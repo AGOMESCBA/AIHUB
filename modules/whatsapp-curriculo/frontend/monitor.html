@@ -112,6 +112,7 @@
 
   function pararTimer() {
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; timerStart = null; }
+    localStorage.removeItem('iahub_start_ts');
   }
 
   function setStatus(s) {
@@ -123,14 +124,18 @@
     document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
     if (s === 'connected') document.getElementById('qr-box').style.display = 'none';
 
-    pararTimer();
-    if (s === 'starting') {
-      timerStart = Date.now();
-      timerInterval = setInterval(() => {
-        const seg = Math.floor((Date.now() - timerStart) / 1000);
-        pill.textContent = `Iniciando… ${seg}s`;
-      }, 1000);
-    }
+    if (s !== 'starting') { pararTimer(); return; }
+
+    // Persiste o instante de início no localStorage para sobreviver à navegação
+    const saved = localStorage.getItem('iahub_start_ts');
+    timerStart  = saved ? Number(saved) : Date.now();
+    if (!saved) localStorage.setItem('iahub_start_ts', timerStart);
+
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      const seg = Math.floor((Date.now() - timerStart) / 1000);
+      pill.textContent = `Iniciando… ${seg}s`;
+    }, 1000);
   }
 
   // O servidor envia o buffer completo + status ao conectar/reconectar
