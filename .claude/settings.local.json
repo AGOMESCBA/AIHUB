@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(node -e \"require\\('dotenv'\\).config\\(\\); const app=require\\('express'\\)\\(\\); const http=require\\('http'\\); const s=http.createServer\\(app\\); const io=new \\(require\\('socket.io'\\).Server\\)\\(s\\); require\\('./modules/whatsapp-curriculo/service'\\); require\\('./modules/whatsapp-curriculo/routes'\\)\\(app,{requireAuth:\\(_,__,n\\)=>n\\(\\),registrarLog:\\(\\)=>{},io}\\); console.log\\('OK - sem erros de require'\\)\")"
     ]
   }
 }

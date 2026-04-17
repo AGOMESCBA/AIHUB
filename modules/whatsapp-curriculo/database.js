@@ -1,7 +1,7 @@
 const fs   = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, 'data.json');
+const FILE = path.join(__dirname, '..', '..', 'data.json');
 
 function load() {
   if (!fs.existsSync(FILE)) return { config: {}, curriculos: [], nextId: 1, processedIds: [] };
