@@ -77,7 +77,7 @@
 <script>
   const socket   = io();
   const terminal = document.getElementById('terminal');
-  let lines = [], count = 0;
+  let lines = [], count = 0, timerInterval = null, timerStart = null;
 
   const TAG = {
     info:     ['INFO',     'tag-info',    'msg-info'],
@@ -105,6 +105,10 @@
     connected: ['pill-connected', 'Conectado'],
   };
 
+  function pararTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; timerStart = null; }
+  }
+
   function setStatus(s) {
     const [cls, label] = PILLS[s] || PILLS.stopped;
     const pill = document.getElementById('status-pill');
@@ -113,6 +117,15 @@
     document.getElementById('btn-start').classList.toggle('d-none', s !== 'stopped');
     document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
     if (s === 'connected') document.getElementById('qr-box').style.display = 'none';
+
+    pararTimer();
+    if (s === 'starting') {
+      timerStart = Date.now();
+      timerInterval = setInterval(() => {
+        const seg = Math.floor((Date.now() - timerStart) / 1000);
+        pill.textContent = `Iniciando… ${seg}s`;
+      }, 1000);
+    }
   }
 
   // O servidor envia o buffer completo + status ao conectar/reconectar
