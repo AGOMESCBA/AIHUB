@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Currículo — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .exp-block { border:1px solid var(--border); border-radius:9px; padding:16px; margin-bottom:12px; background:var(--bg-base); }
+    .exp-emp   { font-weight:700; color:var(--accent-light); font-size:15px; }
+    .exp-cargo { color:var(--text-hi); font-size:13.5px; margin-top:2px; }
+    .exp-per   { color:var(--text-lo); font-size:12px; margin-top:2px; }
+    .exp-list  { list-style:disc; padding-left:18px; margin-top:10px; }
+    .exp-list li{ color:var(--text-md); font-size:13px; margin-bottom:3px; }
+    .field-l   { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo); margin-bottom:3px; }
+    .field-v   { font-size:14.5px; color:var(--text-hi); margin-bottom:16px; }
+    .field-v a { color:var(--accent-light); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub active"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a href="/curriculos.html" class="btn btn-ghost" style="font-size:12px;padding:5px 12px">← Voltar</a>
+      <span class="topbar-title" style="margin-left:12px" id="topbar-nome">Currículo</span>
+      <div class="ms-auto d-flex gap-2" id="topbar-actions"></div>
+    </div>
+
+    <div class="page-content" id="page-content">
+      <div style="text-align:center;padding:60px;color:var(--text-lo)">Carregando...</div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  const id = new URLSearchParams(location.search).get('id');
+
+  function f(label, value, html) {
+    if (!value) return '';
+    return `<div class="field-l">${label}</div><div class="field-v">${html||value}</div>`;
+  }
+
+  async function carregar() {
+    if (!id) return;
+    const c = await fetch(`/api/curriculos/${id}`).then(r => r.json());
+
+    document.getElementById('topbar-nome').textContent = c.nome || `Currículo #${c.id}`;
+
+    if (c.pdf_base64) {
+      document.getElementById('topbar-actions').innerHTML =
+        `<button class="btn btn-info" style="font-size:12px" onclick="baixarPdf()">⬇ Baixar PDF</button>`;
+      window._pdf = { data: c.pdf_base64, nome: c.pdf_nome || 'curriculo.pdf' };
+    }
+
+    const exps = (c.experiencias||[]).map(e => `
+      <div class="exp-block">
+        <div class="exp-emp">${e.empresa||'—'}</div>
+        <div class="exp-cargo">${e.cargo||''}</div>
+        <div class="exp-per">${e.periodo||''}</div>
+        ${e.atividades?.length ? `<ul class="exp-list">${e.atividades.map(a=>`<li>${a}</li>`).join('')}</ul>` : ''}
+      </div>`).join('');
+
+    const form = (c.formacao||[]).map(f =>
+      `<div class="field-v"><strong>${f.instituicao||'—'}</strong> — ${f.curso||'—'} <span style="color:var(--text-lo);font-size:12px">(${f.periodo||'—'})</span></div>`
+    ).join('');
+
+    const caps = (c.capacitacoes||[]).map(x => `<span class="badge badge-purple" style="margin:3px">${x}</span>`).join('');
+
+    document.getElementById('page-content').innerHTML = `
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+        <div class="card">
+          <div class="card-header">📋 Dados Pessoais</div>
+          <div class="card-body">
+            ${f('Nome', c.nome)}
+            ${f('Telefone', c.telefone)}
+            ${f('E-mail', c.email, c.email ? `<a href="mailto:${c.email}">${c.email}</a>` : null)}
+            ${f('Endereço', c.endereco)}
+            ${f('LinkedIn / Portfolio', c.linkedin, c.linkedin ? `<a href="${c.linkedin}" target="_blank">${c.linkedin}</a>` : null)}
+            <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-lo)">
+              Recebido de <strong style="color:var(--accent-light)">${c.remetente}</strong>
+              em ${new Date(c.recebido_em).toLocaleString('pt-BR')}
+            </div>
+          </div>
+        </div>
+
+        ${c.descricao ? `
+        <div class="card">
+          <div class="card-header">👤 Descrição do Candidato</div>
+          <div class="card-body" style="color:var(--text-md);line-height:1.75;font-size:13.5px">${c.descricao}</div>
+        </div>` : '<div></div>'}
+      </div>
+
+      ${c.experiencias?.length ? `
+      <div class="card mb-4">
+        <div class="card-header">💼 Experiência Profissional</div>
+        <div class="card-body">${exps}</div>
+      </div>` : ''}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        ${c.formacao?.length ? `
+        <div class="card">
+          <div class="card-header">🎓 Formação Acadêmica</div>
+          <div class="card-body">${form}</div>
+        </div>` : ''}
+
+        ${c.capacitacoes?.length ? `
+        <div class="card">
+          <div class="card-header">🏆 Capacitações e Certificações</div>
+          <div class="card-body">${caps}</div>
+        </div>` : ''}
+      </div>`;
+  }
+
+  function baixarPdf() {
+    const a = document.createElement('a');
+    a.href = `data:application/pdf;base64,${window._pdf.data}`;
+    a.download = window._pdf.nome;
+    a.click();
+  }
+
+  carregar();
+</script>
+</body>
+</html>

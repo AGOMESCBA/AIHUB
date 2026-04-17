@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IAHub — Login</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">IA</div>
+      <h1>IAHub</h1>
+      <p>Plataforma de Automações Inteligentes</p>
+    </div>
+
+    <div id="login-error" class="login-error"></div>
+
+    <form onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label class="form-label">Usuário</label>
+        <input id="user" type="text" class="form-control" placeholder="Digite seu usuário" autocomplete="username" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input id="pass" type="password" class="form-control" placeholder="Digite sua senha" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="btn-login" id="btn-login">Entrar</button>
+    </form>
+
+    <div class="login-version">IAHub v2.0 · Todos os direitos reservados</div>
+  </div>
+
+  <script>
+    // Se já autenticado, vai direto para o dashboard
+    fetch('/api/me').then(r => { if (r.ok) location.href = '/dashboard.html'; });
+
+    async function doLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-login');
+      const err = document.getElementById('login-error');
+      err.style.display = 'none';
+      btn.textContent = 'Entrando...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: document.getElementById('user').value,
+            pass: document.getElementById('pass').value,
+          }),
+        });
+
+        if (res.ok) {
+          window.location.href = '/dashboard.html';
+        } else {
+          const data = await res.json();
+          err.textContent = data.error || 'Usuário ou senha inválidos.';
+          err.style.display = 'block';
+        }
+      } catch (_) {
+        err.textContent = 'Erro de conexão. Verifique se o servidor está rodando.';
+        err.style.display = 'block';
+      } finally {
+        btn.textContent = 'Entrar';
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

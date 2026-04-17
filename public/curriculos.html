@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Currículos — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    #search { max-width: 260px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub active"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Currículos</span>
+      <span class="topbar-breadcrumb ms-auto">WhatsApp Currículo › Currículos</span>
+    </div>
+
+    <div class="page-content">
+
+      <div class="d-flex gap-3 mb-3" style="align-items:center">
+        <span id="count" class="text-muted text-sm"></span>
+        <div class="ms-auto">
+          <input id="search" type="text" class="form-control" placeholder="🔍  Buscar nome ou e-mail…" oninput="filtrar()" style="max-width:260px">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          <div class="table-wrap">
+            <table id="tabela">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Nome</th>
+                  <th>Telefone</th>
+                  <th>E-mail</th>
+                  <th>Remetente</th>
+                  <th>Recebido em</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
+            📭 Nenhum currículo recebido ainda.<br>
+            <span style="font-size:12px">Inicie o serviço no Monitor e aguarde o primeiro PDF.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  let todos = [];
+
+  function render(lista) {
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = '';
+    document.getElementById('empty').classList.toggle('d-none', lista.length > 0);
+    document.getElementById('tabela').style.display = lista.length ? '' : 'none';
+
+    lista.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.onclick = () => location.href = `/curriculo.html?id=${c.id}`;
+      tr.innerHTML = `
+        <td style="color:var(--text-lo)">${c.id}</td>
+        <td><strong>${c.nome||'—'}</strong></td>
+        <td style="color:var(--text-md)">${c.telefone||'—'}</td>
+        <td style="color:var(--text-md)">${c.email||'—'}</td>
+        <td><span class="badge badge-blue">${c.remetente}</span></td>
+        <td style="color:var(--text-lo);font-size:12px">${new Date(c.recebido_em).toLocaleString('pt-BR')}</td>
+        <td style="white-space:nowrap">
+          <a href="/curriculo.html?id=${c.id}" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="event.stopPropagation()">Ver</a>
+          <button class="btn btn-danger" style="font-size:12px;padding:4px 10px;margin-left:4px" onclick="event.stopPropagation();apagar(${c.id}, this)">Apagar</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function filtrar() {
+    const q = document.getElementById('search').value.toLowerCase();
+    render(todos.filter(c =>
+      (c.nome||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q)));
+  }
+
+  async function apagar(id, btn) {
+    if (!confirm('Apagar este currículo permanentemente?')) return;
+    btn.disabled = true;
+    btn.textContent = '…';
+    const r = await fetch(`/api/curriculos/${id}`, { method: 'DELETE' });
+    if (r.ok) {
+      todos = todos.filter(c => c.id !== id);
+      document.getElementById('count').textContent = `${todos.length} currículo${todos.length!==1?'s':''}`;
+      filtrar();
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Apagar';
+      alert('Erro ao apagar. Tente novamente.');
+    }
+  }
+
+  async function carregar() {
+    todos = await fetch('/api/curriculos').then(r => r.json());
+    document.getElementById('count').textContent = `${todos.length} currículo${todos.length!==1?'s':''}`;
+    render(todos);
+  }
+
+  carregar();
+</script>
+</body>
+</html>

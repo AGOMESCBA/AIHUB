@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+</head>
+<body>
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span>
+        <span class="nav-label">WhatsApp Currículo</span>
+        <span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub active"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name" id="sidebar-user">Admin</div>
+        <div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Dashboard</span>
+      <span class="ms-auto text-muted text-sm" id="topbar-date"></span>
+    </div>
+
+    <div class="page-content">
+
+      <!-- Stats -->
+      <div class="grid-3 mb-4">
+        <div class="stat-card">
+          <div class="stat-label">Currículos Recebidos</div>
+          <div class="stat-value stat-accent" id="stat-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Hoje</div>
+          <div class="stat-value" id="stat-hoje">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Status WhatsApp</div>
+          <div style="margin-top:8px" id="stat-status"><span class="status-pill pill-stopped">Parado</span></div>
+        </div>
+      </div>
+
+      <!-- Últimos currículos -->
+      <div class="card">
+        <div class="card-header">
+          📋 Últimos Currículos Recebidos
+          <a href="/curriculos.html" class="btn btn-ghost ms-auto" style="font-size:12px">Ver todos</a>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Remetente</th>
+                  <th>Recebido em</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-recentes"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="d-none" style="text-align:center;padding:40px;color:var(--text-lo)">
+            Nenhum currículo recebido ainda. Inicie o serviço no Monitor.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  document.getElementById('topbar-date').textContent =
+    new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  const statusMap = {
+    stopped:   ['pill-stopped',   'Parado'],
+    starting:  ['pill-starting',  'Iniciando…'],
+    connected: ['pill-connected', 'Conectado'],
+  };
+
+  async function carregar() {
+    const [stats, curriculos] = await Promise.all([
+      fetch('/api/stats').then(r => r.json()),
+      fetch('/api/curriculos').then(r => r.json()),
+    ]);
+
+    document.getElementById('stat-total').textContent = stats.total;
+    document.getElementById('stat-hoje').textContent  = stats.hoje;
+
+    const [cls, label] = statusMap[stats.status] || statusMap.stopped;
+    document.getElementById('stat-status').innerHTML =
+      `<span class="status-pill ${cls}">${label}</span>`;
+
+    const recentes = curriculos.slice(0, 8);
+    const tbody = document.getElementById('tabela-recentes');
+
+    if (!recentes.length) {
+      document.getElementById('empty-state').classList.remove('d-none');
+      return;
+    }
+
+    tbody.innerHTML = recentes.map(c => `
+      <tr onclick="location.href='/curriculo.html?id=${c.id}'">
+        <td style="color:var(--text-lo)">${c.id}</td>
+        <td><strong>${c.nome || '—'}</strong></td>
+        <td style="color:var(--text-md)">${c.email || '—'}</td>
+        <td><span class="badge badge-blue">${c.remetente}</span></td>
+        <td style="color:var(--text-lo);font-size:12px">${new Date(c.recebido_em).toLocaleString('pt-BR')}</td>
+      </tr>`).join('');
+  }
+
+  fetch('/api/me').then(r => r.json()).then(d => {
+    document.getElementById('sidebar-user').textContent = d.user || 'Admin';
+  });
+
+  carregar();
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuração — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub active"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Configuração</span>
+      <span class="topbar-breadcrumb ms-auto">WhatsApp Currículo › Configuração</span>
+    </div>
+
+    <div class="page-content">
+      <div style="max-width:600px">
+
+        <div id="alert-ok" class="d-none mb-4" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:9px;padding:12px 16px;font-size:13px">
+          ✅ Configuração salva com sucesso!
+        </div>
+
+        <div class="card mb-4">
+          <div class="card-header">⚙ Configuração do WhatsApp Currículo</div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">Identificação / Nome do Número</label>
+              <input type="text" id="label" class="form-control" placeholder="Ex: RH — Empresa XYZ">
+              <div class="form-hint">Nome para identificar este número no sistema.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Número de Destino (recebe os currículos analisados)</label>
+              <input type="text" id="numero_destino" class="form-control" placeholder="5511999999999">
+              <div class="form-hint">
+                Formato internacional sem símbolos (ex: 5511999999999).<br>
+                Se em branco, os currículos são enviados para o próprio número conectado.
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="salvar()">Salvar Configuração</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">ℹ Como funciona</div>
+          <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+            O bot recebe currículos em PDF enviados para o número conectado via QR Code no Monitor.<br>
+            Após analisar com IA, as informações são enviadas para o <strong style="color:var(--accent-light)">Número de Destino</strong> acima.<br>
+            Para conectar o WhatsApp, acesse <a href="/monitor.html" style="color:var(--accent-light)">Monitor → Iniciar Serviço</a>.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  async function carregar() {
+    const cfg = await fetch('/api/config').then(r => r.json());
+    document.getElementById('label').value          = cfg.label          || '';
+    document.getElementById('numero_destino').value = cfg.numero_destino || '';
+  }
+
+  async function salvar() {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label:          document.getElementById('label').value.trim(),
+        numero_destino: document.getElementById('numero_destino').value.trim(),
+      }),
+    });
+    const el = document.getElementById('alert-ok');
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 3000);
+  }
+
+  carregar();
+</script>
+</body>
+</html>

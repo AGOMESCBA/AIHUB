@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitor — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .terminal { height: calc(100vh - 178px); }
+    .toolbar  { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub active"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Monitor</span>
+      <span class="topbar-breadcrumb ms-auto">WhatsApp Currículo › Monitor</span>
+    </div>
+
+    <div class="page-content">
+
+      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+        <span id="status-pill" class="status-pill pill-stopped">Parado</span>
+        <span id="log-count" class="text-muted text-sm"></span>
+        <div class="toolbar ms-auto">
+          <button id="btn-start" class="btn btn-success" onclick="startService()">▶ Iniciar Serviço</button>
+          <button id="btn-stop"  class="btn btn-danger d-none" onclick="stopService()">■ Parar Serviço</button>
+          <button class="btn btn-info"  onclick="saveLog()">💾 Salvar Log</button>
+          <button class="btn btn-ghost" onclick="clearLog()">🗑 Limpar</button>
+        </div>
+      </div>
+
+      <div id="qr-box" class="qr-box">
+        <strong style="color:var(--accent-light)">📱 Escaneie com o WhatsApp</strong>
+        <br><br>
+        <img id="qr-img" src="" alt="QR Code">
+        <p>Vá em <strong>Configurações → Dispositivos conectados → Conectar dispositivo</strong></p>
+      </div>
+
+      <div id="terminal" class="terminal"></div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket   = io();
+  const terminal = document.getElementById('terminal');
+  let lines = [], count = 0;
+
+  const TAG = {
+    info:     ['INFO',     'tag-info',    'msg-info'],
+    success:  ['SUCESSO',  'tag-success', 'msg-success'],
+    error:    ['ERRO',     'tag-error',   'msg-error'],
+    warning:  ['AVISO',    'tag-warning', 'msg-warning'],
+    received: ['RECEBIDO', 'tag-received','msg-received'],
+    saved:    ['GRAVADO',  'tag-saved',   'msg-saved'],
+  };
+
+  function addLine(e) {
+    const [label, tagCls, msgCls] = TAG[e.type] || TAG.info;
+    const d = document.createElement('div');
+    d.className = 'log-line';
+    d.innerHTML = `<span class="log-ts">${e.timestamp||''}</span><span class="log-tag ${tagCls}">${label}</span><span class="log-msg ${msgCls}">${e.message}</span>`;
+    terminal.appendChild(d);
+    terminal.scrollTop = terminal.scrollHeight;
+    lines.push(`[${e.timestamp}] [${label}] ${e.message}`);
+    document.getElementById('log-count').textContent = `${++count} linha${count!==1?'s':''}`;
+  }
+
+  const PILLS = {
+    stopped:   ['pill-stopped',   'Parado'],
+    starting:  ['pill-starting',  'Iniciando…'],
+    connected: ['pill-connected', 'Conectado'],
+  };
+
+  function setStatus(s) {
+    const [cls, label] = PILLS[s] || PILLS.stopped;
+    const pill = document.getElementById('status-pill');
+    pill.className = `status-pill ${cls}`;
+    pill.textContent = label;
+    document.getElementById('btn-start').classList.toggle('d-none', s !== 'stopped');
+    document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
+    if (s === 'connected') document.getElementById('qr-box').style.display = 'none';
+  }
+
+  // O servidor envia o buffer completo + status ao conectar/reconectar
+  // Isso garante que ao voltar para a página os logs são restaurados
+  socket.on('connect', () => {
+    // Limpa a tela antes de receber o replay do buffer
+    terminal.innerHTML = '';
+    lines = []; count = 0;
+    document.getElementById('log-count').textContent = '';
+  });
+
+  socket.on('log',    addLine);
+  socket.on('status', setStatus);
+  socket.on('qr', url => {
+    document.getElementById('qr-img').src = url;
+    document.getElementById('qr-box').style.display = 'block';
+  });
+
+  async function startService() {
+    document.getElementById('btn-start').disabled = true;
+    try {
+      const r = await fetch('/api/service/start', { method: 'POST' });
+      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
+      if (!r.ok) { alert(`Erro ao iniciar serviço (HTTP ${r.status})`); }
+    } catch (e) {
+      alert(`Erro de conexão: ${e.message}`);
+    } finally {
+      document.getElementById('btn-start').disabled = false;
+    }
+  }
+
+  async function stopService() {
+    document.getElementById('btn-stop').disabled = true;
+    try {
+      const r = await fetch('/api/service/stop', { method: 'POST' });
+      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
+      if (!r.ok) { alert(`Erro ao parar serviço (HTTP ${r.status})`); }
+    } catch (e) {
+      alert(`Erro de conexão: ${e.message}`);
+    } finally {
+      document.getElementById('btn-stop').disabled = false;
+    }
+  }
+
+  function saveLog() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type:'text/plain' }));
+    a.download = `iahub_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+    a.click();
+  }
+
+  function clearLog() {
+    terminal.innerHTML = '';
+    lines = []; count = 0;
+    document.getElementById('log-count').textContent = '';
+  }
+</script>
+</body>
+</html>
