@@ -3,10 +3,19 @@ const qrcode  = require('qrcode');
 // Importação direta evita bug do pdf-parse que executa testes ao carregar
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 const Groq    = require('groq-sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { EventEmitter } = require('events');
 const db = require('./database');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groq  = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const gemini = process.env.GEMINI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  : null;
+
+// Detecta se o erro é de limite de tokens/rate limit do Groq
+function isRateLimit(err) {
+  return err?.status === 429 || err?.message?.includes('rate_limit') || err?.message?.includes('Rate limit');
+}
 
 class WhatsAppService extends EventEmitter {
   constructor() {
@@ -37,7 +46,17 @@ class WhatsAppService extends EventEmitter {
 
     this.client = new Client({
       authStrategy: new LocalAuth(),
-      puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+      puppeteer: {
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-gpu',
+          '--disable-dev-shm-usage',
+          '--no-first-run',
+          '--no-default-browser-check',
+          '--disable-extensions',
+        ],
+      },
     });
 
     this.client.on('qr', async (qr) => {
@@ -281,68 +300,126 @@ class WhatsAppService extends EventEmitter {
     }
   }
 
-  // ── Análise com 3 tentativas progressivas ───────────────────────────────────
+  // ── Análise com tentativas progressivas + fallback Gemini ───────────────────
 
   async analisarComRetry(texto) {
-    // Tentativa 1: JSON estruturado completo
+    const SYSTEM_COMPLETO = `Você é um extrator de currículos. Responda SOMENTE com um objeto JSON válido, sem explicações, sem markdown, sem blocos de código.
+IMPORTANTE: NÃO resuma, NÃO omita e NÃO abrevie nenhuma informação. Copie as atividades, descrições e demais campos EXATAMENTE como aparecem no currículo.
+Para cada experiência: capture o parágrafo descritivo em "descricao" e TODOS os bullets em "atividades" — prefixe itens de sub-projetos com o nome entre colchetes.
+Use esta estrutura:
+{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}`;
+
+    const SYSTEM_SIMPLES = 'Extraia dados do currículo. NÃO resuma nem omita — copie as atividades exatamente. Responda SOMENTE com JSON válido: {"nome":null,"telefone":null,"email":null,"descricao":null,"experiencias":[],"formacao":[],"capacitacoes":[],"habilidades":[]}';
+
+    const limparJson = (txt) => {
+      const m = txt.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('JSON não encontrado na resposta');
+      return JSON.parse(m[0]);
+    };
+
+    // Tentativa 1: Groq modelo completo
     try {
-      this.log('Tentativa 1/3: análise JSON estruturada...', 'info');
-      return await this.tentativaJson(texto);
+      this.log('Tentativa 1/3: Groq (modelo completo)...', 'info');
+      const res = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: 8000,
+        messages: [
+          { role: 'system', content: SYSTEM_COMPLETO },
+          { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 20000)}` },
+        ],
+      });
+      return limparJson(res.choices[0].message.content);
     } catch (e1) {
-      this.log(`Tentativa 1 falhou: ${e1.message}. Tentando abordagem simplificada...`, 'warning');
+      this.log(`Tentativa 1 falhou: ${e1.message}.`, 'warning');
     }
 
-    // Tentativa 2: JSON simplificado (prompt mais curto, modelo mais rápido)
+    // Tentativa 2: Groq modelo rápido
     try {
-      this.log('Tentativa 2/3: análise JSON simplificada...', 'info');
-      return await this.tentativaJsonSimples(texto);
+      this.log('Tentativa 2/3: Groq (modelo rápido)...', 'info');
+      const res = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 5000,
+        messages: [
+          { role: 'system', content: SYSTEM_SIMPLES },
+          { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 12000)}` },
+        ],
+      });
+      return limparJson(res.choices[0].message.content);
     } catch (e2) {
-      this.log(`Tentativa 2 falhou: ${e2.message}. Tentando extração em texto livre...`, 'warning');
+      this.log(`Tentativa 2 falhou: ${e2.message}.`, 'warning');
     }
 
-    // Tentativa 3: resposta em texto livre (sem JSON)
-    this.log('Tentativa 3/3: extração em texto livre...', 'info');
-    return await this.tentativaTextoLivre(texto);
+    // Tentativa 3: Google Gemini (fallback de rate limit)
+    if (gemini) {
+      try {
+        this.log('Tentativa 3/3: Google Gemini (fallback)...', 'info');
+        const model  = gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const result = await model.generateContent(`${SYSTEM_COMPLETO}\n\nCurrículo:\n\n${texto.slice(0, 20000)}`);
+        return limparJson(result.response.text());
+      } catch (e3) {
+        this.log(`Tentativa 3 (Gemini) falhou: ${e3.message}. Usando texto livre...`, 'warning');
+      }
+    }
+
+    // Tentativa 4: texto livre (último recurso)
+    this.log('Tentativa 4/4: extração em texto livre (último recurso)...', 'warning');
+    const res = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant', temperature: 0.2, max_tokens: 1500,
+      messages: [
+        { role: 'system', content: 'Extraia e organize as informações do currículo em formato legível em português.' },
+        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 4000)}` },
+      ],
+    });
+    return { nome: null, descricao: res.choices[0].message.content };
+  }
+
+  // ── Chamada de IA com fallback Groq → Gemini ────────────────────────────────
+
+  async chamarIA({ systemPrompt, userPrompt, maxTokens = 1000, temperatura = 0.1, modeloGroq = 'llama-3.1-8b-instant' }) {
+    // Tentativa 1: Groq
+    try {
+      const res = await groq.chat.completions.create({
+        model: modeloGroq,
+        temperature: temperatura,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt   },
+        ],
+      });
+      return res.choices[0].message.content.trim();
+    } catch (e) {
+      if (!isRateLimit(e)) throw e;
+      this.log(`Groq atingiu limite de tokens. Usando Google Gemini como fallback...`, 'warning');
+    }
+
+    // Tentativa 2: Gemini (fallback)
+    if (!gemini) throw new Error('Groq atingiu o limite e GEMINI_API_KEY não está configurada.');
+    const model = gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
+    return result.response.text().trim();
   }
 
   // ── Detecção de idioma e tradução ───────────────────────────────────────────
 
   async traduzirSeNecessario(texto) {
     try {
-      // Detecta o idioma com base nos primeiros 500 caracteres
-      const deteccao = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
-        temperature: 0,
-        max_tokens: 5,
-        messages: [
-          {
-            role: 'system',
-            content: 'Identifique o idioma do texto. Responda APENAS com o código ISO 639-1 em minúsculas (ex: pt, en, es, fr, de, it, zh, etc).',
-          },
-          { role: 'user', content: texto.slice(0, 500) },
-        ],
-      });
-
-      const idioma = deteccao.choices[0].message.content.trim().toLowerCase().slice(0, 2);
+      const idioma = (await this.chamarIA({
+        systemPrompt: 'Identifique o idioma do texto. Responda APENAS com o código ISO 639-1 em minúsculas (ex: pt, en, es, fr, de, it, zh, etc).',
+        userPrompt:   texto.slice(0, 500),
+        maxTokens:    5,
+        temperatura:  0,
+      })).toLowerCase().slice(0, 2);
 
       if (idioma === 'pt') return { texto, idioma };
 
-      // Traduz para português brasileiro
       this.log(`Idioma detectado: "${idioma}". Traduzindo para português...`, 'info');
-      const traducao = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        temperature: 0.1,
-        max_tokens: 8000,
-        messages: [
-          {
-            role: 'system',
-            content: 'Traduza o texto a seguir para o português do Brasil. Mantenha toda a estrutura, formatação e informações originais. Não resuma nem omita nada.',
-          },
-          { role: 'user', content: texto.slice(0, 20000) },
-        ],
+      const traduzido = await this.chamarIA({
+        systemPrompt: 'Traduza o texto a seguir para o português do Brasil. Mantenha toda a estrutura, formatação e informações originais. Não resuma nem omita nada.',
+        userPrompt:   texto.slice(0, 20000),
+        maxTokens:    8000,
+        temperatura:  0.1,
+        modeloGroq:   'llama-3.3-70b-versatile',
       });
-
-      return { texto: traducao.choices[0].message.content.trim(), idioma };
+      return { texto: traduzido, idioma };
     } catch (e) {
       this.log(`Aviso: falha na detecção/tradução de idioma, usando texto original: ${e.message}`, 'warning');
       return { texto, idioma: 'pt' };
@@ -353,92 +430,17 @@ class WhatsAppService extends EventEmitter {
 
   async verificarSeCurriculo(texto) {
     try {
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant',
-        temperature: 0,
-        max_tokens: 5,
-        messages: [
-          {
-            role: 'system',
-            content: 'Você analisa documentos. Responda APENAS com "SIM" se o texto for um currículo/CV profissional, ou "NAO" se for qualquer outro tipo de documento (contrato, nota fiscal, relatório, etc).',
-          },
-          { role: 'user', content: `Documento:\n\n${texto.slice(0, 3000)}` },
-        ],
+      const resposta = await this.chamarIA({
+        systemPrompt: 'Você analisa documentos. Responda APENAS com "SIM" se o texto for um currículo/CV profissional, ou "NAO" se for qualquer outro tipo de documento (contrato, nota fiscal, relatório, etc).',
+        userPrompt:   `Documento:\n\n${texto.slice(0, 3000)}`,
+        maxTokens:    5,
+        temperatura:  0,
       });
-      const resposta = res.choices[0].message.content.trim().toUpperCase();
-      return resposta.startsWith('SIM');
+      return resposta.toUpperCase().startsWith('SIM');
     } catch (e) {
       this.log(`Aviso: falha na verificação de currículo, prosseguindo mesmo assim: ${e.message}`, 'warning');
-      return true; // Em caso de erro na verificação, deixa prosseguir
+      return true;
     }
-  }
-
-  // Tentativa 1: extração JSON completa
-  async tentativaJson(texto) {
-    const res = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.1,
-      max_tokens: 8000,
-      messages: [
-        {
-          role: 'system',
-          content: `Você é um extrator de currículos. Responda SOMENTE com um objeto JSON válido, sem explicações, sem markdown, sem blocos de código.
-IMPORTANTE: NÃO resuma, NÃO omita e NÃO abrevie nenhuma informação. Copie textos, atividades e descrições EXATAMENTE como aparecem no currículo.
-Para cada experiência: capture o parágrafo descritivo em "descricao" e TODOS os bullets/atividades em "atividades" — se houver sub-projetos, prefixe cada item com o nome do projeto entre colchetes, ex: "[Nome do Projeto] atividade aqui".
-Use esta estrutura:
-{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}`,
-        },
-        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 20000)}` },
-      ],
-    });
-
-    const conteudo = res.choices[0].message.content.trim();
-    // Remove possíveis blocos de código markdown
-    const limpo = conteudo.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
-    return JSON.parse(limpo);
-  }
-
-  // Tentativa 2: JSON simplificado com modelo menor
-  async tentativaJsonSimples(texto) {
-    const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      temperature: 0.1,
-      max_tokens: 5000,
-      messages: [
-        {
-          role: 'system',
-          content: 'Extraia dados do currículo. NÃO resuma nem omita informações — copie as atividades exatamente como estão. Responda SOMENTE com JSON válido: {"nome":null,"telefone":null,"email":null,"descricao":null,"experiencias":[],"formacao":[],"capacitacoes":[],"habilidades":[]}',
-        },
-        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 12000)}` },
-      ],
-    });
-
-    const conteudo = res.choices[0].message.content.trim();
-    const limpo    = conteudo.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim();
-
-    // Tenta extrair JSON mesmo que haja texto ao redor
-    const match = limpo.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('JSON não encontrado na resposta');
-    return JSON.parse(match[0]);
-  }
-
-  // Tentativa 3: texto livre (último recurso)
-  async tentativaTextoLivre(texto) {
-    this.log('Usando extração em texto livre (fallback final).', 'warning');
-    const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
-      temperature: 0.2,
-      max_tokens: 1500,
-      messages: [
-        {
-          role: 'system',
-          content: 'Extraia e organize as informações do currículo em formato legível em português.',
-        },
-        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 4000)}` },
-      ],
-    });
-
-    return { nome: null, descricao: res.choices[0].message.content };
   }
 
   // ── Formatar para WhatsApp ───────────────────────────────────────────────────
