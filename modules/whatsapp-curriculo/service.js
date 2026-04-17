@@ -367,7 +367,7 @@ Use esta estrutura:
     if (gemini) {
       try {
         this.log('Tentativa 3/3: Google Gemini (fallback)...', 'info');
-        const model  = gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model  = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
         const result = await model.generateContent(`${SYSTEM_COMPLETO}\n\nCurrículo:\n\n${texto.slice(0, 20000)}`);
         return limparJson(result.response.text());
       } catch (e3) {
@@ -409,7 +409,7 @@ Use esta estrutura:
 
     // Tentativa 2: Gemini (fallback)
     if (!gemini) throw new Error('Groq atingiu o limite e GEMINI_API_KEY não está configurada.');
-    const model = gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
     return result.response.text().trim();
   }

@@ -40,6 +40,17 @@
     .filtros        { display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px; }
     .select-funcao  { min-width:280px; }
     .tag            { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
+    .detail-scores  { display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;padding:10px 0;border-top:1px solid var(--border); }
+    .detail-score   { text-align:center;min-width:80px; }
+    .detail-score-val { font-size:18px;font-weight:700;color:var(--accent-light); }
+    .detail-score-lbl { font-size:10px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-top:2px; }
+    .eliminados-section { margin-top:24px; }
+    .eliminados-toggle  { background:none;border:1px solid var(--border);border-radius:8px;padding:10px 16px;width:100%;text-align:left;cursor:pointer;color:var(--text-md);font-size:13px;display:flex;justify-content:space-between;align-items:center; }
+    .eliminados-toggle:hover { background:var(--bg-hover); }
+    .eliminado-row  { display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px; }
+    .eliminado-row:last-child { border-bottom:none; }
+    .eliminado-nome { font-weight:600;color:var(--text-hi);min-width:160px; }
+    .eliminado-motivo { color:var(--text-lo);font-size:12px; }
   </style>
 </head>
 <body>
@@ -114,7 +125,7 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-  let todosResultados = [];
+  let todosResultados = [], todosEliminados = [];
 
   async function carregarFuncoes() {
     const funcoes = await fetch('/api/funcoes').then(r => r.json());
@@ -154,10 +165,14 @@
     const funcao_id = Number(document.getElementById('sel-funcao').value);
     if (!funcao_id) return;
 
+    document.getElementById('btn-analisar').disabled = true;
     document.getElementById('resultado-area').innerHTML = `
       <div class="loader">
         <div class="spinner"></div>
-        <div style="color:var(--text-md);font-size:14px">Analisando currículos com IA… isso pode levar alguns instantes.</div>
+        <div style="color:var(--text-md);font-size:14px;text-align:center">
+          <strong style="color:var(--text-hi)">Etapa 1 — Triagem eliminatória</strong><br>
+          <span style="font-size:12px;color:var(--text-lo)">Filtrando candidatos que atendem os requisitos obrigatórios…</span>
+        </div>
       </div>`;
 
     try {
@@ -170,32 +185,44 @@
       if (res.error) { document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>⚠️</div>${res.error}</div>`; return; }
 
       todosResultados = res.resultados || [];
-      renderResultados(todosResultados, res.total, res.funcao);
+      todosEliminados = res.eliminados || [];
+      renderResultados(todosResultados, res);
     } catch (e) {
       document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>❌</div>Erro: ${e.message}</div>`;
+    } finally {
+      document.getElementById('btn-analisar').disabled = false;
     }
   }
 
   function filtrarResultados() {
     const nivel = document.getElementById('filtro-nivel').value;
     const filtrados = nivel ? todosResultados.filter(r => r.nivel === nivel) : todosResultados;
-    renderResultados(filtrados, todosResultados.length);
+    renderResultados(filtrados, { total: todosResultados.length + todosEliminados.length, total_eliminados: todosEliminados.length, funcao: '' }, true);
   }
 
-  function renderResultados(resultados, total, funcaoNome) {
-    if (!resultados.length && !total) {
+  function renderResultados(resultados, res, isFiltro = false) {
+    if (!resultados.length && !res.total) {
       document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>📭</div><strong>Nenhum currículo encontrado</strong><p style="font-size:13px;margin-top:6px">Receba currículos pelo WhatsApp para analisar.</p></div>`;
       return;
     }
     const altos  = resultados.filter(r => r.nivel === 'Alto').length;
     const medios = resultados.filter(r => r.nivel === 'Médio').length;
     const baixos = resultados.filter(r => r.nivel === 'Baixo').length;
+    const eliminados = isFiltro ? todosEliminados : (res.eliminados || todosEliminados);
 
     const cards = resultados.map((r, i) => {
       const nivelCls = r.nivel === 'Alto' ? 'nivel-alto' : r.nivel === 'Médio' ? 'nivel-medio' : 'nivel-baixo';
       const barCls   = r.nivel === 'Alto' ? 'score-alto' : r.nivel === 'Médio' ? 'score-medio' : 'score-baixo';
       const pos = (r.pontos_positivos || []).map(p => `<li>${p}</li>`).join('');
       const neg = (r.pontos_negativos || []).map(p => `<li>${p}</li>`).join('');
+      const det = r.detalhes || {};
+      const detHtml = (det.requisitos_obrigatorios !== undefined) ? `
+        <div class="detail-scores">
+          <div class="detail-score"><div class="detail-score-val">${det.requisitos_obrigatorios ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/40</span></div><div class="detail-score-lbl">Req. Obrigatórios</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.habilidades_tecnicas ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/30</span></div><div class="detail-score-lbl">Habilidades</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.nivel_experiencia ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Experiência</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.formacao ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Formação</div></div>
+        </div>` : '';
       return `
         <div class="result-card">
           <div class="result-header">
@@ -215,6 +242,7 @@
             <div class="score-bar-wrap"><div class="score-bar ${barCls}" style="width:${r.score}%"></div></div>
             <span style="font-size:12px;color:var(--text-lo);min-width:30px">${r.score}%</span>
           </div>
+          ${detHtml}
           ${pos || neg ? `
           <div class="pontos">
             ${pos ? `<div><div style="font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos positivos</div><ul class="ponto-list ponto-pos">${pos}</ul></div>` : ''}
@@ -224,19 +252,49 @@
         </div>`;
     }).join('');
 
+    const eliminadosHtml = eliminados.length ? `
+      <div class="eliminados-section">
+        <button class="eliminados-toggle" onclick="toggleEliminados(this)">
+          <span>🚫 ${eliminados.length} candidato${eliminados.length !== 1 ? 's' : ''} eliminado${eliminados.length !== 1 ? 's' : ''} na triagem — não atendem os requisitos obrigatórios</span>
+          <span id="eliminados-arrow">▾</span>
+        </button>
+        <div id="eliminados-lista" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:12px 16px">
+          ${eliminados.map(e => `
+            <div class="eliminado-row">
+              <div class="eliminado-nome">${e.nome}</div>
+              <div style="font-size:12px;color:var(--text-lo)">${e.telefone || ''}${e.telefone && e.email ? ' · ' : ''}${e.email || ''}</div>
+              <div class="eliminado-motivo ms-auto">${e.motivo || '—'}</div>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    const triagemBadge = res.triagem_ativa !== false
+      ? `<span class="badge" style="background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.3)">⚡ Triagem ativa</span>`
+      : '';
+
     document.getElementById('resultado-area').innerHTML = `
       <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
         <span style="font-size:14px;color:var(--text-md)">
-          ${funcaoNome ? `<strong style="color:var(--text-hi)">${funcaoNome}</strong> · ` : ''}
-          ${resultados.length} candidato${resultados.length !== 1 ? 's' : ''} analisado${resultados.length !== 1 ? 's' : ''}
+          ${res.funcao ? `<strong style="color:var(--text-hi)">${res.funcao}</strong> · ` : ''}
+          ${res.total || 0} recebidos · ${resultados.length} analisados
         </span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${triagemBadge}
           <span class="badge badge-green">✓ ${altos} alto${altos !== 1 ? 's' : ''}</span>
           <span class="badge badge-yellow">~ ${medios} médio${medios !== 1 ? 's' : ''}</span>
           <span class="badge badge-red">✗ ${baixos} baixo${baixos !== 1 ? 's' : ''}</span>
         </div>
       </div>
-      ${cards}`;
+      ${cards}
+      ${eliminadosHtml}`;
+  }
+
+  function toggleEliminados(btn) {
+    const lista = document.getElementById('eliminados-lista');
+    const arrow = document.getElementById('eliminados-arrow');
+    const aberto = lista.style.display !== 'none';
+    lista.style.display = aberto ? 'none' : 'block';
+    arrow.textContent = aberto ? '▾' : '▴';
   }
 
   carregarFuncoes();
