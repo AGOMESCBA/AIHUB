@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cadastro de Funções — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(700px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
+    .modal-close:hover { color:var(--text-hi); }
+    .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .form-row-3    { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+    .modal-footer  { display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .search-bar    { position:relative; }
+    .search-bar input { padding-left:32px; }
+    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
+    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
+    .empty-state div { font-size:40px;margin-bottom:12px; }
+    textarea.form-control { resize:vertical;min-height:80px;font-family:inherit;box-sizing:border-box; }
+    .nivel-badge { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
+    .nivel-junior     { background:#0c2744;color:var(--accent-light); }
+    .nivel-pleno      { background:#14532d;color:var(--success); }
+    .nivel-senior     { background:#2d1e00;color:var(--warning); }
+    .nivel-especialista { background:#1e0c3a;color:#a78bfa; }
+    .nivel-nao-especificado { background:var(--bg-hover);color:var(--text-lo); }
+    .view-field    { margin-bottom:16px; }
+    .view-label    { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:4px; }
+    .view-value    { font-size:14px;color:var(--text-hi);line-height:1.7; }
+    .tag-list      { display:flex;flex-wrap:wrap;gap:6px;margin-top:4px; }
+    .tag           { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
+        <a href="/funcoes.html"    class="nav-item sub active"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
+        <a href="/vagas.html"      class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Cadastro de Funções</span>
+      <span class="topbar-breadcrumb ms-auto">Recrutamento › Funções</span>
+    </div>
+
+    <div class="page-content">
+      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+        <div class="search-bar" style="flex:1;max-width:340px">
+          <input type="text" id="busca" class="form-control" placeholder="Buscar função..." oninput="filtrar()">
+        </div>
+        <div class="ms-auto">
+          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Função</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table id="tabela">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Nome da Função</th>
+                <th>Área</th>
+                <th>Nível</th>
+                <th>Palavras-chave</th>
+                <th style="text-align:right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div id="empty" class="empty-state d-none">
+          <div>📋</div>
+          <strong style="color:var(--text-md)">Nenhuma função cadastrada</strong>
+          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Função</strong> para começar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Criar/Editar -->
+<div id="modal" class="modal-overlay d-none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nova Função</span>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Nome da Função *</label>
+        <input type="text" id="f-nome" class="form-control" placeholder="Ex: Desenvolvedor Full Stack">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Área / Departamento</label>
+        <input type="text" id="f-area" class="form-control" placeholder="Ex: Tecnologia">
+      </div>
+    </div>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label class="form-label">Nível de Experiência</label>
+        <select id="f-nivel" class="form-control">
+          <option value="Não especificado">Não especificado</option>
+          <option value="Júnior">Júnior</option>
+          <option value="Pleno">Pleno</option>
+          <option value="Sênior">Sênior</option>
+          <option value="Especialista">Especialista</option>
+        </select>
+      </div>
+      <div class="form-group" style="grid-column:span 2">
+        <label class="form-label">Formação Necessária</label>
+        <input type="text" id="f-formacao" class="form-control" placeholder="Ex: Análise de Sistemas ou área correlata">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição da Função</label>
+      <textarea id="f-descricao" class="form-control" rows="3" placeholder="Descreva as responsabilidades e atividades da função..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Requisitos Obrigatórios</label>
+        <textarea id="f-req-obrig" class="form-control" rows="3" placeholder="Liste os requisitos indispensáveis..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Requisitos Desejáveis</label>
+        <textarea id="f-req-desej" class="form-control" rows="3" placeholder="Liste os requisitos diferenciais..."></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Habilidades Técnicas</label>
+        <textarea id="f-habilidades" class="form-control" rows="2" placeholder="Separe por vírgula: React, Node.js, SQL..."></textarea>
+        <div class="form-hint">Separe cada habilidade por vírgula.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Palavras-chave para Análise</label>
+        <textarea id="f-keywords" class="form-control" rows="2" placeholder="javascript, api, backend, agile..."></textarea>
+        <div class="form-hint">Usadas pelo analisador de currículos.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvar()">Salvar Função</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Visualizar -->
+<div id="modal-view" class="modal-overlay d-none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="view-titulo">Detalhes da Função</span>
+      <button class="modal-close" onclick="document.getElementById('modal-view').classList.add('d-none')">✕</button>
+    </div>
+    <div id="view-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-view').classList.add('d-none')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  const NIVEIS = {
+    'Júnior': 'nivel-junior', 'Pleno': 'nivel-pleno',
+    'Sênior': 'nivel-senior', 'Especialista': 'nivel-especialista',
+    'Não especificado': 'nivel-nao-especificado',
+  };
+
+  let funcoes = [], editandoId = null;
+
+  async function carregar() {
+    funcoes = await fetch('/api/funcoes').then(r => r.json());
+    renderizar(funcoes);
+  }
+
+  function parseTags(str) {
+    if (!str) return [];
+    return str.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function tagsHtml(arr) {
+    if (!arr?.length) return '<span style="color:var(--text-lo)">—</span>';
+    return arr.slice(0, 4).map(t => `<span class="tag">${t}</span>`).join('') + (arr.length > 4 ? `<span class="tag">+${arr.length - 4}</span>` : '');
+  }
+
+  function renderizar(lista) {
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty');
+    if (!lista.length) { tbody.innerHTML = ''; empty.classList.remove('d-none'); return; }
+    empty.classList.add('d-none');
+    tbody.innerHTML = lista.map(f => `
+      <tr>
+        <td style="color:var(--text-lo);font-size:12px">#${f.id}</td>
+        <td><strong style="color:var(--accent-light)">${f.nome}</strong></td>
+        <td style="color:var(--text-md)">${f.area || '—'}</td>
+        <td><span class="nivel-badge ${NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado'}">${f.nivel_experiencia || '—'}</span></td>
+        <td><div class="tag-list">${tagsHtml(f.palavras_chave)}</div></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn-icon" title="Visualizar" onclick="visualizar(${f.id})">👁</button>
+          <button class="btn-icon" title="Editar"     onclick="editar(${f.id})">✏️</button>
+          <button class="btn-icon" title="Excluir"    onclick="excluir(${f.id}, '${f.nome.replace(/'/g,"\\'")}')">🗑️</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  function filtrar() {
+    const q = document.getElementById('busca').value.toLowerCase();
+    renderizar(funcoes.filter(f =>
+      f.nome?.toLowerCase().includes(q) || f.area?.toLowerCase().includes(q)
+    ));
+  }
+
+  function abrirModal(f = null) {
+    editandoId = f ? f.id : null;
+    document.getElementById('modal-title').textContent = f ? 'Editar Função' : 'Nova Função';
+    document.getElementById('f-nome').value       = f?.nome || '';
+    document.getElementById('f-area').value       = f?.area || '';
+    document.getElementById('f-nivel').value      = f?.nivel_experiencia || 'Não especificado';
+    document.getElementById('f-formacao').value   = f?.formacao_necessaria || '';
+    document.getElementById('f-descricao').value  = f?.descricao || '';
+    document.getElementById('f-req-obrig').value  = f?.requisitos_obrigatorios || '';
+    document.getElementById('f-req-desej').value  = f?.requisitos_desejaveis || '';
+    document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas) ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
+    document.getElementById('f-keywords').value   = Array.isArray(f?.palavras_chave) ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
+    document.getElementById('modal').classList.remove('d-none');
+  }
+
+  function fecharModal() { document.getElementById('modal').classList.add('d-none'); }
+
+  async function salvar() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) { alert('O nome da função é obrigatório.'); return; }
+    const body = {
+      nome,
+      area:                    document.getElementById('f-area').value.trim(),
+      nivel_experiencia:       document.getElementById('f-nivel').value,
+      formacao_necessaria:     document.getElementById('f-formacao').value.trim(),
+      descricao:               document.getElementById('f-descricao').value.trim(),
+      requisitos_obrigatorios: document.getElementById('f-req-obrig').value.trim(),
+      requisitos_desejaveis:   document.getElementById('f-req-desej').value.trim(),
+      habilidades_tecnicas:    parseTags(document.getElementById('f-habilidades').value),
+      palavras_chave:          parseTags(document.getElementById('f-keywords').value),
+    };
+    const url    = editandoId ? `/api/funcoes/${editandoId}` : '/api/funcoes';
+    const method = editandoId ? 'PUT' : 'POST';
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    fecharModal();
+    carregar();
+  }
+
+  async function editar(id) {
+    const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
+    abrirModal(f);
+  }
+
+  async function excluir(id, nome) {
+    if (!confirm(`Excluir a função "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+    await fetch(`/api/funcoes/${id}`, { method: 'DELETE' });
+    carregar();
+  }
+
+  async function visualizar(id) {
+    const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
+    document.getElementById('view-titulo').textContent = f.nome;
+    const tags = arr => Array.isArray(arr) && arr.length
+      ? `<div class="tag-list">${arr.map(t => `<span class="tag">${t}</span>`).join('')}</div>`
+      : '<span style="color:var(--text-lo)">—</span>';
+    const campo = (label, val) => val
+      ? `<div class="view-field"><div class="view-label">${label}</div><div class="view-value">${val}</div></div>` : '';
+    document.getElementById('view-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
+        ${campo('Área', f.area)}
+        ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${f.nivel_experiencia||'—'}</span>`)}
+        ${campo('Formação', f.formacao_necessaria)}
+      </div>
+      ${campo('Descrição da Função', (f.descricao||'').replace(/\n/g,'<br>'))}
+      ${campo('Requisitos Obrigatórios', (f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
+      ${campo('Requisitos Desejáveis', (f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
+      <div class="view-field"><div class="view-label">Habilidades Técnicas</div>${tags(f.habilidades_tecnicas)}</div>
+      <div class="view-field"><div class="view-label">Palavras-chave</div>${tags(f.palavras_chave)}</div>
+      <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>
+    `;
+    document.getElementById('modal-view').classList.remove('d-none');
+  }
+
+  carregar();
+</script>
+</body>
+</html>

@@ -23,6 +23,7 @@ app.use(session({
 // modules/whatsapp-curriculo/frontend/ → páginas do módulo
 app.use(express.static(path.join(__dirname, 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
+app.use(express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
 
 // ── Log em arquivo e buffer para restaurar ao reconectar ─────────────────────
 const LOG_FILE   = path.join(__dirname, 'whatscurriculo.log');
@@ -71,6 +72,9 @@ io.on('connection', (socket) => {
 
 // ── Módulo WhatsApp Currículo ─────────────────────────────────────────────────
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, registrarLog, io });
+
+// ── Módulo Analisador de Currículos ───────────────────────────────────────────
+require('./modules/analisador-curriculos/routes')(app, { requireAuth });
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

@@ -42,6 +42,7 @@ class WhatsAppService extends EventEmitter {
       return;
     }
     this.setStatus('starting');
+    this._startTime = Date.now();
     this.log('Iniciando serviço WhatsApp...', 'info');
 
     this.client = new Client({
@@ -67,7 +68,8 @@ class WhatsAppService extends EventEmitter {
 
     this.client.on('ready', () => {
       this.setStatus('connected');
-      this.log(`WhatsApp conectado! Número: ${this.client.info.wid.user}`, 'success');
+      const seg = this._startTime ? ((Date.now() - this._startTime) / 1000).toFixed(1) : '—';
+      this.log(`WhatsApp conectado! Número: ${this.client.info.wid.user} — tempo de inicialização: ${seg}s`, 'success');
     });
 
     this.client.on('auth_failure', () => {
