@@ -1,7 +1,7 @@
 {
-  "name": "whatsapp-curriculo",
+  "name": "iahub",
   "version": "2.0.0",
-  "description": "Sistema web de análise de currículos via WhatsApp",
+  "description": "IAHub — Sistema web de análise de currículos via WhatsApp",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
