@@ -11,15 +11,23 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   // ── Configuração ──────────────────────────────────────────────────────────
   app.get('/api/config', requireAuth, (_req, res) => {
     res.json({
-      numero_destino: db.getConfig('numero_destino') || '',
-      label:          db.getConfig('label')          || '',
+      numero_destino:  db.getConfig('numero_destino')  || '',
+      label:           db.getConfig('label')           || '',
+      msg_confirmacao: db.getConfig('msg_confirmacao') || '',
+      msg_nao_pdf:     db.getConfig('msg_nao_pdf')     || '',
+      msg_pdf_ilegivel:db.getConfig('msg_pdf_ilegivel')|| '',
+      msg_nao_curriculo:db.getConfig('msg_nao_curriculo')||'',
+      msg_duplicata:   db.getConfig('msg_duplicata')   || '',
+      msg_nao_atualizar:db.getConfig('msg_nao_atualizar')||'',
+      msg_erro:        db.getConfig('msg_erro')        || '',
     });
   });
 
   app.post('/api/config', requireAuth, (req, res) => {
-    const { numero_destino, label } = req.body;
-    if (numero_destino !== undefined) db.setConfig('numero_destino', numero_destino);
-    if (label          !== undefined) db.setConfig('label', label);
+    const campos = ['numero_destino','label','msg_confirmacao','msg_nao_pdf',
+                    'msg_pdf_ilegivel','msg_nao_curriculo','msg_duplicata',
+                    'msg_nao_atualizar','msg_erro'];
+    campos.forEach(c => { if (req.body[c] !== undefined) db.setConfig(c, req.body[c]); });
     res.json({ ok: true });
   });
 

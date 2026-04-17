@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Configuração — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    textarea.form-control {
+      resize: vertical;
+      min-height: 80px;
+      font-family: inherit;
+      box-sizing: border-box;
+      pointer-events: auto !important;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      position: relative;
+      z-index: 1;
+    }
+  </style>
 </head>
 <body>
 <div class="layout">
@@ -42,14 +55,18 @@
     </div>
 
     <div class="page-content">
-      <div style="max-width:600px">
+      <div style="max-width:660px">
 
         <div id="alert-ok" class="d-none mb-4" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:9px;padding:12px 16px;font-size:13px">
           ✅ Configuração salva com sucesso!
         </div>
+        <div id="alert-erro" class="d-none mb-4" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:9px;padding:12px 16px;font-size:13px">
+          ❌ Todos os campos de mensagem são obrigatórios. Preencha os campos em branco antes de salvar.
+        </div>
 
+        <!-- Geral -->
         <div class="card mb-4">
-          <div class="card-header">⚙ Configuração do WhatsApp Currículo</div>
+          <div class="card-header">⚙ Geral</div>
           <div class="card-body">
 
             <div class="form-group">
@@ -61,17 +78,72 @@
             <div class="form-group">
               <label class="form-label">Número de Destino (recebe os currículos analisados)</label>
               <input type="text" id="numero_destino" class="form-control" placeholder="5511999999999">
-              <div class="form-hint">
-                Formato internacional sem símbolos (ex: 5511999999999).<br>
-                Se em branco, os currículos são enviados para o próprio número conectado.
-              </div>
+              <div class="form-hint">Formato internacional sem símbolos (ex: 5511999999999). Se em branco, os currículos são salvos apenas no sistema.</div>
             </div>
 
-            <button class="btn btn-primary" onclick="salvar()">Salvar Configuração</button>
           </div>
         </div>
 
-        <div class="card">
+        <!-- Mensagens ao candidato -->
+        <div class="card mb-4">
+          <div class="card-header">💬 Mensagens ao Candidato</div>
+          <div class="card-body">
+
+            <div class="form-group">
+              <label class="form-label">✅ Currículo recebido com sucesso</label>
+              <textarea id="msg_confirmacao" class="form-control" rows="3"
+                placeholder="✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!"></textarea>
+              <div class="form-hint">Enviada após o currículo ser processado e salvo com sucesso.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">⚠️ Arquivo não é PDF</label>
+              <textarea id="msg_nao_pdf" class="form-control" rows="2"
+                placeholder="⚠️ Por favor, envie o currículo em formato *PDF*."></textarea>
+              <div class="form-hint">Enviada quando o arquivo recebido não é um PDF.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">❌ PDF ilegível ou protegido</label>
+              <textarea id="msg_pdf_ilegivel" class="form-control" rows="2"
+                placeholder="❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem."></textarea>
+              <div class="form-hint">Enviada quando o PDF não possui texto legível.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">😊 Documento não é um currículo</label>
+              <textarea id="msg_nao_curriculo" class="form-control" rows="3"
+                placeholder="😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.&#10;&#10;Por favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!"></textarea>
+              <div class="form-hint">Enviada quando o PDF não é identificado como currículo.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">⚠️ Currículo duplicado (use <code style="color:var(--accent-light)">{nome}</code> para o nome do candidato)</label>
+              <textarea id="msg_duplicata" class="form-control" rows="4"
+                placeholder="⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).&#10;&#10;Deseja *atualizar* o registro existente?&#10;&#10;Responda *SIM* para atualizar ou *NÃO* para manter o atual."></textarea>
+              <div class="form-hint">Enviada quando já existe um currículo com o mesmo telefone ou e-mail.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">😊 Candidato optou por NÃO atualizar</label>
+              <textarea id="msg_nao_atualizar" class="form-control" rows="2"
+                placeholder="😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!"></textarea>
+              <div class="form-hint">Enviada quando o candidato responde NÃO à pergunta de atualização.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">❌ Erro ao processar currículo</label>
+              <textarea id="msg_erro" class="form-control" rows="2"
+                placeholder="❌ Ocorreu um erro ao processar seu currículo. Tente novamente."></textarea>
+              <div class="form-hint">Enviada quando ocorre um erro inesperado durante o processamento.</div>
+            </div>
+
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="salvar()" style="width:100%">Salvar Configuração</button>
+
+        <div class="card" style="margin-top:32px">
           <div class="card-header">ℹ Como funciona</div>
           <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
             O bot recebe currículos em PDF enviados para o número conectado via QR Code no Monitor.<br>
@@ -88,24 +160,57 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
+  const PADROES = {
+    label:             '',
+    numero_destino:    '',
+    msg_confirmacao:   '✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!',
+    msg_nao_pdf:       '⚠️ Por favor, envie o currículo em formato *PDF*.',
+    msg_pdf_ilegivel:  '❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.',
+    msg_nao_curriculo: '😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.\n\nPor favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!',
+    msg_duplicata:     '⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).\n\nDeseja *atualizar* o registro existente?\n\nResponda *SIM* para atualizar ou *NÃO* para manter o atual.',
+    msg_nao_atualizar: '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!',
+    msg_erro:          '❌ Ocorreu um erro ao processar seu currículo. Tente novamente.',
+  };
+
+  // Campos de mensagem que são obrigatórios
+  const OBRIGATORIOS = [
+    'msg_confirmacao','msg_nao_pdf','msg_pdf_ilegivel',
+    'msg_nao_curriculo','msg_duplicata','msg_nao_atualizar','msg_erro'
+  ];
+
   async function carregar() {
     const cfg = await fetch('/api/config').then(r => r.json());
-    document.getElementById('label').value          = cfg.label          || '';
-    document.getElementById('numero_destino').value = cfg.numero_destino || '';
+    Object.keys(PADROES).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = cfg[id] || PADROES[id];
+    });
   }
 
   async function salvar() {
+    // Valida campos obrigatórios
+    const vazios = OBRIGATORIOS.filter(id => !document.getElementById(id)?.value.trim());
+    if (vazios.length) {
+      const alertErro = document.getElementById('alert-erro');
+      alertErro.classList.remove('d-none');
+      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+      document.getElementById(vazios[0])?.focus();
+      return;
+    }
+
+    const body = {};
+    Object.keys(PADROES).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) body[id] = el.value.trim() || PADROES[id];
+    });
+
     await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        label:          document.getElementById('label').value.trim(),
-        numero_destino: document.getElementById('numero_destino').value.trim(),
-      }),
+      body: JSON.stringify(body),
     });
-    const el = document.getElementById('alert-ok');
-    el.classList.remove('d-none');
-    setTimeout(() => el.classList.add('d-none'), 3000);
+
+    document.getElementById('alert-ok').classList.remove('d-none');
+    setTimeout(() => document.getElementById('alert-ok').classList.add('d-none'), 3000);
   }
 
   carregar();

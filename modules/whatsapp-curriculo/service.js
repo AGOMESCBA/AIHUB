@@ -11,8 +11,9 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 class WhatsAppService extends EventEmitter {
   constructor() {
     super();
-    this.client = null;
-    this.status = 'stopped';
+    this.client       = null;
+    this.status       = 'stopped';
+    this.pendingUpdates = new Map(); // sender → { existingId, dados, pdf_base64, pdf_nome, msgId }
   }
 
   getStatus() { return this.status; }
@@ -79,7 +80,15 @@ class WhatsAppService extends EventEmitter {
   // ── Processamento principal ──────────────────────────────────────────────────
 
   async handleMessage(msg) {
-    this.log(`Mensagem recebida — tipo: ${msg.type}, hasMedia: ${msg.hasMedia}, de: ${msg.from}`, 'info');
+    const sender = msg.from;
+    this.log(`Mensagem recebida — tipo: ${msg.type}, hasMedia: ${msg.hasMedia}, de: ${sender}`, 'info');
+
+    // Verifica se há uma confirmação de atualização pendente para este remetente
+    if (this.pendingUpdates.has(sender) && !msg.hasMedia) {
+      await this.handleConfirmationResponse(msg);
+      return;
+    }
+
     if (!msg.hasMedia) return;
     if (msg.type !== 'document') {
       this.log(`Mensagem ignorada — tipo não é documento (${msg.type}).`, 'info');
@@ -93,7 +102,6 @@ class WhatsAppService extends EventEmitter {
       return;
     }
 
-    const sender = msg.from;
     this.log(`PDF recebido de ${sender}`, 'received');
 
     let media = null;
@@ -112,7 +120,7 @@ class WhatsAppService extends EventEmitter {
       if (!media.mimetype?.includes('pdf')) {
         this.log(`[1/4] Arquivo ignorado — não é PDF (${media.mimetype}).`, 'warning');
         const chat = await msg.getChat();
-        await chat.sendMessage('⚠️ Por favor, envie o currículo em formato *PDF*.');
+        await chat.sendMessage(db.getConfig('msg_nao_pdf') || '⚠️ Por favor, envie o currículo em formato *PDF*.');
         return;
       }
 
@@ -126,49 +134,57 @@ class WhatsAppService extends EventEmitter {
       if (!texto) {
         this.log(`[2/4] FALHA: PDF sem texto legível (protegido ou escaneado).`, 'error');
         const chat = await msg.getChat();
-        await chat.sendMessage('❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.');
+        await chat.sendMessage(db.getConfig('msg_pdf_ilegivel') || '❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.');
         return;
       }
 
-      // Etapa 3: análise IA com tentativas progressivas
-      this.log(`[3/4] Enviando para análise IA...`, 'info');
-      const dados = await this.analisarComRetry(texto);
-
-      // Etapa 4: salva no banco (sempre) e envia por WhatsApp só se houver destino configurado
-      this.emit('curriculo', {
-        remetente:  sender,
-        dados,
-        pdf_base64: media.data,
-        pdf_nome:   msg.body || 'curriculo.pdf',
-      });
-
-      // Marca como processado para não reprocessar ao reiniciar o serviço
-      db.markProcessed(msgId);
-
-      // Normaliza o número: remove tudo que não for dígito e adiciona @c.us
-      const raw = db.getConfig('numero_destino');
-      const numeroDestino = raw ? raw.replace(/\D/g, '') + '@c.us' : null;
-      const mensagem = this.formatarParaWhatsApp(dados);
-
-      // Confirma recebimento para o remetente
-      try {
-        const chatRemetente = await msg.getChat();
-        await chatRemetente.sendMessage('✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!');
-      } catch (confirmErr) {
-        this.log(`Aviso: não foi possível confirmar recebimento para ${sender}: ${confirmErr.message}`, 'warning');
+      // Etapa 3: traduz para português se necessário
+      const { texto: textoFinal, idioma } = await this.traduzirSeNecessario(texto);
+      if (idioma !== 'pt') {
+        this.log(`[3/5] Currículo em "${idioma}" — traduzido para português.`, 'info');
       }
 
-      if (numeroDestino) {
-        this.log(`[4/4] Enviando resultado para ${numeroDestino}...`, 'info');
+      // Etapa 4: verifica se o documento é um currículo
+      this.log(`[4/5] Verificando se o documento é um currículo...`, 'info');
+      const ehCurriculo = await this.verificarSeCurriculo(textoFinal);
+      if (!ehCurriculo) {
+        this.log(`[4/5] Documento rejeitado — não identificado como currículo.`, 'warning');
+        const chat = await msg.getChat();
+        await chat.sendMessage(
+          db.getConfig('msg_nao_curriculo') || '😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.\n\nPor favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!'
+        );
+        return;
+      }
+
+      // Etapa 5: análise IA com tentativas progressivas
+      this.log(`[5/5] Enviando para análise IA...`, 'info');
+      const dados = await this.analisarComRetry(textoFinal);
+
+      // Etapa 5: verifica duplicata por telefone OU e-mail
+      const existente = db.findByPhoneOrEmail(dados.telefone, dados.email);
+      if (existente) {
+        this.log(`Currículo duplicado detectado — ID #${existente.id} (${existente.nome}). Aguardando confirmação do remetente.`, 'warning');
+        this.pendingUpdates.set(sender, {
+          existingId: existente.id,
+          dados,
+          pdf_base64: media.data,
+          pdf_nome:   msg.body || 'curriculo.pdf',
+          msgId,
+        });
         try {
-          await this.enviarMensagemParaNumero(numeroDestino, `✅ *Currículo recebido de ${sender}*\n\n${mensagem}`);
-          this.log(`[4/4] Concluído. Currículo de ${sender} enviado para ${numeroDestino}.`, 'success');
-        } catch (sendErr) {
-          this.log(`[4/4] Currículo salvo, mas falhou ao enviar para ${numeroDestino}: ${sendErr.message}`, 'warning');
+          const chat = await msg.getChat();
+          const tplDuplicata = db.getConfig('msg_duplicata') ||
+            '⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).\n\nDeseja *atualizar* o registro existente?\n\nResponda *SIM* para atualizar ou *NÃO* para manter o atual.';
+          await chat.sendMessage(tplDuplicata.replace('{nome}', existente.nome || ''));
+        } catch (e) {
+          this.log(`Aviso: não foi possível notificar remetente sobre duplicata: ${e.message}`, 'warning');
         }
-      } else {
-        this.log(`[4/4] Concluído. Currículo de ${sender} salvo no banco. Configure um número de destino em Configuração para receber também pelo WhatsApp.`, 'success');
+        return;
       }
+
+      // Etapa 4: salva no banco e notifica
+      await this.salvarENotificar({ sender, dados, pdf_base64: media.data, pdf_nome: msg.body || 'curriculo.pdf', msgId, msg });
+      // Etapa 5 concluída via salvarENotificar
 
     } catch (err) {
       const detalhe = err?.stack || err?.message || JSON.stringify(err) || String(err);
@@ -176,9 +192,73 @@ class WhatsAppService extends EventEmitter {
 
       try {
         const chat = await msg.getChat();
-        await chat.sendMessage('❌ Ocorreu um erro ao processar seu currículo. Tente novamente.');
+        await chat.sendMessage(db.getConfig('msg_erro') || '❌ Ocorreu um erro ao processar seu currículo. Tente novamente.');
       } catch (_) {}
     }
+  }
+
+  // ── Salva currículo e notifica destino + remetente ──────────────────────────
+
+  async salvarENotificar({ sender, dados, pdf_base64, pdf_nome, msgId, msg }) {
+    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome });
+    db.markProcessed(msgId);
+
+    const raw           = db.getConfig('numero_destino');
+    const numeroDestino = raw ? raw.replace(/\D/g, '') + '@c.us' : null;
+    const mensagem      = this.formatarParaWhatsApp(dados);
+
+    try {
+      const msgConfirmacao = db.getConfig('msg_confirmacao') ||
+        '✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!';
+      const chatRemetente = await msg.getChat();
+      await chatRemetente.sendMessage(msgConfirmacao);
+    } catch (confirmErr) {
+      this.log(`Aviso: não foi possível confirmar recebimento para ${sender}: ${confirmErr.message}`, 'warning');
+    }
+
+    if (numeroDestino) {
+      this.log(`[4/4] Enviando resultado para ${numeroDestino}...`, 'info');
+      try {
+        await this.enviarMensagemParaNumero(numeroDestino, `✅ *Currículo recebido de ${sender}*\n\n${mensagem}`);
+        this.log(`[4/4] Concluído. Currículo de ${sender} enviado para ${numeroDestino}.`, 'success');
+      } catch (sendErr) {
+        this.log(`[4/4] Currículo salvo, mas falhou ao enviar para ${numeroDestino}: ${sendErr.message}`, 'warning');
+      }
+    } else {
+      this.log(`[4/4] Concluído. Currículo de ${sender} salvo no banco.`, 'success');
+    }
+  }
+
+  // ── Resposta de confirmação de atualização ───────────────────────────────────
+
+  async handleConfirmationResponse(msg) {
+    const sender  = msg.from;
+    const pending = this.pendingUpdates.get(sender);
+    const resposta = (msg.body || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    if (resposta === 'SIM') {
+      this.log(`Remetente ${sender} confirmou atualização do currículo ID #${pending.existingId}.`, 'info');
+      db.deleteCurriculo(pending.existingId);
+      this.pendingUpdates.delete(sender);
+      await this.salvarENotificar({
+        sender,
+        dados:      pending.dados,
+        pdf_base64: pending.pdf_base64,
+        pdf_nome:   pending.pdf_nome,
+        msgId:      pending.msgId,
+        msg,
+      });
+    } else if (resposta === 'NAO') {
+      this.log(`Remetente ${sender} optou por manter o currículo existente.`, 'info');
+      this.pendingUpdates.delete(sender);
+      try {
+        const chat = await msg.getChat();
+        await chat.sendMessage(db.getConfig('msg_nao_atualizar') || '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!');
+      } catch (e) {
+        this.log(`Aviso: não foi possível enviar resposta de agradecimento para ${sender}: ${e.message}`, 'warning');
+      }
+    }
+    // Se resposta não for SIM nem NÃO, ignora e mantém pendente
   }
 
   // ── Envio robusto de mensagem ────────────────────────────────────────────────
@@ -225,19 +305,90 @@ class WhatsAppService extends EventEmitter {
     return await this.tentativaTextoLivre(texto);
   }
 
+  // ── Detecção de idioma e tradução ───────────────────────────────────────────
+
+  async traduzirSeNecessario(texto) {
+    try {
+      // Detecta o idioma com base nos primeiros 500 caracteres
+      const deteccao = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        temperature: 0,
+        max_tokens: 5,
+        messages: [
+          {
+            role: 'system',
+            content: 'Identifique o idioma do texto. Responda APENAS com o código ISO 639-1 em minúsculas (ex: pt, en, es, fr, de, it, zh, etc).',
+          },
+          { role: 'user', content: texto.slice(0, 500) },
+        ],
+      });
+
+      const idioma = deteccao.choices[0].message.content.trim().toLowerCase().slice(0, 2);
+
+      if (idioma === 'pt') return { texto, idioma };
+
+      // Traduz para português brasileiro
+      this.log(`Idioma detectado: "${idioma}". Traduzindo para português...`, 'info');
+      const traducao = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.1,
+        max_tokens: 8000,
+        messages: [
+          {
+            role: 'system',
+            content: 'Traduza o texto a seguir para o português do Brasil. Mantenha toda a estrutura, formatação e informações originais. Não resuma nem omita nada.',
+          },
+          { role: 'user', content: texto.slice(0, 20000) },
+        ],
+      });
+
+      return { texto: traducao.choices[0].message.content.trim(), idioma };
+    } catch (e) {
+      this.log(`Aviso: falha na detecção/tradução de idioma, usando texto original: ${e.message}`, 'warning');
+      return { texto, idioma: 'pt' };
+    }
+  }
+
+  // ── Verificação se documento é currículo ────────────────────────────────────
+
+  async verificarSeCurriculo(texto) {
+    try {
+      const res = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant',
+        temperature: 0,
+        max_tokens: 5,
+        messages: [
+          {
+            role: 'system',
+            content: 'Você analisa documentos. Responda APENAS com "SIM" se o texto for um currículo/CV profissional, ou "NAO" se for qualquer outro tipo de documento (contrato, nota fiscal, relatório, etc).',
+          },
+          { role: 'user', content: `Documento:\n\n${texto.slice(0, 3000)}` },
+        ],
+      });
+      const resposta = res.choices[0].message.content.trim().toUpperCase();
+      return resposta.startsWith('SIM');
+    } catch (e) {
+      this.log(`Aviso: falha na verificação de currículo, prosseguindo mesmo assim: ${e.message}`, 'warning');
+      return true; // Em caso de erro na verificação, deixa prosseguir
+    }
+  }
+
   // Tentativa 1: extração JSON completa
   async tentativaJson(texto) {
     const res = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       temperature: 0.1,
-      max_tokens: 3000,
+      max_tokens: 8000,
       messages: [
         {
           role: 'system',
-          content: `Você é um extrator de currículos. Responda SOMENTE com um objeto JSON válido, sem explicações, sem markdown, sem blocos de código. Use esta estrutura:
-{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[]}`,
+          content: `Você é um extrator de currículos. Responda SOMENTE com um objeto JSON válido, sem explicações, sem markdown, sem blocos de código.
+IMPORTANTE: NÃO resuma, NÃO omita e NÃO abrevie nenhuma informação. Copie textos, atividades e descrições EXATAMENTE como aparecem no currículo.
+Para cada experiência: capture o parágrafo descritivo em "descricao" e TODOS os bullets/atividades em "atividades" — se houver sub-projetos, prefixe cada item com o nome do projeto entre colchetes, ex: "[Nome do Projeto] atividade aqui".
+Use esta estrutura:
+{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}`,
         },
-        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 8000)}` },
+        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 20000)}` },
       ],
     });
 
@@ -252,13 +403,13 @@ class WhatsAppService extends EventEmitter {
     const res = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
       temperature: 0.1,
-      max_tokens: 2000,
+      max_tokens: 5000,
       messages: [
         {
           role: 'system',
-          content: 'Extraia dados do currículo. Responda SOMENTE com JSON válido: {"nome":null,"telefone":null,"email":null,"descricao":null,"experiencias":[],"formacao":[],"capacitacoes":[]}',
+          content: 'Extraia dados do currículo. NÃO resuma nem omita informações — copie as atividades exatamente como estão. Responda SOMENTE com JSON válido: {"nome":null,"telefone":null,"email":null,"descricao":null,"experiencias":[],"formacao":[],"capacitacoes":[],"habilidades":[]}',
         },
-        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 5000)}` },
+        { role: 'user', content: `Currículo:\n\n${texto.slice(0, 12000)}` },
       ],
     });
 
@@ -309,16 +460,21 @@ class WhatsAppService extends EventEmitter {
     if (d.experiencias?.length) {
       partes.push('💼 *EXPERIÊNCIA PROFISSIONAL*');
       d.experiencias.forEach(e => {
+        const desc  = e.descricao ? `\n${e.descricao}` : '';
         const ativs = e.atividades?.length
           ? '\n' + e.atividades.map(a => `  • ${a}`).join('\n')
           : '';
-        partes.push(`🏢 *${e.empresa}* | ${e.cargo} | ${e.periodo}${ativs}`);
+        partes.push(`🏢 *${e.empresa}* | ${e.cargo} | ${e.periodo}${desc}${ativs}`);
       });
     }
 
     if (d.formacao?.length) {
       const items = d.formacao.map(f => `• *${f.instituicao}* — ${f.curso} (${f.periodo})`).join('\n');
       partes.push(`🎓 *FORMAÇÃO ACADÊMICA*\n${items}`);
+    }
+
+    if (d.habilidades?.length) {
+      partes.push(`🛠️ *HABILIDADES E COMPETÊNCIAS*\n${d.habilidades.map(h => `• ${h}`).join('\n')}`);
     }
 
     if (d.capacitacoes?.length) {

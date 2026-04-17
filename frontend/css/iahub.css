@@ -429,6 +429,17 @@ a { text-decoration: none; color: inherit; }
 }
 
 .form-control::placeholder { color: var(--text-lo); }
+textarea.form-control {
+  resize: vertical;
+  min-height: 80px;
+  font-family: inherit;
+  box-sizing: border-box;
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  position: relative;
+  z-index: 1;
+}
 .form-hint { font-size: 11.5px; color: var(--text-lo); margin-top: 5px; }
 
 /* ── Table ───────────────────────────────────────────────── */

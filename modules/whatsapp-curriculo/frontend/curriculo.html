@@ -12,6 +12,8 @@
     .exp-per   { color:var(--text-lo); font-size:12px; margin-top:2px; }
     .exp-list  { list-style:disc; padding-left:18px; margin-top:10px; }
     .exp-list li{ color:var(--text-md); font-size:13px; margin-bottom:3px; }
+    .exp-desc  { color:var(--text-md); font-size:13px; line-height:1.7; margin-top:8px; }
+    .skill-tag { display:inline-block; background:var(--bg-card); border:1px solid var(--border); border-radius:20px; padding:4px 12px; font-size:12.5px; color:var(--text-md); margin:3px; }
     .field-l   { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo); margin-bottom:3px; }
     .field-v   { font-size:14.5px; color:var(--text-hi); margin-bottom:16px; }
     .field-v a { color:var(--accent-light); }
@@ -86,6 +88,7 @@
         <div class="exp-emp">${e.empresa||'—'}</div>
         <div class="exp-cargo">${e.cargo||''}</div>
         <div class="exp-per">${e.periodo||''}</div>
+        ${e.descricao ? `<div class="exp-desc">${e.descricao}</div>` : ''}
         ${e.atividades?.length ? `<ul class="exp-list">${e.atividades.map(a=>`<li>${a}</li>`).join('')}</ul>` : ''}
       </div>`).join('');
 
@@ -93,7 +96,8 @@
       `<div class="field-v"><strong>${f.instituicao||'—'}</strong> — ${f.curso||'—'} <span style="color:var(--text-lo);font-size:12px">(${f.periodo||'—'})</span></div>`
     ).join('');
 
-    const caps = (c.capacitacoes||[]).map(x => `<span class="badge badge-purple" style="margin:3px">${x}</span>`).join('');
+    const caps  = (c.capacitacoes||[]).map(x => `<span class="badge badge-purple" style="margin:3px">${x}</span>`).join('');
+    const habs  = (c.habilidades||[]).map(h => `<span class="skill-tag">${h}</span>`).join('');
 
     document.getElementById('page-content').innerHTML = `
 
@@ -125,6 +129,12 @@
       <div class="card mb-4">
         <div class="card-header">💼 Experiência Profissional</div>
         <div class="card-body">${exps}</div>
+      </div>` : ''}
+
+      ${habs ? `
+      <div class="card mb-4">
+        <div class="card-header">🛠️ Habilidades e Competências</div>
+        <div class="card-body" style="line-height:2">${habs}</div>
       </div>` : ''}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">

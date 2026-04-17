@@ -43,6 +43,7 @@ module.exports = {
       experiencias:    row.experiencias    || [],
       formacao:        row.formacao        || [],
       capacitacoes:    row.capacitacoes    || [],
+      habilidades:     row.habilidades     || [],
       dados_completos: row.dados_completos || null,
       pdf_base64:      row.pdf_base64      || null,
       pdf_nome:        row.pdf_nome        || null,
@@ -61,6 +62,14 @@ module.exports = {
 
   getCurriculo(id) {
     return load().curriculos.find(c => c.id === id) || null;
+  },
+
+  findByPhoneOrEmail(telefone, email) {
+    const data = load();
+    return data.curriculos.find(c =>
+      (telefone && c.telefone && c.telefone === telefone) ||
+      (email    && c.email    && c.email.toLowerCase() === email.toLowerCase())
+    ) || null;
   },
 
   deleteCurriculo(id) {
