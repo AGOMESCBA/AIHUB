@@ -48,7 +48,6 @@ class WhatsAppService extends EventEmitter {
     this.client = new Client({
       authStrategy: new LocalAuth(),
       puppeteer: {
-        executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe',
         headless: true,
         args: [
           '--no-sandbox',
@@ -66,6 +65,11 @@ class WhatsAppService extends EventEmitter {
           '--disable-sync',
           '--mute-audio',
           '--disable-infobars',
+          '--disable-translate',
+          '--disable-features=TranslateUI',
+          '--safebrowsing-disable-auto-update',
+          '--hide-scrollbars',
+          '--metrics-recording-only',
         ],
       },
     });
