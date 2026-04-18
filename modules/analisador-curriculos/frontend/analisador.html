@@ -168,8 +168,12 @@
       <div class="ajuda-criterio">
         <div class="ajuda-pts">15 pts</div>
         <div class="ajuda-criterio-info">
-          <strong>Nível e Tempo de Experiência</strong>
-          <p>O candidato tem o nível pedido (Júnior, Pleno, Sênior)? E o tempo de experiência é compatível com o que a vaga exige?</p>
+          <strong>Nível e Tempo de Experiência Relevante</strong>
+          <p>O sistema calcula automaticamente o tempo total de experiência do candidato somando todos os períodos informados no currículo. Em seguida, a IA avalia o tempo de experiência <em>relevante para a vaga</em> e classifica o candidato:</p>
+          <p>• <strong style="color:var(--accent-light)">Júnior</strong>: menos de 2 anos de experiência relevante<br>
+             • <strong style="color:var(--accent-light)">Pleno</strong>: de 2 a 5 anos de experiência relevante<br>
+             • <strong style="color:var(--accent-light)">Sênior</strong>: mais de 5 anos de experiência relevante</p>
+          <p>O nível do candidato é comparado ao nível exigido na vaga: nível igual ou superior = 15 pts; um nível abaixo = 8 pts; dois níveis abaixo = 0 pts.</p>
         </div>
       </div>
       <div class="ajuda-criterio">
@@ -183,7 +187,9 @@
 
     <div class="ajuda-etapa" style="margin-bottom:0">
       <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
-      <p>A pontuação total define o nível: <strong style="color:var(--success)">Alto (70–100)</strong>, <strong style="color:var(--warning)">Médio (40–69)</strong> ou <strong style="color:var(--error)">Baixo (0–39)</strong>. Os candidatos são ordenados do mais compatível para o menos. Os eliminados (Etapa 1 e 2) aparecem em uma seção separada e colapsada no final da página.</p>
+      <p>A pontuação total define o nível de compatibilidade: <strong style="color:var(--success)">Alto (70–100 pts)</strong>, <strong style="color:var(--warning)">Médio (40–69 pts)</strong> ou <strong style="color:var(--error)">Baixo (0–39 pts)</strong>.</p>
+      <p>Cada card mostra o nível classificado pelo sistema (<em>Júnior / Pleno / Sênior</em>), o tempo de experiência relevante estimado e o tempo total de carreira do candidato.</p>
+      <p>Os candidatos são ordenados do mais compatível para o menos. Os eliminados (Etapas 1 e 2) aparecem em uma seção colapsada no final da página, com o motivo da eliminação.</p>
     </div>
   </div>
 </div>
@@ -282,6 +288,9 @@
       const pos = (r.pontos_positivos || []).map(p => `<li>${p}</li>`).join('');
       const neg = (r.pontos_negativos || []).map(p => `<li>${p}</li>`).join('');
       const det = r.detalhes || {};
+      const nivelCandBadge = r.nivel_candidato
+        ? `<span style="font-size:11px;background:var(--bg-hover);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--text-lo)">Candidato: ${r.nivel_candidato}${r.meses_relevantes > 0 ? ` · ${Math.floor(r.meses_relevantes/12) > 0 ? Math.floor(r.meses_relevantes/12)+'a ' : ''}${r.meses_relevantes%12 > 0 ? r.meses_relevantes%12+'m relevantes' : 'relevantes'}` : ''}${r.exp_total ? ` · Total: ${r.exp_total}` : ''}</span>`
+        : '';
       const detHtml = (det.requisitos_obrigatorios !== undefined) ? `
         <div class="detail-scores">
           <div class="detail-score"><div class="detail-score-val">${det.requisitos_obrigatorios ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/40</span></div><div class="detail-score-lbl">Req. Obrigatórios</div></div>
@@ -296,6 +305,7 @@
             <div>
               <div class="result-name">${r.nome || '—'}</div>
               <div class="result-contact">${r.telefone || ''}${r.telefone && r.email ? ' · ' : ''}${r.email || ''}</div>
+              <div style="margin-top:4px">${nivelCandBadge}</div>
             </div>
             <div class="result-score">
               <div class="result-score-num">${r.score}</div>
