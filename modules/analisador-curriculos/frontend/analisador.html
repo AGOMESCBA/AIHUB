@@ -30,7 +30,7 @@
     .ponto-list li  { list-style:none;padding-left:18px;position:relative;color:var(--text-md); }
     .ponto-list li::before { position:absolute;left:0; }
     .ponto-pos li::before  { content:"✓";color:var(--success); }
-    .ponto-neg li::before  { content:"✗";color:var(--error); }
+    .ponto-neg li::before  { content:"●";color:var(--error);font-size:10px;top:3px; }
     .resumo         { font-size:13px;color:var(--text-md);line-height:1.7;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
     .loader         { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px; }
     .spinner        { width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite; }
@@ -87,9 +87,10 @@
         <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
       </div>
       <div class="submenu" id="sub-vagas">
-        <a href="/funcoes.html"    class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
-        <a href="/vagas.html"      class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
-        <a href="/analisador.html" class="nav-item sub active"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/funcoes.html"           class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
+        <a href="/vagas.html"             class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/analisador.html"        class="nav-item sub active"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/config-analisador.html" class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
       </div>
     </div>
     <div class="sidebar-footer">
@@ -117,11 +118,11 @@
             </select>
             <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>▶ Analisar Currículos</button>
             <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')" title="Como funciona a análise" style="font-size:16px;padding:6px 12px">?</button>
-            <select id="filtro-nivel" class="form-control" style="max-width:160px" onchange="filtrarResultados()">
-              <option value="">Todos os níveis</option>
-              <option value="Alto">Alto</option>
-              <option value="Médio">Médio</option>
-              <option value="Baixo">Baixo</option>
+            <select id="filtro-nivel" class="form-control" style="max-width:220px" onchange="filtrarResultados()">
+              <option value="">Filtrar por compatibilidade</option>
+              <option value="Alto">✓ Alta compatibilidade (70–100 pts)</option>
+              <option value="Médio">~ Média compatibilidade (40–69 pts)</option>
+              <option value="Baixo">● Baixa compatibilidade (0–39 pts)</option>
             </select>
           </div>
           <div id="funcao-info" style="display:none;margin-top:12px;padding:14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.8"></div>

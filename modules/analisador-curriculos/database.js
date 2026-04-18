@@ -95,4 +95,15 @@ module.exports = {
 
   // ── Currículos (para o analisador) ───────────────────────────────────────────
   listCurriculos() { return load().curriculos || []; },
+
+  // ── Configuração do analisador ────────────────────────────────────────────────
+  getAnalisadorConfig() {
+    const d = load();
+    return { junior_max_meses: 12, pleno_max_meses: 36, ...(d.analisador_config || {}) };
+  },
+  setAnalisadorConfig(cfg) {
+    const d = load();
+    d.analisador_config = { ...this.getAnalisadorConfig(), ...cfg };
+    persist(d);
+  },
 };

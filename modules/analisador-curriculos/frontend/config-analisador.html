@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configuração — Analisador de Currículos</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html"  class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html"    class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+        <a href="/config.html"     class="nav-item sub"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
+        <a href="/funcoes.html"         class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
+        <a href="/vagas.html"           class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/analisador.html"      class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/config-analisador.html" class="nav-item sub active"><span class="nav-icon">⚙</span><span class="nav-label">Configuração</span></a>
+      </div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Configuração</span>
+      <span class="topbar-breadcrumb ms-auto">Recrutamento › Configuração</span>
+    </div>
+
+    <div class="page-content">
+      <div style="max-width:580px">
+
+        <div id="alert-ok" class="d-none mb-4" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:9px;padding:12px 16px;font-size:13px">
+          ✅ Configuração salva com sucesso!
+        </div>
+        <div id="alert-erro" class="d-none mb-4" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+
+        <div class="card mb-4">
+          <div class="card-header">⏱ Classificação de Nível por Tempo de Experiência</div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--text-md);margin-bottom:20px;line-height:1.7">
+              Defina os limites de tempo de experiência <strong style="color:var(--text-hi)">relevante para a vaga</strong> que classificam o candidato como Júnior, Pleno ou Sênior.
+              O sistema calculará automaticamente o tempo total de experiência e a IA avaliará o tempo relevante com base nesses critérios.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Limite Júnior → Pleno (em meses)</label>
+              <input type="number" id="junior_max" class="form-control" min="1" max="120" placeholder="12" oninput="atualizarPreview()">
+              <div class="form-hint">Candidatos com menos de <strong id="hint-junior">12 meses</strong> de experiência relevante serão classificados como <strong>Júnior</strong>.</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Limite Pleno → Sênior (em meses)</label>
+              <input type="number" id="pleno_max" class="form-control" min="1" max="300" placeholder="36" oninput="atualizarPreview()">
+              <div class="form-hint">Candidatos com mais de <strong id="hint-senior">36 meses</strong> de experiência relevante serão classificados como <strong>Sênior</strong>.</div>
+            </div>
+
+            <div id="preview" style="background:var(--bg-hover);border-radius:9px;padding:14px 16px;margin-top:8px;font-size:13px;line-height:2">
+              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:6px">Prévia da classificação</div>
+              <div><span style="display:inline-block;min-width:90px;color:var(--accent-light);font-weight:600">Júnior</span> → menos de <span id="prev-junior">12</span> meses (&lt; 1 ano)</div>
+              <div><span style="display:inline-block;min-width:90px;color:var(--success);font-weight:600">Pleno</span> → de <span id="prev-pleno-min">12</span> a <span id="prev-pleno-max">36</span> meses (1 a 3 anos)</div>
+              <div><span style="display:inline-block;min-width:90px;color:var(--warning);font-weight:600">Sênior</span> → acima de <span id="prev-senior">36</span> meses (3+ anos)</div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="salvar()" style="width:100%">Salvar Configuração</button>
+
+        <div class="card" style="margin-top:32px">
+          <div class="card-header">ℹ Como funciona</div>
+          <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+            Os limites definidos aqui são usados em toda análise de currículo. O sistema soma automaticamente os períodos informados em cada experiência profissional e a IA avalia quanto desse tempo é relevante para os requisitos da vaga.<br><br>
+            A classificação resultante (Júnior / Pleno / Sênior) é comparada ao nível exigido na <a href="/funcoes.html" style="color:var(--accent-light)">Função cadastrada</a> e contribui com até <strong style="color:var(--accent-light)">15 pontos</strong> na pontuação total do candidato.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  function mesesParaTexto(m) {
+    const anos = Math.floor(m / 12);
+    const meses = m % 12;
+    if (anos === 0) return `${m} mês${m !== 1 ? 'es' : ''}`;
+    if (meses === 0) return `${anos} ano${anos !== 1 ? 's' : ''}`;
+    return `${anos} ano${anos !== 1 ? 's' : ''} e ${meses} mês${meses !== 1 ? 'es' : ''}`;
+  }
+
+  function atualizarPreview() {
+    const j = parseInt(document.getElementById('junior_max').value) || 12;
+    const p = parseInt(document.getElementById('pleno_max').value) || 36;
+    document.getElementById('hint-junior').textContent  = `${j} meses`;
+    document.getElementById('hint-senior').textContent  = `${p} meses`;
+    document.getElementById('prev-junior').textContent  = j;
+    document.getElementById('prev-pleno-min').textContent = j;
+    document.getElementById('prev-pleno-max').textContent = p;
+    document.getElementById('prev-senior').textContent  = p;
+
+    const jTexto = mesesParaTexto(j);
+    const pTexto = mesesParaTexto(p);
+    document.querySelectorAll('#preview div')[1].innerHTML =
+      `<span style="display:inline-block;min-width:90px;color:var(--accent-light);font-weight:600">Júnior</span> → menos de <strong>${j}</strong> meses (menos de ${jTexto})`;
+    document.querySelectorAll('#preview div')[2].innerHTML =
+      `<span style="display:inline-block;min-width:90px;color:var(--success);font-weight:600">Pleno</span> → de <strong>${j}</strong> a <strong>${p}</strong> meses (${jTexto} até ${pTexto})`;
+    document.querySelectorAll('#preview div')[3].innerHTML =
+      `<span style="display:inline-block;min-width:90px;color:var(--warning);font-weight:600">Sênior</span> → acima de <strong>${p}</strong> meses (mais de ${pTexto})`;
+  }
+
+  async function carregar() {
+    const cfg = await fetch('/api/analisador/config').then(r => r.json());
+    document.getElementById('junior_max').value = cfg.junior_max_meses;
+    document.getElementById('pleno_max').value  = cfg.pleno_max_meses;
+    atualizarPreview();
+  }
+
+  async function salvar() {
+    const j = parseInt(document.getElementById('junior_max').value);
+    const p = parseInt(document.getElementById('pleno_max').value);
+
+    const alertErro = document.getElementById('alert-erro');
+    if (!j || !p) {
+      alertErro.textContent = '❌ Preencha os dois campos.';
+      alertErro.classList.remove('d-none');
+      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+      return;
+    }
+    if (j >= p) {
+      alertErro.textContent = '❌ O limite Júnior deve ser menor que o limite Pleno.';
+      alertErro.classList.remove('d-none');
+      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+      return;
+    }
+
+    const r = await fetch('/api/analisador/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ junior_max_meses: j, pleno_max_meses: p }),
+    });
+    if (r.ok) {
+      document.getElementById('alert-ok').classList.remove('d-none');
+      setTimeout(() => document.getElementById('alert-ok').classList.add('d-none'), 3000);
+    }
+  }
+
+  carregar();
+</script>
+</body>
+</html>

@@ -58,16 +58,16 @@ function parsePeriodoMeses(periodo) {
   return Math.max(0, meses);
 }
 
-function calcularExperiencia(curriculo) {
+function calcularExperiencia(curriculo, cfg = { junior_max_meses: 12, pleno_max_meses: 36 }) {
   let totalMeses = 0;
   for (const exp of (curriculo.experiencias || [])) {
     totalMeses += parsePeriodoMeses(exp.periodo);
   }
 
   let nivel;
-  if (totalMeses < 12)      nivel = 'Júnior';   // 0–1 ano
-  else if (totalMeses < 36) nivel = 'Pleno';    // 1–3 anos
-  else                       nivel = 'Sênior';  // 3+ anos
+  if (totalMeses < cfg.junior_max_meses)      nivel = 'Júnior';
+  else if (totalMeses < cfg.pleno_max_meses)  nivel = 'Pleno';
+  else                                         nivel = 'Sênior';
 
   const anos   = Math.floor(totalMeses / 12);
   const mesesR = totalMeses % 12;
@@ -198,8 +198,8 @@ Responda SOMENTE com JSON array válido, sem markdown.`;
 }
 
 // ── Etapa 2: Análise profunda individual ─────────────────────────────────────
-async function analisarIndividual(funcao, curriculo) {
-  const expCalc = calcularExperiencia(curriculo);
+async function analisarIndividual(funcao, curriculo, cfg) {
+  const expCalc = calcularExperiencia(curriculo, cfg);
 
   const system = `Você é um recrutador sênior experiente. Avalie o currículo completo abaixo com base no perfil da vaga.
 
@@ -219,10 +219,10 @@ RUBRICA DE PONTUAÇÃO (total 100 pts):
 3. NÍVEL E TEMPO DE EXPERIÊNCIA RELEVANTE — até 15 pts
    O sistema calculou a experiência TOTAL do candidato: ${expCalc.texto} (${expCalc.nivel} pelo tempo total).
    Avalie o tempo de experiência RELEVANTE para esta vaga especificamente.
-   Classifique o candidato como:
-   • Júnior: menos de 1 ano de experiência relevante
-   • Pleno: de 1 a 3 anos de experiência relevante
-   • Sênior: mais de 3 anos de experiência relevante
+   Classifique o candidato como (critérios configurados pelo recrutador):
+   • Júnior: menos de ${cfg.junior_max_meses} meses de experiência relevante
+   • Pleno: de ${cfg.junior_max_meses} a ${cfg.pleno_max_meses} meses de experiência relevante
+   • Sênior: mais de ${cfg.pleno_max_meses} meses de experiência relevante
    Compare ao nível exigido pela vaga:
    • Nível idêntico ou candidato é Sênior para vaga Pleno → 15 pts
    • Um nível abaixo (ex: Pleno para vaga Sênior) → 8 pts
@@ -293,6 +293,16 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
     res.json({ ok: true });
   });
 
+  // ── Config do analisador ──────────────────────────────────────────────────────
+  app.get ('/api/analisador/config', requireAuth, (_req, res) => res.json(db.getAnalisadorConfig()));
+  app.post('/api/analisador/config', requireAuth, (req, res) => {
+    const { junior_max_meses, pleno_max_meses } = req.body;
+    if (!junior_max_meses || !pleno_max_meses) return res.status(400).json({ error: 'Campos obrigatórios' });
+    if (Number(junior_max_meses) >= Number(pleno_max_meses)) return res.status(400).json({ error: 'Limite Júnior deve ser menor que Pleno' });
+    db.setAnalisadorConfig({ junior_max_meses: Number(junior_max_meses), pleno_max_meses: Number(pleno_max_meses) });
+    res.json({ ok: true });
+  });
+
   // ── Analisador ───────────────────────────────────────────────────────────────
   app.post('/api/analisador/analisar', requireAuth, async (req, res) => {
     const { funcao_id } = req.body;
@@ -303,18 +313,19 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
     if (!curriculos.length) return res.json({ resultados: [], eliminados: [], total: 0 });
 
     try {
+      const cfg = db.getAnalisadorConfig();
       const { aprovados, eliminados } = await triagem(funcao, curriculos);
 
       const resultados = [];
       for (const c of aprovados) {
-        const r = await analisarIndividual(funcao, c);
+        const r = await analisarIndividual(funcao, c, cfg);
         const enriquecido = {
           ...r,
           nome:      c.nome      || '—',
           telefone:  c.telefone  || '—',
           email:     c.email     || '—',
           remetente: c.remetente || '—',
-          exp_total: calcularExperiencia(c).texto,
+          exp_total: calcularExperiencia(c, cfg).texto,
         };
         if ((r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
           eliminados.push({ ...c, motivo_eliminacao: r.resumo || 'Não atende os requisitos obrigatórios' });
