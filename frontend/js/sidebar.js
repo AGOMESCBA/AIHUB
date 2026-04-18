@@ -1,26 +1,26 @@
-// Gerencia estado da sidebar (expandida/retraída)
 (function () {
-  const STORAGE_KEY = 'iahub_sidebar';
+  const STORAGE_KEY = 'iahub_sidebar_pinned';
 
   function getSidebar() { return document.getElementById('sidebar'); }
 
-  function apply(collapsed) {
+  function apply(pinned) {
     const sb = getSidebar();
     if (!sb) return;
-    if (collapsed) sb.classList.add('collapsed');
-    else           sb.classList.remove('collapsed');
+    sb.classList.toggle('pinned', pinned);
   }
 
   function toggle() {
-    const collapsed = !getSidebar().classList.contains('collapsed');
-    apply(collapsed);
-    localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0');
+    const sb = getSidebar();
+    if (!sb) return;
+    const pinned = !sb.classList.contains('pinned');
+    apply(pinned);
+    localStorage.setItem(STORAGE_KEY, pinned ? '1' : '0');
   }
 
   function init() {
     apply(localStorage.getItem(STORAGE_KEY) === '1');
 
-    // Abre submenu que contém a página ativa
+    // Abre o submenu que contém a página ativa
     document.querySelectorAll('.submenu').forEach(sm => {
       if (sm.querySelector('.nav-item.active')) {
         sm.classList.add('open');
@@ -39,9 +39,8 @@
     parent?.classList.toggle('open', opening);
   }
 
-  // Expõe globalmente
-  window.toggleSidebar  = toggle;
-  window.toggleSubmenu  = toggleSubmenu;
+  window.toggleSidebar = toggle;
+  window.toggleSubmenu = toggleSubmenu;
 
   document.addEventListener('DOMContentLoaded', init);
 })();
