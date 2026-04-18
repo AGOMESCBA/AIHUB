@@ -28,10 +28,10 @@ async function chamarIA(systemPrompt, userPrompt, maxTokens = 2000) {
   return result.response.text().trim();
 }
 
-async function chamarIARapida(systemPrompt, userPrompt) {
+async function chamarIATriagem(systemPrompt, userPrompt) {
   try {
     const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant', temperature: 0, max_tokens: 1500,
+      model: 'llama-3.3-70b-versatile', temperature: 0, max_tokens: 1500,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: userPrompt   },
@@ -47,14 +47,24 @@ async function chamarIARapida(systemPrompt, userPrompt) {
   return result.response.text().trim();
 }
 
-function resumoCurriculo(c) {
-  const exps = (c.experiencias || []).map(e =>
-    `${e.cargo} em ${e.empresa} (${e.periodo})${e.descricao ? ': ' + e.descricao.slice(0, 150) : ''}`
-  ).join(' | ');
+function resumoCurriculo(c, curto = false) {
   const form = (c.formacao || []).map(f => `${f.curso} - ${f.instituicao}`).join('; ');
-  const habs = Array.isArray(c.habilidades) ? c.habilidades.join(', ') : '';
+  const habs = Array.isArray(c.habilidades) ? c.habilidades.join(' | ') : '';
   const caps = Array.isArray(c.capacitacoes) ? c.capacitacoes.join(', ') : '';
-  return `Nome:${c.nome||'—'} | Habilidades:${habs} | Capacitações:${caps} | Experiências:${exps} | Formação:${form} | Perfil:${(c.descricao||'').slice(0,200)}`;
+  const exps = (c.experiencias || []).map(e => {
+    const ativ = (e.atividades || []).slice(0, 5).join('; ');
+    return `${e.cargo} em ${e.empresa} (${e.periodo})` +
+      (e.descricao ? ': ' + e.descricao.slice(0, curto ? 200 : 400) : '') +
+      (ativ ? ' | Atividades: ' + ativ.slice(0, curto ? 200 : 400) : '');
+  }).join('\n');
+  const perfil = (c.descricao || '').slice(0, curto ? 300 : 500);
+  return `Nome: ${c.nome||'—'}
+Perfil: ${perfil}
+Habilidades: ${habs}
+Capacitações: ${caps}
+Formação: ${form}
+Experiências:
+${exps}`;
 }
 
 function perfilFuncao(funcao) {
@@ -83,22 +93,25 @@ Habilidades Técnicas exigidas: ${Array.isArray(funcao.habilidades_tecnicas) ? f
 Nível de Experiência: ${funcao.nivel_experiencia || '—'}
 Formação Necessária: ${funcao.formacao_necessaria || '—'}`.trim();
 
-  const system = `Você é um recrutador fazendo triagem inicial rigorosa. Verifique APENAS se o candidato menciona ou demonstra os requisitos obrigatórios. Seja criterioso: se não há evidência clara do requisito, reprove. Responda SOMENTE com JSON array válido, sem markdown.`;
+  const system = `Você é um recrutador especialista fazendo triagem inicial. Analise se o candidato possui evidência dos requisitos obrigatórios.
+IMPORTANTE: Considere variações de nome, siglas e produtos relacionados. Por exemplo: "Softexpert" e "SE SUITE" são o mesmo sistema; "SQL" inclui "MySQL", "PostgreSQL"; "Processos" inclui "BPM", "BPMN", "mapeamento de processos".
+Seja criterioso mas justo: se há evidência clara no perfil, habilidades ou experiências, aprove. Só reprove se não houver NENHUMA evidência.
+Responda SOMENTE com JSON array válido, sem markdown.`;
 
-  const BATCH = 10;
+  const BATCH = 5;
   const aprovados = [];
   const eliminados = [];
 
   for (let i = 0; i < curriculos.length; i += BATCH) {
     const batch = curriculos.slice(i, i + BATCH);
     const texto = batch.map((c, idx) =>
-      `[${idx + 1}] ID:${c.id} | ${resumoCurriculo(c)}`
-    ).join('\n');
+      `--- CANDIDATO ${idx + 1} (ID:${c.id}) ---\n${resumoCurriculo(c, true)}`
+    ).join('\n\n');
 
-    const user = `CRITÉRIOS MÍNIMOS DA VAGA:\n${criterios}\n\nCURRÍCULOS PARA TRIAGEM:\n${texto}\n\nPara cada currículo retorne:\n[{"id": ID, "apto": true/false, "motivo": "motivo objetivo em 1 frase"}]`;
+    const user = `CRITÉRIOS MÍNIMOS DA VAGA:\n${criterios}\n\nCURRÍCULOS PARA TRIAGEM:\n${texto}\n\nRetorne JSON array com um objeto por candidato:\n[{"id": ID_EXATO_DO_CANDIDATO, "apto": true/false, "motivo": "motivo objetivo em 1 frase"}]`;
 
     try {
-      const resposta = await chamarIARapida(system, user);
+      const resposta = await chamarIATriagem(system, user);
       const match = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\[[\s\S]*\]/);
       if (match) {
         const resultados = JSON.parse(match[0]);
