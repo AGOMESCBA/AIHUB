@@ -64,11 +64,10 @@ function calcularExperiencia(curriculo) {
     totalMeses += parsePeriodoMeses(exp.periodo);
   }
 
-  // Boas práticas de mercado
   let nivel;
-  if (totalMeses < 24)      nivel = 'Júnior';   // 0–2 anos
-  else if (totalMeses < 60) nivel = 'Pleno';    // 2–5 anos
-  else                       nivel = 'Sênior';  // 5+ anos
+  if (totalMeses < 12)      nivel = 'Júnior';   // 0–1 ano
+  else if (totalMeses < 36) nivel = 'Pleno';    // 1–3 anos
+  else                       nivel = 'Sênior';  // 3+ anos
 
   const anos   = Math.floor(totalMeses / 12);
   const mesesR = totalMeses % 12;
@@ -221,9 +220,9 @@ RUBRICA DE PONTUAÇÃO (total 100 pts):
    O sistema calculou a experiência TOTAL do candidato: ${expCalc.texto} (${expCalc.nivel} pelo tempo total).
    Avalie o tempo de experiência RELEVANTE para esta vaga especificamente.
    Classifique o candidato como:
-   • Júnior: sem experiência relevante ou menos de 2 anos na área
-   • Pleno: 2 a 5 anos de experiência relevante
-   • Sênior: mais de 5 anos de experiência relevante
+   • Júnior: menos de 1 ano de experiência relevante
+   • Pleno: de 1 a 3 anos de experiência relevante
+   • Sênior: mais de 3 anos de experiência relevante
    Compare ao nível exigido pela vaga:
    • Nível idêntico ou candidato é Sênior para vaga Pleno → 15 pts
    • Um nível abaixo (ex: Pleno para vaga Sênior) → 8 pts

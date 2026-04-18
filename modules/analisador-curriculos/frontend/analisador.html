@@ -170,9 +170,9 @@
         <div class="ajuda-criterio-info">
           <strong>Nível e Tempo de Experiência Relevante</strong>
           <p>O sistema calcula automaticamente o tempo total de experiência do candidato somando todos os períodos informados no currículo. Em seguida, a IA avalia o tempo de experiência <em>relevante para a vaga</em> e classifica o candidato:</p>
-          <p>• <strong style="color:var(--accent-light)">Júnior</strong>: menos de 2 anos de experiência relevante<br>
-             • <strong style="color:var(--accent-light)">Pleno</strong>: de 2 a 5 anos de experiência relevante<br>
-             • <strong style="color:var(--accent-light)">Sênior</strong>: mais de 5 anos de experiência relevante</p>
+          <p>• <strong style="color:var(--accent-light)">Júnior</strong>: menos de 1 ano de experiência relevante<br>
+             • <strong style="color:var(--accent-light)">Pleno</strong>: de 1 a 3 anos de experiência relevante<br>
+             • <strong style="color:var(--accent-light)">Sênior</strong>: mais de 3 anos de experiência relevante</p>
           <p>O nível do candidato é comparado ao nível exigido na vaga: nível igual ou superior = 15 pts; um nível abaixo = 8 pts; dois níveis abaixo = 0 pts.</p>
         </div>
       </div>
@@ -325,6 +325,9 @@
             ${neg ? `<div><div style="font-size:11px;color:var(--error);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos a avaliar</div><ul class="ponto-list ponto-neg">${neg}</ul></div>` : ''}
           </div>` : ''}
           ${r.resumo ? `<div class="resumo">${r.resumo}</div>` : ''}
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);text-align:right">
+            <a href="/curriculo.html?id=${r.id}" target="_blank" class="btn btn-ghost" style="font-size:12px;padding:5px 14px">📄 Ver Currículo Completo</a>
+          </div>
         </div>`;
     }).join('');
 
