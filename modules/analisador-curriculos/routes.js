@@ -208,13 +208,19 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
       const resultados = [];
       for (const c of aprovados) {
         const r = await analisarIndividual(funcao, c);
-        resultados.push({
+        const enriquecido = {
           ...r,
           nome:      c.nome      || '—',
           telefone:  c.telefone  || '—',
           email:     c.email     || '—',
           remetente: c.remetente || '—',
-        });
+        };
+        // Se não atendeu requisitos obrigatórios na análise profunda, move para eliminados
+        if ((r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
+          eliminados.push({ ...c, motivo_eliminacao: r.resumo || 'Não atende os requisitos obrigatórios da vaga' });
+        } else {
+          resultados.push(enriquecido);
+        }
       }
 
       resultados.sort((a, b) => b.score - a.score);

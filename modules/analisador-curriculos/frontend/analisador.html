@@ -51,6 +51,16 @@
     .eliminado-row:last-child { border-bottom:none; }
     .eliminado-nome { font-weight:600;color:var(--text-hi);min-width:160px; }
     .eliminado-motivo { color:var(--text-lo);font-size:12px; }
+    .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:flex;align-items:center;justify-content:center; }
+    .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(600px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .ajuda-titulo { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px; }
+    .ajuda-etapa  { margin-bottom:20px; }
+    .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent-light);margin-bottom:6px; }
+    .ajuda-etapa p { font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ajuda-criterio { display:flex;align-items:flex-start;gap:12px;margin-bottom:10px; }
+    .ajuda-pts { background:var(--bg-hover);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--accent-light);white-space:nowrap;min-width:48px;text-align:center; }
+    .ajuda-criterio-info strong { font-size:13px;color:var(--text-hi); }
+    .ajuda-criterio-info p { font-size:12px;color:var(--text-lo);margin:2px 0 0; }
   </style>
 </head>
 <body>
@@ -106,6 +116,7 @@
               <option value="">— Selecione uma função —</option>
             </select>
             <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>▶ Analisar Currículos</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')" title="Como funciona a análise" style="font-size:16px;padding:6px 12px">?</button>
             <select id="filtro-nivel" class="form-control" style="max-width:160px" onchange="filtrarResultados()">
               <option value="">Todos os níveis</option>
               <option value="Alto">Alto</option>
@@ -118,6 +129,61 @@
       </div>
 
       <div id="resultado-area"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Ajuda -->
+<div id="modal-ajuda" class="modal-ajuda-overlay d-none" onclick="if(event.target===this)this.classList.add('d-none')">
+  <div class="modal-ajuda">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div class="ajuda-titulo" style="margin:0">🔍 Como funciona a Análise de Currículos</div>
+      <button onclick="document.getElementById('modal-ajuda').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <div class="ajuda-etapa">
+      <div class="ajuda-etapa-titulo">⚡ Etapa 1 — Triagem automática</div>
+      <p>Antes de qualquer análise detalhada, o sistema faz uma triagem rápida em todos os currículos. Ele verifica se o candidato menciona os <strong style="color:var(--text-hi)">Requisitos Obrigatórios</strong> e as <strong style="color:var(--text-hi)">Habilidades Técnicas</strong> que você cadastrou na Função.</p>
+      <p>Quem <strong style="color:var(--error)">não atende</strong> esses critérios mínimos é eliminado aqui e não entra na análise profunda. Isso evita gastar tempo avaliando currículos claramente fora do perfil.</p>
+    </div>
+
+    <div class="ajuda-etapa">
+      <div class="ajuda-etapa-titulo">📊 Etapa 2 — Pontuação por critérios (máx. 100 pts)</div>
+      <p>Os candidatos que passaram da triagem são analisados individualmente. A IA avalia 4 critérios e atribui pontos a cada um:</p>
+
+      <div class="ajuda-criterio">
+        <div class="ajuda-pts">40 pts</div>
+        <div class="ajuda-criterio-info">
+          <strong>Requisitos Obrigatórios</strong>
+          <p>O candidato realmente tem experiência com o que foi exigido? Ex: se a vaga pede Softexpert, ele trabalhou com Softexpert? Atende tudo = 40 pts. Atende parcialmente = 20 pts. Não atende = 0 pts <em>(e o total máximo cai para 25)</em>.</p>
+        </div>
+      </div>
+      <div class="ajuda-criterio">
+        <div class="ajuda-pts">30 pts</div>
+        <div class="ajuda-criterio-info">
+          <strong>Habilidades Técnicas</strong>
+          <p>O candidato domina as ferramentas e tecnologias listadas na vaga? Quanto mais habilidades compatíveis, mais pontos.</p>
+        </div>
+      </div>
+      <div class="ajuda-criterio">
+        <div class="ajuda-pts">15 pts</div>
+        <div class="ajuda-criterio-info">
+          <strong>Nível e Tempo de Experiência</strong>
+          <p>O candidato tem o nível pedido (Júnior, Pleno, Sênior)? E o tempo de experiência é compatível com o que a vaga exige?</p>
+        </div>
+      </div>
+      <div class="ajuda-criterio">
+        <div class="ajuda-pts">15 pts</div>
+        <div class="ajuda-criterio-info">
+          <strong>Formação Acadêmica</strong>
+          <p>A formação do candidato atende ou supera o que foi definido na Função? Ex: se pediu Análise de Sistemas e ele tem Engenharia de Software, conta positivo.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ajuda-etapa" style="margin-bottom:0">
+      <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
+      <p>A pontuação total define o nível: <strong style="color:var(--success)">Alto (70–100)</strong>, <strong style="color:var(--warning)">Médio (40–69)</strong> ou <strong style="color:var(--error)">Baixo (0–39)</strong>. Os candidatos são ordenados do mais compatível para o menos. Os eliminados (Etapa 1 e 2) aparecem em uma seção separada e colapsada no final da página.</p>
     </div>
   </div>
 </div>
