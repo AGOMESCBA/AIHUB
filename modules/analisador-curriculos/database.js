@@ -106,4 +106,47 @@ module.exports = {
     d.analisador_config = { ...this.getAnalisadorConfig(), ...cfg };
     persist(d);
   },
+
+  // ── Análises Salvas ───────────────────────────────────────────────────────────
+  listAnalises() {
+    const d = load();
+    return ((d.analises || []))
+      .map(a => ({
+        id:               a.id,
+        data:             a.data,
+        vaga_id:          a.vaga_id,
+        funcao_id:        a.funcao_id,
+        funcao_nome:      a.funcao_nome,
+        total_curriculos: a.total_curriculos,
+        total_analisados: a.total_analisados,
+        total_eliminados: a.total_eliminados,
+        finalistas_count: (a.finalistas_ids || []).length,
+        status:           a.status,
+      }))
+      .sort((a, b) => b.data.localeCompare(a.data));
+  },
+
+  getAnalise(id) {
+    return (load().analises || []).find(a => a.id === id) || null;
+  },
+
+  saveAnalise(analise) {
+    const d = load();
+    if (!d.analises) d.analises = [];
+    const idx = d.analises.findIndex(a => a.id === analise.id);
+    if (idx >= 0) d.analises[idx] = analise;
+    else d.analises.push(analise);
+    persist(d);
+    return analise;
+  },
+
+  deleteAnalise(id) {
+    const d = load();
+    if (!d.analises) return false;
+    const idx = d.analises.findIndex(a => a.id === id);
+    if (idx === -1) return false;
+    d.analises.splice(idx, 1);
+    persist(d);
+    return true;
+  },
 };

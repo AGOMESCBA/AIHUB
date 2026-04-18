@@ -11,18 +11,19 @@
     .score-alto     { background:var(--success); }
     .score-medio    { background:var(--warning); }
     .score-baixo    { background:var(--error); }
-    .nivel-alto     { background:#14532d;color:var(--success); }
-    .nivel-medio    { background:#2d1e00;color:var(--warning); }
-    .nivel-baixo    { background:#450a0a;color:var(--error); }
+    .nivel-alto     { background:#dcfce7;color:#15803d; }
+    .nivel-medio    { background:#fef9c3;color:#a16207; }
+    .nivel-baixo    { background:#fee2e2;color:#b91c1c; }
     .nivel-badge    { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
     .result-card    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px;transition:border-color .2s; }
     .result-card:hover { border-color:var(--accent); }
+    .result-card.finalista { border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.12); }
     .result-header  { display:flex;align-items:center;gap:14px;margin-bottom:12px; }
     .result-rank    { font-size:22px;font-weight:800;color:var(--text-lo);min-width:32px;text-align:center; }
     .result-name    { font-size:15px;font-weight:700;color:var(--text-hi); }
     .result-contact { font-size:12px;color:var(--text-lo);margin-top:2px; }
     .result-score   { margin-left:auto;text-align:right; }
-    .result-score-num { font-size:26px;font-weight:800;color:var(--accent-light);line-height:1; }
+    .result-score-num { font-size:26px;font-weight:800;color:var(--accent);line-height:1; }
     .result-score-lbl { font-size:11px;color:var(--text-lo); }
     .score-row      { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
     .pontos         { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px; }
@@ -38,12 +39,13 @@
     .empty-state    { text-align:center;padding:80px 20px;color:var(--text-lo); }
     .empty-state div { font-size:48px;margin-bottom:12px; }
     .filtros        { display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px; }
-    .select-funcao  { min-width:280px; }
+    .select-vaga    { min-width:320px; }
     .tag            { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
     .detail-scores  { display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;padding:10px 0;border-top:1px solid var(--border); }
     .detail-score   { text-align:center;min-width:80px; }
-    .detail-score-val { font-size:18px;font-weight:700;color:var(--accent-light); }
+    .detail-score-val { font-size:18px;font-weight:700;color:var(--accent); }
     .detail-score-lbl { font-size:10px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-top:2px; }
+    /* Eliminados */
     .eliminados-section { margin-top:24px; }
     .eliminados-toggle  { background:none;border:1px solid var(--border);border-radius:8px;padding:10px 16px;width:100%;text-align:left;cursor:pointer;color:var(--text-md);font-size:13px;display:flex;justify-content:space-between;align-items:center; }
     .eliminados-toggle:hover { background:var(--bg-hover); }
@@ -53,17 +55,30 @@
     .eliminados-table td { padding:10px 12px 10px 0;vertical-align:top;border-bottom:1px solid var(--border); }
     .eliminados-table td:last-child { padding-right:0; }
     .eliminados-table tr:last-child td { border-bottom:none; }
-    .eliminados-table .col-nome { font-weight:600;color:var(--text-hi);width:25%;word-break:break-word; }
+    .eliminados-table .col-nome    { font-weight:600;color:var(--text-hi);width:25%;word-break:break-word; }
     .eliminados-table .col-contato { color:var(--text-lo);width:22%;font-size:12px; }
-    .eliminados-table .col-motivo { color:var(--text-lo);font-size:12px;line-height:1.6; }
-    .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:300;display:flex;align-items:center;justify-content:center; }
+    .eliminados-table .col-motivo  { color:var(--text-lo);font-size:12px;line-height:1.6; }
+    /* Checkbox e finalistas */
+    .cb-finalista   { width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0; }
+    .badge-finalista{ background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600; }
+    /* Barra de ação salvar */
+    .save-bar { position:sticky;bottom:0;background:var(--bg-card);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;z-index:100;box-shadow:0 -4px 16px rgba(0,0,0,.06); }
+    .save-bar-info { font-size:13px;color:var(--text-md); }
+    /* Modal overlay */
+    .modal-overlay2 { position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center; }
+    .modal-box      { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(440px,95vw);padding:28px; }
+    .modal-box h3   { font-size:15px;font-weight:700;color:var(--text-hi);margin:0 0 12px; }
+    .modal-box p    { font-size:13px;color:var(--text-md);line-height:1.7;margin:0 0 20px; }
+    .modal-box-foot { display:flex;justify-content:flex-end;gap:10px; }
+    /* Ajuda */
+    .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:center;justify-content:center; }
     .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(600px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
     .ajuda-titulo { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px; }
     .ajuda-etapa  { margin-bottom:20px; }
-    .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent-light);margin-bottom:6px; }
+    .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px; }
     .ajuda-etapa p { font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
     .ajuda-criterio { display:flex;align-items:flex-start;gap:12px;margin-bottom:10px; }
-    .ajuda-pts { background:var(--bg-hover);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--accent-light);white-space:nowrap;min-width:48px;text-align:center; }
+    .ajuda-pts { background:var(--bg-hover);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;min-width:48px;text-align:center; }
     .ajuda-criterio-info strong { font-size:13px;color:var(--text-hi); }
     .ajuda-criterio-info p { font-size:12px;color:var(--text-lo);margin:2px 0 0; }
   </style>
@@ -94,6 +109,7 @@
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
         <a href="/analisador.html" class="nav-item sub active"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Sistema</div>
       <a href="/configuracoes.html" class="nav-item"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
@@ -115,11 +131,11 @@
 
     <div class="page-content">
       <div class="card mb-4">
-        <div class="card-header">🔍 Selecione a Função para Análise</div>
+        <div class="card-header">🔍 Selecione a Vaga para Análise</div>
         <div class="card-body">
           <div class="filtros">
-            <select id="sel-funcao" class="form-control select-funcao">
-              <option value="">— Selecione uma função —</option>
+            <select id="sel-vaga" class="form-control select-vaga">
+              <option value="">— Selecione uma vaga —</option>
             </select>
             <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>▶ Analisar Currículos</button>
             <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')" title="Como funciona a análise" style="font-size:16px;padding:6px 12px">?</button>
@@ -130,11 +146,23 @@
               <option value="Baixo">● Baixa compatibilidade (0–39 pts)</option>
             </select>
           </div>
-          <div id="funcao-info" style="display:none;margin-top:12px;padding:14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.8"></div>
+          <div id="vaga-info" style="display:none;margin-top:12px;padding:14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.8"></div>
         </div>
       </div>
 
       <div id="resultado-area"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmação sobrescrever -->
+<div id="modal-sobrepor" class="modal-overlay2 d-none">
+  <div class="modal-box">
+    <h3>⚠️ Análise já existente</h3>
+    <p id="modal-sobrepor-txt"></p>
+    <div class="modal-box-foot">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-sobrepor').classList.add('d-none')">Não, cancelar</button>
+      <button class="btn btn-primary" id="btn-sobrepor-confirm">Sim, sobrepor</button>
     </div>
   </div>
 </div>
@@ -149,53 +177,53 @@
 
     <div class="ajuda-etapa">
       <div class="ajuda-etapa-titulo">⚡ Etapa 1 — Triagem automática</div>
-      <p>Antes de qualquer análise detalhada, o sistema faz uma triagem rápida em todos os currículos. Ele verifica se o candidato menciona os <strong style="color:var(--text-hi)">Requisitos Obrigatórios</strong> e as <strong style="color:var(--text-hi)">Habilidades Técnicas</strong> que você cadastrou na Função.</p>
-      <p>Quem <strong style="color:var(--error)">não atende</strong> esses critérios mínimos é eliminado aqui e não entra na análise profunda. Isso evita gastar tempo avaliando currículos claramente fora do perfil.</p>
+      <p>Antes de qualquer análise detalhada, o sistema faz uma triagem rápida em todos os currículos verificando os <strong style="color:var(--text-hi)">Requisitos Obrigatórios</strong> e as <strong style="color:var(--text-hi)">Habilidades Técnicas</strong> cadastrados na Função.</p>
+      <p>Quem <strong style="color:var(--error)">não atende</strong> esses critérios mínimos é eliminado e não entra na análise profunda.</p>
     </div>
 
     <div class="ajuda-etapa">
       <div class="ajuda-etapa-titulo">📊 Etapa 2 — Pontuação por critérios (máx. 100 pts)</div>
-      <p>Os candidatos que passaram da triagem são analisados individualmente. A IA avalia 4 critérios e atribui pontos a cada um:</p>
-
+      <p>Os candidatos que passaram da triagem são analisados individualmente pela IA:</p>
       <div class="ajuda-criterio">
         <div class="ajuda-pts">40 pts</div>
         <div class="ajuda-criterio-info">
           <strong>Requisitos Obrigatórios</strong>
-          <p>O candidato realmente tem experiência com o que foi exigido? Ex: se a vaga pede Softexpert, ele trabalhou com Softexpert? Atende tudo = 40 pts. Atende parcialmente = 20 pts. Não atende = 0 pts <em>(e o total máximo cai para 25)</em>.</p>
+          <p>Atende tudo = 40 pts. Parcialmente = 20 pts. Não atende = 0 pts <em>(score máximo cai para 25)</em>.</p>
         </div>
       </div>
       <div class="ajuda-criterio">
         <div class="ajuda-pts">30 pts</div>
         <div class="ajuda-criterio-info">
           <strong>Habilidades Técnicas</strong>
-          <p>O candidato domina as ferramentas e tecnologias listadas na vaga? Quanto mais habilidades compatíveis, mais pontos.</p>
+          <p>Domínio das ferramentas e tecnologias listadas na vaga.</p>
         </div>
       </div>
       <div class="ajuda-criterio">
         <div class="ajuda-pts">15 pts</div>
         <div class="ajuda-criterio-info">
           <strong>Nível e Tempo de Experiência Relevante</strong>
-          <p>O sistema calcula automaticamente o tempo total de experiência do candidato somando todos os períodos informados no currículo. Em seguida, a IA avalia o tempo de experiência <em>relevante para a vaga</em> e classifica o candidato:</p>
-          <p>• <strong style="color:var(--accent-light)">Júnior</strong>: menos de 1 ano de experiência relevante<br>
-             • <strong style="color:var(--accent-light)">Pleno</strong>: de 1 a 3 anos de experiência relevante<br>
-             • <strong style="color:var(--accent-light)">Sênior</strong>: mais de 3 anos de experiência relevante</p>
-          <p>O nível do candidato é comparado ao nível exigido na vaga: nível igual ou superior = 15 pts; um nível abaixo = 8 pts; dois níveis abaixo = 0 pts.</p>
+          <p>O sistema calcula o tempo total de carreira e a IA avalia o tempo relevante para a vaga, classificando como Júnior / Pleno / Sênior. O nível do candidato é comparado ao exigido na função.</p>
         </div>
       </div>
       <div class="ajuda-criterio">
         <div class="ajuda-pts">15 pts</div>
         <div class="ajuda-criterio-info">
           <strong>Formação Acadêmica</strong>
-          <p>A formação do candidato atende ou supera o que foi definido na Função? Ex: se pediu Análise de Sistemas e ele tem Engenharia de Software, conta positivo.</p>
+          <p>A formação atende ou supera o definido na Função.</p>
         </div>
       </div>
     </div>
 
+    <div class="ajuda-etapa">
+      <div class="ajuda-etapa-titulo">✅ Etapa 3 — Encerrar e Salvar Análise</div>
+      <p>Após revisar os resultados, marque os candidatos finalistas (checkbox em cada card ou use <strong>Marcar todos</strong>) e clique em <strong>Encerrar e Salvar Análise</strong>. O resultado fica salvo no <a href="/historico.html" style="color:var(--accent)">Histórico de Análises</a> e pode ser consultado ou regenerado a qualquer momento.</p>
+      <p>O ID da análise é único por vaga e por dia — se você rodar a análise novamente no mesmo dia, o sistema perguntará antes de sobrepor.</p>
+    </div>
+
     <div class="ajuda-etapa" style="margin-bottom:0">
       <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
-      <p>A pontuação total define o nível de compatibilidade: <strong style="color:var(--success)">Alto (70–100 pts)</strong>, <strong style="color:var(--warning)">Médio (40–69 pts)</strong> ou <strong style="color:var(--error)">Baixo (0–39 pts)</strong>.</p>
-      <p>Cada card mostra o nível classificado pelo sistema (<em>Júnior / Pleno / Sênior</em>), o tempo de experiência relevante estimado e o tempo total de carreira do candidato.</p>
-      <p>Os candidatos são ordenados do mais compatível para o menos. Os eliminados (Etapas 1 e 2) aparecem em uma seção colapsada no final da página, com o motivo da eliminação.</p>
+      <p>Compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong>, <strong style="color:#a16207">Médio (40–69 pts)</strong> ou <strong style="color:#b91c1c">Baixo (0–39 pts)</strong>.</p>
+      <p>Candidatos eliminados aparecem em seção colapsada com o motivo da eliminação.</p>
     </div>
   </div>
 </div>
@@ -204,45 +232,56 @@
 <script src="/js/sidebar.js"></script>
 <script>
   let todosResultados = [], todosEliminados = [];
+  let vagaSelecionada = null, funcaoId = null, vagaId = null;
+  let ultimoRes = null;
 
-  async function carregarFuncoes() {
-    const funcoes = await fetch('/api/funcoes').then(r => r.json());
-    const sel = document.getElementById('sel-funcao');
-    sel.innerHTML = '<option value="">— Selecione uma função —</option>' +
-      funcoes.map(f => `<option value="${f.id}">${f.nome}${f.area ? ` — ${f.area}` : ''}${f.nivel_experiencia && f.nivel_experiencia !== 'Não especificado' ? ` (${f.nivel_experiencia})` : ''}</option>`).join('');
+  // ── Carrega vagas no seletor ─────────────────────────────────────────────────
+  async function carregarVagas() {
+    const vagas = await fetch('/api/vagas').then(r => r.json());
+    const sel = document.getElementById('sel-vaga');
+    sel.innerHTML = '<option value="">— Selecione uma vaga —</option>' +
+      vagas.map(v => {
+        const f = v.funcao || {};
+        const label = [f.nome, f.area, f.nivel_experiencia && f.nivel_experiencia !== 'Não especificado' ? f.nivel_experiencia : null]
+          .filter(Boolean).join(' · ');
+        const statusLabel = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' }[v.status] || v.status;
+        return `<option value="${v.id}">${label} — ${statusLabel} (${v.quantidade} vaga${v.quantidade !== 1 ? 's' : ''})</option>`;
+      }).join('');
 
     sel.addEventListener('change', async () => {
       const id = Number(sel.value);
       document.getElementById('btn-analisar').disabled = !id;
-      const info = document.getElementById('funcao-info');
-      if (!id) { info.style.display = 'none'; return; }
-      const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
-      info.style.display = 'block';
+      const info = document.getElementById('vaga-info');
+      if (!id) { vagaSelecionada = null; info.style.display = 'none'; return; }
+      const v = await fetch(`/api/vagas/${id}`).then(r => r.json());
+      vagaSelecionada = v;
+      funcaoId = v.funcao_id;
+      vagaId   = v.id;
+      const f = v.funcao || {};
       const tags = arr => Array.isArray(arr) && arr.length
-        ? arr.map(t => `<span class="tag">${t}</span>`).join(' ')
-        : '—';
+        ? arr.map(t => `<span class="tag">${t}</span>`).join(' ') : '—';
+      info.style.display = 'block';
       info.innerHTML = `
-        <strong style="color:var(--text-hi)">${f.nome}</strong>
+        <strong style="color:var(--text-hi)">${f.nome || '—'}</strong>
         ${f.area ? ` · <span>${f.area}</span>` : ''}
         ${f.nivel_experiencia ? ` · <span>${f.nivel_experiencia}</span>` : ''}
-        ${f.descricao ? `<br><span style="color:var(--text-lo)">${f.descricao.slice(0,180)}${f.descricao.length>180?'…':''}</span>` : ''}
-        <br>
-        ${f.habilidades_tecnicas?.length ? `<span style="color:var(--text-lo)">Habilidades:</span> ${tags(f.habilidades_tecnicas)}` : ''}`;
+        ${f.descricao ? `<br><span style="color:var(--text-lo)">${f.descricao.slice(0,200)}${f.descricao.length>200?'…':''}</span>` : ''}
+        ${f.habilidades_tecnicas?.length ? `<br><span style="color:var(--text-lo)">Habilidades:</span> ${tags(f.habilidades_tecnicas)}` : ''}
+        ${f.requisitos_obrigatorios ? `<br><span style="color:var(--text-lo)">Requisitos:</span> <span style="font-size:12px">${f.requisitos_obrigatorios.slice(0,180)}${f.requisitos_obrigatorios.length>180?'…':''}</span>` : ''}`;
     });
 
     // Auto-seleciona se vier via query string
     const params = new URLSearchParams(location.search);
-    const funcaoId = params.get('funcao_id');
-    if (funcaoId) {
-      sel.value = funcaoId;
+    const paramVagaId = params.get('vaga_id');
+    if (paramVagaId) {
+      sel.value = paramVagaId;
       sel.dispatchEvent(new Event('change'));
     }
   }
 
+  // ── Analisa ──────────────────────────────────────────────────────────────────
   async function analisar() {
-    const funcao_id = Number(document.getElementById('sel-funcao').value);
-    if (!funcao_id) return;
-
+    if (!funcaoId) return;
     document.getElementById('btn-analisar').disabled = true;
     document.getElementById('resultado-area').innerHTML = `
       <div class="loader">
@@ -252,18 +291,18 @@
           <span style="font-size:12px;color:var(--text-lo)">Filtrando candidatos que atendem os requisitos obrigatórios…</span>
         </div>
       </div>`;
-
     try {
       const res = await fetch('/api/analisador/analisar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ funcao_id }),
+        body: JSON.stringify({ funcao_id: funcaoId, vaga_id: vagaId }),
       }).then(r => r.json());
 
       if (res.error) { document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>⚠️</div>${res.error}</div>`; return; }
 
       todosResultados = res.resultados || [];
       todosEliminados = res.eliminados || [];
+      ultimoRes = res;
       renderResultados(todosResultados, res);
     } catch (e) {
       document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>❌</div>Erro: ${e.message}</div>`;
@@ -272,20 +311,22 @@
     }
   }
 
+  // ── Filtra resultados ────────────────────────────────────────────────────────
   function filtrarResultados() {
     const nivel = document.getElementById('filtro-nivel').value;
     const filtrados = nivel ? todosResultados.filter(r => r.nivel === nivel) : todosResultados;
-    renderResultados(filtrados, { total: todosResultados.length + todosEliminados.length, total_eliminados: todosEliminados.length, funcao: '' }, true);
+    renderResultados(filtrados, ultimoRes || { total: todosResultados.length + todosEliminados.length }, true);
   }
 
+  // ── Renderiza resultados ─────────────────────────────────────────────────────
   function renderResultados(resultados, res, isFiltro = false) {
-    if (!resultados.length && !res.total) {
+    if (!resultados.length && !res?.total) {
       document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>📭</div><strong>Nenhum currículo encontrado</strong><p style="font-size:13px;margin-top:6px">Receba currículos pelo WhatsApp para analisar.</p></div>`;
       return;
     }
-    const altos  = resultados.filter(r => r.nivel === 'Alto').length;
-    const medios = resultados.filter(r => r.nivel === 'Médio').length;
-    const baixos = resultados.filter(r => r.nivel === 'Baixo').length;
+    const altos    = resultados.filter(r => r.nivel === 'Alto').length;
+    const medios   = resultados.filter(r => r.nivel === 'Médio').length;
+    const baixos   = resultados.filter(r => r.nivel === 'Baixo').length;
     const eliminados = isFiltro ? todosEliminados : (res.eliminados || todosEliminados);
 
     const cards = resultados.map((r, i) => {
@@ -305,13 +346,14 @@
           <div class="detail-score"><div class="detail-score-val">${det.formacao ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Formação</div></div>
         </div>` : '';
       return `
-        <div class="result-card">
+        <div class="result-card" id="card-${r.id}">
           <div class="result-header">
+            <input type="checkbox" class="cb-finalista" data-id="${r.id}" onchange="atualizarCard(${r.id}, this.checked)" title="Marcar como finalista">
             <div class="result-rank">${i + 1}º</div>
             <div>
               <div class="result-name">${r.nome || '—'}</div>
               <div class="result-contact">${r.telefone || ''}${r.telefone && r.email ? ' · ' : ''}${r.email || ''}</div>
-              <div style="margin-top:4px">${nivelCandBadge}</div>
+              <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">${nivelCandBadge}</div>
             </div>
             <div class="result-score">
               <div class="result-score-num">${r.score}</div>
@@ -365,8 +407,18 @@
       </div>` : '';
 
     const triagemBadge = res.triagem_ativa !== false
-      ? `<span class="badge" style="background:rgba(139,92,246,.15);color:#a78bfa;border:1px solid rgba(139,92,246,.3)">⚡ Triagem ativa</span>`
+      ? `<span class="badge" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe">⚡ Triagem ativa</span>`
       : '';
+
+    const saveBarHtml = vagaId ? `
+      <div class="save-bar" id="save-bar">
+        <div>
+          <button class="btn btn-ghost" style="font-size:12px" onclick="marcarTodos(true)">☑ Marcar todos</button>
+          <button class="btn btn-ghost" style="font-size:12px;margin-left:6px" onclick="marcarTodos(false)">☐ Desmarcar todos</button>
+        </div>
+        <span class="save-bar-info"><span id="count-finalistas">0</span> candidato(s) marcado(s) como finalista</span>
+        <button class="btn btn-primary ms-auto" onclick="salvarAnalise()">✅ Encerrar e Salvar Análise</button>
+      </div>` : '';
 
     document.getElementById('resultado-area').innerHTML = `
       <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
@@ -378,11 +430,90 @@
           ${triagemBadge}
           <span class="badge badge-green">✓ ${altos} alto${altos !== 1 ? 's' : ''}</span>
           <span class="badge badge-yellow">~ ${medios} médio${medios !== 1 ? 's' : ''}</span>
-          <span class="badge badge-red">✗ ${baixos} baixo${baixos !== 1 ? 's' : ''}</span>
+          <span class="badge badge-red">● ${baixos} baixo${baixos !== 1 ? 's' : ''}</span>
         </div>
       </div>
       ${cards}
-      ${eliminadosHtml}`;
+      ${eliminadosHtml}
+      ${saveBarHtml}`;
+
+    atualizarContadorFinalistas();
+  }
+
+  // ── Checkbox helpers ─────────────────────────────────────────────────────────
+  function atualizarCard(id, marcado) {
+    const card = document.getElementById(`card-${id}`);
+    if (card) card.classList.toggle('finalista', marcado);
+    atualizarContadorFinalistas();
+  }
+
+  function marcarTodos(marcar) {
+    document.querySelectorAll('.cb-finalista').forEach(cb => {
+      cb.checked = marcar;
+      atualizarCard(Number(cb.dataset.id), marcar);
+    });
+  }
+
+  function atualizarContadorFinalistas() {
+    const n = document.querySelectorAll('.cb-finalista:checked').length;
+    const el = document.getElementById('count-finalistas');
+    if (el) el.textContent = n;
+  }
+
+  // ── Salvar análise ───────────────────────────────────────────────────────────
+  async function salvarAnalise() {
+    if (!vagaId || !ultimoRes) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const id   = `${hoje}_${vagaId}`;
+    const finalistas_ids = Array.from(document.querySelectorAll('.cb-finalista:checked')).map(cb => Number(cb.dataset.id));
+    const f = vagaSelecionada?.funcao || {};
+
+    const payload = {
+      id,
+      vaga_id:          vagaId,
+      funcao_id:        funcaoId,
+      funcao_nome:      f.nome || ultimoRes.funcao || '—',
+      total_curriculos: ultimoRes.total || 0,
+      total_analisados: todosResultados.length,
+      total_eliminados: todosEliminados.length,
+      finalistas_ids,
+      resultados:       todosResultados,
+      eliminados:       todosEliminados,
+      status:           'encerrada',
+    };
+
+    await executarSalvar(payload, false);
+  }
+
+  async function executarSalvar(payload, force) {
+    const r = await fetch('/api/analises', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, force }),
+    });
+
+    if (r.status === 409) {
+      const conf = await r.json();
+      const dataFmt = new Date(conf.data_existente).toLocaleString('pt-BR');
+      document.getElementById('modal-sobrepor-txt').textContent =
+        `Já existe uma análise para esta vaga salva hoje às ${dataFmt}. Deseja substituí-la pelos novos resultados?`;
+      document.getElementById('modal-sobrepor').classList.remove('d-none');
+      document.getElementById('btn-sobrepor-confirm').onclick = async () => {
+        document.getElementById('modal-sobrepor').classList.add('d-none');
+        await executarSalvar(payload, true);
+      };
+      return;
+    }
+
+    if (r.ok) {
+      const bar = document.getElementById('save-bar');
+      if (bar) {
+        bar.innerHTML = `<div style="display:flex;align-items:center;gap:12px;width:100%">
+          <span style="color:var(--success);font-size:13px;font-weight:600">✅ Análise salva com sucesso!</span>
+          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px;margin-left:auto">📊 Ver no Histórico</a>
+        </div>`;
+      }
+    }
   }
 
   function toggleEliminados(btn) {
@@ -393,7 +524,7 @@
     arrow.textContent = aberto ? '▾' : '▴';
   }
 
-  carregarFuncoes();
+  carregarVagas();
 </script>
 </body>
 </html>

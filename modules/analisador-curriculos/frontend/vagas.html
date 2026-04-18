@@ -43,7 +43,7 @@
 <body>
 <div class="layout">
 
-    <nav class="sidebar" id="sidebar">
+      <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
@@ -66,6 +66,7 @@
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub active"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Sistema</div>
       <a href="/configuracoes.html" class="nav-item"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
@@ -150,12 +151,13 @@
   const STATUS_DOT   = { aberta: 'dot-aberta', pausada: 'dot-pausada', encerrada: 'dot-encerrada' };
   const STATUS_LABEL = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' };
 
-  let vagas = [], funcoes = [], editandoId = null;
+  let vagas = [], funcoes = [], analises = [], editandoId = null;
 
   async function carregar() {
-    [vagas, funcoes] = await Promise.all([
+    [vagas, funcoes, analises] = await Promise.all([
       fetch('/api/vagas').then(r => r.json()),
       fetch('/api/funcoes').then(r => r.json()),
+      fetch('/api/analises').then(r => r.json()),
     ]);
     renderStats();
     renderGrid();
@@ -178,7 +180,8 @@
     if (!vagas.length) { grid.innerHTML = ''; empty.classList.remove('d-none'); return; }
     empty.classList.add('d-none');
     grid.innerHTML = vagas.map(v => {
-      const f      = v.funcao || {};
+      const f            = v.funcao || {};
+      const vagaAnalises = analises.filter(a => a.vaga_id === v.id);
       const nivelCls = NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado';
       return `
       <div class="vaga-card">
@@ -195,10 +198,18 @@
         </div>
         ${v.observacoes ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-lo);line-height:1.6">${v.observacoes}</div>` : ''}
         <div class="vaga-actions">
-          <a href="/analisador.html?funcao_id=${v.funcao_id}" class="btn btn-info" style="font-size:12px;flex:1;text-align:center">🔍 Analisar</a>
+          <a href="/analisador.html?vaga_id=${v.id}" class="btn btn-info" style="font-size:12px;flex:1;text-align:center">🔍 Analisar</a>
           <button class="btn btn-ghost" style="font-size:12px" onclick="editar(${v.id})">✏️ Editar</button>
           <button class="btn btn-danger" style="font-size:12px" onclick="excluir(${v.id})">🗑</button>
         </div>
+        ${vagaAnalises.length ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:12px;color:var(--text-lo)">Última análise: <strong style="color:var(--text-md)">${new Date(vagaAnalises[0].data).toLocaleDateString('pt-BR')}</strong></div>
+            <div style="font-size:11.5px;color:var(--text-lo)">${vagaAnalises[0].total_analisados} analisados · ${vagaAnalises[0].finalistas_count} finalista${vagaAnalises[0].finalistas_count !== 1 ? 's' : ''}</div>
+          </div>
+          <a href="/historico.html?vaga_id=${v.id}" class="btn btn-ghost ms-auto" style="font-size:12px">📊 Ver Análises (${vagaAnalises.length})</a>
+        </div>` : ''}
       </div>`;
     }).join('');
   }

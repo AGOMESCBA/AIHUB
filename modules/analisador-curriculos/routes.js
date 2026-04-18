@@ -303,9 +303,41 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
     res.json({ ok: true });
   });
 
+  // ── Análises Salvas ──────────────────────────────────────────────────────────
+  app.get('/api/analises', requireAuth, (_req, res) => {
+    res.json(db.listAnalises());
+  });
+
+  app.get('/api/analises/:id', requireAuth, (req, res) => {
+    const a = db.getAnalise(req.params.id);
+    if (!a) return res.status(404).json({ error: 'Não encontrada' });
+    res.json(a);
+  });
+
+  app.post('/api/analises', requireAuth, (req, res) => {
+    const { force, ...analise } = req.body;
+    if (!analise.id) return res.status(400).json({ error: 'ID obrigatório' });
+    const existing = db.getAnalise(analise.id);
+    if (existing && !force) {
+      return res.status(409).json({
+        conflict: true,
+        data_existente: existing.data,
+        funcao_nome:    existing.funcao_nome,
+      });
+    }
+    db.saveAnalise({ ...analise, data: new Date().toISOString() });
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/analises/:id', requireAuth, (req, res) => {
+    const ok = db.deleteAnalise(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Não encontrada' });
+    res.json({ ok: true });
+  });
+
   // ── Analisador ───────────────────────────────────────────────────────────────
   app.post('/api/analisador/analisar', requireAuth, async (req, res) => {
-    const { funcao_id } = req.body;
+    const { funcao_id, vaga_id } = req.body;
     const funcao = db.getFuncao(Number(funcao_id));
     if (!funcao) return res.status(404).json({ error: 'Função não encontrada' });
 
@@ -348,6 +380,8 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
         total_aprovados:  aprovados.length,
         total_eliminados: eliminados.length,
         funcao:           funcao.nome,
+        funcao_id:        funcao.id,
+        vaga_id:          vaga_id ? Number(vaga_id) : null,
         triagem_ativa:    !!(funcao.requisitos_obrigatorios || (Array.isArray(funcao.habilidades_tecnicas) && funcao.habilidades_tecnicas.length)),
       });
     } catch (err) {
