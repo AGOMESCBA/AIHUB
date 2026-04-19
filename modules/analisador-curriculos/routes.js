@@ -479,12 +479,11 @@ module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, 
           exp_total: calcularExperiencia(c, cfg).texto,
         };
 
-        const motivoElim = r.ia_falha
-          ? `[Falha IA] ${r.ia_erro}`
-          : (r.resumo || 'Não atende os requisitos obrigatórios');
-
-        if (r.ia_falha || (r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
-          eliminados.push({ ...c, motivo_eliminacao: motivoElim });
+        if (r.ia_falha) {
+          // IA falhou: mantém o candidato nos aprovados com score neutro
+          resultados.push({ ...enriquecido, score: 50, nivel: 'Indefinido', resumo: `⚠️ ${r.ia_erro}` });
+        } else if ((r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
+          eliminados.push({ ...c, motivo_eliminacao: r.resumo || 'Não atende os requisitos obrigatórios' });
         } else {
           resultados.push(enriquecido);
         }
