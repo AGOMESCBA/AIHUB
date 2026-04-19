@@ -61,7 +61,7 @@ require('./modules/configuracoes/routes')(app, { requireAuth });
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, registrarLog, io });
 
 // ── Módulo Analisador de Currículos ───────────────────────────────────────────
-require('./modules/analisador-curriculos/routes')(app, { requireAuth });
+require('./modules/analisador-curriculos/routes')(app, { requireAuth, registrarLog, io });
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

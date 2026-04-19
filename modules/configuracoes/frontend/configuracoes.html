@@ -6,18 +6,113 @@
   <title>Configurações — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    textarea.form-control {
-      resize: vertical;
-      min-height: 80px;
-      font-family: inherit;
-      box-sizing: border-box;
+    textarea.form-control { resize: vertical; min-height: 80px; font-family: inherit; box-sizing: border-box; }
+
+    /* ── Equivalências table ─── */
+    .eq-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 16px; border-bottom: 1px solid var(--border);
+      transition: background .1s;
     }
+    .eq-row:last-child { border-bottom: none; }
+    .eq-row:hover { background: var(--bg-hover); }
+    .eq-kw-col {
+      min-width: 170px; display: flex; align-items: center;
+      gap: 8px; font-weight: 600; font-size: 13px; color: var(--text-hi);
+      flex-shrink: 0;
+    }
+    .badge-builtin {
+      font-size: 10px; padding: 2px 7px; border-radius: 10px; white-space: nowrap;
+      background: rgba(37,99,235,.1); color: var(--accent);
+    }
+    .badge-builtin.overridden { background: rgba(37,99,235,.18); }
+    .badge-custom {
+      font-size: 10px; padding: 2px 7px; border-radius: 10px; white-space: nowrap;
+      background: rgba(234,179,8,.14); color: #92400e;
+    }
+    .eq-vars-col { flex: 1; display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; }
+    .eq-var-pill {
+      background: var(--bg-hover); color: var(--text-md);
+      border-radius: 20px; padding: 2px 10px; font-size: 11px; white-space: nowrap;
+    }
+    .eq-var-more {
+      background: var(--bg-hover); color: var(--text-lo);
+      border-radius: 20px; padding: 2px 10px; font-size: 11px;
+    }
+    .eq-actions-col { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-eq {
+      border: none; border-radius: 7px; padding: 5px 11px;
+      font-size: 12px; cursor: pointer; transition: background .15s; font-family: inherit;
+    }
+    .btn-eq-edit   { background: rgba(37,99,235,.08); color: var(--accent); }
+    .btn-eq-edit:hover { background: rgba(37,99,235,.16); }
+    .btn-eq-del    { background: rgba(239,68,68,.08); color: #dc2626; }
+    .btn-eq-del:hover { background: rgba(239,68,68,.15); }
+    .btn-eq-restore { background: rgba(107,114,128,.08); color: var(--text-md); font-size: 11px; }
+    .btn-eq-restore:hover { background: rgba(107,114,128,.15); }
+
+    /* ── Tag input ─── */
+    .tag-input-box {
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; min-height: 46px; cursor: text;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      background: var(--bg-input, var(--bg-card)); transition: border-color .15s;
+    }
+    .tag-input-box:focus-within {
+      border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+    }
+    .tag-input-box input {
+      border: none; outline: none; background: transparent;
+      font-size: 13px; min-width: 160px; flex: 1; color: var(--text-hi);
+      padding: 2px 0; font-family: inherit;
+    }
+    .tag-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(37,99,235,.1); color: var(--accent);
+      border-radius: 20px; padding: 3px 10px; font-size: 12px; white-space: nowrap;
+    }
+    .tag-pill .rm {
+      cursor: pointer; font-size: 15px; line-height: 1; opacity: .65;
+    }
+    .tag-pill .rm:hover { opacity: 1; }
+
+    /* ── Modal ─── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.45); z-index: 999;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 28px 28px 24px;
+      width: 540px; max-width: calc(100vw - 32px);
+      box-shadow: 0 24px 60px rgba(0,0,0,.28);
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: var(--text-hi); margin-bottom: 20px; }
+    .note-builtin {
+      background: rgba(37,99,235,.06); border: 1px solid rgba(37,99,235,.18);
+      border-radius: 8px; padding: 10px 14px; font-size: 12px;
+      color: var(--accent); margin-bottom: 16px; line-height: 1.6;
+    }
+    .btn-secondary {
+      background: var(--bg-hover); color: var(--text-md); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 18px; font-size: 13px;
+      cursor: pointer; font-family: inherit; transition: background .15s;
+    }
+    .btn-secondary:hover { background: var(--border); }
+    .eq-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-lo);
+    }
+    .eq-header-row span:first-child { min-width: 170px; }
   </style>
 </head>
 <body>
 <div class="layout">
 
-    <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
@@ -65,17 +160,13 @@
       <div class="tabs-header" style="margin-bottom:24px">
         <button class="tab-btn active" onclick="mudarAba('whatsapp', this)">💬 WhatsApp Currículo</button>
         <button class="tab-btn" onclick="mudarAba('analisador', this)">🔍 Analisador de Currículos</button>
+        <button class="tab-btn" onclick="mudarAba('equivalencias', this)">⚡ Equivalências</button>
       </div>
 
       <!-- ===================== ABA: WHATSAPP ===================== -->
       <div id="aba-whatsapp" style="max-width:660px">
-
-        <div id="alert-ok-wa" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">
-          ✅ Configuração do WhatsApp salva com sucesso!
-        </div>
-        <div id="alert-erro-wa" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px">
-          ❌ Todos os campos de mensagem são obrigatórios. Preencha os campos em branco antes de salvar.
-        </div>
+        <div id="alert-ok-wa" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração do WhatsApp salva com sucesso!</div>
+        <div id="alert-erro-wa" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px">❌ Todos os campos de mensagem são obrigatórios.</div>
 
         <div class="card mb-4">
           <div class="card-header">⚙ Geral</div>
@@ -88,7 +179,7 @@
             <div class="form-group">
               <label class="form-label">Número de Destino (recebe os currículos analisados)</label>
               <input type="text" id="numero_destino" class="form-control" placeholder="5511999999999">
-              <div class="form-hint">Formato internacional sem símbolos (ex: 5511999999999). Se em branco, os currículos são salvos apenas no sistema.</div>
+              <div class="form-hint">Formato internacional sem símbolos. Se em branco, os currículos são salvos apenas no sistema.</div>
             </div>
           </div>
         </div>
@@ -96,56 +187,35 @@
         <div class="card mb-4">
           <div class="card-header">💬 Mensagens ao Candidato</div>
           <div class="card-body">
-
             <div class="form-group">
               <label class="form-label">✅ Currículo recebido com sucesso</label>
-              <textarea id="msg_confirmacao" class="form-control" rows="3"
-                placeholder="✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!"></textarea>
+              <textarea id="msg_confirmacao" class="form-control" rows="3" placeholder="✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!"></textarea>
               <div class="form-hint">Enviada após o currículo ser processado e salvo com sucesso.</div>
             </div>
-
             <div class="form-group">
               <label class="form-label">⚠️ Arquivo não é PDF</label>
-              <textarea id="msg_nao_pdf" class="form-control" rows="2"
-                placeholder="⚠️ Por favor, envie o currículo em formato *PDF*."></textarea>
-              <div class="form-hint">Enviada quando o arquivo recebido não é um PDF.</div>
+              <textarea id="msg_nao_pdf" class="form-control" rows="2" placeholder="⚠️ Por favor, envie o currículo em formato *PDF*."></textarea>
             </div>
-
             <div class="form-group">
               <label class="form-label">❌ PDF ilegível ou protegido</label>
-              <textarea id="msg_pdf_ilegivel" class="form-control" rows="2"
-                placeholder="❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem."></textarea>
-              <div class="form-hint">Enviada quando o PDF não possui texto legível.</div>
+              <textarea id="msg_pdf_ilegivel" class="form-control" rows="2" placeholder="❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem."></textarea>
             </div>
-
             <div class="form-group">
               <label class="form-label">😊 Documento não é um currículo</label>
-              <textarea id="msg_nao_curriculo" class="form-control" rows="3"
-                placeholder="😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.&#10;&#10;Por favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!"></textarea>
-              <div class="form-hint">Enviada quando o PDF não é identificado como currículo.</div>
+              <textarea id="msg_nao_curriculo" class="form-control" rows="3" placeholder="😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.&#10;&#10;Por favor, envie seu currículo em formato *PDF*. Obrigado!"></textarea>
             </div>
-
             <div class="form-group">
-              <label class="form-label">⚠️ Currículo duplicado (use <code style="color:var(--accent)">{nome}</code> para o nome do candidato)</label>
-              <textarea id="msg_duplicata" class="form-control" rows="4"
-                placeholder="⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).&#10;&#10;Deseja *atualizar* o registro existente?&#10;&#10;Responda *SIM* para atualizar ou *NÃO* para manter o atual."></textarea>
-              <div class="form-hint">Enviada quando já existe um currículo com o mesmo telefone ou e-mail.</div>
+              <label class="form-label">⚠️ Currículo duplicado (use <code style="color:var(--accent)">{nome}</code>)</label>
+              <textarea id="msg_duplicata" class="form-control" rows="4" placeholder="⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).&#10;&#10;Deseja *atualizar* o registro existente?&#10;&#10;Responda *SIM* para atualizar ou *NÃO* para manter o atual."></textarea>
             </div>
-
             <div class="form-group">
               <label class="form-label">😊 Candidato optou por NÃO atualizar</label>
-              <textarea id="msg_nao_atualizar" class="form-control" rows="2"
-                placeholder="😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!"></textarea>
-              <div class="form-hint">Enviada quando o candidato responde NÃO à pergunta de atualização.</div>
+              <textarea id="msg_nao_atualizar" class="form-control" rows="2" placeholder="😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!"></textarea>
             </div>
-
             <div class="form-group">
               <label class="form-label">❌ Erro ao processar currículo</label>
-              <textarea id="msg_erro" class="form-control" rows="2"
-                placeholder="❌ Ocorreu um erro ao processar seu currículo. Tente novamente."></textarea>
-              <div class="form-hint">Enviada quando ocorre um erro inesperado durante o processamento.</div>
+              <textarea id="msg_erro" class="form-control" rows="2" placeholder="❌ Ocorreu um erro ao processar seu currículo. Tente novamente."></textarea>
             </div>
-
           </div>
         </div>
 
@@ -159,15 +229,11 @@
             Para conectar o WhatsApp, acesse <a href="/monitor.html" style="color:var(--accent)">Monitor → Iniciar Serviço</a>.
           </div>
         </div>
-
       </div>
 
       <!-- ===================== ABA: ANALISADOR ===================== -->
       <div id="aba-analisador" class="d-none" style="max-width:580px">
-
-        <div id="alert-ok-an" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">
-          ✅ Configuração do Analisador salva com sucesso!
-        </div>
+        <div id="alert-ok-an" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração do Analisador salva com sucesso!</div>
         <div id="alert-erro-an" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
 
         <div class="card mb-4">
@@ -175,26 +241,22 @@
           <div class="card-body">
             <p style="font-size:13px;color:var(--text-md);margin-bottom:20px;line-height:1.7">
               Defina os limites de tempo de experiência <strong>relevante para a vaga</strong> que classificam o candidato como Júnior, Pleno ou Sênior.
-              O sistema calculará automaticamente o tempo total de experiência e a IA avaliará o tempo relevante com base nesses critérios.
             </p>
-
             <div class="form-group">
               <label class="form-label">Limite Júnior → Pleno (em meses)</label>
               <input type="number" id="junior_max" class="form-control" min="1" max="120" placeholder="12" oninput="atualizarPreview()">
               <div class="form-hint">Candidatos com menos de <strong id="hint-junior">12 meses</strong> de experiência relevante serão classificados como <strong>Júnior</strong>.</div>
             </div>
-
             <div class="form-group">
               <label class="form-label">Limite Pleno → Sênior (em meses)</label>
               <input type="number" id="pleno_max" class="form-control" min="1" max="300" placeholder="36" oninput="atualizarPreview()">
               <div class="form-hint">Candidatos com mais de <strong id="hint-senior">36 meses</strong> de experiência relevante serão classificados como <strong>Sênior</strong>.</div>
             </div>
-
             <div id="preview" style="background:var(--bg-hover);border-radius:9px;padding:14px 16px;margin-top:8px;font-size:13px;line-height:2">
               <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:6px">Prévia da classificação</div>
-              <div><span style="display:inline-block;min-width:90px;color:var(--accent);font-weight:600">Júnior</span> → menos de <span id="prev-junior">12</span> meses (&lt; 1 ano)</div>
-              <div><span style="display:inline-block;min-width:90px;color:#16a34a;font-weight:600">Pleno</span> → de <span id="prev-pleno-min">12</span> a <span id="prev-pleno-max">36</span> meses (1 a 3 anos)</div>
-              <div><span style="display:inline-block;min-width:90px;color:#d97706;font-weight:600">Sênior</span> → acima de <span id="prev-senior">36</span> meses (3+ anos)</div>
+              <div><span style="display:inline-block;min-width:90px;color:var(--accent);font-weight:600">Júnior</span> → menos de <span id="prev-junior">12</span> meses</div>
+              <div><span style="display:inline-block;min-width:90px;color:#16a34a;font-weight:600">Pleno</span> → de <span id="prev-pleno-min">12</span> a <span id="prev-pleno-max">36</span> meses</div>
+              <div><span style="display:inline-block;min-width:90px;color:#d97706;font-weight:600">Sênior</span> → acima de <span id="prev-senior">36</span> meses</div>
             </div>
           </div>
         </div>
@@ -204,13 +266,91 @@
         <div class="card" style="margin-top:32px">
           <div class="card-header">ℹ Como funciona</div>
           <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
-            Os limites definidos aqui são usados em toda análise de currículo. O sistema soma automaticamente os períodos informados em cada experiência profissional e a IA avalia quanto desse tempo é relevante para os requisitos da vaga.<br><br>
-            A classificação resultante (Júnior / Pleno / Sênior) é comparada ao nível exigido na <a href="/funcoes.html" style="color:var(--accent)">Função cadastrada</a> e contribui com até <strong>15 pontos</strong> na pontuação total do candidato.
+            Os limites definidos aqui são usados em toda análise de currículo. A classificação (Júnior / Pleno / Sênior) é comparada ao nível exigido na <a href="/funcoes.html" style="color:var(--accent)">Função cadastrada</a> e contribui com até <strong>15 pontos</strong> na pontuação total do candidato.
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== ABA: EQUIVALÊNCIAS ===================== -->
+      <div id="aba-equivalencias" class="d-none">
+
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:20px">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-hi)">Equivalências de Palavras-chave</div>
+            <div style="font-size:12px;color:var(--text-md);margin-top:4px;line-height:1.6;max-width:560px">
+              Mapeie termos equivalentes para que a triagem reconheça diferentes formas de descrever a mesma habilidade.
+              Por exemplo: <em>ADVPL = TOTVS, Protheus, Microsiga</em>.
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="abrirModal(null)" style="white-space:nowrap;flex-shrink:0">+ Nova Equivalência</button>
+        </div>
+
+        <div class="card">
+          <div style="padding:10px 16px;border-bottom:1px solid var(--border)">
+            <input type="text" id="eq-busca" class="form-control" placeholder="Filtrar por palavra-chave ou sinônimo..." oninput="renderTabela()" style="margin:0">
+          </div>
+          <div class="eq-header-row">
+            <span>Palavra-chave</span>
+            <span style="flex:1">Sinônimos / Variantes</span>
+            <span style="min-width:140px;text-align:right">Ações</span>
+          </div>
+          <div id="eq-tbody"></div>
+          <div id="eq-empty" class="d-none" style="padding:40px;text-align:center;color:var(--text-lo);font-size:13px">
+            Nenhuma equivalência encontrada.
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:24px">
+          <div class="card-header">ℹ Como funciona</div>
+          <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+            Durante a triagem, o sistema verifica se cada requisito obrigatório da função aparece em <strong>qualquer parte do currículo</strong> — incluindo todos os termos equivalentes cadastrados aqui.<br><br>
+            <span class="badge-builtin" style="font-size:11px">⚙ embutido</span> — faz parte do código do sistema. Pode ser editado; ao salvar, suas alterações têm prioridade.<br>
+            <span class="badge-custom" style="font-size:11px;margin-left:6px">★ personalizado</span> — criado pelo recrutador; pode ser editado ou excluído livremente.
           </div>
         </div>
 
       </div>
 
+    </div><!-- /page-content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- ===================== MODAL EQUIVALÊNCIA ===================== -->
+<div class="modal-overlay" id="eq-modal" onclick="if(event.target===this)fecharModal()">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Nova Equivalência</div>
+
+    <div class="note-builtin d-none" id="modal-note-builtin">
+      ⚙ Você está editando uma equivalência <strong>embutida no sistema</strong>. Ao salvar, suas variantes terão prioridade sobre o padrão original.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Palavra-chave principal</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="eq-kw-input" class="form-control" style="flex:1" placeholder="Ex: advpl">
+        <button id="btn-sugerir-ia" onclick="sugerirComIA()" style="white-space:nowrap;padding:8px 14px;border:none;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .2s" title="Deixar a IA sugerir sinônimos para esta palavra-chave">✨ Sugerir com IA</button>
+      </div>
+      <div class="form-hint">Termo que aparece nos requisitos da função. Será convertido para minúsculo.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Sinônimos / Variantes</label>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <div class="tag-input-box" id="tag-box" style="flex:1" onclick="document.getElementById('tag-new-input').focus()">
+          <div id="tags-list" style="display:contents"></div>
+          <input type="text" id="tag-new-input" placeholder="Digite e pressione Enter...">
+        </div>
+        <button type="button" onclick="addTagFromBtn()" title="Adicionar variante"
+          style="height:38px;padding:0 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-size:18px;cursor:pointer;line-height:1;flex-shrink:0">+</button>
+      </div>
+      <div class="form-hint">Todos os termos que a triagem deve reconhecer como equivalentes à palavra-chave acima.</div>
+    </div>
+
+    <div id="modal-alert" class="d-none" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:8px;padding:10px 14px;font-size:12px;margin-bottom:12px"></div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEquiv()">Salvar Equivalência</button>
     </div>
   </div>
 </div>
@@ -218,132 +358,315 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-  // ── Tab navigation ──────────────────────────────────────────
-  function mudarAba(aba, btn) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('aba-whatsapp').classList.add('d-none');
-    document.getElementById('aba-analisador').classList.add('d-none');
-    document.getElementById('aba-' + aba).classList.remove('d-none');
+const ABAS = ['whatsapp', 'analisador', 'equivalencias'];
+
+function mudarAba(aba, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ABAS.forEach(a => document.getElementById('aba-' + a).classList.add('d-none'));
+  document.getElementById('aba-' + aba).classList.remove('d-none');
+  if (aba === 'equivalencias') carregarEquiv();
+}
+
+// ── WhatsApp ─────────────────────────────────────────────────────────────────
+const PADROES = {
+  label: '', numero_destino: '',
+  msg_confirmacao:   '✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!',
+  msg_nao_pdf:       '⚠️ Por favor, envie o currículo em formato *PDF*.',
+  msg_pdf_ilegivel:  '❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.',
+  msg_nao_curriculo: '😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.\n\nPor favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!',
+  msg_duplicata:     '⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).\n\nDeseja *atualizar* o registro existente?\n\nResponda *SIM* para atualizar ou *NÃO* para manter o atual.',
+  msg_nao_atualizar: '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!',
+  msg_erro:          '❌ Ocorreu um erro ao processar seu currículo. Tente novamente.',
+};
+const OBRIGATORIOS = ['msg_confirmacao','msg_nao_pdf','msg_pdf_ilegivel','msg_nao_curriculo','msg_duplicata','msg_nao_atualizar','msg_erro'];
+
+async function carregarWhatsapp() {
+  const cfg = await fetch('/api/config').then(r => r.json());
+  Object.keys(PADROES).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = cfg[id] || PADROES[id];
+  });
+}
+
+async function salvarWhatsapp() {
+  const vazios = OBRIGATORIOS.filter(id => !document.getElementById(id)?.value.trim());
+  if (vazios.length) {
+    const el = document.getElementById('alert-erro-wa');
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 4000);
+    document.getElementById(vazios[0])?.focus();
+    return;
   }
+  const body = {};
+  Object.keys(PADROES).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) body[id] = el.value.trim() || PADROES[id];
+  });
+  await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const ok = document.getElementById('alert-ok-wa');
+  ok.classList.remove('d-none');
+  setTimeout(() => ok.classList.add('d-none'), 3000);
+}
 
-  // ── WhatsApp config ─────────────────────────────────────────
-  const PADROES = {
-    label:             '',
-    numero_destino:    '',
-    msg_confirmacao:   '✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!',
-    msg_nao_pdf:       '⚠️ Por favor, envie o currículo em formato *PDF*.',
-    msg_pdf_ilegivel:  '❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.',
-    msg_nao_curriculo: '😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.\n\nPor favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!',
-    msg_duplicata:     '⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).\n\nDeseja *atualizar* o registro existente?\n\nResponda *SIM* para atualizar ou *NÃO* para manter o atual.',
-    msg_nao_atualizar: '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!',
-    msg_erro:          '❌ Ocorreu um erro ao processar seu currículo. Tente novamente.',
-  };
+// ── Analisador ────────────────────────────────────────────────────────────────
+function mesesParaTexto(m) {
+  const a = Math.floor(m/12), ms = m%12;
+  if (a===0) return `${m} mês${m!==1?'es':''}`;
+  if (ms===0) return `${a} ano${a!==1?'s':''}`;
+  return `${a} ano${a!==1?'s':''} e ${ms} mês${ms!==1?'es':''}`;
+}
 
-  const OBRIGATORIOS = [
-    'msg_confirmacao','msg_nao_pdf','msg_pdf_ilegivel',
-    'msg_nao_curriculo','msg_duplicata','msg_nao_atualizar','msg_erro',
-  ];
+function atualizarPreview() {
+  const j = parseInt(document.getElementById('junior_max').value)||12;
+  const p = parseInt(document.getElementById('pleno_max').value)||36;
+  document.getElementById('hint-junior').textContent = `${j} meses`;
+  document.getElementById('hint-senior').textContent = `${p} meses`;
+  document.getElementById('prev-junior').textContent = j;
+  document.getElementById('prev-pleno-min').textContent = j;
+  document.getElementById('prev-pleno-max').textContent = p;
+  document.getElementById('prev-senior').textContent = p;
+  const jT = mesesParaTexto(j), pT = mesesParaTexto(p);
+  const rows = document.querySelectorAll('#preview div');
+  rows[1].innerHTML = `<span style="display:inline-block;min-width:90px;color:var(--accent);font-weight:600">Júnior</span> → menos de <strong>${j}</strong> meses (menos de ${jT})`;
+  rows[2].innerHTML = `<span style="display:inline-block;min-width:90px;color:#16a34a;font-weight:600">Pleno</span> → de <strong>${j}</strong> a <strong>${p}</strong> meses (${jT} até ${pT})`;
+  rows[3].innerHTML = `<span style="display:inline-block;min-width:90px;color:#d97706;font-weight:600">Sênior</span> → acima de <strong>${p}</strong> meses (mais de ${pT})`;
+}
 
-  async function carregarWhatsapp() {
-    const cfg = await fetch('/api/config').then(r => r.json());
-    Object.keys(PADROES).forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = cfg[id] || PADROES[id];
-    });
+async function carregarAnalisador() {
+  const cfg = await fetch('/api/analisador/config').then(r => r.json());
+  document.getElementById('junior_max').value = cfg.junior_max_meses;
+  document.getElementById('pleno_max').value  = cfg.pleno_max_meses;
+  atualizarPreview();
+}
+
+async function salvarAnalisador() {
+  const j = parseInt(document.getElementById('junior_max').value);
+  const p = parseInt(document.getElementById('pleno_max').value);
+  const alertErro = document.getElementById('alert-erro-an');
+  if (!j || !p) { alertErro.textContent='❌ Preencha os dois campos.'; alertErro.classList.remove('d-none'); setTimeout(()=>alertErro.classList.add('d-none'),4000); return; }
+  if (j >= p)   { alertErro.textContent='❌ O limite Júnior deve ser menor que o limite Pleno.'; alertErro.classList.remove('d-none'); setTimeout(()=>alertErro.classList.add('d-none'),4000); return; }
+  const r = await fetch('/api/analisador/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({junior_max_meses:j,pleno_max_meses:p}) });
+  if (r.ok) {
+    const ok = document.getElementById('alert-ok-an');
+    ok.classList.remove('d-none');
+    setTimeout(() => ok.classList.add('d-none'), 3000);
   }
+}
 
-  async function salvarWhatsapp() {
-    const vazios = OBRIGATORIOS.filter(id => !document.getElementById(id)?.value.trim());
-    if (vazios.length) {
-      const alertErro = document.getElementById('alert-erro-wa');
-      alertErro.classList.remove('d-none');
-      setTimeout(() => alertErro.classList.add('d-none'), 4000);
-      document.getElementById(vazios[0])?.focus();
-      return;
+// ── Equivalências ─────────────────────────────────────────────────────────────
+let equivData   = [];
+let editingKw   = null;
+let tagList     = [];
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function carregarEquiv() {
+  equivData = await fetch('/api/equivalencias').then(r => r.json());
+  renderTabela();
+}
+
+function renderTabela() {
+  const busca   = (document.getElementById('eq-busca')?.value || '').toLowerCase().trim();
+  const filtrado = busca
+    ? equivData.filter(e => e.keyword.includes(busca) || e.variantes.some(v => v.includes(busca)))
+    : equivData;
+
+  const tbody = document.getElementById('eq-tbody');
+  const empty = document.getElementById('eq-empty');
+
+  if (!filtrado.length) {
+    tbody.innerHTML = '';
+    empty.classList.remove('d-none');
+    return;
+  }
+  empty.classList.add('d-none');
+
+  const MAX = 5;
+  tbody.innerHTML = filtrado.map(e => {
+    const pills = e.variantes.slice(0, MAX).map(v => `<span class="eq-var-pill">${esc(v)}</span>`).join('');
+    const more  = e.variantes.length > MAX ? `<span class="eq-var-more">+${e.variantes.length - MAX}</span>` : '';
+
+    let badge;
+    if (!e.builtin) {
+      badge = `<span class="badge-custom">★ personalizado</span>`;
+    } else if (e.overridden) {
+      badge = `<span class="badge-builtin overridden" title="Editado — diferente do padrão do sistema">⚙ editado</span>`;
+    } else {
+      badge = `<span class="badge-builtin">⚙ embutido</span>`;
     }
-    const body = {};
-    Object.keys(PADROES).forEach(id => {
-      const el = document.getElementById(id);
-      if (el) body[id] = el.value.trim() || PADROES[id];
-    });
-    await fetch('/api/config', {
+
+    const btnEditar   = `<button class="btn-eq btn-eq-edit" onclick="abrirModal('${esc(e.keyword)}')">Editar</button>`;
+    const btnRestaurar = e.overridden
+      ? `<button class="btn-eq btn-eq-restore" onclick="restaurarEquiv('${esc(e.keyword)}')" title="Restaurar padrão do sistema">↺ Restaurar</button>`
+      : '';
+    const btnExcluir = !e.builtin
+      ? `<button class="btn-eq btn-eq-del" onclick="excluirEquiv('${esc(e.keyword)}')">Excluir</button>`
+      : '';
+
+    return `<div class="eq-row">
+      <div class="eq-kw-col">${badge}<span>${esc(e.keyword)}</span></div>
+      <div class="eq-vars-col">${pills}${more}</div>
+      <div class="eq-actions-col">${btnEditar}${btnRestaurar}${btnExcluir}</div>
+    </div>`;
+  }).join('');
+}
+
+function abrirModal(kw) {
+  editingKw = kw || null;
+  const entry = kw ? equivData.find(e => e.keyword === kw) : null;
+
+  document.getElementById('modal-title').textContent = kw ? `Editar: ${kw}` : 'Nova Equivalência';
+
+  const kwInput = document.getElementById('eq-kw-input');
+  kwInput.value    = kw || '';
+  kwInput.disabled = !!kw;
+  kwInput.placeholder = kw ? '' : 'Ex: advpl';
+
+  const noteBuiltin = document.getElementById('modal-note-builtin');
+  if (entry?.builtin) noteBuiltin.classList.remove('d-none');
+  else noteBuiltin.classList.add('d-none');
+
+  document.getElementById('modal-alert').classList.add('d-none');
+
+  tagList = entry ? [...entry.variantes] : [];
+  renderTags();
+
+  document.getElementById('eq-modal').classList.add('open');
+  setTimeout(() => {
+    if (!kw) kwInput.focus();
+    else document.getElementById('tag-new-input').focus();
+  }, 60);
+}
+
+function fecharModal() {
+  document.getElementById('eq-modal').classList.remove('open');
+  document.getElementById('tag-new-input').value = '';
+  editingKw = null;
+  tagList   = [];
+}
+
+function renderTags() {
+  document.getElementById('tags-list').innerHTML = tagList.map((t, i) =>
+    `<span class="tag-pill">${esc(t)}<span class="rm" onclick="removeTag(${i})">×</span></span>`
+  ).join('');
+}
+
+function addTag(val) {
+  const v = val.trim().toLowerCase().replace(/,+$/, '');
+  if (!v || tagList.includes(v)) return false;
+  tagList.push(v);
+  renderTags();
+  return true;
+}
+
+function removeTag(idx) {
+  tagList.splice(idx, 1);
+  renderTags();
+}
+
+async function sugerirComIA() {
+  const kw = document.getElementById('eq-kw-input').value.trim();
+  if (!kw) {
+    const alert = document.getElementById('modal-alert');
+    alert.textContent = 'Informe a palavra-chave antes de sugerir.';
+    alert.classList.remove('d-none');
+    document.getElementById('eq-kw-input').focus();
+    return;
+  }
+  const btn = document.getElementById('btn-sugerir-ia');
+  btn.disabled = true;
+  btn.textContent = '⏳ Consultando IA...';
+  document.getElementById('modal-alert').classList.add('d-none');
+  try {
+    const r = await fetch('/api/equivalencias/sugerir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ keyword: kw }),
     });
-    const alertOk = document.getElementById('alert-ok-wa');
-    alertOk.classList.remove('d-none');
-    setTimeout(() => alertOk.classList.add('d-none'), 3000);
+    if (!r.ok) throw new Error('Erro na resposta da IA');
+    const { variantes } = await r.json();
+    variantes.forEach(v => addTag(v));
+  } catch (err) {
+    const alert = document.getElementById('modal-alert');
+    alert.textContent = 'Não foi possível obter sugestões da IA. Tente novamente.';
+    alert.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Sugerir com IA';
+  }
+}
+
+async function salvarEquiv() {
+  const kw = editingKw || document.getElementById('eq-kw-input').value.trim().toLowerCase();
+  const alert = document.getElementById('modal-alert');
+
+  if (!kw) {
+    alert.textContent = 'Informe a palavra-chave principal.';
+    alert.classList.remove('d-none');
+    document.getElementById('eq-kw-input').focus();
+    return;
   }
 
-  // ── Analisador config ────────────────────────────────────────
-  function mesesParaTexto(m) {
-    const anos = Math.floor(m / 12);
-    const meses = m % 12;
-    if (anos === 0) return `${m} mês${m !== 1 ? 'es' : ''}`;
-    if (meses === 0) return `${anos} ano${anos !== 1 ? 's' : ''}`;
-    return `${anos} ano${anos !== 1 ? 's' : ''} e ${meses} mês${meses !== 1 ? 'es' : ''}`;
+  const pending = document.getElementById('tag-new-input').value.trim();
+  if (pending) addTag(pending);
+  document.getElementById('tag-new-input').value = '';
+
+  if (!tagList.length) {
+    alert.textContent = 'Adicione pelo menos um sinônimo.';
+    alert.classList.remove('d-none');
+    document.getElementById('tag-new-input').focus();
+    return;
   }
 
-  function atualizarPreview() {
-    const j = parseInt(document.getElementById('junior_max').value) || 12;
-    const p = parseInt(document.getElementById('pleno_max').value) || 36;
-    document.getElementById('hint-junior').textContent = `${j} meses`;
-    document.getElementById('hint-senior').textContent = `${p} meses`;
-    document.getElementById('prev-junior').textContent = j;
-    document.getElementById('prev-pleno-min').textContent = j;
-    document.getElementById('prev-pleno-max').textContent = p;
-    document.getElementById('prev-senior').textContent = p;
+  alert.classList.add('d-none');
+  await fetch('/api/equivalencias', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword: kw, variantes: tagList }),
+  });
+  fecharModal();
+  await carregarEquiv();
+}
 
-    const jTexto = mesesParaTexto(j);
-    const pTexto = mesesParaTexto(p);
-    document.querySelectorAll('#preview div')[1].innerHTML =
-      `<span style="display:inline-block;min-width:90px;color:var(--accent);font-weight:600">Júnior</span> → menos de <strong>${j}</strong> meses (menos de ${jTexto})`;
-    document.querySelectorAll('#preview div')[2].innerHTML =
-      `<span style="display:inline-block;min-width:90px;color:#16a34a;font-weight:600">Pleno</span> → de <strong>${j}</strong> a <strong>${p}</strong> meses (${jTexto} até ${pTexto})`;
-    document.querySelectorAll('#preview div')[3].innerHTML =
-      `<span style="display:inline-block;min-width:90px;color:#d97706;font-weight:600">Sênior</span> → acima de <strong>${p}</strong> meses (mais de ${pTexto})`;
+async function excluirEquiv(kw) {
+  if (!confirm(`Excluir a equivalência "${kw}"?`)) return;
+  await fetch(`/api/equivalencias/${encodeURIComponent(kw)}`, { method: 'DELETE' });
+  await carregarEquiv();
+}
+
+async function restaurarEquiv(kw) {
+  if (!confirm(`Restaurar "${kw}" para o padrão embutido do sistema?\n\nSua personalização será removida.`)) return;
+  await fetch(`/api/equivalencias/${encodeURIComponent(kw)}`, { method: 'DELETE' });
+  await carregarEquiv();
+}
+
+function addTagFromBtn() {
+  const inp = document.getElementById('tag-new-input');
+  if (addTag(inp.value)) inp.value = '';
+  inp.focus();
+}
+
+// ── Tag input — teclado ───────────────────────────────────────────────────────
+document.getElementById('tag-new-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    e.stopPropagation();
+    if (addTag(this.value)) this.value = '';
   }
-
-  async function carregarAnalisador() {
-    const cfg = await fetch('/api/analisador/config').then(r => r.json());
-    document.getElementById('junior_max').value = cfg.junior_max_meses;
-    document.getElementById('pleno_max').value  = cfg.pleno_max_meses;
-    atualizarPreview();
+  if (e.key === 'Backspace' && !this.value && tagList.length) {
+    removeTag(tagList.length - 1);
   }
+});
 
-  async function salvarAnalisador() {
-    const j = parseInt(document.getElementById('junior_max').value);
-    const p = parseInt(document.getElementById('pleno_max').value);
-    const alertErro = document.getElementById('alert-erro-an');
-    if (!j || !p) {
-      alertErro.textContent = '❌ Preencha os dois campos.';
-      alertErro.classList.remove('d-none');
-      setTimeout(() => alertErro.classList.add('d-none'), 4000);
-      return;
-    }
-    if (j >= p) {
-      alertErro.textContent = '❌ O limite Júnior deve ser menor que o limite Pleno.';
-      alertErro.classList.remove('d-none');
-      setTimeout(() => alertErro.classList.add('d-none'), 4000);
-      return;
-    }
-    const r = await fetch('/api/analisador/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ junior_max_meses: j, pleno_max_meses: p }),
-    });
-    if (r.ok) {
-      const alertOk = document.getElementById('alert-ok-an');
-      alertOk.classList.remove('d-none');
-      setTimeout(() => alertOk.classList.add('d-none'), 3000);
-    }
-  }
+// Fechar com Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
 
-  // ── Init ────────────────────────────────────────────────────
-  carregarWhatsapp();
-  carregarAnalisador();
+// ── Init ──────────────────────────────────────────────────────────────────────
+carregarWhatsapp();
+carregarAnalisador();
 </script>
 </body>
 </html>

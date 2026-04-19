@@ -211,12 +211,32 @@ const EQUIVALENCIAS = {
   processos:   ['processos', 'processo', 'bpm', 'bpmn', 'workflow', 'fluxo de trabalho', 'mapeamento de processo'],
   bpm:         ['bpm', 'bpmn', 'processos', 'processo', 'workflow', 'fluxo de trabalho'],
   ged:         ['ged', 'gestão de documentos', 'gerenciamento de documentos', 'ecm'],
-  sap:         ['sap', 'sap erp', 'sap r/3'],
-  totvs:       ['totvs', 'protheus', 'rm totvs'],
-  excel:       ['excel', 'planilha', 'spreadsheet'],
-  python:      ['python', 'py'],
-  javascript:  ['javascript', 'js', 'typescript', 'ts', 'node', 'nodejs'],
+  sap:         ['sap', 'sap erp', 'sap r/3', 'sap hana', 'abap', 'sap sd', 'sap fi', 'sap mm'],
+  totvs:       ['totvs', 'protheus', 'rm totvs', 'rm protheus', 'advpl', 'microsiga', 'erp totvs'],
+  advpl:       ['advpl', 'totvs', 'protheus', 'rm', 'microsiga', 'erp totvs'],
+  protheus:    ['protheus', 'totvs', 'advpl', 'microsiga', 'rm protheus'],
+  excel:       ['excel', 'planilha', 'spreadsheet', 'vba', 'excel avançado'],
+  python:      ['python', 'py', 'django', 'flask', 'fastapi'],
+  javascript:  ['javascript', 'js', 'typescript', 'ts', 'node', 'nodejs', 'node.js', 'react', 'vue', 'angular'],
+  java:        ['java', 'spring', 'spring boot', 'springboot', 'maven', 'gradle', 'jsf'],
+  csharp:      ['c#', 'csharp', '.net', 'dotnet', 'asp.net', 'net core'],
+  powerbi:     ['power bi', 'powerbi', 'bi', 'business intelligence', 'tableau', 'qlik', 'looker'],
+  aws:         ['aws', 'amazon web services', 'ec2', 's3', 'lambda', 'cloud aws'],
+  azure:       ['azure', 'microsoft azure', 'azure devops', 'cloud azure'],
+  linux:       ['linux', 'unix', 'ubuntu', 'debian', 'centos', 'rhel', 'shell', 'bash'],
+  docker:      ['docker', 'kubernetes', 'k8s', 'container', 'containerização'],
+  oracle_db:   ['oracle', 'oracle database', 'pl/sql', 'plsql', 'oracle erp'],
+  scrum:       ['scrum', 'agile', 'ágil', 'kanban', 'jira', 'metodologia ágil', 'sprint'],
 };
+
+function getMergedEquivalencias() {
+  const merged = {};
+  for (const [k, v] of Object.entries(EQUIVALENCIAS))
+    merged[k.toLowerCase()] = v.map(s => s.toLowerCase());
+  for (const entry of db.listEquivalencias())
+    merged[entry.keyword.toLowerCase()] = entry.variantes.map(s => String(s).toLowerCase());
+  return merged;
+}
 
 function curriculoTextoCompleto(c) {
   return [
@@ -232,10 +252,22 @@ function curriculoTextoCompleto(c) {
   ].join(' ').toLowerCase();
 }
 
-function temKeyword(textoLower, kw) {
-  const kwLower = kw.toLowerCase();
-  const variantes = EQUIVALENCIAS[kwLower] || [kwLower];
-  return variantes.some(v => textoLower.includes(v));
+const STOP_WORDS = new Set(['de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'e', 'o', 'a', 'os', 'as', 'um', 'uma', 'com', 'para', 'por', 'ao', 'à', 'ou']);
+
+function temKeyword(textoLower, kw, equiv) {
+  const kwLower = kw.toLowerCase().trim();
+
+  // 1. Equivalência exata para a frase completa
+  if (equiv[kwLower]) return equiv[kwLower].some(v => textoLower.includes(v));
+
+  // 2. Tenta equivalência por cada palavra significativa da frase
+  const palavras = kwLower.split(/\s+/).filter(p => p.length > 2 && !STOP_WORDS.has(p));
+  for (const p of palavras) {
+    if (equiv[p] && equiv[p].some(v => textoLower.includes(v))) return true;
+  }
+
+  // 3. Fallback: frase literal no texto
+  return textoLower.includes(kwLower);
 }
 
 // ── Etapa 1: Triagem eliminatória por palavras-chave (determinística) ─────────
@@ -251,12 +283,13 @@ function triagem(funcao, curriculos) {
     .map(s => s.replace(/^[-•]\s*/, '').trim())
     .filter(Boolean);
 
+  const equiv    = getMergedEquivalencias();
   const aprovados  = [];
   const eliminados = [];
 
   for (const c of curriculos) {
     const texto   = curriculoTextoCompleto(c);
-    const faltando = kwObrigatorias.filter(kw => !temKeyword(texto, kw));
+    const faltando = kwObrigatorias.filter(kw => !temKeyword(texto, kw, equiv));
 
     if (faltando.length === 0) {
       aprovados.push(c);
@@ -315,11 +348,20 @@ Responda SOMENTE com JSON válido, sem markdown.`;
     return JSON.parse(match[0]);
   } catch (err) {
     console.error(`[analisarIndividual] ID ${curriculo.id} (${curriculo.nome}): ${err.message}`);
-    return { id: curriculo.id, score: 0, nivel: 'Baixo', nivel_candidato: '—', meses_relevantes: 0, detalhes: {}, pontos_positivos: [], pontos_negativos: ['Erro ao analisar'], resumo: '' };
+    const erroResumido = err.message?.includes('429') || err.message?.includes('rate_limit') || err.message?.includes('quota')
+      ? 'Limite de uso da IA atingido (quota/rate limit)'
+      : `Falha na IA: ${err.message?.slice(0, 80) || 'erro desconhecido'}`;
+    return { id: curriculo.id, score: 0, nivel: 'Baixo', nivel_candidato: '—', meses_relevantes: 0, detalhes: {}, pontos_positivos: [], pontos_negativos: [erroResumido], resumo: erroResumido, ia_falha: true, ia_erro: erroResumido };
   }
 }
 
-module.exports = function registerVagasRoutes(app, { requireAuth }) {
+module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, io }) {
+
+  function logMonitor(message, type = 'warning') {
+    const entry = { message, type, timestamp: new Date().toLocaleTimeString('pt-BR') };
+    if (registrarLog) registrarLog(entry);
+    if (io) io.emit('log', entry);
+  }
 
   // ── Funções ──────────────────────────────────────────────────────────────────
   app.get   ('/api/funcoes',     requireAuth, (_req, res) => res.json(db.listFuncoes()));
@@ -423,6 +465,11 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
       const resultados = [];
       for (const c of aprovados) {
         const r = await analisarIndividual(funcao, c, cfg);
+
+        if (r.ia_falha) {
+          logMonitor(`[Analisador] Falha IA ao analisar "${c.nome || c.id}" para vaga "${funcao.nome}": ${r.ia_erro}`, 'error');
+        }
+
         const enriquecido = {
           ...r,
           nome:      c.nome      || '—',
@@ -431,8 +478,13 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
           remetente: c.remetente || '—',
           exp_total: calcularExperiencia(c, cfg).texto,
         };
-        if ((r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
-          eliminados.push({ ...c, motivo_eliminacao: r.resumo || 'Não atende os requisitos obrigatórios' });
+
+        const motivoElim = r.ia_falha
+          ? `[Falha IA] ${r.ia_erro}`
+          : (r.resumo || 'Não atende os requisitos obrigatórios');
+
+        if (r.ia_falha || (r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
+          eliminados.push({ ...c, motivo_eliminacao: motivoElim });
         } else {
           resultados.push(enriquecido);
         }
@@ -458,6 +510,109 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
       });
     } catch (err) {
       res.status(500).json({ error: `Erro na análise: ${err.message}` });
+    }
+  });
+
+  // ── Equivalências ─────────────────────────────────────────────────────────────
+  app.get('/api/equivalencias', requireAuth, (_req, res) => {
+    const dbEntries = db.listEquivalencias();
+    const dbMap     = new Map(dbEntries.map(e => [e.keyword, e.variantes]));
+    const result    = [];
+
+    for (const [keyword, builtinVar] of Object.entries(EQUIVALENCIAS)) {
+      if (dbMap.has(keyword)) {
+        result.push({ keyword, variantes: dbMap.get(keyword), builtin: true, overridden: true });
+      } else {
+        result.push({ keyword, variantes: builtinVar, builtin: true, overridden: false });
+      }
+    }
+    for (const entry of dbEntries) {
+      if (!EQUIVALENCIAS[entry.keyword]) {
+        result.push({ keyword: entry.keyword, variantes: entry.variantes, builtin: false, overridden: false });
+      }
+    }
+    result.sort((a, b) => a.keyword.localeCompare(b.keyword));
+    res.json(result);
+  });
+
+  app.post('/api/equivalencias', requireAuth, (req, res) => {
+    const { keyword, variantes } = req.body;
+    if (!keyword?.trim() || !Array.isArray(variantes))
+      return res.status(400).json({ error: 'keyword e variantes[] obrigatórios' });
+    db.saveEquivalencia({ keyword, variantes });
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/equivalencias/:keyword', requireAuth, (req, res) => {
+    db.deleteEquivalencia(req.params.keyword);
+    res.json({ ok: true });
+  });
+
+  // ── Sugerir equivalências via IA (keyword única — modal de Configurações) ─────
+  app.post('/api/equivalencias/sugerir', requireAuth, async (req, res) => {
+    const { keyword } = req.body;
+    if (!keyword?.trim()) return res.status(400).json({ error: 'keyword obrigatório' });
+
+    const system = `Você é especialista em recrutamento no Brasil.
+Para uma habilidade ou tecnologia, retorne os termos equivalentes que aparecem em currículos brasileiros: variações de nome, siglas, produtos da mesma família, versões ou nomenclaturas alternativas.
+Responda SOMENTE com JSON array de strings em minúsculo, sem markdown, sem explicações.`;
+
+    const user = `Habilidade: "${keyword.trim()}"
+Retorne array JSON com 5 a 10 termos equivalentes/relacionados que recrutadores encontrariam em currículos no Brasil.
+Exemplo para "advpl": ["totvs","protheus","microsiga","rm protheus","erp totvs","advpl 12"]
+Responda apenas o array JSON.`;
+
+    try {
+      const resposta  = await chamarIA(system, user, 400);
+      const match     = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\[[\s\S]*\]/);
+      if (!match) throw new Error('Resposta da IA não retornou JSON válido');
+      const variantes = JSON.parse(match[0]).map(v => String(v).toLowerCase().trim()).filter(Boolean);
+      res.json({ variantes });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Sugerir equivalências em lote via IA (salva automaticamente as novas) ─────
+  app.post('/api/equivalencias/sugerir-lote', requireAuth, async (req, res) => {
+    const { keywords, preview } = req.body;
+    if (!Array.isArray(keywords) || !keywords.length)
+      return res.status(400).json({ error: 'keywords[] obrigatório' });
+
+    const equiv        = getMergedEquivalencias();
+    const novas        = keywords.filter(kw => !equiv[kw.toLowerCase().trim()]).map(kw => kw.trim());
+    const jaExistentes = keywords.filter(kw =>  equiv[kw.toLowerCase().trim()]).map(kw => kw.toLowerCase());
+
+    if (!novas.length) return res.json({ geradas: {}, ja_existentes: jaExistentes });
+
+    const system = `Você é especialista em recrutamento no Brasil.
+Para cada habilidade/tecnologia listada, retorne os termos equivalentes que aparecem em currículos brasileiros: variações de nome, siglas, produtos da mesma família, versões, tecnologias relacionadas.
+Responda SOMENTE com JSON objeto válido, sem markdown, sem explicações.`;
+
+    const user = `Habilidades: ${JSON.stringify(novas)}
+Para cada uma, retorne 5 a 10 equivalentes em minúsculo.
+Formato exato: {"keyword1":["var1","var2",...],"keyword2":[...]}`;
+
+    try {
+      const resposta = await chamarIA(system, user, 1000);
+      const match    = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Resposta da IA não retornou JSON válido');
+
+      const parsed  = JSON.parse(match[0]);
+      const geradas = {};
+
+      for (const [kw, variantes] of Object.entries(parsed)) {
+        if (!Array.isArray(variantes)) continue;
+        const keyword = kw.toLowerCase().trim();
+        const vars    = variantes.map(v => String(v).toLowerCase().trim()).filter(Boolean);
+        if (!keyword || !vars.length) continue;
+        if (!preview) db.saveEquivalencia({ keyword, variantes: vars });
+        geradas[keyword] = vars;
+      }
+
+      res.json({ geradas, ja_existentes: jaExistentes });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
   });
 };

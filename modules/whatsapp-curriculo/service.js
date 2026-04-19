@@ -99,7 +99,9 @@ class WhatsAppService extends EventEmitter {
       'Aguardando Chrome iniciar…',
       'Chrome iniciado, carregando WhatsApp Web…',
       'WhatsApp Web carregando, aguardando QR ou sessão…',
-      'Ainda carregando… (isso pode levar até 90s na primeira vez)',
+      'Ainda carregando… (primeira execução pode levar até 3 minutos)',
+      'Aguardando autenticação…',
+      'Quase lá, aguarde…',
     ];
     const progressTimer = setInterval(() => {
       if (this.status !== 'starting') { clearInterval(progressTimer); return; }
@@ -108,14 +110,14 @@ class WhatsAppService extends EventEmitter {
       initStep++;
     }, 15000);
 
-    // Timeout de 90s — para automaticamente se nenhum evento disparar
+    // Timeout de 180s — para automaticamente se nenhum evento disparar
     const initTimeout = setTimeout(() => {
       if (this.status !== 'starting') return;
       clearInterval(progressTimer);
-      this.log('Tempo limite de inicialização atingido (90s). O Chrome pode estar travado. Parando serviço…', 'error');
+      this.log('Tempo limite de inicialização atingido (180s). O Chrome pode estar travado. Parando serviço…', 'error');
       this.log('Dica: verifique processos chrome.exe no Gerenciador de Tarefas e tente novamente.', 'warning');
       this.stop();
-    }, 90000);
+    }, 180000);
 
     const clearTimers = () => { clearInterval(progressTimer); clearTimeout(initTimeout); };
 

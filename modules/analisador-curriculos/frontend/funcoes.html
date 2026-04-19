@@ -14,7 +14,7 @@
     .modal-close:hover { color:var(--text-hi); }
     .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
     .form-row-3    { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
-    .modal-footer  { display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
     .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
     .btn-icon:hover { background:var(--bg-hover); }
     .search-bar    { position:relative; }
@@ -24,22 +24,64 @@
     .empty-state div { font-size:40px;margin-bottom:12px; }
     textarea.form-control { resize:vertical;min-height:80px;font-family:inherit;box-sizing:border-box; }
     .nivel-badge { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
-    .nivel-junior     { background:#0c2744;color:var(--accent-light); }
-    .nivel-pleno      { background:#14532d;color:var(--success); }
-    .nivel-senior     { background:#2d1e00;color:var(--warning); }
-    .nivel-especialista { background:#1e0c3a;color:#a78bfa; }
+    .nivel-junior        { background:#0c2744;color:var(--accent-light); }
+    .nivel-pleno         { background:#14532d;color:var(--success); }
+    .nivel-senior        { background:#2d1e00;color:var(--warning); }
+    .nivel-especialista  { background:#1e0c3a;color:#a78bfa; }
     .nivel-nao-especificado { background:var(--bg-hover);color:var(--text-lo); }
-    .view-field    { margin-bottom:16px; }
-    .view-label    { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:4px; }
-    .view-value    { font-size:14px;color:var(--text-hi);line-height:1.7; }
-    .tag-list      { display:flex;flex-wrap:wrap;gap:6px;margin-top:4px; }
-    .tag           { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
+    .view-field  { margin-bottom:16px; }
+    .view-label  { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:4px; }
+    .view-value  { font-size:14px;color:var(--text-hi);line-height:1.7; }
+    .tag-list    { display:flex;flex-wrap:wrap;gap:6px;margin-top:4px; }
+    .tag         { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
+
+    /* ── Botão Mapear ── */
+    .btn-mapear {
+      background:rgba(234,179,8,.1); color:#92400e;
+      border:1px solid rgba(234,179,8,.3); border-radius:8px;
+      padding:7px 14px; font-size:12px; cursor:pointer;
+      font-family:inherit; transition:background .15s;
+      margin-right:auto; white-space:nowrap;
+    }
+    .btn-mapear:hover:not(:disabled) { background:rgba(234,179,8,.2); }
+    .btn-mapear:disabled { opacity:.6; cursor:not-allowed; }
+
+    /* ── Tag input (modal de revisão) ── */
+    .tag-input-box {
+      border:1px solid var(--border); border-radius:8px;
+      padding:5px 8px; min-height:40px; cursor:text;
+      display:flex; flex-wrap:wrap; align-items:center; gap:4px;
+      background:var(--bg-input,var(--bg-card)); transition:border-color .15s;
+    }
+    .tag-input-box:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+    .tag-input-box input {
+      border:none; outline:none; background:transparent;
+      font-size:12px; min-width:100px; flex:1; color:var(--text-hi);
+      padding:2px 0; font-family:inherit;
+    }
+    .tag-pill {
+      display:inline-flex; align-items:center; gap:4px;
+      background:rgba(37,99,235,.1); color:var(--accent);
+      border-radius:20px; padding:2px 8px; font-size:11px; white-space:nowrap;
+    }
+    .tag-pill .rm { cursor:pointer; font-size:14px; line-height:1; opacity:.6; }
+    .tag-pill .rm:hover { opacity:1; }
+
+    /* ── Modal revisão de equivalências ── */
+    .review-kw-row { margin-bottom:16px; }
+    .review-kw-header { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .review-kw-label {
+      font-size:12px; font-weight:700; color:var(--text-hi);
+      background:var(--bg-hover); border-radius:6px; padding:2px 9px;
+    }
+    .badge-new  { font-size:10px; color:var(--success); font-style:italic; }
+    .badge-existing { font-size:10px; color:var(--text-lo); font-style:italic; }
   </style>
 </head>
 <body>
 <div class="layout">
 
-      <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
@@ -125,6 +167,7 @@
       <span class="modal-title" id="modal-title">Nova Função</span>
       <button class="modal-close" onclick="fecharModal()">✕</button>
     </div>
+
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Nome da Função *</label>
@@ -177,7 +220,11 @@
         <div class="form-hint">Usadas pelo analisador de currículos.</div>
       </div>
     </div>
+
     <div class="modal-footer">
+      <button class="btn-mapear" id="btn-mapear" onclick="gerarEquivalencias()">
+        ✨ Mapear Equivalências
+      </button>
       <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="salvar()">Salvar Função</button>
     </div>
@@ -198,133 +245,329 @@
   </div>
 </div>
 
+<!-- Modal Revisão de Equivalências -->
+<div id="modal-equiv" class="modal-overlay d-none">
+  <div class="modal" style="width:min(740px,95vw)">
+    <div class="modal-header">
+      <span class="modal-title">✨ Revisar Equivalências</span>
+      <button class="modal-close" onclick="fecharModalEquiv()">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-md);margin-bottom:20px;line-height:1.6">
+      Revise os sinônimos mapeados pela IA para cada palavra-chave. Adicione ou remova variantes antes de salvar.<br>
+      <span style="font-size:11px;color:var(--text-lo)">Apenas palavras-chave com ao menos uma variante serão salvas.</span>
+    </p>
+    <div id="equiv-review-list" style="max-height:55vh;overflow-y:auto;padding-right:4px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModalEquiv()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-equiv" onclick="salvarTodasEquivalencias()">Salvar Equivalências</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-  const NIVEIS = {
-    'Júnior': 'nivel-junior', 'Pleno': 'nivel-pleno',
-    'Sênior': 'nivel-senior', 'Especialista': 'nivel-especialista',
-    'Não especificado': 'nivel-nao-especificado',
+const NIVEIS = {
+  'Júnior':'nivel-junior','Pleno':'nivel-pleno',
+  'Sênior':'nivel-senior','Especialista':'nivel-especialista',
+  'Não especificado':'nivel-nao-especificado',
+};
+
+let funcoes    = [];
+let editandoId = null;
+let reviewItems = []; // { kw, tags, isNew }
+
+function escH(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Listar ────────────────────────────────────────────────────────────────────
+async function carregar() {
+  funcoes = await fetch('/api/funcoes').then(r => r.json());
+  renderizar(funcoes);
+}
+
+function parseTags(str) {
+  if (!str) return [];
+  return str.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function tagsHtml(arr) {
+  if (!arr?.length) return '<span style="color:var(--text-lo)">—</span>';
+  return arr.slice(0, 4).map(t => `<span class="tag">${t}</span>`).join('')
+       + (arr.length > 4 ? `<span class="tag">+${arr.length - 4}</span>` : '');
+}
+
+function renderizar(lista) {
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty');
+  if (!lista.length) { tbody.innerHTML=''; empty.classList.remove('d-none'); return; }
+  empty.classList.add('d-none');
+  tbody.innerHTML = lista.map(f => `
+    <tr>
+      <td style="color:var(--text-lo);font-size:12px">#${f.id}</td>
+      <td><strong style="color:var(--accent-light)">${f.nome}</strong></td>
+      <td style="color:var(--text-md)">${f.area||'—'}</td>
+      <td><span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${f.nivel_experiencia||'—'}</span></td>
+      <td><div class="tag-list">${tagsHtml(f.palavras_chave)}</div></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-icon" title="Visualizar" onclick="visualizar(${f.id})">👁</button>
+        <button class="btn-icon" title="Editar"     onclick="editar(${f.id})">✏️</button>
+        <button class="btn-icon" title="Excluir"    onclick="excluir(${f.id},'${f.nome.replace(/'/g,"\\'")}')">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+
+function filtrar() {
+  const q = document.getElementById('busca').value.toLowerCase();
+  renderizar(funcoes.filter(f =>
+    f.nome?.toLowerCase().includes(q) || f.area?.toLowerCase().includes(q)
+  ));
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+function abrirModal(f = null) {
+  editandoId   = f ? f.id : null;
+  reviewItems  = [];
+  document.getElementById('modal-title').textContent = f ? 'Editar Função' : 'Nova Função';
+  document.getElementById('f-nome').value       = f?.nome || '';
+  document.getElementById('f-area').value       = f?.area || '';
+  document.getElementById('f-nivel').value      = f?.nivel_experiencia || 'Não especificado';
+  document.getElementById('f-formacao').value   = f?.formacao_necessaria || '';
+  document.getElementById('f-descricao').value  = f?.descricao || '';
+  document.getElementById('f-req-obrig').value  = f?.requisitos_obrigatorios || '';
+  document.getElementById('f-req-desej').value  = f?.requisitos_desejaveis || '';
+  document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas) ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
+  document.getElementById('f-keywords').value   = Array.isArray(f?.palavras_chave) ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
+  resetEquivUI();
+  document.getElementById('modal').classList.remove('d-none');
+}
+
+function fecharModal() {
+  document.getElementById('modal').classList.add('d-none');
+  resetEquivUI();
+}
+
+function resetEquivUI() {
+  const btn = document.getElementById('btn-mapear');
+  btn.disabled    = false;
+  btn.textContent = '✨ Mapear Equivalências';
+}
+
+// ── Equivalências com IA ──────────────────────────────────────────────────────
+function coletarKeywords() {
+  const habs = parseTags(document.getElementById('f-habilidades').value);
+  const reqs = (document.getElementById('f-req-obrig').value || '')
+    .split(/[\n,;]+/)
+    .map(s => s.replace(/^[-•]\s*/, '').trim())
+    .filter(Boolean);
+  return [...new Set([...habs, ...reqs])];
+}
+
+async function gerarEquivalencias() {
+  const kws = coletarKeywords();
+  if (!kws.length) { document.getElementById('f-habilidades').focus(); return; }
+
+  const btn = document.getElementById('btn-mapear');
+  btn.disabled    = true;
+  btn.textContent = '⏳ Consultando IA...';
+
+  try {
+    // 1. Sugestões da IA (preview=true: não salva automaticamente)
+    const [sugestoes, todasEquiv] = await Promise.all([
+      fetch('/api/equivalencias/sugerir-lote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keywords: kws, preview: true }),
+      }).then(r => r.json()),
+      fetch('/api/equivalencias').then(r => r.json()),
+    ]);
+
+    // 2. Monta mapa das equivalências já no DB
+    const dbMap = new Map(todasEquiv.map(e => [e.keyword.toLowerCase(), e.variantes]));
+    const geradas = sugestoes.geradas || {};
+
+    // 3. Constrói reviewItems: apenas keywords com ao menos 1 variante
+    reviewItems = [];
+    for (const kw of kws.map(k => k.toLowerCase().trim())) {
+      const aiVars = geradas[kw]   || [];
+      const dbVars = dbMap.get(kw) || [];
+      const merged = [...new Set([...dbVars, ...aiVars])];
+      if (!merged.length) continue;
+      reviewItems.push({ kw, tags: merged, isNew: !dbMap.has(kw) });
+    }
+
+    abrirModalEquiv();
+    btn.textContent = '✨ Mapear Equivalências';
+  } catch (err) {
+    alert('Erro ao consultar IA: ' + err.message);
+    btn.textContent = '✨ Mapear Equivalências';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Modal de revisão de equivalências ────────────────────────────────────────
+function abrirModalEquiv() {
+  const list = document.getElementById('equiv-review-list');
+
+  if (!reviewItems.length) {
+    list.innerHTML = '<p style="color:var(--text-lo);font-size:13px">Nenhuma equivalência encontrada para as palavras-chave desta função.</p>';
+    document.getElementById('modal-equiv').classList.remove('d-none');
+    return;
+  }
+
+  list.innerHTML = reviewItems.map((item, idx) => `
+    <div class="review-kw-row">
+      <div class="review-kw-header">
+        <span class="review-kw-label">${escH(item.kw)}</span>
+        <span class="${item.isNew ? 'badge-new' : 'badge-existing'}">${item.isNew ? 'novo' : 'já existe — editando'}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-start">
+        <div class="tag-input-box" style="flex:1" onclick="document.getElementById('rinput-${idx}').focus()">
+          <div id="rtags-${idx}" style="display:contents"></div>
+          <input id="rinput-${idx}" type="text" placeholder="Adicionar variante..."
+            onkeydown="reviewKeydown(event,${idx})">
+        </div>
+        <button type="button" onclick="reviewAddFromBtn(${idx})"
+          style="height:38px;padding:0 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-size:18px;cursor:pointer;line-height:1;flex-shrink:0">+</button>
+      </div>
+    </div>
+  `).join('');
+
+  reviewItems.forEach((_, idx) => renderReviewTags(idx));
+  document.getElementById('modal-equiv').classList.remove('d-none');
+}
+
+function fecharModalEquiv() {
+  document.getElementById('modal-equiv').classList.add('d-none');
+  reviewItems = [];
+}
+
+function renderReviewTags(idx) {
+  const container = document.getElementById('rtags-' + idx);
+  if (!container) return;
+  container.innerHTML = (reviewItems[idx]?.tags || []).map((t, ti) =>
+    `<span class="tag-pill">${escH(t)}<span class="rm" onclick="reviewRemoveTag(${idx},${ti})">×</span></span>`
+  ).join('');
+}
+
+function reviewAddTag(idx, val) {
+  const v = val.trim().toLowerCase().replace(/,+$/, '');
+  if (!v || reviewItems[idx]?.tags.includes(v)) return false;
+  reviewItems[idx].tags.push(v);
+  renderReviewTags(idx);
+  return true;
+}
+
+function reviewRemoveTag(idx, ti) {
+  reviewItems[idx].tags.splice(ti, 1);
+  renderReviewTags(idx);
+}
+
+function reviewKeydown(e, idx) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault(); e.stopPropagation();
+    if (reviewAddTag(idx, e.target.value)) e.target.value = '';
+  }
+  if (e.key === 'Backspace' && !e.target.value && reviewItems[idx]?.tags.length) {
+    reviewRemoveTag(idx, reviewItems[idx].tags.length - 1);
+  }
+}
+
+function reviewAddFromBtn(idx) {
+  const inp = document.getElementById('rinput-' + idx);
+  if (!inp) return;
+  if (reviewAddTag(idx, inp.value)) inp.value = '';
+  inp.focus();
+}
+
+async function salvarTodasEquivalencias() {
+  const btn = document.getElementById('btn-salvar-equiv');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvando...';
+  try {
+    for (const item of reviewItems) {
+      if (!item.tags.length) continue;
+      await fetch('/api/equivalencias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyword: item.kw, variantes: item.tags }),
+      });
+    }
+    fecharModalEquiv();
+    const btn2 = document.getElementById('btn-mapear');
+    btn2.textContent = '✨ Equivalências salvas ✓';
+  } catch (err) {
+    alert('Erro ao salvar: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Equivalências';
+  }
+}
+
+// ── Salvar ────────────────────────────────────────────────────────────────────
+async function salvar() {
+  const nome = document.getElementById('f-nome').value.trim();
+  if (!nome) { alert('O nome da função é obrigatório.'); return; }
+
+  const body = {
+    nome,
+    area:                    document.getElementById('f-area').value.trim(),
+    nivel_experiencia:       document.getElementById('f-nivel').value,
+    formacao_necessaria:     document.getElementById('f-formacao').value.trim(),
+    descricao:               document.getElementById('f-descricao').value.trim(),
+    requisitos_obrigatorios: document.getElementById('f-req-obrig').value.trim(),
+    requisitos_desejaveis:   document.getElementById('f-req-desej').value.trim(),
+    habilidades_tecnicas:    parseTags(document.getElementById('f-habilidades').value),
+    palavras_chave:          parseTags(document.getElementById('f-keywords').value),
   };
 
-  let funcoes = [], editandoId = null;
+  const url    = editandoId ? `/api/funcoes/${editandoId}` : '/api/funcoes';
+  const method = editandoId ? 'PUT' : 'POST';
+  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-  async function carregar() {
-    funcoes = await fetch('/api/funcoes').then(r => r.json());
-    renderizar(funcoes);
-  }
-
-  function parseTags(str) {
-    if (!str) return [];
-    return str.split(',').map(s => s.trim()).filter(Boolean);
-  }
-
-  function tagsHtml(arr) {
-    if (!arr?.length) return '<span style="color:var(--text-lo)">—</span>';
-    return arr.slice(0, 4).map(t => `<span class="tag">${t}</span>`).join('') + (arr.length > 4 ? `<span class="tag">+${arr.length - 4}</span>` : '');
-  }
-
-  function renderizar(lista) {
-    const tbody = document.getElementById('tbody');
-    const empty = document.getElementById('empty');
-    if (!lista.length) { tbody.innerHTML = ''; empty.classList.remove('d-none'); return; }
-    empty.classList.add('d-none');
-    tbody.innerHTML = lista.map(f => `
-      <tr>
-        <td style="color:var(--text-lo);font-size:12px">#${f.id}</td>
-        <td><strong style="color:var(--accent-light)">${f.nome}</strong></td>
-        <td style="color:var(--text-md)">${f.area || '—'}</td>
-        <td><span class="nivel-badge ${NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado'}">${f.nivel_experiencia || '—'}</span></td>
-        <td><div class="tag-list">${tagsHtml(f.palavras_chave)}</div></td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="btn-icon" title="Visualizar" onclick="visualizar(${f.id})">👁</button>
-          <button class="btn-icon" title="Editar"     onclick="editar(${f.id})">✏️</button>
-          <button class="btn-icon" title="Excluir"    onclick="excluir(${f.id}, '${f.nome.replace(/'/g,"\\'")}')">🗑️</button>
-        </td>
-      </tr>`).join('');
-  }
-
-  function filtrar() {
-    const q = document.getElementById('busca').value.toLowerCase();
-    renderizar(funcoes.filter(f =>
-      f.nome?.toLowerCase().includes(q) || f.area?.toLowerCase().includes(q)
-    ));
-  }
-
-  function abrirModal(f = null) {
-    editandoId = f ? f.id : null;
-    document.getElementById('modal-title').textContent = f ? 'Editar Função' : 'Nova Função';
-    document.getElementById('f-nome').value       = f?.nome || '';
-    document.getElementById('f-area').value       = f?.area || '';
-    document.getElementById('f-nivel').value      = f?.nivel_experiencia || 'Não especificado';
-    document.getElementById('f-formacao').value   = f?.formacao_necessaria || '';
-    document.getElementById('f-descricao').value  = f?.descricao || '';
-    document.getElementById('f-req-obrig').value  = f?.requisitos_obrigatorios || '';
-    document.getElementById('f-req-desej').value  = f?.requisitos_desejaveis || '';
-    document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas) ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
-    document.getElementById('f-keywords').value   = Array.isArray(f?.palavras_chave) ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
-    document.getElementById('modal').classList.remove('d-none');
-  }
-
-  function fecharModal() { document.getElementById('modal').classList.add('d-none'); }
-
-  async function salvar() {
-    const nome = document.getElementById('f-nome').value.trim();
-    if (!nome) { alert('O nome da função é obrigatório.'); return; }
-    const body = {
-      nome,
-      area:                    document.getElementById('f-area').value.trim(),
-      nivel_experiencia:       document.getElementById('f-nivel').value,
-      formacao_necessaria:     document.getElementById('f-formacao').value.trim(),
-      descricao:               document.getElementById('f-descricao').value.trim(),
-      requisitos_obrigatorios: document.getElementById('f-req-obrig').value.trim(),
-      requisitos_desejaveis:   document.getElementById('f-req-desej').value.trim(),
-      habilidades_tecnicas:    parseTags(document.getElementById('f-habilidades').value),
-      palavras_chave:          parseTags(document.getElementById('f-keywords').value),
-    };
-    const url    = editandoId ? `/api/funcoes/${editandoId}` : '/api/funcoes';
-    const method = editandoId ? 'PUT' : 'POST';
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    fecharModal();
-    carregar();
-  }
-
-  async function editar(id) {
-    const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
-    abrirModal(f);
-  }
-
-  async function excluir(id, nome) {
-    if (!confirm(`Excluir a função "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
-    await fetch(`/api/funcoes/${id}`, { method: 'DELETE' });
-    carregar();
-  }
-
-  async function visualizar(id) {
-    const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
-    document.getElementById('view-titulo').textContent = f.nome;
-    const tags = arr => Array.isArray(arr) && arr.length
-      ? `<div class="tag-list">${arr.map(t => `<span class="tag">${t}</span>`).join('')}</div>`
-      : '<span style="color:var(--text-lo)">—</span>';
-    const campo = (label, val) => val
-      ? `<div class="view-field"><div class="view-label">${label}</div><div class="view-value">${val}</div></div>` : '';
-    document.getElementById('view-content').innerHTML = `
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
-        ${campo('Área', f.area)}
-        ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${f.nivel_experiencia||'—'}</span>`)}
-        ${campo('Formação', f.formacao_necessaria)}
-      </div>
-      ${campo('Descrição da Função', (f.descricao||'').replace(/\n/g,'<br>'))}
-      ${campo('Requisitos Obrigatórios', (f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
-      ${campo('Requisitos Desejáveis', (f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
-      <div class="view-field"><div class="view-label">Habilidades Técnicas</div>${tags(f.habilidades_tecnicas)}</div>
-      <div class="view-field"><div class="view-label">Palavras-chave</div>${tags(f.palavras_chave)}</div>
-      <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>
-    `;
-    document.getElementById('modal-view').classList.remove('d-none');
-  }
-
+  fecharModal();
   carregar();
+}
+
+// ── Editar / Excluir / Visualizar ─────────────────────────────────────────────
+async function editar(id) {
+  const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
+  abrirModal(f);
+}
+
+async function excluir(id, nome) {
+  if (!confirm(`Excluir a função "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+  await fetch(`/api/funcoes/${id}`, { method: 'DELETE' });
+  carregar();
+}
+
+async function visualizar(id) {
+  const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
+  document.getElementById('view-titulo').textContent = f.nome;
+  const tags  = arr => Array.isArray(arr) && arr.length
+    ? `<div class="tag-list">${arr.map(t => `<span class="tag">${t}</span>`).join('')}</div>`
+    : '<span style="color:var(--text-lo)">—</span>';
+  const campo = (label, val) => val
+    ? `<div class="view-field"><div class="view-label">${label}</div><div class="view-value">${val}</div></div>` : '';
+  document.getElementById('view-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
+      ${campo('Área', f.area)}
+      ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${f.nivel_experiencia||'—'}</span>`)}
+      ${campo('Formação', f.formacao_necessaria)}
+    </div>
+    ${campo('Descrição da Função', (f.descricao||'').replace(/\n/g,'<br>'))}
+    ${campo('Requisitos Obrigatórios', (f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
+    ${campo('Requisitos Desejáveis', (f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
+    <div class="view-field"><div class="view-label">Habilidades Técnicas</div>${tags(f.habilidades_tecnicas)}</div>
+    <div class="view-field"><div class="view-label">Palavras-chave</div>${tags(f.palavras_chave)}</div>
+    <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>
+  `;
+  document.getElementById('modal-view').classList.remove('d-none');
+}
+
+carregar();
 </script>
 </body>
 </html>
