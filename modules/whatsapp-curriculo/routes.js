@@ -1,5 +1,10 @@
+const fs       = require('fs');
+const path     = require('path');
 const db       = require('./database');
 const whatsapp = require('./service');
+
+// Pasta onde LocalAuth salva a sessão (padrão do whatsapp-web.js)
+const SESSION_DIR = path.join(__dirname, '..', '..', '.wwebjs_auth');
 
 module.exports = function registerRoutes(app, { requireAuth, registrarLog, io }) {
 
@@ -7,6 +12,20 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   app.post('/api/service/start',  requireAuth, (_req, res) => { whatsapp.start(); res.json({ ok: true }); });
   app.post('/api/service/stop',   requireAuth, (_req, res) => { whatsapp.stop();  res.json({ ok: true }); });
   app.get ('/api/service/status', requireAuth, (_req, res) => res.json({ status: whatsapp.getStatus() }));
+  app.get ('/api/service/qr',     requireAuth, (_req, res) => res.json({ qr: whatsapp.getQr() || null }));
+
+  // Limpa sessão salva (permite conectar um número diferente)
+  app.post('/api/service/clear-session', requireAuth, async (_req, res) => {
+    try {
+      await whatsapp.stop();
+      if (fs.existsSync(SESSION_DIR)) {
+        fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+      }
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   // ── Configuração ──────────────────────────────────────────────────────────
   app.get('/api/config', requireAuth, (_req, res) => {

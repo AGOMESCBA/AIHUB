@@ -20,8 +20,9 @@ app.use(session({
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
 // frontend/ → login, CSS, JS global
-// modules/whatsapp-curriculo/frontend/ → páginas do módulo
+// modules/*/frontend/ → páginas de cada módulo
 app.use(express.static(path.join(__dirname, 'frontend')));
+app.use(express.static(path.join(__dirname, 'modules', 'configuracoes', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
 
@@ -37,30 +38,11 @@ function registrarLog(entry) {
   try { fs.appendFileSync(LOG_FILE, linha, 'utf8'); } catch (_) {}
 }
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// ── Auth middleware ───────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.session?.authenticated) return next();
   res.status(401).json({ error: 'Não autenticado' });
 }
-
-app.post('/api/login', (req, res) => {
-  const { user, pass } = req.body;
-  if (user === process.env.ADMIN_USER && pass === process.env.ADMIN_PASS) {
-    req.session.authenticated = true;
-    req.session.user = user;
-    return res.json({ ok: true, user });
-  }
-  res.status(401).json({ error: 'Usuário ou senha inválidos' });
-});
-
-app.post('/api/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ ok: true });
-});
-
-app.get('/api/me', requireAuth, (req, res) => {
-  res.json({ user: req.session.user });
-});
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
 const whatsapp = require('./modules/whatsapp-curriculo/service');
@@ -68,7 +50,12 @@ const whatsapp = require('./modules/whatsapp-curriculo/service');
 io.on('connection', (socket) => {
   logBuffer.forEach(entry => socket.emit('log', entry));
   socket.emit('status', whatsapp.getStatus());
+  const qr = whatsapp.getQr();
+  if (qr) socket.emit('qr', qr);
 });
+
+// ── Módulo Configurações (auth + tela de configurações) ───────────────────────
+require('./modules/configuracoes/routes')(app, { requireAuth });
 
 // ── Módulo WhatsApp Currículo ─────────────────────────────────────────────────
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, registrarLog, io });

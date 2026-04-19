@@ -6,8 +6,48 @@
   <title>Monitor — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    .terminal { height: calc(100vh - 178px); }
-    .toolbar  { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .monitor-wrap { display:flex; gap:14px; height:calc(100vh - 178px); }
+    .terminal     { flex:1; min-width:0; height:100%; }
+    .toolbar      { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    /* Painel QR lateral */
+    .qr-panel {
+      width: 268px; min-width: 268px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 20px 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      text-align: center;
+      overflow-y: auto;
+      transition: var(--transition);
+    }
+    .qr-panel-title {
+      font-weight: 600; font-size: 14px; color: var(--text-hi);
+      border-bottom: 1px solid var(--border); width: 100%; padding-bottom: 10px;
+    }
+    .qr-panel img {
+      width: 220px; height: 220px;
+      border-radius: 8px;
+      border: 3px solid var(--accent-glow);
+    }
+    .qr-panel p { font-size: 11.5px; color: var(--text-md); line-height: 1.6; }
+    .qr-pulse { animation: qr-glow 1.8s ease-in-out infinite; }
+    @keyframes qr-glow {
+      0%,100% { box-shadow: 0 0 0 0 rgba(37,99,235,.25); }
+      50%      { box-shadow: 0 0 0 10px rgba(37,99,235,0); }
+    }
+    .qr-connected {
+      background: rgba(22,163,74,.07); border:1px solid rgba(22,163,74,.25);
+      border-radius: 8px; padding: 12px 14px;
+      color: var(--success); font-weight: 600; font-size: 13px; width: 100%;
+    }
+    .qr-waiting {
+      background: rgba(37,99,235,.06); border:1px solid rgba(37,99,235,.2);
+      border-radius: 8px; padding: 10px 12px;
+      color: var(--accent); font-size: 12px; width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -64,19 +104,55 @@
         <div class="toolbar ms-auto">
           <button id="btn-start" class="btn btn-success" onclick="startService()">▶ Iniciar Serviço</button>
           <button id="btn-stop"  class="btn btn-danger d-none" onclick="stopService()">■ Parar Serviço</button>
+          <button id="btn-qr"   class="btn btn-primary" onclick="toggleQrPanel()" title="Mostrar/ocultar painel QR Code">📱 QR Code</button>
           <button class="btn btn-info"  onclick="saveLog()">💾 Salvar Log</button>
           <button class="btn btn-ghost" onclick="clearLog()">🗑 Limpar</button>
         </div>
       </div>
 
-      <div id="qr-box" class="qr-box">
-        <strong style="color:var(--accent-light)">📱 Escaneie com o WhatsApp</strong>
-        <br><br>
-        <img id="qr-img" src="" alt="QR Code">
-        <p>Vá em <strong>Configurações → Dispositivos conectados → Conectar dispositivo</strong></p>
-      </div>
+      <div class="monitor-wrap">
 
-      <div id="terminal" class="terminal"></div>
+        <div id="terminal" class="terminal"></div>
+
+        <!-- Painel QR lateral -->
+        <div id="qr-panel" class="qr-panel" style="display:none">
+          <div class="qr-panel-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span>📱 Conectar WhatsApp</span>
+            <button onclick="fecharQrPanel()" title="Fechar painel"
+              style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;color:var(--text-lo);padding:0 2px"
+              onmouseover="this.style.color='var(--text-hi)'" onmouseout="this.style.color='var(--text-lo)'">×</button>
+          </div>
+
+          <div id="qr-connected" class="qr-connected d-none">
+            ✅ WhatsApp conectado!<br>
+            <span style="font-weight:400;font-size:12px">Número ativo e recebendo currículos.</span>
+          </div>
+
+          <div id="qr-waiting" class="qr-waiting d-none">
+            ⏳ Iniciando serviço…<br>aguardando QR Code.
+          </div>
+
+          <img id="qr-img" src="" alt="QR Code" class="d-none qr-pulse">
+
+          <p id="qr-hint" class="d-none">
+            No celular: <strong>WhatsApp → Menu → Dispositivos conectados → Conectar dispositivo</strong>
+          </p>
+
+          <p style="font-size:11px;color:var(--text-lo);line-height:1.5;width:100%">
+            O QR conecta o celular que o escanear. Para trocar de número, use <strong>Trocar número</strong> abaixo.
+          </p>
+
+          <div id="qr-actions" style="width:100%;display:flex;flex-direction:column;gap:8px">
+            <button id="btn-qr-start" class="btn btn-success" onclick="startService()" style="width:100%">
+              ▶ Iniciar para gerar QR
+            </button>
+            <button id="btn-qr-restart" class="btn btn-warning d-none" onclick="trocarNumero()" style="width:100%;font-size:12px">
+              🔄 Trocar número (novo QR)
+            </button>
+          </div>
+        </div>
+
+      </div>
 
     </div>
   </div>
@@ -89,6 +165,9 @@
   const socket   = io();
   const terminal = document.getElementById('terminal');
   let lines = [], count = 0, timerInterval = null, timerStart = null;
+  let currentStatus = 'stopped';
+  let qrPanelOpen = false;
+  let startedByQrPanel = false; // rastreia se o start foi disparado pelo painel QR
 
   const TAG = {
     info:     ['INFO',     'tag-info',    'msg-info'],
@@ -121,18 +200,55 @@
     localStorage.removeItem('iahub_start_ts');
   }
 
+  function atualizarQrPanel(status) {
+    const img        = document.getElementById('qr-img');
+    const waiting    = document.getElementById('qr-waiting');
+    const connected  = document.getElementById('qr-connected');
+    const hint       = document.getElementById('qr-hint');
+    const btnStart   = document.getElementById('btn-qr-start');
+    const btnRestart = document.getElementById('btn-qr-restart');
+
+    waiting.classList.add('d-none');
+    connected.classList.add('d-none');
+    btnStart.classList.add('d-none');
+    btnRestart.classList.add('d-none');
+
+    if (status === 'connected') {
+      img.classList.add('d-none');
+      hint.classList.add('d-none');
+      connected.classList.remove('d-none');
+      btnRestart.classList.remove('d-none');
+    } else if (status === 'starting') {
+      // QR pode vir a qualquer momento via socket
+      if (!img.src || img.src === window.location.href) {
+        waiting.classList.remove('d-none');
+        img.classList.add('d-none');
+        hint.classList.add('d-none');
+      }
+    } else {
+      // stopped
+      img.classList.add('d-none');
+      hint.classList.add('d-none');
+      btnStart.classList.remove('d-none');
+    }
+  }
+
   function setStatus(s) {
+    currentStatus = s;
     const [cls, label] = PILLS[s] || PILLS.stopped;
     const pill = document.getElementById('status-pill');
     pill.className = `status-pill ${cls}`;
     pill.textContent = label;
     document.getElementById('btn-start').classList.toggle('d-none', s !== 'stopped');
     document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
-    if (s === 'connected') document.getElementById('qr-box').style.display = 'none';
+
+    // Conectou ou parou: a flag de origem do QR já não é mais relevante
+    if (s === 'connected' || s === 'stopped') startedByQrPanel = false;
+
+    if (qrPanelOpen) atualizarQrPanel(s);
 
     if (s !== 'starting') { pararTimer(); return; }
 
-    // Persiste o instante de início no localStorage para sobreviver à navegação
     const saved = localStorage.getItem('iahub_start_ts');
     timerStart  = saved ? Number(saved) : Date.now();
     if (!saved) localStorage.setItem('iahub_start_ts', timerStart);
@@ -144,10 +260,7 @@
     }, 1000);
   }
 
-  // O servidor envia o buffer completo + status ao conectar/reconectar
-  // Isso garante que ao voltar para a página os logs são restaurados
   socket.on('connect', () => {
-    // Limpa a tela antes de receber o replay do buffer
     terminal.innerHTML = '';
     lines = []; count = 0;
     document.getElementById('log-count').textContent = '';
@@ -156,20 +269,85 @@
   socket.on('log',    addLine);
   socket.on('status', setStatus);
   socket.on('qr', url => {
-    document.getElementById('qr-img').src = url;
-    document.getElementById('qr-box').style.display = 'block';
+    const img = document.getElementById('qr-img');
+    img.src = url;
+    img.classList.remove('d-none');
+    document.getElementById('qr-hint').classList.remove('d-none');
+    document.getElementById('qr-waiting').classList.add('d-none');
+    document.getElementById('btn-qr-start').classList.add('d-none');
+    // Abre o painel automaticamente ao receber QR
+    if (!qrPanelOpen) abrirQrPanel();
   });
 
+  // ── Controle do painel QR ────────────────────────────────────────────────────
+
+  function abrirQrPanel() {
+    qrPanelOpen = true;
+    document.getElementById('qr-panel').style.display = 'flex';
+    document.getElementById('btn-qr').classList.add('btn-primary');
+    document.getElementById('btn-qr').classList.remove('btn-ghost');
+    atualizarQrPanel(currentStatus);
+  }
+
+  function fecharQrPanel() {
+    qrPanelOpen = false;
+    document.getElementById('qr-panel').style.display = 'none';
+    document.getElementById('btn-qr').classList.remove('btn-primary');
+    document.getElementById('btn-qr').classList.add('btn-ghost');
+    // Se o serviço foi iniciado PELO painel QR e ainda está subindo (sem QR recebido),
+    // para imediatamente para não deixar o Puppeteer pendurado
+    if (startedByQrPanel && currentStatus === 'starting') {
+      startedByQrPanel = false;
+      stopService();
+    }
+  }
+
+  function toggleQrPanel() {
+    if (qrPanelOpen) {
+      fecharQrPanel();
+    } else {
+      abrirQrPanel();
+      // Se parado, inicia automaticamente para gerar QR e marca a origem
+      if (currentStatus === 'stopped') {
+        startedByQrPanel = true;
+        startService();
+      }
+    }
+  }
+
+  async function trocarNumero() {
+    if (!confirm('Isso desconectará o número atual e apagará a sessão salva.\n\nAo confirmar, um novo QR Code será gerado para conectar um número diferente.\n\nContinuar?')) return;
+    const btn = document.getElementById('btn-qr-restart');
+    btn.disabled = true;
+    btn.textContent = '⏳ Limpando sessão…';
+    try {
+      const r = await fetch('/api/service/clear-session', { method: 'POST' });
+      if (!r.ok) { alert('Erro ao limpar sessão.'); return; }
+      // Aguarda parar e inicia de novo para gerar novo QR
+      setTimeout(startService, 800);
+    } catch (e) {
+      alert('Erro de conexão: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔄 Trocar número (novo QR)';
+    }
+  }
+
+  // ── Serviço ───────────────────────────────────────────────────────────────────
+
   async function startService() {
-    document.getElementById('btn-start').disabled = true;
+    document.getElementById('btn-start').disabled    = true;
+    document.getElementById('btn-qr-start').disabled = true;
     try {
       const r = await fetch('/api/service/start', { method: 'POST' });
       if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
-      if (!r.ok) { alert(`Erro ao iniciar serviço (HTTP ${r.status})`); }
+      if (!r.ok) alert(`Erro ao iniciar serviço (HTTP ${r.status})`);
+      else if (qrPanelOpen) atualizarQrPanel('starting');
     } catch (e) {
       alert(`Erro de conexão: ${e.message}`);
     } finally {
-      document.getElementById('btn-start').disabled = false;
+      document.getElementById('btn-start').disabled    = false;
+      document.getElementById('btn-qr-start').disabled = false;
     }
   }
 
@@ -178,7 +356,7 @@
     try {
       const r = await fetch('/api/service/stop', { method: 'POST' });
       if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
-      if (!r.ok) { alert(`Erro ao parar serviço (HTTP ${r.status})`); }
+      if (!r.ok) alert(`Erro ao parar serviço (HTTP ${r.status})`);
     } catch (e) {
       alert(`Erro de conexão: ${e.message}`);
     } finally {

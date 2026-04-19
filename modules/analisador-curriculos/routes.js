@@ -20,25 +20,52 @@ async function chamarIA(systemPrompt, userPrompt, maxTokens = 2000) {
     });
     return res.choices[0].message.content.trim();
   } catch (e) {
+    console.error(`[chamarIA] Groq erro: ${e.status || ''} ${e.message}`);
     if (!isRateLimit(e)) throw e;
   }
   if (!gemini) throw new Error('Limite Groq atingido e GEMINI_API_KEY não configurada.');
-  const model  = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
-  const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
-  return result.response.text().trim();
+  try {
+    const model  = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
+    return result.response.text().trim();
+  } catch (e) {
+    console.error(`[chamarIA] Gemini erro: ${e.status || ''} ${e.message}`);
+    throw e;
+  }
 }
 
 // ── Cálculo de experiência por período ────────────────────────────────────────
 function parsePeriodoMeses(periodo) {
   if (!periodo) return 0;
-  const partes = periodo.split(/\s*[-–]\s*/);
+
+  let p = periodo.trim();
+
+  // "desde DD/MM/YYYY" ou "desde MM/YYYY" → "DD/MM/YYYY - Atual"
+  const desdeMatch = p.match(/^desde\s+(.+)$/i);
+  if (desdeMatch) p = desdeMatch[1].trim() + ' - Atual';
+
+  // Remove prefixo "de " / "from "
+  p = p.replace(/^de\s+/i, '');
+
+  // Substitui separador português " à " / " ao " por " - "
+  p = p.replace(/\s+[àa]\s+/i, ' - ');
+
+  const partes = p.split(/\s*[-–]\s*/);
   if (partes.length < 2) return 0;
 
   const parseData = (str) => {
     const s = (str || '').trim().toLowerCase();
-    if (['atual', 'presente', 'current', 'o momento', 'atualmente', 'hoje'].some(w => s.includes(w))) {
+    if (['atual', 'presente', 'current', 'o momento', 'atualmente', 'hoje', 'now'].some(w => s.includes(w))) {
       return new Date();
     }
+    // DD/MM/YYYY ou D/M/YYYY
+    const fullDate = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (fullDate) {
+      let ano = parseInt(fullDate[3]);
+      if (ano < 100) ano += ano >= 50 ? 1900 : 2000;
+      return new Date(ano, parseInt(fullDate[2]) - 1, 1);
+    }
+    // MM/YYYY ou M/YYYY
     const m = s.match(/^(\d{1,2})\/(\d{2,4})$/);
     if (m) {
       let ano = parseInt(m[2]);
@@ -56,6 +83,26 @@ function parsePeriodoMeses(periodo) {
   if (!inicio || !fim) return 0;
   const meses = (fim.getFullYear() - inicio.getFullYear()) * 12 + (fim.getMonth() - inicio.getMonth());
   return Math.max(0, meses);
+}
+
+// Normaliza atividades para sempre ser array (a IA às vezes retorna string)
+function toArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') return val.trim() ? [val] : [];
+  return [];
+}
+
+// Converte capacitação que pode ser string ou objeto {curso, periodo}
+function stringifyCap(cap) {
+  if (!cap) return '';
+  if (typeof cap === 'string') return cap;
+  if (typeof cap === 'object') {
+    const parts = [cap.curso || cap.nome || cap.titulo || ''];
+    if (cap.periodo || cap.data) parts.push(`(${cap.periodo || cap.data})`);
+    return parts.filter(Boolean).join(' ').trim();
+  }
+  return String(cap);
 }
 
 function calcularExperiencia(curriculo, cfg = { junior_max_meses: 12, pleno_max_meses: 36 }) {
@@ -81,21 +128,26 @@ function calcularExperiencia(curriculo, cfg = { junior_max_meses: 12, pleno_max_
 // ── Texto completo do currículo (sem truncamento) ─────────────────────────────
 function curriculoCompleto(c) {
   const exp   = calcularExperiencia(c);
-  const habs  = Array.isArray(c.habilidades)   ? c.habilidades.join('\n  • ')   : '—';
-  const caps  = Array.isArray(c.capacitacoes)  ? c.capacitacoes.join('\n  • ')  : '—';
-  const form  = (c.formacao || []).map(f => `  • ${f.curso} — ${f.instituicao} (${f.periodo || '—'})`).join('\n');
+  const habs  = Array.isArray(c.habilidades)  ? c.habilidades.join('\n  • ')                    : '—';
+  const caps  = Array.isArray(c.capacitacoes) ? c.capacitacoes.map(stringifyCap).join('\n  • ') : '—';
+  const form  = (c.formacao || []).map(f => `  • ${f.curso || f.nome || '—'} — ${f.instituicao || f['instituição'] || f.institution || '—'} (${f.periodo || '—'})`).join('\n');
   const exps  = (c.experiencias || []).map(e => {
-    const ativ = (e.atividades || []).map(a => `      – ${a}`).join('\n');
+    const ativ = toArray(e.atividades).map(a => `      – ${String(a).slice(0, 400)}`).join('\n');
     return `  → ${e.cargo} | ${e.empresa} | ${e.periodo || '—'}` +
-      (e.descricao ? `\n    Descrição: ${e.descricao}` : '') +
+      (e.descricao ? `\n    Descrição: ${e.descricao.slice(0, 500)}` : '') +
       (ativ        ? `\n    Atividades:\n${ativ}` : '');
   }).join('\n\n');
+
+  // Quando experiencias está vazio o conteúdo está todo em descricao (parsing fallback)
+  const perfilSection = (c.experiencias || []).length === 0 && c.descricao
+    ? c.descricao  // usa o texto completo sem truncamento
+    : (c.descricao || '—');
 
   return `NOME: ${c.nome || '—'}
 EXPERIÊNCIA TOTAL CALCULADA: ${exp.texto} → Nível estimado pelo sistema: ${exp.nivel}
 
 PERFIL / OBJETIVO:
-${c.descricao || '—'}
+${perfilSection}
 
 HABILIDADES E COMPETÊNCIAS:
   • ${habs}
@@ -113,18 +165,26 @@ ${exps || '  —'}`;
 // ── Texto resumido para triagem em lote ──────────────────────────────────────
 function curriculoResumo(c) {
   const exp  = calcularExperiencia(c);
-  const habs = Array.isArray(c.habilidades) ? c.habilidades.join(' | ') : '';
-  const caps = Array.isArray(c.capacitacoes) ? c.capacitacoes.join(', ') : '';
+  const habs = Array.isArray(c.habilidades)  ? c.habilidades.join(' | ')                    : '';
+  const caps = Array.isArray(c.capacitacoes) ? c.capacitacoes.map(stringifyCap).join(', ')  : '';
   const exps = (c.experiencias || []).map(e => {
-    const ativ = (e.atividades || []).slice(0, 6).join('; ');
+    // Trunca cada atividade individualmente para evitar explosão de tokens
+    const ativ = toArray(e.atividades).slice(0, 6).map(a => String(a).slice(0, 150)).join('; ');
     return `${e.cargo} em ${e.empresa} (${e.periodo})`
       + (e.descricao ? ': ' + e.descricao.slice(0, 300) : '')
-      + (ativ        ? ' | Atividades: ' + ativ : '');
+      + (ativ        ? ' | Atividades: ' + ativ.slice(0, 400) : '');
   }).join('\n');
-  const form = (c.formacao || []).map(f => `${f.curso} — ${f.instituicao}`).join('; ');
+  const form = (c.formacao || []).map(f => `${f.curso || f.nome || '—'} — ${f.instituicao || f['instituição'] || f.institution || '—'}`).join('; ');
+
+  // Quando experiencias está vazio, o currículo foi salvo em modo texto livre —
+  // usa o descricao completo para não esconder informações relevantes
+  const semExps  = (c.experiencias || []).length === 0;
+  const descricao = semExps
+    ? (c.descricao || '').slice(0, 800)
+    : (c.descricao || '').slice(0, 350);
 
   return `Nome: ${c.nome || '—'} | Exp.Total: ${exp.texto} (${exp.nivel})
-Perfil: ${(c.descricao || '').slice(0, 350)}
+Perfil: ${descricao}
 Habilidades: ${habs}
 Capacitações: ${caps}
 Formação: ${form}
@@ -144,53 +204,64 @@ Habilidades Técnicas: ${Array.isArray(funcao.habilidades_tecnicas) ? funcao.hab
 Palavras-chave: ${Array.isArray(funcao.palavras_chave) ? funcao.palavras_chave.join(', ') : (funcao.palavras_chave || '—')}`;
 }
 
-// ── Etapa 1: Triagem eliminatória ─────────────────────────────────────────────
-async function triagem(funcao, curriculos) {
+// ── Tabela de equivalências para triagem por palavras-chave ──────────────────
+const EQUIVALENCIAS = {
+  softexpert:  ['softexpert', 'se suite', 'se-suite', 'se suíte', 'se-suíte', 'sesuite', 'se_suite'],
+  sql:         ['sql', 'mysql', 'postgresql', 'oracle', 'sql server', 'sqlserver', 'db2', 'tsql', 'pl/sql', 'plsql'],
+  processos:   ['processos', 'processo', 'bpm', 'bpmn', 'workflow', 'fluxo de trabalho', 'mapeamento de processo'],
+  bpm:         ['bpm', 'bpmn', 'processos', 'processo', 'workflow', 'fluxo de trabalho'],
+  ged:         ['ged', 'gestão de documentos', 'gerenciamento de documentos', 'ecm'],
+  sap:         ['sap', 'sap erp', 'sap r/3'],
+  totvs:       ['totvs', 'protheus', 'rm totvs'],
+  excel:       ['excel', 'planilha', 'spreadsheet'],
+  python:      ['python', 'py'],
+  javascript:  ['javascript', 'js', 'typescript', 'ts', 'node', 'nodejs'],
+};
+
+function curriculoTextoCompleto(c) {
+  return [
+    c.nome || '',
+    c.descricao || '',
+    (c.habilidades || []).join(' '),
+    (c.capacitacoes || []).map(stringifyCap).join(' '),
+    (c.formacao || []).map(f => `${f.curso || f.nome || ''} ${f.instituicao || f['instituição'] || ''}`).join(' '),
+    (c.experiencias || []).map(e => [
+      e.cargo || '', e.empresa || '', e.descricao || '',
+      ...toArray(e.atividades),
+    ].join(' ')).join(' '),
+  ].join(' ').toLowerCase();
+}
+
+function temKeyword(textoLower, kw) {
+  const kwLower = kw.toLowerCase();
+  const variantes = EQUIVALENCIAS[kwLower] || [kwLower];
+  return variantes.some(v => textoLower.includes(v));
+}
+
+// ── Etapa 1: Triagem eliminatória por palavras-chave (determinística) ─────────
+function triagem(funcao, curriculos) {
   const temCriterios = funcao.requisitos_obrigatorios ||
     (Array.isArray(funcao.habilidades_tecnicas) && funcao.habilidades_tecnicas.length);
 
   if (!temCriterios) return { aprovados: curriculos, eliminados: [] };
 
-  const criterios = `Requisitos OBRIGATÓRIOS: ${funcao.requisitos_obrigatorios || '—'}
-Habilidades Técnicas exigidas: ${Array.isArray(funcao.habilidades_tecnicas) ? funcao.habilidades_tecnicas.join(', ') : (funcao.habilidades_tecnicas || '—')}
-Nível exigido: ${funcao.nivel_experiencia || '—'}
-Formação Necessária: ${funcao.formacao_necessaria || '—'}`;
+  // Extrai keywords obrigatórias do campo requisitos_obrigatorios
+  const kwObrigatorias = (funcao.requisitos_obrigatorios || '')
+    .split(/[\n,;]+/)
+    .map(s => s.replace(/^[-•]\s*/, '').trim())
+    .filter(Boolean);
 
-  const system = `Você é um recrutador especialista fazendo triagem inicial de currículos.
-Analise TODAS as informações do currículo (perfil, habilidades, capacitações, descrições e atividades de cada experiência) para verificar se o candidato possui evidência dos requisitos obrigatórios.
-REGRAS:
-- Considere variações de nome, siglas e produtos equivalentes (ex: "SE SUITE" = "SoftExpert"; "SQL" inclui "MySQL"/"PostgreSQL"; "Processos" inclui "BPM"/"BPMN"/"mapeamento de processos").
-- Aprove se houver qualquer evidência em QUALQUER parte do currículo. Reprove apenas se não houver NENHUMA evidência em nenhuma seção.
-Responda SOMENTE com JSON array válido, sem markdown.`;
-
-  const BATCH = 5;
   const aprovados  = [];
   const eliminados = [];
 
-  for (let i = 0; i < curriculos.length; i += BATCH) {
-    const batch = curriculos.slice(i, i + BATCH);
-    const texto = batch.map((c, idx) =>
-      `=== CANDIDATO ${idx + 1} (ID:${c.id}) ===\n${curriculoResumo(c)}`
-    ).join('\n\n');
+  for (const c of curriculos) {
+    const texto   = curriculoTextoCompleto(c);
+    const faltando = kwObrigatorias.filter(kw => !temKeyword(texto, kw));
 
-    const user = `CRITÉRIOS MÍNIMOS DA VAGA:\n${criterios}\n\nCURRÍCULOS:\n${texto}\n\nRetorne JSON array — um objeto por candidato:\n[{"id": ID_EXATO, "apto": true/false, "motivo": "motivo objetivo em 1 frase"}]`;
-
-    try {
-      const resposta = await chamarIA(system, user, 1500);
-      const match = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\[[\s\S]*\]/);
-      if (match) {
-        const resultados = JSON.parse(match[0]);
-        for (const r of resultados) {
-          const c = batch.find(c => c.id === r.id);
-          if (!c) continue;
-          if (r.apto) aprovados.push(c);
-          else eliminados.push({ ...c, motivo_eliminacao: r.motivo });
-        }
-      } else {
-        aprovados.push(...batch);
-      }
-    } catch {
-      aprovados.push(...batch);
+    if (faltando.length === 0) {
+      aprovados.push(c);
+    } else {
+      eliminados.push({ ...c, motivo_eliminacao: `Não apresenta evidência de: ${faltando.join(', ')}` });
     }
   }
 
@@ -240,9 +311,10 @@ Responda SOMENTE com JSON válido, sem markdown.`;
   try {
     const resposta = await chamarIA(system, user, 1500);
     const match = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\{[\s\S]*\}/);
-    if (!match) throw new Error('JSON inválido');
+    if (!match) throw new Error(`JSON inválido — resposta: ${resposta.slice(0, 200)}`);
     return JSON.parse(match[0]);
-  } catch {
+  } catch (err) {
+    console.error(`[analisarIndividual] ID ${curriculo.id} (${curriculo.nome}): ${err.message}`);
     return { id: curriculo.id, score: 0, nivel: 'Baixo', nivel_candidato: '—', meses_relevantes: 0, detalhes: {}, pontos_positivos: [], pontos_negativos: ['Erro ao analisar'], resumo: '' };
   }
 }
@@ -346,7 +418,7 @@ module.exports = function registerVagasRoutes(app, { requireAuth }) {
 
     try {
       const cfg = db.getAnalisadorConfig();
-      const { aprovados, eliminados } = await triagem(funcao, curriculos);
+      const { aprovados, eliminados } = triagem(funcao, curriculos);
 
       const resultados = [];
       for (const c of aprovados) {

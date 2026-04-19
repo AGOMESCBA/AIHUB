@@ -20,12 +20,15 @@ function isRateLimit(err) {
 class WhatsAppService extends EventEmitter {
   constructor() {
     super();
-    this.client       = null;
-    this.status       = 'stopped';
+    this.client         = null;
+    this.status         = 'stopped';
+    this.lastQrUrl      = null;
     this.pendingUpdates = new Map(); // sender → { existingId, dados, pdf_base64, pdf_nome, msgId }
+    this._stopping      = false;    // guard: evita start() antes do stop() terminar
   }
 
   getStatus() { return this.status; }
+  getQr()     { return this.lastQrUrl; }
 
   log(message, type = 'info') {
     this.emit('log', { message, type, timestamp: new Date().toLocaleTimeString('pt-BR') });
@@ -37,6 +40,10 @@ class WhatsAppService extends EventEmitter {
   }
 
   async start() {
+    if (this._stopping) {
+      this.log('Aguardando parada completa do serviço anterior…', 'warning');
+      return;
+    }
     if (this.status !== 'stopped') {
       this.log('Serviço já está em execução.', 'warning');
       return;
@@ -44,70 +51,122 @@ class WhatsAppService extends EventEmitter {
     this.setStatus('starting');
     this._startTime = Date.now();
     this.log('Iniciando serviço WhatsApp...', 'info');
+    if (process.env.CHROME_PATH) {
+      this.log(`Usando Chrome: ${process.env.CHROME_PATH}`, 'info');
+    }
+
+    // Restaura confirmações pendentes salvas antes do último restart
+    const pendentes = db.listPendingUpdates();
+    if (pendentes.length) {
+      pendentes.forEach(p => this.pendingUpdates.set(p.sender, p));
+      this.log(`${pendentes.length} confirmação(ões) pendente(s) restaurada(s) do banco.`, 'info');
+    }
+
+    const puppeteerConfig = {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-extensions',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-default-apps',
+        '--disable-sync',
+        '--mute-audio',
+        '--disable-infobars',
+        '--disable-translate',
+        '--disable-features=TranslateUI',
+        '--safebrowsing-disable-auto-update',
+        '--hide-scrollbars',
+        '--metrics-recording-only',
+      ],
+    };
+    if (process.env.CHROME_PATH) puppeteerConfig.executablePath = process.env.CHROME_PATH;
 
     this.client = new Client({
       authStrategy: new LocalAuth(),
-      puppeteer: {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-gpu',
-          '--disable-dev-shm-usage',
-          '--no-first-run',
-          '--no-default-browser-check',
-          '--disable-extensions',
-          '--disable-background-networking',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding',
-          '--disable-default-apps',
-          '--disable-sync',
-          '--mute-audio',
-          '--disable-infobars',
-          '--disable-translate',
-          '--disable-features=TranslateUI',
-          '--safebrowsing-disable-auto-update',
-          '--hide-scrollbars',
-          '--metrics-recording-only',
-        ],
-      },
+      puppeteer: puppeteerConfig,
     });
 
+    // Log de progresso a cada 15s enquanto o Chrome ainda está subindo
+    let initStep = 0;
+    const INIT_MSGS = [
+      'Aguardando Chrome iniciar…',
+      'Chrome iniciado, carregando WhatsApp Web…',
+      'WhatsApp Web carregando, aguardando QR ou sessão…',
+      'Ainda carregando… (isso pode levar até 90s na primeira vez)',
+    ];
+    const progressTimer = setInterval(() => {
+      if (this.status !== 'starting') { clearInterval(progressTimer); return; }
+      const msg = INIT_MSGS[Math.min(initStep, INIT_MSGS.length - 1)];
+      this.log(msg, 'info');
+      initStep++;
+    }, 15000);
+
+    // Timeout de 90s — para automaticamente se nenhum evento disparar
+    const initTimeout = setTimeout(() => {
+      if (this.status !== 'starting') return;
+      clearInterval(progressTimer);
+      this.log('Tempo limite de inicialização atingido (90s). O Chrome pode estar travado. Parando serviço…', 'error');
+      this.log('Dica: verifique processos chrome.exe no Gerenciador de Tarefas e tente novamente.', 'warning');
+      this.stop();
+    }, 90000);
+
+    const clearTimers = () => { clearInterval(progressTimer); clearTimeout(initTimeout); };
+
     this.client.on('qr', async (qr) => {
+      clearTimers();
       this.log('QR Code gerado. Escaneie com o WhatsApp.', 'info');
       const dataUrl = await qrcode.toDataURL(qr);
+      this.lastQrUrl = dataUrl;
       this.emit('qr', dataUrl);
     });
 
     this.client.on('ready', () => {
+      clearTimers();
+      this.lastQrUrl = null;
       this.setStatus('connected');
       const seg = this._startTime ? ((Date.now() - this._startTime) / 1000).toFixed(1) : '—';
       this.log(`WhatsApp conectado! Número: ${this.client.info.wid.user} — tempo de inicialização: ${seg}s`, 'success');
     });
 
     this.client.on('auth_failure', () => {
+      clearTimers();
       this.setStatus('stopped');
       this.log('Falha na autenticação. Delete a pasta .wwebjs_auth e tente novamente.', 'error');
     });
 
     this.client.on('disconnected', () => {
+      clearTimers();
       this.setStatus('stopped');
       this.log('WhatsApp desconectado.', 'warning');
     });
 
     this.client.on('message', (msg) => this.handleMessage(msg));
     this.client.initialize().catch((err) => {
+      clearTimers();
+      this.client = null;
       this.setStatus('stopped');
       this.log(`Falha ao inicializar cliente WhatsApp: ${err.message}`, 'error');
     });
   }
 
   async stop() {
+    if (this._stopping) return; // já está parando, ignora chamada duplicada
+    this._stopping = true;
     if (this.client) {
       await this.client.destroy().catch(() => {});
       this.client = null;
     }
+    this.lastQrUrl = null;
+    // Aguarda o Puppeteer terminar completamente antes de liberar novo start()
+    await new Promise(r => setTimeout(r, 800));
+    this._stopping = false;
     this.setStatus('stopped');
     this.log('Serviço parado.', 'info');
   }
@@ -195,17 +254,19 @@ class WhatsAppService extends EventEmitter {
       this.log(`[5/5] Enviando para análise IA...`, 'info');
       const dados = await this.analisarComRetry(textoFinal);
 
-      // Etapa 5: verifica duplicata por telefone OU e-mail
+      // Etapa 5: verifica duplicata por telefone ou e-mail do currículo
       const existente = db.findByPhoneOrEmail(dados.telefone, dados.email);
       if (existente) {
         this.log(`Currículo duplicado detectado — ID #${existente.id} (${existente.nome}). Aguardando confirmação do remetente.`, 'warning');
-        this.pendingUpdates.set(sender, {
+        const pendingData = {
           existingId: existente.id,
           dados,
           pdf_base64: media.data,
           pdf_nome:   msg.body || 'curriculo.pdf',
           msgId,
-        });
+        };
+        this.pendingUpdates.set(sender, pendingData);
+        db.savePendingUpdate(sender, pendingData); // persiste para sobreviver a restarts
         try {
           const chat = await msg.getChat();
           const tplDuplicata = db.getConfig('msg_duplicata') ||
@@ -235,12 +296,14 @@ class WhatsAppService extends EventEmitter {
   // ── Salva currículo e notifica destino + remetente ──────────────────────────
 
   async salvarENotificar({ sender, dados, pdf_base64, pdf_nome, msgId, msg }) {
-    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome });
-    db.markProcessed(msgId);
-
+    // Pré-computa a mensagem formatada ANTES de salvar — se falhar, o currículo não é gravado
     const raw           = db.getConfig('numero_destino');
     const numeroDestino = raw ? raw.replace(/\D/g, '') + '@c.us' : null;
-    const mensagem      = this.formatarParaWhatsApp(dados);
+    const mensagem      = numeroDestino ? this.formatarParaWhatsApp(dados) : null;
+
+    // Só salva após confirmar que os dados estão formatáveis
+    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome });
+    db.markProcessed(msgId);
 
     try {
       const msgConfirmacao = db.getConfig('msg_confirmacao') ||
@@ -251,7 +314,7 @@ class WhatsAppService extends EventEmitter {
       this.log(`Aviso: não foi possível confirmar recebimento para ${sender}: ${confirmErr.message}`, 'warning');
     }
 
-    if (numeroDestino) {
+    if (numeroDestino && mensagem) {
       this.log(`[4/4] Enviando resultado para ${numeroDestino}...`, 'info');
       try {
         await this.enviarMensagemParaNumero(numeroDestino, `✅ *Currículo recebido de ${sender}*\n\n${mensagem}`);
@@ -268,13 +331,21 @@ class WhatsAppService extends EventEmitter {
 
   async handleConfirmationResponse(msg) {
     const sender  = msg.from;
-    const pending = this.pendingUpdates.get(sender);
+    const pending = this.pendingUpdates.get(sender) || db.getPendingUpdate(sender);
     const resposta = (msg.body || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
+    this.log(`Resposta de confirmação recebida de ${sender}: "${msg.body || ''}" → normalizado: "${resposta}"`, 'info');
+
+    if (!pending) {
+      this.log(`Aviso: confirmação recebida de ${sender} mas não há registro pendente no banco.`, 'warning');
+      return;
+    }
+
     if (resposta === 'SIM') {
-      this.log(`Remetente ${sender} confirmou atualização do currículo ID #${pending.existingId}.`, 'info');
+      this.log(`Remetente ${sender} confirmou atualização — excluindo currículo ID #${pending.existingId} e salvando novo.`, 'info');
       db.deleteCurriculo(pending.existingId);
       this.pendingUpdates.delete(sender);
+      db.deletePendingUpdate(sender);
       await this.salvarENotificar({
         sender,
         dados:      pending.dados,
@@ -284,16 +355,20 @@ class WhatsAppService extends EventEmitter {
         msg,
       });
     } else if (resposta === 'NAO') {
-      this.log(`Remetente ${sender} optou por manter o currículo existente.`, 'info');
+      this.log(`Remetente ${sender} optou por manter o currículo existente. Enviando mensagem de retorno.`, 'info');
       this.pendingUpdates.delete(sender);
+      db.deletePendingUpdate(sender);
       try {
         const chat = await msg.getChat();
-        await chat.sendMessage(db.getConfig('msg_nao_atualizar') || '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!');
+        const msgNao = db.getConfig('msg_nao_atualizar') || '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!';
+        await chat.sendMessage(msgNao);
+        this.log(`Mensagem de NÃO atualizar enviada para ${sender}.`, 'success');
       } catch (e) {
-        this.log(`Aviso: não foi possível enviar resposta de agradecimento para ${sender}: ${e.message}`, 'warning');
+        this.log(`Erro ao enviar resposta de NÃO para ${sender}: ${e.message}`, 'error');
       }
+    } else {
+      this.log(`Resposta não reconhecida de ${sender}: "${resposta}". Aguardando SIM ou NÃO.`, 'warning');
     }
-    // Se resposta não for SIM nem NÃO, ignora e mantém pendente
   }
 
   // ── Envio robusto de mensagem ────────────────────────────────────────────────
@@ -375,13 +450,30 @@ Use esta estrutura:
       }
     }
 
-    // Tentativa 4: texto livre (último recurso)
-    this.log('Tentativa 4/4: extração em texto livre (último recurso)...', 'warning');
+    // Tentativa 4: JSON mínimo — extrai apenas campos-chave sem se preocupar com estrutura do texto
+    try {
+      this.log('Tentativa 4/4: extração JSON mínima (campos-chave)...', 'warning');
+      const res = await groq.chat.completions.create({
+        model: 'llama-3.1-8b-instant', temperature: 0.3, max_tokens: 3000,
+        messages: [
+          { role: 'system', content: `Extraia os dados do currículo abaixo. O texto pode estar desorganizado (PDF multi-coluna). Identifique e preencha cada campo.
+Responda SOMENTE com JSON válido, sem markdown:
+{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}` },
+          { role: 'user', content: `Currículo:\n\n${texto.slice(0, 12000)}` },
+        ],
+      });
+      return limparJson(res.choices[0].message.content);
+    } catch (e4) {
+      this.log(`Tentativa 4 falhou: ${e4.message}. Usando texto livre como último recurso...`, 'warning');
+    }
+
+    // Último recurso: texto livre — salva tudo em descricao para não perder o currículo
+    this.log('Tentativa 5/5: salvando texto livre como último recurso...', 'warning');
     const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant', temperature: 0.2, max_tokens: 1500,
+      model: 'llama-3.1-8b-instant', temperature: 0.2, max_tokens: 2000,
       messages: [
-        { role: 'system', content: 'Extraia e organize as informações do currículo em formato legível em português.' },
-        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 4000)}` },
+        { role: 'system', content: 'Organize as informações do currículo em formato legível em português. Inclua todos os dados: nome, contato, experiências, formação e habilidades.' },
+        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 6000)}` },
       ],
     });
     return { nome: null, descricao: res.choices[0].message.content };
@@ -478,10 +570,10 @@ Use esta estrutura:
     if (d.experiencias?.length) {
       partes.push('💼 *EXPERIÊNCIA PROFISSIONAL*');
       d.experiencias.forEach(e => {
-        const desc  = e.descricao ? `\n${e.descricao}` : '';
-        const ativs = e.atividades?.length
-          ? '\n' + e.atividades.map(a => `  • ${a}`).join('\n')
-          : '';
+        const desc    = e.descricao ? `\n${e.descricao}` : '';
+        const ativArr = Array.isArray(e.atividades) ? e.atividades
+                      : typeof e.atividades === 'string' && e.atividades ? [e.atividades] : [];
+        const ativs   = ativArr.length ? '\n' + ativArr.map(a => `  • ${a}`).join('\n') : '';
         partes.push(`🏢 *${e.empresa}* | ${e.cargo} | ${e.periodo}${desc}${ativs}`);
       });
     }

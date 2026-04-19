@@ -94,4 +94,30 @@ module.exports = {
       persist(data);
     }
   },
+
+  // ── Confirmações pendentes (SIM/NÃO) ─────────────────────────────────────
+  savePendingUpdate(sender, pendingData) {
+    const data = load();
+    if (!data.pendingUpdates) data.pendingUpdates = [];
+    // Remove entrada anterior do mesmo remetente (se houver)
+    data.pendingUpdates = data.pendingUpdates.filter(p => p.sender !== sender);
+    data.pendingUpdates.push({ sender, ...pendingData, criado_em: new Date().toISOString() });
+    persist(data);
+  },
+
+  getPendingUpdate(sender) {
+    const data = load();
+    return (data.pendingUpdates || []).find(p => p.sender === sender) || null;
+  },
+
+  deletePendingUpdate(sender) {
+    const data = load();
+    if (!data.pendingUpdates) return;
+    data.pendingUpdates = data.pendingUpdates.filter(p => p.sender !== sender);
+    persist(data);
+  },
+
+  listPendingUpdates() {
+    return load().pendingUpdates || [];
+  },
 };

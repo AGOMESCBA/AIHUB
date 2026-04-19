@@ -43,7 +43,7 @@ O sistema utiliza duas IAs em cascata: **Groq** como principal e **Google Gemini
 
 - **Site:** https://aistudio.google.com
 - **Plano gratuito:** 1.500 requisições/dia e 1.000.000 tokens/dia
-- **Modelo utilizado:** `gemini-1.5-flash`
+- **Modelo utilizado:** `gemini-2.0-flash`
 
 **Como gerar a chave:**
 1. Acesse https://aistudio.google.com e faça login com sua conta Google
@@ -65,8 +65,9 @@ GROQ_API_KEY=gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-**Comportamento do fallback:**
-1. Groq `llama-3.3-70b` — análise completa (principal)
-2. Groq `llama-3.1-8b` — análise simplificada (se o modelo acima falhar)
-3. Google Gemini `1.5-flash` — fallback automático (quando Groq atinge limite diário)
-4. Texto livre — último recurso (se todos falharem)
+**Comportamento do fallback (extração de currículo):**
+1. Groq `llama-3.3-70b` — extração JSON completa (principal)
+2. Groq `llama-3.1-8b` — extração JSON simplificada
+3. Google Gemini `gemini-2.0-flash` — fallback automático (quando Groq atinge limite diário)
+4. Groq `llama-3.1-8b` — extração JSON mínima com prompt adaptado para PDFs multi-coluna
+5. Texto livre — último recurso (se todas as tentativas anteriores falharem)
