@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integrações SE — Currículos — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .stats-row    { display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px; }
+    .stat-card    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px; }
+    .stat-val     { font-size:26px;font-weight:800;line-height:1; }
+    .stat-lbl     { font-size:11.5px;color:var(--text-lo);margin-top:4px;text-transform:uppercase;letter-spacing:.04em; }
+    .filter-bar   { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center; }
+    .filter-bar .form-control { margin:0;height:36px;font-size:13px; }
+    .filter-bar select.form-control { min-width:130px; }
+    .filter-bar input[type="text"].form-control { min-width:200px; }
+    .filter-bar input[type="date"].form-control { min-width:138px; }
+    .table-wrap   { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+    .data-table   { width:100%;border-collapse:collapse;font-size:13px; }
+    .data-table th { font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);font-weight:600;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg-hover);white-space:nowrap; }
+    .data-table td { padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle; }
+    .data-table tr:last-child td { border-bottom:none; }
+    .data-table tr:hover td { background:var(--bg-hover); }
+    .data-table tr.clickable { cursor:pointer; }
+    .badge-status  { display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap; }
+    .badge-sucesso  { background:#dcfce7;color:#15803d; }
+    .badge-manual   { background:#dbeafe;color:#1d4ed8; }
+    .badge-erro     { background:#fee2e2;color:#b91c1c; }
+    .badge-ignorado { background:#f1f5f9;color:#64748b; }
+    .badge-revertido{ background:#fef9c3;color:#92400e; }
+    .cand-nome   { font-weight:600;color:var(--text-hi); }
+    .cand-sub    { font-size:11.5px;color:var(--text-lo);margin-top:2px; }
+    .erro-msg    { font-size:12px;color:#b91c1c;max-width:280px;line-height:1.4;word-break:break-word; }
+    .ok-msg      { font-size:12px;color:#15803d; }
+    .ignored-msg { font-size:12px;color:var(--text-lo); }
+    .pagination  { display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--border);font-size:13px;color:var(--text-lo); }
+    .pag-btns    { display:flex;gap:6px; }
+    .empty-state { padding:60px 20px;text-align:center;color:var(--text-lo); }
+    .empty-state div { font-size:42px;margin-bottom:10px; }
+    /* Modal */
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto; }
+    .modal-box     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(780px,98vw);padding:28px;position:relative; }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px;display:flex;justify-content:space-between;align-items:center; }
+    .detail-grid   { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .detail-item   { background:var(--bg-hover);border-radius:8px;padding:10px 14px; }
+    .detail-item-lbl { font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:4px; }
+    .detail-item-val { font-size:13px;color:var(--text-hi);font-weight:500;word-break:break-word; }
+    .detail-item.full { grid-column:1/-1; }
+    .detail-item.erro-box { background:#fef2f2;border:1px solid #fecaca; }
+    .detail-item.erro-box .detail-item-val { color:#b91c1c; }
+    .detail-item.ok-box  { background:#f0fdf4;border:1px solid #bbf7d0; }
+    .expand-toggle { font-size:11.5px;color:var(--accent);cursor:pointer;user-select:none;margin-top:6px;display:inline-block; }
+    .expand-toggle:hover { text-decoration:underline; }
+    .expand-content { display:none;margin-top:8px;background:var(--bg-main);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-size:11.5px;font-family:monospace;line-height:1.5;overflow-x:auto;max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:var(--text-md); }
+    .expand-content.open { display:block; }
+    .badge-http { display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;font-family:monospace; }
+    .badge-http.ok  { background:#dcfce7;color:#15803d; }
+    .badge-http.err { background:#fee2e2;color:#b91c1c; }
+    .badge-http.nul { background:#f1f5f9;color:#64748b; }
+    @media(max-width:640px) {
+      .stats-row { grid-template-columns:1fr 1fr; }
+      .detail-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
+        <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
+        <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('se-curriculo')">
+        <span class="nav-icon">🔗</span><span class="nav-label">Integrações</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-se-curriculo">
+        <a href="/se-curriculos.html" class="nav-item sub active"><span class="nav-icon">📋</span><span class="nav-label">SE Currículos</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Sistema</div>
+      <a href="/configuracoes.html" class="nav-item"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Integrações SE — Currículos</span>
+      <span class="topbar-breadcrumb ms-auto">Integrações › SE Currículo › Currículos</span>
+    </div>
+
+    <div class="page-content">
+
+      <!-- Stats -->
+      <div class="stats-row" id="stats-row">
+        <div class="stat-card"><div class="stat-val" id="s-total" style="color:var(--accent)">—</div><div class="stat-lbl">Total de Envios</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-sucesso" style="color:var(--success)">—</div><div class="stat-lbl">Sucesso</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-erro" style="color:var(--error)">—</div><div class="stat-lbl">Erros</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-taxa" style="color:var(--accent-2)">—</div><div class="stat-lbl">Taxa de Sucesso</div></div>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filter-bar">
+        <input type="text" id="f-nome" class="form-control" placeholder="Buscar candidato..." oninput="aplicarFiltros()">
+        <select id="f-status" class="form-control" onchange="aplicarFiltros()">
+          <option value="">Todos os status</option>
+          <option value="sucesso">Sucesso (API)</option>
+          <option value="erro">Erro</option>
+          <option value="ignorado">Ignorado</option>
+          <option value="revertido">Revertido</option>
+        </select>
+        <select id="f-vaga" class="form-control" onchange="aplicarFiltros()">
+          <option value="">Todas as vagas</option>
+        </select>
+        <input type="date" id="f-de" class="form-control" title="De" onchange="aplicarFiltros()">
+        <input type="date" id="f-ate" class="form-control" title="Até" onchange="aplicarFiltros()">
+        <button class="btn btn-ghost" style="font-size:12px;height:36px" onclick="limparFiltros()">✕ Limpar</button>
+        <button class="btn btn-primary" style="font-size:12px;height:36px;margin-left:auto" onclick="carregar()">↻ Atualizar</button>
+      </div>
+
+      <!-- Tabela -->
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Data / Hora</th>
+              <th>Candidato</th>
+              <th>Vaga / Análise</th>
+              <th>Status</th>
+              <th>Detalhes</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+        <div id="empty-state" class="empty-state d-none">
+          <div>🔗</div>
+          <strong style="color:var(--text-md)">Nenhum registro encontrado</strong>
+          <p style="font-size:13px;margin-top:6px">Os registros de integração com o Softexpert aparecerão aqui após o primeiro envio.</p>
+        </div>
+        <div class="pagination" id="paginacao">
+          <span id="pag-info" style="color:var(--text-lo)"></span>
+          <div class="pag-btns">
+            <button class="btn btn-ghost" style="font-size:12px" id="btn-prev" onclick="mudarPagina(-1)">‹ Anterior</button>
+            <button class="btn btn-ghost" style="font-size:12px" id="btn-next" onclick="mudarPagina(1)">Próxima ›</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal XML -->
+<div id="modal-xml" class="modal-overlay d-none" onclick="if(event.target===this)fecharModalXML()">
+  <div class="modal-box" style="width:min(860px,98vw)">
+    <div class="modal-title">
+      <span id="xml-titulo">XML Enviado ao Softexpert</span>
+      <button onclick="fecharModalXML()" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0">✕</button>
+    </div>
+    <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
+      <span id="xml-meta" style="font-size:12px;color:var(--text-lo);flex:1"></span>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="copiarXML()">📋 Copiar XML</button>
+    </div>
+    <pre id="xml-content" style="background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:11.5px;font-family:monospace;line-height:1.6;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-all;color:var(--text-md);margin:0"></pre>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="fecharModalXML()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalhe -->
+<div id="modal" class="modal-overlay d-none" onclick="if(event.target===this)fecharModal()">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modal-titulo">Detalhes da Integração</span>
+      <button onclick="fecharModal()" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0">✕</button>
+    </div>
+    <div id="modal-body"></div>
+    <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px" id="modal-actions"></div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  const LIMIT = 50;
+  let paginaAtual = 1;
+  let totalRegistros = 0;
+  let vagas = [];
+  let dadosAtuais = [];
+
+  async function carregar() {
+    const nome     = document.getElementById('f-nome').value.trim();
+    const status   = document.getElementById('f-status').value;
+    const vagaId   = document.getElementById('f-vaga').value;
+    const de       = document.getElementById('f-de').value;
+    const ate      = document.getElementById('f-ate').value;
+
+    const params = new URLSearchParams({ page: paginaAtual, limit: LIMIT });
+    if (nome)   params.set('curriculo_nome', nome);
+    if (status) params.set('status', status);
+    if (vagaId) params.set('vaga_id', vagaId);
+    if (de)     params.set('data_inicio', de);
+    if (ate)    params.set('data_fim', ate);
+
+    const data = await fetch(`/api/integracoes/se/logs?${params}`).then(r => r.json());
+    dadosAtuais   = data.logs || [];
+    totalRegistros = data.total || 0;
+
+    renderTabela();
+    atualizarPaginacao();
+    atualizarStats();
+  }
+
+  async function carregarVagas() {
+    vagas = await fetch('/api/vagas').then(r => r.json());
+    const sel = document.getElementById('f-vaga');
+    const vagasUnicas = [...new Map(vagas.map(v => [v.id, v])).values()];
+    vagasUnicas.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = (v.funcao?.nome || `Vaga #${v.id}`);
+      sel.appendChild(opt);
+    });
+  }
+
+  async function atualizarStats() {
+    const tudo = await fetch('/api/integracoes/se/logs?limit=10000').then(r => r.json());
+    const logs  = tudo.logs || [];
+    const total   = tudo.total || 0;
+    const sucesso = logs.filter(l => l.status === 'sucesso').length;
+    const erro    = logs.filter(l => l.status === 'erro').length;
+    const taxa    = total > 0 ? Math.round((sucesso / (sucesso + erro || 1)) * 100) : 0;
+    document.getElementById('s-total').textContent   = total;
+    document.getElementById('s-sucesso').textContent = sucesso;
+    document.getElementById('s-erro').textContent    = erro;
+    document.getElementById('s-taxa').textContent    = `${taxa}%`;
+  }
+
+  function renderTabela() {
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty-state');
+
+    if (!dadosAtuais.length) {
+      tbody.innerHTML = '';
+      empty.classList.remove('d-none');
+      document.getElementById('paginacao').style.display = 'none';
+      return;
+    }
+    empty.classList.add('d-none');
+    document.getElementById('paginacao').style.display = '';
+
+    const offset = (paginaAtual - 1) * LIMIT;
+    tbody.innerHTML = dadosAtuais.map((l, i) => {
+      const dt   = new Date(l.data_envio);
+      const data = dt.toLocaleDateString('pt-BR');
+      const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const statusBadge = statusBadgeFor(l);
+
+      const detalhe = l.status === 'erro'
+        ? `<span class="erro-msg" title="${esc(l.erro_mensagem)}">${esc((l.erro_mensagem || '').slice(0, 80))}${(l.erro_mensagem || '').length > 80 ? '…' : ''}</span>`
+        : l.status === 'ignorado'
+        ? `<span class="ignored-msg">Já integrado anteriormente</span>`
+        : l.status === 'revertido'
+        ? `<span style="font-size:12px;color:#92400e">Revertido — aguardando reintegração</span>`
+        : l.origem === 'manual'
+        ? `<span class="ok-msg">Marcado manualmente como integrado</span>`
+        : `<span class="ok-msg">Enviado via API com sucesso</span>`;
+
+      const lJson = JSON.stringify(l).replace(/</g,'\\u003c');
+      const idx_abs = offset + i;
+      const xmlBtn = `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#6366f1${!l.xml_enviado ? ';opacity:.35;cursor:not-allowed' : ''}" onclick="event.stopPropagation();verXML(${idx_abs})" title="${l.xml_enviado ? 'Ver / copiar XML enviado' : 'XML não disponível (registro antigo)'}" ${!l.xml_enviado ? 'disabled' : ''}>📋 XML</button>`;
+      let acoes = `<div style="display:flex;gap:4px;flex-wrap:wrap">`;
+      if (l.status === 'erro' || l.status === 'revertido') {
+        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();reenviar(${lJson})">↺ Reenviar</button>`;
+        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#1d4ed8" onclick="event.stopPropagation();marcarOK(${lJson})">✓ Marcar OK</button>`;
+      } else if (l.status === 'sucesso') {
+        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#92400e" onclick="event.stopPropagation();desvincular(${lJson})">↩ Desvincular</button>`;
+      }
+      acoes += xmlBtn + `</div>`;
+
+      return `<tr class="clickable" onclick="verDetalhes(${offset + i})">
+        <td style="color:var(--text-lo);font-size:12px">${offset + i + 1}</td>
+        <td style="white-space:nowrap;font-size:12px"><div>${data}</div><div style="color:var(--text-lo)">${hora}</div></td>
+        <td><div class="cand-nome">${esc(l.curriculo_nome || '—')}</div><div class="cand-sub">${esc(l.curriculo_email || '')}${l.curriculo_telefone ? `<br>${esc(l.curriculo_telefone)}` : ''}</div></td>
+        <td><div style="font-size:13px;font-weight:600;color:var(--text-hi)">${esc(l.vaga_nome || '—')}</div><div style="font-size:11.5px;color:var(--text-lo)">${esc(l.analise_id || '')}</div></td>
+        <td>${statusBadge}</td>
+        <td>${detalhe}</td>
+        <td>${acoes}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function statusBadgeFor(l, big) {
+    const sz = big ? 'font-size:13px' : '';
+    if (l.status === 'sucesso' && l.origem === 'manual')
+      return `<span class="badge-status badge-manual" style="${sz}">✓ Integrado (manual)</span>`;
+    if (l.status === 'sucesso')
+      return `<span class="badge-status badge-sucesso" style="${sz}">✓ Sucesso (API)</span>`;
+    if (l.status === 'erro')
+      return `<span class="badge-status badge-erro" style="${sz}">✗ Erro</span>`;
+    if (l.status === 'revertido')
+      return `<span class="badge-status badge-revertido" style="${sz}">↩ Revertido</span>`;
+    return `<span class="badge-status badge-ignorado" style="${sz}">— Ignorado</span>`;
+  }
+
+  function atualizarPaginacao() {
+    const totalPags = Math.max(1, Math.ceil(totalRegistros / LIMIT));
+    const de  = totalRegistros ? (paginaAtual - 1) * LIMIT + 1 : 0;
+    const ate = Math.min(paginaAtual * LIMIT, totalRegistros);
+    document.getElementById('pag-info').textContent = `${de}–${ate} de ${totalRegistros} registro${totalRegistros !== 1 ? 's' : ''}`;
+    document.getElementById('btn-prev').disabled = paginaAtual <= 1;
+    document.getElementById('btn-next').disabled = paginaAtual >= totalPags;
+  }
+
+  function mudarPagina(dir) {
+    const totalPags = Math.ceil(totalRegistros / LIMIT);
+    paginaAtual = Math.max(1, Math.min(totalPags, paginaAtual + dir));
+    carregar();
+  }
+
+  function aplicarFiltros() {
+    paginaAtual = 1;
+    carregar();
+  }
+
+  function limparFiltros() {
+    document.getElementById('f-nome').value   = '';
+    document.getElementById('f-status').value = '';
+    document.getElementById('f-vaga').value   = '';
+    document.getElementById('f-de').value     = '';
+    document.getElementById('f-ate').value    = '';
+    aplicarFiltros();
+  }
+
+  let _expandCounter = 0;
+  function expandBlock(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('open');
+    const btn = document.querySelector(`[data-expand="${id}"]`);
+    if (btn) btn.textContent = el.classList.contains('open') ? '▲ Recolher' : '▼ Expandir';
+  }
+
+  function expandable(label, content, uid) {
+    if (!content) return '';
+    return `<div class="detail-item full">
+      <div class="detail-item-lbl">${label}</div>
+      <div class="detail-item-val">
+        <span class="expand-toggle" data-expand="${uid}" onclick="expandBlock('${uid}')">▼ Expandir</span>
+        <div class="expand-content" id="${uid}">${esc(content)}</div>
+      </div>
+    </div>`;
+  }
+
+  function verDetalhes(idx) {
+    const l = dadosAtuais[idx];
+    if (!l) return;
+    const dt = new Date(l.data_envio);
+    const uid = ++_expandCounter;
+    document.getElementById('modal-titulo').textContent = `Integração — ${l.curriculo_nome || '—'}`;
+
+    const httpClass = l.http_status == null ? 'nul' : (l.http_status >= 200 && l.http_status < 300 ? 'ok' : 'err');
+    const httpBadge = l.http_status != null
+      ? `<span class="badge-http ${httpClass}">HTTP ${l.http_status}</span>`
+      : `<span class="badge-http nul">—</span>`;
+
+    const seStatusBadge = !l.se_status ? `<span class="badge-http nul">—</span>`
+      : l.se_status === 'SUCCESS'
+      ? `<span class="badge-http ok">${esc(l.se_status)}</span>`
+      : `<span class="badge-http err">${esc(l.se_status)}</span>`;
+
+    const curricJson = l.curriculo_json ? JSON.stringify(l.curriculo_json, null, 2) : null;
+    const lJson = JSON.stringify(l).replace(/</g,'\\u003c');
+
+    document.getElementById('modal-body').innerHTML = `
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="detail-item-lbl">Candidato</div>
+          <div class="detail-item-val">${esc(l.curriculo_nome || '—')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Status Integração</div>
+          <div class="detail-item-val">${statusBadgeFor(l, true)}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">E-mail</div>
+          <div class="detail-item-val">${esc(l.curriculo_email || '—')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Telefone</div>
+          <div class="detail-item-val">${esc(l.curriculo_telefone || '—')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Vaga / Função</div>
+          <div class="detail-item-val">${esc(l.vaga_nome || '—')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">ID da Análise</div>
+          <div class="detail-item-val" style="font-size:12px;font-family:monospace">${esc(l.analise_id || '—')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Data / Hora do Envio</div>
+          <div class="detail-item-val">${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Duração</div>
+          <div class="detail-item-val">${l.duracao_ms != null ? `${l.duracao_ms} ms` : '—'}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">HTTP Status</div>
+          <div class="detail-item-val">${httpBadge}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Tem Anexo (PDF)</div>
+          <div class="detail-item-val">${l.tem_anexo ? '✓ Sim' : '✗ Não'}</div>
+        </div>
+
+        <!-- Retorno SE -->
+        <div class="detail-item" style="border-top:1px solid var(--border);grid-column:1/-1;padding-bottom:4px;margin-top:4px">
+          <div class="detail-item-lbl" style="font-size:10px;letter-spacing:.08em">── Retorno Softexpert</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">SE Status</div>
+          <div class="detail-item-val">${seStatusBadge}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">SE Code</div>
+          <div class="detail-item-val" style="font-family:monospace">${esc(l.se_code || '—')}</div>
+        </div>
+        <div class="detail-item full ${l.se_status === 'FAILURE' ? 'erro-box' : (l.se_status === 'SUCCESS' ? 'ok-box' : '')}">
+          <div class="detail-item-lbl">SE Detail</div>
+          <div class="detail-item-val">${esc(l.se_detail || '—')}</div>
+        </div>
+        <div class="detail-item full">
+          <div class="detail-item-lbl">SE RecordID (registro criado no SE)</div>
+          <div class="detail-item-val" style="font-family:monospace;font-weight:700;color:${l.se_record_id ? 'var(--success)' : 'var(--text-lo)'}">${esc(l.se_record_id || '—')}</div>
+        </div>
+
+        ${l.fault_code ? `
+        <div class="detail-item full erro-box">
+          <div class="detail-item-lbl">SOAP Fault Code</div>
+          <div class="detail-item-val">${esc(l.fault_code)}</div>
+        </div>` : ''}
+        ${l.erro_mensagem ? `
+        <div class="detail-item full erro-box">
+          <div class="detail-item-lbl">Mensagem de Erro</div>
+          <div class="detail-item-val">${esc(l.erro_mensagem)}</div>
+        </div>` : ''}
+        ${l.erro_detalhes ? `
+        <div class="detail-item full erro-box">
+          <div class="detail-item-lbl">Detalhes do Erro de Conexão</div>
+          <div class="detail-item-val" style="font-size:11.5px;font-family:monospace;white-space:pre-wrap">${esc(l.erro_detalhes)}</div>
+        </div>` : ''}
+        ${l.revertido_em ? `
+        <div class="detail-item full" style="background:#fef9c3">
+          <div class="detail-item-lbl">Revertido em</div>
+          <div class="detail-item-val">${new Date(l.revertido_em).toLocaleString('pt-BR')}</div>
+        </div>` : ''}
+        ${expandable('Resposta da API (corpo completo)', l.resposta_api, `resp-${uid}`)}
+        ${expandable('XML Enviado (SOAP)', l.xml_enviado, `xml-${uid}`)}
+        ${expandable('JSON do Currículo Enviado', curricJson, `json-${uid}`)}
+      </div>`;
+
+    const actions = document.getElementById('modal-actions');
+    let btns = `<button class="btn btn-ghost" onclick="fecharModal()">Fechar</button>`;
+    if (l.status === 'erro' || l.status === 'revertido') {
+      btns += `<button class="btn btn-ghost" style="color:#1d4ed8" onclick="fecharModal();marcarOK(${lJson})">✓ Marcar OK</button>`;
+      btns += `<button class="btn btn-primary" onclick="fecharModal();reenviar(${lJson})">↺ Reenviar</button>`;
+    } else if (l.status === 'sucesso') {
+      btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="fecharModal();desvincular(${lJson})">↩ Desvincular</button>`;
+    }
+    actions.innerHTML = btns;
+
+    document.getElementById('modal').classList.remove('d-none');
+  }
+
+  function fecharModal() {
+    document.getElementById('modal').classList.add('d-none');
+  }
+
+  async function reenviar(log) {
+    if (!confirm(`Reenviar o currículo de "${log.curriculo_nome}" para o Softexpert?\n\nAnálise: ${log.analise_id}`)) return;
+    try {
+      const r = await fetch('/api/integracoes/se/reenviar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curriculo_id: log.curriculo_id, analise_id: log.analise_id }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Erro no reenvio');
+      alert(`✓ Currículo de "${log.curriculo_nome}" reenviado com sucesso!`);
+      carregar();
+    } catch (err) {
+      alert(`✗ Erro ao reenviar: ${err.message}`);
+      carregar();
+    }
+  }
+
+  async function marcarOK(log) {
+    if (!confirm(`Marcar "${log.curriculo_nome}" como integrado manualmente?\n\nIsso bloqueará o reenvio automático sem efetivamente enviar ao Softexpert.`)) return;
+    try {
+      const r = await fetch('/api/integracoes/se/marcar-integrado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curriculo_id: log.curriculo_id, analise_id: log.analise_id }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Erro');
+      alert(`✓ "${log.curriculo_nome}" marcado como integrado manualmente.`);
+      carregar();
+    } catch (err) {
+      alert(`✗ Erro: ${err.message}`);
+    }
+  }
+
+  async function desvincular(log) {
+    if (!confirm(`Desvincular integração de "${log.curriculo_nome}"?\n\nO status voltará para "Revertido" e o currículo poderá ser reenviado ao Softexpert.`)) return;
+    try {
+      const r = await fetch('/api/integracoes/se/resetar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ curriculo_id: log.curriculo_id, analise_id: log.analise_id }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Erro');
+      alert(`↩ Integração de "${log.curriculo_nome}" revertida. Ele será reenviado no próximo envio da análise.`);
+      carregar();
+    } catch (err) {
+      alert(`✗ Erro: ${err.message}`);
+    }
+  }
+
+  function verXML(idx) {
+    const l = dadosAtuais[idx];
+    if (!l || !l.xml_enviado) return;
+    document.getElementById('xml-titulo').textContent = `XML — ${l.curriculo_nome || '—'}`;
+    document.getElementById('xml-meta').textContent =
+      `Análise: ${l.analise_id || '—'} · Vaga: ${l.vaga_nome || '—'} · ${new Date(l.data_envio).toLocaleString('pt-BR')}`;
+    document.getElementById('xml-content').textContent = l.xml_enviado;
+    document.getElementById('modal-xml').classList.remove('d-none');
+  }
+
+  function fecharModalXML() {
+    document.getElementById('modal-xml').classList.add('d-none');
+  }
+
+  async function copiarXML() {
+    const xml = document.getElementById('xml-content').textContent;
+    try {
+      await navigator.clipboard.writeText(xml);
+      const btn = event.target;
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.textContent = '📋 Copiar XML'; }, 2000);
+    } catch {
+      alert('Não foi possível copiar automaticamente. Selecione o texto e use Ctrl+C.');
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { fecharModal(); fecharModalXML(); }
+  });
+
+  (async () => {
+    await carregarVagas();
+    await carregar();
+  })();
+</script>
+</body>
+</html>

@@ -137,6 +137,13 @@
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
+      <div class="nav-section-title" style="margin-top:12px">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('se-curriculo')">
+        <span class="nav-icon">🔗</span><span class="nav-label">Integrações</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-se-curriculo">
+        <a href="/se-curriculos.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">SE Currículos</span></a>
+      </div>
       <div class="nav-section-title" style="margin-top:12px">Sistema</div>
       <a href="/configuracoes.html" class="nav-item active"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
     </div>
@@ -161,6 +168,7 @@
         <button class="tab-btn active" onclick="mudarAba('whatsapp', this)">💬 WhatsApp Currículo</button>
         <button class="tab-btn" onclick="mudarAba('analisador', this)">🔍 Analisador de Currículos</button>
         <button class="tab-btn" onclick="mudarAba('equivalencias', this)">⚡ Equivalências</button>
+        <button class="tab-btn" onclick="mudarAba('integracoes', this)">🔗 Integrações</button>
       </div>
 
       <!-- ===================== ABA: WHATSAPP ===================== -->
@@ -311,6 +319,42 @@
 
       </div>
 
+      <!-- ===================== ABA: INTEGRAÇÕES ===================== -->
+      <div id="aba-integracoes" class="d-none" style="max-width:620px">
+        <div id="alert-ok-int" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração salva com sucesso!</div>
+        <div id="alert-err-int" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+
+        <div class="card mb-4">
+          <div class="card-header">🔗 Softexpert — SE Currículo</div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">URL do Webservice (SOAP)</label>
+              <input type="text" id="se_url" class="form-control" placeholder="https://empresa.softexpert.com/se/ws/fm_ws.php?wsdl">
+              <div class="form-hint">Endpoint WSDL do Softexpert. Não altere se não tiver certeza.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Token de Autenticação (JWT)</label>
+              <input type="password" id="se_token" class="form-control" placeholder="eyJhbGci...">
+              <div class="form-hint">Token JWT fornecido pelo Softexpert. Mantido de forma segura no servidor.</div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:4px">
+              <button class="btn btn-ghost" style="font-size:13px" onclick="testarConexaoSE()">🔌 Testar Conexão</button>
+              <span id="se-test-result" style="font-size:12.5px;align-self:center"></span>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="salvarIntegracoes()" style="width:100%">Salvar Configuração</button>
+
+        <div class="card" style="margin-top:32px">
+          <div class="card-header">ℹ Como funciona</div>
+          <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+            Após salvar uma análise no <a href="/historico.html" style="color:var(--accent)">Histórico</a>, clique em <strong>Enviar ao Softexpert</strong> para criar automaticamente os registros dos candidatos finalistas no SE.<br><br>
+            O histórico completo de cada envio pode ser consultado em <a href="/se-curriculos.html" style="color:var(--accent)">Integrações › SE Currículo › Currículos</a>.
+          </div>
+        </div>
+      </div>
+
     </div><!-- /page-content -->
   </div><!-- /main -->
 </div><!-- /layout -->
@@ -358,7 +402,7 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-const ABAS = ['whatsapp', 'analisador', 'equivalencias'];
+const ABAS = ['whatsapp', 'analisador', 'equivalencias', 'integracoes'];
 
 function mudarAba(aba, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -366,6 +410,7 @@ function mudarAba(aba, btn) {
   ABAS.forEach(a => document.getElementById('aba-' + a).classList.add('d-none'));
   document.getElementById('aba-' + aba).classList.remove('d-none');
   if (aba === 'equivalencias') carregarEquiv();
+  if (aba === 'integracoes') carregarIntegracoes();
 }
 
 // ── WhatsApp ─────────────────────────────────────────────────────────────────
@@ -663,6 +708,54 @@ document.getElementById('tag-new-input').addEventListener('keydown', function(e)
 
 // Fechar com Escape
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(); });
+
+// ── Integrações SE ────────────────────────────────────────────────────────────
+async function carregarIntegracoes() {
+  const cfg = await fetch('/api/integracoes/se/config').then(r => r.json());
+  document.getElementById('se_url').value   = cfg.se_url   || '';
+  document.getElementById('se_token').value = cfg.se_token || '';
+}
+
+async function salvarIntegracoes() {
+  const url   = document.getElementById('se_url').value.trim();
+  const token = document.getElementById('se_token').value.trim();
+  const err   = document.getElementById('alert-err-int');
+  const ok    = document.getElementById('alert-ok-int');
+  if (!url || !token) {
+    err.textContent = '❌ URL e Token são obrigatórios.';
+    err.classList.remove('d-none');
+    setTimeout(() => err.classList.add('d-none'), 4000);
+    return;
+  }
+  const r = await fetch('/api/integracoes/se/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ se_url: url, se_token: token }),
+  });
+  if (r.ok) {
+    ok.classList.remove('d-none');
+    setTimeout(() => ok.classList.add('d-none'), 3000);
+  }
+}
+
+async function testarConexaoSE() {
+  const url   = document.getElementById('se_url').value.trim();
+  const token = document.getElementById('se_token').value.trim();
+  const span  = document.getElementById('se-test-result');
+  if (!url || !token) { span.textContent = '⚠ Preencha URL e Token primeiro.'; span.style.color = '#d97706'; return; }
+  span.textContent = '⏳ Testando…';
+  span.style.color = 'var(--text-lo)';
+  try {
+    await fetch('/api/integracoes/se/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ se_url: url, se_token: token }),
+    });
+    span.textContent = '✓ Configuração salva. Faça um envio de teste no Histórico para validar a conexão.';
+    span.style.color = 'var(--success)';
+  } catch {
+    span.textContent = '✗ Erro ao salvar.';
+    span.style.color = 'var(--error)';
+  }
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 carregarWhatsapp();

@@ -246,6 +246,37 @@ a { text-decoration: none; color: inherit; }
 }
 .btn-logout:hover { color: var(--error); background: #fee2e2; }
 
+/* ── Pin button (injetado via sidebar.js) ────────────────── */
+
+.sidebar-pin-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-lo);
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition), background var(--transition);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.sidebar:hover .sidebar-pin-btn,
+.sidebar.pinned .sidebar-pin-btn {
+  opacity: 1;
+}
+
+.sidebar-pin-btn:hover {
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.sidebar.pinned .sidebar-pin-btn {
+  color: var(--accent);
+}
+
 /* ── Main Content ────────────────────────────────────────── */
 
 .main {
@@ -255,6 +286,11 @@ a { text-decoration: none; color: inherit; }
   overflow: hidden;
   background: var(--bg-base);
   min-width: 0;
+  transition: margin-left var(--transition);
+}
+
+.layout.sidebar-pinned .main {
+  margin-left: var(--sidebar-w);
 }
 
 .topbar {

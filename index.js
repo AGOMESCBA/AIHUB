@@ -25,6 +25,7 @@ app.use(express.static(path.join(__dirname, 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'configuracoes', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
+app.use(express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
 
 // ── Log em arquivo e buffer para restaurar ao reconectar ─────────────────────
 const LOG_FILE   = path.join(__dirname, 'whatscurriculo.log');
@@ -62,6 +63,9 @@ require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, registrarLog,
 
 // ── Módulo Analisador de Currículos ───────────────────────────────────────────
 require('./modules/analisador-curriculos/routes')(app, { requireAuth, registrarLog, io });
+
+// ── Módulo Integrações › SE Currículo ─────────────────────────────────────────
+require('./modules/integracoes/SECurriculo/routes')(app, { requireAuth, registrarLog });
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

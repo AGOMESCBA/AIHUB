@@ -2,11 +2,21 @@
   const STORAGE_KEY = 'iahub_sidebar_pinned';
 
   function getSidebar() { return document.getElementById('sidebar'); }
+  function getLayout()  { return document.querySelector('.layout'); }
 
   function apply(pinned) {
     const sb = getSidebar();
     if (!sb) return;
     sb.classList.toggle('pinned', pinned);
+
+    const layout = getLayout();
+    if (layout) layout.classList.toggle('sidebar-pinned', pinned);
+
+    const btn = sb.querySelector('.sidebar-pin-btn');
+    if (btn) {
+      btn.textContent = pinned ? '◀' : '▶';
+      btn.title       = pinned ? 'Recolher menu' : 'Fixar menu';
+    }
   }
 
   function toggle() {
@@ -18,6 +28,16 @@
   }
 
   function init() {
+    // Injeta botão de pin na área do logo (sem alterar nenhum HTML de página)
+    const sb = getSidebar();
+    if (sb && !sb.querySelector('.sidebar-pin-btn')) {
+      const btn    = document.createElement('button');
+      btn.className = 'sidebar-pin-btn';
+      btn.onclick   = (e) => { e.stopPropagation(); toggle(); };
+      const logo   = sb.querySelector('.sidebar-logo');
+      if (logo) logo.appendChild(btn);
+    }
+
     apply(localStorage.getItem(STORAGE_KEY) === '1');
 
     // Abre o submenu que contém a página ativa

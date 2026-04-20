@@ -149,4 +149,28 @@ module.exports = {
     persist(d);
     return true;
   },
+
+  // ── Equivalências de Palavras-chave ───────────────────────────────────────────
+  listEquivalencias() { return load().equivalencias || []; },
+
+  saveEquivalencia({ keyword, variantes }) {
+    const d   = load();
+    if (!d.equivalencias) d.equivalencias = [];
+    const kw  = keyword.toLowerCase().trim();
+    const idx = d.equivalencias.findIndex(e => e.keyword === kw);
+    const entry = { keyword: kw, variantes: variantes.map(v => v.toLowerCase().trim()).filter(Boolean) };
+    if (idx >= 0) d.equivalencias[idx] = entry;
+    else d.equivalencias.push(entry);
+    persist(d);
+  },
+
+  deleteEquivalencia(keyword) {
+    const d   = load();
+    if (!d.equivalencias) return false;
+    const idx = d.equivalencias.findIndex(e => e.keyword === keyword.toLowerCase().trim());
+    if (idx === -1) return false;
+    d.equivalencias.splice(idx, 1);
+    persist(d);
+    return true;
+  },
 };
