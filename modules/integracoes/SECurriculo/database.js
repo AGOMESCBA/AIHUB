@@ -24,7 +24,7 @@ function nextSeq() {
 module.exports = {
   getConfig() {
     return load().se_config || {
-      se_url:   'https://j2a.c3isystems.com.br/se/ws/fm_ws.php?wsdl',
+      se_url:   'https://j2a.c3isystems.com.br/apigateway/se/ws/fm_ws.php',
       se_token: '',
     };
   },
@@ -46,8 +46,14 @@ module.exports = {
 
   listLogs({ status, curriculo_nome, analise_id, vaga_id, data_inicio, data_fim, page = 1, limit = 50 } = {}) {
     const d    = load();
-    let   logs = d.integracoes_se || [];
+    const todos = d.integracoes_se || [];
 
+    // Conjunto de combinações curriculo+analise que já têm sucesso ativo
+    const integrados = new Set(
+      todos.filter(l => l.status === 'sucesso').map(l => `${l.curriculo_id}|${l.analise_id}`)
+    );
+
+    let logs = todos;
     if (status)         logs = logs.filter(l => l.status === status);
     if (analise_id)     logs = logs.filter(l => l.analise_id === analise_id);
     if (vaga_id)        logs = logs.filter(l => l.vaga_id === Number(vaga_id));
@@ -57,7 +63,11 @@ module.exports = {
 
     const total  = logs.length;
     const offset = (Number(page) - 1) * Number(limit);
-    return { logs: logs.slice(offset, offset + Number(limit)), total, page: Number(page), limit: Number(limit) };
+    const page_logs = logs.slice(offset, offset + Number(limit)).map(l => ({
+      ...l,
+      ja_integrado: integrados.has(`${l.curriculo_id}|${l.analise_id}`),
+    }));
+    return { logs: page_logs, total, page: Number(page), limit: Number(limit) };
   },
 
   getResumoAnalises(analise_ids) {

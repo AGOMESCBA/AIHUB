@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Vagas em Aberto</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --bg-card:   #161b22;
+      --bg-hover:  #1c2128;
+      --border:    #30363d;
+      --text-hi:   #f0f6fc;
+      --text-md:   #8b949e;
+      --text-lo:   #484f58;
+      --accent:    #2563eb;
+      --accent-lt: #60a5fa;
+      --success:   #22c55e;
+      --warning:   #f59e0b;
+      --error:     #ef4444;
+      --wa:        #25D366;
+      --wa-dark:   #128C7E;
+      --radius:    12px;
+    }
+
+    body { background: var(--bg); color: var(--text-hi); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; min-height: 100vh; }
+
+    /* ── TOPBAR ─── */
+    .topbar { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: #fff; flex-shrink: 0; }
+    .logo-text { font-weight: 700; font-size: 15px; color: var(--text-hi); }
+    .logo-sub  { font-size: 12px; color: var(--text-md); margin-left: 4px; }
+
+    /* ── HERO ─── */
+    .hero { text-align: center; padding: 52px 24px 40px; background: linear-gradient(180deg, rgba(37,99,235,.08) 0%, transparent 100%); border-bottom: 1px solid var(--border); }
+    .hero h1 { font-size: clamp(22px, 4vw, 34px); font-weight: 800; color: var(--text-hi); margin-bottom: 10px; line-height: 1.2; }
+    .hero p  { font-size: 15px; color: var(--text-md); max-width: 520px; margin: 0 auto 28px; line-height: 1.7; }
+
+    /* ── WHATSAPP BUTTON ─── */
+    .btn-wa {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--wa); color: #fff; border: none; border-radius: 24px;
+      padding: 11px 22px; font-size: 14px; font-weight: 600; cursor: pointer;
+      text-decoration: none; transition: background .2s, transform .15s;
+      box-shadow: 0 4px 16px rgba(37,211,102,.25);
+    }
+    .btn-wa:hover { background: var(--wa-dark); transform: translateY(-1px); }
+    .btn-wa svg   { flex-shrink: 0; }
+
+    /* ── WA BANNER ─── */
+    .wa-banner { background: rgba(37,211,102,.08); border-top: 1px solid rgba(37,211,102,.2); border-bottom: 1px solid rgba(37,211,102,.2); padding: 14px 24px; display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+    .wa-banner span { font-size: 13.5px; color: var(--success); }
+
+    /* ── CONTAINER ─── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px 60px; }
+
+    .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-lo); margin-bottom: 16px; }
+
+    /* ── VAGAS GRID ─── */
+    .vagas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+
+    /* ── VAGA CARD ─── */
+    .vaga-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color .2s, box-shadow .2s; }
+    .vaga-card.expanded { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+
+    .vaga-header { padding: 20px; cursor: pointer; user-select: none; }
+    .vaga-header:hover .vaga-btn-toggle { opacity: 1; }
+    .vaga-area-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-lo); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .06em; }
+    .vaga-nome { font-size: 16px; font-weight: 700; color: var(--text-hi); margin-bottom: 6px; line-height: 1.3; }
+
+    .vaga-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .vaga-tag  { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 20px; padding: 2px 10px; font-size: 11.5px; color: var(--text-md); }
+    .vaga-tag.nivel { background: rgba(37,99,235,.1); color: var(--accent-lt); border-color: rgba(37,99,235,.2); }
+    .vaga-tag.qtd   { background: rgba(34,197,94,.1); color: var(--success); border-color: rgba(34,197,94,.2); }
+
+    .vaga-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-md); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); justify-content: space-between; }
+    .dot-green { width: 7px; height: 7px; border-radius: 50%; background: var(--success); display: inline-block; box-shadow: 0 0 6px rgba(34,197,94,.5); }
+    .vaga-btn-toggle { font-size: 12px; color: var(--accent-lt); font-weight: 600; opacity: .7; transition: opacity .2s; }
+
+    /* ── EXPAND BODY ─── */
+    .vaga-body { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+    .vaga-card.expanded .vaga-body { max-height: 1200px; }
+    .vaga-body-inner { border-top: 1px solid var(--border); padding: 20px; }
+
+    .detalhe-section { margin-bottom: 18px; }
+    .detalhe-label   { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-lo); margin-bottom: 6px; }
+    .detalhe-texto   { font-size: 13.5px; color: var(--text-md); line-height: 1.75; white-space: pre-wrap; }
+    .detalhe-tags    { display: flex; flex-wrap: wrap; gap: 5px; }
+    .detalhe-tag     { background: var(--bg-hover); border-radius: 20px; padding: 3px 10px; font-size: 12px; color: var(--text-md); border: 1px solid var(--border); }
+
+    /* ── FORM ─── */
+    .form-section { background: var(--bg-hover); border-radius: 10px; padding: 20px; margin-top: 20px; border: 1px solid var(--border); }
+    .form-section h3 { font-size: 14px; font-weight: 700; color: var(--text-hi); margin-bottom: 16px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 12.5px; color: var(--text-md); margin-bottom: 6px; font-weight: 500; }
+    .form-label span { color: var(--error); }
+    .form-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 9px 13px; font-size: 13.5px; color: var(--text-hi); outline: none; transition: border-color .15s; font-family: inherit; }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+    .form-input::placeholder { color: var(--text-lo); }
+
+    /* ── UPLOAD ─── */
+    .upload-area { border: 2px dashed var(--border); border-radius: 10px; padding: 28px 20px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: var(--bg-card); }
+    .upload-area:hover, .upload-area.drag-over { border-color: var(--accent); background: rgba(37,99,235,.05); }
+    .upload-area.has-file { border-color: var(--success); background: rgba(34,197,94,.05); border-style: solid; }
+    .upload-icon { font-size: 32px; margin-bottom: 8px; }
+    .upload-txt  { font-size: 13.5px; color: var(--text-md); line-height: 1.6; }
+    .upload-nome { font-size: 13px; color: var(--success); font-weight: 600; margin-top: 6px; }
+    .upload-hint { font-size: 11.5px; color: var(--text-lo); margin-top: 4px; }
+    input[type=file] { display: none; }
+
+    /* ── SUBMIT BUTTON ─── */
+    .btn-submit { width: 100%; padding: 12px; font-size: 15px; font-weight: 700; border: none; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; transition: background .2s, transform .15s; margin-top: 4px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-submit:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-submit:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+    /* ── ALERT ─── */
+    .alert { border-radius: 8px; padding: 11px 14px; font-size: 13px; margin-top: 12px; line-height: 1.6; }
+    .alert-error   { background: rgba(239,68,68,.1);  border: 1px solid rgba(239,68,68,.25);  color: #fca5a5; }
+    .alert-success { background: rgba(34,197,94,.1);  border: 1px solid rgba(34,197,94,.25);  color: #86efac; }
+
+    /* ── SPINNER ─── */
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── LOADING ─── */
+    .loading-state { text-align: center; padding: 60px 20px; color: var(--text-lo); }
+    .loading-spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+
+    /* ── EMPTY ─── */
+    .empty-state { text-align: center; padding: 80px 20px; color: var(--text-lo); }
+    .empty-icon  { font-size: 48px; margin-bottom: 12px; }
+
+    /* ── FOOTER ─── */
+    .footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; color: var(--text-lo); font-size: 12.5px; display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+
+    /* ── SUCCESS STATE ─── */
+    .success-state { text-align: center; padding: 32px 20px; }
+    .success-icon  { font-size: 48px; margin-bottom: 12px; }
+    .success-title { font-size: 18px; font-weight: 700; color: var(--success); margin-bottom: 8px; }
+    .success-sub   { font-size: 13.5px; color: var(--text-md); line-height: 1.7; }
+
+    @media (max-width: 600px) {
+      .vagas-grid { grid-template-columns: 1fr; }
+      .hero { padding: 36px 16px 28px; }
+      .container { padding: 24px 16px 48px; }
+      .wa-banner { flex-direction: column; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub<span class="logo-sub"> · Vagas</span></span>
+    </div>
+    <a id="topbar-wa" href="#" class="btn-wa" style="display:none" target="_blank" rel="noopener">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Enviar via WhatsApp
+    </a>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>Oportunidades de Emprego</h1>
+    <p>Candidate-se às nossas vagas abertas e envie seu currículo em PDF diretamente por aqui</p>
+    <a id="hero-wa" href="#" class="btn-wa" style="display:none" target="_blank" rel="noopener">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Prefere o WhatsApp? Envie por aqui
+    </a>
+  </div>
+
+  <!-- WhatsApp Banner -->
+  <div class="wa-banner" id="wa-banner" style="display:none">
+    <span>💬 Você também pode enviar seu currículo diretamente pelo WhatsApp!</span>
+    <a id="banner-wa" href="#" class="btn-wa" style="font-size:13px;padding:8px 18px" target="_blank" rel="noopener">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Enviar pelo WhatsApp
+    </a>
+  </div>
+
+  <!-- Conteúdo principal -->
+  <div class="container">
+    <div class="section-title">Vagas Disponíveis</div>
+    <div id="loading-vagas" class="loading-state">
+      <div class="loading-spinner"></div>
+      <div>Carregando vagas...</div>
+    </div>
+    <div id="vagas-grid" class="vagas-grid" style="display:none"></div>
+    <div id="empty-vagas" class="empty-state" style="display:none">
+      <div class="empty-icon">💼</div>
+      <strong style="color:var(--text-md);font-size:16px">Nenhuma vaga aberta no momento</strong>
+      <p style="font-size:13.5px;margin-top:8px">Volte em breve para novas oportunidades.</p>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>Powered by <strong style="color:var(--text-md)">IAHub</strong> · Sistema de Gestão de Currículos</span>
+    <a id="footer-wa" href="#" class="btn-wa" style="font-size:12.5px;padding:7px 16px;display:none" target="_blank" rel="noopener">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      WhatsApp
+    </a>
+  </div>
+
+<script>
+  const token = location.pathname.split('/')[2];
+  let vaLinks = [];
+  let expandedId = null;
+
+  // ── Configuração inicial ──────────────────────────────────────────────────────
+  async function init() {
+    try {
+      const [vagasData, info] = await Promise.all([
+        fetch(`/api/public/ps/${token}/vagas`).then(r => r.json()),
+        fetch(`/api/public/ps/${token}/info`).then(r => r.json()),
+      ]);
+
+      if (info.wa_numero) {
+        const waUrl = `https://wa.me/${info.wa_numero}?text=${encodeURIComponent('Olá! Gostaria de enviar meu currículo para a vaga de emprego.')}`;
+        ['topbar-wa','hero-wa','banner-wa','footer-wa'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { el.href = waUrl; el.style.display = ''; }
+        });
+        document.getElementById('wa-banner').style.display = '';
+      }
+
+      renderVagas(vagasData);
+    } catch (e) {
+      document.getElementById('loading-vagas').innerHTML = '<div style="color:var(--error)">Erro ao carregar vagas. Tente recarregar a página.</div>';
+    }
+  }
+
+  // ── Renderiza vagas ───────────────────────────────────────────────────────────
+  function renderVagas(vagas) {
+    document.getElementById('loading-vagas').style.display = 'none';
+    if (!vagas.length) {
+      document.getElementById('empty-vagas').style.display = '';
+      return;
+    }
+    const grid = document.getElementById('vagas-grid');
+    grid.style.display = '';
+    grid.innerHTML = vagas.map(v => {
+      const f = v.funcao || {};
+      const tags = [
+        f.nivel_experiencia && f.nivel_experiencia !== 'Não especificado' ? `<span class="vaga-tag nivel">${f.nivel_experiencia}</span>` : '',
+        `<span class="vaga-tag qtd">${v.quantidade} vaga${v.quantidade !== 1 ? 's' : ''}</span>`,
+        f.formacao_necessaria ? `<span class="vaga-tag">${f.formacao_necessaria.slice(0,40)}</span>` : '',
+      ].filter(Boolean).join('');
+
+      const reqObrig = f.requisitos_obrigatorios ? f.requisitos_obrigatorios.split(/[\n,]+/).map(r => r.replace(/^[-•]\s*/,'').trim()).filter(Boolean) : [];
+      const reqDesej = f.requisitos_desejaveis   ? f.requisitos_desejaveis.split(/[\n,]+/).map(r => r.replace(/^[-•]\s*/,'').trim()).filter(Boolean)   : [];
+      const habs     = Array.isArray(f.habilidades_tecnicas) ? f.habilidades_tecnicas : [];
+
+      return `
+      <div class="vaga-card" id="card-${v.id}">
+        <div class="vaga-header" onclick="toggleCard(${v.id})">
+          <div class="vaga-area-badge">
+            ${f.area ? `🏢 ${f.area}` : '💼 Vaga'}
+          </div>
+          <div class="vaga-nome">${f.nome || 'Vaga em Aberto'}</div>
+          ${f.descricao ? `<div style="font-size:13px;color:var(--text-md);margin-top:6px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${f.descricao}</div>` : ''}
+          <div class="vaga-tags">${tags}</div>
+          <div class="vaga-status">
+            <span><span class="dot-green"></span> Aberta para candidaturas</span>
+            <span class="vaga-btn-toggle" id="toggle-txt-${v.id}">Ver detalhes →</span>
+          </div>
+        </div>
+        <div class="vaga-body" id="body-${v.id}">
+          <div class="vaga-body-inner">
+            ${f.descricao ? `<div class="detalhe-section">
+              <div class="detalhe-label">Descrição da Função</div>
+              <div class="detalhe-texto">${esc(f.descricao)}</div>
+            </div>` : ''}
+            ${reqObrig.length ? `<div class="detalhe-section">
+              <div class="detalhe-label">✅ Requisitos Obrigatórios</div>
+              <div class="detalhe-tags">${reqObrig.map(r => `<span class="detalhe-tag">✓ ${esc(r)}</span>`).join('')}</div>
+            </div>` : ''}
+            ${reqDesej.length ? `<div class="detalhe-section">
+              <div class="detalhe-label">⭐ Requisitos Desejáveis</div>
+              <div class="detalhe-tags">${reqDesej.map(r => `<span class="detalhe-tag">${esc(r)}</span>`).join('')}</div>
+            </div>` : ''}
+            ${habs.length ? `<div class="detalhe-section">
+              <div class="detalhe-label">🛠 Habilidades Técnicas</div>
+              <div class="detalhe-tags">${habs.map(h => `<span class="detalhe-tag">${esc(h)}</span>`).join('')}</div>
+            </div>` : ''}
+            ${f.formacao_necessaria ? `<div class="detalhe-section">
+              <div class="detalhe-label">🎓 Formação</div>
+              <div class="detalhe-texto">${esc(f.formacao_necessaria)}</div>
+            </div>` : ''}
+
+            <!-- Form de candidatura -->
+            <div class="form-section" id="form-section-${v.id}">
+              <h3>📄 Enviar Meu Currículo</h3>
+              <div class="form-group">
+                <label class="form-label">Nome completo <span>*</span></label>
+                <input type="text" class="form-input" id="nome-${v.id}" placeholder="Seu nome completo" autocomplete="name">
+              </div>
+              <div class="form-group">
+                <label class="form-label">E-mail para contato <span>*</span></label>
+                <input type="email" class="form-input" id="email-${v.id}" placeholder="seu@email.com" autocomplete="email">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Currículo em PDF <span>*</span></label>
+                <input type="file" id="file-${v.id}" accept=".pdf,application/pdf" onchange="arquivoSelecionado(${v.id}, this)">
+                <div class="upload-area" id="upload-${v.id}"
+                  onclick="document.getElementById('file-${v.id}').click()"
+                  ondragover="dragOver(event, ${v.id})"
+                  ondragleave="dragLeave(${v.id})"
+                  ondrop="dragDrop(event, ${v.id})">
+                  <div class="upload-icon">📎</div>
+                  <div class="upload-txt">Arraste o PDF aqui ou <strong style="color:var(--accent-lt)">clique para selecionar</strong></div>
+                  <div class="upload-nome" id="upload-nome-${v.id}" style="display:none"></div>
+                  <div class="upload-hint">Apenas arquivos PDF • Máx. 10 MB</div>
+                </div>
+              </div>
+              <div id="alert-${v.id}"></div>
+              <button class="btn-submit" id="btn-${v.id}" onclick="enviarCandidatura(${v.id})">
+                <span>Enviar Currículo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Accordion ─────────────────────────────────────────────────────────────────
+  function toggleCard(vagaId) {
+    const card = document.getElementById(`card-${vagaId}`);
+    const txt  = document.getElementById(`toggle-txt-${vagaId}`);
+    const aberto = card.classList.contains('expanded');
+    card.classList.toggle('expanded', !aberto);
+    txt.textContent = aberto ? 'Ver detalhes →' : '← Fechar';
+  }
+
+  // ── Drag & Drop ───────────────────────────────────────────────────────────────
+  function dragOver(e, id) { e.preventDefault(); document.getElementById(`upload-${id}`).classList.add('drag-over'); }
+  function dragLeave(id)   { document.getElementById(`upload-${id}`).classList.remove('drag-over'); }
+  function dragDrop(e, id) {
+    e.preventDefault();
+    dragLeave(id);
+    const file = e.dataTransfer.files[0];
+    if (file) aplicarArquivo(id, file);
+  }
+
+  function arquivoSelecionado(id, input) {
+    if (input.files[0]) aplicarArquivo(id, input.files[0]);
+  }
+
+  function aplicarArquivo(id, file) {
+    const area = document.getElementById(`upload-${id}`);
+    const nome = document.getElementById(`upload-nome-${id}`);
+    const alerta = document.getElementById(`alert-${id}`);
+
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      alerta.innerHTML = '<div class="alert alert-error">⚠️ Apenas arquivos PDF são aceitos. Verifique o arquivo e tente novamente.</div>';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alerta.innerHTML = '<div class="alert alert-error">⚠️ O arquivo excede 10 MB. Compacte o PDF e tente novamente.</div>';
+      return;
+    }
+
+    area.classList.add('has-file');
+    nome.textContent = `✓ ${file.name}`;
+    nome.style.display = '';
+    alerta.innerHTML = '';
+    area._file = file;
+  }
+
+  // ── Enviar candidatura ────────────────────────────────────────────────────────
+  async function enviarCandidatura(vagaId) {
+    const nome   = document.getElementById(`nome-${vagaId}`).value.trim();
+    const email  = document.getElementById(`email-${vagaId}`).value.trim();
+    const area   = document.getElementById(`upload-${vagaId}`);
+    const btn    = document.getElementById(`btn-${vagaId}`);
+    const alerta = document.getElementById(`alert-${vagaId}`);
+    const file   = area._file;
+
+    alerta.innerHTML = '';
+
+    if (!nome)  { alerta.innerHTML = '<div class="alert alert-error">⚠️ Informe seu nome completo.</div>'; document.getElementById(`nome-${vagaId}`).focus(); return; }
+    if (!email) { alerta.innerHTML = '<div class="alert alert-error">⚠️ Informe seu e-mail para contato.</div>'; document.getElementById(`email-${vagaId}`).focus(); return; }
+    if (!file)  { alerta.innerHTML = '<div class="alert alert-error">⚠️ Anexe seu currículo em PDF.</div>'; return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div><span>Processando... (pode levar até 30s)</span>';
+
+    try {
+      const pdf_base64 = await lerBase64(file);
+      const r = await fetch(`/api/public/ps/${token}/candidatar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vaga_id: vagaId, nome, email, pdf_base64, pdf_nome: file.name }),
+      });
+      const data = await r.json();
+
+      if (!r.ok || data.error) {
+        alerta.innerHTML = `<div class="alert alert-error">⚠️ ${data.error || 'Erro ao enviar. Tente novamente.'}</div>`;
+        btn.disabled = false;
+        btn.innerHTML = '<span>Enviar Currículo</span>';
+        return;
+      }
+
+      // Sucesso — substitui o form por mensagem
+      const formSection = document.getElementById(`form-section-${vagaId}`);
+      formSection.innerHTML = `
+        <div class="success-state">
+          <div class="success-icon">✅</div>
+          <div class="success-title">Currículo enviado com sucesso!</div>
+          <div class="success-sub">
+            <strong>${esc(nome)}</strong>, recebemos seu currículo para esta vaga.<br>
+            Entraremos em contato pelo e-mail <strong>${esc(email)}</strong> em breve.
+          </div>
+        </div>`;
+
+    } catch (err) {
+      alerta.innerHTML = `<div class="alert alert-error">⚠️ Erro de conexão. Verifique sua internet e tente novamente.</div>`;
+      btn.disabled = false;
+      btn.innerHTML = '<span>Enviar Currículo</span>';
+    }
+  }
+
+  function lerBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(e.target.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  init();
+</script>
+</body>
+</html>

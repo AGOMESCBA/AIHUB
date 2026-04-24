@@ -10,11 +10,20 @@
     .stat-card    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px; }
     .stat-val     { font-size:26px;font-weight:800;line-height:1; }
     .stat-lbl     { font-size:11.5px;color:var(--text-lo);margin-top:4px;text-transform:uppercase;letter-spacing:.04em; }
-    .filter-bar   { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center; }
-    .filter-bar .form-control { margin:0;height:36px;font-size:13px; }
-    .filter-bar select.form-control { min-width:130px; }
-    .filter-bar input[type="text"].form-control { min-width:200px; }
-    .filter-bar input[type="date"].form-control { min-width:138px; }
+    .filter-collapsible { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:18px;overflow:hidden; }
+    .filter-header { display:flex;align-items:center;padding:10px 18px;cursor:pointer;user-select:none;gap:10px; }
+    .filter-header:hover { background:var(--bg-hover); }
+    .filter-title  { font-size:13px;font-weight:600;color:var(--text-md); }
+    .filter-badge  { background:var(--accent);color:#fff;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;display:none; }
+    .filter-badge.visible { display:inline-block; }
+    .filter-arrow  { margin-left:auto;color:var(--text-lo);font-size:12px;transition:transform .2s; }
+    .filter-arrow.open { transform:rotate(180deg); }
+    .filter-body   { padding:12px 18px 14px;border-top:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center; }
+    .filter-body.hidden { display:none; }
+    .filter-body .form-control { margin:0;height:36px;font-size:13px; }
+    .filter-body select.form-control { min-width:130px; }
+    .filter-body input[type="text"].form-control { min-width:200px; }
+    .filter-body input[type="date"].form-control { min-width:138px; }
     .table-wrap   { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
     .data-table   { width:100%;border-collapse:collapse;font-size:13px; }
     .data-table th { font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);font-weight:600;padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg-hover);white-space:nowrap; }
@@ -82,12 +91,18 @@
         <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('ps')">
+        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-vagas">
+      <div class="submenu" id="sub-ps">
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
@@ -106,7 +121,7 @@
       <div class="user-info-text">
         <div class="user-name">Admin</div><div class="user-role">Administrador</div>
       </div>
-      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </nav>
 
@@ -126,23 +141,33 @@
         <div class="stat-card"><div class="stat-val" id="s-taxa" style="color:var(--accent-2)">—</div><div class="stat-lbl">Taxa de Sucesso</div></div>
       </div>
 
-      <!-- Filtros -->
-      <div class="filter-bar">
-        <input type="text" id="f-nome" class="form-control" placeholder="Buscar candidato..." oninput="aplicarFiltros()">
-        <select id="f-status" class="form-control" onchange="aplicarFiltros()">
-          <option value="">Todos os status</option>
-          <option value="sucesso">Sucesso (API)</option>
-          <option value="erro">Erro</option>
-          <option value="ignorado">Ignorado</option>
-          <option value="revertido">Revertido</option>
-        </select>
-        <select id="f-vaga" class="form-control" onchange="aplicarFiltros()">
-          <option value="">Todas as vagas</option>
-        </select>
-        <input type="date" id="f-de" class="form-control" title="De" onchange="aplicarFiltros()">
-        <input type="date" id="f-ate" class="form-control" title="Até" onchange="aplicarFiltros()">
-        <button class="btn btn-ghost" style="font-size:12px;height:36px" onclick="limparFiltros()">✕ Limpar</button>
-        <button class="btn btn-primary" style="font-size:12px;height:36px;margin-left:auto" onclick="carregar()">↻ Atualizar</button>
+      <!-- Filtros retráteis -->
+      <div class="filter-collapsible">
+        <div class="filter-header" onclick="toggleFiltros()">
+          <span class="filter-title">🔍 Filtros</span>
+          <span id="filter-badge" class="filter-badge"></span>
+          <span id="filter-arrow" class="filter-arrow">▾</span>
+        </div>
+        <div id="filter-body" class="filter-body hidden">
+          <input type="text" id="f-nome" class="form-control" placeholder="Buscar candidato..." oninput="aplicarFiltros()">
+          <select id="f-status" class="form-control" onchange="aplicarFiltros()">
+            <option value="">Todos os status</option>
+            <option value="sucesso">Sucesso (API)</option>
+            <option value="erro">Erro</option>
+            <option value="ignorado">Ignorado</option>
+            <option value="revertido">Revertido</option>
+          </select>
+          <select id="f-vaga" class="form-control" onchange="aplicarFiltros()">
+            <option value="">Todas as vagas</option>
+          </select>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="date" id="f-de" class="form-control" title="De" onchange="aplicarFiltros()" style="min-width:130px">
+            <span style="font-size:12px;color:var(--text-lo);white-space:nowrap">até</span>
+            <input type="date" id="f-ate" class="form-control" title="Até" onchange="aplicarFiltros()" style="min-width:130px">
+          </div>
+          <button class="btn btn-ghost" style="font-size:12px;height:36px" onclick="limparFiltros()">✕ Limpar</button>
+          <button class="btn btn-primary" style="font-size:12px;height:36px;margin-left:auto" onclick="carregar()">↻ Atualizar</button>
+        </div>
       </div>
 
       <!-- Tabela -->
@@ -188,7 +213,7 @@
     </div>
     <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
       <span id="xml-meta" style="font-size:12px;color:var(--text-lo);flex:1"></span>
-      <button class="btn btn-ghost" style="font-size:12px" onclick="copiarXML()">📋 Copiar XML</button>
+      <button class="btn btn-ghost" style="font-size:12px" onclick="copiarXML(this)">📋 Copiar XML</button>
     </div>
     <pre id="xml-content" style="background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-size:11.5px;font-family:monospace;line-height:1.6;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-all;color:var(--text-md);margin:0"></pre>
     <div style="margin-top:14px;display:flex;justify-content:flex-end">
@@ -217,6 +242,7 @@
   let totalRegistros = 0;
   let vagas = [];
   let dadosAtuais = [];
+  let currentDetailIdx = -1;
 
   async function carregar() {
     const nome     = document.getElementById('f-nome').value.trim();
@@ -296,17 +322,28 @@
         ? `<span class="ok-msg">Marcado manualmente como integrado</span>`
         : `<span class="ok-msg">Enviado via API com sucesso</span>`;
 
-      const lJson = JSON.stringify(l).replace(/</g,'\\u003c');
       const idx_abs = offset + i;
-      const xmlBtn = `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#6366f1${!l.xml_enviado ? ';opacity:.35;cursor:not-allowed' : ''}" onclick="event.stopPropagation();verXML(${idx_abs})" title="${l.xml_enviado ? 'Ver / copiar XML enviado' : 'XML não disponível (registro antigo)'}" ${!l.xml_enviado ? 'disabled' : ''}>📋 XML</button>`;
+      const xmlEnvioBtn = l.xml_enviado
+        ? `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#6366f1" onclick="event.stopPropagation();verConteudo(${idx_abs},'xml')" title="Ver XML enviado ao Softexpert">📋 XML Envio</button>`
+        : `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#6366f1;opacity:.35;cursor:not-allowed" disabled title="XML não disponível">📋 XML Envio</button>`;
+      const xmlRetBtn = l.resposta_api
+        ? `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#0891b2" onclick="event.stopPropagation();verConteudo(${idx_abs},'ret')" title="Ver XML de retorno da API">📋 XML Ret</button>`
+        : '';
+      const jsonBtn = l.curriculo_json
+        ? `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#059669" onclick="event.stopPropagation();verConteudo(${idx_abs},'json')" title="Ver JSON do currículo">📋 JSON</button>`
+        : '';
       let acoes = `<div style="display:flex;gap:4px;flex-wrap:wrap">`;
       if (l.status === 'erro' || l.status === 'revertido') {
-        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();reenviar(${lJson})">↺ Reenviar</button>`;
-        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#1d4ed8" onclick="event.stopPropagation();marcarOK(${lJson})">✓ Marcar OK</button>`;
+        if (l.ja_integrado) {
+          acoes += `<span style="font-size:11px;padding:3px 8px;color:var(--text-lo);font-style:italic" title="Já existe um envio com sucesso para este currículo nesta análise">✓ Já integrado</span>`;
+        } else {
+          acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();reenviar(${idx_abs})">↺ Reenviar</button>`;
+          acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#1d4ed8" onclick="event.stopPropagation();marcarOK(${idx_abs})">✓ Marcar OK</button>`;
+        }
       } else if (l.status === 'sucesso') {
-        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#92400e" onclick="event.stopPropagation();desvincular(${lJson})">↩ Desvincular</button>`;
+        acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 8px;color:#92400e" onclick="event.stopPropagation();desvincular(${idx_abs})">⇄ Mudar Status</button>`;
       }
-      acoes += xmlBtn + `</div>`;
+      acoes += xmlEnvioBtn + xmlRetBtn + jsonBtn + `</div>`;
 
       return `<tr class="clickable" onclick="verDetalhes(${offset + i})">
         <td style="color:var(--text-lo);font-size:12px">${offset + i + 1}</td>
@@ -353,8 +390,37 @@
     carregar();
   }
 
+  const FILTROS_KEY = 'se_curriculos_filtros';
+
+  function salvarFiltros() {
+    localStorage.setItem(FILTROS_KEY, JSON.stringify({
+      nome:   document.getElementById('f-nome').value,
+      status: document.getElementById('f-status').value,
+      vaga:   document.getElementById('f-vaga').value,
+      de:     document.getElementById('f-de').value,
+      ate:    document.getElementById('f-ate').value,
+    }));
+  }
+
+  function restaurarFiltros() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(FILTROS_KEY));
+      if (saved) {
+        document.getElementById('f-nome').value   = saved.nome   || '';
+        document.getElementById('f-status').value = saved.status || '';
+        document.getElementById('f-vaga').value   = saved.vaga   || '';
+        document.getElementById('f-de').value     = saved.de     || '';
+        document.getElementById('f-ate').value    = saved.ate    || '';
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
   function aplicarFiltros() {
     paginaAtual = 1;
+    salvarFiltros();
+    atualizarBadgeFiltros();
     carregar();
   }
 
@@ -368,6 +434,7 @@
   }
 
   let _expandCounter = 0;
+  let _modalLog = null;
   function expandBlock(id) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -376,15 +443,31 @@
     if (btn) btn.textContent = el.classList.contains('open') ? '▲ Recolher' : '▼ Expandir';
   }
 
-  function expandable(label, content, uid) {
+  function expandable(label, content, uid, copyLabel) {
     if (!content) return '';
+    const copyBtn = copyLabel
+      ? `<button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;margin-left:8px;height:auto" onclick="copiarExpandable('${uid}',this,'${copyLabel}')">📋 ${copyLabel}</button>`
+      : '';
     return `<div class="detail-item full">
-      <div class="detail-item-lbl">${label}</div>
+      <div class="detail-item-lbl" style="display:flex;align-items:center">${label}${copyBtn}</div>
       <div class="detail-item-val">
         <span class="expand-toggle" data-expand="${uid}" onclick="expandBlock('${uid}')">▼ Expandir</span>
         <div class="expand-content" id="${uid}">${esc(content)}</div>
       </div>
     </div>`;
+  }
+
+  async function copiarExpandable(uid, btn, label) {
+    const el = document.getElementById(uid);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.textContent);
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    } catch {
+      alert('Não foi possível copiar automaticamente. Selecione o texto e use Ctrl+C.');
+    }
   }
 
   function verDetalhes(idx) {
@@ -405,7 +488,7 @@
       : `<span class="badge-http err">${esc(l.se_status)}</span>`;
 
     const curricJson = l.curriculo_json ? JSON.stringify(l.curriculo_json, null, 2) : null;
-    const lJson = JSON.stringify(l).replace(/</g,'\\u003c');
+    _modalLog = l;
 
     document.getElementById('modal-body').innerHTML = `
       <div class="detail-grid">
@@ -491,18 +574,22 @@
           <div class="detail-item-lbl">Revertido em</div>
           <div class="detail-item-val">${new Date(l.revertido_em).toLocaleString('pt-BR')}</div>
         </div>` : ''}
-        ${expandable('Resposta da API (corpo completo)', l.resposta_api, `resp-${uid}`)}
-        ${expandable('XML Enviado (SOAP)', l.xml_enviado, `xml-${uid}`)}
-        ${expandable('JSON do Currículo Enviado', curricJson, `json-${uid}`)}
+        ${expandable('Resposta da API (XML Retorno)', l.resposta_api, `resp-${uid}`, 'XML Retorno')}
+        ${expandable('XML Enviado (SOAP)', l.xml_enviado, `xml-${uid}`, 'XML Envio')}
+        ${expandable('JSON do Currículo Enviado', curricJson, `json-${uid}`, 'JSON')}
       </div>`;
 
     const actions = document.getElementById('modal-actions');
     let btns = `<button class="btn btn-ghost" onclick="fecharModal()">Fechar</button>`;
     if (l.status === 'erro' || l.status === 'revertido') {
-      btns += `<button class="btn btn-ghost" style="color:#1d4ed8" onclick="fecharModal();marcarOK(${lJson})">✓ Marcar OK</button>`;
-      btns += `<button class="btn btn-primary" onclick="fecharModal();reenviar(${lJson})">↺ Reenviar</button>`;
+      if (l.ja_integrado) {
+        btns += `<span style="font-size:12px;color:var(--text-lo);font-style:italic;padding:0 8px">✓ Já integrado com sucesso — reverta o registro de sucesso para reenviar</span>`;
+      } else {
+        btns += `<button class="btn btn-ghost" style="color:#1d4ed8" onclick="fecharModal();marcarOK(_modalLog)">✓ Marcar OK</button>`;
+        btns += `<button class="btn btn-primary" onclick="fecharModal();reenviar(_modalLog)">↺ Reenviar</button>`;
+      }
     } else if (l.status === 'sucesso') {
-      btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="fecharModal();desvincular(${lJson})">↩ Desvincular</button>`;
+      btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="fecharModal();desvincular(_modalLog)">⇄ Mudar Status</button>`;
     }
     actions.innerHTML = btns;
 
@@ -514,6 +601,8 @@
   }
 
   async function reenviar(log) {
+    if (typeof log === 'number') log = dadosAtuais[log];
+    if (!log) return;
     if (!confirm(`Reenviar o currículo de "${log.curriculo_nome}" para o Softexpert?\n\nAnálise: ${log.analise_id}`)) return;
     try {
       const r = await fetch('/api/integracoes/se/reenviar', {
@@ -532,6 +621,8 @@
   }
 
   async function marcarOK(log) {
+    if (typeof log === 'number') log = dadosAtuais[log];
+    if (!log) return;
     if (!confirm(`Marcar "${log.curriculo_nome}" como integrado manualmente?\n\nIsso bloqueará o reenvio automático sem efetivamente enviar ao Softexpert.`)) return;
     try {
       const r = await fetch('/api/integracoes/se/marcar-integrado', {
@@ -549,7 +640,9 @@
   }
 
   async function desvincular(log) {
-    if (!confirm(`Desvincular integração de "${log.curriculo_nome}"?\n\nO status voltará para "Revertido" e o currículo poderá ser reenviado ao Softexpert.`)) return;
+    if (typeof log === 'number') log = dadosAtuais[log];
+    if (!log) return;
+    if (!confirm(`Mudar status de "${log.curriculo_nome}" para "Revertido"?\n\nO currículo ficará disponível para ser integrado novamente pela rotina Integrar Softexpert.`)) return;
     try {
       const r = await fetch('/api/integracoes/se/resetar', {
         method: 'POST',
@@ -558,37 +651,101 @@
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || 'Erro');
-      alert(`↩ Integração de "${log.curriculo_nome}" revertida. Ele será reenviado no próximo envio da análise.`);
+      alert(`⇄ Status de "${log.curriculo_nome}" alterado para Revertido. Ele poderá ser enviado no próximo Integrar Softexpert.`);
       carregar();
     } catch (err) {
       alert(`✗ Erro: ${err.message}`);
     }
   }
 
-  function verXML(idx) {
+  function toggleFiltros() {
+    const body  = document.getElementById('filter-body');
+    const arrow = document.getElementById('filter-arrow');
+    body.classList.toggle('hidden');
+    arrow.classList.toggle('open');
+  }
+
+  function atualizarBadgeFiltros() {
+    const ativos = [
+      document.getElementById('f-nome').value.trim(),
+      document.getElementById('f-status').value,
+      document.getElementById('f-vaga').value,
+      document.getElementById('f-de').value,
+      document.getElementById('f-ate').value,
+    ].filter(Boolean).length;
+    const badge = document.getElementById('filter-badge');
+    if (ativos > 0) {
+      badge.textContent = ativos;
+      badge.classList.add('visible');
+    } else {
+      badge.classList.remove('visible');
+    }
+  }
+
+  function verConteudo(idx, tipo) {
     const l = dadosAtuais[idx];
-    if (!l || !l.xml_enviado) return;
-    document.getElementById('xml-titulo').textContent = `XML — ${l.curriculo_nome || '—'}`;
+    if (!l) return;
+    let conteudo, titulo, subtipo;
+    if (tipo === 'xml') {
+      conteudo = l.xml_enviado;
+      titulo   = `XML Envio — ${l.curriculo_nome || '—'}`;
+      subtipo  = 'XML enviado ao Softexpert';
+    } else if (tipo === 'ret') {
+      conteudo = l.resposta_api;
+      titulo   = `XML Retorno — ${l.curriculo_nome || '—'}`;
+      subtipo  = 'Resposta da API';
+    } else if (tipo === 'json') {
+      conteudo = typeof l.curriculo_json === 'object' && l.curriculo_json
+        ? JSON.stringify(l.curriculo_json, null, 2)
+        : l.curriculo_json;
+      titulo   = `JSON — ${l.curriculo_nome || '—'}`;
+      subtipo  = 'JSON do currículo';
+    }
+    if (!conteudo) return;
+    document.getElementById('xml-titulo').textContent = titulo;
     document.getElementById('xml-meta').textContent =
-      `Análise: ${l.analise_id || '—'} · Vaga: ${l.vaga_nome || '—'} · ${new Date(l.data_envio).toLocaleString('pt-BR')}`;
-    document.getElementById('xml-content').textContent = l.xml_enviado;
+      `Análise: ${l.analise_id || '—'} · Vaga: ${l.vaga_nome || '—'} · ${new Date(l.data_envio).toLocaleString('pt-BR')} · ${subtipo}`;
+    document.getElementById('xml-content').textContent = conteudo;
     document.getElementById('modal-xml').classList.remove('d-none');
   }
+
+  function verXML(idx) { verConteudo(idx, 'xml'); }
 
   function fecharModalXML() {
     document.getElementById('modal-xml').classList.add('d-none');
   }
 
-  async function copiarXML() {
-    const xml = document.getElementById('xml-content').textContent;
-    try {
-      await navigator.clipboard.writeText(xml);
-      const btn = event.target;
-      btn.textContent = '✓ Copiado!';
-      setTimeout(() => { btn.textContent = '📋 Copiar XML'; }, 2000);
-    } catch {
-      alert('Não foi possível copiar automaticamente. Selecione o texto e use Ctrl+C.');
+  function copiarTexto(texto, btn, labelOrig) {
+    const ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+    if (!ok && navigator.clipboard) {
+      navigator.clipboard.writeText(texto).catch(() => {});
+      ok = true;
     }
+    if (btn) {
+      const orig = labelOrig || btn.textContent;
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    }
+    if (!ok) alert('Não foi possível copiar. Selecione o texto e use Ctrl+C.');
+  }
+
+  function copiarXML(btn) {
+    const xml = document.getElementById('xml-content').textContent;
+    copiarTexto(xml, btn, '📋 Copiar XML');
+  }
+
+  async function copiarExpandable(uid, btn, label) {
+    const el = document.getElementById(uid);
+    if (!el) return;
+    copiarTexto(el.textContent, btn, `📋 ${label}`);
   }
 
   document.addEventListener('keydown', e => {
@@ -596,6 +753,12 @@
   });
 
   (async () => {
+    const temSalvo = restaurarFiltros();
+    if (!temSalvo) {
+      // Primeira visita: filtra por hoje como padrão
+      document.getElementById('f-de').value = new Date().toISOString().split('T')[0];
+    }
+    atualizarBadgeFiltros();
     await carregarVagas();
     await carregar();
   })();

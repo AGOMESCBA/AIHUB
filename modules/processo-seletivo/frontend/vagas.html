@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vagas por Função — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(520px,95vw);max-height:90vh;overflow-y:auto;padding:28px; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
+    .modal-close:hover { color:var(--text-hi); }
+    .modal-footer  { display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .vagas-grid    { display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px; }
+    .vaga-card     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:border-color .2s; }
+    .vaga-card:hover { border-color:var(--accent); }
+    .vaga-funcao   { font-size:15px;font-weight:700;color:var(--text-hi);margin-bottom:6px; }
+    .vaga-meta     { font-size:12.5px;color:var(--text-lo);margin-bottom:14px; }
+    .vaga-count    { font-size:32px;font-weight:800;color:var(--accent-light);line-height:1; }
+    .vaga-count-label { font-size:12px;color:var(--text-lo);margin-top:2px; }
+    .vaga-status   { display:inline-flex;align-items:center;gap:5px;font-size:12px;margin-top:10px; }
+    .dot           { width:8px;height:8px;border-radius:50%;display:inline-block; }
+    .dot-aberta    { background:var(--success); }
+    .dot-pausada   { background:var(--warning); }
+    .dot-encerrada { background:var(--error); }
+    .vaga-actions  { display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border); }
+    .nivel-badge   { padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600; }
+    .nivel-junior  { background:#0c2744;color:var(--accent-light); }
+    .nivel-pleno   { background:#14532d;color:var(--success); }
+    .nivel-senior  { background:#2d1e00;color:var(--warning); }
+    .nivel-especialista { background:#1e0c3a;color:#a78bfa; }
+    .nivel-nao-especificado { background:var(--bg-hover);color:var(--text-lo); }
+    .empty-state   { text-align:center;padding:80px 20px;color:var(--text-lo); }
+    .empty-state div { font-size:48px;margin-bottom:12px; }
+    .stats-row     { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px; }
+    .stat-mini     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px; }
+    .stat-mini-val { font-size:22px;font-weight:700;color:var(--accent-light); }
+    .stat-mini-lbl { font-size:11.5px;color:var(--text-lo);margin-top:2px; }
+    .badge-cand    { background:rgba(37,99,235,.1);color:var(--accent);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+      <div class="nav-section-title">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
+        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-whatsapp">
+        <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
+        <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
+        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
+      <div class="nav-parent" onclick="toggleSubmenu('processo-seletivo')">
+        <span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-processo-seletivo">
+        <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
+        <a href="/vagas.html" class="nav-item sub active"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🌐</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
+        <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
+        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Integrações</div>
+      <div class="nav-parent" onclick="toggleSubmenu('se-curriculo')">
+        <span class="nav-icon">🔗</span><span class="nav-label">Integrações</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-se-curriculo">
+        <a href="/se-curriculos.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">SE Currículos</span></a>
+      </div>
+      <div class="nav-section-title" style="margin-top:12px">Sistema</div>
+      <a href="/configuracoes.html" class="nav-item"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-avatar">A</div>
+      <div class="user-info-text">
+        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">Vagas por Função</span>
+      <span class="topbar-breadcrumb ms-auto">Recrutamento › Processo Seletivo › Vagas</span>
+    </div>
+
+    <div class="page-content">
+      <div class="stats-row" id="stats-row"></div>
+
+      <div class="d-flex gap-3 mb-3" style="align-items:center">
+        <span style="font-size:13.5px;color:var(--text-md)">Vagas cadastradas</span>
+        <div class="ms-auto">
+          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Vaga</button>
+        </div>
+      </div>
+
+      <div id="vagas-grid" class="vagas-grid"></div>
+      <div id="empty" class="empty-state d-none">
+        <div>💼</div>
+        <strong style="color:var(--text-md)">Nenhuma vaga cadastrada</strong>
+        <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Vaga</strong> para começar.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="modal-overlay d-none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nova Vaga</span>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Função *</label>
+      <select id="v-funcao" class="form-control"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Quantidade de Vagas *</label>
+      <input type="number" id="v-qtd" class="form-control" min="1" value="1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Status</label>
+      <select id="v-status" class="form-control">
+        <option value="aberta">Aberta</option>
+        <option value="pausada">Pausada</option>
+        <option value="encerrada">Encerrada</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observações</label>
+      <textarea id="v-obs" class="form-control" rows="3" style="resize:vertical;min-height:70px;font-family:inherit;box-sizing:border-box" placeholder="Informações adicionais sobre esta vaga..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvar()">Salvar Vaga</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  const NIVEIS = {
+    'Júnior': 'nivel-junior', 'Pleno': 'nivel-pleno',
+    'Sênior': 'nivel-senior', 'Especialista': 'nivel-especialista',
+    'Não especificado': 'nivel-nao-especificado',
+  };
+  const STATUS_DOT   = { aberta: 'dot-aberta', pausada: 'dot-pausada', encerrada: 'dot-encerrada' };
+  const STATUS_LABEL = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' };
+
+  let vagas = [], funcoes = [], analises = [], candidaturas = [], editandoId = null;
+
+  async function carregar() {
+    [vagas, funcoes, analises, candidaturas] = await Promise.all([
+      fetch('/api/vagas').then(r => r.json()),
+      fetch('/api/funcoes').then(r => r.json()),
+      fetch('/api/analises').then(r => r.json()),
+      fetch('/api/ps/candidaturas').then(r => r.json()),
+    ]);
+    renderStats();
+    renderGrid();
+  }
+
+  function renderStats() {
+    const total    = vagas.reduce((s, v) => s + (v.quantidade || 0), 0);
+    const abertas  = vagas.filter(v => v.status === 'aberta').reduce((s, v) => s + (v.quantidade || 0), 0);
+    const totalCand = candidaturas.length;
+    document.getElementById('stats-row').innerHTML = `
+      <div class="stat-mini"><div class="stat-mini-val">${total}</div><div class="stat-mini-lbl">Total de vagas</div></div>
+      <div class="stat-mini"><div class="stat-mini-val" style="color:var(--success)">${abertas}</div><div class="stat-mini-lbl">Vagas abertas</div></div>
+      <div class="stat-mini"><div class="stat-mini-val" style="color:var(--accent)">${totalCand}</div><div class="stat-mini-lbl">Candidaturas recebidas</div></div>
+    `;
+  }
+
+  function renderGrid() {
+    const grid  = document.getElementById('vagas-grid');
+    const empty = document.getElementById('empty');
+    if (!vagas.length) { grid.innerHTML = ''; empty.classList.remove('d-none'); return; }
+    empty.classList.add('d-none');
+    grid.innerHTML = vagas.map(v => {
+      const f            = v.funcao || {};
+      const vagaAnalises = analises.filter(a => a.vaga_id === v.id);
+      const vagaCand     = candidaturas.filter(c => c.vaga_id === v.id).length;
+      const nivelCls     = NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado';
+      return `
+      <div class="vaga-card">
+        <div class="vaga-funcao">${f.nome || '—'}</div>
+        <div class="vaga-meta">
+          ${f.area ? `<span>${f.area}</span>` : ''}
+          ${f.nivel_experiencia ? `&nbsp;·&nbsp;<span class="nivel-badge ${nivelCls}">${f.nivel_experiencia}</span>` : ''}
+        </div>
+        <div class="vaga-count">${v.quantidade}</div>
+        <div class="vaga-count-label">vaga${v.quantidade !== 1 ? 's' : ''} disponível${v.quantidade !== 1 ? 'eis' : ''}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <div class="vaga-status">
+            <span class="dot ${STATUS_DOT[v.status] || 'dot-aberta'}"></span>
+            <span style="color:var(--text-md)">${STATUS_LABEL[v.status] || v.status}</span>
+          </div>
+          ${vagaCand > 0 ? `<span class="badge-cand">📋 ${vagaCand} candidatura${vagaCand !== 1 ? 's' : ''}</span>` : ''}
+        </div>
+        ${v.observacoes ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-lo);line-height:1.6">${v.observacoes}</div>` : ''}
+        <div class="vaga-actions">
+          ${v.status === 'encerrada'
+            ? `<span class="btn btn-ghost" style="font-size:12px;flex:1;text-align:center;opacity:.45;cursor:not-allowed">🔒 Encerrada</span>`
+            : `<a href="/analisador.html?vaga_id=${v.id}" class="btn btn-info" style="font-size:12px;flex:1;text-align:center">🔍 Analisar</a>`
+          }
+          ${v.status === 'encerrada'
+            ? `<button class="btn btn-ghost" style="font-size:12px;opacity:.45;cursor:not-allowed" disabled>✏️ Editar</button>`
+            : `<button class="btn btn-ghost" style="font-size:12px" onclick="editar(${v.id})">✏️ Editar</button>`
+          }
+          ${v.status === 'encerrada'
+            ? `<button class="btn btn-ghost" style="font-size:12px;opacity:.45;cursor:not-allowed" disabled>🗑</button>`
+            : `<button class="btn btn-danger" style="font-size:12px" onclick="excluir(${v.id})">🗑</button>`
+          }
+        </div>
+        ${vagaAnalises.length ? `
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:12px;color:var(--text-lo)">Última análise: <strong style="color:var(--text-md)">${new Date(vagaAnalises[0].data).toLocaleDateString('pt-BR')}</strong></div>
+            <div style="font-size:11.5px;color:var(--text-lo)">${vagaAnalises[0].total_analisados} analisados · ${vagaAnalises[0].finalistas_count} finalista${vagaAnalises[0].finalistas_count !== 1 ? 's' : ''}</div>
+          </div>
+          <a href="/historico.html?vaga_id=${v.id}" class="btn btn-ghost ms-auto" style="font-size:12px">📊 Ver Análises (${vagaAnalises.length})</a>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  async function abrirModal(v = null) {
+    editandoId = v ? v.id : null;
+    document.getElementById('modal-title').textContent = v ? 'Editar Vaga' : 'Nova Vaga';
+    const sel = document.getElementById('v-funcao');
+    sel.innerHTML = funcoes.length
+      ? funcoes.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')
+      : '<option value="">Nenhuma função cadastrada</option>';
+    if (v) {
+      sel.value = v.funcao_id;
+      document.getElementById('v-qtd').value    = v.quantidade || 1;
+      document.getElementById('v-status').value = v.status || 'aberta';
+      document.getElementById('v-obs').value    = v.observacoes || '';
+    } else {
+      document.getElementById('v-qtd').value    = 1;
+      document.getElementById('v-status').value = 'aberta';
+      document.getElementById('v-obs').value    = '';
+    }
+    document.getElementById('modal').classList.remove('d-none');
+  }
+
+  function fecharModal() { document.getElementById('modal').classList.add('d-none'); }
+
+  async function salvar() {
+    const funcao_id  = Number(document.getElementById('v-funcao').value);
+    const quantidade = Number(document.getElementById('v-qtd').value);
+    if (!funcao_id)   { alert('Selecione uma função.'); return; }
+    if (quantidade < 1) { alert('A quantidade deve ser pelo menos 1.'); return; }
+    const body = {
+      funcao_id, quantidade,
+      status:      document.getElementById('v-status').value,
+      observacoes: document.getElementById('v-obs').value.trim(),
+    };
+    const url    = editandoId ? `/api/vagas/${editandoId}` : '/api/vagas';
+    const method = editandoId ? 'PUT' : 'POST';
+    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    fecharModal();
+    carregar();
+  }
+
+  async function editar(id) {
+    const v = await fetch(`/api/vagas/${id}`).then(r => r.json());
+    await abrirModal(v);
+  }
+
+  async function excluir(id) {
+    if (!confirm('Excluir esta vaga? Esta ação não pode ser desfeita.')) return;
+    await fetch(`/api/vagas/${id}`, { method: 'DELETE' });
+    carregar();
+  }
+
+  carregar();
+</script>
+</body>
+</html>

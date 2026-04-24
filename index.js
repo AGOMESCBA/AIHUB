@@ -24,6 +24,7 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'configuracoes', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
+app.use(express.static(path.join(__dirname, 'modules', 'processo-seletivo', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
 
@@ -60,6 +61,9 @@ require('./modules/configuracoes/routes')(app, { requireAuth });
 
 // ── Módulo WhatsApp Currículo ─────────────────────────────────────────────────
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, registrarLog, io });
+
+// ── Módulo Processo Seletivo ──────────────────────────────────────────────────
+require('./modules/processo-seletivo/routes')(app, { requireAuth, registrarLog });
 
 // ── Módulo Analisador de Currículos ───────────────────────────────────────────
 require('./modules/analisador-curriculos/routes')(app, { requireAuth, registrarLog, io });

@@ -159,14 +159,25 @@ module.exports = function (app, { requireAuth, registrarLog }) {
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
-    const analise  = anDb.getAnalise(analise_id);
-    if (!analise) return res.status(404).json({ error: 'Análise não encontrada' });
-
     const curriculo = anDb.listCurriculos().find(c => c.id === Number(curriculo_id));
     if (!curriculo) return res.status(404).json({ error: 'Currículo não encontrado' });
 
+    // Se a análise foi excluída, usa dados do log existente como fallback
+    const analise   = anDb.getAnalise(analise_id);
+    let   vagaId    = analise?.vaga_id    ?? null;
+    let   vagaNome  = analise?.funcao_nome ?? null;
+    if (!analise) {
+      const logExist = db.listLogs({ analise_id, limit: 1 }).logs[0];
+      vagaId   = logExist?.vaga_id  ?? null;
+      vagaNome = logExist?.vaga_nome ?? null;
+    }
+
     const config = db.getConfig();
     if (!config.se_token) return res.status(400).json({ error: 'Token SE não configurado' });
+
+    if (db.jaIntegrado(Number(curriculo_id), analise_id)) {
+      return res.status(409).json({ error: 'Este currículo já foi integrado com sucesso nesta análise. Use "Reverter" antes de reenviar.' });
+    }
 
     const xml_enviado = service.montarSoapResumido(curriculo);
     const tem_anexo   = !!(curriculo.pdf_base64 && curriculo.pdf_nome);
@@ -174,7 +185,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
     try {
       const resultado = await service.enviarParaSE(curriculo, config);
       db.saveLog({
-        analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
+        analise_id, vaga_id: vagaId, vaga_nome: vagaNome,
         curriculo_id: curriculo.id, curriculo_nome: curriculo.nome || '—',
         curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
         status: 'sucesso', erro_mensagem: null,
@@ -197,7 +208,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
     } catch (err) {
       const msg = err.message || 'Erro desconhecido';
       db.saveLog({
-        analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
+        analise_id, vaga_id: vagaId, vaga_nome: vagaNome,
         curriculo_id: curriculo.id, curriculo_nome: curriculo.nome || '—',
         curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
         status: 'erro', erro_mensagem: msg,
@@ -239,14 +250,20 @@ module.exports = function (app, { requireAuth, registrarLog }) {
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
-    const analise   = anDb.getAnalise(analise_id);
-    if (!analise) return res.status(404).json({ error: 'Análise não encontrada' });
-
     const curriculo = anDb.listCurriculos().find(c => c.id === Number(curriculo_id));
     if (!curriculo) return res.status(404).json({ error: 'Currículo não encontrado' });
 
+    const analise   = anDb.getAnalise(analise_id);
+    let   vagaId    = analise?.vaga_id    ?? null;
+    let   vagaNome  = analise?.funcao_nome ?? null;
+    if (!analise) {
+      const logExist = db.listLogs({ analise_id, limit: 1 }).logs[0];
+      vagaId   = logExist?.vaga_id  ?? null;
+      vagaNome = logExist?.vaga_nome ?? null;
+    }
+
     db.marcarIntegradoManual({
-      analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
+      analise_id, vaga_id: vagaId, vaga_nome: vagaNome,
       curriculo_id: curriculo.id, curriculo_nome: curriculo.nome || '—',
       curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
       erro_mensagem: null,
