@@ -21,6 +21,8 @@ module.exports = {
     return {
       tipo: 'gmail', email: '', senha: '',
       smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_secure: true, family: 4,
+      imap_host: 'imap.gmail.com', imap_port: 993, imap_secure: true,
+      imap_intervalo_min: 2,
       ...(d.email_config || {}),
     };
   },
@@ -39,6 +41,43 @@ module.exports = {
 
   getSenhaReal() {
     return load().email_config?.senha || '';
+  },
+
+  // ── Email Geral Config ────────────────────────────────────────────────────────
+  getEmailGeralConfig() {
+    const d = load();
+    return {
+      tipo: 'gmail', email: '', senha: '',
+      smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_secure: true, family: 4,
+      imap_host: 'imap.gmail.com', imap_port: 993, imap_secure: true,
+      ...(d.email_geral_config || {}),
+    };
+  },
+
+  setEmailGeralConfig(cfg) {
+    const d = load();
+    const current = this.getEmailGeralConfig();
+    d.email_geral_config = {
+      ...current,
+      ...cfg,
+      senha: (cfg.senha && cfg.senha !== '••••••••') ? cfg.senha : current.senha,
+    };
+    persist(d);
+  },
+
+  getSenhaGeralReal() {
+    return load().email_geral_config?.senha || '';
+  },
+
+  // ── Email Templates ───────────────────────────────────────────────────────────
+  getEmailTemplates() {
+    return load().email_templates || {};
+  },
+
+  setEmailTemplates(tpl) {
+    const d = load();
+    d.email_templates = { ...(d.email_templates || {}), ...tpl };
+    persist(d);
   },
 
   // ── Token Público ─────────────────────────────────────────────────────────────
@@ -97,6 +136,22 @@ module.exports = {
     return (load().vaga_candidaturas || [])
       .filter(c => c.vaga_id === vagaId)
       .map(c => c.curriculo_id);
+  },
+
+  findCandidaturaByVagaAndCandidato(vagaId, email, nome) {
+    const lista = load().vaga_candidaturas || [];
+    return lista.find(c => {
+      if (c.vaga_id !== Number(vagaId)) return false;
+      if (email && c.candidato_email && c.candidato_email.toLowerCase() === email.toLowerCase()) return true;
+      if (nome && c.candidato_nome && c.candidato_nome.toLowerCase() === nome.toLowerCase()) return true;
+      return false;
+    }) || null;
+  },
+
+  updateCandidaturaCurriculoId(id, curriculo_id) {
+    const d = load();
+    const c = (d.vaga_candidaturas || []).find(c => c.id === id);
+    if (c) { c.curriculo_id = Number(curriculo_id); persist(d); }
   },
 
   saveCandidatura({ vaga_id, curriculo_id, canal, candidato_nome, candidato_email }) {

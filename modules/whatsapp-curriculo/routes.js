@@ -66,9 +66,18 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   // ── Stats ─────────────────────────────────────────────────────────────────
   app.get('/api/stats', requireAuth, (_req, res) => {
     const curriculos = db.listCurriculos();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const isWA    = c => !c.remetente?.startsWith('email-externo:') && !c.remetente?.startsWith('ps:');
+    const isEmail = c =>  c.remetente?.startsWith('email-externo:');
     res.json({
-      total:  curriculos.length,
-      hoje:   curriculos.filter(c => c.recebido_em?.startsWith(new Date().toISOString().slice(0, 10))).length,
+      wa: {
+        total: curriculos.filter(isWA).length,
+        hoje:  curriculos.filter(c => isWA(c) && c.recebido_em?.startsWith(hoje)).length,
+      },
+      email: {
+        total: curriculos.filter(isEmail).length,
+        hoje:  curriculos.filter(c => isEmail(c) && c.recebido_em?.startsWith(hoje)).length,
+      },
       status: whatsapp.getStatus(),
     });
   });

@@ -451,11 +451,18 @@ module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, 
 
   // ── Analisador ───────────────────────────────────────────────────────────────
   app.post('/api/analisador/analisar', requireAuth, async (req, res) => {
-    const { funcao_id, vaga_id } = req.body;
+    const { funcao_id, vaga_id, somente_vaga } = req.body;
     const funcao = db.getFuncao(Number(funcao_id));
     if (!funcao) return res.status(404).json({ error: 'Função não encontrada' });
 
-    const curriculos = db.listCurriculos();
+    let curriculos = db.listCurriculos();
+
+    if (somente_vaga && vaga_id) {
+      const psDb = require('../processo-seletivo/database');
+      const ids  = psDb.getCurriculoIdsByVaga(Number(vaga_id));
+      curriculos = curriculos.filter(c => ids.includes(c.id));
+    }
+
     if (!curriculos.length) return res.json({ resultados: [], eliminados: [], total: 0 });
 
     try {

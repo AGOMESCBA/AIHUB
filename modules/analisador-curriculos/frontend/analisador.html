@@ -72,7 +72,9 @@
     .modal-box-foot { display:flex;justify-content:flex-end;gap:10px; }
     /* Ajuda */
     .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:center;justify-content:center; }
-    .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(600px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(820px,96vw);max-height:93vh;overflow-y:auto;padding:32px;position:relative; }
+    .btn-ajuda-topbar { display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.25); }
+    .btn-ajuda-topbar:hover { background:#1d4ed8; }
     .ajuda-titulo { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px; }
     .ajuda-etapa  { margin-bottom:20px; }
     .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px; }
@@ -81,6 +83,37 @@
     .ajuda-pts { background:var(--bg-hover);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;min-width:48px;text-align:center; }
     .ajuda-criterio-info strong { font-size:13px;color:var(--text-hi); }
     .ajuda-criterio-info p { font-size:12px;color:var(--text-lo);margin:2px 0 0; }
+    /* Abas do modal de ajuda */
+    .ajuda-tabs { display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px; }
+    .ajuda-tab  { background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text-lo);cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s;margin-bottom:-1px; }
+    .ajuda-tab:hover { color:var(--text-hi); }
+    .ajuda-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .ajuda-tab-content { display:none; }
+    .ajuda-tab-content.active { display:block; }
+    /* Créditos de IA */
+    .ia-card { border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px; }
+    .ia-card-header { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+    .ia-badge { font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap; }
+    .ia-badge-primary { background:#dbeafe;color:#1e40af; }
+    .ia-badge-fallback { background:#fef3c7;color:#92400e; }
+    .ia-card-title { font-size:14px;font-weight:700;color:var(--text-hi); }
+    .ia-card p { font-size:12.5px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ia-card p:last-child { margin:0; }
+    .ia-ops { background:var(--bg-hover);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:var(--text-md);line-height:2; }
+    .ia-ops strong { color:var(--text-hi); }
+    .ia-link { display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:8px;padding:5px 12px;margin-top:6px;transition:background .15s; }
+    .ia-link:hover { background:#eff6ff; }
+    .credito-calc { background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-top:16px; }
+    .credito-calc-title { font-size:13px;font-weight:700;color:#15803d;margin-bottom:8px; }
+    .credito-calc p { font-size:12.5px;color:#166534;line-height:1.8;margin:0; }
+    /* Fluxo visual */
+    .fluxo-step { display:flex;gap:14px;margin-bottom:18px; }
+    .fluxo-num  { flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center; }
+    .fluxo-body { flex:1; }
+    .fluxo-title { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .fluxo-desc  { font-size:12.5px;color:var(--text-md);line-height:1.75; }
+    .fluxo-sub   { font-size:12px;color:var(--text-lo);margin-top:6px;padding-left:12px;border-left:2px solid var(--border);line-height:1.8; }
+    .fluxo-divider { border:none;border-top:1px solid var(--border);margin:4px 0 18px; }
   </style>
 </head>
 <body>
@@ -93,21 +126,27 @@
     </div>
     <div class="sidebar-nav">
       <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
-        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
+        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-whatsapp">
+      <div class="submenu" id="sub-monitoramento">
         <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
         <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      <div class="nav-parent" onclick="toggleSubmenu('ps')">
+        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-vagas">
+      <div class="submenu" id="sub-ps">
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
         <a href="/analisador.html" class="nav-item sub active"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
@@ -126,34 +165,48 @@
       <div class="user-info-text">
         <div class="user-name">Admin</div><div class="user-role">Administrador</div>
       </div>
-      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </nav>
 
   <div class="main">
     <div class="topbar">
       <span class="topbar-title">Analisador de Currículos</span>
-      <span class="topbar-breadcrumb ms-auto">Recrutamento › Analisador</span>
+      <div class="ms-auto" style="display:flex;align-items:center;gap:14px">
+        <button class="btn-ajuda-topbar" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor" stroke="none"/></svg>
+          Ajuda · Como funciona
+        </button>
+        <span class="topbar-breadcrumb">Recrutamento › Analisador</span>
+      </div>
     </div>
 
     <div class="page-content">
       <div class="card mb-4">
         <div class="card-header">🔍 Selecione a Vaga para Análise</div>
         <div class="card-body">
-          <div class="filtros">
+          <div class="filtros" style="align-items:center;flex-wrap:wrap">
             <select id="sel-vaga" class="form-control select-vaga">
               <option value="">— Selecione uma vaga —</option>
             </select>
             <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>▶ Analisar Currículos</button>
-            <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')" title="Como funciona a análise" style="font-size:16px;padding:6px 12px">?</button>
-            <select id="filtro-nivel" class="form-control" style="max-width:220px" onchange="filtrarResultados()">
+            <select id="filtro-nivel" class="form-control" style="max-width:200px" onchange="filtrarResultados()">
               <option value="">Filtrar por compatibilidade</option>
-              <option value="Alto">✓ Alta compatibilidade (70–100 pts)</option>
-              <option value="Médio">~ Média compatibilidade (40–69 pts)</option>
-              <option value="Baixo">● Baixa compatibilidade (0–39 pts)</option>
+              <option value="Alto">✓ Alta (70–100 pts)</option>
+              <option value="Médio">~ Média (40–69 pts)</option>
+              <option value="Baixo">● Baixa (0–39 pts)</option>
             </select>
+            <div id="filtro-curriculos-box" style="display:none;padding:6px 12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border)">
+              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:5px;font-size:12px;white-space:nowrap">
+                <input type="radio" name="radio-filtro-cv" value="todos" checked> Todos os currículos
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;white-space:nowrap" id="label-somente-vaga">
+                <input type="radio" name="radio-filtro-cv" value="somente_vaga" id="radio-somente-vaga" disabled>
+                <span id="texto-somente-vaga">Apenas desta vaga</span>
+              </label>
+            </div>
           </div>
-          <div id="vaga-info" style="display:none;margin-top:12px;padding:14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.8"></div>
+          <div id="vaga-info" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.7"></div>
         </div>
       </div>
 
@@ -177,61 +230,273 @@
 <!-- Modal Ajuda -->
 <div id="modal-ajuda" class="modal-ajuda-overlay d-none" onclick="if(event.target===this)this.classList.add('d-none')">
   <div class="modal-ajuda">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-      <div class="ajuda-titulo" style="margin:0">🔍 Como funciona a Análise de Currículos</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="ajuda-titulo" style="margin:0">🔍 Análise de Currículos — Ajuda</div>
       <button onclick="document.getElementById('modal-ajuda').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
     </div>
 
-    <div class="ajuda-etapa">
-      <div class="ajuda-etapa-titulo">⚡ Etapa 1 — Triagem automática</div>
-      <p>Antes de qualquer análise detalhada, o sistema faz uma triagem rápida em todos os currículos verificando os <strong style="color:var(--text-hi)">Requisitos Obrigatórios</strong> e as <strong style="color:var(--text-hi)">Habilidades Técnicas</strong> cadastrados na Função.</p>
-      <p>Quem <strong style="color:var(--error)">não atende</strong> esses critérios mínimos é eliminado e não entra na análise profunda.</p>
+    <div class="ajuda-tabs">
+      <button class="ajuda-tab active" id="tab-btn-como-funciona" onclick="switchAjudaTab('como-funciona')">📖 Como funciona</button>
+      <button class="ajuda-tab" id="tab-btn-fluxo" onclick="switchAjudaTab('fluxo')">🔄 Fluxo da análise</button>
+      <button class="ajuda-tab" id="tab-btn-creditos" onclick="switchAjudaTab('creditos')">💳 Créditos de IA</button>
+      <button class="ajuda-tab" id="tab-btn-equivalencias" onclick="switchAjudaTab('equivalencias')">⚡ Equivalências</button>
     </div>
 
-    <div class="ajuda-etapa">
-      <div class="ajuda-etapa-titulo">📊 Etapa 2 — Pontuação por critérios (máx. 100 pts)</div>
-      <p>Os candidatos que passaram da triagem são analisados individualmente pela IA:</p>
-      <div class="ajuda-criterio">
-        <div class="ajuda-pts">40 pts</div>
-        <div class="ajuda-criterio-info">
-          <strong>Requisitos Obrigatórios</strong>
-          <p>Atende tudo = 40 pts. Parcialmente = 20 pts. Não atende = 0 pts <em>(score máximo cai para 25)</em>.</p>
+    <!-- Aba: Como funciona -->
+    <div id="tab-como-funciona" class="ajuda-tab-content active">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">⚡ Etapa 1 — Triagem automática</div>
+        <p>Antes de qualquer análise detalhada, o sistema faz uma triagem rápida em todos os currículos verificando os <strong style="color:var(--text-hi)">Requisitos Obrigatórios</strong> cadastrados na Função.</p>
+        <p>Quem <strong style="color:var(--error)">não atende</strong> esses critérios mínimos é eliminado e não entra na análise profunda.</p>
+      </div>
+
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">📊 Etapa 2 — Pontuação por critérios (máx. 100 pts)</div>
+        <p>Os candidatos que passaram da triagem são analisados individualmente pela IA:</p>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">40 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Requisitos Obrigatórios</strong>
+            <p>Atende tudo = 40 pts. Parcialmente (>50%) = 20–35 pts. Poucos (<50%) = 5–15 pts. Nenhum = 0 pts <em>(score máximo cai para 25)</em>.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">30 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Habilidades Técnicas</strong>
+            <p>Domínio das ferramentas e tecnologias listadas na vaga. Considera equivalências (ex: "SoftExpert" = "SE Suite").</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">15 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Nível e Tempo de Experiência Relevante</strong>
+            <p>O sistema calcula o tempo total de carreira e a IA avalia o tempo relevante para a vaga específica, classificando como Júnior / Pleno / Sênior. O nível do candidato é comparado ao exigido na função.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">15 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Formação Acadêmica</strong>
+            <p>A formação atende ou supera o definido na Função.</p>
+          </div>
         </div>
       </div>
-      <div class="ajuda-criterio">
-        <div class="ajuda-pts">30 pts</div>
-        <div class="ajuda-criterio-info">
-          <strong>Habilidades Técnicas</strong>
-          <p>Domínio das ferramentas e tecnologias listadas na vaga.</p>
+
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">✅ Etapa 3 — Encerrar Análise da Vaga</div>
+        <p>Após revisar os resultados, marque os candidatos finalistas (checkbox em cada card ou use <strong>Marcar todos</strong>) e clique em <strong>Encerrar Análise da Vaga</strong>. O resultado fica salvo no <a href="/historico.html" style="color:var(--accent)">Histórico de Análises</a> e pode ser consultado ou regenerado a qualquer momento.</p>
+        <p>O ID da análise é único por vaga e por dia — se você rodar a análise novamente no mesmo dia, o sistema perguntará antes de sobrepor.</p>
+      </div>
+
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
+        <p>Compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong>, <strong style="color:#a16207">Médio (40–69 pts)</strong> ou <strong style="color:#b91c1c">Baixo (0–39 pts)</strong>.</p>
+        <p>Candidatos eliminados aparecem em seção colapsada com o motivo da eliminação.</p>
+      </div>
+    </div>
+
+    <!-- Aba: Fluxo da análise -->
+    <div id="tab-fluxo" class="ajuda-tab-content">
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">0</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Seleção de currículos</div>
+          <div class="fluxo-desc">O sistema busca todos os currículos cadastrados no banco de dados. Se você escolher a opção <em>"Apenas candidatos desta vaga via Processo Seletivo"</em>, somente os currículos vinculados à vaga pelo formulário público são considerados.</div>
         </div>
       </div>
-      <div class="ajuda-criterio">
-        <div class="ajuda-pts">15 pts</div>
-        <div class="ajuda-criterio-info">
-          <strong>Nível e Tempo de Experiência Relevante</strong>
-          <p>O sistema calcula o tempo total de carreira e a IA avalia o tempo relevante para a vaga, classificando como Júnior / Pleno / Sênior. O nível do candidato é comparado ao exigido na função.</p>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">1</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Triagem eliminatória por palavras-chave — sem IA</div>
+          <div class="fluxo-desc">Para cada currículo, o sistema extrai todo o texto disponível (nome, perfil, habilidades, capacitações, formação e histórico profissional completo com atividades) e verifica se cada Requisito Obrigatório da Função está presente, usando três camadas:</div>
+          <div class="fluxo-sub">
+            1. <strong>Tabela de equivalências</strong> — verifica variantes do termo. Ex: "SoftExpert" reconhece "se suite", "sesuite", "se-suite" automaticamente. Você pode criar equivalências personalizadas nas Configurações.<br>
+            2. <strong>Palavras significativas</strong> — se o requisito é uma frase, cada palavra relevante é verificada individualmente nas equivalências.<br>
+            3. <strong>Fallback literal</strong> — busca o termo exatamente como escrito no texto do currículo.<br><br>
+            Currículos que <strong>não atendem todos os requisitos obrigatórios</strong> são eliminados com o motivo detalhado (ex: "Não apresenta evidência de: SQL, SoftExpert"). Se a função não tiver requisitos cadastrados, todos os currículos passam para a próxima etapa.
+          </div>
         </div>
       </div>
-      <div class="ajuda-criterio">
-        <div class="ajuda-pts">15 pts</div>
-        <div class="ajuda-criterio-info">
-          <strong>Formação Acadêmica</strong>
-          <p>A formação atende ou supera o definido na Função.</p>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">2</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Cálculo automático de experiência total</div>
+          <div class="fluxo-desc">Antes de enviar cada currículo à IA, o sistema calcula deterministicamente o tempo total de carreira somando os períodos de cada experiência profissional. Formatos suportados: DD/MM/YYYY, MM/YYYY, apenas ano (ex: "2020"), "desde MM/YYYY", "atual", "presente" e similares. O resultado é exibido ao usuário e também informado à IA como dado objetivo.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">3</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Análise profunda individual pela IA</div>
+          <div class="fluxo-desc">Cada currículo aprovado é analisado individualmente. O sistema envia à IA o texto completo do currículo (perfil, habilidades, capacitações, formação e cada experiência com suas atividades detalhadas) junto com o perfil completo da função. A IA pontua de acordo com a rubrica:</div>
+          <div class="fluxo-sub">
+            <strong>Requisitos Obrigatórios (40 pts)</strong> — IA percorre todas as seções do currículo. Atende tudo = 40 pts; maioria (>50%) = 20–35 pts; poucos (<50%) = 5–15 pts; nenhum = 0 pts → score máximo final limitado a 25 pts.<br>
+            <strong>Habilidades Técnicas (30 pts)</strong> — Domina todas = 30 pts; maioria = 20 pts; algumas = 10 pts; nenhuma = 0 pts. Considera equivalências de tecnologias.<br>
+            <strong>Nível/Experiência Relevante (15 pts)</strong> — A IA avalia o tempo de experiência <em>relevante para esta vaga específica</em> e classifica o candidato como Júnior, Pleno ou Sênior (com base nos limites configurados). Nível igual ou superior ao exigido = 15 pts; um nível abaixo = 8 pts; dois abaixo = 0 pts.<br>
+            <strong>Formação Acadêmica (15 pts)</strong> — Atende ou supera o exigido = 15 pts; próxima da área = 8 pts; não atende = 0 pts.
+          </div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">4</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Fallback automático de IA e tratamento de falhas</div>
+          <div class="fluxo-desc">A IA primária utilizada é o modelo <strong>Llama 3.3 70B</strong> via Groq. Se ocorrer limite de taxa (rate limit 429) ou quota excedida, o sistema automaticamente tenta o modelo <strong>Gemini 2.0 Flash</strong>. Se ambos falharem, o candidato é mantido nos aprovados com score neutro (50 pts) e nível "Indefinido", sem ser eliminado, para não perder candidatos por problemas técnicos.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">5</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Eliminação pós-IA e ordenação</div>
+          <div class="fluxo-desc">Candidatos que a IA pontuou com <strong>Requisitos Obrigatórios = 0</strong> ou score final ≤ 25 são movidos para a lista de eliminados, mesmo tendo passado da triagem por palavras-chave. Os aprovados restantes são ordenados do maior para o menor score.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step" style="margin-bottom:0">
+        <div class="fluxo-num">6</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Classificação final e encerramento</div>
+          <div class="fluxo-desc">Cada candidato recebe um nível de compatibilidade com a vaga:</div>
+          <div class="fluxo-sub">
+            <strong style="color:#15803d">Alto (70–100 pts)</strong> — candidato altamente compatível com a vaga.<br>
+            <strong style="color:#a16207">Médio (40–69 pts)</strong> — candidato parcialmente compatível, merece avaliação.<br>
+            <strong style="color:#b91c1c">Baixo (0–39 pts)</strong> — candidato com baixa aderência ao perfil exigido.<br><br>
+            O recrutador revisa, marca os finalistas e clica em <strong>Encerrar Análise da Vaga</strong>. O sistema salva o resultado no Histórico e atualiza o status da vaga para "encerrada". O ID da análise é único por vaga e por dia — rodar novamente no mesmo dia perguntará antes de sobrepor.
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="ajuda-etapa">
-      <div class="ajuda-etapa-titulo">✅ Etapa 3 — Encerrar Análise da Vaga</div>
-      <p>Após revisar os resultados, marque os candidatos finalistas (checkbox em cada card ou use <strong>Marcar todos</strong>) e clique em <strong>Encerrar Análise da Vaga</strong>. O resultado fica salvo no <a href="/historico.html" style="color:var(--accent)">Histórico de Análises</a> e pode ser consultado ou regenerado a qualquer momento.</p>
-      <p>O ID da análise é único por vaga e por dia — se você rodar a análise novamente no mesmo dia, o sistema perguntará antes de sobrepor.</p>
+    <!-- Aba: Créditos de IA -->
+    <div id="tab-creditos" class="ajuda-tab-content">
+
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin-bottom:18px">
+        O sistema utiliza dois provedores de IA. A triagem por palavras-chave e o cálculo de experiência são determinísticos — <strong style="color:var(--text-hi)">não consomem créditos</strong>. Créditos são gastos somente na <strong style="color:var(--text-hi)">análise profunda individual</strong> de cada currículo aprovado na triagem.
+      </p>
+
+      <!-- Groq -->
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-badge ia-badge-primary">IA Principal</span>
+          <span class="ia-card-title">Groq — Llama 3.3 70B Versatile</span>
+        </div>
+        <p>Motor principal da análise. Cada currículo aprovado na triagem é enviado individualmente ao modelo Llama 3.3 70B via API Groq, que retorna a pontuação estruturada (JSON) nos quatro critérios.</p>
+        <div class="ia-ops">
+          <strong>Operação:</strong> Análise individual de currículo<br>
+          <strong>Input estimado:</strong> 1.500 – 5.000 tokens por currículo <span style="color:var(--text-lo)">(texto do CV + perfil da função)</span><br>
+          <strong>Output estimado:</strong> 400 – 800 tokens por currículo <span style="color:var(--text-lo)">(JSON com scores, pontos e resumo)</span><br>
+          <strong>Média por análise:</strong> ~3.000 tokens input + ~600 tokens output
+        </div>
+        <p>A Groq oferece um <strong>plano gratuito</strong> com limite de requisições por minuto (RPM) e tokens por dia. Para volumes maiores ou uso em produção, utilize um plano pago conforme a tabela de preços disponível no console.</p>
+        <a class="ia-link" href="https://console.groq.com" target="_blank">🔗 console.groq.com — Criar conta / adquirir créditos</a>
+      </div>
+
+      <!-- Gemini -->
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-badge ia-badge-fallback">Fallback automático</span>
+          <span class="ia-card-title">Google Gemini 2.0 Flash</span>
+        </div>
+        <p>Ativado automaticamente quando a Groq retorna erro de limite (429) ou quota excedida. O sistema reanalisa o currículo com Gemini sem intervenção do recrutador.</p>
+        <div class="ia-ops">
+          <strong>Operação:</strong> Análise individual de currículo (fallback)<br>
+          <strong>Input estimado:</strong> 1.500 – 5.000 tokens por currículo<br>
+          <strong>Output estimado:</strong> 400 – 800 tokens por currículo<br>
+          <strong>Plano gratuito:</strong> até 1.500 requisições/dia e 1 milhão de tokens/minuto <span style="color:var(--text-lo)">(limites sujeitos a alteração pelo Google)</span>
+        </div>
+        <p>Para uso em produção ou volume alto, habilite cobrança no Google AI Studio ou utilize a API via Google Cloud (Vertex AI).</p>
+        <a class="ia-link" href="https://aistudio.google.com" target="_blank">🔗 aistudio.google.com — Google AI Studio / créditos</a>
+      </div>
+
+      <!-- Calculadora orientativa -->
+      <div class="credito-calc">
+        <div class="credito-calc-title">📊 Como estimar o consumo por processo seletivo</div>
+        <p>
+          Considere apenas os currículos que <strong>passam da triagem</strong> — os eliminados não geram chamadas de IA.<br><br>
+          <strong>Fórmula simplificada (Groq):</strong><br>
+          Nº de CVs aprovados × 3.600 tokens médios ÷ 1.000.000 = Milhões de tokens<br><br>
+          <strong>Exemplo — 40 CVs aprovados:</strong><br>
+          40 × 3.600 = 144.000 tokens ≈ 0,14 M tokens input + 0,024 M tokens output<br>
+          Custo estimado com plano pago Groq: <strong>menos de US$ 0,15 por análise completa</strong><br><br>
+          <em style="font-size:11.5px">Valores de referência. Consulte sempre a tabela de preços atual de cada provedor antes de adquirir créditos.</em>
+        </p>
+      </div>
+
     </div>
 
-    <div class="ajuda-etapa" style="margin-bottom:0">
-      <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
-      <p>Compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong>, <strong style="color:#a16207">Médio (40–69 pts)</strong> ou <strong style="color:#b91c1c">Baixo (0–39 pts)</strong>.</p>
-      <p>Candidatos eliminados aparecem em seção colapsada com o motivo da eliminação.</p>
+    <!-- Aba: Equivalências -->
+    <div id="tab-equivalencias" class="ajuda-tab-content">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">💡 Por que equivalências existem?</div>
+        <p>Candidatos descrevem a mesma habilidade de formas diferentes. Um profissional de <strong style="color:var(--text-hi)">ADVPL</strong> pode escrever "Protheus", "TOTVS" ou "Microsiga" no currículo. Sem equivalências, ele seria eliminado na triagem mesmo sendo qualificado.</p>
+        <p>A tabela de equivalências resolve isso: você mapeia uma vez e o sistema reconhece todas as variantes automaticamente em toda triagem futura.</p>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🔍 Como a triagem usa as equivalências?</div>
+        <p>Para cada <strong style="color:var(--text-hi)">Requisito Obrigatório</strong> da vaga, o sistema verifica o texto do currículo em 3 camadas em sequência:</p>
+        <div class="fluxo-step" style="margin-bottom:12px">
+          <div class="fluxo-num">1</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Tabela de equivalências</div>
+            <div class="fluxo-desc">Verifica o termo principal e todos os sinônimos cadastrados. Se <em>qualquer um</em> aparecer no currículo, o requisito é considerado atendido. Ex: requisito "SoftExpert" → reconhece "se suite", "sesuite", "se-suite".</div>
+          </div>
+        </div>
+        <div class="fluxo-step" style="margin-bottom:12px">
+          <div class="fluxo-num">2</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Palavras significativas</div>
+            <div class="fluxo-desc">Se o requisito é uma frase (ex: "Gestão de Pessoas"), cada palavra relevante é verificada individualmente nas equivalências. Conectivos e preposições são ignorados.</div>
+          </div>
+        </div>
+        <div class="fluxo-step" style="margin-bottom:0">
+          <div class="fluxo-num">3</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Busca literal</div>
+            <div class="fluxo-desc">Por último, busca o termo exatamente como escrito na vaga. Captura termos que não estão nas equivalências e não foram desmembrados nas etapas anteriores.</div>
+          </div>
+        </div>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🏷️ Dois tipos de equivalências</div>
+        <div class="ajuda-criterio" style="margin-bottom:12px">
+          <div class="ajuda-pts" style="background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;font-size:11px;min-width:80px">⚙ embutido</div>
+          <div class="ajuda-criterio-info">
+            <strong>Padrão do sistema</strong>
+            <p>Vem pré-configurado, cobrindo termos técnicos comuns (SoftExpert, SAP, Power BI, etc.). Pode ser editado — sua versão tem prioridade sobre o padrão.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" style="background:#fefce8;color:#a16207;border:1px solid #fde68a;font-size:11px;min-width:80px">★ personalizado</div>
+          <div class="ajuda-criterio-info">
+            <strong>Criado pelo recrutador</strong>
+            <p>Equivalências específicas do seu negócio ou setor. Podem ser editadas ou excluídas a qualquer momento sem afetar o padrão.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">⚡ Sugestão automática por IA</div>
+        <p>Ao cadastrar ou editar uma <strong style="color:var(--text-hi)">Função</strong>, após preencher os Requisitos Obrigatórios e Habilidades Técnicas, use o botão <strong>"Sugerir equivalências com IA"</strong>. O sistema gera automaticamente variantes para cada termo e apresenta para você revisar antes de salvar.</p>
+        <p>Equivalências já existentes na base são exibidas na revisão — o sistema nunca sobrescreve sem sua aprovação explícita.</p>
+      </div>
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">⚙ Onde gerenciar</div>
+        <p>Acesse <a href="/configuracoes.html" style="color:var(--accent)">Configurações → aba Equivalências</a> para visualizar, criar, editar ou excluir qualquer equivalência.</p>
+        <div style="background:var(--bg-hover);border-radius:8px;padding:12px 16px;font-size:12.5px;color:var(--text-md);margin-top:10px;line-height:1.75">
+          <strong style="color:var(--text-hi)">Exemplo prático:</strong><br>
+          Keyword: <strong>ADVPL</strong><br>
+          Variantes: <em>totvs, protheus, microsiga, advpl totvs, totvs protheus</em><br><br>
+          Qualquer currículo que mencione uma dessas variantes passará pelo requisito "ADVPL" na triagem, mesmo sem citar a palavra "ADVPL".
+        </div>
+      </div>
     </div>
+
   </div>
 </div>
 
@@ -241,6 +506,15 @@
   let todosResultados = [], todosEliminados = [];
   let vagaSelecionada = null, funcaoId = null, vagaId = null;
   let ultimoRes = null;
+
+  function switchAjudaTab(tab) {
+    document.querySelectorAll('.ajuda-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ajuda-tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none'; });
+    document.getElementById('tab-btn-' + tab).classList.add('active');
+    const content = document.getElementById('tab-' + tab);
+    content.style.display = 'block';
+    content.classList.add('active');
+  }
 
   // ── Carrega vagas no seletor ─────────────────────────────────────────────────
   async function carregarVagas() {
@@ -259,7 +533,15 @@
       const id = Number(sel.value);
       document.getElementById('btn-analisar').disabled = !id;
       const info = document.getElementById('vaga-info');
-      if (!id) { vagaSelecionada = null; info.style.display = 'none'; return; }
+      const box  = document.getElementById('filtro-curriculos-box');
+      if (!id) {
+        vagaSelecionada = null;
+        info.style.display = 'none';
+        box.style.display = 'none';
+        document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
+        document.getElementById('radio-somente-vaga').disabled = true;
+        return;
+      }
       const v = await fetch(`/api/vagas/${id}`).then(r => r.json());
       vagaSelecionada = v;
       funcaoId = v.funcao_id;
@@ -267,6 +549,25 @@
       const f = v.funcao || {};
       const tags = arr => Array.isArray(arr) && arr.length
         ? arr.map(t => `<span class="tag">${t}</span>`).join(' ') : '—';
+      box.style.display = 'block';
+      // Fetch candidaturas for this vaga
+      const autoFiltroVaga = new URLSearchParams(location.search).get('filtro') === 'somente_vaga';
+      fetch(`/api/ps/candidaturas/vaga/${id}`).then(r => r.json()).then(cands => {
+        const n = cands.length;
+        const radio = document.getElementById('radio-somente-vaga');
+        const texto = document.getElementById('texto-somente-vaga');
+        if (n > 0) {
+          radio.disabled = false;
+          texto.innerHTML = `Apenas candidatos desta vaga via Processo Seletivo <span style="background:#dbeafe;color:#1e40af;border-radius:12px;padding:1px 8px;font-size:11px;font-weight:600">${n} candidato${n!==1?'s':''}</span>`;
+          if (autoFiltroVaga) radio.checked = true;
+        } else {
+          radio.disabled = true;
+          radio.checked  = false;
+          document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
+          texto.innerHTML = 'Apenas candidatos desta vaga via Processo Seletivo <span style="color:var(--text-lo);font-size:12px">(nenhum recebido)</span>';
+        }
+      }).catch(() => {});
+
       info.style.display = 'block';
       info.innerHTML = `
         <strong style="color:var(--text-hi)">${f.nome || '—'}</strong>
@@ -299,10 +600,11 @@
         </div>
       </div>`;
     try {
+      const somente_vaga = document.querySelector('input[name="radio-filtro-cv"]:checked')?.value === 'somente_vaga';
       const res = await fetch('/api/analisador/analisar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ funcao_id: funcaoId, vaga_id: vagaId }),
+        body: JSON.stringify({ funcao_id: funcaoId, vaga_id: vagaId, somente_vaga }),
       }).then(r => r.json());
 
       if (res.error) { document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>⚠️</div>${res.error}</div>`; return; }
@@ -390,9 +692,9 @@
       <div class="eliminados-section">
         <button class="eliminados-toggle" onclick="toggleEliminados(this)">
           <span>🚫 ${eliminados.length} candidato${eliminados.length !== 1 ? 's' : ''} eliminado${eliminados.length !== 1 ? 's' : ''} na triagem — não atendem os requisitos obrigatórios</span>
-          <span id="eliminados-arrow">▾</span>
+          <span id="eliminados-arrow">▴</span>
         </button>
-        <div id="eliminados-lista" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:12px 16px">
+        <div id="eliminados-lista" style="display:block;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:12px 16px">
           <table class="eliminados-table">
             <thead>
               <tr>

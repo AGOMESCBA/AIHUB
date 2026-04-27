@@ -56,12 +56,12 @@ function montarSoap(curriculo) {
     ['FRM',  fmtFormacao(curriculo.formacao)],
     ['CTF',  fmtCapacitacoes(curriculo.capacitacoes)],
     ['CPT',  fmtHabilidades(curriculo.habilidades)],
-    ['OUT',  curriculo.outros      || ''],
+    ['OUTR', curriculo.outros      || ''],
   ];
 
   const fields = campos.map(([id, val]) =>
-    `               <urn:TableFieldID>${id}</urn:TableFieldID>\n               <urn:TableFieldValue>${esc(val)}</urn:TableFieldValue>`
-  ).join('\n\n');
+    `            <urn:TableField>\n               <urn:TableFieldID>${id}</urn:TableFieldID>\n               <urn:TableFieldValue>${esc(val)}</urn:TableFieldValue>\n            </urn:TableField>`
+  ).join('\n');
 
   const fileSection = (curriculo.pdf_base64 && curriculo.pdf_nome)
     ? `<urn:TableFieldFileList>
@@ -81,13 +81,11 @@ function montarSoap(curriculo) {
          <urn:UserID>se</urn:UserID>
          <urn:TableID>DDCDT</urn:TableID>
          <urn:TableFieldList>
-            <urn:TableField>
 ${fields}
-            </urn:TableField>
          </urn:TableFieldList>
          <urn:RelationshipList/>
-         <urn:RelatedTo/>
          ${fileSection}
+         <urn:RelatedTo/>
       </urn:newTableRecord>
    </soapenv:Body>
 </soapenv:Envelope>`;
@@ -133,9 +131,9 @@ function enviarParaSE(curriculo, config) {
       path:    parsed.pathname + (parsed.search || ''),
       method:  'POST',
       headers: {
-        'Content-Type':   'text/xml; charset=utf-8',
-        'SOAPAction':     '""',
-        'Authorization':  `Bearer ${config.se_token}`,
+        'Content-Type':   'text/xml; charset=UTF-8',
+        'SOAPAction':     'newTableRecord',
+        'Authorization':  config.se_token,
         'Content-Length': body.length,
       },
     };

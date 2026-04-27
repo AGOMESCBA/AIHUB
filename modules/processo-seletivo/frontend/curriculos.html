@@ -19,21 +19,27 @@
     </div>
     <div class="sidebar-nav">
       <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
-        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
+        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-whatsapp">
+      <div class="submenu" id="sub-monitoramento">
         <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
         <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-        <a href="/curriculos.html" class="nav-item sub active"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      <a href="/curriculos.html" class="nav-item active"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      <div class="nav-parent" onclick="toggleSubmenu('ps')">
+        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-vagas">
+      <div class="submenu" id="sub-ps">
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
@@ -52,14 +58,14 @@
       <div class="user-info-text">
         <div class="user-name">Admin</div><div class="user-role">Administrador</div>
       </div>
-      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </nav>
 
   <div class="main">
     <div class="topbar">
       <span class="topbar-title">Currículos</span>
-      <span class="topbar-breadcrumb ms-auto">WhatsApp Currículo › Currículos</span>
+      <span class="topbar-breadcrumb ms-auto">Recrutamento › Currículos</span>
     </div>
 
     <div class="page-content">

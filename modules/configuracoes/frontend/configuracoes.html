@@ -107,6 +107,25 @@
       font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-lo);
     }
     .eq-header-row span:first-child { min-width: 170px; }
+
+    /* ── Password toggle ─── */
+    .pass-wrap {
+      position: relative; display: flex; align-items: center;
+    }
+    .pass-wrap .form-control {
+      padding-right: 42px;
+    }
+    .btn-pass-toggle {
+      position: absolute; right: 1px; top: 1px; bottom: 1px;
+      width: 38px; border: none; background: transparent;
+      color: var(--text-lo); cursor: pointer; border-radius: 0 7px 7px 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: color .15s, background .15s;
+    }
+    .btn-pass-toggle:hover {
+      color: var(--text-hi); background: var(--bg-hover);
+    }
+    .btn-pass-toggle svg, .btn-pass-toggle svg * { pointer-events: none; }
   </style>
 </head>
 <body>
@@ -119,21 +138,27 @@
     </div>
     <div class="sidebar-nav">
       <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
-        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
+        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-whatsapp">
+      <div class="submenu" id="sub-monitoramento">
         <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
         <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      <div class="nav-parent" onclick="toggleSubmenu('ps')">
+        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-vagas">
+      <div class="submenu" id="sub-ps">
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
@@ -152,7 +177,7 @@
       <div class="user-info-text">
         <div class="user-name">Admin</div><div class="user-role">Administrador</div>
       </div>
-      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </nav>
 
@@ -169,6 +194,9 @@
         <button class="tab-btn" onclick="mudarAba('analisador', this)">🔍 Analisador de Currículos</button>
         <button class="tab-btn" onclick="mudarAba('equivalencias', this)">⚡ Equivalências</button>
         <button class="tab-btn" onclick="mudarAba('integracoes', this)">🔗 Integrações</button>
+        <button class="tab-btn" onclick="mudarAba('email', this)">📧 Configuração de Email</button>
+        <button class="tab-btn" onclick="mudarAba('templates', this)">✉️ Templates de E-mail</button>
+        <button class="tab-btn" onclick="mudarAba('linkpublico', this)">🔗 Link Público — Vagas</button>
       </div>
 
       <!-- ===================== ABA: WHATSAPP ===================== -->
@@ -290,7 +318,13 @@
               Por exemplo: <em>ADVPL = TOTVS, Protheus, Microsiga</em>.
             </div>
           </div>
-          <button class="btn btn-primary" onclick="abrirModal(null)" style="white-space:nowrap;flex-shrink:0">+ Nova Equivalência</button>
+          <div style="display:flex;gap:8px;flex-shrink:0">
+            <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda-equiv').classList.remove('d-none')" style="white-space:nowrap;font-size:13px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor" stroke="none"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-primary" onclick="abrirModal(null)" style="white-space:nowrap">+ Nova Equivalência</button>
+          </div>
         </div>
 
         <div class="card">
@@ -334,7 +368,12 @@
             </div>
             <div class="form-group">
               <label class="form-label">Token de Autenticação (JWT)</label>
-              <input type="password" id="se_token" class="form-control" placeholder="eyJhbGci...">
+              <div class="pass-wrap">
+                <input type="password" id="se_token" class="form-control" placeholder="eyJhbGci...">
+                <button type="button" class="btn-pass-toggle" onclick="toggleSenha('se_token', this)" title="Mostrar/ocultar token">
+                  <svg id="se_token-eye" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
               <div class="form-hint">Token JWT fornecido pelo Softexpert. Mantido de forma segura no servidor.</div>
             </div>
             <div style="display:flex;gap:10px;margin-top:4px">
@@ -351,6 +390,395 @@
           <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
             Após salvar uma análise no <a href="/historico.html" style="color:var(--accent)">Histórico</a>, clique em <strong>Enviar ao Softexpert</strong> para criar automaticamente os registros dos candidatos finalistas no SE.<br><br>
             O histórico completo de cada envio pode ser consultado em <a href="/se-curriculos.html" style="color:var(--accent)">Integrações › SE Currículo › Currículos</a>.
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== ABA: EMAIL ===================== -->
+      <div id="aba-email" class="d-none">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+          <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda-email').classList.remove('d-none')" style="white-space:nowrap;font-size:13px">❓ Ajuda — Configuração de E-mail</button>
+        </div>
+        <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+
+          <!-- Coluna: Processo Seletivo -->
+          <div style="flex:1;min-width:320px;max-width:620px">
+            <div style="min-height:52px">
+              <div id="alert-ok-email" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração de e-mail salva com sucesso!</div>
+              <div id="alert-err-email" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+            </div>
+
+            <div class="card mb-4">
+              <div class="card-header">📧 Notificação por E-mail — Processo Seletivo</div>
+              <div class="card-body">
+
+                <div class="form-group">
+                  <label class="form-label">Tipo de Servidor</label>
+                  <select id="email-tipo" class="form-control" onchange="toggleEmailTipo()" style="max-width:240px">
+                    <option value="gmail">Gmail (App Password)</option>
+                    <option value="smtp">SMTP Genérico</option>
+                  </select>
+                  <div class="form-hint" id="hint-tipo">Ao selecionar Gmail, os campos do servidor são preenchidos automaticamente com os padrões do Google.</div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Endereço de E-mail</label>
+                  <input type="email" id="email-email" class="form-control" placeholder="recrutamento@empresa.com">
+                  <div class="form-hint">Este endereço enviará <strong>e</strong> receberá as notificações de novos currículos.</div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" id="label-senha">Senha do App (App Password)</label>
+                  <div class="pass-wrap">
+                    <input type="password" id="email-senha" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="btn-pass-toggle" onclick="toggleSenha('email-senha', this)" title="Mostrar/ocultar senha">
+                      <svg id="email-senha-eye" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                  <div class="form-hint" id="hint-senha">Para Gmail use uma <strong>Senha de App</strong>: Conta Google → Segurança → Verificação em 2 etapas → Senhas de app → gere para "E-mail".</div>
+                </div>
+
+                <div style="border-top:1px solid var(--border);margin:4px 0 20px;padding-top:18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo)">Configurações do Servidor</div>
+                    <button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="restaurarPadroesEmail()" title="Preencher com os valores padrão para o tipo selecionado">↺ Restaurar padrões</button>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Host SMTP</label>
+                    <input type="text" id="email-smtp-host" class="form-control" placeholder="smtp.gmail.com">
+                    <div class="form-hint">Endereço do servidor de saída de e-mail (SMTP/SMTPS).</div>
+                  </div>
+
+                  <div style="display:flex;gap:12px">
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Porta</label>
+                      <input type="number" id="email-smtp-port" class="form-control" placeholder="465">
+                      <div class="form-hint">465 = SSL/TLS · 587 = STARTTLS</div>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Segurança (TLS)</label>
+                      <select id="email-smtp-secure" class="form-control">
+                        <option value="true">SSL/TLS (porta 465)</option>
+                        <option value="">STARTTLS (porta 587)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Família de IP</label>
+                    <select id="email-smtp-family" class="form-control" style="max-width:240px">
+                      <option value="4">IPv4 (recomendado)</option>
+                      <option value="6">IPv6</option>
+                      <option value="0">Automático</option>
+                    </select>
+                    <div class="form-hint">IPv4 resolve problemas de conexão na maioria dos provedores.</div>
+                  </div>
+                </div>
+
+                <div style="border-top:1px solid var(--border);margin:4px 0 20px;padding-top:18px">
+                  <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:14px">Configurações IMAP (Recebimento de E-mails)</div>
+
+                  <div class="form-group">
+                    <label class="form-label">Host IMAP</label>
+                    <input type="text" id="email-imap-host" class="form-control" placeholder="imap.gmail.com">
+                    <div class="form-hint">Servidor de entrada de e-mail. Para Gmail: <strong>imap.gmail.com</strong>. Para outros provedores, consulte a documentação do seu serviço.</div>
+                  </div>
+
+                  <div style="display:flex;gap:12px">
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Porta IMAP</label>
+                      <input type="number" id="email-imap-port" class="form-control" placeholder="993">
+                      <div class="form-hint">993 = SSL/TLS · 143 = sem TLS</div>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Segurança IMAP</label>
+                      <select id="email-imap-secure" class="form-control">
+                        <option value="true">SSL/TLS (porta 993)</option>
+                        <option value="">Sem TLS (porta 143)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Intervalo de Verificação</label>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <input type="number" id="email-imap-intervalo" class="form-control" placeholder="2" min="1" max="60" style="max-width:120px">
+                      <span style="font-size:13px;color:var(--text-md)">minutos</span>
+                    </div>
+                    <div class="form-hint">Frequência com que o serviço de e-mail verificará a caixa de entrada quando iniciado. Mínimo: 1 minuto.</div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                  <button class="btn btn-ghost" style="font-size:13px" onclick="testarEmail()">📤 Testar Envio (SMTP)</button>
+                  <button class="btn btn-ghost" style="font-size:13px" onclick="testarImap()">📥 Testar Recebimento (IMAP)</button>
+                  <span id="email-test-result" style="font-size:12.5px;flex-basis:100%"></span>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="salvarEmail()" style="width:100%">Salvar Configuração</button>
+
+            <div class="card" style="margin-top:32px">
+              <div class="card-header">ℹ Como funciona</div>
+              <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+                Quando um candidato envia currículo pelo <a href="/processoseletivo.html" style="color:var(--accent)">Processo Seletivo</a>, você recebe um e-mail automático com os dados extraídos pela IA e o PDF original em anexo.<br><br>
+                O sistema também monitora a caixa de entrada via IMAP a cada 2 minutos para capturar currículos enviados diretamente ao seu e-mail (fora da página pública), desde que o assunto siga o padrão: <strong>[ID] - [Vaga] - [Nome]</strong>.<br><br>
+                <strong>Gmail:</strong> obrigatório usar <strong>Senha de App</strong> — não a senha normal. Verificação em 2 etapas deve estar ativa.<br>
+                <strong>SMTP Genérico:</strong> ajuste host, porta e segurança conforme indicado pelo seu provedor de e-mail.
+              </div>
+            </div>
+          </div>
+
+          <!-- Coluna: Geral -->
+          <div style="flex:1;min-width:320px;max-width:620px">
+            <div style="min-height:52px">
+              <div id="alert-ok-egeral" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração de e-mail salva com sucesso!</div>
+              <div id="alert-err-egeral" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+            </div>
+
+            <div class="card mb-4">
+              <div class="card-header">📧 Notificação por E-mail — Geral</div>
+              <div class="card-body">
+
+                <div class="form-group">
+                  <label class="form-label">Tipo de Servidor</label>
+                  <select id="egeral-tipo" class="form-control" onchange="toggleEmailTipoGeral()" style="max-width:240px">
+                    <option value="gmail">Gmail (App Password)</option>
+                    <option value="smtp">SMTP Genérico</option>
+                  </select>
+                  <div class="form-hint" id="hint-tipo-geral">Ao selecionar Gmail, os campos do servidor são preenchidos automaticamente com os padrões do Google.</div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Endereço de E-mail</label>
+                  <input type="email" id="egeral-email" class="form-control" placeholder="notificacoes@empresa.com">
+                  <div class="form-hint">Este endereço enviará <strong>e</strong> receberá as notificações gerais.</div>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label" id="label-senha-geral">Senha do App (App Password)</label>
+                  <div class="pass-wrap">
+                    <input type="password" id="egeral-senha" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                    <button type="button" class="btn-pass-toggle" onclick="toggleSenha('egeral-senha', this)" title="Mostrar/ocultar senha">
+                      <svg id="egeral-senha-eye" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                  <div class="form-hint" id="hint-senha-geral">Para Gmail use uma <strong>Senha de App</strong>: Conta Google → Segurança → Verificação em 2 etapas → Senhas de app → gere para "E-mail".</div>
+                </div>
+
+                <div style="border-top:1px solid var(--border);margin:4px 0 20px;padding-top:18px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                    <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo)">Configurações do Servidor</div>
+                    <button type="button" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="restaurarPadroesEmailGeral()" title="Preencher com os valores padrão para o tipo selecionado">↺ Restaurar padrões</button>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Host SMTP</label>
+                    <input type="text" id="egeral-smtp-host" class="form-control" placeholder="smtp.gmail.com">
+                    <div class="form-hint">Endereço do servidor de saída de e-mail (SMTP/SMTPS).</div>
+                  </div>
+
+                  <div style="display:flex;gap:12px">
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Porta</label>
+                      <input type="number" id="egeral-smtp-port" class="form-control" placeholder="465">
+                      <div class="form-hint">465 = SSL/TLS · 587 = STARTTLS</div>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Segurança (TLS)</label>
+                      <select id="egeral-smtp-secure" class="form-control">
+                        <option value="true">SSL/TLS (porta 465)</option>
+                        <option value="">STARTTLS (porta 587)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Família de IP</label>
+                    <select id="egeral-smtp-family" class="form-control" style="max-width:240px">
+                      <option value="4">IPv4 (recomendado)</option>
+                      <option value="6">IPv6</option>
+                      <option value="0">Automático</option>
+                    </select>
+                    <div class="form-hint">IPv4 resolve problemas de conexão na maioria dos provedores.</div>
+                  </div>
+                </div>
+
+                <div style="border-top:1px solid var(--border);margin:4px 0 20px;padding-top:18px">
+                  <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:14px">Configurações IMAP (Recebimento de E-mails)</div>
+
+                  <div class="form-group">
+                    <label class="form-label">Host IMAP</label>
+                    <input type="text" id="egeral-imap-host" class="form-control" placeholder="imap.gmail.com">
+                    <div class="form-hint">Servidor de entrada de e-mail. Para Gmail: <strong>imap.gmail.com</strong>. Para outros provedores, consulte a documentação do seu serviço.</div>
+                  </div>
+
+                  <div style="display:flex;gap:12px">
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Porta IMAP</label>
+                      <input type="number" id="egeral-imap-port" class="form-control" placeholder="993">
+                      <div class="form-hint">993 = SSL/TLS · 143 = sem TLS</div>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                      <label class="form-label">Segurança IMAP</label>
+                      <select id="egeral-imap-secure" class="form-control">
+                        <option value="true">SSL/TLS (porta 993)</option>
+                        <option value="">Sem TLS (porta 143)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                  <button class="btn btn-ghost" style="font-size:13px" onclick="testarEmailGeral()">📤 Testar Envio (SMTP)</button>
+                  <button class="btn btn-ghost" style="font-size:13px" onclick="testarImapGeral()">📥 Testar Recebimento (IMAP)</button>
+                  <span id="egeral-test-result" style="font-size:12.5px;flex-basis:100%"></span>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="salvarEmailGeral()" style="width:100%">Salvar Configuração</button>
+
+            <div class="card" style="margin-top:32px">
+              <div class="card-header">ℹ Como funciona</div>
+              <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+                Use este e-mail para qualquer processo que não seja o Processo Seletivo — notificações internas, alertas de sistema, integrações, etc.<br><br>
+                <strong>Gmail:</strong> obrigatório usar <strong>Senha de App</strong> — não a senha normal. Verificação em 2 etapas deve estar ativa.<br>
+                <strong>SMTP Genérico:</strong> ajuste host, porta e segurança conforme indicado pelo seu provedor de e-mail.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ===================== ABA: TEMPLATES DE E-MAIL ===================== -->
+      <div id="aba-templates" class="d-none" style="max-width:820px">
+
+        <div style="min-height:52px">
+          <div id="alert-ok-templates" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Templates salvos com sucesso!</div>
+          <div id="alert-err-templates" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+        </div>
+
+        <div style="background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.2);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--text-md);line-height:1.7">
+          Personalize os e-mails enviados automaticamente aos candidatos. Use as variáveis abaixo nos textos:<br>
+          <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{NOME}}</code> — nome do candidato &nbsp;·&nbsp;
+          <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{VAGA}}</code> — descrição da vaga &nbsp;·&nbsp;
+          <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{MOTIVO}}</code> — motivo da rejeição (apenas no template de rejeição)
+        </div>
+
+        <!-- Tabs internas: Confirmação / Rejeição -->
+        <div style="display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
+          <button class="tpl-tab-btn active" data-target="tpl-confirmacao" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600;margin-bottom:-1px">✅ E-mail de Confirmação</button>
+          <button class="tpl-tab-btn" data-target="tpl-rejeicao" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">❌ E-mail de Rejeição</button>
+        </div>
+
+        <!-- Template: Confirmação -->
+        <div id="tpl-confirmacao">
+          <div class="card mb-4">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <span>✅ Template — Currículo Recebido / Confirmação</span>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost" style="font-size:12px" onclick="previewTemplate('confirmacao')">👁 Prévia</button>
+                <button class="btn btn-ghost" style="font-size:12px" onclick="restaurarTemplateConfirmacao()">↺ Restaurar padrão</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Assunto do E-mail</label>
+                <input type="text" id="tpl-conf-assunto" class="form-control" placeholder="Seu currículo foi recebido — {{VAGA}}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Corpo do E-mail (HTML)</label>
+                <textarea id="tpl-conf-html" class="form-control" rows="16" style="font-family:monospace;font-size:12px;resize:vertical"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Template: Rejeição -->
+        <div id="tpl-rejeicao" class="d-none">
+          <div class="card mb-4">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <span>❌ Template — Currículo Não Aceito / Rejeição</span>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost" style="font-size:12px" onclick="previewTemplate('rejeicao')">👁 Prévia</button>
+                <button class="btn btn-ghost" style="font-size:12px" onclick="restaurarTemplateRejeicao()">↺ Restaurar padrão</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Assunto do E-mail</label>
+                <input type="text" id="tpl-rej-assunto" class="form-control" placeholder="Seu currículo não pôde ser processado — {{VAGA}}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Corpo do E-mail (HTML)</label>
+                <textarea id="tpl-rej-html" class="form-control" rows="16" style="font-family:monospace;font-size:12px;resize:vertical"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="salvarTemplates()" style="width:100%">Salvar Templates</button>
+
+        <!-- Modal de prévia -->
+        <div id="modal-preview-template" class="d-none" onclick="if(event.target===this)this.classList.add('d-none')" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;align-items:center;justify-content:center">
+          <div style="background:#fff;border-radius:12px;width:96%;max-width:1100px;height:90vh;overflow:hidden;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #e5e7eb">
+              <div style="font-size:14px;font-weight:700;color:#111" id="preview-titulo">Prévia do E-mail</div>
+              <button onclick="document.getElementById('modal-preview-template').classList.add('d-none')" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1">✕</button>
+            </div>
+            <div style="padding:8px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb;font-size:12px;color:#666" id="preview-assunto-bar"></div>
+            <iframe id="preview-iframe" style="flex:1;border:none;width:100%"></iframe>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===================== ABA: LINK PÚBLICO ===================== -->
+      <div id="aba-linkpublico" class="d-none" style="max-width:660px">
+
+        <div class="card mb-4">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+            <span>🔗 Link Público para Candidatos</span>
+            <a id="lp-btn-abrir" href="#" target="_blank" class="btn btn-ghost" style="font-size:12px">↗ Abrir Página</a>
+          </div>
+          <div class="card-body">
+            <p style="font-size:13px;color:var(--text-md);margin-bottom:14px;line-height:1.7">
+              Publique este link em seu site, redes sociais ou comunicações para que candidatos possam se inscrever nas vagas abertas.
+            </p>
+            <div class="link-box">
+              <div class="link-input" id="lp-link" onclick="lpSelecionarLink()" style="font-family:monospace;font-size:12.5px;color:var(--accent-light);background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:9px 14px;cursor:text;user-select:all;flex:1"></div>
+              <button class="btn btn-primary" onclick="lpCopiarLink()" id="lp-btn-copiar">📋 Copiar</button>
+            </div>
+
+            <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+              <label style="font-size:12px;font-weight:600;color:var(--text-md);display:block;margin-bottom:8px">Apelido personalizado (slug)</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="text" id="lp-slug-input" placeholder="ex: minhaempresa (letras, números e hífens)"
+                  style="flex:1;font-size:13px;background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--text-hi);font-family:monospace;outline:none"
+                  oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9-]/g,'')">
+                <button class="btn btn-primary" onclick="lpSalvarSlug()" style="white-space:nowrap">Salvar</button>
+                <button class="btn btn-ghost" onclick="lpLimparSlug()" style="white-space:nowrap">Limpar</button>
+              </div>
+              <p id="lp-slug-info" style="font-size:12px;color:var(--text-lo);margin:6px 0 0"></p>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+              <button class="btn-warn" onclick="lpRegenerarToken()">🔄 Regenerar Token</button>
+              <span style="font-size:12px;color:var(--text-lo)">Ao regenerar, o link anterior para de funcionar imediatamente.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">ℹ Como funciona</div>
+          <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+            O link leva a uma página pública e segura — os dados só carregam com o token correto.<br>
+            Use o <strong>apelido (slug)</strong> para ter uma URL amigável como <code style="color:var(--accent)">/ps/minhaempresa</code> em vez do token completo.<br>
+            O token original continua funcionando mesmo com slug ativo.
           </div>
         </div>
       </div>
@@ -402,7 +830,19 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-const ABAS = ['whatsapp', 'analisador', 'equivalencias', 'integracoes'];
+// ── Utilitário: toggle visibilidade de campos sensíveis ──────────────────────
+const SVG_EYE      = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+const SVG_EYE_OFF  = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+function toggleSenha(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const svg   = btn.querySelector('svg');
+  const show  = input.type === 'password';
+  input.type  = show ? 'text' : 'password';
+  svg.innerHTML = show ? SVG_EYE_OFF : SVG_EYE;
+  btn.title   = show ? 'Ocultar' : 'Mostrar';
+}
+
+const ABAS = ['whatsapp', 'analisador', 'equivalencias', 'integracoes', 'email', 'templates', 'linkpublico'];
 
 function mudarAba(aba, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -411,6 +851,9 @@ function mudarAba(aba, btn) {
   document.getElementById('aba-' + aba).classList.remove('d-none');
   if (aba === 'equivalencias') carregarEquiv();
   if (aba === 'integracoes') carregarIntegracoes();
+  if (aba === 'email') { carregarEmail(); carregarEmailGeral(); }
+  if (aba === 'templates') carregarTemplates();
+  if (aba === 'linkpublico') lpCarregar();
 }
 
 // ── WhatsApp ─────────────────────────────────────────────────────────────────
@@ -757,9 +1200,695 @@ async function testarConexaoSE() {
   }
 }
 
+// ── Email para Currículo ──────────────────────────────────────────────────────
+const GMAIL_DEFAULTS = { host: 'smtp.gmail.com', port: '465', secure: 'true', family: '4', imap_host: 'imap.gmail.com', imap_port: '993', imap_secure: 'true' };
+const SMTP_DEFAULTS  = { host: '', port: '587', secure: '', family: '4', imap_host: '', imap_port: '993', imap_secure: 'true' };
+
+function toggleEmailTipo() {
+  const tipo       = document.getElementById('email-tipo').value;
+  const labelSenha = document.getElementById('label-senha');
+  const hintSenha  = document.getElementById('hint-senha');
+  const hintTipo   = document.getElementById('hint-tipo');
+  if (tipo === 'gmail') {
+    labelSenha.textContent = 'Senha do App (App Password)';
+    hintSenha.innerHTML    = 'Para Gmail use uma <strong>Senha de App</strong>: Conta Google → Segurança → Verificação em 2 etapas → Senhas de app → gere para "E-mail".';
+    hintTipo.textContent   = 'Use o botão "Restaurar padrões" para preencher os campos do servidor com os valores do Google.';
+  } else {
+    labelSenha.textContent = 'Senha';
+    hintSenha.textContent  = 'Senha de autenticação do servidor SMTP.';
+    hintTipo.textContent   = 'Configure host, porta e segurança conforme indicado pelo seu provedor de e-mail.';
+  }
+}
+
+function restaurarPadroesEmail() {
+  const tipo     = document.getElementById('email-tipo').value;
+  const defaults = tipo === 'gmail' ? GMAIL_DEFAULTS : SMTP_DEFAULTS;
+  document.getElementById('email-smtp-host').value   = defaults.host;
+  document.getElementById('email-smtp-port').value   = defaults.port;
+  document.getElementById('email-smtp-secure').value = defaults.secure;
+  document.getElementById('email-smtp-family').value = defaults.family;
+  document.getElementById('email-imap-host').value   = defaults.imap_host;
+  document.getElementById('email-imap-port').value   = defaults.imap_port;
+  document.getElementById('email-imap-secure').value = defaults.imap_secure;
+}
+
+async function carregarEmail() {
+  const cfg = await fetch('/api/ps/email-config').then(r => r.json());
+  document.getElementById('email-tipo').value         = cfg.tipo        || 'gmail';
+  document.getElementById('email-email').value        = cfg.email       || '';
+  const senhaEl = document.getElementById('email-senha');
+  senhaEl.value       = '';
+  senhaEl.type        = 'password';
+  senhaEl.placeholder = cfg.senha ? 'Configurada — deixe em branco para manter' : 'Nova senha...';
+  const eyeBtn = senhaEl.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
+  if (eyeBtn) { eyeBtn.querySelector('svg').innerHTML = SVG_EYE; eyeBtn.title = 'Mostrar/ocultar senha'; }
+  document.getElementById('email-smtp-host').value    = cfg.smtp_host   || '';
+  document.getElementById('email-smtp-port').value    = cfg.smtp_port   || '';
+  document.getElementById('email-smtp-secure').value  = cfg.smtp_secure ? 'true' : '';
+  document.getElementById('email-smtp-family').value  = String(cfg.family || 4);
+  document.getElementById('email-imap-host').value      = cfg.imap_host          || '';
+  document.getElementById('email-imap-port').value      = cfg.imap_port          || '';
+  document.getElementById('email-imap-secure').value    = cfg.imap_secure !== false ? 'true' : '';
+  document.getElementById('email-imap-intervalo').value = cfg.imap_intervalo_min || 2;
+  toggleEmailTipo();
+}
+
+async function salvarEmail() {
+  const tipo   = document.getElementById('email-tipo').value;
+  const email  = document.getElementById('email-email').value.trim();
+  const senha  = document.getElementById('email-senha').value;
+  const err    = document.getElementById('alert-err-email');
+  const ok     = document.getElementById('alert-ok-email');
+  if (!email) {
+    err.textContent = '❌ O endereço de e-mail é obrigatório.';
+    err.classList.remove('d-none');
+    setTimeout(() => err.classList.add('d-none'), 4000);
+    return;
+  }
+  const body = {
+    tipo, email, senha,
+    smtp_host:   document.getElementById('email-smtp-host').value.trim(),
+    smtp_port:   document.getElementById('email-smtp-port').value.trim(),
+    smtp_secure: document.getElementById('email-smtp-secure').value === 'true',
+    family:      Number(document.getElementById('email-smtp-family').value) || 4,
+    imap_host:         document.getElementById('email-imap-host').value.trim(),
+    imap_port:         Number(document.getElementById('email-imap-port').value) || 993,
+    imap_secure:       document.getElementById('email-imap-secure').value === 'true',
+    imap_intervalo_min: Math.max(1, Number(document.getElementById('email-imap-intervalo').value) || 2),
+  };
+  const r = await fetch('/api/ps/email-config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (r.ok) {
+    ok.classList.remove('d-none');
+    setTimeout(() => ok.classList.add('d-none'), 3000);
+    await carregarEmail();
+  }
+}
+
+async function testarImap() {
+  const span = document.getElementById('email-test-result');
+  span.textContent = '⏳ Testando conexão IMAP…';
+  span.style.color = 'var(--text-lo)';
+  try {
+    await salvarEmail();
+    const r = await fetch('/api/ps/imap-test', { method: 'POST' });
+    const data = await r.json();
+    if (r.ok) {
+      span.textContent = `✓ IMAP OK — ${data.naoLidos} e-mail(s) não lido(s) na caixa de entrada`;
+      span.style.color = 'var(--success)';
+    } else {
+      span.textContent = `✗ Falha IMAP: ${data.error}`;
+      span.style.color = 'var(--error)';
+    }
+  } catch (e) {
+    span.textContent = `✗ Erro: ${e.message}`;
+    span.style.color = 'var(--error)';
+  }
+}
+
+async function testarEmail() {
+  const span = document.getElementById('email-test-result');
+  span.textContent = '⏳ Testando envio SMTP…';
+  span.style.color = 'var(--text-lo)';
+  try {
+    await salvarEmail();
+    const r = await fetch('/api/ps/email-test', { method: 'POST' });
+    const data = await r.json();
+    if (r.ok) {
+      span.textContent = '✓ E-mail de teste enviado com sucesso!';
+      span.style.color = 'var(--success)';
+    } else {
+      span.textContent = `✗ ${data.error || 'Erro ao enviar e-mail.'}`;
+      span.style.color = '#dc2626';
+    }
+  } catch (e) {
+    span.textContent = `✗ ${e.message}`;
+    span.style.color = '#dc2626';
+  }
+}
+
+// ── Email Geral ───────────────────────────────────────────────────────────────
+function toggleEmailTipoGeral() {
+  const tipo       = document.getElementById('egeral-tipo').value;
+  const labelSenha = document.getElementById('label-senha-geral');
+  const hintSenha  = document.getElementById('hint-senha-geral');
+  const hintTipo   = document.getElementById('hint-tipo-geral');
+  if (tipo === 'gmail') {
+    labelSenha.textContent = 'Senha do App (App Password)';
+    hintSenha.innerHTML    = 'Para Gmail use uma <strong>Senha de App</strong>: Conta Google → Segurança → Verificação em 2 etapas → Senhas de app → gere para "E-mail".';
+    hintTipo.textContent   = 'Use o botão "Restaurar padrões" para preencher os campos do servidor com os valores do Google.';
+  } else {
+    labelSenha.textContent = 'Senha';
+    hintSenha.textContent  = 'Senha de autenticação do servidor SMTP.';
+    hintTipo.textContent   = 'Configure host, porta e segurança conforme indicado pelo seu provedor de e-mail.';
+  }
+}
+
+function restaurarPadroesEmailGeral() {
+  const tipo     = document.getElementById('egeral-tipo').value;
+  const defaults = tipo === 'gmail' ? GMAIL_DEFAULTS : SMTP_DEFAULTS;
+  document.getElementById('egeral-smtp-host').value   = defaults.host;
+  document.getElementById('egeral-smtp-port').value   = defaults.port;
+  document.getElementById('egeral-smtp-secure').value = defaults.secure;
+  document.getElementById('egeral-smtp-family').value = defaults.family;
+  document.getElementById('egeral-imap-host').value   = defaults.imap_host;
+  document.getElementById('egeral-imap-port').value   = defaults.imap_port;
+  document.getElementById('egeral-imap-secure').value = defaults.imap_secure;
+}
+
+async function carregarEmailGeral() {
+  const cfg = await fetch('/api/email-geral/config').then(r => r.json());
+  document.getElementById('egeral-tipo').value         = cfg.tipo        || 'gmail';
+  document.getElementById('egeral-email').value        = cfg.email       || '';
+  const senhaEl = document.getElementById('egeral-senha');
+  senhaEl.value       = '';
+  senhaEl.type        = 'password';
+  senhaEl.placeholder = cfg.senha ? 'Configurada — deixe em branco para manter' : 'Nova senha...';
+  const eyeBtn = senhaEl.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
+  if (eyeBtn) { eyeBtn.querySelector('svg').innerHTML = SVG_EYE; eyeBtn.title = 'Mostrar/ocultar senha'; }
+  document.getElementById('egeral-smtp-host').value    = cfg.smtp_host   || '';
+  document.getElementById('egeral-smtp-port').value    = cfg.smtp_port   || '';
+  document.getElementById('egeral-smtp-secure').value  = cfg.smtp_secure ? 'true' : '';
+  document.getElementById('egeral-smtp-family').value  = String(cfg.family || 4);
+  document.getElementById('egeral-imap-host').value    = cfg.imap_host   || '';
+  document.getElementById('egeral-imap-port').value    = cfg.imap_port   || '';
+  document.getElementById('egeral-imap-secure').value  = cfg.imap_secure ? 'true' : '';
+  toggleEmailTipoGeral();
+}
+
+async function salvarEmailGeral() {
+  const tipo   = document.getElementById('egeral-tipo').value;
+  const email  = document.getElementById('egeral-email').value.trim();
+  const senha  = document.getElementById('egeral-senha').value;
+  const err    = document.getElementById('alert-err-egeral');
+  const ok     = document.getElementById('alert-ok-egeral');
+  if (!email) {
+    err.textContent = '❌ O endereço de e-mail é obrigatório.';
+    err.classList.remove('d-none');
+    setTimeout(() => err.classList.add('d-none'), 4000);
+    return;
+  }
+  const body = {
+    tipo, email, senha,
+    smtp_host:   document.getElementById('egeral-smtp-host').value.trim(),
+    smtp_port:   document.getElementById('egeral-smtp-port').value.trim(),
+    smtp_secure: document.getElementById('egeral-smtp-secure').value === 'true',
+    family:      Number(document.getElementById('egeral-smtp-family').value) || 4,
+    imap_host:   document.getElementById('egeral-imap-host').value.trim(),
+    imap_port:   document.getElementById('egeral-imap-port').value.trim(),
+    imap_secure: document.getElementById('egeral-imap-secure').value === 'true',
+  };
+  const r = await fetch('/api/email-geral/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (r.ok) {
+    ok.classList.remove('d-none');
+    setTimeout(() => ok.classList.add('d-none'), 3000);
+    await carregarEmailGeral();
+  }
+}
+
+async function testarEmailGeral() {
+  const span = document.getElementById('egeral-test-result');
+  span.textContent = '⏳ Testando…';
+  span.style.color = 'var(--text-lo)';
+  try {
+    await salvarEmailGeral();
+    const r = await fetch('/api/email-geral/test', { method: 'POST' });
+    const data = await r.json();
+    if (r.ok) {
+      span.textContent = '✓ E-mail de teste enviado com sucesso!';
+      span.style.color = 'var(--success)';
+    } else {
+      span.textContent = `✗ ${data.error || 'Erro ao enviar e-mail.'}`;
+      span.style.color = '#dc2626';
+    }
+  } catch (e) {
+    span.textContent = `✗ ${e.message}`;
+    span.style.color = '#dc2626';
+  }
+}
+
+async function testarImapGeral() {
+  const span = document.getElementById('egeral-test-result');
+  span.textContent = '⏳ Testando IMAP…';
+  span.style.color = 'var(--text-lo)';
+  try {
+    await salvarEmailGeral();
+    const r = await fetch('/api/email-geral/imap-test', { method: 'POST' });
+    const data = await r.json();
+    if (r.ok) {
+      span.textContent = '✓ IMAP conectado com sucesso!';
+      span.style.color = 'var(--success)';
+    } else {
+      span.textContent = `✗ ${data.error || 'Erro ao conectar IMAP.'}`;
+      span.style.color = '#dc2626';
+    }
+  } catch (e) {
+    span.textContent = `✗ ${e.message}`;
+    span.style.color = '#dc2626';
+  }
+}
+
+// ── Link Público — Vagas ──────────────────────────────────────────────────────
+let lpToken = '', lpSlug = '';
+
+function lpAtualizarLink() {
+  const origem = location.origin;
+  const ident  = lpSlug || lpToken;
+  const link   = `${origem}/ps/${ident}`;
+  document.getElementById('lp-link').textContent    = link;
+  document.getElementById('lp-btn-abrir').href      = link;
+  const info = document.getElementById('lp-slug-info');
+  if (lpSlug) {
+    info.textContent = `URL amigável ativa: /ps/${lpSlug}  ·  Token original também continua funcionando.`;
+    info.style.color = 'var(--success)';
+  } else {
+    info.textContent = 'Sem apelido definido. O link usa o token completo.';
+    info.style.color = 'var(--text-lo)';
+  }
+}
+
+async function lpCarregar() {
+  const { token, slug } = await fetch('/api/ps/public-token').then(r => r.json());
+  lpToken = token;
+  lpSlug  = slug || '';
+  document.getElementById('lp-slug-input').value = lpSlug;
+  lpAtualizarLink();
+}
+
+async function lpSalvarSlug() {
+  const val = document.getElementById('lp-slug-input').value.trim();
+  if (val && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(val))
+    return alert('Slug inválido. Use apenas letras minúsculas, números e hífens (mínimo 3 caracteres).');
+  const r = await fetch('/api/ps/slug', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ slug: val }) });
+  if (!r.ok) { const e = await r.json(); return alert(e.error || 'Erro ao salvar slug.'); }
+  lpSlug = val || '';
+  lpAtualizarLink();
+}
+
+async function lpLimparSlug() {
+  await fetch('/api/ps/slug', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ slug: '' }) });
+  lpSlug = '';
+  document.getElementById('lp-slug-input').value = '';
+  lpAtualizarLink();
+}
+
+function lpSelecionarLink() {
+  const el = document.getElementById('lp-link');
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  window.getSelection().removeAllRanges();
+  window.getSelection().addRange(range);
+}
+
+async function lpCopiarLink() {
+  const texto = document.getElementById('lp-link').textContent;
+  await navigator.clipboard.writeText(texto);
+  const btn = document.getElementById('lp-btn-copiar');
+  btn.textContent = '✓ Copiado!';
+  setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+}
+
+async function lpRegenerarToken() {
+  if (!confirm('Regenerar o token irá invalidar o link atual imediatamente.\n\nTodos que tiverem o link antigo não conseguirão mais acessar a página.\n\nDeseja continuar?')) return;
+  const { token, slug } = await fetch('/api/ps/regenerate-token', { method:'POST' }).then(r => r.json());
+  lpToken = token;
+  lpSlug  = slug || '';
+  lpAtualizarLink();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 carregarWhatsapp();
 carregarAnalisador();
 </script>
+
+<!-- Modal Ajuda — Equivalências -->
+<div id="modal-ajuda-equiv" class="d-none" onclick="if(event.target===this)this.classList.add('d-none')" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(780px,96vw);max-height:92vh;overflow-y:auto;padding:32px;position:relative">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:16px;font-weight:700;color:var(--text-hi)">⚡ Equivalências de Palavras-chave — Ajuda</div>
+      <button onclick="document.getElementById('modal-ajuda-equiv').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px">💡 Por que equivalências existem?</div>
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 8px">Candidatos descrevem a mesma habilidade de formas diferentes. Um profissional de <strong style="color:var(--text-hi)">ADVPL</strong> pode escrever "Protheus", "TOTVS" ou "Microsiga" no currículo. Sem equivalências, ele seria eliminado na triagem mesmo sendo qualificado.</p>
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin:0">Você mapeia uma vez aqui e o sistema reconhece todas as variantes automaticamente em todas as triagens futuras.</p>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">🔍 Como a triagem aplica as equivalências?</div>
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 10px">Para cada Requisito Obrigatório da vaga, o sistema verifica o currículo em <strong style="color:var(--text-hi)">3 camadas em sequência</strong>:</p>
+      <div style="display:flex;gap:14px;margin-bottom:10px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">1</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:3px">Tabela de equivalências</div>
+          <div style="font-size:12.5px;color:var(--text-md);line-height:1.65">Verifica o termo principal e todos os sinônimos cadastrados. Se <em>qualquer um</em> aparecer no currículo, o requisito é atendido. Ex: "SoftExpert" → reconhece "se suite", "sesuite", "se-suite".</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;margin-bottom:10px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">2</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:3px">Palavras significativas</div>
+          <div style="font-size:12.5px;color:var(--text-md);line-height:1.65">Se o requisito é uma frase (ex: "Gestão de Pessoas"), cada palavra relevante é verificada individualmente. Conectivos e preposições são ignorados automaticamente.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px">
+        <div style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center">3</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:3px">Busca literal</div>
+          <div style="font-size:12.5px;color:var(--text-md);line-height:1.65">Por último, busca o termo exatamente como escrito na vaga. Captura termos não mapeados nas etapas anteriores.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">🏷️ Dois tipos de equivalências</div>
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
+        <div style="background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;white-space:nowrap;min-width:80px;text-align:center">⚙ embutido</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-hi)">Padrão do sistema</div>
+          <div style="font-size:12px;color:var(--text-lo);margin-top:2px;line-height:1.6">Vem pré-configurado cobrindo termos técnicos comuns (SoftExpert, SAP, Power BI, etc.). Pode ser editado — sua versão tem prioridade sobre o padrão. Para voltar ao original, use "Restaurar padrão".</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="background:#fefce8;color:#a16207;border:1px solid #fde68a;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;white-space:nowrap;min-width:80px;text-align:center">★ personalizado</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-hi)">Criado pelo recrutador</div>
+          <div style="font-size:12px;color:var(--text-lo);margin-top:2px;line-height:1.6">Equivalências específicas do seu negócio. Podem ser editadas ou excluídas a qualquer momento sem afetar os padrões do sistema.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px">⚡ Sugestão automática por IA</div>
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 6px">Ao cadastrar ou editar uma <strong style="color:var(--text-hi)">Função</strong>, após preencher os Requisitos Obrigatórios e Habilidades Técnicas, use o botão <strong>"Sugerir equivalências com IA"</strong>. O sistema gera variantes para cada termo e apresenta para você revisar antes de salvar.</p>
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin:0">Equivalências já existentes são exibidas na revisão — o sistema nunca sobrescreve sem sua aprovação explícita.</p>
+    </div>
+
+    <div>
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px">📌 Exemplo prático</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:14px 16px;font-size:12.5px;color:var(--text-md);line-height:1.8">
+        <strong style="color:var(--text-hi)">Keyword:</strong> ADVPL<br>
+        <strong style="color:var(--text-hi)">Variantes:</strong> <em>totvs, protheus, microsiga, advpl totvs, totvs protheus</em><br><br>
+        Candidato que escreve "Protheus" no currículo → passa pelo requisito "ADVPL" na triagem automaticamente, mesmo sem mencionar a palavra "ADVPL".
+      </div>
+    </div>
+  </div>
+</div>
+<!-- ===================== MODAL AJUDA EMAIL ===================== -->
+<div id="modal-ajuda-email" class="d-none" onclick="if(event.target===this)this.classList.add('d-none')" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:400;display:flex;align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border-radius:14px;padding:32px;max-width:720px;width:95%;max-height:88vh;overflow-y:auto;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px">
+      <div style="font-size:17px;font-weight:700;color:var(--text-hi)">❓ Ajuda — Configuração de E-mail</div>
+      <button onclick="document.getElementById('modal-ajuda-email').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <!-- Abas do modal -->
+    <div class="ajuda-tabs" style="display:flex;gap:6px;margin-bottom:22px;border-bottom:1px solid var(--border);padding-bottom:0">
+      <button class="ajuda-tab-btn active" data-target="ajuda-email-gmail" onclick="mudarAbaAjudaEmail(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600;margin-bottom:-1px">🔴 Gmail</button>
+      <button class="ajuda-tab-btn" data-target="ajuda-email-smtp" onclick="mudarAbaAjudaEmail(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">📧 SMTP Genérico</button>
+    </div>
+
+    <!-- Tab: Gmail -->
+    <div id="ajuda-email-gmail">
+
+      <div style="background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.2);border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:13px;line-height:1.7;color:var(--text-md)">
+        <strong style="color:var(--text-hi)">⚠️ Atenção:</strong> o Gmail <strong>não aceita sua senha normal</strong> para conexões SMTP/IMAP por aplicativos externos. É obrigatório usar uma <strong>Senha de App</strong>.
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">📋 Passo a passo — Senha de App</div>
+      <div style="font-size:13px;color:var(--text-md);line-height:1.9;margin-bottom:18px">
+        <strong style="color:var(--text-hi)">1.</strong> Acesse <strong>myaccount.google.com</strong><br>
+        <strong style="color:var(--text-hi)">2.</strong> Vá em <em>Segurança → Verificação em 2 etapas</em> e ative (obrigatório)<br>
+        <strong style="color:var(--text-hi)">3.</strong> Ainda em Segurança, procure <em>Senhas de app</em><br>
+        <strong style="color:var(--text-hi)">4.</strong> Escolha o app <strong>E-mail</strong> e gere a senha (16 caracteres)<br>
+        <strong style="color:var(--text-hi)">5.</strong> Cole essa senha no campo <strong>Senha do App</strong> aqui no sistema
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">⚙️ Configurações recomendadas para Gmail</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:14px 16px;font-size:12.5px;color:var(--text-md);line-height:1.9;margin-bottom:18px">
+        <strong style="color:var(--text-hi)">SMTP Host:</strong> smtp.gmail.com &nbsp;·&nbsp; <strong>Porta:</strong> 465 &nbsp;·&nbsp; <strong>Segurança:</strong> SSL/TLS<br>
+        <strong style="color:var(--text-hi)">IMAP Host:</strong> imap.gmail.com &nbsp;·&nbsp; <strong>Porta:</strong> 993 &nbsp;·&nbsp; <strong>Segurança:</strong> SSL/TLS<br>
+        <strong style="color:var(--text-hi)">Família de IP:</strong> IPv4 (recomendado)
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">✅ Habilitar IMAP no Gmail</div>
+      <div style="font-size:13px;color:var(--text-md);line-height:1.8;margin-bottom:18px">
+        No Gmail, acesse <em>Configurações → Ver todas as configurações → Encaminhamento e POP/IMAP</em> e certifique-se de que <strong>IMAP está ativado</strong>.
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">📥 Como funciona o recebimento automático de currículos</div>
+      <div style="font-size:13px;color:var(--text-md);line-height:1.8;margin-bottom:18px">
+        O sistema conecta à sua caixa de entrada via IMAP a cada <strong>2 minutos</strong> de forma automática. Quando encontra e-mails com o assunto no padrão <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px">[ID] - [Vaga] - [Nome]</code>, ele:<br><br>
+        <strong>1.</strong> Faz o download do PDF em memória (sem gravar no disco)<br>
+        <strong>2.</strong> Envia o PDF para análise da IA<br>
+        <strong>3.</strong> Salva o currículo e cria a candidatura automaticamente<br>
+        <strong>4.</strong> Responde ao candidato com um e-mail HTML confirmando o recebimento<br>
+        <strong>5.</strong> Marca o e-mail como lido na caixa de entrada
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">🔥 Firewall e Antivírus</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:14px 16px;font-size:12.5px;color:var(--text-md);line-height:1.9">
+        <strong style="color:var(--text-hi)">Portas de saída necessárias:</strong><br>
+        &bull; <strong>993/TCP</strong> (saída) — IMAP com SSL/TLS para leitura de e-mails<br>
+        &bull; <strong>465/TCP</strong> (saída) — SMTP com SSL/TLS para envio de e-mails<br>
+        &bull; <strong>587/TCP</strong> (saída) — alternativa SMTP com STARTTLS<br><br>
+        <strong style="color:var(--success)">✅ Nenhuma porta de entrada (inbound) precisa ser aberta.</strong> O sistema sempre inicia a conexão de saída.<br><br>
+        <strong style="color:var(--text-hi)">Antivírus / Pasta:</strong> nenhuma liberação de pasta é necessária. Todo o processamento de PDF é feito <strong>100% em memória</strong>, sem arquivos temporários gravados no disco.
+      </div>
+    </div>
+
+    <!-- Tab: SMTP Genérico -->
+    <div id="ajuda-email-smtp" class="d-none">
+
+      <div style="font-size:13px;color:var(--text-md);line-height:1.8;margin-bottom:18px">
+        Use o modo <strong>SMTP Genérico</strong> para qualquer provedor de e-mail corporativo ou de terceiros (Outlook, Yahoo, Zoho, Titan, Locaweb, UOL, etc.).
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">⚙️ Configurações típicas por provedor</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:14px 16px;font-size:12.5px;color:var(--text-md);line-height:1.9;margin-bottom:18px">
+        <strong style="color:var(--text-hi)">Outlook / Hotmail / Microsoft 365:</strong><br>
+        &bull; SMTP: smtp.office365.com · Porta 587 · STARTTLS<br>
+        &bull; IMAP: outlook.office365.com · Porta 993 · SSL/TLS<br><br>
+        <strong style="color:var(--text-hi)">Yahoo Mail:</strong><br>
+        &bull; SMTP: smtp.mail.yahoo.com · Porta 465 · SSL/TLS<br>
+        &bull; IMAP: imap.mail.yahoo.com · Porta 993 · SSL/TLS<br><br>
+        <strong style="color:var(--text-hi)">Zoho Mail:</strong><br>
+        &bull; SMTP: smtp.zoho.com · Porta 465 · SSL/TLS<br>
+        &bull; IMAP: imap.zoho.com · Porta 993 · SSL/TLS<br><br>
+        <strong style="color:var(--text-hi)">Outros provedores:</strong> consulte a documentação do seu serviço de e-mail.
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">🔑 Autenticação</div>
+      <div style="font-size:13px;color:var(--text-md);line-height:1.8;margin-bottom:18px">
+        Use o endereço de e-mail completo como <strong>usuário</strong> e a senha da conta (ou senha de app, se o provedor exigir autenticação de dois fatores). Nunca use a senha pessoal se houver opção de senha de app/token.
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">📥 Como funciona o recebimento automático de currículos</div>
+      <div style="font-size:13px;color:var(--text-md);line-height:1.8;margin-bottom:18px">
+        Idêntico ao Gmail: conexão IMAP a cada <strong>2 minutos</strong>, processamento em memória, sem gravação em disco, resposta automática ao candidato e marcação como lido.<br><br>
+        O sistema usa as configurações de IMAP informadas (host, porta, segurança) para conectar ao seu provedor.
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">🔥 Firewall e Antivírus</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:14px 16px;font-size:12.5px;color:var(--text-md);line-height:1.9">
+        <strong style="color:var(--text-hi)">Portas de saída necessárias:</strong><br>
+        &bull; <strong>993/TCP</strong> (saída) — IMAP SSL/TLS<br>
+        &bull; <strong>143/TCP</strong> (saída) — IMAP sem TLS (não recomendado)<br>
+        &bull; <strong>465/TCP</strong> (saída) — SMTP SSL/TLS<br>
+        &bull; <strong>587/TCP</strong> (saída) — SMTP STARTTLS<br><br>
+        <strong style="color:var(--success)">✅ Nenhuma porta de entrada (inbound) precisa ser aberta.</strong><br><br>
+        <strong style="color:var(--text-hi)">Antivírus / Pasta:</strong> processamento 100% em memória — nenhuma liberação de pasta ou exceção de antivírus é necessária.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Templates de E-mail ───────────────────────────────────────────────────────
+const TPL_CONF_ASSUNTO_DEFAULT = 'Currículo processado com sucesso — {{VAGA}}';
+const TPL_CONF_HTML_DEFAULT = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:'Segoe UI',Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.08)">
+        <tr><td style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px;text-align:center">
+          <div style="font-size:32px;margin-bottom:8px">✅</div>
+          <div style="color:#fff;font-size:22px;font-weight:700">Currículo Processado com Sucesso!</div>
+          <div style="color:rgba(255,255,255,.8);font-size:14px;margin-top:6px">Seu currículo foi analisado e cadastrado em nossa base</div>
+        </td></tr>
+        <tr><td style="padding:36px 40px">
+          <p style="font-size:16px;color:#1f2937;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p>
+          <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">
+            Recebemos seu currículo para a vaga de <strong style="color:#059669">{{VAGA}}</strong>.
+            Ele foi <strong>processado pela nossa inteligência artificial</strong> e está
+            <strong>gravado em nossa base de candidatos</strong>. 🎉
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px">
+            <tr><td style="padding:16px 20px">
+              <div style="font-size:13px;color:#166534;font-weight:600;margin-bottom:10px">📋 Status do seu currículo:</div>
+              <table width="100%" cellpadding="3" cellspacing="0">
+                <tr><td style="font-size:13px;color:#166534;width:20px">✔</td><td style="font-size:13px;color:#374151">PDF recebido e lido com sucesso</td></tr>
+                <tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Dados extraídos via inteligência artificial</td></tr>
+                <tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Candidatura registrada para a vaga de <strong>{{VAGA}}</strong></td></tr>
+                <tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Currículo gravado na base de candidatos</td></tr>
+              </table>
+            </td></tr>
+          </table>
+          <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">
+            Nossa equipe irá analisar seu perfil e entrar em contato. Fique atento ao seu e-mail e telefone.
+          </p>
+          <div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:6px;padding:14px 18px;font-size:13px;color:#1e40af">
+            💡 Em caso de dúvidas, responda este e-mail e nossa equipe irá te atender.
+          </div>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb">
+          <p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+const TPL_REJ_ASSUNTO_DEFAULT = 'Seu currículo não pôde ser processado — {{VAGA}}';
+const TPL_REJ_HTML_DEFAULT = `<!DOCTYPE html>
+<html lang="pt-br">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:'Segoe UI',Arial,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.08)">
+        <tr><td style="background:linear-gradient(135deg,#dc2626,#f87171);padding:32px 40px;text-align:center">
+          <div style="font-size:28px;margin-bottom:8px">⚠️</div>
+          <div style="color:#fff;font-size:22px;font-weight:700">Currículo Não Aceito</div>
+          <div style="color:rgba(255,255,255,.8);font-size:14px;margin-top:6px">Não foi possível processar seu arquivo</div>
+        </td></tr>
+        <tr><td style="padding:36px 40px">
+          <p style="font-size:16px;color:#1f2937;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p>
+          <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px">
+            Recebemos seu e-mail para a vaga de <strong style="color:#dc2626">{{VAGA}}</strong>, porém não foi possível processar seu currículo.
+          </p>
+          <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:6px;padding:16px 20px;font-size:14px;color:#991b1b;margin-bottom:20px">
+            <strong>Motivo:</strong> {{MOTIVO}}
+          </div>
+          <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px">
+            Por favor, reenvie seu currículo em formato <strong>PDF</strong> e certifique-se de que o assunto do e-mail siga o padrão:<br>
+            <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:13px">[ID] - [Nome da Vaga] - [Seu Nome]</code>
+          </p>
+        </td></tr>
+        <tr><td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb">
+          <p style="font-size:12px;color:#9ca3af;margin:0">Este é um e-mail automático — por favor não responda diretamente a esta mensagem.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+function mudarAbaTemplate(btn) {
+  document.querySelectorAll('.tpl-tab-btn').forEach(b => {
+    b.style.color = 'var(--text-lo)';
+    b.style.borderBottomColor = 'transparent';
+    document.getElementById(b.dataset.target).classList.add('d-none');
+  });
+  btn.style.color = 'var(--accent)';
+  btn.style.borderBottomColor = 'var(--accent)';
+  document.getElementById(btn.dataset.target).classList.remove('d-none');
+}
+
+function restaurarTemplateConfirmacao() {
+  document.getElementById('tpl-conf-assunto').value = TPL_CONF_ASSUNTO_DEFAULT;
+  document.getElementById('tpl-conf-html').value    = TPL_CONF_HTML_DEFAULT;
+}
+
+function restaurarTemplateRejeicao() {
+  document.getElementById('tpl-rej-assunto').value = TPL_REJ_ASSUNTO_DEFAULT;
+  document.getElementById('tpl-rej-html').value    = TPL_REJ_HTML_DEFAULT;
+}
+
+function previewTemplate(tipo) {
+  const html    = tipo === 'confirmacao'
+    ? document.getElementById('tpl-conf-html').value
+    : document.getElementById('tpl-rej-html').value;
+  const assunto = tipo === 'confirmacao'
+    ? document.getElementById('tpl-conf-assunto').value
+    : document.getElementById('tpl-rej-assunto').value;
+  const rendered = html
+    .replace(/\{\{NOME\}\}/g, 'João da Silva')
+    .replace(/\{\{VAGA\}\}/g, 'Analista de Sistemas')
+    .replace(/\{\{MOTIVO\}\}/g, 'O arquivo enviado não está no formato PDF.');
+  document.getElementById('preview-titulo').textContent  = tipo === 'confirmacao' ? 'Prévia — Confirmação' : 'Prévia — Rejeição';
+  document.getElementById('preview-assunto-bar').textContent = 'Assunto: ' + assunto.replace(/\{\{NOME\}\}/g,'João da Silva').replace(/\{\{VAGA\}\}/g,'Analista de Sistemas');
+  const iframe = document.getElementById('preview-iframe');
+  iframe.srcdoc = rendered;
+  document.getElementById('modal-preview-template').classList.remove('d-none');
+}
+
+async function carregarTemplates() {
+  try {
+    const data = await fetch('/api/ps/email-templates').then(r => r.json());
+    document.getElementById('tpl-conf-assunto').value = data.conf_assunto || TPL_CONF_ASSUNTO_DEFAULT;
+    document.getElementById('tpl-conf-html').value    = data.conf_html    || TPL_CONF_HTML_DEFAULT;
+    document.getElementById('tpl-rej-assunto').value  = data.rej_assunto  || TPL_REJ_ASSUNTO_DEFAULT;
+    document.getElementById('tpl-rej-html').value     = data.rej_html     || TPL_REJ_HTML_DEFAULT;
+  } catch {
+    restaurarTemplateConfirmacao();
+    restaurarTemplateRejeicao();
+  }
+}
+
+async function salvarTemplates() {
+  const ok  = document.getElementById('alert-ok-templates');
+  const err = document.getElementById('alert-err-templates');
+  try {
+    const body = {
+      conf_assunto: document.getElementById('tpl-conf-assunto').value,
+      conf_html:    document.getElementById('tpl-conf-html').value,
+      rej_assunto:  document.getElementById('tpl-rej-assunto').value,
+      rej_html:     document.getElementById('tpl-rej-html').value,
+    };
+    const r = await fetch('/api/ps/email-templates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      ok.classList.remove('d-none');
+      setTimeout(() => ok.classList.add('d-none'), 3000);
+    } else {
+      const d = await r.json();
+      err.textContent = `❌ ${d.error || 'Erro ao salvar.'}`;
+      err.classList.remove('d-none');
+      setTimeout(() => err.classList.add('d-none'), 4000);
+    }
+  } catch (e) {
+    err.textContent = `❌ ${e.message}`;
+    err.classList.remove('d-none');
+    setTimeout(() => err.classList.add('d-none'), 4000);
+  }
+}
+
+function mudarAbaAjudaEmail(btn) {
+  document.querySelectorAll('#modal-ajuda-email .ajuda-tab-btn').forEach(b => {
+    b.style.color = 'var(--text-lo)';
+    b.style.borderBottomColor = 'transparent';
+    b.classList.remove('active');
+    document.getElementById(b.dataset.target).classList.add('d-none');
+  });
+  btn.style.color = 'var(--accent)';
+  btn.style.borderBottomColor = 'var(--accent)';
+  btn.classList.add('active');
+  document.getElementById(btn.dataset.target).classList.remove('d-none');
+}
+</script>
+
 </body>
 </html>

@@ -12,11 +12,18 @@
     .stat-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px; }
     .stat-val  { font-size:28px;font-weight:800;color:var(--accent-light);line-height:1; }
     .stat-lbl  { font-size:12px;color:var(--text-lo);margin-top:4px; }
-    .vaga-row  { display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border); }
-    .vaga-row:last-child { border-bottom:none; }
+    .vaga-item  { border-bottom:1px solid var(--border); }
+    .vaga-item:last-child { border-bottom:none; }
+    .vaga-row  { display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;transition:background .12s; }
     .vaga-row:hover { background:var(--bg-hover); }
     .vaga-nome { font-weight:600;color:var(--text-hi);font-size:13.5px;flex:1;min-width:0; }
     .vaga-meta { font-size:12px;color:var(--text-lo);margin-top:2px; }
+    .vaga-arrow { font-size:13px;color:var(--text-lo);transition:transform .2s;flex-shrink:0; }
+    .vaga-arrow.open { transform:rotate(180deg); }
+    .vaga-panel { display:none;background:var(--bg-hover);border-top:1px solid var(--border);padding:0 16px 14px; }
+    .vaga-panel.open { display:block; }
+    .vaga-panel .table-cand th { padding-top:14px; }
+    .panel-empty { padding:18px 0;font-size:13px;color:var(--text-lo);text-align:center; }
     .badge-aberta   { background:rgba(34,197,94,.12);color:var(--success);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap; }
     .badge-cand     { background:rgba(37,99,235,.12);color:var(--accent);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:600;white-space:nowrap; }
     .table-cand { width:100%;border-collapse:collapse;font-size:13px; }
@@ -29,6 +36,47 @@
     .canal-badge { font-size:11px;padding:2px 8px;border-radius:10px; }
     .canal-email     { background:rgba(37,99,235,.1);color:var(--accent); }
     .canal-whatsapp  { background:rgba(34,197,94,.1);color:var(--success); }
+    /* Botão ajuda topbar */
+    .btn-ajuda-topbar { display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.25); }
+    .btn-ajuda-topbar:hover { background:#1d4ed8; }
+    /* Modal ajuda */
+    .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:center;justify-content:center; }
+    .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(820px,96vw);max-height:93vh;overflow-y:auto;padding:32px;position:relative; }
+    .ajuda-titulo { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px; }
+    .ajuda-etapa  { margin-bottom:20px; }
+    .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px; }
+    .ajuda-etapa p { font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ajuda-criterio { display:flex;align-items:flex-start;gap:12px;margin-bottom:10px; }
+    .ajuda-pts { background:var(--bg-hover);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;min-width:48px;text-align:center; }
+    .ajuda-criterio-info strong { font-size:13px;color:var(--text-hi); }
+    .ajuda-criterio-info p { font-size:12px;color:var(--text-lo);margin:2px 0 0; }
+    .ajuda-tabs { display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px; }
+    .ajuda-tab  { background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text-lo);cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s;margin-bottom:-1px; }
+    .ajuda-tab:hover { color:var(--text-hi); }
+    .ajuda-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .ajuda-tab-content { display:none; }
+    .ajuda-tab-content.active { display:block; }
+    .fluxo-step { display:flex;gap:14px;margin-bottom:18px; }
+    .fluxo-num  { flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center; }
+    .fluxo-body { flex:1; }
+    .fluxo-title { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .fluxo-desc  { font-size:12.5px;color:var(--text-md);line-height:1.75; }
+    .fluxo-sub   { font-size:12px;color:var(--text-lo);margin-top:6px;padding-left:12px;border-left:2px solid var(--border);line-height:1.8; }
+    .ia-card { border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px; }
+    .ia-card-header { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+    .ia-badge { font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap; }
+    .ia-badge-primary { background:#dbeafe;color:#1e40af; }
+    .ia-badge-fallback { background:#fef3c7;color:#92400e; }
+    .ia-card-title { font-size:14px;font-weight:700;color:var(--text-hi); }
+    .ia-card p { font-size:12.5px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ia-card p:last-child { margin:0; }
+    .ia-ops { background:var(--bg-hover);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:var(--text-md);line-height:2; }
+    .ia-ops strong { color:var(--text-hi); }
+    .ia-link { display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:8px;padding:5px 12px;margin-top:6px;transition:background .15s; }
+    .ia-link:hover { background:#eff6ff; }
+    .credito-calc { background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-top:16px; }
+    .credito-calc-title { font-size:13px;font-weight:700;color:#15803d;margin-bottom:8px; }
+    .credito-calc p { font-size:12.5px;color:#166534;line-height:1.8;margin:0; }
   </style>
 </head>
 <body>
@@ -41,15 +89,15 @@
     </div>
     <div class="sidebar-nav">
       <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
-        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
+        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-whatsapp">
+      <div class="submenu" id="sub-monitoramento">
         <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
         <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
+      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       <div class="nav-parent" onclick="toggleSubmenu('processo-seletivo')">
         <span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
@@ -87,7 +135,13 @@
   <div class="main">
     <div class="topbar">
       <span class="topbar-title">Processo Seletivo</span>
-      <span class="topbar-breadcrumb ms-auto">Recrutamento › Processo Seletivo</span>
+      <div class="ms-auto" style="display:flex;align-items:center;gap:14px">
+        <button class="btn-ajuda-topbar" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor" stroke="none"/></svg>
+          Ajuda · Como funciona
+        </button>
+        <span class="topbar-breadcrumb">Recrutamento › Processo Seletivo</span>
+      </div>
     </div>
 
     <div class="page-content">
@@ -99,28 +153,6 @@
         <div class="stat-card"><div class="stat-val" id="stat-hoje">—</div><div class="stat-lbl">Recebidas hoje</div></div>
       </div>
 
-      <!-- Link Público -->
-      <div class="card mb-4">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span>🔗 Link Público para Candidatos</span>
-          <a id="btn-abrir-pagina" href="#" target="_blank" class="btn btn-ghost" style="font-size:12px">↗ Abrir Página</a>
-        </div>
-        <div class="card-body">
-          <p style="font-size:13px;color:var(--text-md);margin-bottom:14px;line-height:1.7">
-            Publique este link em seu site, redes sociais ou comunicações para que candidatos possam se inscrever nas vagas abertas.
-            O link leva a uma página pública e segura — os dados só carregam com o token correto.
-          </p>
-          <div class="link-box">
-            <div class="link-input" id="link-publico" onclick="selecionarLink()"></div>
-            <button class="btn btn-primary" onclick="copiarLink()" id="btn-copiar">📋 Copiar</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px;margin-top:14px">
-            <button class="btn-warn" onclick="regenerarToken()">🔄 Regenerar Token</button>
-            <span style="font-size:12px;color:var(--text-lo)">Ao regenerar, o link anterior para de funcionar imediatamente.</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Vagas com candidaturas -->
       <div class="card mb-4">
         <div class="card-header">💼 Vagas em Aberto — Candidaturas por Vaga</div>
@@ -129,49 +161,316 @@
         </div>
       </div>
 
-      <!-- Candidaturas recentes -->
-      <div class="card">
-        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
-          <span>📋 Candidaturas Recebidas</span>
-          <span id="label-total-cand" style="font-size:12px;color:var(--text-lo)"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Ajuda -->
+<div id="modal-ajuda" class="modal-ajuda-overlay d-none" onclick="if(event.target===this)this.classList.add('d-none')">
+  <div class="modal-ajuda">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="ajuda-titulo" style="margin:0">🔍 Análise de Currículos — Ajuda</div>
+      <button onclick="document.getElementById('modal-ajuda').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <div class="ajuda-tabs">
+      <button class="ajuda-tab active" id="tab-btn-como-funciona" onclick="switchAjudaTab('como-funciona')">📖 Como funciona</button>
+      <button class="ajuda-tab" id="tab-btn-fluxo" onclick="switchAjudaTab('fluxo')">🔄 Fluxo da análise</button>
+      <button class="ajuda-tab" id="tab-btn-creditos" onclick="switchAjudaTab('creditos')">💳 Créditos de IA</button>
+      <button class="ajuda-tab" id="tab-btn-equivalencias" onclick="switchAjudaTab('equivalencias')">⚡ Equivalências</button>
+    </div>
+
+    <!-- Aba: Como funciona -->
+    <div id="tab-como-funciona" class="ajuda-tab-content active">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">⚡ Etapa 1 — Triagem automática</div>
+        <p>Antes de qualquer análise detalhada, o sistema faz uma triagem rápida em todos os currículos verificando os <strong style="color:var(--text-hi)">Requisitos Obrigatórios</strong> cadastrados na Função.</p>
+        <p>Quem <strong style="color:var(--error)">não atende</strong> esses critérios mínimos é eliminado e não entra na análise profunda.</p>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">📊 Etapa 2 — Pontuação por critérios (máx. 100 pts)</div>
+        <p>Os candidatos que passaram da triagem são analisados individualmente pela IA:</p>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">40 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Requisitos Obrigatórios</strong>
+            <p>Atende tudo = 40 pts. Parcialmente (>50%) = 20–35 pts. Poucos (<50%) = 5–15 pts. Nenhum = 0 pts <em>(score máximo cai para 25)</em>.</p>
+          </div>
         </div>
-        <div id="candidaturas-lista" style="padding:0 4px">
-          <div class="empty-state" style="padding:30px">Carregando...</div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">30 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Habilidades Técnicas</strong>
+            <p>Domínio das ferramentas e tecnologias listadas na vaga. Considera equivalências (ex: "SoftExpert" = "SE Suite").</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">15 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Nível e Tempo de Experiência Relevante</strong>
+            <p>O sistema calcula o tempo total de carreira e a IA avalia o tempo relevante para a vaga específica, classificando como Júnior / Pleno / Sênior.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts">15 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Formação Acadêmica</strong>
+            <p>A formação atende ou supera o definido na Função.</p>
+          </div>
         </div>
       </div>
-
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">✅ Etapa 3 — Encerrar Análise da Vaga</div>
+        <p>Após revisar os resultados no <a href="/analisador.html" style="color:var(--accent)">Analisador de Currículos</a>, marque os candidatos finalistas e clique em <strong>Encerrar Análise da Vaga</strong>. O resultado fica salvo no <a href="/historico.html" style="color:var(--accent)">Histórico de Análises</a>.</p>
+      </div>
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
+        <p>Compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong>, <strong style="color:#a16207">Médio (40–69 pts)</strong> ou <strong style="color:#b91c1c">Baixo (0–39 pts)</strong>.</p>
+      </div>
     </div>
+
+    <!-- Aba: Fluxo da análise -->
+    <div id="tab-fluxo" class="ajuda-tab-content">
+      <div class="fluxo-step">
+        <div class="fluxo-num">0</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Seleção de currículos</div>
+          <div class="fluxo-desc">O sistema busca todos os currículos cadastrados. Se você escolher <em>"Apenas candidatos desta vaga via Processo Seletivo"</em> no analisador, somente os currículos vinculados à vaga pelo formulário público são considerados.</div>
+        </div>
+      </div>
+      <div class="fluxo-step">
+        <div class="fluxo-num">1</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Triagem eliminatória por palavras-chave — sem IA</div>
+          <div class="fluxo-desc">Para cada currículo, o sistema extrai todo o texto e verifica se cada Requisito Obrigatório está presente, usando três camadas:</div>
+          <div class="fluxo-sub">
+            1. <strong>Tabela de equivalências</strong> — variantes do termo. Ex: "SoftExpert" reconhece "se suite", "sesuite".<br>
+            2. <strong>Palavras significativas</strong> — cada palavra relevante verificada individualmente.<br>
+            3. <strong>Fallback literal</strong> — busca o termo exatamente como escrito.<br><br>
+            Currículos que <strong>não atendem todos os requisitos</strong> são eliminados com motivo detalhado.
+          </div>
+        </div>
+      </div>
+      <div class="fluxo-step">
+        <div class="fluxo-num">2</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Cálculo automático de experiência total</div>
+          <div class="fluxo-desc">O sistema calcula deterministicamente o tempo total de carreira somando os períodos de cada experiência. Suporta formatos DD/MM/YYYY, MM/YYYY, "desde", "atual", "presente" e similares.</div>
+        </div>
+      </div>
+      <div class="fluxo-step">
+        <div class="fluxo-num">3</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Análise profunda individual pela IA</div>
+          <div class="fluxo-desc">Cada currículo aprovado é analisado individualmente. A IA pontua de acordo com a rubrica:</div>
+          <div class="fluxo-sub">
+            <strong>Requisitos Obrigatórios (40 pts)</strong> — Atende tudo = 40; maioria = 20–35; poucos = 5–15; nenhum = 0 (score final limitado a 25).<br>
+            <strong>Habilidades Técnicas (30 pts)</strong> — Domina todas = 30; maioria = 20; algumas = 10; nenhuma = 0.<br>
+            <strong>Nível/Experiência Relevante (15 pts)</strong> — Nível igual/superior = 15; um abaixo = 8; dois abaixo = 0.<br>
+            <strong>Formação Acadêmica (15 pts)</strong> — Atende/supera = 15; próxima área = 8; não atende = 0.
+          </div>
+        </div>
+      </div>
+      <div class="fluxo-step">
+        <div class="fluxo-num">4</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Fallback automático de IA e tratamento de falhas</div>
+          <div class="fluxo-desc">IA primária: <strong>Llama 3.3 70B</strong> via Groq. Em caso de rate limit (429), o sistema usa <strong>Gemini 2.0 Flash</strong> automaticamente. Se ambos falharem, o candidato recebe score neutro (50 pts) e não é eliminado.</div>
+        </div>
+      </div>
+      <div class="fluxo-step">
+        <div class="fluxo-num">5</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Eliminação pós-IA e ordenação</div>
+          <div class="fluxo-desc">Candidatos com <strong>Requisitos Obrigatórios = 0</strong> ou score ≤ 25 são movidos para eliminados. Os aprovados são ordenados do maior para o menor score.</div>
+        </div>
+      </div>
+      <div class="fluxo-step" style="margin-bottom:0">
+        <div class="fluxo-num">6</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Classificação final</div>
+          <div class="fluxo-sub">
+            <strong style="color:#15803d">Alto (70–100 pts)</strong> — candidato altamente compatível.<br>
+            <strong style="color:#a16207">Médio (40–69 pts)</strong> — candidato parcialmente compatível, merece avaliação.<br>
+            <strong style="color:#b91c1c">Baixo (0–39 pts)</strong> — baixa aderência ao perfil exigido.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba: Créditos de IA -->
+    <div id="tab-creditos" class="ajuda-tab-content">
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin-bottom:18px">
+        A triagem por palavras-chave e o cálculo de experiência são determinísticos — <strong style="color:var(--text-hi)">não consomem créditos</strong>. Créditos são gastos somente na <strong style="color:var(--text-hi)">análise profunda individual</strong> de cada currículo aprovado na triagem.
+      </p>
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-badge ia-badge-primary">IA Principal</span>
+          <span class="ia-card-title">Groq — Llama 3.3 70B Versatile</span>
+        </div>
+        <p>Motor principal da análise. Cada currículo aprovado é enviado individualmente ao modelo Llama 3.3 70B via API Groq, que retorna pontuação estruturada (JSON) nos quatro critérios.</p>
+        <div class="ia-ops">
+          <strong>Input estimado:</strong> 1.500 – 5.000 tokens por currículo <span style="color:var(--text-lo)">(texto do CV + perfil da função)</span><br>
+          <strong>Output estimado:</strong> 400 – 800 tokens por currículo <span style="color:var(--text-lo)">(JSON com scores, pontos e resumo)</span><br>
+          <strong>Média por análise:</strong> ~3.000 tokens input + ~600 tokens output
+        </div>
+        <p>A Groq oferece plano gratuito com limite de requisições por minuto. Para volumes maiores, utilize um plano pago.</p>
+        <a class="ia-link" href="https://console.groq.com" target="_blank">🔗 console.groq.com — Criar conta / adquirir créditos</a>
+      </div>
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-badge ia-badge-fallback">Fallback automático</span>
+          <span class="ia-card-title">Google Gemini 2.0 Flash</span>
+        </div>
+        <p>Ativado automaticamente quando a Groq retorna erro de limite (429) ou quota excedida.</p>
+        <div class="ia-ops">
+          <strong>Input estimado:</strong> 1.500 – 5.000 tokens por currículo<br>
+          <strong>Output estimado:</strong> 400 – 800 tokens por currículo<br>
+          <strong>Plano gratuito:</strong> até 1.500 requisições/dia e 1 milhão de tokens/minuto
+        </div>
+        <p>Para volume alto, habilite cobrança no Google AI Studio ou utilize via Google Cloud (Vertex AI).</p>
+        <a class="ia-link" href="https://aistudio.google.com" target="_blank">🔗 aistudio.google.com — Google AI Studio / créditos</a>
+      </div>
+      <div class="credito-calc">
+        <div class="credito-calc-title">📊 Como estimar o consumo por processo seletivo</div>
+        <p>
+          Considere apenas os currículos que <strong>passam da triagem</strong> — os eliminados não geram chamadas de IA.<br><br>
+          <strong>Fórmula simplificada (Groq):</strong><br>
+          Nº de CVs aprovados × 3.600 tokens médios ÷ 1.000.000 = Milhões de tokens<br><br>
+          <strong>Exemplo — 40 CVs aprovados:</strong><br>
+          40 × 3.600 = 144.000 tokens ≈ custo estimado com plano pago Groq: <strong>menos de US$ 0,15 por análise completa</strong><br><br>
+          <em style="font-size:11.5px">Valores de referência. Consulte sempre a tabela de preços atual de cada provedor antes de adquirir créditos.</em>
+        </p>
+      </div>
+    </div>
+
+    <!-- Aba: Equivalências -->
+    <div id="tab-equivalencias" class="ajuda-tab-content">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">💡 Por que equivalências existem?</div>
+        <p>Candidatos descrevem a mesma habilidade de formas diferentes. Um profissional de <strong style="color:var(--text-hi)">ADVPL</strong> pode escrever "Protheus", "TOTVS" ou "Microsiga" no currículo. Sem equivalências, ele seria eliminado na triagem mesmo sendo qualificado.</p>
+        <p>A tabela de equivalências resolve isso: você mapeia uma vez e o sistema reconhece todas as variantes automaticamente em toda triagem futura.</p>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🔍 Como a triagem usa as equivalências?</div>
+        <p>Para cada <strong style="color:var(--text-hi)">Requisito Obrigatório</strong> da vaga, o sistema verifica o texto do currículo em 3 camadas em sequência:</p>
+        <div class="fluxo-step" style="margin-bottom:12px">
+          <div class="fluxo-num">1</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Tabela de equivalências</div>
+            <div class="fluxo-desc">Verifica o termo principal e todos os sinônimos cadastrados. Se <em>qualquer um</em> aparecer no currículo, o requisito é considerado atendido. Ex: requisito "SoftExpert" → reconhece "se suite", "sesuite", "se-suite".</div>
+          </div>
+        </div>
+        <div class="fluxo-step" style="margin-bottom:12px">
+          <div class="fluxo-num">2</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Palavras significativas</div>
+            <div class="fluxo-desc">Se o requisito é uma frase (ex: "Gestão de Pessoas"), cada palavra relevante é verificada individualmente nas equivalências. Conectivos e preposições são ignorados.</div>
+          </div>
+        </div>
+        <div class="fluxo-step" style="margin-bottom:0">
+          <div class="fluxo-num">3</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Busca literal</div>
+            <div class="fluxo-desc">Por último, busca o termo exatamente como escrito na vaga. Captura termos que não estão nas equivalências e não foram desmembrados nas etapas anteriores.</div>
+          </div>
+        </div>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🏷️ Dois tipos de equivalências</div>
+        <div class="ajuda-criterio" style="margin-bottom:12px">
+          <div class="ajuda-pts" style="background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;font-size:11px;min-width:80px">⚙ embutido</div>
+          <div class="ajuda-criterio-info">
+            <strong>Padrão do sistema</strong>
+            <p>Vem pré-configurado, cobrindo termos técnicos comuns (SoftExpert, SAP, Power BI, etc.). Pode ser editado — sua versão tem prioridade sobre o padrão.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" style="background:#fefce8;color:#a16207;border:1px solid #fde68a;font-size:11px;min-width:80px">★ personalizado</div>
+          <div class="ajuda-criterio-info">
+            <strong>Criado pelo recrutador</strong>
+            <p>Equivalências específicas do seu negócio ou setor. Podem ser editadas ou excluídas a qualquer momento sem afetar o padrão.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">⚡ Sugestão automática por IA</div>
+        <p>Ao cadastrar ou editar uma <strong style="color:var(--text-hi)">Função</strong>, após preencher os Requisitos Obrigatórios e Habilidades Técnicas, use o botão <strong>"Sugerir equivalências com IA"</strong>. O sistema gera automaticamente variantes para cada termo e apresenta para você revisar antes de salvar.</p>
+        <p>Equivalências já existentes na base são exibidas na revisão — o sistema nunca sobrescreve sem sua aprovação explícita.</p>
+      </div>
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">⚙ Onde gerenciar</div>
+        <p>Acesse <a href="/configuracoes.html" style="color:var(--accent)">Configurações → aba Equivalências</a> para visualizar, criar, editar ou excluir qualquer equivalência.</p>
+        <div style="background:var(--bg-hover);border-radius:8px;padding:12px 16px;font-size:12.5px;color:var(--text-md);margin-top:10px;line-height:1.75">
+          <strong style="color:var(--text-hi)">Exemplo prático:</strong><br>
+          Keyword: <strong>ADVPL</strong><br>
+          Variantes: <em>totvs, protheus, microsiga, advpl totvs, totvs protheus</em><br><br>
+          Qualquer currículo que mencione uma dessas variantes passará pelo requisito "ADVPL" na triagem, mesmo sem citar a palavra "ADVPL".
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-let token = '';
-let vagas = [], candidaturas = [];
+let vagas = [], candidaturas = [], semVaga = [];
+
+  function switchAjudaTab(tab) {
+    document.querySelectorAll('.ajuda-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ajuda-tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none'; });
+    document.getElementById('tab-btn-' + tab).classList.add('active');
+    const content = document.getElementById('tab-' + tab);
+    content.style.display = 'block';
+    content.classList.add('active');
+  }
+
+// Deduplicação por candidato dentro de uma mesma vaga (email ou nome, mais recente primeiro)
+function deduplicarPorVaga(cands) {
+  const seen = new Map();
+  for (const c of cands) {
+    const key = (c.candidato_email || '').toLowerCase() || (c.candidato_nome || '').toLowerCase() || c.id;
+    if (!seen.has(key)) seen.set(key, c);
+  }
+  return Array.from(seen.values());
+}
+
+// Deduplicação para sem-vaga por email ou telefone (mais recente primeiro)
+function deduplicarSemVaga(lista) {
+  const seen = new Map();
+  for (const c of lista) {
+    const key = (c.email || '').toLowerCase() || c.telefone || String(c.id);
+    if (!seen.has(key)) seen.set(key, c);
+  }
+  return Array.from(seen.values());
+}
 
 async function carregar() {
-  [{ token }, vagas, candidaturas] = await Promise.all([
-    fetch('/api/ps/public-token').then(r => r.json()),
+  [vagas, candidaturas, semVaga] = await Promise.all([
     fetch('/api/vagas').then(r => r.json()),
     fetch('/api/ps/candidaturas').then(r => r.json()),
+    fetch('/api/ps/curriculos-sem-vaga').then(r => r.json()),
   ]);
-
-  const origem = location.origin;
-  const link   = `${origem}/ps/${token}`;
-  document.getElementById('link-publico').textContent = link;
-  document.getElementById('btn-abrir-pagina').href    = link;
-
   renderStats();
   renderVagas();
-  renderCandidaturas();
 }
 
 function renderStats() {
-  const abertas = vagas.filter(v => v.status === 'aberta').length;
-  const hoje    = new Date().toISOString().slice(0, 10);
-  const hojeN   = candidaturas.filter(c => c.data?.startsWith(hoje)).length;
-  document.getElementById('stat-total-cand').textContent   = candidaturas.length;
+  const abertas  = vagas.filter(v => v.status === 'aberta').length;
+  const hoje     = new Date().toISOString().slice(0, 10);
+  // contagem deduplicada: por candidato+vaga
+  const dedupTotal = (() => {
+    const seen = new Map();
+    for (const c of candidaturas) {
+      const key = `${c.vaga_id}|${(c.candidato_email||'').toLowerCase()||(c.candidato_nome||'').toLowerCase()}`;
+      if (!seen.has(key)) seen.set(key, c);
+    }
+    return seen.size;
+  })();
+  const hojeN = candidaturas.filter(c => c.data?.startsWith(hoje)).length;
+  document.getElementById('stat-total-cand').textContent    = dedupTotal;
   document.getElementById('stat-vagas-abertas').textContent = abertas;
   document.getElementById('stat-hoje').textContent          = hojeN;
 }
@@ -183,79 +482,74 @@ function renderVagas() {
     el.innerHTML = '<div class="empty-state">Nenhuma vaga aberta. <a href="/vagas.html" style="color:var(--accent)">Cadastrar vagas →</a></div>';
     return;
   }
+  const semVagaItem = (() => {
+    const lista = deduplicarSemVaga(semVaga);
+    const n     = lista.length;
+    const rows  = lista.map(c => `<tr>
+        <td style="color:var(--text-lo);white-space:nowrap">${new Date(c.recebido_em || Date.now()).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+        <td style="font-weight:600;color:var(--text-hi)">${c.nome || '—'}</td>
+        <td style="color:var(--text-lo)">${c.email || '—'}</td>
+        <td><span class="canal-badge canal-whatsapp">💬 WhatsApp</span></td>
+        <td style="text-align:right"><a href="/curriculo.html?id=${c.id}" target="_blank" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Ver</a></td>
+      </tr>`).join('');
+    return `<div class="vaga-item">
+      <div class="vaga-row" onclick="toggleVaga('sem-vaga', this)">
+        <div style="flex:1;min-width:0">
+          <div class="vaga-nome" style="color:var(--text-md)">Sem vaga definida</div>
+          <div class="vaga-meta">Currículos recebidos via WhatsApp não vinculados a nenhuma vaga</div>
+        </div>
+        <span class="badge-cand">${n} currículo${n !== 1 ? 's' : ''}</span>
+        <span class="vaga-arrow">▾</span>
+      </div>
+      <div class="vaga-panel" id="panel-sem-vaga">
+        ${rows ? `<table class="table-cand"><thead><tr>
+            <th>Data</th><th>Candidato</th><th>E-mail</th><th>Canal</th><th style="text-align:right">Currículo</th>
+          </tr></thead><tbody>${rows}</tbody></table>`
+          : '<div class="panel-empty">Nenhum currículo sem vaga no momento.</div>'}
+      </div>
+    </div>`;
+  })();
+
   el.innerHTML = abertas.map(v => {
     const f    = v.funcao || {};
-    const cand = candidaturas.filter(c => c.vaga_id === v.id).length;
-    return `<div class="vaga-row">
-      <div style="flex:1;min-width:0">
-        <div class="vaga-nome">${f.nome || '—'}</div>
-        <div class="vaga-meta">${[f.area, f.nivel_experiencia].filter(Boolean).join(' · ')} · ${v.quantidade} vaga${v.quantidade !== 1 ? 's' : ''}</div>
+    const cand = deduplicarPorVaga(candidaturas.filter(c => c.vaga_id === v.id));
+    const n    = cand.length;
+    const rows = cand.length
+      ? cand.map(c => `<tr>
+          <td style="color:var(--text-lo);white-space:nowrap">${new Date(c.data).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+          <td style="font-weight:600;color:var(--text-hi)">${c.candidato_nome || '—'}</td>
+          <td style="color:var(--text-lo)">${c.candidato_email || '—'}</td>
+          <td><span class="canal-badge canal-${c.canal}">${c.canal === 'email' ? '📧 Email' : '💬 WhatsApp'}</span></td>
+          <td style="text-align:right"><a href="/curriculo.html?id=${c.curriculo_id}" target="_blank" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Ver</a></td>
+        </tr>`).join('')
+      : '';
+    return `<div class="vaga-item">
+      <div class="vaga-row" onclick="toggleVaga(${v.id}, this)">
+        <div style="flex:1;min-width:0">
+          <div class="vaga-nome">${f.nome || '—'}</div>
+          <div class="vaga-meta">${[f.area, f.nivel_experiencia].filter(Boolean).join(' · ')} · ${v.quantidade} vaga${v.quantidade !== 1 ? 's' : ''}</div>
+        </div>
+        <span class="badge-aberta">● Aberta</span>
+        <span class="badge-cand">${n} candidatura${n !== 1 ? 's' : ''}</span>
+        <a href="/analisador.html?vaga_id=${v.id}&filtro=somente_vaga" class="btn btn-ghost" style="font-size:12px;white-space:nowrap" onclick="event.stopPropagation()">🔍 Analisar</a>
+        <span class="vaga-arrow">▾</span>
       </div>
-      <span class="badge-aberta">● Aberta</span>
-      <span class="badge-cand">${cand} candidatura${cand !== 1 ? 's' : ''}</span>
-      <a href="/analisador.html?vaga_id=${v.id}" class="btn btn-ghost" style="font-size:12px;white-space:nowrap">🔍 Analisar</a>
+      <div class="vaga-panel" id="panel-${v.id}">
+        ${rows ? `<table class="table-cand"><thead><tr>
+            <th>Data</th><th>Candidato</th><th>E-mail</th><th>Canal</th><th style="text-align:right">Currículo</th>
+          </tr></thead><tbody>${rows}</tbody></table>`
+          : '<div class="panel-empty">Nenhuma candidatura recebida para esta vaga ainda.</div>'}
+      </div>
     </div>`;
-  }).join('');
+  }).join('') + semVagaItem;
 }
 
-function renderCandidaturas() {
-  const el = document.getElementById('candidaturas-lista');
-  document.getElementById('label-total-cand').textContent = candidaturas.length
-    ? `${candidaturas.length} registro${candidaturas.length !== 1 ? 's' : ''}`
-    : '';
-
-  if (!candidaturas.length) {
-    el.innerHTML = '<div class="empty-state">Nenhuma candidatura recebida ainda.<br><span style="font-size:12px;margin-top:6px;display:block">Compartilhe o link público para que candidatos se inscrevam.</span></div>';
-    return;
-  }
-
-  const vagaMap = Object.fromEntries(vagas.map(v => [v.id, v.funcao?.nome || `Vaga #${v.id}`]));
-
-  el.innerHTML = `<div class="table-wrap"><table class="table-cand">
-    <thead><tr>
-      <th>Data</th>
-      <th>Candidato</th>
-      <th>E-mail</th>
-      <th>Vaga</th>
-      <th>Canal</th>
-      <th style="text-align:right">Currículo</th>
-    </tr></thead>
-    <tbody>${candidaturas.map(c => `<tr>
-      <td style="color:var(--text-lo);white-space:nowrap">${new Date(c.data).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
-      <td style="font-weight:600;color:var(--text-hi)">${c.candidato_nome || '—'}</td>
-      <td style="color:var(--text-lo)">${c.candidato_email || '—'}</td>
-      <td style="color:var(--text-md)">${vagaMap[c.vaga_id] || `Vaga #${c.vaga_id}`}</td>
-      <td><span class="canal-badge canal-${c.canal}">${c.canal === 'email' ? '📧 Email' : '💬 WhatsApp'}</span></td>
-      <td style="text-align:right"><a href="/curriculo.html?id=${c.curriculo_id}" target="_blank" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Ver</a></td>
-    </tr>`).join('')}
-    </tbody>
-  </table></div>`;
-}
-
-function selecionarLink() {
-  const el = document.getElementById('link-publico');
-  const range = document.createRange();
-  range.selectNodeContents(el);
-  window.getSelection().removeAllRanges();
-  window.getSelection().addRange(range);
-}
-
-async function copiarLink() {
-  const texto = document.getElementById('link-publico').textContent;
-  await navigator.clipboard.writeText(texto);
-  const btn = document.getElementById('btn-copiar');
-  btn.textContent = '✓ Copiado!';
-  setTimeout(() => btn.textContent = '📋 Copiar', 2000);
-}
-
-async function regenerarToken() {
-  if (!confirm('Regenerar o token irá invalidar o link atual imediatamente.\n\nTodos que tiverem o link antigo não conseguirão mais acessar a página.\n\nDeseja continuar?')) return;
-  const { token: novo } = await fetch('/api/ps/regenerate-token', { method: 'POST' }).then(r => r.json());
-  token = novo;
-  const origem = location.origin;
-  const link   = `${origem}/ps/${token}`;
-  document.getElementById('link-publico').textContent     = link;
-  document.getElementById('btn-abrir-pagina').href        = link;
+function toggleVaga(id, row) {
+  const panel = document.getElementById(`panel-${id}`);
+  const arrow = row.querySelector('.vaga-arrow');
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  arrow.classList.toggle('open', !isOpen);
 }
 
 carregar();

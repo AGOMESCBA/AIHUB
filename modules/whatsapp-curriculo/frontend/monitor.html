@@ -6,11 +6,56 @@
   <title>Monitor — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    .monitor-wrap { display:flex; gap:14px; height:calc(100vh - 178px); }
+    /* ── Abas ─────────────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-md);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: color .15s;
+    }
+    .tab-btn:hover { color: var(--text-hi); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--bg-hover);
+      color: var(--text-lo);
+    }
+    .tab-badge.badge-running {
+      background: rgba(22,163,74,.12);
+      color: var(--success);
+    }
+
+    /* ── Painel de cada aba ───────────────────────────────────────────────── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Monitor (igual ao original) ─────────────────────────────────────── */
+    .monitor-wrap { display:flex; gap:14px; height:calc(100vh - 218px); }
     .terminal     { flex:1; min-width:0; height:100%; }
     .toolbar      { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 
-    /* Painel QR lateral */
+    /* ── Painel QR lateral ────────────────────────────────────────────────── */
     .qr-panel {
       width: 268px; min-width: 268px;
       background: var(--bg-card);
@@ -53,28 +98,34 @@
 <body>
 <div class="layout">
 
-      <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
     </div>
     <div class="sidebar-nav">
       <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
-        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
+        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-whatsapp">
+      <div class="submenu" id="sub-monitoramento">
         <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
         <a href="/monitor.html" class="nav-item sub active"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      <div class="nav-parent" onclick="toggleSubmenu('ps')">
+        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-vagas">
+      <div class="submenu" id="sub-ps">
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
@@ -93,70 +144,99 @@
       <div class="user-info-text">
         <div class="user-name">Admin</div><div class="user-role">Administrador</div>
       </div>
-      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </nav>
 
   <div class="main">
     <div class="topbar">
       <span class="topbar-title">Monitor</span>
-      <span class="topbar-breadcrumb ms-auto">WhatsApp Currículo › Monitor</span>
+      <span class="topbar-breadcrumb ms-auto">Monitoramento › Monitor</span>
     </div>
 
     <div class="page-content">
 
-      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <span id="status-pill" class="status-pill pill-stopped">Parado</span>
-        <span id="log-count" class="text-muted text-sm"></span>
-        <div class="toolbar ms-auto">
-          <button id="btn-start" class="btn btn-success" onclick="startService()">▶ Iniciar Serviço</button>
-          <button id="btn-stop"  class="btn btn-danger d-none" onclick="stopService()">■ Parar Serviço</button>
-          <button id="btn-qr"   class="btn btn-primary" onclick="toggleQrPanel()" title="Mostrar/ocultar painel QR Code">📱 QR Code</button>
-          <button class="btn btn-info"  onclick="saveLog()">💾 Salvar Log</button>
-          <button class="btn btn-ghost" onclick="clearLog()">🗑 Limpar</button>
-        </div>
+      <!-- ── Abas ─────────────────────────────────────────────────────────── -->
+      <div class="tabs">
+        <button class="tab-btn active" id="tab-wa-btn" onclick="mudarAba('wa')">
+          💬 Serviço WhatsApp
+          <span class="tab-badge" id="tab-wa-badge">Parado</span>
+        </button>
+        <button class="tab-btn" id="tab-email-btn" onclick="mudarAba('email')">
+          📧 Serviço E-mail
+          <span class="tab-badge" id="tab-email-badge">Parado</span>
+        </button>
       </div>
 
-      <div class="monitor-wrap">
+      <!-- ── Aba WhatsApp ──────────────────────────────────────────────────── -->
+      <div class="tab-panel active" id="tab-wa">
 
-        <div id="terminal" class="terminal"></div>
-
-        <!-- Painel QR lateral -->
-        <div id="qr-panel" class="qr-panel" style="display:none">
-          <div class="qr-panel-title" style="display:flex;align-items:center;justify-content:space-between">
-            <span>📱 Conectar WhatsApp</span>
-            <button onclick="fecharQrPanel()" title="Fechar painel"
-              style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;color:var(--text-lo);padding:0 2px"
-              onmouseover="this.style.color='var(--text-hi)'" onmouseout="this.style.color='var(--text-lo)'">×</button>
+        <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+          <span id="status-pill" class="status-pill pill-stopped">Parado</span>
+          <span id="log-count" class="text-muted text-sm"></span>
+          <div class="toolbar ms-auto">
+            <button id="btn-start" class="btn btn-success" onclick="startService()">▶ Iniciar Serviço</button>
+            <button id="btn-stop"  class="btn btn-danger d-none" onclick="stopService()">■ Parar Serviço</button>
+            <button id="btn-qr"   class="btn btn-primary" onclick="toggleQrPanel()" title="Mostrar/ocultar painel QR Code">📱 QR Code</button>
+            <button class="btn btn-info"  onclick="saveLog('wa')">💾 Salvar Log</button>
+            <button class="btn btn-ghost" onclick="clearLog('wa')">🗑 Limpar</button>
           </div>
+        </div>
 
-          <div id="qr-connected" class="qr-connected d-none">
-            ✅ WhatsApp conectado!<br>
-            <span style="font-weight:400;font-size:12px">Número ativo e recebendo currículos.</span>
+        <div class="monitor-wrap">
+          <div id="terminal" class="terminal"></div>
+
+          <!-- Painel QR lateral -->
+          <div id="qr-panel" class="qr-panel" style="display:none">
+            <div class="qr-panel-title" style="display:flex;align-items:center;justify-content:space-between">
+              <span>📱 Conectar WhatsApp</span>
+              <button onclick="fecharQrPanel()" title="Fechar painel"
+                style="background:none;border:none;cursor:pointer;font-size:18px;line-height:1;color:var(--text-lo);padding:0 2px"
+                onmouseover="this.style.color='var(--text-hi)'" onmouseout="this.style.color='var(--text-lo)'">×</button>
+            </div>
+            <div id="qr-connected" class="qr-connected d-none">
+              ✅ WhatsApp conectado!<br>
+              <span style="font-weight:400;font-size:12px">Número ativo e recebendo currículos.</span>
+            </div>
+            <div id="qr-waiting" class="qr-waiting d-none">
+              ⏳ Iniciando serviço…<br>aguardando QR Code.
+            </div>
+            <img id="qr-img" src="" alt="QR Code" class="d-none qr-pulse">
+            <p id="qr-hint" class="d-none">
+              No celular: <strong>WhatsApp → Menu → Dispositivos conectados → Conectar dispositivo</strong>
+            </p>
+            <p style="font-size:11px;color:var(--text-lo);line-height:1.5;width:100%">
+              O QR conecta o celular que o escanear. Para trocar de número, use <strong>Trocar número</strong> abaixo.
+            </p>
+            <div id="qr-actions" style="width:100%;display:flex;flex-direction:column;gap:8px">
+              <button id="btn-qr-start" class="btn btn-success" onclick="startService()" style="width:100%">
+                ▶ Iniciar para gerar QR
+              </button>
+              <button id="btn-qr-restart" class="btn btn-warning d-none" onclick="trocarNumero()" style="width:100%;font-size:12px">
+                🔄 Trocar número (novo QR)
+              </button>
+            </div>
           </div>
+        </div>
 
-          <div id="qr-waiting" class="qr-waiting d-none">
-            ⏳ Iniciando serviço…<br>aguardando QR Code.
+      </div>
+
+      <!-- ── Aba E-mail ────────────────────────────────────────────────────── -->
+      <div class="tab-panel" id="tab-email">
+
+        <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+          <span id="email-status-pill" class="status-pill pill-stopped">Parado</span>
+          <span id="email-log-count" class="text-muted text-sm"></span>
+          <div class="toolbar ms-auto">
+            <button id="email-btn-start" class="btn btn-success" onclick="startEmailService()">▶ Iniciar Serviço</button>
+            <button id="email-btn-stop"  class="btn btn-danger d-none" onclick="stopEmailService()">■ Parar Serviço</button>
+            <button class="btn btn-info"  onclick="saveLog('email')">💾 Salvar Log</button>
+            <button class="btn btn-ghost" onclick="clearLog('email')">🗑 Limpar</button>
           </div>
+        </div>
 
-          <img id="qr-img" src="" alt="QR Code" class="d-none qr-pulse">
-
-          <p id="qr-hint" class="d-none">
-            No celular: <strong>WhatsApp → Menu → Dispositivos conectados → Conectar dispositivo</strong>
-          </p>
-
-          <p style="font-size:11px;color:var(--text-lo);line-height:1.5;width:100%">
-            O QR conecta o celular que o escanear. Para trocar de número, use <strong>Trocar número</strong> abaixo.
-          </p>
-
-          <div id="qr-actions" style="width:100%;display:flex;flex-direction:column;gap:8px">
-            <button id="btn-qr-start" class="btn btn-success" onclick="startService()" style="width:100%">
-              ▶ Iniciar para gerar QR
-            </button>
-            <button id="btn-qr-restart" class="btn btn-warning d-none" onclick="trocarNumero()" style="width:100%;font-size:12px">
-              🔄 Trocar número (novo QR)
-            </button>
-          </div>
+        <div class="monitor-wrap">
+          <div id="terminal-email" class="terminal"></div>
         </div>
 
       </div>
@@ -169,12 +249,26 @@
 <script src="/js/sidebar.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  const socket   = io();
-  const terminal = document.getElementById('terminal');
-  let lines = [], count = 0, timerInterval = null, timerStart = null;
+  const socket = io();
+
+  // Abre a aba correta se vier com hash (#email ou #whatsapp)
+  if (location.hash === '#email') mudarAba('email');
+
+  // ── Abas ──────────────────────────────────────────────────────────────────────
+  function mudarAba(aba) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${aba}`).classList.add('active');
+    document.getElementById(`tab-${aba}-btn`).classList.add('active');
+  }
+
+  // ── Estado ────────────────────────────────────────────────────────────────────
+  let waLines = [], waCount = 0, timerInterval = null, timerStart = null;
   let currentStatus = 'stopped';
   let qrPanelOpen = false;
-  let startedByQrPanel = false; // rastreia se o start foi disparado pelo painel QR
+  let startedByQrPanel = false;
+
+  let emailLines = [], emailCount = 0;
 
   const TAG = {
     info:     ['INFO',     'tag-info',    'msg-info'],
@@ -185,17 +279,56 @@
     saved:    ['GRAVADO',  'tag-saved',   'msg-saved'],
   };
 
-  function addLine(e) {
+  function makeLogLine(e) {
     const [label, tagCls, msgCls] = TAG[e.type] || TAG.info;
     const d = document.createElement('div');
     d.className = 'log-line';
     d.innerHTML = `<span class="log-ts">${e.timestamp||''}</span><span class="log-tag ${tagCls}">${label}</span><span class="log-msg ${msgCls}">${e.message}</span>`;
-    terminal.appendChild(d);
-    terminal.scrollTop = terminal.scrollHeight;
-    lines.push(`[${e.timestamp}] [${label}] ${e.message}`);
-    document.getElementById('log-count').textContent = `${++count} linha${count!==1?'s':''}`;
+    return d;
   }
 
+  // ── WhatsApp terminal ─────────────────────────────────────────────────────────
+  const terminal = document.getElementById('terminal');
+
+  function addLine(e) {
+    terminal.appendChild(makeLogLine(e));
+    terminal.scrollTop = terminal.scrollHeight;
+    waLines.push(`[${e.timestamp}] [${(TAG[e.type]||TAG.info)[0]}] ${e.message}`);
+    document.getElementById('log-count').textContent = `${++waCount} linha${waCount!==1?'s':''}`;
+  }
+
+  // ── E-mail terminal ───────────────────────────────────────────────────────────
+  const terminalEmail = document.getElementById('terminal-email');
+
+  function addEmailLine(e) {
+    terminalEmail.appendChild(makeLogLine(e));
+    terminalEmail.scrollTop = terminalEmail.scrollHeight;
+    emailLines.push(`[${e.timestamp}] [${(TAG[e.type]||TAG.info)[0]}] ${e.message}`);
+    document.getElementById('email-log-count').textContent = `${++emailCount} linha${emailCount!==1?'s':''}`;
+  }
+
+  // ── Salvar / Limpar ───────────────────────────────────────────────────────────
+  function saveLog(svc) {
+    const data = svc === 'email' ? emailLines : waLines;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data.join('\n')], { type:'text/plain' }));
+    a.download = `iahub_${svc}_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+    a.click();
+  }
+
+  function clearLog(svc) {
+    if (svc === 'email') {
+      terminalEmail.innerHTML = '';
+      emailLines = []; emailCount = 0;
+      document.getElementById('email-log-count').textContent = '';
+    } else {
+      terminal.innerHTML = '';
+      waLines = []; waCount = 0;
+      document.getElementById('log-count').textContent = '';
+    }
+  }
+
+  // ── WhatsApp status ───────────────────────────────────────────────────────────
   const PILLS = {
     stopped:   ['pill-stopped',   'Parado'],
     starting:  ['pill-starting',  'Iniciando…'],
@@ -221,21 +354,15 @@
     btnRestart.classList.add('d-none');
 
     if (status === 'connected') {
-      img.classList.add('d-none');
-      hint.classList.add('d-none');
-      connected.classList.remove('d-none');
-      btnRestart.classList.remove('d-none');
+      img.classList.add('d-none'); hint.classList.add('d-none');
+      connected.classList.remove('d-none'); btnRestart.classList.remove('d-none');
     } else if (status === 'starting') {
-      // QR pode vir a qualquer momento via socket
       if (!img.src || img.src === window.location.href) {
         waiting.classList.remove('d-none');
-        img.classList.add('d-none');
-        hint.classList.add('d-none');
+        img.classList.add('d-none'); hint.classList.add('d-none');
       }
     } else {
-      // stopped
-      img.classList.add('d-none');
-      hint.classList.add('d-none');
+      img.classList.add('d-none'); hint.classList.add('d-none');
       btnStart.classList.remove('d-none');
     }
   }
@@ -249,11 +376,13 @@
     document.getElementById('btn-start').classList.toggle('d-none', s !== 'stopped');
     document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
 
-    // Conectou ou parou: a flag de origem do QR já não é mais relevante
+    // Badge na aba
+    const badge = document.getElementById('tab-wa-badge');
+    badge.textContent = label;
+    badge.className = `tab-badge${s === 'connected' ? ' badge-running' : ''}`;
+
     if (s === 'connected' || s === 'stopped') startedByQrPanel = false;
-
     if (qrPanelOpen) atualizarQrPanel(s);
-
     if (s !== 'starting') { pararTimer(); return; }
 
     const saved = localStorage.getItem('iahub_start_ts');
@@ -267,14 +396,41 @@
     }, 1000);
   }
 
+  // ── E-mail status ─────────────────────────────────────────────────────────────
+  const EMAIL_PILLS = {
+    stopped: ['pill-stopped',   'Parado'],
+    running: ['pill-connected', 'Rodando'],
+  };
+
+  function setEmailStatus(s) {
+    const [cls, label] = EMAIL_PILLS[s] || EMAIL_PILLS.stopped;
+    const pill = document.getElementById('email-status-pill');
+    pill.className = `status-pill ${cls}`;
+    pill.textContent = label;
+    document.getElementById('email-btn-start').classList.toggle('d-none', s !== 'stopped');
+    document.getElementById('email-btn-stop').classList.toggle('d-none',  s === 'stopped');
+
+    // Badge na aba
+    const badge = document.getElementById('tab-email-badge');
+    badge.textContent = label;
+    badge.className = `tab-badge${s === 'running' ? ' badge-running' : ''}`;
+  }
+
+  // ── Socket events ─────────────────────────────────────────────────────────────
   socket.on('connect', () => {
     terminal.innerHTML = '';
-    lines = []; count = 0;
+    waLines = []; waCount = 0;
     document.getElementById('log-count').textContent = '';
+    terminalEmail.innerHTML = '';
+    emailLines = []; emailCount = 0;
+    document.getElementById('email-log-count').textContent = '';
   });
 
-  socket.on('log',    addLine);
-  socket.on('status', setStatus);
+  socket.on('log',          addLine);
+  socket.on('status',       setStatus);
+  socket.on('email-log',    addEmailLine);
+  socket.on('email-status', setEmailStatus);
+
   socket.on('qr', url => {
     const img = document.getElementById('qr-img');
     img.src = url;
@@ -282,12 +438,12 @@
     document.getElementById('qr-hint').classList.remove('d-none');
     document.getElementById('qr-waiting').classList.add('d-none');
     document.getElementById('btn-qr-start').classList.add('d-none');
-    // Abre o painel automaticamente ao receber QR
+    // Muda para a aba WA e abre o painel QR automaticamente
+    mudarAba('wa');
     if (!qrPanelOpen) abrirQrPanel();
   });
 
-  // ── Controle do painel QR ────────────────────────────────────────────────────
-
+  // ── Painel QR ─────────────────────────────────────────────────────────────────
   function abrirQrPanel() {
     qrPanelOpen = true;
     document.getElementById('qr-panel').style.display = 'flex';
@@ -301,8 +457,6 @@
     document.getElementById('qr-panel').style.display = 'none';
     document.getElementById('btn-qr').classList.remove('btn-primary');
     document.getElementById('btn-qr').classList.add('btn-ghost');
-    // Se o serviço foi iniciado PELO painel QR e ainda está subindo (sem QR recebido),
-    // para imediatamente para não deixar o Puppeteer pendurado
     if (startedByQrPanel && currentStatus === 'starting') {
       startedByQrPanel = false;
       stopService();
@@ -314,7 +468,6 @@
       fecharQrPanel();
     } else {
       abrirQrPanel();
-      // Se parado, inicia automaticamente para gerar QR e marca a origem
       if (currentStatus === 'stopped') {
         startedByQrPanel = true;
         startService();
@@ -325,23 +478,19 @@
   async function trocarNumero() {
     if (!confirm('Isso desconectará o número atual e apagará a sessão salva.\n\nAo confirmar, um novo QR Code será gerado para conectar um número diferente.\n\nContinuar?')) return;
     const btn = document.getElementById('btn-qr-restart');
-    btn.disabled = true;
-    btn.textContent = '⏳ Limpando sessão…';
+    btn.disabled = true; btn.textContent = '⏳ Limpando sessão…';
     try {
       const r = await fetch('/api/service/clear-session', { method: 'POST' });
       if (!r.ok) { alert('Erro ao limpar sessão.'); return; }
-      // Aguarda parar e inicia de novo para gerar novo QR
       setTimeout(startService, 800);
     } catch (e) {
       alert('Erro de conexão: ' + e.message);
     } finally {
-      btn.disabled = false;
-      btn.textContent = '🔄 Trocar número (novo QR)';
+      btn.disabled = false; btn.textContent = '🔄 Trocar número (novo QR)';
     }
   }
 
-  // ── Serviço ───────────────────────────────────────────────────────────────────
-
+  // ── Serviço WhatsApp ──────────────────────────────────────────────────────────
   async function startService() {
     document.getElementById('btn-start').disabled    = true;
     document.getElementById('btn-qr-start').disabled = true;
@@ -371,17 +520,34 @@
     }
   }
 
-  function saveLog() {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type:'text/plain' }));
-    a.download = `iahub_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
-    a.click();
+  // ── Serviço E-mail ────────────────────────────────────────────────────────────
+  async function startEmailService() {
+    const btn = document.getElementById('email-btn-start');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/email-service/start', { method: 'POST' });
+      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) alert(data.error || `Erro ao iniciar serviço de e-mail (HTTP ${r.status})`);
+    } catch (e) {
+      alert(`Erro de conexão: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+    }
   }
 
-  function clearLog() {
-    terminal.innerHTML = '';
-    lines = []; count = 0;
-    document.getElementById('log-count').textContent = '';
+  async function stopEmailService() {
+    const btn = document.getElementById('email-btn-stop');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/email-service/stop', { method: 'POST' });
+      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
+      if (!r.ok) alert(`Erro ao parar serviço de e-mail (HTTP ${r.status})`);
+    } catch (e) {
+      alert(`Erro de conexão: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+    }
   }
 </script>
 </body>

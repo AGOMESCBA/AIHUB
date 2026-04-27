@@ -29,7 +29,8 @@ app.use(express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 
 app.use(express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
 
 // ── Log em arquivo e buffer para restaurar ao reconectar ─────────────────────
-const LOG_FILE   = path.join(__dirname, 'whatscurriculo.log');
+const LOG_FILE       = path.join(__dirname, 'whatscurriculo.log');
+const EMAIL_LOG_FILE = path.join(__dirname, 'emailcurriculo.log');
 const logBuffer  = [];
 const MAX_BUFFER = 500;
 
@@ -47,23 +48,30 @@ function requireAuth(req, res, next) {
 }
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
-const whatsapp = require('./modules/whatsapp-curriculo/service');
+const whatsapp  = require('./modules/whatsapp-curriculo/service');
+const emailImap = require('./modules/processo-seletivo/email-imap');
+emailImap.setLogFile(EMAIL_LOG_FILE);
 
 io.on('connection', (socket) => {
+  // Replay WhatsApp
   logBuffer.forEach(entry => socket.emit('log', entry));
   socket.emit('status', whatsapp.getStatus());
   const qr = whatsapp.getQr();
   if (qr) socket.emit('qr', qr);
+
+  // Replay Email
+  emailImap.getLogBuffer().forEach(entry => socket.emit('email-log', entry));
+  socket.emit('email-status', emailImap.getStatus());
 });
 
 // ── Módulo Configurações (auth + tela de configurações) ───────────────────────
 require('./modules/configuracoes/routes')(app, { requireAuth });
 
-// ── Módulo WhatsApp Currículo ─────────────────────────────────────────────────
+// ── Módulo Monitoramento (WhatsApp Currículo) ─────────────────────────────────
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, registrarLog, io });
 
 // ── Módulo Processo Seletivo ──────────────────────────────────────────────────
-require('./modules/processo-seletivo/routes')(app, { requireAuth, registrarLog });
+require('./modules/processo-seletivo/routes')(app, { requireAuth, registrarLog, io });
 
 // ── Módulo Analisador de Currículos ───────────────────────────────────────────
 require('./modules/analisador-curriculos/routes')(app, { requireAuth, registrarLog, io });
@@ -77,5 +85,6 @@ server.listen(PORT, () => {
   console.log(`\n🌐 IAHub rodando em http://localhost:${PORT}\n`);
   console.log(`   Usuário: ${process.env.ADMIN_USER}`);
   console.log(`   Senha:   ${process.env.ADMIN_PASS}\n`);
-  console.log(`   Log:     ${LOG_FILE}\n`);
+  console.log(`   Log WA:  ${LOG_FILE}`);
+  console.log(`   Log Email: ${EMAIL_LOG_FILE}\n`);
 });

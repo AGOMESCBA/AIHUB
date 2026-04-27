@@ -17,21 +17,27 @@
     </div>
     <div class="sidebar-nav">
       <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('whatsapp')">
-        <span class="nav-icon">💬</span><span class="nav-label">WhatsApp Currículo</span><span class="nav-arrow">▾</span>
+      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
+        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-whatsapp">
+      <div class="submenu" id="sub-monitoramento">
         <a href="/dashboard.html" class="nav-item sub active"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
         <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-        <a href="/curriculos.html" class="nav-item sub"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
       </div>
       <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">💼</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
+      <div class="nav-parent" onclick="toggleSubmenu('ps')">
+        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
       </div>
-      <div class="submenu" id="sub-vagas">
+      <div class="submenu" id="sub-ps">
         <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
         <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
+        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
+      </div>
+      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
+        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu" id="sub-vagas">
         <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
         <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
       </div>
@@ -50,7 +56,7 @@
       <div class="user-info-text">
         <div class="user-name">Admin</div><div class="user-role">Administrador</div>
       </div>
-      <button class="btn-logout" title="Sair" onclick="logout()">⏻</button>
+      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </nav>
 
@@ -63,46 +69,37 @@
 
     <div class="page-content">
 
-      <!-- Stats -->
-      <div class="grid-3 mb-4">
+      <!-- Stats Row 1: WhatsApp -->
+      <div class="grid-3 mb-3">
         <div class="stat-card">
-          <div class="stat-label">Currículos Recebidos</div>
-          <div class="stat-value stat-accent" id="stat-total">—</div>
+          <div class="stat-label">💬 WhatsApp — Hoje</div>
+          <div class="stat-value stat-accent" id="stat-wa-hoje">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Hoje</div>
-          <div class="stat-value" id="stat-hoje">—</div>
+          <div class="stat-label">💬 WhatsApp — Total</div>
+          <div class="stat-value" id="stat-wa-total">—</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Status WhatsApp</div>
+          <div class="stat-label">💬 Serviço WhatsApp</div>
           <div style="margin-top:8px" id="stat-status"><span class="status-pill pill-stopped">Parado</span></div>
+          <a href="/monitor.html#whatsapp" style="font-size:11px;color:var(--accent);text-decoration:none;margin-top:6px;display:inline-block">Ver Monitor →</a>
         </div>
       </div>
 
-      <!-- Últimos currículos -->
-      <div class="card">
-        <div class="card-header">
-          📋 Últimos Currículos Recebidos
-          <a href="/curriculos.html" class="btn btn-ghost ms-auto" style="font-size:12px">Ver todos</a>
+      <!-- Stats Row 2: E-mail -->
+      <div class="grid-3 mb-4">
+        <div class="stat-card">
+          <div class="stat-label">📧 E-mail — Hoje</div>
+          <div class="stat-value stat-accent" id="stat-email-hoje">—</div>
         </div>
-        <div class="card-body" style="padding:0">
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Nome</th>
-                  <th>E-mail</th>
-                  <th>Remetente</th>
-                  <th>Recebido em</th>
-                </tr>
-              </thead>
-              <tbody id="tabela-recentes"></tbody>
-            </table>
-          </div>
-          <div id="empty-state" class="d-none" style="text-align:center;padding:40px;color:var(--text-lo)">
-            Nenhum currículo recebido ainda. Inicie o serviço no Monitor.
-          </div>
+        <div class="stat-card">
+          <div class="stat-label">📧 E-mail — Total</div>
+          <div class="stat-value" id="stat-email-total">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">📧 Serviço E-mail</div>
+          <div style="margin-top:8px" id="stat-email-status"><span class="status-pill pill-stopped">Parado</span></div>
+          <a href="/monitor.html#email" style="font-size:11px;color:var(--accent);text-decoration:none;margin-top:6px;display:inline-block">Ver Monitor →</a>
         </div>
       </div>
 
@@ -116,41 +113,35 @@
   document.getElementById('topbar-date').textContent =
     new Date().toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
 
-  const statusMap = {
+  const waStatusMap = {
     stopped:   ['pill-stopped',   'Parado'],
     starting:  ['pill-starting',  'Iniciando…'],
     connected: ['pill-connected', 'Conectado'],
   };
 
+  const emailStatusMap = {
+    stopped: ['pill-stopped',   'Parado'],
+    running: ['pill-connected', 'Rodando'],
+  };
+
   async function carregar() {
-    const [stats, curriculos] = await Promise.all([
+    const [stats, emailSvc] = await Promise.all([
       fetch('/api/stats').then(r => r.json()),
-      fetch('/api/curriculos').then(r => r.json()),
+      fetch('/api/email-service/status').then(r => r.json()).catch(() => ({ status: 'stopped' })),
     ]);
 
-    document.getElementById('stat-total').textContent = stats.total;
-    document.getElementById('stat-hoje').textContent  = stats.hoje;
+    document.getElementById('stat-wa-hoje').textContent  = stats.wa?.hoje  ?? '—';
+    document.getElementById('stat-wa-total').textContent = stats.wa?.total ?? '—';
+    document.getElementById('stat-email-hoje').textContent  = stats.email?.hoje  ?? '—';
+    document.getElementById('stat-email-total').textContent = stats.email?.total ?? '—';
 
-    const [cls, label] = statusMap[stats.status] || statusMap.stopped;
+    const [cls, label] = waStatusMap[stats.status] || waStatusMap.stopped;
     document.getElementById('stat-status').innerHTML =
       `<span class="status-pill ${cls}">${label}</span>`;
 
-    const recentes = curriculos.slice(0, 8);
-    const tbody = document.getElementById('tabela-recentes');
-
-    if (!recentes.length) {
-      document.getElementById('empty-state').classList.remove('d-none');
-      return;
-    }
-
-    tbody.innerHTML = recentes.map(c => `
-      <tr onclick="location.href='/curriculo.html?id=${c.id}'">
-        <td style="color:var(--text-lo)">${c.id}</td>
-        <td><strong>${c.nome || '—'}</strong></td>
-        <td style="color:var(--text-md)">${c.email || '—'}</td>
-        <td><span class="badge badge-blue">${c.remetente}</span></td>
-        <td style="color:var(--text-lo);font-size:12px">${new Date(c.recebido_em).toLocaleString('pt-BR')}</td>
-      </tr>`).join('');
+    const [eCls, eLabel] = emailStatusMap[emailSvc.status] || emailStatusMap.stopped;
+    document.getElementById('stat-email-status').innerHTML =
+      `<span class="status-pill ${eCls}">${eLabel}</span>`;
   }
 
   fetch('/api/me').then(r => r.json()).then(d => {

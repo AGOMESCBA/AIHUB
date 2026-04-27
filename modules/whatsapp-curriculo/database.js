@@ -7,6 +7,9 @@ function load() {
   if (!fs.existsSync(FILE)) return { config: {}, curriculos: [], nextId: 1, processedIds: [] };
   try {
     const d = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    if (!d.config)       d.config       = {};
+    if (!d.curriculos)   d.curriculos   = [];
+    if (!d.nextId)       d.nextId       = 1;
     if (!d.processedIds) d.processedIds = [];
     return d;
   }
