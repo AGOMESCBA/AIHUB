@@ -2,22 +2,28 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-const FILE = path.join(__dirname, '..', '..', 'data.json');
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 
-function load() {
-  if (!fs.existsSync(FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); }
+function _file(empresaId) {
+  if (!empresaId) throw new Error('empresa_id é obrigatório');
+  return path.join(DATA_DIR, `empresa_${empresaId}.json`);
+}
+
+function load(empresaId) {
+  const f = _file(empresaId);
+  if (!fs.existsSync(f)) return {};
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); }
   catch { return {}; }
 }
 
-function persist(data) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2), 'utf8');
+function persist(empresaId, data) {
+  fs.writeFileSync(_file(empresaId), JSON.stringify(data, null, 2), 'utf8');
 }
 
 module.exports = {
-  // ── Email Config ─────────────────────────────────────────────────────────────
-  getEmailConfig() {
-    const d = load();
+  // ── Email Config ──────────────────────────────────────────────────────────────
+  getEmailConfig(empresaId) {
+    const d = load(empresaId);
     return {
       tipo: 'gmail', email: '', senha: '',
       smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_secure: true, family: 4,
@@ -27,25 +33,24 @@ module.exports = {
     };
   },
 
-  setEmailConfig(cfg) {
-    const d = load();
-    const current = this.getEmailConfig();
+  setEmailConfig(empresaId, cfg) {
+    const d = load(empresaId);
+    const current = this.getEmailConfig(empresaId);
     d.email_config = {
       ...current,
       ...cfg,
-      // Não sobrescreve senha se vier mascarada
       senha: (cfg.senha && cfg.senha !== '••••••••') ? cfg.senha : current.senha,
     };
-    persist(d);
+    persist(empresaId, d);
   },
 
-  getSenhaReal() {
-    return load().email_config?.senha || '';
+  getSenhaReal(empresaId) {
+    return load(empresaId).email_config?.senha || '';
   },
 
   // ── Email Geral Config ────────────────────────────────────────────────────────
-  getEmailGeralConfig() {
-    const d = load();
+  getEmailGeralConfig(empresaId) {
+    const d = load(empresaId);
     return {
       tipo: 'gmail', email: '', senha: '',
       smtp_host: 'smtp.gmail.com', smtp_port: 465, smtp_secure: true, family: 4,
@@ -54,64 +59,63 @@ module.exports = {
     };
   },
 
-  setEmailGeralConfig(cfg) {
-    const d = load();
-    const current = this.getEmailGeralConfig();
+  setEmailGeralConfig(empresaId, cfg) {
+    const d = load(empresaId);
+    const current = this.getEmailGeralConfig(empresaId);
     d.email_geral_config = {
       ...current,
       ...cfg,
       senha: (cfg.senha && cfg.senha !== '••••••••') ? cfg.senha : current.senha,
     };
-    persist(d);
+    persist(empresaId, d);
   },
 
-  getSenhaGeralReal() {
-    return load().email_geral_config?.senha || '';
+  getSenhaGeralReal(empresaId) {
+    return load(empresaId).email_geral_config?.senha || '';
   },
 
   // ── Email Templates ───────────────────────────────────────────────────────────
-  getEmailTemplates() {
-    return load().email_templates || {};
+  getEmailTemplates(empresaId) {
+    return load(empresaId).email_templates || {};
   },
 
-  setEmailTemplates(tpl) {
-    const d = load();
+  setEmailTemplates(empresaId, tpl) {
+    const d = load(empresaId);
     d.email_templates = { ...(d.email_templates || {}), ...tpl };
-    persist(d);
+    persist(empresaId, d);
   },
 
   // ── Token Público ─────────────────────────────────────────────────────────────
-  getPublicToken() {
-    const d = load();
+  getPublicToken(empresaId) {
+    const d = load(empresaId);
     if (!d.ps_public_token) {
       d.ps_public_token = crypto.randomBytes(24).toString('hex');
-      persist(d);
+      persist(empresaId, d);
     }
     return d.ps_public_token;
   },
 
-  regenerateToken() {
-    const d = load();
+  regenerateToken(empresaId) {
+    const d = load(empresaId);
     d.ps_public_token = crypto.randomBytes(24).toString('hex');
-    persist(d);
+    persist(empresaId, d);
     return d.ps_public_token;
   },
 
   // ── Slug ──────────────────────────────────────────────────────────────────────
-  getSlug() {
-    return load().ps_public_slug || null;
+  getSlug(empresaId) {
+    return load(empresaId).ps_public_slug || null;
   },
 
-  setSlug(slug) {
-    const d = load();
+  setSlug(empresaId, slug) {
+    const d = load(empresaId);
     d.ps_public_slug = slug ? slug.toLowerCase().trim() : null;
-    persist(d);
+    persist(empresaId, d);
   },
 
-  // Resolve slug ou token UUID → token real (null se inválido)
-  resolveToToken(identifier) {
+  resolveToToken(empresaId, identifier) {
     if (!identifier) return null;
-    const d = load();
+    const d = load(empresaId);
     const t = d.ps_public_token;
     if (!t) return null;
     if (identifier === t) return t;
@@ -119,27 +123,47 @@ module.exports = {
     return null;
   },
 
-  validateToken(identifier) {
-    return !!this.resolveToToken(identifier);
+  validateToken(empresaId, identifier) {
+    return !!this.resolveToToken(empresaId, identifier);
+  },
+
+  // Busca o empresaId a partir de um token ou slug (percorre todos os arquivos de empresa)
+  findEmpresaIdByToken(identifier) {
+    if (!identifier) return null;
+    const empresasFile = path.join(DATA_DIR, 'empresas.json');
+    if (!fs.existsSync(empresasFile)) return null;
+    let empresas = [];
+    try { empresas = JSON.parse(fs.readFileSync(empresasFile, 'utf8')) || []; } catch { return null; }
+    for (const empresa of empresas) {
+      const f = path.join(DATA_DIR, `empresa_${empresa.id}.json`);
+      if (!fs.existsSync(f)) continue;
+      try {
+        const d = JSON.parse(fs.readFileSync(f, 'utf8'));
+        if (!d.ps_public_token) continue;
+        if (identifier === d.ps_public_token) return empresa.id;
+        if (d.ps_public_slug && identifier === d.ps_public_slug) return empresa.id;
+      } catch { continue; }
+    }
+    return null;
   },
 
   // ── Candidaturas ──────────────────────────────────────────────────────────────
-  listCandidaturas() {
-    return (load().vaga_candidaturas || []).slice().reverse();
+  listCandidaturas(empresaId) {
+    return (load(empresaId).vaga_candidaturas || []).slice().reverse();
   },
 
-  listCandidaturasByVaga(vagaId) {
-    return (load().vaga_candidaturas || []).filter(c => c.vaga_id === vagaId);
+  listCandidaturasByVaga(empresaId, vagaId) {
+    return (load(empresaId).vaga_candidaturas || []).filter(c => c.vaga_id === vagaId);
   },
 
-  getCurriculoIdsByVaga(vagaId) {
-    return (load().vaga_candidaturas || [])
+  getCurriculoIdsByVaga(empresaId, vagaId) {
+    return (load(empresaId).vaga_candidaturas || [])
       .filter(c => c.vaga_id === vagaId)
       .map(c => c.curriculo_id);
   },
 
-  findCandidaturaByVagaAndCandidato(vagaId, email, nome) {
-    const lista = load().vaga_candidaturas || [];
+  findCandidaturaByVagaAndCandidato(empresaId, vagaId, email, nome) {
+    const lista = load(empresaId).vaga_candidaturas || [];
     return lista.find(c => {
       if (c.vaga_id !== Number(vagaId)) return false;
       if (email && c.candidato_email && c.candidato_email.toLowerCase() === email.toLowerCase()) return true;
@@ -148,19 +172,20 @@ module.exports = {
     }) || null;
   },
 
-  updateCandidaturaCurriculoId(id, curriculo_id) {
-    const d = load();
+  updateCandidaturaCurriculoId(empresaId, id, curriculo_id) {
+    const d = load(empresaId);
     const c = (d.vaga_candidaturas || []).find(c => c.id === id);
-    if (c) { c.curriculo_id = Number(curriculo_id); persist(d); }
+    if (c) { c.curriculo_id = Number(curriculo_id); persist(empresaId, d); }
   },
 
-  saveCandidatura({ vaga_id, curriculo_id, canal, candidato_nome, candidato_email }) {
-    const d = load();
+  saveCandidatura(empresaId, { vaga_id, curriculo_id, canal, candidato_nome, candidato_email }) {
+    const d = load(empresaId);
     if (!d.vaga_candidaturas)   d.vaga_candidaturas   = [];
     if (!d.next_candidatura_id) d.next_candidatura_id = 1;
     const id = d.next_candidatura_id++;
     d.vaga_candidaturas.push({
       id,
+      empresa_id:      Number(empresaId),
       vaga_id:         Number(vaga_id),
       curriculo_id:    Number(curriculo_id),
       canal:           canal || 'email',
@@ -168,7 +193,7 @@ module.exports = {
       candidato_email: candidato_email || null,
       data: new Date().toISOString(),
     });
-    persist(d);
+    persist(empresaId, d);
     return id;
   },
 };

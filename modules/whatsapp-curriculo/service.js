@@ -1,21 +1,11 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode  = require('qrcode');
-// Importação direta evita bug do pdf-parse que executa testes ao carregar
+const qrcode   = require('qrcode');
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
-const Groq    = require('groq-sdk');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { EventEmitter } = require('events');
+const path = require('path');
 const db = require('./database');
-
-const groq  = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const gemini = process.env.GEMINI_API_KEY
-  ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-  : null;
-
-// Detecta se o erro é de limite de tokens/rate limit do Groq
-function isRateLimit(err) {
-  return err?.status === 429 || err?.message?.includes('rate_limit') || err?.message?.includes('Rate limit');
-}
+const empresasDb = require('../empresas/database');
+const ia = require('../ia');
 
 class WhatsAppService extends EventEmitter {
   constructor() {
@@ -25,13 +15,24 @@ class WhatsAppService extends EventEmitter {
     this.lastQrUrl      = null;
     this.pendingUpdates = new Map(); // sender → { existingId, dados, pdf_base64, pdf_nome, msgId }
     this._stopping      = false;    // guard: evita start() antes do stop() terminar
+    this._empresaId     = null;
+    this._empresaNome   = null;
+    this._logBuffer     = [];
+    this._wired         = false;
   }
 
-  getStatus() { return this.status; }
-  getQr()     { return this.lastQrUrl; }
+  getStatus()      { return this.status; }
+  getQr()          { return this.lastQrUrl; }
+  getEmpresaId()   { return this._empresaId; }
+  getEmpresaNome() { return this._empresaNome || null; }
+  getLogBuffer()   { return this._logBuffer; }
+  clearBuffer()    { this._logBuffer = []; }
 
   log(message, type = 'info') {
-    this.emit('log', { message, type, timestamp: new Date().toLocaleTimeString('pt-BR') });
+    const entry = { message, type, timestamp: new Date().toLocaleTimeString('pt-BR') };
+    this._logBuffer.push(entry);
+    if (this._logBuffer.length > 500) this._logBuffer.shift();
+    this.emit('log', entry);
   }
 
   setStatus(status) {
@@ -39,24 +40,38 @@ class WhatsAppService extends EventEmitter {
     this.emit('status', status);
   }
 
-  async start() {
+  async start(empresaId, empresaNome) {
+    if (!empresaId) {
+      this.log('empresa_id é obrigatório para iniciar o serviço WhatsApp.', 'error');
+      return;
+    }
     if (this._stopping) {
       this.log('Aguardando parada completa do serviço anterior…', 'warning');
       return;
     }
     if (this.status !== 'stopped') {
+      if (this._empresaId !== Number(empresaId)) {
+        const curLabel = this._empresaNome ? `#${this._empresaId} - ${this._empresaNome}` : `#${this._empresaId}`;
+        this.log(`Serviço já em execução para outra empresa (${curLabel}). Pare o serviço primeiro.`, 'error');
+        return;
+      }
       this.log('Serviço já está em execução.', 'warning');
       return;
     }
+    this._empresaId   = Number(empresaId);
+    this._empresaNome = empresaNome || empresasDb.buscarPorId(this._empresaId)?.razao_social || null;
     this.setStatus('starting');
     this._startTime = Date.now();
-    this.log('Iniciando serviço WhatsApp...', 'info');
+    const empLabel = this._empresaNome
+      ? `empresa #${this._empresaId} - ${this._empresaNome}`
+      : `empresa #${this._empresaId}`;
+    this.log(`Iniciando serviço WhatsApp para ${empLabel}...`, 'info');
     if (process.env.CHROME_PATH) {
       this.log(`Usando Chrome: ${process.env.CHROME_PATH}`, 'info');
     }
 
     // Restaura confirmações pendentes salvas antes do último restart
-    const pendentes = db.listPendingUpdates();
+    const pendentes = db.listPendingUpdates(this._empresaId);
     if (pendentes.length) {
       pendentes.forEach(p => this.pendingUpdates.set(p.sender, p));
       this.log(`${pendentes.length} confirmação(ões) pendente(s) restaurada(s) do banco.`, 'info');
@@ -88,8 +103,13 @@ class WhatsAppService extends EventEmitter {
     };
     if (process.env.CHROME_PATH) puppeteerConfig.executablePath = process.env.CHROME_PATH;
 
+    // Sessão isolada por empresa
+    const authDataPath = path.join(__dirname, '..', '..', '.wwebjs_auth');
     this.client = new Client({
-      authStrategy: new LocalAuth(),
+      authStrategy: new LocalAuth({
+        clientId:  `empresa_${this._empresaId}`,
+        dataPath:  authDataPath,
+      }),
       puppeteer: puppeteerConfig,
     });
 
@@ -193,7 +213,7 @@ class WhatsAppService extends EventEmitter {
 
     // Ignora mensagens já processadas (evita reprocessar ao reiniciar o serviço)
     const msgId = msg.id._serialized;
-    if (db.isProcessed(msgId)) {
+    if (db.isProcessed(this._empresaId, msgId)) {
       this.log(`Mensagem ${msgId} já processada anteriormente. Ignorando.`, 'info');
       return;
     }
@@ -216,7 +236,7 @@ class WhatsAppService extends EventEmitter {
       if (!media.mimetype?.includes('pdf')) {
         this.log(`[1/4] Arquivo ignorado — não é PDF (${media.mimetype}).`, 'warning');
         const chat = await msg.getChat();
-        await chat.sendMessage(db.getConfig('msg_nao_pdf') || '⚠️ Por favor, envie o currículo em formato *PDF*.');
+        await chat.sendMessage(db.getConfig(this._empresaId, 'msg_nao_pdf') || '⚠️ Por favor, envie o currículo em formato *PDF*.');
         return;
       }
 
@@ -230,7 +250,7 @@ class WhatsAppService extends EventEmitter {
       if (!texto) {
         this.log(`[2/4] FALHA: PDF sem texto legível (protegido ou escaneado).`, 'error');
         const chat = await msg.getChat();
-        await chat.sendMessage(db.getConfig('msg_pdf_ilegivel') || '❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.');
+        await chat.sendMessage(db.getConfig(this._empresaId, 'msg_pdf_ilegivel') || '❌ Não consegui ler o PDF. Verifique se não está protegido ou escaneado como imagem.');
         return;
       }
 
@@ -247,7 +267,7 @@ class WhatsAppService extends EventEmitter {
         this.log(`[4/5] Documento rejeitado — não identificado como currículo.`, 'warning');
         const chat = await msg.getChat();
         await chat.sendMessage(
-          db.getConfig('msg_nao_curriculo') || '😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.\n\nPor favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!'
+          db.getConfig(this._empresaId, 'msg_nao_curriculo') || '😊 Olá! Não foi possível processar o arquivo enviado pois ele não parece ser um currículo.\n\nPor favor, envie seu currículo em formato *PDF* para que possamos analisá-lo. Obrigado!'
         );
         return;
       }
@@ -256,8 +276,8 @@ class WhatsAppService extends EventEmitter {
       this.log(`[5/5] Enviando para análise IA...`, 'info');
       const dados = await this.analisarComRetry(textoFinal);
 
-      // Etapa 5: verifica duplicata por telefone ou e-mail do currículo
-      const existente = db.findByPhoneOrEmail(dados.telefone, dados.email);
+      // Verifica duplicata por telefone ou e-mail do currículo
+      const existente = db.findByPhoneOrEmail(this._empresaId, dados.telefone, dados.email);
       if (existente) {
         this.log(`Currículo duplicado detectado — ID #${existente.id} (${existente.nome}). Aguardando confirmação do remetente.`, 'warning');
         const pendingData = {
@@ -268,10 +288,10 @@ class WhatsAppService extends EventEmitter {
           msgId,
         };
         this.pendingUpdates.set(sender, pendingData);
-        db.savePendingUpdate(sender, pendingData); // persiste para sobreviver a restarts
+        db.savePendingUpdate(this._empresaId, sender, pendingData);
         try {
           const chat = await msg.getChat();
-          const tplDuplicata = db.getConfig('msg_duplicata') ||
+          const tplDuplicata = db.getConfig(this._empresaId, 'msg_duplicata') ||
             '⚠️ Já existe um currículo cadastrado com este telefone ou e-mail ({nome}).\n\nDeseja *atualizar* o registro existente?\n\nResponda *SIM* para atualizar ou *NÃO* para manter o atual.';
           await chat.sendMessage(tplDuplicata.replace('{nome}', existente.nome || ''));
         } catch (e) {
@@ -280,9 +300,7 @@ class WhatsAppService extends EventEmitter {
         return;
       }
 
-      // Etapa 4: salva no banco e notifica
       await this.salvarENotificar({ sender, dados, pdf_base64: media.data, pdf_nome: msg.body || 'curriculo.pdf', msgId, msg });
-      // Etapa 5 concluída via salvarENotificar
 
     } catch (err) {
       const detalhe = err?.stack || err?.message || JSON.stringify(err) || String(err);
@@ -290,7 +308,7 @@ class WhatsAppService extends EventEmitter {
 
       try {
         const chat = await msg.getChat();
-        await chat.sendMessage(db.getConfig('msg_erro') || '❌ Ocorreu um erro ao processar seu currículo. Tente novamente.');
+        await chat.sendMessage(db.getConfig(this._empresaId, 'msg_erro') || '❌ Ocorreu um erro ao processar seu currículo. Tente novamente.');
       } catch (_) {}
     }
   }
@@ -298,17 +316,15 @@ class WhatsAppService extends EventEmitter {
   // ── Salva currículo e notifica destino + remetente ──────────────────────────
 
   async salvarENotificar({ sender, dados, pdf_base64, pdf_nome, msgId, msg }) {
-    // Pré-computa a mensagem formatada ANTES de salvar — se falhar, o currículo não é gravado
-    const raw           = db.getConfig('numero_destino');
+    const raw           = db.getConfig(this._empresaId, 'numero_destino');
     const numeroDestino = raw ? raw.replace(/\D/g, '') + '@c.us' : null;
     const mensagem      = numeroDestino ? this.formatarParaWhatsApp(dados) : null;
 
-    // Só salva após confirmar que os dados estão formatáveis
-    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome });
-    db.markProcessed(msgId);
+    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome, empresaId: this._empresaId });
+    db.markProcessed(this._empresaId, msgId);
 
     try {
-      const msgConfirmacao = db.getConfig('msg_confirmacao') ||
+      const msgConfirmacao = db.getConfig(this._empresaId, 'msg_confirmacao') ||
         '✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!';
       const chatRemetente = await msg.getChat();
       await chatRemetente.sendMessage(msgConfirmacao);
@@ -333,7 +349,7 @@ class WhatsAppService extends EventEmitter {
 
   async handleConfirmationResponse(msg) {
     const sender  = msg.from;
-    const pending = this.pendingUpdates.get(sender) || db.getPendingUpdate(sender);
+    const pending = this.pendingUpdates.get(sender) || db.getPendingUpdate(this._empresaId, sender);
     const resposta = (msg.body || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
     this.log(`Resposta de confirmação recebida de ${sender}: "${msg.body || ''}" → normalizado: "${resposta}"`, 'info');
@@ -345,9 +361,9 @@ class WhatsAppService extends EventEmitter {
 
     if (resposta === 'SIM') {
       this.log(`Remetente ${sender} confirmou atualização — excluindo currículo ID #${pending.existingId} e salvando novo.`, 'info');
-      db.deleteCurriculo(pending.existingId);
+      db.deleteCurriculo(this._empresaId, pending.existingId);
       this.pendingUpdates.delete(sender);
-      db.deletePendingUpdate(sender);
+      db.deletePendingUpdate(this._empresaId, sender);
       await this.salvarENotificar({
         sender,
         dados:      pending.dados,
@@ -359,10 +375,10 @@ class WhatsAppService extends EventEmitter {
     } else if (resposta === 'NAO') {
       this.log(`Remetente ${sender} optou por manter o currículo existente. Enviando mensagem de retorno.`, 'info');
       this.pendingUpdates.delete(sender);
-      db.deletePendingUpdate(sender);
+      db.deletePendingUpdate(this._empresaId, sender);
       try {
         const chat = await msg.getChat();
-        const msgNao = db.getConfig('msg_nao_atualizar') || '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!';
+        const msgNao = db.getConfig(this._empresaId, 'msg_nao_atualizar') || '😊 Tudo bem! Seu currículo atual permanece em nossos registros. Obrigado!';
         await chat.sendMessage(msgNao);
         this.log(`Mensagem de NÃO atualizar enviada para ${sender}.`, 'success');
       } catch (e) {
@@ -380,180 +396,26 @@ class WhatsAppService extends EventEmitter {
     const partes = [];
     for (let i = 0; i < texto.length; i += MAX) partes.push(texto.slice(i, i + MAX));
 
-    // Tenta encontrar chat existente primeiro (evita erro "No LID for user")
-    const chats = await this.client.getChats();
-    const chatExistente = chats.find(c => c.id._serialized === destino);
+    // Resolve o ID correto via getNumberId para evitar erro "No LID for user"
+    // quando o contato ainda não tem histórico de chat (protocolo LID do WhatsApp)
+    const numero = destino.replace('@c.us', '');
+    const numberId = await this.client.getNumberId(numero);
+    if (!numberId) throw new Error(`Número ${numero} não encontrado no WhatsApp`);
+    const idResolvido = numberId._serialized;
 
     for (const parte of partes) {
-      if (chatExistente) {
-        await chatExistente.sendMessage(parte);
-      } else {
-        await this.client.sendMessage(destino, parte);
-      }
+      await this.client.sendMessage(idResolvido, parte);
     }
   }
 
-  // ── Análise com tentativas progressivas + fallback Gemini ───────────────────
+  // ── IA: delega para módulo ia/ (sem acoplamento ao socket) ─────────────────
 
-  async analisarComRetry(texto) {
-    const SYSTEM_COMPLETO = `Você é um extrator de currículos. Responda SOMENTE com um objeto JSON válido, sem explicações, sem markdown, sem blocos de código.
-IMPORTANTE: NÃO resuma, NÃO omita e NÃO abrevie nenhuma informação. Copie as atividades, descrições e demais campos EXATAMENTE como aparecem no currículo.
-Para cada experiência: capture o parágrafo descritivo em "descricao" e TODOS os bullets em "atividades" — prefixe itens de sub-projetos com o nome entre colchetes.
-Use esta estrutura:
-{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}`;
+  async analisarComRetry(texto)       { return ia.analisarComRetry(texto,       (m,t) => this.log(m,t)); }
+  async chamarIA(opts)                { return ia.chamarIA(opts,                (m,t) => this.log(m,t)); }
+  async traduzirSeNecessario(texto)   { return ia.traduzirSeNecessario(texto,   (m,t) => this.log(m,t)); }
+  async verificarSeCurriculo(texto)   { return ia.verificarSeCurriculo(texto,   (m,t) => this.log(m,t)); }
 
-    const SYSTEM_SIMPLES = 'Extraia dados do currículo. NÃO resuma nem omita — copie as atividades exatamente. Responda SOMENTE com JSON válido: {"nome":null,"telefone":null,"email":null,"descricao":null,"experiencias":[],"formacao":[],"capacitacoes":[],"habilidades":[]}';
-
-    const limparJson = (txt) => {
-      const m = txt.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\{[\s\S]*\}/);
-      if (!m) throw new Error('JSON não encontrado na resposta');
-      return JSON.parse(m[0]);
-    };
-
-    // Tentativa 1: Groq modelo completo
-    try {
-      this.log('Tentativa 1/3: Groq (modelo completo)...', 'info');
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: 8000,
-        messages: [
-          { role: 'system', content: SYSTEM_COMPLETO },
-          { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 20000)}` },
-        ],
-      });
-      return limparJson(res.choices[0].message.content);
-    } catch (e1) {
-      this.log(`Tentativa 1 falhou: ${e1.message}.`, 'warning');
-    }
-
-    // Tentativa 2: Groq modelo rápido
-    try {
-      this.log('Tentativa 2/3: Groq (modelo rápido)...', 'info');
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 5000,
-        messages: [
-          { role: 'system', content: SYSTEM_SIMPLES },
-          { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 12000)}` },
-        ],
-      });
-      return limparJson(res.choices[0].message.content);
-    } catch (e2) {
-      this.log(`Tentativa 2 falhou: ${e2.message}.`, 'warning');
-    }
-
-    // Tentativa 3: Google Gemini (fallback de rate limit)
-    if (gemini) {
-      try {
-        this.log('Tentativa 3/3: Google Gemini (fallback)...', 'info');
-        const model  = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
-        const result = await model.generateContent(`${SYSTEM_COMPLETO}\n\nCurrículo:\n\n${texto.slice(0, 20000)}`);
-        return limparJson(result.response.text());
-      } catch (e3) {
-        this.log(`Tentativa 3 (Gemini) falhou: ${e3.message}. Usando texto livre...`, 'warning');
-      }
-    }
-
-    // Tentativa 4: JSON mínimo — extrai apenas campos-chave sem se preocupar com estrutura do texto
-    try {
-      this.log('Tentativa 4/4: extração JSON mínima (campos-chave)...', 'warning');
-      const res = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant', temperature: 0.3, max_tokens: 3000,
-        messages: [
-          { role: 'system', content: `Extraia os dados do currículo abaixo. O texto pode estar desorganizado (PDF multi-coluna). Identifique e preencha cada campo.
-Responda SOMENTE com JSON válido, sem markdown:
-{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}` },
-          { role: 'user', content: `Currículo:\n\n${texto.slice(0, 12000)}` },
-        ],
-      });
-      return limparJson(res.choices[0].message.content);
-    } catch (e4) {
-      this.log(`Tentativa 4 falhou: ${e4.message}. Usando texto livre como último recurso...`, 'warning');
-    }
-
-    // Último recurso: texto livre — salva tudo em descricao para não perder o currículo
-    this.log('Tentativa 5/5: salvando texto livre como último recurso...', 'warning');
-    const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant', temperature: 0.2, max_tokens: 2000,
-      messages: [
-        { role: 'system', content: 'Organize as informações do currículo em formato legível em português. Inclua todos os dados: nome, contato, experiências, formação e habilidades.' },
-        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 6000)}` },
-      ],
-    });
-    return { nome: null, descricao: res.choices[0].message.content };
-  }
-
-  // ── Chamada de IA com fallback Groq → Gemini ────────────────────────────────
-
-  async chamarIA({ systemPrompt, userPrompt, maxTokens = 1000, temperatura = 0.1, modeloGroq = 'llama-3.1-8b-instant' }) {
-    // Tentativa 1: Groq
-    try {
-      const res = await groq.chat.completions.create({
-        model: modeloGroq,
-        temperature: temperatura,
-        max_tokens: maxTokens,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userPrompt   },
-        ],
-      });
-      return res.choices[0].message.content.trim();
-    } catch (e) {
-      if (!isRateLimit(e)) throw e;
-      this.log(`Groq atingiu limite de tokens. Usando Google Gemini como fallback...`, 'warning');
-    }
-
-    // Tentativa 2: Gemini (fallback)
-    if (!gemini) throw new Error('Groq atingiu o limite e GEMINI_API_KEY não está configurada.');
-    const model = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
-    return result.response.text().trim();
-  }
-
-  // ── Detecção de idioma e tradução ───────────────────────────────────────────
-
-  async traduzirSeNecessario(texto) {
-    try {
-      const idioma = (await this.chamarIA({
-        systemPrompt: 'Identifique o idioma do texto. Responda APENAS com o código ISO 639-1 em minúsculas (ex: pt, en, es, fr, de, it, zh, etc).',
-        userPrompt:   texto.slice(0, 500),
-        maxTokens:    5,
-        temperatura:  0,
-      })).toLowerCase().slice(0, 2);
-
-      if (idioma === 'pt') return { texto, idioma };
-
-      this.log(`Idioma detectado: "${idioma}". Traduzindo para português...`, 'info');
-      const traduzido = await this.chamarIA({
-        systemPrompt: 'Traduza o texto a seguir para o português do Brasil. Mantenha toda a estrutura, formatação e informações originais. Não resuma nem omita nada.',
-        userPrompt:   texto.slice(0, 20000),
-        maxTokens:    8000,
-        temperatura:  0.1,
-        modeloGroq:   'llama-3.3-70b-versatile',
-      });
-      return { texto: traduzido, idioma };
-    } catch (e) {
-      this.log(`Aviso: falha na detecção/tradução de idioma, usando texto original: ${e.message}`, 'warning');
-      return { texto, idioma: 'pt' };
-    }
-  }
-
-  // ── Verificação se documento é currículo ────────────────────────────────────
-
-  async verificarSeCurriculo(texto) {
-    try {
-      const resposta = await this.chamarIA({
-        systemPrompt: 'Você analisa documentos. Responda APENAS com "SIM" se o texto for um currículo/CV profissional, ou "NAO" se for qualquer outro tipo de documento (contrato, nota fiscal, relatório, etc).',
-        userPrompt:   `Documento:\n\n${texto.slice(0, 3000)}`,
-        maxTokens:    5,
-        temperatura:  0,
-      });
-      return resposta.toUpperCase().startsWith('SIM');
-    } catch (e) {
-      this.log(`Aviso: falha na verificação de currículo, prosseguindo mesmo assim: ${e.message}`, 'warning');
-      return true;
-    }
-  }
-
-  // ── Formatar para WhatsApp ───────────────────────────────────────────────────
+    // ── Formatar para WhatsApp ───────────────────────────────────────────────────
 
   formatarParaWhatsApp(d) {
     const partes = [];
@@ -597,4 +459,4 @@ Responda SOMENTE com JSON válido, sem markdown:
   }
 }
 
-module.exports = new WhatsAppService();
+module.exports = WhatsAppService;

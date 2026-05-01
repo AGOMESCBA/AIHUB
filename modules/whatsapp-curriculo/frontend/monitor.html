@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Monitor — IAHub</title>
+  <title>Monitor WhatsApp — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
     /* ── Abas ─────────────────────────────────────────────────────────────── */
@@ -104,72 +104,21 @@
       <span class="logo-text">IAHub</span>
     </div>
     <div class="sidebar-nav">
-      <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
-        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-monitoramento">
-        <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
-        <a href="/monitor.html" class="nav-item sub active"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
-      <div class="nav-parent" onclick="toggleSubmenu('ps')">
-        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-ps">
-        <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
-        <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
-        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
-      </div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-vagas">
-        <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
-        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('se-curriculo')">
-        <span class="nav-icon">🔗</span><span class="nav-label">Integrações</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-se-curriculo">
-        <a href="/se-curriculos.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">SE Currículos</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Sistema</div>
-      <a href="/configuracoes.html" class="nav-item"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
     </div>
     <div class="sidebar-footer">
-      <div class="user-avatar">A</div>
-      <div class="user-info-text">
-        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
-      </div>
-      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
-  </nav>
+    </nav>
 
   <div class="main">
     <div class="topbar">
-      <span class="topbar-title">Monitor</span>
-      <span class="topbar-breadcrumb ms-auto">Monitoramento › Monitor</span>
+      <span class="topbar-title"><span class="topbar-path">Monitoramento ›</span> Monitor WhatsApp</span>
     </div>
 
     <div class="page-content">
 
-      <!-- ── Abas ─────────────────────────────────────────────────────────── -->
-      <div class="tabs">
-        <button class="tab-btn active" id="tab-wa-btn" onclick="mudarAba('wa')">
-          💬 Serviço WhatsApp
-          <span class="tab-badge" id="tab-wa-badge">Parado</span>
-        </button>
-        <button class="tab-btn" id="tab-email-btn" onclick="mudarAba('email')">
-          📧 Serviço E-mail
-          <span class="tab-badge" id="tab-email-badge">Parado</span>
-        </button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <span class="tab-badge" id="tab-wa-badge" style="font-size:12px;padding:3px 12px">Parado</span>
       </div>
-
-      <!-- ── Aba WhatsApp ──────────────────────────────────────────────────── -->
-      <div class="tab-panel active" id="tab-wa">
 
         <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
           <span id="status-pill" class="status-pill pill-stopped">Parado</span>
@@ -178,8 +127,8 @@
             <button id="btn-start" class="btn btn-success" onclick="startService()">▶ Iniciar Serviço</button>
             <button id="btn-stop"  class="btn btn-danger d-none" onclick="stopService()">■ Parar Serviço</button>
             <button id="btn-qr"   class="btn btn-primary" onclick="toggleQrPanel()" title="Mostrar/ocultar painel QR Code">📱 QR Code</button>
-            <button class="btn btn-info"  onclick="saveLog('wa')">💾 Salvar Log</button>
-            <button class="btn btn-ghost" onclick="clearLog('wa')">🗑 Limpar</button>
+            <button class="btn btn-info"  onclick="saveLog()">💾 Salvar Log</button>
+            <button class="btn btn-ghost" onclick="clearLog()">🗑 Limpar</button>
           </div>
         </div>
 
@@ -221,26 +170,6 @@
 
       </div>
 
-      <!-- ── Aba E-mail ────────────────────────────────────────────────────── -->
-      <div class="tab-panel" id="tab-email">
-
-        <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-          <span id="email-status-pill" class="status-pill pill-stopped">Parado</span>
-          <span id="email-log-count" class="text-muted text-sm"></span>
-          <div class="toolbar ms-auto">
-            <button id="email-btn-start" class="btn btn-success" onclick="startEmailService()">▶ Iniciar Serviço</button>
-            <button id="email-btn-stop"  class="btn btn-danger d-none" onclick="stopEmailService()">■ Parar Serviço</button>
-            <button class="btn btn-info"  onclick="saveLog('email')">💾 Salvar Log</button>
-            <button class="btn btn-ghost" onclick="clearLog('email')">🗑 Limpar</button>
-          </div>
-        </div>
-
-        <div class="monitor-wrap">
-          <div id="terminal-email" class="terminal"></div>
-        </div>
-
-      </div>
-
     </div>
   </div>
 </div>
@@ -251,24 +180,11 @@
 <script>
   const socket = io();
 
-  // Abre a aba correta se vier com hash (#email ou #whatsapp)
-  if (location.hash === '#email') mudarAba('email');
-
-  // ── Abas ──────────────────────────────────────────────────────────────────────
-  function mudarAba(aba) {
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-${aba}`).classList.add('active');
-    document.getElementById(`tab-${aba}-btn`).classList.add('active');
-  }
-
   // ── Estado ────────────────────────────────────────────────────────────────────
   let waLines = [], waCount = 0, timerInterval = null, timerStart = null;
   let currentStatus = 'stopped';
   let qrPanelOpen = false;
   let startedByQrPanel = false;
-
-  let emailLines = [], emailCount = 0;
 
   const TAG = {
     info:     ['INFO',     'tag-info',    'msg-info'],
@@ -297,35 +213,19 @@
     document.getElementById('log-count').textContent = `${++waCount} linha${waCount!==1?'s':''}`;
   }
 
-  // ── E-mail terminal ───────────────────────────────────────────────────────────
-  const terminalEmail = document.getElementById('terminal-email');
-
-  function addEmailLine(e) {
-    terminalEmail.appendChild(makeLogLine(e));
-    terminalEmail.scrollTop = terminalEmail.scrollHeight;
-    emailLines.push(`[${e.timestamp}] [${(TAG[e.type]||TAG.info)[0]}] ${e.message}`);
-    document.getElementById('email-log-count').textContent = `${++emailCount} linha${emailCount!==1?'s':''}`;
-  }
-
   // ── Salvar / Limpar ───────────────────────────────────────────────────────────
-  function saveLog(svc) {
-    const data = svc === 'email' ? emailLines : waLines;
+  function saveLog() {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([data.join('\n')], { type:'text/plain' }));
-    a.download = `iahub_${svc}_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+    a.href = URL.createObjectURL(new Blob([waLines.join('\n')], { type:'text/plain' }));
+    a.download = `iahub_wa_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
     a.click();
   }
 
-  function clearLog(svc) {
-    if (svc === 'email') {
-      terminalEmail.innerHTML = '';
-      emailLines = []; emailCount = 0;
-      document.getElementById('email-log-count').textContent = '';
-    } else {
-      terminal.innerHTML = '';
-      waLines = []; waCount = 0;
-      document.getElementById('log-count').textContent = '';
-    }
+  function clearLog() {
+    terminal.innerHTML = '';
+    waLines = []; waCount = 0;
+    document.getElementById('log-count').textContent = '';
+    fetch('/api/service/clear-log', { method: 'POST' }).catch(() => {});
   }
 
   // ── WhatsApp status ───────────────────────────────────────────────────────────
@@ -360,6 +260,9 @@
       if (!img.src || img.src === window.location.href) {
         waiting.classList.remove('d-none');
         img.classList.add('d-none'); hint.classList.add('d-none');
+      } else {
+        // QR já exibido: mostra opção de trocar número
+        btnRestart.classList.remove('d-none');
       }
     } else {
       img.classList.add('d-none'); hint.classList.add('d-none');
@@ -367,7 +270,8 @@
     }
   }
 
-  function setStatus(s) {
+  function setStatus(payload) {
+    const s = typeof payload === 'object' ? payload.status : payload;
     currentStatus = s;
     const [cls, label] = PILLS[s] || PILLS.stopped;
     const pill = document.getElementById('status-pill');
@@ -376,14 +280,14 @@
     document.getElementById('btn-start').classList.toggle('d-none', s !== 'stopped');
     document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
 
-    // Badge na aba
     const badge = document.getElementById('tab-wa-badge');
     badge.textContent = label;
     badge.className = `tab-badge${s === 'connected' ? ' badge-running' : ''}`;
 
     if (s === 'connected' || s === 'stopped') startedByQrPanel = false;
     if (qrPanelOpen) atualizarQrPanel(s);
-    if (s !== 'starting') { pararTimer(); return; }
+    if (s !== 'starting') { pararTimer(); pararPollQr(); return; }
+    iniciarPollQr();
 
     const saved = localStorage.getItem('iahub_start_ts');
     timerStart  = saved ? Number(saved) : Date.now();
@@ -396,24 +300,35 @@
     }, 1000);
   }
 
-  // ── E-mail status ─────────────────────────────────────────────────────────────
-  const EMAIL_PILLS = {
-    stopped: ['pill-stopped',   'Parado'],
-    running: ['pill-connected', 'Rodando'],
-  };
+  // ── Exibição do QR ───────────────────────────────────────────────────────────
+  function mostrarQr(url) {
+    const img = document.getElementById('qr-img');
+    img.src = url;
+    img.classList.remove('d-none');
+    document.getElementById('qr-hint').classList.remove('d-none');
+    document.getElementById('qr-waiting').classList.add('d-none');
+    document.getElementById('btn-qr-start').classList.add('d-none');
+    document.getElementById('btn-qr-restart').classList.remove('d-none');
+    if (!qrPanelOpen) abrirQrPanel();
+  }
 
-  function setEmailStatus(s) {
-    const [cls, label] = EMAIL_PILLS[s] || EMAIL_PILLS.stopped;
-    const pill = document.getElementById('email-status-pill');
-    pill.className = `status-pill ${cls}`;
-    pill.textContent = label;
-    document.getElementById('email-btn-start').classList.toggle('d-none', s !== 'stopped');
-    document.getElementById('email-btn-stop').classList.toggle('d-none',  s === 'stopped');
+  // ── Polling de fallback para QR (caso o socket perca o evento) ───────────────
+  let qrPollTimer = null;
 
-    // Badge na aba
-    const badge = document.getElementById('tab-email-badge');
-    badge.textContent = label;
-    badge.className = `tab-badge${s === 'running' ? ' badge-running' : ''}`;
+  function iniciarPollQr() {
+    pararPollQr();
+    qrPollTimer = setInterval(async () => {
+      if (currentStatus !== 'starting') { pararPollQr(); return; }
+      try {
+        const r = await fetch('/api/service/qr');
+        const { qr } = await r.json();
+        if (qr) { mostrarQr(qr); pararPollQr(); }
+      } catch (_) {}
+    }, 5000);
+  }
+
+  function pararPollQr() {
+    if (qrPollTimer) { clearInterval(qrPollTimer); qrPollTimer = null; }
   }
 
   // ── Socket events ─────────────────────────────────────────────────────────────
@@ -421,27 +336,16 @@
     terminal.innerHTML = '';
     waLines = []; waCount = 0;
     document.getElementById('log-count').textContent = '';
-    terminalEmail.innerHTML = '';
-    emailLines = []; emailCount = 0;
-    document.getElementById('email-log-count').textContent = '';
+    window._iahubAuthReady?.then(() => socket.emit('join-empresa'));
   });
 
   socket.on('log',          addLine);
   socket.on('status',       setStatus);
-  socket.on('email-log',    addEmailLine);
-  socket.on('email-status', setEmailStatus);
 
-  socket.on('qr', url => {
-    const img = document.getElementById('qr-img');
-    img.src = url;
-    img.classList.remove('d-none');
-    document.getElementById('qr-hint').classList.remove('d-none');
-    document.getElementById('qr-waiting').classList.add('d-none');
-    document.getElementById('btn-qr-start').classList.add('d-none');
-    // Muda para a aba WA e abre o painel QR automaticamente
-    mudarAba('wa');
-    if (!qrPanelOpen) abrirQrPanel();
-  });
+  // Carga inicial: busca status completo (com empresa_id) para exibir aviso imediatamente
+  fetch('/api/service/status').then(r => r.json()).then(setStatus).catch(() => {});
+
+  socket.on('qr', mostrarQr);
 
   // ── Painel QR ─────────────────────────────────────────────────────────────────
   function abrirQrPanel() {
@@ -517,36 +421,6 @@
       alert(`Erro de conexão: ${e.message}`);
     } finally {
       document.getElementById('btn-stop').disabled = false;
-    }
-  }
-
-  // ── Serviço E-mail ────────────────────────────────────────────────────────────
-  async function startEmailService() {
-    const btn = document.getElementById('email-btn-start');
-    btn.disabled = true;
-    try {
-      const r = await fetch('/api/email-service/start', { method: 'POST' });
-      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) alert(data.error || `Erro ao iniciar serviço de e-mail (HTTP ${r.status})`);
-    } catch (e) {
-      alert(`Erro de conexão: ${e.message}`);
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  async function stopEmailService() {
-    const btn = document.getElementById('email-btn-stop');
-    btn.disabled = true;
-    try {
-      const r = await fetch('/api/email-service/stop', { method: 'POST' });
-      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
-      if (!r.ok) alert(`Erro ao parar serviço de e-mail (HTTP ${r.status})`);
-    } catch (e) {
-      alert(`Erro de conexão: ${e.message}`);
-    } finally {
-      btn.disabled = false;
     }
   }
 </script>

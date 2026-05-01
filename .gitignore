@@ -2,5 +2,14 @@ node_modules/
 .env
 data.json
 whatscurriculo.log
+whatscurriculo_*.log
+emailcurriculo.log
+*.log
 .wwebjs_auth/
 .wwebjs_cache/
+data/usuarios.json
+data/seguranca.json
+data/empresa_*.json
+data/empresas.json
+data/auditoria.log
+.claude/settings.local.json

@@ -126,6 +126,13 @@
       color: var(--text-hi); background: var(--bg-hover);
     }
     .btn-pass-toggle svg, .btn-pass-toggle svg * { pointer-events: none; }
+    .page-content { padding-top: 16px; }
+    .alert-save {
+      border-radius: 9px; padding: 12px 16px; font-size: 13px;
+      margin-top: 12px;
+    }
+    .alert-save-ok  { background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent); }
+    .alert-save-err { background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626; }
   </style>
 </head>
 <body>
@@ -137,54 +144,14 @@
       <span class="logo-text">IAHub</span>
     </div>
     <div class="sidebar-nav">
-      <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
-        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-monitoramento">
-        <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
-        <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
-      <div class="nav-parent" onclick="toggleSubmenu('ps')">
-        <span class="nav-icon">📋</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-ps">
-        <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
-        <a href="/vagas.html" class="nav-item sub"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
-        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span></a>
-      </div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-vagas">
-        <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
-        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('se-curriculo')">
-        <span class="nav-icon">🔗</span><span class="nav-label">Integrações</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-se-curriculo">
-        <a href="/se-curriculos.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">SE Currículos</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Sistema</div>
-      <a href="/configuracoes.html" class="nav-item active"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
     </div>
     <div class="sidebar-footer">
-      <div class="user-avatar">A</div>
-      <div class="user-info-text">
-        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
-      </div>
-      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
-  </nav>
+    </nav>
 
   <div class="main">
     <div class="topbar">
-      <span class="topbar-title">Configurações</span>
-      <span class="topbar-breadcrumb ms-auto">Sistema › Configurações</span>
+      <span class="topbar-title"><span class="topbar-path">Configurador ›</span> Configurações</span>
     </div>
 
     <div class="page-content">
@@ -201,9 +168,6 @@
 
       <!-- ===================== ABA: WHATSAPP ===================== -->
       <div id="aba-whatsapp" style="max-width:660px">
-        <div id="alert-ok-wa" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração do WhatsApp salva com sucesso!</div>
-        <div id="alert-erro-wa" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px">❌ Todos os campos de mensagem são obrigatórios.</div>
-
         <div class="card mb-4">
           <div class="card-header">⚙ Geral</div>
           <div class="card-body">
@@ -256,6 +220,8 @@
         </div>
 
         <button class="btn btn-primary" onclick="salvarWhatsapp()" style="width:100%">Salvar Configuração</button>
+        <div id="alert-ok-wa" class="d-none alert-save alert-save-ok">✅ Configuração do WhatsApp salva com sucesso!</div>
+        <div id="alert-erro-wa" class="d-none alert-save alert-save-err">❌ Todos os campos de mensagem são obrigatórios.</div>
 
         <div class="card" style="margin-top:32px">
           <div class="card-header">ℹ Como funciona</div>
@@ -269,9 +235,6 @@
 
       <!-- ===================== ABA: ANALISADOR ===================== -->
       <div id="aba-analisador" class="d-none" style="max-width:580px">
-        <div id="alert-ok-an" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração do Analisador salva com sucesso!</div>
-        <div id="alert-erro-an" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
-
         <div class="card mb-4">
           <div class="card-header">⏱ Classificação de Nível por Tempo de Experiência</div>
           <div class="card-body">
@@ -298,6 +261,8 @@
         </div>
 
         <button class="btn btn-primary" onclick="salvarAnalisador()" style="width:100%">Salvar Configuração</button>
+        <div id="alert-ok-an" class="d-none alert-save alert-save-ok">✅ Configuração do Analisador salva com sucesso!</div>
+        <div id="alert-erro-an" class="d-none alert-save alert-save-err"></div>
 
         <div class="card" style="margin-top:32px">
           <div class="card-header">ℹ Como funciona</div>
@@ -355,9 +320,6 @@
 
       <!-- ===================== ABA: INTEGRAÇÕES ===================== -->
       <div id="aba-integracoes" class="d-none" style="max-width:620px">
-        <div id="alert-ok-int" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração salva com sucesso!</div>
-        <div id="alert-err-int" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
-
         <div class="card mb-4">
           <div class="card-header">🔗 Softexpert — SE Currículo</div>
           <div class="card-body">
@@ -384,6 +346,8 @@
         </div>
 
         <button class="btn btn-primary" onclick="salvarIntegracoes()" style="width:100%">Salvar Configuração</button>
+        <div id="alert-ok-int" class="d-none alert-save alert-save-ok">✅ Configuração salva com sucesso!</div>
+        <div id="alert-err-int" class="d-none alert-save alert-save-err"></div>
 
         <div class="card" style="margin-top:32px">
           <div class="card-header">ℹ Como funciona</div>
@@ -396,21 +360,24 @@
 
       <!-- ===================== ABA: EMAIL ===================== -->
       <div id="aba-email" class="d-none">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-          <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda-email').classList.remove('d-none')" style="white-space:nowrap;font-size:13px">❓ Ajuda — Configuração de E-mail</button>
+
+        <!-- Sub-abas internas -->
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);margin-bottom:24px">
+          <div style="display:flex;gap:4px">
+            <button class="email-sub-tab-btn active" data-target="email-sub-ps" onclick="mudarAbaEmail(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600;margin-bottom:-1px">📧 Processo Seletivo</button>
+            <button class="email-sub-tab-btn" data-target="email-sub-geral" onclick="mudarAbaEmail(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">📧 Geral</button>
+          </div>
+          <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuda-email').classList.remove('d-none')" style="white-space:nowrap;font-size:13px;margin-bottom:8px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor" stroke="none"/></svg>
+            Ajuda
+          </button>
         </div>
-        <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
 
-          <!-- Coluna: Processo Seletivo -->
-          <div style="flex:1;min-width:320px;max-width:620px">
-            <div style="min-height:52px">
-              <div id="alert-ok-email" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração de e-mail salva com sucesso!</div>
-              <div id="alert-err-email" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
-            </div>
-
-            <div class="card mb-4">
-              <div class="card-header">📧 Notificação por E-mail — Processo Seletivo</div>
-              <div class="card-body">
+        <!-- SUB-ABA: Processo Seletivo -->
+        <div id="email-sub-ps" style="max-width:620px;display:flex;flex-direction:column">
+          <div class="card mb-4">
+            <div class="card-header">📧 Notificação por E-mail — Processo Seletivo</div>
+            <div class="card-body">
 
                 <div class="form-group">
                   <label class="form-label">Tipo de Servidor</label>
@@ -518,29 +485,26 @@
               </div>
             </div>
 
-            <button class="btn btn-primary" onclick="salvarEmail()" style="width:100%">Salvar Configuração</button>
+          <button class="btn btn-primary" onclick="salvarEmail()" style="width:100%">Salvar Configuração</button>
+          <div id="alert-ok-email" class="d-none alert-save alert-save-ok">✅ Configuração de e-mail salva com sucesso!</div>
+          <div id="alert-err-email" class="d-none alert-save alert-save-err"></div>
 
-            <div class="card" style="margin-top:32px">
-              <div class="card-header">ℹ Como funciona</div>
-              <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
-                Quando um candidato envia currículo pelo <a href="/processoseletivo.html" style="color:var(--accent)">Processo Seletivo</a>, você recebe um e-mail automático com os dados extraídos pela IA e o PDF original em anexo.<br><br>
-                O sistema também monitora a caixa de entrada via IMAP a cada 2 minutos para capturar currículos enviados diretamente ao seu e-mail (fora da página pública), desde que o assunto siga o padrão: <strong>[ID] - [Vaga] - [Nome]</strong>.<br><br>
-                <strong>Gmail:</strong> obrigatório usar <strong>Senha de App</strong> — não a senha normal. Verificação em 2 etapas deve estar ativa.<br>
-                <strong>SMTP Genérico:</strong> ajuste host, porta e segurança conforme indicado pelo seu provedor de e-mail.
-              </div>
+          <div class="card" style="margin-top:16px">
+            <div class="card-header">ℹ Como funciona</div>
+            <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+              Quando um candidato envia currículo pelo <a href="/processoseletivo.html" style="color:var(--accent)">Processo Seletivo</a>, você recebe um e-mail automático com os dados extraídos pela IA e o PDF original em anexo.<br><br>
+              O sistema também monitora a caixa de entrada via IMAP a cada 2 minutos para capturar currículos enviados diretamente ao seu e-mail (fora da página pública), desde que o assunto siga o padrão: <strong>[ID] - [Vaga] - [Nome]</strong>.<br><br>
+              <strong>Gmail:</strong> obrigatório usar <strong>Senha de App</strong> — não a senha normal. Verificação em 2 etapas deve estar ativa.<br>
+              <strong>SMTP Genérico:</strong> ajuste host, porta e segurança conforme indicado pelo seu provedor de e-mail.
             </div>
           </div>
+        </div>
 
-          <!-- Coluna: Geral -->
-          <div style="flex:1;min-width:320px;max-width:620px">
-            <div style="min-height:52px">
-              <div id="alert-ok-egeral" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração de e-mail salva com sucesso!</div>
-              <div id="alert-err-egeral" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
-            </div>
-
-            <div class="card mb-4">
-              <div class="card-header">📧 Notificação por E-mail — Geral</div>
-              <div class="card-body">
+        <!-- SUB-ABA: Geral -->
+        <div id="email-sub-geral" class="d-none" style="max-width:620px;display:flex;flex-direction:column">
+          <div class="card mb-4">
+            <div class="card-header">📧 Notificação por E-mail — Geral</div>
+            <div class="card-body">
 
                 <div class="form-group">
                   <label class="form-label">Tipo de Servidor</label>
@@ -639,40 +603,39 @@
               </div>
             </div>
 
-            <button class="btn btn-primary" onclick="salvarEmailGeral()" style="width:100%">Salvar Configuração</button>
+          <button class="btn btn-primary" onclick="salvarEmailGeral()" style="width:100%">Salvar Configuração</button>
+          <div id="alert-ok-egeral" class="d-none alert-save alert-save-ok">✅ Configuração de e-mail salva com sucesso!</div>
+          <div id="alert-err-egeral" class="d-none alert-save alert-save-err"></div>
 
-            <div class="card" style="margin-top:32px">
-              <div class="card-header">ℹ Como funciona</div>
-              <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
-                Use este e-mail para qualquer processo que não seja o Processo Seletivo — notificações internas, alertas de sistema, integrações, etc.<br><br>
-                <strong>Gmail:</strong> obrigatório usar <strong>Senha de App</strong> — não a senha normal. Verificação em 2 etapas deve estar ativa.<br>
-                <strong>SMTP Genérico:</strong> ajuste host, porta e segurança conforme indicado pelo seu provedor de e-mail.
-              </div>
+          <div class="card" style="margin-top:16px">
+            <div class="card-header">ℹ Como funciona</div>
+            <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+              Use este e-mail para qualquer processo que não seja o Processo Seletivo — notificações internas, alertas de sistema, integrações, etc.<br><br>
+              <strong>Gmail:</strong> obrigatório usar <strong>Senha de App</strong> — não a senha normal. Verificação em 2 etapas deve estar ativa.<br>
+              <strong>SMTP Genérico:</strong> ajuste host, porta e segurança conforme indicado pelo seu provedor de e-mail.
             </div>
           </div>
-
         </div>
+
       </div>
 
       <!-- ===================== ABA: TEMPLATES DE E-MAIL ===================== -->
       <div id="aba-templates" class="d-none" style="max-width:820px">
 
-        <div style="min-height:52px">
-          <div id="alert-ok-templates" class="d-none mb-4" style="background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent);border-radius:9px;padding:12px 16px;font-size:13px">✅ Templates salvos com sucesso!</div>
-          <div id="alert-err-templates" class="d-none mb-4" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626;border-radius:9px;padding:12px 16px;font-size:13px"></div>
-        </div>
-
         <div style="background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.2);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13px;color:var(--text-md);line-height:1.7">
           Personalize os e-mails enviados automaticamente aos candidatos. Use as variáveis abaixo nos textos:<br>
+          <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{NOMEEMPRESA}}</code> — nome da empresa &nbsp;·&nbsp;
           <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{NOME}}</code> — nome do candidato &nbsp;·&nbsp;
           <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{VAGA}}</code> — descrição da vaga &nbsp;·&nbsp;
           <code style="background:var(--bg-hover);padding:1px 6px;border-radius:4px;font-size:12px">{{MOTIVO}}</code> — motivo da rejeição (apenas no template de rejeição)
         </div>
 
-        <!-- Tabs internas: Confirmação / Rejeição -->
-        <div style="display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0">
-          <button class="tpl-tab-btn active" data-target="tpl-confirmacao" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600;margin-bottom:-1px">✅ E-mail de Confirmação</button>
-          <button class="tpl-tab-btn" data-target="tpl-rejeicao" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">❌ E-mail de Rejeição</button>
+        <!-- Tabs internas: Confirmação / Rejeição / Confirmação Avulso / Rejeição Avulso -->
+        <div style="display:flex;gap:6px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0;flex-wrap:wrap">
+          <button class="tpl-tab-btn active" data-target="tpl-confirmacao" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600;margin-bottom:-1px">✅ Confirmação (com Vaga)</button>
+          <button class="tpl-tab-btn" data-target="tpl-rejeicao" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">❌ Rejeição (com Vaga)</button>
+          <button class="tpl-tab-btn" data-target="tpl-conf-livre" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">📩 Confirmação (Avulso)</button>
+          <button class="tpl-tab-btn" data-target="tpl-rej-livre" onclick="mudarAbaTemplate(this)" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--text-lo);border-bottom:2px solid transparent;font-weight:600;margin-bottom:-1px">🚫 Rejeição (Avulso)</button>
         </div>
 
         <!-- Template: Confirmação -->
@@ -688,7 +651,7 @@
             <div class="card-body">
               <div class="form-group">
                 <label class="form-label">Assunto do E-mail</label>
-                <input type="text" id="tpl-conf-assunto" class="form-control" placeholder="Seu currículo foi recebido — {{VAGA}}">
+                <input type="text" id="tpl-conf-assunto" class="form-control" placeholder="{{NOMEEMPRESA}} - Currículo processado com sucesso — {{VAGA}}">
               </div>
               <div class="form-group">
                 <label class="form-label">Corpo do E-mail (HTML)</label>
@@ -711,7 +674,7 @@
             <div class="card-body">
               <div class="form-group">
                 <label class="form-label">Assunto do E-mail</label>
-                <input type="text" id="tpl-rej-assunto" class="form-control" placeholder="Seu currículo não pôde ser processado — {{VAGA}}">
+                <input type="text" id="tpl-rej-assunto" class="form-control" placeholder="{{NOMEEMPRESA}} - Seu currículo não pôde ser processado — {{VAGA}}">
               </div>
               <div class="form-group">
                 <label class="form-label">Corpo do E-mail (HTML)</label>
@@ -721,7 +684,61 @@
           </div>
         </div>
 
+        <!-- Template: Confirmação Avulso -->
+        <div id="tpl-conf-livre" class="d-none">
+          <div class="card mb-4">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <span>📩 Template — Confirmação (E-mail Avulso / sem Vaga)</span>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost" style="font-size:12px" onclick="previewTemplate('conf-livre')">👁 Prévia</button>
+                <button class="btn btn-ghost" style="font-size:12px" onclick="restaurarTemplateConfLivre()">↺ Restaurar padrão</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--accent);margin-bottom:14px;line-height:1.6">
+                Usado quando o candidato envia um PDF válido <strong>sem assunto formatado</strong>. Variáveis disponíveis: <code>{{NOME}}</code>, <code>{{NOMEEMPRESA}}</code>. A variável <code>{{VAGA}}</code> <strong>não está disponível</strong> neste template.
+              </div>
+              <div class="form-group">
+                <label class="form-label">Assunto do E-mail</label>
+                <input type="text" id="tpl-conf-livre-assunto" class="form-control" placeholder="{{NOMEEMPRESA}} — Currículo recebido com sucesso">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Corpo do E-mail (HTML)</label>
+                <textarea id="tpl-conf-livre-html" class="form-control" rows="16" style="font-family:monospace;font-size:12px;resize:vertical"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Template: Rejeição Avulso -->
+        <div id="tpl-rej-livre" class="d-none">
+          <div class="card mb-4">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+              <span>🚫 Template — Rejeição (E-mail Avulso / sem Vaga)</span>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost" style="font-size:12px" onclick="previewTemplate('rej-livre')">👁 Prévia</button>
+                <button class="btn btn-ghost" style="font-size:12px" onclick="restaurarTemplateRejLivre()">↺ Restaurar padrão</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--accent);margin-bottom:14px;line-height:1.6">
+                Usado quando o PDF enviado <strong>não é reconhecido como currículo</strong>. Variáveis disponíveis: <code>{{NOME}}</code>, <code>{{NOMEEMPRESA}}</code>, <code>{{MOTIVO}}</code>. A variável <code>{{VAGA}}</code> <strong>não está disponível</strong> neste template.
+              </div>
+              <div class="form-group">
+                <label class="form-label">Assunto do E-mail</label>
+                <input type="text" id="tpl-rej-livre-assunto" class="form-control" placeholder="{{NOMEEMPRESA}} — Não foi possível processar seu arquivo">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Corpo do E-mail (HTML)</label>
+                <textarea id="tpl-rej-livre-html" class="form-control" rows="16" style="font-family:monospace;font-size:12px;resize:vertical"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button class="btn btn-primary" onclick="salvarTemplates()" style="width:100%">Salvar Templates</button>
+        <div id="alert-ok-templates" class="d-none alert-save alert-save-ok">✅ Templates salvos com sucesso!</div>
+        <div id="alert-err-templates" class="d-none alert-save alert-save-err"></div>
 
         <!-- Modal de prévia -->
         <div id="modal-preview-template" class="d-none" onclick="if(event.target===this)this.classList.add('d-none')" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;display:flex;align-items:center;justify-content:center">
@@ -1805,6 +1822,24 @@ function mudarAbaTemplate(btn) {
   document.getElementById(btn.dataset.target).classList.remove('d-none');
 }
 
+function mudarAbaEmail(btn) {
+  document.querySelectorAll('.email-sub-tab-btn').forEach(b => {
+    b.style.color = 'var(--text-lo)';
+    b.style.borderBottomColor = 'transparent';
+    document.getElementById(b.dataset.target).classList.add('d-none');
+  });
+  btn.style.color = 'var(--accent)';
+  btn.style.borderBottomColor = 'var(--accent)';
+  document.getElementById(btn.dataset.target).classList.remove('d-none');
+}
+
+// Defaults para e-mail avulso (sem vaga)
+const TPL_CONF_LIVRE_ASSUNTO_DEFAULT = '{{NOMEEMPRESA}} — Currículo recebido com sucesso';
+const TPL_CONF_LIVRE_HTML_DEFAULT = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f4f7;font-family:'Segoe UI',Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px;text-align:center"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="color:#fff;font-size:22px;font-weight:700">Currículo Recebido com Sucesso!</div><div style="color:rgba(255,255,255,.8);font-size:14px;margin-top:6px">Seu currículo foi analisado e cadastrado em nossa base</div></td></tr><tr><td style="padding:36px 40px"><p style="font-size:16px;color:#1f2937;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">Recebemos seu currículo e ele foi <strong>processado pela nossa inteligência artificial</strong> e está <strong>gravado em nossa base de candidatos</strong>. 🎉</p><table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px"><tr><td style="padding:16px 20px"><div style="font-size:13px;color:#166534;font-weight:600;margin-bottom:10px">📋 Status do seu currículo:</div><table width="100%" cellpadding="3" cellspacing="0"><tr><td style="font-size:13px;color:#166534;width:20px">✔</td><td style="font-size:13px;color:#374151">PDF recebido e lido com sucesso</td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Dados extraídos via inteligência artificial</td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Currículo gravado na base de candidatos</td></tr></table></td></tr></table><p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">Nossa equipe irá analisar seu perfil e entrar em contato em breve. Fique atento ao seu e-mail e telefone.</p><div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:6px;padding:14px 18px;font-size:13px;color:#1e40af">💡 Em caso de dúvidas, responda este e-mail e nossa equipe irá te atender.</div></td></tr><tr><td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
+
+const TPL_REJ_LIVRE_ASSUNTO_DEFAULT = '{{NOMEEMPRESA}} — Não foi possível processar seu arquivo';
+const TPL_REJ_LIVRE_HTML_DEFAULT = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#dc2626,#f87171);padding:32px 36px;text-align:center"><h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">⚠️ Arquivo não processado</h1></td></tr><tr><td style="padding:36px 36px 24px"><p style="font-size:16px;color:#374151;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#6b7280;line-height:1.75;margin:0 0 16px">Recebemos seu e-mail, mas não foi possível processar o arquivo em anexo.</p><p style="font-size:14px;color:#991b1b;background:#fef2f2;border-radius:8px;padding:14px 18px;margin:0 0 20px"><strong>Motivo:</strong> {{MOTIVO}}</p><p style="font-size:13px;color:#9ca3af">Por favor reenvie seu currículo em formato <strong>PDF</strong>.</p></td></tr><tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:18px 36px;text-align:center"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
+
 function restaurarTemplateConfirmacao() {
   document.getElementById('tpl-conf-assunto').value = TPL_CONF_ASSUNTO_DEFAULT;
   document.getElementById('tpl-conf-html').value    = TPL_CONF_HTML_DEFAULT;
@@ -1815,34 +1850,68 @@ function restaurarTemplateRejeicao() {
   document.getElementById('tpl-rej-html').value    = TPL_REJ_HTML_DEFAULT;
 }
 
+function restaurarTemplateConfLivre() {
+  document.getElementById('tpl-conf-livre-assunto').value = TPL_CONF_LIVRE_ASSUNTO_DEFAULT;
+  document.getElementById('tpl-conf-livre-html').value    = TPL_CONF_LIVRE_HTML_DEFAULT;
+}
+
+function restaurarTemplateRejLivre() {
+  document.getElementById('tpl-rej-livre-assunto').value = TPL_REJ_LIVRE_ASSUNTO_DEFAULT;
+  document.getElementById('tpl-rej-livre-html').value    = TPL_REJ_LIVRE_HTML_DEFAULT;
+}
+
 function previewTemplate(tipo) {
-  const html    = tipo === 'confirmacao'
-    ? document.getElementById('tpl-conf-html').value
-    : document.getElementById('tpl-rej-html').value;
-  const assunto = tipo === 'confirmacao'
-    ? document.getElementById('tpl-conf-assunto').value
-    : document.getElementById('tpl-rej-assunto').value;
+  const htmlMap = {
+    confirmacao:  document.getElementById('tpl-conf-html').value,
+    rejeicao:     document.getElementById('tpl-rej-html').value,
+    'conf-livre': document.getElementById('tpl-conf-livre-html').value,
+    'rej-livre':  document.getElementById('tpl-rej-livre-html').value,
+  };
+  const assuntoMap = {
+    confirmacao:  document.getElementById('tpl-conf-assunto').value,
+    rejeicao:     document.getElementById('tpl-rej-assunto').value,
+    'conf-livre': document.getElementById('tpl-conf-livre-assunto').value,
+    'rej-livre':  document.getElementById('tpl-rej-livre-assunto').value,
+  };
+  const tituloMap = {
+    confirmacao:  'Prévia — Confirmação (com Vaga)',
+    rejeicao:     'Prévia — Rejeição (com Vaga)',
+    'conf-livre': 'Prévia — Confirmação (E-mail Avulso)',
+    'rej-livre':  'Prévia — Rejeição (E-mail Avulso)',
+  };
+  const html    = htmlMap[tipo]    || '';
+  const assunto = assuntoMap[tipo] || '';
   const rendered = html
-    .replace(/\{\{NOME\}\}/g, 'João da Silva')
-    .replace(/\{\{VAGA\}\}/g, 'Analista de Sistemas')
-    .replace(/\{\{MOTIVO\}\}/g, 'O arquivo enviado não está no formato PDF.');
-  document.getElementById('preview-titulo').textContent  = tipo === 'confirmacao' ? 'Prévia — Confirmação' : 'Prévia — Rejeição';
-  document.getElementById('preview-assunto-bar').textContent = 'Assunto: ' + assunto.replace(/\{\{NOME\}\}/g,'João da Silva').replace(/\{\{VAGA\}\}/g,'Analista de Sistemas');
-  const iframe = document.getElementById('preview-iframe');
-  iframe.srcdoc = rendered;
+    .replace(/\{\{NOME\}\}/g,        'João da Silva')
+    .replace(/\{\{NOMEEMPRESA\}\}/g, 'Empresa Exemplo')
+    .replace(/\{\{VAGA\}\}/g,        'Analista de Sistemas')
+    .replace(/\{\{MOTIVO\}\}/g,      'O arquivo enviado não está no formato PDF.');
+  document.getElementById('preview-titulo').textContent = tituloMap[tipo] || 'Prévia';
+  document.getElementById('preview-assunto-bar').textContent = 'Assunto: ' +
+    assunto
+      .replace(/\{\{NOME\}\}/g,        'João da Silva')
+      .replace(/\{\{NOMEEMPRESA\}\}/g, 'Empresa Exemplo')
+      .replace(/\{\{VAGA\}\}/g,        'Analista de Sistemas');
+  document.getElementById('preview-iframe').srcdoc = rendered;
   document.getElementById('modal-preview-template').classList.remove('d-none');
 }
 
 async function carregarTemplates() {
   try {
     const data = await fetch('/api/ps/email-templates').then(r => r.json());
-    document.getElementById('tpl-conf-assunto').value = data.conf_assunto || TPL_CONF_ASSUNTO_DEFAULT;
-    document.getElementById('tpl-conf-html').value    = data.conf_html    || TPL_CONF_HTML_DEFAULT;
-    document.getElementById('tpl-rej-assunto').value  = data.rej_assunto  || TPL_REJ_ASSUNTO_DEFAULT;
-    document.getElementById('tpl-rej-html').value     = data.rej_html     || TPL_REJ_HTML_DEFAULT;
+    document.getElementById('tpl-conf-assunto').value      = data.conf_assunto      || TPL_CONF_ASSUNTO_DEFAULT;
+    document.getElementById('tpl-conf-html').value         = data.conf_html         || TPL_CONF_HTML_DEFAULT;
+    document.getElementById('tpl-rej-assunto').value       = data.rej_assunto       || TPL_REJ_ASSUNTO_DEFAULT;
+    document.getElementById('tpl-rej-html').value          = data.rej_html          || TPL_REJ_HTML_DEFAULT;
+    document.getElementById('tpl-conf-livre-assunto').value = data.conf_livre_assunto || TPL_CONF_LIVRE_ASSUNTO_DEFAULT;
+    document.getElementById('tpl-conf-livre-html').value    = data.conf_livre_html    || TPL_CONF_LIVRE_HTML_DEFAULT;
+    document.getElementById('tpl-rej-livre-assunto').value  = data.rej_livre_assunto  || TPL_REJ_LIVRE_ASSUNTO_DEFAULT;
+    document.getElementById('tpl-rej-livre-html').value     = data.rej_livre_html     || TPL_REJ_LIVRE_HTML_DEFAULT;
   } catch {
     restaurarTemplateConfirmacao();
     restaurarTemplateRejeicao();
+    restaurarTemplateConfLivre();
+    restaurarTemplateRejLivre();
   }
 }
 
@@ -1851,10 +1920,14 @@ async function salvarTemplates() {
   const err = document.getElementById('alert-err-templates');
   try {
     const body = {
-      conf_assunto: document.getElementById('tpl-conf-assunto').value,
-      conf_html:    document.getElementById('tpl-conf-html').value,
-      rej_assunto:  document.getElementById('tpl-rej-assunto').value,
-      rej_html:     document.getElementById('tpl-rej-html').value,
+      conf_assunto:       document.getElementById('tpl-conf-assunto').value,
+      conf_html:          document.getElementById('tpl-conf-html').value,
+      rej_assunto:        document.getElementById('tpl-rej-assunto').value,
+      rej_html:           document.getElementById('tpl-rej-html').value,
+      conf_livre_assunto: document.getElementById('tpl-conf-livre-assunto').value,
+      conf_livre_html:    document.getElementById('tpl-conf-livre-html').value,
+      rej_livre_assunto:  document.getElementById('tpl-rej-livre-assunto').value,
+      rej_livre_html:     document.getElementById('tpl-rej-livre-html').value,
     };
     const r = await fetch('/api/ps/email-templates', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

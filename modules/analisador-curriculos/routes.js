@@ -229,11 +229,11 @@ const EQUIVALENCIAS = {
   scrum:       ['scrum', 'agile', 'ágil', 'kanban', 'jira', 'metodologia ágil', 'sprint'],
 };
 
-function getMergedEquivalencias() {
+function getMergedEquivalencias(empresaId) {
   const merged = {};
   for (const [k, v] of Object.entries(EQUIVALENCIAS))
     merged[k.toLowerCase()] = v.map(s => s.toLowerCase());
-  for (const entry of db.listEquivalencias())
+  for (const entry of db.listEquivalencias(empresaId))
     merged[entry.keyword.toLowerCase()] = entry.variantes.map(s => String(s).toLowerCase());
   return merged;
 }
@@ -270,31 +270,48 @@ function temKeyword(textoLower, kw, equiv) {
   return textoLower.includes(kwLower);
 }
 
-// ── Etapa 1: Triagem eliminatória por palavras-chave (determinística) ─────────
-function triagem(funcao, curriculos) {
+// ── Etapa 1: Triagem por palavras-chave — obrigatórios + desejáveis ───────────
+function triagem(funcao, curriculos, empresaId) {
   const temCriterios = funcao.requisitos_obrigatorios ||
     (Array.isArray(funcao.habilidades_tecnicas) && funcao.habilidades_tecnicas.length);
 
   if (!temCriterios) return { aprovados: curriculos, eliminados: [] };
 
-  // Extrai keywords obrigatórias do campo requisitos_obrigatorios
   const kwObrigatorias = (funcao.requisitos_obrigatorios || '')
     .split(/[\n,;]+/)
     .map(s => s.replace(/^[-•]\s*/, '').trim())
     .filter(Boolean);
 
-  const equiv    = getMergedEquivalencias();
+  const kwDesejaveis = (funcao.requisitos_desejaveis || '')
+    .split(/[\n,;]+/)
+    .map(s => s.replace(/^[-•]\s*/, '').trim())
+    .filter(Boolean);
+
+  const equiv    = getMergedEquivalencias(empresaId);
   const aprovados  = [];
   const eliminados = [];
 
   for (const c of curriculos) {
-    const texto   = curriculoTextoCompleto(c);
-    const faltando = kwObrigatorias.filter(kw => !temKeyword(texto, kw, equiv));
+    const texto          = curriculoTextoCompleto(c);
+    const obrigAtendidos = kwObrigatorias.filter(kw =>  temKeyword(texto, kw, equiv));
+    const obrigFaltando  = kwObrigatorias.filter(kw => !temKeyword(texto, kw, equiv));
+    const desejAtendidos = kwDesejaveis.filter(kw =>  temKeyword(texto, kw, equiv));
 
-    if (faltando.length === 0) {
+    // Nota de triagem: obrigatórios valem 7 pts, desejáveis valem 3 pts, mínimo 5 para aprovação
+    const ptObrig = kwObrigatorias.length > 0 ? (obrigAtendidos.length / kwObrigatorias.length) * 7 : 7;
+    const ptDesej = kwDesejaveis.length  > 0 ? (desejAtendidos.length  / kwDesejaveis.length)  * 3 : 0;
+    const nota    = ptObrig + ptDesej;
+
+    if (nota >= 5) {
       aprovados.push(c);
     } else {
-      eliminados.push({ ...c, motivo_eliminacao: `Não apresenta evidência de: ${faltando.join(', ')}` });
+      const notaFmt = nota.toFixed(1).replace('.', ',');
+      let motivo = `Nota de triagem: ${notaFmt}/10`;
+      if (obrigFaltando.length > 0)
+        motivo += ` — Não apresenta evidência de: ${obrigFaltando.join(', ')}`;
+      if (kwDesejaveis.length > 0)
+        motivo += ` — atende ${desejAtendidos.length}/${kwDesejaveis.length} desejável(is)`;
+      eliminados.push({ ...c, motivo_eliminacao: motivo });
     }
   }
 
@@ -355,7 +372,7 @@ Responda SOMENTE com JSON válido, sem markdown.`;
   }
 }
 
-module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, io }) {
+module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa, registrarLog, io }) {
 
   function logMonitor(message, type = 'warning') {
     const entry = { message, type, timestamp: new Date().toLocaleTimeString('pt-BR') };
@@ -364,74 +381,75 @@ module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, 
   }
 
   // ── Funções ──────────────────────────────────────────────────────────────────
-  app.get   ('/api/funcoes',     requireAuth, (_req, res) => res.json(db.listFuncoes()));
-  app.get   ('/api/funcoes/:id', requireAuth, (req, res) => {
-    const f = db.getFuncao(Number(req.params.id));
+  app.get   ('/api/funcoes',     requireAuth, requireEmpresa, (req, res) => res.json(db.listFuncoes(req.session.empresa_id)));
+  app.get   ('/api/funcoes/:id', requireAuth, requireEmpresa, (req, res) => {
+    const f = db.getFuncao(req.session.empresa_id, Number(req.params.id));
     if (!f) return res.status(404).json({ error: 'Não encontrada' });
     res.json(f);
   });
-  app.post  ('/api/funcoes',     requireAuth, (req, res) => {
-    const id = db.saveFuncao(req.body);
+  app.post  ('/api/funcoes',     requireAuth, requireEmpresa, (req, res) => {
+    const id = db.saveFuncao(req.session.empresa_id, req.body);
     res.json({ ok: true, id });
   });
-  app.put   ('/api/funcoes/:id', requireAuth, (req, res) => {
-    const ok = db.updateFuncao(Number(req.params.id), req.body);
+  app.put   ('/api/funcoes/:id', requireAuth, requireEmpresa, (req, res) => {
+    const ok = db.updateFuncao(req.session.empresa_id, Number(req.params.id), req.body);
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
-  app.delete('/api/funcoes/:id', requireAuth, (req, res) => {
-    const ok = db.deleteFuncao(Number(req.params.id));
+  app.delete('/api/funcoes/:id', requireAuth, requireEmpresa, (req, res) => {
+    const ok = db.deleteFuncao(req.session.empresa_id, Number(req.params.id));
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
 
   // ── Vagas ────────────────────────────────────────────────────────────────────
-  app.get   ('/api/vagas',     requireAuth, (_req, res) => res.json(db.listVagas()));
-  app.get   ('/api/vagas/:id', requireAuth, (req, res) => {
-    const v = db.getVaga(Number(req.params.id));
+  app.get   ('/api/vagas',     requireAuth, requireEmpresa, (req, res) => res.json(db.listVagas(req.session.empresa_id)));
+  app.get   ('/api/vagas/:id', requireAuth, requireEmpresa, (req, res) => {
+    const v = db.getVaga(req.session.empresa_id, Number(req.params.id));
     if (!v) return res.status(404).json({ error: 'Não encontrada' });
     res.json(v);
   });
-  app.post  ('/api/vagas',     requireAuth, (req, res) => {
-    const id = db.saveVaga(req.body);
+  app.post  ('/api/vagas',     requireAuth, requireEmpresa, (req, res) => {
+    const id = db.saveVaga(req.session.empresa_id, req.body);
     res.json({ ok: true, id });
   });
-  app.put   ('/api/vagas/:id', requireAuth, (req, res) => {
-    const ok = db.updateVaga(Number(req.params.id), req.body);
+  app.put   ('/api/vagas/:id', requireAuth, requireEmpresa, (req, res) => {
+    const ok = db.updateVaga(req.session.empresa_id, Number(req.params.id), req.body);
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
-  app.delete('/api/vagas/:id', requireAuth, (req, res) => {
-    const ok = db.deleteVaga(Number(req.params.id));
+  app.delete('/api/vagas/:id', requireAuth, requireEmpresa, (req, res) => {
+    const ok = db.deleteVaga(req.session.empresa_id, Number(req.params.id));
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
 
   // ── Config do analisador ──────────────────────────────────────────────────────
-  app.get ('/api/analisador/config', requireAuth, (_req, res) => res.json(db.getAnalisadorConfig()));
-  app.post('/api/analisador/config', requireAuth, (req, res) => {
+  app.get ('/api/analisador/config', requireAuth, requireEmpresa, (req, res) => res.json(db.getAnalisadorConfig(req.session.empresa_id)));
+  app.post('/api/analisador/config', requireAuth, requireEmpresa, (req, res) => {
     const { junior_max_meses, pleno_max_meses } = req.body;
     if (!junior_max_meses || !pleno_max_meses) return res.status(400).json({ error: 'Campos obrigatórios' });
     if (Number(junior_max_meses) >= Number(pleno_max_meses)) return res.status(400).json({ error: 'Limite Júnior deve ser menor que Pleno' });
-    db.setAnalisadorConfig({ junior_max_meses: Number(junior_max_meses), pleno_max_meses: Number(pleno_max_meses) });
+    db.setAnalisadorConfig(req.session.empresa_id, { junior_max_meses: Number(junior_max_meses), pleno_max_meses: Number(pleno_max_meses) });
     res.json({ ok: true });
   });
 
   // ── Análises Salvas ──────────────────────────────────────────────────────────
-  app.get('/api/analises', requireAuth, (_req, res) => {
-    res.json(db.listAnalises());
+  app.get('/api/analises', requireAuth, requireEmpresa, (req, res) => {
+    res.json(db.listAnalises(req.session.empresa_id));
   });
 
-  app.get('/api/analises/:id', requireAuth, (req, res) => {
-    const a = db.getAnalise(req.params.id);
+  app.get('/api/analises/:id', requireAuth, requireEmpresa, (req, res) => {
+    const a = db.getAnalise(req.session.empresa_id, req.params.id);
     if (!a) return res.status(404).json({ error: 'Não encontrada' });
     res.json(a);
   });
 
-  app.post('/api/analises', requireAuth, (req, res) => {
+  app.post('/api/analises', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
     const { force, ...analise } = req.body;
     if (!analise.id) return res.status(400).json({ error: 'ID obrigatório' });
-    const existing = db.getAnalise(analise.id);
+    const existing = db.getAnalise(eid, analise.id);
     if (existing && !force) {
       return res.status(409).json({
         conflict: true,
@@ -439,35 +457,36 @@ module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, 
         funcao_nome:    existing.funcao_nome,
       });
     }
-    db.saveAnalise({ ...analise, data: new Date().toISOString() });
+    db.saveAnalise(eid, { ...analise, data: new Date().toISOString() });
     res.json({ ok: true });
   });
 
-  app.delete('/api/analises/:id', requireAuth, (req, res) => {
-    const ok = db.deleteAnalise(req.params.id);
+  app.delete('/api/analises/:id', requireAuth, requireEmpresa, (req, res) => {
+    const ok = db.deleteAnalise(req.session.empresa_id, req.params.id);
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
 
   // ── Analisador ───────────────────────────────────────────────────────────────
-  app.post('/api/analisador/analisar', requireAuth, async (req, res) => {
+  app.post('/api/analisador/analisar', requireAuth, requireEmpresa, async (req, res) => {
+    const eid = req.session.empresa_id;
     const { funcao_id, vaga_id, somente_vaga } = req.body;
-    const funcao = db.getFuncao(Number(funcao_id));
+    const funcao = db.getFuncao(eid, Number(funcao_id));
     if (!funcao) return res.status(404).json({ error: 'Função não encontrada' });
 
-    let curriculos = db.listCurriculos();
+    let curriculos = db.listCurriculos(eid);
 
     if (somente_vaga && vaga_id) {
       const psDb = require('../processo-seletivo/database');
-      const ids  = psDb.getCurriculoIdsByVaga(Number(vaga_id));
+      const ids  = psDb.getCurriculoIdsByVaga(eid, Number(vaga_id));
       curriculos = curriculos.filter(c => ids.includes(c.id));
     }
 
     if (!curriculos.length) return res.json({ resultados: [], eliminados: [], total: 0 });
 
     try {
-      const cfg = db.getAnalisadorConfig();
-      const { aprovados, eliminados } = triagem(funcao, curriculos);
+      const cfg = db.getAnalisadorConfig(eid);
+      const { aprovados, eliminados } = triagem(funcao, curriculos, eid);
 
       const resultados = [];
       for (const c of aprovados) {
@@ -520,8 +539,9 @@ module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, 
   });
 
   // ── Equivalências ─────────────────────────────────────────────────────────────
-  app.get('/api/equivalencias', requireAuth, (_req, res) => {
-    const dbEntries = db.listEquivalencias();
+  app.get('/api/equivalencias', requireAuth, requireEmpresa, (req, res) => {
+    const eid       = req.session.empresa_id;
+    const dbEntries = db.listEquivalencias(eid);
     const dbMap     = new Map(dbEntries.map(e => [e.keyword, e.variantes]));
     const result    = [];
 
@@ -541,21 +561,21 @@ module.exports = function registerVagasRoutes(app, { requireAuth, registrarLog, 
     res.json(result);
   });
 
-  app.post('/api/equivalencias', requireAuth, (req, res) => {
+  app.post('/api/equivalencias', requireAuth, requireEmpresa, (req, res) => {
     const { keyword, variantes } = req.body;
     if (!keyword?.trim() || !Array.isArray(variantes))
       return res.status(400).json({ error: 'keyword e variantes[] obrigatórios' });
-    db.saveEquivalencia({ keyword, variantes });
+    db.saveEquivalencia(req.session.empresa_id, { keyword, variantes });
     res.json({ ok: true });
   });
 
-  app.delete('/api/equivalencias/:keyword', requireAuth, (req, res) => {
-    db.deleteEquivalencia(req.params.keyword);
+  app.delete('/api/equivalencias/:keyword', requireAuth, requireEmpresa, (req, res) => {
+    db.deleteEquivalencia(req.session.empresa_id, req.params.keyword);
     res.json({ ok: true });
   });
 
   // ── Sugerir equivalências via IA (keyword única — modal de Configurações) ─────
-  app.post('/api/equivalencias/sugerir', requireAuth, async (req, res) => {
+  app.post('/api/equivalencias/sugerir', requireAuth, requireEmpresa, async (req, res) => {
     const { keyword } = req.body;
     if (!keyword?.trim()) return res.status(400).json({ error: 'keyword obrigatório' });
 
@@ -580,12 +600,13 @@ Responda apenas o array JSON.`;
   });
 
   // ── Sugerir equivalências em lote via IA (salva automaticamente as novas) ─────
-  app.post('/api/equivalencias/sugerir-lote', requireAuth, async (req, res) => {
+  app.post('/api/equivalencias/sugerir-lote', requireAuth, requireEmpresa, async (req, res) => {
+    const eid              = req.session.empresa_id;
     const { keywords, preview } = req.body;
     if (!Array.isArray(keywords) || !keywords.length)
       return res.status(400).json({ error: 'keywords[] obrigatório' });
 
-    const equiv        = getMergedEquivalencias();
+    const equiv        = getMergedEquivalencias(eid);
     const novas        = keywords.filter(kw => !equiv[kw.toLowerCase().trim()]).map(kw => kw.trim());
     const jaExistentes = keywords.filter(kw =>  equiv[kw.toLowerCase().trim()]).map(kw => kw.toLowerCase());
 
@@ -612,7 +633,7 @@ Formato exato: {"keyword1":["var1","var2",...],"keyword2":[...]}`;
         const keyword = kw.toLowerCase().trim();
         const vars    = variantes.map(v => String(v).toLowerCase().trim()).filter(Boolean);
         if (!keyword || !vars.length) continue;
-        if (!preview) db.saveEquivalencia({ keyword, variantes: vars });
+        if (!preview) db.saveEquivalencia(eid, { keyword, variantes: vars });
         geradas[keyword] = vars;
       }
 

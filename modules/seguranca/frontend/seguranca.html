@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Segurança — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .config-section { margin-bottom:28px; }
+    .config-section-title {
+      font-size:13px;font-weight:700;text-transform:uppercase;
+      letter-spacing:.06em;color:var(--text-lo);margin-bottom:16px;
+      padding-bottom:8px;border-bottom:1px solid var(--border);
+    }
+    .form-row   { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .hint       { font-size:11px;color:var(--text-lo);margin-top:4px; }
+    .save-bar   {
+      position:sticky;bottom:0;background:var(--bg-card);
+      border-top:1px solid var(--border);padding:14px 24px;
+      display:flex;align-items:center;gap:12px;z-index:10;
+    }
+    .save-msg { font-size:13px;color:var(--success);display:none; }
+
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+
+    /* ── Tabela de auditoria ── */
+    .audit-filters {
+      display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
+    }
+    .audit-filters .form-group { margin:0;flex:1;min-width:140px; }
+    .audit-filters .form-label { font-size:11px;margin-bottom:4px; }
+    .audit-filters .form-control { font-size:12px;padding:6px 10px; }
+    .acao-badge {
+      display:inline-block;padding:2px 8px;border-radius:12px;
+      font-size:11px;font-weight:600;
+    }
+    .acao-login_sucesso  { background:rgba(22,163,74,.12); color:var(--success); }
+    .acao-login_falha    { background:rgba(239,68,68,.10); color:#dc2626; }
+    .acao-login_bloqueado{ background:rgba(239,68,68,.18); color:#dc2626; }
+    .acao-logout         { background:var(--bg-hover);    color:var(--text-md); }
+    .acao-empresa_selecionada { background:rgba(37,99,235,.1); color:var(--accent); }
+    .acao-default        { background:var(--bg-hover);    color:var(--text-lo); }
+    .empty-audit         { text-align:center;padding:40px;color:var(--text-lo);font-size:13px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+    </div>
+    <div class="sidebar-footer">
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Configurador › Administração ›</span> Segurança</span>
+    </div>
+
+    <div class="page-content" style="padding-bottom:0">
+      <div class="card">
+
+        <!-- ── Abas ─────────────────────────────────────────────────────────── -->
+        <div class="tabs-header" style="padding:0 24px">
+          <button class="tab-btn active" id="tab-btn-config"   onclick="mudarAba('config',   this)">Configurações de Segurança</button>
+          <button class="tab-btn"        id="tab-btn-auditoria" onclick="mudarAba('auditoria', this)">Auditoria de Acessos</button>
+        </div>
+
+        <!-- ── Aba: Configurações ────────────────────────────────────────────── -->
+        <div class="tab-content active" id="tab-config">
+          <div style="padding:24px 24px 0">
+
+            <div class="config-section">
+              <div class="config-section-title">Sessão</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Tempo máximo de sessão (horas)</label>
+                  <input id="cfg-sessao" type="number" min="1" max="24" class="form-control" placeholder="8">
+                  <div class="hint">Usuário será desconectado após este tempo de inatividade.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-section">
+              <div class="config-section-title">Tentativas de Login</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Máximo de tentativas antes do bloqueio</label>
+                  <input id="cfg-tentativas" type="number" min="1" max="20" class="form-control" placeholder="5">
+                  <div class="hint">Após este número de falhas, o IP será bloqueado temporariamente.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Duração do bloqueio (minutos)</label>
+                  <input id="cfg-bloqueio" type="number" min="1" max="1440" class="form-control" placeholder="15">
+                  <div class="hint">Tempo que o IP ficará bloqueado após exceder as tentativas.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-section" style="margin-bottom:0">
+              <div class="config-section-title">Política de Senha</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Nível mínimo de força</label>
+                  <select id="cfg-senha" class="form-control">
+                    <option value="basico">Básico — mín. 6 caracteres</option>
+                    <option value="medio">Médio — mín. 8 chars + maiúscula + número</option>
+                    <option value="forte">Forte — mín. 10 chars + maiúscula + número + especial</option>
+                  </select>
+                  <div class="hint">Aplica-se ao cadastro e alteração de senhas de usuários.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="save-bar">
+            <button class="btn btn-primary" id="btn-salvar" onclick="salvar()">Salvar Configurações</button>
+            <span class="save-msg" id="save-msg">✓ Configurações salvas</span>
+            <div id="save-error" class="login-error" style="display:none;margin:0"></div>
+          </div>
+        </div>
+
+        <!-- ── Aba: Auditoria ────────────────────────────────────────────────── -->
+        <div class="tab-content" id="tab-auditoria">
+          <div style="padding:20px 24px 0">
+
+            <div class="audit-filters">
+              <div class="form-group">
+                <label class="form-label">Usuário</label>
+                <input id="f-usuario" type="text" class="form-control" placeholder="Filtrar por usuário">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ação</label>
+                <select id="f-acao" class="form-control">
+                  <option value="">Todas</option>
+                  <option value="login_sucesso">Login com sucesso</option>
+                  <option value="login_falha">Login com falha</option>
+                  <option value="login_bloqueado">Login bloqueado</option>
+                  <option value="logout">Logout</option>
+                  <option value="empresa_selecionada">Empresa selecionada</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data início</label>
+                <input id="f-data-ini" type="date" class="form-control">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data fim</label>
+                <input id="f-data-fim" type="date" class="form-control">
+              </div>
+              <div class="form-group" style="min-width:auto">
+                <label class="form-label" style="visibility:hidden">.</label>
+                <button class="btn btn-secondary" onclick="carregarAuditoria()" style="white-space:nowrap">🔍 Filtrar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:160px">Data / Hora</th>
+                  <th>Usuário</th>
+                  <th>Ação</th>
+                  <th>IP</th>
+                  <th>Empresa</th>
+                  <th>Detalhes</th>
+                </tr>
+              </thead>
+              <tbody id="audit-tbody"></tbody>
+            </table>
+          </div>
+          <div id="audit-empty" class="empty-audit d-none">Nenhum registro encontrado.</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  function mudarAba(aba, btn) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + aba).classList.add('active');
+    btn.classList.add('active');
+    if (aba === 'auditoria') carregarAuditoria();
+  }
+
+  async function carregarConfig() {
+    try {
+      const res = await fetch('/api/seguranca');
+      const cfg = await res.json();
+      document.getElementById('cfg-sessao').value     = cfg.sessao_timeout_horas;
+      document.getElementById('cfg-tentativas').value = cfg.login_max_tentativas;
+      document.getElementById('cfg-bloqueio').value   = cfg.login_bloqueio_min;
+      document.getElementById('cfg-senha').value      = cfg.senha_nivel_minimo;
+    } catch (_) {
+      document.getElementById('save-error').textContent = 'Erro ao carregar configurações.';
+      document.getElementById('save-error').style.display = 'block';
+    }
+  }
+
+  async function salvar() {
+    const errEl = document.getElementById('save-error');
+    const msgEl = document.getElementById('save-msg');
+    errEl.style.display = 'none';
+    msgEl.style.display = 'none';
+
+    const dados = {
+      sessao_timeout_horas: document.getElementById('cfg-sessao').value,
+      login_max_tentativas: document.getElementById('cfg-tentativas').value,
+      login_bloqueio_min:   document.getElementById('cfg-bloqueio').value,
+      senha_nivel_minimo:   document.getElementById('cfg-senha').value,
+    };
+
+    const btn = document.getElementById('btn-salvar');
+    btn.textContent = 'Salvando...';
+    btn.disabled    = true;
+
+    try {
+      const res = await fetch('/api/seguranca', {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(dados),
+      });
+
+      if (res.ok) {
+        msgEl.style.display = 'inline';
+        setTimeout(() => msgEl.style.display = 'none', 3000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        errEl.textContent = err.error || 'Erro ao salvar.';
+        errEl.style.display = 'block';
+      }
+    } finally {
+      btn.textContent = 'Salvar Configurações';
+      btn.disabled    = false;
+    }
+  }
+
+  async function carregarAuditoria() {
+    const params = new URLSearchParams({
+      limite:   200,
+      usuario:  document.getElementById('f-usuario').value,
+      acao:     document.getElementById('f-acao').value,
+      data_ini: document.getElementById('f-data-ini').value,
+      data_fim: document.getElementById('f-data-fim').value,
+    });
+
+    try {
+      const res       = await fetch(`/api/seguranca/auditoria?${params}`);
+      const registros = await res.json();
+      renderAuditoria(registros);
+    } catch (_) {
+      document.getElementById('audit-tbody').innerHTML =
+        '<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:30px">Erro ao carregar auditoria.</td></tr>';
+    }
+  }
+
+  function renderAuditoria(registros) {
+    const tbody = document.getElementById('audit-tbody');
+    const empty = document.getElementById('audit-empty');
+
+    if (!registros.length) {
+      tbody.innerHTML = '';
+      empty.classList.remove('d-none');
+      return;
+    }
+    empty.classList.add('d-none');
+
+    tbody.innerHTML = registros.map(e => {
+      const dt  = new Date(e.ts).toLocaleString('pt-BR');
+      const cls = `acao-${e.acao}`;
+      return `
+        <tr>
+          <td style="font-size:12px;color:var(--text-md);white-space:nowrap">${dt}</td>
+          <td style="font-weight:600;color:var(--text-hi)">${esc(e.usuario)}</td>
+          <td><span class="acao-badge ${cls}">${esc(e.acao)}</span></td>
+          <td style="font-family:monospace;font-size:12px">${esc(e.ip)}</td>
+          <td style="font-size:12px">${e.empresa_id ? `#${e.empresa_id}` : '<span style="color:var(--text-lo)">—</span>'}</td>
+          <td style="font-size:12px;color:var(--text-md)">${esc(e.detalhes)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    carregarConfig();
+  });
+</script>
+</body>
+</html>

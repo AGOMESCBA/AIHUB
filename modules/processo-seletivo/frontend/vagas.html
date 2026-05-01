@@ -50,54 +50,14 @@
       <span class="logo-text">IAHub</span>
     </div>
     <div class="sidebar-nav">
-      <div class="nav-section-title">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('monitoramento')">
-        <span class="nav-icon">💬</span><span class="nav-label">Monitoramento</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-monitoramento">
-        <a href="/dashboard.html" class="nav-item sub"><span class="nav-icon">⊞</span><span class="nav-label">Dashboard</span></a>
-        <a href="/monitor.html" class="nav-item sub"><span class="nav-icon">⬛</span><span class="nav-label">Monitor</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Recrutamento</div>
-      <a href="/curriculos.html" class="nav-item"><span class="nav-icon">☰</span><span class="nav-label">Currículos</span></a>
-      <div class="nav-parent" onclick="toggleSubmenu('processo-seletivo')">
-        <span class="nav-icon">🎯</span><span class="nav-label">Processo Seletivo</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-processo-seletivo">
-        <a href="/funcoes.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">Cadastro de Funções</span></a>
-        <a href="/vagas.html" class="nav-item sub active"><span class="nav-icon">💼</span><span class="nav-label">Vagas por Função</span></a>
-        <a href="/processoseletivo.html" class="nav-item sub"><span class="nav-icon">🌐</span><span class="nav-label">Processo Seletivo</span></a>
-      </div>
-      <div class="nav-parent" onclick="toggleSubmenu('vagas')">
-        <span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-vagas">
-        <a href="/analisador.html" class="nav-item sub"><span class="nav-icon">🔍</span><span class="nav-label">Analisador de Currículos</span></a>
-        <a href="/historico.html" class="nav-item sub"><span class="nav-icon">📊</span><span class="nav-label">Histórico de Análises</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Integrações</div>
-      <div class="nav-parent" onclick="toggleSubmenu('se-curriculo')">
-        <span class="nav-icon">🔗</span><span class="nav-label">Integrações</span><span class="nav-arrow">▾</span>
-      </div>
-      <div class="submenu" id="sub-se-curriculo">
-        <a href="/se-curriculos.html" class="nav-item sub"><span class="nav-icon">📋</span><span class="nav-label">SE Currículos</span></a>
-      </div>
-      <div class="nav-section-title" style="margin-top:12px">Sistema</div>
-      <a href="/configuracoes.html" class="nav-item"><span class="nav-icon">⚙</span><span class="nav-label">Configurações</span></a>
     </div>
     <div class="sidebar-footer">
-      <div class="user-avatar">A</div>
-      <div class="user-info-text">
-        <div class="user-name">Admin</div><div class="user-role">Administrador</div>
-      </div>
-      <button class="btn-logout" title="Sair" onclick="logout()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
-  </nav>
+    </nav>
 
   <div class="main">
     <div class="topbar">
-      <span class="topbar-title">Vagas por Função</span>
-      <span class="topbar-breadcrumb ms-auto">Recrutamento › Processo Seletivo › Vagas</span>
+      <span class="topbar-title"><span class="topbar-path">Recrutamento › Processo Seletivo ›</span> Vagas por Função</span>
     </div>
 
     <div class="page-content">
@@ -127,6 +87,20 @@
       <span class="modal-title" id="modal-title">Nova Vaga</span>
       <button class="modal-close" onclick="fecharModal()">✕</button>
     </div>
+    <div class="form-row-3 audit-row" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+      <div class="form-group">
+        <label class="form-label" style="color:var(--text-lo)">ID do Registro</label>
+        <input type="text" id="ps-v-audit-id" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-family:monospace;font-size:13px">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="color:var(--text-lo)">ID da Empresa</label>
+        <input type="text" id="ps-v-audit-emp-id" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-family:monospace;font-size:13px">
+      </div>
+      <div class="form-group">
+        <label class="form-label" style="color:var(--text-lo)">Empresa</label>
+        <input type="text" id="ps-v-audit-emp-nome" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-size:13px">
+      </div>
+    </div>
     <div class="form-group">
       <label class="form-label">Função *</label>
       <select id="v-funcao" class="form-control"></select>
@@ -155,6 +129,7 @@
 </div>
 
 <script src="/js/auth.js"></script>
+<script src="/js/audit-fields.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
   const NIVEIS = {
@@ -199,8 +174,14 @@
       const vagaAnalises = analises.filter(a => a.vaga_id === v.id);
       const vagaCand     = candidaturas.filter(c => c.vaga_id === v.id).length;
       const nivelCls     = NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado';
+      const _emp = window._iahubEmpresa || { id: '—', nome: '—' };
       return `
       <div class="vaga-card">
+        <div style="display:flex;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:var(--text-lo);font-family:monospace">ID: <strong>${v.id}</strong></span>
+          <span style="font-size:11px;color:var(--text-lo);font-family:monospace">Emp: <strong>${_emp.id}</strong></span>
+          <span style="font-size:11px;color:var(--text-lo);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_emp.nome}</span>
+        </div>
         <div class="vaga-funcao">${f.nome || '—'}</div>
         <div class="vaga-meta">
           ${f.area ? `<span>${f.area}</span>` : ''}
@@ -245,6 +226,10 @@
   async function abrirModal(v = null) {
     editandoId = v ? v.id : null;
     document.getElementById('modal-title').textContent = v ? 'Editar Vaga' : 'Nova Vaga';
+    const _emp = window._iahubEmpresa || { id: '—', nome: '—' };
+    document.getElementById('ps-v-audit-id').value       = v?.id ?? '—';
+    document.getElementById('ps-v-audit-emp-id').value   = _emp.id;
+    document.getElementById('ps-v-audit-emp-nome').value = _emp.nome;
     const sel = document.getElementById('v-funcao');
     sel.innerHTML = funcoes.length
       ? funcoes.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')

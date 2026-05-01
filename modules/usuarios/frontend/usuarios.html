@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuários — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(680px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal-sm      { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(420px,95vw);padding:28px;position:relative; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
+    .modal-close:hover { color:var(--text-hi); }
+    .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .search-bar    { position:relative; }
+    .search-bar input { padding-left:32px; }
+    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
+    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
+    .empty-state div { font-size:40px;margin-bottom:12px; }
+
+    .badge        { display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
+    .badge-admin  { background:rgba(37,99,235,.12);color:var(--accent); }
+    .badge-user   { background:var(--bg-hover);color:var(--text-md); }
+    .badge-ativo  { background:rgba(22,163,74,.12);color:var(--success); }
+    .badge-inativo{ background:rgba(239,68,68,.10);color:#dc2626; }
+
+    .empresas-grid {
+      border:1px solid var(--border);border-radius:8px;padding:12px;
+      max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+    }
+    .empresa-check {
+      display:flex;align-items:center;gap:10px;padding:6px 8px;
+      border-radius:6px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text-hi);
+    }
+    .empresa-check:hover { background:var(--bg-hover); }
+    .empresa-check input[type=checkbox] { cursor:pointer;width:15px;height:15px;flex-shrink:0; }
+    .empresa-check.disabled { opacity:.55;cursor:not-allowed; }
+
+    .pass-wrap { position:relative; }
+    .pass-wrap input { padding-right:40px; }
+    .pass-toggle { position:absolute;right:10px;top:50%;transform:translateY(-50%);
+      background:none;border:none;cursor:pointer;color:var(--text-lo);font-size:16px;padding:0; }
+    .pass-toggle:hover { color:var(--text-hi); }
+
+    /* Caixa de senha opcional na edição */
+    .senha-edit-box {
+      border:1px dashed var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;
+      background:rgba(37,99,235,.03);
+    }
+    .senha-edit-box .form-label { color:var(--text-md); }
+
+    .hint { font-size:11px;color:var(--text-lo);margin-top:4px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+    </div>
+    <div class="sidebar-footer">
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Configurador › Administração ›</span> Usuários</span>
+    </div>
+
+    <div class="page-content">
+      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+        <div class="search-bar" style="flex:1;max-width:340px">
+          <input type="text" id="busca" class="form-control" placeholder="Buscar usuário..." oninput="filtrar()">
+        </div>
+        <div class="ms-auto">
+          <button class="btn btn-primary" onclick="abrirModal()">＋ Novo Usuário</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table id="tabela">
+            <thead>
+              <tr>
+                <th style="width:50px">#</th>
+                <th>Nome</th>
+                <th>Usuário</th>
+                <th>Celular</th>
+                <th>Perfil</th>
+                <th>Status</th>
+                <th style="text-align:right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div id="empty" class="empty-state d-none">
+          <div>👤</div>
+          <strong style="color:var(--text-md)">Nenhum usuário cadastrado</strong>
+          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Novo Usuário</strong> para começar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Criar / Editar ───────────────────────────────────────────────── -->
+<div id="modal" class="modal-overlay d-none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Novo Usuário</span>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
+        <input id="f-nome" type="text" class="form-control" placeholder="Nome do usuário">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Usuário (login) <span style="color:#dc2626">*</span></label>
+        <input id="f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
+        <input id="f-celular" type="text" class="form-control" placeholder="(00) 00000-0000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail <span style="color:#dc2626">*</span></label>
+        <input id="f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br">
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
+        <select id="f-role" class="form-control" onchange="onRoleChange()">
+          <option value="usuario">Usuário</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="form-group" id="grp-ativo" style="display:none">
+        <label class="form-label">Status</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-md);margin-top:10px">
+          <input type="checkbox" id="f-ativo" style="width:15px;height:15px"> Usuário ativo
+        </label>
+      </div>
+    </div>
+
+    <!-- Senha — campo sempre visível, estilo distinto na edição -->
+    <div id="grp-senha-novo" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
+        <div class="pass-wrap">
+          <input id="f-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+          <button type="button" class="pass-toggle" onclick="toggleSenha('f-senha')" title="Mostrar/ocultar">👁</button>
+        </div>
+        <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+      </div>
+    </div>
+
+    <div id="grp-senha-edit" class="senha-edit-box" style="display:none">
+      <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
+      <div class="pass-wrap" style="margin-top:6px">
+        <input id="f-senha-edit" type="password" class="form-control" placeholder="Nova senha — deixe em branco para manter" autocomplete="new-password">
+        <button type="button" class="pass-toggle" onclick="toggleSenha('f-senha-edit')" title="Mostrar/ocultar">👁</button>
+      </div>
+      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Acesso às Empresas</label>
+      <div class="empresas-grid" id="empresas-grid">
+        <span class="hint" style="padding:8px">Carregando empresas...</span>
+      </div>
+      <div class="hint" id="hint-empresas">Selecione as empresas que este usuário poderá acessar.</div>
+    </div>
+
+    <div id="form-error" class="login-error" style="display:none;margin-bottom:0"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Alterar Senha ────────────────────────────────────────────────── -->
+<div id="modal-senha" class="modal-overlay d-none">
+  <div class="modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" id="ms-titulo">Alterar Senha</span>
+      <button class="modal-close" onclick="fecharModalSenha()">✕</button>
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Nova senha <span style="color:#dc2626">*</span></label>
+      <div class="pass-wrap">
+        <input id="ms-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+        <button type="button" class="pass-toggle" onclick="toggleSenha('ms-senha')" title="Mostrar/ocultar">👁</button>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Confirmar nova senha <span style="color:#dc2626">*</span></label>
+      <div class="pass-wrap">
+        <input id="ms-confirmar" type="password" class="form-control" placeholder="Repita a nova senha" autocomplete="new-password">
+        <button type="button" class="pass-toggle" onclick="toggleSenha('ms-confirmar')" title="Mostrar/ocultar">👁</button>
+      </div>
+      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+    </div>
+
+    <div id="ms-error" class="login-error" style="display:none;margin-bottom:12px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModalSenha()">Cancelar</button>
+      <button class="btn btn-primary" id="ms-btn" onclick="salvarSenha()">Salvar Senha</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  let usuarios   = [];
+  let empresas   = [];
+  let editId     = null;
+  let senhaUserId = null;
+  let meuId      = null;
+
+  async function carregar() {
+    try {
+      const [resU, resE, resMe] = await Promise.all([
+        fetch('/api/usuarios'),
+        fetch('/api/empresas'),
+        fetch('/api/me'),
+      ]);
+      usuarios = await resU.json();
+      empresas = await resE.json();
+      const me = await resMe.json();
+      meuId    = me.user_id || null;
+      renderizar();
+    } catch (_) {
+      document.getElementById('tbody').innerHTML =
+        '<tr><td colspan="7" style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar dados.</td></tr>';
+    }
+  }
+
+  function renderizar() {
+    const busca    = document.getElementById('busca').value.toLowerCase();
+    const filtrado = usuarios.filter(u =>
+      u.nome.toLowerCase().includes(busca) ||
+      u.usuario.toLowerCase().includes(busca) ||
+      (u.email || '').toLowerCase().includes(busca)
+    );
+
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty');
+
+    if (!filtrado.length) {
+      tbody.innerHTML = '';
+      empty.classList.remove('d-none');
+      return;
+    }
+
+    empty.classList.add('d-none');
+    tbody.innerHTML = filtrado.map(u => {
+      const empresasLabel = u.empresas === 'all'
+        ? '<span style="font-size:11px;color:var(--accent)">Todas</span>'
+        : (Array.isArray(u.empresas) && u.empresas.length
+            ? `<span style="font-size:11px;color:var(--text-md)">${u.empresas.length} empresa(s)</span>`
+            : '<span style="font-size:11px;color:var(--text-lo)">Nenhuma</span>');
+
+      const ehEuMesmo  = u.id === meuId;
+      const btnExcluir = ehEuMesmo
+        ? `<button class="btn-icon" disabled title="Não é possível excluir o usuário logado" style="opacity:.35;cursor:not-allowed">🗑</button>`
+        : `<button class="btn-icon" onclick="confirmarExcluir(${u.id}, '${esc(u.nome)}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+
+      return `
+        <tr>
+          <td style="color:var(--text-lo);font-size:12px">${u.id}</td>
+          <td>
+            <strong style="color:var(--text-hi)">${esc(u.nome)}</strong>
+            ${u.email ? `<br><span style="font-size:11px;color:var(--text-lo)">${esc(u.email)}</span>` : ''}
+          </td>
+          <td style="font-family:monospace;font-size:12px">${esc(u.usuario)}</td>
+          <td>${esc(u.celular) || '<span style="color:var(--text-lo)">—</span>'}</td>
+          <td>
+            <span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">
+              ${u.role === 'admin' ? 'Admin' : 'Usuário'}
+            </span>
+            <br><span style="font-size:10px;margin-top:2px;display:inline-block">${empresasLabel}</span>
+          </td>
+          <td><span class="badge ${u.ativo ? 'badge-ativo' : 'badge-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn-icon" onclick="editar(${u.id})" title="Editar dados">✏️</button>
+            <button class="btn-icon" onclick="abrirModalSenha(${u.id}, '${esc(u.nome)}')" title="Alterar senha">🔑</button>
+            ${btnExcluir}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function filtrar() { renderizar(); }
+
+  // ── Modal Criar / Editar ────────────────────────────────────────────────────
+  function abrirModal(usuario = null) {
+    editId       = usuario?.id ?? null;
+    const isEdit = !!editId;
+
+    document.getElementById('modal-title').textContent = isEdit ? 'Editar Usuário' : 'Novo Usuário';
+    document.getElementById('f-nome').value    = usuario?.nome    ?? '';
+    document.getElementById('f-usuario').value = usuario?.usuario ?? '';
+    document.getElementById('f-celular').value = usuario?.celular ?? '';
+    document.getElementById('f-email').value   = usuario?.email   ?? '';
+    document.getElementById('f-role').value    = usuario?.role    ?? 'usuario';
+    document.getElementById('f-ativo').checked = usuario?.ativo   ?? true;
+
+    document.getElementById('grp-ativo').style.display      = isEdit ? 'block' : 'none';
+    document.getElementById('grp-senha-novo').style.display = isEdit ? 'none'  : 'block';
+    document.getElementById('grp-senha-edit').style.display = isEdit ? 'block' : 'none';
+    document.getElementById('f-senha').value      = '';
+    document.getElementById('f-senha-edit').value = '';
+    document.getElementById('form-error').style.display = 'none';
+
+    renderEmpresasGrid(usuario?.empresas ?? []);
+    onRoleChange();
+
+    document.getElementById('modal').classList.remove('d-none');
+    setTimeout(() => document.getElementById('f-nome').focus(), 50);
+  }
+
+  function fecharModal() {
+    document.getElementById('modal').classList.add('d-none');
+    editId = null;
+  }
+
+  function editar(id) {
+    const u = usuarios.find(x => x.id === id);
+    if (u) abrirModal(u);
+  }
+
+  async function confirmarExcluir(id, nome) {
+    if (!confirm(`Excluir o usuário "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+    const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+    if (res.ok) { carregar(); }
+    else {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Erro ao excluir usuário.');
+    }
+  }
+
+  // ── Modal Alterar Senha ─────────────────────────────────────────────────────
+  function abrirModalSenha(id, nome) {
+    senhaUserId = id;
+    document.getElementById('ms-titulo').textContent = `Alterar Senha — ${nome}`;
+    document.getElementById('ms-senha').value     = '';
+    document.getElementById('ms-confirmar').value = '';
+    document.getElementById('ms-error').style.display = 'none';
+    document.getElementById('modal-senha').classList.remove('d-none');
+    setTimeout(() => document.getElementById('ms-senha').focus(), 50);
+  }
+
+  function fecharModalSenha() {
+    document.getElementById('modal-senha').classList.add('d-none');
+    senhaUserId = null;
+  }
+
+  async function salvarSenha() {
+    const errEl    = document.getElementById('ms-error');
+    const senha    = document.getElementById('ms-senha').value;
+    const confirmar = document.getElementById('ms-confirmar').value;
+    errEl.style.display = 'none';
+
+    if (!senha) {
+      errEl.textContent = 'Digite a nova senha.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if (senha !== confirmar) {
+      errEl.textContent = 'As senhas não conferem.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('ms-btn');
+    btn.textContent = 'Salvando...';
+    btn.disabled    = true;
+
+    try {
+      const res = await fetch(`/api/usuarios/${senhaUserId}/senha`, {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ senha, confirmar }),
+      });
+
+      if (res.ok) { fecharModalSenha(); }
+      else {
+        const err = await res.json().catch(() => ({}));
+        errEl.textContent = err.error || 'Erro ao alterar senha.';
+        errEl.style.display = 'block';
+      }
+    } finally {
+      btn.textContent = 'Salvar Senha';
+      btn.disabled    = false;
+    }
+  }
+
+  // ── Helpers formulário ──────────────────────────────────────────────────────
+  function renderEmpresasGrid(selecionadas) {
+    const grid = document.getElementById('empresas-grid');
+    if (!empresas.length) {
+      grid.innerHTML = '<span style="font-size:12px;color:var(--text-lo);padding:8px;font-style:italic">Nenhuma empresa cadastrada ainda.</span>';
+      return;
+    }
+    const ids = selecionadas === 'all' ? empresas.map(e => e.id) : (Array.isArray(selecionadas) ? selecionadas : []);
+    const sorted = [...empresas].sort((a, b) => (a.razao_social || '').localeCompare(b.razao_social || '', 'pt-BR'));
+    grid.innerHTML = sorted.map(e => `
+      <label class="empresa-check" id="lbl-emp-${e.id}">
+        <input type="checkbox" id="chk-emp-${e.id}" value="${e.id}" ${ids.includes(e.id) ? 'checked' : ''}>
+        <span>${esc(e.razao_social)}</span>
+        ${e.documento ? `<span style="font-size:11px;color:var(--text-lo);margin-left:auto;font-family:monospace">${esc(e.documento)}</span>` : ''}
+      </label>
+    `).join('');
+  }
+
+  function onRoleChange() {
+    const isAdmin = document.getElementById('f-role').value === 'admin';
+    const grid    = document.getElementById('empresas-grid');
+    const hint    = document.getElementById('hint-empresas');
+
+    grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+      cb.checked  = isAdmin ? true : cb.checked;
+      cb.disabled = isAdmin;
+      cb.closest('.empresa-check')?.classList.toggle('disabled', isAdmin);
+    });
+    hint.textContent = isAdmin
+      ? 'Administradores têm acesso irrestrito a todas as empresas.'
+      : 'Selecione as empresas que este usuário poderá acessar.';
+  }
+
+  function getEmpresasSelecionadas() {
+    if (document.getElementById('f-role').value === 'admin') return 'all';
+    return empresas
+      .filter(e => document.getElementById(`chk-emp-${e.id}`)?.checked)
+      .map(e => e.id);
+  }
+
+  function toggleSenha(id) {
+    const input = document.getElementById(id);
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  async function salvar() {
+    const errEl  = document.getElementById('form-error');
+    errEl.style.display = 'none';
+
+    const isEdit  = !!editId;
+    const nome    = document.getElementById('f-nome').value.trim();
+    const usuario = document.getElementById('f-usuario').value.trim();
+    const celular = document.getElementById('f-celular').value.trim();
+    const email   = document.getElementById('f-email').value.trim();
+    const senha   = isEdit
+      ? document.getElementById('f-senha-edit').value
+      : document.getElementById('f-senha').value;
+
+    if (!nome)    { errEl.textContent = 'Nome é obrigatório.';    errEl.style.display = 'block'; return; }
+    if (!usuario) { errEl.textContent = 'Usuário é obrigatório.'; errEl.style.display = 'block'; return; }
+    if (!celular) { errEl.textContent = 'Celular é obrigatório.'; errEl.style.display = 'block'; return; }
+    if (!email)   { errEl.textContent = 'E-mail é obrigatório.';  errEl.style.display = 'block'; return; }
+    if (!isEdit && !senha) {
+      errEl.textContent = 'Senha é obrigatória para novos usuários.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const dados = {
+      nome, usuario, celular, email,
+      role:     document.getElementById('f-role').value,
+      empresas: getEmpresasSelecionadas(),
+      ativo:    document.getElementById('f-ativo').checked,
+    };
+    if (senha) dados.senha = senha;
+
+    const btn = document.getElementById('btn-salvar');
+    btn.textContent = 'Salvando...';
+    btn.disabled    = true;
+
+    try {
+      const url    = isEdit ? `/api/usuarios/${editId}` : '/api/usuarios';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res    = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados),
+      });
+
+      if (res.ok) { fecharModal(); carregar(); }
+      else {
+        const err = await res.json().catch(() => ({}));
+        errEl.textContent = err.error || 'Erro ao salvar usuário.';
+        errEl.style.display = 'block';
+      }
+    } finally {
+      btn.textContent = 'Salvar';
+      btn.disabled    = false;
+    }
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) fecharModal();
+  });
+  document.getElementById('modal-senha').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalSenha();
+  });
+
+  document.addEventListener('DOMContentLoaded', carregar);
+</script>
+</body>
+</html>

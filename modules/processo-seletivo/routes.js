@@ -4,13 +4,13 @@ const nodemailer = require('nodemailer');
 const pdfParse   = require('pdf-parse/lib/pdf-parse.js');
 
 const db          = require('./database');
+const crud        = require('../crud');
 const analisadorDb = require('../analisador-curriculos/database');
 const whatsappDb   = require('../whatsapp-curriculo/database');
-const whatsapp     = require('../whatsapp-curriculo/service');
-const emailImap    = require('./email-imap');
+const emailSvcMgr  = require('./email-service-manager');
 
 function criarTransporter(cfg) {
-  const senha  = cfg.senha || db.getSenhaReal();
+  const senha  = cfg.senha;
   const family = Number(cfg.family) || 4;
   if (cfg.tipo === 'gmail') {
     return nodemailer.createTransport({
@@ -30,8 +30,8 @@ function criarTransporter(cfg) {
   });
 }
 
-async function enviarEmailNotificacao(cfg, vaga, dados, pdf_base64, pdf_nome, logFn) {
-  const t = criarTransporter({ ...cfg, senha: db.getSenhaReal() });
+async function enviarEmailNotificacao(cfg, vaga, dados, pdf_base64, pdf_nome, logFn, empresaId) {
+  const t = criarTransporter({ ...cfg, senha: db.getSenhaReal(empresaId) });
   const funcaoNome = vaga.funcao?.nome || `Vaga #${vaga.id}`;
 
   const exps = (dados.experiencias || []).slice(0, 3)
@@ -74,38 +74,42 @@ async function enviarEmailNotificacao(cfg, vaga, dados, pdf_base64, pdf_nome, lo
   logFn(`[Email] Notificação enviada → ${cfg.email} | Candidato: ${dados.nome || '—'} | Vaga: ${funcaoNome}`, 'success');
 }
 
-module.exports = function registerRoutes(app, { requireAuth, registrarLog, io }) {
+module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, registrarLog, io }) {
 
   function log(message, type = 'info') {
     if (registrarLog) registrarLog({ message, type, timestamp: new Date().toLocaleTimeString('pt-BR') });
   }
 
   // ── Email Config (autenticado) ────────────────────────────────────────────────
-  app.get('/api/ps/email-config', requireAuth, (_req, res) => {
-    const cfg = db.getEmailConfig();
+  app.get('/api/ps/email-config', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
+    const cfg = db.getEmailConfig(eid);
     res.json({ ...cfg, senha: cfg.senha ? '••••••••' : '' });
   });
 
-  app.post('/api/ps/email-config', requireAuth, (req, res) => {
-    db.setEmailConfig(req.body);
+  app.post('/api/ps/email-config', requireAuth, requireEmpresa, (req, res) => {
+    db.setEmailConfig(req.session.empresa_id, req.body);
     res.json({ ok: true });
   });
 
-  app.post('/api/ps/email-test', requireAuth, async (req, res) => {
-    const cfg = db.getEmailConfig();
+  app.post('/api/ps/email-test', requireAuth, requireEmpresa, async (req, res) => {
+    const eid  = req.session.empresa_id;
+    const cfg  = db.getEmailConfig(eid);
+    const senha = db.getSenhaReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
-    if (!db.getSenhaReal()) return res.status(400).json({ error: 'Configure a senha primeiro.' });
+    if (!senha)     return res.status(400).json({ error: 'Configure a senha primeiro.' });
     const servidor = cfg.tipo === 'gmail' ? `Gmail (${cfg.email})` : `SMTP ${cfg.smtp_host}:${cfg.smtp_port}`;
     log(`[Email] Iniciando teste de conexão — ${servidor}`, 'info');
     try {
-      const t = criarTransporter({ ...cfg, senha: db.getSenhaReal() });
+      const t = criarTransporter({ ...cfg, senha });
       await t.verify();
       log(`[Email] Conexão verificada com sucesso — ${servidor}`, 'success');
+      const empNome = req.session.empresa_nome || 'IAHub';
       await t.sendMail({
-        from:    `"IAHub Recrutamento" <${cfg.email}>`,
+        from:    `"${empNome} Recrutamento" <${cfg.email}>`,
         to:      cfg.email,
-        subject: '[IAHub] Teste de configuração de e-mail ✅',
-        text:    'Configuração de e-mail funcionando! O IAHub está pronto para enviar notificações de currículos.',
+        subject: `[${empNome}] Teste de configuração de e-mail ✅`,
+        text:    `Configuração de e-mail funcionando! O sistema está pronto para enviar notificações de currículos.`,
       });
       log(`[Email] E-mail de teste enviado com sucesso → ${cfg.email}`, 'success');
       res.json({ ok: true });
@@ -116,19 +120,21 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   });
 
   // ── Email Geral Config ────────────────────────────────────────────────────────
-  app.get('/api/email-geral/config', requireAuth, (_req, res) => {
-    const cfg = db.getEmailGeralConfig();
+  app.get('/api/email-geral/config', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
+    const cfg = db.getEmailGeralConfig(eid);
     res.json({ ...cfg, senha: cfg.senha ? '••••••••' : '' });
   });
 
-  app.post('/api/email-geral/config', requireAuth, (req, res) => {
-    db.setEmailGeralConfig(req.body);
+  app.post('/api/email-geral/config', requireAuth, requireEmpresa, (req, res) => {
+    db.setEmailGeralConfig(req.session.empresa_id, req.body);
     res.json({ ok: true });
   });
 
-  app.post('/api/email-geral/imap-test', requireAuth, async (req, res) => {
-    const cfg   = db.getEmailGeralConfig();
-    const senha = db.getSenhaGeralReal();
+  app.post('/api/email-geral/imap-test', requireAuth, requireEmpresa, async (req, res) => {
+    const eid   = req.session.empresa_id;
+    const cfg   = db.getEmailGeralConfig(eid);
+    const senha = db.getSenhaGeralReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
     if (!senha)     return res.status(400).json({ error: 'Configure a senha primeiro.' });
     try {
@@ -140,21 +146,24 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
     }
   });
 
-  app.post('/api/email-geral/test', requireAuth, async (req, res) => {
-    const cfg = db.getEmailGeralConfig();
+  app.post('/api/email-geral/test', requireAuth, requireEmpresa, async (req, res) => {
+    const eid   = req.session.empresa_id;
+    const cfg   = db.getEmailGeralConfig(eid);
+    const senha = db.getSenhaGeralReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
-    if (!db.getSenhaGeralReal()) return res.status(400).json({ error: 'Configure a senha primeiro.' });
+    if (!senha)     return res.status(400).json({ error: 'Configure a senha primeiro.' });
     const servidor = cfg.tipo === 'gmail' ? `Gmail (${cfg.email})` : `SMTP ${cfg.smtp_host}:${cfg.smtp_port}`;
     log(`[Email Geral] Iniciando teste de conexão — ${servidor}`, 'info');
     try {
-      const t = criarTransporter({ ...cfg, senha: db.getSenhaGeralReal() });
+      const t = criarTransporter({ ...cfg, senha });
       await t.verify();
       log(`[Email Geral] Conexão verificada com sucesso — ${servidor}`, 'success');
+      const empNomeGeral = req.session.empresa_nome || 'IAHub';
       await t.sendMail({
-        from:    `"IAHub" <${cfg.email}>`,
+        from:    `"${empNomeGeral}" <${cfg.email}>`,
         to:      cfg.email,
-        subject: '[IAHub] Teste de configuração de e-mail (Geral) ✅',
-        text:    'Configuração de e-mail geral funcionando! O IAHub está pronto para enviar notificações.',
+        subject: `[${empNomeGeral}] Teste de configuração de e-mail (Geral) ✅`,
+        text:    `Configuração de e-mail geral funcionando! O sistema está pronto para enviar notificações.`,
       });
       log(`[Email Geral] E-mail de teste enviado com sucesso → ${cfg.email}`, 'success');
       res.json({ ok: true });
@@ -165,72 +174,80 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   });
 
   // ── Slug (autenticado) ────────────────────────────────────────────────────────
-  app.get('/api/ps/slug', requireAuth, (_req, res) => {
-    res.json({ slug: db.getSlug() || '' });
+  app.get('/api/ps/slug', requireAuth, requireEmpresa, (req, res) => {
+    res.json({ slug: db.getSlug(req.session.empresa_id) || '' });
   });
 
-  app.post('/api/ps/slug', requireAuth, (req, res) => {
+  app.post('/api/ps/slug', requireAuth, requireEmpresa, (req, res) => {
     const slug = (req.body.slug || '').trim().toLowerCase();
     if (slug && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug))
       return res.status(400).json({ error: 'Slug inválido. Use apenas letras minúsculas, números e hífens (mín. 3 chars).' });
-    db.setSlug(slug || null);
+    db.setSlug(req.session.empresa_id, slug || null);
     res.json({ ok: true });
   });
 
   // ── Token Público (autenticado) ───────────────────────────────────────────────
-  app.get('/api/ps/public-token', requireAuth, (_req, res) => {
-    res.json({ token: db.getPublicToken(), slug: db.getSlug() || null });
+  app.get('/api/ps/public-token', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
+    res.json({ token: db.getPublicToken(eid), slug: db.getSlug(eid) || null });
   });
 
-  app.post('/api/ps/regenerate-token', requireAuth, (_req, res) => {
-    res.json({ token: db.regenerateToken(), slug: db.getSlug() || null });
+  app.post('/api/ps/regenerate-token', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
+    res.json({ token: db.regenerateToken(eid), slug: db.getSlug(eid) || null });
   });
 
   // ── Candidaturas (autenticado) ────────────────────────────────────────────────
-  app.get('/api/ps/candidaturas', requireAuth, (_req, res) => {
-    res.json(db.listCandidaturas());
+  app.get('/api/ps/candidaturas', requireAuth, requireEmpresa, (req, res) => {
+    res.json(db.listCandidaturas(req.session.empresa_id));
   });
 
-  app.get('/api/ps/candidaturas/vaga/:vagaId', requireAuth, (req, res) => {
-    res.json(db.listCandidaturasByVaga(Number(req.params.vagaId)));
+  app.get('/api/ps/candidaturas/vaga/:vagaId', requireAuth, requireEmpresa, (req, res) => {
+    res.json(db.listCandidaturasByVaga(req.session.empresa_id, Number(req.params.vagaId)));
   });
 
-  app.get('/api/ps/curriculos-sem-vaga', requireAuth, (_req, res) => {
-    const vinculados = new Set(db.listCandidaturas().map(c => c.curriculo_id));
-    const todos = whatsappDb.listCurriculos(); // já vem do mais recente para o mais antigo
+  app.get('/api/ps/curriculos-sem-vaga', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
+    const vinculados = new Set(db.listCandidaturas(eid).map(c => c.curriculo_id));
+    const todos = whatsappDb.listCurriculos(eid);
     res.json(todos.filter(c => !vinculados.has(c.id)));
   });
 
   // ── API Pública ───────────────────────────────────────────────────────────────
-  function tokenValido(req, res) {
-    if (!db.validateToken(req.params.token)) {
+  function resolverEmpresaPorToken(req, res) {
+    const empresaId = db.findEmpresaIdByToken(req.params.token);
+    if (!empresaId) {
       res.status(403).json({ error: 'Link inválido ou expirado.' });
-      return false;
+      return null;
     }
-    return true;
+    return empresaId;
   }
 
   app.get('/api/public/ps/:token/info', (req, res) => {
-    if (!tokenValido(req, res)) return;
-    const numero = (whatsappDb.getConfig('numero_destino') || '').replace(/\D/g, '');
-    res.json({ wa_numero: numero || null });
+    const empresaId = resolverEmpresaPorToken(req, res);
+    if (!empresaId) return;
+    const numero  = (whatsappDb.getConfig(empresaId, 'numero_destino') || '').replace(/\D/g, '');
+    const empresa = crud.buscarPorId('empresas', empresaId);
+    res.json({ wa_numero: numero || null, empresa_nome: empresa?.razao_social || null });
   });
 
   app.get('/api/public/ps/:token/vagas', (req, res) => {
-    if (!tokenValido(req, res)) return;
-    const vagas = analisadorDb.listVagas().filter(v => v.status === 'aberta');
+    const empresaId = resolverEmpresaPorToken(req, res);
+    if (!empresaId) return;
+    const vagas = analisadorDb.listVagas(empresaId).filter(v => v.status === 'aberta');
     res.json(vagas);
   });
 
   app.post('/api/public/ps/:token/candidatar', async (req, res) => {
-    if (!tokenValido(req, res)) return;
+    const empresaId = resolverEmpresaPorToken(req, res);
+    if (!empresaId) return;
 
     const { vaga_id, nome, email, pdf_base64, pdf_nome } = req.body;
     if (!vaga_id)      return res.status(400).json({ error: 'Selecione uma vaga.' });
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório.' });
     if (!pdf_base64)   return res.status(400).json({ error: 'Anexe seu currículo em PDF.' });
 
-    const vaga = analisadorDb.getVaga(Number(vaga_id));
+    const vaga = analisadorDb.getVaga(empresaId, Number(vaga_id));
     if (!vaga || vaga.status !== 'aberta')
       return res.status(400).json({ error: 'Esta vaga não está disponível.' });
 
@@ -251,13 +268,13 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
       dados.email = dados.email || email || null;
 
       // Sobrescreve silenciosamente se já existe na base
-      const existente = whatsappDb.findByPhoneOrEmail(dados.telefone, dados.email || email);
+      const existente = whatsappDb.findByPhoneOrEmail(empresaId, dados.telefone, dados.email || email);
       if (existente) {
         log(`[PS] Currículo duplicado — "${existente.nome || '?'}" (ID #${existente.id}) substituído por novo envio de "${dados.nome || nome}"`, 'warning');
-        whatsappDb.deleteCurriculo(existente.id);
+        whatsappDb.deleteCurriculo(empresaId, existente.id);
       }
 
-      const curriculo_id = whatsappDb.saveCurriculo({
+      const curriculo_id = whatsappDb.saveCurriculo(empresaId, {
         remetente:    `ps:${email || nome || 'desconhecido'}`,
         nome:         dados.nome,
         telefone:     dados.telefone     || null,
@@ -274,12 +291,12 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
         pdf_nome: pdf_nome || 'curriculo.pdf',
       });
 
-      const candExist = db.findCandidaturaByVagaAndCandidato(Number(vaga_id), dados.email || email, dados.nome || nome);
+      const candExist = db.findCandidaturaByVagaAndCandidato(empresaId, Number(vaga_id), dados.email || email, dados.nome || nome);
       if (candExist) {
-        db.updateCandidaturaCurriculoId(candExist.id, curriculo_id);
+        db.updateCandidaturaCurriculoId(empresaId, candExist.id, curriculo_id);
         log(`[PS] Reenvio detectado — candidatura de "${dados.nome || nome}" atualizada, contagem mantida`, 'info');
       } else {
-        db.saveCandidatura({
+        db.saveCandidatura(empresaId, {
           vaga_id:         Number(vaga_id),
           curriculo_id,
           canal:           'email',
@@ -290,9 +307,9 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
 
       log(`[PS] Currículo recebido de "${dados.nome || nome}" para vaga "${vaga.funcao?.nome}"`, 'success');
 
-      const emailCfg = db.getEmailConfig();
-      if (emailCfg.email && db.getSenhaReal()) {
-        enviarEmailNotificacao(emailCfg, vaga, dados, pdf_base64, pdf_nome || 'curriculo.pdf', log)
+      const emailCfg = db.getEmailConfig(empresaId);
+      if (emailCfg.email && db.getSenhaReal(empresaId)) {
+        enviarEmailNotificacao(emailCfg, vaga, dados, pdf_base64, pdf_nome || 'curriculo.pdf', log, empresaId)
           .catch(err => log(`[Email] Falha ao enviar notificação para "${dados.nome || nome}": ${err.message}`, 'error'));
       } else {
         log('[Email] Notificação por e-mail desativada — sem e-mail ou senha configurados.', 'warning');
@@ -307,13 +324,14 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
 
   // ── Serve página pública (aceita token UUID ou slug) ─────────────────────────
   app.get('/ps/:identifier', (req, res) => {
-    const realToken = db.resolveToToken(req.params.identifier);
-    if (!realToken) {
+    const empresaId = db.findEmpresaIdByToken(req.params.identifier);
+    if (!empresaId) {
       return res.status(403).send(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Link Inválido</title>
         <style>body{font-family:sans-serif;text-align:center;padding:80px;background:#0d1117;color:#f0f6fc}
         h2{color:#f0f6fc}p{color:#8b949e}</style></head>
         <body><h2>🔒 Link Inválido</h2><p>Este link não é mais válido. Solicite um novo link ao recrutador.</p></body></html>`);
     }
+    const realToken = db.resolveToToken(empresaId, req.params.identifier);
     // Injeta o token real no HTML para que a página use sempre o UUID nas chamadas de API
     const html = fs.readFileSync(path.join(__dirname, 'frontend', 'ps-publico.html'), 'utf8');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -321,9 +339,10 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   });
 
   // ── Teste de conexão IMAP ─────────────────────────────────────────────────────
-  app.post('/api/ps/imap-test', requireAuth, async (_req, res) => {
-    const cfg   = db.getEmailConfig();
-    const senha = db.getSenhaReal();
+  app.post('/api/ps/imap-test', requireAuth, requireEmpresa, async (req, res) => {
+    const eid   = req.session.empresa_id;
+    const cfg   = db.getEmailConfig(eid);
+    const senha = db.getSenhaReal(eid);
     if (!cfg.email || !senha) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
     try {
       const result = await emailImap.testarConexao(cfg, senha);
@@ -336,32 +355,40 @@ module.exports = function registerRoutes(app, { requireAuth, registrarLog, io })
   });
 
   // ── Templates de E-mail ───────────────────────────────────────────────────────
-  app.get('/api/ps/email-templates', requireAuth, (_req, res) => {
-    res.json(db.getEmailTemplates());
+  app.get('/api/ps/email-templates', requireAuth, requireEmpresa, (req, res) => {
+    res.json(db.getEmailTemplates(req.session.empresa_id));
   });
 
-  app.post('/api/ps/email-templates', requireAuth, (req, res) => {
-    db.setEmailTemplates(req.body);
+  app.post('/api/ps/email-templates', requireAuth, requireEmpresa, (req, res) => {
+    db.setEmailTemplates(req.session.empresa_id, req.body);
     res.json({ ok: true });
   });
 
   // ── Serviço de E-mail IMAP — controle manual via monitor ─────────────────────
-  app.get('/api/email-service/status', requireAuth, (_req, res) => {
-    res.json({ status: emailImap.getStatus() });
+  app.get('/api/email-service/status', requireAuth, requireEmpresa, (req, res) => {
+    const svc = emailSvcMgr.get(req.session.empresa_id);
+    res.json({ status: svc?.getStatus() || 'stopped' });
   });
 
-  app.post('/api/email-service/start', requireAuth, (_req, res) => {
-    if (emailImap.getStatus() === 'running')
-      return res.status(400).json({ error: 'Serviço já está em execução.' });
+  app.post('/api/email-service/start', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
+    const svc = emailSvcMgr.getOrCreate(eid);
+    if (svc.getStatus() === 'running')
+      return res.status(400).json({ error: 'Serviço já está em execução para esta empresa.' });
     if (!io) return res.status(500).json({ error: 'Socket.IO não disponível.' });
-    const cfg = db.getEmailConfig();
+    const cfg         = db.getEmailConfig(eid);
     const intervaloMs = Math.max(1, Number(cfg.imap_intervalo_min) || 2) * 60_000;
-    emailImap.iniciarServico({ db, whatsappDb, whatsapp, analisadorDb }, io, intervaloMs);
+    svc.iniciarServico({ db, whatsappDb, analisadorDb }, io, intervaloMs, eid);
     res.json({ ok: true });
   });
 
-  app.post('/api/email-service/stop', requireAuth, (_req, res) => {
-    emailImap.pararServico();
+  app.post('/api/email-service/stop', requireAuth, requireEmpresa, (req, res) => {
+    emailSvcMgr.get(req.session.empresa_id)?.pararServico();
+    res.json({ ok: true });
+  });
+
+  app.post('/api/email-service/clear-log', requireAuth, requireEmpresa, (req, res) => {
+    emailSvcMgr.get(req.session.empresa_id)?.clearBuffer();
     res.json({ ok: true });
   });
 };

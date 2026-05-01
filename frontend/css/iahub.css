@@ -176,54 +176,79 @@ a { text-decoration: none; color: inherit; }
 .sidebar:hover .nav-label,
 .sidebar:hover .nav-arrow,
 .sidebar:hover .nav-section-title,
-.sidebar:hover .user-info-text,
-.sidebar:hover .btn-logout,
 .sidebar.pinned .logo-text,
 .sidebar.pinned .nav-label,
 .sidebar.pinned .nav-arrow,
-.sidebar.pinned .nav-section-title,
-.sidebar.pinned .user-info-text,
-.sidebar.pinned .btn-logout {
+.sidebar.pinned .nav-section-title {
   opacity: 1;
 }
 
-/* Parent menu */
-.nav-parent {
+/* ── Seção colapsável de nível superior ───────────────────────────────────── */
+.nav-section-hdr {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 18px;
   color: var(--text-md);
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
   white-space: nowrap; user-select: none;
-  font-size: 13.5px; font-weight: 500;
+  font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.nav-section-hdr:hover { background: var(--bg-hover); color: var(--text-hi); }
+.nav-section-hdr.open  { color: var(--accent); }
+.nav-section-hdr.open .nav-arrow { transform: rotate(180deg); color: var(--accent); }
+
+/* Body da seção — colapsa quando sidebar retraído, respeita .open quando expandido */
+.nav-section-body {
+  overflow: hidden; max-height: 0;
+  transition: max-height .32s cubic-bezier(.4,0,.2,1);
+}
+.nav-section-body.open { max-height: 600px; }
+.sidebar:not(:hover):not(.pinned) .nav-section-body { max-height: 0 !important; }
+
+/* Parent menu — submenu interno à seção */
+.nav-parent {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 18px 8px 44px;
+  color: var(--text-md);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap; user-select: none;
+  font-size: 13px; font-weight: 500;
 }
 
 .nav-parent:hover { background: var(--bg-hover); color: var(--text-hi); }
 .nav-parent.open  { color: var(--accent); }
 .nav-parent.open .nav-arrow { transform: rotate(180deg); color: var(--accent); }
 
-/* Submenu */
+/* Submenu (2º nível dentro da seção) */
 .submenu {
   overflow: hidden; max-height: 0;
   transition: max-height .28s cubic-bezier(.4,0,.2,1);
   background: rgba(0,0,0,.015);
 }
-
 .sidebar:not(:hover):not(.pinned) .submenu { max-height: 0 !important; }
 .submenu.open { max-height: 300px; }
 
-.nav-item.sub { padding-left: 54px; font-size: 13px; }
-.nav-item.sub .nav-icon { font-size: 13px; width: 20px; min-width: 20px; }
+/* Itens de 1º nível dentro da seção */
+.nav-item.sub  { padding-left: 44px; font-size: 13px; }
+/* Itens de 2º nível (dentro de submenu da seção) */
+.nav-item.sub2 { padding-left: 62px; font-size: 12.5px; }
+.nav-item.sub .nav-icon,
+.nav-item.sub2 .nav-icon { font-size: 13px; width: 20px; min-width: 20px; }
 
-/* Sidebar footer */
-.sidebar-footer {
-  border-top: 1px solid var(--border);
-  padding: 12px 16px;
-  display: flex; align-items: center; gap: 10px;
+/* Sidebar — bloco de usuário abaixo do logo (injetado via auth.js) */
+.sidebar-userinfo {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
-.user-avatar {
+.sidebar-userinfo .user-avatar {
   width: 32px; min-width: 32px; height: 32px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border-radius: 50%;
@@ -232,19 +257,50 @@ a { text-decoration: none; color: inherit; }
   flex-shrink: 0;
 }
 
+.sidebar-userinfo .user-info-text {
+  flex: 1; min-width: 0;
+  opacity: 0;
+  transition: opacity var(--transition);
+  overflow: hidden;
+}
+.sidebar-userinfo .user-name { font-size: 13px; font-weight: 600; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-userinfo .user-role { font-size: 11px; color: var(--text-lo); white-space: nowrap; }
+
+.sidebar:hover .sidebar-userinfo .user-info-text,
+.sidebar.pinned .sidebar-userinfo .user-info-text { opacity: 1; }
+
+/* Sidebar footer — apenas botão de logout */
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Botão de logout maior e centralizado */
+.btn-logout {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  background: none; border: 1px solid var(--border); cursor: pointer;
+  color: var(--text-lo); font-size: 13px; font-weight: 500;
+  padding: 9px 12px; border-radius: 8px;
+  transition: color var(--transition), background var(--transition), border-color var(--transition);
+  white-space: nowrap; overflow: hidden;
+}
+.btn-logout:hover { color: var(--error); background: #fee2e2; border-color: var(--error); }
+.btn-logout .btn-logout-text {
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.sidebar:hover .btn-logout .btn-logout-text,
+.sidebar.pinned .btn-logout .btn-logout-text { opacity: 1; }
+
+/* Remove classes legadas do footer (compatibilidade) */
 .user-info-text { flex: 1; opacity: 0; transition: opacity var(--transition); min-width: 0; }
 .user-name { font-size: 13px; font-weight: 600; color: var(--text-hi); }
 .user-role { font-size: 11px; color: var(--text-lo); }
-
-.btn-logout {
-  background: none; border: none; cursor: pointer;
-  color: var(--text-lo); font-size: 16px;
-  padding: 6px; border-radius: 6px;
-  opacity: 0;
-  transition: color var(--transition), background var(--transition), opacity var(--transition);
-  flex-shrink: 0;
-}
-.btn-logout:hover { color: var(--error); background: #fee2e2; }
 
 /* ── Pin button (injetado via sidebar.js) ────────────────── */
 
@@ -302,11 +358,10 @@ a { text-decoration: none; color: inherit; }
 }
 
 .topbar-title { font-size: 15px; font-weight: 600; color: var(--text-hi); }
+.topbar-path  { font-size: 13px; font-weight: 400; color: var(--text-lo); margin-right: 2px; }
 
-.topbar-breadcrumb {
-  font-size: 12px; color: var(--text-lo);
-  display: flex; align-items: center; gap: 6px;
-}
+/* classe legada — oculta caso ainda exista em alguma página */
+.topbar-breadcrumb { display: none; }
 
 .page-content {
   flex: 1; overflow-y: auto;

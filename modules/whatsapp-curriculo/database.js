@@ -1,12 +1,18 @@
 const fs   = require('fs');
 const path = require('path');
 
-const FILE = path.join(__dirname, '..', '..', 'data.json');
+const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 
-function load() {
-  if (!fs.existsSync(FILE)) return { config: {}, curriculos: [], nextId: 1, processedIds: [] };
+function _file(empresaId) {
+  if (!empresaId) throw new Error('empresa_id é obrigatório');
+  return path.join(DATA_DIR, `empresa_${empresaId}.json`);
+}
+
+function load(empresaId) {
+  const f = _file(empresaId);
+  if (!fs.existsSync(f)) return { config: {}, curriculos: [], nextId: 1, processedIds: [] };
   try {
-    const d = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    const d = JSON.parse(fs.readFileSync(f, 'utf8'));
     if (!d.config)       d.config       = {};
     if (!d.curriculos)   d.curriculos   = [];
     if (!d.nextId)       d.nextId       = 1;
@@ -16,26 +22,27 @@ function load() {
   catch { return { config: {}, curriculos: [], nextId: 1, processedIds: [] }; }
 }
 
-function persist(data) {
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2), 'utf8');
+function persist(empresaId, data) {
+  fs.writeFileSync(_file(empresaId), JSON.stringify(data, null, 2), 'utf8');
 }
 
 module.exports = {
-  getConfig(key) {
-    return load().config[key] ?? null;
+  getConfig(empresaId, key) {
+    return load(empresaId).config[key] ?? null;
   },
 
-  setConfig(key, value) {
-    const data = load();
+  setConfig(empresaId, key, value) {
+    const data = load(empresaId);
     data.config[key] = value;
-    persist(data);
+    persist(empresaId, data);
   },
 
-  saveCurriculo(row) {
-    const data = load();
+  saveCurriculo(empresaId, row) {
+    const data = load(empresaId);
     const id   = data.nextId++;
     data.curriculos.push({
       id,
+      empresa_id:      Number(empresaId),
       remetente:       row.remetente,
       nome:            row.nome            || null,
       telefone:        row.telefone        || null,
@@ -52,75 +59,72 @@ module.exports = {
       pdf_nome:        row.pdf_nome        || null,
       recebido_em:     new Date().toISOString(),
     });
-    persist(data);
+    persist(empresaId, data);
     return id;
   },
 
-  listCurriculos() {
-    return load().curriculos
+  listCurriculos(empresaId) {
+    return load(empresaId).curriculos
       .map(({ id, remetente, nome, telefone, email, recebido_em }) =>
         ({ id, remetente, nome, telefone, email, recebido_em }))
       .reverse();
   },
 
-  getCurriculo(id) {
-    return load().curriculos.find(c => c.id === id) || null;
+  getCurriculo(empresaId, id) {
+    return load(empresaId).curriculos.find(c => c.id === id) || null;
   },
 
-  findByPhoneOrEmail(telefone, email) {
-    const data = load();
+  findByPhoneOrEmail(empresaId, telefone, email) {
+    const data = load(empresaId);
     return data.curriculos.find(c =>
       (telefone && c.telefone && c.telefone === telefone) ||
       (email    && c.email    && c.email.toLowerCase() === email.toLowerCase())
     ) || null;
   },
 
-  deleteCurriculo(id) {
-    const data = load();
+  deleteCurriculo(empresaId, id) {
+    const data = load(empresaId);
     const idx  = data.curriculos.findIndex(c => c.id === id);
     if (idx === -1) return false;
     data.curriculos.splice(idx, 1);
-    persist(data);
+    persist(empresaId, data);
     return true;
   },
 
-  isProcessed(messageId) {
-    return load().processedIds.includes(messageId);
+  isProcessed(empresaId, messageId) {
+    return load(empresaId).processedIds.includes(messageId);
   },
 
-  markProcessed(messageId) {
-    const data = load();
+  markProcessed(empresaId, messageId) {
+    const data = load(empresaId);
     if (!data.processedIds.includes(messageId)) {
       data.processedIds.push(messageId);
-      // Mantém apenas os últimos 2000 para o arquivo não crescer infinitamente
       if (data.processedIds.length > 2000) data.processedIds = data.processedIds.slice(-2000);
-      persist(data);
+      persist(empresaId, data);
     }
   },
 
-  // ── Confirmações pendentes (SIM/NÃO) ─────────────────────────────────────
-  savePendingUpdate(sender, pendingData) {
-    const data = load();
+  savePendingUpdate(empresaId, sender, pendingData) {
+    const data = load(empresaId);
     if (!data.pendingUpdates) data.pendingUpdates = [];
-    // Remove entrada anterior do mesmo remetente (se houver)
     data.pendingUpdates = data.pendingUpdates.filter(p => p.sender !== sender);
     data.pendingUpdates.push({ sender, ...pendingData, criado_em: new Date().toISOString() });
-    persist(data);
+    persist(empresaId, data);
   },
 
-  getPendingUpdate(sender) {
-    const data = load();
+  getPendingUpdate(empresaId, sender) {
+    const data = load(empresaId);
     return (data.pendingUpdates || []).find(p => p.sender === sender) || null;
   },
 
-  deletePendingUpdate(sender) {
-    const data = load();
+  deletePendingUpdate(empresaId, sender) {
+    const data = load(empresaId);
     if (!data.pendingUpdates) return;
     data.pendingUpdates = data.pendingUpdates.filter(p => p.sender !== sender);
-    persist(data);
+    persist(empresaId, data);
   },
 
-  listPendingUpdates() {
-    return load().pendingUpdates || [];
+  listPendingUpdates(empresaId) {
+    return load(empresaId).pendingUpdates || [];
   },
 };

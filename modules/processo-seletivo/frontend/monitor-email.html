@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitor E-mail — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .monitor-wrap { display:flex; gap:14px; height:calc(100vh - 180px); }
+    .terminal     { flex:1; min-width:0; height:100%; }
+    .toolbar      { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+    .info-panel {
+      width: 240px; min-width: 200px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 18px 16px;
+      display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto;
+    }
+    .info-panel-title {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--text-lo);
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .info-row { display: flex; flex-direction: column; gap: 3px; }
+    .info-label { font-size: 11px; color: var(--text-lo); font-weight: 600; }
+    .info-value { font-size: 12.5px; color: var(--text-hi); word-break: break-all; }
+    .info-value.mono { font-family: monospace; }
+
+    .stat-card {
+      background: var(--bg-hover); border-radius: 8px; padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .stat-card-label { font-size: 10.5px; color: var(--text-lo); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-card-value { font-size: 20px; font-weight: 700; color: var(--text-hi); line-height: 1.2; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Monitoramento ›</span> Monitor E-mail</span>
+    </div>
+
+    <div class="page-content">
+
+      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+        <span id="email-status-pill" class="status-pill pill-stopped">Parado</span>
+        <span id="email-log-count" class="text-muted text-sm"></span>
+        <div class="toolbar ms-auto">
+          <button id="email-btn-start" class="btn btn-success" onclick="startEmailService()">▶ Iniciar Serviço</button>
+          <button id="email-btn-stop"  class="btn btn-danger d-none" onclick="stopEmailService()">■ Parar Serviço</button>
+          <button class="btn btn-info"  onclick="saveLog()">💾 Salvar Log</button>
+          <button class="btn btn-ghost" onclick="clearLog()">🗑 Limpar</button>
+        </div>
+      </div>
+
+      <div class="monitor-wrap">
+        <div id="terminal-email" class="terminal"></div>
+
+        <div class="info-panel">
+          <div class="info-panel-title">📧 Configuração ativa</div>
+
+          <div class="info-row">
+            <span class="info-label">Conta</span>
+            <span class="info-value mono" id="info-email">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Servidor IMAP</span>
+            <span class="info-value mono" id="info-imap">—</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Intervalo</span>
+            <span class="info-value" id="info-intervalo">—</span>
+          </div>
+
+          <div class="info-panel-title" style="margin-top:4px">📊 Estatísticas</div>
+
+          <div class="stat-card">
+            <span class="stat-card-label">E-mails hoje</span>
+            <span class="stat-card-value" id="stat-hoje">—</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-label">Total recebidos</span>
+            <span class="stat-card-value" id="stat-total">—</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  let emailLines = [], emailCount = 0;
+
+  const TAG = {
+    info:     ['INFO',     'tag-info',    'msg-info'],
+    success:  ['SUCESSO',  'tag-success', 'msg-success'],
+    error:    ['ERRO',     'tag-error',   'msg-error'],
+    warning:  ['AVISO',    'tag-warning', 'msg-warning'],
+    received: ['RECEBIDO', 'tag-received','msg-received'],
+    saved:    ['GRAVADO',  'tag-saved',   'msg-saved'],
+  };
+
+  const terminalEmail = document.getElementById('terminal-email');
+
+  function makeLogLine(e) {
+    const [label, tagCls, msgCls] = TAG[e.type] || TAG.info;
+    const d = document.createElement('div');
+    d.className = 'log-line';
+    d.innerHTML = `<span class="log-ts">${e.timestamp||''}</span><span class="log-tag ${tagCls}">${label}</span><span class="log-msg ${msgCls}">${e.message}</span>`;
+    return d;
+  }
+
+  function addEmailLine(e) {
+    terminalEmail.appendChild(makeLogLine(e));
+    terminalEmail.scrollTop = terminalEmail.scrollHeight;
+    emailLines.push(`[${e.timestamp}] [${(TAG[e.type]||TAG.info)[0]}] ${e.message}`);
+    document.getElementById('email-log-count').textContent = `${++emailCount} linha${emailCount!==1?'s':''}`;
+  }
+
+  function saveLog() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([emailLines.join('\n')], { type:'text/plain' }));
+    a.download = `iahub_email_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+    a.click();
+  }
+
+  function clearLog() {
+    terminalEmail.innerHTML = '';
+    emailLines = []; emailCount = 0;
+    document.getElementById('email-log-count').textContent = '';
+    fetch('/api/email-service/clear-log', { method: 'POST' }).catch(() => {});
+  }
+
+  const EMAIL_PILLS = {
+    stopped: ['pill-stopped',   'Parado'],
+    running: ['pill-connected', 'Rodando'],
+  };
+
+  function setEmailStatus(s) {
+    const [cls, label] = EMAIL_PILLS[s] || EMAIL_PILLS.stopped;
+    const pill = document.getElementById('email-status-pill');
+    pill.className = `status-pill ${cls}`;
+    pill.textContent = label;
+    document.getElementById('email-btn-start').classList.toggle('d-none', s !== 'stopped');
+    document.getElementById('email-btn-stop').classList.toggle('d-none',  s === 'stopped');
+  }
+
+  // ── Socket ────────────────────────────────────────────────────────────────────
+  socket.on('connect', () => {
+    terminalEmail.innerHTML = '';
+    emailLines = []; emailCount = 0;
+    document.getElementById('email-log-count').textContent = '';
+    window._iahubAuthReady?.then(() => socket.emit('join-empresa'));
+  });
+
+  socket.on('email-log',    addEmailLine);
+  socket.on('email-status', setEmailStatus);
+
+  // Carga inicial
+  fetch('/api/email-service/status').then(r => r.json()).then(d => setEmailStatus(d.status)).catch(() => {});
+  carregarInfoConfig();
+  carregarStats();
+
+  // ── Controles ─────────────────────────────────────────────────────────────────
+  async function startEmailService() {
+    const btn = document.getElementById('email-btn-start');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/email-service/start', { method: 'POST' });
+      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) alert(data.error || `Erro ao iniciar serviço de e-mail (HTTP ${r.status})`);
+      else { carregarInfoConfig(); carregarStats(); }
+    } catch (e) {
+      alert(`Erro de conexão: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function stopEmailService() {
+    const btn = document.getElementById('email-btn-stop');
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/email-service/stop', { method: 'POST' });
+      if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
+      if (!r.ok) alert(`Erro ao parar serviço de e-mail (HTTP ${r.status})`);
+    } catch (e) {
+      alert(`Erro de conexão: ${e.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Painel de informações ─────────────────────────────────────────────────────
+  async function carregarInfoConfig() {
+    try {
+      const r = await fetch('/api/email-geral/config');
+      if (!r.ok) return;
+      const cfg = await r.json();
+      document.getElementById('info-email').textContent    = cfg.email    || '—';
+      document.getElementById('info-imap').textContent     = cfg.imap_host ? `${cfg.imap_host}:${cfg.imap_port}` : '—';
+      const min = cfg.imap_intervalo_min || 2;
+      document.getElementById('info-intervalo').textContent = `a cada ${min} min`;
+    } catch (_) {}
+  }
+
+  async function carregarStats() {
+    try {
+      const r = await fetch('/api/stats');
+      if (!r.ok) return;
+      const d = await r.json();
+      document.getElementById('stat-hoje').textContent  = d.email?.hoje  ?? '—';
+      document.getElementById('stat-total').textContent = d.email?.total ?? '—';
+    } catch (_) {}
+  }
+</script>
+</body>
+</html>

@@ -5,6 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>IAHub — Login</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff; border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    .spinner-sm {
+      display: inline-block; width: 12px; height: 12px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin .6s linear infinite;
+      margin-left: 6px; vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empresa-label-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .empresa-label-row .form-label { margin-bottom: 0; }
+
+    /* Estado desabilitado do select com visual diferenciado */
+    select.form-control:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+  </style>
 </head>
 <body class="login-page">
 
@@ -17,15 +48,27 @@
 
     <div id="login-error" class="login-error"></div>
 
-    <form onsubmit="doLogin(event)">
+    <form onsubmit="doLogin(event)" id="form-login" autocomplete="off">
       <div class="form-group">
         <label class="form-label">Usuário</label>
-        <input id="user" type="text" class="form-control" placeholder="Digite seu usuário" autocomplete="username" required>
+        <input id="user" type="text" class="form-control" placeholder="Digite seu usuário"
+          autocomplete="username" required>
       </div>
 
       <div class="form-group">
         <label class="form-label">Senha</label>
-        <input id="pass" type="password" class="form-control" placeholder="Digite sua senha" autocomplete="current-password" required>
+        <input id="pass" type="password" class="form-control" placeholder="Digite sua senha"
+          autocomplete="current-password" required>
+      </div>
+
+      <div class="form-group">
+        <div class="empresa-label-row">
+          <label class="form-label">Empresa</label>
+          <span id="empresa-spinner" class="spinner-sm" style="display:none"></span>
+        </div>
+        <select id="empresa-select" class="form-control" disabled>
+          <option value="">— Digite usuário e senha para carregar —</option>
+        </select>
       </div>
 
       <button type="submit" class="btn-login" id="btn-login">Entrar</button>
@@ -35,40 +78,178 @@
   </div>
 
   <script>
-    // Se já autenticado, vai direto para o dashboard
-    fetch('/api/me').then(r => { if (r.ok) location.href = '/dashboard.html'; });
+    let _logado     = false;
+    let _role       = null;
+    let _checkTimer = null;
+    let _bypassAdmin = false;
 
-    async function doLogin(e) {
-      e.preventDefault();
-      const btn = document.getElementById('btn-login');
-      const err = document.getElementById('login-error');
-      err.style.display = 'none';
-      btn.textContent = 'Entrando...';
-      btn.disabled = true;
+    // ── Se já autenticado, pre-popula empresas e redireciona se for caso ────────
+    (async () => {
+      const me = await fetch('/api/me').catch(() => null);
+      if (!me?.ok) return;
+      const data = await me.json();
+      _role   = data.role;
+      _logado = true;
+      await carregarEmpresas(/* silencioso */ true);
+    })();
+
+    // ── Listeners: dispara verificação ao digitar ────────────────────────────────
+    document.getElementById('user').addEventListener('input', agendarVerificacao);
+    document.getElementById('pass').addEventListener('input', agendarVerificacao);
+    document.getElementById('pass').addEventListener('blur',  verificarAgora);
+
+    function agendarVerificacao() {
+      clearTimeout(_checkTimer);
+      const u = document.getElementById('user').value.trim();
+      const p = document.getElementById('pass').value;
+      if (u && p.length >= 4) {
+        _checkTimer = setTimeout(verificarAgora, 600);
+      } else if (!_logado) {
+        resetSelect('— Digite usuário e senha para carregar —');
+      }
+    }
+
+    async function verificarAgora() {
+      if (_logado) return;
+      clearTimeout(_checkTimer);
+
+      const u = document.getElementById('user').value.trim();
+      const p = document.getElementById('pass').value;
+      if (!u || p.length < 4) return;
+
+      mostrarSpinner(true);
+      esconderErro();
 
       try {
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user: document.getElementById('user').value,
-            pass: document.getElementById('pass').value,
-          }),
+          body: JSON.stringify({ user: u, pass: p }),
         });
 
-        if (res.ok) {
-          window.location.href = '/dashboard.html';
-        } else {
-          const data = await res.json();
-          err.textContent = data.error || 'Usuário ou senha inválidos.';
-          err.style.display = 'block';
+        if (!res.ok) {
+          resetSelect('— Usuário ou senha inválidos —');
+          return;
         }
+
+        const data = await res.json();
+        _role   = data.role;
+        _logado = true;
+        await carregarEmpresas();
+
       } catch (_) {
-        err.textContent = 'Erro de conexão. Verifique se o servidor está rodando.';
-        err.style.display = 'block';
+        resetSelect('— Erro de conexão —');
       } finally {
-        btn.textContent = 'Entrar';
+        mostrarSpinner(false);
+      }
+    }
+
+    async function carregarEmpresas(autoRedirecionar = false) {
+      mostrarSpinner(true);
+      const empresas = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+      mostrarSpinner(false);
+
+      const sel = document.getElementById('empresa-select');
+
+      // Admin sem empresas — entra direto para cadastrar
+      if (!empresas.length && _role === 'admin') {
+        _bypassAdmin = true;
+        sel.innerHTML = '<option value="__admin__">🔧 Administrador — Nenhuma empresa cadastrada</option>';
+        sel.disabled  = false;
+        document.getElementById('btn-login').textContent = 'Entrar como Administrador';
+        return;
+      }
+
+      if (!empresas.length) {
+        resetSelect('— Nenhuma empresa disponível. Contate o administrador. —');
+        return;
+      }
+
+      // Popula as opções (ordem alfabética)
+      empresas.sort((a, b) => (a.razao_social || a.nome || '').localeCompare(b.razao_social || b.nome || '', 'pt-BR'));
+      sel.innerHTML = empresas.length > 1
+        ? '<option value="">— Selecione uma empresa —</option>' +
+          empresas.map(e => `<option value="${e.id}">${e.razao_social || e.nome || 'Empresa'}</option>`).join('')
+        : empresas.map(e => `<option value="${e.id}">${e.razao_social || e.nome || 'Empresa'}</option>`).join('');
+      sel.disabled = false;
+
+      // Auto-seleciona se só há uma empresa
+      if (empresas.length === 1) {
+        sel.value = String(empresas[0].id);
+        if (autoRedirecionar) {
+          await selecionarEAvancar(empresas[0].id);
+        }
+      }
+    }
+
+    function resetSelect(placeholder) {
+      const sel = document.getElementById('empresa-select');
+      sel.innerHTML = `<option value="">${placeholder}</option>`;
+      sel.disabled  = true;
+      _bypassAdmin  = false;
+    }
+
+    function mostrarSpinner(show) {
+      document.getElementById('empresa-spinner').style.display = show ? 'inline-block' : 'none';
+    }
+
+    function mostrarErro(msg) {
+      const el = document.getElementById('login-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    function esconderErro() {
+      document.getElementById('login-error').style.display = 'none';
+    }
+
+    // ── Submit ────────────────────────────────────────────────────────────────────
+    async function doLogin(e) {
+      e.preventDefault();
+      esconderErro();
+
+      // Bypass admin sem empresa
+      if (_bypassAdmin) {
+        const dest = new URLSearchParams(location.search).get('next') || '/empresas.html';
+        location.href = dest;
+        return;
+      }
+
+      // Precisa estar autenticado
+      if (!_logado) {
+        await verificarAgora();
+        if (!_logado) return;
+      }
+
+      const sel = document.getElementById('empresa-select');
+      const empresaId = sel.value ? Number(sel.value) : null;
+
+      if (!empresaId) {
+        mostrarErro('Selecione uma empresa para continuar.');
+        sel.focus();
+        return;
+      }
+
+      await selecionarEAvancar(empresaId);
+    }
+
+    async function selecionarEAvancar(empresa_id) {
+      const btn = document.getElementById('btn-login');
+      btn.innerHTML = '<span class="spinner"></span>Acessando…';
+      btn.disabled  = true;
+
+      try {
+        await fetch('/api/empresas/selecionar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ empresa_id }),
+        });
+        const dest = new URLSearchParams(location.search).get('next') || '/dashboard.html';
+        location.href = dest;
+      } catch (_) {
+        mostrarErro('Erro ao selecionar empresa. Tente novamente.');
         btn.disabled = false;
+        btn.textContent = 'Entrar';
       }
     }
   </script>

@@ -12,47 +12,49 @@ function curricuoloParaLog(c) {
   return copia;
 }
 
-module.exports = function (app, { requireAuth, registrarLog }) {
+module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Configuração ──────────────────────────────────────────────────────────────
-  app.get('/api/integracoes/se/config', requireAuth, (_req, res) => {
-    res.json(db.getConfig());
+  app.get('/api/integracoes/se/config', requireAuth, requireEmpresa, (req, res) => {
+    res.json(db.getConfig(req.session.empresa_id));
   });
 
-  app.post('/api/integracoes/se/config', requireAuth, (req, res) => {
+  app.post('/api/integracoes/se/config', requireAuth, requireEmpresa, (req, res) => {
     const { se_url, se_token } = req.body;
     if (!se_url || !se_token) return res.status(400).json({ error: 'se_url e se_token são obrigatórios' });
-    db.saveConfig({ se_url: se_url.trim(), se_token: se_token.trim() });
+    db.saveConfig(req.session.empresa_id, { se_url: se_url.trim(), se_token: se_token.trim() });
     res.json({ ok: true });
   });
 
   // ── Logs ──────────────────────────────────────────────────────────────────────
-  app.get('/api/integracoes/se/logs', requireAuth, (req, res) => {
+  app.get('/api/integracoes/se/logs', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
     const { status, curriculo_nome, analise_id, vaga_id, data_inicio, data_fim, page, limit } = req.query;
-    res.json(db.listLogs({ status, curriculo_nome, analise_id, vaga_id, data_inicio, data_fim, page, limit }));
+    res.json(db.listLogs(eid, { status, curriculo_nome, analise_id, vaga_id, data_inicio, data_fim, page, limit }));
   });
 
-  app.post('/api/integracoes/se/resumo-analises', requireAuth, (req, res) => {
+  app.post('/api/integracoes/se/resumo-analises', requireAuth, requireEmpresa, (req, res) => {
     const { analise_ids } = req.body;
     if (!Array.isArray(analise_ids)) return res.status(400).json({ error: 'analise_ids deve ser um array' });
-    res.json(db.getResumoAnalises(analise_ids));
+    res.json(db.getResumoAnalises(req.session.empresa_id, analise_ids));
   });
 
   // ── Enviar analisados ao SE ───────────────────────────────────────────────────
-  app.post('/api/integracoes/se/enviar', requireAuth, async (req, res) => {
+  app.post('/api/integracoes/se/enviar', requireAuth, requireEmpresa, async (req, res) => {
+    const eid        = req.session.empresa_id;
     const { analise_id } = req.body;
     if (!analise_id) return res.status(400).json({ error: 'analise_id é obrigatório' });
 
-    const analise = anDb.getAnalise(analise_id);
+    const analise = anDb.getAnalise(eid, analise_id);
     if (!analise) return res.status(404).json({ error: 'Análise não encontrada' });
 
-    const config = db.getConfig();
+    const config = db.getConfig(eid);
     if (!config.se_token) return res.status(400).json({ error: 'Token SE não configurado. Acesse Configurações › Integrações.' });
 
     const idsParaEnviar = (analise.resultados || []).map(r => r.id).filter(Boolean);
     if (!idsParaEnviar.length) return res.status(400).json({ error: 'Esta análise não possui currículos analisados para enviar.' });
 
-    const curriculos = anDb.listCurriculos();
+    const curriculos = anDb.listCurriculos(eid);
     const resultados = [];
 
     registrarLog({ timestamp: new Date().toISOString(), type: 'info',
@@ -62,7 +64,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
       const curriculo = curriculos.find(c => c.id === cid);
 
       if (!curriculo) {
-        db.saveLog({
+        db.saveLog(eid, {
           analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
           curriculo_id: cid, curriculo_nome: `(ID ${cid} não encontrado)`,
           curriculo_email: '', curriculo_telefone: '',
@@ -77,8 +79,8 @@ module.exports = function (app, { requireAuth, registrarLog }) {
         continue;
       }
 
-      if (db.jaIntegrado(cid, analise_id)) {
-        db.saveLog({
+      if (db.jaIntegrado(eid, cid, analise_id)) {
+        db.saveLog(eid, {
           analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
           curriculo_id: cid, curriculo_nome: curriculo.nome || '—',
           curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
@@ -97,7 +99,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
 
       try {
         const resultado = await service.enviarParaSE(curriculo, config);
-        db.saveLog({
+        db.saveLog(eid, {
           analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
           curriculo_id: cid, curriculo_nome: curriculo.nome || '—',
           curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
@@ -120,7 +122,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
           message: `[SE Integração] ✓ ${curriculo.nome || cid} — SE RecordID: ${resultado.se_record_id || '?'} (${resultado.duracao_ms}ms)` });
       } catch (err) {
         const msg = err.message || 'Erro desconhecido';
-        db.saveLog({
+        db.saveLog(eid, {
           analise_id, vaga_id: analise.vaga_id, vaga_nome: analise.funcao_nome,
           curriculo_id: cid, curriculo_nome: curriculo.nome || '—',
           curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
@@ -155,27 +157,28 @@ module.exports = function (app, { requireAuth, registrarLog }) {
   });
 
   // ── Reenviar currículo específico ─────────────────────────────────────────────
-  app.post('/api/integracoes/se/reenviar', requireAuth, async (req, res) => {
+  app.post('/api/integracoes/se/reenviar', requireAuth, requireEmpresa, async (req, res) => {
+    const eid = req.session.empresa_id;
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
-    const curriculo = anDb.listCurriculos().find(c => c.id === Number(curriculo_id));
+    const curriculo = anDb.listCurriculos(eid).find(c => c.id === Number(curriculo_id));
     if (!curriculo) return res.status(404).json({ error: 'Currículo não encontrado' });
 
     // Se a análise foi excluída, usa dados do log existente como fallback
-    const analise   = anDb.getAnalise(analise_id);
+    const analise   = anDb.getAnalise(eid, analise_id);
     let   vagaId    = analise?.vaga_id    ?? null;
     let   vagaNome  = analise?.funcao_nome ?? null;
     if (!analise) {
-      const logExist = db.listLogs({ analise_id, limit: 1 }).logs[0];
+      const logExist = db.listLogs(eid, { analise_id, limit: 1 }).logs[0];
       vagaId   = logExist?.vaga_id  ?? null;
       vagaNome = logExist?.vaga_nome ?? null;
     }
 
-    const config = db.getConfig();
+    const config = db.getConfig(eid);
     if (!config.se_token) return res.status(400).json({ error: 'Token SE não configurado' });
 
-    if (db.jaIntegrado(Number(curriculo_id), analise_id)) {
+    if (db.jaIntegrado(eid, Number(curriculo_id), analise_id)) {
       return res.status(409).json({ error: 'Este currículo já foi integrado com sucesso nesta análise. Use "Reverter" antes de reenviar.' });
     }
 
@@ -184,7 +187,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
 
     try {
       const resultado = await service.enviarParaSE(curriculo, config);
-      db.saveLog({
+      db.saveLog(eid, {
         analise_id, vaga_id: vagaId, vaga_nome: vagaNome,
         curriculo_id: curriculo.id, curriculo_nome: curriculo.nome || '—',
         curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
@@ -207,7 +210,7 @@ module.exports = function (app, { requireAuth, registrarLog }) {
       res.json({ ok: true });
     } catch (err) {
       const msg = err.message || 'Erro desconhecido';
-      db.saveLog({
+      db.saveLog(eid, {
         analise_id, vaga_id: vagaId, vaga_nome: vagaNome,
         curriculo_id: curriculo.id, curriculo_nome: curriculo.nome || '—',
         curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',
@@ -233,11 +236,12 @@ module.exports = function (app, { requireAuth, registrarLog }) {
   });
 
   // ── Desflagging: reverter sucesso para reintegrar ─────────────────────────────
-  app.post('/api/integracoes/se/resetar', requireAuth, (req, res) => {
+  app.post('/api/integracoes/se/resetar', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
-    const ok = db.resetarIntegracao(Number(curriculo_id), analise_id);
+    const ok = db.resetarIntegracao(eid, Number(curriculo_id), analise_id);
     if (!ok) return res.status(404).json({ error: 'Nenhum registro sucesso encontrado para este currículo nesta análise' });
 
     registrarLog({ timestamp: new Date().toISOString(), type: 'info',
@@ -246,23 +250,24 @@ module.exports = function (app, { requireAuth, registrarLog }) {
   });
 
   // ── Marcar como integrado manualmente (sem enviar ao SE) ──────────────────────
-  app.post('/api/integracoes/se/marcar-integrado', requireAuth, (req, res) => {
+  app.post('/api/integracoes/se/marcar-integrado', requireAuth, requireEmpresa, (req, res) => {
+    const eid = req.session.empresa_id;
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
-    const curriculo = anDb.listCurriculos().find(c => c.id === Number(curriculo_id));
+    const curriculo = anDb.listCurriculos(eid).find(c => c.id === Number(curriculo_id));
     if (!curriculo) return res.status(404).json({ error: 'Currículo não encontrado' });
 
-    const analise   = anDb.getAnalise(analise_id);
+    const analise   = anDb.getAnalise(eid, analise_id);
     let   vagaId    = analise?.vaga_id    ?? null;
     let   vagaNome  = analise?.funcao_nome ?? null;
     if (!analise) {
-      const logExist = db.listLogs({ analise_id, limit: 1 }).logs[0];
+      const logExist = db.listLogs(eid, { analise_id, limit: 1 }).logs[0];
       vagaId   = logExist?.vaga_id  ?? null;
       vagaNome = logExist?.vaga_nome ?? null;
     }
 
-    db.marcarIntegradoManual({
+    db.marcarIntegradoManual(eid, {
       analise_id, vaga_id: vagaId, vaga_nome: vagaNome,
       curriculo_id: curriculo.id, curriculo_nome: curriculo.nome || '—',
       curriculo_email: curriculo.email || '', curriculo_telefone: curriculo.telefone || '',

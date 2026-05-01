@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Administração — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal-sm      { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(420px,95vw);padding:28px;position:relative; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
+    .modal-close:hover { color:var(--text-hi); }
+    .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .search-bar    { position:relative; }
+    .search-bar input { padding-left:32px; }
+    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
+    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
+    .empty-state div { font-size:40px;margin-bottom:12px; }
+    td.doc-col     { font-family:monospace;font-size:12px;color:var(--text-md); }
+
+    .badge        { display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
+    .badge-admin  { background:rgba(37,99,235,.12);color:var(--accent); }
+    .badge-user   { background:var(--bg-hover);color:var(--text-md); }
+    .badge-ativo  { background:rgba(22,163,74,.12);color:var(--success); }
+    .badge-inativo{ background:rgba(239,68,68,.10);color:#dc2626; }
+
+    .empresas-grid {
+      border:1px solid var(--border);border-radius:8px;padding:12px;
+      max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
+    }
+    .empresa-check {
+      display:flex;align-items:center;gap:10px;padding:6px 8px;
+      border-radius:6px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text-hi);
+    }
+    .empresa-check:hover { background:var(--bg-hover); }
+    .empresa-check input[type=checkbox] { cursor:pointer;width:15px;height:15px;flex-shrink:0; }
+    .empresa-check.disabled { opacity:.55;cursor:not-allowed; }
+
+    .pass-wrap { position:relative; }
+    .pass-wrap input { padding-right:40px; }
+    .pass-toggle { position:absolute;right:10px;top:50%;transform:translateY(-50%);
+      background:none;border:none;cursor:pointer;color:var(--text-lo);font-size:16px;padding:0; }
+    .pass-toggle:hover { color:var(--text-hi); }
+
+    .senha-edit-box {
+      border:1px dashed var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;
+      background:rgba(37,99,235,.03);
+    }
+    .senha-edit-box .form-label { color:var(--text-md); }
+    .hint { font-size:11px;color:var(--text-lo);margin-top:4px; }
+
+    .config-section { margin-bottom:28px; }
+    .config-section-title {
+      font-size:13px;font-weight:700;text-transform:uppercase;
+      letter-spacing:.06em;color:var(--text-lo);margin-bottom:16px;
+      padding-bottom:8px;border-bottom:1px solid var(--border);
+    }
+    .save-bar {
+      position:sticky;bottom:0;background:var(--bg-card);
+      border-top:1px solid var(--border);padding:14px 24px;
+      display:flex;align-items:center;gap:12px;z-index:10;
+    }
+    .save-msg { font-size:13px;color:var(--success);display:none; }
+
+    .audit-filters { display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px; }
+    .audit-filters .form-group { margin:0;flex:1;min-width:140px; }
+    .audit-filters .form-label { font-size:11px;margin-bottom:4px; }
+    .audit-filters .form-control { font-size:12px;padding:6px 10px; }
+    .acao-badge { display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600; }
+    .acao-login_sucesso   { background:rgba(22,163,74,.12);  color:var(--success); }
+    .acao-login_falha     { background:rgba(239,68,68,.10);  color:#dc2626; }
+    .acao-login_bloqueado { background:rgba(239,68,68,.18);  color:#dc2626; }
+    .acao-logout          { background:var(--bg-hover);      color:var(--text-md); }
+    .acao-empresa_selecionada { background:rgba(37,99,235,.1); color:var(--accent); }
+    .acao-default         { background:var(--bg-hover);      color:var(--text-lo); }
+    .empty-audit          { text-align:center;padding:40px;color:var(--text-lo);font-size:13px; }
+
+    .adm-tab-content { display:none; }
+    .adm-tab-content.active { display:block; }
+
+    /* ── Reset de Dados ─────────────────────────────────────────────────────── */
+    .reset-layout      { display:flex; gap:24px; padding:24px; align-items:flex-start; flex-wrap:wrap; }
+    .reset-col-left    { flex:1; min-width:280px; }
+    .reset-col-right   { width:320px; min-width:260px; }
+
+    .reset-section-title {
+      font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em;
+      color:var(--text-lo); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border);
+    }
+
+    .tabela-card {
+      border:1px solid var(--border); border-radius:10px; padding:14px 16px;
+      margin-bottom:10px; cursor:pointer; transition:border-color .15s, background .15s;
+      display:flex; align-items:flex-start; gap:12px; position:relative;
+      background:var(--bg-card);
+    }
+    .tabela-card:hover   { border-color:var(--accent); background:rgba(37,99,235,.03); }
+    .tabela-card.checked { border-color:var(--accent); background:rgba(37,99,235,.06); }
+    .tabela-card.cascade { border-color:#f59e0b; background:rgba(245,158,11,.05); }
+    .tabela-card.disabled{ opacity:.45; cursor:not-allowed; pointer-events:none; }
+
+    .tabela-card input[type=checkbox] { margin-top:2px; cursor:pointer; width:16px; height:16px; flex-shrink:0; accent-color:var(--accent); }
+    .tabela-card-body  { flex:1; }
+    .tabela-card-title { font-size:13px; font-weight:600; color:var(--text-hi); display:flex; align-items:center; gap:8px; }
+    .tabela-card-desc  { font-size:11.5px; color:var(--text-md); margin-top:3px; line-height:1.5; }
+    .tabela-card-count { font-size:11px; font-weight:700; color:var(--text-lo); margin-top:5px; }
+    .tabela-card-count span { color:var(--accent); }
+    .cascade-tag {
+      font-size:10px; font-weight:600; padding:1px 7px; border-radius:10px;
+      background:rgba(245,158,11,.15); color:#b45309; white-space:nowrap;
+    }
+
+    .reset-aviso {
+      border-radius:10px; padding:14px 16px; font-size:12.5px; line-height:1.6;
+      display:flex; gap:10px; align-items:flex-start; margin-bottom:16px;
+    }
+    .reset-aviso-danger  { background:rgba(239,68,68,.07);  border:1px solid rgba(239,68,68,.25); color:#991b1b; }
+    .reset-aviso-info    { background:rgba(37,99,235,.06);  border:1px solid rgba(37,99,235,.18); color:#1e40af; }
+    .reset-aviso-warning { background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.25); color:#92400e; }
+    .reset-aviso-icon    { font-size:18px; flex-shrink:0; line-height:1.2; }
+
+    .reset-sumario {
+      border:1px solid var(--border); border-radius:10px; padding:16px;
+      background:var(--bg-card); margin-bottom:16px;
+    }
+    .reset-sumario-item {
+      display:flex; align-items:center; gap:8px; padding:5px 0;
+      border-bottom:1px solid var(--border); font-size:12.5px; color:var(--text-hi);
+    }
+    .reset-sumario-item:last-child { border-bottom:none; }
+    .reset-sumario-cascade { font-size:10.5px; color:#b45309; margin-left:auto; }
+    .reset-sumario-empty   { text-align:center; padding:20px; color:var(--text-lo); font-size:12.5px; }
+
+    .reset-confirm-wrap {
+      border:1px solid rgba(239,68,68,.3); border-radius:10px; padding:16px;
+      background:rgba(239,68,68,.04); margin-bottom:16px;
+    }
+    .reset-confirm-wrap label { font-size:12px; font-weight:600; color:#991b1b; display:block; margin-bottom:6px; }
+    .reset-confirm-wrap input { border-color:rgba(239,68,68,.4); }
+    .reset-confirm-wrap input:focus { border-color:#dc2626; outline:none; box-shadow:0 0 0 3px rgba(239,68,68,.15); }
+
+    .reset-empresa-select { margin-bottom:20px; }
+    .reset-empresa-select .form-label { font-size:12px; font-weight:600; color:var(--text-hi); }
+
+    .reset-result {
+      border-radius:10px; padding:14px 16px; font-size:12.5px; line-height:1.6;
+      display:none; gap:10px; align-items:flex-start; margin-bottom:16px;
+    }
+    .reset-result.success { display:flex; background:rgba(22,163,74,.07); border:1px solid rgba(22,163,74,.25); color:#166534; }
+    .reset-result.error   { display:flex; background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.25); color:#991b1b; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer">
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Configurador ›</span> Administração</span>
+    </div>
+
+    <div class="page-content" style="padding-top:16px;padding-bottom:0">
+      <div class="card">
+
+        <div class="tabs-header" style="padding:0 24px">
+          <button class="tab-btn active" id="adm-btn-empresas"  onclick="mudarAbaAdmin('empresas',  this)">🏢 Empresas</button>
+          <button class="tab-btn"        id="adm-btn-usuarios"  onclick="mudarAbaAdmin('usuarios',  this)">👤 Usuários</button>
+          <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
+          <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
+          <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
+        </div>
+
+        <!-- ── Aba: Empresas ─────────────────────────────────────────────────── -->
+        <div id="adm-tab-empresas" class="adm-tab-content active">
+          <div style="padding:20px 24px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div class="search-bar" style="flex:1;max-width:340px">
+              <input type="text" id="emp-busca" class="form-control" placeholder="Buscar empresa..." oninput="empFiltrar()">
+            </div>
+            <div class="ms-auto">
+              <button class="btn btn-primary" onclick="empAbrirModal()">＋ Nova Empresa</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:50px">#</th>
+                  <th>Razão Social</th>
+                  <th>CPF / CNPJ</th>
+                  <th>Telefone</th>
+                  <th>E-mail</th>
+                  <th style="text-align:right">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="emp-tbody"></tbody>
+            </table>
+          </div>
+          <div id="emp-empty" class="empty-state d-none">
+            <div>🏢</div>
+            <strong style="color:var(--text-md)">Nenhuma empresa cadastrada</strong>
+            <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Empresa</strong> para começar.</p>
+          </div>
+        </div>
+
+        <!-- ── Aba: Usuários ─────────────────────────────────────────────────── -->
+        <div id="adm-tab-usuarios" class="adm-tab-content">
+          <div style="padding:20px 24px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <div class="search-bar" style="flex:1;max-width:340px">
+              <input type="text" id="usu-busca" class="form-control" placeholder="Buscar usuário..." oninput="usuFiltrar()">
+            </div>
+            <div class="ms-auto">
+              <button class="btn btn-primary" onclick="usuAbrirModal()">＋ Novo Usuário</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:50px">#</th>
+                  <th>Nome</th>
+                  <th>Usuário</th>
+                  <th>Celular</th>
+                  <th>Perfil</th>
+                  <th>Status</th>
+                  <th style="text-align:right">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="usu-tbody"></tbody>
+            </table>
+          </div>
+          <div id="usu-empty" class="empty-state d-none">
+            <div>👤</div>
+            <strong style="color:var(--text-md)">Nenhum usuário cadastrado</strong>
+            <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Novo Usuário</strong> para começar.</p>
+          </div>
+        </div>
+
+        <!-- ── Aba: Segurança ────────────────────────────────────────────────── -->
+        <div id="adm-tab-seguranca" class="adm-tab-content">
+          <div style="padding:24px 24px 0">
+
+            <div class="config-section">
+              <div class="config-section-title">Sessão</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Tempo máximo de sessão (horas)</label>
+                  <input id="seg-cfg-sessao" type="number" min="1" max="24" class="form-control" placeholder="8">
+                  <div class="hint">Usuário será desconectado após este tempo de inatividade.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-section">
+              <div class="config-section-title">Tentativas de Login</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Máximo de tentativas antes do bloqueio</label>
+                  <input id="seg-cfg-tentativas" type="number" min="1" max="20" class="form-control" placeholder="5">
+                  <div class="hint">Após este número de falhas, o IP será bloqueado temporariamente.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Duração do bloqueio (minutos)</label>
+                  <input id="seg-cfg-bloqueio" type="number" min="1" max="1440" class="form-control" placeholder="15">
+                  <div class="hint">Tempo que o IP ficará bloqueado após exceder as tentativas.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="config-section" style="margin-bottom:0">
+              <div class="config-section-title">Política de Senha</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Nível mínimo de força</label>
+                  <select id="seg-cfg-senha" class="form-control">
+                    <option value="basico">Básico — mín. 6 caracteres</option>
+                    <option value="medio">Médio — mín. 8 chars + maiúscula + número</option>
+                    <option value="forte">Forte — mín. 10 chars + maiúscula + número + especial</option>
+                  </select>
+                  <div class="hint">Aplica-se ao cadastro e alteração de senhas de usuários.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <div class="save-bar">
+            <button class="btn btn-primary" id="seg-btn-salvar" onclick="segSalvar()">Salvar Configurações</button>
+            <span class="save-msg" id="seg-save-msg">✓ Configurações salvas</span>
+            <div id="seg-save-error" class="login-error" style="display:none;margin:0"></div>
+          </div>
+        </div>
+
+        <!-- ── Aba: Auditoria ────────────────────────────────────────────────── -->
+        <div id="adm-tab-auditoria" class="adm-tab-content">
+          <div style="padding:20px 24px 0">
+            <div class="audit-filters">
+              <div class="form-group">
+                <label class="form-label">Usuário</label>
+                <input id="aud-f-usuario" type="text" class="form-control" placeholder="Filtrar por usuário">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ação</label>
+                <select id="aud-f-acao" class="form-control">
+                  <option value="">Todas</option>
+                  <option value="login_sucesso">Login com sucesso</option>
+                  <option value="login_falha">Login com falha</option>
+                  <option value="login_bloqueado">Login bloqueado</option>
+                  <option value="logout">Logout</option>
+                  <option value="empresa_selecionada">Empresa selecionada</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data início</label>
+                <input id="aud-f-data-ini" type="date" class="form-control">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data fim</label>
+                <input id="aud-f-data-fim" type="date" class="form-control">
+              </div>
+              <div class="form-group" style="min-width:auto">
+                <label class="form-label" style="visibility:hidden">.</label>
+                <button class="btn btn-secondary" onclick="audCarregar()" style="white-space:nowrap">🔍 Filtrar</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:160px">Data / Hora</th>
+                  <th>Usuário</th>
+                  <th>Ação</th>
+                  <th>IP</th>
+                  <th>Empresa</th>
+                  <th>Detalhes</th>
+                </tr>
+              </thead>
+              <tbody id="aud-tbody"></tbody>
+            </table>
+          </div>
+          <div id="aud-empty" class="empty-audit d-none">Nenhum registro encontrado.</div>
+        </div>
+
+        <!-- ── Aba: Reset de Dados ───────────────────────────────────────────── -->
+        <div id="adm-tab-reset" class="adm-tab-content">
+          <div class="reset-layout">
+
+            <!-- Coluna esquerda: seleção de empresa + tabelas -->
+            <div class="reset-col-left">
+
+              <div class="reset-aviso reset-aviso-danger">
+                <span class="reset-aviso-icon">⚠️</span>
+                <div>
+                  <strong>Ação irreversível.</strong> Os dados zerados <strong>não podem ser recuperados</strong>.
+                  Use esta ferramenta apenas em ambiente de testes ou quando tiver certeza absoluta do que está fazendo.
+                  <br>Configurações (e-mail, WhatsApp, modelos, etc.) <strong>não serão afetadas</strong>.
+                </div>
+              </div>
+
+              <div class="reset-empresa-select">
+                <div class="reset-section-title">1 · Selecione a empresa</div>
+                <select id="rst-empresa" class="form-control" onchange="rstCarregarContagens()">
+                  <option value="">— escolha uma empresa —</option>
+                </select>
+              </div>
+
+              <div class="reset-section-title">2 · Escolha o que zerar</div>
+
+              <div class="reset-aviso reset-aviso-info" style="margin-bottom:16px">
+                <span class="reset-aviso-icon">ℹ️</span>
+                <div>
+                  Marque as tabelas que deseja esvaziar. Dependências em cascata são indicadas automaticamente
+                  e também serão zeradas para manter a consistência dos dados.
+                </div>
+              </div>
+
+              <!-- Cards das tabelas -->
+              <div id="rst-cards">
+
+                <div class="tabela-card" id="rst-card-curriculos" onclick="rstToggle('curriculos',this)">
+                  <input type="checkbox" id="rst-chk-curriculos" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      📄 Currículos recebidos
+                    </div>
+                    <div class="tabela-card-desc">
+                      Todos os currículos recebidos via WhatsApp, e-mail e Processo Seletivo.
+                      Inclui os IDs processados e o contador de sequência.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-curriculos">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-vaga_candidaturas" onclick="rstToggle('vaga_candidaturas',this)">
+                  <input type="checkbox" id="rst-chk-vaga_candidaturas" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      📋 Candidaturas do Processo Seletivo
+                    </div>
+                    <div class="tabela-card-desc">
+                      Vínculos entre candidatos e vagas criados pelo Processo Seletivo público.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-vaga_candidaturas">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-vagas" onclick="rstToggle('vagas',this)">
+                  <input type="checkbox" id="rst-chk-vagas" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      💼 Vagas
+                      <span class="cascade-tag" title="Zerar vagas também zera candidaturas">cascata ↓ candidaturas</span>
+                    </div>
+                    <div class="tabela-card-desc">
+                      Todas as vagas cadastradas (abertas e fechadas).
+                      Ao zerar vagas, as candidaturas vinculadas serão zeradas automaticamente.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-vagas">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-funcoes" onclick="rstToggle('funcoes',this)">
+                  <input type="checkbox" id="rst-chk-funcoes" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      🏷 Funções
+                      <span class="cascade-tag" title="Zerar funções também zera vagas e candidaturas">cascata ↓ vagas · candidaturas</span>
+                    </div>
+                    <div class="tabela-card-desc">
+                      Funções cadastradas e suas equivalências de cargo.
+                      Ao zerar funções, vagas e candidaturas também serão zeradas automaticamente.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-funcoes">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-equivalencias" onclick="rstToggle('equivalencias',this)">
+                  <input type="checkbox" id="rst-chk-equivalencias" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      🔀 Equivalências de habilidades
+                    </div>
+                    <div class="tabela-card-desc">
+                      Grupos de palavras-chave utilizados pelo analisador de currículos para
+                      reconhecer habilidades similares. Independente das demais tabelas.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-equivalencias">— registros</div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Coluna direita: resumo + confirmação -->
+            <div class="reset-col-right">
+
+              <div class="reset-section-title">3 · Confirme e execute</div>
+
+              <!-- Resumo do que será zerado -->
+              <div class="reset-sumario" id="rst-sumario">
+                <div class="reset-sumario-empty">Nenhuma tabela selecionada.</div>
+              </div>
+
+              <!-- Aviso de cascade quando aplicável -->
+              <div id="rst-aviso-cascade" class="reset-aviso reset-aviso-warning" style="display:none;margin-bottom:16px">
+                <span class="reset-aviso-icon">🔗</span>
+                <div id="rst-aviso-cascade-texto">As tabelas em cascata abaixo também serão zeradas automaticamente.</div>
+              </div>
+
+              <!-- Campo de confirmação -->
+              <div class="reset-confirm-wrap" id="rst-confirm-wrap" style="display:none">
+                <label for="rst-confirm-input">
+                  Para confirmar, digite <strong>CONFIRMAR</strong> no campo abaixo:
+                </label>
+                <input
+                  id="rst-confirm-input"
+                  type="text"
+                  class="form-control"
+                  placeholder="Digite CONFIRMAR"
+                  oninput="rstValidarConfirmacao()"
+                  autocomplete="off">
+              </div>
+
+              <!-- Resultado -->
+              <div id="rst-result" class="reset-result">
+                <span id="rst-result-icon" style="font-size:18px;flex-shrink:0"></span>
+                <div id="rst-result-texto"></div>
+              </div>
+
+              <!-- Botão de execução -->
+              <button
+                id="rst-btn-executar"
+                class="btn btn-danger"
+                style="width:100%;display:none"
+                onclick="rstExecutar()"
+                disabled>
+                🗑 Zerar dados selecionados
+              </button>
+
+              <div class="reset-aviso reset-aviso-info" style="margin-top:16px">
+                <span class="reset-aviso-icon">💡</span>
+                <div style="font-size:11.5px">
+                  <strong>O que NÃO é afetado:</strong> configurações de WhatsApp, e-mail,
+                  analisador, Softexpert, templates, token público, usuários, empresas e auditoria.
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Criar / Editar Empresa ─────────────────────────────────────────── -->
+<div id="emp-modal" class="modal-overlay d-none">
+  <div class="modal" style="width:min(660px,95vw)">
+    <div class="modal-header">
+      <span class="modal-title" id="emp-modal-title">Nova Empresa</span>
+      <button class="modal-close" onclick="empFecharModal()">✕</button>
+    </div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Razão Social <span style="color:#dc2626">*</span></label>
+        <input id="emp-f-razao" type="text" class="form-control" placeholder="Nome da empresa ou produtor rural">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CPF / CNPJ <span style="color:#dc2626">*</span></label>
+        <input id="emp-f-doc" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00"
+               oninput="maskDoc(this)" inputmode="numeric" maxlength="18">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Telefone</label>
+        <input id="emp-f-tel" type="text" class="form-control" placeholder="(00) 00000-0000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input id="emp-f-email" type="email" class="form-control" placeholder="contato@empresa.com.br">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Site</label>
+        <input id="emp-f-site" type="text" class="form-control" placeholder="https://empresa.com.br">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Endereço</label>
+        <input id="emp-f-end" type="text" class="form-control" placeholder="Rua, número, cidade — UF">
+      </div>
+    </div>
+    <div id="emp-form-error" class="login-error" style="display:none;margin-bottom:12px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="empFecharModal()">Cancelar</button>
+      <button class="btn btn-primary" id="emp-btn-salvar" onclick="empSalvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Criar / Editar Usuário ─────────────────────────────────────────── -->
+<div id="usu-modal" class="modal-overlay d-none">
+  <div class="modal" style="width:min(680px,95vw)">
+    <div class="modal-header">
+      <span class="modal-title" id="usu-modal-title">Novo Usuário</span>
+      <button class="modal-close" onclick="usuFecharModal()">✕</button>
+    </div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
+        <input id="usu-f-nome" type="text" class="form-control" placeholder="Nome do usuário">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Usuário (login) <span style="color:#dc2626">*</span></label>
+        <input id="usu-f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
+        <input id="usu-f-celular" type="text" class="form-control" placeholder="(00) 00000-0000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail <span style="color:#dc2626">*</span></label>
+        <input id="usu-f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
+        <select id="usu-f-role" class="form-control" onchange="usuOnRoleChange()">
+          <option value="usuario">Usuário</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="form-group" id="usu-grp-ativo" style="display:none">
+        <label class="form-label">Status</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-md);margin-top:10px">
+          <input type="checkbox" id="usu-f-ativo" style="width:15px;height:15px"> Usuário ativo
+        </label>
+      </div>
+    </div>
+    <div id="usu-grp-senha-novo" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
+        <div class="pass-wrap">
+          <input id="usu-f-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+          <button type="button" class="pass-toggle" onclick="toggleSenha('usu-f-senha')" title="Mostrar/ocultar">👁</button>
+        </div>
+        <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+      </div>
+    </div>
+    <div id="usu-grp-senha-edit" class="senha-edit-box" style="display:none">
+      <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
+      <div class="pass-wrap" style="margin-top:6px">
+        <input id="usu-f-senha-edit" type="password" class="form-control" placeholder="Nova senha — deixe em branco para manter" autocomplete="new-password">
+        <button type="button" class="pass-toggle" onclick="toggleSenha('usu-f-senha-edit')" title="Mostrar/ocultar">👁</button>
+      </div>
+      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Acesso às Empresas</label>
+      <div class="empresas-grid" id="usu-empresas-grid">
+        <span class="hint" style="padding:8px">Carregando empresas...</span>
+      </div>
+      <div class="hint" id="usu-hint-empresas">Selecione as empresas que este usuário poderá acessar.</div>
+    </div>
+    <div id="usu-form-error" class="login-error" style="display:none;margin-bottom:0"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="usuFecharModal()">Cancelar</button>
+      <button class="btn btn-primary" id="usu-btn-salvar" onclick="usuSalvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Alterar Senha Usuário ───────────────────────────────────────────── -->
+<div id="usu-modal-senha" class="modal-overlay d-none">
+  <div class="modal-sm">
+    <div class="modal-header">
+      <span class="modal-title" id="usu-ms-titulo">Alterar Senha</span>
+      <button class="modal-close" onclick="usuFecharModalSenha()">✕</button>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Nova senha <span style="color:#dc2626">*</span></label>
+      <div class="pass-wrap">
+        <input id="usu-ms-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+        <button type="button" class="pass-toggle" onclick="toggleSenha('usu-ms-senha')" title="Mostrar/ocultar">👁</button>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label class="form-label">Confirmar nova senha <span style="color:#dc2626">*</span></label>
+      <div class="pass-wrap">
+        <input id="usu-ms-confirmar" type="password" class="form-control" placeholder="Repita a nova senha" autocomplete="new-password">
+        <button type="button" class="pass-toggle" onclick="toggleSenha('usu-ms-confirmar')" title="Mostrar/ocultar">👁</button>
+      </div>
+      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+    </div>
+    <div id="usu-ms-error" class="login-error" style="display:none;margin-bottom:12px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="usuFecharModalSenha()">Cancelar</button>
+      <button class="btn btn-primary" id="usu-ms-btn" onclick="usuSalvarSenha()">Salvar Senha</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+
+// ── Utilitários compartilhados ───────────────────────────────────────────────
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toggleSenha(id) {
+  const input = document.getElementById(id);
+  if (input) input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+// ── Navegação entre abas ─────────────────────────────────────────────────────
+const _admCarregado = new Set();
+
+function mudarAbaAdmin(aba, btn) {
+  document.querySelectorAll('.adm-tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('[id^="adm-btn-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById('adm-tab-' + aba).classList.add('active');
+  btn.classList.add('active');
+  if (!_admCarregado.has(aba)) {
+    _admCarregado.add(aba);
+    if      (aba === 'usuarios')  usuCarregar();
+    else if (aba === 'seguranca') segCarregarConfig();
+    else if (aba === 'auditoria') audCarregar();
+    else if (aba === 'reset')     rstInicializar();
+  }
+}
+
+// ── Empresas ─────────────────────────────────────────────────────────────────
+let _empLista  = [];
+let _empEditId = null;
+
+function maskDoc(input) {
+  let v = input.value.replace(/\D/g, '').substring(0, 14);
+  if (v.length <= 11) {
+    v = v.replace(/(\d{3})(\d)/,       '$1.$2');
+    v = v.replace(/(\d{3})(\d)/,       '$1.$2');
+    v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  } else {
+    v = v.replace(/(\d{2})(\d)/,       '$1.$2');
+    v = v.replace(/(\d{3})(\d)/,       '$1.$2');
+    v = v.replace(/(\d{3})(\d)/,       '$1/$2');
+    v = v.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+  input.value = v;
+}
+
+function formatarDoc(doc) {
+  if (!doc) return '';
+  const v = String(doc).replace(/\D/g, '');
+  if (v.length <= 11) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+  return v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
+}
+
+function soNumeros(str) { return String(str || '').replace(/\D/g, ''); }
+
+async function empCarregar() {
+  try {
+    const res = await fetch('/api/empresas');
+    _empLista  = await res.json();
+    empRenderizar();
+  } catch (_) {
+    document.getElementById('emp-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar empresas.</td></tr>';
+  }
+}
+
+function empRenderizar() {
+  const busca    = document.getElementById('emp-busca').value.toLowerCase();
+  const filtrado = _empLista.filter(e =>
+    e.razao_social.toLowerCase().includes(busca) ||
+    (e.documento || '').toLowerCase().includes(busca) ||
+    (e.email     || '').toLowerCase().includes(busca)
+  );
+  const tbody = document.getElementById('emp-tbody');
+  const empty = document.getElementById('emp-empty');
+  if (!filtrado.length) {
+    tbody.innerHTML = '';
+    empty.classList.remove('d-none');
+    return;
+  }
+  empty.classList.add('d-none');
+  tbody.innerHTML = filtrado.map(e => `
+    <tr>
+      <td style="color:var(--text-lo);font-size:12px">${e.id}</td>
+      <td><strong style="color:var(--text-hi)">${esc(e.razao_social)}</strong>
+          ${e.site ? `<br><a href="${esc(e.site)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">${esc(e.site)}</a>` : ''}
+      </td>
+      <td class="doc-col">${esc(formatarDoc(e.documento)) || '<span style="color:var(--text-lo)">—</span>'}</td>
+      <td>${esc(e.telefone) || '<span style="color:var(--text-lo)">—</span>'}</td>
+      <td>${esc(e.email)    || '<span style="color:var(--text-lo)">—</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn-icon" onclick="empEditar(${e.id})" title="Editar">✏️</button>
+        <button class="btn-icon" onclick="empConfirmarExcluir(${e.id}, '${esc(e.razao_social)}')" title="Excluir" style="color:#dc2626">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function empFiltrar() { empRenderizar(); }
+
+function empAbrirModal(empresa = null) {
+  _empEditId = empresa?.id ?? null;
+  document.getElementById('emp-modal-title').textContent = empresa ? 'Editar Empresa' : 'Nova Empresa';
+  document.getElementById('emp-f-razao').value = empresa?.razao_social ?? '';
+  document.getElementById('emp-f-doc').value   = formatarDoc(empresa?.documento ?? '');
+  document.getElementById('emp-f-tel').value   = empresa?.telefone     ?? '';
+  document.getElementById('emp-f-email').value = empresa?.email        ?? '';
+  document.getElementById('emp-f-site').value  = empresa?.site         ?? '';
+  document.getElementById('emp-f-end').value   = empresa?.endereco     ?? '';
+  document.getElementById('emp-form-error').style.display = 'none';
+  document.getElementById('emp-modal').classList.remove('d-none');
+  setTimeout(() => document.getElementById('emp-f-razao').focus(), 50);
+}
+
+function empFecharModal() {
+  document.getElementById('emp-modal').classList.add('d-none');
+  _empEditId = null;
+}
+
+function empEditar(id) {
+  const e = _empLista.find(x => x.id === id);
+  if (e) empAbrirModal(e);
+}
+
+async function empConfirmarExcluir(id, nome) {
+  if (!confirm(`Excluir a empresa "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+  const res = await fetch(`/api/empresas/${id}`, { method: 'DELETE' });
+  if (res.ok) { empCarregar(); }
+  else {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Erro ao excluir empresa.');
+  }
+}
+
+async function empSalvar() {
+  const errEl = document.getElementById('emp-form-error');
+  errEl.style.display = 'none';
+  const razao = document.getElementById('emp-f-razao').value.trim();
+  const doc   = soNumeros(document.getElementById('emp-f-doc').value);
+  if (!razao) {
+    errEl.textContent = 'Razão Social é obrigatória.';
+    errEl.style.display = 'block';
+    document.getElementById('emp-f-razao').focus();
+    return;
+  }
+  if (!doc) {
+    errEl.textContent = 'CPF / CNPJ é obrigatório.';
+    errEl.style.display = 'block';
+    document.getElementById('emp-f-doc').focus();
+    return;
+  }
+  const dados = {
+    razao_social: razao,
+    documento:    doc,
+    telefone:     document.getElementById('emp-f-tel').value.trim(),
+    email:        document.getElementById('emp-f-email').value.trim(),
+    site:         document.getElementById('emp-f-site').value.trim(),
+    endereco:     document.getElementById('emp-f-end').value.trim(),
+  };
+  const btn = document.getElementById('emp-btn-salvar');
+  btn.textContent = 'Salvando...';
+  btn.disabled    = true;
+  try {
+    const url    = _empEditId ? `/api/empresas/${_empEditId}` : '/api/empresas';
+    const method = _empEditId ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
+    });
+    if (res.ok) { empFecharModal(); empCarregar(); }
+    else {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Erro ao salvar empresa.';
+      errEl.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = 'Salvar';
+    btn.disabled    = false;
+  }
+}
+
+// ── Usuários ─────────────────────────────────────────────────────────────────
+let _usuLista    = [];
+let _usuEmpresas = [];
+let _usuEditId   = null;
+let _usuSenhaId  = null;
+let _usuMeuId    = null;
+
+async function usuCarregar() {
+  try {
+    const [resU, resE, resMe] = await Promise.all([
+      fetch('/api/usuarios'),
+      fetch('/api/empresas'),
+      fetch('/api/me'),
+    ]);
+    _usuLista    = await resU.json();
+    _usuEmpresas = await resE.json();
+    const me     = await resMe.json();
+    _usuMeuId    = me.user_id || null;
+    usuRenderizar();
+  } catch (_) {
+    document.getElementById('usu-tbody').innerHTML =
+      '<tr><td colspan="7" style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar dados.</td></tr>';
+  }
+}
+
+function usuRenderizar() {
+  const busca    = document.getElementById('usu-busca').value.toLowerCase();
+  const filtrado = _usuLista.filter(u =>
+    u.nome.toLowerCase().includes(busca) ||
+    u.usuario.toLowerCase().includes(busca) ||
+    (u.email || '').toLowerCase().includes(busca)
+  );
+  const tbody = document.getElementById('usu-tbody');
+  const empty = document.getElementById('usu-empty');
+  if (!filtrado.length) {
+    tbody.innerHTML = '';
+    empty.classList.remove('d-none');
+    return;
+  }
+  empty.classList.add('d-none');
+  tbody.innerHTML = filtrado.map(u => {
+    const empresasLabel = u.empresas === 'all'
+      ? '<span style="font-size:11px;color:var(--accent)">Todas</span>'
+      : (Array.isArray(u.empresas) && u.empresas.length
+          ? `<span style="font-size:11px;color:var(--text-md)">${u.empresas.length} empresa(s)</span>`
+          : '<span style="font-size:11px;color:var(--text-lo)">Nenhuma</span>');
+    const ehEuMesmo  = u.id === _usuMeuId;
+    const btnExcluir = ehEuMesmo
+      ? `<button class="btn-icon" disabled title="Não é possível excluir o usuário logado" style="opacity:.35;cursor:not-allowed">🗑</button>`
+      : `<button class="btn-icon" onclick="usuConfirmarExcluir(${u.id}, '${esc(u.nome)}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+    return `
+      <tr>
+        <td style="color:var(--text-lo);font-size:12px">${u.id}</td>
+        <td>
+          <strong style="color:var(--text-hi)">${esc(u.nome)}</strong>
+          ${u.email ? `<br><span style="font-size:11px;color:var(--text-lo)">${esc(u.email)}</span>` : ''}
+        </td>
+        <td style="font-family:monospace;font-size:12px">${esc(u.usuario)}</td>
+        <td>${esc(u.celular) || '<span style="color:var(--text-lo)">—</span>'}</td>
+        <td>
+          <span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">
+            ${u.role === 'admin' ? 'Admin' : 'Usuário'}
+          </span>
+          <br><span style="font-size:10px;margin-top:2px;display:inline-block">${empresasLabel}</span>
+        </td>
+        <td><span class="badge ${u.ativo ? 'badge-ativo' : 'badge-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn-icon" onclick="usuEditar(${u.id})" title="Editar dados">✏️</button>
+          <button class="btn-icon" onclick="usuAbrirModalSenha(${u.id}, '${esc(u.nome)}')" title="Alterar senha">🔑</button>
+          ${btnExcluir}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function usuFiltrar() { usuRenderizar(); }
+
+function usuAbrirModal(usuario = null) {
+  _usuEditId       = usuario?.id ?? null;
+  const isEdit     = !!_usuEditId;
+  document.getElementById('usu-modal-title').textContent   = isEdit ? 'Editar Usuário' : 'Novo Usuário';
+  document.getElementById('usu-f-nome').value    = usuario?.nome    ?? '';
+  document.getElementById('usu-f-usuario').value = usuario?.usuario ?? '';
+  document.getElementById('usu-f-celular').value = usuario?.celular ?? '';
+  document.getElementById('usu-f-email').value   = usuario?.email   ?? '';
+  document.getElementById('usu-f-role').value    = usuario?.role    ?? 'usuario';
+  document.getElementById('usu-f-ativo').checked = usuario?.ativo   ?? true;
+  document.getElementById('usu-grp-ativo').style.display      = isEdit ? 'block' : 'none';
+  document.getElementById('usu-grp-senha-novo').style.display = isEdit ? 'none'  : 'block';
+  document.getElementById('usu-grp-senha-edit').style.display = isEdit ? 'block' : 'none';
+  document.getElementById('usu-f-senha').value      = '';
+  document.getElementById('usu-f-senha-edit').value = '';
+  document.getElementById('usu-form-error').style.display = 'none';
+  usuRenderEmpresasGrid(usuario?.empresas ?? []);
+  usuOnRoleChange();
+  document.getElementById('usu-modal').classList.remove('d-none');
+  setTimeout(() => document.getElementById('usu-f-nome').focus(), 50);
+}
+
+function usuFecharModal() {
+  document.getElementById('usu-modal').classList.add('d-none');
+  _usuEditId = null;
+}
+
+function usuEditar(id) {
+  const u = _usuLista.find(x => x.id === id);
+  if (u) usuAbrirModal(u);
+}
+
+async function usuConfirmarExcluir(id, nome) {
+  if (!confirm(`Excluir o usuário "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+  const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+  if (res.ok) { usuCarregar(); }
+  else {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Erro ao excluir usuário.');
+  }
+}
+
+function usuAbrirModalSenha(id, nome) {
+  _usuSenhaId = id;
+  document.getElementById('usu-ms-titulo').textContent = `Alterar Senha — ${nome}`;
+  document.getElementById('usu-ms-senha').value     = '';
+  document.getElementById('usu-ms-confirmar').value = '';
+  document.getElementById('usu-ms-error').style.display = 'none';
+  document.getElementById('usu-modal-senha').classList.remove('d-none');
+  setTimeout(() => document.getElementById('usu-ms-senha').focus(), 50);
+}
+
+function usuFecharModalSenha() {
+  document.getElementById('usu-modal-senha').classList.add('d-none');
+  _usuSenhaId = null;
+}
+
+async function usuSalvarSenha() {
+  const errEl    = document.getElementById('usu-ms-error');
+  const senha    = document.getElementById('usu-ms-senha').value;
+  const confirmar = document.getElementById('usu-ms-confirmar').value;
+  errEl.style.display = 'none';
+  if (!senha) {
+    errEl.textContent = 'Digite a nova senha.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (senha !== confirmar) {
+    errEl.textContent = 'As senhas não conferem.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('usu-ms-btn');
+  btn.textContent = 'Salvando...';
+  btn.disabled    = true;
+  try {
+    const res = await fetch(`/api/usuarios/${_usuSenhaId}/senha`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senha, confirmar }),
+    });
+    if (res.ok) { usuFecharModalSenha(); }
+    else {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Erro ao alterar senha.';
+      errEl.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = 'Salvar Senha';
+    btn.disabled    = false;
+  }
+}
+
+function usuRenderEmpresasGrid(selecionadas) {
+  const grid = document.getElementById('usu-empresas-grid');
+  if (!_usuEmpresas.length) {
+    grid.innerHTML = '<span style="font-size:12px;color:var(--text-lo);padding:8px;font-style:italic">Nenhuma empresa cadastrada ainda.</span>';
+    return;
+  }
+  const ids = selecionadas === 'all'
+    ? _usuEmpresas.map(e => e.id)
+    : (Array.isArray(selecionadas) ? selecionadas : []);
+  const sorted = [..._usuEmpresas].sort((a, b) => (a.razao_social || '').localeCompare(b.razao_social || '', 'pt-BR'));
+  grid.innerHTML = sorted.map(e => `
+    <label class="empresa-check" id="usu-lbl-emp-${e.id}">
+      <input type="checkbox" id="usu-chk-emp-${e.id}" value="${e.id}" ${ids.includes(e.id) ? 'checked' : ''}>
+      <span>${esc(e.razao_social)}</span>
+      ${e.documento ? `<span style="font-size:11px;color:var(--text-lo);margin-left:auto;font-family:monospace">${esc(e.documento)}</span>` : ''}
+    </label>
+  `).join('');
+}
+
+function usuOnRoleChange() {
+  const isAdmin = document.getElementById('usu-f-role').value === 'admin';
+  const grid    = document.getElementById('usu-empresas-grid');
+  const hint    = document.getElementById('usu-hint-empresas');
+  grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.checked  = isAdmin ? true : cb.checked;
+    cb.disabled = isAdmin;
+    cb.closest('.empresa-check')?.classList.toggle('disabled', isAdmin);
+  });
+  hint.textContent = isAdmin
+    ? 'Administradores têm acesso irrestrito a todas as empresas.'
+    : 'Selecione as empresas que este usuário poderá acessar.';
+}
+
+function usuGetEmpresasSelecionadas() {
+  if (document.getElementById('usu-f-role').value === 'admin') return 'all';
+  return _usuEmpresas
+    .filter(e => document.getElementById(`usu-chk-emp-${e.id}`)?.checked)
+    .map(e => e.id);
+}
+
+async function usuSalvar() {
+  const errEl  = document.getElementById('usu-form-error');
+  errEl.style.display = 'none';
+  const isEdit  = !!_usuEditId;
+  const nome    = document.getElementById('usu-f-nome').value.trim();
+  const usuario = document.getElementById('usu-f-usuario').value.trim();
+  const celular = document.getElementById('usu-f-celular').value.trim();
+  const email   = document.getElementById('usu-f-email').value.trim();
+  const senha   = isEdit
+    ? document.getElementById('usu-f-senha-edit').value
+    : document.getElementById('usu-f-senha').value;
+  if (!nome)    { errEl.textContent = 'Nome é obrigatório.';    errEl.style.display = 'block'; return; }
+  if (!usuario) { errEl.textContent = 'Usuário é obrigatório.'; errEl.style.display = 'block'; return; }
+  if (!celular) { errEl.textContent = 'Celular é obrigatório.'; errEl.style.display = 'block'; return; }
+  if (!email)   { errEl.textContent = 'E-mail é obrigatório.';  errEl.style.display = 'block'; return; }
+  if (!isEdit && !senha) {
+    errEl.textContent = 'Senha é obrigatória para novos usuários.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const dados = {
+    nome, usuario, celular, email,
+    role:     document.getElementById('usu-f-role').value,
+    empresas: usuGetEmpresasSelecionadas(),
+    ativo:    document.getElementById('usu-f-ativo').checked,
+  };
+  if (senha) dados.senha = senha;
+  const btn = document.getElementById('usu-btn-salvar');
+  btn.textContent = 'Salvando...';
+  btn.disabled    = true;
+  try {
+    const url    = isEdit ? `/api/usuarios/${_usuEditId}` : '/api/usuarios';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
+    });
+    if (res.ok) { usuFecharModal(); usuCarregar(); }
+    else {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Erro ao salvar usuário.';
+      errEl.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = 'Salvar';
+    btn.disabled    = false;
+  }
+}
+
+// ── Segurança ────────────────────────────────────────────────────────────────
+async function segCarregarConfig() {
+  try {
+    const res = await fetch('/api/seguranca');
+    const cfg = await res.json();
+    document.getElementById('seg-cfg-sessao').value     = cfg.sessao_timeout_horas;
+    document.getElementById('seg-cfg-tentativas').value = cfg.login_max_tentativas;
+    document.getElementById('seg-cfg-bloqueio').value   = cfg.login_bloqueio_min;
+    document.getElementById('seg-cfg-senha').value      = cfg.senha_nivel_minimo;
+  } catch (_) {
+    document.getElementById('seg-save-error').textContent = 'Erro ao carregar configurações.';
+    document.getElementById('seg-save-error').style.display = 'block';
+  }
+}
+
+async function segSalvar() {
+  const errEl = document.getElementById('seg-save-error');
+  const msgEl = document.getElementById('seg-save-msg');
+  errEl.style.display = 'none';
+  msgEl.style.display = 'none';
+  const dados = {
+    sessao_timeout_horas: document.getElementById('seg-cfg-sessao').value,
+    login_max_tentativas: document.getElementById('seg-cfg-tentativas').value,
+    login_bloqueio_min:   document.getElementById('seg-cfg-bloqueio').value,
+    senha_nivel_minimo:   document.getElementById('seg-cfg-senha').value,
+  };
+  const btn = document.getElementById('seg-btn-salvar');
+  btn.textContent = 'Salvando...';
+  btn.disabled    = true;
+  try {
+    const res = await fetch('/api/seguranca', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
+    });
+    if (res.ok) {
+      msgEl.style.display = 'inline';
+      setTimeout(() => msgEl.style.display = 'none', 3000);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Erro ao salvar.';
+      errEl.style.display = 'block';
+    }
+  } finally {
+    btn.textContent = 'Salvar Configurações';
+    btn.disabled    = false;
+  }
+}
+
+// ── Auditoria ────────────────────────────────────────────────────────────────
+async function audCarregar() {
+  const params = new URLSearchParams({
+    limite:   200,
+    usuario:  document.getElementById('aud-f-usuario').value,
+    acao:     document.getElementById('aud-f-acao').value,
+    data_ini: document.getElementById('aud-f-data-ini').value,
+    data_fim: document.getElementById('aud-f-data-fim').value,
+  });
+  try {
+    const res       = await fetch(`/api/seguranca/auditoria?${params}`);
+    const registros = await res.json();
+    audRenderizar(registros);
+  } catch (_) {
+    document.getElementById('aud-tbody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:30px">Erro ao carregar auditoria.</td></tr>';
+  }
+}
+
+function audRenderizar(registros) {
+  const tbody = document.getElementById('aud-tbody');
+  const empty = document.getElementById('aud-empty');
+  if (!registros.length) {
+    tbody.innerHTML = '';
+    empty.classList.remove('d-none');
+    return;
+  }
+  empty.classList.add('d-none');
+  tbody.innerHTML = registros.map(e => {
+    const dt  = new Date(e.ts).toLocaleString('pt-BR');
+    const cls = `acao-${e.acao}`;
+    return `
+      <tr>
+        <td style="font-size:12px;color:var(--text-md);white-space:nowrap">${dt}</td>
+        <td style="font-weight:600;color:var(--text-hi)">${esc(e.usuario)}</td>
+        <td><span class="acao-badge ${cls}">${esc(e.acao)}</span></td>
+        <td style="font-family:monospace;font-size:12px">${esc(e.ip)}</td>
+        <td style="font-size:12px">${e.empresa_id ? `#${e.empresa_id}` : '<span style="color:var(--text-lo)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--text-md)">${esc(e.detalhes)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ── Fechar modais ao clicar no backdrop ──────────────────────────────────────
+document.getElementById('emp-modal').addEventListener('click', function(e) {
+  if (e.target === this) empFecharModal();
+});
+document.getElementById('usu-modal').addEventListener('click', function(e) {
+  if (e.target === this) usuFecharModal();
+});
+document.getElementById('usu-modal-senha').addEventListener('click', function(e) {
+  if (e.target === this) usuFecharModalSenha();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  _admCarregado.add('empresas');
+  empCarregar();
+});
+
+// ── Reset de Dados ────────────────────────────────────────────────────────────
+const RST_CASCADE = {
+  funcoes:    ['vagas', 'vaga_candidaturas'],
+  vagas:      ['vaga_candidaturas'],
+  curriculos: ['vaga_candidaturas'],
+};
+const RST_LABELS = {
+  curriculos:        'Currículos recebidos',
+  vaga_candidaturas: 'Candidaturas do PS',
+  vagas:             'Vagas',
+  funcoes:           'Funções',
+  equivalencias:     'Equivalências',
+};
+const RST_ICONES = {
+  curriculos:        '📄',
+  vaga_candidaturas: '📋',
+  vagas:             '💼',
+  funcoes:           '🏷',
+  equivalencias:     '🔀',
+};
+
+let _rstContagens = {};
+let _rstSelecionadas = new Set();
+
+async function rstCarregarContagens() {
+  const eid = document.getElementById('rst-empresa').value;
+  _rstSelecionadas.clear();
+  rstAtualizarCards();
+  rstAtualizarSumario();
+
+  if (!eid) {
+    document.querySelectorAll('#rst-cards .tabela-card').forEach(c => c.classList.add('disabled'));
+    document.querySelectorAll('#rst-cards .tabela-card-count').forEach(c => c.innerHTML = '— registros');
+    return;
+  }
+  document.querySelectorAll('#rst-cards .tabela-card').forEach(c => c.classList.remove('disabled'));
+
+  try {
+    const r = await fetch(`/api/admin/reset-preview/${eid}`);
+    if (!r.ok) {
+      if (r.status === 401) { location.href = '/login.html'; return; }
+      const err = await r.json().catch(() => ({}));
+      alert(err.error || 'Erro ao carregar contagens.');
+      return;
+    }
+    _rstContagens = await r.json();
+    const nomes = { curriculos: 'curriculos', vaga_candidaturas: 'vaga_candidaturas', vagas: 'vagas', funcoes: 'funcoes', equivalencias: 'equivalencias' };
+    for (const [key] of Object.entries(nomes)) {
+      const el = document.getElementById(`rst-count-${key}`);
+      if (el) {
+        const n = _rstContagens[key] ?? 0;
+        el.innerHTML = `<span>${n}</span> registro${n !== 1 ? 's' : ''}`;
+      }
+    }
+  } catch (e) {
+    alert('Erro de conexão: ' + e.message);
+  }
+}
+
+function rstToggle(tabela, card) {
+  const eid = document.getElementById('rst-empresa').value;
+  if (!eid) return;
+
+  const chk = document.getElementById(`rst-chk-${tabela}`);
+  chk.checked = !chk.checked;
+
+  if (chk.checked) {
+    _rstSelecionadas.add(tabela);
+  } else {
+    _rstSelecionadas.delete(tabela);
+    // Remove cascades que dependiam exclusivamente desta tabela
+    rstLimparCascadesOrfas();
+  }
+  rstAtualizarCards();
+  rstAtualizarSumario();
+  // Limpa resultado anterior ao mudar seleção
+  document.getElementById('rst-result').className = 'reset-result';
+  document.getElementById('rst-confirm-input').value = '';
+  rstValidarConfirmacao();
+}
+
+function rstLimparCascadesOrfas() {
+  // Recalcula quais cascades ainda são necessários
+  const cascadesNecessarios = new Set();
+  for (const t of _rstSelecionadas) {
+    (RST_CASCADE[t] || []).forEach(c => cascadesNecessarios.add(c));
+  }
+  // Remove seleções de cascade que não têm mais pai selecionado
+  for (const t of [..._rstSelecionadas]) {
+    const ehCascade = Object.values(RST_CASCADE).some(arr => arr.includes(t));
+    if (ehCascade && !cascadesNecessarios.has(t)) {
+      _rstSelecionadas.delete(t);
+      const chk = document.getElementById(`rst-chk-${t}`);
+      if (chk) chk.checked = false;
+    }
+  }
+}
+
+function rstAtualizarCards() {
+  // Calcula cascades ativos
+  const cascadesAtivos = new Set();
+  for (const t of _rstSelecionadas) {
+    (RST_CASCADE[t] || []).forEach(c => cascadesAtivos.add(c));
+  }
+
+  for (const tabela of Object.keys(RST_LABELS)) {
+    const card = document.getElementById(`rst-card-${tabela}`);
+    const chk  = document.getElementById(`rst-chk-${tabela}`);
+    if (!card) continue;
+
+    const selecionada = _rstSelecionadas.has(tabela);
+    const cascade     = !selecionada && cascadesAtivos.has(tabela);
+
+    card.classList.toggle('checked',  selecionada);
+    card.classList.toggle('cascade',  cascade);
+    chk.checked = selecionada || cascade;
+    chk.disabled = cascade;
+
+    if (cascade) {
+      card.style.pointerEvents = 'none';
+      card.style.opacity = '1';
+    } else {
+      card.style.pointerEvents = '';
+      card.style.opacity = '';
+    }
+  }
+}
+
+function rstAtualizarSumario() {
+  const sumario = document.getElementById('rst-sumario');
+  const confirmWrap = document.getElementById('rst-confirm-wrap');
+  const btnExecutar = document.getElementById('rst-btn-executar');
+  const avioCascade = document.getElementById('rst-aviso-cascade');
+
+  // Calcula total a zerar (selecionados + cascades)
+  const cascadesAtivos = new Set();
+  for (const t of _rstSelecionadas) {
+    (RST_CASCADE[t] || []).forEach(c => cascadesAtivos.add(c));
+  }
+  const todasAfetadas = new Set([..._rstSelecionadas, ...cascadesAtivos]);
+
+  if (!todasAfetadas.size) {
+    sumario.innerHTML = '<div class="reset-sumario-empty">Nenhuma tabela selecionada.</div>';
+    confirmWrap.style.display = 'none';
+    btnExecutar.style.display = 'none';
+    avioCascade.style.display = 'none';
+    return;
+  }
+
+  let html = '';
+  for (const t of todasAfetadas) {
+    const n    = _rstContagens[t] ?? '?';
+    const isCascade = !_rstSelecionadas.has(t) && cascadesAtivos.has(t);
+    html += `
+      <div class="reset-sumario-item">
+        <span>${RST_ICONES[t]}</span>
+        <span style="flex:1">${RST_LABELS[t]}</span>
+        <span style="font-weight:700;color:#dc2626">${n} reg.</span>
+        ${isCascade ? '<span class="reset-sumario-cascade">cascata</span>' : ''}
+      </div>`;
+  }
+  sumario.innerHTML = html;
+
+  const temCascade = cascadesAtivos.size > 0;
+  avioCascade.style.display = temCascade ? 'flex' : 'none';
+  if (temCascade) {
+    const nomes = [...cascadesAtivos].map(c => RST_LABELS[c]).join(', ');
+    document.getElementById('rst-aviso-cascade-texto').innerHTML =
+      `Serão zeradas automaticamente em cascata: <strong>${nomes}</strong>.`;
+  }
+
+  confirmWrap.style.display = 'block';
+  btnExecutar.style.display = 'block';
+  rstValidarConfirmacao();
+}
+
+function rstValidarConfirmacao() {
+  const btn = document.getElementById('rst-btn-executar');
+  const val = (document.getElementById('rst-confirm-input')?.value || '').trim();
+  btn.disabled = (val !== 'CONFIRMAR' || !_rstSelecionadas.size);
+}
+
+async function rstExecutar() {
+  const eid = document.getElementById('rst-empresa').value;
+  if (!eid || !_rstSelecionadas.size) return;
+
+  const btn = document.getElementById('rst-btn-executar');
+  btn.disabled = true;
+  btn.textContent = '⏳ Zerando…';
+
+  const result = document.getElementById('rst-result');
+  result.className = 'reset-result';
+
+  try {
+    const r = await fetch('/api/admin/reset-dados', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empresa_id: Number(eid), tabelas: [..._rstSelecionadas] }),
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      result.className = 'reset-result error';
+      document.getElementById('rst-result-icon').textContent = '❌';
+      document.getElementById('rst-result-texto').innerHTML = `<strong>Erro:</strong> ${data.error || 'Falha inesperada.'}`;
+    } else {
+      const nomes = (data.zeradas || []).map(t => RST_LABELS[t]).join(', ');
+      result.className = 'reset-result success';
+      document.getElementById('rst-result-icon').textContent = '✅';
+      document.getElementById('rst-result-texto').innerHTML =
+        `<strong>Concluído!</strong> Zeradas com sucesso: <strong>${nomes}</strong>.`;
+
+      // Reseta seleções e recarrega contagens
+      _rstSelecionadas.clear();
+      document.querySelectorAll('#rst-cards input[type=checkbox]').forEach(c => { c.checked = false; c.disabled = false; });
+      document.querySelectorAll('#rst-cards .tabela-card').forEach(c => c.classList.remove('checked','cascade'));
+      document.getElementById('rst-confirm-input').value = '';
+      rstAtualizarSumario();
+      await rstCarregarContagens();
+    }
+  } catch (e) {
+    result.className = 'reset-result error';
+    document.getElementById('rst-result-icon').textContent = '❌';
+    document.getElementById('rst-result-texto').innerHTML = `<strong>Erro de conexão:</strong> ${e.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑 Zerar dados selecionados';
+    rstValidarConfirmacao();
+  }
+}
+
+// Popula dropdown de empresas quando a aba é aberta
+const _rstCarregado = { ok: false };
+async function rstInicializar() {
+  if (_rstCarregado.ok) return;
+  _rstCarregado.ok = true;
+  document.querySelectorAll('#rst-cards .tabela-card').forEach(c => c.classList.add('disabled'));
+
+  await window._iahubAuthReady;
+
+  if (window._iahubUser?.role !== 'admin') {
+    document.getElementById('adm-tab-reset').innerHTML = `
+      <div class="reset-aviso reset-aviso-danger" style="margin:24px">
+        <span class="reset-aviso-icon">🔒</span>
+        <div><strong>Acesso restrito.</strong> Apenas administradores podem utilizar o Reset de Dados.</div>
+      </div>`;
+    return;
+  }
+
+  fetch('/api/empresas').then(r => r.json()).then(empresas => {
+    const sel = document.getElementById('rst-empresa');
+    empresas.forEach(e => {
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      opt.textContent = e.razao_social;
+      sel.appendChild(opt);
+    });
+  }).catch(() => {});
+}
+</script>
+</body>
+</html>

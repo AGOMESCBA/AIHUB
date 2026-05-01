@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Empresas — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(660px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
+    .modal-close:hover { color:var(--text-hi); }
+    .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .search-bar    { position:relative; }
+    .search-bar input { padding-left:32px; }
+    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
+    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
+    .empty-state div { font-size:40px;margin-bottom:12px; }
+    td.doc-col     { font-family:monospace;font-size:12px;color:var(--text-md); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+    </div>
+    <div class="sidebar-footer">
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Configurador › Administração ›</span> Empresas</span>
+    </div>
+
+    <div class="page-content">
+      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+        <div class="search-bar" style="flex:1;max-width:340px">
+          <input type="text" id="busca" class="form-control" placeholder="Buscar empresa..." oninput="filtrar()">
+        </div>
+        <div class="ms-auto">
+          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Empresa</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table id="tabela">
+            <thead>
+              <tr>
+                <th style="width:50px">#</th>
+                <th>Razão Social</th>
+                <th>CPF / CNPJ</th>
+                <th>Telefone</th>
+                <th>E-mail</th>
+                <th style="text-align:right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div id="empty" class="empty-state d-none">
+          <div>🏢</div>
+          <strong style="color:var(--text-md)">Nenhuma empresa cadastrada</strong>
+          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Empresa</strong> para começar.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Criar / Editar ───────────────────────────────────────────────── -->
+<div id="modal" class="modal-overlay d-none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Nova Empresa</span>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Razão Social <span style="color:#dc2626">*</span></label>
+        <input id="f-razao" type="text" class="form-control" placeholder="Nome da empresa ou produtor rural">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CPF / CNPJ <span style="color:#dc2626">*</span></label>
+        <input id="f-doc" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00"
+               oninput="maskDoc(this)" inputmode="numeric" maxlength="18">
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Telefone</label>
+        <input id="f-tel" type="text" class="form-control" placeholder="(00) 00000-0000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input id="f-email" type="email" class="form-control" placeholder="contato@empresa.com.br">
+      </div>
+    </div>
+
+    <div class="form-row" style="margin-bottom:16px">
+      <div class="form-group">
+        <label class="form-label">Site</label>
+        <input id="f-site" type="text" class="form-control" placeholder="https://empresa.com.br">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Endereço</label>
+        <input id="f-end" type="text" class="form-control" placeholder="Rua, número, cidade — UF">
+      </div>
+    </div>
+
+    <div id="form-error" class="login-error" style="display:none;margin-bottom:12px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  let empresas = [];
+  let editId   = null;
+
+  // ── Máscara CPF / CNPJ ──────────────────────────────────────────────────────
+  function maskDoc(input) {
+    let v = input.value.replace(/\D/g, '').substring(0, 14);
+    if (v.length <= 11) {
+      v = v.replace(/(\d{3})(\d)/,       '$1.$2');
+      v = v.replace(/(\d{3})(\d)/,       '$1.$2');
+      v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else {
+      v = v.replace(/(\d{2})(\d)/,       '$1.$2');
+      v = v.replace(/(\d{3})(\d)/,       '$1.$2');
+      v = v.replace(/(\d{3})(\d)/,       '$1/$2');
+      v = v.replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+    }
+    input.value = v;
+  }
+
+  // Formata dígitos já salvos para exibir no campo
+  function formatarDoc(doc) {
+    if (!doc) return '';
+    const v = String(doc).replace(/\D/g, '');
+    if (v.length <= 11) {
+      return v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+    }
+    return v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
+  }
+
+  // Salva somente os números
+  function soNumeros(str) { return String(str || '').replace(/\D/g, ''); }
+
+  // ── Carregamento e renderização ─────────────────────────────────────────────
+  async function carregar() {
+    try {
+      const res = await fetch('/api/empresas');
+      empresas  = await res.json();
+      renderizar();
+    } catch (_) {
+      mostrarErroGlobal('Erro ao carregar empresas.');
+    }
+  }
+
+  function renderizar() {
+    const busca    = document.getElementById('busca').value.toLowerCase();
+    const filtrado = empresas.filter(e =>
+      e.razao_social.toLowerCase().includes(busca) ||
+      (e.documento || '').toLowerCase().includes(busca) ||
+      (e.email     || '').toLowerCase().includes(busca)
+    );
+
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty');
+
+    if (!filtrado.length) {
+      tbody.innerHTML = '';
+      empty.classList.remove('d-none');
+      return;
+    }
+
+    empty.classList.add('d-none');
+    tbody.innerHTML = filtrado.map(e => `
+      <tr>
+        <td style="color:var(--text-lo);font-size:12px">${e.id}</td>
+        <td><strong style="color:var(--text-hi)">${esc(e.razao_social)}</strong>
+            ${e.site ? `<br><a href="${esc(e.site)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">${esc(e.site)}</a>` : ''}
+        </td>
+        <td class="doc-col">${esc(formatarDoc(e.documento)) || '<span style="color:var(--text-lo)">—</span>'}</td>
+        <td>${esc(e.telefone) || '<span style="color:var(--text-lo)">—</span>'}</td>
+        <td>${esc(e.email)    || '<span style="color:var(--text-lo)">—</span>'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn-icon" onclick="editar(${e.id})" title="Editar">✏️</button>
+          <button class="btn-icon" onclick="confirmarExcluir(${e.id}, '${esc(e.razao_social)}')" title="Excluir" style="color:#dc2626">🗑</button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function filtrar() { renderizar(); }
+
+  function abrirModal(empresa = null) {
+    editId = empresa?.id ?? null;
+    document.getElementById('modal-title').textContent = empresa ? 'Editar Empresa' : 'Nova Empresa';
+    document.getElementById('f-razao').value = empresa?.razao_social ?? '';
+    document.getElementById('f-doc').value   = formatarDoc(empresa?.documento ?? '');
+    document.getElementById('f-tel').value   = empresa?.telefone     ?? '';
+    document.getElementById('f-email').value = empresa?.email        ?? '';
+    document.getElementById('f-site').value  = empresa?.site         ?? '';
+    document.getElementById('f-end').value   = empresa?.endereco     ?? '';
+    document.getElementById('form-error').style.display = 'none';
+    document.getElementById('modal').classList.remove('d-none');
+    setTimeout(() => document.getElementById('f-razao').focus(), 50);
+  }
+
+  function fecharModal() {
+    document.getElementById('modal').classList.add('d-none');
+    editId = null;
+  }
+
+  function editar(id) {
+    const e = empresas.find(x => x.id === id);
+    if (e) abrirModal(e);
+  }
+
+  async function confirmarExcluir(id, nome) {
+    if (!confirm(`Excluir a empresa "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+    const res = await fetch(`/api/empresas/${id}`, { method: 'DELETE' });
+    if (res.ok) { carregar(); }
+    else {
+      const err = await res.json().catch(() => ({}));
+      alert(err.error || 'Erro ao excluir empresa.');
+    }
+  }
+
+  async function salvar() {
+    const errEl = document.getElementById('form-error');
+    errEl.style.display = 'none';
+
+    const razao = document.getElementById('f-razao').value.trim();
+    const doc   = soNumeros(document.getElementById('f-doc').value);
+
+    if (!razao) {
+      errEl.textContent = 'Razão Social é obrigatória.';
+      errEl.style.display = 'block';
+      document.getElementById('f-razao').focus();
+      return;
+    }
+    if (!doc) {
+      errEl.textContent = 'CPF / CNPJ é obrigatório.';
+      errEl.style.display = 'block';
+      document.getElementById('f-doc').focus();
+      return;
+    }
+
+    const dados = {
+      razao_social: razao,
+      documento:    doc,   // somente dígitos
+      telefone:     document.getElementById('f-tel').value.trim(),
+      email:        document.getElementById('f-email').value.trim(),
+      site:         document.getElementById('f-site').value.trim(),
+      endereco:     document.getElementById('f-end').value.trim(),
+    };
+
+    const btn = document.getElementById('btn-salvar');
+    btn.textContent = 'Salvando...';
+    btn.disabled    = true;
+
+    try {
+      const url    = editId ? `/api/empresas/${editId}` : '/api/empresas';
+      const method = editId ? 'PUT' : 'POST';
+      const res    = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados),
+      });
+
+      if (res.ok) { fecharModal(); carregar(); }
+      else {
+        const err = await res.json().catch(() => ({}));
+        errEl.textContent = err.error || 'Erro ao salvar empresa.';
+        errEl.style.display = 'block';
+      }
+    } finally {
+      btn.textContent = 'Salvar';
+      btn.disabled    = false;
+    }
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function mostrarErroGlobal(msg) {
+    document.getElementById('tbody').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:40px">${msg}</td></tr>`;
+  }
+
+  document.getElementById('modal').addEventListener('click', function(e) {
+    if (e.target === this) fecharModal();
+  });
+
+  document.addEventListener('DOMContentLoaded', carregar);
+</script>
+</body>
+</html>

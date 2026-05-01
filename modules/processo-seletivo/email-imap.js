@@ -1,48 +1,18 @@
 const { ImapFlow } = require('imapflow');
+const crud         = require('../crud');
 const nodemailer   = require('nodemailer');
 const pdfParse     = require('pdf-parse/lib/pdf-parse.js');
 const fs           = require('fs');
+const ia           = require('../ia');
 
 // Tenta carregar TNEF (winmail.dat do Outlook) — opcional
 let tnef = null;
 try { tnef = require('node-tnef'); } catch {}
 
-// Formato com ID:  [1] - [Analista Softexpert] - [Vanusa Cardoso]
-// Formato sem ID:  [Analista Softexpert] - [Vanusa Cardoso]
-// O ] final é opcional para aceitar assuntos truncados pelo cliente de e-mail
 const REGEX_COM_ID  = /^\[(\d+)\]\s*-\s*\[([^\]]+)\]\s*-\s*\[([^\]]+)\]?/i;
 const REGEX_SEM_ID  = /^\[([^\]]+)\]\s*-\s*\[([^\]]+)\]?/i;
 
-let _timer       = null;
-let _rodando     = false;
-let _status      = 'stopped';
-let _io          = null;
-let _intervaloMs = 120_000;
-let _logFile     = null;
 
-const _logBuffer  = [];
-const MAX_BUFFER  = 300;
-
-// ── Helpers de log/status via socket ─────────────────────────────────────────
-function ts() {
-  return new Date().toLocaleTimeString('pt-BR');
-}
-
-function emitLog(message, type = 'info') {
-  const entry = { message, type, timestamp: ts() };
-  _logBuffer.push(entry);
-  if (_logBuffer.length > MAX_BUFFER) _logBuffer.shift();
-  if (_io) _io.emit('email-log', entry);
-  if (_logFile) {
-    const linha = `[${entry.timestamp}] [${(type || 'info').toUpperCase().padEnd(8)}] ${message}\n`;
-    try { fs.appendFileSync(_logFile, linha, 'utf8'); } catch (_) {}
-  }
-}
-
-function emitStatus(s) {
-  _status = s;
-  if (_io) _io.emit('email-status', s);
-}
 
 // ── Config IMAP ───────────────────────────────────────────────────────────────
 function getImapOpts(cfg, senha) {
@@ -152,23 +122,23 @@ function normalizarAssunto(subject) {
 }
 
 // ── Resolução da vaga ─────────────────────────────────────────────────────────
-function resolverVaga(subject, analisadorDb) {
+function resolverVaga(subject, analisadorDb, empresaId) {
   const assunto = normalizarAssunto(subject);
   const mId = assunto.match(REGEX_COM_ID);
   if (mId) {
     const vagaId = Number(mId[1]);
-    const vaga   = analisadorDb.getVaga(vagaId);
+    const vaga   = analisadorDb.getVaga(empresaId, vagaId);
     if (vaga?.status === 'aberta') return { vaga, nomeCandidato: mId[3].trim(), descricaoAssunto: mId[2].trim() };
     const desc = mId[2].trim().toLowerCase();
     const nome = mId[3].trim();
-    const porNome = analisadorDb.listVagas().find(v => v.status === 'aberta' && (v.funcao?.nome || '').toLowerCase().includes(desc));
+    const porNome = analisadorDb.listVagas(empresaId).find(v => v.status === 'aberta' && (v.funcao?.nome || '').toLowerCase().includes(desc));
     return porNome ? { vaga: porNome, nomeCandidato: nome, descricaoAssunto: mId[2].trim() } : null;
   }
   const mSemId = assunto.match(REGEX_SEM_ID);
   if (mSemId) {
     const desc = mSemId[1].trim().toLowerCase();
     const nome = mSemId[2].trim();
-    const vaga = analisadorDb.listVagas().find(v => v.status === 'aberta' && (v.funcao?.nome || '').toLowerCase().includes(desc));
+    const vaga = analisadorDb.listVagas(empresaId).find(v => v.status === 'aberta' && (v.funcao?.nome || '').toLowerCase().includes(desc));
     return vaga ? { vaga, nomeCandidato: nome, descricaoAssunto: mSemId[1].trim() } : null;
   }
   return null;
@@ -177,78 +147,140 @@ function resolverVaga(subject, analisadorDb) {
 // ── Emails de resposta ao candidato ──────────────────────────────────────────
 function renderTpl(tpl, vars) {
   return tpl
-    .replace(/\{\{NOME\}\}/g,   vars.nome   || '')
-    .replace(/\{\{VAGA\}\}/g,   vars.vaga   || '')
-    .replace(/\{\{MOTIVO\}\}/g, vars.motivo || '');
+    .replace(/\{\{NOME\}\}/g,        vars.nome        || '')
+    .replace(/\{\{VAGA\}\}/g,        vars.vaga        || '')
+    .replace(/\{\{MOTIVO\}\}/g,      vars.motivo      || '')
+    .replace(/\{\{NOMEEMPRESA\}\}/g, vars.nomeEmpresa || '');
 }
 
-const TPL_CONF_ASSUNTO_PADRAO = 'Currículo processado com sucesso — {{VAGA}}';
+const TPL_CONF_ASSUNTO_PADRAO = '{{NOMEEMPRESA}} - Currículo processado com sucesso — {{VAGA}}';
 const TPL_CONF_HTML_PADRAO    = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f4f7;font-family:'Segoe UI',Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px;text-align:center"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="color:#fff;font-size:22px;font-weight:700">Currículo Processado com Sucesso!</div><div style="color:rgba(255,255,255,.8);font-size:14px;margin-top:6px">Seu currículo foi analisado e cadastrado em nossa base</div></td></tr><tr><td style="padding:36px 40px"><p style="font-size:16px;color:#1f2937;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">Recebemos seu currículo para a vaga de <strong style="color:#059669">{{VAGA}}</strong>. Ele foi <strong>processado pela nossa inteligência artificial</strong> e está <strong>gravado em nossa base de candidatos</strong>. 🎉</p><table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px"><tr><td style="padding:16px 20px"><div style="font-size:13px;color:#166534;font-weight:600;margin-bottom:10px">📋 Status do seu currículo:</div><table width="100%" cellpadding="3" cellspacing="0"><tr><td style="font-size:13px;color:#166534;width:20px">✔</td><td style="font-size:13px;color:#374151">PDF recebido e lido com sucesso</td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Dados extraídos via inteligência artificial</td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Candidatura registrada para a vaga de <strong>{{VAGA}}</strong></td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Currículo gravado na base de candidatos</td></tr></table></td></tr></table><p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">Nossa equipe irá analisar seu perfil e entrar em contato. Fique atento ao seu e-mail e telefone.</p><div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:6px;padding:14px 18px;font-size:13px;color:#1e40af">💡 Em caso de dúvidas, responda este e-mail e nossa equipe irá te atender.</div></td></tr><tr><td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
 
-const TPL_REJ_ASSUNTO_PADRAO = 'Seu currículo não pôde ser processado — {{VAGA}}';
+const TPL_REJ_ASSUNTO_PADRAO = '{{NOMEEMPRESA}} - Seu currículo não pôde ser processado — {{VAGA}}';
 const TPL_REJ_HTML_PADRAO    = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#dc2626,#f87171);padding:32px 36px;text-align:center"><h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">⚠️ Currículo não processado</h1></td></tr><tr><td style="padding:36px 36px 24px"><p style="font-size:16px;color:#374151;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#6b7280;line-height:1.75;margin:0 0 16px">Não foi possível processar seu currículo para a vaga de <strong style="color:#dc2626">{{VAGA}}</strong>.</p><p style="font-size:14px;color:#991b1b;background:#fef2f2;border-radius:8px;padding:14px 18px;margin:0 0 20px"><strong>Motivo:</strong> {{MOTIVO}}</p><p style="font-size:13px;color:#9ca3af">Por favor reenvie o currículo em formato <strong>PDF</strong>.</p></td></tr><tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:18px 36px;text-align:center"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
 
-async function enviarConfirmacao(cfg, senha, toEmail, nomeCandidato, nomeVaga, db) {
+// Templates para e-mail avulso (sem assunto formatado / sem vaga vinculada)
+const TPL_CONF_LIVRE_ASSUNTO_PADRAO = '{{NOMEEMPRESA}} — Currículo recebido com sucesso';
+const TPL_CONF_LIVRE_HTML_PADRAO    = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f4f4f7;font-family:'Segoe UI',Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#059669,#10b981);padding:32px 40px;text-align:center"><div style="font-size:32px;margin-bottom:8px">✅</div><div style="color:#fff;font-size:22px;font-weight:700">Currículo Recebido com Sucesso!</div><div style="color:rgba(255,255,255,.8);font-size:14px;margin-top:6px">Seu currículo foi analisado e cadastrado em nossa base</div></td></tr><tr><td style="padding:36px 40px"><p style="font-size:16px;color:#1f2937;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">Recebemos seu currículo e ele foi <strong>processado pela nossa inteligência artificial</strong> e está <strong>gravado em nossa base de candidatos</strong>. 🎉</p><table width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:24px"><tr><td style="padding:16px 20px"><div style="font-size:13px;color:#166534;font-weight:600;margin-bottom:10px">📋 Status do seu currículo:</div><table width="100%" cellpadding="3" cellspacing="0"><tr><td style="font-size:13px;color:#166534;width:20px">✔</td><td style="font-size:13px;color:#374151">PDF recebido e lido com sucesso</td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Dados extraídos via inteligência artificial</td></tr><tr><td style="font-size:13px;color:#166534">✔</td><td style="font-size:13px;color:#374151">Currículo gravado na base de candidatos</td></tr></table></td></tr></table><p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px">Nossa equipe irá analisar seu perfil e entrar em contato em breve. Fique atento ao seu e-mail e telefone.</p><div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:6px;padding:14px 18px;font-size:13px;color:#1e40af">💡 Em caso de dúvidas, responda este e-mail e nossa equipe irá te atender.</div></td></tr><tr><td style="background:#f9fafb;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
+
+const TPL_REJ_LIVRE_ASSUNTO_PADRAO = '{{NOMEEMPRESA}} — Não foi possível processar seu arquivo';
+const TPL_REJ_LIVRE_HTML_PADRAO    = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#dc2626,#f87171);padding:32px 36px;text-align:center"><h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">⚠️ Arquivo não processado</h1></td></tr><tr><td style="padding:36px 36px 24px"><p style="font-size:16px;color:#374151;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#6b7280;line-height:1.75;margin:0 0 16px">Recebemos seu e-mail, mas não foi possível processar o arquivo em anexo.</p><p style="font-size:14px;color:#991b1b;background:#fef2f2;border-radius:8px;padding:14px 18px;margin:0 0 20px"><strong>Motivo:</strong> {{MOTIVO}}</p><p style="font-size:13px;color:#9ca3af">Por favor reenvie seu currículo em formato <strong>PDF</strong>.</p></td></tr><tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:18px 36px;text-align:center"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
+
+async function enviarConfirmacaoLivre(cfg, senha, toEmail, nomeCandidato, db, empresaId) {
   if (!toEmail) return;
-  const tpls   = db ? db.getEmailTemplates() : {};
-  const assunto = renderTpl(tpls.conf_assunto || TPL_CONF_ASSUNTO_PADRAO, { nome: nomeCandidato, vaga: nomeVaga });
-  const html    = renderTpl(tpls.conf_html    || TPL_CONF_HTML_PADRAO,    { nome: nomeCandidato, vaga: nomeVaga });
+  const empresa     = crud.buscarPorId('empresas', empresaId);
+  const nomeEmpresa = empresa?.razao_social || 'IAHub';
+  const tpls    = db ? db.getEmailTemplates(empresaId) : {};
+  const vars    = { nome: nomeCandidato, nomeEmpresa };
+  const assunto = renderTpl(tpls.conf_livre_assunto || TPL_CONF_LIVRE_ASSUNTO_PADRAO, vars);
+  const html    = renderTpl(tpls.conf_livre_html    || TPL_CONF_LIVRE_HTML_PADRAO,    vars);
   const t = getSmtpTransporter(cfg, senha);
-  await t.sendMail({ from: `"Recrutamento IAHub" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
 }
 
-async function enviarRejeicao(cfg, senha, toEmail, nomeCandidato, nomeVaga, motivo, db) {
+async function enviarRejeicaoLivre(cfg, senha, toEmail, nomeCandidato, motivo, db, empresaId) {
+  if (!toEmail) return;
+  const motivoTexto = motivo === 'pdf_ilegivel'
+    ? 'O PDF enviado está ilegível, protegido por senha ou não contém texto selecionável.'
+    : 'O arquivo enviado não foi reconhecido como um currículo válido.';
+  const empresa     = crud.buscarPorId('empresas', empresaId);
+  const nomeEmpresa = empresa?.razao_social || 'IAHub';
+  const tpls    = db ? db.getEmailTemplates(empresaId) : {};
+  const vars    = { nome: nomeCandidato, motivo: motivoTexto, nomeEmpresa };
+  const assunto = renderTpl(tpls.rej_livre_assunto || TPL_REJ_LIVRE_ASSUNTO_PADRAO, vars);
+  const html    = renderTpl(tpls.rej_livre_html    || TPL_REJ_LIVRE_HTML_PADRAO,    vars);
+  const t = getSmtpTransporter(cfg, senha);
+  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+}
+
+async function enviarConfirmacao(cfg, senha, toEmail, nomeCandidato, nomeVaga, db, empresaId) {
+  if (!toEmail) return;
+  const empresa    = crud.buscarPorId('empresas', empresaId);
+  const nomeEmpresa = empresa?.razao_social || 'IAHub';
+  const tpls   = db ? db.getEmailTemplates(empresaId) : {};
+  const vars   = { nome: nomeCandidato, vaga: nomeVaga, nomeEmpresa };
+  const assunto = renderTpl(tpls.conf_assunto || TPL_CONF_ASSUNTO_PADRAO, vars);
+  const html    = renderTpl(tpls.conf_html    || TPL_CONF_HTML_PADRAO,    vars);
+  const t = getSmtpTransporter(cfg, senha);
+  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+}
+
+async function enviarRejeicao(cfg, senha, toEmail, nomeCandidato, nomeVaga, motivo, db, empresaId) {
   if (!toEmail) return;
   const motivoTexto = motivo === 'sem_pdf'
     ? 'Seu e-mail não continha um arquivo PDF em anexo.'
     : motivo === 'pdf_ilegivel'
     ? 'O PDF enviado está ilegível, protegido por senha ou não contém texto selecionável.'
     : 'O arquivo enviado não foi reconhecido como um currículo válido.';
-  const tpls   = db ? db.getEmailTemplates() : {};
-  const assunto = renderTpl(tpls.rej_assunto || TPL_REJ_ASSUNTO_PADRAO, { nome: nomeCandidato, vaga: nomeVaga, motivo: motivoTexto });
-  const html    = renderTpl(tpls.rej_html    || TPL_REJ_HTML_PADRAO,    { nome: nomeCandidato, vaga: nomeVaga, motivo: motivoTexto });
+  const empresa    = crud.buscarPorId('empresas', empresaId);
+  const nomeEmpresa = empresa?.razao_social || 'IAHub';
+  const tpls   = db ? db.getEmailTemplates(empresaId) : {};
+  const vars   = { nome: nomeCandidato, vaga: nomeVaga, motivo: motivoTexto, nomeEmpresa };
+  const assunto = renderTpl(tpls.rej_assunto || TPL_REJ_ASSUNTO_PADRAO, vars);
+  const html    = renderTpl(tpls.rej_html    || TPL_REJ_HTML_PADRAO,    vars);
   const t = getSmtpTransporter(cfg, senha);
-  await t.sendMail({ from: `"Recrutamento IAHub" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
 }
 
-// ── Processamento de um email ─────────────────────────────────────────────────
-async function processarEmail(msg, client, deps) {
-  const { db, whatsappDb, whatsapp, analisadorDb } = deps;
-  const subject   = msg.envelope?.subject || '';
+// ── Processamento de e-mail avulso (PDF sem assunto formatado) ────────────────
+const MAX_BUFFER = 300;
+
+class EmailImapService {
+  constructor() {
+    this._timer       = null;
+    this._rodando     = false;
+    this._status      = 'stopped';
+    this._io          = null;
+    this._intervaloMs = 120_000;
+    this._logFile     = null;
+    this._empresaId   = null;
+    this._logBuffer   = [];
+    this._deps        = null;
+  }
+
+  _ts() { return new Date().toLocaleTimeString('pt-BR'); }
+
+  _emitLog(message, type = 'info') {
+    const entry = { message, type, timestamp: this._ts() };
+    this._logBuffer.push(entry);
+    if (this._logBuffer.length > MAX_BUFFER) this._logBuffer.shift();
+    if (this._io && this._empresaId) this._io.to(`emp_${this._empresaId}`).emit('email-log', entry);
+    if (this._logFile) {
+      const linha = `[${entry.timestamp}] [${(type || 'info').toUpperCase().padEnd(8)}] ${message}
+`;
+      try { fs.appendFileSync(this._logFile, linha, 'utf8'); } catch (_) {}
+    }
+  }
+
+  _emitStatus(s) {
+    this._status = s;
+    if (this._io && this._empresaId) this._io.to(`emp_${this._empresaId}`).emit('email-status', s);
+  }
+
+
+  async _processarEmailLivre(msg, client) {
+  const { db, whatsappDb } = this._deps;
+  const empresaId = this._empresaId;
+    const subject   = msg.envelope?.subject || '';
   const fromEmail = msg.envelope?.from?.[0]?.address || '';
+  const fromName  = msg.envelope?.from?.[0]?.name    || fromEmail;
   const uid       = msg.uid;
 
   const marcarLido = () =>
     client.messageFlagsAdd(uid, ['\\Seen'], { uid: true }).catch(() => {});
 
-  const cfg   = db.getEmailConfig();
-  const senha = db.getSenhaReal();
+  const cfg   = db.getEmailConfig(empresaId);
+  const senha = db.getSenhaReal(empresaId);
 
-  emitLog(`[IMAP] Analisando e-mail — assunto: "${subject}" | De: ${fromEmail}`, 'info');
-
-  const resolved = resolverVaga(subject, analisadorDb);
-  if (!resolved) {
-    emitLog(`[IMAP] E-mail ignorado — assunto fora do padrão esperado: "${subject}"`, 'warning');
-    return;
-  }
-
-  const { vaga, nomeCandidato } = resolved;
-  const nomeVaga = vaga.funcao?.nome || `Vaga #${vaga.id}`;
-
-  emitLog(`[IMAP] Vaga identificada — "${nomeVaga}" | Candidato: "${nomeCandidato}"`, 'info');
-
-  // Localiza partes PDF ou TNEF
+  // Sem PDF e sem assunto formatado: ignora silenciosamente (e-mail comum)
   const parts = findParts(msg.bodyStructure);
   if (!parts.length) {
-    emitLog(`[IMAP] Estrutura MIME: ${JSON.stringify(msg.bodyStructure).slice(0, 400)}`, 'info');
-    emitLog(`[IMAP] Sem PDF no e-mail de "${nomeCandidato}" — enviando rejeição`, 'warning');
-    enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db)
-      .then(() => emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
-      .catch(e => emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+    this._emitLog(`[IMAP] E-mail sem PDF e sem assunto formatado — ignorado: "${subject}"`, 'info');
     return;
   }
 
-  emitLog(`[IMAP] ${parts.length} anexo(s) encontrado(s) — baixando PDF…`, 'info');
+  this._emitLog(`[IMAP] Assunto livre + PDF detectado — processando como currículo avulso | De: ${fromEmail}`, 'info');
+  this._emitLog(`[IMAP] ${parts.length} anexo(s) encontrado(s) — baixando PDF…`, 'info');
 
   let pdfBuffer = null;
   let pdfNome   = 'curriculo.pdf';
@@ -261,75 +293,220 @@ async function processarEmail(msg, client, deps) {
       if (part.type === 'pdf') {
         pdfBuffer = buf;
         pdfNome   = part.filename;
-        emitLog(`[IMAP] PDF baixado — "${pdfNome}" (${Math.round(buf.length / 1024)} KB)`, 'info');
+        this._emitLog(`[IMAP] PDF baixado — "${pdfNome}" (${Math.round(buf.length / 1024)} KB)`, 'info');
         break;
       }
       if (part.type === 'tnef') {
-        emitLog(`[IMAP] Processando winmail.dat (Outlook) — ${Math.round(buf.length / 1024)} KB…`, 'info');
+        this._emitLog(`[IMAP] Processando winmail.dat (Outlook)…`, 'info');
         const extracted = await extractPdfFromTnef(buf);
         if (extracted) {
           pdfBuffer = extracted.buffer;
           pdfNome   = extracted.filename;
-          emitLog(`[IMAP] PDF extraído do winmail.dat — "${pdfNome}" (${Math.round(pdfBuffer.length / 1024)} KB)`, 'info');
+          this._emitLog(`[IMAP] PDF extraído do winmail.dat — "${pdfNome}"`, 'info');
           break;
         }
-        emitLog(`[IMAP] winmail.dat de "${nomeCandidato}" não contém PDF reconhecível — verifique se o PDF foi enviado como anexo e não embutido no corpo do e-mail`, 'warning');
       }
     } catch (e) {
-      emitLog(`[IMAP] Falha ao baixar anexo "${part.path}": ${e.message}`, 'warning');
+      this._emitLog(`[IMAP] Falha ao baixar anexo "${part.path}": ${e.message}`, 'warning');
     }
   }
 
   if (!pdfBuffer) {
-    emitLog(`[IMAP] PDF não encontrado no e-mail de "${nomeCandidato}" — enviando rejeição`, 'warning');
-    enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db)
-      .then(() => emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
-      .catch(e => emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+    this._emitLog(`[IMAP] PDF não extraível no e-mail avulso — ignorado`, 'warning');
     return;
   }
 
   try {
-    emitLog(`[IMAP] Extraindo texto do PDF…`, 'info');
+    this._emitLog(`[IMAP] Extraindo texto do PDF (avulso)…`, 'info');
     const pdfData = await pdfParse(pdfBuffer);
     const texto   = pdfData.text.trim();
     if (!texto) {
-      emitLog(`[IMAP] PDF de "${nomeCandidato}" ilegível ou protegido — enviando rejeição`, 'warning');
-      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'pdf_ilegivel', db)
-        .then(() => emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
-        .catch(e => emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+      this._emitLog(`[IMAP] PDF ilegível — enviando rejeição para ${fromEmail}`, 'warning');
+      await marcarLido();
+      enviarRejeicaoLivre(cfg, senha, fromEmail, fromName, 'pdf_ilegivel', db, empresaId)
+        .then(() => this._emitLog(`[IMAP] Rejeição (avulso) enviada → ${fromEmail}`, 'info'))
+        .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição (avulso): ${e.message}`, 'error'));
       return;
     }
 
-    emitLog(`[IMAP] Texto extraído — ${texto.length} caracteres | Verificando se é currículo via IA…`, 'info');
-    const ehCurriculo = await whatsapp.verificarSeCurriculo(texto);
+    this._emitLog(`[IMAP] Texto extraído — ${texto.length} chars | Verificando se é currículo via IA…`, 'info');
+    const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t));
     if (!ehCurriculo) {
-      emitLog(`[IMAP] Documento de "${nomeCandidato}" não reconhecido como currículo pela IA — enviando rejeição`, 'warning');
-      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'nao_curriculo', db)
-        .then(() => emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
-        .catch(e => emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+      this._emitLog(`[IMAP] PDF não reconhecido como currículo — enviando rejeição para ${fromEmail}`, 'warning');
+      await marcarLido();
+      enviarRejeicaoLivre(cfg, senha, fromEmail, fromName, 'nao_curriculo', db, empresaId)
+        .then(() => this._emitLog(`[IMAP] Rejeição (avulso) enviada → ${fromEmail}`, 'info'))
+        .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição (avulso): ${e.message}`, 'error'));
       return;
     }
 
-    emitLog(`[IMAP] Currículo confirmado pela IA — verificando idioma…`, 'info');
-    const { texto: textoFinal, traduzido } = await whatsapp.traduzirSeNecessario(texto);
-    if (traduzido) emitLog(`[IMAP] Currículo traduzido para português`, 'info');
+    this._emitLog(`[IMAP] Currículo confirmado — extraindo dados via IA…`, 'info');
+    const { texto: textoFinal, traduzido } = await ia.traduzirSeNecessario(texto, (m,t) => this._emitLog(m,t));
+    if (traduzido) this._emitLog(`[IMAP] Currículo traduzido para português`, 'info');
 
-    emitLog(`[IMAP] Extraindo dados estruturados via IA…`, 'info');
-    const dados = await whatsapp.analisarComRetry(textoFinal);
+    const dados = await ia.analisarComRetry(textoFinal, (m,t) => this._emitLog(m,t));
+    dados.nome  = dados.nome  || fromName  || null;
+    dados.email = dados.email || fromEmail || null;
+
+    this._emitLog(`[IMAP] Dados extraídos — Nome: ${dados.nome || '—'} | Tel: ${dados.telefone || '—'} | E-mail: ${dados.email || '—'}`, 'info');
+
+    const existente = whatsappDb.findByPhoneOrEmail(empresaId, dados.telefone, dados.email);
+    if (existente) {
+      this._emitLog(`[IMAP] Duplicata encontrada — "${existente.nome}" (ID #${existente.id}) será substituído`, 'warning');
+      whatsappDb.deleteCurriculo(empresaId, existente.id);
+    }
+
+    const curriculo_id = whatsappDb.saveCurriculo(empresaId, {
+      remetente:       `email-livre:${fromEmail}`,
+      nome:            dados.nome,
+      telefone:        dados.telefone     || null,
+      email:           dados.email        || null,
+      endereco:        dados.endereco     || null,
+      linkedin:        dados.linkedin     || null,
+      descricao:       dados.descricao    || null,
+      experiencias:    dados.experiencias || [],
+      formacao:        dados.formacao     || [],
+      capacitacoes:    dados.capacitacoes || [],
+      habilidades:     dados.habilidades  || [],
+      dados_completos: JSON.stringify(dados),
+      pdf_base64:      pdfBuffer.toString('base64'),
+      pdf_nome:        pdfNome,
+    });
+    this._emitLog(`[IMAP] Currículo avulso salvo — ID #${curriculo_id}`, 'saved');
+
+    await marcarLido();
+    this._emitLog(`[IMAP] E-mail avulso de "${dados.nome}" marcado como lido`, 'received');
+
+    enviarConfirmacaoLivre(cfg, senha, dados.email || fromEmail, dados.nome || fromName, db, empresaId)
+      .then(() => this._emitLog(`[IMAP] Confirmação (avulso) enviada → ${dados.email || fromEmail}`, 'success'))
+      .catch(e => this._emitLog(`[IMAP] Falha ao enviar confirmação (avulso): ${e.message}`, 'error'));
+
+  } catch (err) {
+    this._emitLog(`[IMAP] Erro ao processar e-mail avulso de "${fromName}": ${err.message}`, 'error');
+  }
+  }
+
+// ── Processamento de um email ─────────────────────────────────────────────────
+  async _processarEmail(msg, client) {
+  const { db, whatsappDb, analisadorDb } = this._deps;
+  const empresaId = this._empresaId;
+    const subject   = msg.envelope?.subject || '';
+  const fromEmail = msg.envelope?.from?.[0]?.address || '';
+  const uid       = msg.uid;
+
+  const marcarLido = () =>
+    client.messageFlagsAdd(uid, ['\\Seen'], { uid: true }).catch(() => {});
+
+  const cfg   = db.getEmailConfig(empresaId);
+  const senha = db.getSenhaReal(empresaId);
+
+  this._emitLog(`[IMAP] Analisando e-mail — assunto: "${subject}" | De: ${fromEmail}`, 'info');
+
+  const resolved = resolverVaga(subject, analisadorDb, empresaId);
+  if (!resolved) {
+    // Tenta importar como currículo avulso (PDF sem assunto formatado)
+    await this._processarEmailLivre(msg, client);
+    return;
+  }
+
+  const { vaga, nomeCandidato } = resolved;
+  const nomeVaga = vaga.funcao?.nome || `Vaga #${vaga.id}`;
+
+  this._emitLog(`[IMAP] Vaga identificada — "${nomeVaga}" | Candidato: "${nomeCandidato}"`, 'info');
+
+  // Localiza partes PDF ou TNEF
+  const parts = findParts(msg.bodyStructure);
+  if (!parts.length) {
+    this._emitLog(`[IMAP] Estrutura MIME: ${JSON.stringify(msg.bodyStructure).slice(0, 400)}`, 'info');
+    this._emitLog(`[IMAP] Sem PDF no e-mail de "${nomeCandidato}" — enviando rejeição`, 'warning');
+    enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db, empresaId)
+      .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
+      .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+    return;
+  }
+
+  this._emitLog(`[IMAP] ${parts.length} anexo(s) encontrado(s) — baixando PDF…`, 'info');
+
+  let pdfBuffer = null;
+  let pdfNome   = 'curriculo.pdf';
+
+  for (const part of parts) {
+    try {
+      const { content } = await client.download(uid, part.path, { uid: true });
+      const buf = await streamToBuffer(content);
+
+      if (part.type === 'pdf') {
+        pdfBuffer = buf;
+        pdfNome   = part.filename;
+        this._emitLog(`[IMAP] PDF baixado — "${pdfNome}" (${Math.round(buf.length / 1024)} KB)`, 'info');
+        break;
+      }
+      if (part.type === 'tnef') {
+        this._emitLog(`[IMAP] Processando winmail.dat (Outlook) — ${Math.round(buf.length / 1024)} KB…`, 'info');
+        const extracted = await extractPdfFromTnef(buf);
+        if (extracted) {
+          pdfBuffer = extracted.buffer;
+          pdfNome   = extracted.filename;
+          this._emitLog(`[IMAP] PDF extraído do winmail.dat — "${pdfNome}" (${Math.round(pdfBuffer.length / 1024)} KB)`, 'info');
+          break;
+        }
+        this._emitLog(`[IMAP] winmail.dat de "${nomeCandidato}" não contém PDF reconhecível — verifique se o PDF foi enviado como anexo e não embutido no corpo do e-mail`, 'warning');
+      }
+    } catch (e) {
+      this._emitLog(`[IMAP] Falha ao baixar anexo "${part.path}": ${e.message}`, 'warning');
+    }
+  }
+
+  if (!pdfBuffer) {
+    this._emitLog(`[IMAP] PDF não encontrado no e-mail de "${nomeCandidato}" — enviando rejeição`, 'warning');
+    enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db, empresaId)
+      .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
+      .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+    return;
+  }
+
+  try {
+    this._emitLog(`[IMAP] Extraindo texto do PDF…`, 'info');
+    const pdfData = await pdfParse(pdfBuffer);
+    const texto   = pdfData.text.trim();
+    if (!texto) {
+      this._emitLog(`[IMAP] PDF de "${nomeCandidato}" ilegível ou protegido — enviando rejeição`, 'warning');
+      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'pdf_ilegivel', db, empresaId)
+        .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
+        .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+      return;
+    }
+
+    this._emitLog(`[IMAP] Texto extraído — ${texto.length} caracteres | Verificando se é currículo via IA…`, 'info');
+    const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t));
+    if (!ehCurriculo) {
+      this._emitLog(`[IMAP] Documento de "${nomeCandidato}" não reconhecido como currículo pela IA — enviando rejeição`, 'warning');
+      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'nao_curriculo', db, empresaId)
+        .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
+        .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
+      return;
+    }
+
+    this._emitLog(`[IMAP] Currículo confirmado pela IA — verificando idioma…`, 'info');
+    const { texto: textoFinal, traduzido } = await ia.traduzirSeNecessario(texto, (m,t) => this._emitLog(m,t));
+    if (traduzido) this._emitLog(`[IMAP] Currículo traduzido para português`, 'info');
+
+    this._emitLog(`[IMAP] Extraindo dados estruturados via IA…`, 'info');
+    const dados = await ia.analisarComRetry(textoFinal, (m,t) => this._emitLog(m,t));
     dados.nome  = dados.nome  || nomeCandidato || null;
     dados.email = dados.email || fromEmail     || null;
 
-    emitLog(`[IMAP] Dados extraídos — Nome: ${dados.nome || '—'} | Tel: ${dados.telefone || '—'} | E-mail: ${dados.email || '—'}`, 'info');
+    this._emitLog(`[IMAP] Dados extraídos — Nome: ${dados.nome || '—'} | Tel: ${dados.telefone || '—'} | E-mail: ${dados.email || '—'}`, 'info');
 
-    emitLog(`[IMAP] Verificando duplicatas na base de currículos…`, 'info');
-    const existente = whatsappDb.findByPhoneOrEmail(dados.telefone, dados.email);
+    this._emitLog(`[IMAP] Verificando duplicatas na base de currículos…`, 'info');
+    const existente = whatsappDb.findByPhoneOrEmail(empresaId, dados.telefone, dados.email);
     if (existente) {
-      emitLog(`[IMAP] Duplicata encontrada — "${existente.nome}" (ID #${existente.id}) será substituído por "${dados.nome}"`, 'warning');
-      whatsappDb.deleteCurriculo(existente.id);
+      this._emitLog(`[IMAP] Duplicata encontrada — "${existente.nome}" (ID #${existente.id}) será substituído por "${dados.nome}"`, 'warning');
+      whatsappDb.deleteCurriculo(empresaId, existente.id);
     }
 
-    emitLog(`[IMAP] Salvando currículo na base de dados…`, 'info');
-    const curriculo_id = whatsappDb.saveCurriculo({
+    this._emitLog(`[IMAP] Salvando currículo na base de dados…`, 'info');
+    const curriculo_id = whatsappDb.saveCurriculo(empresaId, {
       remetente:       `email-externo:${fromEmail || nomeCandidato}`,
       nome:            dados.nome,
       telefone:        dados.telefone        || null,
@@ -345,64 +522,65 @@ async function processarEmail(msg, client, deps) {
       pdf_base64:      pdfBuffer.toString('base64'),
       pdf_nome:        pdfNome,
     });
-    emitLog(`[IMAP] Currículo salvo — ID #${curriculo_id}`, 'saved');
+    this._emitLog(`[IMAP] Currículo salvo — ID #${curriculo_id}`, 'saved');
 
-    emitLog(`[IMAP] Registrando candidatura para "${nomeVaga}"…`, 'info');
-    const candExist = db.findCandidaturaByVagaAndCandidato(vaga.id, dados.email, dados.nome);
+    this._emitLog(`[IMAP] Registrando candidatura para "${nomeVaga}"…`, 'info');
+    const candExist = db.findCandidaturaByVagaAndCandidato(empresaId, vaga.id, dados.email, dados.nome);
     if (candExist) {
-      db.updateCandidaturaCurriculoId(candExist.id, curriculo_id);
-      emitLog(`[IMAP] Candidatura atualizada — "${dados.nome}" → "${nomeVaga}"`, 'info');
+      db.updateCandidaturaCurriculoId(empresaId, candExist.id, curriculo_id);
+      this._emitLog(`[IMAP] Candidatura atualizada — "${dados.nome}" → "${nomeVaga}"`, 'info');
     } else {
-      db.saveCandidatura({ vaga_id: vaga.id, curriculo_id, canal: 'email', candidato_nome: dados.nome, candidato_email: dados.email });
-      emitLog(`[IMAP] Nova candidatura registrada — "${dados.nome}" → "${nomeVaga}"`, 'success');
+      db.saveCandidatura(empresaId, { vaga_id: vaga.id, curriculo_id, canal: 'email', candidato_nome: dados.nome, candidato_email: dados.email });
+      this._emitLog(`[IMAP] Nova candidatura registrada — "${dados.nome}" → "${nomeVaga}"`, 'success');
     }
 
     // Marca como lido SOMENTE após gravar o currículo com sucesso
-    emitLog(`[IMAP] Marcando e-mail como lido…`, 'info');
+    this._emitLog(`[IMAP] Marcando e-mail como lido…`, 'info');
     await marcarLido();
-    emitLog(`[IMAP] E-mail de "${nomeCandidato}" gravado e marcado como lido`, 'received');
+    this._emitLog(`[IMAP] E-mail de "${nomeCandidato}" gravado e marcado como lido`, 'received');
 
-    emitLog(`[IMAP] Enviando e-mail de confirmação → ${dados.email || fromEmail}…`, 'info');
-    enviarConfirmacao(cfg, senha, dados.email || fromEmail, dados.nome || nomeCandidato, nomeVaga, db)
-      .then(() => emitLog(`[IMAP] Confirmação enviada com sucesso → ${dados.email || fromEmail}`, 'success'))
-      .catch(e => emitLog(`[IMAP] Falha ao enviar confirmação: ${e.message}`, 'error'));
+    this._emitLog(`[IMAP] Enviando e-mail de confirmação → ${dados.email || fromEmail}…`, 'info');
+    enviarConfirmacao(cfg, senha, dados.email || fromEmail, dados.nome || nomeCandidato, nomeVaga, db, empresaId)
+      .then(() => this._emitLog(`[IMAP] Confirmação enviada com sucesso → ${dados.email || fromEmail}`, 'success'))
+      .catch(e => this._emitLog(`[IMAP] Falha ao enviar confirmação: ${e.message}`, 'error'));
 
   } catch (err) {
-    emitLog(`[IMAP] Erro ao processar currículo de "${nomeCandidato}": ${err.message}`, 'error');
+    this._emitLog(`[IMAP] Erro ao processar currículo de "${nomeCandidato}": ${err.message}`, 'error');
   }
-}
+  }
 
 // ── Poll principal ────────────────────────────────────────────────────────────
-async function poll(deps) {
-  if (_rodando) return;
-  _rodando = true;
-  const { db } = deps;
-  const cfg   = db.getEmailConfig();
-  const senha = db.getSenhaReal();
+  async _poll() {
+  if (this._rodando) return;
+  this._rodando = true;
+  const { db, analisadorDb, whatsappDb } = this._deps;
+  const empresaId = this._empresaId;
+  const cfg   = db.getEmailConfig(empresaId);
+  const senha = db.getSenhaReal(empresaId);
 
   if (!cfg.email || !senha) {
-    emitLog('[IMAP] E-mail ou senha não configurados — verifique as configurações', 'warning');
-    _rodando = false;
+    this._emitLog('[IMAP] E-mail ou senha não configurados — verifique as configurações', 'warning');
+    this._rodando = false;
     return;
   }
 
   const servidor = cfg.tipo === 'gmail' ? `Gmail (${cfg.email})` : `${cfg.imap_host}:${cfg.imap_port}`;
-  emitLog(`[IMAP] Conectando ao servidor — ${servidor}…`, 'info');
+  this._emitLog(`[IMAP] Conectando ao servidor — ${servidor}…`, 'info');
 
   const client = new ImapFlow({ ...getImapOpts(cfg, senha), logger: false });
-  client.on('error', err => emitLog(`[IMAP] Erro de socket: ${err.message}`, 'error'));
+  client.on('error', err => this._emitLog(`[IMAP] Erro de socket: ${err.message}`, 'error'));
 
   try {
     await client.connect();
-    emitLog(`[IMAP] Conectado — verificando caixa de entrada…`, 'info');
+    this._emitLog(`[IMAP] Conectado — verificando caixa de entrada…`, 'info');
 
     const lock = await client.getMailboxLock('INBOX');
     try {
       const uids = await client.search({ seen: false }, { uid: true });
       if (!uids.length) {
-        emitLog(`[IMAP] Nenhum e-mail novo na caixa de entrada`, 'info');
+        this._emitLog(`[IMAP] Nenhum e-mail novo na caixa de entrada`, 'info');
       } else {
-        emitLog(`[IMAP] ${uids.length} e-mail(s) não lido(s) encontrado(s) — coletando metadados…`, 'received');
+        this._emitLog(`[IMAP] ${uids.length} e-mail(s) não lido(s) encontrado(s) — coletando metadados…`, 'received');
 
         // Fase 1: coleta TODOS os metadados sem nenhuma operação no servidor dentro do loop.
         // Fazer client.download ou client.messageFlagsAdd dentro do for await quebra a iteração.
@@ -412,29 +590,29 @@ async function poll(deps) {
         }
 
         // Fase 2: processa cada mensagem fora do loop de fetch
-        emitLog(`[IMAP] Iniciando processamento de ${mensagens.length} e-mail(s)…`, 'info');
+        this._emitLog(`[IMAP] Iniciando processamento de ${mensagens.length} e-mail(s)…`, 'info');
         let idx = 0;
         for (const msg of mensagens) {
           idx++;
-          emitLog(`[IMAP] Processando e-mail ${idx} de ${mensagens.length}…`, 'info');
-          await processarEmail(msg, client, deps);
+          this._emitLog(`[IMAP] Processando e-mail ${idx} de ${mensagens.length}…`, 'info');
+          await this._processarEmail(msg, client);
         }
-        emitLog(`[IMAP] Processamento concluído — ${mensagens.length} e-mail(s) tratado(s)`, 'success');
+        this._emitLog(`[IMAP] Processamento concluído — ${mensagens.length} e-mail(s) tratado(s)`, 'success');
       }
     } finally {
       lock.release();
     }
   } catch (err) {
-    emitLog(`[IMAP] Erro ao verificar caixa: ${err.message}`, 'error');
+    this._emitLog(`[IMAP] Erro ao verificar caixa: ${err.message}`, 'error');
   } finally {
     await client.logout().catch(() => {});
-    emitLog(`[IMAP] Desconectado — próxima verificação em ${Math.round(_intervaloMs / 60000)} min`, 'info');
-    _rodando = false;
+    this._emitLog(`[IMAP] Desconectado — próxima verificação em ${Math.round(this._intervaloMs / 60000)} min`, 'info');
+    this._rodando = false;
   }
-}
+  }
 
 // ── API de teste de conexão IMAP ──────────────────────────────────────────────
-async function testarConexao(cfg, senha) {
+  async testarConexao(cfg, senha) {
   const client = new ImapFlow({ ...getImapOpts(cfg, senha), logger: false });
   client.on('error', () => {});
   await client.connect();
@@ -444,37 +622,43 @@ async function testarConexao(cfg, senha) {
   lock.release();
   await client.logout();
   return { ok: true, naoLidos: count };
-}
+  }
 
-// ── Controle do serviço ───────────────────────────────────────────────────────
-module.exports = {
-  iniciarServico(deps, io, intervaloMs = 120_000) {
-    if (_timer) {
-      emitLog('[Email] Serviço já está em execução', 'warning');
+  iniciarServico(deps, io, intervaloMs = 120_000, empresaId) {
+    if (!empresaId) throw new Error('empresa_id é obrigatório para iniciar o serviço de e-mail');
+    this._deps        = { ...deps, empresaId };
+    this._io          = io;
+    this._empresaId   = Number(empresaId);
+    this._intervaloMs = intervaloMs;
+    if (this._timer) {
+      this._emitLog('[Email] Serviço já está em execução', 'warning');
       return;
     }
-    _io          = io;
-    _intervaloMs = intervaloMs;
-    emitStatus('running');
-    emitLog(`[Email] Serviço de monitoramento de e-mail iniciado — verificação a cada ${Math.round(intervaloMs / 60000)} min`, 'success');
+    this._emitStatus('running');
+    this._emitLog(`[Email] Serviço de monitoramento de e-mail iniciado — verificação a cada ${Math.round(intervaloMs / 60000)} min`, 'success');
 
-    const executar = () => poll(deps).catch(err => {
-      emitLog(`[Email] Erro inesperado no ciclo de verificação: ${err.message}`, 'error');
-      _rodando = false;
+    const executar = () => this._poll().catch(err => {
+      this._emitLog(`[Email] Erro inesperado no ciclo de verificação: ${err.message}`, 'error');
+      this._rodando = false;
     });
     executar();
-    _timer = setInterval(executar, intervaloMs);
-  },
+    this._timer = setInterval(executar, intervaloMs);
+  }
 
   pararServico() {
-    if (_timer) { clearInterval(_timer); _timer = null; }
-    _rodando = false;
-    emitStatus('stopped');
-    emitLog('[Email] Serviço de monitoramento de e-mail parado', 'warning');
-  },
+    if (this._timer) { clearInterval(this._timer); this._timer = null; }
+    this._rodando = false;
+    this._emitStatus('stopped');
+    this._emitLog('[Email] Serviço de monitoramento de e-mail parado', 'warning');
+    this._empresaId = null;
+    this._deps      = null;
+  }
 
-  getStatus() { return _status; },
-  getLogBuffer() { return [..._logBuffer]; },
-  setLogFile(filePath) { _logFile = filePath; },
-  testarConexao,
-};
+  getStatus()    { return this._status; }
+  getEmpresaId() { return this._empresaId; }
+  getLogBuffer() { return [...this._logBuffer]; }
+  clearBuffer()  { this._logBuffer.length = 0; }
+  setLogFile(fp) { this._logFile = fp; }
+}
+
+module.exports = EmailImapService;
