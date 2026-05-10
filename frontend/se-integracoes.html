@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SE Integrações — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .tabs-bar {
+      display:flex;
+      gap:4px;
+      border-bottom:2px solid var(--border);
+      margin-bottom:18px;
+      overflow-x:auto;
+    }
+    .tab-btn {
+      padding:10px 22px;
+      font-size:13.5px;
+      font-weight:600;
+      color:var(--text-md);
+      background:none;
+      border:none;
+      border-bottom:2px solid transparent;
+      margin-bottom:-2px;
+      cursor:pointer;
+      transition:color .15s,border-color .15s;
+      display:flex;
+      align-items:center;
+      gap:7px;
+      white-space:nowrap;
+    }
+    .tab-btn:hover { color:var(--accent); }
+    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+    .tab-frame {
+      width:100%;
+      border:0;
+      display:block;
+      min-height:560px;
+      background:transparent;
+    }
+    .tab-loading {
+      padding:48px 20px;
+      text-align:center;
+      color:var(--text-lo);
+      font-size:13px;
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Integrações ›</span> SE Integrações</span>
+    </div>
+
+    <div class="page-content">
+      <div class="tabs-bar">
+        <button class="tab-btn active" id="tab-btn-curriculos" onclick="switchSeTab('curriculos')">🔗 SE Currículos</button>
+        <button class="tab-btn" id="tab-btn-funcoes" onclick="switchSeTab('funcoes')">📋 SE Funções</button>
+        <button class="tab-btn" id="tab-btn-vagas" onclick="switchSeTab('vagas')">💼 SE Vagas</button>
+        <button class="tab-btn" id="tab-btn-flowapi" onclick="switchSeTab('flowapi')">⚙ SE Flow API</button>
+      </div>
+
+      <div class="tab-pane active" id="tab-pane-curriculos">
+        <div class="tab-loading" id="loading-curriculos">Carregando SE Currículos...</div>
+      </div>
+      <div class="tab-pane" id="tab-pane-funcoes">
+        <div class="tab-loading" id="loading-funcoes">Carregando SE Funções...</div>
+      </div>
+      <div class="tab-pane" id="tab-pane-vagas">
+        <div class="tab-loading" id="loading-vagas">Carregando SE Vagas...</div>
+      </div>
+      <div class="tab-pane" id="tab-pane-flowapi">
+        <div class="tab-loading" id="loading-flowapi">Carregando SE Flow API...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+const SE_TABS = {
+  curriculos: '/se-curriculos.html',
+  funcoes:    '/se-funcoes.html',
+  vagas:      '/se-vagas.html',
+  flowapi:    '/se-integracoes-config.html',
+};
+const _loadedTabs = new Set();
+let _activeTab = 'curriculos';
+
+function switchSeTab(tab) {
+  _activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+  document.getElementById('tab-btn-' + tab)?.classList.add('active');
+  document.getElementById('tab-pane-' + tab)?.classList.add('active');
+  history.replaceState(null, '', '#'+tab);
+  loadTab(tab);
+  setTimeout(() => resizeFrame(tab), 80);
+}
+
+function loadTab(tab) {
+  if (_loadedTabs.has(tab)) return;
+  renderTab(tab);
+  _loadedTabs.add(tab);
+}
+
+function renderTab(tab) {
+  const pane = document.getElementById('tab-pane-' + tab);
+  const frame = document.createElement('iframe');
+  frame.className = 'tab-frame';
+  frame.id = 'frame-' + tab;
+  frame.src = SE_TABS[tab];
+  frame.onload = () => prepareFrame(tab);
+  pane.innerHTML = '';
+  pane.appendChild(frame);
+}
+
+function prepareFrame(tab) {
+  const frame = document.getElementById('frame-' + tab);
+  const doc = frame?.contentDocument;
+  if (!doc) return;
+
+  const style = doc.createElement('style');
+  style.textContent = `
+    html, body { background: transparent !important; overflow: hidden !important; }
+    .sidebar, .topbar, #_empresa-badge { display: none !important; }
+    .layout { display: block !important; min-height: auto !important; }
+    .main { margin: 0 !important; width: 100% !important; min-height: auto !important; }
+    .page-content { padding: 0 !important; }
+  `;
+  doc.head.appendChild(style);
+  resizeFrame(tab);
+}
+
+function resizeFrame(tab) {
+  const frame = document.getElementById('frame-' + tab);
+  const doc = frame?.contentDocument;
+  if (!doc) return;
+  const height = Math.max(
+    560,
+    doc.documentElement.scrollHeight,
+    doc.body?.scrollHeight || 0
+  );
+  frame.style.height = height + 'px';
+}
+
+setInterval(() => resizeFrame(_activeTab), 900);
+
+window.addEventListener('message', event => {
+  if (event.origin !== location.origin) return;
+  const data = event.data || {};
+  if (data.type !== 'se-integracoes:return-tab' || !SE_TABS[data.tab]) return;
+  _loadedTabs.delete(data.tab);
+  renderTab(data.tab);
+  _loadedTabs.add(data.tab);
+  switchSeTab(data.tab);
+});
+
+(async () => {
+  await window._iahubAuthReady;
+  const initial = location.hash.replace('#', '');
+  switchSeTab(SE_TABS[initial] ? initial : 'curriculos');
+})();
+</script>
+</body>
+</html>

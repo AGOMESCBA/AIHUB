@@ -93,6 +93,35 @@
       border-radius: 8px; padding: 10px 12px;
       color: var(--accent); font-size: 12px; width: 100%;
     }
+
+    /* ── Modal Ajuda ─────────────────────────────────────────────────────────── */
+    .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:center;justify-content:center; }
+    .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(820px,96vw);max-height:93vh;overflow-y:auto;padding:32px;position:relative; }
+    .btn-ajuda-topbar { display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.25); }
+    .btn-ajuda-topbar:hover { background:#1d4ed8; }
+    .ajuda-titulo { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px; }
+    .ajuda-etapa  { margin-bottom:20px; }
+    .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px; }
+    .ajuda-etapa p { font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ajuda-tabs { display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px; }
+    .ajuda-tab  { background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text-lo);cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s;margin-bottom:-1px; }
+    .ajuda-tab:hover { color:var(--text-hi); }
+    .ajuda-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .ajuda-tab-content { display:none; }
+    .ajuda-tab-content.active { display:block; }
+    .ia-card { border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px; }
+    .ia-card-header { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+    .ia-card-icon { font-size:22px; }
+    .ia-card-title { font-size:14px;font-weight:700;color:var(--text-hi); }
+    .ia-card p { font-size:12.5px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ia-card p:last-child { margin:0; }
+    .ia-link { display:inline-block;font-size:12px;color:var(--accent);margin-top:6px; }
+    .fluxo-step { display:flex;align-items:flex-start;gap:12px;margin-bottom:14px; }
+    .fluxo-num  { background:var(--accent);color:#fff;border-radius:50%;width:24px;height:24px;min-width:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;margin-top:1px; }
+    .fluxo-body strong { font-size:13px;color:var(--text-hi); }
+    .fluxo-body p { font-size:12.5px;color:var(--text-md);line-height:1.7;margin:2px 0 0; }
+    .aviso-card { background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--text-md);line-height:1.7; }
+    .aviso-card strong { color:#a16207; }
   </style>
 </head>
 <body>
@@ -120,6 +149,14 @@
         <span class="tab-badge" id="tab-wa-badge" style="font-size:12px;padding:3px 12px">Parado</span>
       </div>
 
+        <!-- Aviso modo Meta (oculto por padrão) -->
+        <div id="meta-mode-banner" class="d-none mb-3"
+          style="background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.25);border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--text-md);display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">🟢</span>
+          <span><strong style="color:var(--accent)">Modo API Oficial Meta</strong> — mensagens são recebidas via webhook. Não é necessário escanear QR Code.
+          <a href="/config.html" style="color:var(--accent);margin-left:6px">Alterar configuração →</a></span>
+        </div>
+
         <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
           <span id="status-pill" class="status-pill pill-stopped">Parado</span>
           <span id="log-count" class="text-muted text-sm"></span>
@@ -129,6 +166,9 @@
             <button id="btn-qr"   class="btn btn-primary" onclick="toggleQrPanel()" title="Mostrar/ocultar painel QR Code">📱 QR Code</button>
             <button class="btn btn-info"  onclick="saveLog()">💾 Salvar Log</button>
             <button class="btn btn-ghost" onclick="clearLog()">🗑 Limpar</button>
+            <button class="btn-ajuda-topbar" onclick="document.getElementById('modal-ajuda-wa').classList.remove('d-none')">
+              ❓ Ajuda · Como funciona
+            </button>
           </div>
         </div>
 
@@ -174,6 +214,145 @@
   </div>
 </div>
 
+<!-- Modal Ajuda -->
+<div id="modal-ajuda-wa" class="modal-ajuda-overlay d-none" onclick="if(event.target===this)this.classList.add('d-none')">
+  <div class="modal-ajuda">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div class="ajuda-titulo" style="margin:0">📱 WhatsApp para Currículos — Ajuda</div>
+      <button onclick="document.getElementById('modal-ajuda-wa').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <div class="ajuda-tabs">
+      <button class="ajuda-tab active" id="tab-btn-wa-fluxo"       onclick="switchWaTab('wa-fluxo')">🔄 Como funciona</button>
+      <button class="ajuda-tab"        id="tab-btn-wa-tecnologia"   onclick="switchWaTab('wa-tecnologia')">⚙ Tecnologia</button>
+      <button class="ajuda-tab"        id="tab-btn-wa-ia"           onclick="switchWaTab('wa-ia')">🤖 IA utilizada</button>
+    </div>
+
+    <!-- Aba: Como funciona -->
+    <div id="tab-wa-fluxo" class="ajuda-tab-content active">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">📨 O que acontece quando um candidato envia o currículo?</div>
+        <p>O candidato envia um arquivo PDF pelo WhatsApp para o número configurado. O sistema processa automaticamente em 5 etapas:</p>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">1</div>
+        <div class="fluxo-body">
+          <strong>Recebimento e validação do arquivo</strong>
+          <p>O sistema verifica se a mensagem contém um arquivo do tipo <em>documento</em>. Outros tipos (imagem, áudio, texto) são ignorados. Se o arquivo não for PDF, o candidato recebe uma mensagem orientando a enviar em formato correto.</p>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">2</div>
+        <div class="fluxo-body">
+          <strong>Extração do texto do PDF</strong>
+          <p>O conteúdo textual é extraído do PDF. Se o arquivo estiver protegido ou for uma imagem escaneada sem texto legível, o candidato é notificado e o processo é encerrado para aquele envio.</p>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">3</div>
+        <div class="fluxo-body">
+          <strong>Detecção de idioma e tradução</strong>
+          <p>A IA identifica o idioma do currículo. Caso não esteja em português, o texto é automaticamente traduzido antes de prosseguir, garantindo que a análise funcione corretamente.</p>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">4</div>
+        <div class="fluxo-body">
+          <strong>Verificação se é um currículo</strong>
+          <p>A IA verifica se o documento enviado é de fato um currículo. Documentos que não forem identificados como currículo (contratos, comprovantes, etc.) são rejeitados e o candidato recebe uma mensagem explicativa.</p>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">5</div>
+        <div class="fluxo-body">
+          <strong>Análise, salvamento e notificação</strong>
+          <p>O currículo é analisado pela IA, os dados são extraídos (nome, e-mail, telefone, experiências, formação) e salvos no banco. O candidato recebe uma confirmação de recebimento e, se houver um número de destino configurado, o resumo do currículo é enviado para esse número.</p>
+        </div>
+      </div>
+
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">⚠️ Tratamento de duplicatas</div>
+        <p>Antes de salvar, o sistema verifica se já existe um currículo com o mesmo e-mail ou telefone. Se houver, o candidato recebe uma mensagem perguntando se deseja <strong>atualizar</strong> o registro existente. Ele responde <em>SIM</em> (substitui) ou <em>NÃO</em> (mantém o anterior). O candidato tem até o próximo reinício do serviço para responder.</p>
+      </div>
+    </div>
+
+    <!-- Aba: Tecnologia -->
+    <div id="tab-wa-tecnologia" class="ajuda-tab-content">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">📦 Biblioteca utilizada: whatsapp-web.js</div>
+        <p>O sistema utiliza a biblioteca open source <strong>whatsapp-web.js</strong> — uma solução <strong>totalmente gratuita</strong>, sem custos de API. Ela funciona automatizando o <strong>WhatsApp Web</strong> em um navegador Chrome rodando em segundo plano no servidor.</p>
+        <p>A autenticação é feita via <strong>QR Code</strong>: basta escanear com o celular que terá o número ativo, exatamente como quando você acessa o WhatsApp Web normalmente.</p>
+      </div>
+
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">📱 Como conectar o número</div>
+        <p>1. Clique em <strong>▶ Iniciar Serviço</strong> — o Chrome sobe em segundo plano.<br>
+           2. Clique em <strong>📱 QR Code</strong> para abrir o painel lateral.<br>
+           3. No celular: <strong>WhatsApp → Menu (⋮) → Dispositivos conectados → Conectar dispositivo</strong>.<br>
+           4. Aponte a câmera para o QR Code exibido na tela.<br>
+           5. Após escanear, o status muda para <em>Conectado</em> e o número passa a receber currículos.</p>
+      </div>
+
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">💾 Sessão persistente</div>
+        <p>Após o primeiro escaneamento do QR Code, a sessão é salva automaticamente. Nas próximas vezes que o serviço for iniciado, ele reconecta sem precisar escanear novamente — desde que o número não tenha sido desconectado pelo celular. Para trocar o número, use o botão <strong>🔄 Trocar número</strong> no painel QR.</p>
+      </div>
+
+      <div class="aviso-card">
+        <strong>⚠️ Importante:</strong> O whatsapp-web.js é uma solução <strong>não oficial</strong> da Meta. O WhatsApp pode limitar ou bloquear números que enviam/recebem mensagens automatizadas em alto volume. Para uso comercial intenso, use a <strong>API Oficial do WhatsApp Business (Meta)</strong> — configurável em <a href="/config.html" style="color:var(--accent)">Configuração → API Oficial Meta</a>.
+      </div>
+
+      <div class="ajuda-etapa" style="margin-top:18px;margin-bottom:0">
+        <div class="ajuda-etapa-titulo">🟢 API Oficial Meta (alternativa paga)</div>
+        <p>Quando ativada em <a href="/config.html" style="color:var(--accent)">Configuração</a>, o sistema usa a <strong>Cloud API da Meta</strong> em vez do whatsapp-web.js. Neste modo:</p>
+        <p>• <strong>Sem QR Code</strong> — a autenticação é via token permanente gerado no Meta Developer Console.<br>
+           • <strong>Sem risco de bloqueio</strong> — é a API oficial, suportada pela Meta.<br>
+           • <strong>Webhook</strong> — a Meta envia mensagens para a URL <code style="color:var(--accent)">/api/whatsapp/webhook/meta</code> do seu servidor. O servidor precisa ter um endereço público (HTTPS) acessível pela Meta.<br>
+           • <strong>Custo</strong> — a Meta cobra por conversa iniciada (modelo de pricing em conversas de 24h). Verifique os preços em <a href="https://developers.facebook.com/docs/whatsapp/pricing" target="_blank" style="color:var(--accent)">developers.facebook.com/docs/whatsapp/pricing</a>.</p>
+      </div>
+    </div>
+
+    <!-- Aba: IA utilizada -->
+    <div id="tab-wa-ia" class="ajuda-tab-content">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🔄 Estratégia: Groq como primário, Gemini como fallback</div>
+        <p>O sistema tenta 3 vezes antes de desistir, sempre na ordem abaixo:</p>
+      </div>
+
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-card-icon">⚡</span>
+          <span class="ia-card-title">1ª e 2ª tentativas — Groq (Llama 3.3 70B / Llama 3.1 8B)</span>
+        </div>
+        <p>Motor principal. Cada currículo é enviado ao modelo <strong>Llama 3.3 70B Versatile</strong> via API Groq. Se falhar, uma segunda tentativa usa o modelo mais rápido <strong>Llama 3.1 8B Instant</strong>.</p>
+        <p>A Groq oferece um <strong>plano gratuito</strong> generoso com limite de tokens por dia — suficiente para uso moderado sem custo algum.</p>
+        <a class="ia-link" href="https://console.groq.com" target="_blank">🔗 console.groq.com — Criar conta / gerenciar créditos</a>
+      </div>
+
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-card-icon">🌐</span>
+          <span class="ia-card-title">3ª tentativa — Google Gemini (fallback automático)</span>
+        </div>
+        <p>Ativado automaticamente quando a Groq retorna erro de limite (429) ou quota excedida. O sistema reanalisa o currículo com Gemini sem nenhuma intervenção do operador.</p>
+        <p>O modelo usado é configurável em <strong>Configurações → Chaves de API → Modelo Gemini</strong> (padrão: <em>gemini-1.5-flash</em>).</p>
+      </div>
+
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">🛡️ Proteção contra falhas</div>
+        <p>Se todas as 3 tentativas falharem, o currículo ainda é <strong>salvo no banco</strong> com os dados brutos extraídos do PDF, sem ser descartado. Nenhum candidato é perdido por problemas técnicos de IA.</p>
+        <p>As chaves de API são configuradas em <strong>Configurações → Chaves de API</strong> e são armazenadas por empresa (cada empresa pode ter suas próprias chaves).</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/socket.io/socket.io.js"></script>
@@ -183,6 +362,7 @@
   // ── Estado ────────────────────────────────────────────────────────────────────
   let waLines = [], waCount = 0, timerInterval = null, timerStart = null;
   let currentStatus = 'stopped';
+  let currentProvider = 'webjs';
   let qrPanelOpen = false;
   let startedByQrPanel = false;
 
@@ -270,9 +450,24 @@
     }
   }
 
+  function setProvider(provider) {
+    currentProvider = provider || 'webjs';
+    const isMeta = currentProvider === 'meta';
+    // Banner modo Meta
+    const banner = document.getElementById('meta-mode-banner');
+    banner.style.display = isMeta ? 'flex' : 'none';
+    banner.classList.toggle('d-none', !isMeta);
+    // Oculta botão QR no modo Meta (não há QR para escanear)
+    document.getElementById('btn-qr').classList.toggle('d-none', isMeta);
+    if (isMeta && qrPanelOpen) fecharQrPanel();
+  }
+
   function setStatus(payload) {
-    const s = typeof payload === 'object' ? payload.status : payload;
+    const s = typeof payload === 'object' ? payload.status   : payload;
+    const p = typeof payload === 'object' ? payload.provider : currentProvider;
     currentStatus = s;
+    setProvider(p);
+
     const [cls, label] = PILLS[s] || PILLS.stopped;
     const pill = document.getElementById('status-pill');
     pill.className = `status-pill ${cls}`;
@@ -287,7 +482,9 @@
     if (s === 'connected' || s === 'stopped') startedByQrPanel = false;
     if (qrPanelOpen) atualizarQrPanel(s);
     if (s !== 'starting') { pararTimer(); pararPollQr(); return; }
-    iniciarPollQr();
+
+    // Modo Meta não usa polling de QR
+    if (currentProvider !== 'meta') iniciarPollQr();
 
     const saved = localStorage.getItem('iahub_start_ts');
     timerStart  = saved ? Number(saved) : Date.now();
@@ -422,6 +619,15 @@
     } finally {
       document.getElementById('btn-stop').disabled = false;
     }
+  }
+
+  function switchWaTab(tab) {
+    document.querySelectorAll('.ajuda-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ajuda-tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none'; });
+    document.getElementById('tab-btn-wa-' + tab).classList.add('active');
+    const el = document.getElementById('tab-wa-' + tab);
+    el.classList.add('active');
+    el.style.display = 'block';
   }
 </script>
 </body>

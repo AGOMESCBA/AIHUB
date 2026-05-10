@@ -5,20 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Configuração — Analisador de Currículos</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .cfg-tabs        { display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:28px; }
+    .cfg-tab         { background:none;border:none;border-bottom:2px solid transparent;padding:10px 20px;font-size:13px;font-weight:600;color:var(--text-lo);cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s;margin-bottom:-1px; }
+    .cfg-tab:hover   { color:var(--text-hi); }
+    .cfg-tab.active  { color:var(--accent);border-bottom-color:var(--accent); }
+    .cfg-pane        { display:none; }
+    .cfg-pane.active { display:block; }
+  </style>
 </head>
 <body>
 <div class="layout">
 
-      <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
     </div>
-    <div class="sidebar-nav">
-    </div>
-    <div class="sidebar-footer">
-    </div>
-    </nav>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
 
   <div class="main">
     <div class="topbar">
@@ -26,49 +32,181 @@
     </div>
 
     <div class="page-content">
-      <div style="max-width:580px">
+      <div style="max-width:600px">
 
-        <div id="alert-ok" class="d-none mb-4" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:9px;padding:12px 16px;font-size:13px">
-          ✅ Configuração salva com sucesso!
+        <!-- Abas -->
+        <div class="cfg-tabs">
+          <button class="cfg-tab active" onclick="trocarAba('nivel')">⏱ Classificação de Nível</button>
+          <button class="cfg-tab"        onclick="trocarAba('pesos')">⚖ Pesos da Pontuação</button>
         </div>
-        <div id="alert-erro" class="d-none mb-4" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:9px;padding:12px 16px;font-size:13px"></div>
 
-        <div class="card mb-4">
-          <div class="card-header">⏱ Classificação de Nível por Tempo de Experiência</div>
-          <div class="card-body">
-            <p style="font-size:13px;color:var(--text-md);margin-bottom:20px;line-height:1.7">
-              Defina os limites de tempo de experiência <strong style="color:var(--text-hi)">relevante para a vaga</strong> que classificam o candidato como Júnior, Pleno ou Sênior.
-              O sistema calculará automaticamente o tempo total de experiência e a IA avaliará o tempo relevante com base nesses critérios.
-            </p>
+        <!-- ── Aba: Classificação de Nível ─────────────────────────────────── -->
+        <div id="pane-nivel" class="cfg-pane active">
 
-            <div class="form-group">
-              <label class="form-label">Limite Júnior → Pleno (em meses)</label>
-              <input type="number" id="junior_max" class="form-control" min="1" max="120" placeholder="12" oninput="atualizarPreview()">
-              <div class="form-hint">Candidatos com menos de <strong id="hint-junior">12 meses</strong> de experiência relevante serão classificados como <strong>Júnior</strong>.</div>
+          <div id="alert-nivel-ok"   class="d-none mb-4" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:9px;padding:12px 16px;font-size:13px">✅ Configuração salva com sucesso!</div>
+          <div id="alert-nivel-erro" class="d-none mb-4" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+
+          <div class="card mb-4">
+            <div class="card-header">⏱ Classificação de Nível por Tempo de Experiência</div>
+            <div class="card-body">
+              <p style="font-size:13px;color:var(--text-md);margin-bottom:20px;line-height:1.7">
+                Defina os limites de tempo de experiência <strong style="color:var(--text-hi)">relevante para a vaga</strong> que classificam o candidato como Júnior, Pleno ou Sênior.
+                O sistema calculará automaticamente o tempo total de experiência e exibirá ao recrutador.
+              </p>
+
+              <div class="form-group">
+                <label class="form-label">Limite Júnior → Pleno (em meses)</label>
+                <input type="number" id="junior_max" class="form-control" min="1" max="120" placeholder="12" oninput="atualizarPreview()">
+                <div class="form-hint">Candidatos com menos de <strong id="hint-junior">12 meses</strong> de experiência relevante serão classificados como <strong>Júnior</strong>.</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Limite Pleno → Sênior (em meses)</label>
+                <input type="number" id="pleno_max" class="form-control" min="1" max="300" placeholder="36" oninput="atualizarPreview()">
+                <div class="form-hint">Candidatos com mais de <strong id="hint-senior">36 meses</strong> de experiência relevante serão classificados como <strong>Sênior</strong>.</div>
+              </div>
+
+              <div id="preview" style="background:var(--bg-hover);border-radius:9px;padding:14px 16px;margin-top:8px;font-size:13px;line-height:2">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:6px">Prévia da classificação</div>
+                <div><span style="display:inline-block;min-width:90px;color:var(--accent-light);font-weight:600">Júnior</span> → menos de <span id="prev-junior">12</span> meses (&lt; 1 ano)</div>
+                <div><span style="display:inline-block;min-width:90px;color:var(--success);font-weight:600">Pleno</span> → de <span id="prev-pleno-min">12</span> a <span id="prev-pleno-max">36</span> meses (1 a 3 anos)</div>
+                <div><span style="display:inline-block;min-width:90px;color:var(--warning);font-weight:600">Sênior</span> → acima de <span id="prev-senior">36</span> meses (3+ anos)</div>
+              </div>
             </div>
+          </div>
 
-            <div class="form-group">
-              <label class="form-label">Limite Pleno → Sênior (em meses)</label>
-              <input type="number" id="pleno_max" class="form-control" min="1" max="300" placeholder="36" oninput="atualizarPreview()">
-              <div class="form-hint">Candidatos com mais de <strong id="hint-senior">36 meses</strong> de experiência relevante serão classificados como <strong>Sênior</strong>.</div>
-            </div>
+          <button class="btn btn-primary" onclick="salvarNivel()" style="width:100%">Salvar Classificação de Nível</button>
 
-            <div id="preview" style="background:var(--bg-hover);border-radius:9px;padding:14px 16px;margin-top:8px;font-size:13px;line-height:2">
-              <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:6px">Prévia da classificação</div>
-              <div><span style="display:inline-block;min-width:90px;color:var(--accent-light);font-weight:600">Júnior</span> → menos de <span id="prev-junior">12</span> meses (&lt; 1 ano)</div>
-              <div><span style="display:inline-block;min-width:90px;color:var(--success);font-weight:600">Pleno</span> → de <span id="prev-pleno-min">12</span> a <span id="prev-pleno-max">36</span> meses (1 a 3 anos)</div>
-              <div><span style="display:inline-block;min-width:90px;color:var(--warning);font-weight:600">Sênior</span> → acima de <span id="prev-senior">36</span> meses (3+ anos)</div>
+          <div class="card" style="margin-top:24px">
+            <div class="card-header">ℹ Como funciona</div>
+            <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+              Os limites definidos aqui são usados em toda análise de currículo. O sistema soma automaticamente os períodos informados em cada experiência profissional e classifica o candidato como Júnior, Pleno ou Sênior para exibição ao recrutador.
             </div>
           </div>
         </div>
 
-        <button class="btn btn-primary" onclick="salvar()" style="width:100%">Salvar Configuração</button>
+        <!-- ── Aba: Pesos da Pontuação ──────────────────────────────────────── -->
+        <div id="pane-pesos" class="cfg-pane">
 
-        <div class="card" style="margin-top:32px">
-          <div class="card-header">ℹ Como funciona</div>
-          <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
-            Os limites definidos aqui são usados em toda análise de currículo. O sistema soma automaticamente os períodos informados em cada experiência profissional e a IA avalia quanto desse tempo é relevante para os requisitos da vaga.<br><br>
-            A classificação resultante (Júnior / Pleno / Sênior) é comparada ao nível exigido na <a href="/funcoes.html" style="color:var(--accent-light)">Função cadastrada</a> e contribui com até <strong style="color:var(--accent-light)">15 pontos</strong> na pontuação total do candidato.
+          <div id="alert-pesos-ok"   class="d-none mb-4" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:#4ade80;border-radius:9px;padding:12px 16px;font-size:13px">✅ Pesos salvos com sucesso!</div>
+          <div id="alert-pesos-erro" class="d-none mb-4" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:9px;padding:12px 16px;font-size:13px"></div>
+
+          <div class="card mb-4">
+            <div class="card-header">⚖ Pesos da Pontuação da IA</div>
+            <div class="card-body">
+              <p style="font-size:13px;color:var(--text-md);margin-bottom:20px;line-height:1.7">
+                Defina quanto cada critério vale na pontuação total de <strong style="color:var(--text-hi)">100 pontos</strong>.
+                Candidatos com pontuação ≥ ao mínimo configurado são <strong style="color:var(--text-hi)">selecionados</strong>; abaixo disso são desclassificados.
+              </p>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div class="form-group">
+                  <label class="form-label">Requisitos Obrigatórios (pts)</label>
+                  <input type="number" id="p_obrig" class="form-control" min="0" max="100" oninput="atualizarSoma()">
+                  <div class="form-hint">Critérios essenciais da função. Peso maior recomendado.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Requisitos Desejáveis (pts)</label>
+                  <input type="number" id="p_desej" class="form-control" min="0" max="100" oninput="atualizarSoma()">
+                  <div class="form-hint">Diferenciais valorizados, mas não obrigatórios.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Formação Acadêmica (pts)</label>
+                  <input type="number" id="p_form" class="form-control" min="0" max="100" oninput="atualizarSoma()">
+                  <div class="form-hint">Grau de instrução e área de formação.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Habilidades Técnicas (pts)</label>
+                  <input type="number" id="p_hab" class="form-control" min="0" max="100" oninput="atualizarSoma()">
+                  <div class="form-hint">Ferramentas e tecnologias listadas na função.</div>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:9px;margin:8px 0 20px;border:1px solid var(--border);background:var(--bg-hover)">
+                <span style="font-size:13px;color:var(--text-md)">Soma dos critérios:</span>
+                <strong id="soma-val" style="font-size:18px;color:var(--text-hi)">100</strong>
+                <span style="font-size:13px;color:var(--text-lo)">/ 100 pts</span>
+                <span id="soma-status" style="margin-left:auto;font-size:13px;font-weight:600;color:#15803d">✓ OK</span>
+              </div>
+
+              <div class="form-group" style="max-width:300px">
+                <label class="form-label">Pontuação mínima para aprovação (pts)</label>
+                <input type="number" id="p_corte" class="form-control" min="1" max="99" oninput="atualizarHintCorte()">
+                <div class="form-hint">Candidatos com score ≥ <strong id="hint-corte">50</strong> pts são selecionados para entrevista.</div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="salvarPesos()" style="width:100%">Salvar Pesos de Pontuação</button>
+
+          <div class="card" style="margin-top:24px">
+            <div class="card-header">ℹ Como funciona a pontuação</div>
+            <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
+              A IA analisa cada currículo e atribui pontos em cada critério de forma <strong style="color:var(--text-hi)">proporcional ao que o candidato atende</strong>. Não existe penalidade: um requisito não atendido vale simplesmente 0 pontos, sem reduzir os pontos dos demais critérios.<br><br>
+              A soma dos quatro critérios deve ser sempre <strong style="color:var(--text-hi)">100 pontos</strong>. A pontuação mínima define o corte de aprovação — candidatos abaixo desse valor são desclassificados automaticamente, e os aprovados são ordenados do maior para o menor score.<br><br>
+              <strong style="color:var(--text-hi)">Exemplo com os pesos padrão (50 / 30 / 10 / 10) e corte em 50 pts:</strong>
+              <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:10px">
+                <thead>
+                  <tr style="background:var(--bg-hover)">
+                    <th style="text-align:left;padding:7px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Candidato</th>
+                    <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Obrig.<br><span style="font-weight:400;color:var(--text-lo)">/50</span></th>
+                    <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Desej.<br><span style="font-weight:400;color:var(--text-lo)">/30</span></th>
+                    <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Form.<br><span style="font-weight:400;color:var(--text-lo)">/10</span></th>
+                    <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Hab.<br><span style="font-weight:400;color:var(--text-lo)">/10</span></th>
+                    <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Total</th>
+                    <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:7px 10px;color:var(--text-md)">Candidato A</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">50</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">24</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">8</td>
+                    <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">92</td>
+                    <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:7px 10px;color:var(--text-md)">Candidato B</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">25</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">15</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">7</td>
+                    <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">57</td>
+                    <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border);background:rgba(34,197,94,.04)">
+                    <td style="padding:7px 10px;color:var(--text-md)">Candidato C <span style="font-size:11px;color:var(--text-lo)">(0 obrig.)</span></td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">30</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+                    <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">50</td>
+                    <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado <span style="font-weight:400;font-size:10px">(no limite)</span></td>
+                  </tr>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:7px 10px;color:var(--text-md)">Candidato D</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">25</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">6</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">5</td>
+                    <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">36</td>
+                    <td style="padding:7px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Desclassificado</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:7px 10px;color:var(--text-md)">Candidato E <span style="font-size:11px;color:var(--text-lo)">(0 obrig.)</span></td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+                    <td style="padding:7px 8px;text-align:center;color:var(--text-md)">5</td>
+                    <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">15</td>
+                    <td style="padding:7px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Desclassificado</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p style="font-size:11.5px;color:var(--text-lo);margin-top:8px;line-height:1.6">O Candidato C ilustra que a ausência de requisitos obrigatórios não elimina automaticamente — ele pode passar se compensar nos demais critérios. A decisão final cabe ao recrutador na entrevista.</p>
+            </div>
           </div>
         </div>
 
@@ -80,71 +218,139 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
+  // ── Abas ─────────────────────────────────────────────────────────────────────
+  function trocarAba(aba) {
+    document.querySelectorAll('.cfg-tab').forEach((btn, i) => {
+      const id = ['nivel','pesos'][i];
+      btn.classList.toggle('active', id === aba);
+    });
+    document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById('pane-' + aba).classList.add('active');
+  }
+
+  // ── Aba Nível ─────────────────────────────────────────────────────────────────
   function mesesParaTexto(m) {
-    const anos = Math.floor(m / 12);
+    const anos  = Math.floor(m / 12);
     const meses = m % 12;
-    if (anos === 0) return `${m} mês${m !== 1 ? 'es' : ''}`;
+    if (anos  === 0) return `${m} mês${m !== 1 ? 'es' : ''}`;
     if (meses === 0) return `${anos} ano${anos !== 1 ? 's' : ''}`;
     return `${anos} ano${anos !== 1 ? 's' : ''} e ${meses} mês${meses !== 1 ? 'es' : ''}`;
   }
 
   function atualizarPreview() {
     const j = parseInt(document.getElementById('junior_max').value) || 12;
-    const p = parseInt(document.getElementById('pleno_max').value) || 36;
-    document.getElementById('hint-junior').textContent  = `${j} meses`;
-    document.getElementById('hint-senior').textContent  = `${p} meses`;
-    document.getElementById('prev-junior').textContent  = j;
+    const p = parseInt(document.getElementById('pleno_max').value)  || 36;
+    document.getElementById('hint-junior').textContent    = `${j} meses`;
+    document.getElementById('hint-senior').textContent    = `${p} meses`;
+    document.getElementById('prev-junior').textContent    = j;
     document.getElementById('prev-pleno-min').textContent = j;
     document.getElementById('prev-pleno-max').textContent = p;
-    document.getElementById('prev-senior').textContent  = p;
-
-    const jTexto = mesesParaTexto(j);
-    const pTexto = mesesParaTexto(p);
+    document.getElementById('prev-senior').textContent    = p;
+    const jT = mesesParaTexto(j), pT = mesesParaTexto(p);
     document.querySelectorAll('#preview div')[1].innerHTML =
-      `<span style="display:inline-block;min-width:90px;color:var(--accent-light);font-weight:600">Júnior</span> → menos de <strong>${j}</strong> meses (menos de ${jTexto})`;
+      `<span style="display:inline-block;min-width:90px;color:var(--accent-light);font-weight:600">Júnior</span> → menos de <strong>${j}</strong> meses (menos de ${jT})`;
     document.querySelectorAll('#preview div')[2].innerHTML =
-      `<span style="display:inline-block;min-width:90px;color:var(--success);font-weight:600">Pleno</span> → de <strong>${j}</strong> a <strong>${p}</strong> meses (${jTexto} até ${pTexto})`;
+      `<span style="display:inline-block;min-width:90px;color:var(--success);font-weight:600">Pleno</span> → de <strong>${j}</strong> a <strong>${p}</strong> meses (${jT} até ${pT})`;
     document.querySelectorAll('#preview div')[3].innerHTML =
-      `<span style="display:inline-block;min-width:90px;color:var(--warning);font-weight:600">Sênior</span> → acima de <strong>${p}</strong> meses (mais de ${pTexto})`;
+      `<span style="display:inline-block;min-width:90px;color:var(--warning);font-weight:600">Sênior</span> → acima de <strong>${p}</strong> meses (mais de ${pT})`;
   }
 
-  async function carregar() {
+  async function carregarNivel() {
     const cfg = await fetch('/api/analisador/config').then(r => r.json());
     document.getElementById('junior_max').value = cfg.junior_max_meses;
     document.getElementById('pleno_max').value  = cfg.pleno_max_meses;
     atualizarPreview();
   }
 
-  async function salvar() {
-    const j = parseInt(document.getElementById('junior_max').value);
-    const p = parseInt(document.getElementById('pleno_max').value);
-
-    const alertErro = document.getElementById('alert-erro');
+  async function salvarNivel() {
+    const j    = parseInt(document.getElementById('junior_max').value);
+    const p    = parseInt(document.getElementById('pleno_max').value);
+    const erro = document.getElementById('alert-nivel-erro');
     if (!j || !p) {
-      alertErro.textContent = '❌ Preencha os dois campos.';
-      alertErro.classList.remove('d-none');
-      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+      erro.textContent = '❌ Preencha os dois campos.';
+      erro.classList.remove('d-none');
+      setTimeout(() => erro.classList.add('d-none'), 4000);
       return;
     }
     if (j >= p) {
-      alertErro.textContent = '❌ O limite Júnior deve ser menor que o limite Pleno.';
-      alertErro.classList.remove('d-none');
-      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+      erro.textContent = '❌ O limite Júnior deve ser menor que o limite Pleno.';
+      erro.classList.remove('d-none');
+      setTimeout(() => erro.classList.add('d-none'), 4000);
       return;
     }
-
     const r = await fetch('/api/analisador/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ junior_max_meses: j, pleno_max_meses: p }),
     });
     if (r.ok) {
-      document.getElementById('alert-ok').classList.remove('d-none');
-      setTimeout(() => document.getElementById('alert-ok').classList.add('d-none'), 3000);
+      document.getElementById('alert-nivel-ok').classList.remove('d-none');
+      setTimeout(() => document.getElementById('alert-nivel-ok').classList.add('d-none'), 3000);
     }
   }
 
-  carregar();
+  // ── Aba Pesos ─────────────────────────────────────────────────────────────────
+  function atualizarSoma() {
+    const soma = ['p_obrig','p_desej','p_form','p_hab']
+      .reduce((s, id) => s + (parseInt(document.getElementById(id).value) || 0), 0);
+    const ok = soma === 100;
+    document.getElementById('soma-val').textContent    = soma;
+    document.getElementById('soma-val').style.color    = ok ? 'var(--success)' : 'var(--error)';
+    document.getElementById('soma-status').textContent = ok ? '✓ OK' : '✗ Ajuste os valores';
+    document.getElementById('soma-status').style.color = ok ? '#15803d' : '#b91c1c';
+  }
+
+  function atualizarHintCorte() {
+    document.getElementById('hint-corte').textContent = parseInt(document.getElementById('p_corte').value) || 50;
+  }
+
+  async function carregarPesos() {
+    const p = await fetch('/api/pesos-pontuacao').then(r => r.json());
+    document.getElementById('p_obrig').value = p.requisitos_obrigatorios;
+    document.getElementById('p_desej').value = p.requisitos_desejados;
+    document.getElementById('p_form').value  = p.formacao;
+    document.getElementById('p_hab').value   = p.habilidades;
+    document.getElementById('p_corte').value = p.corte_minimo;
+    atualizarSoma();
+    atualizarHintCorte();
+  }
+
+  async function salvarPesos() {
+    const alertOk   = document.getElementById('alert-pesos-ok');
+    const alertErro = document.getElementById('alert-pesos-erro');
+    const payload = {
+      requisitos_obrigatorios: parseInt(document.getElementById('p_obrig').value),
+      requisitos_desejados:    parseInt(document.getElementById('p_desej').value),
+      formacao:                parseInt(document.getElementById('p_form').value),
+      habilidades:             parseInt(document.getElementById('p_hab').value),
+      corte_minimo:            parseInt(document.getElementById('p_corte').value),
+    };
+    const soma = payload.requisitos_obrigatorios + payload.requisitos_desejados + payload.formacao + payload.habilidades;
+    if (soma !== 100) {
+      alertErro.textContent = `❌ A soma dos critérios deve ser 100 pts. Atual: ${soma} pts.`;
+      alertErro.classList.remove('d-none');
+      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+      return;
+    }
+    const r = await fetch('/api/pesos-pontuacao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (r.ok) {
+      alertOk.classList.remove('d-none');
+      setTimeout(() => alertOk.classList.add('d-none'), 3000);
+    } else {
+      const e = await r.json();
+      alertErro.textContent = `❌ ${e.error}`;
+      alertErro.classList.remove('d-none');
+      setTimeout(() => alertErro.classList.add('d-none'), 4000);
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────────
+  carregarNivel();
+  carregarPesos();
 </script>
 </body>
 </html>

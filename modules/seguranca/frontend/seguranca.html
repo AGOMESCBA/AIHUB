@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Segurança — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
     .config-section { margin-bottom:28px; }
     .config-section-title {
@@ -24,24 +25,40 @@
     .tab-content { display:none; }
     .tab-content.active { display:block; }
 
-    /* ── Tabela de auditoria ── */
+    /* ── Filtros de auditoria ── */
     .audit-filters {
       display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
     }
     .audit-filters .form-group { margin:0;flex:1;min-width:140px; }
     .audit-filters .form-label { font-size:11px;margin-bottom:4px; }
     .audit-filters .form-control { font-size:12px;padding:6px 10px; }
+
     .acao-badge {
       display:inline-block;padding:2px 8px;border-radius:12px;
       font-size:11px;font-weight:600;
     }
-    .acao-login_sucesso  { background:rgba(22,163,74,.12); color:var(--success); }
-    .acao-login_falha    { background:rgba(239,68,68,.10); color:#dc2626; }
-    .acao-login_bloqueado{ background:rgba(239,68,68,.18); color:#dc2626; }
-    .acao-logout         { background:var(--bg-hover);    color:var(--text-md); }
+    .acao-login_sucesso   { background:rgba(22,163,74,.12); color:var(--success); }
+    .acao-login_falha     { background:rgba(239,68,68,.10); color:#dc2626; }
+    .acao-login_bloqueado { background:rgba(239,68,68,.18); color:#dc2626; }
+    .acao-logout          { background:var(--bg-hover);    color:var(--text-md); }
     .acao-empresa_selecionada { background:rgba(37,99,235,.1); color:var(--accent); }
-    .acao-default        { background:var(--bg-hover);    color:var(--text-lo); }
-    .empty-audit         { text-align:center;padding:40px;color:var(--text-lo);font-size:13px; }
+    .acao-default         { background:var(--bg-hover);    color:var(--text-lo); }
+
+    /* ── Group panel ── */
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+
+    /* ── Tabulator overrides ── */
+    .tabulator { border:none !important; background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-body) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-body) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
   </style>
 </head>
 <body>
@@ -68,7 +85,7 @@
 
         <!-- ── Abas ─────────────────────────────────────────────────────────── -->
         <div class="tabs-header" style="padding:0 24px">
-          <button class="tab-btn active" id="tab-btn-config"   onclick="mudarAba('config',   this)">Configurações de Segurança</button>
+          <button class="tab-btn active" id="tab-btn-config"    onclick="mudarAba('config',    this)">Configurações de Segurança</button>
           <button class="tab-btn"        id="tab-btn-auditoria" onclick="mudarAba('auditoria', this)">Auditoria de Acessos</button>
         </div>
 
@@ -160,24 +177,14 @@
                 <button class="btn btn-secondary" onclick="carregarAuditoria()" style="white-space:nowrap">🔍 Filtrar</button>
               </div>
             </div>
+
+            <div class="gp-chips-row" id="aud-gp-chips" style="margin-bottom:6px">
+              <span class="gp-label">Agrupar:</span>
+            </div>
+            <div id="aud-gp-dz" style="margin-bottom:12px"></div>
           </div>
 
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:160px">Data / Hora</th>
-                  <th>Usuário</th>
-                  <th>Ação</th>
-                  <th>IP</th>
-                  <th>Empresa</th>
-                  <th>Detalhes</th>
-                </tr>
-              </thead>
-              <tbody id="audit-tbody"></tbody>
-            </table>
-          </div>
-          <div id="audit-empty" class="empty-audit d-none">Nenhum registro encontrado.</div>
+          <div id="audit-grid"></div>
         </div>
 
       </div>
@@ -185,17 +192,91 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
 <script>
+  // ── Auditoria ────────────────────────────────────────────────────────────────
+  let auditTable = null;
+  let auditGp    = null;
+
+  function initAuditGroupPanel() {
+    auditGp = createGroupPanel({
+      chipsRowId: 'aud-gp-chips',
+      dropZoneId: 'aud-gp-dz',
+      storageKey: 'auditoria_group_fields',
+      getTable:   () => auditTable,
+    });
+  }
+
+  function initAuditTabulator(dados) {
+    auditTable = new Tabulator('#audit-grid', {
+      data: dados,
+      layout: 'fitColumns',
+      height: 'calc(100vh - 360px)',
+      groupStartOpen: true,
+      groupBy: auditGp.getActiveFields(),
+      initialSort: [{ column: 'ts', dir: 'desc' }],
+      placeholder: '<div style="text-align:center;padding:40px;color:var(--text-lo);font-size:13px">Nenhum registro encontrado.</div>',
+      columns: [
+        {
+          title: 'Data / Hora', field: 'ts', width: 165, headerFilter: false, sorter: 'string', groupable: false,
+          formatter: cell => `<span style="font-size:12px;color:var(--text-md);white-space:nowrap">${new Date(cell.getValue()).toLocaleString('pt-BR')}</span>`,
+        },
+        {
+          title: 'Usuário', field: 'usuario', minWidth: 120, headerFilter: true,
+          formatter: cell => `<span style="font-weight:600;color:var(--text-hi)">${esc(cell.getValue())}</span>`,
+        },
+        {
+          title: 'Ação', field: 'acao', minWidth: 160,
+          headerFilter: 'select',
+          headerFilterParams: {
+            values: {
+              '': 'Todas',
+              login_sucesso: 'Login com sucesso',
+              login_falha: 'Login com falha',
+              login_bloqueado: 'Login bloqueado',
+              logout: 'Logout',
+              empresa_selecionada: 'Empresa selecionada',
+            },
+          },
+          formatter: cell => {
+            const v = cell.getValue() || '';
+            return `<span class="acao-badge acao-${v}">${esc(v)}</span>`;
+          },
+        },
+        {
+          title: 'IP', field: 'ip', width: 140, headerFilter: true,
+          formatter: cell => `<span style="font-family:monospace;font-size:12px">${esc(cell.getValue())}</span>`,
+        },
+        {
+          title: 'Empresa', field: 'empresa_id', width: 90, headerFilter: false, groupable: false,
+          formatter: cell => cell.getValue()
+            ? `<span style="font-size:12px">#${cell.getValue()}</span>`
+            : `<span style="color:var(--text-lo)">—</span>`,
+        },
+        {
+          title: 'Detalhes', field: 'detalhes', headerFilter: true, groupable: false,
+          formatter: cell => `<span style="font-size:12px;color:var(--text-md)">${esc(cell.getValue())}</span>`,
+        },
+      ],
+    });
+  }
+
+  // ── Abas ─────────────────────────────────────────────────────────────────────
   function mudarAba(aba, btn) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     document.getElementById('tab-' + aba).classList.add('active');
     btn.classList.add('active');
-    if (aba === 'auditoria') carregarAuditoria();
+    if (aba === 'auditoria') {
+      if (!auditGp) initAuditGroupPanel();
+      carregarAuditoria();
+    }
   }
 
+  // ── Configurações ─────────────────────────────────────────────────────────────
   async function carregarConfig() {
     try {
       const res = await fetch('/api/seguranca');
@@ -248,6 +329,7 @@
     }
   }
 
+  // ── Auditoria: carregar ───────────────────────────────────────────────────────
   async function carregarAuditoria() {
     const params = new URLSearchParams({
       limite:   200,
@@ -260,47 +342,22 @@
     try {
       const res       = await fetch(`/api/seguranca/auditoria?${params}`);
       const registros = await res.json();
-      renderAuditoria(registros);
+      if (auditTable) {
+        auditTable.replaceData(registros);
+      } else {
+        initAuditTabulator(registros);
+        setTimeout(() => auditGp.refresh(), 0);
+      }
     } catch (_) {
-      document.getElementById('audit-tbody').innerHTML =
-        '<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:30px">Erro ao carregar auditoria.</td></tr>';
+      console.error('Erro ao carregar auditoria.');
     }
-  }
-
-  function renderAuditoria(registros) {
-    const tbody = document.getElementById('audit-tbody');
-    const empty = document.getElementById('audit-empty');
-
-    if (!registros.length) {
-      tbody.innerHTML = '';
-      empty.classList.remove('d-none');
-      return;
-    }
-    empty.classList.add('d-none');
-
-    tbody.innerHTML = registros.map(e => {
-      const dt  = new Date(e.ts).toLocaleString('pt-BR');
-      const cls = `acao-${e.acao}`;
-      return `
-        <tr>
-          <td style="font-size:12px;color:var(--text-md);white-space:nowrap">${dt}</td>
-          <td style="font-weight:600;color:var(--text-hi)">${esc(e.usuario)}</td>
-          <td><span class="acao-badge ${cls}">${esc(e.acao)}</span></td>
-          <td style="font-family:monospace;font-size:12px">${esc(e.ip)}</td>
-          <td style="font-size:12px">${e.empresa_id ? `#${e.empresa_id}` : '<span style="color:var(--text-lo)">—</span>'}</td>
-          <td style="font-size:12px;color:var(--text-md)">${esc(e.detalhes)}</td>
-        </tr>
-      `;
-    }).join('');
   }
 
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    carregarConfig();
-  });
+  document.addEventListener('DOMContentLoaded', carregarConfig);
 </script>
 </body>
 </html>

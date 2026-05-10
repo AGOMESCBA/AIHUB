@@ -330,7 +330,7 @@ class EmailImapService {
     }
 
     this._emitLog(`[IMAP] Texto extraído — ${texto.length} chars | Verificando se é currículo via IA…`, 'info');
-    const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t));
+    const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t), empresaId);
     if (!ehCurriculo) {
       this._emitLog(`[IMAP] PDF não reconhecido como currículo — enviando rejeição para ${fromEmail}`, 'warning');
       await marcarLido();
@@ -341,10 +341,10 @@ class EmailImapService {
     }
 
     this._emitLog(`[IMAP] Currículo confirmado — extraindo dados via IA…`, 'info');
-    const { texto: textoFinal, traduzido } = await ia.traduzirSeNecessario(texto, (m,t) => this._emitLog(m,t));
+    const { texto: textoFinal, traduzido } = await ia.traduzirSeNecessario(texto, (m,t) => this._emitLog(m,t), empresaId);
     if (traduzido) this._emitLog(`[IMAP] Currículo traduzido para português`, 'info');
 
-    const dados = await ia.analisarComRetry(textoFinal, (m,t) => this._emitLog(m,t));
+    const dados = await ia.analisarComRetry(textoFinal, (m,t) => this._emitLog(m,t), empresaId);
     dados.nome  = dados.nome  || fromName  || null;
     dados.email = dados.email || fromEmail || null;
 
@@ -358,6 +358,7 @@ class EmailImapService {
 
     const curriculo_id = whatsappDb.saveCurriculo(empresaId, {
       remetente:       `email-livre:${fromEmail}`,
+      empresa_nome:    this._empresaNome || null,
       nome:            dados.nome,
       telefone:        dados.telefone     || null,
       email:           dados.email        || null,
@@ -478,7 +479,7 @@ class EmailImapService {
     }
 
     this._emitLog(`[IMAP] Texto extraído — ${texto.length} caracteres | Verificando se é currículo via IA…`, 'info');
-    const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t));
+    const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t), empresaId);
     if (!ehCurriculo) {
       this._emitLog(`[IMAP] Documento de "${nomeCandidato}" não reconhecido como currículo pela IA — enviando rejeição`, 'warning');
       enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'nao_curriculo', db, empresaId)
@@ -488,11 +489,11 @@ class EmailImapService {
     }
 
     this._emitLog(`[IMAP] Currículo confirmado pela IA — verificando idioma…`, 'info');
-    const { texto: textoFinal, traduzido } = await ia.traduzirSeNecessario(texto, (m,t) => this._emitLog(m,t));
+    const { texto: textoFinal, traduzido } = await ia.traduzirSeNecessario(texto, (m,t) => this._emitLog(m,t), empresaId);
     if (traduzido) this._emitLog(`[IMAP] Currículo traduzido para português`, 'info');
 
     this._emitLog(`[IMAP] Extraindo dados estruturados via IA…`, 'info');
-    const dados = await ia.analisarComRetry(textoFinal, (m,t) => this._emitLog(m,t));
+    const dados = await ia.analisarComRetry(textoFinal, (m,t) => this._emitLog(m,t), empresaId);
     dados.nome  = dados.nome  || nomeCandidato || null;
     dados.email = dados.email || fromEmail     || null;
 
@@ -508,6 +509,7 @@ class EmailImapService {
     this._emitLog(`[IMAP] Salvando currículo na base de dados…`, 'info');
     const curriculo_id = whatsappDb.saveCurriculo(empresaId, {
       remetente:       `email-externo:${fromEmail || nomeCandidato}`,
+      empresa_nome:    this._empresaNome || null,
       nome:            dados.nome,
       telefone:        dados.telefone        || null,
       email:           dados.email           || null,
@@ -624,11 +626,12 @@ class EmailImapService {
   return { ok: true, naoLidos: count };
   }
 
-  iniciarServico(deps, io, intervaloMs = 120_000, empresaId) {
+  iniciarServico(deps, io, intervaloMs = 120_000, empresaId, empresaNome = null) {
     if (!empresaId) throw new Error('empresa_id é obrigatório para iniciar o serviço de e-mail');
     this._deps        = { ...deps, empresaId };
     this._io          = io;
     this._empresaId   = Number(empresaId);
+    this._empresaNome = empresaNome || null;
     this._intervaloMs = intervaloMs;
     if (this._timer) {
       this._emitLog('[Email] Serviço já está em execução', 'warning');

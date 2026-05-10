@@ -320,7 +320,7 @@ class WhatsAppService extends EventEmitter {
     const numeroDestino = raw ? raw.replace(/\D/g, '') + '@c.us' : null;
     const mensagem      = numeroDestino ? this.formatarParaWhatsApp(dados) : null;
 
-    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome, empresaId: this._empresaId });
+    this.emit('curriculo', { remetente: sender, dados, pdf_base64, pdf_nome, empresaId: this._empresaId, empresaNome: this._empresaNome });
     db.markProcessed(this._empresaId, msgId);
 
     try {
@@ -410,10 +410,10 @@ class WhatsAppService extends EventEmitter {
 
   // ── IA: delega para módulo ia/ (sem acoplamento ao socket) ─────────────────
 
-  async analisarComRetry(texto)       { return ia.analisarComRetry(texto,       (m,t) => this.log(m,t)); }
-  async chamarIA(opts)                { return ia.chamarIA(opts,                (m,t) => this.log(m,t)); }
-  async traduzirSeNecessario(texto)   { return ia.traduzirSeNecessario(texto,   (m,t) => this.log(m,t)); }
-  async verificarSeCurriculo(texto)   { return ia.verificarSeCurriculo(texto,   (m,t) => this.log(m,t)); }
+  async analisarComRetry(texto)       { return ia.analisarComRetry(texto,       (m,t) => this.log(m,t), this._empresaId); }
+  async chamarIA(opts)                { return ia.chamarIA({ ...opts, empresaId: this._empresaId }, (m,t) => this.log(m,t)); }
+  async traduzirSeNecessario(texto)   { return ia.traduzirSeNecessario(texto,   (m,t) => this.log(m,t), this._empresaId); }
+  async verificarSeCurriculo(texto)   { return ia.verificarSeCurriculo(texto,   (m,t) => this.log(m,t), this._empresaId); }
 
     // ── Formatar para WhatsApp ───────────────────────────────────────────────────
 

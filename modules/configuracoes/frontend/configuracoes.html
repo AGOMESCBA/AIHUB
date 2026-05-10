@@ -5,7 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Configurações — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
   <style>
+    /* ── Tabulator skin ─── */
+    .tabulator { font-family: inherit; font-size: 14px; border: none !important; }
+    .tabulator .tabulator-header { background: var(--bg-hover); border-bottom: 1px solid var(--border) !important; }
+    .tabulator .tabulator-col { background: transparent; border-right: none !important; }
+    .tabulator .tabulator-col-title { font-size: 11px; color: var(--text-lo); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .tabulator-row { border-bottom: 1px solid var(--border) !important; }
+    .tabulator-row:hover { background: var(--bg-hover) !important; }
+    .tabulator-cell { border-right: none !important; padding: 10px 12px; }
+    .tabulator-header-filter input { width: 100%; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; background: #fff; color: var(--text); margin-top: 4px; }
+    .tabulator-group { background: var(--bg-hover) !important; border-bottom: 1px solid var(--border) !important; font-weight: 600; font-size: 13px; padding: 8px 14px !important; }
+    /* ── Group panel row ─── */
+    .gp-wrap { margin-bottom: 10px; }
+    .gp-chips-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; position: relative; }
+    .gp-label { font-size: 11px; color: var(--text-lo); white-space: nowrap; }
     textarea.form-control { resize: vertical; min-height: 80px; font-family: inherit; box-sizing: border-box; }
 
     /* ── Equivalências table ─── */
@@ -133,6 +148,16 @@
     }
     .alert-save-ok  { background:rgba(37,99,235,.08);border:1px solid rgba(37,99,235,.25);color:var(--accent); }
     .alert-save-err { background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);color:#dc2626; }
+    .config-section { margin-bottom: 22px; }
+    .config-section-title {
+      font-size: 12px; font-weight: 700; color: var(--text-md);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px;
+    }
+    .ak-credit-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .hint { font-size: 11.5px; color: var(--text-lo); margin-top: 5px; line-height: 1.6; }
+    @media (max-width: 780px) {
+      .ak-credit-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -159,6 +184,7 @@
       <div class="tabs-header" style="margin-bottom:24px">
         <button class="tab-btn active" onclick="mudarAba('whatsapp', this)">💬 WhatsApp Currículo</button>
         <button class="tab-btn" onclick="mudarAba('analisador', this)">🔍 Analisador de Currículos</button>
+        <button class="tab-btn" onclick="mudarAba('apikeys', this)">🔑 Chaves de API</button>
         <button class="tab-btn" onclick="mudarAba('equivalencias', this)">⚡ Equivalências</button>
         <button class="tab-btn" onclick="mudarAba('integracoes', this)">🔗 Integrações</button>
         <button class="tab-btn" onclick="mudarAba('email', this)">📧 Configuração de Email</button>
@@ -272,6 +298,83 @@
         </div>
       </div>
 
+      <!-- ===================== ABA: CHAVES DE API ===================== -->
+      <div id="aba-apikeys" class="d-none">
+        <div style="padding:0;max-width:640px">
+
+          <div class="config-section">
+            <div class="config-section-title">Groq</div>
+            <div class="form-group">
+              <label class="form-label">Chave de API (Groq)</label>
+              <div class="pass-wrap">
+                <input id="ak-groq" type="password" class="form-control" placeholder="Deixe em branco para não alterar">
+                <button class="pass-toggle" type="button" onclick="akToggleVer('ak-groq',this)">👁</button>
+              </div>
+              <div class="hint">Obtida em <strong>console.groq.com</strong>. Usada como provedor principal de IA.</div>
+              <div id="ak-groq-status" style="margin-top:6px;font-size:12px"></div>
+            </div>
+          </div>
+
+          <div class="config-section">
+            <div class="config-section-title">Google Gemini (fallback)</div>
+            <div class="form-group">
+              <label class="form-label">Chave de API (Gemini)</label>
+              <div class="pass-wrap">
+                <input id="ak-gemini" type="password" class="form-control" placeholder="Deixe em branco para não alterar">
+                <button class="pass-toggle" type="button" onclick="akToggleVer('ak-gemini',this)">👁</button>
+              </div>
+              <div class="hint">Usada automaticamente quando o Groq atinge o limite de tokens.</div>
+              <div id="ak-gemini-status" style="margin-top:6px;font-size:12px"></div>
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label class="form-label">Modelo Gemini</label>
+              <input id="ak-gemini-model" type="text" class="form-control" placeholder="gemini-1.5-flash">
+            </div>
+          </div>
+
+          <div class="config-section">
+            <div class="config-section-title">Créditos e atualização do dashboard</div>
+            <div class="ak-credit-grid">
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Limite Groq tokens/mês</label>
+                <input id="ak-groq-token-limit" type="number" min="0" step="1000" class="form-control" placeholder="0">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Limite Gemini tokens/mês</label>
+                <input id="ak-gemini-token-limit" type="number" min="0" step="1000" class="form-control" placeholder="0">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Limite Groq US$</label>
+                <input id="ak-groq-limit" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Limite Gemini US$</label>
+                <input id="ak-gemini-limit" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">Auto refresh min</label>
+                <input id="ak-auto-refresh" type="number" min="0" step="1" class="form-control" placeholder="0">
+              </div>
+            </div>
+            <div class="hint" style="margin-top:8px">
+              O dashboard usa esses limites para calcular saldo estimado em tokens e em dólares. Use 0 para desativar limite ou atualização automática.
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+            <button class="btn btn-primary" onclick="akSalvar()">💾 Salvar Chaves e Limites</button>
+            <span id="ak-msg" style="font-size:13px;display:none"></span>
+          </div>
+
+          <div style="margin-top:28px;padding:14px 16px;background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:8px;font-size:12.5px;color:#92400e;line-height:1.6">
+            <strong>Segurança:</strong> As chaves são gravadas em <code>data/config-sistema.json</code> no servidor,
+            fora do controle de versão. Nunca compartilhe ou exponha este arquivo.
+            Após salvar aqui, as variáveis <code>GROQ_API_KEY</code> e <code>GEMINI_API_KEY</code>
+            do arquivo <code>.env</code> podem ser removidas.
+          </div>
+        </div>
+      </div>
+
       <!-- ===================== ABA: EQUIVALÊNCIAS ===================== -->
       <div id="aba-equivalencias" class="d-none">
 
@@ -292,16 +395,16 @@
           </div>
         </div>
 
+        <!-- Group panel -->
+        <div class="gp-wrap">
+          <div class="gp-chips-row" id="eq-gp-chips-row">
+            <span class="gp-label">Agrupar por:</span>
+          </div>
+          <div id="eq-dz" style="margin-bottom:10px"></div>
+        </div>
+
         <div class="card">
-          <div style="padding:10px 16px;border-bottom:1px solid var(--border)">
-            <input type="text" id="eq-busca" class="form-control" placeholder="Filtrar por palavra-chave ou sinônimo..." oninput="renderTabela()" style="margin:0">
-          </div>
-          <div class="eq-header-row">
-            <span>Palavra-chave</span>
-            <span style="flex:1">Sinônimos / Variantes</span>
-            <span style="min-width:140px;text-align:right">Ações</span>
-          </div>
-          <div id="eq-tbody"></div>
+          <div id="eq-tabela"></div>
           <div id="eq-empty" class="d-none" style="padding:40px;text-align:center;color:var(--text-lo);font-size:13px">
             Nenhuma equivalência encontrada.
           </div>
@@ -341,6 +444,20 @@
             <div style="display:flex;gap:10px;margin-top:4px">
               <button class="btn btn-ghost" style="font-size:13px" onclick="testarConexaoSE()">🔌 Testar Conexão</button>
               <span id="se-test-result" style="font-size:12.5px;align-self:center"></span>
+            </div>
+            <hr style="margin:18px 0;border:none;border-top:1px solid var(--border)">
+            <div style="font-size:12px;font-weight:600;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">Campos de Empresa no Formulário SE</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="form-group" style="margin:0">
+                <label class="form-label">ID do campo — Empresa</label>
+                <input type="text" id="se_campo_empresa_id" class="form-control" placeholder="Ex.: IDEMP (deixe vazio para não enviar)">
+                <div class="form-hint">ID exato do campo no formulário SE para o identificador da empresa.</div>
+              </div>
+              <div class="form-group" style="margin:0">
+                <label class="form-label">ID do campo — Nome da Empresa</label>
+                <input type="text" id="se_campo_empresa_nome" class="form-control" placeholder="Ex.: NMEMP (deixe vazio para não enviar)">
+                <div class="form-hint">ID exato do campo no formulário SE para o nome da empresa.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -846,6 +963,8 @@
 
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
 // ── Utilitário: toggle visibilidade de campos sensíveis ──────────────────────
 const SVG_EYE      = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
@@ -859,13 +978,14 @@ function toggleSenha(inputId, btn) {
   btn.title   = show ? 'Ocultar' : 'Mostrar';
 }
 
-const ABAS = ['whatsapp', 'analisador', 'equivalencias', 'integracoes', 'email', 'templates', 'linkpublico'];
+const ABAS = ['whatsapp', 'analisador', 'apikeys', 'equivalencias', 'integracoes', 'email', 'templates', 'linkpublico'];
 
 function mudarAba(aba, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   ABAS.forEach(a => document.getElementById('aba-' + a).classList.add('d-none'));
   document.getElementById('aba-' + aba).classList.remove('d-none');
+  if (aba === 'apikeys') akInicializar();
   if (aba === 'equivalencias') carregarEquiv();
   if (aba === 'integracoes') carregarIntegracoes();
   if (aba === 'email') { carregarEmail(); carregarEmailGeral(); }
@@ -960,63 +1080,99 @@ async function salvarAnalisador() {
 }
 
 // ── Equivalências ─────────────────────────────────────────────────────────────
-let equivData   = [];
-let editingKw   = null;
-let tagList     = [];
+let equivData = [];
+let editingKw = null;
+let tagList   = [];
+let eqTable   = null;
 
 function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Painel de agrupamento — inicializado uma vez (elementos existem no DOM desde o carregamento)
+const eqGp = createGroupPanel({
+  chipsRowId: 'eq-gp-chips-row',
+  dropZoneId: 'eq-dz',
+  storageKey: 'equiv_group_fields',
+  getTable  : () => eqTable,
+});
+
 async function carregarEquiv() {
   equivData = await fetch('/api/equivalencias').then(r => r.json());
-  renderTabela();
+  equivData = equivData.map(e => ({
+    ...e,
+    tipo: !e.builtin ? '★ Personalizado' : e.overridden ? '⚙ Editado' : '⚙ Embutido',
+  }));
+  if (eqTable) {
+    eqTable.replaceData(equivData);
+  } else {
+    initEqTabulator();
+    setTimeout(() => eqGp.refresh(), 0);
+  }
 }
 
-function renderTabela() {
-  const busca   = (document.getElementById('eq-busca')?.value || '').toLowerCase().trim();
-  const filtrado = busca
-    ? equivData.filter(e => e.keyword.includes(busca) || e.variantes.some(v => v.includes(busca)))
-    : equivData;
-
-  const tbody = document.getElementById('eq-tbody');
-  const empty = document.getElementById('eq-empty');
-
-  if (!filtrado.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('d-none');
-    return;
-  }
-  empty.classList.add('d-none');
-
-  const MAX = 5;
-  tbody.innerHTML = filtrado.map(e => {
-    const pills = e.variantes.slice(0, MAX).map(v => `<span class="eq-var-pill">${esc(v)}</span>`).join('');
-    const more  = e.variantes.length > MAX ? `<span class="eq-var-more">+${e.variantes.length - MAX}</span>` : '';
-
-    let badge;
-    if (!e.builtin) {
-      badge = `<span class="badge-custom">★ personalizado</span>`;
-    } else if (e.overridden) {
-      badge = `<span class="badge-builtin overridden" title="Editado — diferente do padrão do sistema">⚙ editado</span>`;
-    } else {
-      badge = `<span class="badge-builtin">⚙ embutido</span>`;
-    }
-
-    const btnEditar   = `<button class="btn-eq btn-eq-edit" onclick="abrirModal('${esc(e.keyword)}')">Editar</button>`;
-    const btnRestaurar = e.overridden
-      ? `<button class="btn-eq btn-eq-restore" onclick="restaurarEquiv('${esc(e.keyword)}')" title="Restaurar padrão do sistema">↺ Restaurar</button>`
-      : '';
-    const btnExcluir = !e.builtin
-      ? `<button class="btn-eq btn-eq-del" onclick="excluirEquiv('${esc(e.keyword)}')">Excluir</button>`
-      : '';
-
-    return `<div class="eq-row">
-      <div class="eq-kw-col">${badge}<span>${esc(e.keyword)}</span></div>
-      <div class="eq-vars-col">${pills}${more}</div>
-      <div class="eq-actions-col">${btnEditar}${btnRestaurar}${btnExcluir}</div>
-    </div>`;
-  }).join('');
+function initEqTabulator() {
+  eqTable = new Tabulator('#eq-tabela', {
+    data: equivData,
+    index: 'keyword',
+    layout: 'fitColumns',
+    movableColumns: true,
+    columnDefaults: { resizable: true, headerSort: true },
+    groupBy: eqGp.getActiveFields(),
+    groupStartOpen: true,
+    columns: [
+      {
+        title: 'Tipo', field: 'tipo', width: 160,
+        formatter: c => {
+          const row = c.getRow().getData();
+          if (!row.builtin)        return `<span class="badge-custom">★ personalizado</span>`;
+          if (row.overridden)      return `<span class="badge-builtin overridden">⚙ editado</span>`;
+          return `<span class="badge-builtin">⚙ embutido</span>`;
+        }
+      },
+      {
+        title: 'Palavra-chave', field: 'keyword',
+        headerFilter: true, width: 230,
+        formatter: c => {
+          const row = c.getRow().getData();
+          let badge;
+          if (!row.builtin)        badge = `<span class="badge-custom">★ personalizado</span>`;
+          else if (row.overridden) badge = `<span class="badge-builtin overridden" title="Editado — diferente do padrão do sistema">⚙ editado</span>`;
+          else                     badge = `<span class="badge-builtin">⚙ embutido</span>`;
+          return `<div style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px">${badge}<span>${esc(c.getValue())}</span></div>`;
+        }
+      },
+      {
+        title: 'Sinônimos / Variantes', field: 'variantes',
+        headerFilter: true, groupable: false,
+        headerFilterFunc: (val, _rowVal, rowData) =>
+          !val || rowData.variantes.some(v => v.includes(val.toLowerCase())),
+        formatter: c => {
+          const vars = c.getRow().getData().variantes;
+          const MAX  = 6;
+          const pills = vars.slice(0, MAX).map(v => `<span class="eq-var-pill">${esc(v)}</span>`).join('');
+          const more  = vars.length > MAX ? `<span class="eq-var-more">+${vars.length - MAX}</span>` : '';
+          return `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${pills}${more}</div>`;
+        }
+      },
+      {
+        title: '', field: 'keyword',
+        headerFilter: false, headerSort: false, width: 215, groupable: false,
+        formatter: c => {
+          const row = c.getRow().getData();
+          const kw  = esc(row.keyword);
+          const btnEdit    = `<button class="btn-eq btn-eq-edit" onclick="event.stopPropagation();abrirModal('${kw}')">Editar</button>`;
+          const btnRestore = row.overridden
+            ? `<button class="btn-eq btn-eq-restore" onclick="event.stopPropagation();restaurarEquiv('${kw}')" title="Restaurar padrão do sistema">↺ Restaurar</button>`
+            : '';
+          const btnDel = !row.builtin
+            ? `<button class="btn-eq btn-eq-del" onclick="event.stopPropagation();excluirEquiv('${kw}')">Excluir</button>`
+            : '';
+          return `<div style="display:flex;gap:6px;justify-content:flex-end">${btnEdit}${btnRestore}${btnDel}</div>`;
+        }
+      }
+    ],
+  });
 }
 
 function abrirModal(kw) {
@@ -1172,15 +1328,19 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharModal(
 // ── Integrações SE ────────────────────────────────────────────────────────────
 async function carregarIntegracoes() {
   const cfg = await fetch('/api/integracoes/se/config').then(r => r.json());
-  document.getElementById('se_url').value   = cfg.se_url   || '';
-  document.getElementById('se_token').value = cfg.se_token || '';
+  document.getElementById('se_url').value              = cfg.se_url              || '';
+  document.getElementById('se_token').value            = cfg.se_token            || '';
+  document.getElementById('se_campo_empresa_id').value   = cfg.campo_empresa_id   || '';
+  document.getElementById('se_campo_empresa_nome').value = cfg.campo_empresa_nome || '';
 }
 
 async function salvarIntegracoes() {
-  const url   = document.getElementById('se_url').value.trim();
-  const token = document.getElementById('se_token').value.trim();
-  const err   = document.getElementById('alert-err-int');
-  const ok    = document.getElementById('alert-ok-int');
+  const url        = document.getElementById('se_url').value.trim();
+  const token      = document.getElementById('se_token').value.trim();
+  const campoId    = document.getElementById('se_campo_empresa_id').value.trim();
+  const campoNome  = document.getElementById('se_campo_empresa_nome').value.trim();
+  const err        = document.getElementById('alert-err-int');
+  const ok         = document.getElementById('alert-ok-int');
   if (!url || !token) {
     err.textContent = '❌ URL e Token são obrigatórios.';
     err.classList.remove('d-none');
@@ -1189,7 +1349,7 @@ async function salvarIntegracoes() {
   }
   const r = await fetch('/api/integracoes/se/config', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ se_url: url, se_token: token }),
+    body: JSON.stringify({ se_url: url, se_token: token, campo_empresa_id: campoId, campo_empresa_nome: campoNome }),
   });
   if (r.ok) {
     ok.classList.remove('d-none');
@@ -1254,9 +1414,9 @@ async function carregarEmail() {
   document.getElementById('email-tipo').value         = cfg.tipo        || 'gmail';
   document.getElementById('email-email').value        = cfg.email       || '';
   const senhaEl = document.getElementById('email-senha');
-  senhaEl.value       = '';
+  senhaEl.value       = cfg.senha || '';
   senhaEl.type        = 'password';
-  senhaEl.placeholder = cfg.senha ? 'Configurada — deixe em branco para manter' : 'Nova senha...';
+  senhaEl.placeholder = cfg.senha ? '' : 'Nova senha...';
   const eyeBtn = senhaEl.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
   if (eyeBtn) { eyeBtn.querySelector('svg').innerHTML = SVG_EYE; eyeBtn.title = 'Mostrar/ocultar senha'; }
   document.getElementById('email-smtp-host').value    = cfg.smtp_host   || '';
@@ -1380,9 +1540,9 @@ async function carregarEmailGeral() {
   document.getElementById('egeral-tipo').value         = cfg.tipo        || 'gmail';
   document.getElementById('egeral-email').value        = cfg.email       || '';
   const senhaEl = document.getElementById('egeral-senha');
-  senhaEl.value       = '';
+  senhaEl.value       = cfg.senha || '';
   senhaEl.type        = 'password';
-  senhaEl.placeholder = cfg.senha ? 'Configurada — deixe em branco para manter' : 'Nova senha...';
+  senhaEl.placeholder = cfg.senha ? '' : 'Nova senha...';
   const eyeBtn = senhaEl.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
   if (eyeBtn) { eyeBtn.querySelector('svg').innerHTML = SVG_EYE; eyeBtn.title = 'Mostrar/ocultar senha'; }
   document.getElementById('egeral-smtp-host').value    = cfg.smtp_host   || '';
@@ -1541,6 +1701,131 @@ async function lpRegenerarToken() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 carregarWhatsapp();
 carregarAnalisador();
+
+// ── Aba: Chaves de API ────────────────────────────────────────────────────────
+
+const _akCarregado = { ok: false };
+
+async function akInicializar() {
+  if (_akCarregado.ok) return;
+  _akCarregado.ok = true;
+
+  await window._iahubAuthReady;
+
+  try {
+    const data = await fetch('/api/config/apikeys').then(r => r.json());
+    const groqEl   = document.getElementById('ak-groq');
+    const geminiEl = document.getElementById('ak-gemini');
+    groqEl.placeholder   = data.groq_configurada   ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
+    geminiEl.placeholder = data.gemini_configurada ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui (opcional)';
+    groqEl.dataset.configurada   = data.groq_configurada   ? '1' : '0';
+    geminiEl.dataset.configurada = data.gemini_configurada ? '1' : '0';
+    groqEl.value   = '';
+    geminiEl.value = '';
+    document.getElementById('ak-gemini-model').value = data.gemini_model || 'gemini-1.5-flash';
+    document.getElementById('ak-groq-status').innerHTML   = data.groq_configurada
+      ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+      : '<span style="color:#dc2626">✗ Não configurada</span>';
+    document.getElementById('ak-gemini-status').innerHTML = data.gemini_configurada
+      ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+      : '<span style="color:var(--text-lo)">— Não configurada (opcional)</span>';
+
+    const iaData = await fetch('/api/ia/dashboard').then(r => r.json());
+    document.getElementById('ak-groq-token-limit').value   = iaData.providers?.groq?.limit_tokens || '';
+    document.getElementById('ak-gemini-token-limit').value = iaData.providers?.gemini?.limit_tokens || '';
+    document.getElementById('ak-groq-limit').value   = iaData.providers?.groq?.limit_usd || '';
+    document.getElementById('ak-gemini-limit').value = iaData.providers?.gemini?.limit_usd || '';
+    document.getElementById('ak-auto-refresh').value = iaData.auto_refresh_min || '';
+  } catch (e) {
+    console.error('Erro ao carregar chaves:', e);
+  }
+}
+
+async function akToggleVer(id, btn) {
+  const inp = document.getElementById(id);
+  if (!inp) return;
+  const mostrar = inp.type === 'password';
+
+  if (mostrar && inp.value === '' && inp.dataset.configurada === '1') {
+    btn.disabled = true;
+    try {
+      const data = await fetch('/api/config/apikeys/reveal').then(r => r.json());
+      const campo = id === 'ak-groq' ? 'groq_api_key' : 'gemini_api_key';
+      inp.value = data[campo] || '';
+    } catch (e) {
+      console.error('Erro ao revelar chave:', e);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  inp.type = mostrar ? 'text' : 'password';
+  btn.textContent = mostrar ? '🙈' : '👁';
+}
+
+async function akSalvar() {
+  const msg  = document.getElementById('ak-msg');
+  const body = {
+    groq_api_key:   document.getElementById('ak-groq').value,
+    gemini_api_key: document.getElementById('ak-gemini').value,
+    gemini_model:   document.getElementById('ak-gemini-model').value,
+  };
+
+  msg.style.display = 'inline';
+  msg.style.color   = 'var(--text-lo)';
+  msg.textContent   = 'Salvando…';
+
+  try {
+    const r    = await fetch('/api/config/apikeys', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro ao salvar');
+
+    const iaBody = {
+      limits: {
+        groq: Number(document.getElementById('ak-groq-limit').value) || 0,
+        gemini: Number(document.getElementById('ak-gemini-limit').value) || 0,
+        groq_tokens: Number(document.getElementById('ak-groq-token-limit').value) || 0,
+        gemini_tokens: Number(document.getElementById('ak-gemini-token-limit').value) || 0,
+      },
+      auto_refresh_min: Number(document.getElementById('ak-auto-refresh').value) || 0,
+    };
+    const iaResp = await fetch('/api/ia/dashboard/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(iaBody),
+    });
+    if (!iaResp.ok) {
+      const iaErr = await iaResp.json().catch(() => ({}));
+      throw new Error(iaErr.error || 'Erro ao salvar limites de IA');
+    }
+
+    const groqEl2   = document.getElementById('ak-groq');
+    const geminiEl2 = document.getElementById('ak-gemini');
+    groqEl2.value   = '';
+    geminiEl2.value = '';
+    groqEl2.type    = 'password';
+    geminiEl2.type  = 'password';
+    groqEl2.dataset.configurada   = data.groq_configurada   ? '1' : '0';
+    geminiEl2.dataset.configurada = data.gemini_configurada ? '1' : '0';
+    msg.style.color   = 'var(--success)';
+    msg.textContent   = '✓ Chaves e limites salvos com sucesso!';
+
+    document.getElementById('ak-groq-status').innerHTML   = data.groq_configurada
+      ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+      : '<span style="color:#dc2626">✗ Não configurada</span>';
+    document.getElementById('ak-gemini-status').innerHTML = data.gemini_configurada
+      ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+      : '<span style="color:var(--text-lo)">— Não configurada (opcional)</span>';
+    groqEl2.placeholder   = data.groq_configurada   ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
+    geminiEl2.placeholder = data.gemini_configurada ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui (opcional)';
+    document.querySelectorAll('#aba-apikeys .pass-toggle').forEach(b => b.textContent = '👁');
+  } catch (e) {
+    msg.style.color = '#dc2626';
+    msg.textContent = `✗ ${e.message}`;
+  }
+
+  setTimeout(() => { msg.style.display = 'none'; }, 4000);
+}
 </script>
 
 <!-- Modal Ajuda — Equivalências -->

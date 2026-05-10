@@ -8,6 +8,8 @@ const crud        = require('../crud');
 const analisadorDb = require('../analisador-curriculos/database');
 const whatsappDb   = require('../whatsapp-curriculo/database');
 const emailSvcMgr  = require('./email-service-manager');
+const ia           = require('../ia');
+const LOG_DIR      = path.join(__dirname, '..', '..', 'logs');
 
 function criarTransporter(cfg) {
   const senha  = cfg.senha;
@@ -258,12 +260,12 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
       if (!texto)
         return res.status(400).json({ error: 'PDF ilegível ou protegido. Envie um PDF com texto selecionável.' });
 
-      const ehCurriculo = await whatsapp.verificarSeCurriculo(texto);
+      const ehCurriculo = await ia.verificarSeCurriculo(texto, log, empresaId);
       if (!ehCurriculo)
         return res.status(400).json({ error: 'O arquivo não parece ser um currículo. Verifique e tente novamente.' });
 
-      const { texto: textoFinal } = await whatsapp.traduzirSeNecessario(texto);
-      const dados = await whatsapp.analisarComRetry(textoFinal);
+      const { texto: textoFinal } = await ia.traduzirSeNecessario(texto, log, empresaId);
+      const dados = await ia.analisarComRetry(textoFinal, log, empresaId);
       dados.nome  = dados.nome  || nome  || null;
       dados.email = dados.email || email || null;
 
@@ -378,7 +380,10 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     if (!io) return res.status(500).json({ error: 'Socket.IO não disponível.' });
     const cfg         = db.getEmailConfig(eid);
     const intervaloMs = Math.max(1, Number(cfg.imap_intervalo_min) || 2) * 60_000;
-    svc.iniciarServico({ db, whatsappDb, analisadorDb }, io, intervaloMs, eid);
+    const empNome     = crud.buscarPorId('empresas', eid)?.razao_social || null;
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    svc.setLogFile(path.join(LOG_DIR, `emailcurriculo_${eid}.log`));
+    svc.iniciarServico({ db, whatsappDb, analisadorDb }, io, intervaloMs, eid, empNome);
     res.json({ ok: true });
   });
 

@@ -6,43 +6,40 @@
     {
       id: 'monitoramento', label: 'Monitoramento', icon: '💬', defaultOpen: true,
       items: [
-        { label: 'Dashboard',        href: '/dashboard.html',     icon: '⊞' },
-        { label: 'Monitor WhatsApp', href: '/monitor.html',        icon: '💬' },
-        { label: 'Monitor E-mail',   href: '/monitor-email.html',  icon: '📧' },
+        { id: 'dashboard',        label: 'Dashboard',        href: '/dashboard.html',     icon: '⊞' },
+        { id: 'monitor-whatsapp', label: 'Monitor WhatsApp', href: '/monitor.html',        icon: '💬' },
+        { id: 'monitor-email',    label: 'Monitor E-mail',   href: '/monitor-email.html',  icon: '📧' },
       ],
     },
     {
       id: 'recrutamento', label: 'Recrutamento', icon: '🎯', defaultOpen: false,
       items: [
-        { label: 'Currículos', href: '/curriculos.html', icon: '☰' },
-        {
-          id: 'ps', label: 'Processo Seletivo', icon: '🎯',
-          items: [
-            { label: 'Cadastro de Funções', href: '/funcoes.html',          icon: '📋' },
-            { label: 'Vagas por Função',    href: '/vagas.html',            icon: '💼' },
-            { label: 'Processo Seletivo',   href: '/processoseletivo.html', icon: '🌐' },
-          ],
-        },
-        {
-          id: 'analisador', label: 'Analisador de Currículos', icon: '🔍',
-          items: [
-            { label: 'Analisador',            href: '/analisador.html',  icon: '🔍' },
-            { label: 'Histórico de Análises', href: '/historico.html',   icon: '📊' },
-          ],
-        },
+        { id: 'curriculos',         label: 'Currículos',          href: '/curriculos.html',       icon: '☰' },
+        { id: 'funcoes',            label: 'Cadastro de Funções', href: '/funcoes.html',          icon: '📋' },
+        { id: 'vagas',              label: 'Vagas por Função',    href: '/vagas.html',            icon: '💼' },
+        { id: 'processo-seletivo',  label: 'Processo Seletivo',   href: '/processoseletivo.html', icon: '🌐' },
+      ],
+    },
+    {
+      id: 'analisador', label: 'Analisador de Currículos', icon: '🔍', defaultOpen: false,
+      items: [
+        { id: 'analisador',        label: 'Analisador',            href: '/analisador.html',        icon: '🔍' },
+        { id: 'historico',         label: 'Histórico de Análises', href: '/historico.html',         icon: '📊' },
+        { id: 'config-analisador', label: 'Configuração',          href: '/config-analisador.html', icon: '⚙' },
       ],
     },
     {
       id: 'integracoes', label: 'Integrações', icon: '🔗', defaultOpen: false,
       items: [
-        { label: 'SE Currículos', href: '/se-curriculos.html', icon: '🔗' },
+        { id: 'se-integracoes',        label: 'SE Integrações',      href: '/se-integracoes.html',        icon: '🔗', aliases: ['se-curriculos', 'se-funcoes', 'se-vagas', 'se-integracoes-config'] },
+        { id: 'se-api-configurador',   label: 'SE API Configurador', href: '/se-api-configurador.html',   icon: '⚡' },
       ],
     },
     {
       id: 'configurador', label: 'Configurador', icon: '⚙', defaultOpen: false,
       items: [
-        { label: 'Configurações', href: '/configuracoes.html', icon: '⚙' },
-        { label: 'Administração', href: '/administracao.html', icon: '🏢' },
+        { id: 'configuracoes', label: 'Configurações', href: '/configuracoes.html', icon: '⚙' },
+        { id: 'administracao', label: 'Administração', href: '/administracao.html', icon: '🏢' },
       ],
     },
   ];
@@ -60,6 +57,18 @@
 
   function getSectionsOpen() {
     return new Set(MENU.filter(s => s.defaultOpen).map(s => s.id));
+  }
+
+  // ── Filtro por permissões ─────────────────────────────────────────────────────
+  // rotinas: null = sem filtro (admin) | [] = sem acesso | [...ids] = permitidas
+  function filtrarMenu(rotinas) {
+    if (rotinas === null) return MENU;
+    return MENU.map(section => ({
+      ...section,
+      items: section.items.filter(item =>
+        rotinas.includes(item.id) || (item.aliases || []).some(alias => rotinas.includes(alias))
+      ),
+    })).filter(section => section.items.length > 0);
   }
 
   // ── Geração de HTML ───────────────────────────────────────────────────────────
@@ -111,14 +120,28 @@
     const nav = document.querySelector('.sidebar-nav');
     if (!nav) return;
 
+    const rotinas     = window._iahubRotinas ?? null;
+    const menuFiltrado = filtrarMenu(rotinas);
+
+    // Sem acesso: menu vazio com aviso
+    if (rotinas !== null && menuFiltrado.length === 0) {
+      nav.innerHTML = `
+        <div style="padding:24px 16px;text-align:center;color:var(--text-lo);font-size:12px;line-height:1.6">
+          <div style="font-size:28px;margin-bottom:8px">🔒</div>
+          Sem acesso às rotinas.<br>
+          Contate o administrador do sistema.
+        </div>`;
+      return;
+    }
+
     const openSections = getSectionsOpen();
 
     // Auto-abre a seção que contém a página ativa
-    MENU.forEach(section => {
+    menuFiltrado.forEach(section => {
       if (itemsContainActive(section.items)) openSections.add(section.id);
     });
 
-    nav.innerHTML = MENU.map(s => sectionHtml(s, openSections.has(s.id))).join('');
+    nav.innerHTML = menuFiltrado.map(s => sectionHtml(s, openSections.has(s.id))).join('');
   }
 
   // ── Toggle seção ──────────────────────────────────────────────────────────────
@@ -188,5 +211,9 @@
   window.toggleSection = toggleSection;
   window.toggleSubmenu = toggleSubmenu;
 
-  document.addEventListener('DOMContentLoaded', init);
+  // Aguarda rotinas para construir o nav com filtro correto
+  document.addEventListener('DOMContentLoaded', async () => {
+    await (window._iahubRotinasReady || Promise.resolve(null));
+    init();
+  });
 })();

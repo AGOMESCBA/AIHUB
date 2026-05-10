@@ -25,9 +25,14 @@ function nextSeq(empresaId) {
 
 module.exports = {
   getConfig(empresaId) {
-    return load(empresaId).se_config || {
-      se_url:   'https://j2a.c3isystems.com.br/apigateway/se/ws/fm_ws.php',
-      se_token: '',
+    return {
+      se_url:              'https://j2a.c3isystems.com.br/apigateway/se/ws/fm_ws.php',
+      se_token:            '',
+      campo_empresa_id:    '',
+      campo_empresa_nome:  '',
+      integration_source:  'legacy',
+      se_api_flow_id:      null,
+      ...(load(empresaId).se_config || {}),
     };
   },
 
@@ -108,5 +113,15 @@ module.exports = {
 
   marcarIntegradoManual(empresaId, entry) {
     return this.saveLog(empresaId, { ...entry, status: 'sucesso', origem: 'manual' });
+  },
+
+  getLogBySeq(empresaId, seq) {
+    return (load(empresaId).integracoes_se || []).find(l => l._seq === Number(seq)) || null;
+  },
+
+  getSeApiLogsByIds(empresaId, ids) {
+    if (!ids || !ids.length) return [];
+    const d = load(empresaId);
+    return (d.se_api_logs || []).filter(l => ids.includes(l.id));
   },
 };

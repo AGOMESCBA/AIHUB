@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cadastro de Funções — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
   <style>
     .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
     .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(700px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
@@ -15,13 +16,6 @@
     .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
     .form-row-3    { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
     .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
-    .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
-    .btn-icon:hover { background:var(--bg-hover); }
-    .search-bar    { position:relative; }
-    .search-bar input { padding-left:32px; }
-    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
-    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
-    .empty-state div { font-size:40px;margin-bottom:12px; }
     textarea.form-control { resize:vertical;min-height:80px;font-family:inherit;box-sizing:border-box; }
     .nivel-badge { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
     .nivel-junior        { background:#0c2744;color:var(--accent-light); }
@@ -34,7 +28,7 @@
     .view-value  { font-size:14px;color:var(--text-hi);line-height:1.7; }
     .tag-list    { display:flex;flex-wrap:wrap;gap:6px;margin-top:4px; }
     .tag         { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
-    .btn-mapear { background:rgba(234,179,8,.1);color:#92400e;border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:background .15s;margin-right:auto;white-space:nowrap; }
+    .btn-mapear  { background:rgba(234,179,8,.1);color:#92400e;border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:background .15s;margin-right:auto;white-space:nowrap; }
     .btn-mapear:hover:not(:disabled) { background:rgba(234,179,8,.2); }
     .btn-mapear:disabled { opacity:.6;cursor:not-allowed; }
     .tag-input-box { border:1px solid var(--border);border-radius:8px;padding:5px 8px;min-height:40px;cursor:text;display:flex;flex-wrap:wrap;align-items:center;gap:4px;background:var(--bg-input,var(--bg-card));transition:border-color .15s; }
@@ -46,8 +40,25 @@
     .review-kw-row { margin-bottom:16px; }
     .review-kw-header { display:flex;align-items:center;gap:8px;margin-bottom:6px; }
     .review-kw-label { font-size:12px;font-weight:700;color:var(--text-hi);background:var(--bg-hover);border-radius:6px;padding:2px 9px; }
-    .badge-new  { font-size:10px;color:var(--success);font-style:italic; }
+    .badge-new      { font-size:10px;color:var(--success);font-style:italic; }
     .badge-existing { font-size:10px;color:var(--text-lo);font-style:italic; }
+
+    /* Group panel */
+    .gp-wrap      { margin-bottom:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+
+    /* Tabulator skin */
+    .tabulator { font-family:inherit;font-size:14px;border:none !important; }
+    .tabulator .tabulator-header { background:var(--bg-hover);border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-col { background:transparent;border-right:none !important; }
+    .tabulator .tabulator-col-title { font-size:11px;color:var(--text-lo);font-weight:600;text-transform:uppercase;letter-spacing:.04em; }
+    .tabulator-row { border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator-cell { border-right:none !important;padding:9px 12px; }
+    .tabulator-header-filter input,
+    .tabulator-header-filter select { width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:#fff;color:var(--text);margin-top:4px; }
+    .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
   </style>
 </head>
 <body>
@@ -58,11 +69,9 @@
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
     </div>
-    <div class="sidebar-nav">
-    </div>
-    <div class="sidebar-footer">
-    </div>
-    </nav>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
 
   <div class="main">
     <div class="topbar">
@@ -70,40 +79,35 @@
     </div>
 
     <div class="page-content">
+
       <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <div class="search-bar" style="flex:1;max-width:340px">
-          <input type="text" id="busca" class="form-control" placeholder="Buscar função..." oninput="filtrar()">
-        </div>
         <div class="ms-auto">
           <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Função</button>
         </div>
       </div>
 
-      <div class="card">
-        <div class="table-wrap">
-          <table id="tabela">
-            <thead>
-              <tr>
-                <th style="color:var(--text-lo);font-size:11px;white-space:nowrap">ID Reg.</th>
-                <th style="color:var(--text-lo);font-size:11px;white-space:nowrap">ID Emp.</th>
-                <th style="color:var(--text-lo);font-size:11px;white-space:nowrap">Empresa</th>
-                <th>#</th>
-                <th>Nome da Função</th>
-                <th>Área</th>
-                <th>Nível</th>
-                <th>Palavras-chave</th>
-                <th style="text-align:right">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
+      <!-- Painel de agrupamento -->
+      <div class="gp-wrap">
+        <div class="gp-chips-row" id="gp-chips-row">
+          <span class="gp-label">Agrupar por:</span>
         </div>
-        <div id="empty" class="empty-state d-none">
-          <div>📋</div>
-          <strong style="color:var(--text-md)">Nenhuma função cadastrada</strong>
-          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Função</strong> para começar.</p>
+        <div id="dz"></div>
+      </div>
+
+      <!-- Grid -->
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          <div style="display:flex;align-items:center;padding:10px 16px">
+            <span id="count" class="text-muted text-sm"></span>
+          </div>
+          <div id="tabela"></div>
+          <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
+            📋 Nenhuma função cadastrada.<br>
+            <span style="font-size:12px">Clique em <strong>+ Nova Função</strong> para começar.</span>
+          </div>
         </div>
       </div>
+
     </div>
   </div>
 </div>
@@ -225,6 +229,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/audit-fields.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
 const NIVEIS = {
   'Júnior':'nivel-junior','Pleno':'nivel-pleno',
@@ -235,15 +241,10 @@ const NIVEIS = {
 let funcoes    = [];
 let editandoId = null;
 let reviewItems = [];
+let table       = null;
 
 function escH(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-async function carregar() {
-  await window._iahubAuthReady;
-  funcoes = await fetch('/api/funcoes').then(r => r.json());
-  renderizar(funcoes);
 }
 
 function parseTags(str) {
@@ -253,55 +254,127 @@ function parseTags(str) {
 
 function tagsHtml(arr) {
   if (!arr?.length) return '<span style="color:var(--text-lo)">—</span>';
-  return arr.slice(0, 4).map(t => `<span class="tag">${t}</span>`).join('')
-       + (arr.length > 4 ? `<span class="tag">+${arr.length - 4}</span>` : '');
+  return arr.slice(0, 5).map(t => `<span class="tag">${escH(t)}</span>`).join('')
+       + (arr.length > 5 ? `<span class="tag">+${arr.length - 5}</span>` : '');
 }
 
-function renderizar(lista) {
-  const tbody = document.getElementById('tbody');
+const gp = createGroupPanel({
+  chipsRowId: 'gp-chips-row',
+  dropZoneId: 'dz',
+  storageKey: 'ps_funcoes_group_fields',
+  getTable  : () => table,
+});
+
+// ── Tabulator ──────────────────────────────────────────────────
+function initTabulator(data) {
+  table = new Tabulator('#tabela', {
+    data,
+    index: 'id',
+    layout: 'fitColumns',
+    movableColumns: true,
+    columnDefaults: { resizable: true, headerSort: true },
+    groupBy: gp.getActiveFields(),
+    groupStartOpen: true,
+    columns: [
+      {
+        title: 'ID', field: 'id', width: 70, groupable: false,
+        hozAlign: 'center', headerHozAlign: 'center',
+        formatter: c => `<span style="font-size:11px;font-family:monospace;color:var(--text-lo)">${c.getValue()}</span>`
+      },
+      {
+        title: 'Nome da Função', field: 'nome',
+        headerFilter: true,
+        formatter: c => `<strong style="color:var(--accent-light)">${escH(c.getValue() || '—')}</strong>`
+      },
+      {
+        title: 'Área', field: 'area',
+        headerFilter: true,
+        formatter: c => `<span style="color:var(--text-md)">${escH(c.getValue() || '—')}</span>`
+      },
+      {
+        title: 'Nível', field: 'nivel_experiencia', width: 145,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', 'Júnior': 'Júnior', 'Pleno': 'Pleno', 'Sênior': 'Sênior', 'Especialista': 'Especialista', 'Não especificado': 'Não esp.' } },
+        formatter: c => {
+          const n = c.getValue() || 'Não especificado';
+          return `<span class="nivel-badge ${NIVEIS[n] || 'nivel-nao-especificado'}">${escH(n)}</span>`;
+        }
+      },
+      {
+        title: 'Palavras-chave', field: 'palavras_chave',
+        headerFilter: true, groupable: false,
+        headerFilterFunc: (val, _v, rowData) =>
+          !val || (rowData.palavras_chave || []).some(k => k.toLowerCase().includes(val.toLowerCase())),
+        formatter: c => `<div class="tag-list">${tagsHtml(c.getValue())}</div>`
+      },
+      {
+        title: '', field: 'id',
+        headerFilter: false, headerSort: false, width: 110, groupable: false,
+        hozAlign: 'right',
+        formatter: c => {
+          const id = c.getValue();
+          const nome = escH(c.getRow().getData().nome || '');
+          return `
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="event.stopPropagation();visualizar(${id})" title="Visualizar">👁</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="event.stopPropagation();editar(${id})" title="Editar">✏️</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="event.stopPropagation();excluir(${id},'${nome}')" title="Excluir">🗑️</button>`;
+        }
+      },
+    ],
+    rowClick: (_e, row) => visualizar(row.getData().id),
+    dataFiltered: fd => {
+      const t = fd.length;
+      document.getElementById('count').textContent =
+        t === funcoes.length
+          ? `${t} função${t !== 1 ? 'ões' : ''}`
+          : `${t} de ${funcoes.length} funções`;
+    },
+  });
+}
+
+// ── Carregamento ───────────────────────────────────────────────
+async function carregar() {
+  await window._iahubAuthReady;
+  funcoes = await fetch('/api/funcoes').then(r => r.json());
+
   const empty = document.getElementById('empty');
-  if (!lista.length) { tbody.innerHTML=''; empty.classList.remove('d-none'); return; }
+  if (!funcoes.length) {
+    empty.classList.remove('d-none');
+    return;
+  }
   empty.classList.add('d-none');
-  tbody.innerHTML = lista.map(f => `
-    <tr>
-      ${auditTdHtml(f)}
-      <td style="color:var(--text-lo);font-size:12px">#${f.id}</td>
-      <td><strong style="color:var(--accent-light)">${f.nome}</strong></td>
-      <td style="color:var(--text-md)">${f.area||'—'}</td>
-      <td><span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${f.nivel_experiencia||'—'}</span></td>
-      <td><div class="tag-list">${tagsHtml(f.palavras_chave)}</div></td>
-      <td style="text-align:right;white-space:nowrap">
-        <button class="btn-icon" title="Visualizar" onclick="visualizar(${f.id})">👁</button>
-        <button class="btn-icon" title="Editar"     onclick="editar(${f.id})">✏️</button>
-        <button class="btn-icon" title="Excluir"    onclick="excluir(${f.id},'${f.nome.replace(/'/g,"\\'")}')">🗑️</button>
-      </td>
-    </tr>`).join('');
+
+  document.getElementById('count').textContent =
+    `${funcoes.length} função${funcoes.length !== 1 ? 'ões' : ''}`;
+
+  if (!table) {
+    initTabulator(funcoes);
+    setTimeout(() => gp.refresh(), 0);
+  } else {
+    table.replaceData(funcoes);
+  }
 }
 
-function filtrar() {
-  const q = document.getElementById('busca').value.toLowerCase();
-  renderizar(funcoes.filter(f =>
-    f.nome?.toLowerCase().includes(q) || f.area?.toLowerCase().includes(q)
-  ));
-}
-
+// ── Modal criar/editar ─────────────────────────────────────────
 function abrirModal(f = null) {
-  editandoId   = f ? f.id : null;
-  reviewItems  = [];
+  editandoId  = f ? f.id : null;
+  reviewItems = [];
   document.getElementById('modal-title').textContent = f ? 'Editar Função' : 'Nova Função';
   const _emp = window._iahubEmpresa || { id: '—', nome: '—' };
   document.getElementById('ps-f-audit-id').value       = f?.id ?? '—';
   document.getElementById('ps-f-audit-emp-id').value   = _emp.id;
   document.getElementById('ps-f-audit-emp-nome').value = _emp.nome;
-  document.getElementById('f-nome').value       = f?.nome || '';
-  document.getElementById('f-area').value       = f?.area || '';
-  document.getElementById('f-nivel').value      = f?.nivel_experiencia || 'Não especificado';
-  document.getElementById('f-formacao').value   = f?.formacao_necessaria || '';
-  document.getElementById('f-descricao').value  = f?.descricao || '';
-  document.getElementById('f-req-obrig').value  = f?.requisitos_obrigatorios || '';
-  document.getElementById('f-req-desej').value  = f?.requisitos_desejaveis || '';
-  document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas) ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
-  document.getElementById('f-keywords').value   = Array.isArray(f?.palavras_chave) ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
+  document.getElementById('f-nome').value        = f?.nome || '';
+  document.getElementById('f-area').value        = f?.area || '';
+  document.getElementById('f-nivel').value       = f?.nivel_experiencia || 'Não especificado';
+  document.getElementById('f-formacao').value    = f?.formacao_necessaria || '';
+  document.getElementById('f-descricao').value   = f?.descricao || '';
+  document.getElementById('f-req-obrig').value   = f?.requisitos_obrigatorios || '';
+  document.getElementById('f-req-desej').value   = f?.requisitos_desejaveis || '';
+  document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas)
+    ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
+  document.getElementById('f-keywords').value    = Array.isArray(f?.palavras_chave)
+    ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
   resetEquivUI();
   document.getElementById('modal').classList.remove('d-none');
 }
@@ -317,12 +390,11 @@ function resetEquivUI() {
   btn.textContent = '✨ Mapear Equivalências';
 }
 
+// ── Equivalências com IA ───────────────────────────────────────
 function coletarKeywords() {
   const habs = parseTags(document.getElementById('f-habilidades').value);
   const reqs = (document.getElementById('f-req-obrig').value || '')
-    .split(/[\n,;]+/)
-    .map(s => s.replace(/^[-•]\s*/, '').trim())
-    .filter(Boolean);
+    .split(/[\n,;]+/).map(s => s.replace(/^[-•]\s*/, '').trim()).filter(Boolean);
   return [...new Set([...habs, ...reqs])];
 }
 
@@ -330,8 +402,7 @@ async function gerarEquivalencias() {
   const kws = coletarKeywords();
   if (!kws.length) { document.getElementById('f-habilidades').focus(); return; }
   const btn = document.getElementById('btn-mapear');
-  btn.disabled    = true;
-  btn.textContent = '⏳ Consultando IA...';
+  btn.disabled = true; btn.textContent = '⏳ Consultando IA...';
   try {
     const [sugestoes, todasEquiv] = await Promise.all([
       fetch('/api/equivalencias/sugerir-lote', {
@@ -340,13 +411,11 @@ async function gerarEquivalencias() {
       }).then(r => r.json()),
       fetch('/api/equivalencias').then(r => r.json()),
     ]);
-    const dbMap = new Map(todasEquiv.map(e => [e.keyword.toLowerCase(), e.variantes]));
+    const dbMap  = new Map(todasEquiv.map(e => [e.keyword.toLowerCase(), e.variantes]));
     const geradas = sugestoes.geradas || {};
     reviewItems = [];
     for (const kw of kws.map(k => k.toLowerCase().trim())) {
-      const aiVars = geradas[kw]   || [];
-      const dbVars = dbMap.get(kw) || [];
-      const merged = [...new Set([...dbVars, ...aiVars])];
+      const merged = [...new Set([...(dbMap.get(kw) || []), ...(geradas[kw] || [])])];
       if (!merged.length) continue;
       reviewItems.push({ kw, tags: merged, isNew: !dbMap.has(kw) });
     }
@@ -381,8 +450,7 @@ function abrirModalEquiv() {
         <button type="button" onclick="reviewAddFromBtn(${idx})"
           style="height:38px;padding:0 14px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;font-size:18px;cursor:pointer;line-height:1;flex-shrink:0">+</button>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
   reviewItems.forEach((_, idx) => renderReviewTags(idx));
   document.getElementById('modal-equiv').classList.remove('d-none');
 }
@@ -393,9 +461,9 @@ function fecharModalEquiv() {
 }
 
 function renderReviewTags(idx) {
-  const container = document.getElementById('rtags-' + idx);
-  if (!container) return;
-  container.innerHTML = (reviewItems[idx]?.tags || []).map((t, ti) =>
+  const c = document.getElementById('rtags-' + idx);
+  if (!c) return;
+  c.innerHTML = (reviewItems[idx]?.tags || []).map((t, ti) =>
     `<span class="tag-pill">${escH(t)}<span class="rm" onclick="reviewRemoveTag(${idx},${ti})">×</span></span>`
   ).join('');
 }
@@ -449,6 +517,7 @@ async function salvarTodasEquivalencias() {
   }
 }
 
+// ── CRUD ───────────────────────────────────────────────────────
 async function salvar() {
   const nome = document.getElementById('f-nome').value.trim();
   if (!nome) { alert('O nome da função é obrigatório.'); return; }
@@ -485,23 +554,22 @@ async function visualizar(id) {
   const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
   document.getElementById('view-titulo').textContent = f.nome;
   const tags  = arr => Array.isArray(arr) && arr.length
-    ? `<div class="tag-list">${arr.map(t => `<span class="tag">${t}</span>`).join('')}</div>`
+    ? `<div class="tag-list">${arr.map(t => `<span class="tag">${escH(t)}</span>`).join('')}</div>`
     : '<span style="color:var(--text-lo)">—</span>';
   const campo = (label, val) => val
     ? `<div class="view-field"><div class="view-label">${label}</div><div class="view-value">${val}</div></div>` : '';
   document.getElementById('view-content').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
       ${campo('Área', f.area)}
-      ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${f.nivel_experiencia||'—'}</span>`)}
-      ${campo('Formação', f.formacao_necessaria)}
+      ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${escH(f.nivel_experiencia||'—')}</span>`)}
+      ${campo('Formação', escH(f.formacao_necessaria))}
     </div>
-    ${campo('Descrição da Função', (f.descricao||'').replace(/\n/g,'<br>'))}
-    ${campo('Requisitos Obrigatórios', (f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
-    ${campo('Requisitos Desejáveis', (f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
+    ${campo('Descrição da Função', escH(f.descricao||'').replace(/\n/g,'<br>'))}
+    ${campo('Requisitos Obrigatórios', escH(f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
+    ${campo('Requisitos Desejáveis', escH(f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
     <div class="view-field"><div class="view-label">Habilidades Técnicas</div>${tags(f.habilidades_tecnicas)}</div>
     <div class="view-field"><div class="view-label">Palavras-chave</div>${tags(f.palavras_chave)}</div>
-    <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>
-  `;
+    <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>`;
   document.getElementById('modal-view').classList.remove('d-none');
 }
 

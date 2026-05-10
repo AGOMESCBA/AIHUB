@@ -4,7 +4,8 @@ const bcrypt = require('bcryptjs');
 const crud   = require('../crud');
 
 const ARQUIVO  = 'usuarios';
-const AUDIT_FILE = path.join(__dirname, '..', '..', 'data', 'auditoria.log');
+const LOG_DIR = path.join(__dirname, '..', '..', 'logs');
+const AUDIT_FILE = path.join(LOG_DIR, 'auditoria.log');
 
 // ── Bootstrap: cria o admin a partir do .env se ainda não houver usuários ──
 
@@ -50,7 +51,10 @@ function registrarAuditoria({ usuario, acao, ip, empresa_id = null, detalhes = '
     empresa_id,
     detalhes,
   });
-  try { fs.appendFileSync(AUDIT_FILE, linha + '\n', 'utf8'); } catch (_) {}
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.appendFileSync(AUDIT_FILE, linha + '\n', 'utf8');
+  } catch (_) {}
 }
 
 module.exports = { inicializarAdmin, getUsuarios, getUsuarioPorLogin, registrarAuditoria };

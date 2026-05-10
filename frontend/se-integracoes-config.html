@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SE — Configurações de Integração — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .tabs          { display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:28px; }
+    .tab-btn       { padding:10px 22px;font-size:13px;font-weight:600;color:var(--text-lo);background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;transition:color .15s,border-color .15s; }
+    .tab-btn:hover { color:var(--text-hi); }
+    .tab-btn.active{ color:var(--accent);border-bottom-color:var(--accent); }
+    .tab-pane      { display:none; }
+    .tab-pane.active{ display:block; }
+    .section-title { font-size:14px;font-weight:700;color:var(--text-hi);margin-bottom:6px; }
+    .section-desc  { font-size:12.5px;color:var(--text-lo);margin-bottom:22px;line-height:1.6; }
+    .source-options{ display:flex;gap:10px;margin-bottom:18px; }
+    .source-opt    { flex:1;border:2px solid var(--border);border-radius:8px;padding:12px 14px;cursor:pointer;transition:border-color .15s; }
+    .source-opt.active { border-color:var(--accent);background:var(--bg-hover); }
+    .source-opt-title{ font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:2px; }
+    .source-opt-desc { font-size:11.5px;color:var(--text-lo); }
+    .config-row    { display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:end; }
+    .save-row      { display:flex;align-items:center;gap:12px;margin-top:20px;padding-top:20px;border-top:1px solid var(--border); }
+    .cfg-status    { font-size:12px;color:var(--text-lo); }
+    .flow-badge    { display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;background:#ede9fe;color:#6d28d9;font-size:12px;font-weight:600;margin-bottom:14px; }
+    @media(max-width:600px) { .config-row { grid-template-columns:1fr; } .source-options { flex-direction:column; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Integrações ›</span> SE Configurações</span>
+    </div>
+
+    <div class="page-content">
+      <div class="card" style="max-width:820px">
+        <div class="card-body">
+
+          <div class="tabs">
+            <button class="tab-btn active" id="config-tab-btn-curriculos" onclick="mudarAba('curriculos',this)">Currículos</button>
+            <button class="tab-btn" id="config-tab-btn-funcoes" onclick="mudarAba('funcoes',this)">Funções</button>
+            <button class="tab-btn" id="config-tab-btn-vagas" onclick="mudarAba('vagas',this)">Vagas</button>
+          </div>
+
+          <!-- ── ABA CURRÍCULOS ─────────────────────────────────────────────── -->
+          <div id="tab-curriculos" class="tab-pane active">
+            <div class="section-title">Integração de Currículos ao SE</div>
+            <div class="section-desc">
+              Define como os currículos analisados são enviados ao Softexpert.<br>
+              Escolha entre integração padrão (SOAP legada) ou via SE API Configurador (Flow).
+            </div>
+
+            <div class="source-options">
+              <div class="source-opt" id="cur-opt-legacy" onclick="selecionarSourceCur('legacy')">
+                <div class="source-opt-title">Integração Padrão (legada)</div>
+                <div class="source-opt-desc">SOAP fixo via token SE — configuração original</div>
+              </div>
+              <div class="source-opt" id="cur-opt-flow" onclick="selecionarSourceCur('flow')">
+                <div class="source-opt-title">SE API Configurador — Flow</div>
+                <div class="source-opt-desc">Executa um Flow configurável com sequência de APIs por candidato</div>
+              </div>
+              <div class="source-opt" id="cur-opt-grid" onclick="selecionarSourceCur('grid')">
+                <div class="source-opt-title">SE API Configurador — Grid (Lote)</div>
+                <div class="source-opt-desc">Envia todos os aprovados em uma única chamada <code>newChildEntityRecordList</code></div>
+              </div>
+            </div>
+
+            <div id="cur-legacy-fields">
+              <div class="config-row">
+                <div>
+                  <label class="form-label">URL da API SE</label>
+                  <input id="cur-se-url" class="form-control" placeholder="https://...">
+                </div>
+                <div>
+                  <label class="form-label">Token (Authorization)</label>
+                  <input id="cur-se-token" class="form-control" placeholder="Bearer ...">
+                </div>
+                <div>
+                  <label class="form-label">Campo Empresa ID (opcional)</label>
+                  <input id="cur-campo-emp-id" class="form-control" placeholder="ex: EMP_ID">
+                </div>
+                <div>
+                  <label class="form-label">Campo Empresa Nome (opcional)</label>
+                  <input id="cur-campo-emp-nome" class="form-control" placeholder="ex: EMP_NOME">
+                </div>
+              </div>
+            </div>
+
+            <div id="cur-flow-fields" style="display:none">
+              <label class="form-label">Flow a executar</label>
+              <select id="cur-flow-id" class="form-control" style="max-width:420px">
+                <option value="">Carregando flows...</option>
+              </select>
+              <div style="font-size:11.5px;color:var(--text-lo);margin-top:6px">
+                Configure flows no <a href="/se-api-configurador.html" style="color:var(--accent)">SE API Configurador</a>.
+                Cada Config deve ter <strong>Tabela de Origem: currículos</strong>.
+              </div>
+            </div>
+
+            <div id="cur-grid-fields" style="display:none">
+              <label class="form-label">Flow a executar (GRID)</label>
+              <select id="cur-grid-flow-id" class="form-control" style="max-width:420px">
+                <option value="">Carregando flows...</option>
+              </select>
+              <div style="font-size:11.5px;color:var(--text-lo);margin-top:6px">
+                Configure um Flow no <a href="/se-api-configurador.html" style="color:var(--accent)">SE API Configurador</a> com:<br>
+                • <strong>Step 1:</strong> Config tipo <strong>GRID</strong> — template com <code>{{workflow_id}}</code> e <code>{{grid_rows}}</code><br>
+                • <strong>Step 2 (opcional):</strong> Config tipo <strong>MOVE</strong> — para avançar atividade após inserir os candidatos<br>
+                O <code>{{workflow_id}}</code> é preenchido automaticamente com o WorkflowID da vaga integrada.
+              </div>
+            </div>
+
+            <div class="save-row">
+              <button class="btn btn-primary" onclick="salvarCurriculos()">Salvar Configuração</button>
+              <span id="cur-msg" class="cfg-status"></span>
+            </div>
+          </div>
+
+          <!-- ── ABA FUNÇÕES ────────────────────────────────────────────────── -->
+          <div id="tab-funcoes" class="tab-pane">
+            <div class="section-title">Integração de Funções ao SE</div>
+            <div class="section-desc">
+              Define o Flow do SE API Configurador usado para enviar cadastros de funções ao Softexpert.<br>
+              A integração pode ser disparada individualmente ou em lote a partir do Cadastro de Funções.
+            </div>
+
+            <div id="func-flow-badge" class="flow-badge" style="display:none">
+              <span>⚡</span> <span id="func-flow-nome-badge">—</span>
+            </div>
+
+            <div>
+              <label class="form-label">Flow a executar</label>
+              <select id="func-flow-id" class="form-control" style="max-width:420px">
+                <option value="">Carregando flows...</option>
+              </select>
+              <div style="font-size:11.5px;color:var(--text-lo);margin-top:6px">
+                Configure flows no <a href="/se-api-configurador.html" style="color:var(--accent)">SE API Configurador</a>.
+                Cada Config deve ter <strong>Tabela de Origem: funções</strong>.
+              </div>
+            </div>
+
+            <div class="save-row">
+              <button class="btn btn-primary" onclick="salvarFuncoes()">Salvar Configuração</button>
+              <span id="func-msg" class="cfg-status"></span>
+            </div>
+          </div>
+
+          <!-- ── ABA VAGAS ──────────────────────────────────────────────────── -->
+          <div id="tab-vagas" class="tab-pane">
+            <div class="section-title">Integração de Vagas ao SE</div>
+            <div class="section-desc">
+              Define o Flow do SE API Configurador usado para enviar vagas ao Softexpert.<br>
+              A integração pode ser disparada individualmente ou em lote a partir do Cadastro de Vagas.
+            </div>
+
+            <div id="vaga-flow-badge" class="flow-badge" style="display:none">
+              <span>⚡</span> <span id="vaga-flow-nome-badge">—</span>
+            </div>
+
+            <div>
+              <label class="form-label">Flow a executar</label>
+              <select id="vaga-flow-id" class="form-control" style="max-width:420px">
+                <option value="">Carregando flows...</option>
+              </select>
+              <div style="font-size:11.5px;color:var(--text-lo);margin-top:6px">
+                Configure flows no <a href="/se-api-configurador.html" style="color:var(--accent)">SE API Configurador</a>.
+                Cada Config deve ter <strong>Tabela de Origem: vagas</strong>.
+              </div>
+            </div>
+
+            <div class="save-row">
+              <button class="btn btn-primary" onclick="salvarVagas()">Salvar Configuração</button>
+              <span id="vaga-msg" class="cfg-status"></span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/audit-fields.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+let _curSource = 'legacy';
+let _flows     = [];
+const _params = new URLSearchParams(location.search);
+const _returnTab = _params.get('returnTab');
+const _configTab = _params.get('configTab');
+const _validTabs = new Set(['curriculos', 'funcoes', 'vagas']);
+
+// ── Abas ───────────────────────────────────────────────────────
+function mudarAba(aba, btn) {
+  btn = btn || document.getElementById('config-tab-btn-' + aba);
+  if (!btn || !_validTabs.has(aba)) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + aba).classList.add('active');
+}
+
+function retornarParaOrigem(aba) {
+  if (!_validTabs.has(aba)) return;
+  setTimeout(() => {
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'se-integracoes:return-tab', tab: aba }, location.origin);
+    } else {
+      location.href = '/se-integracoes.html#' + aba;
+    }
+  }, 600);
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function mostrarMsg(id, texto, ok) {
+  const el = document.getElementById(id);
+  el.textContent   = texto;
+  el.style.color   = ok ? 'var(--success)' : 'var(--error)';
+  if (ok) setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function popularSelect(selId, flows, valorAtual) {
+  const sel = document.getElementById(selId);
+  sel.innerHTML = '<option value="">— Selecione um flow —</option>';
+  flows.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = `${f.nome} (${f.steps_count} step${f.steps_count!==1?'s':''})${f.descricao?' — '+f.descricao:''}`;
+    if (f.id === valorAtual) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+// ── Currículos ─────────────────────────────────────────────────
+function selecionarSourceCur(src) {
+  _curSource = src;
+  document.getElementById('cur-opt-legacy').classList.toggle('active', src === 'legacy');
+  document.getElementById('cur-opt-flow').classList.toggle('active',   src === 'flow');
+  document.getElementById('cur-opt-grid').classList.toggle('active',   src === 'grid');
+  document.getElementById('cur-legacy-fields').style.display = src === 'legacy' ? 'block' : 'none';
+  document.getElementById('cur-flow-fields').style.display   = src === 'flow'   ? 'block' : 'none';
+  document.getElementById('cur-grid-fields').style.display   = src === 'grid'   ? 'block' : 'none';
+}
+
+async function carregarCurriculos() {
+  const [cfg, flows] = await Promise.all([
+    fetch('/api/integracoes/se/config').then(r => r.json()).catch(() => ({})),
+    fetch('/api/integracoes/se/flows').then(r => r.json()).catch(() => []),
+  ]);
+  _flows = flows;
+  popularSelect('cur-flow-id',      flows, cfg.se_api_flow_id);
+  popularSelect('cur-grid-flow-id', flows, cfg.se_api_grid_flow_id);
+  document.getElementById('cur-se-url').value         = cfg.se_url            || '';
+  document.getElementById('cur-se-token').value       = cfg.se_token          || '';
+  document.getElementById('cur-campo-emp-id').value   = cfg.campo_empresa_id  || '';
+  document.getElementById('cur-campo-emp-nome').value = cfg.campo_empresa_nome|| '';
+  selecionarSourceCur(cfg.integration_source || 'legacy');
+}
+
+async function salvarCurriculos() {
+  const body = {
+    integration_source:  _curSource,
+    se_url:              document.getElementById('cur-se-url').value.trim(),
+    se_token:            document.getElementById('cur-se-token').value.trim(),
+    campo_empresa_id:    document.getElementById('cur-campo-emp-id').value.trim(),
+    campo_empresa_nome:  document.getElementById('cur-campo-emp-nome').value.trim(),
+    se_api_flow_id:      _curSource === 'flow' ? Number(document.getElementById('cur-flow-id').value) : null,
+    se_api_grid_config_id: _curSource === 'grid' ? Number(document.getElementById('cur-grid-flow-id').value) : null,
+  };
+  try {
+    const r = await fetch('/api/integracoes/se/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro ao salvar');
+    mostrarMsg('cur-msg', '✓ Configuração de currículos salva', true);
+    retornarParaOrigem(_returnTab);
+  } catch (err) { mostrarMsg('cur-msg', `✗ ${err.message}`, false); }
+}
+
+// ── Funções ────────────────────────────────────────────────────
+async function carregarFuncoes() {
+  const [cfg, flows] = await Promise.all([
+    fetch('/api/integracoes/se-funcao/config').then(r => r.json()).catch(() => ({})),
+    fetch('/api/integracoes/se-funcao/flows').then(r => r.json()).catch(() => []),
+  ]);
+  popularSelect('func-flow-id', flows, cfg.se_api_flow_id);
+  const flow = flows.find(f => f.id === cfg.se_api_flow_id);
+  if (flow) {
+    document.getElementById('func-flow-nome-badge').textContent = flow.nome;
+    document.getElementById('func-flow-badge').style.display    = 'inline-flex';
+  }
+}
+
+async function salvarFuncoes() {
+  const flowId = document.getElementById('func-flow-id').value;
+  if (!flowId) { mostrarMsg('func-msg', '✗ Selecione um flow', false); return; }
+  try {
+    const r = await fetch('/api/integracoes/se-funcao/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ se_api_flow_id: Number(flowId) }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro ao salvar');
+    mostrarMsg('func-msg', '✓ Configuração de funções salva', true);
+    carregarFuncoes();
+    retornarParaOrigem(_returnTab);
+  } catch (err) { mostrarMsg('func-msg', `✗ ${err.message}`, false); }
+}
+
+// ── Vagas ──────────────────────────────────────────────────────
+async function carregarVagas() {
+  const [cfg, flows] = await Promise.all([
+    fetch('/api/integracoes/se-vaga/config').then(r => r.json()).catch(() => ({})),
+    fetch('/api/integracoes/se-vaga/flows').then(r => r.json()).catch(() => []),
+  ]);
+  popularSelect('vaga-flow-id', flows, cfg.se_api_flow_id);
+  const flow = flows.find(f => f.id === cfg.se_api_flow_id);
+  if (flow) {
+    document.getElementById('vaga-flow-nome-badge').textContent = flow.nome;
+    document.getElementById('vaga-flow-badge').style.display    = 'inline-flex';
+  }
+}
+
+async function salvarVagas() {
+  const flowId = document.getElementById('vaga-flow-id').value;
+  if (!flowId) { mostrarMsg('vaga-msg', '✗ Selecione um flow', false); return; }
+  try {
+    const r = await fetch('/api/integracoes/se-vaga/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ se_api_flow_id: Number(flowId) }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro ao salvar');
+    mostrarMsg('vaga-msg', '✓ Configuração de vagas salva', true);
+    carregarVagas();
+    retornarParaOrigem(_returnTab);
+  } catch (err) { mostrarMsg('vaga-msg', `✗ ${err.message}`, false); }
+}
+
+(async () => {
+  await window._iahubAuthReady;
+  await Promise.all([carregarCurriculos(), carregarFuncoes(), carregarVagas()]);
+  if (_validTabs.has(_configTab)) mudarAba(_configTab);
+})();
+</script>
+</body>
+</html>

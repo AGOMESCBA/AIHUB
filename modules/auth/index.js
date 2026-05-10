@@ -9,6 +9,11 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Não autenticado' });
 }
 
+function requireAdmin(req, res, next) {
+  if (req.session?.authenticated && req.session?.role === 'admin') return next();
+  res.status(403).json({ error: 'Acesso restrito a administradores' });
+}
+
 // ── Verificação de credenciais com bcrypt ────────────────────────────────────
 
 async function verificarCredenciais(usuario, senha) {
@@ -18,4 +23,4 @@ async function verificarCredenciais(usuario, senha) {
   return ok ? user : null;
 }
 
-module.exports = { requireAuth, verificarCredenciais };
+module.exports = { requireAuth, requireAdmin, verificarCredenciais };

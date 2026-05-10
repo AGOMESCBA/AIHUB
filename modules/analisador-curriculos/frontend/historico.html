@@ -200,7 +200,10 @@
       const horaFmt = new Date(a.data).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
       const vaga = vagas.find(v => v.id === a.vaga_id);
       const vagaLabel = vaga ? ` · Vaga #${vaga.id} — ${vaga.quantidade} vaga${vaga.quantidade !== 1 ? 's' : ''}` : '';
-      const _empH = window._iahubEmpresa || { id: '—', nome: '—' };
+      const _empH = {
+        id: a.empresa_id ?? window._iahubEmpresa?.id ?? '—',
+        nome: a.empresa_nome || window._iahubEmpresa?.nome || '—',
+      };
       return `
         <div class="analise-card">
           <div style="display:flex;gap:12px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
@@ -235,7 +238,6 @@
           </div>
           <div class="analise-actions">
             <button class="btn btn-primary" style="font-size:12px" onclick="verDetalhes('${a.id}')">🔎 Ver Detalhes</button>
-            <button class="btn btn-ghost" style="font-size:12px" onclick="gerarNovamente(${a.vaga_id})">▶ Gerar novamente</button>
             <button class="btn btn-info" style="font-size:12px" id="btn-se-${a.id}" onclick="enviarParaSE('${a.id}', ${a.total_analisados})">🔗 Integrar Softexpert (${a.total_analisados})</button>
             <button class="btn btn-danger" style="font-size:12px;margin-left:auto" onclick="excluir('${a.id}')">🗑 Excluir</button>
           </div>
@@ -323,7 +325,6 @@
     document.getElementById('modal-det-body').innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
         <div style="font-size:13px;color:var(--text-md)">${resultados.length} analisados · <strong style="color:#15803d">${finCount} finalista${finCount !== 1 ? 's' : ''}</strong> · ${eliminados.length} eliminados</div>
-        <button class="btn btn-primary ms-auto" style="font-size:12px" onclick="gerarNovamente(${a.vaga_id})">▶ Gerar novamente</button>
       </div>
       ${resultados.length ? cards : '<p style="color:var(--text-lo);font-size:13px">Nenhum candidato analisado.</p>'}
       ${elimSection}`;
@@ -340,19 +341,6 @@
     const aberto = body.style.display !== 'none';
     body.style.display = aberto ? 'none' : 'block';
     btn.querySelector('span:last-child').textContent = aberto ? '▾' : '▴';
-  }
-
-  async function gerarNovamente(vagaId) {
-    const vaga = vagas.find(v => v.id === vagaId);
-    if (vaga && vaga.status === 'encerrada') {
-      if (!confirm('Esta vaga está encerrada.\n\nDeseja reabri-la e gerar uma nova análise?')) return;
-      await fetch(`/api/vagas/${vagaId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'aberta' }),
-      });
-    }
-    window.location.href = `/analisador.html?vaga_id=${vagaId}`;
   }
 
   async function excluir(id) {
@@ -416,7 +404,10 @@
     }
   }
 
-  carregar();
+  (async () => {
+    if (window._iahubAuthReady) await window._iahubAuthReady;
+    carregar();
+  })();
 </script>
 </body>
 </html>

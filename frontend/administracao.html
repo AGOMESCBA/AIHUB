@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Administração — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
     .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
     .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
@@ -17,12 +18,6 @@
     .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
     .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
     .btn-icon:hover { background:var(--bg-hover); }
-    .search-bar    { position:relative; }
-    .search-bar input { padding-left:32px; }
-    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
-    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
-    .empty-state div { font-size:40px;margin-bottom:12px; }
-    td.doc-col     { font-family:monospace;font-size:12px;color:var(--text-md); }
 
     .badge        { display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
     .badge-admin  { background:rgba(37,99,235,.12);color:var(--accent); }
@@ -30,17 +25,44 @@
     .badge-ativo  { background:rgba(22,163,74,.12);color:var(--success); }
     .badge-inativo{ background:rgba(239,68,68,.10);color:#dc2626; }
 
-    .empresas-grid {
-      border:1px solid var(--border);border-radius:8px;padding:12px;
-      max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
-    }
-    .empresa-check {
-      display:flex;align-items:center;gap:10px;padding:6px 8px;
-      border-radius:6px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text-hi);
-    }
-    .empresa-check:hover { background:var(--bg-hover); }
-    .empresa-check input[type=checkbox] { cursor:pointer;width:15px;height:15px;flex-shrink:0; }
-    .empresa-check.disabled { opacity:.55;cursor:not-allowed; }
+    /* ── Painel duplo de acessos (usuário) ── */
+    .section-divider   { border:none;border-top:1px solid var(--border);margin:20px 0 18px; }
+    .section-lbl       { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:14px; }
+    .acessos-admin-msg { display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:8px;background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.18);font-size:13px;color:var(--accent); }
+    .acessos-painel    { display:grid;grid-template-columns:220px 1fr;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;min-height:300px; }
+    .ap-empresas       { border-right:1px solid var(--border);display:flex;flex-direction:column; }
+    .ap-col-header     { padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);background:var(--bg-hover);border-bottom:1px solid var(--border);flex-shrink:0; }
+    .ap-empresas-list  { overflow-y:auto;flex:1; }
+    .ap-empresa-item   { display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;position:relative; }
+    .ap-empresa-item:last-child { border-bottom:none; }
+    .ap-empresa-item:hover { background:var(--bg-hover); }
+    .ap-empresa-item.selected { background:rgba(37,99,235,.08); }
+    .ap-empresa-item.selected::before { content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);border-radius:0 2px 2px 0; }
+    .ap-emp-toggle     { width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;cursor:pointer;background:transparent;font-size:11px;color:transparent; }
+    .ap-emp-toggle.ativo { background:var(--accent);border-color:var(--accent);color:#fff; }
+    .ap-emp-nome       { flex:1;font-size:13px;color:var(--text-hi);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .ap-emp-contador   { font-size:10px;color:var(--text-lo);white-space:nowrap;background:var(--bg-hover);padding:2px 6px;border-radius:10px;flex-shrink:0; }
+    .ap-emp-contador.tem-acesso { background:rgba(37,99,235,.12);color:var(--accent);font-weight:600; }
+    .ap-rotinas        { display:flex;flex-direction:column; }
+    .ap-rotinas-header { padding:10px 14px;background:var(--bg-hover);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-shrink:0; }
+    .ap-rotinas-title  { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .ap-rotinas-body   { overflow-y:auto;flex:1;padding:12px 14px; }
+    .ap-rotinas-actions { display:flex;gap:6px;flex-shrink:0; }
+    .ap-rotinas-placeholder { display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;color:var(--text-lo);font-size:13px;gap:10px; }
+    .ap-bloqueado      { display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;color:var(--text-lo);font-size:13px;gap:8px; }
+    .btn-tiny          { font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;color:var(--text-md);transition:all .1s; }
+    .btn-tiny:hover    { background:var(--bg-hover);color:var(--text-hi); }
+    .rot-grupo         { margin-bottom:14px; }
+    .rot-grupo-hdr     { display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .1s;margin-bottom:4px; }
+    .rot-grupo-hdr:hover { background:var(--bg-hover); }
+    .rot-grupo-hdr input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
+    .rot-grupo-nome    { font-size:12px;font-weight:700;color:var(--text-md);text-transform:uppercase;letter-spacing:.04em;flex:1; }
+    .rot-grupo-icon    { font-size:15px; }
+    .rot-item          { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 30px;border-radius:6px;cursor:pointer;transition:background .1s; }
+    .rot-item:hover    { background:var(--bg-hover); }
+    .rot-item input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
+    .rot-item-label    { font-size:13px;color:var(--text-hi); }
+    .rot-item-icon     { font-size:14px; }
 
     .pass-wrap { position:relative; }
     .pass-wrap input { padding-right:40px; }
@@ -79,7 +101,6 @@
     .acao-logout          { background:var(--bg-hover);      color:var(--text-md); }
     .acao-empresa_selecionada { background:rgba(37,99,235,.1); color:var(--accent); }
     .acao-default         { background:var(--bg-hover);      color:var(--text-lo); }
-    .empty-audit          { text-align:center;padding:40px;color:var(--text-lo);font-size:13px; }
 
     .adm-tab-content { display:none; }
     .adm-tab-content.active { display:block; }
@@ -154,6 +175,24 @@
     }
     .reset-result.success { display:flex; background:rgba(22,163,74,.07); border:1px solid rgba(22,163,74,.25); color:#166534; }
     .reset-result.error   { display:flex; background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.25); color:#991b1b; }
+
+    /* ── Group panel ── */
+    .gp-wrap      { margin-bottom:6px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+
+    /* ── Tabulator overrides ── */
+    .tabulator { border:none !important; background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-body) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-body) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; cursor:pointer; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    .tabulator-audit .tabulator-row { cursor:default !important; }
   </style>
 </head>
 <body>
@@ -182,72 +221,36 @@
           <button class="tab-btn"        id="adm-btn-usuarios"  onclick="mudarAbaAdmin('usuarios',  this)">👤 Usuários</button>
           <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
           <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
+
           <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
         </div>
 
         <!-- ── Aba: Empresas ─────────────────────────────────────────────────── -->
         <div id="adm-tab-empresas" class="adm-tab-content active">
-          <div style="padding:20px 24px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-            <div class="search-bar" style="flex:1;max-width:340px">
-              <input type="text" id="emp-busca" class="form-control" placeholder="Buscar empresa..." oninput="empFiltrar()">
-            </div>
-            <div class="ms-auto">
+          <div style="padding:16px 24px 8px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+              <div class="gp-chips-row" id="emp-gp-chips" style="flex:1;min-height:28px">
+                <span class="gp-label">Agrupar:</span>
+              </div>
               <button class="btn btn-primary" onclick="empAbrirModal()">＋ Nova Empresa</button>
             </div>
+            <div id="emp-gp-dz"></div>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:50px">#</th>
-                  <th>Razão Social</th>
-                  <th>CPF / CNPJ</th>
-                  <th>Telefone</th>
-                  <th>E-mail</th>
-                  <th style="text-align:right">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="emp-tbody"></tbody>
-            </table>
-          </div>
-          <div id="emp-empty" class="empty-state d-none">
-            <div>🏢</div>
-            <strong style="color:var(--text-md)">Nenhuma empresa cadastrada</strong>
-            <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Empresa</strong> para começar.</p>
-          </div>
+          <div id="emp-grid"></div>
         </div>
 
         <!-- ── Aba: Usuários ─────────────────────────────────────────────────── -->
         <div id="adm-tab-usuarios" class="adm-tab-content">
-          <div style="padding:20px 24px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-            <div class="search-bar" style="flex:1;max-width:340px">
-              <input type="text" id="usu-busca" class="form-control" placeholder="Buscar usuário..." oninput="usuFiltrar()">
-            </div>
-            <div class="ms-auto">
+          <div style="padding:16px 24px 8px">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+              <div class="gp-chips-row" id="usu-gp-chips" style="flex:1;min-height:28px">
+                <span class="gp-label">Agrupar:</span>
+              </div>
               <button class="btn btn-primary" onclick="usuAbrirModal()">＋ Novo Usuário</button>
             </div>
+            <div id="usu-gp-dz"></div>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:50px">#</th>
-                  <th>Nome</th>
-                  <th>Usuário</th>
-                  <th>Celular</th>
-                  <th>Perfil</th>
-                  <th>Status</th>
-                  <th style="text-align:right">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="usu-tbody"></tbody>
-            </table>
-          </div>
-          <div id="usu-empty" class="empty-state d-none">
-            <div>👤</div>
-            <strong style="color:var(--text-md)">Nenhum usuário cadastrado</strong>
-            <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Novo Usuário</strong> para começar.</p>
-          </div>
+          <div id="usu-grid"></div>
         </div>
 
         <!-- ── Aba: Segurança ────────────────────────────────────────────────── -->
@@ -336,30 +339,18 @@
                 <button class="btn btn-secondary" onclick="audCarregar()" style="white-space:nowrap">🔍 Filtrar</button>
               </div>
             </div>
+            <div class="gp-chips-row" id="aud-gp-chips" style="margin-bottom:6px">
+              <span class="gp-label">Agrupar:</span>
+            </div>
+            <div id="aud-gp-dz" style="margin-bottom:12px"></div>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:160px">Data / Hora</th>
-                  <th>Usuário</th>
-                  <th>Ação</th>
-                  <th>IP</th>
-                  <th>Empresa</th>
-                  <th>Detalhes</th>
-                </tr>
-              </thead>
-              <tbody id="aud-tbody"></tbody>
-            </table>
-          </div>
-          <div id="aud-empty" class="empty-audit d-none">Nenhum registro encontrado.</div>
+          <div id="aud-grid"></div>
         </div>
 
         <!-- ── Aba: Reset de Dados ───────────────────────────────────────────── -->
         <div id="adm-tab-reset" class="adm-tab-content">
           <div class="reset-layout">
 
-            <!-- Coluna esquerda: seleção de empresa + tabelas -->
             <div class="reset-col-left">
 
               <div class="reset-aviso reset-aviso-danger">
@@ -388,15 +379,12 @@
                 </div>
               </div>
 
-              <!-- Cards das tabelas -->
               <div id="rst-cards">
 
                 <div class="tabela-card" id="rst-card-curriculos" onclick="rstToggle('curriculos',this)">
                   <input type="checkbox" id="rst-chk-curriculos" onclick="event.stopPropagation()">
                   <div class="tabela-card-body">
-                    <div class="tabela-card-title">
-                      📄 Currículos recebidos
-                    </div>
+                    <div class="tabela-card-title">📄 Currículos recebidos</div>
                     <div class="tabela-card-desc">
                       Todos os currículos recebidos via WhatsApp, e-mail e Processo Seletivo.
                       Inclui os IDs processados e o contador de sequência.
@@ -408,9 +396,7 @@
                 <div class="tabela-card" id="rst-card-vaga_candidaturas" onclick="rstToggle('vaga_candidaturas',this)">
                   <input type="checkbox" id="rst-chk-vaga_candidaturas" onclick="event.stopPropagation()">
                   <div class="tabela-card-body">
-                    <div class="tabela-card-title">
-                      📋 Candidaturas do Processo Seletivo
-                    </div>
+                    <div class="tabela-card-title">📋 Candidaturas do Processo Seletivo</div>
                     <div class="tabela-card-desc">
                       Vínculos entre candidatos e vagas criados pelo Processo Seletivo público.
                     </div>
@@ -451,9 +437,7 @@
                 <div class="tabela-card" id="rst-card-equivalencias" onclick="rstToggle('equivalencias',this)">
                   <input type="checkbox" id="rst-chk-equivalencias" onclick="event.stopPropagation()">
                   <div class="tabela-card-body">
-                    <div class="tabela-card-title">
-                      🔀 Equivalências de habilidades
-                    </div>
+                    <div class="tabela-card-title">🔀 Equivalências de habilidades</div>
                     <div class="tabela-card-desc">
                       Grupos de palavras-chave utilizados pelo analisador de currículos para
                       reconhecer habilidades similares. Independente das demais tabelas.
@@ -462,26 +446,121 @@
                   </div>
                 </div>
 
+                <div class="reset-section-title" style="margin-top:20px">📥 SE Currículos</div>
+
+                <div class="tabela-card" id="rst-card-integracoes_se" onclick="rstToggle('integracoes_se',this)">
+                  <input type="checkbox" id="rst-chk-integracoes_se" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">📜 Histórico de envios ao SE</div>
+                    <div class="tabela-card-desc">
+                      Todos os registros de envio exibidos no histórico do módulo SE Currículos.
+                      Não afeta a configuração do módulo.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-integracoes_se">— registros</div>
+                  </div>
+                </div>
+
+                <div class="reset-section-title" style="margin-top:20px">🔗 SE API Configurador</div>
+
+                <div class="tabela-card" id="rst-card-se_api_templates" onclick="rstToggle('se_api_templates',this)">
+                  <input type="checkbox" id="rst-chk-se_api_templates" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">📐 Templates de payload</div>
+                    <div class="tabela-card-desc">
+                      Templates de corpo de requisição cadastrados na aba Templates.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_templates">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-se_api_configs" onclick="rstToggle('se_api_configs',this)">
+                  <input type="checkbox" id="rst-chk-se_api_configs" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      ⚙️ Configurações de endpoint
+                      <span class="cascade-tag" title="Zerar configurações também zera headers e mapeamentos">cascata ↓ headers · mapeamentos</span>
+                    </div>
+                    <div class="tabela-card-desc">
+                      Endpoints configurados na aba Configurações. Ao zerar, os headers e mapeamentos vinculados também são zerados.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_configs">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-se_api_headers" onclick="rstToggle('se_api_headers',this)">
+                  <input type="checkbox" id="rst-chk-se_api_headers" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">🔑 Headers HTTP</div>
+                    <div class="tabela-card-desc">
+                      Headers personalizados por configuração de endpoint.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_headers">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-se_api_mappings" onclick="rstToggle('se_api_mappings',this)">
+                  <input type="checkbox" id="rst-chk-se_api_mappings" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">🗺 Mapeamentos de campos</div>
+                    <div class="tabela-card-desc">
+                      Mapeamentos de campos de origem para campos da API de destino.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_mappings">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-se_api_flows" onclick="rstToggle('se_api_flows',this)">
+                  <input type="checkbox" id="rst-chk-se_api_flows" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">
+                      🔄 Fluxos de execução
+                      <span class="cascade-tag" title="Zerar fluxos também zera os passos">cascata ↓ passos</span>
+                    </div>
+                    <div class="tabela-card-desc">
+                      Fluxos configurados na aba Fluxos. Ao zerar, os passos vinculados também são zerados.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_flows">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-se_api_flow_steps" onclick="rstToggle('se_api_flow_steps',this)">
+                  <input type="checkbox" id="rst-chk-se_api_flow_steps" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">📍 Passos de fluxo</div>
+                    <div class="tabela-card-desc">
+                      Etapas individuais de cada fluxo de execução.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_flow_steps">— registros</div>
+                  </div>
+                </div>
+
+                <div class="tabela-card" id="rst-card-se_api_logs" onclick="rstToggle('se_api_logs',this)">
+                  <input type="checkbox" id="rst-chk-se_api_logs" onclick="event.stopPropagation()">
+                  <div class="tabela-card-body">
+                    <div class="tabela-card-title">📜 Histórico de execuções (Logs)</div>
+                    <div class="tabela-card-desc">
+                      Registros de execução exibidos na aba Logs. Não afeta as configurações.
+                    </div>
+                    <div class="tabela-card-count" id="rst-count-se_api_logs">— registros</div>
+                  </div>
+                </div>
+
               </div>
             </div>
 
-            <!-- Coluna direita: resumo + confirmação -->
             <div class="reset-col-right">
 
               <div class="reset-section-title">3 · Confirme e execute</div>
 
-              <!-- Resumo do que será zerado -->
               <div class="reset-sumario" id="rst-sumario">
                 <div class="reset-sumario-empty">Nenhuma tabela selecionada.</div>
               </div>
 
-              <!-- Aviso de cascade quando aplicável -->
               <div id="rst-aviso-cascade" class="reset-aviso reset-aviso-warning" style="display:none;margin-bottom:16px">
                 <span class="reset-aviso-icon">🔗</span>
                 <div id="rst-aviso-cascade-texto">As tabelas em cascata abaixo também serão zeradas automaticamente.</div>
               </div>
 
-              <!-- Campo de confirmação -->
               <div class="reset-confirm-wrap" id="rst-confirm-wrap" style="display:none">
                 <label for="rst-confirm-input">
                   Para confirmar, digite <strong>CONFIRMAR</strong> no campo abaixo:
@@ -495,13 +574,11 @@
                   autocomplete="off">
               </div>
 
-              <!-- Resultado -->
               <div id="rst-result" class="reset-result">
                 <span id="rst-result-icon" style="font-size:18px;flex-shrink:0"></span>
                 <div id="rst-result-texto"></div>
               </div>
 
-              <!-- Botão de execução -->
               <button
                 id="rst-btn-executar"
                 class="btn btn-danger"
@@ -515,7 +592,7 @@
                 <span class="reset-aviso-icon">💡</span>
                 <div style="font-size:11.5px">
                   <strong>O que NÃO é afetado:</strong> configurações de WhatsApp, e-mail,
-                  analisador, Softexpert, templates, token público, usuários, empresas e auditoria.
+                  analisador, Softexpert, token público, usuários, empresas e auditoria.
                 </div>
               </div>
 
@@ -576,11 +653,14 @@
 
 <!-- ── Modal Criar / Editar Usuário ─────────────────────────────────────────── -->
 <div id="usu-modal" class="modal-overlay d-none">
-  <div class="modal" style="width:min(680px,95vw)">
+  <div class="modal" style="width:min(940px,97vw);padding:28px 32px">
     <div class="modal-header">
       <span class="modal-title" id="usu-modal-title">Novo Usuário</span>
       <button class="modal-close" onclick="usuFecharModal()">✕</button>
     </div>
+
+    <!-- Dados -->
+    <div class="section-lbl">Dados</div>
     <div class="form-row" style="margin-bottom:16px">
       <div class="form-group">
         <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
@@ -634,14 +714,47 @@
       </div>
       <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
     </div>
-    <div class="form-group" style="margin-bottom:16px">
-      <label class="form-label">Acesso às Empresas</label>
-      <div class="empresas-grid" id="usu-empresas-grid">
-        <span class="hint" style="padding:8px">Carregando empresas...</span>
-      </div>
-      <div class="hint" id="usu-hint-empresas">Selecione as empresas que este usuário poderá acessar.</div>
+
+    <!-- Acessos -->
+    <hr class="section-divider">
+    <div class="section-lbl">Acessos</div>
+
+    <div id="usu-acessos-admin" class="acessos-admin-msg" style="display:none">
+      <span style="font-size:20px">🔓</span>
+      <span>Administradores têm acesso irrestrito a todas as empresas e rotinas do sistema.</span>
     </div>
-    <div id="usu-form-error" class="login-error" style="display:none;margin-bottom:0"></div>
+
+    <div id="usu-acessos-usuario">
+      <div class="hint" style="margin-bottom:10px">
+        Ative as empresas e marque as rotinas que este usuário poderá acessar.
+        Usuários sem nenhuma rotina marcada não conseguirão acessar o sistema.
+      </div>
+      <div class="acessos-painel">
+        <div class="ap-empresas">
+          <div class="ap-col-header">Empresas</div>
+          <div class="ap-empresas-list" id="usu-ap-empresas-list">
+            <div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">Carregando...</div>
+          </div>
+        </div>
+        <div class="ap-rotinas">
+          <div class="ap-rotinas-header">
+            <span class="ap-rotinas-title" id="usu-ap-rotinas-title">— selecione uma empresa —</span>
+            <div class="ap-rotinas-actions" id="usu-ap-rotinas-actions" style="display:none">
+              <button class="btn-tiny" onclick="usuMarcarTodasRotinas(true)">Marcar tudo</button>
+              <button class="btn-tiny" onclick="usuMarcarTodasRotinas(false)">Limpar tudo</button>
+            </div>
+          </div>
+          <div class="ap-rotinas-body" id="usu-ap-rotinas-body">
+            <div class="ap-rotinas-placeholder">
+              <span style="font-size:28px">👈</span>
+              Selecione uma empresa para configurar as rotinas de acesso.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="usu-form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="usuFecharModal()">Cancelar</button>
       <button class="btn btn-primary" id="usu-btn-salvar" onclick="usuSalvar()">Salvar</button>
@@ -679,8 +792,10 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
 <script>
 
 // ── Utilitários compartilhados ───────────────────────────────────────────────
@@ -713,6 +828,8 @@ function mudarAbaAdmin(aba, btn) {
 // ── Empresas ─────────────────────────────────────────────────────────────────
 let _empLista  = [];
 let _empEditId = null;
+let _empTable  = null;
+let _empGp     = null;
 
 function maskDoc(input) {
   let v = input.value.replace(/\D/g, '').substring(0, 14);
@@ -738,50 +855,93 @@ function formatarDoc(doc) {
 
 function soNumeros(str) { return String(str || '').replace(/\D/g, ''); }
 
+function empInitTabulator(dados) {
+  _empTable = new Tabulator('#emp-grid', {
+    data: dados,
+    layout: 'fitColumns',
+    height: 'calc(100vh - 240px)',
+    groupStartOpen: true,
+    groupBy: _empGp.getActiveFields(),
+    placeholder: '<div style="text-align:center;padding:60px 20px;color:var(--text-lo)"><div style="font-size:40px;margin-bottom:12px">🏢</div><strong>Nenhuma empresa cadastrada</strong></div>',
+    columns: [
+      {
+        title: '#', field: 'id', width: 60, headerFilter: false, groupable: false,
+        formatter: cell => `<span style="color:var(--text-lo);font-size:12px">${cell.getValue()}</span>`,
+      },
+      {
+        title: 'Razão Social', field: 'razao_social', minWidth: 200, headerFilter: true,
+        formatter: cell => {
+          const row  = cell.getRow().getData();
+          const site = row.site
+            ? `<br><a href="${esc(row.site)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">${esc(row.site)}</a>`
+            : '';
+          return `<strong style="color:var(--text-hi)">${esc(row.razao_social)}</strong>${site}`;
+        },
+      },
+      {
+        title: 'Tipo', field: 'tipo_doc', width: 80,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', CPF: 'CPF', CNPJ: 'CNPJ' } },
+      },
+      {
+        title: 'CPF / CNPJ', field: 'documento_fmt', width: 170, headerFilter: true,
+        formatter: cell => {
+          const v = cell.getValue();
+          return v
+            ? `<span style="font-family:monospace;font-size:12px;color:var(--text-md)">${v}</span>`
+            : `<span style="color:var(--text-lo)">—</span>`;
+        },
+      },
+      {
+        title: 'Telefone', field: 'telefone', headerFilter: true,
+        formatter: cell => cell.getValue() || `<span style="color:var(--text-lo)">—</span>`,
+      },
+      {
+        title: 'E-mail', field: 'email', headerFilter: true,
+        formatter: cell => cell.getValue() || `<span style="color:var(--text-lo)">—</span>`,
+      },
+      {
+        title: 'Ações', headerFilter: false, width: 90, hozAlign: 'right',
+        formatter: cell => {
+          const row  = cell.getRow().getData();
+          const id   = row.id;
+          const nome = esc(row.razao_social);
+          return `<button class="btn-icon" onclick="event.stopPropagation();empEditar(${id})" title="Editar">✏️</button>
+                  <button class="btn-icon" onclick="event.stopPropagation();empConfirmarExcluir(${id},'${nome}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+        },
+      },
+    ],
+    rowClick: (_e, row) => empEditar(row.getData().id),
+  });
+  _empTable.on('tableBuilt', () => _empGp?.refresh());
+}
+
 async function empCarregar() {
+  if (!_empGp) {
+    _empGp = createGroupPanel({
+      chipsRowId: 'emp-gp-chips',
+      dropZoneId: 'emp-gp-dz',
+      storageKey: 'adm_empresas_group_fields',
+      getTable:   () => _empTable,
+    });
+  }
   try {
-    const res = await fetch('/api/empresas');
+    const res  = await fetch('/api/empresas');
     _empLista  = await res.json();
-    empRenderizar();
+    const dados = _empLista.map(e => ({
+      ...e,
+      tipo_doc:      soNumeros(e.documento || '').length <= 11 ? 'CPF' : 'CNPJ',
+      documento_fmt: formatarDoc(e.documento),
+    }));
+    if (_empTable) {
+      _empTable.replaceData(dados);
+    } else {
+      empInitTabulator(dados);
+    }
   } catch (_) {
-    document.getElementById('emp-tbody').innerHTML =
-      '<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar empresas.</td></tr>';
+    console.error('Erro ao carregar empresas.');
   }
 }
-
-function empRenderizar() {
-  const busca    = document.getElementById('emp-busca').value.toLowerCase();
-  const filtrado = _empLista.filter(e =>
-    e.razao_social.toLowerCase().includes(busca) ||
-    (e.documento || '').toLowerCase().includes(busca) ||
-    (e.email     || '').toLowerCase().includes(busca)
-  );
-  const tbody = document.getElementById('emp-tbody');
-  const empty = document.getElementById('emp-empty');
-  if (!filtrado.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('d-none');
-    return;
-  }
-  empty.classList.add('d-none');
-  tbody.innerHTML = filtrado.map(e => `
-    <tr>
-      <td style="color:var(--text-lo);font-size:12px">${e.id}</td>
-      <td><strong style="color:var(--text-hi)">${esc(e.razao_social)}</strong>
-          ${e.site ? `<br><a href="${esc(e.site)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">${esc(e.site)}</a>` : ''}
-      </td>
-      <td class="doc-col">${esc(formatarDoc(e.documento)) || '<span style="color:var(--text-lo)">—</span>'}</td>
-      <td>${esc(e.telefone) || '<span style="color:var(--text-lo)">—</span>'}</td>
-      <td>${esc(e.email)    || '<span style="color:var(--text-lo)">—</span>'}</td>
-      <td style="text-align:right;white-space:nowrap">
-        <button class="btn-icon" onclick="empEditar(${e.id})" title="Editar">✏️</button>
-        <button class="btn-icon" onclick="empConfirmarExcluir(${e.id}, '${esc(e.razao_social)}')" title="Excluir" style="color:#dc2626">🗑</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-function empFiltrar() { empRenderizar(); }
 
 function empAbrirModal(empresa = null) {
   _empEditId = empresa?.id ?? null;
@@ -848,9 +1008,7 @@ async function empSalvar() {
   try {
     const url    = _empEditId ? `/api/empresas/${_empEditId}` : '/api/empresas';
     const method = _empEditId ? 'PUT' : 'POST';
-    const res = await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
-    });
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
     if (res.ok) { empFecharModal(); empCarregar(); }
     else {
       const err = await res.json().catch(() => ({}));
@@ -864,13 +1022,130 @@ async function empSalvar() {
 }
 
 // ── Usuários ─────────────────────────────────────────────────────────────────
-let _usuLista    = [];
-let _usuEmpresas = [];
-let _usuEditId   = null;
-let _usuSenhaId  = null;
-let _usuMeuId    = null;
+let _usuLista              = [];
+let _usuEmpresas           = [];
+let _usuEditId             = null;
+let _usuSenhaId            = null;
+let _usuMeuId              = null;
+let _usuTable              = null;
+let _usuGp                 = null;
+let _usuEmpresaSelecionada = null;
+let _usuPermissoesMap      = {};  // { empresa_id: { ativo, rotinas: Set } }
+
+const _USU_ROTINAS_MENU = [
+  { id:'monitoramento', label:'Monitoramento',          icon:'💬', itens:[
+    { id:'dashboard',        label:'Dashboard',        icon:'⊞' },
+    { id:'monitor-whatsapp', label:'Monitor WhatsApp', icon:'💬' },
+    { id:'monitor-email',    label:'Monitor E-mail',   icon:'📧' },
+  ]},
+  { id:'recrutamento',  label:'Recrutamento',           icon:'🎯', itens:[
+    { id:'curriculos',        label:'Currículos',          icon:'☰' },
+    { id:'funcoes',           label:'Cadastro de Funções', icon:'📋' },
+    { id:'vagas',             label:'Vagas por Função',    icon:'💼' },
+    { id:'processo-seletivo', label:'Processo Seletivo',   icon:'🌐' },
+  ]},
+  { id:'analisador',    label:'Analisador de Currículos',icon:'🔍', itens:[
+    { id:'analisador',        label:'Analisador',            icon:'🔍' },
+    { id:'historico',         label:'Histórico de Análises', icon:'📊' },
+    { id:'config-analisador', label:'Configuração',          icon:'⚙'  },
+  ]},
+  { id:'integracoes',   label:'Integrações',            icon:'🔗', itens:[
+    { id:'se-integracoes',        label:'SE Integrações',     icon:'🔗' },
+    { id:'se-api-configurador',   label:'SE API Configurador', icon:'⚡' },
+  ]},
+  { id:'configurador',  label:'Configurador',           icon:'⚙',  itens:[
+    { id:'configuracoes', label:'Configurações', icon:'⚙'  },
+    { id:'administracao', label:'Administração', icon:'🏢' },
+  ]},
+];
+const _USU_TOTAL_ROTINAS = _USU_ROTINAS_MENU.reduce((n,g) => n + g.itens.length, 0);
+
+function usuInitTabulator(dados) {
+  _usuTable = new Tabulator('#usu-grid', {
+    data: dados,
+    layout: 'fitColumns',
+    height: 'calc(100vh - 240px)',
+    groupStartOpen: true,
+    groupBy: _usuGp.getActiveFields(),
+    placeholder: '<div style="text-align:center;padding:60px 20px;color:var(--text-lo)"><div style="font-size:40px;margin-bottom:12px">👤</div><strong>Nenhum usuário cadastrado</strong></div>',
+    columns: [
+      {
+        title: '#', field: 'id', width: 60, headerFilter: false, groupable: false,
+        formatter: cell => `<span style="color:var(--text-lo);font-size:12px">${cell.getValue()}</span>`,
+      },
+      {
+        title: 'Nome', field: 'nome', minWidth: 160, headerFilter: true,
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          const email = row.email
+            ? `<br><span style="font-size:11px;color:var(--text-lo)">${esc(row.email)}</span>`
+            : '';
+          return `<strong style="color:var(--text-hi)">${esc(row.nome)}</strong>${email}`;
+        },
+      },
+      {
+        title: 'Usuário', field: 'usuario', headerFilter: true,
+        formatter: cell => `<span style="font-family:monospace;font-size:12px">${esc(cell.getValue())}</span>`,
+      },
+      {
+        title: 'Celular', field: 'celular', headerFilter: true,
+        formatter: cell => cell.getValue() || `<span style="color:var(--text-lo)">—</span>`,
+      },
+      {
+        title: 'Perfil', field: 'role_label', minWidth: 110,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', Admin: 'Admin', 'Usuário': 'Usuário' } },
+        formatter: cell => {
+          const row  = cell.getRow().getData();
+          const isAdmin = row.role === 'admin';
+          const empLabel = row.empresas === 'all'
+            ? '<span style="font-size:10px;color:var(--accent)">Todas</span>'
+            : (Array.isArray(row.empresas) && row.empresas.length
+                ? `<span style="font-size:10px;color:var(--text-md)">${row.empresas.length} empresa(s)</span>`
+                : '<span style="font-size:10px;color:var(--text-lo)">Nenhuma</span>');
+          return `<span class="badge ${isAdmin ? 'badge-admin' : 'badge-user'}">${isAdmin ? 'Admin' : 'Usuário'}</span>
+                  <br>${empLabel}`;
+        },
+      },
+      {
+        title: 'Status', field: 'status_label', width: 100,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', Ativo: 'Ativo', Inativo: 'Inativo' } },
+        formatter: cell => {
+          const ativo = cell.getRow().getData().ativo;
+          return `<span class="badge ${ativo ? 'badge-ativo' : 'badge-inativo'}">${ativo ? 'Ativo' : 'Inativo'}</span>`;
+        },
+      },
+      {
+        title: 'Ações', headerFilter: false, width: 110, hozAlign: 'right',
+        formatter: cell => {
+          const row    = cell.getRow().getData();
+          const id     = row.id;
+          const nome   = esc(row.nome);
+          const isSelf = id === _usuMeuId;
+          const btnDel = isSelf
+            ? `<button class="btn-icon" disabled title="Não é possível excluir o usuário logado" style="opacity:.35;cursor:not-allowed">🗑</button>`
+            : `<button class="btn-icon" onclick="event.stopPropagation();usuConfirmarExcluir(${id},'${nome}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+          return `<button class="btn-icon" onclick="event.stopPropagation();usuEditar(${id})" title="Editar">✏️</button>
+                  <button class="btn-icon" onclick="event.stopPropagation();usuAbrirModalSenha(${id},'${nome}')" title="Alterar senha">🔑</button>
+                  ${btnDel}`;
+        },
+      },
+    ],
+    rowClick: (_e, row) => usuEditar(row.getData().id),
+  });
+  _usuTable.on('tableBuilt', () => _usuGp?.refresh());
+}
 
 async function usuCarregar() {
+  if (!_usuGp) {
+    _usuGp = createGroupPanel({
+      chipsRowId: 'usu-gp-chips',
+      dropZoneId: 'usu-gp-dz',
+      storageKey: 'adm_usuarios_group_fields',
+      getTable: () => _usuTable,
+    });
+  }
   try {
     const [resU, resE, resMe] = await Promise.all([
       fetch('/api/usuarios'),
@@ -881,69 +1156,29 @@ async function usuCarregar() {
     _usuEmpresas = await resE.json();
     const me     = await resMe.json();
     _usuMeuId    = me.user_id || null;
-    usuRenderizar();
+
+    const dados = _usuLista.map(u => ({
+      ...u,
+      role_label:   u.role === 'admin' ? 'Admin' : 'Usuário',
+      status_label: u.ativo ? 'Ativo' : 'Inativo',
+    }));
+
+    if (_usuTable) {
+      _usuTable.replaceData(dados);
+    } else {
+      usuInitTabulator(dados);
+    }
   } catch (_) {
-    document.getElementById('usu-tbody').innerHTML =
-      '<tr><td colspan="7" style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar dados.</td></tr>';
+    console.error('Erro ao carregar usuários.');
   }
 }
 
-function usuRenderizar() {
-  const busca    = document.getElementById('usu-busca').value.toLowerCase();
-  const filtrado = _usuLista.filter(u =>
-    u.nome.toLowerCase().includes(busca) ||
-    u.usuario.toLowerCase().includes(busca) ||
-    (u.email || '').toLowerCase().includes(busca)
-  );
-  const tbody = document.getElementById('usu-tbody');
-  const empty = document.getElementById('usu-empty');
-  if (!filtrado.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('d-none');
-    return;
-  }
-  empty.classList.add('d-none');
-  tbody.innerHTML = filtrado.map(u => {
-    const empresasLabel = u.empresas === 'all'
-      ? '<span style="font-size:11px;color:var(--accent)">Todas</span>'
-      : (Array.isArray(u.empresas) && u.empresas.length
-          ? `<span style="font-size:11px;color:var(--text-md)">${u.empresas.length} empresa(s)</span>`
-          : '<span style="font-size:11px;color:var(--text-lo)">Nenhuma</span>');
-    const ehEuMesmo  = u.id === _usuMeuId;
-    const btnExcluir = ehEuMesmo
-      ? `<button class="btn-icon" disabled title="Não é possível excluir o usuário logado" style="opacity:.35;cursor:not-allowed">🗑</button>`
-      : `<button class="btn-icon" onclick="usuConfirmarExcluir(${u.id}, '${esc(u.nome)}')" title="Excluir" style="color:#dc2626">🗑</button>`;
-    return `
-      <tr>
-        <td style="color:var(--text-lo);font-size:12px">${u.id}</td>
-        <td>
-          <strong style="color:var(--text-hi)">${esc(u.nome)}</strong>
-          ${u.email ? `<br><span style="font-size:11px;color:var(--text-lo)">${esc(u.email)}</span>` : ''}
-        </td>
-        <td style="font-family:monospace;font-size:12px">${esc(u.usuario)}</td>
-        <td>${esc(u.celular) || '<span style="color:var(--text-lo)">—</span>'}</td>
-        <td>
-          <span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">
-            ${u.role === 'admin' ? 'Admin' : 'Usuário'}
-          </span>
-          <br><span style="font-size:10px;margin-top:2px;display:inline-block">${empresasLabel}</span>
-        </td>
-        <td><span class="badge ${u.ativo ? 'badge-ativo' : 'badge-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="btn-icon" onclick="usuEditar(${u.id})" title="Editar dados">✏️</button>
-          <button class="btn-icon" onclick="usuAbrirModalSenha(${u.id}, '${esc(u.nome)}')" title="Alterar senha">🔑</button>
-          ${btnExcluir}
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
+async function usuAbrirModal(usuario = null) {
+  _usuEditId             = usuario?.id ?? null;
+  _usuEmpresaSelecionada = null;
+  _usuPermissoesMap      = {};
+  const isEdit = !!_usuEditId;
 
-function usuFiltrar() { usuRenderizar(); }
-
-function usuAbrirModal(usuario = null) {
-  _usuEditId       = usuario?.id ?? null;
-  const isEdit     = !!_usuEditId;
   document.getElementById('usu-modal-title').textContent   = isEdit ? 'Editar Usuário' : 'Novo Usuário';
   document.getElementById('usu-f-nome').value    = usuario?.nome    ?? '';
   document.getElementById('usu-f-usuario').value = usuario?.usuario ?? '';
@@ -957,8 +1192,29 @@ function usuAbrirModal(usuario = null) {
   document.getElementById('usu-f-senha').value      = '';
   document.getElementById('usu-f-senha-edit').value = '';
   document.getElementById('usu-form-error').style.display = 'none';
-  usuRenderEmpresasGrid(usuario?.empresas ?? []);
+
+  // Inicializa mapa de permissões com empresas do usuário
+  const empIds = usuario?.empresas === 'all'
+    ? _usuEmpresas.map(e => e.id)
+    : (Array.isArray(usuario?.empresas) ? usuario.empresas : []);
+  _usuEmpresas.forEach(e => {
+    _usuPermissoesMap[e.id] = { ativo: empIds.includes(e.id), rotinas: new Set() };
+  });
+
+  // Carrega permissões existentes (edição)
+  if (isEdit) {
+    const permRes = await fetch(`/api/permissoes/${_usuEditId}`).catch(() => null);
+    if (permRes?.ok) {
+      const perms = await permRes.json().catch(() => []);
+      perms.forEach(p => {
+        if (_usuPermissoesMap[p.empresa_id])
+          _usuPermissoesMap[p.empresa_id].rotinas = new Set(p.rotinas || []);
+      });
+    }
+  }
+
   usuOnRoleChange();
+  usuRenderEmpresasList();
   document.getElementById('usu-modal').classList.remove('d-none');
   setTimeout(() => document.getElementById('usu-f-nome').focus(), 50);
 }
@@ -1033,44 +1289,162 @@ async function usuSalvarSenha() {
   }
 }
 
-function usuRenderEmpresasGrid(selecionadas) {
-  const grid = document.getElementById('usu-empresas-grid');
-  if (!_usuEmpresas.length) {
-    grid.innerHTML = '<span style="font-size:12px;color:var(--text-lo);padding:8px;font-style:italic">Nenhuma empresa cadastrada ainda.</span>';
+// ── Painel duplo: Empresas ────────────────────────────────────────────────────
+function usuRenderEmpresasList() {
+  const list   = document.getElementById('usu-ap-empresas-list');
+  const sorted = [..._usuEmpresas].sort((a,b) => (a.razao_social||'').localeCompare(b.razao_social||'','pt-BR'));
+  if (!sorted.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">Nenhuma empresa cadastrada.</div>';
     return;
   }
-  const ids = selecionadas === 'all'
-    ? _usuEmpresas.map(e => e.id)
-    : (Array.isArray(selecionadas) ? selecionadas : []);
-  const sorted = [..._usuEmpresas].sort((a, b) => (a.razao_social || '').localeCompare(b.razao_social || '', 'pt-BR'));
-  grid.innerHTML = sorted.map(e => `
-    <label class="empresa-check" id="usu-lbl-emp-${e.id}">
-      <input type="checkbox" id="usu-chk-emp-${e.id}" value="${e.id}" ${ids.includes(e.id) ? 'checked' : ''}>
-      <span>${esc(e.razao_social)}</span>
-      ${e.documento ? `<span style="font-size:11px;color:var(--text-lo);margin-left:auto;font-family:monospace">${esc(e.documento)}</span>` : ''}
-    </label>
-  `).join('');
+  list.innerHTML = sorted.map(e => {
+    const pm  = _usuPermissoesMap[e.id] || { ativo:false, rotinas:new Set() };
+    const qtd = pm.rotinas.size;
+    const isSel = e.id === _usuEmpresaSelecionada;
+    const temAcesso = pm.ativo && qtd > 0;
+    return `
+      <div class="ap-empresa-item${isSel?' selected':''}" id="usu-ap-emp-item-${e.id}"
+           onclick="usuSelecionarEmpresa(${e.id})">
+        <div class="ap-emp-toggle${pm.ativo?' ativo':''}" id="usu-ap-emp-toggle-${e.id}"
+             onclick="event.stopPropagation();usuToggleEmpresaAtivo(${e.id})"
+             title="${pm.ativo?'Revogar acesso':'Conceder acesso'}">✓</div>
+        <span class="ap-emp-nome" title="${esc(e.razao_social)}">${esc(e.razao_social)}</span>
+        <span class="ap-emp-contador${temAcesso?' tem-acesso':''}" id="usu-ap-emp-cnt-${e.id}">
+          ${pm.ativo?`${qtd}/${_USU_TOTAL_ROTINAS}`:'—'}
+        </span>
+      </div>`;
+  }).join('');
+}
+
+function usuAtualizarEmpresaItem(empresaId) {
+  const pm  = _usuPermissoesMap[empresaId] || { ativo:false, rotinas:new Set() };
+  const qtd = pm.rotinas.size;
+  const temAcesso = pm.ativo && qtd > 0;
+  const toggle = document.getElementById(`usu-ap-emp-toggle-${empresaId}`);
+  const cnt    = document.getElementById(`usu-ap-emp-cnt-${empresaId}`);
+  const item   = document.getElementById(`usu-ap-emp-item-${empresaId}`);
+  if (toggle) toggle.classList.toggle('ativo', pm.ativo);
+  if (cnt) {
+    cnt.textContent = pm.ativo ? `${qtd}/${_USU_TOTAL_ROTINAS}` : '—';
+    cnt.classList.toggle('tem-acesso', temAcesso);
+  }
+  if (item) item.classList.toggle('selected', empresaId === _usuEmpresaSelecionada);
+}
+
+function usuToggleEmpresaAtivo(empresaId) {
+  if (!_usuPermissoesMap[empresaId]) _usuPermissoesMap[empresaId] = { ativo:false, rotinas:new Set() };
+  _usuPermissoesMap[empresaId].ativo = !_usuPermissoesMap[empresaId].ativo;
+  usuAtualizarEmpresaItem(empresaId);
+  if (_usuPermissoesMap[empresaId].ativo && !_usuEmpresaSelecionada)
+    usuSelecionarEmpresa(empresaId);
+  else if (_usuEmpresaSelecionada === empresaId)
+    usuRenderRotinas(empresaId);
+}
+
+function usuSelecionarEmpresa(empresaId) {
+  const anterior = _usuEmpresaSelecionada;
+  _usuEmpresaSelecionada = empresaId;
+  if (anterior && anterior !== empresaId) usuAtualizarEmpresaItem(anterior);
+  usuAtualizarEmpresaItem(empresaId);
+  usuRenderRotinas(empresaId);
+}
+
+// ── Painel duplo: Rotinas ─────────────────────────────────────────────────────
+function usuRenderRotinas(empresaId) {
+  const empresa = _usuEmpresas.find(e => e.id === empresaId);
+  const pm      = _usuPermissoesMap[empresaId] || { ativo:false, rotinas:new Set() };
+  document.getElementById('usu-ap-rotinas-title').textContent = empresa ? empresa.razao_social : '—';
+  document.getElementById('usu-ap-rotinas-actions').style.display = pm.ativo ? 'flex' : 'none';
+
+  const body = document.getElementById('usu-ap-rotinas-body');
+  if (!pm.ativo) {
+    body.innerHTML = `<div class="ap-bloqueado"><span style="font-size:28px">🔒</span>
+      <span>Esta empresa está sem acesso.<br>Clique no círculo para ativá-la.</span></div>`;
+    return;
+  }
+  body.innerHTML = _USU_ROTINAS_MENU.map(grupo => {
+    const todos  = grupo.itens.every(i => pm.rotinas.has(i.id));
+    const alguns = grupo.itens.some(i => pm.rotinas.has(i.id));
+    return `
+      <div class="rot-grupo">
+        <div class="rot-grupo-hdr">
+          <span class="rot-grupo-icon">${grupo.icon}</span>
+          <input type="checkbox" id="usu-rot-grp-${empresaId}-${grupo.id}"
+            ${todos?'checked':''} ${alguns&&!todos?'data-ind="1"':''}
+            onchange="usuToggleGrupoRotinas(${empresaId},'${grupo.id}',this.checked)">
+          <span class="rot-grupo-nome">${esc(grupo.label)}</span>
+        </div>
+        ${grupo.itens.map(item=>`
+          <div class="rot-item">
+            <span class="rot-item-icon">${item.icon}</span>
+            <input type="checkbox" id="usu-rot-${empresaId}-${item.id}"
+              ${pm.rotinas.has(item.id)?'checked':''}
+              onchange="usuToggleRotina(${empresaId},'${item.id}',this.checked,'${grupo.id}')">
+            <label class="rot-item-label" for="usu-rot-${empresaId}-${item.id}">${esc(item.label)}</label>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+  _USU_ROTINAS_MENU.forEach(grupo => {
+    const cb = document.getElementById(`usu-rot-grp-${empresaId}-${grupo.id}`);
+    if (cb && cb.dataset.ind === '1') cb.indeterminate = true;
+  });
+}
+
+function usuToggleRotina(empresaId, rotinaId, marcado, grupoId) {
+  if (!_usuPermissoesMap[empresaId]) _usuPermissoesMap[empresaId] = { ativo:true, rotinas:new Set() };
+  if (marcado) _usuPermissoesMap[empresaId].rotinas.add(rotinaId);
+  else         _usuPermissoesMap[empresaId].rotinas.delete(rotinaId);
+  const grupo  = _USU_ROTINAS_MENU.find(g => g.id === grupoId);
+  if (grupo) {
+    const pm    = _usuPermissoesMap[empresaId];
+    const todos = grupo.itens.every(i => pm.rotinas.has(i.id));
+    const algs  = grupo.itens.some(i => pm.rotinas.has(i.id));
+    const cb    = document.getElementById(`usu-rot-grp-${empresaId}-${grupoId}`);
+    if (cb) { cb.checked = todos; cb.indeterminate = algs && !todos; }
+  }
+  usuAtualizarEmpresaItem(empresaId);
+}
+
+function usuToggleGrupoRotinas(empresaId, grupoId, marcado) {
+  if (!_usuPermissoesMap[empresaId]) _usuPermissoesMap[empresaId] = { ativo:true, rotinas:new Set() };
+  const grupo = _USU_ROTINAS_MENU.find(g => g.id === grupoId);
+  if (!grupo) return;
+  grupo.itens.forEach(item => {
+    const cb = document.getElementById(`usu-rot-${empresaId}-${item.id}`);
+    if (marcado) { _usuPermissoesMap[empresaId].rotinas.add(item.id);    if(cb) cb.checked=true;  }
+    else         { _usuPermissoesMap[empresaId].rotinas.delete(item.id); if(cb) cb.checked=false; }
+  });
+  usuAtualizarEmpresaItem(empresaId);
+}
+
+function usuMarcarTodasRotinas(marcar) {
+  if (!_usuEmpresaSelecionada || !_usuPermissoesMap[_usuEmpresaSelecionada]) return;
+  _USU_ROTINAS_MENU.forEach(grupo => grupo.itens.forEach(item => {
+    if (marcar) _usuPermissoesMap[_usuEmpresaSelecionada].rotinas.add(item.id);
+    else        _usuPermissoesMap[_usuEmpresaSelecionada].rotinas.delete(item.id);
+  }));
+  usuRenderRotinas(_usuEmpresaSelecionada);
+  usuAtualizarEmpresaItem(_usuEmpresaSelecionada);
 }
 
 function usuOnRoleChange() {
   const isAdmin = document.getElementById('usu-f-role').value === 'admin';
-  const grid    = document.getElementById('usu-empresas-grid');
-  const hint    = document.getElementById('usu-hint-empresas');
-  grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
-    cb.checked  = isAdmin ? true : cb.checked;
-    cb.disabled = isAdmin;
-    cb.closest('.empresa-check')?.classList.toggle('disabled', isAdmin);
-  });
-  hint.textContent = isAdmin
-    ? 'Administradores têm acesso irrestrito a todas as empresas.'
-    : 'Selecione as empresas que este usuário poderá acessar.';
+  document.getElementById('usu-acessos-admin').style.display   = isAdmin ? 'flex'  : 'none';
+  document.getElementById('usu-acessos-usuario').style.display = isAdmin ? 'none'  : 'block';
 }
 
 function usuGetEmpresasSelecionadas() {
   if (document.getElementById('usu-f-role').value === 'admin') return 'all';
-  return _usuEmpresas
-    .filter(e => document.getElementById(`usu-chk-emp-${e.id}`)?.checked)
-    .map(e => e.id);
+  return Object.entries(_usuPermissoesMap)
+    .filter(([,pm]) => pm.ativo)
+    .map(([id]) => Number(id));
+}
+
+function usuGetPermissoesSelecionadas() {
+  return Object.entries(_usuPermissoesMap).map(([id,pm]) => ({
+    empresa_id: Number(id),
+    rotinas: [...pm.rotinas],
+  }));
 }
 
 async function usuSalvar() {
@@ -1090,8 +1464,7 @@ async function usuSalvar() {
   if (!email)   { errEl.textContent = 'E-mail é obrigatório.';  errEl.style.display = 'block'; return; }
   if (!isEdit && !senha) {
     errEl.textContent = 'Senha é obrigatória para novos usuários.';
-    errEl.style.display = 'block';
-    return;
+    errEl.style.display = 'block'; return;
   }
   const dados = {
     nome, usuario, celular, email,
@@ -1101,23 +1474,29 @@ async function usuSalvar() {
   };
   if (senha) dados.senha = senha;
   const btn = document.getElementById('usu-btn-salvar');
-  btn.textContent = 'Salvando...';
-  btn.disabled    = true;
+  btn.textContent = 'Salvando...'; btn.disabled = true;
   try {
     const url    = isEdit ? `/api/usuarios/${_usuEditId}` : '/api/usuarios';
     const method = isEdit ? 'PUT' : 'POST';
-    const res = await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
-    });
-    if (res.ok) { usuFecharModal(); usuCarregar(); }
-    else {
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(dados) });
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       errEl.textContent = err.error || 'Erro ao salvar usuário.';
-      errEl.style.display = 'block';
+      errEl.style.display = 'block'; return;
     }
+    const salvo  = await res.json();
+    const userId = isEdit ? _usuEditId : salvo.id;
+    if (dados.role !== 'admin') {
+      await fetch(`/api/permissoes/${userId}`, {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ permissoes: usuGetPermissoesSelecionadas() }),
+      });
+    }
+    usuFecharModal(); usuCarregar();
+  } catch {
+    errEl.textContent = 'Erro inesperado ao salvar.'; errEl.style.display = 'block';
   } finally {
-    btn.textContent = 'Salvar';
-    btn.disabled    = false;
+    btn.textContent = 'Salvar'; btn.disabled = false;
   }
 }
 
@@ -1169,7 +1548,74 @@ async function segSalvar() {
 }
 
 // ── Auditoria ────────────────────────────────────────────────────────────────
+let _audTable = null;
+let _audGp    = null;
+
+function audInitTabulator(dados) {
+  _audTable = new Tabulator('#aud-grid', {
+    data: dados,
+    layout: 'fitColumns',
+    height: 'calc(100vh - 340px)',
+    groupStartOpen: true,
+    groupBy: _audGp.getActiveFields(),
+    initialSort: [{ column: 'ts', dir: 'desc' }],
+    placeholder: '<div style="text-align:center;padding:40px;color:var(--text-lo);font-size:13px">Nenhum registro encontrado.</div>',
+    columns: [
+      {
+        title: 'Data / Hora', field: 'ts', width: 165, headerFilter: false, sorter: 'string', groupable: false,
+        formatter: cell => `<span style="font-size:12px;color:var(--text-md);white-space:nowrap">${new Date(cell.getValue()).toLocaleString('pt-BR')}</span>`,
+      },
+      {
+        title: 'Usuário', field: 'usuario', minWidth: 120, headerFilter: true,
+        formatter: cell => `<span style="font-weight:600;color:var(--text-hi)">${esc(cell.getValue())}</span>`,
+      },
+      {
+        title: 'Ação', field: 'acao', minWidth: 160,
+        headerFilter: 'select',
+        headerFilterParams: {
+          values: {
+            '': 'Todas',
+            login_sucesso: 'Login com sucesso',
+            login_falha: 'Login com falha',
+            login_bloqueado: 'Login bloqueado',
+            logout: 'Logout',
+            empresa_selecionada: 'Empresa selecionada',
+          },
+        },
+        formatter: cell => {
+          const v = cell.getValue() || '';
+          return `<span class="acao-badge acao-${v}">${esc(v)}</span>`;
+        },
+      },
+      {
+        title: 'IP', field: 'ip', width: 140, headerFilter: true,
+        formatter: cell => `<span style="font-family:monospace;font-size:12px">${esc(cell.getValue())}</span>`,
+      },
+      {
+        title: 'Empresa', field: 'empresa_id', width: 90, headerFilter: false, groupable: false,
+        formatter: cell => cell.getValue()
+          ? `<span style="font-size:12px">#${cell.getValue()}</span>`
+          : `<span style="color:var(--text-lo)">—</span>`,
+      },
+      {
+        title: 'Detalhes', field: 'detalhes', headerFilter: true, groupable: false,
+        formatter: cell => `<span style="font-size:12px;color:var(--text-md)">${esc(cell.getValue())}</span>`,
+      },
+    ],
+  });
+  _audTable.element.classList.add('tabulator-audit');
+  _audTable.on('tableBuilt', () => _audGp?.refresh());
+}
+
 async function audCarregar() {
+  if (!_audGp) {
+    _audGp = createGroupPanel({
+      chipsRowId: 'aud-gp-chips',
+      dropZoneId: 'aud-gp-dz',
+      storageKey: 'adm_auditoria_group_fields',
+      getTable: () => _audTable,
+    });
+  }
   const params = new URLSearchParams({
     limite:   200,
     usuario:  document.getElementById('aud-f-usuario').value,
@@ -1180,36 +1626,14 @@ async function audCarregar() {
   try {
     const res       = await fetch(`/api/seguranca/auditoria?${params}`);
     const registros = await res.json();
-    audRenderizar(registros);
+    if (_audTable) {
+      _audTable.replaceData(registros);
+    } else {
+      audInitTabulator(registros);
+    }
   } catch (_) {
-    document.getElementById('aud-tbody').innerHTML =
-      '<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:30px">Erro ao carregar auditoria.</td></tr>';
+    console.error('Erro ao carregar auditoria.');
   }
-}
-
-function audRenderizar(registros) {
-  const tbody = document.getElementById('aud-tbody');
-  const empty = document.getElementById('aud-empty');
-  if (!registros.length) {
-    tbody.innerHTML = '';
-    empty.classList.remove('d-none');
-    return;
-  }
-  empty.classList.add('d-none');
-  tbody.innerHTML = registros.map(e => {
-    const dt  = new Date(e.ts).toLocaleString('pt-BR');
-    const cls = `acao-${e.acao}`;
-    return `
-      <tr>
-        <td style="font-size:12px;color:var(--text-md);white-space:nowrap">${dt}</td>
-        <td style="font-weight:600;color:var(--text-hi)">${esc(e.usuario)}</td>
-        <td><span class="acao-badge ${cls}">${esc(e.acao)}</span></td>
-        <td style="font-family:monospace;font-size:12px">${esc(e.ip)}</td>
-        <td style="font-size:12px">${e.empresa_id ? `#${e.empresa_id}` : '<span style="color:var(--text-lo)">—</span>'}</td>
-        <td style="font-size:12px;color:var(--text-md)">${esc(e.detalhes)}</td>
-      </tr>
-    `;
-  }).join('');
 }
 
 // ── Fechar modais ao clicar no backdrop ──────────────────────────────────────
@@ -1230,9 +1654,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Reset de Dados ────────────────────────────────────────────────────────────
 const RST_CASCADE = {
-  funcoes:    ['vagas', 'vaga_candidaturas'],
-  vagas:      ['vaga_candidaturas'],
-  curriculos: ['vaga_candidaturas'],
+  funcoes:         ['vagas', 'vaga_candidaturas'],
+  vagas:           ['vaga_candidaturas'],
+  curriculos:      ['vaga_candidaturas'],
+  se_api_configs:  ['se_api_headers', 'se_api_mappings'],
+  se_api_flows:    ['se_api_flow_steps'],
 };
 const RST_LABELS = {
   curriculos:        'Currículos recebidos',
@@ -1240,6 +1666,14 @@ const RST_LABELS = {
   vagas:             'Vagas',
   funcoes:           'Funções',
   equivalencias:     'Equivalências',
+  integracoes_se:    'SE Currículos — Histórico',
+  se_api_templates:  'SE API — Templates',
+  se_api_configs:    'SE API — Configurações',
+  se_api_headers:    'SE API — Headers',
+  se_api_mappings:   'SE API — Mapeamentos',
+  se_api_flows:      'SE API — Fluxos',
+  se_api_flow_steps: 'SE API — Passos de Fluxo',
+  se_api_logs:       'SE API — Logs',
 };
 const RST_ICONES = {
   curriculos:        '📄',
@@ -1247,9 +1681,17 @@ const RST_ICONES = {
   vagas:             '💼',
   funcoes:           '🏷',
   equivalencias:     '🔀',
+  integracoes_se:    '📜',
+  se_api_templates:  '📐',
+  se_api_configs:    '⚙️',
+  se_api_headers:    '🔑',
+  se_api_mappings:   '🗺',
+  se_api_flows:      '🔄',
+  se_api_flow_steps: '📍',
+  se_api_logs:       '📜',
 };
 
-let _rstContagens = {};
+let _rstContagens    = {};
 let _rstSelecionadas = new Set();
 
 async function rstCarregarContagens() {
@@ -1274,8 +1716,7 @@ async function rstCarregarContagens() {
       return;
     }
     _rstContagens = await r.json();
-    const nomes = { curriculos: 'curriculos', vaga_candidaturas: 'vaga_candidaturas', vagas: 'vagas', funcoes: 'funcoes', equivalencias: 'equivalencias' };
-    for (const [key] of Object.entries(nomes)) {
+    for (const key of Object.keys(RST_LABELS)) {
       const el = document.getElementById(`rst-count-${key}`);
       if (el) {
         const n = _rstContagens[key] ?? 0;
@@ -1287,7 +1728,7 @@ async function rstCarregarContagens() {
   }
 }
 
-function rstToggle(tabela, card) {
+function rstToggle(tabela) {
   const eid = document.getElementById('rst-empresa').value;
   if (!eid) return;
 
@@ -1298,24 +1739,20 @@ function rstToggle(tabela, card) {
     _rstSelecionadas.add(tabela);
   } else {
     _rstSelecionadas.delete(tabela);
-    // Remove cascades que dependiam exclusivamente desta tabela
     rstLimparCascadesOrfas();
   }
   rstAtualizarCards();
   rstAtualizarSumario();
-  // Limpa resultado anterior ao mudar seleção
   document.getElementById('rst-result').className = 'reset-result';
   document.getElementById('rst-confirm-input').value = '';
   rstValidarConfirmacao();
 }
 
 function rstLimparCascadesOrfas() {
-  // Recalcula quais cascades ainda são necessários
   const cascadesNecessarios = new Set();
   for (const t of _rstSelecionadas) {
     (RST_CASCADE[t] || []).forEach(c => cascadesNecessarios.add(c));
   }
-  // Remove seleções de cascade que não têm mais pai selecionado
   for (const t of [..._rstSelecionadas]) {
     const ehCascade = Object.values(RST_CASCADE).some(arr => arr.includes(t));
     if (ehCascade && !cascadesNecessarios.has(t)) {
@@ -1327,7 +1764,6 @@ function rstLimparCascadesOrfas() {
 }
 
 function rstAtualizarCards() {
-  // Calcula cascades ativos
   const cascadesAtivos = new Set();
   for (const t of _rstSelecionadas) {
     (RST_CASCADE[t] || []).forEach(c => cascadesAtivos.add(c));
@@ -1341,9 +1777,9 @@ function rstAtualizarCards() {
     const selecionada = _rstSelecionadas.has(tabela);
     const cascade     = !selecionada && cascadesAtivos.has(tabela);
 
-    card.classList.toggle('checked',  selecionada);
-    card.classList.toggle('cascade',  cascade);
-    chk.checked = selecionada || cascade;
+    card.classList.toggle('checked', selecionada);
+    card.classList.toggle('cascade', cascade);
+    chk.checked  = selecionada || cascade;
     chk.disabled = cascade;
 
     if (cascade) {
@@ -1357,12 +1793,11 @@ function rstAtualizarCards() {
 }
 
 function rstAtualizarSumario() {
-  const sumario = document.getElementById('rst-sumario');
-  const confirmWrap = document.getElementById('rst-confirm-wrap');
-  const btnExecutar = document.getElementById('rst-btn-executar');
-  const avioCascade = document.getElementById('rst-aviso-cascade');
+  const sumario      = document.getElementById('rst-sumario');
+  const confirmWrap  = document.getElementById('rst-confirm-wrap');
+  const btnExecutar  = document.getElementById('rst-btn-executar');
+  const avioCascade  = document.getElementById('rst-aviso-cascade');
 
-  // Calcula total a zerar (selecionados + cascades)
   const cascadesAtivos = new Set();
   for (const t of _rstSelecionadas) {
     (RST_CASCADE[t] || []).forEach(c => cascadesAtivos.add(c));
@@ -1379,7 +1814,7 @@ function rstAtualizarSumario() {
 
   let html = '';
   for (const t of todasAfetadas) {
-    const n    = _rstContagens[t] ?? '?';
+    const n         = _rstContagens[t] ?? '?';
     const isCascade = !_rstSelecionadas.has(t) && cascadesAtivos.has(t);
     html += `
       <div class="reset-sumario-item">
@@ -1440,7 +1875,6 @@ async function rstExecutar() {
       document.getElementById('rst-result-texto').innerHTML =
         `<strong>Concluído!</strong> Zeradas com sucesso: <strong>${nomes}</strong>.`;
 
-      // Reseta seleções e recarrega contagens
       _rstSelecionadas.clear();
       document.querySelectorAll('#rst-cards input[type=checkbox]').forEach(c => { c.checked = false; c.disabled = false; });
       document.querySelectorAll('#rst-cards .tabela-card').forEach(c => c.classList.remove('checked','cascade'));
@@ -1459,7 +1893,6 @@ async function rstExecutar() {
   }
 }
 
-// Popula dropdown de empresas quando a aba é aberta
 const _rstCarregado = { ok: false };
 async function rstInicializar() {
   if (_rstCarregado.ok) return;
@@ -1487,6 +1920,8 @@ async function rstInicializar() {
     });
   }).catch(() => {});
 }
+
+
 </script>
 </body>
 </html>

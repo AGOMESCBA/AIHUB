@@ -130,6 +130,15 @@
     .badge-qtd   { background: #dcfce7; color: var(--success); border: 1px solid #86efac; }
     .badge-form  { background: var(--bg-hover); color: var(--text-md); border: 1px solid var(--border); }
 
+    .tile-desc {
+      font-size: 13px;
+      color: var(--text-md);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .tile-cta {
       margin-top: auto;
       font-size: 15px;
@@ -445,6 +454,7 @@
         ${f.area ? `<div class="tile-area">${esc(f.area)}</div>` : ''}
         <div class="tile-nome">${esc(f.nome || 'Vaga em Aberto')}</div>
         <div class="tile-badges">${badges}</div>
+        ${f.descricao ? `<div class="tile-desc">${esc(f.descricao)}</div>` : ''}
         <div class="tile-cta">Ver vaga →</div>
       </div>`;
     }).join('')}</div>`;

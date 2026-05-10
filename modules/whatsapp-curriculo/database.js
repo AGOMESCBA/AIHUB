@@ -43,6 +43,7 @@ module.exports = {
     data.curriculos.push({
       id,
       empresa_id:      Number(empresaId),
+      empresa_nome:    row.empresa_nome    || null,
       remetente:       row.remetente,
       nome:            row.nome            || null,
       telefone:        row.telefone        || null,

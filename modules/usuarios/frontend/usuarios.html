@@ -5,56 +5,177 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Usuários — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
   <style>
+    /* ── Modal base ── */
     .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
-    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(680px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(920px,97vw);max-height:95vh;overflow-y:auto;padding:28px 32px;position:relative; }
     .modal-sm      { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(420px,95vw);padding:28px;position:relative; }
-    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:22px; }
     .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
     .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
     .modal-close:hover { color:var(--text-hi); }
     .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
     .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
-    .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
-    .btn-icon:hover { background:var(--bg-hover); }
-    .search-bar    { position:relative; }
-    .search-bar input { padding-left:32px; }
-    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
-    .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
-    .empty-state div { font-size:40px;margin-bottom:12px; }
 
+    /* ── Badges ── */
     .badge        { display:inline-block;padding:2px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
     .badge-admin  { background:rgba(37,99,235,.12);color:var(--accent); }
     .badge-user   { background:var(--bg-hover);color:var(--text-md); }
     .badge-ativo  { background:rgba(22,163,74,.12);color:var(--success); }
     .badge-inativo{ background:rgba(239,68,68,.10);color:#dc2626; }
 
-    .empresas-grid {
-      border:1px solid var(--border);border-radius:8px;padding:12px;
-      max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;
-    }
-    .empresa-check {
-      display:flex;align-items:center;gap:10px;padding:6px 8px;
-      border-radius:6px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text-hi);
-    }
-    .empresa-check:hover { background:var(--bg-hover); }
-    .empresa-check input[type=checkbox] { cursor:pointer;width:15px;height:15px;flex-shrink:0; }
-    .empresa-check.disabled { opacity:.55;cursor:not-allowed; }
-
+    /* ── Senha ── */
     .pass-wrap { position:relative; }
     .pass-wrap input { padding-right:40px; }
-    .pass-toggle { position:absolute;right:10px;top:50%;transform:translateY(-50%);
-      background:none;border:none;cursor:pointer;color:var(--text-lo);font-size:16px;padding:0; }
+    .pass-toggle { position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-lo);font-size:16px;padding:4px;z-index:2;line-height:1; }
     .pass-toggle:hover { color:var(--text-hi); }
-
-    /* Caixa de senha opcional na edição */
-    .senha-edit-box {
-      border:1px dashed var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;
-      background:rgba(37,99,235,.03);
-    }
+    .senha-edit-box { border:1px dashed var(--border);border-radius:8px;padding:14px 16px;margin-bottom:16px;background:rgba(37,99,235,.03); }
     .senha-edit-box .form-label { color:var(--text-md); }
-
     .hint { font-size:11px;color:var(--text-lo);margin-top:4px; }
+
+    /* ── Seção de acessos ── */
+    .section-divider { border:none;border-top:1px solid var(--border);margin:20px 0 18px; }
+    .section-label   { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:14px; }
+
+    .acessos-admin-msg {
+      display:flex;align-items:center;gap:12px;
+      padding:14px 18px;border-radius:8px;
+      background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.18);
+      font-size:13px;color:var(--accent);
+    }
+
+    /* ── Painel duplo ── */
+    .acessos-painel {
+      display:grid;
+      grid-template-columns:220px 1fr;
+      gap:0;
+      border:1px solid var(--border);
+      border-radius:10px;
+      overflow:hidden;
+      min-height:320px;
+    }
+
+    /* Coluna esquerda — Empresas */
+    .ap-empresas {
+      border-right:1px solid var(--border);
+      display:flex;flex-direction:column;
+    }
+    .ap-col-header {
+      padding:10px 14px;
+      font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+      color:var(--text-lo);background:var(--bg-hover);border-bottom:1px solid var(--border);
+      flex-shrink:0;
+    }
+    .ap-empresas-list {
+      overflow-y:auto;flex:1;
+    }
+    .ap-empresa-item {
+      display:flex;align-items:center;gap:10px;
+      padding:10px 14px;cursor:pointer;
+      border-bottom:1px solid var(--border);
+      transition:background .1s;
+      position:relative;
+    }
+    .ap-empresa-item:last-child { border-bottom:none; }
+    .ap-empresa-item:hover { background:var(--bg-hover); }
+    .ap-empresa-item.selected { background:rgba(37,99,235,.08); }
+    .ap-empresa-item.selected::before {
+      content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+      background:var(--accent);border-radius:0 2px 2px 0;
+    }
+
+    .ap-emp-toggle {
+      width:20px;height:20px;border-radius:50%;border:2px solid var(--border);
+      display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;transition:all .15s;cursor:pointer;background:transparent;
+      font-size:11px;color:transparent;
+    }
+    .ap-emp-toggle.ativo {
+      background:var(--accent);border-color:var(--accent);color:#fff;
+    }
+    .ap-emp-nome {
+      flex:1;font-size:13px;color:var(--text-hi);min-width:0;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .ap-emp-contador {
+      font-size:10px;color:var(--text-lo);white-space:nowrap;
+      background:var(--bg-hover);padding:2px 6px;border-radius:10px;flex-shrink:0;
+    }
+    .ap-emp-contador.tem-acesso { background:rgba(37,99,235,.12);color:var(--accent);font-weight:600; }
+
+    /* Coluna direita — Rotinas */
+    .ap-rotinas { display:flex;flex-direction:column; }
+    .ap-rotinas-header {
+      padding:10px 14px;background:var(--bg-hover);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:8px;flex-shrink:0;
+    }
+    .ap-rotinas-title {
+      font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);
+      flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+    .ap-rotinas-body { overflow-y:auto;flex:1;padding:12px 14px; }
+
+    .ap-rotinas-placeholder {
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:100%;padding:40px;text-align:center;color:var(--text-lo);font-size:13px;gap:10px;
+    }
+
+    /* Grupos de rotinas */
+    .rot-grupo { margin-bottom:14px; }
+    .rot-grupo-hdr {
+      display:flex;align-items:center;gap:8px;
+      padding:6px 8px;border-radius:6px;cursor:pointer;
+      transition:background .1s;margin-bottom:4px;
+    }
+    .rot-grupo-hdr:hover { background:var(--bg-hover); }
+    .rot-grupo-hdr input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
+    .rot-grupo-nome {
+      font-size:12px;font-weight:700;color:var(--text-md);
+      text-transform:uppercase;letter-spacing:.04em;flex:1;
+    }
+    .rot-grupo-icon { font-size:15px; }
+
+    .rot-item {
+      display:flex;align-items:center;gap:10px;
+      padding:6px 8px 6px 30px;border-radius:6px;cursor:pointer;
+      transition:background .1s;
+    }
+    .rot-item:hover { background:var(--bg-hover); }
+    .rot-item input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
+    .rot-item-label { font-size:13px;color:var(--text-hi); }
+    .rot-item-icon  { font-size:14px; }
+
+    /* Ações rápidas rotinas */
+    .ap-rotinas-actions {
+      display:flex;gap:6px;flex-shrink:0;
+    }
+    .btn-tiny {
+      font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);
+      background:none;cursor:pointer;color:var(--text-md);transition:all .1s;
+    }
+    .btn-tiny:hover { background:var(--bg-hover);color:var(--text-hi); }
+
+    /* Empresa inativa — rotinas desabilitadas */
+    .ap-bloqueado {
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:100%;padding:40px;text-align:center;color:var(--text-lo);font-size:13px;gap:8px;
+    }
+
+    /* ── Group panel / Tabulator ── */
+    .gp-wrap      { margin-bottom:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .tabulator { font-family:inherit;font-size:14px;border:none !important; }
+    .tabulator .tabulator-header { background:var(--bg-hover);border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-col { background:transparent;border-right:none !important; }
+    .tabulator .tabulator-col-title { font-size:11px;color:var(--text-lo);font-weight:600;text-transform:uppercase;letter-spacing:.04em; }
+    .tabulator-row { border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator-cell { border-right:none !important;padding:9px 12px; }
+    .tabulator-header-filter input,
+    .tabulator-header-filter select { width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:#fff;color:var(--text);margin-top:4px; }
+    .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
   </style>
 </head>
 <body>
@@ -65,10 +186,8 @@
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
     </div>
-    <div class="sidebar-nav">
-    </div>
-    <div class="sidebar-footer">
-    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
   </nav>
 
   <div class="main">
@@ -77,49 +196,51 @@
     </div>
 
     <div class="page-content">
+
       <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <div class="search-bar" style="flex:1;max-width:340px">
-          <input type="text" id="busca" class="form-control" placeholder="Buscar usuário..." oninput="filtrar()">
-        </div>
         <div class="ms-auto">
           <button class="btn btn-primary" onclick="abrirModal()">＋ Novo Usuário</button>
         </div>
       </div>
 
-      <div class="card">
-        <div class="table-wrap">
-          <table id="tabela">
-            <thead>
-              <tr>
-                <th style="width:50px">#</th>
-                <th>Nome</th>
-                <th>Usuário</th>
-                <th>Celular</th>
-                <th>Perfil</th>
-                <th>Status</th>
-                <th style="text-align:right">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
+      <!-- Painel de agrupamento -->
+      <div class="gp-wrap">
+        <div class="gp-chips-row" id="gp-chips-row">
+          <span class="gp-label">Agrupar por:</span>
         </div>
-        <div id="empty" class="empty-state d-none">
-          <div>👤</div>
-          <strong style="color:var(--text-md)">Nenhum usuário cadastrado</strong>
-          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Novo Usuário</strong> para começar.</p>
+        <div id="dz"></div>
+      </div>
+
+      <!-- Grid -->
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          <div style="display:flex;align-items:center;padding:10px 16px">
+            <span id="count" class="text-muted text-sm"></span>
+          </div>
+          <div id="tabela"></div>
+          <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
+            👤 Nenhum usuário cadastrado.<br>
+            <span style="font-size:12px">Clique em <strong>+ Novo Usuário</strong> para começar.</span>
+          </div>
         </div>
       </div>
+
     </div>
   </div>
 </div>
 
-<!-- ── Modal Criar / Editar ───────────────────────────────────────────────── -->
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     Modal Criar / Editar
+═══════════════════════════════════════════════════════════════════════════ -->
 <div id="modal" class="modal-overlay d-none">
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title" id="modal-title">Novo Usuário</span>
       <button class="modal-close" onclick="fecharModal()">✕</button>
     </div>
+
+    <!-- ── Dados ─────────────────────────────────────────────────── -->
+    <div class="section-label">Dados</div>
 
     <div class="form-row" style="margin-bottom:16px">
       <div class="form-group">
@@ -131,7 +252,6 @@
         <input id="f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off">
       </div>
     </div>
-
     <div class="form-row" style="margin-bottom:16px">
       <div class="form-group">
         <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
@@ -142,7 +262,6 @@
         <input id="f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br">
       </div>
     </div>
-
     <div class="form-row" style="margin-bottom:16px">
       <div class="form-group">
         <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
@@ -158,8 +277,6 @@
         </label>
       </div>
     </div>
-
-    <!-- Senha — campo sempre visível, estilo distinto na edição -->
     <div id="grp-senha-novo" style="margin-bottom:16px">
       <div class="form-group">
         <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
@@ -170,7 +287,6 @@
         <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
       </div>
     </div>
-
     <div id="grp-senha-edit" class="senha-edit-box" style="display:none">
       <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
       <div class="pass-wrap" style="margin-top:6px">
@@ -180,16 +296,52 @@
       <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
     </div>
 
-    <div class="form-group" style="margin-bottom:16px">
-      <label class="form-label">Acesso às Empresas</label>
-      <div class="empresas-grid" id="empresas-grid">
-        <span class="hint" style="padding:8px">Carregando empresas...</span>
-      </div>
-      <div class="hint" id="hint-empresas">Selecione as empresas que este usuário poderá acessar.</div>
+    <!-- ── Acessos ────────────────────────────────────────────────── -->
+    <hr class="section-divider">
+    <div class="section-label">Acessos</div>
+
+    <!-- Admin: mensagem de acesso irrestrito -->
+    <div id="acessos-admin" class="acessos-admin-msg" style="display:none">
+      <span style="font-size:20px">🔓</span>
+      <span>Administradores têm acesso irrestrito a todas as empresas e rotinas do sistema.</span>
     </div>
 
-    <div id="form-error" class="login-error" style="display:none;margin-bottom:0"></div>
+    <!-- Usuário: painel duplo -->
+    <div id="acessos-usuario">
+      <div class="hint" style="margin-bottom:10px">
+        Ative as empresas e marque as rotinas que este usuário poderá acessar.
+        Usuários sem nenhuma rotina marcada não conseguirão acessar o sistema.
+      </div>
+      <div class="acessos-painel">
+        <!-- Esquerda: empresas -->
+        <div class="ap-empresas">
+          <div class="ap-col-header">Empresas</div>
+          <div class="ap-empresas-list" id="ap-empresas-list">
+            <div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">
+              Carregando...
+            </div>
+          </div>
+        </div>
+        <!-- Direita: rotinas -->
+        <div class="ap-rotinas">
+          <div class="ap-rotinas-header">
+            <span class="ap-rotinas-title" id="ap-rotinas-title">— selecione uma empresa —</span>
+            <div class="ap-rotinas-actions" id="ap-rotinas-actions" style="display:none">
+              <button class="btn-tiny" onclick="marcarTodasRotinas(true)">Marcar tudo</button>
+              <button class="btn-tiny" onclick="marcarTodasRotinas(false)">Limpar tudo</button>
+            </div>
+          </div>
+          <div class="ap-rotinas-body" id="ap-rotinas-body">
+            <div class="ap-rotinas-placeholder">
+              <span style="font-size:28px">👈</span>
+              Selecione uma empresa para configurar as rotinas de acesso.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
+    <div id="form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar" onclick="salvar()">Salvar</button>
@@ -197,14 +349,13 @@
   </div>
 </div>
 
-<!-- ── Modal Alterar Senha ────────────────────────────────────────────────── -->
+<!-- Modal Alterar Senha -->
 <div id="modal-senha" class="modal-overlay d-none">
   <div class="modal-sm">
     <div class="modal-header">
       <span class="modal-title" id="ms-titulo">Alterar Senha</span>
       <button class="modal-close" onclick="fecharModalSenha()">✕</button>
     </div>
-
     <div class="form-group" style="margin-bottom:16px">
       <label class="form-label">Nova senha <span style="color:#dc2626">*</span></label>
       <div class="pass-wrap">
@@ -212,7 +363,6 @@
         <button type="button" class="pass-toggle" onclick="toggleSenha('ms-senha')" title="Mostrar/ocultar">👁</button>
       </div>
     </div>
-
     <div class="form-group" style="margin-bottom:16px">
       <label class="form-label">Confirmar nova senha <span style="color:#dc2626">*</span></label>
       <div class="pass-wrap">
@@ -221,9 +371,7 @@
       </div>
       <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
     </div>
-
     <div id="ms-error" class="login-error" style="display:none;margin-bottom:12px"></div>
-
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModalSenha()">Cancelar</button>
       <button class="btn btn-primary" id="ms-btn" onclick="salvarSenha()">Salvar Senha</button>
@@ -233,305 +381,599 @@
 
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
-  let usuarios   = [];
-  let empresas   = [];
-  let editId     = null;
-  let senhaUserId = null;
-  let meuId      = null;
+// ── Definição das rotinas (espelho do sidebar.js) ─────────────────────────────
+const ROTINAS_MENU = [
+  {
+    id: 'monitoramento', label: 'Monitoramento', icon: '💬',
+    itens: [
+      { id: 'dashboard',        label: 'Dashboard',        icon: '⊞' },
+      { id: 'monitor-whatsapp', label: 'Monitor WhatsApp', icon: '💬' },
+      { id: 'monitor-email',    label: 'Monitor E-mail',   icon: '📧' },
+    ],
+  },
+  {
+    id: 'recrutamento', label: 'Recrutamento', icon: '🎯',
+    itens: [
+      { id: 'curriculos',        label: 'Currículos',          icon: '☰' },
+      { id: 'funcoes',           label: 'Cadastro de Funções', icon: '📋' },
+      { id: 'vagas',             label: 'Vagas por Função',    icon: '💼' },
+      { id: 'processo-seletivo', label: 'Processo Seletivo',   icon: '🌐' },
+    ],
+  },
+  {
+    id: 'analisador', label: 'Analisador de Currículos', icon: '🔍',
+    itens: [
+      { id: 'analisador',        label: 'Analisador',            icon: '🔍' },
+      { id: 'historico',         label: 'Histórico de Análises', icon: '📊' },
+      { id: 'config-analisador', label: 'Configuração',          icon: '⚙' },
+    ],
+  },
+  {
+    id: 'integracoes', label: 'Integrações', icon: '🔗',
+    itens: [
+      { id: 'se-integracoes',        label: 'SE Integrações',     icon: '🔗' },
+      { id: 'se-api-configurador',   label: 'SE API Configurador', icon: '⚡' },
+    ],
+  },
+  {
+    id: 'configurador', label: 'Configurador', icon: '⚙',
+    itens: [
+      { id: 'configuracoes', label: 'Configurações', icon: '⚙' },
+      { id: 'administracao', label: 'Administração', icon: '🏢' },
+    ],
+  },
+];
 
-  async function carregar() {
-    try {
-      const [resU, resE, resMe] = await Promise.all([
-        fetch('/api/usuarios'),
-        fetch('/api/empresas'),
-        fetch('/api/me'),
-      ]);
-      usuarios = await resU.json();
-      empresas = await resE.json();
-      const me = await resMe.json();
-      meuId    = me.user_id || null;
-      renderizar();
-    } catch (_) {
-      document.getElementById('tbody').innerHTML =
-        '<tr><td colspan="7" style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar dados.</td></tr>';
+const TOTAL_ROTINAS = ROTINAS_MENU.reduce((n, g) => n + g.itens.length, 0);
+
+// ── Estado do formulário ──────────────────────────────────────────────────────
+let usuarios          = [];
+let empresas          = [];
+let editId            = null;
+let senhaUserId       = null;
+let meuId             = null;
+let table             = null;
+let empresaSelecionadaId = null;
+
+// permissoesMap: { empresa_id: { ativo: bool, rotinas: Set<string> } }
+let permissoesMap = {};
+
+const gp = createGroupPanel({
+  chipsRowId: 'gp-chips-row',
+  dropZoneId: 'dz',
+  storageKey: 'usuarios_group_fields',
+  getTable  : () => table,
+});
+
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Tabulator ─────────────────────────────────────────────────────────────────
+function initTabulator(data) {
+  table = new Tabulator('#tabela', {
+    data,
+    index: 'id',
+    layout: 'fitColumns',
+    movableColumns: true,
+    columnDefaults: { resizable: true, headerSort: true },
+    groupBy: gp.getActiveFields(),
+    groupStartOpen: true,
+    columns: [
+      {
+        title: '#', field: 'id', width: 60, groupable: false,
+        hozAlign: 'center', headerHozAlign: 'center',
+        formatter: c => `<span style="font-size:12px;color:var(--text-lo)">${c.getValue()}</span>`
+      },
+      {
+        title: 'Nome', field: 'nome',
+        headerFilter: true,
+        formatter: c => {
+          const u = c.getRow().getData();
+          return `<strong style="color:var(--text-hi)">${esc(u.nome)}</strong>`
+               + (u.email ? `<br><span style="font-size:11px;color:var(--text-lo)">${esc(u.email)}</span>` : '');
+        }
+      },
+      {
+        title: 'Usuário', field: 'usuario', width: 160,
+        headerFilter: true,
+        formatter: c => `<span style="font-family:monospace;font-size:12px">${esc(c.getValue())}</span>`
+      },
+      {
+        title: 'Celular', field: 'celular', width: 150,
+        headerFilter: true,
+        formatter: c => esc(c.getValue()) || '<span style="color:var(--text-lo)">—</span>'
+      },
+      {
+        title: 'Perfil', field: 'role_label', width: 140,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', 'Admin': 'Admin', 'Usuário': 'Usuário' } },
+        formatter: c => {
+          const u   = c.getRow().getData();
+          const cls = u.role === 'admin' ? 'badge-admin' : 'badge-user';
+          const emp = u.empresas === 'all'
+            ? '<span style="font-size:10px;color:var(--accent)">Todas as empresas</span>'
+            : Array.isArray(u.empresas) && u.empresas.length
+            ? `<span style="font-size:10px;color:var(--text-lo)">${u.empresas.length} empresa(s)</span>`
+            : '<span style="font-size:10px;color:var(--text-lo)">Nenhuma empresa</span>';
+          return `<span class="badge ${cls}">${c.getValue()}</span><br>${emp}`;
+        }
+      },
+      {
+        title: 'Status', field: 'status_label', width: 100,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', 'Ativo': 'Ativo', 'Inativo': 'Inativo' } },
+        formatter: c => {
+          const ativo = c.getRow().getData().ativo;
+          return `<span class="badge ${ativo ? 'badge-ativo' : 'badge-inativo'}">${c.getValue()}</span>`;
+        }
+      },
+      {
+        title: '', field: 'id',
+        headerFilter: false, headerSort: false, width: 105, groupable: false,
+        hozAlign: 'right',
+        formatter: c => {
+          const id      = c.getValue();
+          const u       = c.getRow().getData();
+          const nomeEsc = u.nome.replace(/'/g, "\\'");
+          const isSelf  = id === meuId;
+          const btnDel  = isSelf
+            ? `<button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;opacity:.35;cursor:not-allowed" disabled title="Não é possível excluir o usuário logado">🗑</button>`
+            : `<button class="btn btn-ghost" style="font-size:12px;padding:4px 8px;color:#dc2626" onclick="event.stopPropagation();confirmarExcluir(${id},'${nomeEsc}')" title="Excluir">🗑</button>`;
+          return `
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="event.stopPropagation();editar(${id})" title="Editar">✏️</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:4px 8px" onclick="event.stopPropagation();abrirModalSenha(${id},'${nomeEsc}')" title="Alterar senha">🔑</button>
+            ${btnDel}`;
+        }
+      },
+    ],
+    rowClick: (_e, row) => editar(row.getData().id),
+    dataFiltered: fd => {
+      const t = fd.length;
+      document.getElementById('count').textContent =
+        t === usuarios.length
+          ? `${t} usuário${t !== 1 ? 's' : ''}`
+          : `${t} de ${usuarios.length} usuários`;
+    },
+  });
+}
+
+async function carregar() {
+  try {
+    const [resU, resE, resMe] = await Promise.all([
+      fetch('/api/usuarios'),
+      fetch('/api/empresas'),
+      fetch('/api/me'),
+    ]);
+    usuarios = await resU.json();
+    empresas = await resE.json();
+    const me = await resMe.json();
+    meuId    = me.user_id || null;
+
+    const dados = usuarios.map(u => ({
+      ...u,
+      role_label:   u.role === 'admin' ? 'Admin' : 'Usuário',
+      status_label: u.ativo ? 'Ativo' : 'Inativo',
+    }));
+
+    const empty = document.getElementById('empty');
+    if (!dados.length) { empty.classList.remove('d-none'); return; }
+    empty.classList.add('d-none');
+
+    document.getElementById('count').textContent =
+      `${dados.length} usuário${dados.length !== 1 ? 's' : ''}`;
+
+    if (!table) {
+      initTabulator(dados);
+      setTimeout(() => gp.refresh(), 0);
+    } else {
+      table.replaceData(dados);
+    }
+  } catch (_) {
+    document.getElementById('tabela').innerHTML =
+      '<p style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar dados.</p>';
+  }
+}
+
+// ── Modal Criar / Editar ──────────────────────────────────────────────────────
+async function abrirModal(usuario = null) {
+  editId              = usuario?.id ?? null;
+  empresaSelecionadaId = null;
+  permissoesMap       = {};
+
+  const isEdit = !!editId;
+
+  document.getElementById('modal-title').textContent = isEdit ? 'Editar Usuário' : 'Novo Usuário';
+  document.getElementById('f-nome').value    = usuario?.nome    ?? '';
+  document.getElementById('f-usuario').value = usuario?.usuario ?? '';
+  document.getElementById('f-celular').value = usuario?.celular ?? '';
+  document.getElementById('f-email').value   = usuario?.email   ?? '';
+  document.getElementById('f-role').value    = usuario?.role    ?? 'usuario';
+  document.getElementById('f-ativo').checked = usuario?.ativo   ?? true;
+
+  document.getElementById('grp-ativo').style.display      = isEdit ? 'block' : 'none';
+  document.getElementById('grp-senha-novo').style.display = isEdit ? 'none'  : 'block';
+  document.getElementById('grp-senha-edit').style.display = isEdit ? 'block' : 'none';
+  document.getElementById('f-senha').value      = '';
+  document.getElementById('f-senha-edit').value = '';
+  document.getElementById('form-error').style.display = 'none';
+
+  // Inicializar permissoesMap com empresas do usuário
+  const empIds = usuario?.empresas === 'all'
+    ? empresas.map(e => e.id)
+    : (Array.isArray(usuario?.empresas) ? usuario.empresas : []);
+
+  empresas.forEach(e => {
+    permissoesMap[e.id] = { ativo: empIds.includes(e.id), rotinas: new Set() };
+  });
+
+  // Carregar permissões existentes (apenas em edição)
+  if (isEdit) {
+    const permRes = await fetch(`/api/permissoes/${editId}`).catch(() => null);
+    if (permRes?.ok) {
+      const perms = await permRes.json().catch(() => []);
+      perms.forEach(p => {
+        if (permissoesMap[p.empresa_id]) {
+          permissoesMap[p.empresa_id].rotinas = new Set(p.rotinas || []);
+        }
+      });
     }
   }
 
-  function renderizar() {
-    const busca    = document.getElementById('busca').value.toLowerCase();
-    const filtrado = usuarios.filter(u =>
-      u.nome.toLowerCase().includes(busca) ||
-      u.usuario.toLowerCase().includes(busca) ||
-      (u.email || '').toLowerCase().includes(busca)
-    );
+  onRoleChange();
+  renderEmpresasList();
 
-    const tbody = document.getElementById('tbody');
-    const empty = document.getElementById('empty');
+  document.getElementById('modal').classList.remove('d-none');
+  setTimeout(() => document.getElementById('f-nome').focus(), 50);
+}
 
-    if (!filtrado.length) {
-      tbody.innerHTML = '';
-      empty.classList.remove('d-none');
+function fecharModal() {
+  document.getElementById('modal').classList.add('d-none');
+  editId = null;
+}
+
+function editar(id) {
+  const u = usuarios.find(x => x.id === id);
+  if (u) abrirModal(u);
+}
+
+async function confirmarExcluir(id, nome) {
+  if (!confirm(`Excluir o usuário "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
+  const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+  if (res.ok) { carregar(); }
+  else {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Erro ao excluir usuário.');
+  }
+}
+
+// ── Painel de acessos — Empresas ──────────────────────────────────────────────
+function renderEmpresasList() {
+  const list = document.getElementById('ap-empresas-list');
+  const sorted = [...empresas].sort((a, b) =>
+    (a.razao_social || '').localeCompare(b.razao_social || '', 'pt-BR')
+  );
+
+  if (!sorted.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">Nenhuma empresa cadastrada.</div>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(e => {
+    const pm      = permissoesMap[e.id] || { ativo: false, rotinas: new Set() };
+    const qtd     = pm.rotinas.size;
+    const isSel   = e.id === empresaSelecionadaId;
+    const temAcesso = pm.ativo && qtd > 0;
+    return `
+      <div class="ap-empresa-item${isSel ? ' selected' : ''}" id="ap-emp-item-${e.id}"
+           onclick="selecionarEmpresa(${e.id})">
+        <div class="ap-emp-toggle${pm.ativo ? ' ativo' : ''}" id="ap-emp-toggle-${e.id}"
+             onclick="event.stopPropagation();toggleEmpresaAtivo(${e.id})"
+             title="${pm.ativo ? 'Revogar acesso à empresa' : 'Conceder acesso à empresa'}">✓</div>
+        <span class="ap-emp-nome" title="${esc(e.razao_social)}">${esc(e.razao_social)}</span>
+        <span class="ap-emp-contador${temAcesso ? ' tem-acesso' : ''}" id="ap-emp-cnt-${e.id}">
+          ${pm.ativo ? `${qtd}/${TOTAL_ROTINAS}` : '—'}
+        </span>
+      </div>`;
+  }).join('');
+}
+
+function atualizarEmpresaItem(empresaId) {
+  const pm = permissoesMap[empresaId] || { ativo: false, rotinas: new Set() };
+  const qtd = pm.rotinas.size;
+  const temAcesso = pm.ativo && qtd > 0;
+
+  const toggle  = document.getElementById(`ap-emp-toggle-${empresaId}`);
+  const cnt     = document.getElementById(`ap-emp-cnt-${empresaId}`);
+  const item    = document.getElementById(`ap-emp-item-${empresaId}`);
+
+  if (toggle) toggle.classList.toggle('ativo', pm.ativo);
+  if (cnt) {
+    cnt.textContent = pm.ativo ? `${qtd}/${TOTAL_ROTINAS}` : '—';
+    cnt.classList.toggle('tem-acesso', temAcesso);
+  }
+  if (item) {
+    item.classList.toggle('selected', empresaId === empresaSelecionadaId);
+  }
+}
+
+function toggleEmpresaAtivo(empresaId) {
+  if (!permissoesMap[empresaId]) permissoesMap[empresaId] = { ativo: false, rotinas: new Set() };
+  permissoesMap[empresaId].ativo = !permissoesMap[empresaId].ativo;
+  atualizarEmpresaItem(empresaId);
+
+  // Se acabou de ativar e não tem empresa selecionada ainda, seleciona esta
+  if (permissoesMap[empresaId].ativo && !empresaSelecionadaId) {
+    selecionarEmpresa(empresaId);
+  } else if (empresaSelecionadaId === empresaId) {
+    renderRotinas(empresaId);
+  }
+}
+
+function selecionarEmpresa(empresaId) {
+  const anterior = empresaSelecionadaId;
+  empresaSelecionadaId = empresaId;
+
+  if (anterior && anterior !== empresaId) atualizarEmpresaItem(anterior);
+  atualizarEmpresaItem(empresaId);
+
+  renderRotinas(empresaId);
+}
+
+// ── Painel de acessos — Rotinas ───────────────────────────────────────────────
+function renderRotinas(empresaId) {
+  const empresa  = empresas.find(e => e.id === empresaId);
+  const pm       = permissoesMap[empresaId] || { ativo: false, rotinas: new Set() };
+  const titulo   = document.getElementById('ap-rotinas-title');
+  const body     = document.getElementById('ap-rotinas-body');
+  const actions  = document.getElementById('ap-rotinas-actions');
+
+  titulo.textContent = empresa ? empresa.razao_social : '—';
+  actions.style.display = pm.ativo ? 'flex' : 'none';
+
+  if (!pm.ativo) {
+    body.innerHTML = `
+      <div class="ap-bloqueado">
+        <span style="font-size:28px">🔒</span>
+        <span>Esta empresa está sem acesso.<br>
+          Clique no círculo ao lado do nome para ativá-la e liberar as rotinas.</span>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = ROTINAS_MENU.map(grupo => {
+    const todosAtivos  = grupo.itens.every(i => pm.rotinas.has(i.id));
+    const algunsAtivos = grupo.itens.some(i => pm.rotinas.has(i.id));
+    return `
+      <div class="rot-grupo">
+        <div class="rot-grupo-hdr">
+          <span class="rot-grupo-icon">${grupo.icon}</span>
+          <input type="checkbox" id="rot-grp-${empresaId}-${grupo.id}"
+            ${todosAtivos ? 'checked' : ''}
+            ${algunsAtivos && !todosAtivos ? 'data-indeterminate="true"' : ''}
+            onchange="toggleGrupoRotinas(${empresaId},'${grupo.id}',this.checked)">
+          <span class="rot-grupo-nome">${esc(grupo.label)}</span>
+        </div>
+        ${grupo.itens.map(item => `
+          <div class="rot-item">
+            <span class="rot-item-icon">${item.icon}</span>
+            <input type="checkbox" id="rot-${empresaId}-${item.id}"
+              ${pm.rotinas.has(item.id) ? 'checked' : ''}
+              onchange="toggleRotina(${empresaId},'${item.id}',this.checked,'${grupo.id}')">
+            <label class="rot-item-label" for="rot-${empresaId}-${item.id}">${esc(item.label)}</label>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+
+  // Aplica estado indeterminado via JS (não há atributo HTML para isso)
+  ROTINAS_MENU.forEach(grupo => {
+    const cb = document.getElementById(`rot-grp-${empresaId}-${grupo.id}`);
+    if (cb && cb.dataset.indeterminate === 'true') cb.indeterminate = true;
+  });
+}
+
+function toggleRotina(empresaId, rotinaId, marcado, grupoId) {
+  if (!permissoesMap[empresaId]) permissoesMap[empresaId] = { ativo: true, rotinas: new Set() };
+  if (marcado) permissoesMap[empresaId].rotinas.add(rotinaId);
+  else         permissoesMap[empresaId].rotinas.delete(rotinaId);
+
+  // Atualiza checkbox do grupo
+  const grupo = ROTINAS_MENU.find(g => g.id === grupoId);
+  if (grupo) {
+    const pm          = permissoesMap[empresaId];
+    const todos       = grupo.itens.every(i => pm.rotinas.has(i.id));
+    const alguns      = grupo.itens.some(i => pm.rotinas.has(i.id));
+    const cbGrupo     = document.getElementById(`rot-grp-${empresaId}-${grupoId}`);
+    if (cbGrupo) {
+      cbGrupo.checked       = todos;
+      cbGrupo.indeterminate = alguns && !todos;
+    }
+  }
+
+  atualizarEmpresaItem(empresaId);
+}
+
+function toggleGrupoRotinas(empresaId, grupoId, marcado) {
+  if (!permissoesMap[empresaId]) permissoesMap[empresaId] = { ativo: true, rotinas: new Set() };
+  const grupo = ROTINAS_MENU.find(g => g.id === grupoId);
+  if (!grupo) return;
+
+  grupo.itens.forEach(item => {
+    const cb = document.getElementById(`rot-${empresaId}-${item.id}`);
+    if (marcado) {
+      permissoesMap[empresaId].rotinas.add(item.id);
+      if (cb) cb.checked = true;
+    } else {
+      permissoesMap[empresaId].rotinas.delete(item.id);
+      if (cb) cb.checked = false;
+    }
+  });
+
+  atualizarEmpresaItem(empresaId);
+}
+
+function marcarTodasRotinas(marcar) {
+  if (!empresaSelecionadaId) return;
+  if (!permissoesMap[empresaSelecionadaId]) return;
+
+  ROTINAS_MENU.forEach(grupo => {
+    grupo.itens.forEach(item => {
+      if (marcar) permissoesMap[empresaSelecionadaId].rotinas.add(item.id);
+      else        permissoesMap[empresaSelecionadaId].rotinas.delete(item.id);
+    });
+  });
+
+  renderRotinas(empresaSelecionadaId);
+  atualizarEmpresaItem(empresaSelecionadaId);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function onRoleChange() {
+  const isAdmin = document.getElementById('f-role').value === 'admin';
+  document.getElementById('acessos-admin').style.display   = isAdmin ? 'flex'  : 'none';
+  document.getElementById('acessos-usuario').style.display = isAdmin ? 'none'  : 'block';
+}
+
+function getEmpresasSelecionadas() {
+  if (document.getElementById('f-role').value === 'admin') return 'all';
+  return Object.entries(permissoesMap)
+    .filter(([, pm]) => pm.ativo)
+    .map(([id]) => Number(id));
+}
+
+function getPermissoesSelecionadas() {
+  return Object.entries(permissoesMap).map(([id, pm]) => ({
+    empresa_id: Number(id),
+    rotinas: [...pm.rotinas],
+  }));
+}
+
+function toggleSenha(id) {
+  const input = document.getElementById(id);
+  const isText = input.type === 'password';
+  input.type = isText ? 'text' : 'password';
+  const btn = input.parentElement.querySelector('.pass-toggle');
+  if (btn) btn.textContent = isText ? '🙈' : '👁';
+}
+
+// ── Salvar ────────────────────────────────────────────────────────────────────
+async function salvar() {
+  const errEl   = document.getElementById('form-error');
+  errEl.style.display = 'none';
+  const isEdit  = !!editId;
+  const nome    = document.getElementById('f-nome').value.trim();
+  const usuario = document.getElementById('f-usuario').value.trim();
+  const celular = document.getElementById('f-celular').value.trim();
+  const email   = document.getElementById('f-email').value.trim();
+  const senha   = isEdit
+    ? document.getElementById('f-senha-edit').value
+    : document.getElementById('f-senha').value;
+
+  if (!nome)    { errEl.textContent = 'Nome é obrigatório.';    errEl.style.display = 'block'; return; }
+  if (!usuario) { errEl.textContent = 'Usuário é obrigatório.'; errEl.style.display = 'block'; return; }
+  if (!celular) { errEl.textContent = 'Celular é obrigatório.'; errEl.style.display = 'block'; return; }
+  if (!email)   { errEl.textContent = 'E-mail é obrigatório.';  errEl.style.display = 'block'; return; }
+  if (!isEdit && !senha) {
+    errEl.textContent = 'Senha é obrigatória para novos usuários.';
+    errEl.style.display = 'block'; return;
+  }
+
+  const dados = {
+    nome, usuario, celular, email,
+    role:     document.getElementById('f-role').value,
+    empresas: getEmpresasSelecionadas(),
+    ativo:    document.getElementById('f-ativo').checked,
+  };
+  if (senha) dados.senha = senha;
+
+  const btn = document.getElementById('btn-salvar');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+  try {
+    const url    = isEdit ? `/api/usuarios/${editId}` : '/api/usuarios';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res    = await fetch(url, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.error || 'Erro ao salvar usuário.';
+      errEl.style.display = 'block';
       return;
     }
 
-    empty.classList.add('d-none');
-    tbody.innerHTML = filtrado.map(u => {
-      const empresasLabel = u.empresas === 'all'
-        ? '<span style="font-size:11px;color:var(--accent)">Todas</span>'
-        : (Array.isArray(u.empresas) && u.empresas.length
-            ? `<span style="font-size:11px;color:var(--text-md)">${u.empresas.length} empresa(s)</span>`
-            : '<span style="font-size:11px;color:var(--text-lo)">Nenhuma</span>');
+    const salvo  = await res.json();
+    const userId = isEdit ? editId : salvo.id;
 
-      const ehEuMesmo  = u.id === meuId;
-      const btnExcluir = ehEuMesmo
-        ? `<button class="btn-icon" disabled title="Não é possível excluir o usuário logado" style="opacity:.35;cursor:not-allowed">🗑</button>`
-        : `<button class="btn-icon" onclick="confirmarExcluir(${u.id}, '${esc(u.nome)}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+    // Salva permissões (apenas para usuários não-admin)
+    if (dados.role !== 'admin') {
+      await fetch(`/api/permissoes/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissoes: getPermissoesSelecionadas() }),
+      });
+    }
 
-      return `
-        <tr>
-          <td style="color:var(--text-lo);font-size:12px">${u.id}</td>
-          <td>
-            <strong style="color:var(--text-hi)">${esc(u.nome)}</strong>
-            ${u.email ? `<br><span style="font-size:11px;color:var(--text-lo)">${esc(u.email)}</span>` : ''}
-          </td>
-          <td style="font-family:monospace;font-size:12px">${esc(u.usuario)}</td>
-          <td>${esc(u.celular) || '<span style="color:var(--text-lo)">—</span>'}</td>
-          <td>
-            <span class="badge ${u.role === 'admin' ? 'badge-admin' : 'badge-user'}">
-              ${u.role === 'admin' ? 'Admin' : 'Usuário'}
-            </span>
-            <br><span style="font-size:10px;margin-top:2px;display:inline-block">${empresasLabel}</span>
-          </td>
-          <td><span class="badge ${u.ativo ? 'badge-ativo' : 'badge-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
-          <td style="text-align:right;white-space:nowrap">
-            <button class="btn-icon" onclick="editar(${u.id})" title="Editar dados">✏️</button>
-            <button class="btn-icon" onclick="abrirModalSenha(${u.id}, '${esc(u.nome)}')" title="Alterar senha">🔑</button>
-            ${btnExcluir}
-          </td>
-        </tr>
-      `;
-    }).join('');
+    fecharModal();
+    carregar();
+  } catch (e) {
+    errEl.textContent = 'Erro inesperado ao salvar.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Salvar'; btn.disabled = false;
   }
+}
 
-  function filtrar() { renderizar(); }
+// ── Modal Alterar Senha ───────────────────────────────────────────────────────
+function abrirModalSenha(id, nome) {
+  senhaUserId = id;
+  document.getElementById('ms-titulo').textContent = `Alterar Senha — ${nome}`;
+  document.getElementById('ms-senha').value     = '';
+  document.getElementById('ms-confirmar').value = '';
+  document.getElementById('ms-error').style.display = 'none';
+  document.getElementById('modal-senha').classList.remove('d-none');
+  setTimeout(() => document.getElementById('ms-senha').focus(), 50);
+}
 
-  // ── Modal Criar / Editar ────────────────────────────────────────────────────
-  function abrirModal(usuario = null) {
-    editId       = usuario?.id ?? null;
-    const isEdit = !!editId;
+function fecharModalSenha() {
+  document.getElementById('modal-senha').classList.add('d-none');
+  senhaUserId = null;
+}
 
-    document.getElementById('modal-title').textContent = isEdit ? 'Editar Usuário' : 'Novo Usuário';
-    document.getElementById('f-nome').value    = usuario?.nome    ?? '';
-    document.getElementById('f-usuario').value = usuario?.usuario ?? '';
-    document.getElementById('f-celular').value = usuario?.celular ?? '';
-    document.getElementById('f-email').value   = usuario?.email   ?? '';
-    document.getElementById('f-role').value    = usuario?.role    ?? 'usuario';
-    document.getElementById('f-ativo').checked = usuario?.ativo   ?? true;
+async function salvarSenha() {
+  const errEl     = document.getElementById('ms-error');
+  const senha     = document.getElementById('ms-senha').value;
+  const confirmar = document.getElementById('ms-confirmar').value;
+  errEl.style.display = 'none';
 
-    document.getElementById('grp-ativo').style.display      = isEdit ? 'block' : 'none';
-    document.getElementById('grp-senha-novo').style.display = isEdit ? 'none'  : 'block';
-    document.getElementById('grp-senha-edit').style.display = isEdit ? 'block' : 'none';
-    document.getElementById('f-senha').value      = '';
-    document.getElementById('f-senha-edit').value = '';
-    document.getElementById('form-error').style.display = 'none';
+  if (!senha)              { errEl.textContent = 'Digite a nova senha.';    errEl.style.display = 'block'; return; }
+  if (senha !== confirmar) { errEl.textContent = 'As senhas não conferem.'; errEl.style.display = 'block'; return; }
 
-    renderEmpresasGrid(usuario?.empresas ?? []);
-    onRoleChange();
-
-    document.getElementById('modal').classList.remove('d-none');
-    setTimeout(() => document.getElementById('f-nome').focus(), 50);
-  }
-
-  function fecharModal() {
-    document.getElementById('modal').classList.add('d-none');
-    editId = null;
-  }
-
-  function editar(id) {
-    const u = usuarios.find(x => x.id === id);
-    if (u) abrirModal(u);
-  }
-
-  async function confirmarExcluir(id, nome) {
-    if (!confirm(`Excluir o usuário "${nome}"?\nEsta ação não pode ser desfeita.`)) return;
-    const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
-    if (res.ok) { carregar(); }
+  const btn = document.getElementById('ms-btn');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+  try {
+    const res = await fetch(`/api/usuarios/${senhaUserId}/senha`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senha, confirmar }),
+    });
+    if (res.ok) { fecharModalSenha(); }
     else {
       const err = await res.json().catch(() => ({}));
-      alert(err.error || 'Erro ao excluir usuário.');
-    }
-  }
-
-  // ── Modal Alterar Senha ─────────────────────────────────────────────────────
-  function abrirModalSenha(id, nome) {
-    senhaUserId = id;
-    document.getElementById('ms-titulo').textContent = `Alterar Senha — ${nome}`;
-    document.getElementById('ms-senha').value     = '';
-    document.getElementById('ms-confirmar').value = '';
-    document.getElementById('ms-error').style.display = 'none';
-    document.getElementById('modal-senha').classList.remove('d-none');
-    setTimeout(() => document.getElementById('ms-senha').focus(), 50);
-  }
-
-  function fecharModalSenha() {
-    document.getElementById('modal-senha').classList.add('d-none');
-    senhaUserId = null;
-  }
-
-  async function salvarSenha() {
-    const errEl    = document.getElementById('ms-error');
-    const senha    = document.getElementById('ms-senha').value;
-    const confirmar = document.getElementById('ms-confirmar').value;
-    errEl.style.display = 'none';
-
-    if (!senha) {
-      errEl.textContent = 'Digite a nova senha.';
+      errEl.textContent = err.error || 'Erro ao alterar senha.';
       errEl.style.display = 'block';
-      return;
     }
-    if (senha !== confirmar) {
-      errEl.textContent = 'As senhas não conferem.';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    const btn = document.getElementById('ms-btn');
-    btn.textContent = 'Salvando...';
-    btn.disabled    = true;
-
-    try {
-      const res = await fetch(`/api/usuarios/${senhaUserId}/senha`, {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ senha, confirmar }),
-      });
-
-      if (res.ok) { fecharModalSenha(); }
-      else {
-        const err = await res.json().catch(() => ({}));
-        errEl.textContent = err.error || 'Erro ao alterar senha.';
-        errEl.style.display = 'block';
-      }
-    } finally {
-      btn.textContent = 'Salvar Senha';
-      btn.disabled    = false;
-    }
+  } finally {
+    btn.textContent = 'Salvar Senha'; btn.disabled = false;
   }
+}
 
-  // ── Helpers formulário ──────────────────────────────────────────────────────
-  function renderEmpresasGrid(selecionadas) {
-    const grid = document.getElementById('empresas-grid');
-    if (!empresas.length) {
-      grid.innerHTML = '<span style="font-size:12px;color:var(--text-lo);padding:8px;font-style:italic">Nenhuma empresa cadastrada ainda.</span>';
-      return;
-    }
-    const ids = selecionadas === 'all' ? empresas.map(e => e.id) : (Array.isArray(selecionadas) ? selecionadas : []);
-    const sorted = [...empresas].sort((a, b) => (a.razao_social || '').localeCompare(b.razao_social || '', 'pt-BR'));
-    grid.innerHTML = sorted.map(e => `
-      <label class="empresa-check" id="lbl-emp-${e.id}">
-        <input type="checkbox" id="chk-emp-${e.id}" value="${e.id}" ${ids.includes(e.id) ? 'checked' : ''}>
-        <span>${esc(e.razao_social)}</span>
-        ${e.documento ? `<span style="font-size:11px;color:var(--text-lo);margin-left:auto;font-family:monospace">${esc(e.documento)}</span>` : ''}
-      </label>
-    `).join('');
-  }
+// ── Fechar ao clicar fora ─────────────────────────────────────────────────────
+document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) fecharModal(); });
+document.getElementById('modal-senha').addEventListener('click', function(e) { if (e.target === this) fecharModalSenha(); });
 
-  function onRoleChange() {
-    const isAdmin = document.getElementById('f-role').value === 'admin';
-    const grid    = document.getElementById('empresas-grid');
-    const hint    = document.getElementById('hint-empresas');
-
-    grid.querySelectorAll('input[type=checkbox]').forEach(cb => {
-      cb.checked  = isAdmin ? true : cb.checked;
-      cb.disabled = isAdmin;
-      cb.closest('.empresa-check')?.classList.toggle('disabled', isAdmin);
-    });
-    hint.textContent = isAdmin
-      ? 'Administradores têm acesso irrestrito a todas as empresas.'
-      : 'Selecione as empresas que este usuário poderá acessar.';
-  }
-
-  function getEmpresasSelecionadas() {
-    if (document.getElementById('f-role').value === 'admin') return 'all';
-    return empresas
-      .filter(e => document.getElementById(`chk-emp-${e.id}`)?.checked)
-      .map(e => e.id);
-  }
-
-  function toggleSenha(id) {
-    const input = document.getElementById(id);
-    input.type = input.type === 'password' ? 'text' : 'password';
-  }
-
-  async function salvar() {
-    const errEl  = document.getElementById('form-error');
-    errEl.style.display = 'none';
-
-    const isEdit  = !!editId;
-    const nome    = document.getElementById('f-nome').value.trim();
-    const usuario = document.getElementById('f-usuario').value.trim();
-    const celular = document.getElementById('f-celular').value.trim();
-    const email   = document.getElementById('f-email').value.trim();
-    const senha   = isEdit
-      ? document.getElementById('f-senha-edit').value
-      : document.getElementById('f-senha').value;
-
-    if (!nome)    { errEl.textContent = 'Nome é obrigatório.';    errEl.style.display = 'block'; return; }
-    if (!usuario) { errEl.textContent = 'Usuário é obrigatório.'; errEl.style.display = 'block'; return; }
-    if (!celular) { errEl.textContent = 'Celular é obrigatório.'; errEl.style.display = 'block'; return; }
-    if (!email)   { errEl.textContent = 'E-mail é obrigatório.';  errEl.style.display = 'block'; return; }
-    if (!isEdit && !senha) {
-      errEl.textContent = 'Senha é obrigatória para novos usuários.';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    const dados = {
-      nome, usuario, celular, email,
-      role:     document.getElementById('f-role').value,
-      empresas: getEmpresasSelecionadas(),
-      ativo:    document.getElementById('f-ativo').checked,
-    };
-    if (senha) dados.senha = senha;
-
-    const btn = document.getElementById('btn-salvar');
-    btn.textContent = 'Salvando...';
-    btn.disabled    = true;
-
-    try {
-      const url    = isEdit ? `/api/usuarios/${editId}` : '/api/usuarios';
-      const method = isEdit ? 'PUT' : 'POST';
-      const res    = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dados),
-      });
-
-      if (res.ok) { fecharModal(); carregar(); }
-      else {
-        const err = await res.json().catch(() => ({}));
-        errEl.textContent = err.error || 'Erro ao salvar usuário.';
-        errEl.style.display = 'block';
-      }
-    } finally {
-      btn.textContent = 'Salvar';
-      btn.disabled    = false;
-    }
-  }
-
-  function esc(str) {
-    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  document.getElementById('modal').addEventListener('click', function(e) {
-    if (e.target === this) fecharModal();
-  });
-  document.getElementById('modal-senha').addEventListener('click', function(e) {
-    if (e.target === this) fecharModalSenha();
-  });
-
-  document.addEventListener('DOMContentLoaded', carregar);
+document.addEventListener('DOMContentLoaded', carregar);
 </script>
 </body>
 </html>

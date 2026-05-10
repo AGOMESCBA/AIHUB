@@ -20,7 +20,7 @@
   --success:      #16a34a;
   --error:        #dc2626;
   --warning:      #d97706;
-  --sidebar-w:    252px;
+  --sidebar-w:    300px;
   --sidebar-mini: 64px;
   --radius:       10px;
   --shadow-sm:    0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
@@ -197,6 +197,8 @@ a { text-decoration: none; color: inherit; }
 .nav-section-hdr:hover { background: var(--bg-hover); color: var(--text-hi); }
 .nav-section-hdr.open  { color: var(--accent); }
 .nav-section-hdr.open .nav-arrow { transform: rotate(180deg); color: var(--accent); }
+.nav-section-hdr .nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav-section-hdr .nav-arrow { flex-shrink: 0; margin-left: auto; }
 
 /* Body da seção — colapsa quando sidebar retraído, respeita .open quando expandido */
 .nav-section-body {

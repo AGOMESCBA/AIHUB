@@ -1,15 +1,27 @@
-const db   = require('./database');
-const Groq = require('groq-sdk');
+const db       = require('./database');
+const Groq     = require('groq-sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const configDb = require('../configuracoes/database');
+const usageDb  = require('../ia/usage-db');
 
-const groq   = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const gemini = process.env.GEMINI_API_KEY ? new GoogleGenerativeAI(process.env.GEMINI_API_KEY) : null;
+function _getGroq(empresaId) {
+  const key = configDb.getApiKey('groq_api_key', empresaId) || process.env.GROQ_API_KEY;
+  if (!key) throw new Error('Chave Groq não configurada. Acesse Configurações → Chaves de API.');
+  return new Groq({ apiKey: key });
+}
+
+function _getGemini(empresaId) {
+  const key = configDb.getApiKey('gemini_api_key', empresaId) || process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  return new GoogleGenerativeAI(key);
+}
 
 function isRateLimit(err) {
   return err?.status === 429 || err?.message?.includes('rate_limit') || err?.message?.includes('Rate limit');
 }
 
-async function chamarIA(systemPrompt, userPrompt, maxTokens = 2000) {
+async function chamarIA(systemPrompt, userPrompt, maxTokens = 2000, empresaId) {
+  const groq = _getGroq(empresaId);
   try {
     const res = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile', temperature: 0.1, max_tokens: maxTokens,
@@ -18,17 +30,45 @@ async function chamarIA(systemPrompt, userPrompt, maxTokens = 2000) {
         { role: 'user',   content: userPrompt   },
       ],
     });
+    usageDb.recordUsage(empresaId, {
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      usage: res.usage,
+      ok: true,
+    });
     return res.choices[0].message.content.trim();
   } catch (e) {
+    usageDb.recordUsage(empresaId, {
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      usage: null,
+      ok: false,
+      error: e.message,
+    });
     console.error(`[chamarIA] Groq erro: ${e.status || ''} ${e.message}`);
     if (!isRateLimit(e)) throw e;
   }
-  if (!gemini) throw new Error('Limite Groq atingido e GEMINI_API_KEY não configurada.');
+  const gemini = _getGemini(empresaId);
+  if (!gemini) throw new Error('Limite Groq atingido e chave Gemini não configurada.');
   try {
-    const model  = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const modelName = 'gemini-2.0-flash';
+    const model  = gemini.getGenerativeModel({ model: modelName });
     const result = await model.generateContent(`${systemPrompt}\n\n${userPrompt}`);
+    usageDb.recordUsage(empresaId, {
+      provider: 'gemini',
+      model: modelName,
+      usage: result.response?.usageMetadata,
+      ok: true,
+    });
     return result.response.text().trim();
   } catch (e) {
+    usageDb.recordUsage(empresaId, {
+      provider: 'gemini',
+      model: 'gemini-2.0-flash',
+      usage: null,
+      ok: false,
+      error: e.message,
+    });
     console.error(`[chamarIA] Gemini erro: ${e.status || ''} ${e.message}`);
     throw e;
   }
@@ -270,96 +310,50 @@ function temKeyword(textoLower, kw, equiv) {
   return textoLower.includes(kwLower);
 }
 
-// ── Etapa 1: Triagem por palavras-chave — obrigatórios + desejáveis ───────────
-function triagem(funcao, curriculos, empresaId) {
-  const temCriterios = funcao.requisitos_obrigatorios ||
-    (Array.isArray(funcao.habilidades_tecnicas) && funcao.habilidades_tecnicas.length);
-
-  if (!temCriterios) return { aprovados: curriculos, eliminados: [] };
-
-  const kwObrigatorias = (funcao.requisitos_obrigatorios || '')
-    .split(/[\n,;]+/)
-    .map(s => s.replace(/^[-•]\s*/, '').trim())
-    .filter(Boolean);
-
-  const kwDesejaveis = (funcao.requisitos_desejaveis || '')
-    .split(/[\n,;]+/)
-    .map(s => s.replace(/^[-•]\s*/, '').trim())
-    .filter(Boolean);
-
-  const equiv    = getMergedEquivalencias(empresaId);
-  const aprovados  = [];
-  const eliminados = [];
-
-  for (const c of curriculos) {
-    const texto          = curriculoTextoCompleto(c);
-    const obrigAtendidos = kwObrigatorias.filter(kw =>  temKeyword(texto, kw, equiv));
-    const obrigFaltando  = kwObrigatorias.filter(kw => !temKeyword(texto, kw, equiv));
-    const desejAtendidos = kwDesejaveis.filter(kw =>  temKeyword(texto, kw, equiv));
-
-    // Nota de triagem: obrigatórios valem 7 pts, desejáveis valem 3 pts, mínimo 5 para aprovação
-    const ptObrig = kwObrigatorias.length > 0 ? (obrigAtendidos.length / kwObrigatorias.length) * 7 : 7;
-    const ptDesej = kwDesejaveis.length  > 0 ? (desejAtendidos.length  / kwDesejaveis.length)  * 3 : 0;
-    const nota    = ptObrig + ptDesej;
-
-    if (nota >= 5) {
-      aprovados.push(c);
-    } else {
-      const notaFmt = nota.toFixed(1).replace('.', ',');
-      let motivo = `Nota de triagem: ${notaFmt}/10`;
-      if (obrigFaltando.length > 0)
-        motivo += ` — Não apresenta evidência de: ${obrigFaltando.join(', ')}`;
-      if (kwDesejaveis.length > 0)
-        motivo += ` — atende ${desejAtendidos.length}/${kwDesejaveis.length} desejável(is)`;
-      eliminados.push({ ...c, motivo_eliminacao: motivo });
-    }
-  }
-
-  return { aprovados, eliminados };
+// ── Etapa 1: Triagem por palavras-chave — apenas informativa, não elimina ─────
+function triagem(funcao, curriculos) {
+  // A triagem não elimina candidatos; a pontuação da IA com corte_minimo decide quem passa.
+  return { aprovados: curriculos, eliminados: [] };
 }
 
 // ── Etapa 2: Análise profunda individual ─────────────────────────────────────
-async function analisarIndividual(funcao, curriculo, cfg) {
-  const expCalc = calcularExperiencia(curriculo, cfg);
+async function analisarIndividual(funcao, curriculo, cfg, pesos, empresaId) {
+  const P = pesos;
 
   const system = `Você é um recrutador sênior experiente. Avalie o currículo completo abaixo com base no perfil da vaga.
 
 RUBRICA DE PONTUAÇÃO (total 100 pts):
 
-1. REQUISITOS OBRIGATÓRIOS — até 40 pts
+1. REQUISITOS OBRIGATÓRIOS — até ${P.requisitos_obrigatorios} pts
    Percorra TODAS as seções do currículo (perfil, habilidades, capacitações, descrições e atividades de cada experiência).
-   • Atende todos os requisitos com evidência clara → 40 pts
-   • Atende a maioria (>50%) → 20–35 pts (proporcional)
-   • Atende poucos (<50%) → 5–15 pts
-   • Não atende nenhum → 0 pts + SCORE MÁXIMO FINAL = 25 pts (regra crítica)
+   Pontuação proporcional: (requisitos atendidos ÷ total de requisitos) × ${P.requisitos_obrigatorios}
+   • Atende todos → ${P.requisitos_obrigatorios} pts
+   • Não atende nenhum → 0 pts — sem penalidade adicional.
 
-2. HABILIDADES TÉCNICAS — até 30 pts
+2. REQUISITOS DESEJÁVEIS — até ${P.requisitos_desejados} pts
+   Percorra TODAS as seções do currículo.
+   Pontuação proporcional: (desejáveis atendidos ÷ total de desejáveis) × ${P.requisitos_desejados}
+   • Não atende nenhum → 0 pts — sem penalidade.
+
+3. FORMAÇÃO ACADÊMICA — até ${P.formacao} pts
+   • Atende ou supera o exigido → ${P.formacao} pts
+   • Próxima da área → ${Math.round(P.formacao * 0.6)} pts
+   • Não atende → 0 pts
+
+4. HABILIDADES TÉCNICAS — até ${P.habilidades} pts
    Percorra TODAS as seções do currículo. Considere equivalências (ex: SE SUITE = SoftExpert).
-   • Domina todas → 30 pts  |  Domina maioria → 20 pts  |  Domina algumas → 10 pts  |  Nenhuma → 0 pts
+   Pontuação proporcional: (habilidades dominadas ÷ total listadas) × ${P.habilidades}
+   • Nenhuma → 0 pts — sem penalidade.
 
-3. NÍVEL E TEMPO DE EXPERIÊNCIA RELEVANTE — até 15 pts
-   O sistema calculou a experiência TOTAL do candidato: ${expCalc.texto} (${expCalc.nivel} pelo tempo total).
-   Avalie o tempo de experiência RELEVANTE para esta vaga especificamente.
-   Classifique o candidato como (critérios configurados pelo recrutador):
-   • Júnior: menos de ${cfg.junior_max_meses} meses de experiência relevante
-   • Pleno: de ${cfg.junior_max_meses} a ${cfg.pleno_max_meses} meses de experiência relevante
-   • Sênior: mais de ${cfg.pleno_max_meses} meses de experiência relevante
-   Compare ao nível exigido pela vaga:
-   • Nível idêntico ou candidato é Sênior para vaga Pleno → 15 pts
-   • Um nível abaixo (ex: Pleno para vaga Sênior) → 8 pts
-   • Dois níveis abaixo (ex: Júnior para vaga Sênior) → 0 pts
-
-4. FORMAÇÃO ACADÊMICA — até 15 pts
-   • Atende ou supera o exigido → 15 pts  |  Próxima da área → 8 pts  |  Não atende → 0 pts
-
-REGRA CRÍTICA: Se requisitos_obrigatorios = 0, o score final máximo é 25.
+IMPORTANTE: Não há penalidade por ausência de requisitos. Candidatos que não atendem um critério simplesmente não ganham os pontos daquele critério.
+Candidatos com score ≥ ${P.corte_minimo} pts são selecionados; abaixo disso são desclassificados.
 
 Responda SOMENTE com JSON válido, sem markdown.`;
 
-  const user = `PERFIL DA VAGA:\n${perfilFuncao(funcao)}\n\nCURRÍCULO COMPLETO:\n${curriculoCompleto(curriculo)}\n\nRetorne:\n{"id":${curriculo.id},"score":0-100,"nivel":"Alto|Médio|Baixo","nivel_candidato":"Júnior|Pleno|Sênior","meses_relevantes":0,"detalhes":{"requisitos_obrigatorios":0-40,"habilidades_tecnicas":0-30,"nivel_experiencia":0-15,"formacao":0-15},"pontos_positivos":["..."],"pontos_negativos":["..."],"resumo":"2 frases objetivas sobre a aderência do candidato à vaga"}`;
+  const user = `PERFIL DA VAGA:\n${perfilFuncao(funcao)}\n\nCURRÍCULO COMPLETO:\n${curriculoCompleto(curriculo)}\n\nRetorne:\n{"id":${curriculo.id},"score":0-100,"nivel":"Alto|Médio|Baixo","nivel_candidato":"Júnior|Pleno|Sênior","detalhes":{"requisitos_obrigatorios":0-${P.requisitos_obrigatorios},"requisitos_desejados":0-${P.requisitos_desejados},"formacao":0-${P.formacao},"habilidades_tecnicas":0-${P.habilidades}},"pontos_positivos":["..."],"pontos_negativos":["..."],"resumo":"2 frases objetivas sobre a aderência do candidato à vaga"}`;
 
   try {
-    const resposta = await chamarIA(system, user, 1500);
+    const resposta = await chamarIA(system, user, 1500, empresaId);
     const match = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\{[\s\S]*\}/);
     if (!match) throw new Error(`JSON inválido — resposta: ${resposta.slice(0, 200)}`);
     return JSON.parse(match[0]);
@@ -368,7 +362,7 @@ Responda SOMENTE com JSON válido, sem markdown.`;
     const erroResumido = err.message?.includes('429') || err.message?.includes('rate_limit') || err.message?.includes('quota')
       ? 'Limite de uso da IA atingido (quota/rate limit)'
       : `Falha na IA: ${err.message?.slice(0, 80) || 'erro desconhecido'}`;
-    return { id: curriculo.id, score: 0, nivel: 'Baixo', nivel_candidato: '—', meses_relevantes: 0, detalhes: {}, pontos_positivos: [], pontos_negativos: [erroResumido], resumo: erroResumido, ia_falha: true, ia_erro: erroResumido };
+    return { id: curriculo.id, score: 0, nivel: 'Baixo', nivel_candidato: '—', detalhes: {}, pontos_positivos: [], pontos_negativos: [erroResumido], resumo: erroResumido, ia_falha: true, ia_erro: erroResumido };
   }
 }
 
@@ -434,13 +428,45 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
     res.json({ ok: true });
   });
 
+  // ── Pesos de Pontuação ────────────────────────────────────────────────────────
+  app.get('/api/pesos-pontuacao', requireAuth, requireEmpresa, (req, res) => {
+    res.json(db.getPesosPontuacao(req.session.empresa_id));
+  });
+
+  app.post('/api/pesos-pontuacao', requireAuth, requireEmpresa, (req, res) => {
+    const { requisitos_obrigatorios, requisitos_desejados, formacao, habilidades, corte_minimo } = req.body;
+    const campos = { requisitos_obrigatorios, requisitos_desejados, formacao, habilidades };
+    for (const [k, v] of Object.entries(campos)) {
+      if (v === undefined || v === null || isNaN(Number(v)) || Number(v) < 0)
+        return res.status(400).json({ error: `Campo inválido: ${k}` });
+    }
+    const soma = Object.values(campos).reduce((s, v) => s + Number(v), 0);
+    if (soma !== 100)
+      return res.status(400).json({ error: `A soma dos pesos deve ser exatamente 100. Atual: ${soma}` });
+    if (!corte_minimo || isNaN(Number(corte_minimo)) || Number(corte_minimo) < 1 || Number(corte_minimo) > 99)
+      return res.status(400).json({ error: 'Pontuação mínima deve ser entre 1 e 99' });
+    db.setPesosPontuacao(req.session.empresa_id, {
+      requisitos_obrigatorios: Number(requisitos_obrigatorios),
+      requisitos_desejados:    Number(requisitos_desejados),
+      formacao:                Number(formacao),
+      habilidades:             Number(habilidades),
+      corte_minimo:            Number(corte_minimo),
+    });
+    res.json({ ok: true });
+  });
+
   // ── Análises Salvas ──────────────────────────────────────────────────────────
   app.get('/api/analises', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listAnalises(req.session.empresa_id));
+    const eid = req.session.empresa_id;
+    const empresaNome = req.session.empresa_nome || '';
+    db.backfillAnalisesEmpresa(eid, empresaNome);
+    res.json(db.listAnalises(eid));
   });
 
   app.get('/api/analises/:id', requireAuth, requireEmpresa, (req, res) => {
-    const a = db.getAnalise(req.session.empresa_id, req.params.id);
+    const eid = req.session.empresa_id;
+    db.backfillAnalisesEmpresa(eid, req.session.empresa_nome || '');
+    const a = db.getAnalise(eid, req.params.id);
     if (!a) return res.status(404).json({ error: 'Não encontrada' });
     res.json(a);
   });
@@ -449,6 +475,17 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
     const eid = req.session.empresa_id;
     const { force, ...analise } = req.body;
     if (!analise.id) return res.status(400).json({ error: 'ID obrigatório' });
+    const existingByVaga = analise.vaga_id ? db.getAnaliseByVaga(eid, analise.vaga_id) : null;
+    if (existingByVaga) {
+      return res.status(409).json({
+        conflict: true,
+        vaga_ja_analisada: true,
+        analise_id: existingByVaga.id,
+        data_existente: existingByVaga.data,
+        funcao_nome: existingByVaga.funcao_nome,
+        error: 'Esta vaga ja possui uma analise salva no historico.',
+      });
+    }
     const existing = db.getAnalise(eid, analise.id);
     if (existing && !force) {
       return res.status(409).json({
@@ -457,7 +494,12 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
         funcao_nome:    existing.funcao_nome,
       });
     }
-    db.saveAnalise(eid, { ...analise, data: new Date().toISOString() });
+    db.saveAnalise(eid, {
+      ...analise,
+      empresa_id: Number(eid),
+      empresa_nome: req.session.empresa_nome || '',
+      data: new Date().toISOString(),
+    });
     res.json({ ok: true });
   });
 
@@ -472,6 +514,15 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
     const eid = req.session.empresa_id;
     const { funcao_id, vaga_id, somente_vaga } = req.body;
     const funcao = db.getFuncao(eid, Number(funcao_id));
+    const analiseExistente = vaga_id ? db.getAnaliseByVaga(eid, vaga_id) : null;
+    if (analiseExistente) {
+      return res.status(409).json({
+        error: 'Esta vaga ja possui uma analise salva no historico.',
+        vaga_ja_analisada: true,
+        analise_id: analiseExistente.id,
+        data_existente: analiseExistente.data,
+      });
+    }
     if (!funcao) return res.status(404).json({ error: 'Função não encontrada' });
 
     let curriculos = db.listCurriculos(eid);
@@ -485,12 +536,13 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
     if (!curriculos.length) return res.json({ resultados: [], eliminados: [], total: 0 });
 
     try {
-      const cfg = db.getAnalisadorConfig(eid);
-      const { aprovados, eliminados } = triagem(funcao, curriculos, eid);
+      const cfg   = db.getAnalisadorConfig(eid);
+      const pesos = db.getPesosPontuacao(eid);
+      const { aprovados, eliminados } = triagem(funcao, curriculos);
 
       const resultados = [];
       for (const c of aprovados) {
-        const r = await analisarIndividual(funcao, c, cfg);
+        const r = await analisarIndividual(funcao, c, cfg, pesos, eid);
 
         if (r.ia_falha) {
           logMonitor(`[Analisador] Falha IA ao analisar "${c.nome || c.id}" para vaga "${funcao.nome}": ${r.ia_erro}`, 'error');
@@ -506,10 +558,9 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
         };
 
         if (r.ia_falha) {
-          // IA falhou: mantém o candidato nos aprovados com score neutro
-          resultados.push({ ...enriquecido, score: 50, nivel: 'Indefinido', resumo: `⚠️ ${r.ia_erro}` });
-        } else if ((r.detalhes?.requisitos_obrigatorios === 0) || r.score <= 25) {
-          eliminados.push({ ...c, motivo_eliminacao: r.resumo || 'Não atende os requisitos obrigatórios' });
+          resultados.push({ ...enriquecido, score: pesos.corte_minimo, nivel: 'Indefinido', resumo: `⚠️ ${r.ia_erro}` });
+        } else if (r.score < pesos.corte_minimo) {
+          eliminados.push({ ...c, motivo_eliminacao: r.resumo || `Pontuação abaixo do mínimo (${r.score}/${pesos.corte_minimo} pts)` });
         } else {
           resultados.push(enriquecido);
         }
@@ -531,7 +582,7 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
         funcao:           funcao.nome,
         funcao_id:        funcao.id,
         vaga_id:          vaga_id ? Number(vaga_id) : null,
-        triagem_ativa:    !!(funcao.requisitos_obrigatorios || (Array.isArray(funcao.habilidades_tecnicas) && funcao.habilidades_tecnicas.length)),
+        pesos,
       });
     } catch (err) {
       res.status(500).json({ error: `Erro na análise: ${err.message}` });
@@ -576,6 +627,7 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
 
   // ── Sugerir equivalências via IA (keyword única — modal de Configurações) ─────
   app.post('/api/equivalencias/sugerir', requireAuth, requireEmpresa, async (req, res) => {
+    const eid = req.session.empresa_id;
     const { keyword } = req.body;
     if (!keyword?.trim()) return res.status(400).json({ error: 'keyword obrigatório' });
 
@@ -589,7 +641,7 @@ Exemplo para "advpl": ["totvs","protheus","microsiga","rm protheus","erp totvs",
 Responda apenas o array JSON.`;
 
     try {
-      const resposta  = await chamarIA(system, user, 400);
+      const resposta  = await chamarIA(system, user, 400, eid);
       const match     = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\[[\s\S]*\]/);
       if (!match) throw new Error('Resposta da IA não retornou JSON válido');
       const variantes = JSON.parse(match[0]).map(v => String(v).toLowerCase().trim()).filter(Boolean);
@@ -621,7 +673,7 @@ Para cada uma, retorne 5 a 10 equivalentes em minúsculo.
 Formato exato: {"keyword1":["var1","var2",...],"keyword2":[...]}`;
 
     try {
-      const resposta = await chamarIA(system, user, 1000);
+      const resposta = await chamarIA(system, user, 1000, eid);
       const match    = resposta.replace(/^```json?\s*/i, '').replace(/\s*```$/, '').trim().match(/\{[\s\S]*\}/);
       if (!match) throw new Error('Resposta da IA não retornou JSON válido');
 

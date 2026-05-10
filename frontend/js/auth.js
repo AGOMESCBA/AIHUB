@@ -2,15 +2,118 @@
 let _authReadyResolve;
 window._iahubAuthReady = new Promise(r => { _authReadyResolve = r; });
 
+// Sinal de rotinas: resolve quando window._iahubRotinas estiver disponível
+// null = admin (sem filtro) | [] = sem acesso | [...ids] = rotinas permitidas
+let _rotinasResolve;
+window._iahubRotinasReady = new Promise(r => { _rotinasResolve = r; });
+
 // Páginas que não exigem empresa selecionada
 const _PAGINAS_LIVRES = [
   '/login.html', '/selecionar-empresa.html',
-  '/empresas.html', '/usuarios.html', '/seguranca.html', '/configuracoes.html',
+  '/empresas.html', '/usuarios.html', '/seguranca.html',
   '/administracao.html',
 ];
 
+// Mapa página → id da rotina (deve espelhar os ids do sidebar.js)
+const _PAGINA_ROTINA = {
+  '/dashboard.html':        'dashboard',
+  '/monitor.html':          'monitor-whatsapp',
+  '/monitor-email.html':    'monitor-email',
+  '/curriculos.html':       'curriculos',
+  '/funcoes.html':          'funcoes',
+  '/vagas.html':            'vagas',
+  '/processoseletivo.html': 'processo-seletivo',
+  '/analisador.html':       'analisador',
+  '/historico.html':        'historico',
+  '/config-analisador.html':'config-analisador',
+  '/se-integracoes.html':   'se-integracoes',
+  '/se-curriculos.html':    'se-curriculos',
+  '/se-funcoes.html':       'se-funcoes',
+  '/se-vagas.html':         'se-vagas',
+  '/se-integracoes-config.html': 'se-integracoes-config',
+  '/se-api-configurador.html':  'se-api-configurador',
+  '/configuracoes.html':    'configuracoes',
+  '/administracao.html':    'administracao',
+};
+
+const _ROTINA_ALIASES = {
+  'se-integracoes': ['se-curriculos', 'se-funcoes', 'se-vagas', 'se-integracoes-config'],
+  'se-curriculos':  ['se-integracoes'],
+  'se-funcoes':     ['se-integracoes'],
+  'se-vagas':       ['se-integracoes'],
+  'se-integracoes-config': ['se-integracoes'],
+};
+
 function _paginaLivre() {
   return _PAGINAS_LIVRES.some(p => location.pathname === p || location.pathname.endsWith(p));
+}
+
+function _rotinaIdDaPagina() {
+  return Object.entries(_PAGINA_ROTINA).find(
+    ([p]) => location.pathname === p || location.pathname.endsWith(p)
+  )?.[1] ?? null;
+}
+
+function _verificarAcessoPagina() {
+  const rotinas  = window._iahubRotinas;
+  if (rotinas === null) return true;  // admin: acesso irrestrito
+
+  const rotinaId = _rotinaIdDaPagina();
+  if (!rotinaId) return true;         // página sem rotina mapeada: livre
+
+  if (rotinas.includes(rotinaId)) return true;
+  if ((_ROTINA_ALIASES[rotinaId] || []).some(alias => rotinas.includes(alias))) return true;
+
+  // Página atual não permitida. Se há outras rotinas, redireciona silenciosamente.
+  if (rotinas.length > 0) {
+    const rotinaHref = Object.fromEntries(
+      Object.entries(_PAGINA_ROTINA).map(([href, rid]) => [rid, href])
+    );
+    rotinaHref['se-curriculos'] = '/se-integracoes.html#curriculos';
+    rotinaHref['se-funcoes']    = '/se-integracoes.html#funcoes';
+    rotinaHref['se-vagas']      = '/se-integracoes.html#vagas';
+    rotinaHref['se-integracoes-config'] = '/se-integracoes.html#flowapi';
+    const destino = rotinaHref[rotinas[0]];
+    if (destino) { location.href = destino; return false; }
+  }
+
+  // Sem nenhuma rotina disponível: exibe overlay bloqueador
+  _mostrarOverlaySemAcesso();
+  return false;
+}
+
+function _mostrarOverlaySemAcesso() {
+  function _inserir() {
+    const el = document.createElement('div');
+    el.id = '_acesso-negado';
+    el.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:500',
+      'background:var(--bg,#0f1117)',
+      'display:flex', 'align-items:center', 'justify-content:center',
+    ].join(';');
+    el.innerHTML = `
+      <div style="text-align:center;max-width:380px;padding:40px;
+                  background:var(--bg-card,#1a1d27);border:1px solid var(--border,#2a2d3e);
+                  border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.4)">
+        <div style="font-size:52px;margin-bottom:16px">🔒</div>
+        <div style="font-size:17px;font-weight:700;color:var(--text-hi,#e2e8f0);margin-bottom:8px">
+          Sem acesso a esta rotina
+        </div>
+        <div style="font-size:13px;color:var(--text-lo,#64748b);line-height:1.7;margin-bottom:24px">
+          Você não tem permissão para acessar esta página.<br>
+          Contate o administrador do sistema para solicitar acesso.
+        </div>
+        <button onclick="history.back()" style="
+          padding:9px 22px;border-radius:8px;
+          border:1px solid var(--border,#2a2d3e);
+          background:var(--bg-hover,#242736);
+          color:var(--text-hi,#e2e8f0);font-size:13px;cursor:pointer;
+        ">← Voltar</button>
+      </div>`;
+    document.body.appendChild(el);
+  }
+  if (document.body) _inserir();
+  else document.addEventListener('DOMContentLoaded', _inserir);
 }
 
 (async function () {
@@ -39,11 +142,35 @@ function _paginaLivre() {
     window._iahubEmpresa = sessao.empresa_id
       ? { id: sessao.empresa_id, nome: sessao.empresa_nome || '' }
       : { id: '—', nome: '(nenhuma)' };
+
+    // 3b. Carregar rotinas permitidas para filtrar o menu lateral
+    const rotinasRes = await fetch('/api/minhas-rotinas').catch(() => null);
+    if (rotinasRes?.ok) {
+      const data = await rotinasRes.json().catch(() => ({}));
+      // Preserva null (= admin sem filtro). Só usa [] como fallback quando a chave está ausente.
+      window._iahubRotinas = 'rotinas' in data ? data.rotinas : [];
+    } else {
+      window._iahubRotinas = [];
+    }
+  } else {
+    // Páginas livres: admin não precisa de filtro, usuário sem empresa não tem rotinas ainda
+    window._iahubRotinas = me.role === 'admin' ? null : [];
+  }
+
+  _rotinasResolve?.(window._iahubRotinas);
+
+  // 4. Verificar permissão de acesso à página atual
+  const _temAcesso = _verificarAcessoPagina();
+  if (!_temAcesso) {
+    // Overlay já exibido; injeta empresa no topbar mas NÃO resolve authReady
+    // (impede que os scripts da página iniciem o carregamento de dados)
+    _injetarEmpresaTopbar();
+    return;
   }
 
   _authReadyResolve?.();
 
-  // 4. Injetar combo de empresa no topbar
+  // 5. Injetar combo de empresa no topbar
   _injetarEmpresaTopbar();
 })();
 

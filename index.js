@@ -1,12 +1,13 @@
 require('dotenv').config();
-const express    = require('express');
-const http       = require('http');
-const { Server } = require('socket.io');
-const session    = require('express-session');
-const helmet     = require('helmet');
-const rateLimit  = require('express-rate-limit');
-const path       = require('path');
-const fs         = require('fs');
+const express          = require('express');
+const http             = require('http');
+const { Server }       = require('socket.io');
+const session          = require('express-session');
+const helmet           = require('helmet');
+const rateLimit        = require('express-rate-limit');
+const path             = require('path');
+const fs               = require('fs');
+const FileSessionStore = require('./modules/auth/session-store');
 
 const app    = express();
 const server = http.createServer(app);
@@ -35,6 +36,7 @@ app.use('/api/login', rateLimit({
 
 app.use(express.json({ limit: '50mb' }));
 const sessionMiddleware = session({
+  store:             new FileSessionStore(),
   secret:            process.env.SESSION_SECRET || 'iahub-secret',
   resave:            false,
   saveUninitialized: false,
@@ -61,23 +63,51 @@ app.use(express.static(path.join(__dirname, 'modules', 'seguranca',             
 app.use(express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
 
 // ── Log em arquivo ────────────────────────────────────────────────────────────
-const LOG_DIR        = __dirname;
-const EMAIL_LOG_FILE = path.join(__dirname, 'emailcurriculo.log');
+const LOG_DIR        = path.join(__dirname, 'logs');
+const EMAIL_LOG_FILE = path.join(LOG_DIR, 'emailcurriculo_<empresa_id>.log');
+
+fs.mkdirSync(LOG_DIR, { recursive: true });
+
+function migrarLogLegado(origemRelativa, destinoNome) {
+  const origem = path.join(__dirname, origemRelativa);
+  if (!fs.existsSync(origem)) return;
+
+  let destino = path.join(LOG_DIR, destinoNome);
+  if (fs.existsSync(destino)) {
+    const ext = path.extname(destinoNome);
+    const base = path.basename(destinoNome, ext);
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    destino = path.join(LOG_DIR, `${base}_migrado_${stamp}${ext}`);
+  }
+  try { fs.renameSync(origem, destino); } catch (_) {}
+}
+
+migrarLogLegado('emailcurriculo.log', 'emailcurriculo.log');
+migrarLogLegado(path.join('data', 'auditoria.log'), 'auditoria.log');
+for (const file of fs.readdirSync(__dirname)) {
+  if (/^whatscurriculo_\d+\.log$/i.test(file)) migrarLogLegado(file, file);
+}
+try {
+  const legadoWa = path.join(__dirname, 'whatscurriculo.log');
+  if (fs.existsSync(legadoWa)) fs.unlinkSync(legadoWa);
+} catch (_) {}
 
 function registrarLog(entry, empresaId) {
   const arquivo = empresaId
     ? path.join(LOG_DIR, `whatscurriculo_${empresaId}.log`)
-    : path.join(LOG_DIR, 'whatscurriculo.log');
+    : path.join(LOG_DIR, 'system.log');
   const linha = `[${entry.timestamp}] [${(entry.type || 'info').toUpperCase().padEnd(8)}] ${entry.message}\n`;
   try { fs.appendFileSync(arquivo, linha, 'utf8'); } catch (_) {}
 }
 
 // ── Auth: middleware e inicialização ─────────────────────────────────────────
-const { requireAuth }      = require('./modules/auth');
-const { inicializarAdmin } = require('./modules/auth/database');
-const { requireEmpresa }   = require('./modules/empresa-context');
+const { requireAuth, requireAdmin } = require('./modules/auth');
+const { inicializarAdmin }          = require('./modules/auth/database');
+const { requireEmpresa }            = require('./modules/empresa-context');
+const { inicializarConfig }         = require('./modules/configuracoes/database');
 
 inicializarAdmin().catch(err => console.error('[auth] Falha ao inicializar admin:', err));
+inicializarConfig();
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
 const waManager = require('./modules/whatsapp-curriculo/service-manager');
@@ -153,7 +183,10 @@ io.on('connection', (socket) => {
 require('./modules/auth/routes')(app);
 
 // ── Módulo Configurações ──────────────────────────────────────────────────────
-require('./modules/configuracoes/routes')(app, { requireAuth });
+require('./modules/configuracoes/routes')(app, { requireAuth, requireAdmin, requireEmpresa });
+
+// ── Módulo IA — uso, custos estimados e saldo manual ───────────────────────────
+require('./modules/ia/routes')(app, { requireAuth, requireEmpresa });
 
 // ── Módulo Empresa Context (deve vir ANTES de /empresas para não ser sobreposto por /:id) ──
 require('./modules/empresa-context/routes')(app, { requireAuth });
@@ -163,6 +196,9 @@ require('./modules/empresas/routes')(app, { requireAuth });
 
 // ── Módulo Usuários ───────────────────────────────────────────────────────────
 require('./modules/usuarios/routes')(app, { requireAuth });
+
+// ── Módulo Permissões ─────────────────────────────────────────────────────────
+require('./modules/permissoes/routes')(app, { requireAuth });
 
 // ── Módulo Segurança ──────────────────────────────────────────────────────────
 require('./modules/seguranca/routes')(app, { requireAuth });
@@ -178,6 +214,18 @@ require('./modules/analisador-curriculos/routes')(app, { requireAuth, requireEmp
 
 // ── Módulo Integrações › SE Currículo ─────────────────────────────────────────
 require('./modules/integracoes/SECurriculo/routes')(app, { requireAuth, requireEmpresa, registrarLog });
+
+// ── Módulo Integrações › SE Função ────────────────────────────────────────────
+app.use(require('express').static(require('path').join(__dirname, 'modules', 'integracoes', 'SEFuncao', 'frontend')));
+require('./modules/integracoes/SEFuncao/routes')(app, { requireAuth, requireEmpresa, registrarLog });
+
+// ── Módulo Integrações › SE Vaga ──────────────────────────────────────────────
+app.use(require('express').static(require('path').join(__dirname, 'modules', 'integracoes', 'SEVaga', 'frontend')));
+require('./modules/integracoes/SEVaga/routes')(app, { requireAuth, requireEmpresa, registrarLog });
+
+// ── Módulo Integrações › SE API Configurador ──────────────────────────────────
+app.use(require('express').static(require('path').join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
+require('./modules/integracoes/SEApiConfigurator/routes')(app, { requireAuth, requireEmpresa, registrarLog });
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

@@ -1,7 +1,15 @@
-const fs      = require('fs');
-const path    = require('path');
-const db      = require('./database');
-const manager = require('./service-manager');
+const fs                  = require('fs');
+const path                = require('path');
+const db                  = require('./database');
+const manager             = require('./service-manager');
+const MetaWhatsAppService = require('./service-meta');
+
+const GRAPH_API = 'https://graph.facebook.com/v21.0';
+
+function _maskKey(key) {
+  if (!key || key.length < 8) return '';
+  return key.slice(0, 6) + '••••••••••••' + key.slice(-4);
+}
 
 // Pasta onde LocalAuth salva sessões por empresa
 const AUTH_BASE = path.join(__dirname, '..', '..', '.wwebjs_auth');
@@ -27,10 +35,11 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
     svc.on('qr', (url) => io.to(room).emit('qr', url));
 
-    svc.on('curriculo', ({ remetente, dados, pdf_base64, pdf_nome, empresaId }) => {
+    svc.on('curriculo', ({ remetente, dados, pdf_base64, pdf_nome, empresaId, empresaNome }) => {
       const id = db.saveCurriculo(empresaId, {
         remetente,
         ...dados,
+        empresa_nome:    empresaNome || null,
         dados_completos: JSON.stringify(dados),
         pdf_base64,
         pdf_nome,
@@ -61,11 +70,14 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
   });
 
   app.get('/api/service/status', requireAuth, requireEmpresa, (req, res) => {
-    const svc = manager.get(req.session.empresa_id);
+    const eid = req.session.empresa_id;
+    const svc = manager.get(eid);
+    const metaAtivo = db.getConfig(eid, 'meta_wa_ativo') === 'true';
     res.json({
       status:       svc?.getStatus()     || 'stopped',
       empresa_id:   svc?.getEmpresaId()  || null,
       empresa_nome: svc?.getEmpresaNome()|| null,
+      provider:     metaAtivo ? 'meta' : 'webjs',
     });
   });
 
@@ -96,19 +108,28 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     }
   });
 
-  // ── Configuração ──────────────────────────────────────────────────────────
+  // ── Configuração geral ────────────────────────────────────────────────────
   app.get('/api/config', requireAuth, requireEmpresa, (req, res) => {
     const eid = req.session.empresa_id;
+    const metaToken   = db.getConfig(eid, 'meta_wa_token')    || '';
+    const metaPhoneId = db.getConfig(eid, 'meta_wa_phone_id') || '';
     res.json({
-      numero_destino:   db.getConfig(eid, 'numero_destino')   || '',
-      label:            db.getConfig(eid, 'label')            || '',
-      msg_confirmacao:  db.getConfig(eid, 'msg_confirmacao')  || '',
-      msg_nao_pdf:      db.getConfig(eid, 'msg_nao_pdf')      || '',
-      msg_pdf_ilegivel: db.getConfig(eid, 'msg_pdf_ilegivel') || '',
-      msg_nao_curriculo:db.getConfig(eid, 'msg_nao_curriculo')|| '',
-      msg_duplicata:    db.getConfig(eid, 'msg_duplicata')    || '',
-      msg_nao_atualizar:db.getConfig(eid, 'msg_nao_atualizar')|| '',
-      msg_erro:         db.getConfig(eid, 'msg_erro')         || '',
+      numero_destino:           db.getConfig(eid, 'numero_destino')        || '',
+      label:                    db.getConfig(eid, 'label')                 || '',
+      msg_confirmacao:          db.getConfig(eid, 'msg_confirmacao')       || '',
+      msg_nao_pdf:              db.getConfig(eid, 'msg_nao_pdf')           || '',
+      msg_pdf_ilegivel:         db.getConfig(eid, 'msg_pdf_ilegivel')      || '',
+      msg_nao_curriculo:        db.getConfig(eid, 'msg_nao_curriculo')     || '',
+      msg_duplicata:            db.getConfig(eid, 'msg_duplicata')         || '',
+      msg_nao_atualizar:        db.getConfig(eid, 'msg_nao_atualizar')     || '',
+      msg_erro:                 db.getConfig(eid, 'msg_erro')              || '',
+      // Meta API
+      meta_wa_ativo:            db.getConfig(eid, 'meta_wa_ativo') === 'true',
+      meta_wa_token:            metaToken   ? _maskKey(metaToken)   : '',
+      meta_wa_token_salvo:      !!metaToken,
+      meta_wa_phone_id:         metaPhoneId ? _maskKey(metaPhoneId) : '',
+      meta_wa_phone_id_salvo:   !!metaPhoneId,
+      meta_wa_webhook_token:    db.getConfig(eid, 'meta_wa_webhook_token') || '',
     });
   });
 
@@ -118,7 +139,82 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
                     'msg_pdf_ilegivel','msg_nao_curriculo','msg_duplicata',
                     'msg_nao_atualizar','msg_erro'];
     campos.forEach(c => { if (req.body[c] !== undefined) db.setConfig(eid, c, req.body[c]); });
+
+    // Meta: só salva se não tiver bullets (campo mascarado = sem alteração)
+    if (req.body.meta_wa_ativo !== undefined)
+      db.setConfig(eid, 'meta_wa_ativo', req.body.meta_wa_ativo ? 'true' : 'false');
+    if (req.body.meta_wa_token !== undefined && !req.body.meta_wa_token.includes('•'))
+      db.setConfig(eid, 'meta_wa_token', req.body.meta_wa_token.trim());
+    if (req.body.meta_wa_phone_id !== undefined && !req.body.meta_wa_phone_id.includes('•'))
+      db.setConfig(eid, 'meta_wa_phone_id', req.body.meta_wa_phone_id.trim());
+    if (req.body.meta_wa_webhook_token !== undefined)
+      db.setConfig(eid, 'meta_wa_webhook_token', req.body.meta_wa_webhook_token.trim());
+
     res.json({ ok: true });
+  });
+
+  // ── Meta: testar conexão ──────────────────────────────────────────────────
+  app.post('/api/meta/test-connection', requireAuth, requireEmpresa, async (req, res) => {
+    const eid = req.session.empresa_id;
+    let { token, phone_id } = req.body || {};
+
+    // Usa valores salvos se o usuário não enviou novos
+    if (!token    || token.includes('•'))    token    = db.getConfig(eid, 'meta_wa_token')    || '';
+    if (!phone_id || phone_id.includes('•')) phone_id = db.getConfig(eid, 'meta_wa_phone_id') || '';
+
+    if (!token)    return res.status(400).json({ ok: false, error: 'Token de acesso não configurado.' });
+    if (!phone_id) return res.status(400).json({ ok: false, error: 'Phone Number ID não configurado.' });
+
+    try {
+      const resp = await fetch(
+        `${GRAPH_API}/${phone_id}?fields=display_phone_number,verified_name,quality_rating`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await resp.json();
+      if (!resp.ok) {
+        return res.json({ ok: false, error: data?.error?.message || `HTTP ${resp.status}` });
+      }
+      return res.json({
+        ok:                   true,
+        display_phone_number: data.display_phone_number,
+        verified_name:        data.verified_name,
+        quality_rating:       data.quality_rating,
+      });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // ── Meta webhook: verificação GET (público — chamado pela Meta) ───────────
+  app.get('/api/whatsapp/webhook/meta', (req, res) => {
+    const mode      = req.query['hub.mode'];
+    const token     = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode !== 'subscribe' || !token) return res.sendStatus(403);
+
+    const eid = manager.findByMetaWebhookToken(token);
+    if (eid === null) return res.sendStatus(403);
+
+    res.send(challenge);
+  });
+
+  // ── Meta webhook: receber mensagens POST (público — chamado pela Meta) ────
+  app.post('/api/whatsapp/webhook/meta', (req, res) => {
+    res.sendStatus(200); // responde imediatamente para Meta não reenviar
+
+    const phoneNumberId = req.body?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    if (!phoneNumberId) return;
+
+    const eid = manager.findByMetaPhoneId(phoneNumberId);
+    if (eid === null) return;
+
+    const svc = manager.get(eid);
+    if (!svc || !(svc instanceof MetaWhatsAppService)) return;
+
+    svc.handleWebhook(req.body).catch(err =>
+      console.error('[Meta webhook] Erro ao processar:', err.message)
+    );
   });
 
   // ── Currículos ────────────────────────────────────────────────────────────
@@ -143,8 +239,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     const eid       = req.session.empresa_id;
     const curriculos = db.listCurriculos(eid);
     const hoje      = new Date().toISOString().slice(0, 10);
-    const isWA      = c => !c.remetente?.startsWith('email-externo:') && !c.remetente?.startsWith('ps:');
-    const isEmail   = c =>  c.remetente?.startsWith('email-externo:');
+    const isWA      = c => !c.remetente?.startsWith('email-externo:') && !c.remetente?.startsWith('email-livre:') && !c.remetente?.startsWith('ps:');
+    const isEmail   = c =>  c.remetente?.startsWith('email-externo:') || c.remetente?.startsWith('email-livre:');
     const svc       = manager.get(eid);
     res.json({
       wa: {

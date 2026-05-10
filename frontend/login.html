@@ -35,6 +35,42 @@
       opacity: .55;
       cursor: not-allowed;
     }
+
+    .password-wrap {
+      position: relative;
+    }
+    .password-wrap .form-control {
+      padding-right: 44px;
+    }
+    .password-toggle {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      width: 32px;
+      height: 32px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text-md);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transform: translateY(-50%);
+      transition: background var(--transition), color var(--transition);
+    }
+    .password-toggle:hover {
+      background: var(--bg-hover);
+      color: var(--accent);
+    }
+    .password-toggle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .password-toggle svg {
+      width: 18px;
+      height: 18px;
+    }
   </style>
 </head>
 <body class="login-page">
@@ -57,8 +93,19 @@
 
       <div class="form-group">
         <label class="form-label">Senha</label>
-        <input id="pass" type="password" class="form-control" placeholder="Digite sua senha"
-          autocomplete="current-password" required>
+        <div class="password-wrap">
+          <input id="pass" type="password" class="form-control" placeholder="Digite sua senha"
+            autocomplete="current-password" required>
+          <button type="button" class="password-toggle" id="pass-toggle"
+            onclick="toggleLoginPassword()" aria-label="Mostrar senha" title="Mostrar senha">
+            <svg id="pass-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="form-group">
@@ -83,20 +130,47 @@
     let _checkTimer = null;
     let _bypassAdmin = false;
 
-    // ── Se já autenticado, pre-popula empresas e redireciona se for caso ────────
+    // ── Se já autenticado, redireciona diretamente (não reutiliza sessão ativa) ──
     (async () => {
       const me = await fetch('/api/me').catch(() => null);
       if (!me?.ok) return;
-      const data = await me.json();
-      _role   = data.role;
-      _logado = true;
-      await carregarEmpresas(/* silencioso */ true);
+      // Sessão ativa encontrada — redireciona sem exibir o formulário.
+      // Para trocar de usuário é necessário fazer logout explicitamente.
+      const dest = new URLSearchParams(location.search).get('next') || '/dashboard.html';
+      location.href = dest;
     })();
 
     // ── Listeners: dispara verificação ao digitar ────────────────────────────────
-    document.getElementById('user').addEventListener('input', agendarVerificacao);
+    document.getElementById('user').addEventListener('input', ao_trocar_usuario);
     document.getElementById('pass').addEventListener('input', agendarVerificacao);
     document.getElementById('pass').addEventListener('blur',  verificarAgora);
+
+    function toggleLoginPassword() {
+      const input = document.getElementById('pass');
+      const btn = document.getElementById('pass-toggle');
+      const eye = document.getElementById('pass-eye');
+      const mostrar = input.type === 'password';
+
+      input.type = mostrar ? 'text' : 'password';
+      btn.setAttribute('aria-label', mostrar ? 'Ocultar senha' : 'Mostrar senha');
+      btn.title = mostrar ? 'Ocultar senha' : 'Mostrar senha';
+      eye.innerHTML = mostrar
+        ? '<path d="M17.9 17.9A10.7 10.7 0 0 1 12 19C5.5 19 2 12 2 12a18.2 18.2 0 0 1 4.2-5.2"></path><path d="M9.9 4.2A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a18.3 18.3 0 0 1-2.1 3.2"></path><path d="M14.1 14.1A3 3 0 0 1 9.9 9.9"></path><path d="M2 2l20 20"></path>'
+        : '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle>';
+      input.focus();
+    }
+
+    // Ao alterar o campo usuário, descarta qualquer sessão em andamento
+    function ao_trocar_usuario() {
+      if (_logado) {
+        _logado      = false;
+        _role        = null;
+        _bypassAdmin = false;
+        resetSelect('— Digite usuário e senha para carregar —');
+        fetch('/api/logout', { method: 'POST' }).catch(() => {});
+      }
+      agendarVerificacao();
+    }
 
     function agendarVerificacao() {
       clearTimeout(_checkTimer);
@@ -239,16 +313,20 @@
       btn.disabled  = true;
 
       try {
-        await fetch('/api/empresas/selecionar', {
+        const res = await fetch('/api/empresas/selecionar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ empresa_id }),
         });
+        if (!res.ok) {
+          const { error } = await res.json().catch(() => ({}));
+          throw new Error(error || `Erro ${res.status}`);
+        }
         const dest = new URLSearchParams(location.search).get('next') || '/dashboard.html';
         location.href = dest;
-      } catch (_) {
-        mostrarErro('Erro ao selecionar empresa. Tente novamente.');
-        btn.disabled = false;
+      } catch (err) {
+        mostrarErro(err.message || 'Erro ao selecionar empresa. Tente novamente.');
+        btn.disabled    = false;
         btn.textContent = 'Entrar';
       }
     }

@@ -127,7 +127,76 @@
 
         <button class="btn btn-primary" onclick="salvar()" style="width:100%">Salvar Configuração</button>
 
-        <div class="card" style="margin-top:32px">
+        <!-- API Oficial Meta -->
+        <div class="card mb-4" style="margin-top:32px">
+          <div class="card-header">🟢 API Oficial WhatsApp Business (Meta)</div>
+          <div class="card-body">
+
+            <div style="background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.2);border-radius:8px;padding:12px 14px;font-size:12.5px;color:var(--text-md);line-height:1.7;margin-bottom:18px">
+              <strong style="color:var(--accent)">Quando usar?</strong> Para uso comercial em volume, estabilidade garantida pela Meta e sem risco de bloqueio de número. Requer uma conta no <strong>Meta Business</strong> com WhatsApp Business API habilitada.
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" style="display:flex;align-items:center;gap:10px">
+                <input type="checkbox" id="meta_wa_ativo" style="width:16px;height:16px;accent-color:var(--accent)">
+                Usar API Oficial Meta (desativa o modo QR Code)
+              </label>
+              <div class="form-hint">Quando ativado, o sistema usa a Cloud API da Meta em vez do whatsapp-web.js.</div>
+            </div>
+
+            <div id="meta-campos" style="display:none">
+
+              <div class="form-group">
+                <label class="form-label">Token de Acesso Permanente</label>
+                <div style="position:relative">
+                  <input type="password" id="meta_wa_token" class="form-control" placeholder="Deixe em branco para não alterar">
+                  <button type="button" onclick="toggleVer('meta_wa_token',this)"
+                    style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-lo)">👁</button>
+                </div>
+                <div class="form-hint">Gere em <strong>Meta Developer Console → WhatsApp → API Setup → Permanent Token</strong>.</div>
+                <div id="meta_wa_token_status" style="font-size:12px;margin-top:4px"></div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Phone Number ID</label>
+                <div style="position:relative">
+                  <input type="password" id="meta_wa_phone_id" class="form-control" placeholder="Deixe em branco para não alterar">
+                  <button type="button" onclick="toggleVer('meta_wa_phone_id',this)"
+                    style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--text-lo)">👁</button>
+                </div>
+                <div class="form-hint">Encontrado em <strong>Meta Developer Console → WhatsApp → API Setup → Phone Number ID</strong>.</div>
+                <div id="meta_wa_phone_id_status" style="font-size:12px;margin-top:4px"></div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Token de Verificação do Webhook</label>
+                <input type="text" id="meta_wa_webhook_token" class="form-control" placeholder="Crie uma senha qualquer (ex: iahub-rh-2025)">
+                <div class="form-hint">Você define este token livremente e usa o mesmo no Meta Developer Console ao configurar o webhook.</div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">URL do Webhook (copie para o Meta Developer Console)</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="webhook_url_display" class="form-control" readonly
+                    style="background:var(--bg-hover);color:var(--text-md);font-family:monospace;font-size:12px">
+                  <button type="button" onclick="copiarWebhook()" class="btn btn-ghost" style="white-space:nowrap;font-size:12px">📋 Copiar</button>
+                </div>
+                <div class="form-hint">Configure esta URL em <strong>Meta Developer Console → WhatsApp → Configuration → Webhook</strong>. Campo <em>Callback URL</em>.</div>
+              </div>
+
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+                <button type="button" class="btn btn-primary" onclick="testarConexaoMeta()" id="btn-testar-meta">
+                  🔌 Testar Conexão com a Meta
+                </button>
+                <div id="meta-test-result" style="font-size:13px"></div>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:0">
           <div class="card-header">ℹ Como funciona</div>
           <div class="card-body" style="color:var(--text-md);line-height:1.8;font-size:13px">
             O bot recebe currículos em PDF enviados para o número conectado via QR Code no Monitor.<br>
@@ -162,16 +231,93 @@
     'msg_nao_curriculo','msg_duplicata','msg_nao_atualizar','msg_erro'
   ];
 
+  // ── Webhook URL ───────────────────────────────────────────────────────────────
+  document.getElementById('webhook_url_display').value =
+    `${location.origin}/api/whatsapp/webhook/meta`;
+
+  // ── Mostrar/ocultar campos Meta ───────────────────────────────────────────────
+  document.getElementById('meta_wa_ativo').addEventListener('change', function () {
+    document.getElementById('meta-campos').style.display = this.checked ? 'block' : 'none';
+  });
+
+  function toggleVer(id, btn) {
+    const el = document.getElementById(id);
+    el.type = el.type === 'password' ? 'text' : 'password';
+    btn.textContent = el.type === 'password' ? '👁' : '🙈';
+  }
+
+  function copiarWebhook() {
+    const url = document.getElementById('webhook_url_display').value;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = event.currentTarget;
+      btn.textContent = '✅ Copiado!';
+      setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+    });
+  }
+
+  // ── Testar conexão Meta ───────────────────────────────────────────────────────
+  async function testarConexaoMeta() {
+    const btn    = document.getElementById('btn-testar-meta');
+    const result = document.getElementById('meta-test-result');
+    btn.disabled = true;
+    btn.textContent = '⏳ Testando…';
+    result.textContent = '';
+
+    try {
+      const r = await fetch('/api/meta/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token:    document.getElementById('meta_wa_token').value,
+          phone_id: document.getElementById('meta_wa_phone_id').value,
+        }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        result.innerHTML = `<span style="color:var(--success)">✅ Conectado! <strong>${data.display_phone_number}</strong> — ${data.verified_name} (qualidade: ${data.quality_rating || '—'})</span>`;
+      } else {
+        result.innerHTML = `<span style="color:var(--danger)">❌ ${data.error}</span>`;
+      }
+    } catch (e) {
+      result.innerHTML = `<span style="color:var(--danger)">❌ Erro: ${e.message}</span>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔌 Testar Conexão com a Meta';
+    }
+  }
+
+  // ── Carregar configuração ─────────────────────────────────────────────────────
   async function carregar() {
     const cfg = await fetch('/api/config').then(r => r.json());
     Object.keys(PADROES).forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = cfg[id] || PADROES[id];
     });
+
+    // Meta
+    const ckMeta = document.getElementById('meta_wa_ativo');
+    ckMeta.checked = !!cfg.meta_wa_ativo;
+    document.getElementById('meta-campos').style.display = ckMeta.checked ? 'block' : 'none';
+
+    const tokenEl   = document.getElementById('meta_wa_token');
+    const phoneIdEl = document.getElementById('meta_wa_phone_id');
+    tokenEl.placeholder   = cfg.meta_wa_token_salvo   ? '••••••• (salvo — deixe em branco para manter)' : 'Cole o token aqui';
+    phoneIdEl.placeholder = cfg.meta_wa_phone_id_salvo ? '••••••• (salvo — deixe em branco para manter)' : 'Ex: 123456789012345';
+    tokenEl.value   = '';
+    phoneIdEl.value = '';
+
+    if (cfg.meta_wa_token_salvo)
+      document.getElementById('meta_wa_token_status').innerHTML =
+        '<span style="color:var(--success)">✅ Token salvo</span>';
+    if (cfg.meta_wa_phone_id_salvo)
+      document.getElementById('meta_wa_phone_id_status').innerHTML =
+        '<span style="color:var(--success)">✅ Phone Number ID salvo</span>';
+
+    document.getElementById('meta_wa_webhook_token').value = cfg.meta_wa_webhook_token || '';
   }
 
+  // ── Salvar configuração ───────────────────────────────────────────────────────
   async function salvar() {
-    // Valida campos obrigatórios
     const vazios = OBRIGATORIOS.filter(id => !document.getElementById(id)?.value.trim());
     if (vazios.length) {
       const alertErro = document.getElementById('alert-erro');
@@ -187,6 +333,12 @@
       if (el) body[id] = el.value.trim() || PADROES[id];
     });
 
+    // Meta
+    body.meta_wa_ativo         = document.getElementById('meta_wa_ativo').checked;
+    body.meta_wa_token         = document.getElementById('meta_wa_token').value;
+    body.meta_wa_phone_id      = document.getElementById('meta_wa_phone_id').value;
+    body.meta_wa_webhook_token = document.getElementById('meta_wa_webhook_token').value;
+
     await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -195,6 +347,9 @@
 
     document.getElementById('alert-ok').classList.remove('d-none');
     setTimeout(() => document.getElementById('alert-ok').classList.add('d-none'), 3000);
+
+    // Recarrega para atualizar status dos campos mascarados
+    await carregar();
   }
 
   carregar();

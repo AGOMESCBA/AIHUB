@@ -44,20 +44,26 @@ function fmtHabilidades(list) {
   return list.join(', ');
 }
 
-function montarSoap(curriculo) {
+function montarSoap(curriculo, config = {}) {
+  const campoEmpId   = (config.campo_empresa_id   || '').trim();
+  const campoEmpNome = (config.campo_empresa_nome || '').trim();
+
   const campos = [
-    ['NM',   curriculo.nome        || ''],
-    ['TLF',  curriculo.telefone    || ''],
-    ['EML',  curriculo.email       || ''],
-    ['ENDE', curriculo.endereco    || ''],
-    ['LKD',  curriculo.linkedin    || ''],
-    ['DSC',  curriculo.descricao   || ''],
-    ['EXPC', fmtExperiencias(curriculo.experiencias)],
-    ['FRM',  fmtFormacao(curriculo.formacao)],
-    ['CTF',  fmtCapacitacoes(curriculo.capacitacoes)],
-    ['CPT',  fmtHabilidades(curriculo.habilidades)],
-    ['OUTR', curriculo.outros      || ''],
+    ['NM',    curriculo.nome         || ''],
+    ['TLF',   curriculo.telefone     || ''],
+    ['EML',   curriculo.email        || ''],
+    ['ENDE',  curriculo.endereco     || ''],
+    ['LKD',   curriculo.linkedin     || ''],
+    ['DSC',   curriculo.descricao    || ''],
+    ['EXPC',  fmtExperiencias(curriculo.experiencias)],
+    ['FRM',   fmtFormacao(curriculo.formacao)],
+    ['CTF',   fmtCapacitacoes(curriculo.capacitacoes)],
+    ['CPT',   fmtHabilidades(curriculo.habilidades)],
+    ['OUTR',  curriculo.outros       || ''],
   ];
+
+  if (campoEmpId)   campos.push([campoEmpId,   String(curriculo.empresa_id   || '')]);
+  if (campoEmpNome) campos.push([campoEmpNome, curriculo.empresa_nome || '']);
 
   const fields = campos.map(([id, val]) =>
     `            <urn:TableField>\n               <urn:TableFieldID>${id}</urn:TableFieldID>\n               <urn:TableFieldValue>${esc(val)}</urn:TableFieldValue>\n            </urn:TableField>`
@@ -92,8 +98,8 @@ ${fields}
 }
 
 // Versão sem base64 para armazenar no log (evita blobs enormes)
-function montarSoapResumido(curriculo) {
-  const xml = montarSoap(curriculo);
+function montarSoapResumido(curriculo, config = {}) {
+  const xml = montarSoap(curriculo, config);
   if (!curriculo.pdf_base64) return xml;
   const kb = Math.round(Buffer.byteLength(curriculo.pdf_base64, 'utf8') / 1024);
   return xml.replace(
@@ -117,7 +123,7 @@ function parseSEResponse(xml) {
 }
 
 function enviarParaSE(curriculo, config) {
-  const xml      = montarSoap(curriculo);
+  const xml      = montarSoap(curriculo, config);
   const parsed   = new URL(config.se_url);
   const isSsl    = parsed.protocol === 'https:';
   const port     = parsed.port ? Number(parsed.port) : (isSsl ? 443 : 80);

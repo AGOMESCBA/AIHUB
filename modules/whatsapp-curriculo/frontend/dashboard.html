@@ -5,6 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dashboard — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* stat cards compactos */
+    .stat-card { padding:14px 16px !important; }
+    .stat-label { font-size:11px !important; }
+    .stat-value { font-size:26px !important; }
+
+    /* grid de vagas */
+    .vagas-grid-db { display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px; }
+    .vagas-grid-db .vaga-card     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;transition:border-color .2s; }
+    .vagas-grid-db .vaga-card:hover { border-color:var(--accent); }
+    .vagas-grid-db .vaga-funcao   { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .vagas-grid-db .vaga-meta     { font-size:11px;color:var(--text-lo);margin-bottom:10px; }
+    .vagas-grid-db .vaga-count    { font-size:26px;font-weight:800;color:var(--accent-light);line-height:1; }
+    .vagas-grid-db .vaga-count-label { font-size:11px;color:var(--text-lo);margin-top:2px; }
+    .vagas-grid-db .vaga-status   { display:inline-flex;align-items:center;gap:5px;font-size:11px;margin-top:8px; }
+    .vagas-grid-db .dot           { width:7px;height:7px;border-radius:50%;display:inline-block; }
+    .vagas-grid-db .dot-aberta    { background:var(--success); }
+    .vagas-grid-db .vaga-actions  { display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border); }
+    .vagas-grid-db .nivel-badge   { padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600; }
+    .vagas-grid-db .nivel-junior  { background:#0c2744;color:var(--accent-light); }
+    .vagas-grid-db .nivel-pleno   { background:#14532d;color:var(--success); }
+    .vagas-grid-db .nivel-senior  { background:#2d1e00;color:var(--warning); }
+    .vagas-grid-db .nivel-especialista { background:#1e0c3a;color:#a78bfa; }
+    .vagas-grid-db .nivel-nao-especificado { background:var(--bg-hover);color:var(--text-lo); }
+
+    .ia-card-header { display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+    .ia-title { font-size:14px;font-weight:700;color:var(--text-hi);display:flex;align-items:center;gap:8px; }
+    .ia-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .ia-refresh-btn { background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border:none;box-shadow:0 6px 16px var(--accent-glow); }
+    .ia-refresh-btn:hover { filter:brightness(.96);transform:translateY(-1px); }
+    .ia-refresh-btn.loading { opacity:.75;pointer-events:none; }
+    .ia-provider-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-top:16px; }
+    .ia-provider { border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-sidebar); }
+    .ia-provider-top { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px; }
+    .ia-provider-name { font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--text-md); }
+    .ia-provider-value { font-size:28px;font-weight:800;color:var(--text-hi);line-height:1.05; }
+    .ia-provider-sub { font-size:11.5px;color:var(--text-lo);margin-top:4px; }
+    .ia-meter { height:8px;border-radius:999px;background:var(--bg-hover);overflow:hidden;margin:12px 0; }
+    .ia-meter-fill { height:100%;background:linear-gradient(90deg,var(--success),var(--accent));width:0%;transition:width .25s ease; }
+    .ia-metrics { display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--border);padding-top:10px;margin-top:10px; }
+    .ia-metric-label { font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo); }
+    .ia-metric-value { font-size:13px;font-weight:700;color:var(--text-hi); }
+    .ia-footer { display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:11.5px;color:var(--text-lo); }
+    @media (max-width: 900px) {
+      .ia-provider-grid { grid-template-columns:1fr; }
+      .ia-metrics { grid-template-columns:1fr 1fr; }
+    }
+  </style>
 </head>
 <body>
 <div class="layout">
@@ -64,6 +112,65 @@
         </div>
       </div>
 
+      <!-- Creditos IA -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <div class="ia-card-header">
+            <div>
+              <div class="ia-title">⚡ Creditos IA</div>
+              <div class="text-muted text-sm" id="ia-last-update">—</div>
+            </div>
+            <div class="ia-actions">
+              <button class="btn ia-refresh-btn" id="ia-refresh-btn" title="Atualizar agora">⟳ Atualizar</button>
+            </div>
+          </div>
+
+          <div class="ia-provider-grid">
+            <div class="ia-provider" id="ia-groq-card">
+              <div class="ia-provider-top">
+                <span class="ia-provider-name">Groq</span>
+                <span class="status-pill pill-stopped" id="ia-groq-status">Nao configurado</span>
+              </div>
+              <div class="ia-provider-value" id="ia-groq-available">—</div>
+              <div class="ia-provider-sub" id="ia-groq-sub">—</div>
+              <div class="ia-meter"><div class="ia-meter-fill" id="ia-groq-meter"></div></div>
+              <div class="ia-metrics">
+                <div><div class="ia-metric-label">Gasto</div><div class="ia-metric-value" id="ia-groq-cost">—</div></div>
+                <div><div class="ia-metric-label">Chamadas</div><div class="ia-metric-value" id="ia-groq-calls">—</div></div>
+                <div><div class="ia-metric-label">Tokens</div><div class="ia-metric-value" id="ia-groq-tokens">—</div></div>
+              </div>
+            </div>
+
+            <div class="ia-provider" id="ia-gemini-card">
+              <div class="ia-provider-top">
+                <span class="ia-provider-name">Gemini</span>
+                <span class="status-pill pill-stopped" id="ia-gemini-status">Nao configurado</span>
+              </div>
+              <div class="ia-provider-value" id="ia-gemini-available">—</div>
+              <div class="ia-provider-sub" id="ia-gemini-sub">—</div>
+              <div class="ia-meter"><div class="ia-meter-fill" id="ia-gemini-meter"></div></div>
+              <div class="ia-metrics">
+                <div><div class="ia-metric-label">Gasto</div><div class="ia-metric-value" id="ia-gemini-cost">—</div></div>
+                <div><div class="ia-metric-label">Chamadas</div><div class="ia-metric-value" id="ia-gemini-calls">—</div></div>
+                <div><div class="ia-metric-label">Tokens</div><div class="ia-metric-value" id="ia-gemini-tokens">—</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ia-footer">
+            <span id="ia-pricing-note">—</span>
+            <span>Limites e auto refresh em Configurador > Configuracoes > Chaves de API.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vagas em Aberto -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span style="font-size:14px;font-weight:600;color:var(--text-hi)">💼 Vagas em Aberto</span>
+        <a href="/vagas.html" style="font-size:12px;color:var(--accent);text-decoration:none">Ver todas →</a>
+      </div>
+      <div id="dashboard-vagas-grid" class="vagas-grid-db"></div>
+
     </div>
   </div>
 </div>
@@ -85,6 +192,13 @@
     running: ['pill-connected', 'Rodando'],
   };
 
+  let iaAutoRefreshTimer = null;
+
+  const money = v => v === null || v === undefined
+    ? '—'
+    : Number(v).toLocaleString('en-US', { style:'currency', currency:'USD', minimumFractionDigits:2, maximumFractionDigits:4 });
+  const compact = v => Number(v || 0).toLocaleString('pt-BR');
+
   async function carregar() {
     const [stats, emailSvc] = await Promise.all([
       fetch('/api/stats').then(r => r.json()),
@@ -105,11 +219,117 @@
       `<span class="status-pill ${eCls}">${eLabel}</span>`;
   }
 
+  function renderIaProvider(provider, data, configured) {
+    const status = document.getElementById(`ia-${provider}-status`);
+    status.className = `status-pill ${configured ? 'pill-connected' : 'pill-stopped'}`;
+    status.textContent = configured ? 'Configurado' : 'Nao configurado';
+
+    const hasTokenLimit = Number(data.limit_tokens) > 0;
+    const hasMoneyLimit = Number(data.limit_usd) > 0;
+    document.getElementById(`ia-${provider}-available`).textContent = hasTokenLimit ? compact(data.available_tokens) : 'Sem limite';
+    document.getElementById(`ia-${provider}-sub`).textContent = hasTokenLimit
+      ? `tokens disponiveis de ${compact(data.limit_tokens)} no mes`
+      : 'Defina um limite mensal de tokens para ver saldo estimado';
+    document.getElementById(`ia-${provider}-cost`).textContent = money(data.estimated_cost_usd);
+    document.getElementById(`ia-${provider}-calls`).textContent = compact(data.calls);
+    document.getElementById(`ia-${provider}-tokens`).textContent = `${compact(data.total_tokens)} usados`;
+
+    const pct = hasTokenLimit
+      ? Math.min(100, (Number(data.total_tokens) / Number(data.limit_tokens)) * 100)
+      : hasMoneyLimit
+        ? Math.min(100, (Number(data.estimated_cost_usd) / Number(data.limit_usd)) * 100)
+        : 0;
+    document.getElementById(`ia-${provider}-meter`).style.width = `${pct}%`;
+  }
+
+  function configurarAutoRefresh(minutos) {
+    if (iaAutoRefreshTimer) clearInterval(iaAutoRefreshTimer);
+    const mins = Number(minutos) || 0;
+    if (mins > 0) {
+      iaAutoRefreshTimer = setInterval(carregarTudo, mins * 60 * 1000);
+    }
+  }
+
+  async function carregarIaDashboard() {
+    const btn = document.getElementById('ia-refresh-btn');
+    btn.classList.add('loading');
+    btn.textContent = '⟳ Atualizando';
+    try {
+      const data = await fetch('/api/ia/dashboard').then(r => r.json());
+      renderIaProvider('groq', data.providers.groq, data.configured.groq);
+      renderIaProvider('gemini', data.providers.gemini, data.configured.gemini);
+      document.getElementById('ia-pricing-note').textContent = data.pricing_note || '';
+      document.getElementById('ia-last-update').textContent =
+        `Atualizado em ${new Date(data.generated_at).toLocaleString('pt-BR')}`;
+      configurarAutoRefresh(data.auto_refresh_min);
+    } catch (err) {
+      document.getElementById('ia-last-update').textContent = 'Falha ao atualizar dados de IA.';
+    } finally {
+      btn.classList.remove('loading');
+      btn.textContent = '⟳ Atualizar';
+    }
+  }
+
+  async function carregarTudo() {
+    await Promise.all([carregar(), carregarIaDashboard()]);
+  }
+
   fetch('/api/me').then(r => r.json()).then(d => {
     document.getElementById('sidebar-user').textContent = d.user || 'Admin';
   });
 
-  carregar();
+  const NIVEIS_DB = {
+    'Júnior': 'nivel-junior', 'Pleno': 'nivel-pleno',
+    'Sênior': 'nivel-senior', 'Especialista': 'nivel-especialista',
+    'Não especificado': 'nivel-nao-especificado',
+  };
+
+  async function carregarVagas() {
+    const grid = document.getElementById('dashboard-vagas-grid');
+    try {
+      const vagas = await fetch('/api/vagas').then(r => r.json());
+      const abertas = vagas.filter(v => v.status === 'aberta');
+      if (!abertas.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-lo);font-style:italic">Nenhuma vaga em aberto no momento.</div>';
+        return;
+      }
+      grid.className = 'vagas-grid-db';
+      grid.innerHTML = abertas.map(v => {
+        const f = v.funcao || {};
+        const nivelCls = NIVEIS_DB[f.nivel_experiencia] || 'nivel-nao-especificado';
+        return `
+        <div class="vaga-card">
+          <div style="display:flex;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--text-lo);font-family:monospace">ID: <strong>${v.id}</strong></span>
+            <span style="font-size:11px;color:var(--text-lo);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(window._iahubEmpresa?.nome) || ''}</span>
+          </div>
+          <div class="vaga-funcao">${f.nome || '—'}</div>
+          <div class="vaga-meta">
+            ${f.area ? `<span>${f.area}</span>` : ''}
+            ${f.nivel_experiencia ? `&nbsp;·&nbsp;<span class="nivel-badge ${nivelCls}">${f.nivel_experiencia}</span>` : ''}
+          </div>
+          <div class="vaga-count">${v.quantidade}</div>
+          <div class="vaga-count-label">vaga${v.quantidade !== 1 ? 's' : ''} disponível${v.quantidade !== 1 ? 'eis' : ''}</div>
+          <div class="vaga-status">
+            <span class="dot dot-aberta"></span>
+            <span style="color:var(--text-md)">Aberta</span>
+          </div>
+          ${v.observacoes ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-lo);line-height:1.6">${v.observacoes}</div>` : ''}
+          <div class="vaga-actions">
+            <a href="/analisador.html?vaga_id=${v.id}" class="btn btn-info" style="font-size:12px;flex:1;text-align:center">🔍 Analisar</a>
+            <a href="/vagas.html" class="btn btn-ghost" style="font-size:12px">✏️ Editar</a>
+          </div>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      grid.innerHTML = '<div style="grid-column:1/-1;color:var(--error);font-size:13px">Falha ao carregar vagas.</div>';
+    }
+  }
+
+  document.getElementById('ia-refresh-btn').addEventListener('click', carregarTudo);
+
+  carregarTudo();
+  (async () => { await window._iahubAuthReady; carregarVagas(); })();
 </script>
 </body>
 </html>

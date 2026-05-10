@@ -21,18 +21,30 @@ function requireAdmin(req, res, next) {
 
 // Tabelas zeráveis e seus campos no JSON
 const TABELAS = {
-  curriculos:         { label: 'Currículos',            campos: ['curriculos', 'nextId', 'processedIds'],       defaults: { curriculos: [], nextId: 1, processedIds: [] } },
-  vaga_candidaturas:  { label: 'Candidaturas do PS',    campos: ['vaga_candidaturas', 'nextCandidaturaId'],     defaults: { vaga_candidaturas: [], nextCandidaturaId: 1 } },
-  vagas:              { label: 'Vagas',                 campos: ['vagas', 'nextVagaId'],                        defaults: { vagas: [], nextVagaId: 1 } },
-  funcoes:            { label: 'Funções',               campos: ['funcoes', 'nextFuncaoId'],                    defaults: { funcoes: [], nextFuncaoId: 1 } },
-  equivalencias:      { label: 'Equivalências',         campos: ['equivalencias'],                              defaults: { equivalencias: [] } },
+  curriculos:         { label: 'Currículos',                campos: ['curriculos', 'nextId', 'processedIds'],   defaults: { curriculos: [], nextId: 1, processedIds: [] } },
+  vaga_candidaturas:  { label: 'Candidaturas do PS',        campos: ['vaga_candidaturas', 'nextCandidaturaId'], defaults: { vaga_candidaturas: [], nextCandidaturaId: 1 } },
+  vagas:              { label: 'Vagas',                     campos: ['vagas', 'nextVagaId'],                    defaults: { vagas: [], nextVagaId: 1 } },
+  funcoes:            { label: 'Funções',                   campos: ['funcoes', 'nextFuncaoId'],                defaults: { funcoes: [], nextFuncaoId: 1 } },
+  equivalencias:      { label: 'Equivalências',             campos: ['equivalencias'],                          defaults: { equivalencias: [] } },
+  // SE Currículos
+  integracoes_se:     { label: 'SE Currículos — Histórico',  campos: ['integracoes_se'],                         defaults: { integracoes_se: [] } },
+  // SE API Configurador
+  se_api_templates:   { label: 'SE API — Templates',        campos: ['se_api_templates'],                      defaults: { se_api_templates: [] } },
+  se_api_configs:     { label: 'SE API — Configurações',    campos: ['se_api_configs'],                        defaults: { se_api_configs: [] } },
+  se_api_headers:     { label: 'SE API — Headers',          campos: ['se_api_headers'],                        defaults: { se_api_headers: [] } },
+  se_api_mappings:    { label: 'SE API — Mapeamentos',      campos: ['se_api_mappings'],                       defaults: { se_api_mappings: [] } },
+  se_api_flows:       { label: 'SE API — Fluxos',           campos: ['se_api_flows'],                          defaults: { se_api_flows: [] } },
+  se_api_flow_steps:  { label: 'SE API — Passos de Fluxo',  campos: ['se_api_flow_steps'],                     defaults: { se_api_flow_steps: [] } },
+  se_api_logs:        { label: 'SE API — Logs',             campos: ['se_api_logs', '_se_api_log_id'],         defaults: { se_api_logs: [], _se_api_log_id: 1 } },
 };
 
 // Cascade: zerar X força o zero de Y
 const CASCADE = {
-  funcoes:    ['vagas', 'vaga_candidaturas'],
-  vagas:      ['vaga_candidaturas'],
-  curriculos: ['vaga_candidaturas'],
+  funcoes:         ['vagas', 'vaga_candidaturas'],
+  vagas:           ['vaga_candidaturas'],
+  curriculos:      ['vaga_candidaturas'],
+  se_api_configs:  ['se_api_headers', 'se_api_mappings'],
+  se_api_flows:    ['se_api_flow_steps'],
 };
 
 function contagens(data) {
@@ -42,6 +54,14 @@ function contagens(data) {
     vagas:             (data.vagas             || []).length,
     funcoes:           (data.funcoes           || []).length,
     equivalencias:     (data.equivalencias     || []).length,
+    integracoes_se:    (data.integracoes_se    || []).length,
+    se_api_templates:  (data.se_api_templates  || []).length,
+    se_api_configs:    (data.se_api_configs    || []).length,
+    se_api_headers:    (data.se_api_headers    || []).length,
+    se_api_mappings:   (data.se_api_mappings   || []).length,
+    se_api_flows:      (data.se_api_flows      || []).length,
+    se_api_flow_steps: (data.se_api_flow_steps || []).length,
+    se_api_logs:       (data.se_api_logs       || []).length,
   };
 }
 

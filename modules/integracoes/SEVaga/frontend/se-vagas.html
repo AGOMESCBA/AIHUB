@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integrações SE — Vagas — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
+  <style>
+    .stats-row   { display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px; }
+    .stat-card   { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px; }
+    .stat-val    { font-size:26px;font-weight:800;line-height:1; }
+    .stat-lbl    { font-size:11.5px;color:var(--text-lo);margin-top:4px;text-transform:uppercase;letter-spacing:.04em; }
+    .filter-bar  { display:flex;align-items:center;gap:10px;margin-bottom:18px; }
+    .filter-bar .form-control { margin:0;height:36px;font-size:13px; }
+    .filter-bar select.form-control { min-width:150px; }
+    .cfg-info    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;gap:10px;font-size:13px; }
+    .cfg-info-lbl { color:var(--text-lo); }
+    .cfg-info-val { font-weight:600;color:var(--text-hi); }
+    .cfg-info a  { font-size:12px;color:var(--accent);margin-left:auto; }
+    .gp-wrap      { margin-bottom:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .tabulator { font-family:inherit;font-size:14px;border:none !important; }
+    .tabulator .tabulator-header { background:var(--bg-hover);border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-col { background:transparent;border-right:none !important; }
+    .tabulator .tabulator-col-title { font-size:11px;color:var(--text-lo);font-weight:600;text-transform:uppercase;letter-spacing:.04em; }
+    .tabulator-row { border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator-cell { border-right:none !important;padding:9px 12px;vertical-align:middle; }
+    .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
+    .badge-status   { display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap; }
+    .badge-sucesso  { background:#dcfce7;color:#15803d; }
+    .badge-erro     { background:#fee2e2;color:#b91c1c; }
+    .badge-revertido{ background:#fef9c3;color:#92400e; }
+    .badge-parcial  { background:#ffedd5;color:#c2410c; }
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:32px 16px;overflow-y:auto; }
+    .modal-box     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(780px,98vw);padding:28px;position:relative; }
+    .modal-box.wide { width:min(960px,98vw); }
+    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px;display:flex;justify-content:space-between;align-items:center; }
+    .detail-grid   { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .detail-item   { background:var(--bg-hover);border-radius:8px;padding:10px 14px; }
+    .detail-item-lbl { font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:4px; }
+    .detail-item-val { font-size:13px;color:var(--text-hi);font-weight:500;word-break:break-word; }
+    .detail-item.full { grid-column:1/-1; }
+    .detail-item.erro-box { background:#fef2f2;border:1px solid #fecaca; }
+    .detail-item.erro-box .detail-item-val { color:#b91c1c; }
+    .steps-section { margin-top:20px; }
+    .steps-section-title { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:10px; }
+    .steps-tbl { width:100%;border-collapse:collapse;font-size:13px; }
+    .steps-tbl th { background:var(--bg-hover);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-lo);font-weight:600;padding:7px 10px;text-align:left;border-bottom:1px solid var(--border); }
+    .steps-tbl td { padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle; }
+    .steps-tbl tr:last-child td { border-bottom:none; }
+    .steps-tbl tr:hover td { background:var(--bg-hover); }
+    .step-status-ok  { color:#15803d;font-weight:600; }
+    .step-status-err { color:#b91c1c;font-weight:600; }
+    .badge-http { display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:700;font-family:monospace; }
+    .badge-http.ok  { background:#dcfce7;color:#15803d; }
+    .badge-http.err { background:#fee2e2;color:#b91c1c; }
+    .badge-http.nul { background:#f1f5f9;color:#64748b; }
+    @media(max-width:640px) { .stats-row { grid-template-columns:1fr 1fr; } .detail-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Integrações ›</span> SE Vagas</span>
+    </div>
+
+    <div class="page-content">
+
+      <div class="cfg-info">
+        <span class="cfg-info-lbl">Flow ativo:</span>
+        <span class="cfg-info-val" id="cfg-flow-nome">Carregando...</span>
+        <a href="/se-integracoes-config.html?returnTab=vagas&configTab=vagas">⚙ Alterar configuração</a>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="s-total"   style="color:var(--accent)">—</div><div class="stat-lbl">Total de Envios</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-sucesso" style="color:var(--success)">—</div><div class="stat-lbl">Sucesso</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-erro"    style="color:var(--error)">—</div><div class="stat-lbl">Erros</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-taxa"    style="color:var(--accent-2)">—</div><div class="stat-lbl">Taxa de Sucesso</div></div>
+      </div>
+
+      <div class="filter-bar">
+        <select id="f-status" class="form-control" onchange="aplicarFiltros()">
+          <option value="">Todos os status</option>
+          <option value="sucesso">Sucesso</option>
+          <option value="parcial">Parcial</option>
+          <option value="erro">Erro</option>
+          <option value="revertido">Revertido</option>
+        </select>
+        <select id="f-funcao" class="form-control" onchange="aplicarFiltros()" style="max-width:300px">
+          <option value="">Todas as funções</option>
+        </select>
+        <button class="btn btn-primary" style="font-size:12px;height:36px;margin-left:auto" onclick="carregar()">↻ Atualizar</button>
+      </div>
+
+      <div class="gp-wrap">
+        <div class="gp-chips-row" id="gp-chips-row">
+          <span class="gp-label">Agrupar por:</span>
+        </div>
+        <div id="dz"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-body" style="padding:0">
+          <div style="display:flex;align-items:center;padding:10px 16px">
+            <span id="count" class="text-muted text-sm"></span>
+          </div>
+          <div style="overflow-x:auto"><div id="tabela"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalhe -->
+<div id="modal" class="modal-overlay d-none" onclick="if(event.target===this)fecharModal()">
+  <div class="modal-box wide">
+    <div class="modal-title">
+      <span id="modal-titulo">Detalhes da Integração</span>
+      <button onclick="fecharModal()" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0">✕</button>
+    </div>
+    <div id="modal-body"></div>
+    <div style="margin-top:20px;display:flex;justify-content:flex-end;gap:10px" id="modal-actions"></div>
+  </div>
+</div>
+
+<!-- Modal conteúdo -->
+<div id="modal-conteudo" class="modal-overlay d-none" style="z-index:400" onclick="if(event.target===this)fecharModalConteudo()">
+  <div class="modal-box" style="width:min(860px,98vw)">
+    <div class="modal-title">
+      <span id="mc-titulo">Conteúdo</span>
+      <button onclick="fecharModalConteudo()" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0">✕</button>
+    </div>
+    <pre id="mc-content" style="background:var(--bg-main);border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11.5px;font-family:monospace;line-height:1.6;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-all;color:var(--text-md);margin:0"></pre>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="fecharModalConteudo()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/audit-fields.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script>
+let todos      = [];
+let funcoes    = [];
+let table      = null;
+let _modalLog  = null;
+const _logsMap   = {};
+const _stepCache = {};
+
+const gp = createGroupPanel({
+  chipsRowId: 'gp-chips-row',
+  dropZoneId: 'dz',
+  storageKey: 'se_vagas_group_fields',
+  getTable  : () => table,
+});
+
+window._acaoReenviar = seq => reenviar(_logsMap[seq]);
+window._acaoReverter = seq => reverter(_logsMap[seq]);
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function statusBadge(l, big) {
+  const sz = big ? 'font-size:13px' : '';
+  if (l.status === 'sucesso')   return `<span class="badge-status badge-sucesso"  style="${sz}">✓ Sucesso</span>`;
+  if (l.status === 'parcial')   return `<span class="badge-status badge-parcial"  style="${sz}">⚠ Parcial</span>`;
+  if (l.status === 'erro')      return `<span class="badge-status badge-erro"     style="${sz}">✗ Erro</span>`;
+  if (l.status === 'revertido') return `<span class="badge-status badge-revertido"style="${sz}">↩ Revertido</span>`;
+  return `<span class="badge-status" style="${sz}">—</span>`;
+}
+
+const STATUS_VAGA = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' };
+
+function initTabulator(data) {
+  table = new Tabulator('#tabela', {
+    data,
+    index: '_seq',
+    layout: 'fitDataFill',
+    movableColumns: true,
+    columnDefaults: { resizable: true, headerSort: true },
+    groupBy: gp.getActiveFields(),
+    groupStartOpen: true,
+    columns: [
+      {
+        title: 'Vaga / Função', field: 'vaga_funcao_nome', minWidth: 220,
+        headerFilter: true,
+        formatter: c => {
+          const l = c.getRow().getData();
+          const statusDot = { aberta:'#16a34a', pausada:'#d97706', encerrada:'#dc2626' }[l.vaga_status] || 'var(--text-lo)';
+          return `<div style="font-weight:600;color:var(--text-hi)">${esc(l.vaga_funcao_nome || '—')}</div>
+                  <div style="font-size:11.5px;color:var(--text-lo)">Vaga #${l.vaga_id}
+                    ${l.vaga_status ? `<span style="color:${statusDot};margin-left:4px">● ${STATUS_VAGA[l.vaga_status]||l.vaga_status}</span>` : ''}
+                  </div>`;
+        }
+      },
+      {
+        title: 'Flow', field: 'flow_nome', minWidth: 180,
+        formatter: c => {
+          const l = c.getRow().getData();
+          return l.flow_nome
+            ? `<span style="font-size:12px;color:#6d28d9;font-weight:600">⚡ ${esc(l.flow_nome)}</span>`
+            : `<span style="font-size:12px;color:var(--text-lo)">—</span>`;
+        }
+      },
+      {
+        title: 'Data', field: 'data_envio', width: 130, minWidth: 120,
+        sorter: 'datetime', sorterParams: { format: 'iso' },
+        formatter: c => {
+          const dt = new Date(c.getValue());
+          return `<div style="font-size:12px;white-space:nowrap">${dt.toLocaleDateString('pt-BR')}</div>
+                  <div style="font-size:11px;color:var(--text-lo)">${dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</div>`;
+        }
+      },
+      {
+        title: 'Status', field: 'status', width: 160,
+        formatter: c => statusBadge(c.getRow().getData())
+      },
+      {
+        title: 'Detalhes', field: 'erro_mensagem', minWidth: 200,
+        headerFilter: true, groupable: false,
+        formatter: c => {
+          const l = c.getRow().getData();
+          if (l.status === 'erro')
+            return `<span style="font-size:12px;color:#b91c1c">${esc((l.erro_mensagem||'').slice(0,90))}${(l.erro_mensagem||'').length>90?'…':''}</span>`;
+          if (l.status === 'parcial')
+            return `<span style="font-size:12px;color:#c2410c">Flow parcial — clique para ver steps</span>`;
+          if (l.status === 'revertido')
+            return `<span style="font-size:12px;color:#92400e">Revertido — disponível para reintegrar</span>`;
+          return `<span style="font-size:12px;color:#15803d">Flow executado com sucesso</span>`;
+        }
+      },
+      {
+        title: 'Ações', field: '_seq',
+        headerFilter: false, headerSort: false, width: 200, minWidth: 200, groupable: false,
+        formatter: c => {
+          const l = c.getRow().getData();
+          const seq = l._seq;
+          let btns = '';
+          if (l.status === 'erro' || l.status === 'revertido' || l.status === 'parcial')
+            btns += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 7px" onclick="event.stopPropagation();_acaoReenviar(${seq})">↺ Reenviar</button>`;
+          if (l.status === 'sucesso')
+            btns += `<button class="btn btn-ghost" style="font-size:11px;padding:3px 7px;color:#92400e" onclick="event.stopPropagation();_acaoReverter(${seq})">⇄ Reverter</button>`;
+          return `<div style="display:flex;gap:3px;flex-wrap:wrap">${btns}</div>`;
+        }
+      }
+    ],
+    dataFiltered: fd => {
+      const t = fd.length;
+      document.getElementById('count').textContent =
+        t === todos.length ? `${t} registro${t!==1?'s':''}` : `${t} de ${todos.length} registro${todos.length!==1?'s':''}`;
+    },
+  });
+}
+
+async function carregar() {
+  const data = await fetch('/api/integracoes/se-vaga/logs?limit=99999').then(r => r.json());
+  todos = (data.logs || []).map(l => { _logsMap[l._seq] = l; return l; });
+
+  atualizarStats(todos);
+  if (!table) {
+    initTabulator(todos);
+    table.on('rowClick', (_e, row) => verDetalhes(row.getData()));
+    setTimeout(() => gp.refresh(), 0);
+  } else {
+    await table.replaceData(todos);
+  }
+  document.getElementById('count').textContent = `${todos.length} registro${todos.length!==1?'s':''}`;
+  aplicarFiltros();
+}
+
+async function carregarFuncoes() {
+  const select = document.getElementById('f-funcao');
+  try {
+    funcoes = await fetch('/api/funcoes').then(r => r.json());
+    const selecionada = select.value;
+    select.innerHTML = '<option value="">Todas as funções</option>';
+    funcoes
+      .slice()
+      .sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'))
+      .forEach(f => {
+        if (!f.nome) return;
+        const option = document.createElement('option');
+        option.value = f.nome;
+        option.textContent = f.nome;
+        select.appendChild(option);
+      });
+    select.value = selecionada;
+  } catch {
+    select.innerHTML = '<option value="">Erro ao carregar funções</option>';
+  }
+}
+
+async function carregarConfig() {
+  try {
+    const cfg   = await fetch('/api/integracoes/se-vaga/config').then(r => r.json());
+    const flows = await fetch('/api/integracoes/se-vaga/flows').then(r => r.json());
+    const flow  = flows.find(f => f.id === cfg.se_api_flow_id);
+    const el    = document.getElementById('cfg-flow-nome');
+    if (flow) {
+      el.textContent = `⚡ ${flow.nome} (${flow.steps_count} step${flow.steps_count!==1?'s':''})`;
+      el.style.color = '#6d28d9';
+    } else {
+      el.textContent = 'Não configurado — clique em "Alterar configuração"';
+      el.style.color = 'var(--error)';
+    }
+  } catch { document.getElementById('cfg-flow-nome').textContent = 'Erro ao carregar'; }
+}
+
+function atualizarStats(logs) {
+  const total   = logs.length;
+  const sucesso = logs.filter(l => l.status === 'sucesso').length;
+  const erro    = logs.filter(l => l.status === 'erro' || l.status === 'parcial').length;
+  const taxa    = (sucesso + erro) > 0 ? Math.round((sucesso / (sucesso + erro)) * 100) : 0;
+  document.getElementById('s-total').textContent   = total;
+  document.getElementById('s-sucesso').textContent = sucesso;
+  document.getElementById('s-erro').textContent    = erro;
+  document.getElementById('s-taxa').textContent    = `${taxa}%`;
+}
+
+let _panelFilterFn = null;
+
+function aplicarFiltros() {
+  if (!table) return;
+  const status = document.getElementById('f-status').value;
+  const funcao = document.getElementById('f-funcao').value.toLowerCase();
+  if (_panelFilterFn) { table.removeFilter(_panelFilterFn); _panelFilterFn = null; }
+  if (status || funcao) {
+    _panelFilterFn = rowData => {
+      if (status && rowData.status !== status) return false;
+      if (funcao && (rowData.vaga_funcao_nome || '').toLowerCase() !== funcao) return false;
+      return true;
+    };
+    table.addFilter(_panelFilterFn);
+  }
+}
+
+function verDetalhes(l) {
+  if (!l) return;
+  _modalLog = l;
+  document.getElementById('modal-titulo').textContent = `Integração — Vaga #${l.vaga_id} (${l.vaga_funcao_nome || '—'})`;
+  const dt = new Date(l.data_envio);
+  document.getElementById('modal-body').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-item-lbl">Função da Vaga</div>
+        <div class="detail-item-val">${esc(l.vaga_funcao_nome || '—')}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-item-lbl">Status</div>
+        <div class="detail-item-val">${statusBadge(l, true)}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-item-lbl">ID da Vaga</div>
+        <div class="detail-item-val" style="font-family:monospace">#${l.vaga_id}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-item-lbl">Status da Vaga</div>
+        <div class="detail-item-val">${esc(STATUS_VAGA[l.vaga_status] || l.vaga_status || '—')}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-item-lbl">Flow usado</div>
+        <div class="detail-item-val"><span style="color:#6d28d9;font-weight:600">⚡ ${esc(l.flow_nome || '—')}</span></div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-item-lbl">Data / Hora</div>
+        <div class="detail-item-val">${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR')}</div>
+      </div>
+      ${l.erro_mensagem ? `<div class="detail-item full erro-box">
+        <div class="detail-item-lbl">Mensagem de Erro</div>
+        <div class="detail-item-val">${esc(l.erro_mensagem)}</div>
+      </div>` : ''}
+    </div>
+    <div class="steps-section">
+      <div class="steps-section-title">Steps do Flow</div>
+      <div id="steps-container"><div style="text-align:center;padding:20px;color:var(--text-lo);font-size:13px">Carregando steps...</div></div>
+    </div>`;
+
+  carregarSteps(l);
+
+  const actions = document.getElementById('modal-actions');
+  let btns = `<button class="btn btn-ghost" onclick="fecharModal()">Fechar</button>`;
+  if (l.status === 'erro' || l.status === 'revertido' || l.status === 'parcial')
+    btns += `<button class="btn btn-primary" onclick="fecharModal();reenviar(_modalLog)">↺ Re-executar Flow</button>`;
+  if (l.status === 'sucesso')
+    btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="fecharModal();reverter(_modalLog)">⇄ Reverter</button>`;
+  actions.innerHTML = btns;
+
+  document.getElementById('modal').classList.remove('d-none');
+}
+
+async function carregarSteps(l) {
+  const container = document.getElementById('steps-container');
+  if (!container || !l._seq) { if(container) container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-lo)">Referência não disponível.</div>'; return; }
+  try {
+    const steps = await fetch(`/api/integracoes/se-vaga/logs/${l._seq}/steps`).then(r => r.json());
+    if (!steps.length) { container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-lo);font-size:13px">Nenhum step registrado.</div>'; return; }
+    steps.forEach(s => { _stepCache[s.id] = s; });
+    const rows = steps.map(s => {
+      const stEl = s.status === 'sucesso' ? `<span class="step-status-ok">✓ Sucesso</span>` : `<span class="step-status-err">✗ Erro</span>`;
+      const http = s.status_code ? `<span class="badge-http ${s.status_code>=200&&s.status_code<300?'ok':'err'}">${s.status_code}</span>` : '<span class="badge-http nul">—</span>';
+      let acoes  = '';
+      if (s.xml_enviado) acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:2px 6px;color:#6366f1" onclick="verConteudo(${s.id},'xml')">📋 XML</button>`;
+      if (s.resposta)    acoes += `<button class="btn btn-ghost" style="font-size:11px;padding:2px 6px;color:#0891b2" onclick="verConteudo(${s.id},'resp')">📋 Resp</button>`;
+      if (s.erro)        acoes += `<span style="font-size:11px;color:#b91c1c;display:block;margin-top:2px">${esc(s.erro.slice(0,80))}</span>`;
+      return `<tr>
+        <td style="color:var(--text-lo);font-family:monospace">${s.step_ordem||'—'}</td>
+        <td style="font-weight:500">${esc(s.config_nome||`Config ${s.config_id}`)}</td>
+        <td>${stEl}</td><td>${http}</td>
+        <td style="font-family:monospace;font-size:12px">${s.duracao_ms!=null?s.duracao_ms+'ms':'—'}</td>
+        <td><div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">${acoes}</div></td>
+      </tr>`;
+    }).join('');
+    container.innerHTML = `<table class="steps-tbl"><thead><tr><th>#</th><th>Config</th><th>Status</th><th>HTTP</th><th>Duração</th><th>Ações</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch { container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--error);font-size:13px">Erro ao carregar steps.</div>'; }
+}
+
+function verConteudo(stepId, tipo) {
+  const s = _stepCache[stepId];
+  if (!s) return;
+  document.getElementById('mc-titulo').textContent  = tipo === 'xml' ? `XML — ${s.config_nome||''}` : `Resposta — ${s.config_nome||''}`;
+  document.getElementById('mc-content').textContent = (tipo === 'xml' ? s.xml_enviado : s.resposta) || '(vazio)';
+  document.getElementById('modal-conteudo').classList.remove('d-none');
+}
+
+function fecharModal()         { document.getElementById('modal').classList.add('d-none'); }
+function fecharModalConteudo() { document.getElementById('modal-conteudo').classList.add('d-none'); }
+
+async function reenviar(log) {
+  if (!log) return;
+  if (!confirm(`Re-executar o flow para a Vaga #${log.vaga_id} (${log.vaga_funcao_nome})?`)) return;
+  try {
+    const r = await fetch('/api/integracoes/se-vaga/reenviar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vaga_id: log.vaga_id }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro');
+    alert(`✓ Flow re-executado para Vaga #${log.vaga_id}. Status: ${data.status}`);
+    carregar();
+  } catch (err) { alert(`✗ Erro: ${err.message}`); }
+}
+
+async function reverter(log) {
+  if (!log) return;
+  if (!confirm(`Reverter status da Vaga #${log.vaga_id} para "Revertido"?`)) return;
+  try {
+    const r = await fetch('/api/integracoes/se-vaga/resetar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seq: log._seq }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Erro');
+    alert(`⇄ Status da Vaga #${log.vaga_id} alterado para Revertido.`);
+    carregar();
+  } catch (err) { alert(`✗ Erro: ${err.message}`); }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharModal(); fecharModalConteudo(); } });
+
+(async () => {
+  await window._iahubAuthReady;
+  await carregarConfig();
+  await carregarFuncoes();
+  await carregar();
+})();
+</script>
+</body>
+</html>

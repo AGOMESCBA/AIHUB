@@ -1,5 +1,7 @@
 node_modules/
 .env
+data/
+logs/
 data.json
 whatscurriculo.log
 whatscurriculo_*.log
@@ -13,3 +15,9 @@ data/empresa_*.json
 data/empresas.json
 data/auditoria.log
 .claude/settings.local.json
+.claude/.gitignore
+.claude/*.md
+.claude/.claude-plugin/
+.claude/skills/
+.claude/spec/
+.claude/template/

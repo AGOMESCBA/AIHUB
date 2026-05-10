@@ -5,23 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Currículos — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
   <style>
-    #search { max-width: 260px; }
+    /* ── Group panel row ─────────────────────────────────────── */
+    .gp-wrap        { margin-bottom: 10px; }
+    .gp-chips-row   {
+      display: flex; align-items: center;
+      gap: 6px; flex-wrap: wrap; margin-bottom: 6px;
+      position: relative;
+    }
+    .gp-label { font-size: 11px; color: var(--text-lo); white-space: nowrap; }
+
+    /* ── Tabulator skin ──────────────────────────────────────── */
+    .tabulator { font-family: inherit; font-size: 14px; border: none !important; }
+    .tabulator .tabulator-header {
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border) !important;
+    }
+    .tabulator .tabulator-col { background: transparent; border-right: none !important; }
+    .tabulator .tabulator-col-title {
+      font-size: 11px; color: var(--text-lo);
+      font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    }
+    .tabulator-row  { border-bottom: 1px solid var(--border) !important; cursor: pointer; }
+    .tabulator-row:hover { background: var(--bg-hover) !important; }
+    .tabulator-cell { border-right: none !important; padding: 10px 12px; }
+    .tabulator-header-filter input,
+    .tabulator-header-filter select {
+      width: 100%; font-size: 11px;
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 6px; background: #fff; color: var(--text); margin-top: 4px;
+    }
+    .tabulator-group {
+      background: var(--bg-hover) !important;
+      border-bottom: 1px solid var(--border) !important;
+      font-weight: 600; font-size: 13px; padding: 8px 14px !important;
+    }
   </style>
 </head>
 <body>
 <div class="layout">
 
-      <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
       <div class="logo-icon">IA</div>
       <span class="logo-text">IAHub</span>
     </div>
-    <div class="sidebar-nav">
-    </div>
-    <div class="sidebar-footer">
-    </div>
-    </nav>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
 
   <div class="main">
     <div class="topbar">
@@ -30,33 +62,21 @@
 
     <div class="page-content">
 
-      <div class="d-flex gap-3 mb-3" style="align-items:center">
-        <span id="count" class="text-muted text-sm"></span>
-        <div class="ms-auto">
-          <input id="search" type="text" class="form-control" placeholder="🔍  Buscar nome ou e-mail…" oninput="filtrar()" style="max-width:260px">
+      <!-- Group panel -->
+      <div class="gp-wrap">
+        <div class="gp-chips-row" id="gp-chips-row">
+          <span class="gp-label">Agrupar por:</span>
         </div>
+        <div id="dz"></div>
       </div>
 
+      <!-- Grade -->
       <div class="card">
         <div class="card-body" style="padding:0">
-          <div class="table-wrap">
-            <table id="tabela">
-              <thead>
-                <tr>
-                  <th style="color:var(--text-lo);font-size:11px">ID Reg.</th>
-                  <th style="color:var(--text-lo);font-size:11px">ID Emp.</th>
-                  <th style="color:var(--text-lo);font-size:11px">Empresa</th>
-                  <th>Nome</th>
-                  <th>Telefone</th>
-                  <th>E-mail</th>
-                  <th>Remetente</th>
-                  <th>Recebido em</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="tbody"></tbody>
-            </table>
+          <div style="display:flex;align-items:center;padding:10px 16px">
+            <span id="count" class="text-muted text-sm"></span>
           </div>
+          <div id="tabela"></div>
           <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
             📭 Nenhum currículo recebido ainda.<br>
             <span style="font-size:12px">Inicie o serviço no Monitor e aguarde o primeiro PDF.</span>
@@ -71,63 +91,140 @@
 <script src="/js/audit-fields.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
-  let todos = [];
+let todos = [];
+let table = null;
 
-  function render(lista) {
-    const tbody = document.getElementById('tbody');
-    tbody.innerHTML = '';
-    document.getElementById('empty').classList.toggle('d-none', lista.length > 0);
-    document.getElementById('tabela').style.display = lista.length ? '' : 'none';
+const gp = createGroupPanel({
+  chipsRowId: 'gp-chips-row',
+  dropZoneId: 'dz',
+  storageKey: 'curriculos_group_fields',
+  getTable  : () => table,
+});
 
-    lista.forEach(c => {
-      const tr = document.createElement('tr');
-      tr.onclick = () => location.href = `/curriculo.html?id=${c.id}`;
-      tr.innerHTML = `
-        ${auditTdHtml(c)}
-        <td><strong>${c.nome||'—'}</strong></td>
-        <td style="color:var(--text-md)">${c.telefone||'—'}</td>
-        <td style="color:var(--text-md)">${c.email||'—'}</td>
-        <td><span class="badge badge-blue">${c.remetente}</span></td>
-        <td style="color:var(--text-lo);font-size:12px">${new Date(c.recebido_em).toLocaleString('pt-BR')}</td>
-        <td style="white-space:nowrap">
-          <a href="/curriculo.html?id=${c.id}" class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="event.stopPropagation()">Ver</a>
-          <button class="btn btn-danger" style="font-size:12px;padding:4px 10px;margin-left:4px" onclick="event.stopPropagation();apagar(${c.id}, this)">Apagar</button>
-        </td>`;
-      tbody.appendChild(tr);
-    });
+// ── Tabulator ─────────────────────────────────────────────────
+function initTabulator(data) {
+  table = new Tabulator('#tabela', {
+    data,
+    index: 'id',
+    layout: 'fitColumns',
+    movableColumns: true,
+    columnDefaults: { resizable: true, headerSort: true },
+    groupBy: gp.getActiveFields(),
+    groupStartOpen: true,
+    columns: [
+      {
+        title: 'ID Reg.', field: 'id', width: 85,
+        headerFilter: true, groupable: false, hozAlign: 'center', headerHozAlign: 'center',
+        formatter: c => `<span style="font-size:11px;font-family:monospace;color:var(--text-lo)">${c.getValue()}</span>`
+      },
+      {
+        title: 'ID Emp.', field: 'empresa_id', width: 85,
+        headerFilter: true, groupable: false, hozAlign: 'center', headerHozAlign: 'center',
+        formatter: c => `<span style="font-size:11px;font-family:monospace;color:var(--text-lo)">${c.getValue()||'—'}</span>`
+      },
+      {
+        title: 'Empresa', field: 'empresa_nome',
+        headerFilter: true,
+        formatter: c => `<span style="font-size:11px;color:var(--text-lo)">${c.getValue()||'—'}</span>`
+      },
+      {
+        title: 'Nome', field: 'nome',
+        headerFilter: true,
+        formatter: c => `<strong>${c.getValue()||'—'}</strong>`
+      },
+      {
+        title: 'Telefone', field: 'telefone', width: 140,
+        headerFilter: true,
+        formatter: c => `<span style="color:var(--text-md)">${c.getValue()||'—'}</span>`
+      },
+      {
+        title: 'E-mail', field: 'email',
+        headerFilter: true,
+        formatter: c => `<span style="color:var(--text-md)">${c.getValue()||'—'}</span>`
+      },
+      {
+        title: 'Remetente', field: 'remetente', width: 140,
+        headerFilter: true,
+        formatter: c => `<span class="badge badge-blue">${c.getValue()||'—'}</span>`
+      },
+      {
+        title: 'Recebido em', field: 'recebido_em', width: 155,
+        headerFilter: true,
+        sorter: 'datetime', sorterParams: { format: 'iso' },
+        formatter: c => {
+          const v = c.getValue();
+          return v ? `<span style="color:var(--text-lo);font-size:12px">${new Date(v).toLocaleString('pt-BR')}</span>` : '—';
+        }
+      },
+      {
+        title: 'Recebido (dia)', field: 'recebido_dia', visible: false,
+      },
+      {
+        title: '', field: 'id',
+        headerFilter: false, headerSort: false, width: 145, groupable: false,
+        formatter: c => {
+          const id = c.getValue();
+          return `
+            <a href="/curriculo.html?id=${id}" class="btn btn-ghost"
+               style="font-size:12px;padding:4px 10px"
+               onclick="event.stopPropagation()">Ver</a>
+            <button class="btn btn-danger"
+               style="font-size:12px;padding:4px 10px;margin-left:4px"
+               onclick="event.stopPropagation();_apagar(${id},this)">Apagar</button>`;
+        }
+      }
+    ],
+    rowClick: (_e, row) => { location.href = `/curriculo.html?id=${row.getData().id}`; }
+  });
+}
+
+// ── CRUD ──────────────────────────────────────────────────────
+window._apagar = async function(id, btn) {
+  if (!confirm('Apagar este currículo permanentemente?')) return;
+  btn.disabled    = true;
+  btn.textContent = '…';
+  const r = await fetch(`/api/curriculos/${id}`, { method: 'DELETE' });
+  if (r.ok) {
+    todos = todos.filter(c => c.id !== id);
+    document.getElementById('count').textContent =
+      `${todos.length} currículo${todos.length !== 1 ? 's' : ''}`;
+    table?.deleteRow(id);
+  } else {
+    btn.disabled    = false;
+    btn.textContent = 'Apagar';
+    alert('Erro ao apagar. Tente novamente.');
   }
+};
 
-  function filtrar() {
-    const q = document.getElementById('search').value.toLowerCase();
-    render(todos.filter(c =>
-      (c.nome||'').toLowerCase().includes(q) || (c.email||'').toLowerCase().includes(q)));
+// ── Carregamento ──────────────────────────────────────────────
+async function carregar() {
+  await window._iahubAuthReady;
+  const empNome = window._iahubEmpresa?.nome || '—';
+
+  todos = await fetch('/api/curriculos').then(r => r.json());
+  todos = todos.map(c => ({
+    ...c,
+    empresa_nome: empNome,
+    recebido_dia: c.recebido_em
+      ? new Date(c.recebido_em).toLocaleDateString('pt-BR')
+      : '—',
+  }));
+
+  document.getElementById('count').textContent =
+    `${todos.length} currículo${todos.length !== 1 ? 's' : ''}`;
+
+  if (todos.length === 0) {
+    document.getElementById('empty').classList.remove('d-none');
+  } else {
+    initTabulator(todos);
+    setTimeout(() => gp.refresh(), 0);
   }
+}
 
-  async function apagar(id, btn) {
-    if (!confirm('Apagar este currículo permanentemente?')) return;
-    btn.disabled = true;
-    btn.textContent = '…';
-    const r = await fetch(`/api/curriculos/${id}`, { method: 'DELETE' });
-    if (r.ok) {
-      todos = todos.filter(c => c.id !== id);
-      document.getElementById('count').textContent = `${todos.length} currículo${todos.length!==1?'s':''}`;
-      filtrar();
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Apagar';
-      alert('Erro ao apagar. Tente novamente.');
-    }
-  }
-
-  async function carregar() {
-    await window._iahubAuthReady;
-    todos = await fetch('/api/curriculos').then(r => r.json());
-    document.getElementById('count').textContent = `${todos.length} currículo${todos.length!==1?'s':''}`;
-    render(todos);
-  }
-
-  carregar();
+carregar();
 </script>
 </body>
 </html>

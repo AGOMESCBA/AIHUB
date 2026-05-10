@@ -2,8 +2,9 @@ const fs   = require('fs');
 const path = require('path');
 
 const DATA_DIR  = path.join(__dirname, '..', '..', 'data');
+const LOG_DIR   = path.join(__dirname, '..', '..', 'logs');
 const ARQUIVO   = path.join(DATA_DIR, 'seguranca.json');
-const AUDIT_LOG = path.join(DATA_DIR, 'auditoria.log');
+const AUDIT_LOG = path.join(LOG_DIR, 'auditoria.log');
 
 // Valores padrão — usados quando seguranca.json ainda não existe
 const DEFAULTS = {

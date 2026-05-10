@@ -154,8 +154,8 @@
             <select id="filtro-nivel" class="form-control" style="max-width:200px" onchange="filtrarResultados()">
               <option value="">Filtrar por compatibilidade</option>
               <option value="Alto">✓ Alta (70–100 pts)</option>
-              <option value="Médio">~ Média (40–69 pts)</option>
-              <option value="Baixo">● Baixa (0–39 pts)</option>
+              <option value="Médio">~ Média (50–69 pts)</option>
+              <option value="Baixo">● Baixa (abaixo do corte)</option>
             </select>
             <div id="filtro-curriculos-box" style="display:none;padding:6px 12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border)">
               <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:5px;font-size:12px;white-space:nowrap">
@@ -206,122 +206,115 @@
     <!-- Aba: Como funciona -->
     <div id="tab-como-funciona" class="ajuda-tab-content active">
       <div class="ajuda-etapa">
-        <div class="ajuda-etapa-titulo">⚡ Etapa 1 — Triagem automática</div>
-        <p>Antes de qualquer análise detalhada, o sistema calcula uma <strong style="color:var(--text-hi)">nota de triagem de 0 a 10</strong> combinando Requisitos Obrigatórios e Desejáveis. Candidatos com nota ≥ 5 passam para a análise da IA.</p>
-        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;margin-bottom:4px">
-          <thead>
-            <tr style="background:var(--bg-hover)">
-              <th style="text-align:left;padding:8px 12px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Critério</th>
-              <th style="text-align:center;padding:8px 12px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Peso</th>
-              <th style="text-align:left;padding:8px 12px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Fórmula</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:8px 12px;color:var(--text-md)"><strong>Requisitos Obrigatórios</strong></td>
-              <td style="padding:8px 12px;text-align:center;color:var(--text-hi);font-weight:600">7 pts</td>
-              <td style="padding:8px 12px;color:var(--text-md)">atendidos ÷ total × 7</td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:8px 12px;color:var(--text-md)"><strong>Requisitos Desejáveis</strong></td>
-              <td style="padding:8px 12px;text-align:center;color:var(--text-hi);font-weight:600">3 pts</td>
-              <td style="padding:8px 12px;color:var(--text-md)">atendidos ÷ total × 3</td>
-            </tr>
-            <tr style="background:var(--bg-hover)">
-              <td colspan="2" style="padding:8px 12px;color:var(--text-hi);font-weight:600">Nota mínima para aprovação</td>
-              <td style="padding:8px 12px;color:#15803d;font-weight:700;font-size:14px">≥ 5,0</td>
-            </tr>
-          </tbody>
-        </table>
-        <p style="font-size:12.5px;color:var(--text-md);margin-top:12px;margin-bottom:6px"><strong>Exemplos — 4 obrigatórios e 4 desejáveis:</strong></p>
-        <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:8px">
-          <thead>
-            <tr style="background:var(--bg-hover)">
-              <th style="text-align:center;padding:6px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Obrigatórios</th>
-              <th style="text-align:center;padding:6px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Desejáveis</th>
-              <th style="text-align:center;padding:6px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Nota</th>
-              <th style="text-align:center;padding:6px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Resultado</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">4/4 (100%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">0/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">7,0</td>
-              <td style="padding:6px 10px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado</td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">3/4 (75%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">2/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">6,75</td>
-              <td style="padding:6px 10px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado</td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">2/4 (50%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">4/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">6,5</td>
-              <td style="padding:6px 10px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado</td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">2/4 (50%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">2/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">5,0</td>
-              <td style="padding:6px 10px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado <span style="font-weight:400;font-size:11px">(exato)</span></td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">2/4 (50%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">1/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">4,25</td>
-              <td style="padding:6px 10px;text-align:center;color:#b91c1c;font-weight:600">❌ Eliminado</td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">1/4 (25%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">4/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">4,75</td>
-              <td style="padding:6px 10px;text-align:center;color:#b91c1c;font-weight:600">❌ Eliminado</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">0/4 (0%)</td>
-              <td style="padding:6px 10px;text-align:center;color:var(--text-md)">4/4</td>
-              <td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--text-hi)">3,0</td>
-              <td style="padding:6px 10px;text-align:center;color:#b91c1c;font-weight:600">❌ Eliminado</td>
-            </tr>
-          </tbody>
-        </table>
-        <p style="font-size:12px;color:var(--text-lo);line-height:1.6">Quando a função não tem desejáveis cadastrados, os 3 pontos são ignorados e o mínimo equivale a ≈ 72% dos obrigatórios.</p>
+        <div class="ajuda-etapa-titulo">📊 Etapa 1 — Pontuação por critérios (máx. 100 pts)</div>
+        <p>Todos os currículos são analisados individualmente pela IA usando quatro critérios. A pontuação de cada critério é <strong style="color:var(--text-hi)">proporcional ao que o candidato atende</strong> — não existe penalidade por ausência: o candidato simplesmente não ganha os pontos que não atingiu.</p>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-obrig">50 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Requisitos Obrigatórios</strong>
+            <p>Critérios essenciais da função. Pontuação proporcional: (atendidos ÷ total) × peso configurado. Não atender nenhum = 0 pts, sem penalidade adicional.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-desej">30 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Requisitos Desejáveis</strong>
+            <p>Diferenciais valorizados, porém não obrigatórios. Pontuação proporcional ao que o candidato apresenta. Não atender nenhum = 0 pts, sem penalidade.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-form">10 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Formação Acadêmica</strong>
+            <p>Grau de instrução e área de formação comparados ao definido na Função. Atende ou supera = pontuação máxima; próxima da área = parcial; não atende = 0 pts.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-hab">10 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Habilidades Técnicas</strong>
+            <p>Ferramentas e tecnologias listadas na função. Considera equivalências (ex: "SoftExpert" = "SE Suite"). Pontuação proporcional ao domínio demonstrado.</p>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-lo);margin-top:10px;line-height:1.6">Os pesos de cada critério e a pontuação mínima de aprovação são configuráveis em <a href="/config-analisador.html" style="color:var(--accent)">Configurações → Pesos de Pontuação</a>.</p>
       </div>
 
       <div class="ajuda-etapa">
-        <div class="ajuda-etapa-titulo">📊 Etapa 2 — Pontuação por critérios (máx. 100 pts)</div>
-        <p>Os candidatos que passaram da triagem são analisados individualmente pela IA:</p>
-        <div class="ajuda-criterio">
-          <div class="ajuda-pts">40 pts</div>
-          <div class="ajuda-criterio-info">
-            <strong>Requisitos Obrigatórios</strong>
-            <p>Atende tudo = 40 pts. Parcialmente (>50%) = 20–35 pts. Poucos (<50%) = 5–15 pts. Nenhum = 0 pts <em>(score máximo cai para 25)</em>.</p>
+        <div class="ajuda-etapa-titulo">✅ Etapa 2 — Corte por pontuação mínima</div>
+        <p>Após a IA avaliar cada candidato, o sistema aplica o corte configurado:</p>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 14px">
+          <div style="flex:1;min-width:160px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:800;color:#15803d">≥ <span id="help-corte">50</span> pts</div>
+            <div style="font-size:12px;color:#166534;margin-top:4px">✅ Selecionado para entrevista<br>Ordenado do maior para o menor score</div>
+          </div>
+          <div style="flex:1;min-width:160px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:800;color:#b91c1c">&lt; <span id="help-corte2">50</span> pts</div>
+            <div style="font-size:12px;color:#991b1b;margin-top:4px">❌ Desclassificado<br>Aparece na seção de eliminados</div>
           </div>
         </div>
-        <div class="ajuda-criterio">
-          <div class="ajuda-pts">30 pts</div>
-          <div class="ajuda-criterio-info">
-            <strong>Habilidades Técnicas</strong>
-            <p>Domínio das ferramentas e tecnologias listadas na vaga. Considera equivalências (ex: "SoftExpert" = "SE Suite").</p>
-          </div>
-        </div>
-        <div class="ajuda-criterio">
-          <div class="ajuda-pts">15 pts</div>
-          <div class="ajuda-criterio-info">
-            <strong>Nível e Tempo de Experiência Relevante</strong>
-            <p>O sistema calcula o tempo total de carreira e a IA avalia o tempo relevante para a vaga específica, classificando como Júnior / Pleno / Sênior. O nível do candidato é comparado ao exigido na função.</p>
-          </div>
-        </div>
-        <div class="ajuda-criterio">
-          <div class="ajuda-pts">15 pts</div>
-          <div class="ajuda-criterio-info">
-            <strong>Formação Acadêmica</strong>
-            <p>A formação atende ou supera o definido na Função.</p>
-          </div>
-        </div>
+        <p style="font-size:12.5px;color:var(--text-md)">Os selecionados são ordenados do maior para o menor score. O recrutador revisa e decide quem chama para entrevista.</p>
+        <p style="font-size:12.5px;color:var(--text-md);margin-top:12px"><strong style="color:var(--text-hi)">Exemplo com os pesos padrão (50 / 30 / 10 / 10) e corte em 50 pts:</strong></p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+          <thead>
+            <tr style="background:var(--bg-hover)">
+              <th style="text-align:left;padding:7px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Candidato</th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Obrig.<br><span style="font-weight:400;color:var(--text-lo)">/50</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Desej.<br><span style="font-weight:400;color:var(--text-lo)">/30</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Form.<br><span style="font-weight:400;color:var(--text-lo)">/10</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Hab.<br><span style="font-weight:400;color:var(--text-lo)">/10</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Total</th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato A</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">50</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">24</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">8</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">92</td>
+              <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato B</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">25</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">15</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">7</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">57</td>
+              <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);background:rgba(34,197,94,.04)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato C <span style="font-size:11px;color:var(--text-lo)">(0 obrig.)</span></td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">30</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">50</td>
+              <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado <span style="font-weight:400;font-size:10px">(no limite)</span></td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato D</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">25</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">6</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">5</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">36</td>
+              <td style="padding:7px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Desclassificado</td>
+            </tr>
+            <tr>
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato E <span style="font-size:11px;color:var(--text-lo)">(0 obrig.)</span></td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">5</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">15</td>
+              <td style="padding:7px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Desclassificado</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="font-size:11.5px;color:var(--text-lo);margin-top:8px;line-height:1.6">O Candidato C ilustra que a ausência de requisitos obrigatórios não elimina automaticamente — ele pode passar se compensar nos demais critérios. A decisão final cabe ao recrutador na entrevista.</p>
       </div>
 
       <div class="ajuda-etapa">
@@ -332,8 +325,8 @@
 
       <div class="ajuda-etapa" style="margin-bottom:0">
         <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
-        <p>Compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong>, <strong style="color:#a16207">Médio (40–69 pts)</strong> ou <strong style="color:#b91c1c">Baixo (0–39 pts)</strong>.</p>
-        <p>Candidatos eliminados aparecem em seção colapsada com o motivo da eliminação.</p>
+        <p>Candidatos aprovados são classificados por compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong> ou <strong style="color:#a16207">Médio (50–69 pts)</strong>. Candidatos com pontuação abaixo do corte configurado (padrão 50 pts) são desclassificados automaticamente.</p>
+        <p>Candidatos desclassificados aparecem em seção colapsada com o motivo (pontuação obtida vs. corte mínimo).</p>
       </div>
     </div>
 
@@ -351,141 +344,51 @@
       <div class="fluxo-step">
         <div class="fluxo-num">1</div>
         <div class="fluxo-body">
-          <div class="fluxo-title">Triagem por nota combinada — obrigatórios + desejáveis, sem IA</div>
-          <div class="fluxo-desc">Para cada currículo, o sistema extrai todo o texto disponível (nome, perfil, habilidades, capacitações, formação e histórico profissional completo com atividades) e verifica os Requisitos Obrigatórios e os Requisitos Desejáveis da Função usando três camadas em cada verificação (equivalências → palavras significativas → literal). Com os resultados, calcula uma nota de 0 a 10:</div>
-          <div class="fluxo-sub">
-            <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin:10px 0">
-              <thead>
-                <tr style="background:var(--bg-hover)">
-                  <th style="text-align:left;padding:7px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Critério</th>
-                  <th style="text-align:center;padding:7px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Peso</th>
-                  <th style="text-align:left;padding:7px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Fórmula</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:7px 10px;color:var(--text-md)"><strong>Requisitos Obrigatórios</strong></td>
-                  <td style="padding:7px 10px;text-align:center;color:var(--text-hi);font-weight:600">7 pts</td>
-                  <td style="padding:7px 10px;color:var(--text-md)">atendidos ÷ total × 7</td>
-                </tr>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:7px 10px;color:var(--text-md)"><strong>Requisitos Desejáveis</strong></td>
-                  <td style="padding:7px 10px;text-align:center;color:var(--text-hi);font-weight:600">3 pts</td>
-                  <td style="padding:7px 10px;color:var(--text-md)">atendidos ÷ total × 3</td>
-                </tr>
-                <tr style="background:var(--bg-hover)">
-                  <td colspan="2" style="padding:7px 10px;color:var(--text-hi);font-weight:600">Nota mínima para aprovação</td>
-                  <td style="padding:7px 10px;color:#15803d;font-weight:700">≥ 5,0</td>
-                </tr>
-              </tbody>
-            </table>
-            <strong style="font-size:12.5px">Exemplos — 4 obrigatórios e 4 desejáveis:</strong>
-            <table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0">
-              <thead>
-                <tr style="background:var(--bg-hover)">
-                  <th style="text-align:center;padding:5px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Obrigatórios</th>
-                  <th style="text-align:center;padding:5px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Desejáveis</th>
-                  <th style="text-align:center;padding:5px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Nota</th>
-                  <th style="text-align:center;padding:5px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Resultado</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">4/4 (100%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">0/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">7,0</td>
-                  <td style="padding:5px 8px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado</td>
-                </tr>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">3/4 (75%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">2/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">6,75</td>
-                  <td style="padding:5px 8px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado</td>
-                </tr>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">2/4 (50%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">4/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">6,5</td>
-                  <td style="padding:5px 8px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado</td>
-                </tr>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">2/4 (50%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">2/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">5,0</td>
-                  <td style="padding:5px 8px;text-align:center;color:#15803d;font-weight:600">✅ Aprovado <span style="font-weight:400;font-size:10px">(exato)</span></td>
-                </tr>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">2/4 (50%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">1/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">4,25</td>
-                  <td style="padding:5px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Eliminado</td>
-                </tr>
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">1/4 (25%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">4/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">4,75</td>
-                  <td style="padding:5px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Eliminado</td>
-                </tr>
-                <tr>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">0/4 (0%)</td>
-                  <td style="padding:5px 8px;text-align:center;color:var(--text-md)">4/4</td>
-                  <td style="padding:5px 8px;text-align:center;font-weight:600;color:var(--text-hi)">3,0</td>
-                  <td style="padding:5px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Eliminado</td>
-                </tr>
-              </tbody>
-            </table>
-            O motivo de eliminação exibe a nota e o detalhe (ex: <em>"Nota de triagem: 4,2/10 — Não apresenta evidência de: SQL, SoftExpert — atende 2/4 desejável(is)"</em>). Quando a função não tem desejáveis cadastrados, os 3 pontos são ignorados e o mínimo equivale a ≈ 72% dos obrigatórios. Se não houver requisitos cadastrados, todos os currículos passam para a próxima etapa.
-          </div>
+          <div class="fluxo-title">Cálculo automático de experiência total</div>
+          <div class="fluxo-desc">Antes de enviar cada currículo à IA, o sistema calcula deterministicamente o tempo total de carreira somando os períodos de cada experiência profissional. Formatos suportados: DD/MM/YYYY, MM/YYYY, apenas ano (ex: "2020"), "desde MM/YYYY", "atual", "presente" e similares. O resultado é exibido ao recrutador como informação complementar.</div>
         </div>
       </div>
 
       <div class="fluxo-step">
         <div class="fluxo-num">2</div>
         <div class="fluxo-body">
-          <div class="fluxo-title">Cálculo automático de experiência total</div>
-          <div class="fluxo-desc">Antes de enviar cada currículo à IA, o sistema calcula deterministicamente o tempo total de carreira somando os períodos de cada experiência profissional. Formatos suportados: DD/MM/YYYY, MM/YYYY, apenas ano (ex: "2020"), "desde MM/YYYY", "atual", "presente" e similares. O resultado é exibido ao usuário e também informado à IA como dado objetivo.</div>
+          <div class="fluxo-title">Análise profunda individual pela IA — sem penalidades</div>
+          <div class="fluxo-desc">Cada currículo é analisado individualmente. O sistema envia à IA o texto completo do currículo junto com o perfil completo da função. A IA pontua por proporcionalidade — não existe penalidade por ausência de critérios:</div>
+          <div class="fluxo-sub">
+            <strong>Requisitos Obrigatórios</strong> — Proporcional: (atendidos ÷ total) × peso configurado. Não atende nenhum = 0 pts; sem teto ou penalidade adicional.<br>
+            <strong>Requisitos Desejáveis</strong> — Proporcional: (atendidos ÷ total) × peso configurado. Não atende nenhum = 0 pts; sem penalidade.<br>
+            <strong>Formação Acadêmica</strong> — Atende ou supera = pontuação máxima; próxima da área = parcial; não atende = 0 pts.<br>
+            <strong>Habilidades Técnicas</strong> — Proporcional ao domínio demonstrado. Considera equivalências de tecnologias (ex: "SoftExpert" = "SE Suite").<br><br>
+            Os pesos de cada critério são configurados em <a href="/config-analisador.html" style="color:var(--accent)">Configurações → Pesos de Pontuação</a>.
+          </div>
         </div>
       </div>
 
       <div class="fluxo-step">
         <div class="fluxo-num">3</div>
         <div class="fluxo-body">
-          <div class="fluxo-title">Análise profunda individual pela IA</div>
-          <div class="fluxo-desc">Cada currículo aprovado é analisado individualmente. O sistema envia à IA o texto completo do currículo (perfil, habilidades, capacitações, formação e cada experiência com suas atividades detalhadas) junto com o perfil completo da função. A IA pontua de acordo com a rubrica:</div>
-          <div class="fluxo-sub">
-            <strong>Requisitos Obrigatórios (40 pts)</strong> — IA percorre todas as seções do currículo. Atende tudo = 40 pts; maioria (>50%) = 20–35 pts; poucos (<50%) = 5–15 pts; nenhum = 0 pts → score máximo final limitado a 25 pts.<br>
-            <strong>Habilidades Técnicas (30 pts)</strong> — Domina todas = 30 pts; maioria = 20 pts; algumas = 10 pts; nenhuma = 0 pts. Considera equivalências de tecnologias.<br>
-            <strong>Nível/Experiência Relevante (15 pts)</strong> — A IA avalia o tempo de experiência <em>relevante para esta vaga específica</em> e classifica o candidato como Júnior, Pleno ou Sênior (com base nos limites configurados). Nível igual ou superior ao exigido = 15 pts; um nível abaixo = 8 pts; dois abaixo = 0 pts.<br>
-            <strong>Formação Acadêmica (15 pts)</strong> — Atende ou supera o exigido = 15 pts; próxima da área = 8 pts; não atende = 0 pts.
-          </div>
+          <div class="fluxo-title">Fallback automático de IA e tratamento de falhas</div>
+          <div class="fluxo-desc">A IA primária utilizada é o modelo <strong>Llama 3.3 70B</strong> via Groq. Se ocorrer limite de taxa (rate limit 429) ou quota excedida, o sistema automaticamente tenta o modelo <strong>Gemini 2.0 Flash</strong>. Se ambos falharem, o candidato é mantido com score neutro igual ao corte mínimo configurado e nível "Indefinido", sem ser eliminado, para não perder candidatos por problemas técnicos.</div>
         </div>
       </div>
 
       <div class="fluxo-step">
         <div class="fluxo-num">4</div>
         <div class="fluxo-body">
-          <div class="fluxo-title">Fallback automático de IA e tratamento de falhas</div>
-          <div class="fluxo-desc">A IA primária utilizada é o modelo <strong>Llama 3.3 70B</strong> via Groq. Se ocorrer limite de taxa (rate limit 429) ou quota excedida, o sistema automaticamente tenta o modelo <strong>Gemini 2.0 Flash</strong>. Se ambos falharem, o candidato é mantido nos aprovados com score neutro (50 pts) e nível "Indefinido", sem ser eliminado, para não perder candidatos por problemas técnicos.</div>
-        </div>
-      </div>
-
-      <div class="fluxo-step">
-        <div class="fluxo-num">5</div>
-        <div class="fluxo-body">
-          <div class="fluxo-title">Eliminação pós-IA e ordenação</div>
-          <div class="fluxo-desc">Candidatos que a IA pontuou com <strong>Requisitos Obrigatórios = 0</strong> ou score final ≤ 25 são movidos para a lista de eliminados, mesmo tendo passado da triagem por palavras-chave. Os aprovados restantes são ordenados do maior para o menor score.</div>
+          <div class="fluxo-title">Corte por pontuação mínima e ordenação</div>
+          <div class="fluxo-desc">Candidatos com score abaixo da pontuação mínima configurada são movidos para a lista de desclassificados. Os aprovados são ordenados do maior para o menor score, permitindo que o recrutador foque nos mais aderentes primeiro.</div>
         </div>
       </div>
 
       <div class="fluxo-step" style="margin-bottom:0">
-        <div class="fluxo-num">6</div>
+        <div class="fluxo-num">5</div>
         <div class="fluxo-body">
           <div class="fluxo-title">Classificação final e encerramento</div>
           <div class="fluxo-desc">Cada candidato recebe um nível de compatibilidade com a vaga:</div>
           <div class="fluxo-sub">
             <strong style="color:#15803d">Alto (70–100 pts)</strong> — candidato altamente compatível com a vaga.<br>
-            <strong style="color:#a16207">Médio (40–69 pts)</strong> — candidato parcialmente compatível, merece avaliação.<br>
-            <strong style="color:#b91c1c">Baixo (0–39 pts)</strong> — candidato com baixa aderência ao perfil exigido.<br><br>
+            <strong style="color:#a16207">Médio (50–69 pts)</strong> — candidato compatível, acima do corte mínimo, merece avaliação.<br>
+            <strong style="color:#b91c1c">Desclassificado (abaixo do corte)</strong> — pontuação insuficiente; aparece na lista de eliminados com o motivo.<br><br>
             O recrutador revisa, marca os finalistas e clica em <strong>Encerrar Análise da Vaga</strong>. O sistema salva o resultado no Histórico e atualiza o status da vaga para "encerrada". O ID da análise é único por vaga e por dia — rodar novamente no mesmo dia perguntará antes de sobrepor.
           </div>
         </div>
@@ -496,7 +399,7 @@
     <div id="tab-creditos" class="ajuda-tab-content">
 
       <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin-bottom:18px">
-        O sistema utiliza dois provedores de IA. A triagem por palavras-chave e o cálculo de experiência são determinísticos — <strong style="color:var(--text-hi)">não consomem créditos</strong>. Créditos são gastos somente na <strong style="color:var(--text-hi)">análise profunda individual</strong> de cada currículo aprovado na triagem.
+        O sistema utiliza dois provedores de IA. O cálculo de experiência é determinístico — <strong style="color:var(--text-hi)">não consome créditos</strong>. Créditos são gastos somente na <strong style="color:var(--text-hi)">análise profunda individual</strong> de cada currículo, pois todos são enviados à IA para pontuação.
       </p>
 
       <!-- Groq -->
@@ -625,6 +528,22 @@
   let todosResultados = [], todosEliminados = [];
   let vagaSelecionada = null, funcaoId = null, vagaId = null;
   let ultimoRes = null;
+  let analisesPorVaga = new Map();
+  let ultimoPesos = { requisitos_obrigatorios:50, requisitos_desejados:30, formacao:10, habilidades:10, corte_minimo:50 };
+
+  async function carregarPesosHelp() {
+    try {
+      const p = await fetch('/api/pesos-pontuacao').then(r => r.json());
+      ultimoPesos = p;
+      document.getElementById('help-pts-obrig').textContent = `${p.requisitos_obrigatorios} pts`;
+      document.getElementById('help-pts-desej').textContent = `${p.requisitos_desejados} pts`;
+      document.getElementById('help-pts-form').textContent  = `${p.formacao} pts`;
+      document.getElementById('help-pts-hab').textContent   = `${p.habilidades} pts`;
+      document.getElementById('help-corte').textContent     = p.corte_minimo;
+      document.getElementById('help-corte2').textContent    = p.corte_minimo;
+    } catch {}
+  }
+  carregarPesosHelp();
 
   function switchAjudaTab(tab) {
     document.querySelectorAll('.ajuda-tab').forEach(b => b.classList.remove('active'));
@@ -637,24 +556,46 @@
 
   // ── Carrega vagas no seletor ─────────────────────────────────────────────────
   async function carregarVagas() {
-    const vagas = await fetch('/api/vagas').then(r => r.json());
+    const [vagas, analises] = await Promise.all([
+      fetch('/api/vagas').then(r => r.json()),
+      fetch('/api/analises').then(r => r.json()),
+    ]);
+    analisesPorVaga = new Map((Array.isArray(analises) ? analises : [])
+      .filter(a => a.vaga_id)
+      .map(a => [Number(a.vaga_id), a]));
+    const vagasDisponiveis = vagas.filter(v => !analisesPorVaga.has(Number(v.id)));
     const sel = document.getElementById('sel-vaga');
     sel.innerHTML = '<option value="">— Selecione uma vaga —</option>' +
-      vagas.map(v => {
+      vagasDisponiveis.map(v => {
         const f = v.funcao || {};
         const label = [f.nome, f.area, f.nivel_experiencia && f.nivel_experiencia !== 'Não especificado' ? f.nivel_experiencia : null]
           .filter(Boolean).join(' · ');
         const statusLabel = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' }[v.status] || v.status;
         return `<option value="${v.id}">${label} — ${statusLabel} (${v.quantidade} vaga${v.quantidade !== 1 ? 's' : ''})</option>`;
       }).join('');
+    if (!vagasDisponiveis.length) {
+      sel.disabled = true;
+      document.getElementById('btn-analisar').disabled = true;
+      document.getElementById('vaga-info').style.display = 'block';
+      document.getElementById('vaga-info').innerHTML = `
+        <strong style="color:var(--text-hi)">Nenhuma vaga disponivel para analise.</strong>
+        <br><span style="color:var(--text-lo)">Todas as vagas cadastradas ja possuem analise salva no historico.</span>
+        <br><a href="/historico.html" style="color:var(--accent);font-weight:600">Ver Historico de Analises</a>`;
+    }
 
     sel.addEventListener('change', async () => {
       const id = Number(sel.value);
-      document.getElementById('btn-analisar').disabled = !id;
+      const btnAnalisar = document.getElementById('btn-analisar');
+      const analiseExistente = analisesPorVaga.get(id);
+      btnAnalisar.disabled = !id || Boolean(analiseExistente);
+      btnAnalisar.textContent = analiseExistente ? 'Analise ja existente' : 'Analisar Curriculos';
       const info = document.getElementById('vaga-info');
       const box  = document.getElementById('filtro-curriculos-box');
       if (!id) {
         vagaSelecionada = null;
+        funcaoId = null;
+        vagaId = null;
+        btnAnalisar.textContent = 'Analisar Curriculos';
         info.style.display = 'none';
         box.style.display = 'none';
         document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
@@ -668,6 +609,20 @@
       const f = v.funcao || {};
       const tags = arr => Array.isArray(arr) && arr.length
         ? arr.map(t => `<span class="tag">${t}</span>`).join(' ') : '—';
+      if (analiseExistente) {
+        box.style.display = 'none';
+        document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
+        document.getElementById('resultado-area').innerHTML = '';
+        const dataFmt = analiseExistente.data ? new Date(analiseExistente.data).toLocaleString('pt-BR') : '';
+        info.style.display = 'block';
+        info.innerHTML = `
+        <strong style="color:var(--text-hi)">${f.nome || 'â€”'}</strong>
+        ${f.area ? ` Â· <span>${f.area}</span>` : ''}
+        ${f.nivel_experiencia ? ` Â· <span>${f.nivel_experiencia}</span>` : ''}
+        <br><span style="color:var(--error);font-weight:600">Esta vaga ja possui uma analise salva${dataFmt ? ` em ${dataFmt}` : ''}.</span>
+        <br><a href="/historico.html?vaga_id=${id}" style="color:var(--accent);font-weight:600">Ver no Historico de Analises</a>`;
+        return;
+      }
       box.style.display = 'block';
       // Fetch candidaturas for this vaga
       const autoFiltroVaga = new URLSearchParams(location.search).get('filtro') === 'somente_vaga';
@@ -726,7 +681,11 @@
         body: JSON.stringify({ funcao_id: funcaoId, vaga_id: vagaId, somente_vaga }),
       }).then(r => r.json());
 
-      if (res.error) { document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>⚠️</div>${res.error}</div>`; return; }
+      if (res.error) {
+        if (res.vaga_ja_analisada) document.getElementById('btn-analisar').disabled = true;
+        document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>⚠️</div>${res.error}${res.vaga_ja_analisada ? `<p style="font-size:13px;margin-top:8px"><a href="/historico.html?vaga_id=${vagaId}" style="color:var(--accent)">Ver no Historico de Analises</a></p>` : ''}</div>`;
+        return;
+      }
 
       todosResultados = res.resultados || [];
       todosEliminados = res.eliminados || [];
@@ -735,7 +694,7 @@
     } catch (e) {
       document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>❌</div>Erro: ${e.message}</div>`;
     } finally {
-      document.getElementById('btn-analisar').disabled = false;
+      document.getElementById('btn-analisar').disabled = Boolean(analisesPorVaga.get(Number(vagaId)));
     }
   }
 
@@ -766,12 +725,13 @@
       const nivelCandBadge = r.nivel_candidato
         ? `<span style="font-size:11px;background:var(--bg-hover);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--text-lo)">Candidato: ${r.nivel_candidato}${r.meses_relevantes > 0 ? ` · ${Math.floor(r.meses_relevantes/12) > 0 ? Math.floor(r.meses_relevantes/12)+'a ' : ''}${r.meses_relevantes%12 > 0 ? r.meses_relevantes%12+'m relevantes' : 'relevantes'}` : ''}${r.exp_total ? ` · Total: ${r.exp_total}` : ''}</span>`
         : '';
+      const P = res.pesos || ultimoPesos;
       const detHtml = (det.requisitos_obrigatorios !== undefined) ? `
         <div class="detail-scores">
-          <div class="detail-score"><div class="detail-score-val">${det.requisitos_obrigatorios ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/40</span></div><div class="detail-score-lbl">Req. Obrigatórios</div></div>
-          <div class="detail-score"><div class="detail-score-val">${det.habilidades_tecnicas ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/30</span></div><div class="detail-score-lbl">Habilidades</div></div>
-          <div class="detail-score"><div class="detail-score-val">${det.nivel_experiencia ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Experiência</div></div>
-          <div class="detail-score"><div class="detail-score-val">${det.formacao ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Formação</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.requisitos_obrigatorios ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.requisitos_obrigatorios}</span></div><div class="detail-score-lbl">Req. Obrigatórios</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.requisitos_desejados ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.requisitos_desejados}</span></div><div class="detail-score-lbl">Req. Desejáveis</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.formacao ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.formacao}</span></div><div class="detail-score-lbl">Formação</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.habilidades_tecnicas ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.habilidades}</span></div><div class="detail-score-lbl">Habilidades</div></div>
         </div>` : '';
       const _empAn = window._iahubEmpresa || { id: '—', nome: '—' };
       return `
@@ -927,6 +887,17 @@
 
     if (r.status === 409) {
       const conf = await r.json();
+      if (conf.vaga_ja_analisada) {
+        const bar = document.getElementById('save-bar');
+        const dataFmt = conf.data_existente ? new Date(conf.data_existente).toLocaleString('pt-BR') : '';
+        if (bar) {
+          bar.innerHTML = `<div style="display:flex;align-items:center;gap:12px;width:100%">
+          <span style="color:var(--error);font-size:13px;font-weight:600">Esta vaga ja possui uma analise salva${dataFmt ? ` em ${dataFmt}` : ''}.</span>
+          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px;margin-left:auto">Ver no Historico</a>
+        </div>`;
+        }
+        return;
+      }
       const dataFmt = new Date(conf.data_existente).toLocaleString('pt-BR');
       document.getElementById('modal-sobrepor-txt').textContent =
         `Já existe uma análise para esta vaga salva hoje às ${dataFmt}. Deseja substituí-la pelos novos resultados?`;

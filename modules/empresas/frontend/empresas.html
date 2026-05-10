@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Empresas — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
     .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
     .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(660px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
@@ -16,12 +17,24 @@
     .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
     .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
     .btn-icon:hover { background:var(--bg-hover); }
-    .search-bar    { position:relative; }
-    .search-bar input { padding-left:32px; }
-    .search-bar::before { content:"🔍";position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none; }
     .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
     .empty-state div { font-size:40px;margin-bottom:12px; }
-    td.doc-col     { font-family:monospace;font-size:12px;color:var(--text-md); }
+
+    /* ── Group panel ── */
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+
+    /* ── Tabulator overrides ── */
+    .tabulator { border:none !important; background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-body) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-body) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
   </style>
 </head>
 <body>
@@ -44,36 +57,18 @@
     </div>
 
     <div class="page-content">
-      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <div class="search-bar" style="flex:1;max-width:340px">
-          <input type="text" id="busca" class="form-control" placeholder="Buscar empresa..." oninput="filtrar()">
-        </div>
-        <div class="ms-auto">
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+          <div class="gp-chips-row" id="gp-chips" style="flex:1;min-height:28px">
+            <span class="gp-label">Agrupar:</span>
+          </div>
           <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Empresa</button>
         </div>
+        <div id="gp-dz"></div>
       </div>
 
-      <div class="card">
-        <div class="table-wrap">
-          <table id="tabela">
-            <thead>
-              <tr>
-                <th style="width:50px">#</th>
-                <th>Razão Social</th>
-                <th>CPF / CNPJ</th>
-                <th>Telefone</th>
-                <th>E-mail</th>
-                <th style="text-align:right">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
-        </div>
-        <div id="empty" class="empty-state d-none">
-          <div>🏢</div>
-          <strong style="color:var(--text-md)">Nenhuma empresa cadastrada</strong>
-          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Empresa</strong> para começar.</p>
-        </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="grid"></div>
       </div>
     </div>
   </div>
@@ -130,11 +125,21 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/grid-group-panel.js"></script>
 <script>
   let empresas = [];
   let editId   = null;
+  let table    = null;
+
+  const gp = createGroupPanel({
+    chipsRowId: 'gp-chips',
+    dropZoneId: 'gp-dz',
+    storageKey: 'empresas_group_fields',
+    getTable:   () => table,
+  });
 
   // ── Máscara CPF / CNPJ ──────────────────────────────────────────────────────
   function maskDoc(input) {
@@ -152,7 +157,6 @@
     input.value = v;
   }
 
-  // Formata dígitos já salvos para exibir no campo
   function formatarDoc(doc) {
     if (!doc) return '';
     const v = String(doc).replace(/\D/g, '');
@@ -162,57 +166,91 @@
     return v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
   }
 
-  // Salva somente os números
   function soNumeros(str) { return String(str || '').replace(/\D/g, ''); }
 
-  // ── Carregamento e renderização ─────────────────────────────────────────────
+  // ── Tabulator ───────────────────────────────────────────────────────────────
+  function initTabulator(dados) {
+    table = new Tabulator('#grid', {
+      data: dados,
+      layout: 'fitColumns',
+      height: 'calc(100vh - 220px)',
+      groupStartOpen: true,
+      groupBy: gp.getActiveFields(),
+      placeholder: '<div class="empty-state"><div>🏢</div><strong style="color:var(--text-md)">Nenhuma empresa cadastrada</strong></div>',
+      columns: [
+        {
+          title: '#', field: 'id', width: 60, headerFilter: false, groupable: false,
+          formatter: cell => `<span style="color:var(--text-lo);font-size:12px">${cell.getValue()}</span>`,
+        },
+        {
+          title: 'Razão Social', field: 'razao_social', minWidth: 200, headerFilter: true,
+          formatter: cell => {
+            const row  = cell.getRow().getData();
+            const site = row.site
+              ? `<br><a href="${esc(row.site)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">${esc(row.site)}</a>`
+              : '';
+            return `<strong style="color:var(--text-hi)">${esc(row.razao_social)}</strong>${site}`;
+          },
+        },
+        {
+          title: 'Tipo', field: 'tipo_doc', width: 80,
+          headerFilter: 'select',
+          headerFilterParams: { values: { '': 'Todos', CPF: 'CPF', CNPJ: 'CNPJ' } },
+        },
+        {
+          title: 'CPF / CNPJ', field: 'documento_fmt', width: 170, headerFilter: true,
+          formatter: cell => {
+            const v = cell.getValue();
+            return v
+              ? `<span style="font-family:monospace;font-size:12px;color:var(--text-md)">${v}</span>`
+              : `<span style="color:var(--text-lo)">—</span>`;
+          },
+        },
+        {
+          title: 'Telefone', field: 'telefone', headerFilter: true,
+          formatter: cell => cell.getValue() || `<span style="color:var(--text-lo)">—</span>`,
+        },
+        {
+          title: 'E-mail', field: 'email', headerFilter: true,
+          formatter: cell => cell.getValue() || `<span style="color:var(--text-lo)">—</span>`,
+        },
+        {
+          title: 'Ações', headerFilter: false, width: 90, hozAlign: 'right',
+          formatter: cell => {
+            const row  = cell.getRow().getData();
+            const id   = row.id;
+            const nome = esc(row.razao_social);
+            return `<button class="btn-icon" onclick="event.stopPropagation();editar(${id})" title="Editar">✏️</button>
+                    <button class="btn-icon" onclick="event.stopPropagation();confirmarExcluir(${id},'${nome}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+          },
+        },
+      ],
+      rowClick: (_e, row) => editar(row.getData().id),
+    });
+  }
+
+  // ── Carregamento ────────────────────────────────────────────────────────────
   async function carregar() {
     try {
-      const res = await fetch('/api/empresas');
-      empresas  = await res.json();
-      renderizar();
+      const res  = await fetch('/api/empresas');
+      empresas   = await res.json();
+      const dados = empresas.map(e => ({
+        ...e,
+        tipo_doc:     soNumeros(e.documento || '').length <= 11 ? 'CPF' : 'CNPJ',
+        documento_fmt: formatarDoc(e.documento),
+      }));
+      if (table) {
+        table.replaceData(dados);
+      } else {
+        initTabulator(dados);
+        setTimeout(() => gp.refresh(), 0);
+      }
     } catch (_) {
-      mostrarErroGlobal('Erro ao carregar empresas.');
+      console.error('Erro ao carregar empresas.');
     }
   }
 
-  function renderizar() {
-    const busca    = document.getElementById('busca').value.toLowerCase();
-    const filtrado = empresas.filter(e =>
-      e.razao_social.toLowerCase().includes(busca) ||
-      (e.documento || '').toLowerCase().includes(busca) ||
-      (e.email     || '').toLowerCase().includes(busca)
-    );
-
-    const tbody = document.getElementById('tbody');
-    const empty = document.getElementById('empty');
-
-    if (!filtrado.length) {
-      tbody.innerHTML = '';
-      empty.classList.remove('d-none');
-      return;
-    }
-
-    empty.classList.add('d-none');
-    tbody.innerHTML = filtrado.map(e => `
-      <tr>
-        <td style="color:var(--text-lo);font-size:12px">${e.id}</td>
-        <td><strong style="color:var(--text-hi)">${esc(e.razao_social)}</strong>
-            ${e.site ? `<br><a href="${esc(e.site)}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none">${esc(e.site)}</a>` : ''}
-        </td>
-        <td class="doc-col">${esc(formatarDoc(e.documento)) || '<span style="color:var(--text-lo)">—</span>'}</td>
-        <td>${esc(e.telefone) || '<span style="color:var(--text-lo)">—</span>'}</td>
-        <td>${esc(e.email)    || '<span style="color:var(--text-lo)">—</span>'}</td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="btn-icon" onclick="editar(${e.id})" title="Editar">✏️</button>
-          <button class="btn-icon" onclick="confirmarExcluir(${e.id}, '${esc(e.razao_social)}')" title="Excluir" style="color:#dc2626">🗑</button>
-        </td>
-      </tr>
-    `).join('');
-  }
-
-  function filtrar() { renderizar(); }
-
+  // ── Modal ───────────────────────────────────────────────────────────────────
   function abrirModal(empresa = null) {
     editId = empresa?.id ?? null;
     document.getElementById('modal-title').textContent = empresa ? 'Editar Empresa' : 'Nova Empresa';
@@ -269,7 +307,7 @@
 
     const dados = {
       razao_social: razao,
-      documento:    doc,   // somente dígitos
+      documento:    doc,
       telefone:     document.getElementById('f-tel').value.trim(),
       email:        document.getElementById('f-email').value.trim(),
       site:         document.getElementById('f-site').value.trim(),
@@ -303,11 +341,6 @@
 
   function esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  function mostrarErroGlobal(msg) {
-    document.getElementById('tbody').innerHTML =
-      `<tr><td colspan="6" style="text-align:center;color:var(--text-lo);padding:40px">${msg}</td></tr>`;
   }
 
   document.getElementById('modal').addEventListener('click', function(e) {

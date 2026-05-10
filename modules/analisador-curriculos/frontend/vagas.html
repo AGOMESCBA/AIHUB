@@ -38,6 +38,15 @@
     .stat-mini     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px; }
     .stat-mini-val { font-size:22px;font-weight:700;color:var(--accent-light); }
     .stat-mini-lbl { font-size:11.5px;color:var(--text-lo);margin-top:2px; }
+    .vaga-card.selecionada { border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.15); }
+    .se-badge-card { display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:10px;font-size:10.5px;font-weight:600; }
+    .se-c-ok  { background:#dcfce7;color:#15803d; }
+    .se-c-err { background:#fee2e2;color:#b91c1c; }
+    .se-c-par { background:#ffedd5;color:#c2410c; }
+    .se-c-rev { background:#fef9c3;color:#92400e; }
+    .se-c-pen { background:#f1f5f9;color:#64748b; }
+    .sel-bar  { display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;font-size:13px; }
+    .sel-bar.active { display:flex; }
   </style>
 </head>
 <body>
@@ -67,6 +76,13 @@
         <div class="ms-auto">
           <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Vaga</button>
         </div>
+      </div>
+
+      <div class="sel-bar" id="sel-bar">
+        <span id="sel-count" style="font-weight:600"></span>
+        <span style="color:var(--text-lo);font-size:12px">vaga(s) selecionada(s)</span>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;margin-left:auto" onclick="integrarSelecionados()">🔗 Integrar ao SE</button>
+        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="limparSelecao()">✕ Limpar</button>
       </div>
 
       <div id="vagas-grid" class="vagas-grid"></div>
@@ -142,6 +158,73 @@
   const STATUS_LABEL = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' };
 
   let vagas = [], funcoes = [], analises = [], editandoId = null;
+  let _seStatusMap = {}, _selecionados = new Set();
+
+  function seBadgeCard(vagaId) {
+    const st = _seStatusMap[vagaId];
+    const cfg = {
+      sucesso:  ['se-c-ok',  '✓ Integrado'],
+      erro:     ['se-c-err', '✗ Erro SE'],
+      parcial:  ['se-c-par', '⚠ Parcial'],
+      revertido:['se-c-rev', '↩ Revertido'],
+    };
+    const [cls, label] = cfg[st] || ['se-c-pen', '● Não integrado'];
+    return `<span class="se-badge-card ${cls}">${label}</span>`;
+  }
+
+  function toggleSel(id) {
+    if (_selecionados.has(id)) _selecionados.delete(id);
+    else _selecionados.add(id);
+    atualizarSelBar();
+    renderGrid();
+  }
+
+  function atualizarSelBar() {
+    const bar = document.getElementById('sel-bar');
+    document.getElementById('sel-count').textContent = _selecionados.size;
+    bar.classList.toggle('active', _selecionados.size > 0);
+  }
+
+  function limparSelecao() { _selecionados.clear(); atualizarSelBar(); renderGrid(); }
+
+  async function integrarSelecionados() {
+    if (!_selecionados.size) return;
+    const ids = [..._selecionados];
+    if (!confirm(`Integrar ${ids.length} vaga(s) ao SE?`)) return;
+    try {
+      const r = await fetch('/api/integracoes/se-vaga/enviar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vaga_ids: ids }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Erro');
+      alert(`✓ Integração concluída — ${data.sucesso} sucesso, ${data.erros} erro(s).`);
+      limparSelecao();
+      await carregarSEStatus();
+      renderGrid();
+    } catch (err) { alert(`✗ Erro: ${err.message}`); }
+  }
+
+  async function integrarVaga(id) {
+    if (!confirm(`Integrar Vaga #${id} ao SE?`)) return;
+    try {
+      const r = await fetch('/api/integracoes/se-vaga/enviar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vaga_ids: [id] }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Erro');
+      const st = data.resultados?.[0]?.status || '?';
+      alert(`✓ Integração concluída — status: ${st}`);
+      await carregarSEStatus();
+      renderGrid();
+    } catch (err) { alert(`✗ Erro: ${err.message}`); }
+  }
+
+  async function carregarSEStatus() {
+    try { _seStatusMap = await fetch('/api/integracoes/se-vaga/status-mapa').then(r => r.json()); }
+    catch { _seStatusMap = {}; }
+  }
 
   async function carregar() {
     [vagas, funcoes, analises] = await Promise.all([
@@ -149,6 +232,7 @@
       fetch('/api/funcoes').then(r => r.json()),
       fetch('/api/analises').then(r => r.json()),
     ]);
+    await carregarSEStatus();
     renderStats();
     renderGrid();
   }
@@ -172,13 +256,16 @@
     grid.innerHTML = vagas.map(v => {
       const f            = v.funcao || {};
       const vagaAnalises = analises.filter(a => a.vaga_id === v.id);
-      const nivelCls = NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado';
+      const nivelCls  = NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado';
+      const selecionada = _selecionados.has(v.id);
       return `
-      <div class="vaga-card">
-        <div style="display:flex;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+      <div class="vaga-card${selecionada ? ' selecionada' : ''}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          <input type="checkbox" ${selecionada?'checked':''} onclick="toggleSel(${v.id})" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);flex-shrink:0">
           ${['ID: ' + v.id, 'Emp: ' + (v.empresa_id || (window._iahubEmpresa?.id || '—')), window._iahubEmpresa?.nome || '—'].map(t =>
             `<span style="font-size:10.5px;color:var(--text-lo);background:var(--bg-hover);border-radius:4px;padding:2px 7px;font-family:monospace">${t}</span>`
           ).join('')}
+          <span style="margin-left:auto">${seBadgeCard(v.id)}</span>
         </div>
         <div class="vaga-funcao">${f.nome || '—'}</div>
         <div class="vaga-meta">
@@ -198,11 +285,12 @@
             : `<a href="/analisador.html?vaga_id=${v.id}" class="btn btn-info" style="font-size:12px;flex:1;text-align:center">🔍 Analisar</a>`
           }
           ${v.status === 'encerrada'
-            ? `<button class="btn btn-ghost" style="font-size:12px;opacity:.45;cursor:not-allowed" title="Vaga encerrada — reabra a vaga para editar" disabled>✏️ Editar</button>`
+            ? `<button class="btn btn-ghost" style="font-size:12px;opacity:.45;cursor:not-allowed" disabled>✏️ Editar</button>`
             : `<button class="btn btn-ghost" style="font-size:12px" onclick="editar(${v.id})">✏️ Editar</button>`
           }
+          <button class="btn btn-ghost" style="font-size:12px;color:#6d28d9" onclick="integrarVaga(${v.id})" title="Integrar ao SE">🔗</button>
           ${v.status === 'encerrada'
-            ? `<button class="btn btn-ghost" style="font-size:12px;opacity:.45;cursor:not-allowed" title="Reabra a vaga para excluir" disabled>🗑</button>`
+            ? `<button class="btn btn-ghost" style="font-size:12px;opacity:.45;cursor:not-allowed" disabled>🗑</button>`
             : `<button class="btn btn-danger" style="font-size:12px" onclick="excluir(${v.id})">🗑</button>`
           }
         </div>
@@ -274,7 +362,10 @@
     carregar();
   }
 
-  carregar();
+  (async () => {
+    await window._iahubAuthReady;
+    carregar();
+  })();
 </script>
 </body>
 </html>

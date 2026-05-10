@@ -1,0 +1,2160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SE API Configurador — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
+  <style>
+    /* ── Abas ─────────────────────────────────────────────────────────────── */
+    .tabs-bar {
+      display: flex; gap: 4px; border-bottom: 2px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      padding: 10px 22px; font-size: 13.5px; font-weight: 600;
+      color: var(--text-md); background: none; border: none;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      cursor: pointer; transition: color .15s, border-color .15s;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .tab-btn:hover  { color: var(--accent); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-badge {
+      font-size: 10px; font-weight: 700; padding: 1px 6px;
+      border-radius: 10px; background: var(--bg-hover); color: var(--text-lo);
+    }
+    .tab-btn.active .tab-badge { background: var(--accent); color: #fff; }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ── Stats ────────────────────────────────────────────────────────────── */
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 22px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+    .stat-val  { font-size: 26px; font-weight: 800; line-height: 1; }
+    .stat-lbl  { font-size: 11.5px; color: var(--text-lo); margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
+
+    /* ── Toolbar ──────────────────────────────────────────────────────────── */
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .toolbar .form-control { margin: 0; height: 36px; font-size: 13px; }
+    .toolbar select.form-control { min-width: 140px; }
+    .spacer { flex: 1; }
+
+    /* ── Cards de template / config / flow ────────────────────────────────── */
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+    .item-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+      display: flex; flex-direction: column; gap: 10px;
+      transition: box-shadow .15s, border-color .15s;
+    }
+    .item-card:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(99,102,241,.1); }
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .card-title { font-size: 14px; font-weight: 700; color: var(--text-hi); line-height: 1.3; }
+    .card-desc  { font-size: 12px; color: var(--text-lo); line-height: 1.5; }
+    .card-meta  { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .card-actions { display: flex; gap: 6px; margin-top: 4px; }
+    .card-actions .btn { padding: 5px 12px; font-size: 12px; }
+
+    /* ── Badges ───────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-start    { background: #dbeafe; color: #1d4ed8; }
+    .badge-data     { background: #fef9c3; color: #92400e; }
+    .badge-move     { background: #dcfce7; color: #15803d; }
+    .badge-grid     { background: #f3e8ff; color: #7c3aed; }
+    .badge-sucesso  { background: #dcfce7; color: #15803d; }
+    .badge-erro     { background: #fee2e2; color: #b91c1c; }
+    .badge-erro_http{ background: #ffedd5; color: #c2410c; }
+    .badge-flow     { background: #ede9fe; color: #6d28d9; }
+    .badge-config   { background: #dbeafe; color: #1d4ed8; }
+    .badge-flow-step{ background: #f0fdf4; color: #166534; }
+    .badge-ativo    { background: #dcfce7; color: #15803d; }
+    .badge-inativo  { background: #fee2e2; color: #b91c1c; }
+    .badge-neutral  { background: var(--bg-hover); color: var(--text-lo); }
+
+    /* ── Placeholders chips ───────────────────────────────────────────────── */
+    .ph-chip {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 9px; border-radius: 12px;
+      background: #ede9fe; color: #6d28d9;
+      font-size: 11px; font-weight: 600; font-family: monospace;
+    }
+
+    /* ── Seção de accordion (headers / mappings dentro de config) ─────────── */
+    .accordion { border: 1px solid var(--border); border-radius: var(--radius); margin-top: 8px; overflow: hidden; }
+    .accordion-hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; background: var(--bg-hover);
+      cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-hi);
+      user-select: none; transition: background .12s;
+    }
+    .accordion-hdr:hover { background: #eef2ff; }
+    .accordion-body { display: none; padding: 14px 16px; }
+    .accordion-body.open { display: block; }
+    .accordion-arrow { transition: transform .2s; font-size: 12px; color: var(--text-lo); }
+    .accordion-hdr.open .accordion-arrow { transform: rotate(180deg); }
+
+    /* ── Tabela de pares key/value ────────────────────────────────────────── */
+    .kv-table { width: 100%; border-collapse: collapse; }
+    .kv-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-lo); font-weight: 600; padding: 6px 8px; text-align: left; }
+    .kv-table td { padding: 5px 4px; vertical-align: middle; }
+    .kv-table .form-control { margin: 0; height: 32px; font-size: 12.5px; }
+    .kv-table .btn-icon { background: none; border: none; cursor: pointer; padding: 4px 6px; color: var(--text-lo); font-size: 16px; }
+    .kv-table .btn-icon:hover { color: var(--error); }
+    .kv-add-row { margin-top: 8px; }
+
+    /* ── Steps do flow ────────────────────────────────────────────────────── */
+    .steps-list { display: flex; flex-direction: column; gap: 8px; }
+    .step-item {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--bg-hover); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 14px;
+    }
+    .step-order {
+      width: 26px; height: 26px; border-radius: 50%; background: var(--accent);
+      color: #fff; font-size: 12px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-hi); }
+    .step-move { display: flex; flex-direction: column; gap: 2px; }
+    .step-move button { background: none; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; padding: 2px 6px; font-size: 11px; }
+    .step-move button:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Group panel ──────────────────────────────────────────────────────── */
+    .gp-wrap      { margin-bottom: 10px; }
+    .gp-chips-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; position: relative; }
+    .gp-label     { font-size: 11px; color: var(--text-lo); white-space: nowrap; }
+
+    /* ── Tabulator ────────────────────────────────────────────────────────── */
+    .tabulator { font-family: inherit; font-size: 14px; border: none !important; }
+    .tabulator .tabulator-header { background: var(--bg-hover); border-bottom: 1px solid var(--border) !important; }
+    .tabulator .tabulator-col { background: transparent; border-right: none !important; }
+    .tabulator .tabulator-col-title { font-size: 11px; color: var(--text-lo); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .tabulator-row { border-bottom: 1px solid var(--border) !important; cursor: pointer; }
+    .tabulator-row:hover { background: var(--bg-hover) !important; }
+    .tabulator-cell { border-right: none !important; padding: 9px 12px; vertical-align: middle; }
+    .tabulator-header-filter input, .tabulator-header-filter select {
+      width: 100%; font-size: 11px; border: 1px solid var(--border);
+      border-radius: 4px; padding: 3px 6px; background: #fff; color: var(--text); margin-top: 4px;
+    }
+    .tabulator-group { background: var(--bg-hover) !important; border-bottom: 1px solid var(--border) !important; font-weight: 600; font-size: 13px; padding: 8px 14px !important; }
+
+    /* ── Modal ────────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 300;
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 32px 16px; overflow-y: auto;
+    }
+    .modal-box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); width: min(760px, 98vw);
+      padding: 28px; position: relative;
+    }
+    .modal-box.modal-xl { width: min(980px, 98vw); }
+    .modal-title {
+      font-size: 16px; font-weight: 700; color: var(--text-hi);
+      margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-lo); line-height: 1; }
+    .modal-close:hover { color: var(--error); }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+    /* ── XML preview ──────────────────────────────────────────────────────── */
+    .xml-preview {
+      background: #1e1e2e; color: #cdd6f4; border-radius: 8px;
+      padding: 14px 16px; font-family: monospace; font-size: 12px;
+      line-height: 1.6; overflow-x: auto; max-height: 320px;
+      overflow-y: auto; white-space: pre; margin-top: 8px;
+    }
+    .xml-preview .ph  { color: #f38ba8; font-weight: 700; }
+    .xml-preview .tag { color: #89b4fa; }
+    .xml-preview .att { color: #a6e3a1; }
+
+    /* ── Detail log modal ─────────────────────────────────────────────────── */
+    .detail-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .detail-item   { background: var(--bg-hover); border-radius: 8px; padding: 10px 14px; }
+    .detail-item.full { grid-column: 1 / -1; }
+    .detail-lbl    { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-lo); margin-bottom: 4px; }
+    .detail-val    { font-size: 13px; color: var(--text-hi); font-weight: 500; word-break: break-word; }
+    .expand-toggle { font-size: 11.5px; color: var(--accent); cursor: pointer; margin-top: 6px; display: inline-block; }
+    .expand-toggle:hover { text-decoration: underline; }
+    .expand-content { display: none; margin-top: 8px; background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; font-size: 11.5px; font-family: monospace; line-height: 1.5; overflow-x: auto; max-height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--text-md); }
+    .expand-content.open { display: block; }
+
+    /* ── Modal de Ajuda ──────────────────────────────────────────────────── */
+    .help-modal { width: min(900px, 98vw); max-height: 88vh; display: flex; flex-direction: column; }
+    .help-body  { overflow-y: auto; flex: 1; padding-right: 4px; }
+    .help-nav   { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 24px; }
+    .help-nav a {
+      padding: 5px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 600;
+      background: var(--bg-hover); color: var(--text-md); text-decoration: none;
+      border: 1px solid var(--border); transition: background .12s, color .12s;
+    }
+    .help-nav a:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .help-section { margin-bottom: 36px; scroll-margin-top: 8px; }
+    .help-section-title {
+      font-size: 15px; font-weight: 800; color: var(--text-hi);
+      border-left: 4px solid var(--accent); padding-left: 12px; margin-bottom: 14px;
+    }
+    .help-p  { font-size: 13.5px; color: var(--text-md); line-height: 1.7; margin-bottom: 12px; }
+    .help-step-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+    .help-step {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--bg-hover); border-radius: 10px; padding: 12px 16px;
+    }
+    .help-step-num {
+      width: 30px; height: 30px; border-radius: 50%; background: var(--accent);
+      color: #fff; font-size: 13px; font-weight: 800; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .help-step-body { flex: 1; }
+    .help-step-title { font-size: 13.5px; font-weight: 700; color: var(--text-hi); margin-bottom: 4px; }
+    .help-step-desc  { font-size: 13px; color: var(--text-md); line-height: 1.6; }
+    .help-code {
+      background: #1e1e2e; color: #cdd6f4; border-radius: 8px;
+      padding: 14px 16px; font-family: monospace; font-size: 12px;
+      line-height: 1.7; overflow-x: auto; margin: 10px 0 14px; white-space: pre;
+    }
+    .help-code .ph  { color: #f38ba8; font-weight: 700; }
+    .help-code .tag { color: #89b4fa; }
+    .help-code .cm  { color: #6c7086; font-style: italic; }
+    .help-code .str { color: #a6e3a1; }
+    .help-code .key { color: #cba6f7; }
+    .help-table { width: 100%; border-collapse: collapse; margin: 10px 0 14px; font-size: 13px; }
+    .help-table th { background: var(--bg-hover); padding: 8px 12px; text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-lo); border-bottom: 2px solid var(--border); }
+    .help-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-md); vertical-align: top; }
+    .help-table tr:last-child td { border-bottom: none; }
+    .help-table code { background: var(--bg-hover); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; font-family: monospace; color: #6d28d9; }
+    .help-callout {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 12px 16px; border-radius: 8px; margin: 10px 0 14px;
+    }
+    .help-callout.info  { background: #eff6ff; border-left: 4px solid #3b82f6; }
+    .help-callout.warn  { background: #fffbeb; border-left: 4px solid #f59e0b; }
+    .help-callout.tip   { background: #f0fdf4; border-left: 4px solid #22c55e; }
+    .help-callout-icon  { font-size: 18px; flex-shrink: 0; }
+    .help-callout-text  { font-size: 13px; color: var(--text-md); line-height: 1.6; }
+    .help-callout-text strong { color: var(--text-hi); }
+    .help-flow-diagram  { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 14px 0; }
+    .help-flow-box {
+      background: var(--bg-card); border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 8px 14px; font-size: 12.5px; font-weight: 600; color: var(--text-hi); text-align: center;
+    }
+    .help-flow-box.accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .help-flow-arrow { color: var(--text-lo); font-size: 18px; font-weight: 300; }
+    .btn-help {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 600;
+      background: var(--bg-hover); border: 1px solid var(--border); color: var(--text-md);
+      cursor: pointer; transition: background .12s, color .12s;
+    }
+    .btn-help:hover { background: #eff6ff; color: #3b82f6; border-color: #3b82f6; }
+
+    /* ── Estado vazio ─────────────────────────────────────────────────────── */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-lo); }
+    .empty-state .empty-icon { font-size: 42px; margin-bottom: 12px; }
+    .empty-state .empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); margin-bottom: 6px; }
+    .empty-state .empty-desc  { font-size: 13px; line-height: 1.5; }
+
+    @media (max-width: 640px) {
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .card-grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .tabs-bar { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">
+        <span class="topbar-path">Integrações ›</span> SE API Configurador
+      </span>
+      <button class="btn-help" onclick="openModal('modal-ajuda')" title="Abrir guia de uso">
+        ❓ Ajuda
+      </button>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ── Abas ─────────────────────────────────────────────────────────── -->
+      <div class="tabs-bar">
+        <button class="tab-btn active" onclick="switchTab('templates')" id="tab-btn-templates">
+          📄 Templates <span class="tab-badge" id="badge-templates">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('configs')" id="tab-btn-configs">
+          ⚙ Configurações <span class="tab-badge" id="badge-configs">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('flows')" id="tab-btn-flows">
+          🔀 Flows <span class="tab-badge" id="badge-flows">0</span>
+        </button>
+        <button class="tab-btn" onclick="switchTab('historico')" id="tab-btn-historico">
+          📊 Histórico <span class="tab-badge" id="badge-historico">0</span>
+        </button>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════════════════
+           ABA: TEMPLATES
+      ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="tab-pane active" id="pane-templates">
+        <div class="toolbar">
+          <input type="text" class="form-control" id="tpl-search" placeholder="Buscar template..." oninput="renderTemplates()" style="max-width:260px">
+          <select class="form-control" id="tpl-filter-tipo" onchange="renderTemplates()">
+            <option value="">Todos os tipos</option>
+            <option value="START">START</option>
+            <option value="DATA">DATA</option>
+            <option value="MOVE">MOVE</option>
+            <option value="GRID">GRID</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" onclick="openTemplateModal()">+ Novo Template</button>
+        </div>
+        <div class="card-grid" id="templates-grid"></div>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════════════════
+           ABA: CONFIGURAÇÕES
+      ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="pane-configs">
+        <div class="toolbar">
+          <input type="text" class="form-control" id="cfg-search" placeholder="Buscar configuração..." oninput="renderConfigs()" style="max-width:260px">
+          <select class="form-control" id="cfg-filter-ativo" onchange="renderConfigs()">
+            <option value="">Todas</option>
+            <option value="true">Ativas</option>
+            <option value="false">Inativas</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" onclick="openConfigModal()">+ Nova Configuração</button>
+        </div>
+        <div class="card-grid" id="configs-grid"></div>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════════════════
+           ABA: FLOWS
+      ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="pane-flows">
+        <div class="toolbar">
+          <input type="text" class="form-control" id="flow-search" placeholder="Buscar flow..." oninput="renderFlows()" style="max-width:260px">
+          <div class="spacer"></div>
+          <button class="btn btn-primary" onclick="openFlowModal()">+ Novo Flow</button>
+        </div>
+        <div class="card-grid" id="flows-grid"></div>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════════════════
+           ABA: HISTÓRICO
+      ═══════════════════════════════════════════════════════════════════════ -->
+      <div class="tab-pane" id="pane-historico">
+        <div class="stats-row">
+          <div class="stat-card"><div class="stat-val" id="h-total"  style="color:var(--accent)">—</div><div class="stat-lbl">Total de Execuções</div></div>
+          <div class="stat-card"><div class="stat-val" id="h-sucesso" style="color:var(--success)">—</div><div class="stat-lbl">Sucesso</div></div>
+          <div class="stat-card"><div class="stat-val" id="h-erro"    style="color:var(--error)">—</div><div class="stat-lbl">Erros</div></div>
+          <div class="stat-card"><div class="stat-val" id="h-media"   style="color:var(--accent-2)">—</div><div class="stat-lbl">Tempo Médio</div></div>
+        </div>
+
+        <div class="toolbar">
+          <button class="btn btn-secondary btn-sm" onclick="loadHistorico()">↻ Atualizar</button>
+          <div class="spacer"></div>
+        </div>
+
+        <!-- Group panel -->
+        <div class="gp-wrap">
+          <div class="gp-chips-row" id="gp-chips-row">
+            <span class="gp-label">Agrupar por:</span>
+          </div>
+          <div id="gp-drop-zone"></div>
+        </div>
+
+        <div id="historico-grid"></div>
+      </div>
+
+    </div><!-- page-content -->
+  </div><!-- main -->
+</div><!-- layout -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: TEMPLATE
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-template" style="display:none" onclick="closeModalOnBackdrop(event,'modal-template')">
+  <div class="modal-box modal-xl">
+    <div class="modal-title">
+      <span id="modal-template-title">Novo Template</span>
+      <button class="modal-close" onclick="closeModal('modal-template')">×</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <label class="form-label">Nome *</label>
+        <input type="text" class="form-control" id="tpl-nome" placeholder="Ex: Iniciar Processo Seletivo">
+      </div>
+      <div>
+        <label class="form-label">Tipo *</label>
+        <select class="form-control" id="tpl-tipo">
+          <option value="">Selecione...</option>
+          <option value="START">START — Iniciar processo</option>
+          <option value="DATA">DATA — Inserir dados</option>
+          <option value="MOVE">MOVE — Avançar atividade</option>
+          <option value="GRID">GRID — Inserir dados na Grid</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Integração</label>
+        <select class="form-control" id="tpl-integration-type">
+          <option value="">Genérico</option>
+          <option value="function_registration">Cadastro de Função</option>
+          <option value="job_position">Cargo / Vaga</option>
+          <option value="resume">Currículo</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Versão</label>
+        <input type="text" class="form-control" id="tpl-versao" value="1.0" placeholder="1.0">
+      </div>
+      <div style="grid-column:1/-1">
+        <label class="form-label">Descrição</label>
+        <input type="text" class="form-control" id="tpl-descricao" placeholder="Descrição opcional">
+      </div>
+      <div style="grid-column:1/-1">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label class="form-label" style="margin:0">XML Template *</label>
+          <button class="btn btn-secondary btn-sm" onclick="extrairPlaceholders()">⟳ Extrair Placeholders</button>
+        </div>
+        <textarea class="form-control" id="tpl-xml" rows="12"
+          placeholder="Cole o XML aqui. Use {{nome_variavel}} para placeholders."
+          style="font-family:monospace;font-size:12.5px;line-height:1.6"
+          oninput="extrairPlaceholders()"></textarea>
+      </div>
+      <div style="grid-column:1/-1" id="tpl-ph-section" style="display:none">
+        <label class="form-label">Placeholders detectados</label>
+        <div id="tpl-ph-chips" style="display:flex;gap:6px;flex-wrap:wrap;min-height:28px;padding:4px 0"></div>
+      </div>
+
+      <!-- Formato do bloco {{form_fields}} -->
+      <div style="grid-column:1/-1">
+        <div class="accordion" id="acc-block-tpl">
+          <div class="accordion-hdr" onclick="toggleAccordion('acc-block-tpl')" style="border-radius:8px">
+            <span>⚙ Formato do Bloco <code style="font-size:11px;background:#ede9fe;padding:1px 6px;border-radius:4px;margin-left:4px">{{form_fields}}</code> <span style="font-weight:400;color:var(--text-lo);font-size:12px">(avançado)</span></span>
+            <span class="accordion-arrow">▾</span>
+          </div>
+          <div class="accordion-body" id="acc-block-tpl-body">
+            <div style="font-size:12.5px;color:var(--text-lo);margin-bottom:10px;line-height:1.6">
+              Define a estrutura XML usada para <strong>cada campo</strong> ao gerar o bloco <code>{{form_fields}}</code>.
+              Use <code>{SE_FIELD_ID}</code> e <code>{SE_FIELD_VALUE}</code> como marcadores.<br>
+              Deixe em branco para usar o formato padrão (<code>&lt;item&gt;&lt;fieldID&gt;...&lt;/fieldID&gt;&lt;/item&gt;</code>).
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="setBlockTpl('default')">Padrão &lt;item&gt;</button>
+              <button class="btn btn-secondary btn-sm" onclick="setBlockTpl('urn')">SoftExpert urn:EntityAttribute</button>
+            </div>
+            <textarea class="form-control" id="tpl-block-xml" rows="6"
+              style="font-family:monospace;font-size:12px;line-height:1.6"
+              placeholder="Deixe em branco para usar o formato padrão"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-template')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveTemplate()">Salvar Template</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: VISUALIZAR XML
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-xml" style="display:none" onclick="closeModalOnBackdrop(event,'modal-xml')">
+  <div class="modal-box modal-xl">
+    <div class="modal-title">
+      <span id="modal-xml-title">XML do Template</span>
+      <button class="modal-close" onclick="closeModal('modal-xml')">×</button>
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="form-label">Placeholders</label>
+      <div id="modal-xml-placeholders" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <label class="form-label">XML</label>
+    <div class="xml-preview" id="modal-xml-content"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-xml')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: CONFIG
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-config" style="display:none" onclick="closeModalOnBackdrop(event,'modal-config')">
+  <div class="modal-box modal-xl">
+    <div class="modal-title">
+      <span id="modal-config-title">Nova Configuração</span>
+      <button class="modal-close" onclick="closeModal('modal-config')">×</button>
+    </div>
+
+    <!-- Dados básicos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+      <div style="grid-column:1/-1">
+        <label class="form-label">Nome *</label>
+        <input type="text" class="form-control" id="cfg-nome" placeholder="Ex: Enviar Currículo para SE">
+      </div>
+      <div>
+        <label class="form-label">Template *</label>
+        <select class="form-control" id="cfg-template-id" onchange="onTemplateChange()">
+          <option value="">Selecione o template...</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Tipo</label>
+        <select class="form-control" id="cfg-tipo">
+          <option value="OUTBOUND">OUTBOUND — Nosso sistema → SE</option>
+          <option value="INBOUND">INBOUND — SE → Nosso sistema</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1">
+        <label class="form-label">Endpoint *</label>
+        <input type="text" class="form-control" id="cfg-endpoint" placeholder="https://...">
+      </div>
+      <div>
+        <label class="form-label">Método HTTP</label>
+        <select class="form-control" id="cfg-method">
+          <option value="POST">POST</option>
+          <option value="GET">GET</option>
+          <option value="PUT">PUT</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Status</label>
+        <select class="form-control" id="cfg-ativo">
+          <option value="true">Ativa</option>
+          <option value="false">Inativa</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1">
+        <label class="form-label">Descrição</label>
+        <input type="text" class="form-control" id="cfg-descricao" placeholder="Descrição opcional">
+      </div>
+    </div>
+
+    <!-- Tabela de Origem -->
+    <div class="accordion" id="acc-source-table" style="margin-bottom:10px">
+      <div class="accordion-hdr" onclick="toggleAccordion('acc-source-table')">
+        <span>🗄 Tabela de Origem <span style="font-weight:400;color:var(--text-lo);font-size:12px">(opcional — carregamento automático de dados)</span></span>
+        <span class="accordion-arrow">▾</span>
+      </div>
+      <div class="accordion-body" id="acc-source-table-body">
+        <div style="background:#f0fdf4;border-left:3px solid #22c55e;border-radius:6px;padding:9px 13px;margin-bottom:14px;font-size:12.5px;color:#166534;line-height:1.6">
+          Selecione uma tabela para que o motor carregue o registro automaticamente na execução.
+          Basta informar o ID do registro — todos os campos ficam disponíveis para os mapeamentos.<br>
+          <strong>Sem tabela:</strong> os dados precisam ser passados manualmente no JSON de execução.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label class="form-label">Tabela de Origem</label>
+            <select class="form-control" id="cfg-source-table" onchange="onSourceTableChange()">
+              <option value="">— Sem tabela de origem —</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Campo do ID <span style="color:var(--text-lo);font-weight:400;font-size:11.5px">(campo enviado na execução)</span></label>
+            <input type="text" class="form-control" id="cfg-source-id-field" placeholder="ex: curriculo_id" disabled>
+          </div>
+        </div>
+        <div id="source-table-fields-info" style="margin-top:12px;display:none">
+          <label class="form-label">Campos disponíveis nesta tabela</label>
+          <div id="source-table-fields-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
+        <div id="cfg-save-workflow-id-row" style="margin-top:14px;display:none">
+          <label class="form-label">Salvar WorkflowID retornado em <span style="color:var(--text-lo);font-weight:400;font-size:11.5px">(campo na tabela de origem)</span></label>
+          <input type="text" class="form-control" id="cfg-save-workflow-id-field" placeholder="ex: se_workflow_id" style="max-width:280px">
+          <div style="font-size:11.5px;color:var(--text-lo);margin-top:5px">
+            Após executar este Config (START), o motor extrai o <code>&lt;WorkflowID&gt;</code> da resposta SE e grava no registro de origem.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Headers -->
+    <div class="accordion" id="acc-headers">
+      <div class="accordion-hdr" onclick="toggleAccordion('acc-headers')">
+        <span>🔑 Headers de Autenticação <span id="headers-count-label" style="font-weight:400;color:var(--text-lo);font-size:12px"></span></span>
+        <span class="accordion-arrow">▾</span>
+      </div>
+      <div class="accordion-body" id="acc-headers-body">
+        <table class="kv-table" id="headers-table">
+          <thead><tr><th style="width:40%">Chave</th><th>Valor</th><th style="width:36px"></th></tr></thead>
+          <tbody id="headers-tbody"></tbody>
+        </table>
+        <div class="kv-add-row">
+          <button class="btn btn-secondary btn-sm" onclick="addHeaderRow()">+ Adicionar Header</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mapeamentos -->
+    <div class="accordion" id="acc-mappings" style="margin-top:10px">
+      <div class="accordion-hdr" onclick="toggleAccordion('acc-mappings')">
+        <span>🗺 Mapeamento de Campos <span id="mappings-count-label" style="font-weight:400;color:var(--text-lo);font-size:12px"></span></span>
+        <span class="accordion-arrow">▾</span>
+      </div>
+      <div class="accordion-body" id="acc-mappings-body">
+        <div id="mappings-ph-info" style="margin-bottom:10px;font-size:12.5px;color:var(--text-lo)">
+          Selecione um template para ver os placeholders disponíveis.
+        </div>
+        <div style="background:#eff6ff;border-left:3px solid #3b82f6;border-radius:6px;padding:9px 13px;margin-bottom:12px;font-size:12.5px;color:#1e40af;line-height:1.5">
+          <strong>Campo SE (Destino):</strong> código do campo no formulário do SoftExpert (ex: <code style="background:#dbeafe;padding:1px 5px;border-radius:3px">CANDIDATE_NAME</code>).
+          Preencha quando o template usar <code style="background:#dbeafe;padding:1px 5px;border-radius:3px">{{form_fields}}</code> — o motor gera os blocos <code style="background:#dbeafe;padding:1px 5px;border-radius:3px">&lt;item&gt;</code> automaticamente.<br>
+          <strong>Placeholder:</strong> obrigatório apenas para campos individuais no XML (ex: <code style="background:#dbeafe;padding:1px 5px;border-radius:3px">{{process_id}}</code>).
+        </div>
+        <table class="kv-table" id="mappings-table">
+          <thead>
+            <tr>
+              <th>Campo Origem — Nosso Sistema</th>
+              <th>Campo SE — Sistema Destino</th>
+              <th>Placeholder no XML</th>
+              <th>Valor Padrão</th>
+              <th style="width:36px"></th>
+            </tr>
+          </thead>
+          <tbody id="mappings-tbody"></tbody>
+        </table>
+        <div class="kv-add-row">
+          <button class="btn btn-secondary btn-sm" onclick="addMappingRow()">+ Adicionar Mapeamento</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Painel de resultado do teste -->
+    <div id="test-conn-result" style="display:none;margin-top:16px"></div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-config')">Cancelar</button>
+      <button class="btn btn-secondary" id="btn-test-conn" onclick="testarConexao()" style="display:flex;align-items:center;gap:6px">
+        🔌 Testar Conexão
+      </button>
+      <button class="btn btn-primary" onclick="saveConfig()">Salvar Configuração</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: FLOW
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-flow" style="display:none" onclick="closeModalOnBackdrop(event,'modal-flow')">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modal-flow-title">Novo Flow</span>
+      <button class="modal-close" onclick="closeModal('modal-flow')">×</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label class="form-label">Nome *</label>
+        <input type="text" class="form-control" id="flow-nome" placeholder="Ex: Processo Seletivo Completo">
+      </div>
+      <div>
+        <label class="form-label">Descrição</label>
+        <input type="text" class="form-control" id="flow-descricao" placeholder="Descreva o que este flow faz">
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div style="margin-top:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <label class="form-label" style="margin:0">Steps (sequência de chamadas)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <select class="form-control" id="step-config-select" style="height:33px;font-size:12.5px;min-width:200px">
+            <option value="">Selecione uma configuração...</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="addFlowStep()">+ Adicionar</button>
+        </div>
+      </div>
+      <div class="steps-list" id="steps-list">
+        <div style="text-align:center;padding:20px;color:var(--text-lo);font-size:13px">
+          Nenhum step adicionado. Selecione uma configuração e clique em "+ Adicionar".
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-flow')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveFlow()">Salvar Flow</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: DETALHE DO LOG
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-log" style="display:none" onclick="closeModalOnBackdrop(event,'modal-log')">
+  <div class="modal-box modal-xl">
+    <div class="modal-title">
+      <span>Detalhe da Execução</span>
+      <button class="modal-close" onclick="closeModal('modal-log')">×</button>
+    </div>
+    <div class="detail-grid" id="log-detail-grid"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-log')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: EXECUTAR CONFIG (teste manual)
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-exec" style="display:none" onclick="closeModalOnBackdrop(event,'modal-exec')">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modal-exec-title">Executar Configuração</span>
+      <button class="modal-close" onclick="closeModal('modal-exec')">×</button>
+    </div>
+    <div style="margin-bottom:14px;font-size:13px;color:var(--text-lo)">
+      Informe os dados de entrada em formato JSON. Os campos mapeados serão usados como valores dos placeholders.
+    </div>
+    <label class="form-label">Dados de Entrada (JSON)</label>
+    <textarea class="form-control" id="exec-data" rows="8"
+      style="font-family:monospace;font-size:12.5px"
+      placeholder='{\n  "nome": "João Silva",\n  "cargo": "Analista"\n}'></textarea>
+    <div id="exec-result" style="display:none;margin-top:16px">
+      <label class="form-label">Resultado</label>
+      <div id="exec-result-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-exec')">Fechar</button>
+      <button class="btn btn-primary" id="exec-btn" onclick="runExec()">▶ Executar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     MODAL: AJUDA
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-ajuda" style="display:none" onclick="closeModalOnBackdrop(event,'modal-ajuda')">
+  <div class="modal-box help-modal">
+    <div class="modal-title">
+      <span>❓ Guia de Uso — SE API Configurador</span>
+      <button class="modal-close" onclick="closeModal('modal-ajuda')">×</button>
+    </div>
+
+    <!-- Navegação rápida -->
+    <nav class="help-nav">
+      <a href="#help-conceito">Como funciona</a>
+      <a href="#help-modos">Modos de template</a>
+      <a href="#help-template">1. Criar Template</a>
+      <a href="#help-config">2. Criar Configuração</a>
+      <a href="#help-mapping">3. Mapeamentos</a>
+      <a href="#help-flow">4. Flows</a>
+      <a href="#help-exec">5. Executar</a>
+      <a href="#help-exemplos">Exemplos práticos</a>
+    </nav>
+
+    <div class="help-body">
+
+      <!-- ── Como funciona ─────────────────────────────────────────────── -->
+      <div class="help-section" id="help-conceito">
+        <div class="help-section-title">Como funciona o SE API Configurador</div>
+        <p class="help-p">
+          O SE API Configurador permite integrar seu sistema ao SoftExpert através de chamadas SOAP/XML
+          configuradas visualmente — sem precisar escrever código. Você define os templates XML uma vez,
+          e as configurações mapeiam os dados do seu sistema para os campos do SE.
+        </p>
+        <div class="help-flow-diagram">
+          <div class="help-flow-box">Dados do<br>seu sistema</div>
+          <div class="help-flow-arrow">→</div>
+          <div class="help-flow-box accent">Mapeamento<br>source → SE</div>
+          <div class="help-flow-arrow">→</div>
+          <div class="help-flow-box">Motor substitui<br>placeholders</div>
+          <div class="help-flow-arrow">→</div>
+          <div class="help-flow-box">XML gerado<br>automaticamente</div>
+          <div class="help-flow-arrow">→</div>
+          <div class="help-flow-box">Enviado ao<br>SoftExpert</div>
+        </div>
+        <p class="help-p">
+          Há <strong>4 conceitos principais</strong>: <strong>Template</strong> (estrutura XML), <strong>Configuração</strong>
+          (endpoint + autenticação + mapeamentos), <strong>Flow</strong> (sequência de chamadas) e
+          <strong>Histórico</strong> (log de execuções).
+        </p>
+      </div>
+
+      <!-- ── Modos de template ──────────────────────────────────────────── -->
+      <div class="help-section" id="help-modos">
+        <div class="help-section-title">Modos de template: Campos Fixos vs. {{form_fields}}</div>
+        <p class="help-p">
+          Existem <strong>dois modos</strong> de trabalhar com os campos do formulário SoftExpert:
+        </p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+          <div style="background:var(--bg-hover);border-radius:10px;padding:16px;border:1px solid var(--border)">
+            <div style="font-weight:700;color:var(--text-hi);margin-bottom:8px">📌 Modo 1 — Campos Fixos no XML</div>
+            <div style="font-size:12.5px;color:var(--text-md);line-height:1.6">
+              Os <code style="background:#ede9fe;padding:1px 5px;border-radius:3px">fieldID</code> do SE ficam
+              escritos diretamente no XML. Você usa placeholders <code style="background:#ede9fe;padding:1px 5px;border-radius:3px">{{nome}}</code>
+              apenas para os <em>valores</em>.<br><br>
+              ✅ Use quando a estrutura de campos raramente muda.
+            </div>
+          </div>
+          <div style="background:var(--bg-hover);border-radius:10px;padding:16px;border:1px solid var(--border)">
+            <div style="font-weight:700;color:var(--text-hi);margin-bottom:8px">🔄 Modo 2 — {{form_fields}} Dinâmico</div>
+            <div style="font-size:12.5px;color:var(--text-md);line-height:1.6">
+              O XML usa <code style="background:#ede9fe;padding:1px 5px;border-radius:3px">{{form_fields}}</code>
+              como marcador. O motor gera todos os blocos <code style="background:#ede9fe;padding:1px 5px;border-radius:3px">&lt;item&gt;</code>
+              automaticamente a partir dos mapeamentos que tiverem o <strong>Campo SE</strong> preenchido.<br><br>
+              ✅ Use quando os campos do SE podem variar por configuração.
+            </div>
+          </div>
+        </div>
+
+        <div class="help-callout tip">
+          <div class="help-callout-icon">💡</div>
+          <div class="help-callout-text">
+            <strong>Dica:</strong> Os dois modos podem coexistir no mesmo XML. Por exemplo,
+            <code>{{process_id}}</code> para o ID do processo (valor único) e
+            <code>{{form_fields}}</code> para o bloco de campos do formulário.
+          </div>
+        </div>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px">Comparação visual:</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <div style="font-size:11.5px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Modo 1 — Fixo no XML</div>
+            <div class="help-code"><span class="tag">&lt;formFields&gt;</span>
+  <span class="tag">&lt;item&gt;</span>
+    <span class="tag">&lt;fieldID&gt;</span>CANDIDATE_NAME<span class="tag">&lt;/fieldID&gt;</span>
+    <span class="tag">&lt;fieldValue&gt;</span><span class="ph">{{nome}}</span><span class="tag">&lt;/fieldValue&gt;</span>
+  <span class="tag">&lt;/item&gt;</span>
+  <span class="tag">&lt;item&gt;</span>
+    <span class="tag">&lt;fieldID&gt;</span>CANDIDATE_EMAIL<span class="tag">&lt;/fieldID&gt;</span>
+    <span class="tag">&lt;fieldValue&gt;</span><span class="ph">{{email}}</span><span class="tag">&lt;/fieldValue&gt;</span>
+  <span class="tag">&lt;/item&gt;</span>
+<span class="tag">&lt;/formFields&gt;</span></div>
+          </div>
+          <div>
+            <div style="font-size:11.5px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Modo 2 — Dinâmico</div>
+            <div class="help-code"><span class="tag">&lt;formFields&gt;</span>
+  <span class="ph">{{form_fields}}</span>
+  <span class="cm">&lt;!-- Motor gera os &lt;item&gt;
+  automaticamente --&gt;</span>
+<span class="tag">&lt;/formFields&gt;</span>
+
+<span class="cm">&lt;!-- Resultado gerado:
+  &lt;item&gt;
+    &lt;fieldID&gt;CANDIDATE_NAME&lt;/fieldID&gt;
+    &lt;fieldValue&gt;João&lt;/fieldValue&gt;
+  &lt;/item&gt;
+  ... --&gt;</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 1. Criar Template ──────────────────────────────────────────── -->
+      <div class="help-section" id="help-template">
+        <div class="help-section-title">Passo 1 — Criar um Template XML</div>
+        <p class="help-p">
+          O Template define a <strong>estrutura fixa do XML</strong> que o SoftExpert espera receber.
+          É compartilhado entre todas as empresas e pode ser reutilizado em múltiplas configurações.
+        </p>
+
+        <div class="help-step-list">
+          <div class="help-step">
+            <div class="help-step-num">1</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Obtenha o XML esperado pelo SoftExpert</div>
+              <div class="help-step-desc">Consulte a documentação da API do SE ou use o XML de uma chamada SOAP que já funciona. Esse será o "esqueleto" do template.</div>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">2</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Substitua os valores dinâmicos por placeholders</div>
+              <div class="help-step-desc">Onde o XML teria um valor real (nome, ID, etc.), coloque <code style="background:#ede9fe;padding:1px 5px;border-radius:3px">{{nome_do_placeholder}}</code>. Use nomes em minúsculas com underscore.</div>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">3</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Escolha o Tipo do template</div>
+              <div class="help-step-desc">
+                <strong>START</strong> → Iniciar um processo no SE &nbsp;|&nbsp;
+                <strong>DATA</strong> → Inserir dados em um formulário &nbsp;|&nbsp;
+                <strong>MOVE</strong> → Avançar uma atividade do workflow
+              </div>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">4</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Cole o XML e salve</div>
+              <div class="help-step-desc">O sistema extrai automaticamente todos os placeholders detectados e os exibe como chips abaixo do campo XML.</div>
+            </div>
+          </div>
+        </div>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px">Exemplo de template START com {{form_fields}}:</p>
+        <div class="help-code"><span class="tag">&lt;soapenv:Envelope</span> <span class="att">xmlns:soapenv</span>=<span class="str">"http://schemas.xmlsoap.org/soap/envelope/"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;soapenv:Body&gt;</span>
+    <span class="tag">&lt;ws:startProcess&gt;</span>
+      <span class="tag">&lt;processID&gt;</span><span class="ph">{{process_id}}</span><span class="tag">&lt;/processID&gt;</span>
+      <span class="tag">&lt;formFields&gt;</span>
+        <span class="ph">{{form_fields}}</span>
+      <span class="tag">&lt;/formFields&gt;</span>
+    <span class="tag">&lt;/ws:startProcess&gt;</span>
+  <span class="tag">&lt;/soapenv:Body&gt;</span>
+<span class="tag">&lt;/soapenv:Envelope&gt;</span>
+
+<span class="cm">&lt;!-- Placeholders detectados: process_id, form_fields --&gt;</span></div>
+
+        <div class="help-callout warn">
+          <div class="help-callout-icon">⚠️</div>
+          <div class="help-callout-text">
+            <strong>Atenção:</strong> O nome <code>form_fields</code> é reservado pelo motor. Ao usá-lo,
+            o sistema gera automaticamente os blocos <code>&lt;item&gt;</code> a partir dos mapeamentos
+            com "Campo SE" preenchido. Não use esse nome para outro fim.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 2. Criar Configuração ──────────────────────────────────────── -->
+      <div class="help-section" id="help-config">
+        <div class="help-section-title">Passo 2 — Criar uma Configuração</div>
+        <p class="help-p">
+          A Configuração liga o Template a um endpoint específico do SoftExpert, define como autenticar
+          e mapeiam os campos. Cada empresa tem suas próprias configurações.
+        </p>
+
+        <table class="help-table">
+          <thead><tr><th>Campo</th><th>O que preencher</th><th>Exemplo</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Nome</strong></td><td>Nome descritivo para identificar a config</td><td><code>Enviar Currículo ao SE</code></td></tr>
+            <tr><td><strong>Template</strong></td><td>Selecione o template XML criado no Passo 1</td><td><code>Iniciar Processo Seletivo</code></td></tr>
+            <tr><td><strong>Tipo</strong></td><td>OUTBOUND = seu sistema envia ao SE</td><td><code>OUTBOUND</code></td></tr>
+            <tr><td><strong>Endpoint</strong></td><td>URL completa da API do SoftExpert</td><td><code>https://empresa.se.com/apigateway/ws.php</code></td></tr>
+            <tr><td><strong>Método</strong></td><td>Método HTTP da chamada (geralmente POST)</td><td><code>POST</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── 3. Mapeamentos ─────────────────────────────────────────────── -->
+      <div class="help-section" id="help-mapping">
+        <div class="help-section-title">Passo 3 — Configurar os Mapeamentos</div>
+        <p class="help-p">
+          Os mapeamentos conectam os dados do seu sistema aos campos do SoftExpert. Cada linha de mapeamento
+          tem até 4 informações:
+        </p>
+
+        <table class="help-table">
+          <thead><tr><th>Coluna</th><th>O que é</th><th>Quando preencher</th><th>Exemplo</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Campo Origem</strong><br><code>source_field</code></td>
+              <td>Nome do campo do <strong>seu sistema</strong> que será enviado na execução</td>
+              <td>Sempre</td>
+              <td><code>nome</code>, <code>email</code>, <code>vaga_id</code></td>
+            </tr>
+            <tr>
+              <td><strong>Campo SE</strong><br><code>se_field_id</code></td>
+              <td>Código do campo no <strong>formulário do SoftExpert</strong></td>
+              <td>Quando usar <code>{{form_fields}}</code> no template</td>
+              <td><code>CANDIDATE_NAME</code>, <code>JOB_TITLE</code></td>
+            </tr>
+            <tr>
+              <td><strong>Placeholder</strong></td>
+              <td>Nome do <code>{{placeholder}}</code> que está no XML do template</td>
+              <td>Quando o campo aparece individualmente no XML</td>
+              <td><code>process_id</code>, <code>token</code></td>
+            </tr>
+            <tr>
+              <td><strong>Valor Padrão</strong></td>
+              <td>Valor usado quando o campo de origem vier vazio ou ausente</td>
+              <td>Opcional — para campos opcionais</td>
+              <td><code>PS-2024</code>, <code>ativo</code></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:8px">Exemplo de mapeamento completo:</p>
+        <table class="help-table">
+          <thead><tr><th>Campo Origem (nosso sistema)</th><th>Campo SE (SoftExpert)</th><th>Placeholder XML</th><th>Valor Padrão</th></tr></thead>
+          <tbody>
+            <tr><td><code>nome</code></td><td><code>CANDIDATE_NAME</code></td><td>—</td><td>—</td></tr>
+            <tr><td><code>email</code></td><td><code>CANDIDATE_EMAIL</code></td><td>—</td><td>—</td></tr>
+            <tr><td><code>telefone</code></td><td><code>CANDIDATE_PHONE</code></td><td>—</td><td>—</td></tr>
+            <tr><td><code>vaga_titulo</code></td><td><code>JOB_TITLE</code></td><td>—</td><td>—</td></tr>
+            <tr><td><code>se_process_id</code></td><td>—</td><td><code>process_id</code></td><td><code>PS-001</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="help-callout info">
+          <div class="help-callout-icon">ℹ️</div>
+          <div class="help-callout-text">
+            <strong>Como o motor processa:</strong> As 4 primeiras linhas (com Campo SE preenchido) são usadas
+            para gerar os blocos <code>&lt;item&gt;</code> dentro de <code>{{form_fields}}</code>.
+            A última linha (com Placeholder) é usada para substituir <code>{{process_id}}</code> diretamente no XML.
+          </div>
+        </div>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px">XML gerado automaticamente pelo motor:</p>
+        <div class="help-code"><span class="tag">&lt;soapenv:Envelope&gt;</span>
+  <span class="tag">&lt;soapenv:Body&gt;</span>
+    <span class="tag">&lt;ws:startProcess&gt;</span>
+      <span class="tag">&lt;processID&gt;</span>PS-001<span class="tag">&lt;/processID&gt;</span>  <span class="cm">&lt;!-- de {{process_id}} --&gt;</span>
+      <span class="tag">&lt;formFields&gt;</span>
+        <span class="cm">&lt;!-- gerado de {{form_fields}} --&gt;</span>
+        <span class="tag">&lt;item&gt;</span>
+          <span class="tag">&lt;fieldID&gt;</span>CANDIDATE_NAME<span class="tag">&lt;/fieldID&gt;</span>
+          <span class="tag">&lt;fieldValue&gt;</span>João Silva<span class="tag">&lt;/fieldValue&gt;</span>
+        <span class="tag">&lt;/item&gt;</span>
+        <span class="tag">&lt;item&gt;</span>
+          <span class="tag">&lt;fieldID&gt;</span>CANDIDATE_EMAIL<span class="tag">&lt;/fieldID&gt;</span>
+          <span class="tag">&lt;fieldValue&gt;</span>joao@email.com<span class="tag">&lt;/fieldValue&gt;</span>
+        <span class="tag">&lt;/item&gt;</span>
+        <span class="tag">&lt;item&gt;</span>
+          <span class="tag">&lt;fieldID&gt;</span>JOB_TITLE<span class="tag">&lt;/fieldID&gt;</span>
+          <span class="tag">&lt;fieldValue&gt;</span>Analista de RH<span class="tag">&lt;/fieldValue&gt;</span>
+        <span class="tag">&lt;/item&gt;</span>
+      <span class="tag">&lt;/formFields&gt;</span>
+    <span class="tag">&lt;/ws:startProcess&gt;</span>
+  <span class="tag">&lt;/soapenv:Body&gt;</span>
+<span class="tag">&lt;/soapenv:Envelope&gt;</span></div>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px">Headers de autenticação — exemplos comuns:</p>
+        <table class="help-table">
+          <thead><tr><th>Chave (Key)</th><th>Valor (Value)</th></tr></thead>
+          <tbody>
+            <tr><td><code>Authorization</code></td><td><code>Bearer SEU_TOKEN_AQUI</code></td></tr>
+            <tr><td><code>Content-Type</code></td><td><code>text/xml; charset=utf-8</code></td></tr>
+            <tr><td><code>SOAPAction</code></td><td><code>startProcess</code></td></tr>
+            <tr><td><code>X-SE-Token</code></td><td><code>abc123...</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── 4. Flows ───────────────────────────────────────────────────── -->
+      <div class="help-section" id="help-flow">
+        <div class="help-section-title">Passo 4 — Criar um Flow (opcional)</div>
+        <p class="help-p">
+          Um Flow encadeia múltiplas Configurações em sequência. Útil quando o processo completo
+          exige várias chamadas ao SE — por exemplo: iniciar processo → inserir dados → avançar atividade.
+        </p>
+
+        <div class="help-step-list">
+          <div class="help-step">
+            <div class="help-step-num">1</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Crie as Configurações individuais primeiro</div>
+              <div class="help-step-desc">Cada step do flow é uma Configuração. Certifique-se de que cada uma está correta antes de montar o flow.</div>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">2</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Adicione os steps na ordem correta</div>
+              <div class="help-step-desc">Use ▲ e ▼ para reordenar. O motor executa do step 1 ao último em sequência, passando os mesmos dados de entrada para todos.</div>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">3</div>
+            <div class="help-step-body">
+              <div class="help-step-title">Configure "Parar em erro"</div>
+              <div class="help-step-desc">Se marcado, o flow interrompe nos steps seguintes caso este step falhe. Se desmarcado, continua mesmo com erro.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="help-callout info">
+          <div class="help-callout-icon">ℹ️</div>
+          <div class="help-callout-text">
+            Os dados de entrada são compartilhados entre todos os steps do flow. O campo <code>source_field</code>
+            de cada mapeamento é buscado no mesmo objeto JSON enviado na execução.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 5. Executar ────────────────────────────────────────────────── -->
+      <div class="help-section" id="help-exec">
+        <div class="help-section-title">Passo 5 — Executar e monitorar</div>
+        <p class="help-p">
+          Clique em <strong>▶ Executar</strong> em qualquer Configuração ou Flow para fazer uma chamada
+          de teste. Informe os dados de entrada em JSON:
+        </p>
+        <div class="help-code"><span class="cm">// Dados de entrada para o exemplo anterior:</span>
+{
+  <span class="key">"nome"</span>:         <span class="str">"João Silva"</span>,
+  <span class="key">"email"</span>:        <span class="str">"joao@empresa.com"</span>,
+  <span class="key">"telefone"</span>:     <span class="str">"(65) 99999-0000"</span>,
+  <span class="key">"vaga_titulo"</span>:  <span class="str">"Analista de RH"</span>,
+  <span class="key">"se_process_id"</span>:<span class="str">"PS-2024-001"</span>
+}</div>
+        <p class="help-p">
+          Todas as execuções ficam registradas na aba <strong>Histórico</strong> com o XML enviado,
+          a resposta do SE, o status HTTP e o tempo de resposta. Use o agrupamento por coluna
+          para analisar padrões de erro.
+        </p>
+      </div>
+
+      <!-- ── Exemplos práticos ──────────────────────────────────────────── -->
+      <div class="help-section" id="help-exemplos">
+        <div class="help-section-title">Exemplos práticos</div>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px">Exemplo A — Template de cadastro de função (START)</p>
+        <div class="help-code"><span class="tag">&lt;soapenv:Envelope</span> <span class="att">xmlns:soapenv</span>=<span class="str">"http://schemas.xmlsoap.org/soap/envelope/"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;soapenv:Body&gt;</span>
+    <span class="tag">&lt;ws:startProcess&gt;</span>
+      <span class="tag">&lt;processID&gt;</span><span class="ph">{{process_id}}</span><span class="tag">&lt;/processID&gt;</span>
+      <span class="tag">&lt;formFields&gt;</span>
+        <span class="ph">{{form_fields}}</span>
+      <span class="tag">&lt;/formFields&gt;</span>
+    <span class="tag">&lt;/ws:startProcess&gt;</span>
+  <span class="tag">&lt;/soapenv:Body&gt;</span>
+<span class="tag">&lt;/soapenv:Envelope&gt;</span></div>
+
+        <table class="help-table" style="margin-top:4px">
+          <thead><tr><th>Campo Origem</th><th>Campo SE</th><th>Placeholder XML</th></tr></thead>
+          <tbody>
+            <tr><td><code>funcao_nome</code></td><td><code>FUNCTION_NAME</code></td><td>—</td></tr>
+            <tr><td><code>funcao_cbo</code></td><td><code>CBO_CODE</code></td><td>—</td></tr>
+            <tr><td><code>funcao_descricao</code></td><td><code>DESCRIPTION</code></td><td>—</td></tr>
+            <tr><td><code>processo_id</code></td><td>—</td><td><code>process_id</code></td></tr>
+          </tbody>
+        </table>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px;margin-top:20px">Exemplo B — Template de envio de currículo com campos fixos (DATA)</p>
+        <div class="help-code"><span class="tag">&lt;soapenv:Envelope</span> <span class="att">xmlns:soapenv</span>=<span class="str">"http://schemas.xmlsoap.org/soap/envelope/"</span><span class="tag">&gt;</span>
+  <span class="tag">&lt;soapenv:Body&gt;</span>
+    <span class="tag">&lt;ws:insertData&gt;</span>
+      <span class="tag">&lt;recordID&gt;</span><span class="ph">{{record_id}}</span><span class="tag">&lt;/recordID&gt;</span>
+      <span class="tag">&lt;formFields&gt;</span>
+        <span class="tag">&lt;item&gt;</span>
+          <span class="tag">&lt;fieldID&gt;</span>NM<span class="tag">&lt;/fieldID&gt;</span>
+          <span class="tag">&lt;fieldValue&gt;</span><span class="ph">{{nome}}</span><span class="tag">&lt;/fieldValue&gt;</span>
+        <span class="tag">&lt;/item&gt;</span>
+        <span class="tag">&lt;item&gt;</span>
+          <span class="tag">&lt;fieldID&gt;</span>TLF<span class="tag">&lt;/fieldID&gt;</span>
+          <span class="tag">&lt;fieldValue&gt;</span><span class="ph">{{telefone}}</span><span class="tag">&lt;/fieldValue&gt;</span>
+        <span class="tag">&lt;/item&gt;</span>
+      <span class="tag">&lt;/formFields&gt;</span>
+    <span class="tag">&lt;/ws:insertData&gt;</span>
+  <span class="tag">&lt;/soapenv:Body&gt;</span>
+<span class="tag">&lt;/soapenv:Envelope&gt;</span></div>
+
+        <p class="help-p" style="font-weight:700;margin-bottom:6px;margin-top:20px">Exemplo C — Flow completo: Processo Seletivo</p>
+        <div class="steps-list" style="pointer-events:none">
+          <div class="step-item">
+            <div class="step-order">1</div>
+            <div class="step-name">Iniciar Processo no SE</div>
+            <span class="badge badge-start">START</span>
+            <span style="font-size:12px;color:var(--text-lo)">Parar em erro: ✓</span>
+          </div>
+          <div class="step-item">
+            <div class="step-order">2</div>
+            <div class="step-name">Inserir Dados do Candidato</div>
+            <span class="badge badge-data">DATA</span>
+            <span style="font-size:12px;color:var(--text-lo)">Parar em erro: ✓</span>
+          </div>
+          <div class="step-item">
+            <div class="step-order">3</div>
+            <div class="step-name">Avançar para Triagem</div>
+            <span class="badge badge-move">MOVE</span>
+            <span style="font-size:12px;color:var(--text-lo)">Parar em erro: ✗</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- help-body -->
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ajuda')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts ─────────────────────────────────────────────────────────────── -->
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// Estado global
+// ════════════════════════════════════════════════════════════════════════════
+let _templates  = [];
+let _configs    = [];
+let _flows      = [];
+let _editingTpl = null;
+let _editingCfg = null;
+let _editingFlw = null;
+let _execTarget = null;
+let _execType   = null;
+let _flowSteps  = [];
+let _histTable  = null;
+let _gpanel     = null;
+
+// ════════════════════════════════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadAll();
+  initHistoricoGrid();
+});
+
+let _sourceTables = [];
+
+async function loadAll() {
+  await Promise.all([loadTemplates(), loadConfigs(), loadFlows(), loadSourceTables()]);
+  loadHistoricoStats();
+}
+
+async function loadSourceTables() {
+  try {
+    const r = await fetch('/api/se-api/source-tables');
+    _sourceTables = await r.json();
+    populateSourceTableSelect();
+  } catch {}
+}
+
+function populateSourceTableSelect() {
+  const sel = document.getElementById('cfg-source-table');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— Sem tabela de origem —</option>' +
+    _sourceTables.map(t =>
+      `<option value="${t.key}" ${t.key === cur ? 'selected' : ''}>${t.label}</option>`
+    ).join('');
+}
+
+function onSourceTableChange() {
+  const key   = document.getElementById('cfg-source-table').value;
+  const idFld = document.getElementById('cfg-source-id-field');
+  const info  = document.getElementById('source-table-fields-info');
+  const chips = document.getElementById('source-table-fields-chips');
+  const meta  = _sourceTables.find(t => t.key === key);
+
+  if (!meta) {
+    idFld.disabled = true;
+    idFld.value    = '';
+    info.style.display = 'none';
+    updateMappingSourceDropdowns([]);
+    return;
+  }
+
+  idFld.disabled = false;
+  if (!idFld.value) idFld.value = `${key.replace(/s$/, '')}_id`;
+
+  chips.innerHTML = meta.fields.map(f =>
+    `<span style="background:var(--bg-hover);border:1px solid var(--border);border-radius:12px;padding:2px 9px;font-size:11.5px;font-family:monospace;cursor:pointer"
+      onclick="document.getElementById('cfg-source-id-field').value='${f}'"
+      title="Usar como campo do ID">${f}</span>`
+  ).join('');
+  info.style.display = 'block';
+
+  updateMappingSourceDropdowns(meta.fields);
+}
+
+function updateMappingSourceDropdowns(fields) {
+  document.querySelectorAll('.mapping-src').forEach(input => {
+    const cur = input.value;
+    if (!fields.length) {
+      // Volta para input de texto livre
+      input.outerHTML = input.outerHTML; // mantém como input
+      return;
+    }
+    const sel = document.createElement('select');
+    sel.className = 'form-control mapping-src';
+    sel.title     = 'Campo do seu sistema';
+    sel.innerHTML = `<option value="">Selecione...</option>` +
+      fields.map(f => `<option value="${f}" ${f === cur ? 'selected' : ''}>${f}</option>`).join('');
+    input.replaceWith(sel);
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Abas
+// ════════════════════════════════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  document.getElementById('tab-btn-' + name).classList.add('active');
+  if (name === 'historico') { loadHistorico(); }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TEMPLATES
+// ════════════════════════════════════════════════════════════════════════════
+async function loadTemplates() {
+  try {
+    const r = await fetch('/api/se-api/templates');
+    _templates = await r.json();
+    document.getElementById('badge-templates').textContent = _templates.length;
+    renderTemplates();
+    populateTemplateSelects();
+  } catch {}
+}
+
+function renderTemplates() {
+  const q    = (document.getElementById('tpl-search').value || '').toLowerCase();
+  const tipo = document.getElementById('tpl-filter-tipo').value;
+  const el   = document.getElementById('templates-grid');
+
+  let list = _templates;
+  if (q)    list = list.filter(t => t.nome.toLowerCase().includes(q) || (t.descricao || '').toLowerCase().includes(q));
+  if (tipo) list = list.filter(t => t.tipo === tipo);
+
+  if (!list.length) {
+    el.innerHTML = emptyState('📄', 'Nenhum template encontrado', 'Crie templates XML com placeholders para usar nas configurações.');
+    return;
+  }
+  el.innerHTML = list.map(t => templateCard(t)).join('');
+}
+
+function templateCard(t) {
+  const phs = (t.placeholders || []);
+  const tipoBadge = { START: 'badge-start', DATA: 'badge-data', MOVE: 'badge-move', GRID: 'badge-grid' }[t.tipo] || 'badge-neutral';
+  return `<div class="item-card">
+    <div class="card-header">
+      <div class="card-title">${esc(t.nome)}</div>
+      <span class="badge ${tipoBadge}">${t.tipo || '—'}</span>
+    </div>
+    ${t.descricao ? `<div class="card-desc">${esc(t.descricao)}</div>` : ''}
+    <div class="card-meta">
+      ${t.integration_type ? `<span class="badge badge-neutral">${esc(t.integration_type)}</span>` : ''}
+      <span class="badge badge-neutral">v${esc(t.versao || '1.0')}</span>
+      <span class="badge badge-neutral">${phs.length} placeholder${phs.length !== 1 ? 's' : ''}</span>
+    </div>
+    ${phs.length ? `<div style="display:flex;gap:5px;flex-wrap:wrap">${phs.map(p => `<span class="ph-chip">{{${esc(p)}}}</span>`).join('')}</div>` : ''}
+    <div class="card-actions">
+      <button class="btn btn-secondary" onclick="viewXml(${t.id})">🔍 Ver XML</button>
+      <button class="btn btn-secondary" onclick="openTemplateModal(${t.id})">✏ Editar</button>
+      <button class="btn btn-secondary" style="color:var(--error)" onclick="deleteTemplate(${t.id}, '${esc(t.nome)}')">✕</button>
+    </div>
+  </div>`;
+}
+
+const BLOCK_TPL_DEFAULT = `        <item>
+          <fieldID>{SE_FIELD_ID}</fieldID>
+          <fieldValue>{SE_FIELD_VALUE}</fieldValue>
+        </item>`;
+
+const BLOCK_TPL_URN = `                  <urn:EntityAttribute>
+                     <urn:EntityAttributeID>{SE_FIELD_ID}</urn:EntityAttributeID>
+                     <urn:EntityAttributeValue>{SE_FIELD_VALUE}</urn:EntityAttributeValue>
+                  </urn:EntityAttribute>`;
+
+function setBlockTpl(tipo) {
+  document.getElementById('tpl-block-xml').value =
+    tipo === 'urn' ? BLOCK_TPL_URN : BLOCK_TPL_DEFAULT;
+}
+
+function openTemplateModal(id) {
+  _editingTpl = id || null;
+  const t = id ? _templates.find(x => x.id === id) : null;
+  document.getElementById('modal-template-title').textContent = t ? 'Editar Template' : 'Novo Template';
+  document.getElementById('tpl-nome').value              = t?.nome              || '';
+  document.getElementById('tpl-tipo').value              = t?.tipo              || '';
+  document.getElementById('tpl-integration-type').value  = t?.integration_type  || '';
+  document.getElementById('tpl-versao').value            = t?.versao            || '1.0';
+  document.getElementById('tpl-descricao').value         = t?.descricao         || '';
+  document.getElementById('tpl-xml').value               = t?.xml_template      || '';
+  document.getElementById('tpl-block-xml').value         = t?.block_xml_template || '';
+  extrairPlaceholders();
+  openModal('modal-template');
+}
+
+function extrairPlaceholders() {
+  const xml  = document.getElementById('tpl-xml').value;
+  const re   = /\{\{(\w+)\}\}/g;
+  const phs  = new Set(); let m;
+  while ((m = re.exec(xml)) !== null) phs.add(m[1]);
+  const chips = [...phs];
+  const sec   = document.getElementById('tpl-ph-section');
+  const cont  = document.getElementById('tpl-ph-chips');
+  sec.style.display = chips.length ? 'block' : 'none';
+  cont.innerHTML = chips.map(p => `<span class="ph-chip">{{${esc(p)}}}</span>`).join('');
+}
+
+async function saveTemplate() {
+  const nome     = document.getElementById('tpl-nome').value.trim();
+  const tipo     = document.getElementById('tpl-tipo').value;
+  const xml      = document.getElementById('tpl-xml').value.trim();
+  if (!nome || !tipo || !xml) return alert('Nome, Tipo e XML são obrigatórios.');
+
+  const blockXml = document.getElementById('tpl-block-xml').value.trim();
+  const body = {
+    nome, tipo,
+    integration_type:   document.getElementById('tpl-integration-type').value,
+    versao:             document.getElementById('tpl-versao').value.trim() || '1.0',
+    descricao:          document.getElementById('tpl-descricao').value.trim(),
+    xml_template:       xml,
+    block_xml_template: blockXml || null,
+  };
+
+  const url    = _editingTpl ? `/api/se-api/templates/${_editingTpl}` : '/api/se-api/templates';
+  const method = _editingTpl ? 'PUT' : 'POST';
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json(); return alert(e.error); }
+  closeModal('modal-template');
+  await loadTemplates();
+}
+
+async function deleteTemplate(id, nome) {
+  if (!confirm(`Remover template "${nome}"? Esta ação não pode ser desfeita.`)) return;
+  const r = await fetch(`/api/se-api/templates/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json(); return alert(e.error); }
+  await loadTemplates();
+}
+
+function viewXml(id) {
+  const t = _templates.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('modal-xml-title').textContent = t.nome;
+  const phs = t.placeholders || [];
+  document.getElementById('modal-xml-placeholders').innerHTML =
+    phs.map(p => `<span class="ph-chip">{{${esc(p)}}}</span>`).join('') || '<span style="color:var(--text-lo);font-size:12px">Nenhum placeholder detectado</span>';
+  document.getElementById('modal-xml-content').innerHTML = highlightXml(t.xml_template || '');
+  openModal('modal-xml');
+}
+
+function highlightXml(xml) {
+  return esc(xml)
+    .replace(/(&lt;\/?[\w:]+)/g, '<span class="tag">$1</span>')
+    .replace(/(\{\{[\w]+\}\})/g, '<span class="ph">$1</span>');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONFIGS
+// ════════════════════════════════════════════════════════════════════════════
+async function loadConfigs() {
+  try {
+    const r = await fetch('/api/se-api/configs');
+    _configs = await r.json();
+    document.getElementById('badge-configs').textContent = _configs.length;
+    renderConfigs();
+    populateConfigSelects();
+  } catch {}
+}
+
+function renderConfigs() {
+  const q     = (document.getElementById('cfg-search').value || '').toLowerCase();
+  const ativo = document.getElementById('cfg-filter-ativo').value;
+  const el    = document.getElementById('configs-grid');
+
+  let list = _configs;
+  if (q)     list = list.filter(c => c.nome.toLowerCase().includes(q));
+  if (ativo) list = list.filter(c => String(c.ativo) === ativo);
+
+  if (!list.length) {
+    el.innerHTML = emptyState('⚙', 'Nenhuma configuração encontrada', 'Crie uma configuração vinculando um template ao endpoint do SoftExpert.');
+    return;
+  }
+  el.innerHTML = list.map(c => configCard(c)).join('');
+}
+
+function configCard(c) {
+  return `<div class="item-card">
+    <div class="card-header">
+      <div class="card-title">${esc(c.nome)}</div>
+      <span class="badge ${c.ativo ? 'badge-ativo' : 'badge-inativo'}">${c.ativo ? 'Ativa' : 'Inativa'}</span>
+    </div>
+    ${c.descricao ? `<div class="card-desc">${esc(c.descricao)}</div>` : ''}
+    <div class="card-meta">
+      <span class="badge badge-neutral">📄 ${esc(c.template_nome)}</span>
+      <span class="badge badge-neutral">${esc(c.method || 'POST')}</span>
+    </div>
+    <div class="card-desc" style="font-family:monospace;font-size:11.5px;word-break:break-all">${esc(c.endpoint)}</div>
+    <div class="card-meta">
+      <span class="badge badge-neutral">🔑 ${c.headers_count} header${c.headers_count !== 1 ? 's' : ''}</span>
+      <span class="badge badge-neutral">🗺 ${c.mappings_count} mapeamento${c.mappings_count !== 1 ? 's' : ''}</span>
+    </div>
+    <div class="card-actions">
+      <button class="btn btn-secondary" onclick="runConfigExec(${c.id}, '${esc(c.nome)}')">▶ Executar</button>
+      <button class="btn btn-secondary" onclick="openConfigModal(${c.id})">✏ Editar</button>
+      <button class="btn btn-secondary" style="color:var(--error)" onclick="deleteConfig(${c.id}, '${esc(c.nome)}')">✕</button>
+    </div>
+  </div>`;
+}
+
+async function openConfigModal(id) {
+  _editingCfg = id || null;
+  populateTemplateSelects();
+
+  document.getElementById('test-conn-result').style.display = 'none';
+  populateSourceTableSelect();
+
+  if (id) {
+    const r = await fetch(`/api/se-api/configs/${id}`);
+    const c = await r.json();
+    document.getElementById('modal-config-title').textContent  = 'Editar Configuração';
+    document.getElementById('cfg-nome').value                  = c.nome          || '';
+    document.getElementById('cfg-template-id').value           = c.template_id   || '';
+    document.getElementById('cfg-tipo').value                  = c.tipo          || 'OUTBOUND';
+    document.getElementById('cfg-endpoint').value              = c.endpoint      || '';
+    document.getElementById('cfg-method').value                = c.method        || 'POST';
+    document.getElementById('cfg-ativo').value                 = String(c.ativo !== false);
+    document.getElementById('cfg-descricao').value             = c.descricao     || '';
+    document.getElementById('cfg-source-table').value          = c.source_table  || '';
+    document.getElementById('cfg-source-id-field').value       = c.source_id_field || '';
+    document.getElementById('cfg-save-workflow-id-field').value = c.save_workflow_id_field || '';
+    onSourceTableChange();
+    renderHeadersTable(c.headers || []);
+    renderMappingsTable(c.mappings || []);
+    onTemplateChange();
+  } else {
+    document.getElementById('modal-config-title').textContent  = 'Nova Configuração';
+    document.getElementById('cfg-nome').value                  = '';
+    document.getElementById('cfg-template-id').value           = '';
+    document.getElementById('cfg-tipo').value                  = 'OUTBOUND';
+    document.getElementById('cfg-endpoint').value              = '';
+    document.getElementById('cfg-method').value                = 'POST';
+    document.getElementById('cfg-ativo').value                 = 'true';
+    document.getElementById('cfg-descricao').value             = '';
+    document.getElementById('cfg-source-table').value          = '';
+    document.getElementById('cfg-source-id-field').value       = '';
+    document.getElementById('cfg-source-id-field').disabled    = true;
+    document.getElementById('cfg-save-workflow-id-field').value = '';
+    document.getElementById('source-table-fields-info').style.display = 'none';
+    document.getElementById('cfg-save-workflow-id-row').style.display  = 'none';
+    renderHeadersTable([]);
+    renderMappingsTable([]);
+  }
+  openModal('modal-config');
+}
+
+function onTemplateChange() {
+  const tid = Number(document.getElementById('cfg-template-id').value);
+  const tpl = _templates.find(t => t.id === tid);
+  const phs = tpl?.placeholders || [];
+  const info = document.getElementById('mappings-ph-info');
+  info.innerHTML = phs.length
+    ? `Placeholders disponíveis: ${phs.map(p => `<span class="ph-chip">{{${esc(p)}}}</span>`).join(' ')}`
+    : '<span style="color:var(--text-lo)">Selecione um template para ver os placeholders.</span>';
+  // Atualiza os selects de placeholder nas linhas de mapping
+  document.querySelectorAll('.mapping-ph-select').forEach(sel => {
+    const cur = sel.value;
+    sel.innerHTML = `<option value="">Selecione...</option>` +
+      phs.map(p => `<option value="${p}" ${p === cur ? 'selected' : ''}>${p}</option>`).join('');
+  });
+  // Mostra campo "Salvar WorkflowID em" apenas para templates tipo START
+  const saveRow = document.getElementById('cfg-save-workflow-id-row');
+  if (saveRow) saveRow.style.display = tpl?.tipo === 'START' ? 'block' : 'none';
+}
+
+// Headers table
+function renderHeadersTable(rows) {
+  const tbody = document.getElementById('headers-tbody');
+  tbody.innerHTML = rows.map((h, i) => headerRow(h.key, h.value, i)).join('');
+  updateHeadersLabel();
+}
+
+function headerRow(key = '', value = '', idx = Date.now()) {
+  return `<tr id="hrow-${idx}">
+    <td><input type="text" class="form-control" placeholder="Content-Type" value="${esc(key)}"></td>
+    <td><input type="text" class="form-control" placeholder="text/xml; charset=utf-8" value="${esc(value)}"></td>
+    <td><button class="btn-icon" onclick="this.closest('tr').remove();updateHeadersLabel()">✕</button></td>
+  </tr>`;
+}
+
+function addHeaderRow() {
+  const tbody = document.getElementById('headers-tbody');
+  const tr    = document.createElement('tr');
+  tr.innerHTML = headerRow('', '', Date.now()).replace(/^<tr[^>]*>/, '').replace(/<\/tr>$/, '');
+  const full   = document.createElement('tr');
+  full.innerHTML = headerRow('', '', Date.now());
+  tbody.appendChild(full.querySelector('tr') || full);
+  // Re-render limpo
+  tbody.insertAdjacentHTML('beforeend', headerRow('', '', Date.now()));
+  updateHeadersLabel();
+}
+
+function addHeaderRow() {
+  document.getElementById('headers-tbody').insertAdjacentHTML('beforeend', headerRow('', '', Date.now()));
+  updateHeadersLabel();
+}
+
+function getHeaders() {
+  return [...document.querySelectorAll('#headers-tbody tr')].map(tr => {
+    const inputs = tr.querySelectorAll('input');
+    return { key: inputs[0]?.value.trim(), value: inputs[1]?.value.trim() };
+  }).filter(h => h.key);
+}
+
+function updateHeadersLabel() {
+  const n = document.querySelectorAll('#headers-tbody tr').length;
+  document.getElementById('headers-count-label').textContent = n ? `(${n})` : '';
+}
+
+// Mappings table
+function renderMappingsTable(rows) {
+  const tid   = Number(document.getElementById('cfg-template-id').value);
+  const tpl   = _templates.find(t => t.id === tid);
+  const phs   = tpl?.placeholders || [];
+  const tbody = document.getElementById('mappings-tbody');
+  tbody.innerHTML = rows.map(m => mappingRow(m.source_field, m.se_field_id, m.placeholder, m.default_value, phs)).join('');
+  updateMappingsLabel();
+}
+
+function mappingRow(src = '', seField = '', ph = '', def = '', phs = []) {
+  const phOpts  = phs.map(p => `<option value="${p}" ${p === ph ? 'selected' : ''}>${p}</option>`).join('');
+  const tableKey = document.getElementById('cfg-source-table')?.value || '';
+  const meta     = _sourceTables.find(t => t.key === tableKey);
+  const srcCtrl  = meta
+    ? `<select class="form-control mapping-src" title="Campo da tabela ${meta.label}">
+         <option value="">Selecione...</option>
+         ${meta.fields.map(f => `<option value="${f}" ${f === src ? 'selected' : ''}>${f}</option>`).join('')}
+       </select>`
+    : `<input type="text" class="form-control mapping-src" placeholder="ex: nome" value="${esc(src)}" title="Campo do seu sistema enviado na execução">`;
+
+  return `<tr>
+    <td>${srcCtrl}</td>
+    <td><input type="text" class="form-control mapping-se" placeholder="ex: NM" value="${esc(seField)}" style="font-family:monospace;font-size:12px" title="Código do campo no SoftExpert"></td>
+    <td><select class="form-control mapping-ph-select" title="Placeholder no XML"><option value="">— nenhum —</option>${phOpts}</select></td>
+    <td><input type="text" class="form-control mapping-def" placeholder="(opcional)" value="${esc(def || '')}" title="Valor padrão se o campo vier vazio"></td>
+    <td><button class="btn-icon" onclick="this.closest('tr').remove();updateMappingsLabel()">✕</button></td>
+  </tr>`;
+}
+
+function addMappingRow() {
+  const tid = Number(document.getElementById('cfg-template-id').value);
+  const tpl = _templates.find(t => t.id === tid);
+  const phs = tpl?.placeholders || [];
+  document.getElementById('mappings-tbody').insertAdjacentHTML('beforeend', mappingRow('', '', '', '', phs));
+  updateMappingsLabel();
+}
+
+function getMappings() {
+  return [...document.querySelectorAll('#mappings-tbody tr')].map(tr => {
+    const src     = tr.querySelector('.mapping-src')?.value.trim()  || '';
+    const seField = tr.querySelector('.mapping-se')?.value.trim()   || '';
+    const ph      = tr.querySelector('.mapping-ph-select')?.value   || '';
+    const def     = tr.querySelector('.mapping-def')?.value.trim()  || null;
+    return { source_field: src, se_field_id: seField || null, placeholder: ph || null, default_value: def };
+  }).filter(m => m.source_field);
+}
+
+function updateMappingsLabel() {
+  const n = document.querySelectorAll('#mappings-tbody tr').length;
+  document.getElementById('mappings-count-label').textContent = n ? `(${n})` : '';
+}
+
+async function saveConfig() {
+  const nome       = document.getElementById('cfg-nome').value.trim();
+  const template_id = Number(document.getElementById('cfg-template-id').value);
+  const endpoint   = document.getElementById('cfg-endpoint').value.trim();
+  if (!nome || !template_id || !endpoint) return alert('Nome, Template e Endpoint são obrigatórios.');
+
+  const sourceTable         = document.getElementById('cfg-source-table').value || null;
+  const sourceIdField       = document.getElementById('cfg-source-id-field').value.trim() || null;
+  const tpl                 = _templates.find(t => t.id === template_id);
+  const saveWorkflowIdField = tpl?.tipo === 'START'
+    ? (document.getElementById('cfg-save-workflow-id-field').value.trim() || null)
+    : null;
+  const body = {
+    nome,
+    tipo:                   document.getElementById('cfg-tipo').value,
+    template_id,
+    endpoint,
+    method:                 document.getElementById('cfg-method').value,
+    ativo:                  document.getElementById('cfg-ativo').value === 'true',
+    descricao:              document.getElementById('cfg-descricao').value.trim(),
+    source_table:           sourceTable,
+    source_id_field:        sourceTable ? sourceIdField : null,
+    save_workflow_id_field: saveWorkflowIdField,
+  };
+
+  const url    = _editingCfg ? `/api/se-api/configs/${_editingCfg}` : '/api/se-api/configs';
+  const method = _editingCfg ? 'PUT' : 'POST';
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json(); return alert(e.error); }
+  const saved = await r.json();
+  const cfgId = saved.id;
+
+  // Salva headers e mappings
+  await fetch(`/api/se-api/configs/${cfgId}/headers`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ headers: getHeaders() }),
+  });
+  await fetch(`/api/se-api/configs/${cfgId}/mappings`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mappings: getMappings() }),
+  });
+
+  closeModal('modal-config');
+  await loadConfigs();
+}
+
+async function deleteConfig(id, nome) {
+  if (!confirm(`Remover configuração "${nome}"? Headers e mapeamentos também serão excluídos.`)) return;
+  const r = await fetch(`/api/se-api/configs/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json(); return alert(e.error); }
+  await loadConfigs();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FLOWS
+// ════════════════════════════════════════════════════════════════════════════
+async function loadFlows() {
+  try {
+    const r = await fetch('/api/se-api/flows');
+    _flows = await r.json();
+    document.getElementById('badge-flows').textContent = _flows.length;
+    renderFlows();
+  } catch {}
+}
+
+function renderFlows() {
+  const q  = (document.getElementById('flow-search').value || '').toLowerCase();
+  const el = document.getElementById('flows-grid');
+  let list = _flows;
+  if (q) list = list.filter(f => f.nome.toLowerCase().includes(q));
+  if (!list.length) {
+    el.innerHTML = emptyState('🔀', 'Nenhum flow encontrado', 'Crie flows para encadear múltiplas chamadas de API em sequência.');
+    return;
+  }
+  el.innerHTML = list.map(f => flowCard(f)).join('');
+}
+
+function flowCard(f) {
+  return `<div class="item-card">
+    <div class="card-header">
+      <div class="card-title">${esc(f.nome)}</div>
+      <span class="badge badge-flow">Flow</span>
+    </div>
+    ${f.descricao ? `<div class="card-desc">${esc(f.descricao)}</div>` : ''}
+    <div class="card-meta">
+      <span class="badge badge-neutral">📌 ${f.steps_count} step${f.steps_count !== 1 ? 's' : ''}</span>
+    </div>
+    <div class="card-actions">
+      <button class="btn btn-secondary" onclick="runFlowExec(${f.id}, '${esc(f.nome)}')">▶ Executar</button>
+      <button class="btn btn-secondary" onclick="openFlowModal(${f.id})">✏ Editar</button>
+      <button class="btn btn-secondary" style="color:var(--error)" onclick="deleteFlow(${f.id}, '${esc(f.nome)}')">✕</button>
+    </div>
+  </div>`;
+}
+
+async function openFlowModal(id) {
+  _editingFlw = id || null;
+  _flowSteps  = [];
+  populateConfigSelects();
+
+  if (id) {
+    const r = await fetch(`/api/se-api/flows/${id}`);
+    const f = await r.json();
+    document.getElementById('modal-flow-title').textContent = 'Editar Flow';
+    document.getElementById('flow-nome').value      = f.nome      || '';
+    document.getElementById('flow-descricao').value = f.descricao || '';
+    _flowSteps = f.steps || [];
+  } else {
+    document.getElementById('modal-flow-title').textContent = 'Novo Flow';
+    document.getElementById('flow-nome').value      = '';
+    document.getElementById('flow-descricao').value = '';
+  }
+  renderStepsList();
+  openModal('modal-flow');
+}
+
+function addFlowStep() {
+  const sel = document.getElementById('step-config-select');
+  const id  = Number(sel.value);
+  if (!id) return;
+  const cfg = _configs.find(c => c.id === id);
+  if (!cfg) return;
+  _flowSteps.push({ config_id: id, config_nome: cfg.nome, parar_em_erro: true });
+  renderStepsList();
+  sel.value = '';
+}
+
+function renderStepsList() {
+  const el = document.getElementById('steps-list');
+  if (!_flowSteps.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-lo);font-size:13px">Nenhum step adicionado. Selecione uma configuração e clique em "+ Adicionar".</div>';
+    return;
+  }
+  el.innerHTML = _flowSteps.map((s, i) => `
+    <div class="step-item">
+      <div class="step-order">${i + 1}</div>
+      <div class="step-name">${esc(s.config_nome)}</div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-lo);cursor:pointer">
+        <input type="checkbox" ${s.parar_em_erro !== false ? 'checked' : ''} onchange="_flowSteps[${i}].parar_em_erro=this.checked">
+        Parar em erro
+      </label>
+      <div class="step-move">
+        <button onclick="moveStep(${i}, -1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button onclick="moveStep(${i},  1)" ${i === _flowSteps.length - 1 ? 'disabled' : ''}>▼</button>
+      </div>
+      <button class="btn-icon" style="color:var(--error)" onclick="removeStep(${i})">✕</button>
+    </div>`).join('');
+}
+
+function moveStep(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= _flowSteps.length) return;
+  [_flowSteps[i], _flowSteps[j]] = [_flowSteps[j], _flowSteps[i]];
+  renderStepsList();
+}
+
+function removeStep(i) {
+  _flowSteps.splice(i, 1);
+  renderStepsList();
+}
+
+async function saveFlow() {
+  const nome = document.getElementById('flow-nome').value.trim();
+  if (!nome) return alert('Nome é obrigatório.');
+
+  const body = { nome, descricao: document.getElementById('flow-descricao').value.trim() };
+  const url    = _editingFlw ? `/api/se-api/flows/${_editingFlw}` : '/api/se-api/flows';
+  const method = _editingFlw ? 'PUT' : 'POST';
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json(); return alert(e.error); }
+  const saved = await r.json();
+
+  await fetch(`/api/se-api/flows/${saved.id}/steps`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ steps: _flowSteps }),
+  });
+
+  closeModal('modal-flow');
+  await loadFlows();
+}
+
+async function deleteFlow(id, nome) {
+  if (!confirm(`Remover flow "${nome}"?`)) return;
+  const r = await fetch(`/api/se-api/flows/${id}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json(); return alert(e.error); }
+  await loadFlows();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// TESTE DE CONEXÃO (dentro do modal de config)
+// ════════════════════════════════════════════════════════════════════════════
+async function testarConexao() {
+  const endpoint    = document.getElementById('cfg-endpoint').value.trim();
+  const method      = document.getElementById('cfg-method').value;
+  const template_id = Number(document.getElementById('cfg-template-id').value) || null;
+
+  if (!endpoint) {
+    mostrarResultadoTeste({ ok: false, error: 'Informe o Endpoint antes de testar.' });
+    return;
+  }
+
+  const btn = document.getElementById('btn-test-conn');
+  btn.disabled    = true;
+  btn.textContent = '⏳ Testando...';
+
+  try {
+    const r = await fetch('/api/se-api/test-connection', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint,
+        method,
+        template_id,
+        headers:  getHeaders(),
+        mappings: getMappings(),
+      }),
+    });
+    const resultado = await r.json();
+    mostrarResultadoTeste(resultado);
+  } catch (err) {
+    mostrarResultadoTeste({ ok: false, error: 'Falha ao chamar o servidor: ' + err.message });
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '🔌 Testar Conexão';
+  }
+}
+
+function mostrarResultadoTeste(r) {
+  const el   = document.getElementById('test-conn-result');
+  const ok   = r.ok === true;
+  const cor  = ok ? '#15803d' : '#b91c1c';
+  const bg   = ok ? '#f0fdf4' : '#fef2f2';
+  const bdr  = ok ? '#bbf7d0' : '#fecaca';
+  const icon = ok ? '✅' : '❌';
+
+  const httpBadge = r.status_code
+    ? `<span style="font-family:monospace;font-weight:700;color:${r.status_code < 400 ? '#15803d' : '#b91c1c'}">HTTP ${r.status_code}</span>`
+    : '';
+  const tempoBadge = r.duracao_ms != null
+    ? `<span style="color:var(--text-lo);font-size:12px">${r.duracao_ms}ms</span>`
+    : '';
+
+  const xmlSection = r.xml_enviado ? `
+    <div style="margin-top:10px">
+      <div class="expand-toggle" onclick="toggleExpand(this)">Ver XML enviado ▾</div>
+      <div class="expand-content" style="max-height:180px">${esc(r.xml_enviado)}</div>
+    </div>` : '';
+
+  const respostaSection = r.body ? `
+    <div style="margin-top:6px">
+      <div class="expand-toggle" onclick="toggleExpand(this)">Ver resposta do servidor ▾</div>
+      <div class="expand-content" style="max-height:180px">${esc(r.body)}</div>
+    </div>` : '';
+
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="border:1px solid ${bdr};background:${bg};border-radius:8px;padding:12px 16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span style="font-size:16px">${icon}</span>
+        <span style="font-weight:700;color:${cor}">${ok ? 'Conexão estabelecida' : 'Falha na conexão'}</span>
+        ${httpBadge}
+        ${tempoBadge}
+      </div>
+      ${r.error ? `<div style="font-size:13px;color:#b91c1c;margin-bottom:4px">${esc(r.error)}</div>` : ''}
+      ${xmlSection}
+      ${respostaSection}
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXECUÇÃO (teste manual)
+// ════════════════════════════════════════════════════════════════════════════
+function runConfigExec(id, nome) {
+  _execTarget = id; _execType = 'config';
+  document.getElementById('modal-exec-title').textContent = `Executar: ${nome}`;
+  document.getElementById('exec-data').value = '{\n  \n}';
+  document.getElementById('exec-result').style.display = 'none';
+  openModal('modal-exec');
+}
+
+function runFlowExec(id, nome) {
+  _execTarget = id; _execType = 'flow';
+  document.getElementById('modal-exec-title').textContent = `Executar Flow: ${nome}`;
+  document.getElementById('exec-data').value = '{\n  \n}';
+  document.getElementById('exec-result').style.display = 'none';
+  openModal('modal-exec');
+}
+
+async function runExec() {
+  let data = {};
+  try { data = JSON.parse(document.getElementById('exec-data').value || '{}'); }
+  catch { return alert('JSON inválido no campo de dados.'); }
+
+  const btn = document.getElementById('exec-btn');
+  btn.disabled = true; btn.textContent = '⏳ Executando...';
+
+  try {
+    const url = `/api/se-api/execute/${_execType}/${_execTarget}`;
+    const r   = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    });
+    const result = await r.json();
+    showExecResult(result, r.ok);
+    if (r.ok) loadHistorico();
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Executar';
+  }
+}
+
+function showExecResult(result, ok) {
+  const el = document.getElementById('exec-result');
+  el.style.display = 'block';
+  const statusColor = ok ? 'var(--success)' : 'var(--error)';
+  const statusText  = ok ? '✓ Sucesso' : '✕ Erro';
+  document.getElementById('exec-result-content').innerHTML = `
+    <div style="padding:10px 14px;border-radius:8px;border:1px solid ${ok ? '#bbf7d0' : '#fecaca'};background:${ok ? '#f0fdf4' : '#fef2f2'}">
+      <div style="font-weight:700;color:${statusColor};margin-bottom:8px">${statusText}</div>
+      ${result.status_code ? `<div style="font-size:12.5px;margin-bottom:4px">HTTP: <strong>${result.status_code}</strong> &nbsp; Tempo: <strong>${result.duracao_ms}ms</strong></div>` : ''}
+      ${result.error ? `<div style="font-size:13px;color:var(--error)">${esc(result.error)}</div>` : ''}
+      ${result.body ? `<div class="expand-toggle" onclick="toggleExpand(this)">Ver resposta ▾</div><div class="expand-content">${esc(result.body)}</div>` : ''}
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HISTÓRICO
+// ════════════════════════════════════════════════════════════════════════════
+function initHistoricoGrid() {
+  _histTable = new Tabulator('#historico-grid', {
+    data:          [],
+    layout:        'fitDataFill',
+    height:        520,
+    placeholder:   'Nenhuma execução registrada.',
+    groupStartOpen: false,
+    headerFilterPlaceholder: 'Filtrar...',
+    columns: [
+      { title: 'Data',        field: 'data',        width: 160,
+        formatter: (c) => fmtDate(c.getValue()),
+        headerFilter: 'input' },
+      { title: 'Tipo',        field: 'tipo',        width: 100,
+        formatter: (c) => {
+          const v = c.getValue();
+          const badge = { config: 'badge-config', flow: 'badge-flow', flow_step: 'badge-flow-step' }[v] || 'badge-neutral';
+          return `<span class="badge ${badge}">${v || '—'}</span>`;
+        },
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', config: 'Config', flow: 'Flow', flow_step: 'Step' } } },
+      { title: 'Config / Flow', field: 'config_nome', minWidth: 180,
+        formatter: (c) => {
+          const r = c.getRow().getData();
+          return esc(r.config_nome || r.flow_nome || '—');
+        },
+        headerFilter: 'input' },
+      { title: 'ID Currículo', field: 'curriculo_id', width: 110,
+        formatter: (c) => {
+          const v = c.getValue();
+          return v ? `<span style="font-family:monospace;font-size:12px">${v}</span>` : '<span style="color:var(--text-lo)">—</span>';
+        },
+        headerFilter: 'input' },
+      { title: 'Candidato', field: 'curriculo_nome', minWidth: 160,
+        formatter: (c) => esc(c.getValue() || '—'),
+        headerFilter: 'input' },
+      { title: 'Status',      field: 'status',      width: 120,
+        formatter: (c) => {
+          const v = c.getValue();
+          const badge = { sucesso: 'badge-sucesso', erro: 'badge-erro', erro_http: 'badge-erro_http' }[v] || 'badge-neutral';
+          return `<span class="badge ${badge}">${v || '—'}</span>`;
+        },
+        headerFilter: 'select',
+        headerFilterParams: { values: { '': 'Todos', sucesso: 'Sucesso', erro: 'Erro', erro_http: 'Erro HTTP' } } },
+      { title: 'HTTP',        field: 'status_code', width: 80,
+        formatter: (c) => {
+          const v = c.getValue();
+          if (!v) return '<span style="color:var(--text-lo)">—</span>';
+          const ok = v >= 200 && v < 300;
+          return `<span style="font-weight:700;color:${ok ? 'var(--success)' : 'var(--error)'}">${v}</span>`;
+        } },
+      { title: 'Tempo (ms)',  field: 'duracao_ms',  width: 110,
+        formatter: (c) => {
+          const v = c.getValue();
+          return v != null ? `${v}ms` : '—';
+        } },
+      { title: 'Erro',        field: 'erro',        minWidth: 200,
+        formatter: (c) => {
+          const v = c.getValue();
+          return v ? `<span style="color:var(--error);font-size:12px">${esc(String(v).slice(0, 120))}</span>` : '';
+        },
+        headerFilter: 'input' },
+    ],
+    rowClick: (e, row) => showLogDetail(row.getData()),
+  });
+
+  _gpanel = createGroupPanel({
+    chipsRowId: 'gp-chips-row',
+    dropZoneId: 'gp-drop-zone',
+    storageKey: 'seApiLogs_group_fields',
+    getTable:   () => _histTable,
+  });
+}
+
+async function loadHistorico() {
+  if (!_histTable) return;
+  try {
+    const r    = await fetch('/api/se-api/logs');
+    const data = await r.json();
+    _histTable.setData(data.logs || []);
+    document.getElementById('badge-historico').textContent = data.total || 0;
+    if (_gpanel) _gpanel.refresh();
+  } catch {}
+}
+
+async function loadHistoricoStats() {
+  try {
+    const r = await fetch('/api/se-api/logs/stats');
+    const s = await r.json();
+    document.getElementById('h-total').textContent  = s.total  || 0;
+    document.getElementById('h-sucesso').textContent = s.sucesso || 0;
+    document.getElementById('h-erro').textContent   = s.erro   || 0;
+    document.getElementById('h-media').textContent  = s.media_ms ? `${s.media_ms}ms` : '—';
+  } catch {}
+}
+
+function showLogDetail(log) {
+  const grid = document.getElementById('log-detail-grid');
+  const row  = (lbl, val, full = false, cls = '') => `
+    <div class="detail-item ${full ? 'full' : ''} ${cls}">
+      <div class="detail-lbl">${lbl}</div>
+      <div class="detail-val">${val}</div>
+    </div>`;
+  const expand = (lbl, content) => content ? `
+    <div class="detail-item full">
+      <div class="detail-lbl">${lbl}</div>
+      <div class="expand-toggle" onclick="toggleExpand(this)">Ver conteúdo ▾</div>
+      <div class="expand-content">${esc(content)}</div>
+    </div>` : '';
+
+  const tipoBadge = { config: 'badge-config', flow: 'badge-flow', flow_step: 'badge-flow-step' }[log.tipo] || 'badge-neutral';
+  const stBadge   = { sucesso: 'badge-sucesso', erro: 'badge-erro', erro_http: 'badge-erro_http' }[log.status] || 'badge-neutral';
+
+  grid.innerHTML = [
+    row('Data / Hora', fmtDate(log.data)),
+    row('Tipo', `<span class="badge ${tipoBadge}">${log.tipo || '—'}</span>`),
+    row('Config / Flow', esc(log.config_nome || log.flow_nome || '—')),
+    row('Status', `<span class="badge ${stBadge}">${log.status || '—'}</span>`),
+    log.curriculo_id   ? row('ID Currículo', `<span style="font-family:monospace">${log.curriculo_id}</span>`) : '',
+    log.curriculo_nome ? row('Candidato',    esc(log.curriculo_nome)) : '',
+    log.status_code ? row('HTTP Status', `<strong>${log.status_code}</strong>`) : '',
+    log.duracao_ms  ? row('Duração', `${log.duracao_ms}ms`) : '',
+    log.erro        ? row('Mensagem de Erro', `<span style="color:var(--error)">${esc(log.erro)}</span>`, true, '') : '',
+    expand('XML Enviado', log.xml_enviado),
+    expand('Resposta da API', log.resposta),
+  ].join('');
+
+  openModal('modal-log');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Helpers de UI
+// ════════════════════════════════════════════════════════════════════════════
+function populateTemplateSelects() {
+  const sel = document.getElementById('cfg-template-id');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Selecione o template...</option>' +
+    _templates.map(t => `<option value="${t.id}" ${String(t.id) === cur ? 'selected' : ''}>${esc(t.nome)} (${t.tipo})</option>`).join('');
+}
+
+function populateConfigSelects() {
+  const sel = document.getElementById('step-config-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione uma configuração...</option>' +
+    _configs.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+}
+
+function toggleAccordion(id) {
+  const hdr  = document.querySelector(`#${id} .accordion-hdr`);
+  const body = document.querySelector(`#${id} .accordion-body`);
+  hdr.classList.toggle('open');
+  body.classList.toggle('open');
+}
+
+function toggleExpand(el) {
+  const content = el.nextElementSibling;
+  content.classList.toggle('open');
+  el.textContent = content.classList.contains('open') ? 'Ocultar ▴' : 'Ver conteúdo ▾';
+}
+
+function emptyState(icon, title, desc) {
+  return `<div class="empty-state" style="grid-column:1/-1">
+    <div class="empty-icon">${icon}</div>
+    <div class="empty-title">${title}</div>
+    <div class="empty-desc">${desc}</div>
+  </div>`;
+}
+
+function openModal(id)  { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function closeModalOnBackdrop(e, id) { if (e.target.id === id) closeModal(id); }
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

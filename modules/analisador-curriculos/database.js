@@ -120,6 +120,8 @@ module.exports = {
     return ((d.analises || []))
       .map(a => ({
         id:               a.id,
+        empresa_id:       a.empresa_id ?? Number(empresaId),
+        empresa_nome:     a.empresa_nome || null,
         data:             a.data,
         vaga_id:          a.vaga_id,
         funcao_id:        a.funcao_id,
@@ -135,6 +137,31 @@ module.exports = {
 
   getAnalise(empresaId, id) {
     return (load(empresaId).analises || []).find(a => a.id === id) || null;
+  },
+
+  getAnaliseByVaga(empresaId, vagaId) {
+    const id = Number(vagaId);
+    return (load(empresaId).analises || []).find(a => Number(a.vaga_id) === id) || null;
+  },
+
+  backfillAnalisesEmpresa(empresaId, empresaNome) {
+    const d = load(empresaId);
+    if (!Array.isArray(d.analises) || !d.analises.length) return false;
+
+    let changed = false;
+    for (const a of d.analises) {
+      if (a.empresa_id === undefined || a.empresa_id === null || a.empresa_id === '') {
+        a.empresa_id = Number(empresaId);
+        changed = true;
+      }
+      if (!a.empresa_nome && empresaNome) {
+        a.empresa_nome = empresaNome;
+        changed = true;
+      }
+    }
+
+    if (changed) persist(empresaId, d);
+    return changed;
   },
 
   saveAnalise(empresaId, analise) {
@@ -155,6 +182,25 @@ module.exports = {
     d.analises.splice(idx, 1);
     persist(empresaId, d);
     return true;
+  },
+
+  // ── Pesos de Pontuação ────────────────────────────────────────────────────────
+  getPesosPontuacao(empresaId) {
+    const d = load(empresaId);
+    return {
+      requisitos_obrigatorios: 50,
+      requisitos_desejados:    30,
+      formacao:                10,
+      habilidades:             10,
+      corte_minimo:            50,
+      ...(d.pesos_pontuacao || {}),
+    };
+  },
+
+  setPesosPontuacao(empresaId, pesos) {
+    const d = load(empresaId);
+    d.pesos_pontuacao = { ...pesos, atualizado_em: new Date().toISOString() };
+    persist(empresaId, d);
   },
 
   // ── Equivalências de Palavras-chave ───────────────────────────────────────────
