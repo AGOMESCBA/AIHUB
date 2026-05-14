@@ -10,8 +10,16 @@ const sharedFrontend = fromRoot('frontend');
 const iahubFrontend = fromRoot('apps', 'IAHUB', 'frontend');
 const iaRecruitFrontend = fromRoot('apps', 'IA Recruit', 'frontend');
 const iaAdministracaoFrontend = fromRoot('apps', 'IA Administracao', 'frontend');
+const uiFrontend = fromRoot('packages', 'ui', 'frontend');
+const authFrontend = fromRoot('packages', 'auth', 'frontend');
+
+const SHARED_STATIC_DIRS = [
+  uiFrontend,
+  authFrontend,
+];
 
 const IA_RECRUIT_STATIC_DIRS = [
+  ...SHARED_STATIC_DIRS,
   iaRecruitFrontend,
   sharedFrontend,
   fromRoot('modules', 'whatsapp-curriculo', 'frontend'),
@@ -24,6 +32,7 @@ const IA_RECRUIT_STATIC_DIRS = [
 ];
 
 const IA_ADMIN_STATIC_DIRS = [
+  ...SHARED_STATIC_DIRS,
   iaAdministracaoFrontend,
   sharedFrontend,
   fromRoot('modules', 'configuracoes', 'frontend'),
@@ -33,6 +42,7 @@ const IA_ADMIN_STATIC_DIRS = [
 ];
 
 const LEGACY_STATIC_DIRS = [
+  ...SHARED_STATIC_DIRS,
   iahubFrontend,
   iaAdministracaoFrontend,
   iaRecruitFrontend,
@@ -76,5 +86,6 @@ const APPS = {
 module.exports = {
   APPS,
   LEGACY_STATIC_DIRS,
+  SHARED_STATIC_DIRS,
   fromRoot,
 };
