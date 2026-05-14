@@ -280,15 +280,16 @@
     .tabulator-audit .tabulator-row { cursor:default !important; }
     .admin-topbar { gap:12px; }
     .admin-topbar .topbar-title { font-weight:800; }
-    .admin-actions { margin-left:auto;display:flex;align-items:center;gap:8px; }
-    .admin-nav-btn {
+    .admin-actions { margin-left:auto;display:flex;align-items:center;gap:8px;order:2; }
+    .shell-nav-btn {
       height:34px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
       padding:0 12px;border-radius:8px;border:1px solid var(--border);
       background:var(--bg-card);color:var(--text-hi);font-size:13px;font-weight:800;
       text-decoration:none;transition:border-color .15s,background .15s,color .15s,transform .15s;
       white-space:nowrap;
     }
-    .admin-nav-btn:hover { border-color:var(--accent);background:var(--accent-glow);color:var(--accent);transform:translateY(-1px); }
+    .shell-nav-btn:hover { border-color:var(--accent);background:var(--accent-glow);color:var(--accent);transform:translateY(-1px); }
+    @media (max-width: 760px) { .shell-nav-btn span { display:none; } }
     .system-access-page { padding:18px 24px 24px; }
     .system-access-layout { display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr);gap:16px;align-items:start; }
     .system-access-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px; }
@@ -332,7 +333,7 @@
     <div class="topbar admin-topbar">
       <span class="topbar-title"><span class="topbar-path">Plataforma &gt;</span> IA Administracao</span>
       <div class="admin-actions">
-        <a class="admin-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
+        <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M3 11l9-8 9 8"/>
