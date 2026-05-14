@@ -412,8 +412,11 @@ async function _injetarEmpresaTopbar() {
       box-shadow:0 8px 32px rgba(0,0,0,.35);min-width:220px;padding:6px;
     "></div>`;
 
-  // Botão Guia de Uso — lado direito do topbar, antes do seletor de empresa
-  if (!topbar.querySelector('#_guia-btn')) {
+  // Botão Guia de Uso — pertence ao IA Recruit; o Admin/Shell principal não recebe o guia genérico.
+  const isAdminApp = location.pathname.includes('/app/ia-administracao/')
+    || location.pathname === '/administracao.html'
+    || location.pathname.endsWith('/administracao.html');
+  if (!isAdminApp && !topbar.querySelector('#_guia-btn')) {
     const guiaBtn = document.createElement('a');
     guiaBtn.id        = '_guia-btn';
     guiaBtn.href      = '/guia/';
