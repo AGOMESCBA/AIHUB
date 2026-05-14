@@ -10,11 +10,23 @@ const USER_SYSTEMS_FILE = 'user_systems';
 const DEFAULT_SYSTEMS = [
   {
     code: 'recrutamento',
-    name: 'Recrutamento',
-    description: 'Sistema de analise de curriculos',
-    url: '/app/recrutamento',
+    name: 'IA Recruit',
+    description: 'A inteligencia que encontra os talentos certos.',
+    url: '/app/ia-recruit',
     image_url: '/guia/img/04-dashboard.png',
     accent: '#2563eb',
+    badge: 'IA Recruit',
+    active: true,
+  },
+  {
+    code: 'ia-admin',
+    name: 'IA Administracao',
+    description: 'Administracao global de empresas, usuarios, sistemas e regras.',
+    url: '/app/ia-administracao',
+    image_url: '/guia/img/01-permissoes.png',
+    accent: '#0f766e',
+    badge: 'Plataforma',
+    admin_only: true,
     active: true,
   },
 ];
@@ -49,6 +61,8 @@ function hasCompanySystem(companyId, systemCode) {
 function hasUserSystem(userId, companyId, systemCode) {
   const user = usuariosDb.buscarPorId(userId);
   if (!user?.ativo) return false;
+  const system = getSystem(systemCode);
+  if (system?.admin_only && user.role !== 'admin') return false;
   if (user.role === 'admin') return hasCompanySystem(companyId, systemCode);
 
   const row = listarUserSystems().find(r =>
@@ -79,6 +93,8 @@ function listarDisponiveis(userId, companyId) {
       url: system.url,
       image_url: system.image_url || '',
       accent: system.accent || '#2563eb',
+      badge: system.badge || system.code,
+      admin_only: !!system.admin_only,
       active: system.active,
     }));
 }
@@ -94,7 +110,15 @@ function inicializarSistemas() {
     const row = ensureCrudRow(SYSTEMS_FILE, s => s.code === system.code, system);
     const patch = {};
     for (const [key, value] of Object.entries(system)) {
-      if (row[key] === undefined || row[key] === null || row[key] === '') patch[key] = value;
+      if (
+        row[key] === undefined ||
+        row[key] === null ||
+        row[key] === '' ||
+        key === 'name' ||
+        key === 'description' ||
+        key === 'url' ||
+        key === 'badge'
+      ) patch[key] = value;
     }
     if (Object.keys(patch).length) crud.atualizar(SYSTEMS_FILE, row.id, patch);
   }

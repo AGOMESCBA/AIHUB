@@ -1,6 +1,8 @@
-# Recrutamento
+# IA Recruit
 
-Projeto do sistema de recrutamento.
+A inteligencia que encontra os talentos certos.
+
+Projeto do sistema de recrutamento da plataforma IA Hub.
 
 Responsabilidades:
 - dashboard de recrutamento

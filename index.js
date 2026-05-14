@@ -85,6 +85,7 @@ inicializarConfig();
 inicializarSistemas();
 
 const requireRecrutamento = requireSystemAccess('recrutamento');
+const requireIaAdmin = requireSystemAccess('ia-admin');
 
 const RECRUTAMENTO_PAGES = new Set([
   '/dashboard.html',
@@ -112,9 +113,26 @@ app.use((req, res, next) => {
   requireRecrutamento(req, res, next);
 });
 
-app.get('/app/recrutamento', requireRecrutamento, (req, res) => {
-  res.redirect('/app/recrutamento/shell.html');
+app.get('/app/ia-recruit', requireRecrutamento, (req, res) => {
+  res.redirect('/app/ia-recruit/shell.html');
 });
+
+app.get('/app/recrutamento', requireRecrutamento, (req, res) => {
+  res.redirect('/app/ia-recruit/shell.html');
+});
+
+app.get('/app/ia-administracao', requireIaAdmin, (req, res) => {
+  res.redirect('/app/ia-administracao/administracao.html');
+});
+
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'processo-seletivo', 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEFuncao', 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEVaga', 'frontend')));
+app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
 
 app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'frontend')));
 app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
@@ -124,6 +142,12 @@ app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dir
 app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEFuncao', 'frontend')));
 app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEVaga', 'frontend')));
 app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
+
+app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'frontend')));
+app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'configuracoes', 'frontend')));
+app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'empresas', 'frontend')));
+app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'usuarios', 'frontend')));
+app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'seguranca', 'frontend')));
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'frontend')));

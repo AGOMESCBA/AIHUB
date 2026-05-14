@@ -249,7 +249,7 @@
             ${visual}
             <div class="system-body">
               <div class="system-chip">
-                <span>${esc(system.code)}</span>
+                <span>${esc(system.badge || system.code)}</span>
               </div>
               <div class="system-name">${esc(system.name)}</div>
               <div class="system-desc">${esc(system.description || '')}</div>
