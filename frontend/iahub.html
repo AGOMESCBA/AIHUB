@@ -6,199 +6,117 @@
   <title>IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    /* ── Barra de abas MDI — estilo "folder tab" ───────────────── */
-    .mdi-tabbar {
-      display: flex;
-      align-items: flex-end;          /* abas se apoiam na borda inferior */
-      background: var(--bg-hover);    /* fundo da barra — mais escuro que o conteúdo */
-      border-bottom: 1px solid var(--border);
-      overflow-x: auto;
-      scrollbar-width: thin;
-      scrollbar-color: var(--border-hi) transparent;
-      scroll-behavior: smooth;
-      flex-shrink: 0;
-      padding: 6px 8px 0;
-      gap: 3px;
+    .hub-shell { min-height:100vh;background:var(--bg-base); }
+    .hub-main { min-height:100vh;display:flex;flex-direction:column; }
+    .hub-content { flex:1;padding:28px;max-width:1180px;width:100%;margin:0 auto; }
+    .systems-head { display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:22px; }
+    .systems-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:4px; }
+    .systems-title { font-size:24px;font-weight:800;color:var(--text-hi);line-height:1.2; }
+    .systems-subtitle { font-size:13px;color:var(--text-md);margin-top:6px; }
+    .systems-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px; }
+    .system-card {
+      border:1px solid var(--border);border-radius:8px;background:var(--bg-card);
+      padding:18px;display:flex;flex-direction:column;gap:12px;min-height:170px;
+      box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s,transform .15s;
     }
-    .mdi-tabbar::-webkit-scrollbar { height: 6px; }
-    .mdi-tabbar::-webkit-scrollbar-track { background: transparent; }
-    .mdi-tabbar::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 999px; }
-
-    .mdi-tab {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      padding: 7px 10px 8px 13px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-md);
-      background: rgba(255,255,255,.5);
-      border: 1px solid var(--border);
-      border-bottom: none;            /* sem borda inferior: aba "assenta" no conteúdo */
-      border-radius: 7px 7px 0 0;
-      cursor: pointer;
-      white-space: nowrap;
-      flex: 0 0 clamp(220px, 15vw, 280px);
-      max-width: 280px;
-      min-width: 0;
-      user-select: none;
-      transition: color var(--transition), background var(--transition), box-shadow var(--transition);
-      margin-bottom: -1px;            /* esconde a borda inferior da barra */
-      position: relative;
+    .system-card:hover { border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-1px); }
+    .system-card-top { display:flex;align-items:center;gap:12px; }
+    .system-icon { width:42px;height:42px;border-radius:8px;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px; }
+    .system-name { color:var(--text-hi);font-size:16px;font-weight:800;line-height:1.25; }
+    .system-code { color:var(--text-lo);font-size:11px;margin-top:2px; }
+    .system-desc { color:var(--text-md);font-size:13px;line-height:1.5;flex:1; }
+    .empty-state { border:1px dashed var(--border-hi);border-radius:8px;padding:38px;text-align:center;color:var(--text-md);background:var(--bg-card); }
+    .empty-title { color:var(--text-hi);font-weight:800;margin-bottom:8px; }
+    @media (max-width: 640px) {
+      .hub-content { padding:18px; }
+      .systems-head { flex-direction:column;align-items:flex-start; }
+      .systems-title { font-size:20px; }
     }
-    .mdi-tab:hover {
-      background: var(--bg-card);
-      color: var(--text-hi);
-    }
-    .mdi-tab.active {
-      background: var(--bg-card);
-      color: var(--accent);
-      font-weight: 600;
-      border-color: var(--border);
-      border-top: 2px solid var(--accent);  /* destaque azul no topo */
-      box-shadow: 0 -2px 10px rgba(37,99,235,.07), var(--shadow-sm);
-      z-index: 1;
-    }
-
-    .mdi-tab-icon  { font-size: 14px; flex-shrink: 0; }
-    .mdi-tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; text-align: left; min-width: 0; }
-
-    .mdi-tab-close {
-      flex-shrink: 0;
-      width: 20px; height: 20px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 4px;
-      font-size: 16px;
-      line-height: 1;
-      color: var(--text-lo);
-      transition: background var(--transition), color var(--transition);
-      margin-left: 1px;
-    }
-    .mdi-tab-close:hover                  { background: rgba(0,0,0,.08); color: var(--text-hi); }
-    .mdi-tab.active .mdi-tab-close:hover  { background: var(--accent-glow); color: var(--accent); }
-
-    /* ── Área de conteúdo ──────────────────────────────────────── */
-    /* Scroll buttons */
-    .mdi-tabbar-wrap {
-      display: flex;
-      align-items: stretch;
-      background: var(--bg-hover);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .mdi-tabbar {
-      flex: 1;
-      min-width: 0;
-      border-bottom: none !important;
-    }
-    .mdi-scroll-btn {
-      display: none;
-      align-items: center;
-      justify-content: center;
-      width: 30px;
-      flex-shrink: 0;
-      background: var(--bg-card);
-      border: none;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--text-md);
-      transition: color var(--transition), background var(--transition);
-      z-index: 1;
-    }
-    .mdi-scroll-btn:hover { color: var(--accent); background: var(--bg-hover); }
-
-    .mdi-content {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
-      background: var(--bg-card);    /* branco — conecta visualmente com a aba ativa */
-    }
-
-    .mdi-iframe {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: none;
-      background: var(--bg-card);
-    }
-    .mdi-iframe.active { display: block; }
-
-    /* ── Estado vazio ──────────────────────────────────────────── */
-    .mdi-empty {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      pointer-events: none;
-      user-select: none;
-    }
-    .mdi-empty-icon  { font-size: 56px; opacity: .15; }
-    .mdi-empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); }
-    .mdi-empty-sub   { font-size: 13px; color: var(--text-lo); }
   </style>
 </head>
 <body>
-<div class="layout" id="layout">
-
-  <!-- Sidebar (igual às demais páginas) -->
-  <nav class="sidebar" id="sidebar">
-    <div class="sidebar-logo" onclick="toggleSidebar()">
-      <div class="logo-icon">IA</div>
-      <span class="logo-text">IAHub</span>
-    </div>
-    <div class="sidebar-nav"></div>
-    <div class="sidebar-footer"></div>
-  </nav>
-
-  <div class="main">
-
-    <!-- Topbar do shell -->
-    <div class="topbar">
-      <span class="topbar-title" id="shell-title">IAHub</span>
-    </div>
-
-    <!-- Barra de abas MDI com scroll -->
-    <div class="mdi-tabbar-wrap">
-      <button class="mdi-scroll-btn" id="mdi-scroll-left"  title="Rolar para esquerda" onclick="scrollMdiTabs(-1)">◀</button>
-      <div class="mdi-tabbar" id="mdi-tabbar"></div>
-      <button class="mdi-scroll-btn" id="mdi-scroll-right" title="Rolar para direita"  onclick="scrollMdiTabs(1)">▶</button>
-    </div>
-
-    <!-- Área de conteúdo: iframes empilhados, apenas o ativo visível -->
-    <div class="mdi-content" id="mdi-content">
-      <div class="mdi-empty" id="mdi-empty">
-        <div class="mdi-empty-icon">🗂️</div>
-        <div class="mdi-empty-title">Nenhuma rotina aberta</div>
-        <div class="mdi-empty-sub">Selecione uma opção no menu lateral para começar</div>
+  <div class="hub-shell">
+    <main class="hub-main">
+      <div class="topbar">
+        <span class="topbar-title">IAHub</span>
       </div>
-    </div>
 
+      <section class="hub-content">
+        <div class="systems-head">
+          <div>
+            <div class="systems-kicker">Plataforma</div>
+            <div class="systems-title">Selecione um sistema</div>
+            <div class="systems-subtitle" id="systems-subtitle">Carregando sistemas disponiveis...</div>
+          </div>
+          <button class="btn btn-secondary" onclick="logout()">Sair</button>
+        </div>
+
+        <div class="systems-grid" id="systems-grid"></div>
+      </section>
+    </main>
   </div>
-</div>
 
-<script src="/js/auth.js"></script>
-<script src="/js/sidebar.js"></script>
-<script src="/js/tab-manager.js"></script>
-<script>
-  // Intercepta cliques nos itens de menu → abre como aba MDI
-  document.addEventListener('click', (e) => {
-    const link = e.target.closest('#sidebar a.nav-item');
-    if (!link) return;
-    e.preventDefault();
-    const url   = new URL(link.href, location.origin).pathname;
-    const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
-    const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
-    window.openTab(url, label, icon);
-  });
+  <script src="/js/auth.js"></script>
+  <script>
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+      }[ch]));
+    }
 
-  // Abre o Dashboard automaticamente ao carregar
-  window._iahubAuthReady.then(() => window.openTab('/dashboard.html', 'Dashboard', '⊞'));
-</script>
+    function sigla(system) {
+      return String(system.name || system.code || 'S').trim().slice(0, 2).toUpperCase();
+    }
+
+    async function selecionarSistema(systemCode) {
+      const res = await fetch('/api/sistemas/selecionar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ system_code: systemCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        sessionStorage.setItem('_iahub_aviso', data.error || 'Sem acesso ao sistema selecionado.');
+        location.reload();
+        return;
+      }
+      location.href = data.redirectUrl || '/iahub.html';
+    }
+
+    async function carregarSistemas() {
+      await window._iahubAuthReady;
+      const grid = document.getElementById('systems-grid');
+      const subtitle = document.getElementById('systems-subtitle');
+      const sistemas = await fetch('/api/sistemas/disponiveis').then(r => r.json()).catch(() => []);
+
+      subtitle.textContent = window._iahubEmpresa?.nome
+        ? `Empresa ativa: ${window._iahubEmpresa.nome}`
+        : 'Escolha uma empresa para continuar.';
+
+      if (!Array.isArray(sistemas) || !sistemas.length) {
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column:1/-1">
+            <div class="empty-title">Nenhum sistema disponivel</div>
+            <div>Solicite ao administrador acesso a um sistema para esta empresa.</div>
+          </div>`;
+        return;
+      }
+
+      grid.innerHTML = sistemas.map(system => `
+        <article class="system-card">
+          <div class="system-card-top">
+            <div class="system-icon">${esc(sigla(system))}</div>
+            <div>
+              <div class="system-name">${esc(system.name)}</div>
+              <div class="system-code">${esc(system.code)}</div>
+            </div>
+          </div>
+          <div class="system-desc">${esc(system.description || '')}</div>
+          <button class="btn btn-primary" onclick="selecionarSistema('${esc(system.code)}')">Acessar</button>
+        </article>`).join('');
+    }
+
+    carregarSistemas();
+  </script>
 </body>
 </html>

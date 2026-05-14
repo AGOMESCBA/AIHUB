@@ -1,4 +1,5 @@
 const db = require('./database');
+const sistemasDb = require('../sistemas/database');
 
 module.exports = function registerRoutes(app, { requireAuth }) {
 
@@ -35,6 +36,14 @@ module.exports = function registerRoutes(app, { requireAuth }) {
       return res.status(400).json({ error: 'permissoes deve ser um array' });
     }
     db.salvar(req.params.usuarioId, permissoes);
+    for (const permissao of permissoes) {
+      sistemasDb.salvarUserSystems(req.params.usuarioId, permissao.empresa_id, [
+        {
+          system_code: 'recrutamento',
+          active: Array.isArray(permissao.rotinas) && permissao.rotinas.length > 0,
+        },
+      ]);
+    }
     res.json({ ok: true });
   });
 

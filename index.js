@@ -8,6 +8,12 @@ const rateLimit        = require('express-rate-limit');
 const path             = require('path');
 const fs               = require('fs');
 const FileSessionStore = require('./modules/auth/session-store');
+const { requireAuth, requireAdmin } = require('./modules/auth');
+const { inicializarAdmin }          = require('./modules/auth/database');
+const { requireEmpresa }            = require('./modules/empresa-context');
+const { inicializarConfig }         = require('./modules/configuracoes/database');
+const { inicializarSistemas }       = require('./modules/sistemas/database');
+const { requireSystemAccess }       = require('./modules/sistemas/access');
 
 let puppeteer;
 try { puppeteer = require('puppeteer-core'); } catch (_) {}
@@ -74,6 +80,51 @@ app.use(sessionMiddleware);
 // Compartilha a sessão Express com Socket.IO para saber qual empresa cada socket pertence
 io.use((socket, next) => sessionMiddleware(socket.request, socket.request.res || {}, next));
 
+inicializarAdmin().catch(err => console.error('[auth] Falha ao inicializar admin:', err));
+inicializarConfig();
+inicializarSistemas();
+
+const requireRecrutamento = requireSystemAccess('recrutamento');
+
+const RECRUTAMENTO_PAGES = new Set([
+  '/dashboard.html',
+  '/monitores.html',
+  '/monitor.html',
+  '/monitor-email.html',
+  '/curriculos.html',
+  '/curriculo.html',
+  '/funcoes.html',
+  '/vagas.html',
+  '/processoseletivo.html',
+  '/analisador.html',
+  '/historico.html',
+  '/config-analisador.html',
+  '/se-integracoes.html',
+  '/se-integracoes-config.html',
+  '/se-curriculos.html',
+  '/se-funcoes.html',
+  '/se-vagas.html',
+  '/se-api-configurador.html',
+]);
+
+app.use((req, res, next) => {
+  if (!RECRUTAMENTO_PAGES.has(req.path)) return next();
+  requireRecrutamento(req, res, next);
+});
+
+app.get('/app/recrutamento', requireRecrutamento, (req, res) => {
+  res.redirect('/app/recrutamento/shell.html');
+});
+
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'processo-seletivo', 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEFuncao', 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEVaga', 'frontend')));
+app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
+
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'frontend')));
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
@@ -123,15 +174,6 @@ function registrarLog(entry, empresaId) {
   const linha = `[${entry.timestamp}] [${(entry.type || 'info').toUpperCase().padEnd(8)}] ${entry.message}\n`;
   try { fs.appendFileSync(arquivo, linha, 'utf8'); } catch (_) {}
 }
-
-// ── Auth: middleware e inicialização ─────────────────────────────────────────
-const { requireAuth, requireAdmin } = require('./modules/auth');
-const { inicializarAdmin }          = require('./modules/auth/database');
-const { requireEmpresa }            = require('./modules/empresa-context');
-const { inicializarConfig }         = require('./modules/configuracoes/database');
-
-inicializarAdmin().catch(err => console.error('[auth] Falha ao inicializar admin:', err));
-inicializarConfig();
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
 const waManager = require('./modules/whatsapp-curriculo/service-manager');
@@ -258,8 +300,32 @@ require('./modules/usuarios/routes')(app, { requireAuth });
 // ── Módulo Permissões ─────────────────────────────────────────────────────────
 require('./modules/permissoes/routes')(app, { requireAuth });
 
+// ── Módulo Sistemas ───────────────────────────────────────────────────────────
+require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
+
 // ── Módulo Segurança ──────────────────────────────────────────────────────────
 require('./modules/seguranca/routes')(app, { requireAuth });
+
+[
+  '/api/service',
+  '/api/config',
+  '/api/meta',
+  '/api/curriculos',
+  '/api/stats',
+  '/api/ps',
+  '/api/email-geral',
+  '/api/email-service',
+  '/api/funcoes',
+  '/api/vagas',
+  '/api/analisador',
+  '/api/pesos-pontuacao',
+  '/api/analises',
+  '/api/equivalencias',
+  '/api/integracoes/se',
+  '/api/integracoes/se-funcao',
+  '/api/integracoes/se-vaga',
+  '/api/se-api',
+].forEach(prefix => app.use(prefix, requireRecrutamento));
 
 // ── Módulo Monitoramento (WhatsApp Currículo) ─────────────────────────────────
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, requireEmpresa, registrarLog, io });

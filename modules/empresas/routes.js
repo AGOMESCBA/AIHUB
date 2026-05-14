@@ -1,6 +1,7 @@
 const fs   = require('fs');
 const path = require('path');
 const db   = require('./database');
+const sistemasDb = require('../sistemas/database');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const UPLOADS_DIR = path.join(DATA_DIR, 'uploads', 'empresas');
@@ -131,6 +132,11 @@ module.exports = function registerRoutes(app, { requireAuth }) {
       endereco:     (endereco   || '').trim(),
       login_slogan: (login_slogan || '').trim(),
     });
+
+    sistemasDb.salvarCompanySystems(
+      nova.id,
+      sistemasDb.listarSystems().map(system => ({ system_code: system.code, active: true }))
+    );
 
     res.status(201).json(nova);
   });

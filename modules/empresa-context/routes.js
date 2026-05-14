@@ -49,6 +49,8 @@ module.exports = function registerRoutes(app, { requireAuth }) {
     const empresa_anterior = req.session.empresa_id || null;
     req.session.empresa_id   = empresa.id;
     req.session.empresa_nome = empresa.razao_social;
+    req.session.system_code  = null;
+    req.session.system_name  = null;
 
     registrarAuditoria({
       usuario:   req.session.user,
@@ -68,6 +70,8 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   app.post('/api/empresas/limpar', requireAuth, (req, res) => {
     req.session.empresa_id   = null;
     req.session.empresa_nome = null;
+    req.session.system_code  = null;
+    req.session.system_name  = null;
     res.json({ ok: true });
   });
 
