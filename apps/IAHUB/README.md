@@ -10,6 +10,6 @@ Responsabilidades:
 - regras globais de multiempresa e multisistema
 - redirecionamento para os sistemas
 
-Nesta fase, esta pasta representa a estrutura destino. Os arquivos executaveis
-ainda permanecem nos caminhos legados em `frontend/` e `modules/` ate a fase de
-migracao fisica.
+Os frontends principais ja foram migrados para `apps/IAHUB/frontend`. Os assets
+compartilhados e parte do backend ainda permanecem nos caminhos legados ate as
+proximas fases.

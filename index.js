@@ -95,6 +95,7 @@ function mountStaticDirs(route, middleware, dirs) {
 }
 
 const RECRUTAMENTO_PAGES = new Set([
+  '/shell.html',
   '/dashboard.html',
   '/monitores.html',
   '/monitor.html',
@@ -120,6 +121,15 @@ app.use((req, res, next) => {
   requireRecrutamento(req, res, next);
 });
 
+const IA_ADMIN_PAGES = new Set([
+  '/administracao.html',
+]);
+
+app.use((req, res, next) => {
+  if (!IA_ADMIN_PAGES.has(req.path)) return next();
+  requireIaAdmin(req, res, next);
+});
+
 app.get('/app/ia-recruit', requireRecrutamento, (req, res) => {
   res.redirect('/app/ia-recruit/shell.html');
 });
@@ -137,9 +147,8 @@ mountStaticDirs('/app/recrutamento', requireRecrutamento, APPS.iaRecruit.legacyS
 mountStaticDirs('/app/ia-administracao', requireIaAdmin, APPS.iaAdministracao.legacyStaticDirs);
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
-app.use(express.static(APPS.iahub.legacyFrontendDir));
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
-for (const dir of LEGACY_STATIC_DIRS.slice(1)) {
+for (const dir of LEGACY_STATIC_DIRS) {
   app.use(express.static(dir));
 }
 

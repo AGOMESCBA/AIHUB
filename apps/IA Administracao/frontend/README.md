@@ -8,3 +8,6 @@ Destino da interface administrativa global da plataforma:
 - seguranca
 - auditoria
 - identidade visual global
+
+A tela principal `administracao.html` ja foi migrada para esta pasta. CSS/JS
+compartilhados ainda permanecem em `frontend/`.

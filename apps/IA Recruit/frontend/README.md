@@ -10,4 +10,5 @@ Destino dos arquivos visuais do IA Recruit:
 - integracoes especificas
 - guia de uso do IA Recruit
 
-Os arquivos ainda nao foram movidos nesta fase.
+Os frontends principais ja foram migrados para esta pasta. Algumas telas internas
+ainda permanecem em `modules/*/frontend` ate a fase de migracao dos modulos.

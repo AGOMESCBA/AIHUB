@@ -7,8 +7,12 @@ function fromRoot(...parts) {
 }
 
 const sharedFrontend = fromRoot('frontend');
+const iahubFrontend = fromRoot('apps', 'IAHUB', 'frontend');
+const iaRecruitFrontend = fromRoot('apps', 'IA Recruit', 'frontend');
+const iaAdministracaoFrontend = fromRoot('apps', 'IA Administracao', 'frontend');
 
 const IA_RECRUIT_STATIC_DIRS = [
+  iaRecruitFrontend,
   sharedFrontend,
   fromRoot('modules', 'whatsapp-curriculo', 'frontend'),
   fromRoot('modules', 'processo-seletivo', 'frontend'),
@@ -20,6 +24,7 @@ const IA_RECRUIT_STATIC_DIRS = [
 ];
 
 const IA_ADMIN_STATIC_DIRS = [
+  iaAdministracaoFrontend,
   sharedFrontend,
   fromRoot('modules', 'configuracoes', 'frontend'),
   fromRoot('modules', 'empresas', 'frontend'),
@@ -28,6 +33,9 @@ const IA_ADMIN_STATIC_DIRS = [
 ];
 
 const LEGACY_STATIC_DIRS = [
+  iahubFrontend,
+  iaAdministracaoFrontend,
+  iaRecruitFrontend,
   sharedFrontend,
   fromRoot('modules', 'configuracoes', 'frontend'),
   fromRoot('modules', 'empresas', 'frontend'),
@@ -44,14 +52,14 @@ const APPS = {
     code: 'iahub',
     name: 'IAHUB',
     rootDir: fromRoot('apps', 'IAHUB'),
-    frontendDir: fromRoot('apps', 'IAHUB', 'frontend'),
+    frontendDir: iahubFrontend,
     legacyFrontendDir: sharedFrontend,
   },
   iaRecruit: {
     code: 'recrutamento',
     name: 'IA Recruit',
     rootDir: fromRoot('apps', 'IA Recruit'),
-    frontendDir: fromRoot('apps', 'IA Recruit', 'frontend'),
+    frontendDir: iaRecruitFrontend,
     backendDir: fromRoot('apps', 'IA Recruit', 'backend'),
     legacyStaticDirs: IA_RECRUIT_STATIC_DIRS,
   },
@@ -59,7 +67,7 @@ const APPS = {
     code: 'ia-admin',
     name: 'IA Administracao',
     rootDir: fromRoot('apps', 'IA Administracao'),
-    frontendDir: fromRoot('apps', 'IA Administracao', 'frontend'),
+    frontendDir: iaAdministracaoFrontend,
     backendDir: fromRoot('apps', 'IA Administracao', 'backend'),
     legacyStaticDirs: IA_ADMIN_STATIC_DIRS,
   },
