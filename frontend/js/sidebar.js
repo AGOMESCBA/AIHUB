@@ -40,7 +40,6 @@
       id: 'configurador', label: 'Configurador', icon: '⚙', defaultOpen: false,
       items: [
         { id: 'configuracoes', label: 'Configurações', href: '/configuracoes.html', icon: '⚙' },
-        { id: 'administracao', label: 'Administração', href: '/administracao.html', icon: '🏢' },
       ],
     },
   ];

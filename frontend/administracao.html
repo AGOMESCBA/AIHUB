@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Administração — IAHub</title>
+  <title>IA Administracao - IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
@@ -278,6 +278,41 @@
     .tabulator .tabulator-row.tabulator-group { background:var(--bg-body) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; cursor:pointer; }
     .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
     .tabulator-audit .tabulator-row { cursor:default !important; }
+    .admin-topbar { gap:12px; }
+    .admin-topbar .topbar-title { font-weight:800; }
+    .admin-actions { margin-left:auto;display:flex;align-items:center;gap:8px; }
+    .admin-nav-btn {
+      height:34px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+      padding:0 12px;border-radius:8px;border:1px solid var(--border);
+      background:var(--bg-card);color:var(--text-hi);font-size:13px;font-weight:800;
+      text-decoration:none;transition:border-color .15s,background .15s,color .15s,transform .15s;
+      white-space:nowrap;
+    }
+    .admin-nav-btn:hover { border-color:var(--accent);background:var(--accent-glow);color:var(--accent);transform:translateY(-1px); }
+    .system-access-page { padding:18px 24px 24px; }
+    .system-access-layout { display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr);gap:16px;align-items:start; }
+    .system-access-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px; }
+    .system-access-panel-title { font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:14px; }
+    .system-access-list { display:grid;gap:10px; }
+    .system-access-card {
+      display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;
+      border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--bg-base);
+    }
+    .system-access-icon {
+      width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+      color:#fff;font-weight:900;font-size:13px;box-shadow:0 8px 18px rgba(15,23,42,.12);
+    }
+    .system-access-name { color:var(--text-hi);font-weight:800;font-size:14px;line-height:1.25; }
+    .system-access-desc { color:var(--text-md);font-size:12px;line-height:1.35;margin-top:2px; }
+    .system-access-meta { color:var(--text-lo);font-size:11px;margin-top:4px; }
+    .system-toggle { width:46px;height:26px;border:0;border-radius:999px;background:var(--border-hi);position:relative;cursor:pointer;transition:background .15s; }
+    .system-toggle::after { content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:left .15s; }
+    .system-toggle.active { background:var(--accent); }
+    .system-toggle.active::after { left:23px; }
+    .system-access-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border); }
+    .system-access-help { color:var(--text-md);font-size:12.5px;line-height:1.5;margin-bottom:14px; }
+    .system-access-empty { color:var(--text-lo);font-size:13px;text-align:center;padding:22px;border:1px dashed var(--border-hi);border-radius:10px;background:var(--bg-base); }
+    @media (max-width: 900px) { .system-access-layout { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -294,8 +329,18 @@
   </nav>
 
   <div class="main">
-    <div class="topbar">
-      <span class="topbar-title"><span class="topbar-path">Configurador ›</span> Administração</span>
+    <div class="topbar admin-topbar">
+      <span class="topbar-title"><span class="topbar-path">Plataforma &gt;</span> IA Administracao</span>
+      <div class="admin-actions">
+        <a class="admin-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 11l9-8 9 8"/>
+            <path d="M5 10v10h14V10"/>
+          </svg>
+          <span>IAHub</span>
+        </a>
+      </div>
     </div>
 
     <div class="page-content" style="padding-top:16px;padding-bottom:0">
@@ -306,6 +351,7 @@
           <button class="tab-btn"        id="adm-btn-usuarios"  onclick="mudarAbaAdmin('usuarios',  this)">👤 Usuários</button>
           <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
           <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
+          <button class="tab-btn"        id="adm-btn-sistemas"  onclick="mudarAbaAdmin('sistemas',  this)">▦ Sistemas</button>
           <button class="tab-btn"        id="adm-btn-sistema"   onclick="mudarAbaAdmin('sistema',   this)">⚙️ Sistema</button>
           <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
         </div>
@@ -851,6 +897,70 @@
         </div>
 
         <!-- ── Aba: Sistema ──────────────────────────────────────────────────── -->
+        <!-- Aba: Sistemas -->
+        <div id="adm-tab-sistemas" class="adm-tab-content">
+          <div class="system-access-page">
+            <div class="admin-grid-head">
+              <div>
+                <div class="admin-grid-kicker">Plataforma</div>
+                <div class="admin-grid-title">Sistemas disponiveis</div>
+                <div class="admin-grid-subtitle">Controle quais sistemas aparecem no IA Hub para cada empresa e usuario.</div>
+              </div>
+              <button class="btn btn-ghost" type="button" onclick="admSisCarregar()">Atualizar</button>
+            </div>
+
+            <div class="system-access-layout">
+              <section class="system-access-panel">
+                <div class="system-access-panel-title">Empresa</div>
+                <div class="system-access-help">
+                  Primeiro libere os sistemas para a empresa. O IA Hub so mostra sistemas ativos e liberados para a empresa selecionada.
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Empresa</label>
+                  <select id="adm-sis-company" class="form-control" onchange="admSisCarregarEmpresa()">
+                    <option value="">Selecione uma empresa...</option>
+                  </select>
+                </div>
+                <div id="adm-sis-company-list" class="system-access-list">
+                  <div class="system-access-empty">Selecione uma empresa para configurar os sistemas.</div>
+                </div>
+                <div class="system-access-toolbar">
+                  <span class="hint" id="adm-sis-company-msg"></span>
+                  <button class="btn btn-primary" type="button" onclick="admSisSalvarEmpresa()">Salvar empresa</button>
+                </div>
+              </section>
+
+              <section class="system-access-panel">
+                <div class="system-access-panel-title">Usuario</div>
+                <div class="system-access-help">
+                  Depois libere os sistemas para o usuario dentro da empresa. Administradores mantem acesso irrestrito aos sistemas ativos da empresa.
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Empresa</label>
+                    <select id="adm-sis-user-company" class="form-control" onchange="admSisCarregarUsuario()">
+                      <option value="">Selecione...</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    <select id="adm-sis-user" class="form-control" onchange="admSisCarregarUsuario()">
+                      <option value="">Selecione...</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="adm-sis-user-list" class="system-access-list">
+                  <div class="system-access-empty">Selecione empresa e usuario para configurar o acesso.</div>
+                </div>
+                <div class="system-access-toolbar">
+                  <span class="hint" id="adm-sis-user-msg"></span>
+                  <button class="btn btn-primary" type="button" onclick="admSisSalvarUsuario()">Salvar usuario</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+
         <div id="adm-tab-sistema" class="adm-tab-content">
           <div class="system-page">
             <div class="admin-grid-head system-head">
@@ -1207,13 +1317,55 @@
 
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
-<script src="/js/sidebar.js"></script>
 <script src="/js/grid-group-panel.js"></script>
 <script>
 
 // ── Utilitários compartilhados ───────────────────────────────────────────────
 function esc(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  const pinned = !sb.classList.contains('pinned');
+  sb.classList.toggle('pinned', pinned);
+  document.querySelector('.layout')?.classList.toggle('sidebar-pinned', pinned);
+}
+
+function montarMenuAdmin() {
+  const nav = document.querySelector('.sidebar-nav');
+  if (!nav) return;
+  const itens = [
+    ['empresas', 'Empresas', '🏢'],
+    ['usuarios', 'Usuarios', '👤'],
+    ['sistemas', 'Sistemas', '▦'],
+    ['seguranca', 'Seguranca', '🔒'],
+    ['auditoria', 'Auditoria', '📋'],
+    ['sistema', 'Identidade', '⚙'],
+    ['reset', 'Reset de Dados', '🗑'],
+  ];
+  nav.innerHTML = `
+    <div class="nav-section-hdr open">
+      <span class="nav-icon">▦</span>
+      <span class="nav-label">IA Administracao</span>
+    </div>
+    <div class="nav-section-body open">
+      ${itens.map(([id, label, icon]) => `
+        <a href="#${id}" class="nav-item sub ${id === 'empresas' ? 'active' : ''}" data-admin-tab="${id}">
+          <span class="nav-icon">${icon}</span>
+          <span class="nav-label">${label}</span>
+        </a>`).join('')}
+    </div>`;
+  nav.querySelectorAll('[data-admin-tab]').forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const id = link.dataset.adminTab;
+      mudarAbaAdmin(id, document.getElementById('adm-btn-' + id));
+      nav.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      link.classList.add('active');
+    });
+  });
 }
 
 function toggleSenha(id) {
@@ -1228,12 +1380,16 @@ function mudarAbaAdmin(aba, btn) {
   document.querySelectorAll('.adm-tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('[id^="adm-btn-"]').forEach(el => el.classList.remove('active'));
   document.getElementById('adm-tab-' + aba).classList.add('active');
-  btn.classList.add('active');
+  btn?.classList.add('active');
+  document.querySelectorAll('[data-admin-tab]').forEach(el => {
+    el.classList.toggle('active', el.dataset.adminTab === aba);
+  });
   if (!_admCarregado.has(aba)) {
     _admCarregado.add(aba);
     if      (aba === 'usuarios')  usuCarregar();
     else if (aba === 'seguranca') segCarregarConfig();
     else if (aba === 'auditoria') audCarregar();
+    else if (aba === 'sistemas')  admSisCarregar();
     else if (aba === 'sistema')   sisCarregarConfig();
     else if (aba === 'reset')     rstInicializar();
   }
@@ -2740,12 +2896,173 @@ function audLimparFiltros() {
   audCarregar();
 }
 
+// Sistemas da plataforma
+let _admSisSystems = [];
+let _admSisCompanies = [];
+let _admSisUsers = [];
+let _admSisCompanyRows = [];
+let _admSisUserRows = [];
+
+function admSisOptions(lista, labelFn) {
+  return '<option value="">Selecione...</option>' + (lista || [])
+    .map(item => `<option value="${item.id}">${esc(labelFn(item))}</option>`)
+    .join('');
+}
+
+function admSisCard(system, granted, onClickName, disabled = false) {
+  const initials = (system.name || system.code || '?')
+    .split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+  const color = system.accent || '#2563eb';
+  const locked = system.admin_only ? 'Admin only' : 'Liberavel';
+  return `
+    <div class="system-access-card" data-system-code="${esc(system.code)}">
+      <div class="system-access-icon" style="background:${esc(color)}">${esc(initials)}</div>
+      <div>
+        <div class="system-access-name">${esc(system.name || system.code)}</div>
+        <div class="system-access-desc">${esc(system.description || '')}</div>
+        <div class="system-access-meta">${esc(system.code)} - ${locked}</div>
+      </div>
+      <button class="system-toggle ${granted ? 'active' : ''}" type="button"
+        ${disabled ? 'disabled' : ''}
+        onclick="${onClickName}('${esc(system.code)}')"
+        title="${granted ? 'Liberado' : 'Bloqueado'}"></button>
+    </div>`;
+}
+
+function admSisRenderCompanyRows() {
+  const el = document.getElementById('adm-sis-company-list');
+  if (!el) return;
+  const companyId = document.getElementById('adm-sis-company')?.value;
+  if (!companyId) {
+    el.innerHTML = '<div class="system-access-empty">Selecione uma empresa para configurar os sistemas.</div>';
+    return;
+  }
+  el.innerHTML = _admSisSystems.map(system => {
+    const row = _admSisCompanyRows.find(r => r.system_code === system.code || r.code === system.code);
+    return admSisCard(system, !!row?.granted, 'admSisToggleEmpresa');
+  }).join('');
+}
+
+function admSisRenderUserRows() {
+  const el = document.getElementById('adm-sis-user-list');
+  if (!el) return;
+  const companyId = document.getElementById('adm-sis-user-company')?.value;
+  const userId = document.getElementById('adm-sis-user')?.value;
+  if (!companyId || !userId) {
+    el.innerHTML = '<div class="system-access-empty">Selecione empresa e usuario para configurar o acesso.</div>';
+    return;
+  }
+  const user = _admSisUsers.find(u => Number(u.id) === Number(userId));
+  if (user?.role === 'admin') {
+    el.innerHTML = '<div class="system-access-empty">Este usuario e administrador. O acesso aos sistemas ativos da empresa e irrestrito.</div>';
+    return;
+  }
+  el.innerHTML = _admSisSystems.map(system => {
+    const companyRow = _admSisCompanyRows.find(r => r.system_code === system.code || r.code === system.code);
+    const userRow = _admSisUserRows.find(r => r.system_code === system.code || r.code === system.code);
+    const disabled = !companyRow?.granted || system.admin_only;
+    return admSisCard(system, !!userRow?.granted && !disabled, 'admSisToggleUsuario', disabled);
+  }).join('');
+}
+
+async function admSisCarregar() {
+  await window._iahubAuthReady;
+  const [systems, companies, users] = await Promise.all([
+    fetch('/api/sistemas').then(r => r.json()),
+    fetch('/api/empresas').then(r => r.json()),
+    fetch('/api/usuarios').then(r => r.json()),
+  ]);
+  _admSisSystems = Array.isArray(systems) ? systems : [];
+  _admSisCompanies = Array.isArray(companies) ? companies : [];
+  _admSisUsers = Array.isArray(users) ? users : [];
+
+  document.getElementById('adm-sis-company').innerHTML = '<option value="">Selecione uma empresa...</option>' +
+    _admSisCompanies.map(e => `<option value="${e.id}">${esc(e.razao_social || e.nome || `Empresa ${e.id}`)}</option>`).join('');
+  document.getElementById('adm-sis-user-company').innerHTML = admSisOptions(_admSisCompanies, e => e.razao_social || e.nome || `Empresa ${e.id}`);
+  document.getElementById('adm-sis-user').innerHTML = admSisOptions(_admSisUsers, u => `${u.nome || u.usuario} (${u.usuario})`);
+  admSisRenderCompanyRows();
+  admSisRenderUserRows();
+}
+
+async function admSisCarregarEmpresa() {
+  const companyId = document.getElementById('adm-sis-company').value;
+  document.getElementById('adm-sis-company-msg').textContent = '';
+  if (!companyId) {
+    _admSisCompanyRows = [];
+    admSisRenderCompanyRows();
+    return;
+  }
+  _admSisCompanyRows = await fetch(`/api/empresas/${companyId}/sistemas`).then(r => r.json()).catch(() => []);
+  document.getElementById('adm-sis-user-company').value = companyId;
+  admSisRenderCompanyRows();
+  await admSisCarregarUsuario();
+}
+
+async function admSisCarregarUsuario() {
+  const companyId = document.getElementById('adm-sis-user-company').value;
+  const userId = document.getElementById('adm-sis-user').value;
+  document.getElementById('adm-sis-user-msg').textContent = '';
+  if (!companyId || !userId) {
+    _admSisUserRows = [];
+    admSisRenderUserRows();
+    return;
+  }
+  if (!_admSisCompanyRows.length || document.getElementById('adm-sis-company').value !== companyId) {
+    _admSisCompanyRows = await fetch(`/api/empresas/${companyId}/sistemas`).then(r => r.json()).catch(() => []);
+  }
+  _admSisUserRows = await fetch(`/api/usuarios/${userId}/sistemas?empresa_id=${companyId}`).then(r => r.json()).catch(() => []);
+  admSisRenderUserRows();
+}
+
+function admSisToggleEmpresa(code) {
+  const row = _admSisCompanyRows.find(r => r.system_code === code || r.code === code);
+  if (row) row.granted = !row.granted;
+  admSisRenderCompanyRows();
+}
+
+function admSisToggleUsuario(code) {
+  const row = _admSisUserRows.find(r => r.system_code === code || r.code === code);
+  if (row) row.granted = !row.granted;
+  admSisRenderUserRows();
+}
+
+async function admSisSalvarEmpresa() {
+  const companyId = document.getElementById('adm-sis-company').value;
+  if (!companyId) return;
+  const payload = { systems: _admSisCompanyRows.map(r => ({ system_code: r.system_code || r.code, active: !!r.granted })) };
+  const res = await fetch(`/api/empresas/${companyId}/sistemas`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  document.getElementById('adm-sis-company-msg').textContent = res.ok ? 'Sistemas da empresa salvos.' : 'Erro ao salvar.';
+  await admSisCarregarEmpresa();
+}
+
+async function admSisSalvarUsuario() {
+  const companyId = document.getElementById('adm-sis-user-company').value;
+  const userId = document.getElementById('adm-sis-user').value;
+  if (!companyId || !userId) return;
+  const payload = {
+    empresa_id: Number(companyId),
+    systems: _admSisUserRows.map(r => ({ system_code: r.system_code || r.code, active: !!r.granted })),
+  };
+  const res = await fetch(`/api/usuarios/${userId}/sistemas`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  document.getElementById('adm-sis-user-msg').textContent = res.ok ? 'Sistemas do usuario salvos.' : 'Erro ao salvar.';
+  await admSisCarregarUsuario();
+}
+
 // ── Fechar modais ao clicar no backdrop ──────────────────────────────────────
 document.getElementById('usu-modal-senha').addEventListener('click', function(e) {
   if (e.target === this) usuFecharModalSenha();
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+  montarMenuAdmin();
   _admCarregado.add('empresas');
   empCarregar();
   Object.entries(EMP_FIELD_ERRORS).forEach(([campo, cfg]) => {
