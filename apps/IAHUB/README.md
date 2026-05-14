@@ -10,6 +10,10 @@ Responsabilidades:
 - regras globais de multiempresa e multisistema
 - redirecionamento para os sistemas
 
-Os frontends principais ja foram migrados para `apps/IAHUB/frontend`. Os assets
-compartilhados e parte do backend ainda permanecem nos caminhos legados ate as
-proximas fases.
+Estrutura atual:
+- `frontend/`: telas principais do shell da plataforma
+- `backend/`: modulos globais da plataforma
+
+Os assets compartilhados ficam em `packages/ui` e `packages/auth`.
+Os caminhos antigos em `modules/` permanecem apenas como stubs temporarios de
+compatibilidade para imports existentes.

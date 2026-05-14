@@ -12,6 +12,9 @@ Responsabilidades:
 
 Este app deve conter apenas funcionalidades genericas reutilizaveis por todos os sistemas.
 
-Estrutura destino:
+Estrutura atual:
 - `frontend/`: telas administrativas globais
-- `backend/`: rotas e servicos administrativos globais
+- `backend/`: reservado para servicos administrativos proprios
+
+As rotas globais usadas pela Administracao hoje ficam em `apps/IAHUB/backend`,
+pois fazem parte do core da plataforma.
