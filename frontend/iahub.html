@@ -6,52 +6,170 @@
   <title>IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    .hub-shell { min-height:100vh;background:var(--bg-base); }
-    .hub-main { min-height:100vh;display:flex;flex-direction:column; }
-    .hub-content { flex:1;padding:28px;max-width:1180px;width:100%;margin:0 auto; }
-    .systems-head { display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:22px; }
-    .systems-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:4px; }
-    .systems-title { font-size:24px;font-weight:800;color:var(--text-hi);line-height:1.2; }
-    .systems-subtitle { font-size:13px;color:var(--text-md);margin-top:6px; }
-    .systems-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px; }
-    .system-card {
-      border:1px solid var(--border);border-radius:8px;background:var(--bg-card);
-      padding:18px;display:flex;flex-direction:column;gap:12px;min-height:170px;
-      box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s,transform .15s;
+    .hub-shell {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(37,99,235,.13), transparent 28%),
+        radial-gradient(circle at 84% 18%, rgba(20,184,166,.10), transparent 26%),
+        var(--bg-base);
     }
-    .system-card:hover { border-color:var(--accent);box-shadow:var(--shadow-md);transform:translateY(-1px); }
-    .system-card-top { display:flex;align-items:center;gap:12px; }
-    .system-icon { width:42px;height:42px;border-radius:8px;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px; }
-    .system-name { color:var(--text-hi);font-size:16px;font-weight:800;line-height:1.25; }
-    .system-code { color:var(--text-lo);font-size:11px;margin-top:2px; }
-    .system-desc { color:var(--text-md);font-size:13px;line-height:1.5;flex:1; }
-    .empty-state { border:1px dashed var(--border-hi);border-radius:8px;padding:38px;text-align:center;color:var(--text-md);background:var(--bg-card); }
-    .empty-title { color:var(--text-hi);font-weight:800;margin-bottom:8px; }
-    @media (max-width: 640px) {
-      .hub-content { padding:18px; }
-      .systems-head { flex-direction:column;align-items:flex-start; }
-      .systems-title { font-size:20px; }
+    .hub-main { min-height: 100vh; display: flex; flex-direction: column; }
+    .hub-topbar { gap: 12px; }
+    .hub-topbar .topbar-title { font-size: 16px; font-weight: 800; letter-spacing: .02em; }
+    .topbar-actions { margin-left: 10px; display: flex; align-items: center; gap: 10px; order: 3; }
+    .topbar-company-slot { display: contents; }
+    #_guia-btn { display: none !important; }
+    #_empresa-badge { order: 2; margin-left: auto !important; }
+    .hub-logout {
+      height: 34px; padding: 0 13px; border-radius: 8px;
+      display: inline-flex; align-items: center; gap: 7px;
+      border: 1px solid rgba(220,38,38,.24);
+      color: #b91c1c; background: #fff5f5;
+      font-size: 13px; font-weight: 800; cursor: pointer;
+      transition: background .15s, border-color .15s, transform .15s, box-shadow .15s;
+    }
+    .hub-logout:hover {
+      background: #fee2e2; border-color: rgba(220,38,38,.55);
+      box-shadow: 0 8px 20px rgba(220,38,38,.12); transform: translateY(-1px);
+    }
+    .hub-content {
+      flex: 1; width: min(1520px, calc(100vw - 48px)); margin: 0 auto;
+      padding: 28px 0 34px; display: flex; flex-direction: column; min-height: 0;
+    }
+    .systems-panel {
+      border: 1px solid rgba(148,163,184,.32);
+      background: rgba(255,255,255,.74);
+      box-shadow: 0 24px 70px rgba(15,23,42,.10);
+      border-radius: 18px; padding: 24px; min-height: 0;
+      backdrop-filter: blur(10px);
+    }
+    .systems-head {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 18px; margin-bottom: 18px;
+    }
+    .systems-kicker {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--accent); font-weight: 900; margin-bottom: 5px;
+    }
+    .systems-title {
+      font-size: 28px; font-weight: 900; color: var(--text-hi);
+      line-height: 1.12;
+    }
+    .systems-subtitle { font-size: 13px; color: var(--text-md); margin-top: 7px; }
+    .systems-count {
+      border: 1px solid var(--border); border-radius: 999px;
+      background: var(--bg-card); color: var(--text-md);
+      padding: 7px 12px; font-size: 12px; font-weight: 800; white-space: nowrap;
+    }
+    .systems-frame {
+      max-height: min(536px, calc(100vh - 190px));
+      overflow-y: auto; padding: 2px 6px 2px 2px;
+      scrollbar-width: thin; scrollbar-color: rgba(37,99,235,.45) transparent;
+    }
+    .systems-grid {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .system-card {
+      position: relative; min-height: 252px; overflow: hidden;
+      border: 1px solid rgba(148,163,184,.34); border-radius: 14px;
+      background: var(--bg-card); box-shadow: 0 10px 28px rgba(15,23,42,.08);
+      cursor: pointer; isolation: isolate;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+    }
+    .system-card:hover {
+      transform: translateY(-4px);
+      border-color: color-mix(in srgb, var(--system-accent) 48%, var(--border));
+      box-shadow: 0 18px 42px rgba(15,23,42,.15);
+    }
+    .system-card::after {
+      content: ''; position: absolute; inset: 0; z-index: -1;
+      background: linear-gradient(180deg, rgba(255,255,255,.15), rgba(15,23,42,.72));
+    }
+    .system-image {
+      position: absolute; inset: 0; z-index: -2;
+      background-size: cover; background-position: center;
+      transform: scale(1.02); transition: transform .22s ease, filter .22s ease;
+      filter: saturate(.96) contrast(.96);
+    }
+    .system-card:hover .system-image { transform: scale(1.07); filter: saturate(1.05) contrast(1); }
+    .system-fallback {
+      position: absolute; inset: 0; z-index: -2;
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--system-accent), #0f172a);
+      color: rgba(255,255,255,.24); font-size: 92px; font-weight: 900;
+    }
+    .system-body {
+      position: absolute; inset: auto 0 0; padding: 18px;
+      color: #fff; display: flex; flex-direction: column; gap: 10px;
+    }
+    .system-chip {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid rgba(255,255,255,.34); border-radius: 999px;
+      background: rgba(15,23,42,.36); padding: 5px 9px;
+      font-size: 11px; font-weight: 800; backdrop-filter: blur(8px);
+    }
+    .system-name { font-size: 22px; line-height: 1.1; font-weight: 900; text-shadow: 0 2px 14px rgba(0,0,0,.30); }
+    .system-desc { font-size: 12.5px; line-height: 1.45; color: rgba(255,255,255,.86); min-height: 36px; }
+    .system-action {
+      margin-top: 2px; height: 34px; border: 0; border-radius: 8px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: #fff; color: #0f172a; font-weight: 900; cursor: pointer;
+      box-shadow: 0 8px 22px rgba(15,23,42,.20);
+    }
+    .empty-state {
+      grid-column: 1 / -1; border: 1px dashed var(--border-hi); border-radius: 12px;
+      padding: 38px; text-align: center; color: var(--text-md); background: var(--bg-card);
+    }
+    .empty-title { color: var(--text-hi); font-weight: 900; margin-bottom: 8px; }
+    @media (max-width: 1280px) { .systems-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+    @media (max-width: 980px) { .systems-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 720px) {
+      .hub-content { width: calc(100vw - 28px); padding-top: 18px; }
+      .systems-panel { padding: 16px; border-radius: 14px; }
+      .systems-head { align-items: flex-start; flex-direction: column; }
+      .systems-title { font-size: 22px; }
+      .systems-grid { grid-template-columns: 1fr; }
+      .systems-frame { max-height: none; overflow: visible; }
+      .system-card { min-height: 220px; }
+      .hub-logout span { display: none; }
     }
   </style>
 </head>
 <body>
   <div class="hub-shell">
     <main class="hub-main">
-      <div class="topbar">
+      <div class="topbar hub-topbar">
         <span class="topbar-title">IAHub</span>
+        <div class="topbar-actions">
+          <div class="topbar-company-slot"></div>
+          <button class="hub-logout" onclick="logout()" title="Sair">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            <span>Sair</span>
+          </button>
+        </div>
       </div>
 
       <section class="hub-content">
-        <div class="systems-head">
-          <div>
-            <div class="systems-kicker">Plataforma</div>
-            <div class="systems-title">Selecione um sistema</div>
-            <div class="systems-subtitle" id="systems-subtitle">Carregando sistemas disponiveis...</div>
+        <div class="systems-panel">
+          <div class="systems-head">
+            <div>
+              <div class="systems-kicker">Plataforma</div>
+              <div class="systems-title">Selecione um sistema</div>
+              <div class="systems-subtitle" id="systems-subtitle">Carregando sistemas disponiveis...</div>
+            </div>
+            <div class="systems-count" id="systems-count">0 sistemas</div>
           </div>
-          <button class="btn btn-secondary" onclick="logout()">Sair</button>
-        </div>
 
-        <div class="systems-grid" id="systems-grid"></div>
+          <div class="systems-frame">
+            <div class="systems-grid" id="systems-grid"></div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
@@ -62,6 +180,10 @@
       return String(value ?? '').replace(/[&<>"']/g, ch => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
       }[ch]));
+    }
+
+    function attr(value) {
+      return esc(value).replace(/`/g, '&#96;');
     }
 
     function sigla(system) {
@@ -87,33 +209,44 @@
       await window._iahubAuthReady;
       const grid = document.getElementById('systems-grid');
       const subtitle = document.getElementById('systems-subtitle');
+      const count = document.getElementById('systems-count');
       const sistemas = await fetch('/api/sistemas/disponiveis').then(r => r.json()).catch(() => []);
+      const total = Array.isArray(sistemas) ? sistemas.length : 0;
 
       subtitle.textContent = window._iahubEmpresa?.nome
         ? `Empresa ativa: ${window._iahubEmpresa.nome}`
         : 'Escolha uma empresa para continuar.';
+      count.textContent = total === 1 ? '1 sistema' : `${total} sistemas`;
 
-      if (!Array.isArray(sistemas) || !sistemas.length) {
+      if (!total) {
         grid.innerHTML = `
-          <div class="empty-state" style="grid-column:1/-1">
+          <div class="empty-state">
             <div class="empty-title">Nenhum sistema disponivel</div>
             <div>Solicite ao administrador acesso a um sistema para esta empresa.</div>
           </div>`;
         return;
       }
 
-      grid.innerHTML = sistemas.map(system => `
-        <article class="system-card">
-          <div class="system-card-top">
-            <div class="system-icon">${esc(sigla(system))}</div>
-            <div>
+      grid.innerHTML = sistemas.map(system => {
+        const accent = system.accent || '#2563eb';
+        const image = system.image_url || '';
+        const fallback = sigla(system);
+        const visual = image
+          ? `<div class="system-image" style="background-image:url('${attr(image)}')"></div>`
+          : `<div class="system-fallback">${esc(fallback)}</div>`;
+        return `
+          <article class="system-card" style="--system-accent:${attr(accent)}" onclick="selecionarSistema('${attr(system.code)}')">
+            ${visual}
+            <div class="system-body">
+              <div class="system-chip">
+                <span>${esc(system.code)}</span>
+              </div>
               <div class="system-name">${esc(system.name)}</div>
-              <div class="system-code">${esc(system.code)}</div>
+              <div class="system-desc">${esc(system.description || '')}</div>
+              <button class="system-action" type="button">Acessar</button>
             </div>
-          </div>
-          <div class="system-desc">${esc(system.description || '')}</div>
-          <button class="btn btn-primary" onclick="selecionarSistema('${esc(system.code)}')">Acessar</button>
-        </article>`).join('');
+          </article>`;
+      }).join('');
     }
 
     carregarSistemas();

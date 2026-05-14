@@ -349,6 +349,9 @@ function _atualizarSidebarUsuario(me) {
 async function _injetarEmpresaTopbar() {
   const topbar = document.querySelector('.topbar');
   if (!topbar || document.getElementById('_empresa-badge')) return;
+  const topbarTarget = topbar.querySelector('.topbar-company-slot')
+    || topbar.querySelector('.topbar-actions')
+    || topbar;
 
   // Modo monitor: empresa fixada via ?empresa=ID — exibe badge somente-leitura
   const _monitorEid = Number(new URLSearchParams(location.search).get('empresa')) || null;
@@ -358,14 +361,14 @@ async function _injetarEmpresaTopbar() {
     const nome = emp ? (emp.razao_social || emp.nome) : `Empresa #${_monitorEid}`;
     const badge = document.createElement('div');
     badge.id = '_empresa-badge';
-    badge.style.cssText = 'margin-left:auto;';
+    badge.style.cssText = topbarTarget === topbar ? 'margin-left:auto;' : '';
     badge.innerHTML = `<div style="
       display:flex;align-items:center;gap:7px;
       background:var(--bg-hover);border:1px solid var(--border);
       border-radius:7px;padding:5px 12px;
       font-size:13px;font-weight:600;color:var(--text-hi);
     "><span style="font-size:15px">🏢</span><span>${nome}</span></div>`;
-    topbar.appendChild(badge);
+    topbarTarget.appendChild(badge);
     return;
   }
 

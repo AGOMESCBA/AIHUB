@@ -13,6 +13,8 @@ const DEFAULT_SYSTEMS = [
     name: 'Recrutamento',
     description: 'Sistema de analise de curriculos',
     url: '/app/recrutamento',
+    image_url: '/guia/img/04-dashboard.png',
+    accent: '#2563eb',
     active: true,
   },
 ];
@@ -75,6 +77,8 @@ function listarDisponiveis(userId, companyId) {
       name: system.name,
       description: system.description,
       url: system.url,
+      image_url: system.image_url || '',
+      accent: system.accent || '#2563eb',
       active: system.active,
     }));
 }
@@ -87,7 +91,12 @@ function ensureCrudRow(file, predicate, data) {
 
 function inicializarSistemas() {
   for (const system of DEFAULT_SYSTEMS) {
-    ensureCrudRow(SYSTEMS_FILE, s => s.code === system.code, system);
+    const row = ensureCrudRow(SYSTEMS_FILE, s => s.code === system.code, system);
+    const patch = {};
+    for (const [key, value] of Object.entries(system)) {
+      if (row[key] === undefined || row[key] === null || row[key] === '') patch[key] = value;
+    }
+    if (Object.keys(patch).length) crud.atualizar(SYSTEMS_FILE, row.id, patch);
   }
 
   const systems = listarSystems();

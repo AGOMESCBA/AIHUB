@@ -146,6 +146,36 @@
     .mdi-empty-icon  { font-size: 56px; opacity: .15; }
     .mdi-empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); }
     .mdi-empty-sub   { font-size: 13px; color: var(--text-lo); }
+    .recrutamento-topbar { gap: 10px; }
+    .recrutamento-topbar .topbar-title { font-weight: 800; }
+    .recrutamento-actions {
+      margin-left: auto; display: flex; align-items: center; gap: 8px; order: 2;
+    }
+    .shell-nav-btn {
+      height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-card); color: var(--text-hi); font-size: 13px; font-weight: 800;
+      text-decoration: none; transition: border-color .15s, background .15s, color .15s, transform .15s;
+      white-space: nowrap;
+    }
+    .shell-nav-btn:hover {
+      border-color: var(--accent); background: var(--accent-glow); color: var(--accent);
+      transform: translateY(-1px);
+    }
+    .shell-nav-btn.primary {
+      background: var(--accent); border-color: var(--accent); color: #fff;
+      box-shadow: 0 8px 18px rgba(37,99,235,.16);
+    }
+    .shell-nav-btn.primary:hover { background: #1d4ed8; color: #fff; }
+    #_guia-btn {
+      order: 3; margin-left: 0 !important; height: 34px; border-radius: 8px;
+      box-shadow: 0 8px 18px rgba(37,99,235,.16);
+    }
+    #_empresa-badge { order: 4; margin-left: 0 !important; }
+    @media (max-width: 760px) {
+      .shell-nav-btn span { display: none; }
+      #_guia-btn span:last-child { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -164,8 +194,26 @@
   <div class="main">
 
     <!-- Topbar do shell -->
-    <div class="topbar">
-      <span class="topbar-title" id="shell-title">IAHub</span>
+    <div class="topbar recrutamento-topbar">
+      <span class="topbar-title" id="shell-title">Recrutamento</span>
+      <div class="recrutamento-actions">
+        <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 11l9-8 9 8"/>
+            <path d="M5 10v10h14V10"/>
+          </svg>
+          <span>IAHub</span>
+        </a>
+        <a class="shell-nav-btn primary" id="_guia-btn" href="/guia/" target="_blank" title="Guia de uso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+          </svg>
+          <span>Guia</span>
+        </a>
+      </div>
     </div>
 
     <!-- Barra de abas MDI com scroll -->
