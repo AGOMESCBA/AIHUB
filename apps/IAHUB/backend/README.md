@@ -1,6 +1,6 @@
 # Backend IAHUB
 
-Destino futuro dos modulos globais:
+Backend dos modulos globais:
 - auth
 - empresa-context
 - empresas
@@ -8,6 +8,11 @@ Destino futuro dos modulos globais:
 - permissoes
 - sistemas
 - seguranca
+- configuracoes
+- crud
 
-Por enquanto, o backend segue em `modules/` e o `apps/registry.js` centraliza
-os caminhos usados pelo servidor.
+Fase 4A:
+- os arquivos reais dos modulos globais foram movidos para esta pasta;
+- os caminhos antigos em `modules/` permanecem como stubs de compatibilidade;
+- as pastas `modules/*/frontend` continuam nos caminhos legados ate a migracao
+  das telas administrativas internas.
