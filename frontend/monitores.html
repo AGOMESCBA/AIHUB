@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitores — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .monitores-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 340px));
+      justify-content: center;
+      gap: 20px;
+      padding-top: 4px;
+    }
+
+    .monitor-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: var(--transition);
+    }
+    .monitor-card:hover {
+      box-shadow: var(--shadow-md);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .mc-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .mc-avatar {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+      letter-spacing: -1px;
+    }
+    .mc-info { flex: 1; min-width: 0; }
+    .mc-nome {
+      font-size: 14px; font-weight: 700;
+      color: var(--text-hi);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .mc-id { font-size: 11px; color: var(--text-lo); margin-top: 2px; }
+
+    .mc-status-row {
+      display: flex; flex-direction: column; gap: 7px;
+      background: var(--bg-hover);
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .mc-status-line {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px;
+    }
+    .mc-status-label {
+      color: var(--text-md);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; flex-shrink: 0;
+    }
+    .dot-running { background: var(--success); }
+    .dot-stopped { background: var(--text-lo); }
+    .dot-loading { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .status-text-running { color: var(--success); font-weight: 600; }
+    .status-text-stopped { color: var(--text-lo); }
+    .status-text-loading { color: #f59e0b; }
+
+    .mc-actions {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .mc-btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 9px 14px;
+      border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: var(--transition);
+      cursor: pointer;
+    }
+    .mc-btn-wa {
+      background: #25d366;
+      color: #fff;
+    }
+    .mc-btn-wa:hover { background: #1da851; color: #fff; }
+
+    .mc-btn-email {
+      background: var(--bg-base);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .mc-btn-email:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-lo);
+    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state-text { font-size: 14px; }
+
+    .page-subtitle {
+      font-size: 13px;
+      color: var(--text-md);
+      margin-bottom: 20px;
+    }
+
+    .refresh-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-md);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .refresh-btn.loading .refresh-icon { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title">
+        <span class="topbar-path">Monitores</span>
+      </span>
+      <div style="margin-left:auto">
+        <button class="refresh-btn" id="btn-refresh" onclick="carregarTudo()">
+          <span class="refresh-icon">↻</span>
+          Atualizar status
+        </button>
+      </div>
+    </div>
+
+    <div class="page-content">
+      <p class="page-subtitle">
+        Clique em qualquer botão para abrir o monitor em uma nova aba — cada aba monitora a empresa de forma independente.
+      </p>
+
+      <div class="monitores-grid" id="grid-monitores">
+        <div class="empty-state">
+          <div class="empty-state-icon">⏳</div>
+          <div class="empty-state-text">Carregando empresas…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  const AVATAR_COLORS = [
+    '#2563eb', '#16a34a', '#9333ea', '#ea580c',
+    '#0891b2', '#be123c', '#0d9488', '#b45309',
+  ];
+
+  function avatarColor(idx) {
+    return AVATAR_COLORS[idx % AVATAR_COLORS.length];
+  }
+
+  function iniciais(nome) {
+    if (!nome) return '?';
+    const parts = nome.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  function statusHtml(wa, email) {
+    function linha(icon, label, status) {
+      const loading = status === 'loading';
+      const running = status === 'running';
+      const dotCls  = loading ? 'dot-loading' : running ? 'dot-running' : 'dot-stopped';
+      const txtCls  = loading ? 'status-text-loading' : running ? 'status-text-running' : 'status-text-stopped';
+      const label2  = loading ? 'verificando…' : running ? 'Rodando' : 'Parado';
+      return `<div class="mc-status-line">
+        <span class="mc-status-label">${icon} ${label}</span>
+        <span class="${txtCls}" style="display:flex;align-items:center;gap:5px">
+          <span class="status-dot ${dotCls}"></span>${label2}
+        </span>
+      </div>`;
+    }
+    return `<div class="mc-status-row">
+      ${linha('💬', 'WhatsApp', wa)}
+      ${linha('📧', 'E-mail', email)}
+    </div>`;
+  }
+
+  // Detecta se está rodando dentro do shell MDI
+  function _dentroDoShell() {
+    try { return window !== window.parent && typeof window.parent.openTab === 'function'; }
+    catch (_) { return false; }
+  }
+
+  function abrirMonitor(url, label, icon, emp) {
+    const nome = emp.razao_social || emp.nome || '';
+    if (_dentroDoShell()) {
+      window.parent.openTab(url, `${label} — ${nome}`, icon, emp.id, nome);
+    } else {
+      window.open(`${url}?empresa=${emp.id}`, '_blank');
+    }
+  }
+
+  function cardHtml(emp, idx, wa, email) {
+    const cor = avatarColor(idx);
+    return `
+    <div class="monitor-card" data-eid="${emp.id}">
+      <div class="mc-header">
+        <div class="mc-avatar" style="background:${cor}">${iniciais(emp.razao_social || emp.nome)}</div>
+        <div class="mc-info">
+          <div class="mc-nome" title="${emp.razao_social || emp.nome}">${emp.razao_social || emp.nome}</div>
+          <div class="mc-id">Empresa #${emp.id}</div>
+        </div>
+      </div>
+      ${statusHtml(wa, email)}
+      <div class="mc-actions">
+        <button onclick='abrirMonitor("/monitor.html","Monitor WhatsApp","💬",${JSON.stringify(emp)})' class="mc-btn mc-btn-wa">
+          💬 Monitor WhatsApp
+        </button>
+        <button onclick='abrirMonitor("/monitor-email.html","Monitor E-mail","📧",${JSON.stringify(emp)})' class="mc-btn mc-btn-email">
+          📧 Monitor E-mail
+        </button>
+      </div>
+    </div>`;
+  }
+
+  function _mapWaStatus(s) {
+    if (s === 'connected') return 'running';
+    if (s === 'starting')  return 'loading';
+    return 'stopped';
+  }
+
+  let _empresas = [];
+
+  async function carregarTudo() {
+    const grid = document.getElementById('grid-monitores');
+    const btn  = document.getElementById('btn-refresh');
+    btn.classList.add('loading');
+
+    try {
+      // Carrega lista de empresas na primeira vez
+      if (_empresas.length === 0) {
+        const r = await fetch('/api/empresas/minhas');
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        _empresas = await r.json();
+      }
+
+      if (_empresas.length === 0) {
+        grid.innerHTML = `<div class="empty-state">
+          <div class="empty-state-icon">🏢</div>
+          <div class="empty-state-text">Nenhuma empresa disponível.</div>
+        </div>`;
+        return;
+      }
+
+      // Renderiza cards com status "carregando"
+      grid.innerHTML = _empresas.map((emp, i) => cardHtml(emp, i, 'loading', 'loading')).join('');
+
+      // Busca status de cada empresa em paralelo — usa data-eid para encontrar o card certo
+      await Promise.all(_empresas.map(async (emp) => {
+        const [waRes, emailRes] = await Promise.all([
+          fetch(`/api/service/status?empresa_id=${emp.id}`).then(r => r.json()).catch(() => ({})),
+          fetch(`/api/email-service/status?empresa_id=${emp.id}`).then(r => r.json()).catch(() => ({})),
+        ]);
+        const wa    = _mapWaStatus(waRes.status);
+        const email = emailRes.status === 'running' ? 'running' : 'stopped';
+
+        const card = grid.querySelector(`.monitor-card[data-eid="${emp.id}"]`);
+        if (card) {
+          const statusDiv = card.querySelector('.mc-status-row');
+          if (statusDiv) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = statusHtml(wa, email);
+            statusDiv.replaceWith(tmp.firstElementChild);
+          }
+        }
+      }));
+
+    } catch (err) {
+      grid.innerHTML = `<div class="empty-state">
+        <div class="empty-state-icon">⚠️</div>
+        <div class="empty-state-text">Erro ao carregar empresas: ${err.message}</div>
+      </div>`;
+    } finally {
+      btn.classList.remove('loading');
+    }
+  }
+
+  // Atualiza só os status sem re-renderizar os cards
+  async function carregarStatus() {
+    const grid = document.getElementById('grid-monitores');
+    if (!_empresas.length || !grid.querySelector('.monitor-card')) return;
+    await Promise.all(_empresas.map(async (emp) => {
+      const [waRes, emailRes] = await Promise.all([
+        fetch(`/api/service/status?empresa_id=${emp.id}`).then(r => r.json()).catch(() => ({})),
+        fetch(`/api/email-service/status?empresa_id=${emp.id}`).then(r => r.json()).catch(() => ({})),
+      ]);
+      const wa    = _mapWaStatus(waRes.status);
+      const email = emailRes.status === 'running' ? 'running' : 'stopped';
+      const card  = grid.querySelector(`.monitor-card[data-eid="${emp.id}"]`);
+      if (card) {
+        const statusDiv = card.querySelector('.mc-status-row');
+        if (statusDiv) {
+          const tmp = document.createElement('div');
+          tmp.innerHTML = statusHtml(wa, email);
+          statusDiv.replaceWith(tmp.firstElementChild);
+        }
+      }
+    }));
+  }
+
+  // Escuta mudanças de status vindas de qualquer monitor aberto
+  // IMPORTANTE: manter referência na variável — sem isso o GC pode destruir o canal
+  let _bc = null;
+  try {
+    _bc = new BroadcastChannel('iahub_monitors');
+    _bc.onmessage = (e) => {
+      if (e.data?.type === 'status-changed') carregarStatus();
+    };
+  } catch(_) {}
+
+  // Refresh periódico como fallback (caso BroadcastChannel seja bloqueado)
+  setInterval(carregarStatus, 30000);
+
+  window._iahubAuthReady?.then(carregarTudo);
+</script>
+</body>
+</html>

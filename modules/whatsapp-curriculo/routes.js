@@ -14,6 +14,16 @@ function _maskKey(key) {
 // Pasta onde LocalAuth salva sessões por empresa
 const AUTH_BASE = path.join(__dirname, '..', '..', '.wwebjs_auth');
 
+function _resolverEid(req, res) {
+  const explicit = Number(req.body?.empresa_id || req.query?.empresa_id || 0);
+  if (!explicit) return req.session.empresa_id;
+  const { empresas: acesso, role } = req.session;
+  const ok = role === 'admin' || acesso === 'all' ||
+    (Array.isArray(acesso) && acesso.includes(explicit));
+  if (!ok) { res.status(403).json({ error: 'Acesso negado a esta empresa' }); return null; }
+  return explicit;
+}
+
 module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, registrarLog, io }) {
 
   // Conecta os eventos de uma instância à sala Socket.IO da empresa (uma vez só)
@@ -56,21 +66,26 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Serviço ───────────────────────────────────────────────────────────────
   app.post('/api/service/start', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    const empNome = req.session.empresa_id === eid ? req.session.empresa_nome
+      : require('../crud').buscarPorId('empresas', eid)?.razao_social || null;
     const svc = manager.getOrCreate(eid);
     wireEvents(svc, eid);
-    svc.start(eid, req.session.empresa_nome);
+    svc.start(eid, empNome);
     res.json({ ok: true });
   });
 
   app.post('/api/service/stop', requireAuth, requireEmpresa, (req, res) => {
-    const svc = manager.get(req.session.empresa_id);
-    svc?.stop();
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    manager.get(eid)?.stop();
     res.json({ ok: true });
   });
 
   app.get('/api/service/status', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const svc = manager.get(eid);
     const metaAtivo = db.getConfig(eid, 'meta_wa_ativo') === 'true';
     res.json({
@@ -82,20 +97,23 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
   });
 
   app.get('/api/service/qr', requireAuth, requireEmpresa, (req, res) => {
-    const svc = manager.get(req.session.empresa_id);
-    res.json({ qr: svc?.getQr() || null });
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    res.json({ qr: manager.get(eid)?.getQr() || null });
   });
 
   app.post('/api/service/clear-log', requireAuth, requireEmpresa, (req, res) => {
-    const svc = manager.get(req.session.empresa_id);
-    svc?.clearBuffer();
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    manager.get(eid)?.clearBuffer();
     res.json({ ok: true });
   });
 
   // Limpa a sessão da empresa atual (permite conectar um número diferente)
   app.post('/api/service/clear-session', requireAuth, requireEmpresa, async (req, res) => {
     try {
-      const eid = req.session.empresa_id;
+      const eid = _resolverEid(req, res);
+      if (eid === null) return;
       const svc = manager.get(eid);
       if (svc) await svc.stop();
       const sessionDir = path.join(AUTH_BASE, `session-empresa_${eid}`);
@@ -110,7 +128,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Configuração geral ────────────────────────────────────────────────────
   app.get('/api/config', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const metaToken   = db.getConfig(eid, 'meta_wa_token')    || '';
     const metaPhoneId = db.getConfig(eid, 'meta_wa_phone_id') || '';
     res.json({
@@ -134,7 +153,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
   });
 
   app.post('/api/config', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const campos = ['numero_destino','label','msg_confirmacao','msg_nao_pdf',
                     'msg_pdf_ilegivel','msg_nao_curriculo','msg_duplicata',
                     'msg_nao_atualizar','msg_erro'];
@@ -155,7 +175,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Meta: testar conexão ──────────────────────────────────────────────────
   app.post('/api/meta/test-connection', requireAuth, requireEmpresa, async (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     let { token, phone_id } = req.body || {};
 
     // Usa valores salvos se o usuário não enviou novos
@@ -219,24 +240,31 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Currículos ────────────────────────────────────────────────────────────
   app.get('/api/curriculos', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listCurriculos(req.session.empresa_id));
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    res.json(db.listCurriculos(eid));
   });
 
   app.get('/api/curriculos/:id', requireAuth, requireEmpresa, (req, res) => {
-    const row = db.getCurriculo(req.session.empresa_id, Number(req.params.id));
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    const row = db.getCurriculo(eid, Number(req.params.id));
     if (!row) return res.status(404).json({ error: 'Não encontrado' });
     res.json(row);
   });
 
   app.delete('/api/curriculos/:id', requireAuth, requireEmpresa, (req, res) => {
-    const ok = db.deleteCurriculo(req.session.empresa_id, Number(req.params.id));
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    const ok = db.deleteCurriculo(eid, Number(req.params.id));
     if (!ok) return res.status(404).json({ error: 'Não encontrado' });
     res.json({ ok: true });
   });
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   app.get('/api/stats', requireAuth, requireEmpresa, (req, res) => {
-    const eid       = req.session.empresa_id;
+    const eid       = _resolverEid(req, res);
+    if (eid === null) return;
     const curriculos = db.listCurriculos(eid);
     const hoje      = new Date().toISOString().slice(0, 10);
     const isWA      = c => !c.remetente?.startsWith('email-externo:') && !c.remetente?.startsWith('email-livre:') && !c.remetente?.startsWith('ps:');

@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Analisador de Currículos — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .score-bar-wrap { background:var(--bg-hover);border-radius:8px;height:8px;flex:1;overflow:hidden; }
+    .score-bar      { height:100%;border-radius:8px;transition:width .6s ease; }
+    .score-alto     { background:var(--success); }
+    .score-medio    { background:var(--warning); }
+    .score-baixo    { background:var(--error); }
+    .nivel-alto     { background:#dcfce7;color:#15803d; }
+    .nivel-medio    { background:#fef9c3;color:#a16207; }
+    .nivel-baixo    { background:#fee2e2;color:#b91c1c; }
+    .nivel-badge    { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
+    .result-card    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:12px;transition:border-color .2s; }
+    .result-card:hover { border-color:var(--accent); }
+    .result-card.finalista { border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.12); }
+    .result-header  { display:flex;align-items:center;gap:14px;margin-bottom:12px; }
+    .result-rank    { font-size:22px;font-weight:800;color:var(--text-lo);min-width:32px;text-align:center; }
+    .result-name    { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .result-contact { font-size:12px;color:var(--text-lo);margin-top:2px; }
+    .result-score   { margin-left:auto;text-align:right; }
+    .result-score-num { font-size:26px;font-weight:800;color:var(--accent);line-height:1; }
+    .result-score-lbl { font-size:11px;color:var(--text-lo); }
+    .score-row      { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+    .pontos         { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px; }
+    .ponto-list     { font-size:12.5px;line-height:1.9; }
+    .ponto-list li  { list-style:none;padding-left:18px;position:relative;color:var(--text-md); }
+    .ponto-list li::before { position:absolute;left:0; }
+    .ponto-pos li::before  { content:"✓";color:var(--success); }
+    .ponto-neg li::before  { content:"●";color:var(--error);font-size:10px;top:3px; }
+    .resumo         { font-size:13px;color:var(--text-md);line-height:1.7;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
+    .loader         { display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:16px; }
+    .spinner        { width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .empty-state    { text-align:center;padding:80px 20px;color:var(--text-lo); }
+    .empty-state div { font-size:48px;margin-bottom:12px; }
+    .filtros        { display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px; }
+    .select-vaga    { min-width:320px; }
+    .tag            { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
+    .detail-scores  { display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;padding:10px 0;border-top:1px solid var(--border); }
+    .detail-score   { text-align:center;min-width:80px; }
+    .detail-score-val { font-size:18px;font-weight:700;color:var(--accent); }
+    .detail-score-lbl { font-size:10px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-top:2px; }
+    /* Eliminados */
+    .eliminados-section { margin-top:24px; }
+    .eliminados-toggle  { background:none;border:1px solid var(--border);border-radius:8px;padding:10px 16px;width:100%;text-align:left;cursor:pointer;color:var(--text-md);font-size:13px;display:flex;justify-content:space-between;align-items:center; }
+    .eliminados-toggle:hover { background:var(--bg-hover); }
+    .eliminados-table { width:100%;border-collapse:collapse;font-size:13px; }
+    .eliminados-table th { font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);font-weight:600;padding:8px 12px 8px 0;text-align:left;border-bottom:1px solid var(--border); }
+    .eliminados-table th:last-child { padding-right:0; }
+    .eliminados-table td { padding:10px 12px 10px 0;vertical-align:top;border-bottom:1px solid var(--border); }
+    .eliminados-table td:last-child { padding-right:0; }
+    .eliminados-table tr:last-child td { border-bottom:none; }
+    .eliminados-table .col-nome    { font-weight:600;color:var(--text-hi);width:25%;word-break:break-word; }
+    .eliminados-table .col-contato { color:var(--text-lo);width:22%;font-size:12px; }
+    .eliminados-table .col-motivo  { color:var(--text-lo);font-size:12px;line-height:1.6; }
+    /* Checkbox e finalistas */
+    .cb-finalista   { width:18px;height:18px;cursor:pointer;accent-color:var(--accent);flex-shrink:0; }
+    .badge-finalista{ background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600; }
+    /* Barra de ação salvar */
+    .save-bar { position:sticky;bottom:0;background:var(--bg-card);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;z-index:100;box-shadow:0 -4px 16px rgba(0,0,0,.06); }
+    .save-bar-info { font-size:13px;color:var(--text-md); }
+    /* Modal overlay */
+    .modal-overlay2 { position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:flex;align-items:center;justify-content:center; }
+    .modal-box      { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(440px,95vw);padding:28px; }
+    .modal-box h3   { font-size:15px;font-weight:700;color:var(--text-hi);margin:0 0 12px; }
+    .modal-box p    { font-size:13px;color:var(--text-md);line-height:1.7;margin:0 0 20px; }
+    .modal-box-foot { display:flex;justify-content:flex-end;gap:10px; }
+    /* Ajuda */
+    .modal-ajuda-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:center;justify-content:center; }
+    .modal-ajuda { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(820px,96vw);max-height:93vh;overflow-y:auto;padding:32px;position:relative; }
+    .btn-ajuda-topbar { display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.25); }
+    .btn-ajuda-topbar:hover { background:#1d4ed8; }
+    .ajuda-titulo { font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:20px; }
+    .ajuda-etapa  { margin-bottom:20px; }
+    .ajuda-etapa-titulo { font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px; }
+    .ajuda-etapa p { font-size:13px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ajuda-criterio { display:flex;align-items:flex-start;gap:12px;margin-bottom:10px; }
+    .ajuda-pts { background:var(--bg-hover);border-radius:8px;padding:4px 10px;font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap;min-width:48px;text-align:center; }
+    .ajuda-criterio-info strong { font-size:13px;color:var(--text-hi); }
+    .ajuda-criterio-info p { font-size:12px;color:var(--text-lo);margin:2px 0 0; }
+    /* Abas do modal de ajuda */
+    .ajuda-tabs { display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px; }
+    .ajuda-tab  { background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:13px;font-weight:600;color:var(--text-lo);cursor:pointer;font-family:inherit;transition:color .15s,border-color .15s;margin-bottom:-1px; }
+    .ajuda-tab:hover { color:var(--text-hi); }
+    .ajuda-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .ajuda-tab-content { display:none; }
+    .ajuda-tab-content.active { display:block; }
+    /* Créditos de IA */
+    .ia-card { border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px; }
+    .ia-card-header { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+    .ia-badge { font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap; }
+    .ia-badge-primary { background:#dbeafe;color:#1e40af; }
+    .ia-badge-fallback { background:#fef3c7;color:#92400e; }
+    .ia-card-title { font-size:14px;font-weight:700;color:var(--text-hi); }
+    .ia-card p { font-size:12.5px;color:var(--text-md);line-height:1.75;margin:0 0 8px; }
+    .ia-card p:last-child { margin:0; }
+    .ia-ops { background:var(--bg-hover);border-radius:8px;padding:10px 14px;margin:10px 0;font-size:12.5px;color:var(--text-md);line-height:2; }
+    .ia-ops strong { color:var(--text-hi); }
+    .ia-link { display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--accent);text-decoration:none;border:1px solid var(--accent);border-radius:8px;padding:5px 12px;margin-top:6px;transition:background .15s; }
+    .ia-link:hover { background:#eff6ff; }
+    .credito-calc { background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-top:16px; }
+    .credito-calc-title { font-size:13px;font-weight:700;color:#15803d;margin-bottom:8px; }
+    .credito-calc p { font-size:12.5px;color:#166534;line-height:1.8;margin:0; }
+    /* Fluxo visual */
+    .fluxo-step { display:flex;gap:14px;margin-bottom:18px; }
+    .fluxo-num  { flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center; }
+    .fluxo-body { flex:1; }
+    .fluxo-title { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .fluxo-desc  { font-size:12.5px;color:var(--text-md);line-height:1.75; }
+    .fluxo-sub   { font-size:12px;color:var(--text-lo);margin-top:6px;padding-left:12px;border-left:2px solid var(--border);line-height:1.8; }
+    .fluxo-divider { border:none;border-top:1px solid var(--border);margin:4px 0 18px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+    <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav">
+    </div>
+    <div class="sidebar-footer">
+    </div>
+    </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path">Recrutamento › Analisador de Currículos ›</span> Analisador</span>
+      <div class="ms-auto" style="display:flex;align-items:center;gap:14px">
+        <button class="btn-ajuda-topbar" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor" stroke="none"/></svg>
+          Ajuda · Como funciona
+        </button>
+        
+      </div>
+    </div>
+
+    <div class="page-content">
+      <div class="card mb-4">
+        <div class="card-header">🔍 Selecione a Vaga para Análise</div>
+        <div class="card-body">
+          <div class="filtros" style="align-items:center;flex-wrap:wrap">
+            <select id="sel-vaga" class="form-control select-vaga">
+              <option value="">— Selecione uma vaga —</option>
+            </select>
+            <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>▶ Analisar Currículos</button>
+            <select id="filtro-nivel" class="form-control" style="max-width:200px" onchange="filtrarResultados()">
+              <option value="">Filtrar por compatibilidade</option>
+              <option value="Alto">✓ Alta (70–100 pts)</option>
+              <option value="Médio">~ Média (50–69 pts)</option>
+              <option value="Baixo">● Baixa (abaixo do corte)</option>
+            </select>
+            <div id="filtro-curriculos-box" style="display:none;padding:6px 12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border)">
+              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:5px;font-size:12px;white-space:nowrap">
+                <input type="radio" name="radio-filtro-cv" value="todos" checked> Todos os currículos
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;white-space:nowrap" id="label-somente-vaga">
+                <input type="radio" name="radio-filtro-cv" value="somente_vaga" id="radio-somente-vaga" disabled>
+                <span id="texto-somente-vaga">Apenas desta vaga</span>
+              </label>
+            </div>
+          </div>
+          <div id="vaga-info" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.7"></div>
+        </div>
+      </div>
+
+      <div id="resultado-area"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal confirmação sobrescrever -->
+<div id="modal-sobrepor" class="modal-overlay2 d-none">
+  <div class="modal-box">
+    <h3>⚠️ Análise já existente</h3>
+    <p id="modal-sobrepor-txt"></p>
+    <div class="modal-box-foot">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-sobrepor').classList.add('d-none')">Não, cancelar</button>
+      <button class="btn btn-primary" id="btn-sobrepor-confirm">Sim, sobrepor</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Ajuda -->
+<div id="modal-ajuda" class="modal-ajuda-overlay d-none" onclick="if(event.target===this)this.classList.add('d-none')">
+  <div class="modal-ajuda">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="ajuda-titulo" style="margin:0">🔍 Análise de Currículos — Ajuda</div>
+      <button onclick="document.getElementById('modal-ajuda').classList.add('d-none')" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+
+    <div class="ajuda-tabs">
+      <button class="ajuda-tab active" id="tab-btn-como-funciona" onclick="switchAjudaTab('como-funciona')">📖 Como funciona</button>
+      <button class="ajuda-tab" id="tab-btn-fluxo" onclick="switchAjudaTab('fluxo')">🔄 Fluxo da análise</button>
+      <button class="ajuda-tab" id="tab-btn-creditos" onclick="switchAjudaTab('creditos')">💳 Créditos de IA</button>
+      <button class="ajuda-tab" id="tab-btn-equivalencias" onclick="switchAjudaTab('equivalencias')">⚡ Equivalências</button>
+    </div>
+
+    <!-- Aba: Como funciona -->
+    <div id="tab-como-funciona" class="ajuda-tab-content active">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">📊 Etapa 1 — Pontuação por critérios (máx. 100 pts)</div>
+        <p>Todos os currículos são analisados individualmente pela IA usando quatro critérios. A pontuação de cada critério é <strong style="color:var(--text-hi)">proporcional ao que o candidato atende</strong> — não existe penalidade por ausência: o candidato simplesmente não ganha os pontos que não atingiu.</p>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-obrig">50 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Requisitos Obrigatórios</strong>
+            <p>Critérios essenciais da função. Pontuação proporcional: (atendidos ÷ total) × peso configurado. Não atender nenhum = 0 pts, sem penalidade adicional.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-desej">30 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Requisitos Desejáveis</strong>
+            <p>Diferenciais valorizados, porém não obrigatórios. Pontuação proporcional ao que o candidato apresenta. Não atender nenhum = 0 pts, sem penalidade.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-form">10 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Formação Acadêmica</strong>
+            <p>Grau de instrução e área de formação comparados ao definido na Função. Atende ou supera = pontuação máxima; próxima da área = parcial; não atende = 0 pts.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" id="help-pts-hab">10 pts</div>
+          <div class="ajuda-criterio-info">
+            <strong>Habilidades Técnicas</strong>
+            <p>Ferramentas e tecnologias listadas na função. Considera equivalências (ex: "SoftExpert" = "SE Suite"). Pontuação proporcional ao domínio demonstrado.</p>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-lo);margin-top:10px;line-height:1.6">Os pesos de cada critério e a pontuação mínima de aprovação são configuráveis em <a href="/config-analisador.html" style="color:var(--accent)">Configurações → Pesos de Pontuação</a>.</p>
+      </div>
+
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">✅ Etapa 2 — Corte por pontuação mínima</div>
+        <p>Após a IA avaliar cada candidato, o sistema aplica o corte configurado:</p>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin:10px 0 14px">
+          <div style="flex:1;min-width:160px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:800;color:#15803d">≥ <span id="help-corte">50</span> pts</div>
+            <div style="font-size:12px;color:#166534;margin-top:4px">✅ Selecionado para entrevista<br>Ordenado do maior para o menor score</div>
+          </div>
+          <div style="flex:1;min-width:160px;background:#fef2f2;border:1px solid #fecaca;border-radius:9px;padding:12px 16px;text-align:center">
+            <div style="font-size:22px;font-weight:800;color:#b91c1c">&lt; <span id="help-corte2">50</span> pts</div>
+            <div style="font-size:12px;color:#991b1b;margin-top:4px">❌ Desclassificado<br>Aparece na seção de eliminados</div>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:var(--text-md)">Os selecionados são ordenados do maior para o menor score. O recrutador revisa e decide quem chama para entrevista.</p>
+        <p style="font-size:12.5px;color:var(--text-md);margin-top:12px"><strong style="color:var(--text-hi)">Exemplo com os pesos padrão (50 / 30 / 10 / 10) e corte em 50 pts:</strong></p>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+          <thead>
+            <tr style="background:var(--bg-hover)">
+              <th style="text-align:left;padding:7px 10px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Candidato</th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Obrig.<br><span style="font-weight:400;color:var(--text-lo)">/50</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Desej.<br><span style="font-weight:400;color:var(--text-lo)">/30</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Form.<br><span style="font-weight:400;color:var(--text-lo)">/10</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Hab.<br><span style="font-weight:400;color:var(--text-lo)">/10</span></th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Total</th>
+              <th style="text-align:center;padding:7px 8px;font-weight:600;color:var(--text-hi);border-bottom:2px solid var(--border)">Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato A</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">50</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">24</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">8</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">92</td>
+              <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato B</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">25</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">15</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">7</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">57</td>
+              <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);background:rgba(34,197,94,.04)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato C <span style="font-size:11px;color:var(--text-lo)">(0 obrig.)</span></td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">30</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">50</td>
+              <td style="padding:7px 8px;text-align:center;color:#15803d;font-weight:600">✅ Selecionado <span style="font-weight:400;font-size:10px">(no limite)</span></td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato D</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">25</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">6</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">5</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">36</td>
+              <td style="padding:7px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Desclassificado</td>
+            </tr>
+            <tr>
+              <td style="padding:7px 10px;color:var(--text-md)">Candidato E <span style="font-size:11px;color:var(--text-lo)">(0 obrig.)</span></td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">10</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">0</td>
+              <td style="padding:7px 8px;text-align:center;color:var(--text-md)">5</td>
+              <td style="padding:7px 8px;text-align:center;font-weight:700;color:var(--text-hi)">15</td>
+              <td style="padding:7px 8px;text-align:center;color:#b91c1c;font-weight:600">❌ Desclassificado</td>
+            </tr>
+          </tbody>
+        </table>
+        <p style="font-size:11.5px;color:var(--text-lo);margin-top:8px;line-height:1.6">O Candidato C ilustra que a ausência de requisitos obrigatórios não elimina automaticamente — ele pode passar se compensar nos demais critérios. A decisão final cabe ao recrutador na entrevista.</p>
+      </div>
+
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">✅ Etapa 3 — Encerrar Análise da Vaga</div>
+        <p>Após revisar os resultados, marque os candidatos finalistas (checkbox em cada card ou use <strong>Marcar todos</strong>) e clique em <strong>Encerrar Análise da Vaga</strong>. O resultado fica salvo no <a href="/historico.html" style="color:var(--accent)">Histórico de Análises</a> e pode ser consultado ou regenerado a qualquer momento.</p>
+        <p>O ID da análise é único por vaga e por dia — se você rodar a análise novamente no mesmo dia, o sistema perguntará antes de sobrepor.</p>
+      </div>
+
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">🏆 Resultado final</div>
+        <p>Candidatos aprovados são classificados por compatibilidade: <strong style="color:#15803d">Alto (70–100 pts)</strong> ou <strong style="color:#a16207">Médio (50–69 pts)</strong>. Candidatos com pontuação abaixo do corte configurado (padrão 50 pts) são desclassificados automaticamente.</p>
+        <p>Candidatos desclassificados aparecem em seção colapsada com o motivo (pontuação obtida vs. corte mínimo).</p>
+      </div>
+    </div>
+
+    <!-- Aba: Fluxo da análise -->
+    <div id="tab-fluxo" class="ajuda-tab-content">
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">0</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Seleção de currículos</div>
+          <div class="fluxo-desc">O sistema busca todos os currículos cadastrados no banco de dados. Se você escolher a opção <em>"Apenas candidatos desta vaga via Processo Seletivo"</em>, somente os currículos vinculados à vaga pelo formulário público são considerados.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">1</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Cálculo automático de experiência total</div>
+          <div class="fluxo-desc">Antes de enviar cada currículo à IA, o sistema calcula deterministicamente o tempo total de carreira somando os períodos de cada experiência profissional. Formatos suportados: DD/MM/YYYY, MM/YYYY, apenas ano (ex: "2020"), "desde MM/YYYY", "atual", "presente" e similares. O resultado é exibido ao recrutador como informação complementar.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">2</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Análise profunda individual pela IA — sem penalidades</div>
+          <div class="fluxo-desc">Cada currículo é analisado individualmente. O sistema envia à IA o texto completo do currículo junto com o perfil completo da função. A IA pontua por proporcionalidade — não existe penalidade por ausência de critérios:</div>
+          <div class="fluxo-sub">
+            <strong>Requisitos Obrigatórios</strong> — Proporcional: (atendidos ÷ total) × peso configurado. Não atende nenhum = 0 pts; sem teto ou penalidade adicional.<br>
+            <strong>Requisitos Desejáveis</strong> — Proporcional: (atendidos ÷ total) × peso configurado. Não atende nenhum = 0 pts; sem penalidade.<br>
+            <strong>Formação Acadêmica</strong> — Atende ou supera = pontuação máxima; próxima da área = parcial; não atende = 0 pts.<br>
+            <strong>Habilidades Técnicas</strong> — Proporcional ao domínio demonstrado. Considera equivalências de tecnologias (ex: "SoftExpert" = "SE Suite").<br><br>
+            Os pesos de cada critério são configurados em <a href="/config-analisador.html" style="color:var(--accent)">Configurações → Pesos de Pontuação</a>.
+          </div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">3</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Fallback automático de IA e tratamento de falhas</div>
+          <div class="fluxo-desc">A IA primária utilizada é o modelo <strong>Llama 3.3 70B</strong> via Groq. Se ocorrer limite de taxa (rate limit 429) ou quota excedida, o sistema automaticamente tenta o modelo <strong>Gemini 2.0 Flash</strong>. Se ambos falharem, o candidato é mantido com score neutro igual ao corte mínimo configurado e nível "Indefinido", sem ser eliminado, para não perder candidatos por problemas técnicos.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step">
+        <div class="fluxo-num">4</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Corte por pontuação mínima e ordenação</div>
+          <div class="fluxo-desc">Candidatos com score abaixo da pontuação mínima configurada são movidos para a lista de desclassificados. Os aprovados são ordenados do maior para o menor score, permitindo que o recrutador foque nos mais aderentes primeiro.</div>
+        </div>
+      </div>
+
+      <div class="fluxo-step" style="margin-bottom:0">
+        <div class="fluxo-num">5</div>
+        <div class="fluxo-body">
+          <div class="fluxo-title">Classificação final e encerramento</div>
+          <div class="fluxo-desc">Cada candidato recebe um nível de compatibilidade com a vaga:</div>
+          <div class="fluxo-sub">
+            <strong style="color:#15803d">Alto (70–100 pts)</strong> — candidato altamente compatível com a vaga.<br>
+            <strong style="color:#a16207">Médio (50–69 pts)</strong> — candidato compatível, acima do corte mínimo, merece avaliação.<br>
+            <strong style="color:#b91c1c">Desclassificado (abaixo do corte)</strong> — pontuação insuficiente; aparece na lista de eliminados com o motivo.<br><br>
+            O recrutador revisa, marca os finalistas e clica em <strong>Encerrar Análise da Vaga</strong>. O sistema salva o resultado no Histórico e atualiza o status da vaga para "encerrada". O ID da análise é único por vaga e por dia — rodar novamente no mesmo dia perguntará antes de sobrepor.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Aba: Créditos de IA -->
+    <div id="tab-creditos" class="ajuda-tab-content">
+
+      <p style="font-size:13px;color:var(--text-md);line-height:1.75;margin-bottom:18px">
+        O sistema utiliza dois provedores de IA. O cálculo de experiência é determinístico — <strong style="color:var(--text-hi)">não consome créditos</strong>. Créditos são gastos somente na <strong style="color:var(--text-hi)">análise profunda individual</strong> de cada currículo, pois todos são enviados à IA para pontuação.
+      </p>
+
+      <!-- Groq -->
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-badge ia-badge-primary">IA Principal</span>
+          <span class="ia-card-title">Groq — Llama 3.3 70B Versatile</span>
+        </div>
+        <p>Motor principal da análise. Cada currículo aprovado na triagem é enviado individualmente ao modelo Llama 3.3 70B via API Groq, que retorna a pontuação estruturada (JSON) nos quatro critérios.</p>
+        <div class="ia-ops">
+          <strong>Operação:</strong> Análise individual de currículo<br>
+          <strong>Input estimado:</strong> 1.500 – 5.000 tokens por currículo <span style="color:var(--text-lo)">(texto do CV + perfil da função)</span><br>
+          <strong>Output estimado:</strong> 400 – 800 tokens por currículo <span style="color:var(--text-lo)">(JSON com scores, pontos e resumo)</span><br>
+          <strong>Média por análise:</strong> ~3.000 tokens input + ~600 tokens output
+        </div>
+        <p>A Groq oferece um <strong>plano gratuito</strong> com limite de requisições por minuto (RPM) e tokens por dia. Para volumes maiores ou uso em produção, utilize um plano pago conforme a tabela de preços disponível no console.</p>
+        <a class="ia-link" href="https://console.groq.com" target="_blank">🔗 console.groq.com — Criar conta / adquirir créditos</a>
+      </div>
+
+      <!-- Gemini -->
+      <div class="ia-card">
+        <div class="ia-card-header">
+          <span class="ia-badge ia-badge-fallback">Fallback automático</span>
+          <span class="ia-card-title">Google Gemini 2.0 Flash</span>
+        </div>
+        <p>Ativado automaticamente quando a Groq retorna erro de limite (429) ou quota excedida. O sistema reanalisa o currículo com Gemini sem intervenção do recrutador.</p>
+        <div class="ia-ops">
+          <strong>Operação:</strong> Análise individual de currículo (fallback)<br>
+          <strong>Input estimado:</strong> 1.500 – 5.000 tokens por currículo<br>
+          <strong>Output estimado:</strong> 400 – 800 tokens por currículo<br>
+          <strong>Plano gratuito:</strong> até 1.500 requisições/dia e 1 milhão de tokens/minuto <span style="color:var(--text-lo)">(limites sujeitos a alteração pelo Google)</span>
+        </div>
+        <p>Para uso em produção ou volume alto, habilite cobrança no Google AI Studio ou utilize a API via Google Cloud (Vertex AI).</p>
+        <a class="ia-link" href="https://aistudio.google.com" target="_blank">🔗 aistudio.google.com — Google AI Studio / créditos</a>
+      </div>
+
+      <!-- Calculadora orientativa -->
+      <div class="credito-calc">
+        <div class="credito-calc-title">📊 Como estimar o consumo por processo seletivo</div>
+        <p>
+          Considere apenas os currículos que <strong>passam da triagem</strong> — os eliminados não geram chamadas de IA.<br><br>
+          <strong>Fórmula simplificada (Groq):</strong><br>
+          Nº de CVs aprovados × 3.600 tokens médios ÷ 1.000.000 = Milhões de tokens<br><br>
+          <strong>Exemplo — 40 CVs aprovados:</strong><br>
+          40 × 3.600 = 144.000 tokens ≈ 0,14 M tokens input + 0,024 M tokens output<br>
+          Custo estimado com plano pago Groq: <strong>menos de US$ 0,15 por análise completa</strong><br><br>
+          <em style="font-size:11.5px">Valores de referência. Consulte sempre a tabela de preços atual de cada provedor antes de adquirir créditos.</em>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Aba: Equivalências -->
+    <div id="tab-equivalencias" class="ajuda-tab-content">
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">💡 Por que equivalências existem?</div>
+        <p>Candidatos descrevem a mesma habilidade de formas diferentes. Um profissional de <strong style="color:var(--text-hi)">ADVPL</strong> pode escrever "Protheus", "TOTVS" ou "Microsiga" no currículo. Sem equivalências, ele seria eliminado na triagem mesmo sendo qualificado.</p>
+        <p>A tabela de equivalências resolve isso: você mapeia uma vez e o sistema reconhece todas as variantes automaticamente em toda triagem futura.</p>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🔍 Como a triagem usa as equivalências?</div>
+        <p>Para cada <strong style="color:var(--text-hi)">Requisito Obrigatório</strong> e cada <strong style="color:var(--text-hi)">Requisito Desejável</strong> da vaga, o sistema verifica o texto do currículo em 3 camadas em sequência:</p>
+        <div class="fluxo-step" style="margin-bottom:12px">
+          <div class="fluxo-num">1</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Tabela de equivalências</div>
+            <div class="fluxo-desc">Verifica o termo principal e todos os sinônimos cadastrados. Se <em>qualquer um</em> aparecer no currículo, o requisito é considerado atendido. Ex: requisito "SoftExpert" → reconhece "se suite", "sesuite", "se-suite".</div>
+          </div>
+        </div>
+        <div class="fluxo-step" style="margin-bottom:12px">
+          <div class="fluxo-num">2</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Palavras significativas</div>
+            <div class="fluxo-desc">Se o requisito é uma frase (ex: "Gestão de Pessoas"), cada palavra relevante é verificada individualmente nas equivalências. Conectivos e preposições são ignorados.</div>
+          </div>
+        </div>
+        <div class="fluxo-step" style="margin-bottom:0">
+          <div class="fluxo-num">3</div>
+          <div class="fluxo-body">
+            <div class="fluxo-title">Busca literal</div>
+            <div class="fluxo-desc">Por último, busca o termo exatamente como escrito na vaga. Captura termos que não estão nas equivalências e não foram desmembrados nas etapas anteriores.</div>
+          </div>
+        </div>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">🏷️ Dois tipos de equivalências</div>
+        <div class="ajuda-criterio" style="margin-bottom:12px">
+          <div class="ajuda-pts" style="background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;font-size:11px;min-width:80px">⚙ embutido</div>
+          <div class="ajuda-criterio-info">
+            <strong>Padrão do sistema</strong>
+            <p>Vem pré-configurado, cobrindo termos técnicos comuns (SoftExpert, SAP, Power BI, etc.). Pode ser editado — sua versão tem prioridade sobre o padrão.</p>
+          </div>
+        </div>
+        <div class="ajuda-criterio">
+          <div class="ajuda-pts" style="background:#fefce8;color:#a16207;border:1px solid #fde68a;font-size:11px;min-width:80px">★ personalizado</div>
+          <div class="ajuda-criterio-info">
+            <strong>Criado pelo recrutador</strong>
+            <p>Equivalências específicas do seu negócio ou setor. Podem ser editadas ou excluídas a qualquer momento sem afetar o padrão.</p>
+          </div>
+        </div>
+      </div>
+      <div class="ajuda-etapa">
+        <div class="ajuda-etapa-titulo">⚡ Sugestão automática por IA</div>
+        <p>Ao cadastrar ou editar uma <strong style="color:var(--text-hi)">Função</strong>, após preencher os Requisitos Obrigatórios e Habilidades Técnicas, use o botão <strong>"Sugerir equivalências com IA"</strong>. O sistema gera automaticamente variantes para cada termo e apresenta para você revisar antes de salvar.</p>
+        <p>Equivalências já existentes na base são exibidas na revisão — o sistema nunca sobrescreve sem sua aprovação explícita.</p>
+      </div>
+      <div class="ajuda-etapa" style="margin-bottom:0">
+        <div class="ajuda-etapa-titulo">⚙ Onde gerenciar</div>
+        <p>Acesse <a href="/configuracoes.html" style="color:var(--accent)">Configurações → aba Equivalências</a> para visualizar, criar, editar ou excluir qualquer equivalência.</p>
+        <div style="background:var(--bg-hover);border-radius:8px;padding:12px 16px;font-size:12.5px;color:var(--text-md);margin-top:10px;line-height:1.75">
+          <strong style="color:var(--text-hi)">Exemplo prático:</strong><br>
+          Keyword: <strong>ADVPL</strong><br>
+          Variantes: <em>totvs, protheus, microsiga, advpl totvs, totvs protheus</em><br><br>
+          Qualquer currículo que mencione uma dessas variantes passará pelo requisito "ADVPL" na triagem, mesmo sem citar a palavra "ADVPL".
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/audit-fields.js"></script>
+<script src="/js/sidebar.js"></script>
+<script>
+  let todosResultados = [], todosEliminados = [];
+  let vagaSelecionada = null, funcaoId = null, vagaId = null;
+  let ultimoRes = null;
+  let analisesPorVaga = new Map();
+  let ultimoPesos = { requisitos_obrigatorios:50, requisitos_desejados:30, formacao:10, habilidades:10, corte_minimo:50 };
+
+  async function carregarPesosHelp() {
+    try {
+      const p = await fetch('/api/pesos-pontuacao').then(r => r.json());
+      ultimoPesos = p;
+      document.getElementById('help-pts-obrig').textContent = `${p.requisitos_obrigatorios} pts`;
+      document.getElementById('help-pts-desej').textContent = `${p.requisitos_desejados} pts`;
+      document.getElementById('help-pts-form').textContent  = `${p.formacao} pts`;
+      document.getElementById('help-pts-hab').textContent   = `${p.habilidades} pts`;
+      document.getElementById('help-corte').textContent     = p.corte_minimo;
+      document.getElementById('help-corte2').textContent    = p.corte_minimo;
+    } catch {}
+  }
+  carregarPesosHelp();
+
+  function switchAjudaTab(tab) {
+    document.querySelectorAll('.ajuda-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.ajuda-tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none'; });
+    document.getElementById('tab-btn-' + tab).classList.add('active');
+    const content = document.getElementById('tab-' + tab);
+    content.style.display = 'block';
+    content.classList.add('active');
+  }
+
+  // ── Carrega vagas no seletor ─────────────────────────────────────────────────
+  async function carregarVagas() {
+    const [vagas, analises] = await Promise.all([
+      fetch('/api/vagas').then(r => r.json()),
+      fetch('/api/analises').then(r => r.json()),
+    ]);
+    analisesPorVaga = new Map((Array.isArray(analises) ? analises : [])
+      .filter(a => a.vaga_id)
+      .map(a => [Number(a.vaga_id), a]));
+    const vagasDisponiveis = vagas.filter(v => !analisesPorVaga.has(Number(v.id)));
+    const sel = document.getElementById('sel-vaga');
+    sel.innerHTML = '<option value="">— Selecione uma vaga —</option>' +
+      vagasDisponiveis.map(v => {
+        const f = v.funcao || {};
+        const label = [f.nome, f.area, f.nivel_experiencia && f.nivel_experiencia !== 'Não especificado' ? f.nivel_experiencia : null]
+          .filter(Boolean).join(' · ');
+        const statusLabel = { aberta: 'Aberta', pausada: 'Pausada', encerrada: 'Encerrada' }[v.status] || v.status;
+        return `<option value="${v.id}">${label} — ${statusLabel} (${v.quantidade} vaga${v.quantidade !== 1 ? 's' : ''})</option>`;
+      }).join('');
+    if (!vagasDisponiveis.length) {
+      sel.disabled = true;
+      document.getElementById('btn-analisar').disabled = true;
+      document.getElementById('vaga-info').style.display = 'block';
+      document.getElementById('vaga-info').innerHTML = `
+        <strong style="color:var(--text-hi)">Nenhuma vaga disponivel para analise.</strong>
+        <br><span style="color:var(--text-lo)">Todas as vagas cadastradas ja possuem analise salva no historico.</span>
+        <br><a href="/historico.html" style="color:var(--accent);font-weight:600">Ver Historico de Analises</a>`;
+    }
+
+    sel.addEventListener('change', async () => {
+      const id = Number(sel.value);
+      const btnAnalisar = document.getElementById('btn-analisar');
+      const analiseExistente = analisesPorVaga.get(id);
+      btnAnalisar.disabled = !id || Boolean(analiseExistente);
+      btnAnalisar.textContent = analiseExistente ? 'Analise ja existente' : 'Analisar Curriculos';
+      const info = document.getElementById('vaga-info');
+      const box  = document.getElementById('filtro-curriculos-box');
+      if (!id) {
+        vagaSelecionada = null;
+        funcaoId = null;
+        vagaId = null;
+        btnAnalisar.textContent = 'Analisar Curriculos';
+        info.style.display = 'none';
+        box.style.display = 'none';
+        document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
+        document.getElementById('radio-somente-vaga').disabled = true;
+        return;
+      }
+      const v = await fetch(`/api/vagas/${id}`).then(r => r.json());
+      vagaSelecionada = v;
+      funcaoId = v.funcao_id;
+      vagaId   = v.id;
+      const f = v.funcao || {};
+      const tags = arr => Array.isArray(arr) && arr.length
+        ? arr.map(t => `<span class="tag">${t}</span>`).join(' ') : '—';
+      if (analiseExistente) {
+        box.style.display = 'none';
+        document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
+        document.getElementById('resultado-area').innerHTML = '';
+        const dataFmt = analiseExistente.data ? new Date(analiseExistente.data).toLocaleString('pt-BR') : '';
+        info.style.display = 'block';
+        info.innerHTML = `
+        <strong style="color:var(--text-hi)">${f.nome || 'â€”'}</strong>
+        ${f.area ? ` Â· <span>${f.area}</span>` : ''}
+        ${f.nivel_experiencia ? ` Â· <span>${f.nivel_experiencia}</span>` : ''}
+        <br><span style="color:var(--error);font-weight:600">Esta vaga ja possui uma analise salva${dataFmt ? ` em ${dataFmt}` : ''}.</span>
+        <br><a href="/historico.html?vaga_id=${id}" style="color:var(--accent);font-weight:600">Ver no Historico de Analises</a>`;
+        return;
+      }
+      box.style.display = 'block';
+      // Fetch candidaturas for this vaga
+      const autoFiltroVaga = new URLSearchParams(location.search).get('filtro') === 'somente_vaga';
+      fetch(`/api/ps/candidaturas/vaga/${id}`).then(r => r.json()).then(cands => {
+        const n = cands.length;
+        const radio = document.getElementById('radio-somente-vaga');
+        const texto = document.getElementById('texto-somente-vaga');
+        if (n > 0) {
+          radio.disabled = false;
+          texto.innerHTML = `Apenas candidatos desta vaga via Processo Seletivo <span style="background:#dbeafe;color:#1e40af;border-radius:12px;padding:1px 8px;font-size:11px;font-weight:600">${n} candidato${n!==1?'s':''}</span>`;
+          if (autoFiltroVaga) radio.checked = true;
+        } else {
+          radio.disabled = true;
+          radio.checked  = false;
+          document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
+          texto.innerHTML = 'Apenas candidatos desta vaga via Processo Seletivo <span style="color:var(--text-lo);font-size:12px">(nenhum recebido)</span>';
+        }
+      }).catch(() => {});
+
+      info.style.display = 'block';
+      info.innerHTML = `
+        <strong style="color:var(--text-hi)">${f.nome || '—'}</strong>
+        ${f.area ? ` · <span>${f.area}</span>` : ''}
+        ${f.nivel_experiencia ? ` · <span>${f.nivel_experiencia}</span>` : ''}
+        ${f.descricao ? `<br><span style="color:var(--text-lo)">${f.descricao.slice(0,200)}${f.descricao.length>200?'…':''}</span>` : ''}
+        ${f.habilidades_tecnicas?.length ? `<br><span style="color:var(--text-lo)">Habilidades:</span> ${tags(f.habilidades_tecnicas)}` : ''}
+        ${f.requisitos_obrigatorios ? `<br><span style="color:var(--text-lo)">Requisitos:</span> <span style="font-size:12px">${f.requisitos_obrigatorios.slice(0,180)}${f.requisitos_obrigatorios.length>180?'…':''}</span>` : ''}`;
+    });
+
+    // Auto-seleciona se vier via query string
+    const params = new URLSearchParams(location.search);
+    const paramVagaId = params.get('vaga_id');
+    if (paramVagaId) {
+      sel.value = paramVagaId;
+      sel.dispatchEvent(new Event('change'));
+    }
+  }
+
+  // ── Analisa ──────────────────────────────────────────────────────────────────
+  async function analisar() {
+    if (!funcaoId) return;
+    document.getElementById('btn-analisar').disabled = true;
+    document.getElementById('resultado-area').innerHTML = `
+      <div class="loader">
+        <div class="spinner"></div>
+        <div style="color:var(--text-md);font-size:14px;text-align:center">
+          <strong style="color:var(--text-hi)">Etapa 1 — Triagem eliminatória</strong><br>
+          <span style="font-size:12px;color:var(--text-lo)">Filtrando candidatos que atendem os requisitos obrigatórios…</span>
+        </div>
+      </div>`;
+    try {
+      const somente_vaga = document.querySelector('input[name="radio-filtro-cv"]:checked')?.value === 'somente_vaga';
+      const res = await fetch('/api/analisador/analisar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ funcao_id: funcaoId, vaga_id: vagaId, somente_vaga }),
+      }).then(r => r.json());
+
+      if (res.error) {
+        if (res.vaga_ja_analisada) document.getElementById('btn-analisar').disabled = true;
+        document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>⚠️</div>${res.error}${res.vaga_ja_analisada ? `<p style="font-size:13px;margin-top:8px"><a href="/historico.html?vaga_id=${vagaId}" style="color:var(--accent)">Ver no Historico de Analises</a></p>` : ''}</div>`;
+        return;
+      }
+
+      todosResultados = res.resultados || [];
+      todosEliminados = res.eliminados || [];
+      ultimoRes = res;
+      renderResultados(todosResultados, res);
+    } catch (e) {
+      document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>❌</div>Erro: ${e.message}</div>`;
+    } finally {
+      document.getElementById('btn-analisar').disabled = Boolean(analisesPorVaga.get(Number(vagaId)));
+    }
+  }
+
+  // ── Filtra resultados ────────────────────────────────────────────────────────
+  function filtrarResultados() {
+    const nivel = document.getElementById('filtro-nivel').value;
+    const filtrados = nivel ? todosResultados.filter(r => r.nivel === nivel) : todosResultados;
+    renderResultados(filtrados, ultimoRes || { total: todosResultados.length + todosEliminados.length }, true);
+  }
+
+  // ── Renderiza resultados ─────────────────────────────────────────────────────
+  function renderResultados(resultados, res, isFiltro = false) {
+    if (!resultados.length && !res?.total) {
+      document.getElementById('resultado-area').innerHTML = `<div class="empty-state"><div>📭</div><strong>Nenhum currículo encontrado</strong><p style="font-size:13px;margin-top:6px">Receba currículos pelo WhatsApp para analisar.</p></div>`;
+      return;
+    }
+    const altos    = resultados.filter(r => r.nivel === 'Alto').length;
+    const medios   = resultados.filter(r => r.nivel === 'Médio').length;
+    const baixos   = resultados.filter(r => r.nivel === 'Baixo').length;
+    const eliminados = isFiltro ? todosEliminados : (res.eliminados || todosEliminados);
+
+    const cards = resultados.map((r, i) => {
+      const nivelCls = r.nivel === 'Alto' ? 'nivel-alto' : r.nivel === 'Médio' ? 'nivel-medio' : 'nivel-baixo';
+      const barCls   = r.nivel === 'Alto' ? 'score-alto' : r.nivel === 'Médio' ? 'score-medio' : 'score-baixo';
+      const pos = (r.pontos_positivos || []).map(p => `<li>${p}</li>`).join('');
+      const neg = (r.pontos_negativos || []).map(p => `<li>${p}</li>`).join('');
+      const det = r.detalhes || {};
+      const nivelCandBadge = r.nivel_candidato
+        ? `<span style="font-size:11px;background:var(--bg-hover);border:1px solid var(--border);border-radius:12px;padding:2px 8px;color:var(--text-lo)">Candidato: ${r.nivel_candidato}${r.meses_relevantes > 0 ? ` · ${Math.floor(r.meses_relevantes/12) > 0 ? Math.floor(r.meses_relevantes/12)+'a ' : ''}${r.meses_relevantes%12 > 0 ? r.meses_relevantes%12+'m relevantes' : 'relevantes'}` : ''}${r.exp_total ? ` · Total: ${r.exp_total}` : ''}</span>`
+        : '';
+      const P = res.pesos || ultimoPesos;
+      const detHtml = (det.requisitos_obrigatorios !== undefined) ? `
+        <div class="detail-scores">
+          <div class="detail-score"><div class="detail-score-val">${det.requisitos_obrigatorios ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.requisitos_obrigatorios}</span></div><div class="detail-score-lbl">Req. Obrigatórios</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.requisitos_desejados ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.requisitos_desejados}</span></div><div class="detail-score-lbl">Req. Desejáveis</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.formacao ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.formacao}</span></div><div class="detail-score-lbl">Formação</div></div>
+          <div class="detail-score"><div class="detail-score-val">${det.habilidades_tecnicas ?? '—'}<span style="font-size:11px;color:var(--text-lo)">/${P.habilidades}</span></div><div class="detail-score-lbl">Habilidades</div></div>
+        </div>` : '';
+      const _empAn = window._iahubEmpresa || { id: '—', nome: '—' };
+      return `
+        <div class="result-card" id="card-${r.id}">
+          <div style="display:flex;gap:10px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border)">
+            <span style="font-size:11px;color:var(--text-lo);font-family:monospace">ID: <strong>${r.id}</strong></span>
+            <span style="font-size:11px;color:var(--text-lo);font-family:monospace">Emp: <strong>${_empAn.id}</strong> — ${_empAn.nome}</span>
+          </div>
+          <div class="result-header">
+            <input type="checkbox" class="cb-finalista" data-id="${r.id}" onchange="atualizarCard(${r.id}, this.checked)" title="Marcar como finalista">
+            <div class="result-rank">${i + 1}º</div>
+            <div>
+              <div class="result-name">${r.nome || '—'}</div>
+              <div class="result-contact">${r.telefone || ''}${r.telefone && r.email ? ' · ' : ''}${r.email || ''}</div>
+              <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">${nivelCandBadge}</div>
+            </div>
+            <div class="result-score">
+              <div class="result-score-num">${r.score}</div>
+              <div class="result-score-lbl">/ 100</div>
+              <span class="nivel-badge ${nivelCls}" style="margin-top:4px;display:inline-block">${r.nivel}</span>
+            </div>
+          </div>
+          <div class="score-row">
+            <span style="font-size:11.5px;color:var(--text-lo);min-width:80px">Compatibilidade</span>
+            <div class="score-bar-wrap"><div class="score-bar ${barCls}" style="width:${r.score}%"></div></div>
+            <span style="font-size:12px;color:var(--text-lo);min-width:30px">${r.score}%</span>
+          </div>
+          ${detHtml}
+          ${pos || neg ? `
+          <div class="pontos">
+            ${pos ? `<div><div style="font-size:11px;color:var(--success);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos positivos</div><ul class="ponto-list ponto-pos">${pos}</ul></div>` : ''}
+            ${neg ? `<div><div style="font-size:11px;color:var(--error);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos a avaliar</div><ul class="ponto-list ponto-neg">${neg}</ul></div>` : ''}
+          </div>` : ''}
+          ${r.resumo ? `<div class="resumo">${r.resumo}</div>` : ''}
+          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);text-align:right">
+            <a href="/curriculo.html?id=${r.id}" target="_blank" class="btn btn-ghost" style="font-size:12px;padding:5px 14px">📄 Ver Currículo Completo</a>
+          </div>
+        </div>`;
+    }).join('');
+
+    const eliminadosHtml = eliminados.length ? `
+      <div class="eliminados-section">
+        <button class="eliminados-toggle" onclick="toggleEliminados(this)">
+          <span>🚫 ${eliminados.length} candidato${eliminados.length !== 1 ? 's' : ''} eliminado${eliminados.length !== 1 ? 's' : ''} na triagem — não atendem os requisitos obrigatórios</span>
+          <span id="eliminados-arrow">▴</span>
+        </button>
+        <div id="eliminados-lista" style="display:block;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;padding:12px 16px">
+          <table class="eliminados-table">
+            <thead>
+              <tr>
+                <th>Candidato</th>
+                <th>Contato</th>
+                <th>Motivo da eliminação</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${eliminados.map(e => `
+                <tr>
+                  <td class="col-nome">${e.nome}</td>
+                  <td class="col-contato">${e.telefone || '—'}${e.email ? `<br>${e.email}` : ''}</td>
+                  <td class="col-motivo">${e.motivo || '—'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : '';
+
+    const triagemBadge = res.triagem_ativa !== false
+      ? `<span class="badge" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe">⚡ Triagem ativa</span>`
+      : '';
+
+    const saveBarHtml = vagaId ? `
+      <div class="save-bar" id="save-bar">
+        <div>
+          <button class="btn btn-ghost" style="font-size:12px" onclick="marcarTodos(true)">☑ Marcar todos</button>
+          <button class="btn btn-ghost" style="font-size:12px;margin-left:6px" onclick="marcarTodos(false)">☐ Desmarcar todos</button>
+        </div>
+        <span class="save-bar-info"><span id="count-finalistas">0</span> candidato(s) marcado(s) como finalista</span>
+        <button class="btn btn-primary ms-auto" onclick="salvarAnalise()">✅ Encerrar Análise da Vaga</button>
+      </div>` : '';
+
+    document.getElementById('resultado-area').innerHTML = `
+      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+        <span style="font-size:14px;color:var(--text-md)">
+          ${res.funcao ? `<strong style="color:var(--text-hi)">${res.funcao}</strong> · ` : ''}
+          ${res.total || 0} recebidos · ${resultados.length} analisados
+        </span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${triagemBadge}
+          <span class="badge badge-green">✓ ${altos} alto${altos !== 1 ? 's' : ''}</span>
+          <span class="badge badge-yellow">~ ${medios} médio${medios !== 1 ? 's' : ''}</span>
+          <span class="badge badge-red">● ${baixos} baixo${baixos !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+      ${cards}
+      ${eliminadosHtml}
+      ${saveBarHtml}`;
+
+    atualizarContadorFinalistas();
+  }
+
+  // ── Checkbox helpers ─────────────────────────────────────────────────────────
+  function atualizarCard(id, marcado) {
+    const card = document.getElementById(`card-${id}`);
+    if (card) card.classList.toggle('finalista', marcado);
+    atualizarContadorFinalistas();
+  }
+
+  function marcarTodos(marcar) {
+    document.querySelectorAll('.cb-finalista').forEach(cb => {
+      cb.checked = marcar;
+      atualizarCard(Number(cb.dataset.id), marcar);
+    });
+  }
+
+  function atualizarContadorFinalistas() {
+    const n = document.querySelectorAll('.cb-finalista:checked').length;
+    const el = document.getElementById('count-finalistas');
+    if (el) el.textContent = n;
+  }
+
+  // ── Salvar análise ───────────────────────────────────────────────────────────
+  async function salvarAnalise() {
+    if (!vagaId || !ultimoRes) return;
+    const hoje = new Date().toISOString().slice(0, 10);
+    const id   = `${hoje}_${vagaId}`;
+    const finalistas_ids = Array.from(document.querySelectorAll('.cb-finalista:checked')).map(cb => Number(cb.dataset.id));
+    const f = vagaSelecionada?.funcao || {};
+
+    const payload = {
+      id,
+      vaga_id:          vagaId,
+      funcao_id:        funcaoId,
+      funcao_nome:      f.nome || ultimoRes.funcao || '—',
+      total_curriculos: ultimoRes.total || 0,
+      total_analisados: todosResultados.length,
+      total_eliminados: todosEliminados.length,
+      finalistas_ids,
+      resultados:       todosResultados,
+      eliminados:       todosEliminados,
+      status:           'encerrada',
+    };
+
+    await executarSalvar(payload, false);
+  }
+
+  async function executarSalvar(payload, force) {
+    const r = await fetch('/api/analises', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, force }),
+    });
+
+    if (r.status === 409) {
+      const conf = await r.json();
+      if (conf.vaga_ja_analisada) {
+        const bar = document.getElementById('save-bar');
+        const dataFmt = conf.data_existente ? new Date(conf.data_existente).toLocaleString('pt-BR') : '';
+        if (bar) {
+          bar.innerHTML = `<div style="display:flex;align-items:center;gap:12px;width:100%">
+          <span style="color:var(--error);font-size:13px;font-weight:600">Esta vaga ja possui uma analise salva${dataFmt ? ` em ${dataFmt}` : ''}.</span>
+          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px;margin-left:auto">Ver no Historico</a>
+        </div>`;
+        }
+        return;
+      }
+      const dataFmt = new Date(conf.data_existente).toLocaleString('pt-BR');
+      document.getElementById('modal-sobrepor-txt').textContent =
+        `Já existe uma análise para esta vaga salva hoje às ${dataFmt}. Deseja substituí-la pelos novos resultados?`;
+      document.getElementById('modal-sobrepor').classList.remove('d-none');
+      document.getElementById('btn-sobrepor-confirm').onclick = async () => {
+        document.getElementById('modal-sobrepor').classList.add('d-none');
+        await executarSalvar(payload, true);
+      };
+      return;
+    }
+
+    if (r.ok) {
+      await fetch(`/api/vagas/${vagaId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'encerrada' }),
+      });
+
+      const bar = document.getElementById('save-bar');
+      if (bar) {
+        bar.innerHTML = `<div style="display:flex;align-items:center;gap:12px;width:100%">
+          <span style="color:var(--success);font-size:13px;font-weight:600">✅ Análise salva com sucesso!</span>
+          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px;margin-left:auto">📊 Ver no Histórico</a>
+        </div>`;
+      }
+    }
+  }
+
+  function toggleEliminados(btn) {
+    const lista = document.getElementById('eliminados-lista');
+    const arrow = document.getElementById('eliminados-arrow');
+    const aberto = lista.style.display !== 'none';
+    lista.style.display = aberto ? 'none' : 'block';
+    arrow.textContent = aberto ? '▾' : '▴';
+  }
+
+  carregarVagas();
+</script>
+</body>
+</html>

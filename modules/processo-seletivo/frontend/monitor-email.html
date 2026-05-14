@@ -52,7 +52,7 @@
 
   <div class="main">
     <div class="topbar">
-      <span class="topbar-title"><span class="topbar-path">Monitoramento ›</span> Monitor E-mail</span>
+      <span class="topbar-title"><span class="topbar-path">Monitores ›</span> Monitor E-mail</span>
     </div>
 
     <div class="page-content">
@@ -110,6 +110,30 @@
 <script>
   const socket = io();
 
+  // Empresa explícita via ?empresa=ID (modo multi-aba)
+  const _qs = new URLSearchParams(location.search);
+  const _monitorEid = Number(_qs.get('empresa') || _qs.get('_empresa')) || null;
+
+  function _apiUrl(path) {
+    return _monitorEid ? `${path}?empresa_id=${_monitorEid}` : path;
+  }
+  function _apiBody(extra = {}) {
+    const body = _monitorEid ? { empresa_id: _monitorEid, ...extra } : extra;
+    return Object.keys(body).length ? JSON.stringify(body) : undefined;
+  }
+  function _apiFetchOpts(method, extra = {}) {
+    const body = _apiBody(extra);
+    return { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body };
+  }
+
+  if (_monitorEid) {
+    // Atualiza o título da página com o nome da empresa
+    fetch('/api/empresas/minhas').then(r => r.json()).then(lista => {
+      const emp = lista.find(e => e.id === _monitorEid);
+      if (emp) document.title = `Monitor E-mail — ${emp.razao_social || emp.nome} — IAHub`;
+    }).catch(() => {});
+  }
+
   let emailLines = [], emailCount = 0;
 
   const TAG = {
@@ -149,7 +173,7 @@
     terminalEmail.innerHTML = '';
     emailLines = []; emailCount = 0;
     document.getElementById('email-log-count').textContent = '';
-    fetch('/api/email-service/clear-log', { method: 'POST' }).catch(() => {});
+    fetch('/api/email-service/clear-log', _apiFetchOpts('POST')).catch(() => {});
   }
 
   const EMAIL_PILLS = {
@@ -171,27 +195,46 @@
     terminalEmail.innerHTML = '';
     emailLines = []; emailCount = 0;
     document.getElementById('email-log-count').textContent = '';
-    window._iahubAuthReady?.then(() => socket.emit('join-empresa'));
+    if (_monitorEid) {
+      socket.emit('join-empresa-monitor', { empresaId: _monitorEid });
+    } else {
+      window._iahubAuthReady?.then(() => socket.emit('join-empresa'));
+    }
+  });
+
+  // Limpa terminal e status quando o servidor troca de empresa (MDI mode)
+  socket.on('clear-monitor', () => {
+    terminalEmail.innerHTML = '';
+    emailLines = []; emailCount = 0;
+    document.getElementById('email-log-count').textContent = '';
+    setEmailStatus('stopped');
   });
 
   socket.on('email-log',    addEmailLine);
   socket.on('email-status', setEmailStatus);
 
   // Carga inicial
-  fetch('/api/email-service/status').then(r => r.json()).then(d => setEmailStatus(d.status)).catch(() => {});
+  fetch(_apiUrl('/api/email-service/status')).then(r => r.json()).then(d => setEmailStatus(d.status)).catch(() => {});
   carregarInfoConfig();
   carregarStats();
+
+  function _notificarMonitores() {
+    try { new BroadcastChannel('iahub_monitors').postMessage({ type: 'status-changed' }); } catch(_) {}
+  }
 
   // ── Controles ─────────────────────────────────────────────────────────────────
   async function startEmailService() {
     const btn = document.getElementById('email-btn-start');
     btn.disabled = true;
     try {
-      const r = await fetch('/api/email-service/start', { method: 'POST' });
+      const r = await fetch('/api/email-service/start', _apiFetchOpts('POST'));
       if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
       const data = await r.json().catch(() => ({}));
       if (!r.ok) alert(data.error || `Erro ao iniciar serviço de e-mail (HTTP ${r.status})`);
-      else { carregarInfoConfig(); carregarStats(); }
+      else {
+        carregarInfoConfig(); carregarStats(); _notificarMonitores();
+        setTimeout(() => fetch(_apiUrl('/api/email-service/status')).then(r => r.json()).then(d => setEmailStatus(d.status)).catch(() => {}), 600);
+      }
     } catch (e) {
       alert(`Erro de conexão: ${e.message}`);
     } finally {
@@ -203,9 +246,13 @@
     const btn = document.getElementById('email-btn-stop');
     btn.disabled = true;
     try {
-      const r = await fetch('/api/email-service/stop', { method: 'POST' });
+      const r = await fetch('/api/email-service/stop', _apiFetchOpts('POST'));
       if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
       if (!r.ok) alert(`Erro ao parar serviço de e-mail (HTTP ${r.status})`);
+      else {
+        _notificarMonitores();
+        setTimeout(() => fetch(_apiUrl('/api/email-service/status')).then(r => r.json()).then(d => setEmailStatus(d.status)).catch(() => {}), 600);
+      }
     } catch (e) {
       alert(`Erro de conexão: ${e.message}`);
     } finally {
@@ -216,7 +263,7 @@
   // ── Painel de informações ─────────────────────────────────────────────────────
   async function carregarInfoConfig() {
     try {
-      const r = await fetch('/api/email-geral/config');
+      const r = await fetch(_apiUrl('/api/email-geral/config'));
       if (!r.ok) return;
       const cfg = await r.json();
       document.getElementById('info-email').textContent    = cfg.email    || '—';
@@ -228,7 +275,7 @@
 
   async function carregarStats() {
     try {
-      const r = await fetch('/api/stats');
+      const r = await fetch(_apiUrl('/api/stats'));
       if (!r.ok) return;
       const d = await r.json();
       document.getElementById('stat-hoje').textContent  = d.email?.hoje  ?? '—';

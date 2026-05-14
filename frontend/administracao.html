@@ -76,6 +76,9 @@
     }
     .senha-edit-box .form-label { color:var(--text-md); }
     .hint { font-size:11px;color:var(--text-lo);margin-top:4px; }
+    .field-error { display:none;margin-top:6px;font-size:12px;line-height:1.35;color:#dc2626; }
+    .form-control.field-invalid { border-color:#f87171;background:rgba(239,68,68,.04); }
+    .form-control.field-invalid:focus { border-color:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.12); }
 
     .config-section { margin-bottom:28px; }
     .config-section-title {
@@ -104,6 +107,88 @@
 
     .adm-tab-content { display:none; }
     .adm-tab-content.active { display:block; }
+
+    .emp-modal-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px; }
+    .emp-modal-tab { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 14px;border-bottom:2px solid transparent; }
+    .emp-modal-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .emp-tab-panel { display:none; }
+    .emp-tab-panel.active { display:block; }
+    .identity-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px; }
+    .identity-card { border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-card); }
+    .identity-title { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .identity-hint { font-size:11.5px;color:var(--text-md);line-height:1.45;margin-bottom:10px; }
+    .identity-preview { height:130px;border:1px dashed var(--border-hi);border-radius:8px;background:var(--bg-base);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text-lo);font-size:12px;margin-bottom:10px;text-align:center;padding:10px; }
+    .identity-preview.logo img { max-width:90%;max-height:90%;object-fit:contain; }
+    .identity-preview.background img { width:100%;height:100%;object-fit:cover; }
+    .identity-actions { display:flex;gap:8px;flex-wrap:wrap; }
+    .identity-actions .btn { padding:6px 10px;font-size:12px; }
+    .identity-locked { border:1px dashed var(--border-hi);border-radius:8px;padding:12px;color:var(--text-md);font-size:12px;background:var(--bg-base);margin-bottom:16px; }
+    .empresa-summary { display:grid;gap:12px; }
+    .empresa-summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .empresa-summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .empresa-summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .empresa-editor-note { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+    .usuario-summary { display:grid;gap:12px; }
+    .usuario-summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .usuario-summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .usuario-summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .usuario-editor-note { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+    .system-page { padding:18px 24px 24px;max-width:1120px; }
+    .system-head { align-items:center;margin-bottom:16px; }
+    .system-head-actions { display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap; }
+    .system-head-actions .login-error { max-width:360px;margin:0; }
+    .system-layout { display:grid;grid-template-columns:minmax(280px,.85fr) minmax(360px,1.15fr);gap:16px;align-items:start; }
+    .system-group { border:1px solid var(--border);border-radius:10px;padding:18px;background:var(--bg-card);box-shadow:var(--shadow-sm); }
+    .system-layout > .system-group:first-child { position:sticky;top:16px;grid-row:1 / span 2; }
+    .system-group .form-group:last-child { margin-bottom:0; }
+    .system-layout > .system-group:nth-child(n+2) { display:flex;flex-direction:column;gap:12px;min-width:0; }
+    .system-layout > .system-group:nth-child(n+2) .identity-card { display:flex;flex-direction:column;gap:12px;flex:1; }
+    .system-layout > .system-group:nth-child(n+2) .identity-hint { margin-bottom:0; }
+    .system-layout > .system-group:nth-child(n+2) .identity-preview { height:auto;min-height:190px;aspect-ratio:16/9;margin-bottom:0;background:var(--bg-base); }
+    .system-layout > .system-group:nth-child(n+2) .identity-actions { margin-top:auto; }
+    .system-save-msg { min-height:18px; }
+    @media (max-width: 720px) { .identity-grid { grid-template-columns:1fr; } }
+    .admin-grid-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px; }
+    .admin-grid-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .admin-grid-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.3; }
+    .admin-grid-subtitle { font-size:12.5px;color:var(--text-md);margin-top:3px; }
+    .admin-quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm); }
+    .admin-quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .admin-quick-search { flex:1;min-width:260px; }
+    .admin-quick-row .form-control { height:36px;margin:0;font-size:13px; }
+    .admin-quick-row select.form-control { width:auto;min-width:145px; }
+    .audit-filter-panel { padding:0;overflow:hidden; }
+    .audit-filter-head { display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:44px; }
+    .audit-filter-panel.open .audit-filter-head { border-bottom:1px solid var(--border); }
+    .audit-filter-toggle { display:inline-flex;align-items:center;gap:7px;height:30px;padding:5px 10px;font-size:12.5px;font-weight:600;white-space:nowrap; }
+    .audit-filter-caret { width:12px;color:var(--text-lo);font-size:12px;line-height:1; }
+    .audit-filter-summary { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-md);font-size:12px; }
+    .audit-filter-body { display:none;padding:14px 16px 16px; }
+    .audit-filter-panel.open .audit-filter-body { display:block; }
+    .audit-date-range { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .audit-date-field { display:flex;align-items:center;gap:6px; }
+    .audit-date-label { color:var(--text-lo);font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap; }
+    .audit-date-field .form-control { width:150px;min-width:150px; }
+    .admin-grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .admin-grid-toolbar-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .admin-grid-toolbar-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .admin-gp-wrap { margin-top:12px;padding-top:12px;border-top:1px solid var(--border); }
+    .admin-form-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .admin-form-panel .system-group:last-child { margin-bottom:0; }
+    @media (max-width: 920px) {
+      .admin-grid-head { flex-direction:column; }
+      .admin-grid-head .btn { align-self:flex-start; }
+      .system-page { max-width:none; }
+      .system-layout { grid-template-columns:1fr; }
+      .system-layout > .system-group:first-child { position:static;grid-row:auto; }
+      .system-head-actions { justify-content:flex-start; }
+    }
+    @media (max-width: 560px) {
+      .admin-quick-search { min-width:100%; }
+      .admin-quick-row select.form-control { width:100%; }
+      .audit-filter-head { align-items:flex-start;flex-direction:column;gap:6px; }
+      .audit-date-range, .audit-date-field, .audit-date-field .form-control { width:100%; }
+    }
 
     /* ── Reset de Dados ─────────────────────────────────────────────────────── */
     .reset-layout      { display:flex; gap:24px; padding:24px; align-items:flex-start; flex-wrap:wrap; }
@@ -221,36 +306,432 @@
           <button class="tab-btn"        id="adm-btn-usuarios"  onclick="mudarAbaAdmin('usuarios',  this)">👤 Usuários</button>
           <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
           <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
-
+          <button class="tab-btn"        id="adm-btn-sistema"   onclick="mudarAbaAdmin('sistema',   this)">⚙️ Sistema</button>
           <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
         </div>
 
         <!-- ── Aba: Empresas ─────────────────────────────────────────────────── -->
         <div id="adm-tab-empresas" class="adm-tab-content active">
-          <div style="padding:16px 24px 8px">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-              <div class="gp-chips-row" id="emp-gp-chips" style="flex:1;min-height:28px">
-                <span class="gp-label">Agrupar:</span>
+          <div id="emp-list-view">
+          <div style="padding:16px 24px 0">
+            <div class="admin-grid-head">
+              <div>
+                <div class="admin-grid-kicker">Administração</div>
+                <div class="admin-grid-title">Cadastro de Empresas</div>
+                <div class="admin-grid-subtitle">Gerencie empresas, documentos e identidade visual usada no acesso ao sistema.</div>
               </div>
               <button class="btn btn-primary" onclick="empAbrirModal()">＋ Nova Empresa</button>
             </div>
-            <div id="emp-gp-dz"></div>
+            <div class="admin-quick-panel audit-filter-panel" id="emp-filter-panel">
+              <div class="audit-filter-head">
+                <button class="btn btn-ghost audit-filter-toggle" type="button" onclick="empToggleFiltros()">
+                  <span class="audit-filter-caret" id="emp-filter-caret">+</span>
+                  <span id="emp-filter-toggle-label">Mostrar filtros</span>
+                </button>
+                <span class="audit-filter-summary" id="emp-filter-summary">Sem filtros ou agrupamentos ativos</span>
+              </div>
+              <div class="audit-filter-body" id="emp-filter-body">
+                <div class="admin-quick-row">
+                  <input id="adm-emp-q-busca" class="form-control admin-quick-search" placeholder="Buscar por razão social, documento, e-mail ou telefone..." oninput="empAplicarFiltrosRapidos()">
+                  <select id="adm-emp-q-tipo" class="form-control" onchange="empAplicarFiltrosRapidos()">
+                    <option value="">Todos os tipos</option>
+                    <option value="CPF">CPF</option>
+                    <option value="CNPJ">CNPJ</option>
+                  </select>
+                  <button class="btn btn-ghost" onclick="empLimparFiltrosRapidos()">Limpar</button>
+                </div>
+                <div class="admin-gp-wrap">
+                  <div class="gp-chips-row" id="emp-gp-chips" style="flex:1;min-height:28px">
+                    <span class="gp-label">Agrupar por:</span>
+                  </div>
+                  <div id="emp-gp-dz"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="admin-grid-toolbar">
+            <div>
+              <div class="admin-grid-toolbar-title">Empresas cadastradas</div>
+              <div id="adm-emp-count" class="admin-grid-toolbar-meta"></div>
+            </div>
           </div>
           <div id="emp-grid"></div>
+          </div>
+
+          <section id="emp-editor-view" class="editor-shell d-none">
+            <div class="editor-actionbar">
+              <div class="editor-actionbar-title">
+                <strong id="emp-modal-title">Nova Empresa</strong>
+                <span id="emp-editor-status">Preencha os dados cadastrais e salve para liberar a identidade visual.</span>
+              </div>
+              <div class="editor-actions">
+                <button class="btn btn-ghost" type="button" onclick="empFecharModal()">Cancelar</button>
+                <button class="btn btn-primary" type="button" id="emp-btn-salvar" onclick="empSalvar()">Salvar</button>
+              </div>
+            </div>
+
+            <div class="editor-grid editor-grid-wide">
+              <main class="editor-main">
+                <div class="emp-modal-tabs">
+                  <button type="button" class="emp-modal-tab active" id="emp-tab-dados" onclick="empMudarTab('dados')">Dados cadastrais</button>
+                  <button type="button" class="emp-modal-tab" id="emp-tab-identidade" onclick="empMudarTab('identidade')">Identidade visual</button>
+                </div>
+
+                <div id="emp-panel-dados" class="emp-tab-panel active">
+                  <section class="form-section">
+                    <div class="form-section-header">
+                      <div>
+                        <div class="form-section-title">Dados principais</div>
+                        <div class="form-section-subtitle">Identificação fiscal e informações de contato da empresa.</div>
+                      </div>
+                    </div>
+                    <div class="form-section-body">
+                      <div class="form-row" style="margin-bottom:16px">
+                        <div class="form-group">
+                          <label class="form-label">Razão Social <span style="color:#dc2626">*</span></label>
+                          <input id="emp-f-razao" type="text" class="form-control" placeholder="Nome da empresa ou produtor rural" oninput="empAtualizarCabecalho()">
+                          <div id="emp-err-razao" class="field-error"></div>
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label">CPF / CNPJ <span style="color:#dc2626">*</span></label>
+                          <input id="emp-f-doc" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00" oninput="maskDoc(this); empAtualizarCabecalho()" inputmode="numeric" maxlength="18">
+                          <div id="emp-err-doc" class="field-error"></div>
+                        </div>
+                      </div>
+                      <div class="form-row" style="margin-bottom:16px">
+                        <div class="form-group">
+                          <label class="form-label">Telefone</label>
+                          <input id="emp-f-tel" type="text" class="form-control" placeholder="(00) 00000-0000">
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label">E-mail</label>
+                          <input id="emp-f-email" type="email" class="form-control" placeholder="contato@empresa.com.br">
+                        </div>
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label class="form-label">Site</label>
+                          <input id="emp-f-site" type="text" class="form-control" placeholder="https://empresa.com.br">
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label">Endereço</label>
+                          <input id="emp-f-end" type="text" class="form-control" placeholder="Rua, número, cidade - UF">
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <div id="emp-panel-identidade" class="emp-tab-panel">
+                  <section class="form-section">
+                    <div class="form-section-header">
+                      <div>
+                        <div class="form-section-title">Identidade visual</div>
+                        <div class="form-section-subtitle">Imagens usadas para personalizar a experiência de login.</div>
+                      </div>
+                    </div>
+                    <div class="form-section-body">
+                      <div id="emp-identity-locked" class="identity-locked">Salve a empresa antes de enviar as imagens da tela de login.</div>
+                      <div class="identity-grid">
+                        <div class="identity-card">
+                          <div class="identity-title">Logomarca acima do login</div>
+                          <div class="identity-hint">Tamanho ideal: 400 x 200 px. Use PNG com fundo transparente, JPG ou WEBP. Limite: 4 MB.</div>
+                          <div class="identity-preview logo" id="emp-preview-logo">Nenhuma logomarca enviada.</div>
+                          <input id="emp-file-logo" type="file" accept="image/png,image/jpeg,image/webp" class="d-none" onchange="empUploadIdentidade('logo', this)">
+                          <div class="identity-actions">
+                            <button type="button" class="btn btn-ghost" onclick="empSelecionarArquivoIdentidade('logo')">Enviar imagem</button>
+                            <button type="button" class="btn btn-danger" onclick="empRemoverIdentidade('logo')">Remover</button>
+                          </div>
+                        </div>
+                        <div class="identity-card">
+                          <div class="identity-title">Imagem lateral do login</div>
+                          <div class="identity-hint">Tamanho ideal: 1920 x 1080 px, proporção 16:9. Prefira JPG ou WEBP. Limite: 6 MB.</div>
+                          <div class="identity-preview background" id="emp-preview-background">Nenhuma imagem lateral enviada.</div>
+                          <input id="emp-file-background" type="file" accept="image/png,image/jpeg,image/webp" class="d-none" onchange="empUploadIdentidade('background', this)">
+                          <div class="identity-actions">
+                            <button type="button" class="btn btn-ghost" onclick="empSelecionarArquivoIdentidade('background')">Enviar imagem</button>
+                            <button type="button" class="btn btn-danger" onclick="empRemoverIdentidade('background')">Remover</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Texto sobre a imagem lateral</label>
+                        <textarea id="emp-f-login-slogan" class="form-control" rows="2" maxlength="180" placeholder="Frase institucional que aparecerá sobre a imagem lateral"></textarea>
+                        <div class="form-hint">Opcional. Será usado na fase 2, quando aplicarmos o novo layout do login.</div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+
+                <div id="emp-form-error" class="login-error" style="display:none;margin-top:12px"></div>
+              </main>
+
+              <aside class="editor-side">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <div class="form-section-title">Resumo do registro</div>
+                      <div class="form-section-subtitle">Referência rápida para conferência durante a edição.</div>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="empresa-summary">
+                      <div class="empresa-summary-item">
+                        <div class="empresa-summary-label">Código</div>
+                        <div class="empresa-summary-value" id="emp-meta-registro">Novo</div>
+                      </div>
+                      <div class="empresa-summary-item">
+                        <div class="empresa-summary-label">Empresa</div>
+                        <div class="empresa-summary-value" id="emp-meta-razao">Nova Empresa</div>
+                      </div>
+                      <div class="empresa-summary-item">
+                        <div class="empresa-summary-label">Documento</div>
+                        <div class="empresa-summary-value" id="emp-meta-doc">-</div>
+                      </div>
+                      <div class="empresa-summary-item">
+                        <div class="empresa-summary-label">Identidade visual</div>
+                        <div class="empresa-summary-value" id="emp-meta-identidade">Disponível após salvar</div>
+                      </div>
+                    </div>
+                    <p class="empresa-editor-note">As imagens de identidade visual continuam liberadas apenas depois que a empresa possui um código salvo.</p>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </section>
         </div>
 
         <!-- ── Aba: Usuários ─────────────────────────────────────────────────── -->
         <div id="adm-tab-usuarios" class="adm-tab-content">
-          <div style="padding:16px 24px 8px">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-              <div class="gp-chips-row" id="usu-gp-chips" style="flex:1;min-height:28px">
-                <span class="gp-label">Agrupar:</span>
+          <div id="usu-list-view">
+          <div style="padding:16px 24px 0">
+            <div class="admin-grid-head">
+              <div>
+                <div class="admin-grid-kicker">Administração</div>
+                <div class="admin-grid-title">Cadastro de Usuários</div>
+                <div class="admin-grid-subtitle">Gerencie usuários, perfis, status e permissões por empresa.</div>
               </div>
               <button class="btn btn-primary" onclick="usuAbrirModal()">＋ Novo Usuário</button>
             </div>
-            <div id="usu-gp-dz"></div>
+            <div class="admin-quick-panel audit-filter-panel" id="usu-filter-panel">
+              <div class="audit-filter-head">
+                <button class="btn btn-ghost audit-filter-toggle" type="button" onclick="usuToggleFiltros()">
+                  <span class="audit-filter-caret" id="usu-filter-caret">+</span>
+                  <span id="usu-filter-toggle-label">Mostrar filtros</span>
+                </button>
+                <span class="audit-filter-summary" id="usu-filter-summary">Sem filtros ou agrupamentos ativos</span>
+              </div>
+              <div class="audit-filter-body" id="usu-filter-body">
+                <div class="admin-quick-row">
+                  <input id="adm-usu-q-busca" class="form-control admin-quick-search" placeholder="Buscar por nome, usuário, e-mail ou celular..." oninput="usuAplicarFiltrosRapidos()">
+                  <select id="adm-usu-q-perfil" class="form-control" onchange="usuAplicarFiltrosRapidos()">
+                    <option value="">Todos os perfis</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Usuário">Usuário</option>
+                  </select>
+                  <select id="adm-usu-q-status" class="form-control" onchange="usuAplicarFiltrosRapidos()">
+                    <option value="">Todos os status</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Inativo">Inativo</option>
+                  </select>
+                  <button class="btn btn-ghost" onclick="usuLimparFiltrosRapidos()">Limpar</button>
+                </div>
+                <div class="admin-gp-wrap">
+                  <div class="gp-chips-row" id="usu-gp-chips" style="flex:1;min-height:28px">
+                    <span class="gp-label">Agrupar por:</span>
+                  </div>
+                  <div id="usu-gp-dz"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="admin-grid-toolbar">
+            <div>
+              <div class="admin-grid-toolbar-title">Usuários cadastrados</div>
+              <div id="adm-usu-count" class="admin-grid-toolbar-meta"></div>
+            </div>
           </div>
           <div id="usu-grid"></div>
+          </div>
+
+          <section id="usu-editor-view" class="editor-shell d-none">
+            <div class="editor-actionbar">
+              <div class="editor-actionbar-title">
+                <strong id="usu-modal-title">Novo Usuário</strong>
+                <span id="usu-editor-status">Preencha os dados do usuário e configure os acessos por empresa.</span>
+              </div>
+              <div class="editor-actions">
+                <button class="btn btn-ghost" type="button" onclick="usuFecharModal()">Cancelar</button>
+                <button class="btn btn-primary" type="button" id="usu-btn-salvar" onclick="usuSalvar()">Salvar</button>
+              </div>
+            </div>
+
+            <div class="editor-grid editor-grid-wide">
+              <main class="editor-main">
+                <div class="emp-modal-tabs">
+                  <button type="button" class="emp-modal-tab active" id="usu-tab-cadastro" onclick="usuMudarTab('cadastro')">Cadastro</button>
+                  <button type="button" class="emp-modal-tab" id="usu-tab-acessos" onclick="usuMudarTab('acessos')">Acessos</button>
+                </div>
+
+                <div id="usu-panel-cadastro" class="emp-tab-panel active">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <div class="form-section-title">Dados principais</div>
+                      <div class="form-section-subtitle">Identificação, login, contato e perfil do usuário.</div>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-row" style="margin-bottom:16px">
+                      <div class="form-group">
+                        <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
+                        <input id="usu-f-nome" type="text" class="form-control" placeholder="Nome do usuário" oninput="usuAtualizarCabecalho()">
+                        <div id="usu-err-nome" class="field-error"></div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Usuário (login) <span style="color:#dc2626">*</span></label>
+                        <input id="usu-f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off" oninput="usuAtualizarCabecalho()">
+                        <div id="usu-err-usuario" class="field-error"></div>
+                      </div>
+                    </div>
+                    <div class="form-row" style="margin-bottom:16px">
+                      <div class="form-group">
+                        <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
+                        <input id="usu-f-celular" type="text" class="form-control" placeholder="(00) 00000-0000">
+                        <div id="usu-err-celular" class="field-error"></div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">E-mail <span style="color:#dc2626">*</span></label>
+                        <input id="usu-f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br" oninput="usuAtualizarCabecalho()">
+                        <div id="usu-err-email" class="field-error"></div>
+                      </div>
+                    </div>
+                    <div class="form-row" style="margin-bottom:16px">
+                      <div class="form-group">
+                        <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
+                        <select id="usu-f-role" class="form-control" onchange="usuOnRoleChange()">
+                          <option value="usuario">Usuário</option>
+                          <option value="admin">Administrador</option>
+                        </select>
+                        <div id="usu-err-role" class="field-error"></div>
+                      </div>
+                      <div class="form-group" id="usu-grp-ativo" style="display:none">
+                        <label class="form-label">Status</label>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-md);margin-top:10px">
+                          <input type="checkbox" id="usu-f-ativo" style="width:15px;height:15px" onchange="usuAtualizarCabecalho()"> Usuário ativo
+                        </label>
+                      </div>
+                    </div>
+                    <div id="usu-grp-senha-novo" style="margin-bottom:16px">
+                      <div class="form-group">
+                        <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
+                        <div class="pass-wrap">
+                          <input id="usu-f-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                          <button type="button" class="pass-toggle" onclick="toggleSenha('usu-f-senha')" title="Mostrar/ocultar">👁</button>
+                        </div>
+                        <div id="usu-err-senha" class="field-error"></div>
+                        <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+                      </div>
+                    </div>
+                    <div id="usu-grp-senha-edit" class="senha-edit-box" style="display:none">
+                      <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
+                      <div class="pass-wrap" style="margin-top:6px">
+                        <input id="usu-f-senha-edit" type="password" class="form-control" placeholder="Nova senha - deixe em branco para manter" autocomplete="new-password">
+                        <button type="button" class="pass-toggle" onclick="toggleSenha('usu-f-senha-edit')" title="Mostrar/ocultar">👁</button>
+                      </div>
+                      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+                    </div>
+                  </div>
+                </section>
+                </div>
+
+                <div id="usu-panel-acessos" class="emp-tab-panel">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <div class="form-section-title">Acessos</div>
+                      <div class="form-section-subtitle">Empresas e rotinas que o usuário poderá acessar.</div>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div id="usu-acessos-admin" class="acessos-admin-msg" style="display:none">
+                      <span style="font-size:20px">🔓</span>
+                      <span>Administradores têm acesso irrestrito a todas as empresas e rotinas do sistema.</span>
+                    </div>
+                    <div id="usu-acessos-usuario">
+                      <div class="hint" style="margin-bottom:10px">
+                        Ative as empresas e marque as rotinas que este usuário poderá acessar.
+                        Usuários sem nenhuma rotina marcada não conseguirão acessar o sistema.
+                      </div>
+                      <div class="acessos-painel">
+                        <div class="ap-empresas">
+                          <div class="ap-col-header">Empresas</div>
+                          <div class="ap-empresas-list" id="usu-ap-empresas-list">
+                            <div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">Carregando...</div>
+                          </div>
+                        </div>
+                        <div class="ap-rotinas">
+                          <div class="ap-rotinas-header">
+                            <span class="ap-rotinas-title" id="usu-ap-rotinas-title">— selecione uma empresa —</span>
+                            <button class="btn-tiny" onclick="usuSincronizarRotinas()" title="Recarregar lista de rotinas a partir do menu atual">↻ Sincronizar</button>
+                            <div class="ap-rotinas-actions" id="usu-ap-rotinas-actions" style="display:none">
+                              <button class="btn-tiny" onclick="usuMarcarTodasRotinas(true)">Marcar tudo</button>
+                              <button class="btn-tiny" onclick="usuMarcarTodasRotinas(false)">Limpar tudo</button>
+                            </div>
+                          </div>
+                          <div class="ap-rotinas-body" id="usu-ap-rotinas-body">
+                            <div class="ap-rotinas-placeholder">
+                              <span style="font-size:28px">☚</span>
+                              Selecione uma empresa para configurar as rotinas de acesso.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                </div>
+
+                <div id="usu-form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
+              </main>
+
+              <aside class="editor-side">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <div class="form-section-title">Resumo do registro</div>
+                      <div class="form-section-subtitle">Referência rápida para conferência durante a edição.</div>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="usuario-summary">
+                      <div class="usuario-summary-item">
+                        <div class="usuario-summary-label">Código</div>
+                        <div class="usuario-summary-value" id="usu-meta-registro">Novo</div>
+                      </div>
+                      <div class="usuario-summary-item">
+                        <div class="usuario-summary-label">Nome</div>
+                        <div class="usuario-summary-value" id="usu-meta-nome">Novo Usuário</div>
+                      </div>
+                      <div class="usuario-summary-item">
+                        <div class="usuario-summary-label">Login</div>
+                        <div class="usuario-summary-value" id="usu-meta-login">-</div>
+                      </div>
+                      <div class="usuario-summary-item">
+                        <div class="usuario-summary-label">Perfil</div>
+                        <div class="usuario-summary-value" id="usu-meta-perfil">Usuário</div>
+                      </div>
+                      <div class="usuario-summary-item">
+                        <div class="usuario-summary-label">Status</div>
+                        <div class="usuario-summary-value" id="usu-meta-status">Ativo</div>
+                      </div>
+                    </div>
+                    <p class="usuario-editor-note">Para usuários comuns, além de ativar a empresa, marque ao menos uma rotina para liberar navegação.</p>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </section>
         </div>
 
         <!-- ── Aba: Segurança ────────────────────────────────────────────────── -->
@@ -309,42 +790,131 @@
 
         <!-- ── Aba: Auditoria ────────────────────────────────────────────────── -->
         <div id="adm-tab-auditoria" class="adm-tab-content">
-          <div style="padding:20px 24px 0">
-            <div class="audit-filters">
-              <div class="form-group">
-                <label class="form-label">Usuário</label>
-                <input id="aud-f-usuario" type="text" class="form-control" placeholder="Filtrar por usuário">
+          <div style="padding:16px 24px 0">
+            <div class="admin-grid-head">
+              <div>
+                <div class="admin-grid-kicker">Administração</div>
+                <div class="admin-grid-title">Auditoria</div>
+                <div class="admin-grid-subtitle">Consulte eventos de acesso, troca de empresa e bloqueios de login.</div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Ação</label>
-                <select id="aud-f-acao" class="form-control">
-                  <option value="">Todas</option>
+            </div>
+
+            <div class="admin-quick-panel audit-filter-panel" id="aud-filter-panel">
+              <div class="audit-filter-head">
+                <button class="btn btn-ghost audit-filter-toggle" type="button" onclick="audToggleFiltros()">
+                  <span class="audit-filter-caret" id="aud-filter-caret">+</span>
+                  <span id="aud-filter-toggle-label">Mostrar filtros</span>
+                </button>
+                <span class="audit-filter-summary" id="aud-filter-summary">Sem filtros ativos</span>
+              </div>
+              <div class="audit-filter-body" id="aud-filter-body">
+                <div class="admin-quick-row">
+                <input id="aud-f-usuario" type="text" class="form-control admin-quick-search" placeholder="Buscar por usuário..." onkeydown="if(event.key==='Enter')audCarregar()">
+                <select id="aud-f-acao" class="form-control" onchange="audCarregar()">
+                  <option value="">Todas as ações</option>
                   <option value="login_sucesso">Login com sucesso</option>
                   <option value="login_falha">Login com falha</option>
                   <option value="login_bloqueado">Login bloqueado</option>
                   <option value="logout">Logout</option>
                   <option value="empresa_selecionada">Empresa selecionada</option>
                 </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Data início</label>
-                <input id="aud-f-data-ini" type="date" class="form-control">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Data fim</label>
-                <input id="aud-f-data-fim" type="date" class="form-control">
-              </div>
-              <div class="form-group" style="min-width:auto">
-                <label class="form-label" style="visibility:hidden">.</label>
-                <button class="btn btn-secondary" onclick="audCarregar()" style="white-space:nowrap">🔍 Filtrar</button>
+                  <div class="audit-date-range">
+                    <label class="audit-date-field">
+                      <span class="audit-date-label">Data de</span>
+                      <input id="aud-f-data-ini" type="date" class="form-control" title="Data início" onchange="audCarregar()">
+                    </label>
+                    <label class="audit-date-field">
+                      <span class="audit-date-label">Data até</span>
+                      <input id="aud-f-data-fim" type="date" class="form-control" title="Data fim" onchange="audCarregar()">
+                    </label>
+                  </div>
+                  <button class="btn btn-primary" type="button" onclick="audCarregar()">Filtrar</button>
+                  <button class="btn btn-ghost" type="button" onclick="audLimparFiltros()">Limpar</button>
+                </div>
+
+                <div class="admin-gp-wrap">
+                <div class="gp-chips-row" id="aud-gp-chips" style="margin-bottom:6px">
+                  <span class="gp-label">Agrupar por:</span>
+                </div>
+                  <div id="aud-gp-dz"></div>
+                </div>
               </div>
             </div>
-            <div class="gp-chips-row" id="aud-gp-chips" style="margin-bottom:6px">
-              <span class="gp-label">Agrupar:</span>
+          </div>
+          <div class="admin-grid-toolbar">
+            <div>
+              <div class="admin-grid-toolbar-title">Registros de auditoria</div>
+              <div id="adm-aud-count" class="admin-grid-toolbar-meta"></div>
             </div>
-            <div id="aud-gp-dz" style="margin-bottom:12px"></div>
           </div>
           <div id="aud-grid"></div>
+        </div>
+
+        <!-- ── Aba: Sistema ──────────────────────────────────────────────────── -->
+        <div id="adm-tab-sistema" class="adm-tab-content">
+          <div class="system-page">
+            <div class="admin-grid-head system-head">
+              <div>
+                <div class="admin-grid-kicker">Administração</div>
+                <div class="admin-grid-title">Sistema</div>
+                <div class="admin-grid-subtitle">Configure identidade padrão, rodapé e imagens usadas na tela de login.</div>
+              </div>
+              <div class="system-head-actions">
+                <span class="save-msg system-save-msg" id="sis-save-msg">✓ Configurações salvas</span>
+                <div id="sis-save-error" class="login-error" style="display:none"></div>
+                <button class="btn btn-primary" id="sis-btn-salvar" onclick="sisSalvar()">Salvar Configurações</button>
+              </div>
+            </div>
+
+            <div class="system-layout">
+            <div class="system-group">
+              <div class="config-section-title">Rodapé da tela de login</div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Nome do sistema</label>
+                  <input id="sis-cfg-nome" type="text" class="form-control" placeholder="IAHUB">
+                  <div class="hint">Exibido no lado esquerdo do rodapé.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Versão do sistema</label>
+                  <input id="sis-cfg-versao" type="text" class="form-control" placeholder="v2.0">
+                  <div class="hint">Exemplo: v2.0, Release 2.2.4 ou Patch 243.</div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Frase do sistema</label>
+                <input id="sis-cfg-frase" type="text" class="form-control" placeholder="Onde a gestão encontra a inteligência">
+                <div class="hint">No rodapé, o sistema monta: Nome - Frase.</div>
+              </div>
+            </div>
+
+            <div class="system-group">
+              <div class="config-section-title">Logomarca acima do login</div>
+              <div class="identity-card" style="padding:0;border:0">
+                <div class="identity-hint">Logomarca padrão usada acima do formulário antes da seleção da empresa ou quando a empresa não tiver logo própria. Tamanho ideal: 400 x 200 px. PNG com fundo transparente, JPG ou WEBP. Limite: 4 MB.</div>
+                <div class="identity-preview logo" id="sis-preview-logo">Nenhuma logomarca padrão enviada.</div>
+                <input id="sis-file-logo" type="file" accept="image/png,image/jpeg,image/webp" class="d-none" onchange="sisUploadLogoPadrao(this)">
+                <div class="identity-actions">
+                  <button type="button" class="btn btn-secondary" onclick="sisSelecionarLogoPadrao()">Enviar logomarca</button>
+                  <button type="button" class="btn btn-danger" onclick="sisRemoverLogoPadrao()">Remover</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="system-group">
+              <div class="config-section-title">Imagem lateral direita</div>
+              <div class="identity-card" style="padding:0;border:0">
+                <div class="identity-hint">Imagem padrão usada no lado direito do login antes da seleção da empresa ou quando a empresa não tiver imagem própria. Tamanho ideal: 1920 x 1080 px, proporção 16:9. PNG, JPG ou WEBP. Limite: 6 MB.</div>
+                <div class="identity-preview background" id="sis-preview-background">Nenhuma imagem padrão enviada.</div>
+                <input id="sis-file-background" type="file" accept="image/png,image/jpeg,image/webp" class="d-none" onchange="sisUploadImagemPadrao(this)">
+                <div class="identity-actions">
+                  <button type="button" class="btn btn-secondary" onclick="sisSelecionarImagemPadrao()">Enviar imagem</button>
+                  <button type="button" class="btn btn-danger" onclick="sisRemoverImagemPadrao()">Remover</button>
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
         </div>
 
         <!-- ── Aba: Reset de Dados ───────────────────────────────────────────── -->
@@ -605,163 +1175,6 @@
   </div>
 </div>
 
-<!-- ── Modal Criar / Editar Empresa ─────────────────────────────────────────── -->
-<div id="emp-modal" class="modal-overlay d-none">
-  <div class="modal" style="width:min(660px,95vw)">
-    <div class="modal-header">
-      <span class="modal-title" id="emp-modal-title">Nova Empresa</span>
-      <button class="modal-close" onclick="empFecharModal()">✕</button>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Razão Social <span style="color:#dc2626">*</span></label>
-        <input id="emp-f-razao" type="text" class="form-control" placeholder="Nome da empresa ou produtor rural">
-      </div>
-      <div class="form-group">
-        <label class="form-label">CPF / CNPJ <span style="color:#dc2626">*</span></label>
-        <input id="emp-f-doc" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00"
-               oninput="maskDoc(this)" inputmode="numeric" maxlength="18">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Telefone</label>
-        <input id="emp-f-tel" type="text" class="form-control" placeholder="(00) 00000-0000">
-      </div>
-      <div class="form-group">
-        <label class="form-label">E-mail</label>
-        <input id="emp-f-email" type="email" class="form-control" placeholder="contato@empresa.com.br">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Site</label>
-        <input id="emp-f-site" type="text" class="form-control" placeholder="https://empresa.com.br">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Endereço</label>
-        <input id="emp-f-end" type="text" class="form-control" placeholder="Rua, número, cidade — UF">
-      </div>
-    </div>
-    <div id="emp-form-error" class="login-error" style="display:none;margin-bottom:12px"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="empFecharModal()">Cancelar</button>
-      <button class="btn btn-primary" id="emp-btn-salvar" onclick="empSalvar()">Salvar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Modal Criar / Editar Usuário ─────────────────────────────────────────── -->
-<div id="usu-modal" class="modal-overlay d-none">
-  <div class="modal" style="width:min(940px,97vw);padding:28px 32px">
-    <div class="modal-header">
-      <span class="modal-title" id="usu-modal-title">Novo Usuário</span>
-      <button class="modal-close" onclick="usuFecharModal()">✕</button>
-    </div>
-
-    <!-- Dados -->
-    <div class="section-lbl">Dados</div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
-        <input id="usu-f-nome" type="text" class="form-control" placeholder="Nome do usuário">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Usuário (login) <span style="color:#dc2626">*</span></label>
-        <input id="usu-f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
-        <input id="usu-f-celular" type="text" class="form-control" placeholder="(00) 00000-0000">
-      </div>
-      <div class="form-group">
-        <label class="form-label">E-mail <span style="color:#dc2626">*</span></label>
-        <input id="usu-f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
-        <select id="usu-f-role" class="form-control" onchange="usuOnRoleChange()">
-          <option value="usuario">Usuário</option>
-          <option value="admin">Administrador</option>
-        </select>
-      </div>
-      <div class="form-group" id="usu-grp-ativo" style="display:none">
-        <label class="form-label">Status</label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-md);margin-top:10px">
-          <input type="checkbox" id="usu-f-ativo" style="width:15px;height:15px"> Usuário ativo
-        </label>
-      </div>
-    </div>
-    <div id="usu-grp-senha-novo" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
-        <div class="pass-wrap">
-          <input id="usu-f-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
-          <button type="button" class="pass-toggle" onclick="toggleSenha('usu-f-senha')" title="Mostrar/ocultar">👁</button>
-        </div>
-        <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
-      </div>
-    </div>
-    <div id="usu-grp-senha-edit" class="senha-edit-box" style="display:none">
-      <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
-      <div class="pass-wrap" style="margin-top:6px">
-        <input id="usu-f-senha-edit" type="password" class="form-control" placeholder="Nova senha — deixe em branco para manter" autocomplete="new-password">
-        <button type="button" class="pass-toggle" onclick="toggleSenha('usu-f-senha-edit')" title="Mostrar/ocultar">👁</button>
-      </div>
-      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
-    </div>
-
-    <!-- Acessos -->
-    <hr class="section-divider">
-    <div class="section-lbl">Acessos</div>
-
-    <div id="usu-acessos-admin" class="acessos-admin-msg" style="display:none">
-      <span style="font-size:20px">🔓</span>
-      <span>Administradores têm acesso irrestrito a todas as empresas e rotinas do sistema.</span>
-    </div>
-
-    <div id="usu-acessos-usuario">
-      <div class="hint" style="margin-bottom:10px">
-        Ative as empresas e marque as rotinas que este usuário poderá acessar.
-        Usuários sem nenhuma rotina marcada não conseguirão acessar o sistema.
-      </div>
-      <div class="acessos-painel">
-        <div class="ap-empresas">
-          <div class="ap-col-header">Empresas</div>
-          <div class="ap-empresas-list" id="usu-ap-empresas-list">
-            <div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">Carregando...</div>
-          </div>
-        </div>
-        <div class="ap-rotinas">
-          <div class="ap-rotinas-header">
-            <span class="ap-rotinas-title" id="usu-ap-rotinas-title">— selecione uma empresa —</span>
-            <div class="ap-rotinas-actions" id="usu-ap-rotinas-actions" style="display:none">
-              <button class="btn-tiny" onclick="usuMarcarTodasRotinas(true)">Marcar tudo</button>
-              <button class="btn-tiny" onclick="usuMarcarTodasRotinas(false)">Limpar tudo</button>
-            </div>
-          </div>
-          <div class="ap-rotinas-body" id="usu-ap-rotinas-body">
-            <div class="ap-rotinas-placeholder">
-              <span style="font-size:28px">👈</span>
-              Selecione uma empresa para configurar as rotinas de acesso.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="usu-form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="usuFecharModal()">Cancelar</button>
-      <button class="btn btn-primary" id="usu-btn-salvar" onclick="usuSalvar()">Salvar</button>
-    </div>
-  </div>
-</div>
-
 <!-- ── Modal Alterar Senha Usuário ───────────────────────────────────────────── -->
 <div id="usu-modal-senha" class="modal-overlay d-none">
   <div class="modal-sm">
@@ -786,7 +1199,7 @@
     </div>
     <div id="usu-ms-error" class="login-error" style="display:none;margin-bottom:12px"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="usuFecharModalSenha()">Cancelar</button>
+      <button class="btn btn-ghost" onclick="usuFecharModalSenha()">Cancelar</button>
       <button class="btn btn-primary" id="usu-ms-btn" onclick="usuSalvarSenha()">Salvar Senha</button>
     </div>
   </div>
@@ -821,15 +1234,175 @@ function mudarAbaAdmin(aba, btn) {
     if      (aba === 'usuarios')  usuCarregar();
     else if (aba === 'seguranca') segCarregarConfig();
     else if (aba === 'auditoria') audCarregar();
+    else if (aba === 'sistema')   sisCarregarConfig();
     else if (aba === 'reset')     rstInicializar();
   }
 }
 
 // ── Empresas ─────────────────────────────────────────────────────────────────
+async function sisCarregarConfig() {
+  const errEl = document.getElementById('sis-save-error');
+  errEl.style.display = 'none';
+  try {
+    const cfg = await fetch('/api/config/sistema').then(r => r.json());
+    document.getElementById('sis-cfg-nome').value = cfg.sistema_nome || 'IAHUB';
+    document.getElementById('sis-cfg-frase').value = cfg.sistema_frase || 'Onde a gestão encontra a inteligência';
+    document.getElementById('sis-cfg-versao').value = cfg.sistema_versao || 'v2.0';
+    sisRenderLogoPadrao(cfg.login_logo_default_url || '');
+    sisRenderImagemPadrao(cfg.login_background_default_url || '');
+  } catch (_) {
+    errEl.textContent = 'Erro ao carregar configurações do sistema.';
+    errEl.style.display = 'block';
+  }
+}
+
+async function sisSalvar() {
+  const errEl = document.getElementById('sis-save-error');
+  const msgEl = document.getElementById('sis-save-msg');
+  errEl.style.display = 'none';
+  msgEl.style.display = 'none';
+
+  const btn = document.getElementById('sis-btn-salvar');
+  btn.textContent = 'Salvando...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/config/sistema', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sistema_nome: document.getElementById('sis-cfg-nome').value,
+        sistema_frase: document.getElementById('sis-cfg-frase').value,
+        sistema_versao: document.getElementById('sis-cfg-versao').value,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao salvar.');
+    msgEl.style.display = 'inline';
+    setTimeout(() => msgEl.style.display = 'none', 3000);
+  } catch (e) {
+    errEl.textContent = e.message || 'Erro ao salvar configurações do sistema.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Salvar Configurações';
+    btn.disabled = false;
+  }
+}
+
+function sisRenderLogoPadrao(url) {
+  const el = document.getElementById('sis-preview-logo');
+  el.dataset.url = url || '';
+  el.innerHTML = url ? `<img src="${esc(url)}" alt="">` : 'Nenhuma logomarca padrão enviada.';
+}
+
+function sisRenderImagemPadrao(url) {
+  const el = document.getElementById('sis-preview-background');
+  el.dataset.url = url || '';
+  el.innerHTML = url ? `<img src="${esc(url)}" alt="">` : 'Nenhuma imagem padrão enviada.';
+}
+
+function sisSelecionarLogoPadrao() {
+  document.getElementById('sis-file-logo').click();
+}
+
+function sisSelecionarImagemPadrao() {
+  document.getElementById('sis-file-background').click();
+}
+
+function sisLerArquivoComoDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sisUploadLogoPadrao(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    alert('Envie uma imagem em PNG, JPG ou WEBP.');
+    return;
+  }
+  if (file.size > 4 * 1024 * 1024) {
+    alert('Arquivo muito grande. Limite: 4 MB.');
+    return;
+  }
+  try {
+    const dataUrl = await sisLerArquivoComoDataUrl(file);
+    const res = await fetch('/api/config/sistema/login-logo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao enviar logomarca.');
+    sisRenderLogoPadrao(data.url || data.login_logo_default_url || '');
+  } catch (e) {
+    alert(e.message || 'Erro ao enviar logomarca.');
+  }
+}
+
+async function sisUploadImagemPadrao(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    alert('Envie uma imagem em PNG, JPG ou WEBP.');
+    return;
+  }
+  if (file.size > 6 * 1024 * 1024) {
+    alert('Arquivo muito grande. Limite: 6 MB.');
+    return;
+  }
+  try {
+    const dataUrl = await sisLerArquivoComoDataUrl(file);
+    const res = await fetch('/api/config/sistema/login-background', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao enviar imagem.');
+    sisRenderImagemPadrao(data.url || data.login_background_default_url || '');
+  } catch (e) {
+    alert(e.message || 'Erro ao enviar imagem.');
+  }
+}
+
+async function sisRemoverLogoPadrao() {
+  if (!document.getElementById('sis-preview-logo').dataset.url) return;
+  if (!confirm('Remover a logomarca padrão do login?')) return;
+  try {
+    const res = await fetch('/api/config/sistema/login-logo', { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao remover logomarca.');
+    sisRenderLogoPadrao('');
+  } catch (e) {
+    alert(e.message || 'Erro ao remover logomarca.');
+  }
+}
+
+async function sisRemoverImagemPadrao() {
+  if (!document.getElementById('sis-preview-background').dataset.url) return;
+  if (!confirm('Remover a imagem padrão do login?')) return;
+  try {
+    const res = await fetch('/api/config/sistema/login-background', { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao remover imagem.');
+    sisRenderImagemPadrao('');
+  } catch (e) {
+    alert(e.message || 'Erro ao remover imagem.');
+  }
+}
+
 let _empLista  = [];
 let _empEditId = null;
 let _empTable  = null;
 let _empGp     = null;
+let _empQuickFilterFn = null;
 
 function maskDoc(input) {
   let v = input.value.replace(/\D/g, '').substring(0, 14);
@@ -855,11 +1428,94 @@ function formatarDoc(doc) {
 
 function soNumeros(str) { return String(str || '').replace(/\D/g, ''); }
 
+function empLabelEmpresas(qtd) {
+  return qtd === 1 ? '1 empresa' : `${qtd} empresas`;
+}
+
+function empLabelsAgrupamento() {
+  const campos = _empGp?.getActiveFields?.() || [];
+  if (!campos.length) return [];
+  return campos.map(campo => {
+    const col = _empTable?.getColumns?.().find(c => c.getField?.() === campo);
+    return col?.getDefinition?.().title || campo;
+  });
+}
+
+function empAtualizarResumoFiltros() {
+  const el = document.getElementById('emp-filter-summary');
+  if (!el) return;
+  const busca = document.getElementById('adm-emp-q-busca')?.value.trim() || '';
+  const tipo  = document.getElementById('adm-emp-q-tipo')?.value || '';
+  const partes = [];
+  if (busca) partes.push(`Busca: ${busca}`);
+  if (tipo) partes.push(`Tipo: ${tipo}`);
+  const grupos = empLabelsAgrupamento();
+  if (grupos.length) partes.push(`Agrupando por: ${grupos.join(' > ')}`);
+  el.textContent = partes.length ? partes.join(' - ') : 'Sem filtros ou agrupamentos ativos';
+}
+
+function empSetFiltrosAbertos(aberto) {
+  const panel = document.getElementById('emp-filter-panel');
+  const caret = document.getElementById('emp-filter-caret');
+  const label = document.getElementById('emp-filter-toggle-label');
+  if (panel) panel.classList.toggle('open', aberto);
+  if (caret) caret.textContent = aberto ? '-' : '+';
+  if (label) label.textContent = aberto ? 'Ocultar filtros' : 'Mostrar filtros';
+  setTimeout(() => _empTable?.redraw(true), 0);
+}
+
+function empToggleFiltros() {
+  const panel = document.getElementById('emp-filter-panel');
+  empSetFiltrosAbertos(!panel?.classList.contains('open'));
+}
+
+function empAplicarFiltrosRapidos() {
+  if (!_empTable) {
+    empAtualizarResumoFiltros();
+    return;
+  }
+  const busca = document.getElementById('adm-emp-q-busca')?.value.trim().toLowerCase() || '';
+  const tipo  = document.getElementById('adm-emp-q-tipo')?.value || '';
+
+  if (_empQuickFilterFn) {
+    _empTable.removeFilter(_empQuickFilterFn);
+    _empQuickFilterFn = null;
+  }
+
+  empAtualizarResumoFiltros();
+
+  if (!busca && !tipo) return;
+
+  _empQuickFilterFn = rowData => {
+    if (tipo && rowData.tipo_doc !== tipo) return false;
+    if (busca) {
+      const termos = [
+        rowData.razao_social || '',
+        rowData.documento || '',
+        rowData.documento_fmt || '',
+        rowData.telefone || '',
+        rowData.email || '',
+        rowData.site || '',
+      ].join(' ').toLowerCase();
+      if (!termos.includes(busca)) return false;
+    }
+    return true;
+  };
+  _empTable.addFilter(_empQuickFilterFn);
+}
+
+function empLimparFiltrosRapidos() {
+  document.getElementById('adm-emp-q-busca').value = '';
+  document.getElementById('adm-emp-q-tipo').value = '';
+  empAplicarFiltrosRapidos();
+  empAtualizarResumoFiltros();
+}
+
 function empInitTabulator(dados) {
   _empTable = new Tabulator('#emp-grid', {
     data: dados,
     layout: 'fitColumns',
-    height: 'calc(100vh - 240px)',
+    height: 'calc(100vh - 380px)',
     groupStartOpen: true,
     groupBy: _empGp.getActiveFields(),
     placeholder: '<div style="text-align:center;padding:60px 20px;color:var(--text-lo)"><div style="font-size:40px;margin-bottom:12px">🏢</div><strong>Nenhuma empresa cadastrada</strong></div>',
@@ -912,8 +1568,17 @@ function empInitTabulator(dados) {
       },
     ],
     rowClick: (_e, row) => empEditar(row.getData().id),
+    dataFiltered: (_filters, rows) => {
+      const total = _empLista.length;
+      const qtd = rows?.length ?? total;
+      const el = document.getElementById('adm-emp-count');
+      if (el) el.textContent = qtd === total ? empLabelEmpresas(qtd) : `${qtd} de ${total} empresas`;
+    },
   });
-  _empTable.on('tableBuilt', () => _empGp?.refresh());
+  _empTable.on('tableBuilt', () => {
+    _empGp?.refresh();
+    empAtualizarResumoFiltros();
+  });
 }
 
 async function empCarregar() {
@@ -923,6 +1588,7 @@ async function empCarregar() {
       dropZoneId: 'emp-gp-dz',
       storageKey: 'adm_empresas_group_fields',
       getTable:   () => _empTable,
+      onChange:   () => empAtualizarResumoFiltros(),
     });
   }
   try {
@@ -938,27 +1604,53 @@ async function empCarregar() {
     } else {
       empInitTabulator(dados);
     }
+    const countEl = document.getElementById('adm-emp-count');
+    if (countEl) countEl.textContent = empLabelEmpresas(dados.length);
+    empAplicarFiltrosRapidos();
+    empAtualizarResumoFiltros();
   } catch (_) {
     console.error('Erro ao carregar empresas.');
   }
 }
 
+function empAtualizarCabecalho() {
+  const nome = document.getElementById('emp-f-razao').value.trim() || 'Nova Empresa';
+  const doc = document.getElementById('emp-f-doc').value.trim();
+  const titulo = _empEditId ? `#${_empEditId} - ${nome}` : `Novo registro - ${nome}`;
+
+  document.getElementById('emp-modal-title').textContent = titulo;
+  document.getElementById('emp-meta-registro').textContent = _empEditId ? `#${_empEditId}` : 'Novo';
+  document.getElementById('emp-meta-razao').textContent = nome;
+  document.getElementById('emp-meta-doc').textContent = doc || '-';
+  document.getElementById('emp-meta-identidade').textContent = _empEditId ? 'Disponível para envio' : 'Disponível após salvar';
+  document.getElementById('emp-editor-status').textContent = _empEditId
+    ? 'Revise os dados cadastrais ou atualize a identidade visual.'
+    : 'Preencha os dados cadastrais e salve para liberar a identidade visual.';
+}
+
 function empAbrirModal(empresa = null) {
   _empEditId = empresa?.id ?? null;
-  document.getElementById('emp-modal-title').textContent = empresa ? 'Editar Empresa' : 'Nova Empresa';
   document.getElementById('emp-f-razao').value = empresa?.razao_social ?? '';
   document.getElementById('emp-f-doc').value   = formatarDoc(empresa?.documento ?? '');
   document.getElementById('emp-f-tel').value   = empresa?.telefone     ?? '';
   document.getElementById('emp-f-email').value = empresa?.email        ?? '';
   document.getElementById('emp-f-site').value  = empresa?.site         ?? '';
   document.getElementById('emp-f-end').value   = empresa?.endereco     ?? '';
+  document.getElementById('emp-f-login-slogan').value = empresa?.login_slogan ?? '';
+  empMudarTab('dados');
+  empRenderIdentidade(empresa || {});
+  empAtualizarCabecalho();
   document.getElementById('emp-form-error').style.display = 'none';
-  document.getElementById('emp-modal').classList.remove('d-none');
+  empLimparErrosCampos();
+  document.getElementById('emp-list-view').classList.add('d-none');
+  document.getElementById('emp-editor-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => document.getElementById('emp-f-razao').focus(), 50);
 }
 
 function empFecharModal() {
-  document.getElementById('emp-modal').classList.add('d-none');
+  document.getElementById('emp-editor-view').classList.add('d-none');
+  document.getElementById('emp-list-view').classList.remove('d-none');
   _empEditId = null;
 }
 
@@ -977,21 +1669,63 @@ async function empConfirmarExcluir(id, nome) {
   }
 }
 
+const EMP_FIELD_ERRORS = {
+  razao: { field: 'emp-f-razao', error: 'emp-err-razao' },
+  doc:   { field: 'emp-f-doc',   error: 'emp-err-doc' },
+};
+
+function empLimparErroCampo(campo) {
+  const cfg = EMP_FIELD_ERRORS[campo];
+  if (!cfg) return;
+  const field = document.getElementById(cfg.field);
+  const error = document.getElementById(cfg.error);
+  if (field) {
+    field.classList.remove('field-invalid');
+    field.removeAttribute('aria-invalid');
+  }
+  if (error) {
+    error.textContent = '';
+    error.style.display = 'none';
+  }
+}
+
+function empLimparErrosCampos() {
+  Object.keys(EMP_FIELD_ERRORS).forEach(empLimparErroCampo);
+}
+
+function empMostrarErroCampo(campo, mensagem) {
+  const cfg = EMP_FIELD_ERRORS[campo];
+  if (!cfg) return;
+  empMudarTab('dados');
+  const field = document.getElementById(cfg.field);
+  const error = document.getElementById(cfg.error);
+  if (field) {
+    field.classList.add('field-invalid');
+    field.setAttribute('aria-invalid', 'true');
+  }
+  if (error) {
+    error.textContent = mensagem;
+    error.style.display = 'block';
+  }
+  setTimeout(() => {
+    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    field?.focus({ preventScroll: true });
+  }, 50);
+}
+
 async function empSalvar() {
   const errEl = document.getElementById('emp-form-error');
   errEl.style.display = 'none';
+  errEl.textContent = '';
+  empLimparErrosCampos();
   const razao = document.getElementById('emp-f-razao').value.trim();
   const doc   = soNumeros(document.getElementById('emp-f-doc').value);
   if (!razao) {
-    errEl.textContent = 'Razão Social é obrigatória.';
-    errEl.style.display = 'block';
-    document.getElementById('emp-f-razao').focus();
+    empMostrarErroCampo('razao', 'Razão Social é obrigatória.');
     return;
   }
   if (!doc) {
-    errEl.textContent = 'CPF / CNPJ é obrigatório.';
-    errEl.style.display = 'block';
-    document.getElementById('emp-f-doc').focus();
+    empMostrarErroCampo('doc', 'CPF / CNPJ é obrigatório.');
     return;
   }
   const dados = {
@@ -1001,6 +1735,7 @@ async function empSalvar() {
     email:        document.getElementById('emp-f-email').value.trim(),
     site:         document.getElementById('emp-f-site').value.trim(),
     endereco:     document.getElementById('emp-f-end').value.trim(),
+    login_slogan: document.getElementById('emp-f-login-slogan').value.trim(),
   };
   const btn = document.getElementById('emp-btn-salvar');
   btn.textContent = 'Salvando...';
@@ -1022,6 +1757,104 @@ async function empSalvar() {
 }
 
 // ── Usuários ─────────────────────────────────────────────────────────────────
+function empMudarTab(tab) {
+  document.getElementById('emp-tab-dados').classList.toggle('active', tab === 'dados');
+  document.getElementById('emp-tab-identidade').classList.toggle('active', tab === 'identidade');
+  document.getElementById('emp-panel-dados').classList.toggle('active', tab === 'dados');
+  document.getElementById('emp-panel-identidade').classList.toggle('active', tab === 'identidade');
+}
+
+function usuMudarTab(tab) {
+  document.getElementById('usu-tab-cadastro').classList.toggle('active', tab === 'cadastro');
+  document.getElementById('usu-tab-acessos').classList.toggle('active', tab === 'acessos');
+  document.getElementById('usu-panel-cadastro').classList.toggle('active', tab === 'cadastro');
+  document.getElementById('usu-panel-acessos').classList.toggle('active', tab === 'acessos');
+}
+
+function empRenderIdentidade(empresa) {
+  document.getElementById('emp-identity-locked').style.display = _empEditId ? 'none' : 'block';
+  empRenderPreview('logo', empresa.login_logo_url);
+  empRenderPreview('background', empresa.login_background_url);
+}
+
+function empRenderPreview(tipo, url) {
+  const el = document.getElementById(`emp-preview-${tipo}`);
+  if (!url) {
+    el.innerHTML = tipo === 'logo' ? 'Nenhuma logomarca enviada.' : 'Nenhuma imagem lateral enviada.';
+    return;
+  }
+  el.innerHTML = `<img src="${esc(url)}" alt="">`;
+}
+
+function empSelecionarArquivoIdentidade(tipo) {
+  if (!_empEditId) {
+    alert('Salve a empresa antes de enviar imagens.');
+    return;
+  }
+  document.getElementById(`emp-file-${tipo}`).click();
+}
+
+function empLerArquivoComoDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function empUploadIdentidade(tipo, input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !_empEditId) return;
+
+  const limite = tipo === 'logo' ? 4 * 1024 * 1024 : 6 * 1024 * 1024;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    alert('Envie uma imagem em PNG, JPG ou WEBP.');
+    return;
+  }
+  if (file.size > limite) {
+    alert(`Arquivo muito grande. Limite: ${Math.round(limite / 1024 / 1024)} MB.`);
+    return;
+  }
+
+  try {
+    const dataUrl = await empLerArquivoComoDataUrl(file);
+    const res = await fetch(`/api/empresas/${_empEditId}/identidade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo, dataUrl }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao enviar imagem.');
+    empRenderPreview(tipo, data.url);
+    const idx = _empLista.findIndex(e => e.id === _empEditId);
+    if (idx >= 0 && data.empresa) _empLista[idx] = data.empresa;
+    empCarregar();
+  } catch (err) {
+    alert(err.message || 'Erro ao enviar imagem.');
+  }
+}
+
+async function empRemoverIdentidade(tipo) {
+  if (!_empEditId) {
+    alert('Salve a empresa antes de remover imagens.');
+    return;
+  }
+  if (!confirm('Remover esta imagem da identidade visual?')) return;
+  try {
+    const res = await fetch(`/api/empresas/${_empEditId}/identidade/${tipo}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao remover imagem.');
+    empRenderPreview(tipo, '');
+    const idx = _empLista.findIndex(e => e.id === _empEditId);
+    if (idx >= 0 && data.empresa) _empLista[idx] = data.empresa;
+    empCarregar();
+  } catch (err) {
+    alert(err.message || 'Erro ao remover imagem.');
+  }
+}
+
 let _usuLista              = [];
 let _usuEmpresas           = [];
 let _usuEditId             = null;
@@ -1030,35 +1863,110 @@ let _usuMeuId              = null;
 let _usuTable              = null;
 let _usuGp                 = null;
 let _usuEmpresaSelecionada = null;
+let _usuQuickFilterFn      = null;
 let _usuPermissoesMap      = {};  // { empresa_id: { ativo, rotinas: Set } }
 
-const _USU_ROTINAS_MENU = [
-  { id:'monitoramento', label:'Monitoramento',          icon:'💬', itens:[
-    { id:'dashboard',        label:'Dashboard',        icon:'⊞' },
-    { id:'monitor-whatsapp', label:'Monitor WhatsApp', icon:'💬' },
-    { id:'monitor-email',    label:'Monitor E-mail',   icon:'📧' },
-  ]},
-  { id:'recrutamento',  label:'Recrutamento',           icon:'🎯', itens:[
-    { id:'curriculos',        label:'Currículos',          icon:'☰' },
-    { id:'funcoes',           label:'Cadastro de Funções', icon:'📋' },
-    { id:'vagas',             label:'Vagas por Função',    icon:'💼' },
-    { id:'processo-seletivo', label:'Processo Seletivo',   icon:'🌐' },
-  ]},
-  { id:'analisador',    label:'Analisador de Currículos',icon:'🔍', itens:[
-    { id:'analisador',        label:'Analisador',            icon:'🔍' },
-    { id:'historico',         label:'Histórico de Análises', icon:'📊' },
-    { id:'config-analisador', label:'Configuração',          icon:'⚙'  },
-  ]},
-  { id:'integracoes',   label:'Integrações',            icon:'🔗', itens:[
-    { id:'se-integracoes',        label:'SE Integrações',     icon:'🔗' },
-    { id:'se-api-configurador',   label:'SE API Configurador', icon:'⚡' },
-  ]},
-  { id:'configurador',  label:'Configurador',           icon:'⚙',  itens:[
-    { id:'configuracoes', label:'Configurações', icon:'⚙'  },
-    { id:'administracao', label:'Administração', icon:'🏢' },
-  ]},
-];
-const _USU_TOTAL_ROTINAS = _USU_ROTINAS_MENU.reduce((n,g) => n + g.itens.length, 0);
+function _menuParaRotinas(menu) {
+  return (menu || []).map(s => ({
+    id: s.id, label: s.label, icon: s.icon,
+    itens: (s.items || []).map(i => ({ id: i.id, label: i.label, icon: i.icon })),
+  }));
+}
+let _USU_ROTINAS_MENU = _menuParaRotinas(window.MENU);
+let _USU_TOTAL_ROTINAS = _USU_ROTINAS_MENU.reduce((n,g) => n + g.itens.length, 0);
+
+function usuSincronizarRotinas() {
+  _USU_ROTINAS_MENU = _menuParaRotinas(window.MENU);
+  _USU_TOTAL_ROTINAS = _USU_ROTINAS_MENU.reduce((n,g) => n + g.itens.length, 0);
+  if (_usuEmpresaSelecionada) usuRenderRotinas(_usuEmpresaSelecionada);
+  Object.keys(_usuPermissoesMap).forEach(id => usuAtualizarEmpresaItem(Number(id)));
+}
+
+function usuLabelUsuarios(qtd) {
+  return qtd === 1 ? '1 usuário' : `${qtd} usuários`;
+}
+
+function usuLabelsAgrupamento() {
+  const campos = _usuGp?.getActiveFields?.() || [];
+  if (!campos.length) return [];
+  return campos.map(campo => {
+    const col = _usuTable?.getColumns?.().find(c => c.getField?.() === campo);
+    return col?.getDefinition?.().title || campo;
+  });
+}
+
+function usuAtualizarResumoFiltros() {
+  const el = document.getElementById('usu-filter-summary');
+  if (!el) return;
+  const busca  = document.getElementById('adm-usu-q-busca')?.value.trim() || '';
+  const perfil = document.getElementById('adm-usu-q-perfil')?.value || '';
+  const status = document.getElementById('adm-usu-q-status')?.value || '';
+  const partes = [];
+  if (busca) partes.push(`Busca: ${busca}`);
+  if (perfil) partes.push(`Perfil: ${perfil}`);
+  if (status) partes.push(`Status: ${status}`);
+  const grupos = usuLabelsAgrupamento();
+  if (grupos.length) partes.push(`Agrupando por: ${grupos.join(' > ')}`);
+  el.textContent = partes.length ? partes.join(' - ') : 'Sem filtros ou agrupamentos ativos';
+}
+
+function usuSetFiltrosAbertos(aberto) {
+  const panel = document.getElementById('usu-filter-panel');
+  const caret = document.getElementById('usu-filter-caret');
+  const label = document.getElementById('usu-filter-toggle-label');
+  if (panel) panel.classList.toggle('open', aberto);
+  if (caret) caret.textContent = aberto ? '-' : '+';
+  if (label) label.textContent = aberto ? 'Ocultar filtros' : 'Mostrar filtros';
+  setTimeout(() => _usuTable?.redraw(true), 0);
+}
+
+function usuToggleFiltros() {
+  const panel = document.getElementById('usu-filter-panel');
+  usuSetFiltrosAbertos(!panel?.classList.contains('open'));
+}
+
+function usuAplicarFiltrosRapidos() {
+  if (!_usuTable) {
+    usuAtualizarResumoFiltros();
+    return;
+  }
+  const busca  = document.getElementById('adm-usu-q-busca')?.value.trim().toLowerCase() || '';
+  const perfil = document.getElementById('adm-usu-q-perfil')?.value || '';
+  const status = document.getElementById('adm-usu-q-status')?.value || '';
+
+  if (_usuQuickFilterFn) {
+    _usuTable.removeFilter(_usuQuickFilterFn);
+    _usuQuickFilterFn = null;
+  }
+
+  usuAtualizarResumoFiltros();
+
+  if (!busca && !perfil && !status) return;
+
+  _usuQuickFilterFn = rowData => {
+    if (perfil && rowData.role_label !== perfil) return false;
+    if (status && rowData.status_label !== status) return false;
+    if (busca) {
+      const termos = [
+        rowData.nome || '',
+        rowData.usuario || '',
+        rowData.email || '',
+        rowData.celular || '',
+      ].join(' ').toLowerCase();
+      if (!termos.includes(busca)) return false;
+    }
+    return true;
+  };
+  _usuTable.addFilter(_usuQuickFilterFn);
+}
+
+function usuLimparFiltrosRapidos() {
+  document.getElementById('adm-usu-q-busca').value = '';
+  document.getElementById('adm-usu-q-perfil').value = '';
+  document.getElementById('adm-usu-q-status').value = '';
+  usuAplicarFiltrosRapidos();
+  usuAtualizarResumoFiltros();
+}
 
 function usuInitTabulator(dados) {
   _usuTable = new Tabulator('#usu-grid', {
@@ -1133,8 +2041,17 @@ function usuInitTabulator(dados) {
       },
     ],
     rowClick: (_e, row) => usuEditar(row.getData().id),
+    dataFiltered: (_filters, rows) => {
+      const total = _usuLista.length;
+      const qtd = rows?.length ?? total;
+      const el = document.getElementById('adm-usu-count');
+      if (el) el.textContent = qtd === total ? usuLabelUsuarios(qtd) : `${qtd} de ${total} usuários`;
+    },
   });
-  _usuTable.on('tableBuilt', () => _usuGp?.refresh());
+  _usuTable.on('tableBuilt', () => {
+    _usuGp?.refresh();
+    usuAtualizarResumoFiltros();
+  });
 }
 
 async function usuCarregar() {
@@ -1144,6 +2061,7 @@ async function usuCarregar() {
       dropZoneId: 'usu-gp-dz',
       storageKey: 'adm_usuarios_group_fields',
       getTable: () => _usuTable,
+      onChange: () => usuAtualizarResumoFiltros(),
     });
   }
   try {
@@ -1168,9 +2086,32 @@ async function usuCarregar() {
     } else {
       usuInitTabulator(dados);
     }
+    const countEl = document.getElementById('adm-usu-count');
+    if (countEl) countEl.textContent = usuLabelUsuarios(dados.length);
+    usuAplicarFiltrosRapidos();
+    usuAtualizarResumoFiltros();
   } catch (_) {
     console.error('Erro ao carregar usuários.');
   }
+}
+
+function usuAtualizarCabecalho() {
+  const nome = document.getElementById('usu-f-nome').value.trim() || 'Novo Usuário';
+  const login = document.getElementById('usu-f-usuario').value.trim();
+  const email = document.getElementById('usu-f-email').value.trim();
+  const perfil = document.getElementById('usu-f-role').value === 'admin' ? 'Administrador' : 'Usuário';
+  const ativo = document.getElementById('usu-f-ativo').checked;
+  const titulo = _usuEditId ? `#${_usuEditId} - ${nome}` : `Novo registro - ${nome}`;
+
+  document.getElementById('usu-modal-title').textContent = titulo;
+  document.getElementById('usu-meta-registro').textContent = _usuEditId ? `#${_usuEditId}` : 'Novo';
+  document.getElementById('usu-meta-nome').textContent = nome;
+  document.getElementById('usu-meta-login').textContent = login || email || '-';
+  document.getElementById('usu-meta-perfil').textContent = perfil;
+  document.getElementById('usu-meta-status').textContent = _usuEditId ? (ativo ? 'Ativo' : 'Inativo') : 'Ativo';
+  document.getElementById('usu-editor-status').textContent = _usuEditId
+    ? 'Revise dados, perfil, status e acessos do usuário.'
+    : 'Preencha os dados do usuário e configure os acessos por empresa.';
 }
 
 async function usuAbrirModal(usuario = null) {
@@ -1179,7 +2120,6 @@ async function usuAbrirModal(usuario = null) {
   _usuPermissoesMap      = {};
   const isEdit = !!_usuEditId;
 
-  document.getElementById('usu-modal-title').textContent   = isEdit ? 'Editar Usuário' : 'Novo Usuário';
   document.getElementById('usu-f-nome').value    = usuario?.nome    ?? '';
   document.getElementById('usu-f-usuario').value = usuario?.usuario ?? '';
   document.getElementById('usu-f-celular').value = usuario?.celular ?? '';
@@ -1192,6 +2132,7 @@ async function usuAbrirModal(usuario = null) {
   document.getElementById('usu-f-senha').value      = '';
   document.getElementById('usu-f-senha-edit').value = '';
   document.getElementById('usu-form-error').style.display = 'none';
+  usuLimparErrosCampos();
 
   // Inicializa mapa de permissões com empresas do usuário
   const empIds = usuario?.empresas === 'all'
@@ -1214,13 +2155,18 @@ async function usuAbrirModal(usuario = null) {
   }
 
   usuOnRoleChange();
+  usuAtualizarCabecalho();
   usuRenderEmpresasList();
-  document.getElementById('usu-modal').classList.remove('d-none');
+  usuMudarTab('cadastro');
+  document.getElementById('usu-list-view').classList.add('d-none');
+  document.getElementById('usu-editor-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => document.getElementById('usu-f-nome').focus(), 50);
 }
 
 function usuFecharModal() {
-  document.getElementById('usu-modal').classList.add('d-none');
+  document.getElementById('usu-editor-view').classList.add('d-none');
+  document.getElementById('usu-list-view').classList.remove('d-none');
   _usuEditId = null;
 }
 
@@ -1431,6 +2377,7 @@ function usuOnRoleChange() {
   const isAdmin = document.getElementById('usu-f-role').value === 'admin';
   document.getElementById('usu-acessos-admin').style.display   = isAdmin ? 'flex'  : 'none';
   document.getElementById('usu-acessos-usuario').style.display = isAdmin ? 'none'  : 'block';
+  usuAtualizarCabecalho();
 }
 
 function usuGetEmpresasSelecionadas() {
@@ -1447,9 +2394,59 @@ function usuGetPermissoesSelecionadas() {
   }));
 }
 
+const USU_FIELD_ERRORS = {
+  nome:    { field: 'usu-f-nome',    error: 'usu-err-nome' },
+  usuario: { field: 'usu-f-usuario', error: 'usu-err-usuario' },
+  celular: { field: 'usu-f-celular', error: 'usu-err-celular' },
+  email:   { field: 'usu-f-email',   error: 'usu-err-email' },
+  role:    { field: 'usu-f-role',    error: 'usu-err-role' },
+  senha:   { field: 'usu-f-senha',   error: 'usu-err-senha' },
+};
+
+function usuLimparErroCampo(campo) {
+  const cfg = USU_FIELD_ERRORS[campo];
+  if (!cfg) return;
+  const field = document.getElementById(cfg.field);
+  const error = document.getElementById(cfg.error);
+  if (field) {
+    field.classList.remove('field-invalid');
+    field.removeAttribute('aria-invalid');
+  }
+  if (error) {
+    error.textContent = '';
+    error.style.display = 'none';
+  }
+}
+
+function usuLimparErrosCampos() {
+  Object.keys(USU_FIELD_ERRORS).forEach(usuLimparErroCampo);
+}
+
+function usuMostrarErroCampo(campo, mensagem) {
+  const cfg = USU_FIELD_ERRORS[campo];
+  if (!cfg) return;
+  usuMudarTab('cadastro');
+  const field = document.getElementById(cfg.field);
+  const error = document.getElementById(cfg.error);
+  if (field) {
+    field.classList.add('field-invalid');
+    field.setAttribute('aria-invalid', 'true');
+  }
+  if (error) {
+    error.textContent = mensagem;
+    error.style.display = 'block';
+  }
+  setTimeout(() => {
+    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    field?.focus({ preventScroll: true });
+  }, 50);
+}
+
 async function usuSalvar() {
   const errEl  = document.getElementById('usu-form-error');
   errEl.style.display = 'none';
+  errEl.textContent = '';
+  usuLimparErrosCampos();
   const isEdit  = !!_usuEditId;
   const nome    = document.getElementById('usu-f-nome').value.trim();
   const usuario = document.getElementById('usu-f-usuario').value.trim();
@@ -1458,13 +2455,13 @@ async function usuSalvar() {
   const senha   = isEdit
     ? document.getElementById('usu-f-senha-edit').value
     : document.getElementById('usu-f-senha').value;
-  if (!nome)    { errEl.textContent = 'Nome é obrigatório.';    errEl.style.display = 'block'; return; }
-  if (!usuario) { errEl.textContent = 'Usuário é obrigatório.'; errEl.style.display = 'block'; return; }
-  if (!celular) { errEl.textContent = 'Celular é obrigatório.'; errEl.style.display = 'block'; return; }
-  if (!email)   { errEl.textContent = 'E-mail é obrigatório.';  errEl.style.display = 'block'; return; }
+  if (!nome)    { usuMostrarErroCampo('nome',    'Nome é obrigatório.');    return; }
+  if (!usuario) { usuMostrarErroCampo('usuario', 'Usuário é obrigatório.'); return; }
+  if (!celular) { usuMostrarErroCampo('celular', 'Celular é obrigatório.'); return; }
+  if (!email)   { usuMostrarErroCampo('email',   'E-mail é obrigatório.');  return; }
   if (!isEdit && !senha) {
-    errEl.textContent = 'Senha é obrigatória para novos usuários.';
-    errEl.style.display = 'block'; return;
+    usuMostrarErroCampo('senha', 'Senha é obrigatória para novos usuários.');
+    return;
   }
   const dados = {
     nome, usuario, celular, email,
@@ -1550,12 +2547,101 @@ async function segSalvar() {
 // ── Auditoria ────────────────────────────────────────────────────────────────
 let _audTable = null;
 let _audGp    = null;
+let _audTotal = 0;
+let _audFiltrosRestaurados = false;
+const AUD_FILTROS_KEY = 'adm_auditoria_filtros';
+
+function audLabelRegistros(qtd) {
+  return qtd === 1 ? '1 registro' : `${qtd} registros`;
+}
+
+function audGetFiltros() {
+  return {
+    usuario:  document.getElementById('aud-f-usuario')?.value || '',
+    acao:     document.getElementById('aud-f-acao')?.value || '',
+    data_ini: document.getElementById('aud-f-data-ini')?.value || '',
+    data_fim: document.getElementById('aud-f-data-fim')?.value || '',
+  };
+}
+
+function audSetFiltros(filtros = {}) {
+  const usuario = document.getElementById('aud-f-usuario');
+  const acao    = document.getElementById('aud-f-acao');
+  const dataIni = document.getElementById('aud-f-data-ini');
+  const dataFim = document.getElementById('aud-f-data-fim');
+  if (usuario) usuario.value = filtros.usuario || '';
+  if (acao) acao.value = filtros.acao || '';
+  if (dataIni) dataIni.value = filtros.data_ini || '';
+  if (dataFim) dataFim.value = filtros.data_fim || '';
+}
+
+function audFormatarDataFiltro(valor) {
+  if (!valor) return '';
+  const partes = valor.split('-');
+  return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : valor;
+}
+
+function audLabelAcao(valor) {
+  const select = document.getElementById('aud-f-acao');
+  const option = select ? select.querySelector(`option[value="${CSS.escape(valor)}"]`) : null;
+  return option ? option.textContent : valor;
+}
+
+function audAtualizarResumoFiltros() {
+  const el = document.getElementById('aud-filter-summary');
+  if (!el) return;
+  const filtros = audGetFiltros();
+  const ativos = [];
+  if (filtros.usuario) ativos.push(`Usuário: ${filtros.usuario}`);
+  if (filtros.acao) ativos.push(`Ação: ${audLabelAcao(filtros.acao)}`);
+  if (filtros.data_ini) ativos.push(`Data de: ${audFormatarDataFiltro(filtros.data_ini)}`);
+  if (filtros.data_fim) ativos.push(`Data até: ${audFormatarDataFiltro(filtros.data_fim)}`);
+  el.textContent = ativos.length ? ativos.join(' • ') : 'Sem filtros ativos';
+}
+
+function audSalvarFiltros() {
+  const filtros = audGetFiltros();
+  const temFiltro = Object.values(filtros).some(Boolean);
+  if (temFiltro) {
+    localStorage.setItem(AUD_FILTROS_KEY, JSON.stringify(filtros));
+  } else {
+    localStorage.removeItem(AUD_FILTROS_KEY);
+  }
+  audAtualizarResumoFiltros();
+}
+
+function audRestaurarFiltros() {
+  if (_audFiltrosRestaurados) return;
+  _audFiltrosRestaurados = true;
+  try {
+    const salvo = JSON.parse(localStorage.getItem(AUD_FILTROS_KEY) || '{}');
+    audSetFiltros(salvo);
+  } catch (_) {
+    localStorage.removeItem(AUD_FILTROS_KEY);
+  }
+  audAtualizarResumoFiltros();
+}
+
+function audSetFiltrosAbertos(aberto) {
+  const panel = document.getElementById('aud-filter-panel');
+  const caret = document.getElementById('aud-filter-caret');
+  const label = document.getElementById('aud-filter-toggle-label');
+  if (panel) panel.classList.toggle('open', aberto);
+  if (caret) caret.textContent = aberto ? '-' : '+';
+  if (label) label.textContent = aberto ? 'Ocultar filtros' : 'Mostrar filtros';
+  setTimeout(() => _audTable?.redraw(true), 0);
+}
+
+function audToggleFiltros() {
+  const panel = document.getElementById('aud-filter-panel');
+  audSetFiltrosAbertos(!panel?.classList.contains('open'));
+}
 
 function audInitTabulator(dados) {
   _audTable = new Tabulator('#aud-grid', {
     data: dados,
     layout: 'fitColumns',
-    height: 'calc(100vh - 340px)',
+    height: 'calc(100vh - 300px)',
     groupStartOpen: true,
     groupBy: _audGp.getActiveFields(),
     initialSort: [{ column: 'ts', dir: 'desc' }],
@@ -1602,12 +2688,18 @@ function audInitTabulator(dados) {
         formatter: cell => `<span style="font-size:12px;color:var(--text-md)">${esc(cell.getValue())}</span>`,
       },
     ],
+    dataFiltered: (_filters, rows) => {
+      const qtd = rows?.length ?? _audTotal;
+      const el = document.getElementById('adm-aud-count');
+      if (el) el.textContent = qtd === _audTotal ? audLabelRegistros(qtd) : `${qtd} de ${_audTotal} registros`;
+    },
   });
   _audTable.element.classList.add('tabulator-audit');
   _audTable.on('tableBuilt', () => _audGp?.refresh());
 }
 
 async function audCarregar() {
+  audRestaurarFiltros();
   if (!_audGp) {
     _audGp = createGroupPanel({
       chipsRowId: 'aud-gp-chips',
@@ -1616,33 +2708,39 @@ async function audCarregar() {
       getTable: () => _audTable,
     });
   }
+  audSalvarFiltros();
+  const filtros = audGetFiltros();
   const params = new URLSearchParams({
     limite:   200,
-    usuario:  document.getElementById('aud-f-usuario').value,
-    acao:     document.getElementById('aud-f-acao').value,
-    data_ini: document.getElementById('aud-f-data-ini').value,
-    data_fim: document.getElementById('aud-f-data-fim').value,
+    usuario:  filtros.usuario,
+    acao:     filtros.acao,
+    data_ini: filtros.data_ini,
+    data_fim: filtros.data_fim,
   });
   try {
     const res       = await fetch(`/api/seguranca/auditoria?${params}`);
     const registros = await res.json();
+    _audTotal = Array.isArray(registros) ? registros.length : 0;
     if (_audTable) {
       _audTable.replaceData(registros);
     } else {
       audInitTabulator(registros);
     }
+    const countEl = document.getElementById('adm-aud-count');
+    if (countEl) countEl.textContent = audLabelRegistros(_audTotal);
   } catch (_) {
     console.error('Erro ao carregar auditoria.');
   }
 }
 
+function audLimparFiltros() {
+  audSetFiltros();
+  localStorage.removeItem(AUD_FILTROS_KEY);
+  audAtualizarResumoFiltros();
+  audCarregar();
+}
+
 // ── Fechar modais ao clicar no backdrop ──────────────────────────────────────
-document.getElementById('emp-modal').addEventListener('click', function(e) {
-  if (e.target === this) empFecharModal();
-});
-document.getElementById('usu-modal').addEventListener('click', function(e) {
-  if (e.target === this) usuFecharModal();
-});
 document.getElementById('usu-modal-senha').addEventListener('click', function(e) {
   if (e.target === this) usuFecharModalSenha();
 });
@@ -1650,6 +2748,16 @@ document.getElementById('usu-modal-senha').addEventListener('click', function(e)
 document.addEventListener('DOMContentLoaded', () => {
   _admCarregado.add('empresas');
   empCarregar();
+  Object.entries(EMP_FIELD_ERRORS).forEach(([campo, cfg]) => {
+    const field = document.getElementById(cfg.field);
+    field?.addEventListener('input', () => empLimparErroCampo(campo));
+    field?.addEventListener('change', () => empLimparErroCampo(campo));
+  });
+  Object.entries(USU_FIELD_ERRORS).forEach(([campo, cfg]) => {
+    const field = document.getElementById(cfg.field);
+    field?.addEventListener('input', () => usuLimparErroCampo(campo));
+    field?.addEventListener('change', () => usuLimparErroCampo(campo));
+  });
 });
 
 // ── Reset de Dados ────────────────────────────────────────────────────────────

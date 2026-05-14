@@ -1,6 +1,15 @@
 const db     = require('./database');
 const engine = require('./engine');
 
+function _resolverEid(req) {
+  const explicit = Number(req.body?.empresa_id || req.query?.empresa_id || 0);
+  if (!explicit) return req.session.empresa_id;
+  const { empresas: acesso, role } = req.session;
+  const ok = role === 'admin' || acesso === 'all' ||
+    (Array.isArray(acesso) && acesso.includes(explicit));
+  return ok ? explicit : req.session.empresa_id;
+}
+
 module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   const log = (msg, type = 'info', eid) =>
@@ -11,7 +20,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.post('/api/se-api/test-connection', requireAuth, requireEmpresa, async (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { endpoint, method, headers = [], template_id, mappings = [] } = req.body;
 
     if (!endpoint) return res.status(400).json({ error: 'endpoint é obrigatório' });
@@ -90,18 +99,18 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/templates', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listTemplates(req.session.empresa_id));
+    res.json(db.listTemplates(_resolverEid(req)));
   });
 
   app.get('/api/se-api/templates/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const t = db.getTemplate(eid, req.params.id);
     if (!t) return res.status(404).json({ error: 'Template não encontrado' });
     res.json(t);
   });
 
   app.get('/api/se-api/templates/:id/placeholders', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const t = db.getTemplate(eid, req.params.id);
     if (!t) return res.status(404).json({ error: 'Template não encontrado' });
     res.json({ placeholders: engine.extractPlaceholders(t.xml_template || '') });
@@ -114,7 +123,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.post('/api/se-api/templates', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { nome, tipo, integration_type, xml_template, versao, descricao } = req.body;
     if (!nome || !tipo || !xml_template) {
       return res.status(400).json({ error: 'nome, tipo e xml_template são obrigatórios' });
@@ -126,7 +135,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.put('/api/se-api/templates/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { nome, tipo, integration_type, xml_template, versao, descricao } = req.body;
     const placeholders = xml_template ? engine.extractPlaceholders(xml_template) : undefined;
     const atualizado = db.updateTemplate(eid, req.params.id, {
@@ -144,7 +153,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.delete('/api/se-api/templates/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const ok = db.deleteTemplate(eid, req.params.id);
     if (!ok) return res.status(404).json({ error: 'Template não encontrado' });
     log(`Template removido ID ${req.params.id}`, 'info', eid);
@@ -156,7 +165,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/configs', requireAuth, requireEmpresa, (req, res) => {
-    const eid     = req.session.empresa_id;
+    const eid     = _resolverEid(req);
     const configs = db.listConfigs(eid);
     const templates = db.listTemplates(eid);
     const enriched = configs.map(c => ({
@@ -169,7 +178,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.get('/api/se-api/configs/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const c   = db.getConfig(eid, req.params.id);
     if (!c) return res.status(404).json({ error: 'Config não encontrada' });
     res.json({
@@ -184,7 +193,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
     if (!nome || !template_id || !endpoint) {
       return res.status(400).json({ error: 'nome, template_id e endpoint são obrigatórios' });
     }
-    const eid  = req.session.empresa_id;
+    const eid  = _resolverEid(req);
     if (!db.getTemplate(eid, template_id)) {
       return res.status(400).json({ error: 'Template não encontrado' });
     }
@@ -199,7 +208,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.put('/api/se-api/configs/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid        = req.session.empresa_id;
+    const eid        = _resolverEid(req);
     const { nome, tipo, template_id, endpoint, method, descricao, ativo, source_table, source_id_field } = req.body;
     const atualizado = db.updateConfig(eid, req.params.id, {
       ...(nome             !== undefined && { nome }),
@@ -218,7 +227,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.delete('/api/se-api/configs/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const ok  = db.deleteConfig(eid, req.params.id);
     if (!ok) return res.status(404).json({ error: 'Config não encontrada' });
     log(`Config removida ID ${req.params.id}`, 'info', eid);
@@ -230,7 +239,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/configs/:id/headers', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listHeaders(req.session.empresa_id, req.params.id));
+    res.json(db.listHeaders(_resolverEid(req), req.params.id));
   });
 
   app.put('/api/se-api/configs/:id/headers', requireAuth, requireEmpresa, (req, res) => {
@@ -238,7 +247,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
     if (!Array.isArray(headers)) return res.status(400).json({ error: 'headers deve ser um array' });
     const invalidos = headers.filter(h => !h.key);
     if (invalidos.length) return res.status(400).json({ error: 'Todos os headers devem ter key' });
-    db.setHeaders(req.session.empresa_id, req.params.id, headers);
+    db.setHeaders(_resolverEid(req), req.params.id, headers);
     res.json({ ok: true });
   });
 
@@ -247,7 +256,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/configs/:id/mappings', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listMappings(req.session.empresa_id, req.params.id));
+    res.json(db.listMappings(_resolverEid(req), req.params.id));
   });
 
   app.put('/api/se-api/configs/:id/mappings', requireAuth, requireEmpresa, (req, res) => {
@@ -255,7 +264,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
     if (!Array.isArray(mappings)) return res.status(400).json({ error: 'mappings deve ser um array' });
     const invalidos = mappings.filter(m => !m.source_field || (!m.placeholder && !m.se_field_id));
     if (invalidos.length) return res.status(400).json({ error: 'Todos os mappings devem ter source_field e ao menos placeholder ou Campo SE' });
-    db.setMappings(req.session.empresa_id, req.params.id, mappings);
+    db.setMappings(_resolverEid(req), req.params.id, mappings);
     res.json({ ok: true });
   });
 
@@ -264,7 +273,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/flows', requireAuth, requireEmpresa, (req, res) => {
-    const eid   = req.session.empresa_id;
+    const eid   = _resolverEid(req);
     const flows = db.listFlows(eid);
     const enriched = flows.map(f => ({
       ...f,
@@ -274,7 +283,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.get('/api/se-api/flows/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const f   = db.getFlow(eid, req.params.id);
     if (!f) return res.status(404).json({ error: 'Flow não encontrado' });
     const steps    = db.listFlowSteps(eid, f.id);
@@ -289,14 +298,14 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   app.post('/api/se-api/flows', requireAuth, requireEmpresa, (req, res) => {
     const { nome, descricao } = req.body;
     if (!nome) return res.status(400).json({ error: 'nome é obrigatório' });
-    const eid  = req.session.empresa_id;
+    const eid  = _resolverEid(req);
     const novo = db.createFlow(eid, { nome, descricao });
     log(`Flow criado: ${novo.nome} (ID ${novo.id})`, 'info', eid);
     res.status(201).json(novo);
   });
 
   app.put('/api/se-api/flows/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid        = req.session.empresa_id;
+    const eid        = _resolverEid(req);
     const { nome, descricao } = req.body;
     const atualizado = db.updateFlow(eid, req.params.id, {
       ...(nome      !== undefined && { nome }),
@@ -307,7 +316,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.delete('/api/se-api/flows/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const ok  = db.deleteFlow(eid, req.params.id);
     if (!ok) return res.status(404).json({ error: 'Flow não encontrado' });
     log(`Flow removido ID ${req.params.id}`, 'info', eid);
@@ -319,7 +328,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/flows/:id/steps', requireAuth, requireEmpresa, (req, res) => {
-    const eid   = req.session.empresa_id;
+    const eid   = _resolverEid(req);
     const steps = db.listFlowSteps(eid, req.params.id);
     const configs = db.listConfigs(eid);
     res.json(steps.map(s => ({
@@ -333,7 +342,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
     if (!Array.isArray(steps)) return res.status(400).json({ error: 'steps deve ser um array' });
     const invalidos = steps.filter(s => !s.config_id);
     if (invalidos.length) return res.status(400).json({ error: 'Todos os steps devem ter config_id' });
-    db.setFlowSteps(req.session.empresa_id, req.params.id, steps);
+    db.setFlowSteps(_resolverEid(req), req.params.id, steps);
     res.json({ ok: true });
   });
 
@@ -342,7 +351,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.post('/api/se-api/execute/config/:id', requireAuth, requireEmpresa, async (req, res) => {
-    const eid      = req.session.empresa_id;
+    const eid      = _resolverEid(req);
     const configId = Number(req.params.id);
     const data     = req.body.data || {};
 
@@ -381,7 +390,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   });
 
   app.post('/api/se-api/execute/flow/:id', requireAuth, requireEmpresa, async (req, res) => {
-    const eid    = req.session.empresa_id;
+    const eid    = _resolverEid(req);
     const flowId = Number(req.params.id);
     const data   = req.body.data || {};
 
@@ -436,12 +445,12 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
   // ════════════════════════════════════════════════════════════════════════════
 
   app.get('/api/se-api/logs', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { status, config_nome, flow_id, tipo, data_inicio, data_fim, page, limit } = req.query;
     res.json(db.listLogs(eid, { status, config_nome, flow_id, tipo, data_inicio, data_fim, page, limit }));
   });
 
   app.get('/api/se-api/logs/stats', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.getLogStats(req.session.empresa_id));
+    res.json(db.getLogStats(_resolverEid(req)));
   });
 };

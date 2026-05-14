@@ -1,7 +1,7 @@
 /**
- * FileSessionStore — store de sessão persistente em JSON.
+ * FileSessionStore — store de sessão em JSON.
  * Substitui o store em memória padrão do express-session.
- * Sessões ficam em data/sessions/ e sobrevivem a reinicializações do servidor.
+ * Sessões ficam em data/sessions/, mas podem ser limpas ao iniciar o servidor.
  */
 const session = require('express-session');
 const fs      = require('fs');
@@ -11,9 +11,10 @@ const SESSIONS_DIR    = path.join(__dirname, '..', '..', 'data', 'sessions');
 const CLEANUP_INTERVAL = 30 * 60 * 1000; // limpa expiradas a cada 30 min
 
 class FileSessionStore extends session.Store {
-  constructor() {
+  constructor(options = {}) {
     super();
     fs.mkdirSync(SESSIONS_DIR, { recursive: true });
+    if (options.clearOnStart) this.clearExpiredAndActive();
     this._cleanup();
     setInterval(() => this._cleanup(), CLEANUP_INTERVAL).unref();
   }
@@ -61,6 +62,16 @@ class FileSessionStore extends session.Store {
   touch(sid, sess, cb) {
     // Renova o TTL sem alterar o conteúdo
     this.set(sid, sess, cb);
+  }
+
+  clearExpiredAndActive() {
+    try {
+      fs.readdirSync(SESSIONS_DIR)
+        .filter(f => f.endsWith('.json'))
+        .forEach(f => {
+          try { fs.unlinkSync(path.join(SESSIONS_DIR, f)); } catch (_) {}
+        });
+    } catch (_) {}
   }
 
   _cleanup() {

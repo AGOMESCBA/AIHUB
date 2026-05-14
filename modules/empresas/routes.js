@@ -3,6 +3,24 @@ const path = require('path');
 const db   = require('./database');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads', 'empresas');
+
+const IDENTIDADE_CAMPOS = {
+  logo: {
+    label: 'logomarca',
+    campo: 'login_logo_url',
+    prefixo: 'login-logo',
+    maxBytes: 4 * 1024 * 1024,
+    extensoes: { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' },
+  },
+  background: {
+    label: 'imagem lateral',
+    campo: 'login_background_url',
+    prefixo: 'login-background',
+    maxBytes: 6 * 1024 * 1024,
+    extensoes: { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' },
+  },
+};
 
 function loadEmpresa(eid) {
   const f = path.join(DATA_DIR, `empresa_${eid}.json`);
@@ -17,6 +35,23 @@ function saveEmpresa(eid, data) {
 function requireAdmin(req, res, next) {
   if (req.session?.role === 'admin') return next();
   res.status(403).json({ error: 'Acesso restrito a administradores.' });
+}
+
+function parseDataUrl(dataUrl) {
+  const match = /^data:(image\/(?:png|jpe?g|webp));base64,([a-z0-9+/=\s]+)$/i.exec(String(dataUrl || ''));
+  if (!match) return null;
+  const mime = match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase();
+  const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+  return { mime, buffer };
+}
+
+function apagarArquivoPublico(url) {
+  if (!url || !String(url).startsWith('/uploads/')) return;
+  const rel = String(url).replace(/^\/uploads\//, '');
+  const alvo = path.resolve(path.join(DATA_DIR, 'uploads', rel));
+  const raiz = path.resolve(path.join(DATA_DIR, 'uploads'));
+  if (!alvo.startsWith(raiz)) return;
+  try { if (fs.existsSync(alvo)) fs.unlinkSync(alvo); } catch (_) {}
 }
 
 // Tabelas zeráveis e seus campos no JSON
@@ -81,7 +116,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
   // ── Criar ──────────────────────────────────────────────────────────────────
   app.post('/api/empresas', requireAuth, (req, res) => {
-    const { razao_social, documento, site, telefone, email, endereco } = req.body || {};
+    const { razao_social, documento, site, telefone, email, endereco, login_slogan } = req.body || {};
 
     if (!razao_social?.trim()) {
       return res.status(400).json({ error: 'Razão Social é obrigatória' });
@@ -94,6 +129,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
       telefone:     (telefone   || '').trim(),
       email:        (email      || '').trim(),
       endereco:     (endereco   || '').trim(),
+      login_slogan: (login_slogan || '').trim(),
     });
 
     res.status(201).json(nova);
@@ -101,7 +137,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
   // ── Atualizar ──────────────────────────────────────────────────────────────
   app.put('/api/empresas/:id', requireAuth, (req, res) => {
-    const { razao_social, documento, site, telefone, email, endereco } = req.body || {};
+    const { razao_social, documento, site, telefone, email, endereco, login_slogan } = req.body || {};
 
     if (!razao_social?.trim()) {
       return res.status(400).json({ error: 'Razão Social é obrigatória' });
@@ -114,10 +150,55 @@ module.exports = function registerRoutes(app, { requireAuth }) {
       telefone:     (telefone   || '').trim(),
       email:        (email      || '').trim(),
       endereco:     (endereco   || '').trim(),
+      login_slogan: (login_slogan || '').trim(),
     });
 
     if (!atualizada) return res.status(404).json({ error: 'Empresa não encontrada' });
     res.json(atualizada);
+  });
+
+  app.post('/api/empresas/:id/identidade', requireAuth, requireAdmin, (req, res) => {
+    const empresa = db.buscarPorId(req.params.id);
+    if (!empresa) return res.status(404).json({ error: 'Empresa não encontrada' });
+
+    const { tipo, dataUrl } = req.body || {};
+    const cfg = IDENTIDADE_CAMPOS[tipo];
+    if (!cfg) return res.status(400).json({ error: 'Tipo de imagem inválido.' });
+
+    const arquivo = parseDataUrl(dataUrl);
+    if (!arquivo || !cfg.extensoes[arquivo.mime]) {
+      return res.status(400).json({ error: `Envie uma ${cfg.label} em PNG, JPG ou WEBP.` });
+    }
+
+    if (arquivo.buffer.length > cfg.maxBytes) {
+      const mb = Math.round(cfg.maxBytes / 1024 / 1024);
+      return res.status(400).json({ error: `Arquivo muito grande. Limite para ${cfg.label}: ${mb} MB.` });
+    }
+
+    const dir = path.join(UPLOADS_DIR, String(empresa.id));
+    fs.mkdirSync(dir, { recursive: true });
+
+    apagarArquivoPublico(empresa[cfg.campo]);
+
+    const ext = cfg.extensoes[arquivo.mime];
+    const nome = `${cfg.prefixo}-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(dir, nome), arquivo.buffer);
+
+    const url = `/uploads/empresas/${empresa.id}/${nome}`;
+    const atualizada = db.atualizar(req.params.id, { [cfg.campo]: url });
+    res.json({ ok: true, url, empresa: atualizada });
+  });
+
+  app.delete('/api/empresas/:id/identidade/:tipo', requireAuth, requireAdmin, (req, res) => {
+    const empresa = db.buscarPorId(req.params.id);
+    if (!empresa) return res.status(404).json({ error: 'Empresa não encontrada' });
+
+    const cfg = IDENTIDADE_CAMPOS[req.params.tipo];
+    if (!cfg) return res.status(400).json({ error: 'Tipo de imagem inválido.' });
+
+    apagarArquivoPublico(empresa[cfg.campo]);
+    const atualizada = db.atualizar(req.params.id, { [cfg.campo]: '' });
+    res.json({ ok: true, empresa: atualizada });
   });
 
   // ── Excluir ────────────────────────────────────────────────────────────────

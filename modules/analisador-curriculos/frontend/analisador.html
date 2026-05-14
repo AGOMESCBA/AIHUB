@@ -114,6 +114,43 @@
     .fluxo-desc  { font-size:12.5px;color:var(--text-md);line-height:1.75; }
     .fluxo-sub   { font-size:12px;color:var(--text-lo);margin-top:6px;padding-left:12px;border-left:2px solid var(--border);line-height:1.8; }
     .fluxo-divider { border:none;border-top:1px solid var(--border);margin:4px 0 18px; }
+    .analysis-control-grid { display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start; }
+    .analysis-filter-box { display:none;background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);padding:14px; }
+    .analysis-filter-title { color:var(--text-hi);font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px; }
+    .analysis-radio { display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:12.5px;color:var(--text-md);line-height:1.5;margin-bottom:8px; }
+    .analysis-radio:last-child { margin-bottom:0; }
+    .analysis-radio input { margin-top:3px;accent-color:var(--accent); }
+    .vaga-context { display:none;margin-top:14px;padding:14px 16px;background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text-md);line-height:1.7; }
+    .analysis-results-grid { display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start;margin-top:18px; }
+    .analysis-results-main { min-width:0; }
+    .analysis-results-side { position:sticky;top:62px;display:flex;flex-direction:column;gap:16px; }
+    .analysis-summary-grid { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:16px; }
+    .analysis-summary-item { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px; }
+    .analysis-summary-value { color:var(--text-hi);font-size:22px;font-weight:800;line-height:1; }
+    .analysis-summary-label { color:var(--text-lo);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;margin-top:5px; }
+    .analysis-side-stat { display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px; }
+    .analysis-side-stat:last-child { border-bottom:none; }
+    .analysis-side-stat span { color:var(--text-lo); }
+    .analysis-side-stat strong { color:var(--text-hi); }
+    .analysis-side-actions { display:flex;flex-direction:column;gap:8px; }
+    .result-card { padding:0;overflow:hidden; }
+    .result-card-top { display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .result-select { display:flex;align-items:center;justify-content:center;width:34px;height:34px;border:1px solid var(--border);border-radius:8px;background:var(--bg-base);flex-shrink:0; }
+    .result-card.finalista .result-select { border-color:var(--accent);background:var(--accent-glow); }
+    .result-body { padding:16px 18px 18px; }
+    .result-meta-row { display:flex;gap:8px;flex-wrap:wrap;margin-top:6px; }
+    .result-actions { margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:flex-end; }
+    @media(max-width:1100px) {
+      .analysis-control-grid,
+      .analysis-results-grid { grid-template-columns:1fr; }
+      .analysis-results-side { position:static; }
+      .analysis-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media(max-width:720px) {
+      .analysis-summary-grid { grid-template-columns:1fr; }
+      .result-card-top { flex-wrap:wrap; }
+      .result-score { width:100%;margin-left:48px;text-align:left; }
+    }
   </style>
 </head>
 <body>
@@ -143,33 +180,68 @@
     </div>
 
     <div class="page-content">
-      <div class="card mb-4">
-        <div class="card-header">🔍 Selecione a Vaga para Análise</div>
-        <div class="card-body">
-          <div class="filtros" style="align-items:center;flex-wrap:wrap">
-            <select id="sel-vaga" class="form-control select-vaga">
-              <option value="">— Selecione uma vaga —</option>
-            </select>
-            <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>▶ Analisar Currículos</button>
-            <select id="filtro-nivel" class="form-control" style="max-width:200px" onchange="filtrarResultados()">
-              <option value="">Filtrar por compatibilidade</option>
-              <option value="Alto">✓ Alta (70–100 pts)</option>
-              <option value="Médio">~ Média (50–69 pts)</option>
-              <option value="Baixo">● Baixa (abaixo do corte)</option>
-            </select>
-            <div id="filtro-curriculos-box" style="display:none;padding:6px 12px;background:var(--bg-hover);border-radius:6px;border:1px solid var(--border)">
-              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:5px;font-size:12px;white-space:nowrap">
-                <input type="radio" name="radio-filtro-cv" value="todos" checked> Todos os currículos
-              </label>
-              <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12px;white-space:nowrap" id="label-somente-vaga">
-                <input type="radio" name="radio-filtro-cv" value="somente_vaga" id="radio-somente-vaga" disabled>
-                <span id="texto-somente-vaga">Apenas desta vaga</span>
-              </label>
-            </div>
+      <section class="editor-shell">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="analysis-title">Analisador de Currículos</strong>
+            <span id="analysis-subtitle">Selecione uma vaga para iniciar a análise dos candidatos.</span>
           </div>
-          <div id="vaga-info" style="display:none;margin-top:10px;padding:10px 14px;background:var(--bg-hover);border-radius:8px;font-size:13px;color:var(--text-md);line-height:1.7"></div>
+          <div class="editor-actions" id="editor-actions">
+            <div id="action-bar-resultado" style="display:none;align-items:center;gap:8px;flex-wrap:wrap"></div>
+            <button class="btn btn-primary" onclick="analisar()" id="btn-analisar" disabled>Analisar Currículos</button>
+            <button class="btn btn-info" onclick="document.getElementById('modal-ajuda').classList.remove('d-none')">Ajuda</button>
+          </div>
         </div>
-      </div>
+
+        <div class="analysis-control-grid">
+          <section class="form-section">
+            <div class="form-section-header">
+              <div class="form-section-title">Vaga para Análise</div>
+              <div class="form-section-subtitle">Escolha a vaga e revise o contexto antes de enviar os currículos para a IA.</div>
+            </div>
+            <div class="form-section-body">
+              <div class="form-group">
+                <label class="form-label">Vaga</label>
+                <select id="sel-vaga" class="form-control select-vaga">
+                  <option value="">— Selecione uma vaga —</option>
+                </select>
+              </div>
+              <div id="vaga-info" class="vaga-context"></div>
+            </div>
+          </section>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Filtros</div>
+                <div class="form-section-subtitle">Refine a origem e a leitura dos resultados.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-group">
+                  <label class="form-label">Compatibilidade</label>
+                  <select id="filtro-nivel" class="form-control" onchange="filtrarResultados()">
+                    <option value="">Todas as compatibilidades</option>
+                    <option value="Alto">Alta (70–100 pts)</option>
+                    <option value="Médio">Média (50–69 pts)</option>
+                    <option value="Baixo">Baixa (abaixo do corte)</option>
+                  </select>
+                </div>
+                <div id="filtro-curriculos-box" class="analysis-filter-box">
+                  <div class="analysis-filter-title">Origem dos currículos</div>
+                  <label class="analysis-radio">
+                    <input type="radio" name="radio-filtro-cv" value="todos" checked>
+                    <span>Todos os currículos</span>
+                  </label>
+                  <label class="analysis-radio" id="label-somente-vaga">
+                    <input type="radio" name="radio-filtro-cv" value="somente_vaga" id="radio-somente-vaga" disabled>
+                    <span id="texto-somente-vaga">Apenas desta vaga</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
 
       <div id="resultado-area"></div>
     </div>
@@ -524,12 +596,17 @@
 <script src="/js/auth.js"></script>
 <script src="/js/audit-fields.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="/js/rich-text.js?v=quill-2"></script>
 <script>
   let todosResultados = [], todosEliminados = [];
   let vagaSelecionada = null, funcaoId = null, vagaId = null;
   let ultimoRes = null;
   let analisesPorVaga = new Map();
   let ultimoPesos = { requisitos_obrigatorios:50, requisitos_desejados:30, formacao:10, habilidades:10, corte_minimo:50 };
+
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 
   async function carregarPesosHelp() {
     try {
@@ -588,14 +665,16 @@
       const btnAnalisar = document.getElementById('btn-analisar');
       const analiseExistente = analisesPorVaga.get(id);
       btnAnalisar.disabled = !id || Boolean(analiseExistente);
-      btnAnalisar.textContent = analiseExistente ? 'Analise ja existente' : 'Analisar Curriculos';
+      btnAnalisar.textContent = analiseExistente ? 'Análise já existente' : 'Analisar Currículos';
       const info = document.getElementById('vaga-info');
       const box  = document.getElementById('filtro-curriculos-box');
       if (!id) {
         vagaSelecionada = null;
         funcaoId = null;
         vagaId = null;
-        btnAnalisar.textContent = 'Analisar Curriculos';
+        btnAnalisar.textContent = 'Analisar Currículos';
+        document.getElementById('analysis-title').textContent = 'Analisador de Currículos';
+        document.getElementById('analysis-subtitle').textContent = 'Selecione uma vaga para iniciar a análise dos candidatos.';
         info.style.display = 'none';
         box.style.display = 'none';
         document.querySelector('input[name="radio-filtro-cv"][value="todos"]').checked = true;
@@ -607,6 +686,8 @@
       funcaoId = v.funcao_id;
       vagaId   = v.id;
       const f = v.funcao || {};
+      document.getElementById('analysis-title').textContent = `#${v.id} - ${f.nome || 'Vaga sem função'}`;
+      document.getElementById('analysis-subtitle').textContent = `${v.quantidade || 0} vaga${v.quantidade !== 1 ? 's' : ''}${f.area ? ` · ${f.area}` : ''}${f.nivel_experiencia ? ` · ${f.nivel_experiencia}` : ''}`;
       const tags = arr => Array.isArray(arr) && arr.length
         ? arr.map(t => `<span class="tag">${t}</span>`).join(' ') : '—';
       if (analiseExistente) {
@@ -647,9 +728,9 @@
         <strong style="color:var(--text-hi)">${f.nome || '—'}</strong>
         ${f.area ? ` · <span>${f.area}</span>` : ''}
         ${f.nivel_experiencia ? ` · <span>${f.nivel_experiencia}</span>` : ''}
-        ${f.descricao ? `<br><span style="color:var(--text-lo)">${f.descricao.slice(0,200)}${f.descricao.length>200?'…':''}</span>` : ''}
+        ${f.descricao ? `<br><span style="color:var(--text-lo)">${escHtml(richPlainText(f.descricao).slice(0,200))}${richPlainText(f.descricao).length>200?'...':''}</span>` : ''}
         ${f.habilidades_tecnicas?.length ? `<br><span style="color:var(--text-lo)">Habilidades:</span> ${tags(f.habilidades_tecnicas)}` : ''}
-        ${f.requisitos_obrigatorios ? `<br><span style="color:var(--text-lo)">Requisitos:</span> <span style="font-size:12px">${f.requisitos_obrigatorios.slice(0,180)}${f.requisitos_obrigatorios.length>180?'…':''}</span>` : ''}`;
+        ${f.requisitos_obrigatorios ? `<br><span style="color:var(--text-lo)">Requisitos:</span> <span style="font-size:12px">${escHtml(richPlainText(f.requisitos_obrigatorios).slice(0,180))}${richPlainText(f.requisitos_obrigatorios).length>180?'...':''}</span>` : ''}`;
     });
 
     // Auto-seleciona se vier via query string
@@ -736,17 +817,19 @@
       const _empAn = window._iahubEmpresa || { id: '—', nome: '—' };
       return `
         <div class="result-card" id="card-${r.id}">
-          <div style="display:flex;gap:10px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border)">
-            <span style="font-size:11px;color:var(--text-lo);font-family:monospace">ID: <strong>${r.id}</strong></span>
-            <span style="font-size:11px;color:var(--text-lo);font-family:monospace">Emp: <strong>${_empAn.id}</strong> — ${_empAn.nome}</span>
-          </div>
-          <div class="result-header">
-            <input type="checkbox" class="cb-finalista" data-id="${r.id}" onchange="atualizarCard(${r.id}, this.checked)" title="Marcar como finalista">
+          <div class="result-card-top">
+            <label class="result-select" title="Marcar como finalista">
+              <input type="checkbox" class="cb-finalista" data-id="${r.id}" onchange="atualizarCard(${r.id}, this.checked)">
+            </label>
             <div class="result-rank">${i + 1}º</div>
-            <div>
+            <div style="min-width:0;flex:1">
               <div class="result-name">${r.nome || '—'}</div>
               <div class="result-contact">${r.telefone || ''}${r.telefone && r.email ? ' · ' : ''}${r.email || ''}</div>
-              <div style="margin-top:4px;display:flex;gap:6px;flex-wrap:wrap">${nivelCandBadge}</div>
+              <div class="result-meta-row">
+                ${nivelCandBadge}
+                <span class="tag">ID ${r.id}</span>
+                <span class="tag">Empresa ${_empAn.id}</span>
+              </div>
             </div>
             <div class="result-score">
               <div class="result-score-num">${r.score}</div>
@@ -754,6 +837,7 @@
               <span class="nivel-badge ${nivelCls}" style="margin-top:4px;display:inline-block">${r.nivel}</span>
             </div>
           </div>
+          <div class="result-body">
           <div class="score-row">
             <span style="font-size:11.5px;color:var(--text-lo);min-width:80px">Compatibilidade</span>
             <div class="score-bar-wrap"><div class="score-bar ${barCls}" style="width:${r.score}%"></div></div>
@@ -766,8 +850,9 @@
             ${neg ? `<div><div style="font-size:11px;color:var(--error);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos a avaliar</div><ul class="ponto-list ponto-neg">${neg}</ul></div>` : ''}
           </div>` : ''}
           ${r.resumo ? `<div class="resumo">${r.resumo}</div>` : ''}
-          <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);text-align:right">
-            <a href="/curriculo.html?id=${r.id}" target="_blank" class="btn btn-ghost" style="font-size:12px;padding:5px 14px">📄 Ver Currículo Completo</a>
+          <div class="result-actions">
+            <a href="/curriculo.html?id=${r.id}" class="btn btn-ghost" style="font-size:12px;padding:5px 14px">📄 Ver Currículo Completo</a>
+          </div>
           </div>
         </div>`;
     }).join('');
@@ -803,34 +888,62 @@
       ? `<span class="badge" style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe">⚡ Triagem ativa</span>`
       : '';
 
-    const saveBarHtml = vagaId ? `
-      <div class="save-bar" id="save-bar">
-        <div>
-          <button class="btn btn-ghost" style="font-size:12px" onclick="marcarTodos(true)">☑ Marcar todos</button>
-          <button class="btn btn-ghost" style="font-size:12px;margin-left:6px" onclick="marcarTodos(false)">☐ Desmarcar todos</button>
-        </div>
-        <span class="save-bar-info"><span id="count-finalistas">0</span> candidato(s) marcado(s) como finalista</span>
-        <button class="btn btn-primary ms-auto" onclick="salvarAnalise()">✅ Encerrar Análise da Vaga</button>
-      </div>` : '';
+    if (vagaId) mostrarBotoesAcao();
 
     document.getElementById('resultado-area').innerHTML = `
-      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <span style="font-size:14px;color:var(--text-md)">
-          ${res.funcao ? `<strong style="color:var(--text-hi)">${res.funcao}</strong> · ` : ''}
-          ${res.total || 0} recebidos · ${resultados.length} analisados
-        </span>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${triagemBadge}
-          <span class="badge badge-green">✓ ${altos} alto${altos !== 1 ? 's' : ''}</span>
-          <span class="badge badge-yellow">~ ${medios} médio${medios !== 1 ? 's' : ''}</span>
-          <span class="badge badge-red">● ${baixos} baixo${baixos !== 1 ? 's' : ''}</span>
-        </div>
-      </div>
-      ${cards}
-      ${eliminadosHtml}
-      ${saveBarHtml}`;
+      <div class="analysis-results-grid">
+        <main class="analysis-results-main">
+          <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
+            <span style="font-size:14px;color:var(--text-md)">
+              ${res.funcao ? `<strong style="color:var(--text-hi)">${res.funcao}</strong> · ` : ''}
+              ranking de candidatos
+            </span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              ${triagemBadge}
+              <span class="badge badge-green">${altos} alto${altos !== 1 ? 's' : ''}</span>
+              <span class="badge badge-yellow">${medios} médio${medios !== 1 ? 's' : ''}</span>
+              <span class="badge badge-red">${baixos} baixo${baixos !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          ${cards}
+          ${eliminadosHtml}
+        </main>
+        <aside class="analysis-results-side">
+          <section class="form-section">
+            <div class="form-section-header">
+              <div class="form-section-title">Resumo da Decisão</div>
+              <div class="form-section-subtitle">Acompanhe a seleção enquanto revisa os candidatos.</div>
+            </div>
+            <div class="form-section-body">
+              <div class="analysis-side-stat"><span>Recebidos</span><strong>${res.total || 0}</strong></div>
+              <div class="analysis-side-stat"><span>Analisados</span><strong>${resultados.length}</strong></div>
+              <div class="analysis-side-stat"><span>Eliminados</span><strong>${eliminados.length}</strong></div>
+              <div class="analysis-side-stat"><span>Alta compatibilidade</span><strong>${altos}</strong></div>
+              <div class="analysis-side-stat"><span>Média compatibilidade</span><strong>${medios}</strong></div>
+              <div class="analysis-side-stat"><span>Baixa compatibilidade</span><strong>${baixos}</strong></div>
+              <div style="margin-top:14px;font-size:13px;color:var(--text-md)"><span id="count-finalistas">0</span> candidato(s) marcado(s) como finalista</div>
+            </div>
+          </section>
+        </aside>
+      </div>`;
 
     atualizarContadorFinalistas();
+  }
+
+  // ── Botões de ação na topbar ─────────────────────────────────────────────────
+  function mostrarBotoesAcao() {
+    const bar = document.getElementById('action-bar-resultado');
+    bar.innerHTML = `
+      <button class="btn btn-ghost" onclick="marcarTodos(true)">Marcar todos</button>
+      <button class="btn btn-ghost" onclick="marcarTodos(false)">Desmarcar todos</button>
+      <button class="btn btn-danger" id="btn-encerrar" onclick="salvarAnalise()">Encerrar Análise da Vaga</button>`;
+    bar.style.display = 'flex';
+  }
+
+  function ocultarBotoesAcao() {
+    const bar = document.getElementById('action-bar-resultado');
+    bar.style.display = 'none';
+    bar.innerHTML = '';
   }
 
   // ── Checkbox helpers ─────────────────────────────────────────────────────────
@@ -888,13 +1001,12 @@
     if (r.status === 409) {
       const conf = await r.json();
       if (conf.vaga_ja_analisada) {
-        const bar = document.getElementById('save-bar');
+        const bar = document.getElementById('action-bar-resultado');
         const dataFmt = conf.data_existente ? new Date(conf.data_existente).toLocaleString('pt-BR') : '';
         if (bar) {
-          bar.innerHTML = `<div style="display:flex;align-items:center;gap:12px;width:100%">
-          <span style="color:var(--error);font-size:13px;font-weight:600">Esta vaga ja possui uma analise salva${dataFmt ? ` em ${dataFmt}` : ''}.</span>
-          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px;margin-left:auto">Ver no Historico</a>
-        </div>`;
+          bar.innerHTML = `
+            <span style="color:var(--error);font-size:13px;font-weight:600">Esta vaga ja possui uma analise salva${dataFmt ? ` em ${dataFmt}` : ''}.</span>
+            <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px">Ver no Historico</a>`;
         }
         return;
       }
@@ -916,12 +1028,11 @@
         body: JSON.stringify({ status: 'encerrada' }),
       });
 
-      const bar = document.getElementById('save-bar');
+      const bar = document.getElementById('action-bar-resultado');
       if (bar) {
-        bar.innerHTML = `<div style="display:flex;align-items:center;gap:12px;width:100%">
+        bar.innerHTML = `
           <span style="color:var(--success);font-size:13px;font-weight:600">✅ Análise salva com sucesso!</span>
-          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px;margin-left:auto">📊 Ver no Histórico</a>
-        </div>`;
+          <a href="/historico.html?vaga_id=${vagaId}" class="btn btn-ghost" style="font-size:12px">📊 Ver no Histórico</a>`;
       }
     }
   }

@@ -162,9 +162,27 @@
       height:100%;padding:40px;text-align:center;color:var(--text-lo);font-size:13px;gap:8px;
     }
 
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-search { flex:1;min-width:260px; }
+    .quick-row .form-control { height:36px;margin:0;font-size:13px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .usuario-summary { display:grid;gap:12px; }
+    .usuario-summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .usuario-summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .usuario-summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .usuario-editor-note { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+
     /* ── Group panel / Tabulator ── */
-    .gp-wrap      { margin-bottom:10px; }
-    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .gp-wrap      { margin-top:12px;padding-top:12px;border-top:1px solid var(--border); }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;position:relative; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
     .tabulator { font-family:inherit;font-size:14px;border:none !important; }
     .tabulator .tabulator-header { background:var(--bg-hover);border-bottom:1px solid var(--border) !important; }
@@ -176,6 +194,15 @@
     .tabulator-header-filter input,
     .tabulator-header-filter select { width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:#fff;color:var(--text);margin-top:4px; }
     .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
+    @media (max-width: 920px) {
+      .page-head { flex-direction:column; }
+      .page-head .btn { align-self:flex-start; }
+      .editor-actions { width:100%;justify-content:flex-start; }
+    }
+    @media (max-width: 560px) {
+      .quick-search { min-width:100%; }
+      .quick-row select.form-control { width:100%; }
+    }
   </style>
 </head>
 <body>
@@ -196,26 +223,50 @@
     </div>
 
     <div class="page-content">
+      <div id="list-view">
 
-      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <div class="ms-auto">
-          <button class="btn btn-primary" onclick="abrirModal()">＋ Novo Usuário</button>
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Administração</div>
+          <div class="page-title">Cadastro de Usuários</div>
+          <div class="page-subtitle">Gerencie usuários, perfis, status e permissões de acesso por empresa.</div>
         </div>
+        <button class="btn btn-primary" onclick="abrirModal()">＋ Novo Usuário</button>
       </div>
 
-      <!-- Painel de agrupamento -->
-      <div class="gp-wrap">
-        <div class="gp-chips-row" id="gp-chips-row">
-          <span class="gp-label">Agrupar por:</span>
+      <div class="quick-panel">
+        <div class="quick-row">
+          <input id="q-busca" class="form-control quick-search" placeholder="Buscar por nome, usuário, e-mail ou celular..." oninput="aplicarFiltrosRapidos()">
+          <select id="q-perfil" class="form-control" onchange="aplicarFiltrosRapidos()">
+            <option value="">Todos os perfis</option>
+            <option value="Admin">Admin</option>
+            <option value="Usuário">Usuário</option>
+          </select>
+          <select id="q-status" class="form-control" onchange="aplicarFiltrosRapidos()">
+            <option value="">Todos os status</option>
+            <option value="Ativo">Ativo</option>
+            <option value="Inativo">Inativo</option>
+          </select>
+          <button class="btn btn-ghost" onclick="limparFiltrosRapidos()">Limpar</button>
         </div>
-        <div id="dz"></div>
+
+        <!-- Painel de agrupamento -->
+        <div class="gp-wrap">
+          <div class="gp-chips-row" id="gp-chips-row">
+            <span class="gp-label">Agrupar por:</span>
+          </div>
+          <div id="dz"></div>
+        </div>
       </div>
 
       <!-- Grid -->
       <div class="card">
         <div class="card-body" style="padding:0">
-          <div style="display:flex;align-items:center;padding:10px 16px">
-            <span id="count" class="text-muted text-sm"></span>
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Usuários cadastrados</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
           </div>
           <div id="tabela"></div>
           <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
@@ -225,126 +276,174 @@
         </div>
       </div>
 
-    </div>
-  </div>
-</div>
+      </div>
 
-<!-- ═══════════════════════════════════════════════════════════════════════════
-     Modal Criar / Editar
-═══════════════════════════════════════════════════════════════════════════ -->
-<div id="modal" class="modal-overlay d-none">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modal-title">Novo Usuário</span>
-      <button class="modal-close" onclick="fecharModal()">✕</button>
-    </div>
-
-    <!-- ── Dados ─────────────────────────────────────────────────── -->
-    <div class="section-label">Dados</div>
-
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
-        <input id="f-nome" type="text" class="form-control" placeholder="Nome do usuário">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Usuário (login) <span style="color:#dc2626">*</span></label>
-        <input id="f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
-        <input id="f-celular" type="text" class="form-control" placeholder="(00) 00000-0000">
-      </div>
-      <div class="form-group">
-        <label class="form-label">E-mail <span style="color:#dc2626">*</span></label>
-        <input id="f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br">
-      </div>
-    </div>
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
-        <select id="f-role" class="form-control" onchange="onRoleChange()">
-          <option value="usuario">Usuário</option>
-          <option value="admin">Administrador</option>
-        </select>
-      </div>
-      <div class="form-group" id="grp-ativo" style="display:none">
-        <label class="form-label">Status</label>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-md);margin-top:10px">
-          <input type="checkbox" id="f-ativo" style="width:15px;height:15px"> Usuário ativo
-        </label>
-      </div>
-    </div>
-    <div id="grp-senha-novo" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
-        <div class="pass-wrap">
-          <input id="f-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
-          <button type="button" class="pass-toggle" onclick="toggleSenha('f-senha')" title="Mostrar/ocultar">👁</button>
-        </div>
-        <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
-      </div>
-    </div>
-    <div id="grp-senha-edit" class="senha-edit-box" style="display:none">
-      <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
-      <div class="pass-wrap" style="margin-top:6px">
-        <input id="f-senha-edit" type="password" class="form-control" placeholder="Nova senha — deixe em branco para manter" autocomplete="new-password">
-        <button type="button" class="pass-toggle" onclick="toggleSenha('f-senha-edit')" title="Mostrar/ocultar">👁</button>
-      </div>
-      <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
-    </div>
-
-    <!-- ── Acessos ────────────────────────────────────────────────── -->
-    <hr class="section-divider">
-    <div class="section-label">Acessos</div>
-
-    <!-- Admin: mensagem de acesso irrestrito -->
-    <div id="acessos-admin" class="acessos-admin-msg" style="display:none">
-      <span style="font-size:20px">🔓</span>
-      <span>Administradores têm acesso irrestrito a todas as empresas e rotinas do sistema.</span>
-    </div>
-
-    <!-- Usuário: painel duplo -->
-    <div id="acessos-usuario">
-      <div class="hint" style="margin-bottom:10px">
-        Ative as empresas e marque as rotinas que este usuário poderá acessar.
-        Usuários sem nenhuma rotina marcada não conseguirão acessar o sistema.
-      </div>
-      <div class="acessos-painel">
-        <!-- Esquerda: empresas -->
-        <div class="ap-empresas">
-          <div class="ap-col-header">Empresas</div>
-          <div class="ap-empresas-list" id="ap-empresas-list">
-            <div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">
-              Carregando...
-            </div>
+      <section id="editor-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="modal-title">Novo Usuário</strong>
+            <span id="editor-status">Preencha os dados do usuário e configure os acessos por empresa.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" type="button" onclick="fecharModal()">Cancelar</button>
+            <button class="btn btn-primary" type="button" id="btn-salvar" onclick="salvar()">Salvar</button>
           </div>
         </div>
-        <!-- Direita: rotinas -->
-        <div class="ap-rotinas">
-          <div class="ap-rotinas-header">
-            <span class="ap-rotinas-title" id="ap-rotinas-title">— selecione uma empresa —</span>
-            <div class="ap-rotinas-actions" id="ap-rotinas-actions" style="display:none">
-              <button class="btn-tiny" onclick="marcarTodasRotinas(true)">Marcar tudo</button>
-              <button class="btn-tiny" onclick="marcarTodasRotinas(false)">Limpar tudo</button>
-            </div>
-          </div>
-          <div class="ap-rotinas-body" id="ap-rotinas-body">
-            <div class="ap-rotinas-placeholder">
-              <span style="font-size:28px">👈</span>
-              Selecione uma empresa para configurar as rotinas de acesso.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <div id="form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-primary" id="btn-salvar" onclick="salvar()">Salvar</button>
+        <div class="editor-grid editor-grid-wide">
+          <main class="editor-main">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div>
+                  <div class="form-section-title">Dados principais</div>
+                  <div class="form-section-subtitle">Identificação, login, contato e perfil do usuário.</div>
+                </div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">Nome completo <span style="color:#dc2626">*</span></label>
+                    <input id="f-nome" type="text" class="form-control" placeholder="Nome do usuário" oninput="atualizarCabecalhoUsuario()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Usuário (login) <span style="color:#dc2626">*</span></label>
+                    <input id="f-usuario" type="text" class="form-control" placeholder="nome.sobrenome" autocomplete="off" oninput="atualizarCabecalhoUsuario()">
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">Celular <span style="color:#dc2626">*</span></label>
+                    <input id="f-celular" type="text" class="form-control" placeholder="(00) 00000-0000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">E-mail <span style="color:#dc2626">*</span></label>
+                    <input id="f-email" type="email" class="form-control" placeholder="usuario@empresa.com.br" oninput="atualizarCabecalhoUsuario()">
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">Perfil <span style="color:#dc2626">*</span></label>
+                    <select id="f-role" class="form-control" onchange="onRoleChange(); atualizarCabecalhoUsuario()">
+                      <option value="usuario">Usuário</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </div>
+                  <div class="form-group" id="grp-ativo" style="display:none">
+                    <label class="form-label">Status</label>
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-md);margin-top:10px">
+                      <input type="checkbox" id="f-ativo" style="width:15px;height:15px" onchange="atualizarCabecalhoUsuario()"> Usuário ativo
+                    </label>
+                  </div>
+                </div>
+                <div id="grp-senha-novo" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">Senha <span style="color:#dc2626">*</span></label>
+                    <div class="pass-wrap">
+                      <input id="f-senha" type="password" class="form-control" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+                      <button type="button" class="pass-toggle" onclick="toggleSenha('f-senha')" title="Mostrar/ocultar">👁</button>
+                    </div>
+                    <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+                  </div>
+                </div>
+                <div id="grp-senha-edit" class="senha-edit-box" style="display:none">
+                  <label class="form-label">Alterar senha <span style="font-size:11px;font-weight:400;color:var(--text-lo)">(opcional)</span></label>
+                  <div class="pass-wrap" style="margin-top:6px">
+                    <input id="f-senha-edit" type="password" class="form-control" placeholder="Nova senha - deixe em branco para manter" autocomplete="new-password">
+                    <button type="button" class="pass-toggle" onclick="toggleSenha('f-senha-edit')" title="Mostrar/ocultar">👁</button>
+                  </div>
+                  <div class="hint">Mín. 8 caracteres, incluindo maiúscula, minúscula e número.</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div>
+                  <div class="form-section-title">Acessos</div>
+                  <div class="form-section-subtitle">Empresas e rotinas que o usuário poderá acessar.</div>
+                </div>
+              </div>
+              <div class="form-section-body">
+                <div id="acessos-admin" class="acessos-admin-msg" style="display:none">
+                  <span style="font-size:20px">🔓</span>
+                  <span>Administradores têm acesso irrestrito a todas as empresas e rotinas do sistema.</span>
+                </div>
+
+                <div id="acessos-usuario">
+                  <div class="hint" style="margin-bottom:10px">
+                    Ative as empresas e marque as rotinas que este usuário poderá acessar.
+                    Usuários sem nenhuma rotina marcada não conseguirão acessar o sistema.
+                  </div>
+                  <div class="acessos-painel">
+                    <div class="ap-empresas">
+                      <div class="ap-col-header">Empresas</div>
+                      <div class="ap-empresas-list" id="ap-empresas-list">
+                        <div style="padding:20px;text-align:center;color:var(--text-lo);font-size:12px">
+                          Carregando...
+                        </div>
+                      </div>
+                    </div>
+                    <div class="ap-rotinas">
+                      <div class="ap-rotinas-header">
+                        <span class="ap-rotinas-title" id="ap-rotinas-title">— selecione uma empresa —</span>
+                        <div class="ap-rotinas-actions" id="ap-rotinas-actions" style="display:none">
+                          <button class="btn-tiny" onclick="marcarTodasRotinas(true)">Marcar tudo</button>
+                          <button class="btn-tiny" onclick="marcarTodasRotinas(false)">Limpar tudo</button>
+                        </div>
+                      </div>
+                      <div class="ap-rotinas-body" id="ap-rotinas-body">
+                        <div class="ap-rotinas-placeholder">
+                          <span style="font-size:28px">☚</span>
+                          Selecione uma empresa para configurar as rotinas de acesso.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
+              </div>
+            </section>
+          </main>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div>
+                  <div class="form-section-title">Resumo do registro</div>
+                  <div class="form-section-subtitle">Referência rápida para conferência durante a edição.</div>
+                </div>
+              </div>
+              <div class="form-section-body">
+                <div class="usuario-summary">
+                  <div class="usuario-summary-item">
+                    <div class="usuario-summary-label">Código</div>
+                    <div class="usuario-summary-value" id="meta-registro">Novo</div>
+                  </div>
+                  <div class="usuario-summary-item">
+                    <div class="usuario-summary-label">Nome</div>
+                    <div class="usuario-summary-value" id="meta-nome">Novo Usuário</div>
+                  </div>
+                  <div class="usuario-summary-item">
+                    <div class="usuario-summary-label">Login</div>
+                    <div class="usuario-summary-value" id="meta-login">-</div>
+                  </div>
+                  <div class="usuario-summary-item">
+                    <div class="usuario-summary-label">Perfil</div>
+                    <div class="usuario-summary-value" id="meta-perfil">Usuário</div>
+                  </div>
+                  <div class="usuario-summary-item">
+                    <div class="usuario-summary-label">Status</div>
+                    <div class="usuario-summary-value" id="meta-status">Ativo</div>
+                  </div>
+                </div>
+                <p class="usuario-editor-note">Para usuários comuns, além de ativar a empresa, marque ao menos uma rotina para liberar navegação.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -373,7 +472,7 @@
     </div>
     <div id="ms-error" class="login-error" style="display:none;margin-bottom:12px"></div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="fecharModalSenha()">Cancelar</button>
+      <button class="btn btn-ghost" onclick="fecharModalSenha()">Cancelar</button>
       <button class="btn btn-primary" id="ms-btn" onclick="salvarSenha()">Salvar Senha</button>
     </div>
   </div>
@@ -437,6 +536,7 @@ let senhaUserId       = null;
 let meuId             = null;
 let table             = null;
 let empresaSelecionadaId = null;
+let _quickFilterFn    = null;
 
 // permissoesMap: { empresa_id: { ativo: bool, rotinas: Set<string> } }
 let permissoesMap = {};
@@ -450,6 +550,47 @@ const gp = createGroupPanel({
 
 function esc(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function labelUsuarios(qtd) {
+  return qtd === 1 ? '1 usuário' : `${qtd} usuários`;
+}
+
+function aplicarFiltrosRapidos() {
+  if (!table) return;
+  const busca  = document.getElementById('q-busca').value.trim().toLowerCase();
+  const perfil = document.getElementById('q-perfil').value;
+  const status = document.getElementById('q-status').value;
+
+  if (_quickFilterFn) {
+    table.removeFilter(_quickFilterFn);
+    _quickFilterFn = null;
+  }
+
+  if (!busca && !perfil && !status) return;
+
+  _quickFilterFn = rowData => {
+    if (perfil && rowData.role_label !== perfil) return false;
+    if (status && rowData.status_label !== status) return false;
+    if (busca) {
+      const termos = [
+        rowData.nome || '',
+        rowData.usuario || '',
+        rowData.email || '',
+        rowData.celular || '',
+      ].join(' ').toLowerCase();
+      if (!termos.includes(busca)) return false;
+    }
+    return true;
+  };
+  table.addFilter(_quickFilterFn);
+}
+
+function limparFiltrosRapidos() {
+  document.getElementById('q-busca').value = '';
+  document.getElementById('q-perfil').value = '';
+  document.getElementById('q-status').value = '';
+  aplicarFiltrosRapidos();
 }
 
 // ── Tabulator ─────────────────────────────────────────────────────────────────
@@ -531,11 +672,11 @@ function initTabulator(data) {
       },
     ],
     rowClick: (_e, row) => editar(row.getData().id),
-    dataFiltered: fd => {
-      const t = fd.length;
+    dataFiltered: (_filters, rows) => {
+      const t = rows?.length ?? usuarios.length;
       document.getElementById('count').textContent =
         t === usuarios.length
-          ? `${t} usuário${t !== 1 ? 's' : ''}`
+          ? labelUsuarios(t)
           : `${t} de ${usuarios.length} usuários`;
     },
   });
@@ -560,11 +701,14 @@ async function carregar() {
     }));
 
     const empty = document.getElementById('empty');
-    if (!dados.length) { empty.classList.remove('d-none'); return; }
+    if (!dados.length) {
+      empty.classList.remove('d-none');
+      document.getElementById('count').textContent = '0 usuários';
+      return;
+    }
     empty.classList.add('d-none');
 
-    document.getElementById('count').textContent =
-      `${dados.length} usuário${dados.length !== 1 ? 's' : ''}`;
+    document.getElementById('count').textContent = labelUsuarios(dados.length);
 
     if (!table) {
       initTabulator(dados);
@@ -572,6 +716,7 @@ async function carregar() {
     } else {
       table.replaceData(dados);
     }
+    aplicarFiltrosRapidos();
   } catch (_) {
     document.getElementById('tabela').innerHTML =
       '<p style="text-align:center;color:var(--text-lo);padding:40px">Erro ao carregar dados.</p>';
@@ -579,6 +724,25 @@ async function carregar() {
 }
 
 // ── Modal Criar / Editar ──────────────────────────────────────────────────────
+function atualizarCabecalhoUsuario() {
+  const nome = document.getElementById('f-nome').value.trim() || 'Novo Usuário';
+  const login = document.getElementById('f-usuario').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const role = document.getElementById('f-role').value === 'admin' ? 'Administrador' : 'Usuário';
+  const ativo = document.getElementById('f-ativo').checked;
+  const titulo = editId ? `#${editId} - ${nome}` : `Novo registro - ${nome}`;
+
+  document.getElementById('modal-title').textContent = titulo;
+  document.getElementById('meta-registro').textContent = editId ? `#${editId}` : 'Novo';
+  document.getElementById('meta-nome').textContent = nome;
+  document.getElementById('meta-login').textContent = login || email || '-';
+  document.getElementById('meta-perfil').textContent = role;
+  document.getElementById('meta-status').textContent = editId ? (ativo ? 'Ativo' : 'Inativo') : 'Ativo';
+  document.getElementById('editor-status').textContent = editId
+    ? 'Revise dados, perfil, status e acessos do usuário.'
+    : 'Preencha os dados do usuário e configure os acessos por empresa.';
+}
+
 async function abrirModal(usuario = null) {
   editId              = usuario?.id ?? null;
   empresaSelecionadaId = null;
@@ -586,7 +750,6 @@ async function abrirModal(usuario = null) {
 
   const isEdit = !!editId;
 
-  document.getElementById('modal-title').textContent = isEdit ? 'Editar Usuário' : 'Novo Usuário';
   document.getElementById('f-nome').value    = usuario?.nome    ?? '';
   document.getElementById('f-usuario').value = usuario?.usuario ?? '';
   document.getElementById('f-celular').value = usuario?.celular ?? '';
@@ -624,14 +787,18 @@ async function abrirModal(usuario = null) {
   }
 
   onRoleChange();
+  atualizarCabecalhoUsuario();
   renderEmpresasList();
 
-  document.getElementById('modal').classList.remove('d-none');
+  document.getElementById('list-view').classList.add('d-none');
+  document.getElementById('editor-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   setTimeout(() => document.getElementById('f-nome').focus(), 50);
 }
 
 function fecharModal() {
-  document.getElementById('modal').classList.add('d-none');
+  document.getElementById('editor-view').classList.add('d-none');
+  document.getElementById('list-view').classList.remove('d-none');
   editId = null;
 }
 
@@ -835,6 +1002,7 @@ function onRoleChange() {
   const isAdmin = document.getElementById('f-role').value === 'admin';
   document.getElementById('acessos-admin').style.display   = isAdmin ? 'flex'  : 'none';
   document.getElementById('acessos-usuario').style.display = isAdmin ? 'none'  : 'block';
+  atualizarCabecalhoUsuario();
 }
 
 function getEmpresasSelecionadas() {
@@ -970,7 +1138,6 @@ async function salvarSenha() {
 }
 
 // ── Fechar ao clicar fora ─────────────────────────────────────────────────────
-document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) fecharModal(); });
 document.getElementById('modal-senha').addEventListener('click', function(e) { if (e.target === this) fecharModalSenha(); });
 
 document.addEventListener('DOMContentLoaded', carregar);

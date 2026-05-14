@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator_simple.min.css">
   <style>
-    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal-overlay { position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:1000;display:flex;align-items:center;justify-content:center; }
     .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(700px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
     .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
     .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
@@ -16,6 +16,13 @@
     .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
     .form-row-3    { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
     .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .meta-list { display:flex;flex-direction:column;gap:12px; }
+    .meta-item { display:flex;flex-direction:column;gap:2px; }
+    .meta-label { color:var(--text-lo);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600; }
+    .meta-value { color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .field-error { display:none;color:var(--error);font-size:11.5px;margin-top:5px; }
+    .form-group.invalid .form-control { border-color:var(--error);box-shadow:0 0 0 3px rgba(220,38,38,.10); }
+    .form-group.invalid .field-error { display:block; }
     textarea.form-control { resize:vertical;min-height:80px;font-family:inherit;box-sizing:border-box; }
     .nivel-badge { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
     .nivel-junior        { background:#0c2744;color:var(--accent-light); }
@@ -28,11 +35,8 @@
     .view-value  { font-size:14px;color:var(--text-hi);line-height:1.7; }
     .tag-list    { display:flex;flex-wrap:wrap;gap:6px;margin-top:4px; }
     .tag         { background:var(--bg-hover);border:1px solid var(--border);border-radius:16px;padding:3px 12px;font-size:12px;color:var(--text-md); }
-    .btn-mapear  { background:rgba(234,179,8,.1);color:#92400e;border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;font-family:inherit;transition:background .15s;margin-right:auto;white-space:nowrap; }
-    .btn-mapear:hover:not(:disabled) { background:rgba(234,179,8,.2); }
-    .btn-mapear:disabled { opacity:.6;cursor:not-allowed; }
-    .tag-input-box { border:1px solid var(--border);border-radius:8px;padding:5px 8px;min-height:40px;cursor:text;display:flex;flex-wrap:wrap;align-items:center;gap:4px;background:var(--bg-input,var(--bg-card));transition:border-color .15s; }
-    .tag-input-box:focus-within { border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+    .tag-input-box { border:1px solid var(--border);border-radius:8px;padding:5px 8px;min-height:40px;cursor:text;display:flex;flex-wrap:wrap;align-items:center;gap:4px;background:var(--bg-sidebar);transition:border-color var(--transition), box-shadow var(--transition); }
+    .tag-input-box:focus-within { border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow); }
     .tag-input-box input { border:none;outline:none;background:transparent;font-size:12px;min-width:100px;flex:1;color:var(--text-hi);padding:2px 0;font-family:inherit; }
     .tag-pill { display:inline-flex;align-items:center;gap:4px;background:rgba(37,99,235,.1);color:var(--accent);border-radius:20px;padding:2px 8px;font-size:11px;white-space:nowrap; }
     .tag-pill .rm { cursor:pointer;font-size:14px;line-height:1;opacity:.6; }
@@ -44,8 +48,28 @@
     .badge-existing { font-size:10px;color:var(--text-lo);font-style:italic; }
 
     /* Group panel */
-    .gp-wrap      { margin-bottom:10px; }
-    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm); }
+    .quick-panel.filter-panel { padding:0;overflow:hidden; }
+    .filter-head { display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:44px; }
+    .filter-panel.open .filter-head { border-bottom:1px solid var(--border); }
+    .filter-toggle { display:inline-flex;align-items:center;gap:7px;height:30px;padding:5px 10px;font-size:12.5px;font-weight:600;white-space:nowrap; }
+    .filter-caret { width:12px;color:var(--text-lo);font-size:12px;line-height:1; }
+    .filter-summary { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-md);font-size:12px; }
+    .filter-body { display:none;padding:14px 16px 16px; }
+    .filter-panel.open .filter-body { display:block; }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-search { flex:1;min-width:260px; }
+    .quick-row .form-control { height:36px;margin:0;font-size:13px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .grid-toolbar { display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo); }
+    .gp-wrap      { margin-top:12px;padding-top:12px;border-top:1px solid var(--border); }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;position:relative; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
 
     /* Tabulator skin */
@@ -59,7 +83,22 @@
     .tabulator-header-filter input,
     .tabulator-header-filter select { width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:#fff;color:var(--text);margin-top:4px; }
     .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
+
+    @media (max-width: 920px) {
+      .page-head { flex-direction:column; }
+      .page-head .btn { align-self:flex-start; }
+    }
+    @media (max-width: 720px) {
+      .form-row, .form-row-3 { grid-template-columns:1fr; }
+      .form-group[style*="grid-column"] { grid-column:auto !important; }
+    }
+    @media (max-width: 560px) {
+      .quick-search { min-width:100%; }
+      .quick-row select.form-control { width:100%; }
+      .filter-head { align-items:flex-start;flex-direction:column;gap:6px; }
+    }
   </style>
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
 <body>
 <div class="layout">
@@ -79,26 +118,60 @@
     </div>
 
     <div class="page-content">
+      <div id="list-view">
 
-      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <div class="ms-auto">
-          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Função</button>
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Processo Seletivo</div>
+          <div class="page-title">Cadastro de Funções</div>
+          <div class="page-subtitle">Organize funções, critérios de análise e palavras-chave para triagem de currículos.</div>
         </div>
+        <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Função</button>
       </div>
 
-      <!-- Painel de agrupamento -->
-      <div class="gp-wrap">
-        <div class="gp-chips-row" id="gp-chips-row">
-          <span class="gp-label">Agrupar por:</span>
+      <div class="quick-panel filter-panel" id="filter-panel">
+        <div class="filter-head">
+          <button class="btn btn-ghost filter-toggle" type="button" onclick="toggleFiltros()">
+            <span class="filter-caret" id="filter-caret">+</span>
+            <span id="filter-toggle-label">Mostrar filtros</span>
+          </button>
+          <span class="filter-summary" id="filter-summary">Sem filtros ou agrupamentos ativos</span>
         </div>
-        <div id="dz"></div>
+        <div class="filter-body" id="filter-body">
+          <div class="quick-row">
+            <input id="q-busca" class="form-control quick-search" placeholder="Buscar por função, área ou palavra-chave..." oninput="aplicarFiltrosRapidos()">
+            <select id="q-area" class="form-control" onchange="aplicarFiltrosRapidos()">
+              <option value="">Todas as áreas</option>
+            </select>
+            <select id="q-nivel" class="form-control" onchange="aplicarFiltrosRapidos()">
+              <option value="">Todos os níveis</option>
+              <option value="Júnior">Júnior</option>
+              <option value="Pleno">Pleno</option>
+              <option value="Sênior">Sênior</option>
+              <option value="Especialista">Especialista</option>
+              <option value="Não especificado">Não especificado</option>
+            </select>
+            <button class="btn btn-ghost" onclick="limparFiltrosRapidos()">Limpar</button>
+          </div>
+
+          <!-- Painel de agrupamento -->
+          <div class="gp-wrap">
+            <div class="gp-chips-row" id="gp-chips-row">
+              <span class="gp-label">Agrupar por:</span>
+            </div>
+            <div id="dz"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Grid -->
       <div class="card">
         <div class="card-body" style="padding:0">
-          <div style="display:flex;align-items:center;padding:10px 16px">
-            <span id="count" class="text-muted text-sm"></span>
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Funções cadastradas</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
           </div>
           <div id="tabela"></div>
           <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
@@ -107,102 +180,131 @@
           </div>
         </div>
       </div>
+      </div>
 
-    </div>
-  </div>
-</div>
+      <section id="editor-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="modal-title">Nova Função</strong>
+            <span id="editor-status">Preencha os dados principais da função.</span>
+          </div>
+          <div class="editor-actions" id="editor-actions">
+            <button class="btn btn-ghost" type="button" onclick="fecharModal()">Cancelar</button>
+            <button class="btn btn-primary" type="button" onclick="salvar()">Salvar Função</button>
+            <button class="btn btn-info" id="btn-mapear" type="button" onclick="gerarEquivalencias()">Mapear Equivalências</button>
+          </div>
+        </div>
 
-<!-- Modal Criar/Editar -->
-<div id="modal" class="modal-overlay d-none">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modal-title">Nova Função</span>
-      <button class="modal-close" onclick="fecharModal()">✕</button>
-    </div>
-    <div class="form-row-3 audit-row" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-      <div class="form-group">
-        <label class="form-label" style="color:var(--text-lo)">ID do Registro</label>
-        <input type="text" id="ps-f-audit-id" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-family:monospace;font-size:13px">
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="color:var(--text-lo)">ID da Empresa</label>
-        <input type="text" id="ps-f-audit-emp-id" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-family:monospace;font-size:13px">
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="color:var(--text-lo)">Empresa</label>
-        <input type="text" id="ps-f-audit-emp-nome" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-size:13px">
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Nome da Função *</label>
-        <input type="text" id="f-nome" class="form-control" placeholder="Ex: Desenvolvedor Full Stack">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Área / Departamento</label>
-        <input type="text" id="f-area" class="form-control" placeholder="Ex: Tecnologia">
-      </div>
-    </div>
-    <div class="form-row-3">
-      <div class="form-group">
-        <label class="form-label">Nível de Experiência</label>
-        <select id="f-nivel" class="form-control">
-          <option value="Não especificado">Não especificado</option>
-          <option value="Júnior">Júnior</option>
-          <option value="Pleno">Pleno</option>
-          <option value="Sênior">Sênior</option>
-          <option value="Especialista">Especialista</option>
-        </select>
-      </div>
-      <div class="form-group" style="grid-column:span 2">
-        <label class="form-label">Formação Necessária</label>
-        <input type="text" id="f-formacao" class="form-control" placeholder="Ex: Análise de Sistemas ou área correlata">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Descrição da Função</label>
-      <textarea id="f-descricao" class="form-control" rows="3" placeholder="Descreva as responsabilidades e atividades da função..."></textarea>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Requisitos Obrigatórios</label>
-        <textarea id="f-req-obrig" class="form-control" rows="3" placeholder="Liste os requisitos indispensáveis..."></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Requisitos Desejáveis</label>
-        <textarea id="f-req-desej" class="form-control" rows="3" placeholder="Liste os requisitos diferenciais..."></textarea>
-      </div>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Habilidades Técnicas</label>
-        <textarea id="f-habilidades" class="form-control" rows="2" placeholder="Separe por vírgula: React, Node.js, SQL..."></textarea>
-        <div class="form-hint">Separe cada habilidade por vírgula.</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Palavras-chave para Análise</label>
-        <textarea id="f-keywords" class="form-control" rows="2" placeholder="javascript, api, backend, agile..."></textarea>
-        <div class="form-hint">Usadas pelo analisador de currículos.</div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-mapear" id="btn-mapear" onclick="gerarEquivalencias()">✨ Mapear Equivalências</button>
-      <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvar()">Salvar Função</button>
-    </div>
-  </div>
-</div>
+        <div class="editor-grid">
+          <div class="editor-main">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Identificação</div>
+                <div class="form-section-subtitle">Dados usados para localizar e classificar a função na base.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row">
+                  <div class="form-group" id="group-f-nome">
+                    <label class="form-label">Nome da Função *</label>
+                    <input type="text" id="f-nome" class="form-control" placeholder="Ex: Desenvolvedor Full Stack" oninput="atualizarCabecalhoEditor()">
+                    <div class="field-error">Informe o nome da função.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Área / Departamento</label>
+                    <input type="text" id="f-area" class="form-control" placeholder="Ex: Tecnologia">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Nível de Experiência</label>
+                    <select id="f-nivel" class="form-control">
+                      <option value="Não especificado">Não especificado</option>
+                      <option value="Júnior">Júnior</option>
+                      <option value="Pleno">Pleno</option>
+                      <option value="Sênior">Sênior</option>
+                      <option value="Especialista">Especialista</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Formação Necessária</label>
+                    <input type="text" id="f-formacao" class="form-control" placeholder="Ex: Análise de Sistemas ou área correlata">
+                  </div>
+                </div>
+              </div>
+            </section>
 
-<!-- Modal Visualizar -->
-<div id="modal-view" class="modal-overlay d-none">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="view-titulo">Detalhes da Função</span>
-      <button class="modal-close" onclick="document.getElementById('modal-view').classList.add('d-none')">✕</button>
-    </div>
-    <div id="view-content"></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="document.getElementById('modal-view').classList.add('d-none')">Fechar</button>
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Perfil da Função</div>
+                <div class="form-section-subtitle">Resumo das responsabilidades e atividades esperadas.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-group">
+                  <label class="form-label">Descrição da Função</label>
+                  <textarea id="f-descricao" class="form-control" rows="5" data-rich-text placeholder="Descreva as responsabilidades e atividades da função..."></textarea>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Critérios para Análise</div>
+                <div class="form-section-subtitle">Esses campos orientam a avaliação dos currículos e o mapeamento de equivalências.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Requisitos Obrigatórios</label>
+                    <textarea id="f-req-obrig" class="form-control" rows="5" data-rich-text placeholder="Liste os requisitos indispensáveis..."></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Requisitos Desejáveis</label>
+                    <textarea id="f-req-desej" class="form-control" rows="5" data-rich-text placeholder="Liste os requisitos diferenciais..."></textarea>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Habilidades Técnicas</label>
+                    <textarea id="f-habilidades" class="form-control" rows="3" placeholder="Separe por vírgula: React, Node.js, SQL..."></textarea>
+                    <div class="form-hint">Separe cada habilidade por vírgula.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Palavras-chave para Análise</label>
+                    <textarea id="f-keywords" class="form-control" rows="3" placeholder="javascript, api, backend, agile..."></textarea>
+                    <div class="form-hint">Usadas pelo analisador de currículos.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Dados do Registro</div>
+              </div>
+              <div class="form-section-body">
+                <div class="meta-list">
+                  <div class="meta-item">
+                    <div class="meta-label">ID do Registro</div>
+                    <input type="text" id="ps-f-audit-id" class="form-control" disabled>
+                  </div>
+                  <div class="meta-item">
+                    <div class="meta-label">ID da Empresa</div>
+                    <input type="text" id="ps-f-audit-emp-id" class="form-control" disabled>
+                  </div>
+                  <div class="meta-item">
+                    <div class="meta-label">Empresa</div>
+                    <input type="text" id="ps-f-audit-emp-nome" class="form-control" disabled>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </aside>
+        </div>
+      </section>
+
     </div>
   </div>
 </div>
@@ -230,6 +332,8 @@
 <script src="/js/audit-fields.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/grid-group-panel.js"></script>
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script src="/js/rich-text.js?v=quill-2"></script>
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
 const NIVEIS = {
@@ -242,9 +346,25 @@ let funcoes    = [];
 let editandoId = null;
 let reviewItems = [];
 let table       = null;
+let formSnapshotInicial = '';
+let visualizandoId = null;
+let _quickFilterFn = null;
 
 function escH(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function campoRico(id) {
+  return window.getRichValue ? getRichValue(id).trim() : document.getElementById(id).value.trim();
+}
+
+function textoRico(value) {
+  return window.richPlainText ? richPlainText(value) : String(value || '').replace(/<[^>]*>/g, '').trim();
+}
+
+function renderRico(value, compact = false) {
+  const html = window.richRender ? richRender(value) : escH(value || '').replace(/\n/g, '<br>');
+  return html ? `<div class="rich-content${compact ? ' rich-content-compact' : ''}">${html}</div>` : '';
 }
 
 function parseTags(str) {
@@ -258,11 +378,108 @@ function tagsHtml(arr) {
        + (arr.length > 5 ? `<span class="tag">+${arr.length - 5}</span>` : '');
 }
 
-const gp = createGroupPanel({
+function popularFiltroAreas() {
+  const el = document.getElementById('q-area');
+  const atual = el.value;
+  const areas = [...new Set(funcoes.map(f => (f.area || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  el.innerHTML = '<option value="">Todas as áreas</option>'
+    + areas.map(area => `<option value="${escH(area)}">${escH(area)}</option>`).join('');
+  if (areas.includes(atual)) el.value = atual;
+}
+
+function aplicarFiltrosRapidos() {
+  if (!table) {
+    atualizarResumoFiltros();
+    return;
+  }
+  const busca = document.getElementById('q-busca').value.trim().toLowerCase();
+  const area = document.getElementById('q-area').value;
+  const nivel = document.getElementById('q-nivel').value;
+
+  if (_quickFilterFn) {
+    table.removeFilter(_quickFilterFn);
+    _quickFilterFn = null;
+  }
+
+  atualizarResumoFiltros();
+
+  if (!busca && !area && !nivel) return;
+
+  _quickFilterFn = rowData => {
+    if (area && (rowData.area || '') !== area) return false;
+    if (nivel && (rowData.nivel_experiencia || 'Não especificado') !== nivel) return false;
+    if (busca) {
+      const termos = [
+        rowData.nome || '',
+        rowData.area || '',
+        ...(rowData.palavras_chave || []),
+      ].join(' ').toLowerCase();
+      if (!termos.includes(busca)) return false;
+    }
+    return true;
+  };
+  table.addFilter(_quickFilterFn);
+}
+
+function limparFiltrosRapidos() {
+  document.getElementById('q-busca').value = '';
+  document.getElementById('q-area').value = '';
+  document.getElementById('q-nivel').value = '';
+  aplicarFiltrosRapidos();
+  atualizarResumoFiltros();
+}
+
+function labelFuncoes(qtd) {
+  return qtd === 1 ? '1 função' : `${qtd} funções`;
+}
+
+function labelsAgrupamento() {
+  const campos = gp?.getActiveFields?.() || [];
+  if (!campos.length) return [];
+  return campos.map(campo => {
+    const col = table?.getColumns?.().find(c => c.getField?.() === campo);
+    return col?.getDefinition?.().title || campo;
+  });
+}
+
+function atualizarResumoFiltros() {
+  const el = document.getElementById('filter-summary');
+  if (!el) return;
+  const busca = document.getElementById('q-busca')?.value.trim() || '';
+  const area = document.getElementById('q-area')?.value || '';
+  const nivel = document.getElementById('q-nivel')?.value || '';
+  const partes = [];
+  if (busca) partes.push(`Busca: ${busca}`);
+  if (area) partes.push(`Área: ${area}`);
+  if (nivel) partes.push(`Nível: ${nivel}`);
+  const grupos = labelsAgrupamento();
+  if (grupos.length) partes.push(`Agrupando por: ${grupos.join(' > ')}`);
+  el.textContent = partes.length ? partes.join(' - ') : 'Sem filtros ou agrupamentos ativos';
+}
+
+function setFiltrosAbertos(aberto) {
+  const panel = document.getElementById('filter-panel');
+  const caret = document.getElementById('filter-caret');
+  const label = document.getElementById('filter-toggle-label');
+  if (panel) panel.classList.toggle('open', aberto);
+  if (caret) caret.textContent = aberto ? '-' : '+';
+  if (label) label.textContent = aberto ? 'Ocultar filtros' : 'Mostrar filtros';
+  setTimeout(() => table?.redraw(true), 0);
+}
+
+function toggleFiltros() {
+  const panel = document.getElementById('filter-panel');
+  setFiltrosAbertos(!panel?.classList.contains('open'));
+}
+
+let gp;
+gp = createGroupPanel({
   chipsRowId: 'gp-chips-row',
   dropZoneId: 'dz',
   storageKey: 'ps_funcoes_group_fields',
   getTable  : () => table,
+  onChange  : () => atualizarResumoFiltros(),
 });
 
 // ── Tabulator ──────────────────────────────────────────────────
@@ -322,13 +539,17 @@ function initTabulator(data) {
       },
     ],
     rowClick: (_e, row) => visualizar(row.getData().id),
-    dataFiltered: fd => {
-      const t = fd.length;
+    dataFiltered: (_filters, rows) => {
+      const t = rows?.length ?? funcoes.length;
       document.getElementById('count').textContent =
         t === funcoes.length
-          ? `${t} função${t !== 1 ? 'ões' : ''}`
+          ? labelFuncoes(t)
           : `${t} de ${funcoes.length} funções`;
     },
+  });
+  table.on('tableBuilt', () => {
+    gp.refresh();
+    atualizarResumoFiltros();
   });
 }
 
@@ -336,30 +557,105 @@ function initTabulator(data) {
 async function carregar() {
   await window._iahubAuthReady;
   funcoes = await fetch('/api/funcoes').then(r => r.json());
+  popularFiltroAreas();
 
   const empty = document.getElementById('empty');
   if (!funcoes.length) {
     empty.classList.remove('d-none');
+    document.getElementById('count').textContent = '0 funções';
+    atualizarResumoFiltros();
     return;
   }
   empty.classList.add('d-none');
 
   document.getElementById('count').textContent =
-    `${funcoes.length} função${funcoes.length !== 1 ? 'ões' : ''}`;
+    labelFuncoes(funcoes.length);
 
   if (!table) {
     initTabulator(funcoes);
-    setTimeout(() => gp.refresh(), 0);
+    setTimeout(() => {
+      gp.refresh();
+      atualizarResumoFiltros();
+    }, 0);
   } else {
     table.replaceData(funcoes);
   }
+  aplicarFiltrosRapidos();
+  atualizarResumoFiltros();
 }
 
-// ── Modal criar/editar ─────────────────────────────────────────
+// ── Editor criar/editar ────────────────────────────────────────
+function snapshotFormulario() {
+  return JSON.stringify({
+    nome:        document.getElementById('f-nome').value,
+    area:        document.getElementById('f-area').value,
+    nivel:       document.getElementById('f-nivel').value,
+    formacao:    document.getElementById('f-formacao').value,
+    descricao:   campoRico('f-descricao'),
+    reqObrig:    campoRico('f-req-obrig'),
+    reqDesej:    campoRico('f-req-desej'),
+    habilidades: document.getElementById('f-habilidades').value,
+    keywords:    document.getElementById('f-keywords').value,
+  });
+}
+
+function alternarEditor(aberto) {
+  document.getElementById('list-view').classList.toggle('d-none', aberto);
+  document.getElementById('editor-view').classList.toggle('d-none', !aberto);
+  const page = document.querySelector('.page-content');
+  if (page) page.scrollTop = 0;
+}
+
+function renderEditorActions(modoVisualizacao = false) {
+  const actions = document.getElementById('editor-actions');
+  if (modoVisualizacao) {
+    actions.innerHTML = `
+      <button class="btn btn-ghost" type="button" onclick="fecharVisualizacao()">Fechar</button>
+      <button class="btn btn-primary" type="button" onclick="editar(${visualizandoId})">Editar Função</button>`;
+    return;
+  }
+  actions.innerHTML = `
+    <button class="btn btn-ghost" type="button" onclick="fecharModal()">Cancelar</button>
+    <button class="btn btn-primary" type="button" onclick="salvar()">Salvar Função</button>
+    <button class="btn btn-info" id="btn-mapear" type="button" onclick="gerarEquivalencias()">Mapear Equivalências</button>`;
+}
+
+function setEditorReadOnly(readonly) {
+  [
+    'f-nome',
+    'f-area',
+    'f-nivel',
+    'f-formacao',
+    'f-descricao',
+    'f-req-obrig',
+    'f-req-desej',
+    'f-habilidades',
+    'f-keywords',
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = readonly;
+  });
+  document.querySelectorAll('#editor-view .ql-editor').forEach(el => {
+    el.setAttribute('contenteditable', readonly ? 'false' : 'true');
+  });
+}
+
+function atualizarCabecalhoEditor() {
+  const codigo = editandoId ? `#${editandoId}` : 'Novo registro';
+  const nome = document.getElementById('f-nome').value.trim() || 'Nova Função';
+  document.getElementById('modal-title').textContent = `${codigo} - ${nome}`;
+}
+
 function abrirModal(f = null) {
   editandoId  = f ? f.id : null;
+  visualizandoId = null;
   reviewItems = [];
-  document.getElementById('modal-title').textContent = f ? 'Editar Função' : 'Nova Função';
+  renderEditorActions(false);
+  setEditorReadOnly(false);
+  document.getElementById('editor-status').textContent = f
+    ? 'Editando cadastro de função.'
+    : 'Preencha os dados principais da função.';
+  document.getElementById('group-f-nome').classList.remove('invalid');
   const _emp = window._iahubEmpresa || { id: '—', nome: '—' };
   document.getElementById('ps-f-audit-id').value       = f?.id ?? '—';
   document.getElementById('ps-f-audit-emp-id').value   = _emp.id;
@@ -368,20 +664,30 @@ function abrirModal(f = null) {
   document.getElementById('f-area').value        = f?.area || '';
   document.getElementById('f-nivel').value       = f?.nivel_experiencia || 'Não especificado';
   document.getElementById('f-formacao').value    = f?.formacao_necessaria || '';
-  document.getElementById('f-descricao').value   = f?.descricao || '';
-  document.getElementById('f-req-obrig').value   = f?.requisitos_obrigatorios || '';
-  document.getElementById('f-req-desej').value   = f?.requisitos_desejaveis || '';
+  setRichValue('f-descricao', f?.descricao || '');
+  setRichValue('f-req-obrig', f?.requisitos_obrigatorios || '');
+  setRichValue('f-req-desej', f?.requisitos_desejaveis || '');
   document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas)
     ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
   document.getElementById('f-keywords').value    = Array.isArray(f?.palavras_chave)
     ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
   resetEquivUI();
-  document.getElementById('modal').classList.remove('d-none');
+  atualizarCabecalhoEditor();
+  formSnapshotInicial = snapshotFormulario();
+  alternarEditor(true);
+  setTimeout(() => document.getElementById('f-nome').focus(), 0);
 }
 
-function fecharModal() {
-  document.getElementById('modal').classList.add('d-none');
+function fecharModal(confirmar = true) {
+  if (confirmar && formSnapshotInicial && snapshotFormulario() !== formSnapshotInicial) {
+    if (!confirm('Descartar as alterações desta função?')) return;
+  }
+  alternarEditor(false);
+  document.getElementById('group-f-nome').classList.remove('invalid');
+  visualizandoId = null;
+  setEditorReadOnly(false);
   resetEquivUI();
+  formSnapshotInicial = '';
 }
 
 function resetEquivUI() {
@@ -393,7 +699,7 @@ function resetEquivUI() {
 // ── Equivalências com IA ───────────────────────────────────────
 function coletarKeywords() {
   const habs = parseTags(document.getElementById('f-habilidades').value);
-  const reqs = (document.getElementById('f-req-obrig').value || '')
+  const reqs = textoRico(campoRico('f-req-obrig'))
     .split(/[\n,;]+/).map(s => s.replace(/^[-•]\s*/, '').trim()).filter(Boolean);
   return [...new Set([...habs, ...reqs])];
 }
@@ -520,23 +826,40 @@ async function salvarTodasEquivalencias() {
 // ── CRUD ───────────────────────────────────────────────────────
 async function salvar() {
   const nome = document.getElementById('f-nome').value.trim();
-  if (!nome) { alert('O nome da função é obrigatório.'); return; }
+  const nomeGroup = document.getElementById('group-f-nome');
+  if (!nome) {
+    nomeGroup.classList.add('invalid');
+    document.getElementById('f-nome').focus();
+    document.getElementById('editor-status').textContent = 'Revise os campos obrigatórios antes de salvar.';
+    return;
+  }
+  nomeGroup.classList.remove('invalid');
   const body = {
     nome,
     area:                    document.getElementById('f-area').value.trim(),
     nivel_experiencia:       document.getElementById('f-nivel').value,
     formacao_necessaria:     document.getElementById('f-formacao').value.trim(),
-    descricao:               document.getElementById('f-descricao').value.trim(),
-    requisitos_obrigatorios: document.getElementById('f-req-obrig').value.trim(),
-    requisitos_desejaveis:   document.getElementById('f-req-desej').value.trim(),
+    descricao:               campoRico('f-descricao'),
+    requisitos_obrigatorios: campoRico('f-req-obrig'),
+    requisitos_desejaveis:   campoRico('f-req-desej'),
     habilidades_tecnicas:    parseTags(document.getElementById('f-habilidades').value),
     palavras_chave:          parseTags(document.getElementById('f-keywords').value),
   };
   const url    = editandoId ? `/api/funcoes/${editandoId}` : '/api/funcoes';
   const method = editandoId ? 'PUT' : 'POST';
-  await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  fecharModal();
-  carregar();
+  document.getElementById('editor-status').textContent = 'Salvando função...';
+  try {
+    const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Não foi possível salvar a função.');
+    }
+    fecharModal(false);
+    await carregar();
+  } catch (err) {
+    document.getElementById('editor-status').textContent = 'Não foi possível salvar. Revise e tente novamente.';
+    alert('Erro ao salvar função: ' + err.message);
+  }
 }
 
 async function editar(id) {
@@ -552,27 +875,41 @@ async function excluir(id, nome) {
 
 async function visualizar(id) {
   const f = await fetch(`/api/funcoes/${id}`).then(r => r.json());
-  document.getElementById('view-titulo').textContent = f.nome;
-  const tags  = arr => Array.isArray(arr) && arr.length
-    ? `<div class="tag-list">${arr.map(t => `<span class="tag">${escH(t)}</span>`).join('')}</div>`
-    : '<span style="color:var(--text-lo)">—</span>';
-  const campo = (label, val) => val
-    ? `<div class="view-field"><div class="view-label">${label}</div><div class="view-value">${val}</div></div>` : '';
-  document.getElementById('view-content').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px">
-      ${campo('Área', f.area)}
-      ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${escH(f.nivel_experiencia||'—')}</span>`)}
-      ${campo('Formação', escH(f.formacao_necessaria))}
-    </div>
-    ${campo('Descrição da Função', escH(f.descricao||'').replace(/\n/g,'<br>'))}
-    ${campo('Requisitos Obrigatórios', escH(f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
-    ${campo('Requisitos Desejáveis', escH(f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
-    <div class="view-field"><div class="view-label">Habilidades Técnicas</div>${tags(f.habilidades_tecnicas)}</div>
-    <div class="view-field"><div class="view-label">Palavras-chave</div>${tags(f.palavras_chave)}</div>
-    <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>`;
-  document.getElementById('modal-view').classList.remove('d-none');
+  editandoId = null;
+  visualizandoId = f.id;
+  reviewItems = [];
+  renderEditorActions(true);
+  document.getElementById('editor-status').textContent = 'Visualizando cadastro de função.';
+  document.getElementById('group-f-nome').classList.remove('invalid');
+  const _emp = window._iahubEmpresa || { id: '—', nome: '—' };
+  document.getElementById('ps-f-audit-id').value       = f?.id ?? '—';
+  document.getElementById('ps-f-audit-emp-id').value   = _emp.id;
+  document.getElementById('ps-f-audit-emp-nome').value = _emp.nome;
+  document.getElementById('f-nome').value        = f?.nome || '';
+  document.getElementById('f-area').value        = f?.area || '';
+  document.getElementById('f-nivel').value       = f?.nivel_experiencia || 'Não especificado';
+  document.getElementById('f-formacao').value    = f?.formacao_necessaria || '';
+  setRichValue('f-descricao', f?.descricao || '');
+  setRichValue('f-req-obrig', f?.requisitos_obrigatorios || '');
+  setRichValue('f-req-desej', f?.requisitos_desejaveis || '');
+  document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas)
+    ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
+  document.getElementById('f-keywords').value    = Array.isArray(f?.palavras_chave)
+    ? f.palavras_chave.join(', ') : (f?.palavras_chave || '');
+  document.getElementById('modal-title').textContent = `#${f.id} - ${f.nome || 'Função sem nome'}`;
+  formSnapshotInicial = '';
+  setEditorReadOnly(true);
+  alternarEditor(true);
 }
 
+function fecharVisualizacao() {
+  alternarEditor(false);
+  visualizandoId = null;
+  setEditorReadOnly(false);
+  renderEditorActions(false);
+}
+
+initRichEditors();
 carregar();
 </script>
 </body>

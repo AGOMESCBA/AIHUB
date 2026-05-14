@@ -6,13 +6,21 @@
   <title>Vagas por Função — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal-overlay { position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:1000;display:flex;align-items:center;justify-content:center; }
     .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(520px,95vw);max-height:90vh;overflow-y:auto;padding:28px; }
     .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
     .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
     .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
     .modal-close:hover { color:var(--text-hi); }
     .modal-footer  { display:flex;justify-content:flex-end;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .meta-list { display:flex;flex-direction:column;gap:12px; }
+    .meta-item { display:flex;flex-direction:column;gap:2px; }
+    .meta-label { color:var(--text-lo);font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:600; }
+    .field-error { display:none;color:var(--error);font-size:11.5px;margin-top:5px; }
+    .form-group.invalid .form-control { border-color:var(--error);box-shadow:0 0 0 3px rgba(220,38,38,.10); }
+    .form-group.invalid .field-error { display:block; }
+    textarea.form-control { resize:vertical;min-height:90px;font-family:inherit;box-sizing:border-box; }
     .vagas-grid    { display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px; }
     .vaga-card     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:border-color .2s; }
     .vaga-card:hover { border-color:var(--accent); }
@@ -48,7 +56,13 @@
     .se-c-pen { background:#f1f5f9;color:#64748b; }
     .sel-bar  { display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;font-size:13px; }
     .sel-bar.active { display:flex; }
+    #v-obs + .rich-text .ql-editor,
+    #v-obs + .rich-text .rich-text-editor { min-height: 260px; }
+    @media (max-width: 720px) {
+      .form-row { grid-template-columns:1fr; }
+    }
   </style>
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
 <body>
 <div class="layout">
@@ -70,76 +84,123 @@
     </div>
 
     <div class="page-content">
-      <div class="stats-row" id="stats-row"></div>
+      <div id="list-view">
+        <div class="stats-row" id="stats-row"></div>
 
-      <div class="d-flex gap-3 mb-3" style="align-items:center">
-        <span style="font-size:13.5px;color:var(--text-md)">Vagas cadastradas</span>
-        <div class="ms-auto">
-          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Vaga</button>
+        <div class="d-flex gap-3 mb-3" style="align-items:center">
+          <span style="font-size:13.5px;color:var(--text-md)">Vagas cadastradas</span>
+          <div class="ms-auto">
+            <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Vaga</button>
+          </div>
+        </div>
+
+        <div class="sel-bar" id="sel-bar">
+          <span id="sel-count" style="font-weight:600"></span>
+          <span style="color:var(--text-lo);font-size:12px">vaga(s) selecionada(s)</span>
+          <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;margin-left:auto" onclick="integrarSelecionados()">🔗 Integrar ao SE</button>
+          <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="limparSelecao()">✕ Limpar</button>
+        </div>
+
+        <div id="vagas-grid" class="vagas-grid"></div>
+        <div id="empty" class="empty-state d-none">
+          <div>💼</div>
+          <strong style="color:var(--text-md)">Nenhuma vaga cadastrada</strong>
+          <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Vaga</strong> para começar.</p>
         </div>
       </div>
 
-      <div class="sel-bar" id="sel-bar">
-        <span id="sel-count" style="font-weight:600"></span>
-        <span style="color:var(--text-lo);font-size:12px">vaga(s) selecionada(s)</span>
-        <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;margin-left:auto" onclick="integrarSelecionados()">🔗 Integrar ao SE</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="limparSelecao()">✕ Limpar</button>
-      </div>
+      <section id="editor-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="modal-title">Nova Vaga</strong>
+            <span id="editor-status">Preencha o contexto da vaga.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" type="button" onclick="fecharModal()">Cancelar</button>
+            <button class="btn btn-primary" type="button" onclick="salvar()">Salvar Vaga</button>
+            <button class="btn btn-info d-none" id="btn-integrar-editor" type="button" onclick="integrarVagaEditor()">Integrar ao SE</button>
+          </div>
+        </div>
 
-      <div id="vagas-grid" class="vagas-grid"></div>
-      <div id="empty" class="empty-state d-none">
-        <div>💼</div>
-        <strong style="color:var(--text-md)">Nenhuma vaga cadastrada</strong>
-        <p style="font-size:13px;margin-top:6px">Clique em <strong>+ Nova Vaga</strong> para começar.</p>
-      </div>
-    </div>
-  </div>
-</div>
+        <div class="editor-grid">
+          <div class="editor-main">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Contexto da Vaga</div>
+                <div class="form-section-subtitle">Defina qual função será aberta e quantas posições existem.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-group" id="group-v-funcao">
+                  <label class="form-label">Função *</label>
+                  <select id="v-funcao" class="form-control" onchange="atualizarCabecalhoEditor(); atualizarResumoFuncao();"></select>
+                  <div class="field-error">Selecione uma função para a vaga.</div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group" id="group-v-qtd">
+                    <label class="form-label">Quantidade de Vagas *</label>
+                    <input type="number" id="v-qtd" class="form-control" min="1" value="1" oninput="atualizarCabecalhoEditor()">
+                    <div class="field-error">Informe uma quantidade maior que zero.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select id="v-status" class="form-control" onchange="atualizarResumoFuncao()">
+                      <option value="aberta">Aberta</option>
+                      <option value="pausada">Pausada</option>
+                      <option value="encerrada">Encerrada</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-<!-- Modal -->
-<div id="modal" class="modal-overlay d-none">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modal-title">Nova Vaga</span>
-      <button class="modal-close" onclick="fecharModal()">✕</button>
-    </div>
-    <div class="form-row-3 audit-row" style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-      <div class="form-group">
-        <label class="form-label" style="color:var(--text-lo)">ID do Registro</label>
-        <input type="text" id="ps-v-audit-id" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-family:monospace;font-size:13px">
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="color:var(--text-lo)">ID da Empresa</label>
-        <input type="text" id="ps-v-audit-emp-id" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-family:monospace;font-size:13px">
-      </div>
-      <div class="form-group">
-        <label class="form-label" style="color:var(--text-lo)">Empresa</label>
-        <input type="text" id="ps-v-audit-emp-nome" class="form-control" disabled style="color:var(--text-lo);background:var(--bg-hover);font-size:13px">
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Função *</label>
-      <select id="v-funcao" class="form-control"></select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Quantidade de Vagas *</label>
-      <input type="number" id="v-qtd" class="form-control" min="1" value="1">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Status</label>
-      <select id="v-status" class="form-control">
-        <option value="aberta">Aberta</option>
-        <option value="pausada">Pausada</option>
-        <option value="encerrada">Encerrada</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Observações</label>
-      <textarea id="v-obs" class="form-control" rows="3" style="resize:vertical;min-height:70px;font-family:inherit;box-sizing:border-box" placeholder="Informações adicionais sobre esta vaga..."></textarea>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvar()">Salvar Vaga</button>
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Observações da Vaga</div>
+                <div class="form-section-subtitle">Use este campo para registrar orientações internas ou detalhes operacionais.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-group">
+                  <label class="form-label">Observações</label>
+                  <textarea id="v-obs" class="form-control" rows="5" data-rich-text placeholder="Informações adicionais sobre esta vaga..."></textarea>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Dados do Registro</div>
+              </div>
+              <div class="form-section-body">
+                <div class="meta-list">
+                  <div class="meta-item">
+                    <div class="meta-label">ID do Registro</div>
+                    <input type="text" id="ps-v-audit-id" class="form-control" disabled>
+                  </div>
+                  <div class="meta-item">
+                    <div class="meta-label">ID da Empresa</div>
+                    <input type="text" id="ps-v-audit-emp-id" class="form-control" disabled>
+                  </div>
+                  <div class="meta-item">
+                    <div class="meta-label">Empresa</div>
+                    <input type="text" id="ps-v-audit-emp-nome" class="form-control" disabled>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo da Função</div>
+              </div>
+              <div class="form-section-body" id="funcao-resumo">
+                <span style="color:var(--text-lo);font-size:13px">Selecione uma função para ver o resumo.</span>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
     </div>
   </div>
 </div>
@@ -147,6 +208,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/audit-fields.js"></script>
 <script src="/js/sidebar.js"></script>
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script src="/js/rich-text.js?v=quill-2"></script>
 <script>
   const NIVEIS = {
     'Júnior': 'nivel-junior', 'Pleno': 'nivel-pleno',
@@ -158,6 +221,16 @@
 
   let vagas = [], funcoes = [], analises = [], candidaturas = [], editandoId = null;
   let _seStatusMap = {}, _selecionados = new Set();
+  let formSnapshotInicial = '';
+
+  function campoRico(id) {
+    return window.getRichValue ? getRichValue(id).trim() : document.getElementById(id).value.trim();
+  }
+
+  function renderRico(value, compact = false) {
+    const html = window.richRender ? richRender(value) : String(value || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    return html ? `<div class="rich-content${compact ? ' rich-content-compact vaga-descricao-scroll' : ''}">${html}</div>` : '';
+  }
 
   function seBadgeCard(vagaId) {
     const st = _seStatusMap[vagaId];
@@ -271,7 +344,7 @@
           </div>
           ${vagaCand > 0 ? `<span class="badge-cand">📋 ${vagaCand} candidatura${vagaCand !== 1 ? 's' : ''}</span>` : ''}
         </div>
-        ${v.observacoes ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-lo);line-height:1.6">${v.observacoes}</div>` : ''}
+        ${v.observacoes ? `<div style="margin-top:10px;font-size:12.5px;color:var(--text-lo);line-height:1.6">${renderRico(v.observacoes, true)}</div>` : ''}
         <div class="vaga-actions">
           ${v.status === 'encerrada'
             ? `<span class="btn btn-ghost" style="font-size:12px;flex:1;text-align:center;opacity:.45;cursor:not-allowed">🔒 Encerrada</span>`
@@ -299,9 +372,64 @@
     }).join('');
   }
 
+  function getFuncaoSelecionada() {
+    const id = Number(document.getElementById('v-funcao').value);
+    return funcoes.find(f => Number(f.id) === id) || null;
+  }
+
+  function snapshotFormulario() {
+    return JSON.stringify({
+      funcao: document.getElementById('v-funcao').value,
+      qtd:    document.getElementById('v-qtd').value,
+      status: document.getElementById('v-status').value,
+      obs:    campoRico('v-obs'),
+    });
+  }
+
+  function alternarEditor(aberto) {
+    document.getElementById('list-view').classList.toggle('d-none', aberto);
+    document.getElementById('editor-view').classList.toggle('d-none', !aberto);
+    const page = document.querySelector('.page-content');
+    if (page) page.scrollTop = 0;
+  }
+
+  function limparValidacao() {
+    document.getElementById('group-v-funcao').classList.remove('invalid');
+    document.getElementById('group-v-qtd').classList.remove('invalid');
+  }
+
+  function atualizarCabecalhoEditor() {
+    const codigo = editandoId ? `#${editandoId}` : 'Novo registro';
+    const funcao = getFuncaoSelecionada();
+    const nome = funcao?.nome || 'Nova Vaga';
+    const quantidade = Number(document.getElementById('v-qtd').value) || 0;
+    const detalhe = quantidade > 0 ? `${nome} (${quantidade} vaga${quantidade !== 1 ? 's' : ''})` : nome;
+    document.getElementById('modal-title').textContent = `${codigo} - ${detalhe}`;
+  }
+
+  function atualizarResumoFuncao() {
+    const f = getFuncaoSelecionada();
+    const status = document.getElementById('v-status').value;
+    const resumo = document.getElementById('funcao-resumo');
+    if (!f) {
+      resumo.innerHTML = '<span style="color:var(--text-lo);font-size:13px">Selecione uma função para ver o resumo.</span>';
+      return;
+    }
+    const nivelCls = NIVEIS[f.nivel_experiencia] || 'nivel-nao-especificado';
+    resumo.innerHTML = `
+      <div class="meta-list">
+        <div class="meta-item"><div class="meta-label">Função</div><div style="font-size:13px;color:var(--text-hi);font-weight:600">${f.nome || '—'}</div></div>
+        <div class="meta-item"><div class="meta-label">Área</div><div style="font-size:13px;color:var(--text-md)">${f.area || '—'}</div></div>
+        <div class="meta-item"><div class="meta-label">Nível</div><span class="nivel-badge ${nivelCls}" style="width:max-content">${f.nivel_experiencia || 'Não especificado'}</span></div>
+        <div class="meta-item"><div class="meta-label">Status da Vaga</div><div class="vaga-status" style="margin-top:0"><span class="dot ${STATUS_DOT[status] || 'dot-aberta'}"></span><span style="color:var(--text-md)">${STATUS_LABEL[status] || status}</span></div></div>
+      </div>`;
+  }
+
   async function abrirModal(v = null) {
     editandoId = v ? v.id : null;
-    document.getElementById('modal-title').textContent = v ? 'Editar Vaga' : 'Nova Vaga';
+    limparValidacao();
+    document.getElementById('editor-status').textContent = v ? 'Editando cadastro de vaga.' : 'Preencha o contexto da vaga.';
+    document.getElementById('btn-integrar-editor').classList.toggle('d-none', !editandoId);
     const _emp = window._iahubEmpresa || { id: '—', nome: '—' };
     document.getElementById('ps-v-audit-id').value       = v?.id ?? '—';
     document.getElementById('ps-v-audit-emp-id').value   = _emp.id;
@@ -314,32 +442,72 @@
       sel.value = v.funcao_id;
       document.getElementById('v-qtd').value    = v.quantidade || 1;
       document.getElementById('v-status').value = v.status || 'aberta';
-      document.getElementById('v-obs').value    = v.observacoes || '';
+      setRichValue('v-obs', v.observacoes || '');
     } else {
       document.getElementById('v-qtd').value    = 1;
       document.getElementById('v-status').value = 'aberta';
-      document.getElementById('v-obs').value    = '';
+      setRichValue('v-obs', '');
     }
-    document.getElementById('modal').classList.remove('d-none');
+    atualizarCabecalhoEditor();
+    atualizarResumoFuncao();
+    resetFormSnapshot();
+    alternarEditor(true);
+    setTimeout(() => document.getElementById('v-funcao').focus(), 0);
   }
 
-  function fecharModal() { document.getElementById('modal').classList.add('d-none'); }
+  function resetFormSnapshot() {
+    formSnapshotInicial = snapshotFormulario();
+  }
+
+  function fecharModal(confirmar = true) {
+    if (confirmar && formSnapshotInicial && snapshotFormulario() !== formSnapshotInicial) {
+      if (!confirm('Descartar as alterações desta vaga?')) return;
+    }
+    alternarEditor(false);
+    limparValidacao();
+    formSnapshotInicial = '';
+  }
+
+  async function integrarVagaEditor() {
+    if (!editandoId) return;
+    await integrarVaga(editandoId);
+  }
 
   async function salvar() {
     const funcao_id  = Number(document.getElementById('v-funcao').value);
     const quantidade = Number(document.getElementById('v-qtd').value);
-    if (!funcao_id)   { alert('Selecione uma função.'); return; }
-    if (quantidade < 1) { alert('A quantidade deve ser pelo menos 1.'); return; }
+    const grupoFuncao = document.getElementById('group-v-funcao');
+    const grupoQtd = document.getElementById('group-v-qtd');
+    let invalido = false;
+    if (!funcao_id) { grupoFuncao.classList.add('invalid'); invalido = true; }
+    else grupoFuncao.classList.remove('invalid');
+    if (quantidade < 1) { grupoQtd.classList.add('invalid'); invalido = true; }
+    else grupoQtd.classList.remove('invalid');
+    if (invalido) {
+      document.getElementById('editor-status').textContent = 'Revise os campos obrigatórios antes de salvar.';
+      (funcao_id ? document.getElementById('v-qtd') : document.getElementById('v-funcao')).focus();
+      return;
+    }
     const body = {
       funcao_id, quantidade,
       status:      document.getElementById('v-status').value,
-      observacoes: document.getElementById('v-obs').value.trim(),
+      observacoes: campoRico('v-obs'),
     };
     const url    = editandoId ? `/api/vagas/${editandoId}` : '/api/vagas';
     const method = editandoId ? 'PUT' : 'POST';
-    await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    fecharModal();
-    carregar();
+    document.getElementById('editor-status').textContent = 'Salvando vaga...';
+    try {
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Não foi possível salvar a vaga.');
+      }
+      fecharModal(false);
+      await carregar();
+    } catch (err) {
+      document.getElementById('editor-status').textContent = 'Não foi possível salvar. Revise e tente novamente.';
+      alert('Erro ao salvar vaga: ' + err.message);
+    }
   }
 
   async function editar(id) {
@@ -350,7 +518,8 @@
   async function excluir(id) {
     if (!confirm('Excluir esta vaga? Esta ação não pode ser desfeita.')) return;
     await fetch(`/api/vagas/${id}`, { method: 'DELETE' });
-    carregar();
+initRichEditors();
+carregar();
   }
 
   (async () => {

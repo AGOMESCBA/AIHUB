@@ -48,7 +48,31 @@
       "PowerShell(winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements)",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git log --oneline -5; git status)",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git add -A; git status --short | Measure-Object -Line)",
-      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git rm --cached data/usuarios.json data/seguranca.json data/empresa_1.json data/empresa_2.json data/empresas.json data/auditoria.log emailcurriculo.log whatscurriculo_1.log whatscurriculo_2.log .claude/settings.local.json 2>&1; git add -A; git status --short)"
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git rm --cached data/usuarios.json data/seguranca.json data/empresa_1.json data/empresa_2.json data/empresas.json data/auditoria.log emailcurriculo.log whatscurriculo_1.log whatscurriculo_2.log .claude/settings.local.json 2>&1; git add -A; git status --short)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git push origin main)",
+      "PowerShell(Start-Sleep -Seconds 20; Get-Content \"C:\\\\Users\\\\aless\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Apps-iahub\\\\fb90ef83-b3f4-484c-bbaa-3d0cb969b056\\\\tasks\\\\bcaow968k.output\" -ErrorAction SilentlyContinue; $env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git log --oneline -3)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git push origin main 2>&1)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; git config --global credential.helper)",
+      "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', '$env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git push origin main' -Verb RunAs)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Git\\\\cmd;\" + $env:PATH; Set-Location \"c:\\\\Apps\\\\iahub\"; git log --oneline -3; git status)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Apps\\\\iahub\" -Recurse -Filter \"*dashboard*\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(grep -E \"\\\\.\\(html|js\\)$\")",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Apps\\\\iahub\" -Force | Format-Table Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"Dir\"}else{\"File\"}}} -AutoSize)",
+      "Bash(dir \"c:\\\\Apps\\\\iahub\\\\data\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"c:\\\\Apps\\\\iahub\\\\modules\\\\permissoes\")",
+      "Bash(node -e \"require\\('./index.js'\\)\")",
+      "Bash(node --check modules/configuracoes/database.js)",
+      "Bash(node --check modules/configuracoes/routes.js)",
+      "Bash(node --check modules/ia/index.js)",
+      "Bash(node --check modules/analisador-curriculos/routes.js)",
+      "Bash(node --check modules/whatsapp-curriculo/service.js)",
+      "Bash(node -e \"require\\('./modules/whatsapp-curriculo/service-meta'\\)\")",
+      "Bash(node -e \"require\\('./modules/whatsapp-curriculo/service-manager'\\)\")",
+      "Bash(node -e \"require\\('./modules/whatsapp-curriculo/routes'\\)\")",
+      "WebFetch(domain:developer.softexpert.com)",
+      "WebSearch",
+      "WebFetch(domain:documentation.softexpert.com)"
     ]
   }
 }

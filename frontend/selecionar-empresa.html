@@ -128,7 +128,7 @@
         body: JSON.stringify({ empresa_id }),
       });
       if (res.ok) {
-        const dest = new URLSearchParams(location.search).get('next') || '/dashboard.html';
+        const dest = new URLSearchParams(location.search).get('next') || '/iahub.html';
         location.href = dest;
       }
     }

@@ -66,7 +66,10 @@ module.exports = function registerAuthRoutes(app) {
     const ip      = obterIp(req);
     const usuario = req.session?.user || 'desconhecido';
     registrarAuditoria({ usuario, acao: 'logout', ip });
-    req.session.destroy(() => res.json({ ok: true }));
+    req.session.destroy(() => {
+      res.clearCookie('connect.sid', { path: '/', httpOnly: true, sameSite: 'strict' });
+      res.json({ ok: true });
+    });
   });
 
   // ── Sessão atual ───────────────────────────────────────────────────────────

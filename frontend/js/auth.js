@@ -7,19 +7,28 @@ window._iahubAuthReady = new Promise(r => { _authReadyResolve = r; });
 let _rotinasResolve;
 window._iahubRotinasReady = new Promise(r => { _rotinasResolve = r; });
 
-// Páginas que não exigem empresa selecionada
+const _IAHUB_BROWSER_SESSION_KEY = 'iahub_browser_session_active';
+
+// Páginas que não exigem empresa selecionada nem verificação de rotina
 const _PAGINAS_LIVRES = [
   '/login.html', '/selecionar-empresa.html',
   '/empresas.html', '/usuarios.html', '/seguranca.html',
-  '/administracao.html',
 ];
+
+// Páginas estruturais: carregam empresa+rotinas normalmente, mas não têm rotina própria para verificar
+const _PAGINAS_ESTRUTURAIS = ['/iahub.html', '/shell.html', '/administracao.html'];
+function _paginaEstrutural() {
+  return _PAGINAS_ESTRUTURAIS.some(p => location.pathname === p || location.pathname.endsWith(p));
+}
 
 // Mapa página → id da rotina (deve espelhar os ids do sidebar.js)
 const _PAGINA_ROTINA = {
   '/dashboard.html':        'dashboard',
+  '/monitores.html':        'monitores',
   '/monitor.html':          'monitor-whatsapp',
   '/monitor-email.html':    'monitor-email',
   '/curriculos.html':       'curriculos',
+  '/curriculo.html':        'curriculos',
   '/funcoes.html':          'funcoes',
   '/vagas.html':            'vagas',
   '/processoseletivo.html': 'processo-seletivo',
@@ -44,6 +53,28 @@ const _ROTINA_ALIASES = {
   'se-integracoes-config': ['se-integracoes'],
 };
 
+const _ROTINA_LABELS = {
+  'dashboard': 'Dashboard',
+  'monitores': 'Monitores',
+  'monitor-whatsapp': 'Monitor WhatsApp',
+  'monitor-email': 'Monitor E-mail',
+  'curriculos': 'Curriculos',
+  'funcoes': 'Cadastro de Funcoes',
+  'vagas': 'Vagas por Funcao',
+  'processo-seletivo': 'Processo Seletivo',
+  'analisador': 'Analisador',
+  'historico': 'Historico de Analises',
+  'config-analisador': 'Configuracao do Analisador',
+  'se-integracoes': 'SE Integracoes',
+  'se-curriculos': 'SE Curriculos',
+  'se-funcoes': 'SE Funcoes',
+  'se-vagas': 'SE Vagas',
+  'se-integracoes-config': 'SE Integracoes - Configuracao',
+  'se-api-configurador': 'SE API Configurador',
+  'configuracoes': 'Configuracoes',
+  'administracao': 'Administracao',
+};
+
 function _paginaLivre() {
   return _PAGINAS_LIVRES.some(p => location.pathname === p || location.pathname.endsWith(p));
 }
@@ -54,36 +85,52 @@ function _rotinaIdDaPagina() {
   )?.[1] ?? null;
 }
 
+function _nomeRotinaAtual(rotinaId = null) {
+  const rid = rotinaId || _rotinaIdDaPagina();
+  if (rid && _ROTINA_LABELS[rid]) return _ROTINA_LABELS[rid];
+  const arquivo = (location.pathname.split('/').pop() || '').replace(/\.html$/i, '');
+  return arquivo ? arquivo.replace(/[-_]+/g, ' ') : 'esta rotina';
+}
+
+function _escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
+function _redirecionarSemAcesso(msg) {
+  if (msg) _mostrarToastAviso(msg);
+  _mostrarOverlaySemAcesso(_nomeRotinaAtual());
+  return false;
+}
+
 function _verificarAcessoPagina() {
   const rotinas  = window._iahubRotinas;
   if (rotinas === null) return true;  // admin: acesso irrestrito
 
+  // Administração é restrita ao perfil admin — redireciona sem abrir a página
+  if (location.pathname === '/administracao.html' || location.pathname.endsWith('/administracao.html')) {
+    const role = window._iahubUser?.role;
+    if (role !== 'admin') return _redirecionarSemAcesso('A área de Administração é restrita ao perfil Administrador.');
+    return true;
+  }
+
   const rotinaId = _rotinaIdDaPagina();
-  if (!rotinaId) return true;         // página sem rotina mapeada: livre
+  if (!rotinaId) {
+    if (_paginaLivre() || _paginaEstrutural()) return true; // sem rotina própria = OK
+    return _redirecionarSemAcesso(`Voce nao tem acesso a rotina ${_nomeRotinaAtual()}.`);
+  }
 
   if (rotinas.includes(rotinaId)) return true;
   if ((_ROTINA_ALIASES[rotinaId] || []).some(alias => rotinas.includes(alias))) return true;
 
-  // Página atual não permitida. Se há outras rotinas, redireciona silenciosamente.
-  if (rotinas.length > 0) {
-    const rotinaHref = Object.fromEntries(
-      Object.entries(_PAGINA_ROTINA).map(([href, rid]) => [rid, href])
-    );
-    rotinaHref['se-curriculos'] = '/se-integracoes.html#curriculos';
-    rotinaHref['se-funcoes']    = '/se-integracoes.html#funcoes';
-    rotinaHref['se-vagas']      = '/se-integracoes.html#vagas';
-    rotinaHref['se-integracoes-config'] = '/se-integracoes.html#flowapi';
-    const destino = rotinaHref[rotinas[0]];
-    if (destino) { location.href = destino; return false; }
-  }
-
-  // Sem nenhuma rotina disponível: exibe overlay bloqueador
-  _mostrarOverlaySemAcesso();
-  return false;
+  return _redirecionarSemAcesso(`Voce nao tem acesso a rotina ${_nomeRotinaAtual(rotinaId)}.`);
 }
 
-function _mostrarOverlaySemAcesso() {
+function _mostrarOverlaySemAcesso(rotinaNome = 'esta rotina') {
   function _inserir() {
+    document.getElementById('_acesso-negado')?.remove();
+    const rotinaSegura = _escapeHtml(rotinaNome);
     const el = document.createElement('div');
     el.id = '_acesso-negado';
     el.style.cssText = [
@@ -97,18 +144,12 @@ function _mostrarOverlaySemAcesso() {
                   border-radius:16px;box-shadow:0 16px 48px rgba(0,0,0,.4)">
         <div style="font-size:52px;margin-bottom:16px">🔒</div>
         <div style="font-size:17px;font-weight:700;color:var(--text-hi,#e2e8f0);margin-bottom:8px">
-          Sem acesso a esta rotina
+          Usuario sem acesso a rotina
         </div>
-        <div style="font-size:13px;color:var(--text-lo,#64748b);line-height:1.7;margin-bottom:24px">
-          Você não tem permissão para acessar esta página.<br>
-          Contate o administrador do sistema para solicitar acesso.
+        <div style="font-size:13px;color:var(--text-lo,#64748b);line-height:1.7">
+          Solicite ao administrador acesso a rotina:<br>
+          <strong style="color:var(--text-hi,#e2e8f0)">${rotinaSegura}</strong>
         </div>
-        <button onclick="history.back()" style="
-          padding:9px 22px;border-radius:8px;
-          border:1px solid var(--border,#2a2d3e);
-          background:var(--bg-hover,#242736);
-          color:var(--text-hi,#e2e8f0);font-size:13px;cursor:pointer;
-        ">← Voltar</button>
       </div>`;
     document.body.appendChild(el);
   }
@@ -117,6 +158,45 @@ function _mostrarOverlaySemAcesso() {
 }
 
 (async function () {
+  if (sessionStorage.getItem(_IAHUB_BROWSER_SESSION_KEY) !== '1') {
+    await fetch('/api/logout', { method: 'POST' }).catch(() => null);
+    if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
+    return;
+  }
+
+  // ── Detectar modo MDI: empresa vem da URL em vez da sessão ───────────────────
+  const _empresaUrlId = Number(new URLSearchParams(location.search).get('_empresa')) || null;
+
+  // Quando em aba MDI, injeta empresa_id em todas as chamadas /api/ automaticamente.
+  // Páginas existentes não precisam ser alteradas — o patch é transparente.
+  if (_empresaUrlId) {
+    const _orig = window.fetch.bind(window);
+    window.fetch = function (input, init = {}) {
+      if (typeof input === 'string' && input.startsWith('/api/')) {
+        const method = (init.method || 'GET').toUpperCase();
+        if (method === 'GET' || method === 'DELETE' || method === 'HEAD') {
+          if (!input.includes('empresa_id='))
+            input = input + (input.includes('?') ? '&' : '?') + 'empresa_id=' + _empresaUrlId;
+        } else {
+          // POST/PUT/PATCH — injeta empresa_id no body existente ou cria body se ausente
+          if (init.body) {
+            try {
+              const b = JSON.parse(init.body);
+              if (!b.empresa_id) { b.empresa_id = _empresaUrlId; init = { ...init, body: JSON.stringify(b) }; }
+            } catch (_) {}
+          } else {
+            init = {
+              ...init,
+              body: JSON.stringify({ empresa_id: _empresaUrlId }),
+              headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+            };
+          }
+        }
+      }
+      return _orig(input, init);
+    };
+  }
+
   // 1. Verificar autenticação e obter dados do usuário
   const meRes = await fetch('/api/me').catch(() => null);
   if (!meRes?.ok) {
@@ -133,17 +213,37 @@ function _mostrarOverlaySemAcesso() {
 
   // 3. Verificar empresa nas páginas que exigem
   if (!_paginaLivre()) {
-    const sessao = await fetch('/api/session/empresa').then(r => r.json()).catch(() => ({}));
-    // Admin sem empresa selecionada pode acessar o sistema para cadastrar empresas
-    if (!sessao.empresa_id && me.role !== 'admin') {
-      location.href = '/login.html?next=' + encodeURIComponent(location.pathname + location.search);
-      return;
-    }
-    window._iahubEmpresa = sessao.empresa_id
-      ? { id: sessao.empresa_id, nome: sessao.empresa_nome || '' }
-      : { id: '—', nome: '(nenhuma)' };
 
-    // 3b. Carregar rotinas permitidas para filtrar o menu lateral
+    if (_empresaUrlId) {
+      // ── Modo MDI: empresa independente por aba ────────────────────────────────
+      const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+      const emp   = lista.find(e => Number(e.id) === _empresaUrlId);
+      if (!emp && me.role !== 'admin') { location.href = '/login.html'; return; }
+      window._iahubEmpresa = emp
+        ? { id: emp.id, nome: emp.razao_social || emp.nome || '' }
+        : { id: _empresaUrlId, nome: '(empresa)' };
+      // Troca de empresa nesta aba comunica ao shell sem alterar a sessão global
+      window._trocarEmpresa = (novaEmpresaId) => {
+        window.parent.postMessage(
+          { type: 'mdi:trocar-empresa', empresaId: Number(novaEmpresaId) },
+          location.origin
+        );
+      };
+
+    } else {
+      // ── Modo normal: empresa vem da sessão ───────────────────────────────────
+      const sessao = await fetch('/api/session/empresa').then(r => r.json()).catch(() => ({}));
+      // Admin sem empresa selecionada pode acessar o sistema para cadastrar empresas
+      if (!sessao.empresa_id && me.role !== 'admin') {
+        location.href = '/login.html?next=' + encodeURIComponent('/iahub.html');
+        return;
+      }
+      window._iahubEmpresa = sessao.empresa_id
+        ? { id: sessao.empresa_id, nome: sessao.empresa_nome || '' }
+        : { id: '—', nome: '(nenhuma)' };
+    }
+
+    // 3b. Carregar rotinas permitidas — em modo MDI o patch injeta empresa_id
     const rotinasRes = await fetch('/api/minhas-rotinas').catch(() => null);
     if (rotinasRes?.ok) {
       const data = await rotinasRes.json().catch(() => ({}));
@@ -172,7 +272,37 @@ function _mostrarOverlaySemAcesso() {
 
   // 5. Injetar combo de empresa no topbar
   _injetarEmpresaTopbar();
+
+  // 6. Exibir aviso de acesso negado vindo de redirecionamento anterior
+  const _aviso = sessionStorage.getItem('_iahub_aviso');
+  if (_aviso) {
+    sessionStorage.removeItem('_iahub_aviso');
+    _mostrarToastAviso(_aviso);
+  }
 })();
+
+function _mostrarToastAviso(msg) {
+  function _inserir() {
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'position:fixed', 'top:20px', 'left:50%', 'transform:translateX(-50%)',
+      'z-index:9999', 'background:var(--bg-card,#1a1d27)',
+      'border:1px solid rgba(239,68,68,.4)', 'border-radius:10px',
+      'padding:12px 20px', 'display:flex', 'align-items:center', 'gap:10px',
+      'box-shadow:0 8px 24px rgba(0,0,0,.4)', 'font-size:13px',
+      'color:var(--text-hi,#e2e8f0)', 'max-width:90vw',
+      'animation:_fadeInDown .25s ease',
+    ].join(';');
+    el.innerHTML = `<span style="font-size:18px;flex-shrink:0">🔒</span><span>${msg}</span>`;
+    const style = document.createElement('style');
+    style.textContent = '@keyframes _fadeInDown{from{opacity:0;transform:translateX(-50%) translateY(-12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+    document.head.appendChild(style);
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }, 4000);
+  }
+  if (document.body) _inserir();
+  else document.addEventListener('DOMContentLoaded', _inserir);
+}
 
 // ── Sidebar: injeta info real do usuário abaixo do logo ───────────────────────
 function _atualizarSidebarUsuario(me) {
@@ -220,6 +350,25 @@ async function _injetarEmpresaTopbar() {
   const topbar = document.querySelector('.topbar');
   if (!topbar || document.getElementById('_empresa-badge')) return;
 
+  // Modo monitor: empresa fixada via ?empresa=ID — exibe badge somente-leitura
+  const _monitorEid = Number(new URLSearchParams(location.search).get('empresa')) || null;
+  if (_monitorEid) {
+    const empresas = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+    const emp  = empresas.find(e => e.id === _monitorEid);
+    const nome = emp ? (emp.razao_social || emp.nome) : `Empresa #${_monitorEid}`;
+    const badge = document.createElement('div');
+    badge.id = '_empresa-badge';
+    badge.style.cssText = 'margin-left:auto;';
+    badge.innerHTML = `<div style="
+      display:flex;align-items:center;gap:7px;
+      background:var(--bg-hover);border:1px solid var(--border);
+      border-radius:7px;padding:5px 12px;
+      font-size:13px;font-weight:600;color:var(--text-hi);
+    "><span style="font-size:15px">🏢</span><span>${nome}</span></div>`;
+    topbar.appendChild(badge);
+    return;
+  }
+
   const [sessao, empresas] = await Promise.all([
     fetch('/api/session/empresa').then(r => r.json()).catch(() => ({})),
     fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []),
@@ -236,7 +385,7 @@ async function _injetarEmpresaTopbar() {
 
   const badge = document.createElement('div');
   badge.id = '_empresa-badge';
-  badge.style.cssText = 'margin-left:auto;position:relative;';
+  badge.style.cssText = 'position:relative;';
   badge.innerHTML = `
     <button id="_empresa-btn" style="
       display:flex;align-items:center;gap:7px;
@@ -260,6 +409,20 @@ async function _injetarEmpresaTopbar() {
       box-shadow:0 8px 32px rgba(0,0,0,.35);min-width:220px;padding:6px;
     "></div>`;
 
+  // Botão Guia de Uso — lado direito do topbar, antes do seletor de empresa
+  if (!topbar.querySelector('#_guia-btn')) {
+    const guiaBtn = document.createElement('a');
+    guiaBtn.id        = '_guia-btn';
+    guiaBtn.href      = '/guia/';
+    guiaBtn.target    = '_blank';
+    guiaBtn.title     = 'Guia de uso do sistema';
+    guiaBtn.className = 'btn btn-primary';
+    guiaBtn.style.cssText = 'margin-left:auto;gap:6px;font-size:13px;white-space:nowrap;color:#fff;';
+    guiaBtn.innerHTML = `<span style="font-size:15px">❓</span><span>Guia de Uso</span>`;
+    topbar.appendChild(guiaBtn);
+  }
+
+  badge.style.cssText = 'margin-left:8px;position:relative;';
   topbar.appendChild(badge);
 
   const btn      = document.getElementById('_empresa-btn');
@@ -313,12 +476,26 @@ window._trocarEmpresa = async function (empresa_id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ empresa_id }),
   });
-  if (res.ok) location.reload();
+  if (res.ok) {
+    // Sinaliza outras abas abertas para recarregarem com a nova empresa
+    try { localStorage.setItem('_iahub_empresa_switch', String(empresa_id) + '_' + Date.now()); } catch (_) {}
+    location.reload();
+  }
 };
+
+// Detecta troca de empresa feita em outra aba e recarrega esta
+// Páginas de monitor com ?empresa=ID são independentes da sessão — não recarregam
+window.addEventListener('storage', (e) => {
+  if (e.key === '_iahub_empresa_switch' && e.newValue
+      && !new URLSearchParams(location.search).get('empresa'))
+    location.reload();
+});
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 function logout() {
   fetch('/api/logout', { method: 'POST' }).finally(() => {
+    try { sessionStorage.removeItem('iahub_mdi_state'); } catch(_) {}
+    try { sessionStorage.removeItem(_IAHUB_BROWSER_SESSION_KEY); } catch(_) {}
     location.href = '/login.html';
   });
 }

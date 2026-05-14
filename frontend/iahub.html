@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* ── Barra de abas MDI — estilo "folder tab" ───────────────── */
+    .mdi-tabbar {
+      display: flex;
+      align-items: flex-end;          /* abas se apoiam na borda inferior */
+      background: var(--bg-hover);    /* fundo da barra — mais escuro que o conteúdo */
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-hi) transparent;
+      scroll-behavior: smooth;
+      flex-shrink: 0;
+      padding: 6px 8px 0;
+      gap: 3px;
+    }
+    .mdi-tabbar::-webkit-scrollbar { height: 6px; }
+    .mdi-tabbar::-webkit-scrollbar-track { background: transparent; }
+    .mdi-tabbar::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 999px; }
+
+    .mdi-tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px 8px 13px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-md);
+      background: rgba(255,255,255,.5);
+      border: 1px solid var(--border);
+      border-bottom: none;            /* sem borda inferior: aba "assenta" no conteúdo */
+      border-radius: 7px 7px 0 0;
+      cursor: pointer;
+      white-space: nowrap;
+      flex: 0 0 clamp(220px, 15vw, 280px);
+      max-width: 280px;
+      min-width: 0;
+      user-select: none;
+      transition: color var(--transition), background var(--transition), box-shadow var(--transition);
+      margin-bottom: -1px;            /* esconde a borda inferior da barra */
+      position: relative;
+    }
+    .mdi-tab:hover {
+      background: var(--bg-card);
+      color: var(--text-hi);
+    }
+    .mdi-tab.active {
+      background: var(--bg-card);
+      color: var(--accent);
+      font-weight: 600;
+      border-color: var(--border);
+      border-top: 2px solid var(--accent);  /* destaque azul no topo */
+      box-shadow: 0 -2px 10px rgba(37,99,235,.07), var(--shadow-sm);
+      z-index: 1;
+    }
+
+    .mdi-tab-icon  { font-size: 14px; flex-shrink: 0; }
+    .mdi-tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; text-align: left; min-width: 0; }
+
+    .mdi-tab-close {
+      flex-shrink: 0;
+      width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      font-size: 16px;
+      line-height: 1;
+      color: var(--text-lo);
+      transition: background var(--transition), color var(--transition);
+      margin-left: 1px;
+    }
+    .mdi-tab-close:hover                  { background: rgba(0,0,0,.08); color: var(--text-hi); }
+    .mdi-tab.active .mdi-tab-close:hover  { background: var(--accent-glow); color: var(--accent); }
+
+    /* ── Área de conteúdo ──────────────────────────────────────── */
+    /* Scroll buttons */
+    .mdi-tabbar-wrap {
+      display: flex;
+      align-items: stretch;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .mdi-tabbar {
+      flex: 1;
+      min-width: 0;
+      border-bottom: none !important;
+    }
+    .mdi-scroll-btn {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border: none;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-md);
+      transition: color var(--transition), background var(--transition);
+      z-index: 1;
+    }
+    .mdi-scroll-btn:hover { color: var(--accent); background: var(--bg-hover); }
+
+    .mdi-content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-card);    /* branco — conecta visualmente com a aba ativa */
+    }
+
+    .mdi-iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: none;
+      background: var(--bg-card);
+    }
+    .mdi-iframe.active { display: block; }
+
+    /* ── Estado vazio ──────────────────────────────────────────── */
+    .mdi-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      pointer-events: none;
+      user-select: none;
+    }
+    .mdi-empty-icon  { font-size: 56px; opacity: .15; }
+    .mdi-empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); }
+    .mdi-empty-sub   { font-size: 13px; color: var(--text-lo); }
+  </style>
+</head>
+<body>
+<div class="layout" id="layout">
+
+  <!-- Sidebar (igual às demais páginas) -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+
+    <!-- Topbar do shell -->
+    <div class="topbar">
+      <span class="topbar-title" id="shell-title">IAHub</span>
+    </div>
+
+    <!-- Barra de abas MDI com scroll -->
+    <div class="mdi-tabbar-wrap">
+      <button class="mdi-scroll-btn" id="mdi-scroll-left"  title="Rolar para esquerda" onclick="scrollMdiTabs(-1)">◀</button>
+      <div class="mdi-tabbar" id="mdi-tabbar"></div>
+      <button class="mdi-scroll-btn" id="mdi-scroll-right" title="Rolar para direita"  onclick="scrollMdiTabs(1)">▶</button>
+    </div>
+
+    <!-- Área de conteúdo: iframes empilhados, apenas o ativo visível -->
+    <div class="mdi-content" id="mdi-content">
+      <div class="mdi-empty" id="mdi-empty">
+        <div class="mdi-empty-icon">🗂️</div>
+        <div class="mdi-empty-title">Nenhuma rotina aberta</div>
+        <div class="mdi-empty-sub">Selecione uma opção no menu lateral para começar</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/sidebar.js"></script>
+<script src="/js/tab-manager.js"></script>
+<script>
+  // Intercepta cliques nos itens de menu → abre como aba MDI
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('#sidebar a.nav-item');
+    if (!link) return;
+    e.preventDefault();
+    const url   = new URL(link.href, location.origin).pathname;
+    const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
+    const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
+    window.openTab(url, label, icon);
+  });
+
+  // Abre o Dashboard automaticamente ao carregar
+  window._iahubAuthReady.then(() => window.openTab('/dashboard.html', 'Dashboard', '⊞'));
+</script>
+</body>
+</html>

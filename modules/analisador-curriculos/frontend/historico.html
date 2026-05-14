@@ -21,10 +21,20 @@
     .empty-state    { text-align:center;padding:80px 20px;color:var(--text-lo); }
     .empty-state div { font-size:48px;margin-bottom:12px; }
     /* Modal detalhes */
-    .modal-det-overlay { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto; }
-    .modal-det  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(820px,98vw);padding:28px;position:relative; }
-    .modal-det-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:20px; }
-    .modal-det-title  { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .modal-det-overlay { position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:300;display:flex;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto; }
+    .modal-det  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(1080px,98vw);max-height:calc(100vh - 48px);position:relative;display:flex;flex-direction:column;box-shadow:var(--shadow-md);overflow:hidden; }
+    .modal-det-header { display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:18px 22px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0; }
+    .modal-det-title  { font-size:16px;font-weight:700;color:var(--text-hi);line-height:1.35; }
+    .modal-det-subtitle { font-size:12.5px;color:var(--text-lo);margin-top:3px; }
+    .modal-det-close { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:2px 0; }
+    .modal-det-close:hover { color:var(--text-hi); }
+    .modal-det-header > button { background:none !important;border:none !important;color:var(--text-lo) !important;font-size:22px !important;cursor:pointer;line-height:1;padding:2px 0 !important; }
+    .modal-det-header > button:hover { color:var(--text-hi) !important; }
+    .modal-det-body { padding:18px 22px 22px;overflow-y:auto; }
+    .modal-summary-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px; }
+    .modal-summary-item { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:12px 14px; }
+    .modal-summary-label { color:var(--text-lo);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700; }
+    .modal-summary-value { color:var(--text-hi);font-size:20px;font-weight:800;line-height:1;margin-top:5px; }
     /* Reutiliza estilos do analisador */
     .score-bar-wrap { background:var(--bg-hover);border-radius:8px;height:8px;flex:1;overflow:hidden; }
     .score-bar      { height:100%;border-radius:8px; }
@@ -35,18 +45,19 @@
     .nivel-medio    { background:#fef9c3;color:#a16207; }
     .nivel-baixo    { background:#fee2e2;color:#b91c1c; }
     .nivel-badge    { padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600; }
-    .result-card    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px; }
+    .result-card    { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:0;margin-bottom:12px;overflow:hidden; }
     .result-card.finalista { border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.10); }
-    .result-header  { display:flex;align-items:center;gap:12px;margin-bottom:10px; }
-    .result-rank    { font-size:20px;font-weight:800;color:var(--text-lo);min-width:28px;text-align:center; }
+    .result-header  { display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .result-rank    { font-size:20px;font-weight:800;color:var(--text-lo);min-width:34px;text-align:center;padding-top:2px; }
     .result-name    { font-size:14px;font-weight:700;color:var(--text-hi); }
     .result-contact { font-size:12px;color:var(--text-lo);margin-top:2px; }
     .result-score   { margin-left:auto;text-align:right; }
     .result-score-num { font-size:22px;font-weight:800;color:var(--accent);line-height:1; }
     .result-score-lbl { font-size:11px;color:var(--text-lo); }
-    .score-row      { display:flex;align-items:center;gap:10px;margin-bottom:6px; }
-    .detail-scores  { display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--border); }
-    .detail-score   { text-align:center;min-width:72px; }
+    .result-body    { padding:14px 18px 16px; }
+    .score-row      { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+    .detail-scores  { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
+    .detail-score   { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;text-align:left;min-width:0;padding:10px 12px; }
     .detail-score-val { font-size:16px;font-weight:700;color:var(--accent); }
     .detail-score-lbl { font-size:10px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-top:2px; }
     .badge-finalista{ background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:12px;padding:2px 9px;font-size:11px;font-weight:600; }
@@ -55,8 +66,10 @@
     .ponto-list li::before { position:absolute;left:0; }
     .ponto-pos li::before  { content:"✓";color:var(--success); }
     .ponto-neg li::before  { content:"●";color:var(--error);font-size:9px;top:3px; }
-    .pontos         { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px; }
-    .resumo         { font-size:12.5px;color:var(--text-md);line-height:1.7;margin-top:8px;padding-top:8px;border-top:1px solid var(--border); }
+    .pontos         { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px; }
+    .pontos-box     { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:12px 14px; }
+    .resumo         { font-size:12.5px;color:var(--text-md);line-height:1.7;margin-top:12px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg-base); }
+    .result-actions { margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:flex-end; }
     /* Eliminados no modal */
     .eliminados-table { width:100%;border-collapse:collapse;font-size:12.5px; }
     .eliminados-table th { font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);font-weight:600;padding:6px 10px 6px 0;text-align:left;border-bottom:1px solid var(--border); }
@@ -73,6 +86,15 @@
     .se-badge-err { background:#fef9c3;color:#92400e;border:1px solid #fde68a; }
     .se-res-item  { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px; }
     .se-res-item:last-child { border-bottom:none; }
+    @media(max-width: 760px) {
+      .modal-det-overlay { padding:10px; }
+      .modal-det { max-height:calc(100vh - 20px); }
+      .modal-summary-grid,
+      .detail-scores,
+      .pontos { grid-template-columns:1fr; }
+      .result-header { flex-wrap:wrap; }
+      .result-score { width:100%;margin-left:48px;text-align:left; }
+    }
   </style>
 </head>
 <body>
@@ -96,6 +118,7 @@
 
     <div class="page-content">
 
+      <div id="history-list-view">
       <!-- Filtros -->
       <div class="d-flex gap-3 mb-4" style="align-items:center;flex-wrap:wrap">
         <select id="filtro-vaga" class="form-control" style="max-width:320px" onchange="filtrar()">
@@ -105,19 +128,34 @@
       </div>
 
       <div id="lista-analises"></div>
+      </div>
+
+      <section id="history-detail-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <button class="btn btn-ghost" type="button" onclick="fecharModal()">Voltar</button>
+          <div class="editor-actionbar-title">
+            <strong id="modal-det-titulo"></strong>
+            <span id="modal-det-subtitulo"></span>
+          </div>
+        </div>
+        <div id="modal-det-body" class="modal-det-body" style="padding:0;overflow:visible"></div>
+      </section>
 
     </div>
   </div>
 </div>
 
 <!-- Modal detalhes da análise -->
-<div id="modal-det" class="modal-det-overlay d-none" onclick="if(event.target===this)fecharModal()">
+<div id="modal-det-legacy" class="modal-det-overlay d-none" onclick="if(event.target===this)fecharModal()">
   <div class="modal-det">
     <div class="modal-det-header">
-      <div class="modal-det-title" id="modal-det-titulo"></div>
+      <div>
+        <div class="modal-det-title"></div>
+        <div class="modal-det-subtitle"></div>
+      </div>
       <button onclick="fecharModal()" style="background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0">✕</button>
     </div>
-    <div id="modal-det-body"></div>
+    <div class="modal-det-body"></div>
   </div>
 </div>
 
@@ -126,6 +164,7 @@
 <script src="/js/sidebar.js"></script>
 <script>
   let todasAnalises = [], vagas = [];
+  let detalheAtualId = null;
 
   async function carregar() {
     [todasAnalises, vagas] = await Promise.all([
@@ -153,6 +192,20 @@
 
     filtrar();
     carregarStatusSE();
+
+    const detalheId = params.get('detalhe');
+    if (detalheId) {
+      await verDetalhes(detalheId, { manterUrl: true });
+    }
+  }
+
+  function atualizarUrlDetalhe(id, substituir = false) {
+    const url = new URL(location.href);
+    if (id) url.searchParams.set('detalhe', id);
+    else url.searchParams.delete('detalhe');
+    const destino = `${url.pathname}${url.search}${url.hash}`;
+    const metodo = substituir ? 'replaceState' : 'pushState';
+    history[metodo]({ detalhe: id || null }, '', destino);
   }
 
   async function carregarStatusSE() {
@@ -246,9 +299,13 @@
     }).join('');
   }
 
-  async function verDetalhes(id) {
+  async function verDetalhes(id, opts = {}) {
+    detalheAtualId = String(id);
+    if (!opts.manterUrl) atualizarUrlDetalhe(detalheAtualId);
+
     const a = await fetch(`/api/analises/${id}`).then(r => r.json());
     const dataFmt = new Date(a.data).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    document.getElementById('modal-det-subtitulo').textContent = 'Resultado salvo da análise, candidatos classificados e registros eliminados na triagem.';
     document.getElementById('modal-det-titulo').textContent = `📊 ${a.funcao_nome} — ${dataFmt}`;
 
     const resultados  = a.resultados  || [];
@@ -269,6 +326,7 @@
           <div class="detail-score"><div class="detail-score-val">${det.nivel_experiencia ?? '—'}<span style="font-size:10px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Experiência</div></div>
           <div class="detail-score"><div class="detail-score-val">${det.formacao ?? '—'}<span style="font-size:10px;color:var(--text-lo)">/15</span></div><div class="detail-score-lbl">Formação</div></div>
         </div>` : '';
+      const retorno = encodeURIComponent(`/historico.html?detalhe=${encodeURIComponent(a.id)}`);
       return `
         <div class="result-card ${ehFinalista ? 'finalista' : ''}">
           <div class="result-header">
@@ -284,6 +342,7 @@
               <span class="nivel-badge ${nivelCls}" style="margin-top:4px;display:inline-block">${r.nivel}</span>
             </div>
           </div>
+          <div class="result-body">
           <div class="score-row">
             <span style="font-size:11px;color:var(--text-lo);min-width:80px">Compatibilidade</span>
             <div class="score-bar-wrap"><div class="score-bar ${barCls}" style="width:${r.score}%"></div></div>
@@ -291,12 +350,13 @@
           </div>
           ${detHtml}
           ${pos || neg ? `<div class="pontos">
-            ${pos ? `<div><div style="font-size:10px;color:var(--success);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos positivos</div><ul class="ponto-list ponto-pos">${pos}</ul></div>` : ''}
-            ${neg ? `<div><div style="font-size:10px;color:var(--error);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos a avaliar</div><ul class="ponto-list ponto-neg">${neg}</ul></div>` : ''}
+            ${pos ? `<div class="pontos-box"><div style="font-size:10px;color:var(--success);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos positivos</div><ul class="ponto-list ponto-pos">${pos}</ul></div>` : ''}
+            ${neg ? `<div class="pontos-box"><div style="font-size:10px;color:var(--error);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Pontos a avaliar</div><ul class="ponto-list ponto-neg">${neg}</ul></div>` : ''}
           </div>` : ''}
           ${r.resumo ? `<div class="resumo">${r.resumo}</div>` : ''}
-          <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);text-align:right">
-            <a href="/curriculo.html?id=${r.id}" target="_blank" class="btn btn-ghost" style="font-size:11.5px;padding:4px 12px">📄 Ver Currículo</a>
+          <div class="result-actions">
+            <a href="/curriculo.html?id=${r.id}&return=${retorno}" class="btn btn-ghost" style="font-size:11.5px;padding:4px 12px">📄 Ver Currículo</a>
+          </div>
           </div>
         </div>`;
     }).join('');
@@ -323,18 +383,39 @@
 
     const finCount = finalistasIds.size;
     document.getElementById('modal-det-body').innerHTML = `
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
-        <div style="font-size:13px;color:var(--text-md)">${resultados.length} analisados · <strong style="color:#15803d">${finCount} finalista${finCount !== 1 ? 's' : ''}</strong> · ${eliminados.length} eliminados</div>
+      <div class="modal-summary-grid">
+        <div class="modal-summary-item"><div class="modal-summary-label">Analisados</div><div class="modal-summary-value">${resultados.length}</div></div>
+        <div class="modal-summary-item"><div class="modal-summary-label">Finalistas</div><div class="modal-summary-value" style="color:#15803d">${finCount}</div></div>
+        <div class="modal-summary-item"><div class="modal-summary-label">Eliminados</div><div class="modal-summary-value" style="color:#b91c1c">${eliminados.length}</div></div>
       </div>
       ${resultados.length ? cards : '<p style="color:var(--text-lo);font-size:13px">Nenhum candidato analisado.</p>'}
       ${elimSection}`;
 
-    document.getElementById('modal-det').classList.remove('d-none');
+    abrirDetalheInline();
   }
 
-  function fecharModal() {
-    document.getElementById('modal-det').classList.add('d-none');
+  function abrirDetalheInline() {
+    document.getElementById('history-list-view').classList.add('d-none');
+    document.getElementById('history-detail-view').classList.remove('d-none');
+    document.querySelector('.page-content')?.scrollTo({ top: 0, behavior: 'auto' });
   }
+
+  function fecharModal(opts = {}) {
+    detalheAtualId = null;
+    document.getElementById('history-detail-view').classList.add('d-none');
+    document.getElementById('history-list-view').classList.remove('d-none');
+    if (!opts.manterUrl) atualizarUrlDetalhe(null);
+    document.querySelector('.page-content')?.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  window.addEventListener('popstate', () => {
+    const detalheId = new URLSearchParams(location.search).get('detalhe');
+    if (detalheId) {
+      verDetalhes(detalheId, { manterUrl: true });
+      return;
+    }
+    fecharModal({ manterUrl: true });
+  });
 
   function toggleElim(btn) {
     const body = btn.nextElementSibling;
@@ -396,8 +477,9 @@
 
       const detModal = `<div style="margin-bottom:14px;font-size:13.5px;color:var(--text-md)">${resumo}</div><div>${linhas}</div>`;
       document.getElementById('modal-det-titulo').textContent = `🔗 Resultado da Integração Softexpert`;
+      document.getElementById('modal-det-subtitulo').textContent = 'Resumo do envio dos candidatos analisados para o SoftExpert.';
       document.getElementById('modal-det-body').innerHTML = detModal;
-      document.getElementById('modal-det').classList.remove('d-none');
+      abrirDetalheInline();
     } catch (err) {
       if (btn) { btn.disabled = false; btn.textContent = `🔗 Integrar Softexpert (${total})`; }
       alert(`✗ Erro ao enviar: ${err.message}`);

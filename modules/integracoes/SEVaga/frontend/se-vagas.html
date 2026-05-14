@@ -78,6 +78,7 @@
     </div>
 
     <div class="page-content">
+      <div id="list-view">
 
       <div class="cfg-info">
         <span class="cfg-info-lbl">Flow ativo:</span>
@@ -121,6 +122,22 @@
           <div style="overflow-x:auto"><div id="tabela"></div></div>
         </div>
       </div>
+
+      </div>
+
+      <section id="detail-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="detail-title">Integração</strong>
+            <span id="detail-subtitle"></span>
+          </div>
+          <div class="editor-actions" id="detail-actions"></div>
+        </div>
+        <div class="editor-grid">
+          <main class="editor-main" id="detail-main"></main>
+          <aside class="editor-side" id="detail-side"></aside>
+        </div>
+      </section>
 
     </div>
   </div>
@@ -445,6 +462,91 @@ function verConteudo(stepId, tipo) {
 function fecharModal()         { document.getElementById('modal').classList.add('d-none'); }
 function fecharModalConteudo() { document.getElementById('modal-conteudo').classList.add('d-none'); }
 
+function abrirDetalheIntegracao() {
+  document.getElementById('list-view').classList.add('d-none');
+  document.getElementById('detail-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function fecharDetalheIntegracao() {
+  document.getElementById('detail-view').classList.add('d-none');
+  document.getElementById('list-view').classList.remove('d-none');
+  _modalLog = null;
+}
+
+function verDetalhes(l) {
+  if (!l) return;
+  _modalLog = l;
+
+  const dt = new Date(l.data_envio);
+  document.getElementById('detail-title').textContent = `#${l.vaga_id || '-'} - ${l.vaga_funcao_nome || 'Vaga sem função'}`;
+  document.getElementById('detail-subtitle').innerHTML = `
+    <span>${statusBadge(l, true)}</span>
+    <span>${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR')}</span>
+  `;
+
+  document.getElementById('detail-main').innerHTML = `
+    <section class="form-section">
+      <div class="form-section-title">Dados principais</div>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <div class="detail-item-lbl">Função da Vaga</div>
+          <div class="detail-item-val">${esc(l.vaga_funcao_nome || '-')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Status da integração</div>
+          <div class="detail-item-val">${statusBadge(l, true)}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">ID da Vaga</div>
+          <div class="detail-item-val" style="font-family:monospace">#${esc(l.vaga_id || '-')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Status da Vaga</div>
+          <div class="detail-item-val">${esc(STATUS_VAGA[l.vaga_status] || l.vaga_status || '-')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Data / Hora</div>
+          <div class="detail-item-val">${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR')}</div>
+        </div>
+        ${l.erro_mensagem ? `<div class="detail-item full erro-box">
+          <div class="detail-item-lbl">Mensagem de Erro</div>
+          <div class="detail-item-val">${esc(l.erro_mensagem)}</div>
+        </div>` : ''}
+      </div>
+    </section>
+    <section class="form-section">
+      <div class="form-section-title">Steps do Flow</div>
+      <div id="steps-container"><div style="text-align:center;padding:20px;color:var(--text-lo);font-size:13px">Carregando steps...</div></div>
+    </section>`;
+
+  document.getElementById('detail-side').innerHTML = `
+    <section class="form-section">
+      <div class="form-section-title">Resumo</div>
+      <div class="detail-grid" style="grid-template-columns:1fr">
+        <div class="detail-item">
+          <div class="detail-item-lbl">Registro</div>
+          <div class="detail-item-val" style="font-family:monospace">#${esc(l._seq || '-')}</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-item-lbl">Flow usado</div>
+          <div class="detail-item-val"><span style="color:#6d28d9;font-weight:600">${esc(l.flow_nome || '-')}</span></div>
+        </div>
+      </div>
+    </section>`;
+
+  carregarSteps(l);
+
+  let btns = `<button class="btn btn-ghost" onclick="fecharDetalheIntegracao()">Cancelar</button>`;
+  if (l.status === 'erro' || l.status === 'revertido' || l.status === 'parcial')
+    btns += `<button class="btn btn-primary" onclick="reenviar(_modalLog)">Re-executar Flow</button>`;
+  if (l.status === 'sucesso')
+    btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="reverter(_modalLog)">Reverter</button>`;
+  document.getElementById('detail-actions').innerHTML = btns;
+
+  abrirDetalheIntegracao();
+}
+
 async function reenviar(log) {
   if (!log) return;
   if (!confirm(`Re-executar o flow para a Vaga #${log.vaga_id} (${log.vaga_funcao_nome})?`)) return;
@@ -456,6 +558,7 @@ async function reenviar(log) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Erro');
     alert(`✓ Flow re-executado para Vaga #${log.vaga_id}. Status: ${data.status}`);
+    fecharDetalheIntegracao();
     carregar();
   } catch (err) { alert(`✗ Erro: ${err.message}`); }
 }
@@ -471,11 +574,12 @@ async function reverter(log) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Erro');
     alert(`⇄ Status da Vaga #${log.vaga_id} alterado para Revertido.`);
+    fecharDetalheIntegracao();
     carregar();
   } catch (err) { alert(`✗ Erro: ${err.message}`); }
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharModal(); fecharModalConteudo(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharModal(); fecharModalConteudo(); fecharDetalheIntegracao(); } });
 
 (async () => {
   await window._iahubAuthReady;

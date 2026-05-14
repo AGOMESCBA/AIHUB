@@ -43,7 +43,19 @@
     .se-parcial  { background:#ffedd5;color:#c2410c; }
     .se-revertido{ background:#fef9c3;color:#92400e; }
     .se-pendente { background:#f1f5f9;color:#64748b; }
-    .sel-bar { display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;font-size:13px; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-search { flex:1;min-width:260px; }
+    .quick-row .form-control { height:36px;margin:0;font-size:13px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .grid-toolbar { display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo); }
+    .sel-bar { display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;margin-left:auto; }
     .sel-bar.active { display:flex; }
     .review-kw-row { margin-bottom:16px; }
     .review-kw-header { display:flex;align-items:center;gap:8px;margin-bottom:6px; }
@@ -52,8 +64,8 @@
     .badge-existing { font-size:10px;color:var(--text-lo);font-style:italic; }
 
     /* Group panel */
-    .gp-wrap      { margin-bottom:10px; }
-    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;position:relative; }
+    .gp-wrap      { margin-top:12px;padding-top:12px;border-top:1px solid var(--border); }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px;position:relative; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
 
     /* Tabulator skin */
@@ -67,7 +79,18 @@
     .tabulator-header-filter input,
     .tabulator-header-filter select { width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:#fff;color:var(--text);margin-top:4px; }
     .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
+    @media(max-width:920px) {
+      .page-head { flex-direction:column; }
+      .page-head .btn { align-self:flex-start; }
+      .grid-toolbar { flex-wrap:wrap; }
+      .sel-bar { width:100%;margin-left:0; }
+    }
+    @media(max-width:560px) {
+      .quick-search { min-width:100%; }
+      .quick-row select.form-control { width:100%; }
+    }
   </style>
+  <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 </head>
 <body>
 <div class="layout">
@@ -88,33 +111,64 @@
 
     <div class="page-content">
 
-      <div class="d-flex gap-3 mb-3" style="align-items:center;flex-wrap:wrap">
-        <div class="ms-auto" style="display:flex;gap:8px">
-          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Função</button>
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Recrutamento</div>
+          <div class="page-title">Cadastro de Funções</div>
+          <div class="page-subtitle">Gerencie funções, palavras-chave e integração com SE em uma visão de trabalho.</div>
         </div>
+        <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Função</button>
       </div>
 
-      <!-- Barra de seleção SE -->
-      <div class="sel-bar" id="sel-bar">
-        <span id="sel-count" style="font-weight:600"></span>
-        <span style="color:var(--text-lo);font-size:12px">funções selecionadas</span>
-        <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;margin-left:auto" onclick="integrarSelecionados()">🔗 Integrar ao SE</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="limparSelecao()">✕ Limpar</button>
-      </div>
-
-      <!-- Painel de agrupamento -->
-      <div class="gp-wrap">
-        <div class="gp-chips-row" id="gp-chips-row">
-          <span class="gp-label">Agrupar por:</span>
+      <div class="quick-panel">
+        <div class="quick-row">
+          <input id="q-busca" class="form-control quick-search" placeholder="Buscar por função, área ou palavra-chave..." oninput="aplicarFiltrosRapidos()">
+          <select id="q-area" class="form-control" onchange="aplicarFiltrosRapidos()">
+            <option value="">Todas as áreas</option>
+          </select>
+          <select id="q-nivel" class="form-control" onchange="aplicarFiltrosRapidos()">
+            <option value="">Todos os níveis</option>
+            <option value="Júnior">Júnior</option>
+            <option value="Pleno">Pleno</option>
+            <option value="Sênior">Sênior</option>
+            <option value="Especialista">Especialista</option>
+            <option value="Não especificado">Não especificado</option>
+          </select>
+          <select id="q-se" class="form-control" onchange="aplicarFiltrosRapidos()">
+            <option value="">Todos no SE</option>
+            <option value="pendente">Não integrado</option>
+            <option value="sucesso">Integrado</option>
+            <option value="parcial">Parcial</option>
+            <option value="erro">Erro</option>
+            <option value="revertido">Revertido</option>
+          </select>
+          <button class="btn btn-ghost" onclick="limparFiltrosRapidos()">Limpar</button>
         </div>
-        <div id="dz"></div>
+
+        <!-- Painel de agrupamento -->
+        <div class="gp-wrap">
+          <div class="gp-chips-row" id="gp-chips-row">
+            <span class="gp-label">Agrupar por:</span>
+          </div>
+          <div id="dz"></div>
+        </div>
       </div>
 
       <!-- Grid -->
       <div class="card">
         <div class="card-body" style="padding:0">
-          <div style="display:flex;align-items:center;padding:10px 16px">
-            <span id="count" class="text-muted text-sm"></span>
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Funções cadastradas</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+            <!-- Barra de seleção SE -->
+            <div class="sel-bar" id="sel-bar">
+              <span id="sel-count" style="font-weight:600"></span>
+              <span style="color:var(--text-lo);font-size:12px">funções selecionadas</span>
+              <button class="btn btn-primary" style="font-size:12px;padding:5px 14px;margin-left:auto" onclick="integrarSelecionados()">🔗 Integrar ao SE</button>
+              <button class="btn btn-ghost" style="font-size:12px;padding:5px 10px" onclick="limparSelecao()">✕ Limpar</button>
+            </div>
           </div>
           <div id="tabela"></div>
           <div id="empty" class="d-none" style="text-align:center;padding:60px;color:var(--text-lo)">
@@ -177,16 +231,16 @@
     </div>
     <div class="form-group">
       <label class="form-label">Descrição da Função</label>
-      <textarea id="f-descricao" class="form-control" rows="3" placeholder="Descreva as responsabilidades e atividades da função..."></textarea>
+      <textarea id="f-descricao" class="form-control" rows="3" data-rich-text placeholder="Descreva as responsabilidades e atividades da função..."></textarea>
     </div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Requisitos Obrigatórios</label>
-        <textarea id="f-req-obrig" class="form-control" rows="3" placeholder="Liste os requisitos indispensáveis..."></textarea>
+        <textarea id="f-req-obrig" class="form-control" rows="3" data-rich-text placeholder="Liste os requisitos indispensáveis..."></textarea>
       </div>
       <div class="form-group">
         <label class="form-label">Requisitos Desejáveis</label>
-        <textarea id="f-req-desej" class="form-control" rows="3" placeholder="Liste os requisitos diferenciais..."></textarea>
+        <textarea id="f-req-desej" class="form-control" rows="3" data-rich-text placeholder="Liste os requisitos diferenciais..."></textarea>
       </div>
     </div>
     <div class="form-row">
@@ -246,6 +300,8 @@
 <script src="/js/auth.js"></script>
 <script src="/js/sidebar.js"></script>
 <script src="/js/grid-group-panel.js"></script>
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<script src="/js/rich-text.js?v=quill-2"></script>
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script>
 const NIVEIS = {
@@ -260,9 +316,23 @@ let reviewItems  = [];
 let table        = null;
 let _seStatusMap = {};
 let _selecionados = new Set();
+let _quickFilterFn = null;
 
 function escH(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function campoRico(id) {
+  return window.getRichValue ? getRichValue(id).trim() : document.getElementById(id).value.trim();
+}
+
+function textoRico(value) {
+  return window.richPlainText ? richPlainText(value) : String(value || '').replace(/<[^>]*>/g, '').trim();
+}
+
+function renderRico(value) {
+  const html = window.richRender ? richRender(value) : escH(value || '').replace(/\n/g, '<br>');
+  return html ? `<div class="rich-content">${html}</div>` : '';
 }
 
 function seBadge(id) {
@@ -291,6 +361,63 @@ function limparSelecao() {
   _selecionados.clear();
   atualizarSelBar();
   if (table) table.redraw();
+}
+
+function statusSE(id) {
+  return _seStatusMap[id] || 'pendente';
+}
+
+function popularFiltroAreas() {
+  const el = document.getElementById('q-area');
+  const atual = el.value;
+  const areas = [...new Set(funcoes.map(f => (f.area || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  el.innerHTML = '<option value="">Todas as áreas</option>'
+    + areas.map(area => `<option value="${escH(area)}">${escH(area)}</option>`).join('');
+  if (areas.includes(atual)) el.value = atual;
+}
+
+function aplicarFiltrosRapidos() {
+  if (!table) return;
+  const busca = document.getElementById('q-busca').value.trim().toLowerCase();
+  const area = document.getElementById('q-area').value;
+  const nivel = document.getElementById('q-nivel').value;
+  const se = document.getElementById('q-se').value;
+
+  if (_quickFilterFn) {
+    table.removeFilter(_quickFilterFn);
+    _quickFilterFn = null;
+  }
+
+  if (!busca && !area && !nivel && !se) return;
+
+  _quickFilterFn = rowData => {
+    if (area && (rowData.area || '') !== area) return false;
+    if (nivel && (rowData.nivel_experiencia || 'Não especificado') !== nivel) return false;
+    if (se && statusSE(rowData.id) !== se) return false;
+    if (busca) {
+      const termos = [
+        rowData.nome || '',
+        rowData.area || '',
+        ...(rowData.palavras_chave || []),
+      ].join(' ').toLowerCase();
+      if (!termos.includes(busca)) return false;
+    }
+    return true;
+  };
+  table.addFilter(_quickFilterFn);
+}
+
+function limparFiltrosRapidos() {
+  document.getElementById('q-busca').value = '';
+  document.getElementById('q-area').value = '';
+  document.getElementById('q-nivel').value = '';
+  document.getElementById('q-se').value = '';
+  aplicarFiltrosRapidos();
+}
+
+function labelFuncoes(qtd) {
+  return qtd === 1 ? '1 função' : `${qtd} funções`;
 }
 
 async function integrarSelecionados() {
@@ -425,11 +552,11 @@ function initTabulator(data) {
       },
     ],
     rowClick: (_e, row) => visualizar(row.getData().id),
-    dataFiltered: fd => {
-      const t = fd.length;
+    dataFiltered: (_filters, rows) => {
+      const t = rows?.length ?? funcoes.length;
       document.getElementById('count').textContent =
         t === funcoes.length
-          ? `${t} função${t !== 1 ? 'ões' : ''}`
+          ? labelFuncoes(t)
           : `${t} de ${funcoes.length} funções`;
     },
   });
@@ -443,15 +570,18 @@ async function carregar() {
     carregarSEStatus(),
   ]);
 
+  popularFiltroAreas();
+
   const empty = document.getElementById('empty');
   if (!funcoes.length) {
     empty.classList.remove('d-none');
+    document.getElementById('count').textContent = '0 funções';
     return;
   }
   empty.classList.add('d-none');
 
   document.getElementById('count').textContent =
-    `${funcoes.length} função${funcoes.length !== 1 ? 'ões' : ''}`;
+    labelFuncoes(funcoes.length);
 
   if (!table) {
     initTabulator(funcoes);
@@ -459,6 +589,7 @@ async function carregar() {
   } else {
     table.replaceData(funcoes);
   }
+  aplicarFiltrosRapidos();
 }
 
 // ── Modal criar/editar ─────────────────────────────────────────
@@ -474,9 +605,9 @@ function abrirModal(f = null) {
   document.getElementById('f-area').value        = f?.area || '';
   document.getElementById('f-nivel').value       = f?.nivel_experiencia || 'Não especificado';
   document.getElementById('f-formacao').value    = f?.formacao_necessaria || '';
-  document.getElementById('f-descricao').value   = f?.descricao || '';
-  document.getElementById('f-req-obrig').value   = f?.requisitos_obrigatorios || '';
-  document.getElementById('f-req-desej').value   = f?.requisitos_desejaveis || '';
+  setRichValue('f-descricao', f?.descricao || '');
+  setRichValue('f-req-obrig', f?.requisitos_obrigatorios || '');
+  setRichValue('f-req-desej', f?.requisitos_desejaveis || '');
   document.getElementById('f-habilidades').value = Array.isArray(f?.habilidades_tecnicas)
     ? f.habilidades_tecnicas.join(', ') : (f?.habilidades_tecnicas || '');
   document.getElementById('f-keywords').value    = Array.isArray(f?.palavras_chave)
@@ -499,7 +630,7 @@ function resetEquivUI() {
 // ── Equivalências com IA ───────────────────────────────────────
 function coletarKeywords() {
   const habs = parseTags(document.getElementById('f-habilidades').value);
-  const reqs = (document.getElementById('f-req-obrig').value || '')
+  const reqs = textoRico(campoRico('f-req-obrig'))
     .split(/[\n,;]+/).map(s => s.replace(/^[-•]\s*/, '').trim()).filter(Boolean);
   return [...new Set([...habs, ...reqs])];
 }
@@ -632,9 +763,9 @@ async function salvar() {
     area:                    document.getElementById('f-area').value.trim(),
     nivel_experiencia:       document.getElementById('f-nivel').value,
     formacao_necessaria:     document.getElementById('f-formacao').value.trim(),
-    descricao:               document.getElementById('f-descricao').value.trim(),
-    requisitos_obrigatorios: document.getElementById('f-req-obrig').value.trim(),
-    requisitos_desejaveis:   document.getElementById('f-req-desej').value.trim(),
+    descricao:               campoRico('f-descricao'),
+    requisitos_obrigatorios: campoRico('f-req-obrig'),
+    requisitos_desejaveis:   campoRico('f-req-desej'),
     habilidades_tecnicas:    parseTags(document.getElementById('f-habilidades').value),
     palavras_chave:          parseTags(document.getElementById('f-keywords').value),
   };
@@ -670,15 +801,16 @@ async function visualizar(id) {
       ${campo('Nível', `<span class="nivel-badge ${NIVEIS[f.nivel_experiencia]||'nivel-nao-especificado'}">${escH(f.nivel_experiencia||'—')}</span>`)}
       ${campo('Formação', escH(f.formacao_necessaria))}
     </div>
-    ${campo('Descrição da Função', escH(f.descricao||'').replace(/\n/g,'<br>'))}
-    ${campo('Requisitos Obrigatórios', escH(f.requisitos_obrigatorios||'').replace(/\n/g,'<br>'))}
-    ${campo('Requisitos Desejáveis', escH(f.requisitos_desejaveis||'').replace(/\n/g,'<br>'))}
+    ${campo('Descrição da Função', renderRico(f.descricao))}
+    ${campo('Requisitos Obrigatórios', renderRico(f.requisitos_obrigatorios))}
+    ${campo('Requisitos Desejáveis', renderRico(f.requisitos_desejaveis))}
     <div class="view-field"><div class="view-label">Habilidades Técnicas</div>${tags(f.habilidades_tecnicas)}</div>
     <div class="view-field"><div class="view-label">Palavras-chave</div>${tags(f.palavras_chave)}</div>
     <div style="margin-top:16px;font-size:12px;color:var(--text-lo)">Cadastrado em ${new Date(f.criado_em).toLocaleString('pt-BR')}</div>`;
   document.getElementById('modal-view').classList.remove('d-none');
 }
 
+initRichEditors();
 carregar();
 </script>
 </body>

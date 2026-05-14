@@ -6,6 +6,29 @@
   <title>Currículo — IAHub</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
+    .identity-band { display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;padding:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);margin-bottom:16px; }
+    .candidate-name { color:var(--text-hi);font-size:22px;font-weight:800;line-height:1.2;margin-bottom:6px; }
+    .candidate-meta { display:flex;gap:8px;flex-wrap:wrap;color:var(--text-lo);font-size:12.5px; }
+    .summary-stats { display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end; }
+    .summary-pill { min-width:82px;text-align:center;background:var(--bg-hover);border:1px solid var(--border);border-radius:8px;padding:8px 10px; }
+    .summary-pill strong { display:block;color:var(--accent);font-size:18px;line-height:1; }
+    .summary-pill span { color:var(--text-lo);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em; }
+    .info-grid { display:grid;grid-template-columns:1fr 1fr;gap:2px 18px; }
+    .side-list { display:flex;flex-direction:column;gap:12px; }
+    .history-item { border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-base); }
+    .history-title { color:var(--text-hi);font-size:13px;font-weight:700;line-height:1.4; }
+    .history-meta { color:var(--text-lo);font-size:11.5px;margin-top:2px;line-height:1.5; }
+    .score-list { display:flex;flex-direction:column;gap:10px; }
+    .score-item { border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-base); }
+    .score-head { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+    .score-num { color:var(--accent);font-size:22px;font-weight:800;line-height:1; }
+    .score-bar-wrap { background:var(--bg-hover);border-radius:8px;height:8px;overflow:hidden; }
+    .score-bar { height:100%;border-radius:8px;background:var(--accent); }
+    .analysis-points { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px; }
+    .point-list { font-size:12px;line-height:1.7;margin:0; }
+    .point-list li { list-style:none;padding-left:16px;position:relative;color:var(--text-md); }
+    .point-list.good li::before { content:"✓";position:absolute;left:0;color:var(--success); }
+    .point-list.warn li::before { content:"•";position:absolute;left:2px;color:var(--error); }
     .exp-block { border:1px solid var(--border); border-radius:9px; padding:16px; margin-bottom:12px; background:var(--bg-base); }
     .exp-emp   { font-weight:700; color:var(--accent-light); font-size:15px; }
     .exp-cargo { color:var(--text-hi); font-size:13.5px; margin-top:2px; }
@@ -17,6 +40,13 @@
     .field-l   { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo); margin-bottom:3px; }
     .field-v   { font-size:14.5px; color:var(--text-hi); margin-bottom:16px; }
     .field-v a { color:var(--accent-light); }
+    @media (max-width: 980px) {
+      .identity-band { grid-template-columns:1fr; }
+      .summary-stats { justify-content:flex-start; }
+    }
+    @media (max-width: 720px) {
+      .info-grid, .analysis-points { grid-template-columns:1fr; }
+    }
   </style>
 </head>
 <body>
@@ -35,7 +65,7 @@
 
   <div class="main">
     <div class="topbar">
-      <a href="/curriculos.html" class="btn btn-ghost" style="font-size:12px;padding:5px 12px">← Voltar</a>
+      <button type="button" class="btn btn-ghost" style="font-size:12px;padding:5px 12px" onclick="voltarCurriculo(event)">← Voltar</button>
       <span class="topbar-title" style="margin-left:12px"><span class="topbar-path">Recrutamento › Currículos ›</span> <span id="topbar-nome">Currículo</span></span>
       <div class="ms-auto d-flex gap-2" id="topbar-actions"></div>
     </div>
@@ -50,7 +80,37 @@
 <script src="/js/audit-fields.js"></script>
 <script src="/js/sidebar.js"></script>
 <script>
-  const id = new URLSearchParams(location.search).get('id');
+  const paramsCurriculo = new URLSearchParams(location.search);
+  const id = paramsCurriculo.get('id');
+  const returnUrl = paramsCurriculo.get('return');
+
+  function obterRetornoSeguro(raw) {
+    if (!raw) return '';
+    try {
+      const url = new URL(raw, location.origin);
+      if (url.origin !== location.origin) return '';
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function voltarCurriculo(event) {
+    event?.preventDefault?.();
+    const retorno = obterRetornoSeguro(returnUrl);
+    if (retorno) {
+      location.href = retorno;
+      return;
+    }
+    try {
+      const ref = document.referrer ? new URL(document.referrer) : null;
+      if (ref?.origin === location.origin && history.length > 1) {
+        history.back();
+        return;
+      }
+    } catch (_) {}
+    location.href = '/curriculos.html';
+  }
 
   function f(label, value, html) {
     if (!value) return '';
@@ -152,7 +212,208 @@
     a.click();
   }
 
-  carregar();
+  // O carregamento V2 aguarda o auth.js resolver empresa/permissões antes de buscar dados.
+</script>
+<script>
+  const fmtDataV2 = v => v ? new Date(v).toLocaleString('pt-BR') : '—';
+
+  function escHV2(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function campoV2(label, value, html) {
+    if (!value) return '';
+    return `<div><div class="field-l">${label}</div><div class="field-v">${html || escHV2(value)}</div></div>`;
+  }
+
+  function statV2(label, value) {
+    return `<div class="summary-pill"><strong>${value}</strong><span>${label}</span></div>`;
+  }
+
+  function canalV2(remetente) {
+    if (!remetente) return 'Origem não informada';
+    if (remetente.startsWith('ps:')) return 'Processo Seletivo';
+    if (remetente.startsWith('email-externo:') || remetente.startsWith('email-livre:')) return 'E-mail';
+    return 'WhatsApp';
+  }
+
+  function renderAnalisesV2(analises, curriculoId) {
+    const itens = [];
+    for (const a of analises || []) {
+      for (const r of (a.resultados || [])) {
+        if (Number(r.id) === Number(curriculoId)) itens.push({ analise: a, resultado: r, finalista: (a.finalistas_ids || []).includes(r.id) });
+      }
+    }
+    if (!itens.length) return '<span style="color:var(--text-lo);font-size:13px">Este currículo ainda não aparece em uma análise salva.</span>';
+    return `<div class="score-list">${itens.map(({ analise, resultado, finalista }) => {
+      const pos = (resultado.pontos_positivos || []).slice(0, 4).map(p => `<li>${escHV2(p)}</li>`).join('');
+      const neg = (resultado.pontos_negativos || []).slice(0, 4).map(p => `<li>${escHV2(p)}</li>`).join('');
+      const score = Number(resultado.score) || 0;
+      return `
+        <div class="score-item">
+          <div class="score-head">
+            <div>
+              <div class="history-title">${escHV2(analise.funcao_nome || 'Análise')}</div>
+              <div class="history-meta">${fmtDataV2(analise.data)}${finalista ? ' · Finalista' : ''}</div>
+            </div>
+            <div style="margin-left:auto;text-align:right">
+              <div class="score-num">${score}</div>
+              <div style="font-size:10.5px;color:var(--text-lo)">/ 100</div>
+            </div>
+          </div>
+          <div class="score-bar-wrap"><div class="score-bar" style="width:${Math.max(0, Math.min(100, score))}%"></div></div>
+          ${resultado.resumo ? `<div class="exp-desc">${escHV2(resultado.resumo)}</div>` : ''}
+          ${(pos || neg) ? `<div class="analysis-points">
+            ${pos ? `<div><div class="field-l" style="color:var(--success)">Pontos positivos</div><ul class="point-list good">${pos}</ul></div>` : ''}
+            ${neg ? `<div><div class="field-l" style="color:var(--error)">Pontos a avaliar</div><ul class="point-list warn">${neg}</ul></div>` : ''}
+          </div>` : ''}
+        </div>`;
+    }).join('')}</div>`;
+  }
+
+  function renderHistoricoV2(candidaturas, vagas) {
+    if (!candidaturas.length) return '<span style="color:var(--text-lo);font-size:13px">Sem candidatura vinculada no Processo Seletivo.</span>';
+    return `<div class="side-list">${candidaturas.map(cand => {
+      const vaga = (vagas || []).find(v => Number(v.id) === Number(cand.vaga_id));
+      const funcao = vaga?.funcao?.nome || `Vaga #${cand.vaga_id || '—'}`;
+      return `<div class="history-item">
+        <div class="history-title">${escHV2(funcao)}</div>
+        <div class="history-meta">${escHV2(cand.canal || 'canal não informado')} · ${fmtDataV2(cand.criado_em || cand.data || cand.recebido_em)}</div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  async function carregarDetalheV2() {
+    if (!id) return;
+    if (window._iahubAuthReady) await window._iahubAuthReady;
+    const [c, analisesRes, candidaturasRes, vagasRes] = await Promise.all([
+      fetch(`/api/curriculos/${id}`).then(r => r.json()),
+      fetch('/api/analises').then(r => r.json()).catch(() => []),
+      fetch('/api/ps/candidaturas').then(r => r.json()).catch(() => []),
+      fetch('/api/vagas').then(r => r.json()).catch(() => []),
+    ]);
+    const analises = Array.isArray(analisesRes) ? analisesRes : [];
+    const candidaturas = (Array.isArray(candidaturasRes) ? candidaturasRes : []).filter(x => Number(x.curriculo_id) === Number(c.id));
+    const vagas = Array.isArray(vagasRes) ? vagasRes : [];
+    const analisesDoCurriculo = analises.filter(a => (a.resultados || []).some(r => Number(r.id) === Number(c.id)));
+    const _empCur = window._iahubEmpresa || { id: '—', nome: '—' };
+
+    document.getElementById('topbar-nome').textContent = c.nome || `Currículo #${c.id}`;
+    document.getElementById('topbar-actions').innerHTML = '';
+    if (c.pdf_base64) window._pdf = { data: c.pdf_base64, nome: c.pdf_nome || 'curriculo.pdf' };
+
+    const exps = (c.experiencias || []).map(e => `
+      <div class="exp-block">
+        <div class="exp-emp">${escHV2(e.empresa || '—')}</div>
+        <div class="exp-cargo">${escHV2(e.cargo || '')}</div>
+        <div class="exp-per">${escHV2(e.periodo || '')}</div>
+        ${e.descricao ? `<div class="exp-desc">${escHV2(e.descricao)}</div>` : ''}
+        ${e.atividades?.length ? `<ul class="exp-list">${e.atividades.map(a => `<li>${escHV2(a)}</li>`).join('')}</ul>` : ''}
+      </div>`).join('');
+
+    const form = (c.formacao || []).map(f =>
+      `<div class="field-v"><strong>${escHV2(f.instituicao || '—')}</strong> — ${escHV2(f.curso || '—')} <span style="color:var(--text-lo);font-size:12px">(${escHV2(f.periodo || '—')})</span></div>`
+    ).join('');
+    const caps = (c.capacitacoes || []).map(x => `<span class="badge badge-purple" style="margin:3px">${escHV2(typeof x === 'string' ? x : JSON.stringify(x))}</span>`).join('');
+    const habs = (c.habilidades || []).map(h => `<span class="skill-tag">${escHV2(h)}</span>`).join('');
+
+    document.getElementById('page-content').innerHTML = `
+      <div class="editor-actionbar">
+        <button type="button" class="btn btn-ghost" onclick="voltarCurriculo(event)">Cancelar</button>
+        <div class="editor-actionbar-title">
+          <strong>#${c.id} - ${escHV2(c.nome || 'Currículo')}</strong>
+          <span>${canalV2(c.remetente)} · recebido em ${fmtDataV2(c.recebido_em)}</span>
+        </div>
+        <div class="editor-actions">
+          ${c.pdf_base64 ? '<button class="btn btn-info" onclick="baixarPdf()">Baixar PDF</button>' : ''}
+        </div>
+      </div>
+
+      <div class="identity-band">
+        <div>
+          <div class="candidate-name">${escHV2(c.nome || 'Candidato sem nome')}</div>
+          <div class="candidate-meta">
+            <span>ID #${c.id}</span>
+            <span>${canalV2(c.remetente)}</span>
+            ${c.email ? `<span>${escHV2(c.email)}</span>` : ''}
+            ${c.telefone ? `<span>${escHV2(c.telefone)}</span>` : ''}
+          </div>
+        </div>
+        <div class="summary-stats">
+          ${statV2('Experiências', (c.experiencias || []).length)}
+          ${statV2('Habilidades', (c.habilidades || []).length)}
+          ${statV2('Análises', analisesDoCurriculo.length)}
+        </div>
+      </div>
+
+      <div class="editor-grid editor-grid-wide">
+        <div class="editor-main">
+          <section class="form-section">
+            <div class="form-section-header">
+              <div class="form-section-title">Dados Principais</div>
+              <div class="form-section-subtitle">Identificação, contatos e resumo profissional do candidato.</div>
+            </div>
+            <div class="form-section-body">
+              <div class="info-grid">
+                ${campoV2('Nome', c.nome)}
+                ${campoV2('Telefone', c.telefone)}
+                ${campoV2('E-mail', c.email, c.email ? `<a href="mailto:${escHV2(c.email)}">${escHV2(c.email)}</a>` : null)}
+                ${campoV2('Endereço', c.endereco)}
+                ${campoV2('LinkedIn / Portfolio', c.linkedin, c.linkedin ? `<a href="${escHV2(c.linkedin)}" target="_blank">${escHV2(c.linkedin)}</a>` : null)}
+                ${campoV2('Remetente', c.remetente)}
+              </div>
+              ${c.descricao ? `<div style="margin-top:8px;padding-top:14px;border-top:1px solid var(--border);color:var(--text-md);line-height:1.75;font-size:13.5px">${escHV2(c.descricao)}</div>` : ''}
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="form-section-header">
+              <div class="form-section-title">Análise</div>
+              <div class="form-section-subtitle">Histórico de aderência deste currículo nas análises salvas.</div>
+            </div>
+            <div class="form-section-body">${renderAnalisesV2(analises, c.id)}</div>
+          </section>
+
+          ${c.experiencias?.length ? `<section class="form-section"><div class="form-section-header"><div class="form-section-title">Experiência Profissional</div></div><div class="form-section-body">${exps}</div></section>` : ''}
+          ${habs ? `<section class="form-section"><div class="form-section-header"><div class="form-section-title">Habilidades e Competências</div></div><div class="form-section-body" style="line-height:2">${habs}</div></section>` : ''}
+        </div>
+
+        <aside class="editor-side">
+          <section class="form-section">
+            <div class="form-section-header"><div class="form-section-title">Anexos</div></div>
+            <div class="form-section-body">
+              ${c.pdf_base64 ? `<div class="history-item"><div class="history-title">${escHV2(c.pdf_nome || 'curriculo.pdf')}</div><div class="history-meta">PDF original recebido</div><button class="btn btn-info w-100" style="margin-top:10px" onclick="baixarPdf()">Baixar PDF</button></div>` : '<span style="color:var(--text-lo);font-size:13px">Nenhum PDF anexado.</span>'}
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="form-section-header"><div class="form-section-title">Histórico</div></div>
+            <div class="form-section-body">
+              <div class="history-item" style="margin-bottom:12px">
+                <div class="history-title">Recebimento do currículo</div>
+                <div class="history-meta">${fmtDataV2(c.recebido_em)} · ${canalV2(c.remetente)}</div>
+              </div>
+              ${renderHistoricoV2(candidaturas, vagas)}
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="form-section-header"><div class="form-section-title">Dados do Registro</div></div>
+            <div class="form-section-body">
+              <div class="side-list">
+                ${campoV2('ID do Registro', c.id)}
+                ${campoV2('ID da Empresa', _empCur.id)}
+                ${campoV2('Empresa', _empCur.nome)}
+              </div>
+            </div>
+          </section>
+
+          ${(c.formacao?.length || c.capacitacoes?.length) ? `<section class="form-section"><div class="form-section-header"><div class="form-section-title">Formação</div></div><div class="form-section-body">${form}${caps ? `<div style="line-height:2">${caps}</div>` : ''}</div></section>` : ''}
+        </aside>
+      </div>`;
+  }
+
+  carregarDetalheV2();
 </script>
 </body>
 </html>

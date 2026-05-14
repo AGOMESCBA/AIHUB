@@ -4,9 +4,10 @@
   // ── Definição do menu ─────────────────────────────────────────────────────────
   const MENU = [
     {
-      id: 'monitoramento', label: 'Monitoramento', icon: '💬', defaultOpen: true,
+      id: 'monitoramento', label: 'Monitores', icon: '💬', defaultOpen: true,
       items: [
         { id: 'dashboard',        label: 'Dashboard',        href: '/dashboard.html',     icon: '⊞' },
+        { id: 'monitores',        label: 'Monitores',          href: '/monitores.html',      icon: '🖥️' },
         { id: 'monitor-whatsapp', label: 'Monitor WhatsApp', href: '/monitor.html',        icon: '💬' },
         { id: 'monitor-email',    label: 'Monitor E-mail',   href: '/monitor-email.html',  icon: '📧' },
       ],
@@ -210,6 +211,7 @@
   window.toggleSidebar = toggle;
   window.toggleSection = toggleSection;
   window.toggleSubmenu = toggleSubmenu;
+  window.MENU = MENU;
 
   // Aguarda rotinas para construir o nav com filtro correto
   document.addEventListener('DOMContentLoaded', async () => {

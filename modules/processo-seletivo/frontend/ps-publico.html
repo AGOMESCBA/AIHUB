@@ -82,24 +82,24 @@
     /* ── Grade de vagas ─────────────────────────────────────────── */
     .vagas-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 300px));
-      gap: 20px;
-      justify-content: center;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 22px;
+      justify-content: stretch;
     }
 
     .vaga-tile {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 32px 28px 26px;
+      padding: 22px;
       cursor: pointer;
       transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
       box-shadow: var(--shadow-sm);
       user-select: none;
-      min-height: 180px;
+      min-height: 280px;
     }
     .vaga-tile:hover {
       border-color: var(--accent-light);
@@ -108,17 +108,18 @@
     }
 
     .tile-area {
-      font-size: 13px;
+      font-size: 12px;
       text-transform: uppercase;
       letter-spacing: .07em;
       color: var(--text-lo);
       font-weight: 600;
+      margin-bottom: 6px;
     }
     .tile-nome {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
       color: var(--text-hi);
-      line-height: 1.3;
+      line-height: 1.25;
     }
     .tile-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
     .badge {
@@ -131,13 +132,48 @@
     .badge-form  { background: var(--bg-hover); color: var(--text-md); border: 1px solid var(--border); }
 
     .tile-desc {
-      font-size: 13px;
+      font-size: 14px;
       color: var(--text-md);
-      line-height: 1.5;
+      line-height: 1.65;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 4;
       -webkit-box-orient: vertical;
       overflow: hidden;
+    }
+    .tile-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .tile-count {
+      font-size: 34px;
+      font-weight: 800;
+      color: var(--accent-light);
+      line-height: 1;
+    }
+    .tile-count-label {
+      color: var(--text-lo);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    .tile-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .tile-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
     }
     .tile-cta {
       margin-top: auto;
@@ -165,12 +201,13 @@
 
     .modal-box {
       background: var(--bg-card);
-      border-radius: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
       width: 100%;
-      max-width: 660px;
+      max-width: 1040px;
       max-height: 88vh;
       overflow-y: auto;
-      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      box-shadow: 0 20px 60px rgba(15,23,42,.22);
       animation: slideUp .18s ease;
     }
     @keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
@@ -216,10 +253,70 @@
     }
     .btn-fechar:hover { background: var(--bg-hover); color: var(--text-hi); }
 
-    .modal-body { padding: 28px 28px 32px; }
+    .modal-body { padding: 0; }
+
+    .vaga-detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0,1fr) 340px;
+      gap: 0;
+      align-items: start;
+    }
+    .vaga-info-panel {
+      padding: 26px 28px 32px;
+      min-width: 0;
+    }
+    .candidatura-panel {
+      position: sticky;
+      top: 89px;
+      padding: 22px;
+      border-left: 1px solid var(--border);
+      background: var(--bg-base);
+      min-height: calc(88vh - 89px);
+    }
+    .detail-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow-sm);
+    }
+    .detail-card + .detail-card { margin-top: 14px; }
+    .detail-card-title {
+      color: var(--text-hi);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .fact-grid {
+      display: grid;
+      grid-template-columns: repeat(3,minmax(0,1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .fact-item {
+      background: var(--bg-base);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .fact-label {
+      color: var(--text-lo);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .fact-value {
+      color: var(--text-hi);
+      font-size: 13px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
 
     /* ── Detalhes ───────────────────────────────────────────────── */
-    .detalhe-bloco { margin-bottom: 22px; }
+    .detalhe-bloco { margin-bottom: 0; }
     .detalhe-label {
       font-size: 11px;
       text-transform: uppercase;
@@ -254,7 +351,7 @@
       font-size: 15px;
       font-weight: 600;
       color: var(--text-hi);
-      margin-bottom: 22px;
+      margin-bottom: 16px;
     }
     .form-label { font-size: 14px; }
 
@@ -356,7 +453,21 @@
     @media (max-width: 600px) {
       .pub-hero { padding: 16px 20px 14px; }
       .pub-container { padding: 16px 16px 60px; }
-      .modal-body { padding: 20px 20px 28px; }
+      .vagas-grid { grid-template-columns: 1fr; }
+      .vaga-tile { min-height: 0; padding: 20px; }
+      .modal-overlay { padding: 10px; align-items: stretch; }
+      .modal-box { max-height: calc(100vh - 20px); }
+      .modal-header { padding: 16px 18px; }
+      .vaga-detail-layout { grid-template-columns: 1fr; }
+      .vaga-info-panel { padding: 18px; }
+      .candidatura-panel {
+        position: static;
+        min-height: auto;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        padding: 18px;
+      }
+      .fact-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -409,6 +520,7 @@
     </div>
   </div>
 
+<script src="/js/rich-text.js?v=quill-2"></script>
 <script>
   const token = '__PS_TOKEN__';
   let waNumero = null;
@@ -451,10 +563,19 @@
 
       return `
       <div class="vaga-tile" onclick="abrirModal(${v.id})">
-        ${f.area ? `<div class="tile-area">${esc(f.area)}</div>` : ''}
-        <div class="tile-nome">${esc(f.nome || 'Vaga em Aberto')}</div>
+        <div>
+          ${f.area ? `<div class="tile-area">${esc(f.area)}</div>` : ''}
+          <div class="tile-nome">${esc(f.nome || 'Vaga em Aberto')}</div>
+        </div>
         <div class="tile-badges">${badges}</div>
-        ${f.descricao ? `<div class="tile-desc">${esc(f.descricao)}</div>` : ''}
+        <div class="tile-summary">
+          <div>
+            <div class="tile-count">${v.quantidade}</div>
+            <div class="tile-count-label">vaga${v.quantidade !== 1 ? 's' : ''} disponível${v.quantidade !== 1 ? 'eis' : ''}</div>
+          </div>
+          <div class="tile-status"><span class="tile-status-dot"></span>Aberta</div>
+        </div>
+        ${f.descricao ? `<div class="tile-desc rich-content rich-content-compact">${richRender(f.descricao)}</div>` : ''}
         <div class="tile-cta">Ver vaga →</div>
       </div>`;
     }).join('')}</div>`;
@@ -480,9 +601,9 @@
       <div class="modal-badges">${badges}</div>`;
 
     const reqObrig = f.requisitos_obrigatorios
-      ? f.requisitos_obrigatorios.split(/[\n,]+/).map(r => r.replace(/^[-•]\s*/, '').trim()).filter(Boolean) : [];
+      ? richPlainText(f.requisitos_obrigatorios).split(/[\n,]+/).map(r => r.replace(/^[-•]\s*/, '').trim()).filter(Boolean) : [];
     const reqDesej = f.requisitos_desejaveis
-      ? f.requisitos_desejaveis.split(/[\n,]+/).map(r => r.replace(/^[-•]\s*/, '').trim()).filter(Boolean) : [];
+      ? richPlainText(f.requisitos_desejaveis).split(/[\n,]+/).map(r => r.replace(/^[-•]\s*/, '').trim()).filter(Boolean) : [];
     const habs = Array.isArray(f.habilidades_tecnicas) ? f.habilidades_tecnicas : [];
 
     const waLink = waNumero
@@ -490,67 +611,86 @@
       : '';
 
     document.getElementById('modal-body').innerHTML = `
-      ${f.descricao ? `<div class="detalhe-bloco">
-        <div class="detalhe-label">Sobre a vaga</div>
-        <div class="detalhe-texto">${esc(f.descricao)}</div>
-      </div>` : ''}
-
-      ${reqObrig.length ? `<div class="detalhe-bloco">
-        <div class="detalhe-label">Requisitos obrigatórios</div>
-        <div class="detalhe-tags">${reqObrig.map(r => `<span class="detalhe-tag">✓ ${esc(r)}</span>`).join('')}</div>
-      </div>` : ''}
-
-      ${reqDesej.length ? `<div class="detalhe-bloco">
-        <div class="detalhe-label">Diferenciais</div>
-        <div class="detalhe-tags">${reqDesej.map(r => `<span class="detalhe-tag">${esc(r)}</span>`).join('')}</div>
-      </div>` : ''}
-
-      ${habs.length ? `<div class="detalhe-bloco">
-        <div class="detalhe-label">Habilidades técnicas</div>
-        <div class="detalhe-tags">${habs.map(h => `<span class="detalhe-tag">${esc(h)}</span>`).join('')}</div>
-      </div>` : ''}
-
-      ${f.formacao_necessaria ? `<div class="detalhe-bloco">
-        <div class="detalhe-label">Formação</div>
-        <div class="detalhe-texto">${esc(f.formacao_necessaria)}</div>
-      </div>` : ''}
-
-      <hr class="form-divider">
-
-      <div id="form-section-${vagaId}">
-        <div class="form-section-title">📄 Enviar meu currículo</div>
-
-        <div class="form-group">
-          <label class="form-label">Nome completo <span style="color:var(--error)">*</span></label>
-          <input type="text" class="form-control" id="nome-${vagaId}" placeholder="Seu nome completo" autocomplete="name">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">E-mail para contato <span style="color:var(--error)">*</span></label>
-          <input type="email" class="form-control" id="email-${vagaId}" placeholder="seu@email.com" autocomplete="email">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Currículo em PDF <span style="color:var(--error)">*</span></label>
-          <input type="file" id="file-${vagaId}" accept=".pdf,application/pdf" onchange="arquivoSelecionado(${vagaId}, this)">
-          <div class="upload-area" id="upload-${vagaId}"
-            onclick="document.getElementById('file-${vagaId}').click()"
-            ondragover="dragOver(event,${vagaId})"
-            ondragleave="dragLeave(${vagaId})"
-            ondrop="dragDrop(event,${vagaId})">
-            <div class="upload-icon">📎</div>
-            <div class="upload-txt">Arraste o PDF aqui ou <strong>clique para selecionar</strong></div>
-            <div class="upload-nome" id="upload-nome-${vagaId}" style="display:none"></div>
-            <div class="upload-hint">Apenas PDF · máx. 10 MB</div>
+      <div class="vaga-detail-layout">
+        <div class="vaga-info-panel">
+          <div class="fact-grid">
+            <div class="fact-item">
+              <div class="fact-label">Área</div>
+              <div class="fact-value">${esc(f.area || 'Não informada')}</div>
+            </div>
+            <div class="fact-item">
+              <div class="fact-label">Nível</div>
+              <div class="fact-value">${esc(f.nivel_experiencia || 'Não especificado')}</div>
+            </div>
+            <div class="fact-item">
+              <div class="fact-label">Vagas</div>
+              <div class="fact-value">${v.quantidade} aberta${v.quantidade !== 1 ? 's' : ''}</div>
+            </div>
           </div>
+
+          ${f.descricao ? `<section class="detail-card detalhe-bloco">
+            <div class="detail-card-title">Sobre a vaga</div>
+            <div class="detalhe-texto rich-content">${richRender(f.descricao)}</div>
+          </section>` : ''}
+
+          ${reqObrig.length ? `<section class="detail-card detalhe-bloco">
+            <div class="detail-card-title">Requisitos obrigatórios</div>
+            <div class="detalhe-tags">${reqObrig.map(r => `<span class="detalhe-tag">${esc(r)}</span>`).join('')}</div>
+          </section>` : ''}
+
+          ${reqDesej.length ? `<section class="detail-card detalhe-bloco">
+            <div class="detail-card-title">Diferenciais</div>
+            <div class="detalhe-tags">${reqDesej.map(r => `<span class="detalhe-tag">${esc(r)}</span>`).join('')}</div>
+          </section>` : ''}
+
+          ${habs.length ? `<section class="detail-card detalhe-bloco">
+            <div class="detail-card-title">Habilidades técnicas</div>
+            <div class="detalhe-tags">${habs.map(h => `<span class="detalhe-tag">${esc(h)}</span>`).join('')}</div>
+          </section>` : ''}
+
+          ${f.formacao_necessaria ? `<section class="detail-card detalhe-bloco">
+            <div class="detail-card-title">Formação</div>
+            <div class="detalhe-texto">${esc(f.formacao_necessaria)}</div>
+          </section>` : ''}
         </div>
 
-        <div id="alert-${vagaId}"></div>
+        <aside class="candidatura-panel">
+          <div id="form-section-${vagaId}">
+            <div class="form-section-title">Enviar meu currículo</div>
 
-        <button class="btn-submit" id="btn-${vagaId}" onclick="enviarCandidatura(${vagaId})">
-          Enviar Currículo
-        </button>
-        ${waLink}
+            <div class="form-group">
+              <label class="form-label">Nome completo <span style="color:var(--error)">*</span></label>
+              <input type="text" class="form-control" id="nome-${vagaId}" placeholder="Seu nome completo" autocomplete="name">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">E-mail para contato <span style="color:var(--error)">*</span></label>
+              <input type="email" class="form-control" id="email-${vagaId}" placeholder="seu@email.com" autocomplete="email">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Currículo em PDF <span style="color:var(--error)">*</span></label>
+              <input type="file" id="file-${vagaId}" accept=".pdf,application/pdf" onchange="arquivoSelecionado(${vagaId}, this)">
+              <div class="upload-area" id="upload-${vagaId}"
+                onclick="document.getElementById('file-${vagaId}').click()"
+                ondragover="dragOver(event,${vagaId})"
+                ondragleave="dragLeave(${vagaId})"
+                ondrop="dragDrop(event,${vagaId})">
+                <div class="upload-icon">PDF</div>
+                <div class="upload-txt">Arraste o arquivo aqui ou <strong>clique para selecionar</strong></div>
+                <div class="upload-nome" id="upload-nome-${vagaId}" style="display:none"></div>
+                <div class="upload-hint">Apenas PDF · máx. 10 MB</div>
+              </div>
+            </div>
+
+            <div id="alert-${vagaId}"></div>
+
+            <button class="btn-submit" id="btn-${vagaId}" onclick="enviarCandidatura(${vagaId})">
+              Enviar currículo
+            </button>
+            ${waLink}
+          </div>
+        </aside>
       </div>`;
 
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -634,10 +774,17 @@
           </div>
         </div>`;
 
-    } catch {
-      alerta.innerHTML = '<div class="alert alert-error">⚠️ Erro de conexão. Verifique sua internet e tente novamente.</div>';
+    } catch (err) {
+      console.error('[PS] Erro ao enviar candidatura:', err);
+      let msg = 'Erro ao conectar com o servidor. Tente novamente em instantes.';
+      if (err instanceof SyntaxError) {
+        msg = 'Resposta inesperada do servidor. Verifique o console e tente novamente.';
+      } else if (err?.message) {
+        msg = `Erro: ${err.message}`;
+      }
+      alerta.innerHTML = `<div class="alert alert-error">⚠️ ${msg}</div>`;
       btn.disabled = false;
-      btn.innerHTML = 'Enviar Currículo';
+      btn.innerHTML = 'Enviar currículo';
     }
   }
 

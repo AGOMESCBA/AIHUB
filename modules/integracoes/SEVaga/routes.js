@@ -4,18 +4,28 @@ const anDb    = require(path.join(__dirname, '..', '..', 'analisador-curriculos'
 const seApiDb = require(path.join(__dirname, '..', 'SEApiConfigurator', 'database'));
 const engine  = require(path.join(__dirname, '..', 'SEApiConfigurator', 'engine'));
 
+function _resolverEid(req) {
+  const explicit = Number(req.body?.empresa_id || req.query?.empresa_id || 0);
+  if (!explicit) return req.session.empresa_id;
+  const { empresas: acesso, role } = req.session;
+  const ok = role === 'admin' || acesso === 'all' ||
+    (Array.isArray(acesso) && acesso.includes(explicit));
+  return ok ? explicit : req.session.empresa_id;
+}
+
 module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Configuração ──────────────────────────────────────────────────────────────
   app.get('/api/integracoes/se-vaga/config', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.getConfig(req.session.empresa_id));
+    res.json(db.getConfig(_resolverEid(req)));
   });
 
   app.post('/api/integracoes/se-vaga/config', requireAuth, requireEmpresa, (req, res) => {
+    const eid = _resolverEid(req);
     const { se_api_flow_id } = req.body;
     if (!se_api_flow_id)
       return res.status(400).json({ error: 'Selecione um flow para a integração de vagas' });
-    db.saveConfig(req.session.empresa_id, {
+    db.saveConfig(eid, {
       integration_source: 'flow',
       se_api_flow_id: Number(se_api_flow_id),
     });
@@ -24,28 +34,30 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Flows disponíveis ─────────────────────────────────────────────────────────
   app.get('/api/integracoes/se-vaga/flows', requireAuth, requireEmpresa, (req, res) => {
-    const flows = seApiDb.listFlows(req.session.empresa_id);
+    const eid   = _resolverEid(req);
+    const flows = seApiDb.listFlows(eid);
     res.json(flows.map(f => ({
       id:          f.id,
       nome:        f.nome,
       descricao:   f.descricao || '',
-      steps_count: seApiDb.listFlowSteps(req.session.empresa_id, f.id).length,
+      steps_count: seApiDb.listFlowSteps(eid, f.id).length,
     })));
   });
 
   // ── Status mapa (vaga_id -> status) para os badges nos cards ─────────────────
   app.get('/api/integracoes/se-vaga/status-mapa', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.getStatusMapa(req.session.empresa_id));
+    res.json(db.getStatusMapa(_resolverEid(req)));
   });
 
   // ── Logs ──────────────────────────────────────────────────────────────────────
   app.get('/api/integracoes/se-vaga/logs', requireAuth, requireEmpresa, (req, res) => {
+    const eid = _resolverEid(req);
     const { status, vaga_nome, data_inicio, data_fim, page, limit } = req.query;
-    res.json(db.listLogs(req.session.empresa_id, { status, vaga_nome, data_inicio, data_fim, page, limit }));
+    res.json(db.listLogs(eid, { status, vaga_nome, data_inicio, data_fim, page, limit }));
   });
 
   app.get('/api/integracoes/se-vaga/logs/:seq/steps', requireAuth, requireEmpresa, (req, res) => {
-    const eid   = req.session.empresa_id;
+    const eid   = _resolverEid(req);
     const entry = db.getLogBySeq(eid, req.params.seq);
     if (!entry) return res.status(404).json({ error: 'Registro não encontrado' });
     if (!entry.se_api_log_ids || !entry.se_api_log_ids.length) return res.json([]);
@@ -55,7 +67,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Enviar vagas ao SE ────────────────────────────────────────────────────────
   app.post('/api/integracoes/se-vaga/enviar', requireAuth, requireEmpresa, async (req, res) => {
-    const eid        = req.session.empresa_id;
+    const eid        = _resolverEid(req);
     const { vaga_ids } = req.body;
     if (!Array.isArray(vaga_ids) || !vaga_ids.length)
       return res.status(400).json({ error: 'vaga_ids deve ser um array não vazio' });
@@ -163,7 +175,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Reenviar vaga específica ──────────────────────────────────────────────────
   app.post('/api/integracoes/se-vaga/reenviar', requireAuth, requireEmpresa, async (req, res) => {
-    const eid      = req.session.empresa_id;
+    const eid      = _resolverEid(req);
     const { vaga_id } = req.body;
     if (!vaga_id) return res.status(400).json({ error: 'vaga_id é obrigatório' });
 
@@ -222,9 +234,10 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Resetar status de sucesso para revertido ──────────────────────────────────
   app.post('/api/integracoes/se-vaga/resetar', requireAuth, requireEmpresa, (req, res) => {
+    const eid = _resolverEid(req);
     const { seq } = req.body;
     if (!seq) return res.status(400).json({ error: 'seq é obrigatório' });
-    const ok = db.resetarIntegracao(req.session.empresa_id, seq);
+    const ok = db.resetarIntegracao(eid, seq);
     if (!ok) return res.status(404).json({ error: 'Registro de sucesso não encontrado' });
     res.json({ ok: true });
   });

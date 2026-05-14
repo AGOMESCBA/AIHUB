@@ -7,21 +7,57 @@
   <link rel="stylesheet" href="/css/iahub.css">
   <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
-    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
-    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(660px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
-    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:24px; }
-    .modal-title   { font-size:16px;font-weight:700;color:var(--text-hi); }
-    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1;padding:0; }
-    .modal-close:hover { color:var(--text-hi); }
     .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
-    .modal-footer  { display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:24px;padding-top:20px;border-top:1px solid var(--border); }
     .btn-icon      { background:none;border:none;cursor:pointer;padding:5px 8px;border-radius:6px;font-size:16px;transition:background .15s; }
     .btn-icon:hover { background:var(--bg-hover); }
     .empty-state   { text-align:center;padding:60px 20px;color:var(--text-lo); }
     .empty-state div { font-size:40px;margin-bottom:12px; }
+    .emp-tab-panel { display:none; }
+    .emp-tab-panel.active { display:block; }
+    .identity-grid { display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px; }
+    .identity-card { border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-card); }
+    .identity-title { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .identity-hint { font-size:11.5px;color:var(--text-md);line-height:1.45;margin-bottom:10px; }
+    .identity-preview { height:130px;border:1px dashed var(--border-hi);border-radius:8px;background:var(--bg-base);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--text-lo);font-size:12px;margin-bottom:10px;text-align:center;padding:10px; }
+    .identity-preview.logo img { max-width:90%;max-height:90%;object-fit:contain; }
+    .identity-preview.background img { width:100%;height:100%;object-fit:cover; }
+    .identity-actions { display:flex;gap:8px;flex-wrap:wrap; }
+    .identity-actions .btn { padding:6px 10px;font-size:12px; }
+    .identity-locked { border:1px dashed var(--border-hi);border-radius:8px;padding:12px;color:var(--text-md);font-size:12px;background:var(--bg-base);margin-bottom:16px; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-search { flex:1;min-width:280px; }
+    .quick-row .form-control { height:36px;margin:0;font-size:13px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .empresa-editor-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:18px; }
+    .empresa-editor-tab { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 14px;border-bottom:2px solid transparent; }
+    .empresa-editor-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .empresa-summary { display:grid;gap:12px; }
+    .empresa-summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .empresa-summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .empresa-summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .empresa-editor-note { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+    @media (max-width: 920px) {
+      .page-head { flex-direction:column; }
+      .page-head .btn { align-self:flex-start; }
+      .editor-actions { width:100%;justify-content:flex-start; }
+    }
+    @media (max-width: 720px) { .form-row,.identity-grid { grid-template-columns:1fr; } }
+    @media (max-width: 560px) {
+      .quick-search { min-width:100%; }
+      .quick-row select.form-control { width:100%; }
+    }
 
     /* ── Group panel ── */
-    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-wrap { margin-top:12px;padding-top:12px;border-top:1px solid var(--border); }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;margin-bottom:8px; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
 
     /* ── Tabulator overrides ── */
@@ -57,70 +93,190 @@
     </div>
 
     <div class="page-content">
-      <div style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
-          <div class="gp-chips-row" id="gp-chips" style="flex:1;min-height:28px">
-            <span class="gp-label">Agrupar:</span>
-          </div>
-          <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Empresa</button>
+      <div id="list-view">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Administração</div>
+          <div class="page-title">Cadastro de Empresas</div>
+          <div class="page-subtitle">Gerencie empresas, documentos e identidade visual usada no acesso ao sistema.</div>
         </div>
-        <div id="gp-dz"></div>
+        <button class="btn btn-primary" onclick="abrirModal()">＋ Nova Empresa</button>
+      </div>
+
+      <div class="quick-panel">
+        <div class="quick-row">
+          <input id="q-busca" class="form-control quick-search" placeholder="Buscar por razão social, documento, e-mail ou telefone..." oninput="aplicarFiltrosRapidos()">
+          <select id="q-tipo" class="form-control" onchange="aplicarFiltrosRapidos()">
+            <option value="">Todos os tipos</option>
+            <option value="CPF">CPF</option>
+            <option value="CNPJ">CNPJ</option>
+          </select>
+          <button class="btn btn-ghost" onclick="limparFiltrosRapidos()">Limpar</button>
+        </div>
+
+        <div class="gp-wrap">
+          <div class="gp-chips-row" id="gp-chips">
+            <span class="gp-label">Agrupar por:</span>
+          </div>
+          <div id="gp-dz"></div>
+        </div>
       </div>
 
       <div class="card" style="padding:0;overflow:hidden">
+        <div class="grid-toolbar">
+          <div>
+            <div class="grid-title">Empresas cadastradas</div>
+            <div id="count" class="grid-meta"></div>
+          </div>
+        </div>
         <div id="grid"></div>
       </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Modal Criar / Editar ───────────────────────────────────────────────── -->
-<div id="modal" class="modal-overlay d-none">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modal-title">Nova Empresa</span>
-      <button class="modal-close" onclick="fecharModal()">✕</button>
-    </div>
-
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Razão Social <span style="color:#dc2626">*</span></label>
-        <input id="f-razao" type="text" class="form-control" placeholder="Nome da empresa ou produtor rural">
       </div>
-      <div class="form-group">
-        <label class="form-label">CPF / CNPJ <span style="color:#dc2626">*</span></label>
-        <input id="f-doc" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00"
-               oninput="maskDoc(this)" inputmode="numeric" maxlength="18">
-      </div>
-    </div>
 
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Telefone</label>
-        <input id="f-tel" type="text" class="form-control" placeholder="(00) 00000-0000">
-      </div>
-      <div class="form-group">
-        <label class="form-label">E-mail</label>
-        <input id="f-email" type="email" class="form-control" placeholder="contato@empresa.com.br">
-      </div>
-    </div>
+      <section id="editor-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="modal-title">Nova Empresa</strong>
+            <span id="editor-status">Preencha os dados cadastrais e salve para liberar a identidade visual.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" type="button" onclick="fecharModal()">Cancelar</button>
+            <button class="btn btn-primary" type="button" id="btn-salvar" onclick="salvar()">Salvar</button>
+          </div>
+        </div>
 
-    <div class="form-row" style="margin-bottom:16px">
-      <div class="form-group">
-        <label class="form-label">Site</label>
-        <input id="f-site" type="text" class="form-control" placeholder="https://empresa.com.br">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Endereço</label>
-        <input id="f-end" type="text" class="form-control" placeholder="Rua, número, cidade — UF">
-      </div>
-    </div>
+        <div class="editor-grid editor-grid-wide">
+          <main class="editor-main">
+            <div class="empresa-editor-tabs">
+              <button type="button" class="empresa-editor-tab active" id="tab-dados" onclick="mudarTabEmpresa('dados')">Dados cadastrais</button>
+              <button type="button" class="empresa-editor-tab" id="tab-identidade" onclick="mudarTabEmpresa('identidade')">Identidade visual</button>
+            </div>
 
-    <div id="form-error" class="login-error" style="display:none;margin-bottom:12px"></div>
+            <div id="panel-dados" class="emp-tab-panel active">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div>
+                    <div class="form-section-title">Dados principais</div>
+                    <div class="form-section-subtitle">Identificação fiscal e informações de contato da empresa.</div>
+                  </div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-row" style="margin-bottom:16px">
+                    <div class="form-group">
+                      <label class="form-label">Razão Social <span style="color:#dc2626">*</span></label>
+                      <input id="f-razao" type="text" class="form-control" placeholder="Nome da empresa ou produtor rural" oninput="atualizarCabecalhoEmpresa()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">CPF / CNPJ <span style="color:#dc2626">*</span></label>
+                      <input id="f-doc" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                             oninput="maskDoc(this); atualizarCabecalhoEmpresa()" inputmode="numeric" maxlength="18">
+                    </div>
+                  </div>
 
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
-      <button class="btn btn-primary" id="btn-salvar" onclick="salvar()">Salvar</button>
+                  <div class="form-row" style="margin-bottom:16px">
+                    <div class="form-group">
+                      <label class="form-label">Telefone</label>
+                      <input id="f-tel" type="text" class="form-control" placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">E-mail</label>
+                      <input id="f-email" type="email" class="form-control" placeholder="contato@empresa.com.br">
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Site</label>
+                      <input id="f-site" type="text" class="form-control" placeholder="https://empresa.com.br">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Endereço</label>
+                      <input id="f-end" type="text" class="form-control" placeholder="Rua, número, cidade - UF">
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div id="panel-identidade" class="emp-tab-panel">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div>
+                    <div class="form-section-title">Identidade visual</div>
+                    <div class="form-section-subtitle">Imagens usadas para personalizar a experiência de login.</div>
+                  </div>
+                </div>
+                <div class="form-section-body">
+                  <div id="identity-locked" class="identity-locked">Salve a empresa antes de enviar as imagens da tela de login.</div>
+                  <div class="identity-grid">
+                    <div class="identity-card">
+                      <div class="identity-title">Logomarca acima do login</div>
+                      <div class="identity-hint">Tamanho ideal: 400 x 200 px. Use PNG com fundo transparente, JPG ou WEBP. Limite: 4 MB.</div>
+                      <div class="identity-preview logo" id="preview-logo">Nenhuma logomarca enviada.</div>
+                      <input id="file-logo" type="file" accept="image/png,image/jpeg,image/webp" class="d-none" onchange="uploadIdentidade('logo', this)">
+                      <div class="identity-actions">
+                        <button type="button" class="btn btn-ghost" onclick="selecionarArquivoIdentidade('logo')">Enviar imagem</button>
+                        <button type="button" class="btn btn-danger" onclick="removerIdentidade('logo')">Remover</button>
+                      </div>
+                    </div>
+
+                    <div class="identity-card">
+                      <div class="identity-title">Imagem lateral do login</div>
+                      <div class="identity-hint">Tamanho ideal: 1920 x 1080 px, proporção 16:9. Prefira JPG ou WEBP. Limite: 6 MB.</div>
+                      <div class="identity-preview background" id="preview-background">Nenhuma imagem lateral enviada.</div>
+                      <input id="file-background" type="file" accept="image/png,image/jpeg,image/webp" class="d-none" onchange="uploadIdentidade('background', this)">
+                      <div class="identity-actions">
+                        <button type="button" class="btn btn-ghost" onclick="selecionarArquivoIdentidade('background')">Enviar imagem</button>
+                        <button type="button" class="btn btn-danger" onclick="removerIdentidade('background')">Remover</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Texto sobre a imagem lateral</label>
+                    <textarea id="f-login-slogan" class="form-control" rows="2" maxlength="180" placeholder="Frase institucional que aparecerá sobre a imagem lateral"></textarea>
+                    <div class="form-hint">Opcional. Será usado na fase 2, quando aplicarmos o novo layout do login.</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <div id="form-error" class="login-error" style="display:none;margin-top:12px"></div>
+          </main>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div>
+                  <div class="form-section-title">Resumo do registro</div>
+                  <div class="form-section-subtitle">Referência rápida para conferência durante a edição.</div>
+                </div>
+              </div>
+              <div class="form-section-body">
+                <div class="empresa-summary">
+                  <div class="empresa-summary-item">
+                    <div class="empresa-summary-label">Código</div>
+                    <div class="empresa-summary-value" id="meta-registro">Novo</div>
+                  </div>
+                  <div class="empresa-summary-item">
+                    <div class="empresa-summary-label">Empresa</div>
+                    <div class="empresa-summary-value" id="meta-razao">Nova Empresa</div>
+                  </div>
+                  <div class="empresa-summary-item">
+                    <div class="empresa-summary-label">Documento</div>
+                    <div class="empresa-summary-value" id="meta-doc">-</div>
+                  </div>
+                  <div class="empresa-summary-item">
+                    <div class="empresa-summary-label">Identidade visual</div>
+                    <div class="empresa-summary-value" id="meta-identidade">Disponível após salvar</div>
+                  </div>
+                </div>
+                <p class="empresa-editor-note">As imagens de identidade visual continuam liberadas apenas depois que a empresa possui um código salvo.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
     </div>
   </div>
 </div>
@@ -133,6 +289,7 @@
   let empresas = [];
   let editId   = null;
   let table    = null;
+  let _quickFilterFn = null;
 
   const gp = createGroupPanel({
     chipsRowId: 'gp-chips',
@@ -168,12 +325,52 @@
 
   function soNumeros(str) { return String(str || '').replace(/\D/g, ''); }
 
+  function labelEmpresas(qtd) {
+    return qtd === 1 ? '1 empresa' : `${qtd} empresas`;
+  }
+
+  function aplicarFiltrosRapidos() {
+    if (!table) return;
+    const busca = document.getElementById('q-busca').value.trim().toLowerCase();
+    const tipo  = document.getElementById('q-tipo').value;
+
+    if (_quickFilterFn) {
+      table.removeFilter(_quickFilterFn);
+      _quickFilterFn = null;
+    }
+
+    if (!busca && !tipo) return;
+
+    _quickFilterFn = rowData => {
+      if (tipo && rowData.tipo_doc !== tipo) return false;
+      if (busca) {
+        const termos = [
+          rowData.razao_social || '',
+          rowData.documento || '',
+          rowData.documento_fmt || '',
+          rowData.telefone || '',
+          rowData.email || '',
+          rowData.site || '',
+        ].join(' ').toLowerCase();
+        if (!termos.includes(busca)) return false;
+      }
+      return true;
+    };
+    table.addFilter(_quickFilterFn);
+  }
+
+  function limparFiltrosRapidos() {
+    document.getElementById('q-busca').value = '';
+    document.getElementById('q-tipo').value = '';
+    aplicarFiltrosRapidos();
+  }
+
   // ── Tabulator ───────────────────────────────────────────────────────────────
   function initTabulator(dados) {
     table = new Tabulator('#grid', {
       data: dados,
       layout: 'fitColumns',
-      height: 'calc(100vh - 220px)',
+      height: 'calc(100vh - 315px)',
       groupStartOpen: true,
       groupBy: gp.getActiveFields(),
       placeholder: '<div class="empty-state"><div>🏢</div><strong style="color:var(--text-md)">Nenhuma empresa cadastrada</strong></div>',
@@ -226,6 +423,12 @@
         },
       ],
       rowClick: (_e, row) => editar(row.getData().id),
+      dataFiltered: (_filters, rows) => {
+        const total = dados.length;
+        const qtd = rows?.length ?? total;
+        document.getElementById('count').textContent =
+          qtd === total ? labelEmpresas(qtd) : `${qtd} de ${total} empresas`;
+      },
     });
   }
 
@@ -245,28 +448,51 @@
         initTabulator(dados);
         setTimeout(() => gp.refresh(), 0);
       }
+      document.getElementById('count').textContent = labelEmpresas(dados.length);
+      aplicarFiltrosRapidos();
     } catch (_) {
       console.error('Erro ao carregar empresas.');
     }
   }
 
-  // ── Modal ───────────────────────────────────────────────────────────────────
+  // ── Editor ──────────────────────────────────────────────────────────────────
+  function atualizarCabecalhoEmpresa() {
+    const nome = document.getElementById('f-razao').value.trim() || 'Nova Empresa';
+    const doc  = document.getElementById('f-doc').value.trim();
+    const titulo = editId ? `#${editId} - ${nome}` : `Novo registro - ${nome}`;
+
+    document.getElementById('modal-title').textContent = titulo;
+    document.getElementById('meta-registro').textContent = editId ? `#${editId}` : 'Novo';
+    document.getElementById('meta-razao').textContent = nome;
+    document.getElementById('meta-doc').textContent = doc || '-';
+    document.getElementById('meta-identidade').textContent = editId ? 'Disponível para envio' : 'Disponível após salvar';
+    document.getElementById('editor-status').textContent = editId
+      ? 'Revise os dados cadastrais ou atualize a identidade visual.'
+      : 'Preencha os dados cadastrais e salve para liberar a identidade visual.';
+  }
+
   function abrirModal(empresa = null) {
     editId = empresa?.id ?? null;
-    document.getElementById('modal-title').textContent = empresa ? 'Editar Empresa' : 'Nova Empresa';
     document.getElementById('f-razao').value = empresa?.razao_social ?? '';
     document.getElementById('f-doc').value   = formatarDoc(empresa?.documento ?? '');
     document.getElementById('f-tel').value   = empresa?.telefone     ?? '';
     document.getElementById('f-email').value = empresa?.email        ?? '';
     document.getElementById('f-site').value  = empresa?.site         ?? '';
     document.getElementById('f-end').value   = empresa?.endereco     ?? '';
+    document.getElementById('f-login-slogan').value = empresa?.login_slogan ?? '';
+    mudarTabEmpresa('dados');
+    renderIdentidade(empresa || {});
+    atualizarCabecalhoEmpresa();
     document.getElementById('form-error').style.display = 'none';
-    document.getElementById('modal').classList.remove('d-none');
+    document.getElementById('list-view').classList.add('d-none');
+    document.getElementById('editor-view').classList.remove('d-none');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(() => document.getElementById('f-razao').focus(), 50);
   }
 
   function fecharModal() {
-    document.getElementById('modal').classList.add('d-none');
+    document.getElementById('editor-view').classList.add('d-none');
+    document.getElementById('list-view').classList.remove('d-none');
     editId = null;
   }
 
@@ -312,6 +538,7 @@
       email:        document.getElementById('f-email').value.trim(),
       site:         document.getElementById('f-site').value.trim(),
       endereco:     document.getElementById('f-end').value.trim(),
+      login_slogan: document.getElementById('f-login-slogan').value.trim(),
     };
 
     const btn = document.getElementById('btn-salvar');
@@ -327,7 +554,12 @@
         body: JSON.stringify(dados),
       });
 
-      if (res.ok) { fecharModal(); carregar(); }
+      if (res.ok) {
+        const salvo = await res.json();
+        if (!editId) editId = salvo.id;
+        fecharModal();
+        carregar();
+      }
       else {
         const err = await res.json().catch(() => ({}));
         errEl.textContent = err.error || 'Erro ao salvar empresa.';
@@ -343,9 +575,96 @@
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  document.getElementById('modal').addEventListener('click', function(e) {
-    if (e.target === this) fecharModal();
-  });
+  function mudarTabEmpresa(tab) {
+    document.getElementById('tab-dados').classList.toggle('active', tab === 'dados');
+    document.getElementById('tab-identidade').classList.toggle('active', tab === 'identidade');
+    document.getElementById('panel-dados').classList.toggle('active', tab === 'dados');
+    document.getElementById('panel-identidade').classList.toggle('active', tab === 'identidade');
+  }
+
+  function renderIdentidade(empresa) {
+    document.getElementById('identity-locked').style.display = editId ? 'none' : 'block';
+    renderPreview('logo', empresa.login_logo_url);
+    renderPreview('background', empresa.login_background_url);
+  }
+
+  function renderPreview(tipo, url) {
+    const el = document.getElementById(`preview-${tipo}`);
+    if (!url) {
+      el.innerHTML = tipo === 'logo' ? 'Nenhuma logomarca enviada.' : 'Nenhuma imagem lateral enviada.';
+      return;
+    }
+    el.innerHTML = `<img src="${esc(url)}" alt="">`;
+  }
+
+  function selecionarArquivoIdentidade(tipo) {
+    if (!editId) {
+      alert('Salve a empresa antes de enviar imagens.');
+      return;
+    }
+    document.getElementById(`file-${tipo}`).click();
+  }
+
+  function lerArquivoComoDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadIdentidade(tipo, input) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !editId) return;
+
+    const limite = tipo === 'logo' ? 4 * 1024 * 1024 : 6 * 1024 * 1024;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      alert('Envie uma imagem em PNG, JPG ou WEBP.');
+      return;
+    }
+    if (file.size > limite) {
+      alert(`Arquivo muito grande. Limite: ${Math.round(limite / 1024 / 1024)} MB.`);
+      return;
+    }
+
+    try {
+      const dataUrl = await lerArquivoComoDataUrl(file);
+      const res = await fetch(`/api/empresas/${editId}/identidade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo, dataUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar imagem.');
+      renderPreview(tipo, data.url);
+      const idx = empresas.findIndex(e => e.id === editId);
+      if (idx >= 0 && data.empresa) empresas[idx] = data.empresa;
+      carregar();
+    } catch (err) {
+      alert(err.message || 'Erro ao enviar imagem.');
+    }
+  }
+
+  async function removerIdentidade(tipo) {
+    if (!editId) {
+      alert('Salve a empresa antes de remover imagens.');
+      return;
+    }
+    if (!confirm('Remover esta imagem da identidade visual?')) return;
+    try {
+      const res = await fetch(`/api/empresas/${editId}/identidade/${tipo}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao remover imagem.');
+      renderPreview(tipo, '');
+      const idx = empresas.findIndex(e => e.id === editId);
+      if (idx >= 0 && data.empresa) empresas[idx] = data.empresa;
+      carregar();
+    } catch (err) {
+      alert(err.message || 'Erro ao remover imagem.');
+    }
+  }
 
   document.addEventListener('DOMContentLoaded', carregar);
 </script>

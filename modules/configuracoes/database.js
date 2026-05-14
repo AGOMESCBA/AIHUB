@@ -8,6 +8,11 @@ const DEFAULTS = {
   groq_api_key:   '',
   gemini_api_key: '',
   gemini_model:   'gemini-1.5-flash',
+  sistema_nome:   'IAHUB',
+  sistema_frase:  'Onde a gestão encontra a inteligência',
+  sistema_versao: 'v2.0',
+  login_logo_default_url: '',
+  login_background_default_url: '',
 };
 
 function _arquivoEmpresa(empresaId) {

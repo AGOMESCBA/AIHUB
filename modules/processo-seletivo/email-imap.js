@@ -653,8 +653,12 @@ class EmailImapService {
     this._rodando = false;
     this._emitStatus('stopped');
     this._emitLog('[Email] Serviço de monitoramento de e-mail parado', 'warning');
-    this._empresaId = null;
-    this._deps      = null;
+    // Não zera _empresaId imediatamente: promises de envio de e-mail ainda em voo
+    // usam this._empresaId nos callbacks de log. Defer para o próximo tick.
+    const eid = this._empresaId;
+    setImmediate(() => {
+      if (this._empresaId === eid) { this._empresaId = null; this._deps = null; }
+    });
   }
 
   getStatus()    { return this._status; }

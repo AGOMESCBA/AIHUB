@@ -1,0 +1,2616 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guia de Uso — IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* ── Layout do Guia ─────────────────────────────────────── */
+    body { overflow: hidden; }
+
+    .guia-layout {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Painel de navegação (esquerda) ─────────────────────── */
+    .guia-nav {
+      width: 260px;
+      min-width: 260px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .guia-nav-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .guia-nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .guia-nav-logo .logo-icon {
+      width: 30px; height: 30px; min-width: 30px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 900; color: #fff;
+    }
+
+    .guia-nav-logo span {
+      font-size: 15px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .guia-nav-subtitle {
+      font-size: 11px;
+      color: var(--text-lo);
+      margin-top: 2px;
+      padding-left: 40px;
+    }
+
+    .guia-nav-body {
+      overflow-y: auto;
+      flex: 1;
+      padding: 12px 0;
+    }
+
+    .guia-nav-body::-webkit-scrollbar { width: 4px; }
+    .guia-nav-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* Fase — cabeçalho de grupo */
+    .nav-fase-hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px 6px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-lo);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .nav-fase-hdr:hover { color: var(--text-md); }
+
+    .nav-fase-num {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: var(--bg-hover);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-md);
+      flex-shrink: 0;
+    }
+
+    .nav-fase-num.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Item de etapa */
+    .nav-etapa {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 16px 7px 44px;
+      font-size: 12.5px;
+      color: var(--text-md);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+      border-radius: 0;
+      text-decoration: none;
+    }
+
+    .nav-etapa:hover {
+      background: var(--bg-hover);
+      color: var(--text-hi);
+    }
+
+    .nav-etapa.active {
+      background: var(--bg-active);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .nav-etapa-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--border-hi);
+      flex-shrink: 0;
+    }
+
+    .nav-etapa.active .nav-etapa-dot {
+      background: var(--accent);
+    }
+
+    .guia-nav-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nav-back-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 7px;
+      font-size: 12px;
+      color: var(--text-md);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+      text-decoration: none;
+      width: 100%;
+      border: none;
+      background: none;
+    }
+
+    .nav-back-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-hi);
+    }
+
+    .nav-pdf-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+      width: 100%;
+      border: 1px solid rgba(37,99,235,.25);
+      background: rgba(37,99,235,.05);
+    }
+
+    .nav-pdf-btn:hover {
+      background: rgba(37,99,235,.12);
+      border-color: var(--accent);
+    }
+
+    /* ── Impressão / Exportação PDF ─────────────────────────── */
+    @media print {
+      @page {
+        size: A4;
+        margin: 16mm 14mm 16mm 14mm;
+      }
+
+      body { overflow: visible !important; }
+
+      .guia-layout {
+        display: block !important;
+        height: auto !important;
+        overflow: visible !important;
+      }
+
+      .guia-nav { display: none !important; }
+
+      .guia-content {
+        overflow: visible !important;
+        padding: 0 !important;
+        height: auto !important;
+      }
+
+      /* Cabeçalho de impressão */
+      .guia-hero {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+        border-radius: 6px !important;
+        margin-bottom: 20px !important;
+        padding: 20px 24px !important;
+        page-break-after: avoid;
+      }
+
+      .guia-hero h1 { font-size: 18px !important; }
+      .guia-hero p  { font-size: 12px !important; }
+
+      /* Expandir todos os cards */
+      .etapa-body {
+        max-height: none !important;
+        overflow: visible !important;
+      }
+
+      .etapa-card { page-break-inside: avoid; }
+
+      .fase-section {
+        margin-bottom: 20px !important;
+        page-break-inside: avoid;
+      }
+
+      .fase-header { page-break-after: avoid; }
+
+      .etapa-card-header { page-break-after: avoid; }
+
+      /* Ocultar elementos de UI */
+      .nav-pdf-btn,
+      .nav-back-btn,
+      .etapa-arrow,
+      .fase-progress { display: none !important; }
+
+      /* Screenshots: oculta placeholders sem imagem carregada */
+      .screenshot-placeholder:not(.ph-loaded) { display: none !important; }
+
+      /* Placeholders com imagem: remove borda/padding residuais */
+      .screenshot-placeholder.ph-loaded {
+        padding: 0 !important;
+        border: none !important;
+        background: none !important;
+      }
+
+      /* Evita corte de imagem entre páginas */
+      .screenshot-placeholder img {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        max-width: 100% !important;
+        height: auto !important;
+        display: block;
+      }
+
+      /* Fontes */
+      .etapa-desc    { font-size: 11.5px !important; }
+      .campo-desc    { font-size: 11px !important; }
+      .campo-nome    { font-size: 11.5px !important; }
+      .campo-secao   { font-size: 9.5px !important; }
+
+      /* Fluxo: garantir visibilidade de cores */
+      .fd-node,
+      .fd-group,
+      .fd-group.fd-config,
+      .fd-group.fd-captacao,
+      .fd-group.fd-ia,
+      .fd-group.fd-analise {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+      }
+
+      /* Rodapé de impressão automático */
+      .guia-content::after {
+        content: 'IAHub — Guia de Uso do Sistema';
+        display: block;
+        text-align: center;
+        font-size: 9px;
+        color: #999;
+        margin-top: 24px;
+        border-top: 1px solid #eee;
+        padding-top: 8px;
+      }
+    }
+
+    /* ── Área de conteúdo (direita) ─────────────────────────── */
+    .guia-content {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg-base);
+      padding: 32px 40px;
+    }
+
+    .guia-content::-webkit-scrollbar { width: 6px; }
+    .guia-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Hero / Intro ────────────────────────────────────────── */
+    .guia-hero {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      border-radius: var(--radius);
+      padding: 32px 36px;
+      margin-bottom: 36px;
+      color: #fff;
+    }
+
+    .guia-hero h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .guia-hero p {
+      font-size: 14px;
+      opacity: .85;
+      max-width: 560px;
+      line-height: 1.7;
+    }
+
+    .guia-hero-meta {
+      display: flex;
+      gap: 16px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .guia-hero-badge {
+      background: rgba(255,255,255,.2);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Seção de fase ───────────────────────────────────────── */
+    .fase-section {
+      margin-bottom: 48px;
+      scroll-margin-top: 24px;
+    }
+
+    .fase-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .fase-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .fase-badge.f1 { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+    .fase-badge.f2 { background: linear-gradient(135deg, #0891b2, #0e7490); }
+    .fase-badge.f3 { background: linear-gradient(135deg, var(--success), #15803d); }
+    .fase-badge.f4 { background: linear-gradient(135deg, var(--warning), #b45309); }
+    .fase-badge.f5 { background: linear-gradient(135deg, var(--error), var(--accent-2)); }
+
+    .fase-titulo {
+      flex: 1;
+    }
+
+    .fase-titulo h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-hi);
+      margin-bottom: 2px;
+    }
+
+    .fase-titulo p {
+      font-size: 12px;
+      color: var(--text-lo);
+    }
+
+    /* ── Card de etapa ───────────────────────────────────────── */
+    .etapa-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+      scroll-margin-top: 24px;
+    }
+
+    .etapa-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-hover);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .etapa-card-header:hover { background: var(--bg-hover); }
+
+    .etapa-num {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-glow);
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .etapa-titulo {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-hi);
+    }
+
+    .etapa-arrow {
+      font-size: 12px;
+      color: var(--text-lo);
+      transition: transform var(--transition);
+    }
+
+    .etapa-card.open .etapa-arrow {
+      transform: rotate(180deg);
+    }
+
+    .etapa-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height var(--transition);
+    }
+
+    .etapa-card.open .etapa-body {
+      max-height: 2000px;
+    }
+
+    .etapa-body-inner {
+      padding: 24px 24px 28px;
+    }
+
+    /* ── Placeholder de screenshot ───────────────────────────── */
+    .screenshot-wrap {
+      margin-top: 20px;
+    }
+
+    .screenshot-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-lo);
+      margin-bottom: 8px;
+    }
+
+    .screenshot-placeholder {
+      border: 2px dashed var(--border-hi);
+      border-radius: var(--radius);
+      background: var(--bg-hover);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 36px 24px;
+      text-align: center;
+    }
+
+    .screenshot-placeholder .ph-icon {
+      font-size: 28px;
+      opacity: .45;
+    }
+
+    .screenshot-placeholder .ph-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-md);
+    }
+
+    .screenshot-placeholder .ph-file {
+      font-size: 11px;
+      color: var(--text-lo);
+      font-family: 'Consolas', monospace;
+      background: var(--bg-card);
+      padding: 3px 10px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+    }
+
+    .screenshot-placeholder img {
+      width: 100%;
+      height: auto;
+      border-radius: 6px;
+      display: block;
+    }
+
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .screenshots-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── Etapa — conteúdo de texto ───────────────────────────── */
+    .etapa-desc {
+      font-size: 13.5px;
+      color: var(--text-md);
+      line-height: 1.75;
+      margin-bottom: 16px;
+    }
+
+    /* ── Lista de campos ─────────────────────────────────────── */
+    .campo-lista {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 16px;
+    }
+
+    .campo-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      background: var(--bg-card);
+      transition: border-color var(--transition);
+    }
+
+    .campo-item:hover { border-color: var(--border-hi); }
+
+    .campo-obrigatorio { border-left: 3px solid var(--accent); }
+
+    .campo-nome {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-hi);
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .campo-req {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--accent);
+      background: var(--accent-glow);
+      padding: 1px 7px;
+      border-radius: 10px;
+    }
+
+    .campo-desc {
+      font-size: 12.5px;
+      color: var(--text-md);
+      line-height: 1.6;
+    }
+
+    .campo-desc em { font-style: normal; font-family: 'Consolas', monospace; background: var(--bg-hover); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+    .campo-secao {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-lo);
+      margin: 16px 0 6px;
+    }
+
+    /* ── Avisos / dicas ──────────────────────────────────────── */
+    .etapa-aviso {
+      background: rgba(37,99,235,.06);
+      border: 1px solid rgba(37,99,235,.2);
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-size: 12.5px;
+      color: var(--text-md);
+      line-height: 1.6;
+      margin-bottom: 4px;
+    }
+
+    .etapa-aviso-warn {
+      background: rgba(217,119,6,.06);
+      border-color: rgba(217,119,6,.25);
+    }
+
+    /* ── Barra de progresso de fases (hero) ─────────────────── */
+    .fase-progress {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .fase-progress-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: rgba(255,255,255,.15);
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: rgba(255,255,255,.9);
+      transition: background var(--transition), transform var(--transition);
+      user-select: none;
+    }
+    .fase-progress-item:hover {
+      background: rgba(255,255,255,.28);
+      transform: translateY(-1px);
+    }
+
+    .fase-progress-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.5);
+    }
+
+    /* ── Fluxo operacional ──────────────────────────────────── */
+    .fluxo-diagram {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      padding: 8px 0;
+    }
+
+    .fd-group {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px 24px;
+      background: var(--bg-base);
+    }
+
+    .fd-group-label {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-lo);
+      margin-bottom: 12px;
+    }
+
+    .fd-group-label-ia {
+      color: #7c3aed;
+    }
+
+    .fd-group.fd-config   { border-color: rgba(37,99,235,.3);  background: rgba(37,99,235,.03); }
+    .fd-group.fd-captacao { border-color: rgba(22,163,74,.3);  background: rgba(22,163,74,.03); }
+    .fd-group.fd-ia       { border-color: rgba(124,58,237,.3); background: rgba(124,58,237,.03); }
+    .fd-group.fd-analise  { border-color: rgba(124,58,237,.3); background: rgba(124,58,237,.03); }
+
+    .fd-row {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .fd-row-center { justify-content: center; width: 100%; }
+    .fd-row-left   { justify-content: flex-start; padding-left: 40px; width: 100%; }
+    .fd-row-split  {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .fd-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 26px 30px;
+      border-radius: 14px;
+      border: 1.5px solid transparent;
+      min-width: 190px;
+      min-height: 240px;
+      text-align: center;
+    }
+
+    .fd-node-wide {
+      min-width: 340px;
+      flex-direction: row;
+      text-align: left;
+      gap: 20px;
+    }
+
+    .fd-node-wide .fd-node-text { text-align: left; }
+
+    .fd-node-icon { font-size: 36px; flex-shrink: 0; }
+
+    .fd-node-text {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-hi);
+      line-height: 1.6;
+    }
+
+    .fd-sub {
+      font-weight: 400;
+      color: var(--text-lo);
+      font-size: 13px;
+    }
+
+    .fd-node-blue   { background: rgba(37,99,235,.08);  border-color: rgba(37,99,235,.3);  }
+    .fd-node-green  { background: rgba(22,163,74,.08);  border-color: rgba(22,163,74,.3);  }
+    .fd-node-purple { background: rgba(124,58,237,.08); border-color: rgba(124,58,237,.3); }
+    .fd-node-slate  { background: var(--bg-hover);      border-color: var(--border-hi);    }
+    .fd-node-ok     { background: rgba(22,163,74,.1);   border-color: rgba(22,163,74,.4);  }
+    .fd-node-err    { background: rgba(220,38,38,.08);  border-color: rgba(220,38,38,.3);  }
+    .fd-node-se     {
+      background: linear-gradient(135deg, rgba(37,99,235,.1), rgba(99,102,241,.1));
+      border-color: rgba(37,99,235,.4);
+      border-width: 2px;
+    }
+
+    .fd-arrow-h {
+      font-size: 24px;
+      color: var(--border-hi);
+      flex-shrink: 0;
+    }
+
+    .fd-arrow-v-center, .fd-arrow-v-left {
+      font-size: 28px;
+      color: var(--border-hi);
+      line-height: 1;
+      padding: 4px 0;
+    }
+
+    .fd-arrow-v-left {
+      align-self: flex-start;
+      padding-left: 125px;
+    }
+
+    .fd-split-branch {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .fd-branch-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 20px;
+    }
+
+    .fd-branch-ok  { background: rgba(22,163,74,.12);  color: #15803d; }
+    .fd-branch-err { background: rgba(220,38,38,.10);  color: #b91c1c; }
+
+    @media (max-width: 760px) {
+      .fd-row         { flex-direction: column; }
+      .fd-row-split   { flex-direction: column; align-items: center; }
+      .fd-arrow-h     { transform: rotate(90deg); }
+      .fd-arrow-v-left { align-self: center; padding-left: 0; }
+      .fd-row-left    { justify-content: center; padding-left: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="guia-layout">
+
+  <!-- ── Navegação lateral ──────────────────────────────────── -->
+  <nav class="guia-nav">
+    <div class="guia-nav-header">
+      <div class="guia-nav-logo">
+        <div class="logo-icon">IA</div>
+        <span>IAHub</span>
+      </div>
+      <div class="guia-nav-subtitle">Guia de Uso do Sistema</div>
+    </div>
+
+    <div class="guia-nav-body" id="nav-body">
+
+      <div class="nav-fase-hdr">
+        <div class="nav-fase-num" style="background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff">★</div>
+        Sobre o Sistema
+      </div>
+      <a class="nav-etapa" onclick="irPara('sec-objetivo', event)">
+        <div class="nav-etapa-dot"></div>
+        Objetivo
+      </a>
+      <a class="nav-etapa" onclick="irPara('sec-tecnologia', event)">
+        <div class="nav-etapa-dot"></div>
+        Tecnologia
+      </a>
+      <a class="nav-etapa" onclick="irPara('sec-ia', event)">
+        <div class="nav-etapa-dot"></div>
+        Inteligência Artificial
+      </a>
+      <a class="nav-etapa" onclick="irPara('sec-fluxo', event)">
+        <div class="nav-etapa-dot"></div>
+        Fluxo Operacional
+      </a>
+
+      <div class="nav-fase-hdr" style="margin-top:8px">
+        <div class="nav-fase-num">1</div>
+        Administração
+      </div>
+      <a class="nav-etapa" onclick="irPara('etapa-1-1', event)">
+        <div class="nav-etapa-dot"></div>
+        1.1 — Cadastro de Empresas
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-1-2', event)">
+        <div class="nav-etapa-dot"></div>
+        1.2 — Identidade Visual
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-1-3', event)">
+        <div class="nav-etapa-dot"></div>
+        1.3 — Usuários
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-1-4', event)">
+        <div class="nav-etapa-dot"></div>
+        1.4 — Permissões de Acesso
+      </a>
+
+      <div class="nav-fase-hdr" style="margin-top:8px">
+        <div class="nav-fase-num">2</div>
+        Configuração Técnica
+      </div>
+      <a class="nav-etapa" onclick="irPara('etapa-2-1', event)">
+        <div class="nav-etapa-dot"></div>
+        2.1 — Parâmetros Gerais / IA
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-2-2', event)">
+        <div class="nav-etapa-dot"></div>
+        2.2 — E-mail IMAP
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-2-3', event)">
+        <div class="nav-etapa-dot"></div>
+        2.3 — WhatsApp
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-2-4', event)">
+        <div class="nav-etapa-dot"></div>
+        2.4 — SE API Configurador
+      </a>
+
+      <div class="nav-fase-hdr" style="margin-top:8px">
+        <div class="nav-fase-num">3</div>
+        Cadastros Operacionais
+      </div>
+      <a class="nav-etapa" onclick="irPara('etapa-3-1', event)">
+        <div class="nav-etapa-dot"></div>
+        3.1 — Funções
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-3-2', event)">
+        <div class="nav-etapa-dot"></div>
+        3.2 — Vagas
+      </a>
+
+      <div class="nav-fase-hdr" style="margin-top:8px">
+        <div class="nav-fase-num">4</div>
+        Monitores e Currículos
+      </div>
+      <a class="nav-etapa" onclick="irPara('etapa-4-1', event)">
+        <div class="nav-etapa-dot"></div>
+        4.1 — Subida dos Monitores
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-4-2', event)">
+        <div class="nav-etapa-dot"></div>
+        4.2 — Recebimento de Currículos
+      </a>
+
+      <div class="nav-fase-hdr" style="margin-top:8px">
+        <div class="nav-fase-num">5</div>
+        Análise e Integração
+      </div>
+      <a class="nav-etapa" onclick="irPara('etapa-5-1', event)">
+        <div class="nav-etapa-dot"></div>
+        5.1 — Analisador de Currículos
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-5-2', event)">
+        <div class="nav-etapa-dot"></div>
+        5.2 — Resultados e Encerramento
+      </a>
+      <a class="nav-etapa" onclick="irPara('etapa-5-3', event)">
+        <div class="nav-etapa-dot"></div>
+        5.3 — Integração Softexpert
+      </a>
+
+    </div>
+
+    <div class="guia-nav-footer">
+      <button class="nav-pdf-btn" id="btn-exportar-pdf" onclick="exportarPDF()">
+        <span>⬇</span> Exportar como PDF
+      </button>
+      <button class="nav-back-btn" onclick="window.close()">
+        ← Voltar ao sistema
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Conteúdo principal ─────────────────────────────────── -->
+  <main class="guia-content" id="guia-main">
+
+    <!-- Hero -->
+    <div class="guia-hero">
+      <h1>Guia de Uso — IAHub</h1>
+      <p>Este guia apresenta o passo a passo para colocar o sistema em operação, desde a criação das empresas e usuários até a análise de currículos e integração com o Softexpert.</p>
+      <div class="fase-progress">
+        <div class="fase-progress-item" onclick="irPara('fase-1',event)" style="cursor:pointer"><div class="fase-progress-dot"></div> Fase 1: Administração</div>
+        <div class="fase-progress-item" onclick="irPara('fase-2',event)" style="cursor:pointer"><div class="fase-progress-dot"></div> Fase 2: Configuração Técnica</div>
+        <div class="fase-progress-item" onclick="irPara('fase-3',event)" style="cursor:pointer"><div class="fase-progress-dot"></div> Fase 3: Cadastros Operacionais</div>
+        <div class="fase-progress-item" onclick="irPara('fase-4',event)" style="cursor:pointer"><div class="fase-progress-dot"></div> Fase 4: Monitores e Currículos</div>
+        <div class="fase-progress-item" onclick="irPara('fase-5',event)" style="cursor:pointer"><div class="fase-progress-dot"></div> Fase 5: Análise e Integração</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- OBJETIVO                                              -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="sec-objetivo">
+      <div class="fase-header">
+        <div class="fase-badge f1" style="font-size:18px">★</div>
+        <div class="fase-titulo">
+          <h2>Objetivo do Sistema</h2>
+          <p>O que o IAHub resolve e por que ele faz diferença no recrutamento.</p>
+        </div>
+      </div>
+
+      <div class="etapa-card open" id="etapa-objetivo">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num" style="background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:13px;padding:4px 12px">IAHub</span>
+          <span class="etapa-titulo">Plataforma de Recrutamento com Inteligência Artificial</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+
+            <!-- Frase âncora -->
+            <div style="background:linear-gradient(135deg,var(--accent) 0%,var(--accent-2) 100%);border-radius:var(--radius);padding:24px 28px;margin-bottom:24px;color:#fff">
+              <div style="font-size:22px;font-weight:800;line-height:1.3;margin-bottom:8px">"Não busca palavras — <em>entende</em> candidatos."</div>
+              <div style="font-size:14px;opacity:.88;line-height:1.7">O IAHub vai além da triagem por palavras-chave. Ele compreende o contexto, reconhece equivalências de termos e entrega uma pontuação objetiva e auditável para cada candidato — eliminando a subjetividade do processo seletivo.</div>
+            </div>
+
+            <div class="campo-secao">O problema que o IAHub resolve</div>
+            <p class="etapa-desc">O recrutamento tradicional consome horas de triagem manual, sofre vieses inconscientes e perde bons candidatos por diferenças de vocabulário. Um currículo que diz <em>"Gestão de Pessoas"</em> e uma vaga que exige <em>"Recursos Humanos"</em> são ignorados pelos sistemas convencionais — mas não pelo IAHub.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Captação automática por múltiplos canais</div>
+                <div class="campo-desc">Currículos chegam pelo <strong>WhatsApp</strong>, <strong>e-mail IMAP</strong> ou <strong>formulário público</strong> — e são processados automaticamente pela IA assim que recebidos. Nenhuma intervenção manual necessária para a coleta.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Análise com equivalência semântica de termos</div>
+                <div class="campo-desc">A IA reconhece que <em>"SoftExpert"</em> = <em>"SE Suite"</em>, <em>"CLT"</em> = <em>"carteira assinada"</em>, <em>"Excel avançado"</em> inclui <em>"Power BI"</em>. O candidato não é penalizado por usar terminologia diferente — o sistema entende o significado, não apenas a palavra.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Pontuação objetiva: 100 pontos de clareza</div>
+                <div class="campo-desc">Cada candidato recebe uma nota de 0 a 100, distribuída em quatro critérios mensuráveis. O recrutador vê exatamente <strong>por que</strong> cada candidato recebeu aquela pontuação — pontos fortes listados, lacunas identificadas, resumo gerado pela IA.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Do recebimento ao Softexpert — sem planilhas</div>
+                <div class="campo-desc">O fluxo completo é gerenciado dentro do sistema: captação → análise → seleção de finalistas → envio direto ao processo seletivo no Softexpert com currículo em PDF e nota de aderência registrados automaticamente.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao" style="margin-top:4px">Quatro pilares do IAHub</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+              <div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px">
+                <div style="font-size:22px;margin-bottom:6px">📥</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px">Captação Omnichannel</div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.6">WhatsApp · E-mail IMAP · Formulário público. Três canais, um único banco de candidatos por empresa.</div>
+              </div>
+              <div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px">
+                <div style="font-size:22px;margin-bottom:6px">🤖</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px">Análise com IA</div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.6">Extração de dados, equivalência semântica, pontuação por critério e resumo explicativo gerados automaticamente.</div>
+              </div>
+              <div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px">
+                <div style="font-size:22px;margin-bottom:6px">🏢</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px">Multiempresa</div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.6">Cada empresa tem seu próprio banco de currículos, vagas, configurações e identidade visual — completamente isolados.</div>
+              </div>
+              <div style="background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px">
+                <div style="font-size:22px;margin-bottom:6px">🔗</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px">Integração Nativa SE</div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.6">Envio automático de candidatos, currículos e notas de aderência diretamente para o Softexpert — sem re-digitação.</div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- TECNOLOGIA                                            -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="sec-tecnologia">
+      <div class="fase-header">
+        <div class="fase-badge f2">💻</div>
+        <div class="fase-titulo">
+          <h2>Tecnologia</h2>
+          <p>Stack técnica e integrações que sustentam a plataforma.</p>
+        </div>
+      </div>
+
+      <div class="etapa-card" id="etapa-tecnologia">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">Stack</span>
+          <span class="etapa-titulo">Arquitetura e Componentes Técnicos</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+
+            <div class="campo-secao">Servidor e Backend</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Node.js + Express</div>
+                <div class="campo-desc">Servidor de aplicação JavaScript de alta performance. Gerencia todas as rotas da API, autenticação, sessões e lógica de negócio dos módulos.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Socket.IO</div>
+                <div class="campo-desc">Comunicação em tempo real via WebSocket. Utilizado nos monitores de WhatsApp e e-mail para transmitir logs ao vivo para o browser sem necessidade de recarregar a página.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Windows Server + NSSM + Nginx</div>
+                <div class="campo-desc">O IAHub roda como serviço Windows gerenciado pelo NSSM (reinício automático em falhas). O Nginx atua como proxy reverso, gerenciando HTTPS e roteamento.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Frontend</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">HTML + CSS + JavaScript estático</div>
+                <div class="campo-desc">Interface construída sem frameworks (sem React, Vue ou Angular). Cada tela é um arquivo HTML independente com JS inline — resultando em carregamento instantâneo e zero overhead de framework.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Tabulator (via CDN)</div>
+                <div class="campo-desc">Biblioteca de grade de dados usada nas telas com listagens. Oferece filtros por coluna, agrupamento drag-and-drop e ordenação — tudo configurável por parâmetros.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Design System com CSS Custom Properties</div>
+                <div class="campo-desc">Todas as cores, espaçamentos e transições são definidos via tokens (<em>var(--accent)</em>, <em>var(--bg-card)</em>, etc.) — permitindo consistência visual em toda a plataforma e suporte a temas.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Captura de Currículos</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">whatsapp-web.js</div>
+                <div class="campo-desc">Biblioteca open source gratuita que automatiza o WhatsApp Web via Chrome headless. Permite receber PDFs enviados pelos candidatos sem custo de API. Autenticação via QR Code.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">API Oficial Meta (WhatsApp Business)</div>
+                <div class="campo-desc">Alternativa paga para uso comercial intenso. Sem QR Code, sem risco de bloqueio. Recebe mensagens via webhook HTTPS direto dos servidores da Meta.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">IMAP (e-mail)</div>
+                <div class="campo-desc">Protocolo padrão de acesso a caixas de e-mail. O monitor verifica a caixa configurada em intervalos regulares e processa automaticamente os anexos PDF recebidos.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Extração de texto PDF</div>
+                <div class="campo-desc">O sistema lê o conteúdo textual do PDF antes de enviar à IA. PDFs protegidos por senha ou baseados em imagem escaneada sem OCR não são processados — o candidato é notificado automaticamente.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Persistência</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Banco de dados JSON em disco</div>
+                <div class="campo-desc">Cada empresa tem seu arquivo <em>data/empresa_ID.json</em> com todas as suas tabelas lógicas (currículos, vagas, funções, análises). Sem banco SQL — toda a lógica de consulta e gravação é feita em memória pelo servidor Node.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Segurança</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">bcryptjs + express-session</div>
+                <div class="campo-desc">Senhas armazenadas com hash bcrypt (fator de custo 10). Sessões gerenciadas em arquivo no servidor — sem tokens JWT expostos no cliente.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Rate Limiting</div>
+                <div class="campo-desc">Limite de requisições por IP para proteção contra força bruta nas rotas de autenticação.</div>
+              </div>
+            </div>
+
+            <!-- Destaque SE -->
+            <div class="campo-secao">Integração Nativa com Softexpert (SE Suite)</div>
+            <div style="background:linear-gradient(135deg,rgba(37,99,235,.07) 0%,rgba(99,102,241,.07) 100%);border:2px solid rgba(37,99,235,.25);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div style="font-size:28px">🔗</div>
+                <div>
+                  <div style="font-size:15px;font-weight:800;color:var(--text-hi)">Integração Nativa com o Softexpert — sem intermediários</div>
+                  <div style="font-size:12.5px;color:var(--text-md);margin-top:2px">O IAHub se comunica diretamente com a API REST e os Web Services SOAP do SE Suite</div>
+                </div>
+              </div>
+              <div class="campo-lista" style="margin-bottom:0">
+                <div class="campo-item campo-obrigatorio">
+                  <div class="campo-nome">Envio de Candidatos e Currículos <span class="campo-req">principal</span></div>
+                  <div class="campo-desc">Ao encerrar uma análise, o IAHub cria automaticamente o candidato no processo seletivo do SE, anexa o PDF original do currículo e registra a <strong>nota de aderência</strong> calculada pela IA — tudo via API, sem re-digitação.</div>
+                </div>
+                <div class="campo-item">
+                  <div class="campo-nome">Sincronização de Vagas</div>
+                  <div class="campo-desc">As vagas do IAHub são espelhadas nos processos seletivos do SE. O vínculo candidato ↔ vaga fica correto em ambos os sistemas automaticamente.</div>
+                </div>
+                <div class="campo-item">
+                  <div class="campo-nome">Sincronização de Funções (Cargos)</div>
+                  <div class="campo-desc">O catálogo de funções do IAHub é sincronizado com os cargos cadastrados no SE, mantendo os IDs de referência consistentes entre os dois sistemas.</div>
+                </div>
+                <div class="campo-item">
+                  <div class="campo-nome">Configurador de API</div>
+                  <div class="campo-desc">Interface dedicada (<strong>SE API Configurador</strong>) para definir a URL do servidor SE, usuário, senha e testar a conexão antes de qualquer envio. Cada empresa pode ter suas próprias credenciais de integração.</div>
+                </div>
+                <div class="campo-item">
+                  <div class="campo-nome">Rastreabilidade completa</div>
+                  <div class="campo-desc">Cada envio ao SE gera um registro de log com: status (Sucesso / Erro / Parcial / Revertido), XML enviado, resposta da API, etapas executadas e timestamp. Auditoria total de todas as integrações realizadas.</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- INTELIGÊNCIA ARTIFICIAL                               -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="sec-ia">
+      <div class="fase-header">
+        <div class="fase-badge f3">🤖</div>
+        <div class="fase-titulo">
+          <h2>Inteligência Artificial</h2>
+          <p>Onde, como e quais IAs o sistema utiliza em cada etapa do processo.</p>
+        </div>
+      </div>
+
+      <div class="etapa-card" id="etapa-ia">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">IA</span>
+          <span class="etapa-titulo">Modelos, Funções e Fallback Automático</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+
+            <div class="campo-secao">Os dois modelos de IA utilizados</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+              <div style="background:var(--bg-hover);border:2px solid var(--accent);border-radius:var(--radius);padding:18px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                  <div style="background:var(--accent);color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700">PRIMÁRIO</div>
+                  <div style="font-size:14px;font-weight:800;color:var(--text-hi)">Groq — Llama 3.3 70B</div>
+                </div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.7">Motor de inferência ultrarrápido da Groq com o modelo Llama 3.3 de 70 bilhões de parâmetros. Processa cada currículo em segundos — ideal para análises em lote de alto volume. Plano gratuito com limite de taxa por minuto.</div>
+              </div>
+              <div style="background:var(--bg-hover);border:2px solid var(--warning);border-radius:var(--radius);padding:18px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                  <div style="background:var(--warning);color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700">FALLBACK</div>
+                  <div style="font-size:14px;font-weight:800;color:var(--text-hi)">Google Gemini 2.0 Flash</div>
+                </div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.7">Acionado automaticamente quando o Groq atinge o limite de taxa (erro 429) ou quando a quota é excedida. Garante continuidade da análise sem intervenção manual e sem perder candidatos por falha técnica.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso" style="margin-bottom:20px">
+              🛡️ <strong>Política de resiliência:</strong> se ambos os provedores falharem simultaneamente, o candidato recebe automaticamente um score neutro igual ao corte mínimo configurado — não é eliminado. O processo continua e o recrutador é informado para revisar manualmente aquele candidato.
+            </div>
+
+            <div class="campo-secao">Onde a IA atua no sistema</div>
+
+            <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+
+              <div style="border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:var(--radius);padding:14px 16px;background:var(--bg-card)">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                  <div style="background:var(--accent-glow);color:var(--accent);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">ETAPA 1</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text-hi)">Recebimento do Currículo (WhatsApp / E-mail)</div>
+                </div>
+                <div class="campo-lista" style="margin-bottom:0">
+                  <div class="campo-item" style="margin-bottom:4px">
+                    <div class="campo-nome" style="font-size:12.5px">Detecção de idioma e tradução automática</div>
+                    <div class="campo-desc">Identifica o idioma do PDF recebido. Se não estiver em português, traduz integralmente antes de processar — garantindo que candidatos internacionais sejam analisados corretamente.</div>
+                  </div>
+                  <div class="campo-item" style="margin-bottom:4px">
+                    <div class="campo-nome" style="font-size:12.5px">Validação: é um currículo?</div>
+                    <div class="campo-desc">Verifica se o documento é de fato um currículo. Contratos, comprovantes, procurações e outros documentos são rejeitados — o candidato recebe uma mensagem explicativa automaticamente.</div>
+                  </div>
+                  <div class="campo-item" style="margin-bottom:0">
+                    <div class="campo-nome" style="font-size:12.5px">Extração de dados estruturados</div>
+                    <div class="campo-desc">Lê o texto do PDF e extrai: nome completo, e-mail, telefone, experiências profissionais (empresa, cargo, período, responsabilidades), formação acadêmica e habilidades técnicas.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="border:1px solid var(--border);border-left:4px solid var(--success);border-radius:var(--radius);padding:14px 16px;background:var(--bg-card)">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                  <div style="background:#dcfce7;color:#15803d;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">ETAPA 2</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text-hi)">Análise de Aderência à Vaga</div>
+                </div>
+                <div class="campo-lista" style="margin-bottom:0">
+                  <div class="campo-item" style="margin-bottom:4px">
+                    <div class="campo-nome" style="font-size:12.5px">Pontuação por quatro critérios (0–100 pts)</div>
+                    <div class="campo-desc">A IA avalia cada candidato individualmente: Requisitos Obrigatórios (até 50 pts), Desejáveis (até 30 pts), Formação (até 10 pts) e Habilidades (até 10 pts). Pontuação proporcional — sem penalidades por ausência.</div>
+                  </div>
+                  <div class="campo-item" style="margin-bottom:4px">
+                    <div class="campo-nome" style="font-size:12.5px">Equivalência semântica de termos</div>
+                    <div class="campo-desc">A IA não compara palavras literalmente — ela entende significado. <em>"SoftExpert" = "SE Suite"</em>, <em>"Gestão de Pessoas" = "Recursos Humanos"</em>, <em>"Excel Avançado"</em> pode cobrir <em>"Power BI"</em>. O candidato não é punido por terminologia diferente.</div>
+                  </div>
+                  <div class="campo-item" style="margin-bottom:4px">
+                    <div class="campo-nome" style="font-size:12.5px">Identificação de pontos fortes e lacunas</div>
+                    <div class="campo-desc">Para cada candidato, a IA lista os requisitos que o candidato <strong>atende</strong> (✓) e os que estão <strong>ausentes ou parciais</strong> (●) — dando ao recrutador contexto imediato sem precisar ler o currículo completo.</div>
+                  </div>
+                  <div class="campo-item" style="margin-bottom:0">
+                    <div class="campo-nome" style="font-size:12.5px">Resumo explicativo personalizado</div>
+                    <div class="campo-desc">A IA gera um parágrafo em linguagem natural explicando a compatibilidade do candidato com a vaga — baseado no perfil real do currículo, não em templates genéricos.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="border:1px solid var(--border);border-left:4px solid var(--warning);border-radius:var(--radius);padding:14px 16px;background:var(--bg-card)">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                  <div style="background:#fef9c3;color:#92400e;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700">ETAPA 3</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--text-hi)">Cálculo Determinístico de Experiência</div>
+                </div>
+                <div style="font-size:12.5px;color:var(--text-md);line-height:1.7">Antes de enviar à IA, o sistema calcula automaticamente o <strong>tempo total de carreira</strong> de cada candidato somando os períodos das experiências profissionais. Suporta os formatos mais comuns: <em>DD/MM/YYYY</em>, <em>MM/YYYY</em>, apenas ano (<em>"2020"</em>), <em>"desde MM/YYYY"</em>, <em>"atual"</em> e similares. Esse cálculo é feito de forma determinística pelo servidor — sem custo de IA — e é exibido como dado complementar na análise.</div>
+              </div>
+
+            </div>
+
+            <div class="etapa-aviso">
+              💡 Todas as chamadas de IA passam por um módulo central (<em>modules/ia/index.js</em>) que gerencia automaticamente o roteamento entre provedores, o controle de fallback e o registro de consumo de tokens — visível no Dashboard.
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FLUXO OPERACIONAL                                     -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="sec-fluxo">
+      <div class="fase-header">
+        <div class="fase-badge f4">⇢</div>
+        <div class="fase-titulo">
+          <h2>Fluxo Operacional</h2>
+          <p>Visão completa do processo — da configuração inicial à entrega dos candidatos no Softexpert.</p>
+        </div>
+      </div>
+
+      <div class="etapa-card open" id="etapa-fluxo">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">Fluxo</span>
+          <span class="etapa-titulo">Diagrama End-to-End do IAHub</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner" style="padding-bottom:32px">
+
+            <div class="fluxo-diagram">
+
+              <!-- BLOCO 1: Configuração -->
+              <div class="fd-group fd-config">
+                <div class="fd-group-label">FASE 1 &amp; 2 — Configuração</div>
+                <div class="fd-row">
+                  <div class="fd-node fd-node-blue">
+                    <div class="fd-node-icon">🏢</div>
+                    <div class="fd-node-text">Empresas &amp;<br>Usuários</div>
+                  </div>
+                  <div class="fd-arrow-h">→</div>
+                  <div class="fd-node fd-node-blue">
+                    <div class="fd-node-icon">⚙</div>
+                    <div class="fd-node-text">Config. Técnica<br>(IA, E-mail, WA)</div>
+                  </div>
+                  <div class="fd-arrow-h">→</div>
+                  <div class="fd-node fd-node-blue">
+                    <div class="fd-node-icon">📋</div>
+                    <div class="fd-node-text">Funções &amp;<br>Vagas</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fd-arrow-v-center">↓</div>
+
+              <!-- BLOCO 2: Captação -->
+              <div class="fd-group fd-captacao">
+                <div class="fd-group-label">FASE 3 — Captação de Currículos</div>
+                <div class="fd-row fd-row-split">
+                  <div class="fd-node fd-node-green">
+                    <div class="fd-node-icon">💬</div>
+                    <div class="fd-node-text">WhatsApp<br><span class="fd-sub">Monitor ativo</span></div>
+                  </div>
+                  <div class="fd-node fd-node-green">
+                    <div class="fd-node-icon">📧</div>
+                    <div class="fd-node-text">E-mail IMAP<br><span class="fd-sub">Monitor ativo</span></div>
+                  </div>
+                  <div class="fd-node fd-node-green">
+                    <div class="fd-node-icon">🌐</div>
+                    <div class="fd-node-text">Formulário<br><span class="fd-sub">Página pública</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fd-arrow-v-center">↓</div>
+
+              <!-- BLOCO 3: IA processa -->
+              <div class="fd-group fd-ia">
+                <div class="fd-group-label fd-group-label-ia">🤖 PROCESSAMENTO COM IA</div>
+                <div class="fd-row">
+                  <div class="fd-node fd-node-purple">
+                    <div class="fd-node-icon">🌍</div>
+                    <div class="fd-node-text">Detecta idioma<br>e traduz</div>
+                  </div>
+                  <div class="fd-arrow-h">→</div>
+                  <div class="fd-node fd-node-purple">
+                    <div class="fd-node-icon">✅</div>
+                    <div class="fd-node-text">Valida se é<br>currículo</div>
+                  </div>
+                  <div class="fd-arrow-h">→</div>
+                  <div class="fd-node fd-node-purple">
+                    <div class="fd-node-icon">📊</div>
+                    <div class="fd-node-text">Extrai dados<br>estruturados</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fd-arrow-v-center">↓</div>
+
+              <!-- BLOCO 4: Banco -->
+              <div class="fd-row fd-row-center">
+                <div class="fd-node fd-node-slate fd-node-wide">
+                  <div class="fd-node-icon">🗄️</div>
+                  <div class="fd-node-text">Banco de Currículos da Empresa<br><span class="fd-sub">Nome · Contato · Experiências · Formação · Habilidades</span></div>
+                </div>
+              </div>
+
+              <div class="fd-arrow-v-center">↓</div>
+
+              <!-- BLOCO 5: Análise -->
+              <div class="fd-group fd-analise">
+                <div class="fd-group-label fd-group-label-ia">🤖 ANÁLISE DE ADERÊNCIA COM IA</div>
+                <div class="fd-row">
+                  <div class="fd-node fd-node-purple">
+                    <div class="fd-node-icon">🎯</div>
+                    <div class="fd-node-text">Seleciona vaga<br>para análise</div>
+                  </div>
+                  <div class="fd-arrow-h">→</div>
+                  <div class="fd-node fd-node-purple">
+                    <div class="fd-node-icon">⚖️</div>
+                    <div class="fd-node-text">Pontua 4<br>critérios (0–100)</div>
+                  </div>
+                  <div class="fd-arrow-h">→</div>
+                  <div class="fd-node fd-node-purple">
+                    <div class="fd-node-icon">📝</div>
+                    <div class="fd-node-text">Gera resumo<br>e pontos fortes</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="fd-arrow-v-center">↓</div>
+
+              <!-- BLOCO 6: Corte -->
+              <div class="fd-row fd-row-split">
+                <div class="fd-split-branch">
+                  <div class="fd-branch-label fd-branch-ok">≥ corte mínimo</div>
+                  <div class="fd-node fd-node-ok">
+                    <div class="fd-node-icon">✅</div>
+                    <div class="fd-node-text">Aprovado<br><span class="fd-sub">Ordenado por score</span></div>
+                  </div>
+                </div>
+                <div class="fd-split-branch">
+                  <div class="fd-branch-label fd-branch-err">&lt; corte mínimo</div>
+                  <div class="fd-node fd-node-err">
+                    <div class="fd-node-icon">❌</div>
+                    <div class="fd-node-text">Desclassificado<br><span class="fd-sub">Motivo registrado</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Seta apenas do lado aprovado -->
+              <div class="fd-arrow-v-left">↓</div>
+
+              <!-- BLOCO 7: Finalistas -->
+              <div class="fd-row fd-row-left">
+                <div class="fd-node fd-node-blue fd-node-wide" style="max-width:320px">
+                  <div class="fd-node-icon">⭐</div>
+                  <div class="fd-node-text">Recrutador revisa e marca finalistas<br><span class="fd-sub">Encerra a análise da vaga</span></div>
+                </div>
+              </div>
+
+              <div class="fd-arrow-v-left">↓</div>
+
+              <!-- BLOCO 8: SE -->
+              <div class="fd-row fd-row-left">
+                <div class="fd-node fd-node-se fd-node-wide" style="max-width:320px">
+                  <div class="fd-node-icon">🔗</div>
+                  <div class="fd-node-text">
+                    <strong>Softexpert SE Suite</strong><br>
+                    <span class="fd-sub">Candidato + PDF + Nota de aderência</span>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /fluxo-diagram -->
+
+            <!-- Legenda -->
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+              <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-md)"><div style="width:12px;height:12px;border-radius:3px;background:var(--accent);flex-shrink:0"></div> Configuração / Recrutador</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-md)"><div style="width:12px;height:12px;border-radius:3px;background:var(--success);flex-shrink:0"></div> Captação (canais)</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-md)"><div style="width:12px;height:12px;border-radius:3px;background:#8b5cf6;flex-shrink:0"></div> Processamento com IA</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-md)"><div style="width:12px;height:12px;border-radius:3px;background:#0891b2;flex-shrink:0"></div> Integração Softexpert</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FASE 1 — Administração                                -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="fase-1">
+      <div class="fase-header">
+        <div class="fase-badge f1">1</div>
+        <div class="fase-titulo">
+          <h2>Administração do Sistema</h2>
+          <p>Configure as empresas, a identidade visual, os usuários e seus níveis de acesso antes de iniciar a operação.</p>
+        </div>
+      </div>
+
+      <!-- 1.1 -->
+      <div class="etapa-card open" id="etapa-1-1">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">1.1</span>
+          <span class="etapa-titulo">Cadastro de Empresas</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">O ponto de partida do sistema é o cadastro das empresas. Cada empresa possui seus próprios currículos, vagas, configurações e candidatos — completamente isolados das demais. Acesse <strong>Configurador → Administração → aba Empresas</strong>.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Razão Social <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Nome oficial da empresa ou produtor rural. É exibido no seletor de empresa do cabeçalho do sistema.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">CPF / CNPJ <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Documento de identificação da empresa. O sistema aplica máscara automaticamente conforme o número de dígitos informado.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Telefone</div>
+                <div class="campo-desc">Telefone de contato principal da empresa. Apenas para referência cadastral.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">E-mail</div>
+                <div class="campo-desc">E-mail institucional de contato. Não é usado para envio automático — apenas informativo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Site</div>
+                <div class="campo-desc">Endereço do site da empresa (com https://). Campo opcional para referência.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Endereço</div>
+                <div class="campo-desc">Endereço físico da empresa no formato livre (Rua, número, cidade – UF). Campo opcional.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 Após salvar o cadastro da empresa, a aba <strong>Identidade Visual</strong> é liberada para configurar o logo e a imagem da tela de login (etapa 1.2).
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Listagem de empresas</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📋</div>
+                  <div class="ph-title">Tela: Lista de Empresas</div>
+                  <div class="ph-file">img/01-empresas-grid.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Formulário de inclusão</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🏢</div>
+                  <div class="ph-title">Tela: Nova Empresa — Dados Cadastrais</div>
+                  <div class="ph-file">img/01-empresas-form.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.2 -->
+      <div class="etapa-card" id="etapa-1-2">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">1.2</span>
+          <span class="etapa-titulo">Identidade Visual (Tela de Login)</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Cada empresa pode ter sua própria identidade visual na tela de login — logo próprio, imagem de fundo lateral e frase institucional. Acesse <strong>Administração → Empresas → editar empresa → aba Identidade Visual</strong>.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Logomarca</div>
+                <div class="campo-desc">Imagem PNG, JPG ou WebP com o logo da empresa. Aparece no centro do painel de login. Recomendado: fundo transparente, proporção quadrada ou retangular com no mínimo 200px.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Imagem lateral</div>
+                <div class="campo-desc">Imagem de fundo que ocupa o lado esquerdo da tela de login. Recomendado: formato 16:9 ou retrato, mínimo 800px de altura. Pode ser foto institucional, paisagem ou imagem da marca.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Texto sobre a imagem lateral</div>
+                <div class="campo-desc">Frase ou slogan institucional exibido em destaque sobre a imagem lateral. Máximo 180 caracteres. Exemplo: "Conectando talentos ao futuro."</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn">
+              ⚠️ A aba <strong>Identidade Visual</strong> só é liberada após salvar os dados cadastrais da empresa (etapa 1.1). Enquanto não configurada, o sistema exibe o padrão padrão do IAHub no login.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Aba Identidade Visual</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🎨</div>
+                  <div class="ph-title">Tela: Identidade Visual da Empresa</div>
+                  <div class="ph-file">img/01-identidade-form.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Tela de login personalizada</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🔐</div>
+                  <div class="ph-title">Tela: Login com Identidade Aplicada</div>
+                  <div class="ph-file">img/01-login-preview.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.3 -->
+      <div class="etapa-card" id="etapa-1-3">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">1.3</span>
+          <span class="etapa-titulo">Cadastro de Usuários</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Crie os usuários que terão acesso ao sistema. Um usuário pode estar vinculado a uma ou mais empresas com perfis de acesso diferentes em cada uma. Acesse <strong>Configurador → Administração → aba Usuários</strong>.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Nome completo <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Nome de exibição do usuário no sistema. Aparece no cabeçalho após o login.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Usuário (login) <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Identificador único de acesso. Recomendado no formato <em>nome.sobrenome</em> (sem espaços, sem acentos). Não pode ser alterado após criação.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Celular <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Número de celular com DDD. Utilizado para contato e identificação do usuário.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">E-mail <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Endereço de e-mail do usuário. Deve ser único no sistema.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Perfil <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc"><strong>Admin</strong> — acesso total ao sistema, sem restrições de rotina. <strong>Usuário</strong> — acesso limitado às rotinas que lhe forem concedidas na etapa 1.4.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Status</div>
+                <div class="campo-desc">Ativo ou Inativo. Usuários inativos não conseguem fazer login. Disponível apenas na edição de usuários já existentes.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Senha <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Mínimo de 8 caracteres. Na edição, o campo é opcional — deixe em branco para manter a senha atual.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 Usuários com perfil <strong>Admin</strong> têm acesso irrestrito a todas as rotinas e empresas — não é necessário configurar permissões para eles (etapa 1.4).
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Listagem de usuários</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">👥</div>
+                  <div class="ph-title">Tela: Lista de Usuários</div>
+                  <div class="ph-file">img/01-usuarios-grid.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Formulário de inclusão</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">👤</div>
+                  <div class="ph-title">Tela: Novo Usuário</div>
+                  <div class="ph-file">img/01-usuarios-form.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.4 -->
+      <div class="etapa-card" id="etapa-1-4">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">1.4</span>
+          <span class="etapa-titulo">Permissões de Acesso</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Após criar o usuário, defina quais rotinas ele pode acessar em cada empresa. O controle é por <strong>rotina individual</strong> — o usuário só enxerga no menu o que lhe foi liberado. Acesse <strong>Administração → Usuários → selecione o usuário → painel Acessos</strong>.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Painel esquerdo — Empresas</div>
+                <div class="campo-desc">Lista todas as empresas cadastradas. Clique em uma empresa para visualizar e editar as rotinas liberadas para aquele usuário naquela empresa. O círculo azul indica que o usuário já possui algum acesso nessa empresa.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Painel direito — Rotinas</div>
+                <div class="campo-desc">Exibe as rotinas agrupadas por módulo (Monitores, Recrutamento, Analisador, Integrações, Configurador). Marque o checkbox do grupo para liberar/remover todas as rotinas do módulo de uma vez, ou marque individualmente.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Botões Marcar todos / Desmarcar todos</div>
+                <div class="campo-desc">Atalhos para conceder ou revogar todas as rotinas de todas as empresas de uma vez. Use com cuidado.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn">
+              ⚠️ Usuários com perfil <strong>Admin</strong> ignoram as permissões — sempre têm acesso total. O painel de permissões para admins exibe um aviso informando isso e não permite alteração.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Painel de permissões por empresa</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🔒</div>
+                  <div class="ph-title">Tela: Permissões por Usuário</div>
+                  <div class="ph-file">img/01-permissoes.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Rotinas marcadas para uma empresa</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">✅</div>
+                  <div class="ph-title">Tela: Rotinas Liberadas</div>
+                  <div class="ph-file">img/01-permissoes-rotinas.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FASE 2 — Configuração Técnica                         -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="fase-2">
+      <div class="fase-header">
+        <div class="fase-badge f2">2</div>
+        <div class="fase-titulo">
+          <h2>Configuração Técnica da Empresa</h2>
+          <p>Configure os canais de recepção de currículos, os parâmetros de IA e a integração com o Softexpert para cada empresa.</p>
+        </div>
+      </div>
+
+      <!-- 2.1 -->
+      <div class="etapa-card" id="etapa-2-1">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">2.1</span>
+          <span class="etapa-titulo">Parâmetros Gerais e IA</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Configure os parâmetros globais do sistema e as chaves de IA. Acesse <strong>Configurador → Configurações</strong>. As configurações são globais — valem para todas as empresas.</p>
+
+            <div class="campo-secao">Identificação do Sistema</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Nome exibido no rodapé</div>
+                <div class="campo-desc">Nome do sistema exibido no rodapé das telas. Padrão: <em>IAHUB</em>.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Frase do sistema</div>
+                <div class="campo-desc">Subtítulo ou slogan exibido no rodapé. Ex.: <em>Onde a gestão encontra a inteligência</em>.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Versão / Release</div>
+                <div class="campo-desc">Número de versão do sistema exibido na interface. Apenas informativo.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Inteligência Artificial — Groq (principal)</div>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Chave de API (Groq) <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Chave obtida em <em>console.groq.com</em>. É o motor principal de análise de currículos. Sem essa chave o analisador não funciona.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Limite de tokens/mês (Groq)</div>
+                <div class="campo-desc">Teto de consumo mensal de tokens do Groq. Usado para acompanhamento no dashboard. Coloque 0 para sem limite.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Limite US$ (Groq)</div>
+                <div class="campo-desc">Teto de custo mensal em dólares para o Groq. Exibido no dashboard de consumo.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Inteligência Artificial — Google Gemini (fallback)</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Chave de API (Gemini)</div>
+                <div class="campo-desc">Chave obtida no Google AI Studio. Usada automaticamente quando o Groq falha ou atinge o limite. Opcional.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Modelo Gemini</div>
+                <div class="campo-desc">Identificador do modelo Gemini a usar. Padrão: <em>gemini-1.5-flash</em>. Consulte a documentação do Google para modelos disponíveis.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Classificação de Senioridade</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Limite Júnior → Pleno (meses)</div>
+                <div class="campo-desc">Tempo de experiência (em meses) a partir do qual o candidato é classificado como Pleno. Padrão: 12 meses.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Limite Pleno → Sênior (meses)</div>
+                <div class="campo-desc">Tempo de experiência a partir do qual o candidato é classificado como Sênior. Padrão: 36 meses.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 As chaves de API são armazenadas de forma protegida. O campo exibe <em>••••••••</em> após salvar — isso é normal e não significa que o valor foi perdido.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Configurações gerais do sistema</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">⚙️</div>
+                  <div class="ph-title">Tela: Configurações — Geral</div>
+                  <div class="ph-file">img/02-config-geral.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Configurações de IA (Groq / Gemini)</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🤖</div>
+                  <div class="ph-title">Tela: Configurações — IA</div>
+                  <div class="ph-file">img/02-config-ia.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2.2 -->
+      <div class="etapa-card" id="etapa-2-2">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">2.2</span>
+          <span class="etapa-titulo">Configuração de E-mail IMAP</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Configure a caixa de e-mail que o sistema monitorará para capturar currículos enviados por e-mail. Acesse <strong>Configurador → Configurações → aba E-mail</strong>. Cada empresa tem sua própria configuração de e-mail.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Tipo de Servidor <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Selecione o provedor: <strong>Gmail</strong>, <strong>Outlook/Hotmail</strong>, <strong>Yahoo</strong> ou <strong>Outro</strong>. Ao selecionar um provedor conhecido, os campos de host e porta são preenchidos automaticamente.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Endereço de E-mail <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">E-mail corporativo que receberá os currículos. Ex.: <em>recrutamento@empresa.com.br</em>. Este e-mail será monitorado pelo sistema.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Senha do App (App Password) <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Para Gmail e Outlook com autenticação em dois fatores ativa, use uma <strong>senha de aplicativo</strong> gerada nas configurações de segurança da conta — não a senha normal. Para outros provedores, a senha normal pode funcionar.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Host IMAP / Porta IMAP / Segurança IMAP</div>
+                <div class="campo-desc">Preenchidos automaticamente para Gmail (<em>imap.gmail.com:993</em>) e Outlook. Para outros provedores, preencha manualmente com os dados fornecidos pelo provedor de e-mail.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Host SMTP / Porta SMTP / Segurança TLS</div>
+                <div class="campo-desc">Configurações do servidor de envio. Usado para notificações e respostas automáticas. Preenchido automaticamente para Gmail (<em>smtp.gmail.com:465</em>).</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Intervalo de Verificação (minutos)</div>
+                <div class="campo-desc">Frequência com que o monitor verificará a caixa de entrada em busca de novos e-mails. Padrão: 2 minutos. Mínimo: 1 minuto.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn">
+              ⚠️ Para Gmail, é obrigatório habilitar <strong>IMAP</strong> nas configurações da conta e gerar uma <strong>Senha de Aplicativo</strong> (não a senha normal). O acesso IMAP pode estar desativado por padrão em contas corporativas Google Workspace.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Configurações de e-mail IMAP</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📧</div>
+                  <div class="ph-title">Tela: Configurações — E-mail IMAP</div>
+                  <div class="ph-file">img/02-config-email.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2.3 -->
+      <div class="etapa-card" id="etapa-2-3">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">2.3</span>
+          <span class="etapa-titulo">Configuração do WhatsApp</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Configure o número de WhatsApp que receberá os currículos dos candidatos e as mensagens automáticas que o sistema enviará em cada situação. Acesse <strong>Configurador → Configurações → aba WhatsApp</strong>.</p>
+
+            <div class="campo-secao">Identificação do Número</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Identificação / Nome do Número</div>
+                <div class="campo-desc">Nome de referência interno para este número. Ex.: <em>RH — Empresa XYZ</em>. Ajuda a identificar o canal no painel de monitores.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Número de Destino</div>
+                <div class="campo-desc">Número que receberá notificações quando um currículo for processado com sucesso. Formato internacional sem símbolos: <em>5511999999999</em>. Pode ser o número do RH responsável.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Mensagens Automáticas</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">✅ Currículo recebido com sucesso</div>
+                <div class="campo-desc">Mensagem enviada ao candidato quando o PDF do currículo é recebido e processado corretamente.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">⚠️ Arquivo não é PDF</div>
+                <div class="campo-desc">Enviada quando o candidato envia um arquivo que não está em formato PDF (ex.: Word, imagem).</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">❌ PDF ilegível ou protegido</div>
+                <div class="campo-desc">Enviada quando o PDF enviado está corrompido, protegido por senha ou é um scan de imagem sem texto reconhecível.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">😊 Documento não é um currículo</div>
+                <div class="campo-desc">Enviada quando o PDF é legível mas a IA identifica que não se trata de um currículo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">⚠️ Currículo duplicado — use <em>{nome}</em></div>
+                <div class="campo-desc">Enviada quando já existe um currículo cadastrado com o mesmo telefone ou e-mail. O placeholder <em>{nome}</em> é substituído pelo nome do candidato já cadastrado.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">😊 Candidato optou por NÃO atualizar</div>
+                <div class="campo-desc">Enviada quando o candidato responde que não deseja substituir o currículo existente.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">❌ Erro ao processar currículo</div>
+                <div class="campo-desc">Mensagem de erro genérico quando ocorre uma falha inesperada no processamento.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 As mensagens suportam formatação WhatsApp: <em>*negrito*</em>, <em>_itálico_</em> e quebras de linha. Personalize o tom de acordo com a cultura da empresa.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Configurações do WhatsApp</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">💬</div>
+                  <div class="ph-title">Tela: Configurações — WhatsApp</div>
+                  <div class="ph-file">img/02-config-whatsapp.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Mensagens automáticas configuradas</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">💬</div>
+                  <div class="ph-title">Tela: Mensagens Automáticas</div>
+                  <div class="ph-file">img/02-config-whatsapp-msgs.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2.4 -->
+      <div class="etapa-card" id="etapa-2-4">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">2.4</span>
+          <span class="etapa-titulo">SE API Configurador</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Configure a integração com o Softexpert definindo templates XML, mapeamento de campos e flows de execução. Esta etapa habilita o envio de candidatos ao SE. Acesse <strong>Integrações → SE API Configurador</strong>.</p>
+
+            <div class="campo-secao">Conexão com o Softexpert (em Configurações → aba SE)</div>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">URL do Webservice (SOAP) <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Endereço do serviço SOAP do Softexpert. Formato: <em>https://suaempresa.softexpert.com/se/ws/fm_ws.php?wsdl</em>. Fornecido pelo administrador do SE.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Token de Autenticação (JWT) <span class="campo-req">obrigatório</span></div>
+                <div class="campo-desc">Token JWT gerado no painel de administração do Softexpert. Necessário para autenticar as chamadas da API.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">ID do campo — Empresa / Nome da Empresa</div>
+                <div class="campo-desc">Identificadores dos campos personalizados no formulário do SE que receberão o código e o nome da empresa. Ex.: <em>IDEMP</em> e <em>NMEMP</em>. Deixe em branco para não enviar esses campos.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">SE API Configurador — Estrutura</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Templates XML</div>
+                <div class="campo-desc">Modelos de payload SOAP com placeholders (<em>{{nome}}</em>, <em>{{cargo}}</em>, etc.). Cada template representa um tipo de chamada ao SE, como iniciar um workflow ou registrar um currículo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Configurações</div>
+                <div class="campo-desc">Vinculam um template a um endpoint e definem o mapeamento de campos — quais dados do IAHub preenchem quais placeholders do XML. Também definem onde salvar o ID de workflow retornado pelo SE.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Flows</div>
+                <div class="campo-desc">Sequência ordenada de configurações executadas em cascata. Permitem encadear múltiplas chamadas ao SE em uma única ação, como criar o candidato e iniciar o processo seletivo em sequência.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn">
+              ⚠️ Esta etapa requer conhecimento da estrutura de formulários e workflows do Softexpert. Envolva o administrador do SE para obter os IDs de campos, endpoints e estrutura dos XMLs.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Tela de templates XML</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🔗</div>
+                  <div class="ph-title">Tela: SE API — Templates</div>
+                  <div class="ph-file">img/02-se-api-templates.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Tela de configurações e flows</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">⚡</div>
+                  <div class="ph-title">Tela: SE API — Flows</div>
+                  <div class="ph-file">img/02-se-api-flows.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FASE 3 — Cadastros Operacionais                       -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="fase-3">
+      <div class="fase-header">
+        <div class="fase-badge f3">3</div>
+        <div class="fase-titulo">
+          <h2>Cadastros Operacionais</h2>
+          <p>Cadastre as funções e as vagas em aberto. Estes cadastros são a base para a análise de aderência dos currículos recebidos.</p>
+        </div>
+      </div>
+
+      <!-- 3.1 -->
+      <div class="etapa-card" id="etapa-3-1">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">3.1</span>
+          <span class="etapa-titulo">Cadastro de Funções</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Cadastre as funções existentes na empresa com seus requisitos e equivalências no Softexpert. As funções são a referência para a criação das vagas.</p>
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Listagem de funções</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📋</div>
+                  <div class="ph-title">Tela: Lista de Funções</div>
+                  <div class="ph-file">img/04-funcoes-grid.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Formulário de inclusão</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📝</div>
+                  <div class="ph-title">Tela: Nova Função</div>
+                  <div class="ph-file">img/04-funcoes-form.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3.2 -->
+      <div class="etapa-card" id="etapa-3-2">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">3.2</span>
+          <span class="etapa-titulo">Cadastro de Vagas</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Crie as vagas abertas vinculadas às funções cadastradas. Cada vaga define os critérios que a IA utilizará para avaliar a aderência dos currículos recebidos.</p>
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Listagem de vagas</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">💼</div>
+                  <div class="ph-title">Tela: Lista de Vagas</div>
+                  <div class="ph-file">img/04-vagas-grid.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Formulário de inclusão</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📌</div>
+                  <div class="ph-title">Tela: Nova Vaga</div>
+                  <div class="ph-file">img/04-vagas-form.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FASE 4 — Monitores e Currículos                       -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="fase-4">
+      <div class="fase-header">
+        <div class="fase-badge f4">4</div>
+        <div class="fase-titulo">
+          <h2>Monitores e Recebimento de Currículos</h2>
+          <p>Suba os serviços de monitoramento e acompanhe o recebimento de currículos pelos canais configurados.</p>
+        </div>
+      </div>
+
+      <!-- 4.1 -->
+      <div class="etapa-card" id="etapa-4-1">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">4.1</span>
+          <span class="etapa-titulo">Subida dos Monitores (WhatsApp e E-mail)</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Com as configurações técnicas concluídas (Fase 2), é hora de iniciar os monitores para que o sistema comece a capturar currículos em tempo real. Acesse <strong>Monitores → Monitores</strong> para ver o painel central com todos os monitores por empresa.</p>
+
+            <div class="campo-secao">Painel de Monitores</div>
+            <p class="etapa-desc" style="margin-top:0">O painel exibe um card por empresa com o status atual do monitor WhatsApp e do monitor E-mail. A partir daqui você acessa cada monitor com um clique.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Status do monitor</div>
+                <div class="campo-desc">Indicador em tempo real: <strong>Rodando</strong> (ponto verde) quando o serviço está ativo e recebendo mensagens, ou <strong>Parado</strong> (ponto cinza) quando inativo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Botão Abrir Monitor WhatsApp</div>
+                <div class="campo-desc">Abre a tela de controle do monitor WhatsApp daquela empresa, onde é possível iniciar/parar o serviço e escanear o QR Code.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Botão Abrir Monitor E-mail</div>
+                <div class="campo-desc">Abre a tela de controle do monitor de e-mail IMAP daquela empresa, com log em tempo real das verificações.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao">Monitor WhatsApp — passo a passo</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">1. Iniciar o serviço</div>
+                <div class="campo-desc">Clique em <strong>▶ Iniciar Serviço</strong>. O Chrome sobe em segundo plano no servidor e o log começa a exibir as mensagens de inicialização.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">2. Abrir o painel QR Code</div>
+                <div class="campo-desc">Clique em <strong>📱 QR Code</strong> para abrir o painel lateral. Aguarde alguns segundos até o QR Code aparecer na tela.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">3. Escanear com o celular</div>
+                <div class="campo-desc">No celular com o número que receberá os currículos: <strong>WhatsApp → Menu (⋮) → Dispositivos conectados → Conectar dispositivo</strong>. Aponte a câmera para o QR Code exibido na tela do sistema.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">4. Conexão estabelecida</div>
+                <div class="campo-desc">O painel exibe <em>✅ WhatsApp conectado!</em> e o status muda para <strong>Rodando</strong>. A partir deste momento, todo PDF enviado para o número é processado automaticamente pela IA.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 <strong>Sessão persistente:</strong> Após o primeiro escaneamento, a sessão é salva no servidor. Nas próximas vezes que o serviço for iniciado, ele reconecta automaticamente sem precisar escanear novamente — desde que o número não tenha sido desconectado pelo celular.
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn" style="margin-top:8px">
+              ⚠️ O WhatsApp utilizado é baseado em <strong>whatsapp-web.js</strong> (solução não-oficial, gratuita). Para uso comercial intenso, ative a <strong>API Oficial Meta</strong> em <em>Configuração do WhatsApp</em> — nesse modo não há QR Code e a autenticação é via token permanente.
+            </div>
+
+            <div class="campo-secao" style="margin-top:20px">Monitor E-mail IMAP — passo a passo</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">1. Verificar configuração ativa</div>
+                <div class="campo-desc">O painel lateral direito mostra a conta, servidor IMAP e intervalo de verificação configurados na etapa 2.2. Confirme que as informações estão corretas antes de iniciar.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">2. Iniciar o serviço</div>
+                <div class="campo-desc">Clique em <strong>▶ Iniciar Serviço</strong>. O sistema começa a verificar a caixa de entrada no intervalo configurado (ex.: a cada 3 minutos). O log exibe cada verificação em tempo real.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">3. Acompanhar estatísticas</div>
+                <div class="campo-desc">O painel lateral exibe <strong>E-mails hoje</strong> (recebidos na sessão atual) e <strong>Total recebidos</strong> (histórico acumulado da empresa).</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 O monitor de e-mail processa automaticamente anexos PDF recebidos na caixa configurada. E-mails sem anexo PDF são ignorados. Se o PDF não for um currículo válido, o registro não é salvo.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Painel central de monitores</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🖥️</div>
+                  <div class="ph-title">Tela: Monitores (cards por empresa)</div>
+                  <div class="ph-file">img/04-monitores.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Monitor WhatsApp com QR Code</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">💬</div>
+                  <div class="ph-title">Tela: Monitor WhatsApp — painel QR</div>
+                  <div class="ph-file">img/04-monitor-whatsapp.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Monitor de e-mail ativo</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📧</div>
+                  <div class="ph-title">Tela: Monitor E-mail</div>
+                  <div class="ph-file">img/04-monitor-email.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4.2 -->
+      <div class="etapa-card" id="etapa-4-2">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">4.2</span>
+          <span class="etapa-titulo">Recebimento e Visualização de Currículos</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Conforme os candidatos enviam seus currículos pelo WhatsApp ou e-mail, os registros aparecem automaticamente nas telas de acompanhamento. Acesse <strong>Recrutamento → Currículos</strong> para ver a lista completa.</p>
+
+            <div class="campo-secao">O que acontece quando um candidato envia o currículo?</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">1. Recebimento e validação</div>
+                <div class="campo-desc">O sistema verifica se o arquivo recebido é um PDF. Outros formatos (imagens, áudio, texto simples) são ignorados e o candidato recebe uma orientação automática.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">2. Extração e verificação</div>
+                <div class="campo-desc">O texto do PDF é extraído. A IA verifica se o idioma é português (traduz automaticamente caso contrário) e se o conteúdo é de fato um currículo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">3. Análise e salvamento</div>
+                <div class="campo-desc">A IA extrai os dados estruturados (nome, e-mail, telefone, experiências profissionais, formação acadêmica, habilidades) e salva o registro. O candidato recebe uma confirmação de recebimento no WhatsApp ou por e-mail.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">4. Detecção de duplicatas</div>
+                <div class="campo-desc">Se já houver um currículo com o mesmo e-mail ou telefone, o candidato é consultado via mensagem automática sobre atualização (<em>SIM</em> substitui o anterior, <em>NÃO</em> mantém o registro existente).</div>
+              </div>
+            </div>
+
+            <div class="campo-secao" style="margin-top:4px">Tela de Currículos — o que você vê</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Grade de candidatos</div>
+                <div class="campo-desc">Lista todos os currículos recebidos pela empresa selecionada. Colunas: Nome, Celular, E-mail, Canal (WhatsApp / E-mail), Data de recebimento e Status de análise. Use os filtros de cabeçalho de coluna para localizar candidatos específicos.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Detalhe do currículo</div>
+                <div class="campo-desc">Clique em qualquer linha para abrir o perfil completo: dados pessoais, experiências profissionais (empresa, cargo, período, responsabilidades), formação acadêmica e habilidades extraídas pela IA.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Scores de análise</div>
+                <div class="campo-desc">Quando o currículo já foi analisado (etapa 5.1), o detalhe exibe a pontuação de aderência para cada vaga analisada — com barra de progresso, pontos fortes e lacunas identificados pela IA.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao" style="margin-top:4px">Dashboard — visão geral</div>
+            <p class="etapa-desc" style="margin-top:0">Acesse <strong>Monitores → Dashboard</strong> para uma visão executiva: total de currículos recebidos, vagas abertas, análises realizadas e consumo de tokens de IA por provedor (Groq / Gemini).</p>
+
+            <div class="etapa-aviso">
+              💡 O Dashboard exibe os dados da empresa selecionada no seletor do cabeçalho. Para comparar empresas, troque a empresa ativa pelo seletor no topo da tela.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Lista de currículos recebidos</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📄</div>
+                  <div class="ph-title">Tela: Currículos (grade)</div>
+                  <div class="ph-file">img/04-curriculos-grid.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Perfil completo do candidato</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🔎</div>
+                  <div class="ph-title">Tela: Detalhe do Currículo</div>
+                  <div class="ph-file">img/04-curriculo-detalhe.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Dashboard de monitoramento</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">⊞</div>
+                  <div class="ph-title">Tela: Dashboard</div>
+                  <div class="ph-file">img/04-dashboard.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FASE 5 — Análise e Integração                         -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="fase-section" id="fase-5">
+      <div class="fase-header">
+        <div class="fase-badge f5">5</div>
+        <div class="fase-titulo">
+          <h2>Análise de Currículos e Integração</h2>
+          <p>Execute a análise de aderência com IA, avalie os resultados e envie os candidatos aprovados para o Softexpert.</p>
+        </div>
+      </div>
+
+      <!-- 5.1 -->
+      <div class="etapa-card" id="etapa-5-1">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">5.1</span>
+          <span class="etapa-titulo">Execução do Analisador de Currículos</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">O Analisador compara todos os currículos recebidos com o perfil de uma vaga específica, atribuindo uma pontuação de compatibilidade (0–100 pontos) a cada candidato. Acesse <strong>Analisador de Currículos → Analisador</strong>.</p>
+
+            <div class="campo-secao">Passo a passo da análise</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">1. Selecionar a vaga</div>
+                <div class="campo-desc">No campo <strong>Vaga</strong>, escolha a vaga que deseja analisar. O sistema exibe o contexto completo da vaga selecionada — função, requisitos obrigatórios, desejáveis e habilidades. Confirme as informações antes de prosseguir.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">2. Definir filtro de currículos (opcional)</div>
+                <div class="campo-desc">Por padrão o sistema analisa <em>todos os currículos da empresa</em>. Se a vaga tiver candidatos vinculados via Processo Seletivo (formulário público), é possível selecionar <strong>Apenas desta vaga</strong> para restringir a análise a esse grupo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">3. Clicar em "Analisar Currículos"</div>
+                <div class="campo-desc">O sistema processa cada currículo individualmente: calcula o tempo de carreira de forma determinística, envia o texto completo à IA junto com o perfil da função e aguarda a pontuação por critério.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">4. Acompanhar o progresso</div>
+                <div class="campo-desc">Uma barra de progresso indica quantos currículos já foram processados. Cada candidato é analisado em sequência — o tempo total varia conforme o volume de currículos e a velocidade da IA.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao" style="margin-top:4px">Como a pontuação é calculada</div>
+            <p class="etapa-desc" style="margin-top:0">A pontuação máxima é <strong>100 pontos</strong>, distribuída em quatro critérios. Não há penalidade por ausência — candidatos que não atendem um critério simplesmente não ganham esses pontos.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Requisitos Obrigatórios <span class="campo-req">até 50 pts</span></div>
+                <div class="campo-desc">Critérios essenciais da função. A pontuação é proporcional: <em>(requisitos atendidos ÷ total de requisitos) × 50</em>. Exemplo: atende 3 de 4 requisitos obrigatórios → 37,5 pts.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Requisitos Desejáveis <span style="font-size:10px;color:var(--text-lo)">até 30 pts</span></div>
+                <div class="campo-desc">Diferenciais valorizados, porém não obrigatórios. Pontuação proporcional ao que o candidato apresenta.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Formação Acadêmica <span style="font-size:10px;color:var(--text-lo)">até 10 pts</span></div>
+                <div class="campo-desc">Grau de instrução e área de formação versus o definido na Função. Atende ou supera = 10 pts; próxima da área = parcial; não atende = 0 pts.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Habilidades Técnicas <span style="font-size:10px;color:var(--text-lo)">até 10 pts</span></div>
+                <div class="campo-desc">Ferramentas e tecnologias listadas na função. A IA considera equivalências (ex: "SoftExpert" = "SE Suite"). Pontuação proporcional ao domínio demonstrado.</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso">
+              💡 Os <strong>pesos de cada critério</strong> e a <strong>pontuação mínima de aprovação</strong> (padrão: 50 pts) são configuráveis em <strong>Analisador de Currículos → Configuração → Pesos de Pontuação</strong>.
+            </div>
+
+            <div class="etapa-aviso" style="margin-top:8px">
+              💡 <strong>Fallback automático de IA:</strong> a análise usa Groq (Llama 3.3 70B) como primário. Se ocorrer limite de taxa, o sistema troca automaticamente para Gemini 2.0 Flash. Se ambos falharem, o candidato recebe score neutro igual ao corte mínimo e não é eliminado.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Seleção de vaga e início da análise</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🔍</div>
+                  <div class="ph-title">Tela: Analisador — seleção de vaga</div>
+                  <div class="ph-file">img/05-analisador.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Análise em progresso</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">⚡</div>
+                  <div class="ph-title">Tela: Análise em andamento</div>
+                  <div class="ph-file">img/05-analisador-progresso.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5.2 -->
+      <div class="etapa-card" id="etapa-5-2">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">5.2</span>
+          <span class="etapa-titulo">Resultados e Encerramento da Análise</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Após a IA concluir o processamento, os candidatos são exibidos ordenados do maior para o menor score. O recrutador revisa, marca os finalistas e encerra a análise para registrá-la no histórico e liberar o envio ao Softexpert.</p>
+
+            <div class="campo-secao">Como ler os resultados</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Resumo geral</div>
+                <div class="campo-desc">Painel com 5 contadores: total analisado, aprovados (acima do corte), desclassificados (abaixo do corte), finalistas marcados e tempo médio de carreira do grupo.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Cards de candidatos aprovados</div>
+                <div class="campo-desc">Cada candidato exibe: <strong>ranking</strong> (posição na lista), <strong>score total</strong> (0–100), barra de compatibilidade colorida (<span style="color:var(--success)">verde ≥ 70</span> / <span style="color:var(--warning)">amarelo 50–69</span>), pontuação detalhada por critério, pontos fortes (✓) e lacunas (●) identificados pela IA e resumo textual do candidato em relação à vaga.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Candidatos desclassificados</div>
+                <div class="campo-desc">Exibidos em seção colapsada ao final da página, com nome, contato e motivo (pontuação obtida vs. corte mínimo). Clique em <strong>Mostrar desclassificados</strong> para visualizar.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Filtro por compatibilidade</div>
+                <div class="campo-desc">Use o seletor lateral para filtrar apenas candidatos de <em>Alta compatibilidade</em> (70–100 pts) ou <em>Média compatibilidade</em> (50–69 pts), facilitando a triagem quando houver muitos aprovados.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao" style="margin-top:4px">Marcar finalistas e encerrar</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Marcar candidatos finalistas</div>
+                <div class="campo-desc">Use o checkbox em cada card (ou <strong>Marcar todos</strong> na barra lateral) para selecionar os candidatos que irão para a próxima etapa. Os cards selecionados recebem destaque visual em azul.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">Encerrar Análise da Vaga <span class="campo-req">obrigatório para envio ao SE</span></div>
+                <div class="campo-desc">Clique em <strong>Encerrar Análise da Vaga</strong> na barra inferior para salvar os resultados no Histórico de Análises. Apenas após o encerramento os candidatos ficam disponíveis para envio ao Softexpert (etapa 5.3).</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn">
+              ⚠️ O ID da análise é único por vaga e por dia. Rodar a análise novamente no mesmo dia exibe um aviso de confirmação antes de sobrepor os resultados anteriores.
+            </div>
+
+            <div class="etapa-aviso" style="margin-top:8px">
+              💡 O <strong>Histórico de Análises</strong> (<strong>Analisador → Histórico</strong>) mantém registro de todas as análises realizadas. É possível consultá-las, comparar rodadas e regenerar a qualquer momento.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Cards de resultado com score e pontos</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">📊</div>
+                  <div class="ph-title">Tela: Resultados da análise</div>
+                  <div class="ph-file">img/05-resultados.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Barra de encerramento e finalistas</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">✅</div>
+                  <div class="ph-title">Tela: Encerramento da análise</div>
+                  <div class="ph-file">img/05-encerramento.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5.3 -->
+      <div class="etapa-card" id="etapa-5-3">
+        <div class="etapa-card-header" onclick="toggleEtapa(this)">
+          <span class="etapa-num">5.3</span>
+          <span class="etapa-titulo">Envio ao Softexpert (SE Integrações)</span>
+          <span class="etapa-arrow">▾</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Com a análise encerrada e os finalistas marcados, o próximo passo é enviar os candidatos aprovados para o processo seletivo no Softexpert. Acesse <strong>Integrações → SE Integrações</strong>.</p>
+
+            <div class="campo-secao">O que o SE Integrações faz</div>
+            <p class="etapa-desc" style="margin-top:0">A tela centraliza três fluxos de envio ao Softexpert: vagas, funções e currículos. Para o fluxo de recrutamento, o mais usado é o envio de <strong>currículos dos finalistas vinculados à vaga</strong>.</p>
+
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">SE Currículos</div>
+                <div class="campo-desc">Envia os candidatos finalistas de uma análise para o processo seletivo correspondente no Softexpert. O sistema usa a API REST do SE para criar o candidato, associar o currículo em PDF e registrar a pontuação de aderência como nota.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">SE Vagas</div>
+                <div class="campo-desc">Sincroniza as vagas do IAHub com os processos seletivos do Softexpert, criando ou atualizando o registro de vaga no SE. Necessário para que o vínculo candidato ↔ vaga fique correto no SE.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">SE Funções</div>
+                <div class="campo-desc">Sincroniza o catálogo de funções (cargos) do IAHub com os cargos cadastrados no Softexpert, mantendo os IDs de referência atualizados.</div>
+              </div>
+            </div>
+
+            <div class="campo-secao" style="margin-top:4px">Passo a passo — enviar currículos ao SE</div>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">1. Acessar SE Currículos</div>
+                <div class="campo-desc">Em <strong>Integrações → SE Integrações</strong>, acesse a aba <strong>SE Currículos</strong>. A tela exibe o histórico de todos os envios anteriores com status individual (Sucesso, Erro, Parcial, Revertido).</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">2. Verificar a configuração ativa</div>
+                <div class="campo-desc">O banner superior exibe o modo de envio configurado. Confirme que o <strong>SE API Configurador</strong> está correto (URL do servidor SE, usuário e senha) antes de prosseguir — veja etapa 2.4 caso precise ajustar.</div>
+              </div>
+              <div class="campo-item campo-obrigatorio">
+                <div class="campo-nome">3. Enviar candidatos <span class="campo-req">ação principal</span></div>
+                <div class="campo-desc">Clique em <strong>Enviar candidatos ao SE</strong>, selecione a análise encerrada na etapa anterior e confirme. O sistema percorre cada finalista, cria o candidato no SE, anexa o PDF do currículo e registra a nota de aderência. O log de passos fica disponível em cada linha da grade.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">4. Acompanhar os resultados</div>
+                <div class="campo-desc">A grade exibe o status de cada envio: <strong style="color:var(--success)">Sucesso</strong> (candidato criado no SE), <strong style="color:var(--error)">Erro</strong> (falha na API — clique na linha para ver o detalhe e a mensagem de erro), <strong style="color:#c2410c">Parcial</strong> (candidato criado mas anexo ou nota com falha) ou <strong style="color:#92400e">Revertido</strong> (envio cancelado manualmente).</div>
+              </div>
+            </div>
+
+            <div class="etapa-aviso etapa-aviso-warn">
+              ⚠️ O envio ao SE é <strong>irreversível pelo sistema</strong>: uma vez criado no Softexpert, o candidato precisa ser excluído manualmente no SE caso seja necessário desfazer. Use o botão <strong>Reverter</strong> (disponível em alguns modos) com cautela.
+            </div>
+
+            <div class="etapa-aviso" style="margin-top:8px">
+              💡 Para ver o detalhe técnico de cada envio — incluindo o XML enviado e a resposta recebida da API do SE — clique em qualquer linha da grade de histórico e depois em <strong>Ver detalhes do envio</strong>.
+            </div>
+
+            <div class="screenshots-grid">
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Grade de histórico de envios</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🔗</div>
+                  <div class="ph-title">Tela: SE Currículos — histórico</div>
+                  <div class="ph-file">img/05-se-curriculos.png</div>
+                </div>
+              </div>
+              <div class="screenshot-wrap">
+                <div class="screenshot-label">Detalhe do envio com passos e status</div>
+                <div class="screenshot-placeholder">
+                  <div class="ph-icon">🚀</div>
+                  <div class="ph-title">Tela: Detalhe do envio ao SE</div>
+                  <div class="ph-file">img/05-se-detalhe.png</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function toggleEtapa(header) {
+    const card = header.closest('.etapa-card');
+    card.classList.toggle('open');
+  }
+
+
+  async function exportarPDF() {
+    const btn = document.getElementById('btn-exportar-pdf');
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Gerando PDF...';
+    try {
+      const res = await fetch('/guia/exportar-pdf');
+      if (!res.ok) throw new Error('Falha na geração');
+      if (!res.headers.get('Content-Type')?.includes('application/pdf')) {
+        throw new Error('Resposta inesperada ao gerar o PDF');
+      }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'guia-iahub.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch {
+      alert('Erro ao gerar o PDF. Verifique o console do servidor.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<span>⬇</span> Exportar como PDF';
+    }
+  }
+
+  function irPara(id, e) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!el.classList.contains('open')) el.classList.add('open');
+    setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    document.querySelectorAll('.nav-etapa').forEach(a => a.classList.remove('active'));
+    e?.currentTarget?.classList.add('active');
+  }
+
+  // Carrega imagens reais nos placeholders quando o arquivo existir
+  function carregarScreenshots() {
+    document.querySelectorAll('.screenshot-placeholder').forEach(ph => {
+      const fileEl = ph.querySelector('.ph-file');
+      if (!fileEl) return;
+      const src = fileEl.textContent.trim();
+      const img = new Image();
+      img.onload = () => {
+        img.style.cssText = 'width:100%;height:auto;border-radius:6px;display:block;box-shadow:0 2px 12px rgba(0,0,0,.12)';
+        ph.innerHTML = '';
+        ph.style.cssText = 'padding:0;border:none;background:none';
+        ph.classList.add('ph-loaded');
+        ph.appendChild(img);
+      };
+      img.onerror = () => ph.classList.add('ph-empty');
+      img.src = src;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', carregarScreenshots);
+
+  // Marca item ativo na nav ao rolar
+  const content = document.getElementById('guia-main');
+  const etapas  = document.querySelectorAll('.etapa-card');
+
+  content.addEventListener('scroll', () => {
+    let current = null;
+    etapas.forEach(el => {
+      const top = el.getBoundingClientRect().top;
+      if (top < 180) current = el.id;
+    });
+    if (!current) return;
+    document.querySelectorAll('.nav-etapa').forEach(a => {
+      const target = a.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+      a.classList.toggle('active', target === current);
+    });
+  });
+</script>
+</body>
+</html>

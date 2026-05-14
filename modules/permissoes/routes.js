@@ -7,7 +7,15 @@ module.exports = function registerRoutes(app, { requireAuth }) {
     // Admin: acesso irrestrito — retorna null como sinal de "sem filtro"
     if (req.session.role === 'admin') return res.json({ rotinas: null });
 
-    const empresa_id = req.session.empresa_id;
+    // Aceita override via query param (MDI per-tab empresa)
+    const override = Number(req.query.empresa_id || 0);
+    let empresa_id = req.session.empresa_id;
+    if (override && override !== empresa_id) {
+      const { empresas: acesso } = req.session;
+      const ok = acesso === 'all' || (Array.isArray(acesso) && acesso.includes(override));
+      if (ok) empresa_id = override;
+    }
+
     if (!empresa_id) return res.json({ rotinas: [] });
 
     const rotinas = db.getRotinas(req.session.user_id, empresa_id);

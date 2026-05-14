@@ -330,6 +330,14 @@
 
   carregarTudo();
   (async () => { await window._iahubAuthReady; carregarVagas(); })();
+
+  // Atualiza status quando qualquer monitor iniciar/parar um serviço
+  let _bc = null;
+  try {
+    _bc = new BroadcastChannel('iahub_monitors');
+    _bc.onmessage = (e) => { if (e.data?.type === 'status-changed') carregar(); };
+  } catch(_) {}
+  setInterval(carregar, 30000);
 </script>
 </body>
 </html>

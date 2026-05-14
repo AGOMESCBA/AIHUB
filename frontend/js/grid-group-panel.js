@@ -28,7 +28,7 @@
  *   gp.applyToTable()                 aplica agrupamento à instância já criada
  *   gp.refresh()                      re-renderiza chips (chamar após o Tabulator ser criado no modo auto)
  */
-function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defaultVisible, getTable }) {
+function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defaultVisible, getTable, onChange }) {
 
   const IS_AUTO = !Array.isArray(allFields) || allFields.length === 0;
 
@@ -229,6 +229,10 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
     localStorage.setItem(KEY_ACTIVE, JSON.stringify(activeGroups));
   }
 
+  function notifyChange() {
+    if (typeof onChange === 'function') onChange(activeGroups.map(g => g.field));
+  }
+
   function renderDropZone() {
     if (!activeGroups.length) {
       dz.innerHTML = '<span class="ggp-dz-hint">↑ Arraste um campo acima para agrupar os dados</span>';
@@ -247,6 +251,7 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
         saveActive();
         renderDropZone();
         applyGrouping();
+        notifyChange();
       })
     );
   }
@@ -262,6 +267,7 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
     saveActive();
     renderDropZone();
     applyGrouping();
+    notifyChange();
   });
 
   function applyGrouping() {
@@ -271,6 +277,7 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
   // ── Inicialização ─────────────────────────────────────────────
   renderChips();
   renderDropZone();
+  notifyChange();
 
   // ── API pública ───────────────────────────────────────────────
   return {

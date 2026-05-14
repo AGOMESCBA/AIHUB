@@ -36,10 +36,33 @@
     .stat-lbl  { font-size: 11.5px; color: var(--text-lo); margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
 
     /* ── Toolbar ──────────────────────────────────────────────────────────── */
-    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow-sm); }
     .toolbar .form-control { margin: 0; height: 36px; font-size: 13px; }
     .toolbar select.form-control { min-width: 140px; }
     .spacer { flex: 1; }
+
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px;max-width:780px; }
+    .page-head-actions { display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow-sm); }
+    .filter-panel { padding:0;overflow:hidden; }
+    .filter-head { display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:44px; }
+    .filter-panel.open .filter-head { border-bottom:1px solid var(--border); }
+    .filter-toggle { display:inline-flex;align-items:center;gap:7px;height:30px;padding:5px 10px;font-size:12.5px;font-weight:600;white-space:nowrap; }
+    .filter-caret { width:12px;color:var(--text-lo);font-size:12px;line-height:1; }
+    .filter-summary { min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-md);font-size:12px; }
+    .filter-body { display:none;padding:14px 16px 16px; }
+    .filter-panel.open .filter-body { display:block; }
+    .filter-body .tab-toolbar > .spacer,
+    .filter-body .tab-toolbar > .btn-primary { display:none; }
+    .tab-pane-head { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px; }
+    .tab-pane-title { font-size:13px;font-weight:700;color:var(--text-hi); }
+    .tab-pane-subtitle { font-size:12px;color:var(--text-lo);margin-top:2px;line-height:1.45; }
+    .tab-toolbar { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .tab-toolbar .form-control { height:36px;margin:0;font-size:13px; }
+    .tab-toolbar input.form-control { min-width:260px; }
 
     /* ── Cards de template / config / flow ────────────────────────────────── */
     .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
@@ -163,6 +186,32 @@
     .modal-close:hover { color: var(--error); }
     .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); }
 
+    .editor-host .modal-overlay.editor-inline {
+      position: static; inset: auto; background: transparent; z-index: auto;
+      display: block !important; padding: 0; overflow: visible;
+    }
+    .editor-host .modal-overlay.editor-inline > .modal-box {
+      width: 100%; max-width: none; border: 0; border-radius: 0; box-shadow: none;
+      padding: 0; background: transparent;
+    }
+    .editor-host .modal-overlay.editor-inline .modal-title,
+    .editor-host .modal-overlay.editor-inline .modal-footer {
+      display: none;
+    }
+    .editor-host .modal-overlay.editor-inline > .modal-box > :not(.modal-title):not(.modal-footer) {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 20px;
+      margin-bottom: 16px;
+    }
+    .editor-host .modal-overlay.editor-inline .accordion {
+      background: var(--bg-card);
+    }
+    .editor-summary { display:grid;gap:12px; }
+    .editor-summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .editor-summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .editor-summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .editor-summary-note { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+
     /* ── XML preview ──────────────────────────────────────────────────────── */
     .xml-preview {
       background: #1e1e2e; color: #cdd6f4; border-radius: 8px;
@@ -253,6 +302,7 @@
       cursor: pointer; transition: background .12s, color .12s;
     }
     .btn-help:hover { background: #eff6ff; color: #3b82f6; border-color: #3b82f6; }
+    .topbar .btn-help { display: none; }
 
     /* ── Estado vazio ─────────────────────────────────────────────────────── */
     .empty-state { text-align: center; padding: 60px 20px; color: var(--text-lo); }
@@ -265,6 +315,9 @@
       .card-grid { grid-template-columns: 1fr; }
       .detail-grid { grid-template-columns: 1fr; }
       .tabs-bar { overflow-x: auto; }
+      .page-head, .tab-pane-head { flex-direction:column; }
+      .filter-head { align-items:flex-start;flex-direction:column;gap:6px; }
+      .tab-toolbar input.form-control { min-width:100%; }
     }
   </style>
 </head>
@@ -291,6 +344,17 @@
     </div>
 
     <div class="page-content">
+      <div id="list-view">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">Integrações</div>
+            <div class="page-title">SE API Configurador</div>
+            <div class="page-subtitle">Configure templates XML, endpoints, headers, mapeamentos, flows de execução e acompanhe o histórico de integrações com o SoftExpert.</div>
+          </div>
+          <div class="page-head-actions">
+            <button class="btn btn-ghost" onclick="openModal('modal-ajuda')" title="Abrir guia de uso">Ajuda</button>
+          </div>
+        </div>
 
       <!-- ── Abas ─────────────────────────────────────────────────────────── -->
       <div class="tabs-bar">
@@ -312,17 +376,34 @@
            ABA: TEMPLATES
       ═══════════════════════════════════════════════════════════════════════ -->
       <div class="tab-pane active" id="pane-templates">
-        <div class="toolbar">
-          <input type="text" class="form-control" id="tpl-search" placeholder="Buscar template..." oninput="renderTemplates()" style="max-width:260px">
-          <select class="form-control" id="tpl-filter-tipo" onchange="renderTemplates()">
-            <option value="">Todos os tipos</option>
-            <option value="START">START</option>
-            <option value="DATA">DATA</option>
-            <option value="MOVE">MOVE</option>
-            <option value="GRID">GRID</option>
-          </select>
-          <div class="spacer"></div>
-          <button class="btn btn-primary" onclick="openTemplateModal()">+ Novo Template</button>
+        <div class="quick-panel filter-panel" id="tpl-filter-panel">
+          <div class="filter-head">
+            <button class="btn btn-ghost filter-toggle" type="button" onclick="toggleFilterPanel('tpl')">
+              <span class="filter-caret" id="tpl-filter-caret">+</span>
+              <span id="tpl-filter-toggle-label">Mostrar filtros</span>
+            </button>
+            <span class="filter-summary" id="tpl-filter-summary">Sem filtros ativos</span>
+            <div class="spacer"></div>
+            <button class="btn btn-primary" onclick="openTemplateModal()">+ Novo Template</button>
+          </div>
+          <div class="filter-body">
+          <div class="tab-pane-head">
+            <div>
+              <div class="tab-pane-title">Templates XML</div>
+              <div class="tab-pane-subtitle">Modelos SOAP/XML com placeholders usados pelas configurações de envio.</div>
+            </div>
+          </div>
+          <div class="tab-toolbar">
+            <input type="text" class="form-control" id="tpl-search" placeholder="Buscar template..." oninput="renderTemplates()">
+            <select class="form-control" id="tpl-filter-tipo" onchange="renderTemplates()">
+              <option value="">Todos os tipos</option>
+              <option value="START">START</option>
+              <option value="DATA">DATA</option>
+              <option value="MOVE">MOVE</option>
+              <option value="GRID">GRID</option>
+            </select>
+          </div>
+          </div>
         </div>
         <div class="card-grid" id="templates-grid"></div>
       </div>
@@ -331,7 +412,24 @@
            ABA: CONFIGURAÇÕES
       ═══════════════════════════════════════════════════════════════════════ -->
       <div class="tab-pane" id="pane-configs">
-        <div class="toolbar">
+        <div class="quick-panel filter-panel" id="cfg-filter-panel">
+          <div class="filter-head">
+            <button class="btn btn-ghost filter-toggle" type="button" onclick="toggleFilterPanel('cfg')">
+              <span class="filter-caret" id="cfg-filter-caret">+</span>
+              <span id="cfg-filter-toggle-label">Mostrar filtros</span>
+            </button>
+            <span class="filter-summary" id="cfg-filter-summary">Sem filtros ativos</span>
+            <div class="spacer"></div>
+            <button class="btn btn-primary" onclick="openConfigModal()">+ Nova Configuração</button>
+          </div>
+          <div class="filter-body">
+            <div class="tab-pane-head">
+              <div>
+                <div class="tab-pane-title">Configurações de API</div>
+                <div class="tab-pane-subtitle">Endpoints, headers, origem de dados e mapeamentos entre o IAHub e o SoftExpert.</div>
+              </div>
+            </div>
+            <div class="tab-toolbar">
           <input type="text" class="form-control" id="cfg-search" placeholder="Buscar configuração..." oninput="renderConfigs()" style="max-width:260px">
           <select class="form-control" id="cfg-filter-ativo" onchange="renderConfigs()">
             <option value="">Todas</option>
@@ -341,6 +439,8 @@
           <div class="spacer"></div>
           <button class="btn btn-primary" onclick="openConfigModal()">+ Nova Configuração</button>
         </div>
+          </div>
+        </div>
         <div class="card-grid" id="configs-grid"></div>
       </div>
 
@@ -348,10 +448,29 @@
            ABA: FLOWS
       ═══════════════════════════════════════════════════════════════════════ -->
       <div class="tab-pane" id="pane-flows">
-        <div class="toolbar">
+        <div class="quick-panel filter-panel" id="flow-filter-panel">
+          <div class="filter-head">
+            <button class="btn btn-ghost filter-toggle" type="button" onclick="toggleFilterPanel('flow')">
+              <span class="filter-caret" id="flow-filter-caret">+</span>
+              <span id="flow-filter-toggle-label">Mostrar filtros</span>
+            </button>
+            <span class="filter-summary" id="flow-filter-summary">Sem filtros ativos</span>
+            <div class="spacer"></div>
+            <button class="btn btn-primary" onclick="openFlowModal()">+ Novo Flow</button>
+          </div>
+          <div class="filter-body">
+            <div class="tab-pane-head">
+              <div>
+                <div class="tab-pane-title">Flows de execução</div>
+                <div class="tab-pane-subtitle">Sequências de chamadas configuradas para executar integrações compostas.</div>
+              </div>
+            </div>
+            <div class="tab-toolbar">
           <input type="text" class="form-control" id="flow-search" placeholder="Buscar flow..." oninput="renderFlows()" style="max-width:260px">
           <div class="spacer"></div>
           <button class="btn btn-primary" onclick="openFlowModal()">+ Novo Flow</button>
+        </div>
+          </div>
         </div>
         <div class="card-grid" id="flows-grid"></div>
       </div>
@@ -383,6 +502,54 @@
         <div id="historico-grid"></div>
       </div>
 
+      </div><!-- list-view -->
+
+      <section id="editor-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="editor-title">Editor</strong>
+            <span id="editor-status">Preencha os dados e salve para voltar à listagem.</span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" type="button" onclick="closeInlineEditor()">Cancelar</button>
+            <button class="btn btn-secondary d-none" type="button" id="editor-test-btn" onclick="testarConexao()">Testar Conexão</button>
+            <button class="btn btn-primary" type="button" id="editor-save-btn">Salvar</button>
+          </div>
+        </div>
+
+        <div class="editor-grid editor-grid-wide">
+          <main class="editor-main">
+            <div id="editor-host" class="editor-host"></div>
+          </main>
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div>
+                  <div class="form-section-title">Resumo do registro</div>
+                  <div class="form-section-subtitle">Referência rápida para conferência durante a edição.</div>
+                </div>
+              </div>
+              <div class="form-section-body">
+                <div class="editor-summary">
+                  <div class="editor-summary-item">
+                    <div class="editor-summary-label">Tipo</div>
+                    <div class="editor-summary-value" id="editor-summary-type">-</div>
+                  </div>
+                  <div class="editor-summary-item">
+                    <div class="editor-summary-label">Modo</div>
+                    <div class="editor-summary-value" id="editor-summary-mode">Novo</div>
+                  </div>
+                  <div class="editor-summary-item">
+                    <div class="editor-summary-label">Aba de origem</div>
+                    <div class="editor-summary-value" id="editor-summary-tab">-</div>
+                  </div>
+                </div>
+                <div class="editor-summary-note">Os campos deste editor são os mesmos da rotina atual, reorganizados no layout padrão do IAHub.</div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
     </div><!-- page-content -->
   </div><!-- main -->
 </div><!-- layout -->
@@ -1199,6 +1366,8 @@ let _execType   = null;
 let _flowSteps  = [];
 let _histTable  = null;
 let _gpanel     = null;
+let _inlineEditor = null;
+let _currentTab = 'templates';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Init
@@ -1282,11 +1451,49 @@ function updateMappingSourceDropdowns(fields) {
 // Abas
 // ════════════════════════════════════════════════════════════════════════════
 function switchTab(name) {
+  _currentTab = name;
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('pane-' + name).classList.add('active');
   document.getElementById('tab-btn-' + name).classList.add('active');
   if (name === 'historico') { loadHistorico(); }
+}
+
+function setFilterPanelOpen(prefix, aberto) {
+  const panel = document.getElementById(`${prefix}-filter-panel`);
+  const caret = document.getElementById(`${prefix}-filter-caret`);
+  const label = document.getElementById(`${prefix}-filter-toggle-label`);
+  if (!panel) return;
+  panel.classList.toggle('open', aberto);
+  if (caret) caret.textContent = aberto ? '-' : '+';
+  if (label) label.textContent = aberto ? 'Ocultar filtros' : 'Mostrar filtros';
+}
+
+function toggleFilterPanel(prefix) {
+  const panel = document.getElementById(`${prefix}-filter-panel`);
+  setFilterPanelOpen(prefix, !panel?.classList.contains('open'));
+}
+
+function updateFilterSummary(prefix) {
+  const el = document.getElementById(`${prefix}-filter-summary`);
+  if (!el) return;
+
+  const partes = [];
+  if (prefix === 'tpl') {
+    const busca = document.getElementById('tpl-search')?.value.trim();
+    const tipo = document.getElementById('tpl-filter-tipo')?.value;
+    if (busca) partes.push(`Busca: ${busca}`);
+    if (tipo) partes.push(`Tipo: ${tipo}`);
+  } else if (prefix === 'cfg') {
+    const busca = document.getElementById('cfg-search')?.value.trim();
+    const ativo = document.getElementById('cfg-filter-ativo')?.value;
+    if (busca) partes.push(`Busca: ${busca}`);
+    if (ativo) partes.push(`Status: ${ativo === 'true' ? 'Ativas' : 'Inativas'}`);
+  } else if (prefix === 'flow') {
+    const busca = document.getElementById('flow-search')?.value.trim();
+    if (busca) partes.push(`Busca: ${busca}`);
+  }
+  el.textContent = partes.length ? partes.join(' - ') : 'Sem filtros ativos';
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1306,6 +1513,7 @@ function renderTemplates() {
   const q    = (document.getElementById('tpl-search').value || '').toLowerCase();
   const tipo = document.getElementById('tpl-filter-tipo').value;
   const el   = document.getElementById('templates-grid');
+  updateFilterSummary('tpl');
 
   let list = _templates;
   if (q)    list = list.filter(t => t.nome.toLowerCase().includes(q) || (t.descricao || '').toLowerCase().includes(q));
@@ -1368,7 +1576,7 @@ function openTemplateModal(id) {
   document.getElementById('tpl-xml').value               = t?.xml_template      || '';
   document.getElementById('tpl-block-xml').value         = t?.block_xml_template || '';
   extrairPlaceholders();
-  openModal('modal-template');
+  openInlineEditor('modal-template', t ? 'Editar Template' : 'Novo Template', 'Template XML', t ? 'Edição' : 'Novo', saveTemplate, false);
 }
 
 function extrairPlaceholders() {
@@ -1448,6 +1656,7 @@ function renderConfigs() {
   const q     = (document.getElementById('cfg-search').value || '').toLowerCase();
   const ativo = document.getElementById('cfg-filter-ativo').value;
   const el    = document.getElementById('configs-grid');
+  updateFilterSummary('cfg');
 
   let list = _configs;
   if (q)     list = list.filter(c => c.nome.toLowerCase().includes(q));
@@ -1527,7 +1736,7 @@ async function openConfigModal(id) {
     renderHeadersTable([]);
     renderMappingsTable([]);
   }
-  openModal('modal-config');
+  openInlineEditor('modal-config', id ? 'Editar Configuração' : 'Nova Configuração', 'Configuração de API', id ? 'Edição' : 'Novo', saveConfig, true);
 }
 
 function onTemplateChange() {
@@ -1714,6 +1923,7 @@ async function loadFlows() {
 function renderFlows() {
   const q  = (document.getElementById('flow-search').value || '').toLowerCase();
   const el = document.getElementById('flows-grid');
+  updateFilterSummary('flow');
   let list = _flows;
   if (q) list = list.filter(f => f.nome.toLowerCase().includes(q));
   if (!list.length) {
@@ -1759,7 +1969,7 @@ async function openFlowModal(id) {
     document.getElementById('flow-descricao').value = '';
   }
   renderStepsList();
-  openModal('modal-flow');
+  openInlineEditor('modal-flow', id ? 'Editar Flow' : 'Novo Flow', 'Flow de execução', id ? 'Edição' : 'Novo', saveFlow, false);
 }
 
 function addFlowStep() {
@@ -2141,8 +2351,59 @@ function emptyState(icon, title, desc) {
   </div>`;
 }
 
+function openInlineEditor(id, title, type, mode, onSave, showTest) {
+  const overlay = document.getElementById(id);
+  const host = document.getElementById('editor-host');
+  if (!overlay || !host) return openModal(id);
+
+  if (_inlineEditor && _inlineEditor.id !== id) closeInlineEditor();
+
+  _inlineEditor = {
+    id,
+    parent: overlay.parentNode,
+    next: overlay.nextSibling,
+  };
+
+  overlay.classList.add('editor-inline');
+  overlay.style.display = 'block';
+  host.appendChild(overlay);
+
+  document.getElementById('list-view').classList.add('d-none');
+  document.getElementById('editor-view').classList.remove('d-none');
+  document.getElementById('editor-title').textContent = title;
+  document.getElementById('editor-status').textContent = 'Preencha os dados e salve para voltar à listagem.';
+  document.getElementById('editor-summary-type').textContent = type;
+  document.getElementById('editor-summary-mode').textContent = mode;
+  document.getElementById('editor-summary-tab').textContent = ({ templates: 'Templates', configs: 'Configurações', flows: 'Flows', historico: 'Histórico' })[_currentTab] || '-';
+
+  const testBtn = document.getElementById('editor-test-btn');
+  testBtn.classList.toggle('d-none', !showTest);
+  document.getElementById('editor-save-btn').onclick = onSave;
+  document.querySelector('.page-content')?.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+function closeInlineEditor() {
+  if (!_inlineEditor) return;
+  const overlay = document.getElementById(_inlineEditor.id);
+  overlay.style.display = 'none';
+  overlay.classList.remove('editor-inline');
+  if (_inlineEditor.next) {
+    _inlineEditor.parent.insertBefore(overlay, _inlineEditor.next);
+  } else {
+    _inlineEditor.parent.appendChild(overlay);
+  }
+  _inlineEditor = null;
+  document.getElementById('editor-view').classList.add('d-none');
+  document.getElementById('list-view').classList.remove('d-none');
+  document.querySelector('.page-content')?.scrollTo({ top: 0, behavior: 'auto' });
+}
+
 function openModal(id)  { document.getElementById(id).style.display = 'flex'; }
-function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el?.classList.contains('editor-inline')) return closeInlineEditor();
+  if (el) el.style.display = 'none';
+}
 function closeModalOnBackdrop(e, id) { if (e.target.id === id) closeModal(id); }
 
 function fmtDate(iso) {

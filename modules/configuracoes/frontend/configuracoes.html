@@ -182,6 +182,7 @@
     <div class="page-content">
 
       <div class="tabs-header" style="margin-bottom:24px">
+        <button class="tab-btn" onclick="mudarAba('sistema', this)">Sistema</button>
         <button class="tab-btn active" onclick="mudarAba('whatsapp', this)">💬 WhatsApp Currículo</button>
         <button class="tab-btn" onclick="mudarAba('analisador', this)">🔍 Analisador de Currículos</button>
         <button class="tab-btn" onclick="mudarAba('apikeys', this)">🔑 Chaves de API</button>
@@ -190,6 +191,32 @@
         <button class="tab-btn" onclick="mudarAba('email', this)">📧 Configuração de Email</button>
         <button class="tab-btn" onclick="mudarAba('templates', this)">✉️ Templates de E-mail</button>
         <button class="tab-btn" onclick="mudarAba('linkpublico', this)">🔗 Link Público — Vagas</button>
+      </div>
+
+      <!-- ===================== ABA: SISTEMA ===================== -->
+      <div id="aba-sistema" class="d-none" style="max-width:640px">
+        <div class="card mb-4">
+          <div class="card-header">Identidade do sistema</div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Nome exibido no rodapé</label>
+              <input id="sis-nome" type="text" class="form-control" placeholder="IAHUB">
+              <div class="form-hint">Aparece no rodapé da tela de login.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Frase do sistema</label>
+              <input id="sis-frase" type="text" class="form-control" placeholder="Onde a gestão encontra a inteligência">
+              <div class="form-hint">O rodapé monta: Nome - Frase.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Versão / Release</label>
+              <input id="sis-versao" type="text" class="form-control" placeholder="v2.0">
+              <div class="form-hint">Exemplo: v2.0, Release 2.2.4 ou Patch 243.</div>
+            </div>
+            <button class="btn btn-primary" onclick="sistemaSalvar()">Salvar Configuração</button>
+            <span id="sis-msg" style="display:none;margin-left:10px;font-size:13px"></span>
+          </div>
+        </div>
       </div>
 
       <!-- ===================== ABA: WHATSAPP ===================== -->
@@ -978,13 +1005,14 @@ function toggleSenha(inputId, btn) {
   btn.title   = show ? 'Ocultar' : 'Mostrar';
 }
 
-const ABAS = ['whatsapp', 'analisador', 'apikeys', 'equivalencias', 'integracoes', 'email', 'templates', 'linkpublico'];
+const ABAS = ['sistema', 'whatsapp', 'analisador', 'apikeys', 'equivalencias', 'integracoes', 'email', 'templates', 'linkpublico'];
 
 function mudarAba(aba, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   ABAS.forEach(a => document.getElementById('aba-' + a).classList.add('d-none'));
   document.getElementById('aba-' + aba).classList.remove('d-none');
+  if (aba === 'sistema') sistemaInicializar();
   if (aba === 'apikeys') akInicializar();
   if (aba === 'equivalencias') carregarEquiv();
   if (aba === 'integracoes') carregarIntegracoes();
@@ -994,6 +1022,49 @@ function mudarAba(aba, btn) {
 }
 
 // ── WhatsApp ─────────────────────────────────────────────────────────────────
+let _sistemaCarregado = false;
+async function sistemaInicializar() {
+  if (_sistemaCarregado) return;
+  _sistemaCarregado = true;
+  const msg = document.getElementById('sis-msg');
+  try {
+    const cfg = await fetch('/api/config/sistema').then(r => r.json());
+    document.getElementById('sis-nome').value = cfg.sistema_nome || 'IAHUB';
+    document.getElementById('sis-frase').value = cfg.sistema_frase || 'Onde a gestão encontra a inteligência';
+    document.getElementById('sis-versao').value = cfg.sistema_versao || 'v2.0';
+  } catch (e) {
+    msg.style.display = 'inline';
+    msg.style.color = '#dc2626';
+    msg.textContent = 'Erro ao carregar configuração.';
+  }
+}
+
+async function sistemaSalvar() {
+  const msg = document.getElementById('sis-msg');
+  msg.style.display = 'inline';
+  msg.style.color = 'var(--text-lo)';
+  msg.textContent = 'Salvando...';
+  try {
+    const res = await fetch('/api/config/sistema', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sistema_nome: document.getElementById('sis-nome').value,
+        sistema_frase: document.getElementById('sis-frase').value,
+        sistema_versao: document.getElementById('sis-versao').value,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Erro ao salvar.');
+    msg.style.color = 'var(--success)';
+    msg.textContent = 'Configuração salva.';
+  } catch (e) {
+    msg.style.color = '#dc2626';
+    msg.textContent = e.message || 'Erro ao salvar.';
+  }
+  setTimeout(() => { msg.style.display = 'none'; }, 3500);
+}
+
 const PADROES = {
   label: '', numero_destino: '',
   msg_confirmacao:   '✅ Seu currículo foi recebido e está sendo analisado. Entraremos em contato em breve!',

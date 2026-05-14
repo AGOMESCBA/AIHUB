@@ -11,6 +11,16 @@ const emailSvcMgr  = require('./email-service-manager');
 const ia           = require('../ia');
 const LOG_DIR      = path.join(__dirname, '..', '..', 'logs');
 
+function _resolverEid(req, res) {
+  const explicit = Number(req.body?.empresa_id || req.query?.empresa_id || 0);
+  if (!explicit) return req.session.empresa_id;
+  const { empresas: acesso, role } = req.session;
+  const ok = role === 'admin' || acesso === 'all' ||
+    (Array.isArray(acesso) && acesso.includes(explicit));
+  if (!ok) { res.status(403).json({ error: 'Acesso negado a esta empresa' }); return null; }
+  return explicit;
+}
+
 function criarTransporter(cfg) {
   const senha  = cfg.senha;
   const family = Number(cfg.family) || 4;
@@ -84,18 +94,22 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Email Config (autenticado) ────────────────────────────────────────────────
   app.get('/api/ps/email-config', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const cfg = db.getEmailConfig(eid);
     res.json({ ...cfg, senha: cfg.senha ? '••••••••' : '' });
   });
 
   app.post('/api/ps/email-config', requireAuth, requireEmpresa, (req, res) => {
-    db.setEmailConfig(req.session.empresa_id, req.body);
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    db.setEmailConfig(eid, req.body);
     res.json({ ok: true });
   });
 
   app.post('/api/ps/email-test', requireAuth, requireEmpresa, async (req, res) => {
-    const eid  = req.session.empresa_id;
+    const eid  = _resolverEid(req, res);
+    if (eid === null) return;
     const cfg  = db.getEmailConfig(eid);
     const senha = db.getSenhaReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
@@ -106,7 +120,7 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
       const t = criarTransporter({ ...cfg, senha });
       await t.verify();
       log(`[Email] Conexão verificada com sucesso — ${servidor}`, 'success');
-      const empNome = req.session.empresa_nome || 'IAHub';
+      const empNome = crud.buscarPorId('empresas', eid)?.razao_social || req.session.empresa_nome || 'IAHub';
       await t.sendMail({
         from:    `"${empNome} Recrutamento" <${cfg.email}>`,
         to:      cfg.email,
@@ -123,18 +137,22 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Email Geral Config ────────────────────────────────────────────────────────
   app.get('/api/email-geral/config', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const cfg = db.getEmailGeralConfig(eid);
     res.json({ ...cfg, senha: cfg.senha ? '••••••••' : '' });
   });
 
   app.post('/api/email-geral/config', requireAuth, requireEmpresa, (req, res) => {
-    db.setEmailGeralConfig(req.session.empresa_id, req.body);
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    db.setEmailGeralConfig(eid, req.body);
     res.json({ ok: true });
   });
 
   app.post('/api/email-geral/imap-test', requireAuth, requireEmpresa, async (req, res) => {
-    const eid   = req.session.empresa_id;
+    const eid   = _resolverEid(req, res);
+    if (eid === null) return;
     const cfg   = db.getEmailGeralConfig(eid);
     const senha = db.getSenhaGeralReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
@@ -149,7 +167,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
   });
 
   app.post('/api/email-geral/test', requireAuth, requireEmpresa, async (req, res) => {
-    const eid   = req.session.empresa_id;
+    const eid   = _resolverEid(req, res);
+    if (eid === null) return;
     const cfg   = db.getEmailGeralConfig(eid);
     const senha = db.getSenhaGeralReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
@@ -160,7 +179,7 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
       const t = criarTransporter({ ...cfg, senha });
       await t.verify();
       log(`[Email Geral] Conexão verificada com sucesso — ${servidor}`, 'success');
-      const empNomeGeral = req.session.empresa_nome || 'IAHub';
+      const empNomeGeral = crud.buscarPorId('empresas', eid)?.razao_social || req.session.empresa_nome || 'IAHub';
       await t.sendMail({
         from:    `"${empNomeGeral}" <${cfg.email}>`,
         to:      cfg.email,
@@ -177,39 +196,50 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Slug (autenticado) ────────────────────────────────────────────────────────
   app.get('/api/ps/slug', requireAuth, requireEmpresa, (req, res) => {
-    res.json({ slug: db.getSlug(req.session.empresa_id) || '' });
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    res.json({ slug: db.getSlug(eid) || '' });
   });
 
   app.post('/api/ps/slug', requireAuth, requireEmpresa, (req, res) => {
+    const eid  = _resolverEid(req, res);
+    if (eid === null) return;
     const slug = (req.body.slug || '').trim().toLowerCase();
     if (slug && !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(slug))
       return res.status(400).json({ error: 'Slug inválido. Use apenas letras minúsculas, números e hífens (mín. 3 chars).' });
-    db.setSlug(req.session.empresa_id, slug || null);
+    db.setSlug(eid, slug || null);
     res.json({ ok: true });
   });
 
   // ── Token Público (autenticado) ───────────────────────────────────────────────
   app.get('/api/ps/public-token', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     res.json({ token: db.getPublicToken(eid), slug: db.getSlug(eid) || null });
   });
 
   app.post('/api/ps/regenerate-token', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     res.json({ token: db.regenerateToken(eid), slug: db.getSlug(eid) || null });
   });
 
   // ── Candidaturas (autenticado) ────────────────────────────────────────────────
   app.get('/api/ps/candidaturas', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listCandidaturas(req.session.empresa_id));
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    res.json(db.listCandidaturas(eid));
   });
 
   app.get('/api/ps/candidaturas/vaga/:vagaId', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.listCandidaturasByVaga(req.session.empresa_id, Number(req.params.vagaId)));
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    res.json(db.listCandidaturasByVaga(eid, Number(req.params.vagaId)));
   });
 
   app.get('/api/ps/curriculos-sem-vaga', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const vinculados = new Set(db.listCandidaturas(eid).map(c => c.curriculo_id));
     const todos = whatsappDb.listCurriculos(eid);
     res.json(todos.filter(c => !vinculados.has(c.id)));
@@ -244,7 +274,10 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     const empresaId = resolverEmpresaPorToken(req, res);
     if (!empresaId) return;
 
-    const { vaga_id, nome, email, pdf_base64, pdf_nome } = req.body;
+    console.log(`[PS-Público] Candidatura recebida — empresa ${empresaId} — token ${req.params.token?.slice(0,8)}...`);
+
+    const body = req.body || {};
+    const { vaga_id, nome, email, pdf_base64, pdf_nome } = body;
     if (!vaga_id)      return res.status(400).json({ error: 'Selecione uma vaga.' });
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório.' });
     if (!pdf_base64)   return res.status(400).json({ error: 'Anexe seu currículo em PDF.' });
@@ -253,26 +286,54 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     if (!vaga || vaga.status !== 'aberta')
       return res.status(400).json({ error: 'Esta vaga não está disponível.' });
 
+    function logPs(message, type = 'info') {
+      if (registrarLog) registrarLog({ message, type, timestamp: new Date().toLocaleTimeString('pt-BR') }, empresaId);
+      if (type === 'error') console.error('[PS-Público]', message);
+      else console.log('[PS-Público]', message);
+    }
+
+    // Timeout de segurança: se o processamento travar, responde após 90s
+    let _timeoutDone = false;
+    const _timeout = setTimeout(() => {
+      _timeoutDone = true;
+      console.error('[PS-Público] Timeout de 90s atingido — sem resposta ao candidato.');
+      if (registrarLog) registrarLog({ message: '[PS] Timeout de 90s ao processar candidatura', type: 'error', timestamp: new Date().toLocaleTimeString('pt-BR') }, empresaId);
+      if (!res.headersSent) res.status(500).json({ error: 'Processamento demorou demais. Tente novamente em instantes.' });
+    }, 90000);
+
     try {
       const buffer  = Buffer.from(pdf_base64, 'base64');
-      const pdfData = await pdfParse(buffer);
-      const texto   = pdfData.text.trim();
+
+      let pdfData;
+      try {
+        pdfData = await Promise.race([
+          pdfParse(buffer),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('PDF parsing timeout')), 30000)),
+        ]);
+      } catch (pdfErr) {
+        logPs(`[PS] Falha ao ler PDF: ${pdfErr.message}`, 'error');
+        clearTimeout(_timeout);
+        if (!res.headersSent) res.status(400).json({ error: 'Não foi possível ler o PDF. Certifique-se de que o arquivo não está protegido por senha e tente novamente.' });
+        return;
+      }
+
+      const texto = pdfData.text.trim();
       if (!texto)
         return res.status(400).json({ error: 'PDF ilegível ou protegido. Envie um PDF com texto selecionável.' });
 
-      const ehCurriculo = await ia.verificarSeCurriculo(texto, log, empresaId);
+      const ehCurriculo = await ia.verificarSeCurriculo(texto, logPs, empresaId);
       if (!ehCurriculo)
         return res.status(400).json({ error: 'O arquivo não parece ser um currículo. Verifique e tente novamente.' });
 
-      const { texto: textoFinal } = await ia.traduzirSeNecessario(texto, log, empresaId);
-      const dados = await ia.analisarComRetry(textoFinal, log, empresaId);
+      const { texto: textoFinal } = await ia.traduzirSeNecessario(texto, logPs, empresaId);
+      const dados = await ia.analisarComRetry(textoFinal, logPs, empresaId);
       dados.nome  = dados.nome  || nome  || null;
       dados.email = dados.email || email || null;
 
       // Sobrescreve silenciosamente se já existe na base
       const existente = whatsappDb.findByPhoneOrEmail(empresaId, dados.telefone, dados.email || email);
       if (existente) {
-        log(`[PS] Currículo duplicado — "${existente.nome || '?'}" (ID #${existente.id}) substituído por novo envio de "${dados.nome || nome}"`, 'warning');
+        logPs(`[PS] Currículo duplicado — "${existente.nome || '?'}" (ID #${existente.id}) substituído por novo envio de "${dados.nome || nome}"`, 'warning');
         whatsappDb.deleteCurriculo(empresaId, existente.id);
       }
 
@@ -296,7 +357,7 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
       const candExist = db.findCandidaturaByVagaAndCandidato(empresaId, Number(vaga_id), dados.email || email, dados.nome || nome);
       if (candExist) {
         db.updateCandidaturaCurriculoId(empresaId, candExist.id, curriculo_id);
-        log(`[PS] Reenvio detectado — candidatura de "${dados.nome || nome}" atualizada, contagem mantida`, 'info');
+        logPs(`[PS] Reenvio detectado — candidatura de "${dados.nome || nome}" atualizada, contagem mantida`, 'info');
       } else {
         db.saveCandidatura(empresaId, {
           vaga_id:         Number(vaga_id),
@@ -307,20 +368,23 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
         });
       }
 
-      log(`[PS] Currículo recebido de "${dados.nome || nome}" para vaga "${vaga.funcao?.nome}"`, 'success');
+      logPs(`[PS] Currículo recebido de "${dados.nome || nome}" para vaga "${vaga.funcao?.nome}"`, 'success');
 
       const emailCfg = db.getEmailConfig(empresaId);
       if (emailCfg.email && db.getSenhaReal(empresaId)) {
-        enviarEmailNotificacao(emailCfg, vaga, dados, pdf_base64, pdf_nome || 'curriculo.pdf', log, empresaId)
-          .catch(err => log(`[Email] Falha ao enviar notificação para "${dados.nome || nome}": ${err.message}`, 'error'));
+        enviarEmailNotificacao(emailCfg, vaga, dados, pdf_base64, pdf_nome || 'curriculo.pdf', logPs, empresaId)
+          .catch(err => logPs(`[Email] Falha ao enviar notificação para "${dados.nome || nome}": ${err.message}`, 'error'));
       } else {
-        log('[Email] Notificação por e-mail desativada — sem e-mail ou senha configurados.', 'warning');
+        logPs('[Email] Notificação por e-mail desativada — sem e-mail ou senha configurados.', 'warning');
       }
-      res.json({ ok: true, curriculo_id });
+      clearTimeout(_timeout);
+      if (!_timeoutDone) res.json({ ok: true, curriculo_id });
 
     } catch (err) {
-      log(`[PS] Erro ao processar candidatura: ${err.message}`, 'error');
-      res.status(500).json({ error: 'Erro ao processar currículo. Tente novamente em instantes.' });
+      clearTimeout(_timeout);
+      console.error('[PS-Público] Erro ao processar candidatura:', err);
+      if (registrarLog) registrarLog({ message: `[PS] Erro ao processar candidatura: ${err.message}`, type: 'error', timestamp: new Date().toLocaleTimeString('pt-BR') }, empresaId);
+      if (!res.headersSent) res.status(500).json({ error: 'Erro ao processar currículo. Tente novamente em instantes.' });
     }
   });
 
@@ -342,7 +406,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Teste de conexão IMAP ─────────────────────────────────────────────────────
   app.post('/api/ps/imap-test', requireAuth, requireEmpresa, async (req, res) => {
-    const eid   = req.session.empresa_id;
+    const eid   = _resolverEid(req, res);
+    if (eid === null) return;
     const cfg   = db.getEmailConfig(eid);
     const senha = db.getSenhaReal(eid);
     if (!cfg.email || !senha) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
@@ -358,22 +423,29 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
 
   // ── Templates de E-mail ───────────────────────────────────────────────────────
   app.get('/api/ps/email-templates', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.getEmailTemplates(req.session.empresa_id));
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    res.json(db.getEmailTemplates(eid));
   });
 
   app.post('/api/ps/email-templates', requireAuth, requireEmpresa, (req, res) => {
-    db.setEmailTemplates(req.session.empresa_id, req.body);
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    db.setEmailTemplates(eid, req.body);
     res.json({ ok: true });
   });
 
   // ── Serviço de E-mail IMAP — controle manual via monitor ─────────────────────
   app.get('/api/email-service/status', requireAuth, requireEmpresa, (req, res) => {
-    const svc = emailSvcMgr.get(req.session.empresa_id);
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    const svc = emailSvcMgr.get(eid);
     res.json({ status: svc?.getStatus() || 'stopped' });
   });
 
   app.post('/api/email-service/start', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
     const svc = emailSvcMgr.getOrCreate(eid);
     if (svc.getStatus() === 'running')
       return res.status(400).json({ error: 'Serviço já está em execução para esta empresa.' });
@@ -388,12 +460,16 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
   });
 
   app.post('/api/email-service/stop', requireAuth, requireEmpresa, (req, res) => {
-    emailSvcMgr.get(req.session.empresa_id)?.pararServico();
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    emailSvcMgr.get(eid)?.pararServico();
     res.json({ ok: true });
   });
 
   app.post('/api/email-service/clear-log', requireAuth, requireEmpresa, (req, res) => {
-    emailSvcMgr.get(req.session.empresa_id)?.clearBuffer();
+    const eid = _resolverEid(req, res);
+    if (eid === null) return;
+    emailSvcMgr.get(eid)?.clearBuffer();
     res.json({ ok: true });
   });
 };

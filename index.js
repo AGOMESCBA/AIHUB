@@ -9,6 +9,30 @@ const path             = require('path');
 const fs               = require('fs');
 const FileSessionStore = require('./modules/auth/session-store');
 
+let puppeteer;
+try { puppeteer = require('puppeteer-core'); } catch (_) {}
+
+// ── Proteção contra crashes por exceções não tratadas ─────────────────────────
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] uncaughtException:', err);
+  try {
+    const logDir = path.join(__dirname, 'logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(path.join(logDir, 'crash.log'),
+      `[${new Date().toISOString()}] uncaughtException: ${err?.stack || err}\n`, 'utf8');
+  } catch (_) {}
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] unhandledRejection:', reason);
+  try {
+    const logDir = path.join(__dirname, 'logs');
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.appendFileSync(path.join(logDir, 'crash.log'),
+      `[${new Date().toISOString()}] unhandledRejection: ${reason?.stack || reason}\n`, 'utf8');
+  } catch (_) {}
+});
+
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
@@ -36,12 +60,11 @@ app.use('/api/login', rateLimit({
 
 app.use(express.json({ limit: '50mb' }));
 const sessionMiddleware = session({
-  store:             new FileSessionStore(),
+  store:             new FileSessionStore({ clearOnStart: true }),
   secret:            process.env.SESSION_SECRET || 'iahub-secret',
   resave:            false,
   saveUninitialized: false,
   cookie: {
-    maxAge:   8 * 60 * 60 * 1000,
     httpOnly: true,
     sameSite: 'strict',
   },
@@ -53,6 +76,7 @@ io.use((socket, next) => sessionMiddleware(socket.request, socket.request.res ||
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'frontend')));
+app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
 app.use(express.static(path.join(__dirname, 'modules', 'configuracoes',       'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'empresas',            'frontend')));
 app.use(express.static(path.join(__dirname, 'modules', 'usuarios',            'frontend')));
@@ -145,6 +169,40 @@ io.on('connection', (socket) => {
     socket.emit('email-status', 'stopped');
   }
 
+  // Permite monitorar uma empresa específica (ex.: ?empresa=2) independente da sessão ativa
+  socket.on('join-empresa-monitor', ({ empresaId } = {}) => {
+    if (!empresaId) return;
+    // Usa a sessão já carregada na conexão (síncrono, sem risco de callback falhar)
+    const sess = socket.request.session;
+    const { empresas: acesso, role } = sess;
+    const temAcesso = role === 'admin' || acesso === 'all' ||
+      (Array.isArray(acesso) && acesso.includes(Number(empresaId)));
+    if (!temAcesso) return;
+
+    [...socket.rooms].filter(r => r !== socket.id && r.startsWith('emp_')).forEach(r => socket.leave(r));
+    socket.join(`emp_${empresaId}`);
+
+    // Limpa os logs/status errados que foram enviados na conexão inicial (empresa da sessão)
+    socket.emit('clear-monitor');
+
+    const svc = waManager.get(empresaId);
+    if (svc) {
+      svc.getLogBuffer().forEach(entry => socket.emit('log', entry));
+      socket.emit('status', { status: svc.getStatus(), empresa_id: svc.getEmpresaId(), empresa_nome: svc.getEmpresaNome() });
+      const qr = svc.getQr();
+      if (qr) socket.emit('qr', qr);
+    } else {
+      socket.emit('status', { status: 'stopped', empresa_id: null, empresa_nome: null });
+    }
+    const emailSvc = emailSvcMgr.get(empresaId);
+    if (emailSvc) {
+      emailSvc.getLogBuffer().forEach(entry => socket.emit('email-log', entry));
+      socket.emit('email-status', emailSvc.getStatus());
+    } else {
+      socket.emit('email-status', 'stopped');
+    }
+  });
+
   // Permite que o frontend force o ingresso na sala correta após auth assincrona
   socket.on('join-empresa', () => {
     socket.request.session.reload((err) => {
@@ -226,6 +284,66 @@ require('./modules/integracoes/SEVaga/routes')(app, { requireAuth, requireEmpres
 // ── Módulo Integrações › SE API Configurador ──────────────────────────────────
 app.use(require('express').static(require('path').join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
 require('./modules/integracoes/SEApiConfigurator/routes')(app, { requireAuth, requireEmpresa, registrarLog });
+
+// ── Exportação do Guia em PDF via Puppeteer ───────────────────────────────────
+const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+
+app.get('/guia/exportar-pdf', async (req, res) => {
+  if (!puppeteer) return res.status(503).send('puppeteer-core não está instalado.');
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: 'new',
+      args: ['--no-first-run', '--disable-extensions'],
+    });
+    const page = await browser.newPage();
+
+    // Bloqueia websockets/socket.io para não impedir networkidle0
+    await page.setRequestInterception(true);
+    page.on('request', r => {
+      if (r.resourceType() === 'websocket' || r.url().includes('socket.io')) r.abort();
+      else r.continue();
+    });
+
+    await page.goto(`http://127.0.0.1:${process.env.PORT || 3000}/guia/`, {
+      waitUntil: 'networkidle0',
+      timeout: 30000,
+    });
+
+    const title = await page.title();
+    console.log(`[Guia PDF] Página carregada: "${title}"`);
+
+    // Aguarda carregarScreenshots() resolver todos os placeholders
+    await page.waitForFunction(
+      () => document.querySelectorAll('.screenshot-placeholder:not(.ph-loaded):not(.ph-empty)').length === 0,
+      { timeout: 10000 }
+    ).catch(() => {});
+
+    const pdfRaw = await page.pdf({
+      format: 'A4',
+      margin: { top: '16mm', right: '14mm', bottom: '16mm', left: '14mm' },
+      printBackground: true,
+    });
+    const pdf = Buffer.from(pdfRaw);
+
+    console.log(`[Guia PDF] Gerado: ${pdf.length} bytes | Header: ${pdf.slice(0,5).toString()}`);
+
+    if (!pdf.slice(0, 4).toString().startsWith('%PDF')) {
+      throw new Error('PDF gerado inválido — header incorreto');
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="guia-iahub.pdf"');
+    res.setHeader('Content-Length', pdf.length);
+    res.end(pdf);
+  } catch (err) {
+    console.error('[Guia PDF] ERRO:', err.message);
+    res.status(500).send(`Erro ao gerar o PDF: ${err.message}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+});
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;

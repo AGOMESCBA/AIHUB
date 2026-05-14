@@ -140,14 +140,10 @@
 
   <div class="main">
     <div class="topbar">
-      <span class="topbar-title"><span class="topbar-path">Monitoramento ›</span> Monitor WhatsApp</span>
+      <span class="topbar-title"><span class="topbar-path">Monitores ›</span> Monitor WhatsApp</span>
     </div>
 
     <div class="page-content">
-
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <span class="tab-badge" id="tab-wa-badge" style="font-size:12px;padding:3px 12px">Parado</span>
-      </div>
 
         <!-- Aviso modo Meta (oculto por padrão) -->
         <div id="meta-mode-banner" class="d-none mb-3"
@@ -359,6 +355,25 @@
 <script>
   const socket = io();
 
+  // Empresa explícita via ?empresa=ID (standalone) ou ?_empresa=ID (MDI shell)
+  const _qs = new URLSearchParams(location.search);
+  const _monitorEid = Number(_qs.get('empresa') || _qs.get('_empresa')) || null;
+
+  function _apiUrl(path) {
+    return _monitorEid ? `${path}?empresa_id=${_monitorEid}` : path;
+  }
+  function _apiFetchOpts(method, extra = {}) {
+    const body = _monitorEid ? JSON.stringify({ empresa_id: _monitorEid, ...extra }) : (Object.keys(extra).length ? JSON.stringify(extra) : undefined);
+    return { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body };
+  }
+
+  if (_monitorEid) {
+    fetch('/api/empresas/minhas').then(r => r.json()).then(lista => {
+      const emp = lista.find(e => e.id === _monitorEid);
+      if (emp) document.title = `Monitor WhatsApp — ${emp.razao_social || emp.nome} — IAHub`;
+    }).catch(() => {});
+  }
+
   // ── Estado ────────────────────────────────────────────────────────────────────
   let waLines = [], waCount = 0, timerInterval = null, timerStart = null;
   let currentStatus = 'stopped';
@@ -405,7 +420,7 @@
     terminal.innerHTML = '';
     waLines = []; waCount = 0;
     document.getElementById('log-count').textContent = '';
-    fetch('/api/service/clear-log', { method: 'POST' }).catch(() => {});
+    fetch('/api/service/clear-log', _apiFetchOpts('POST')).catch(() => {});
   }
 
   // ── WhatsApp status ───────────────────────────────────────────────────────────
@@ -475,10 +490,6 @@
     document.getElementById('btn-start').classList.toggle('d-none', s !== 'stopped');
     document.getElementById('btn-stop').classList.toggle('d-none',  s === 'stopped');
 
-    const badge = document.getElementById('tab-wa-badge');
-    badge.textContent = label;
-    badge.className = `tab-badge${s === 'connected' ? ' badge-running' : ''}`;
-
     if (s === 'connected' || s === 'stopped') startedByQrPanel = false;
     if (qrPanelOpen) atualizarQrPanel(s);
     if (s !== 'starting') { pararTimer(); pararPollQr(); return; }
@@ -517,7 +528,7 @@
     qrPollTimer = setInterval(async () => {
       if (currentStatus !== 'starting') { pararPollQr(); return; }
       try {
-        const r = await fetch('/api/service/qr');
+        const r = await fetch(_apiUrl('/api/service/qr'));
         const { qr } = await r.json();
         if (qr) { mostrarQr(qr); pararPollQr(); }
       } catch (_) {}
@@ -533,14 +544,27 @@
     terminal.innerHTML = '';
     waLines = []; waCount = 0;
     document.getElementById('log-count').textContent = '';
-    window._iahubAuthReady?.then(() => socket.emit('join-empresa'));
+    if (_monitorEid) {
+      // Empresa explícita: entra na sala imediatamente (permissão validada no servidor)
+      socket.emit('join-empresa-monitor', { empresaId: _monitorEid });
+    } else {
+      window._iahubAuthReady?.then(() => socket.emit('join-empresa'));
+    }
+  });
+
+  // Limpa terminal e status quando o servidor troca de empresa (MDI mode)
+  socket.on('clear-monitor', () => {
+    terminal.innerHTML = '';
+    waLines = []; waCount = 0;
+    document.getElementById('log-count').textContent = '';
+    setStatus('stopped');
   });
 
   socket.on('log',          addLine);
   socket.on('status',       setStatus);
 
   // Carga inicial: busca status completo (com empresa_id) para exibir aviso imediatamente
-  fetch('/api/service/status').then(r => r.json()).then(setStatus).catch(() => {});
+  fetch(_apiUrl('/api/service/status')).then(r => r.json()).then(setStatus).catch(() => {});
 
   socket.on('qr', mostrarQr);
 
@@ -581,7 +605,7 @@
     const btn = document.getElementById('btn-qr-restart');
     btn.disabled = true; btn.textContent = '⏳ Limpando sessão…';
     try {
-      const r = await fetch('/api/service/clear-session', { method: 'POST' });
+      const r = await fetch('/api/service/clear-session', _apiFetchOpts('POST'));
       if (!r.ok) { alert('Erro ao limpar sessão.'); return; }
       setTimeout(startService, 800);
     } catch (e) {
@@ -591,15 +615,23 @@
     }
   }
 
+  function _notificarMonitores() {
+    try { new BroadcastChannel('iahub_monitors').postMessage({ type: 'status-changed' }); } catch(_) {}
+  }
+
   // ── Serviço WhatsApp ──────────────────────────────────────────────────────────
   async function startService() {
     document.getElementById('btn-start').disabled    = true;
     document.getElementById('btn-qr-start').disabled = true;
     try {
-      const r = await fetch('/api/service/start', { method: 'POST' });
+      const r = await fetch('/api/service/start', _apiFetchOpts('POST'));
       if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
       if (!r.ok) alert(`Erro ao iniciar serviço (HTTP ${r.status})`);
-      else if (qrPanelOpen) atualizarQrPanel('starting');
+      else {
+        if (qrPanelOpen) atualizarQrPanel('starting');
+        _notificarMonitores();
+        setTimeout(() => fetch(_apiUrl('/api/service/status')).then(r => r.json()).then(setStatus).catch(() => {}), 600);
+      }
     } catch (e) {
       alert(`Erro de conexão: ${e.message}`);
     } finally {
@@ -611,9 +643,13 @@
   async function stopService() {
     document.getElementById('btn-stop').disabled = true;
     try {
-      const r = await fetch('/api/service/stop', { method: 'POST' });
+      const r = await fetch('/api/service/stop', _apiFetchOpts('POST'));
       if (r.status === 401) { alert('Sessão expirada. Faça login novamente.'); location.href = '/login.html'; return; }
       if (!r.ok) alert(`Erro ao parar serviço (HTTP ${r.status})`);
+      else {
+        _notificarMonitores();
+        setTimeout(() => fetch(_apiUrl('/api/service/status')).then(r => r.json()).then(setStatus).catch(() => {}), 600);
+      }
     } catch (e) {
       alert(`Erro de conexão: ${e.message}`);
     } finally {

@@ -50,14 +50,24 @@ function dadosResultadoAnalise(analise, curriculo) {
   };
 }
 
+function _resolverEid(req) {
+  const explicit = Number(req.body?.empresa_id || req.query?.empresa_id || 0);
+  if (!explicit) return req.session.empresa_id;
+  const { empresas: acesso, role } = req.session;
+  const ok = role === 'admin' || acesso === 'all' ||
+    (Array.isArray(acesso) && acesso.includes(explicit));
+  return ok ? explicit : req.session.empresa_id;
+}
+
 module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Configuração ──────────────────────────────────────────────────────────────
   app.get('/api/integracoes/se/config', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.getConfig(req.session.empresa_id));
+    res.json(db.getConfig(_resolverEid(req)));
   });
 
   app.post('/api/integracoes/se/config', requireAuth, requireEmpresa, (req, res) => {
+    const eid = _resolverEid(req);
     const { se_url, se_token, campo_empresa_id, campo_empresa_nome, integration_source, se_api_flow_id, se_api_grid_config_id } = req.body;
     const source = integration_source || 'legacy';
     if (source === 'legacy' && (!se_url || !se_token))
@@ -66,7 +76,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
       return res.status(400).json({ error: 'Selecione um flow para a integração via SE API Configurador' });
     if (source === 'grid' && !se_api_grid_config_id)
       return res.status(400).json({ error: 'Selecione um Flow para a integração em lote (GRID)' });
-    db.saveConfig(req.session.empresa_id, {
+    db.saveConfig(eid, {
       se_url:                (se_url   || '').trim(),
       se_token:              (se_token || '').trim(),
       campo_empresa_id:      (campo_empresa_id   || '').trim(),
@@ -80,19 +90,20 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Listar flows do SE API Configurador (para seleção na config) ──────────────
   app.get('/api/integracoes/se/flows', requireAuth, requireEmpresa, (req, res) => {
-    const flows = seApiDb.listFlows(req.session.empresa_id);
+    const eid   = _resolverEid(req);
+    const flows = seApiDb.listFlows(eid);
     res.json(flows.map(f => ({
       id:          f.id,
       nome:        f.nome,
       descricao:   f.descricao || '',
-      steps_count: seApiDb.listFlowSteps(req.session.empresa_id, f.id).length,
+      steps_count: seApiDb.listFlowSteps(eid, f.id).length,
     })));
   });
 
 
   // ── Steps (se_api_logs) de uma entrada do histórico ───────────────────────────
   app.get('/api/integracoes/se/logs/:seq/steps', requireAuth, requireEmpresa, (req, res) => {
-    const eid  = req.session.empresa_id;
+    const eid  = _resolverEid(req);
     const entry = db.getLogBySeq(eid, req.params.seq);
     if (!entry) return res.status(404).json({ error: 'Registro não encontrado' });
     if (!entry.se_api_log_ids || !entry.se_api_log_ids.length)
@@ -103,20 +114,21 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Logs ──────────────────────────────────────────────────────────────────────
   app.get('/api/integracoes/se/logs', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { status, curriculo_nome, analise_id, vaga_id, data_inicio, data_fim, page, limit } = req.query;
     res.json(db.listLogs(eid, { status, curriculo_nome, analise_id, vaga_id, data_inicio, data_fim, page, limit }));
   });
 
   app.post('/api/integracoes/se/resumo-analises', requireAuth, requireEmpresa, (req, res) => {
+    const eid = _resolverEid(req);
     const { analise_ids } = req.body;
     if (!Array.isArray(analise_ids)) return res.status(400).json({ error: 'analise_ids deve ser um array' });
-    res.json(db.getResumoAnalises(req.session.empresa_id, analise_ids));
+    res.json(db.getResumoAnalises(eid, analise_ids));
   });
 
   // ── Enviar analisados ao SE ───────────────────────────────────────────────────
   app.post('/api/integracoes/se/enviar', requireAuth, requireEmpresa, async (req, res) => {
-    const eid        = req.session.empresa_id;
+    const eid        = _resolverEid(req);
     const { analise_id } = req.body;
     if (!analise_id) return res.status(400).json({ error: 'analise_id é obrigatório' });
 
@@ -430,7 +442,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Reenviar currículo específico ─────────────────────────────────────────────
   app.post('/api/integracoes/se/reenviar', requireAuth, requireEmpresa, async (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
@@ -578,7 +590,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Re-executar um step específico de um flow ──────────────────────────────────
   app.post('/api/integracoes/se/reenviar-step', requireAuth, requireEmpresa, async (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { config_id, curriculo_id } = req.body;
     if (!config_id || !curriculo_id) return res.status(400).json({ error: 'config_id e curriculo_id são obrigatórios' });
 
@@ -624,7 +636,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Desflagging: reverter sucesso para reintegrar ─────────────────────────────
   app.post('/api/integracoes/se/resetar', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 
@@ -638,7 +650,7 @@ module.exports = function (app, { requireAuth, requireEmpresa, registrarLog }) {
 
   // ── Marcar como integrado manualmente (sem enviar ao SE) ──────────────────────
   app.post('/api/integracoes/se/marcar-integrado', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { curriculo_id, analise_id } = req.body;
     if (!curriculo_id || !analise_id) return res.status(400).json({ error: 'curriculo_id e analise_id são obrigatórios' });
 

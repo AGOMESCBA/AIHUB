@@ -71,72 +71,290 @@
       width: 18px;
       height: 18px;
     }
+
+    .login-page {
+      align-items: stretch;
+      justify-content: stretch;
+      background: #fff;
+      padding-bottom: 38px;
+    }
+
+    .login-shell {
+      width: 100%;
+      min-height: calc(100vh - 38px);
+      display: grid;
+      grid-template-columns: minmax(360px, 32vw) 1fr;
+      background: #fff;
+    }
+
+    .login-panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: calc(100vh - 38px);
+      padding: 48px 52px;
+      background: #fff;
+      position: relative;
+      z-index: 2;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 500px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      background: transparent;
+    }
+
+    .login-logo {
+      margin-bottom: 34px;
+      text-align: center;
+      overflow: hidden;
+    }
+
+    .login-logo-img {
+      display: none;
+      max-width: 84%;
+      max-height: 190px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      margin: 0 auto 18px;
+    }
+
+    .login-logo.has-image .login-logo-img {
+      display: block;
+    }
+
+    .login-logo.has-image .login-logo-icon,
+    .login-logo.has-image h1,
+    .login-logo.has-image p {
+      display: none;
+    }
+
+    .login-visual {
+      position: relative;
+      min-height: calc(100vh - 38px);
+      overflow: hidden;
+      background: linear-gradient(135deg, #0f172a, #2563eb);
+      background-size: cover;
+      background-position: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 64px;
+    }
+
+    .login-visual::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 77, 132, .62);
+      z-index: 1;
+    }
+
+    .login-visual.has-image::before {
+      background: transparent;
+    }
+
+    .login-visual-text {
+      position: relative;
+      z-index: 2;
+      max-width: 760px;
+      color: #fff;
+      font-size: clamp(32px, 3.2vw, 52px);
+      line-height: 1.18;
+      font-style: italic;
+      font-weight: 600;
+      text-align: center;
+      text-shadow: 0 2px 12px rgba(0,0,0,.22);
+    }
+
+    .login-version {
+      display: none;
+    }
+
+    .login-footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      min-height: 38px;
+      padding: 7px 26px;
+      background: #f4f4f5;
+      border-top: 1px solid #e5e7eb;
+      color: #9ca3af;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-size: 13px;
+      z-index: 20;
+    }
+
+    .login-footer-name {
+      color: #2563eb;
+      font-weight: 600;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .login-footer-links {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      white-space: nowrap;
+    }
+
+    .login-footer-sep {
+      color: #c7cbd1;
+    }
+
+    @media (max-width: 960px) {
+      .login-shell {
+        grid-template-columns: 1fr;
+      }
+      .login-panel {
+        min-height: auto;
+        padding: 34px 24px;
+        align-items: center;
+      }
+      .login-card {
+        max-width: 520px;
+      }
+      .login-visual {
+        min-height: 280px;
+        padding: 36px 24px;
+        order: -1;
+      }
+      .login-visual-text {
+        font-size: 28px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .login-panel {
+        padding: 28px 18px;
+      }
+      .login-visual {
+        min-height: 220px;
+      }
+      .login-visual-text {
+        font-size: 23px;
+      }
+      .login-logo-img {
+        max-width: 88%;
+        max-height: 145px;
+      }
+      .login-footer {
+        padding: 7px 14px;
+        font-size: 12px;
+      }
+      .login-footer-links {
+        gap: 7px;
+      }
+    }
   </style>
 </head>
 <body class="login-page">
 
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="login-logo-icon">IA</div>
-      <h1>IAHub</h1>
-      <p>Plataforma de Automações Inteligentes</p>
+  <main class="login-shell">
+    <section class="login-panel">
+      <div class="login-card">
+        <div class="login-logo" id="login-logo-wrap">
+          <img id="login-logo-img" class="login-logo-img" alt="">
+          <div class="login-logo-icon">IA</div>
+          <h1>IAHub</h1>
+          <p>Plataforma de Automações Inteligentes</p>
+        </div>
+
+        <div id="login-error" class="login-error"></div>
+
+        <form onsubmit="doLogin(event)" id="form-login" autocomplete="off">
+          <div class="form-group">
+            <label class="form-label">Usuário</label>
+            <input id="user" type="text" class="form-control" placeholder="Digite seu usuário"
+              autocomplete="username" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Senha</label>
+            <div class="password-wrap">
+              <input id="pass" type="password" class="form-control" placeholder="Digite sua senha"
+                autocomplete="current-password" required>
+              <button type="button" class="password-toggle" id="pass-toggle"
+                onclick="toggleLoginPassword()" aria-label="Mostrar senha" title="Mostrar senha">
+                <svg id="pass-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="empresa-label-row">
+              <label class="form-label">Empresa</label>
+              <span id="empresa-spinner" class="spinner-sm" style="display:none"></span>
+            </div>
+            <select id="empresa-select" class="form-control" disabled>
+              <option value="">— Digite usuário e senha para carregar —</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn-login" id="btn-login">Entrar</button>
+        </form>
+
+        <div class="login-version">IAHub v2.0 · Todos os direitos reservados</div>
+      </div>
+    </section>
+
+    <section class="login-visual" id="login-visual">
+      <div class="login-visual-text" id="login-visual-text">
+        Transformando a excelência na gestão em vantagem competitiva para sua empresa.
+      </div>
+    </section>
+  </main>
+
+  <footer class="login-footer">
+    <div class="login-footer-name" id="footer-system-name">IAHUB - Onde a gestão encontra a inteligência</div>
+    <div class="login-footer-links">
+      <span>Política de Privacidade</span>
+      <span class="login-footer-sep">|</span>
+      <span id="footer-system-version">v2.0</span>
     </div>
-
-    <div id="login-error" class="login-error"></div>
-
-    <form onsubmit="doLogin(event)" id="form-login" autocomplete="off">
-      <div class="form-group">
-        <label class="form-label">Usuário</label>
-        <input id="user" type="text" class="form-control" placeholder="Digite seu usuário"
-          autocomplete="username" required>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Senha</label>
-        <div class="password-wrap">
-          <input id="pass" type="password" class="form-control" placeholder="Digite sua senha"
-            autocomplete="current-password" required>
-          <button type="button" class="password-toggle" id="pass-toggle"
-            onclick="toggleLoginPassword()" aria-label="Mostrar senha" title="Mostrar senha">
-            <svg id="pass-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-              fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-              stroke-linejoin="round" aria-hidden="true">
-              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <div class="empresa-label-row">
-          <label class="form-label">Empresa</label>
-          <span id="empresa-spinner" class="spinner-sm" style="display:none"></span>
-        </div>
-        <select id="empresa-select" class="form-control" disabled>
-          <option value="">— Digite usuário e senha para carregar —</option>
-        </select>
-      </div>
-
-      <button type="submit" class="btn-login" id="btn-login">Entrar</button>
-    </form>
-
-    <div class="login-version">IAHub v2.0 · Todos os direitos reservados</div>
-  </div>
+  </footer>
 
   <script>
     let _logado     = false;
     let _role       = null;
     let _checkTimer = null;
     let _bypassAdmin = false;
+    let _empresasLogin = [];
+    let _loginLogoDefaultUrl = '';
+    let _loginBackgroundDefaultUrl = '';
+    const BROWSER_SESSION_KEY = 'iahub_browser_session_active';
+    const SLOGAN_PADRAO = 'Transformando a excelência na gestão em vantagem competitiva para sua empresa.';
+
+    carregarConfigPublica();
 
     // ── Se já autenticado, redireciona diretamente (não reutiliza sessão ativa) ──
     (async () => {
+      if (sessionStorage.getItem(BROWSER_SESSION_KEY) !== '1') {
+        await fetch('/api/logout', { method: 'POST' }).catch(() => null);
+        return;
+      }
       const me = await fetch('/api/me').catch(() => null);
       if (!me?.ok) return;
       // Sessão ativa encontrada — redireciona sem exibir o formulário.
       // Para trocar de usuário é necessário fazer logout explicitamente.
-      const dest = new URLSearchParams(location.search).get('next') || '/dashboard.html';
+      const dest = new URLSearchParams(location.search).get('next') || '/iahub.html';
       location.href = dest;
     })();
 
@@ -144,6 +362,24 @@
     document.getElementById('user').addEventListener('input', ao_trocar_usuario);
     document.getElementById('pass').addEventListener('input', agendarVerificacao);
     document.getElementById('pass').addEventListener('blur',  verificarAgora);
+    document.getElementById('empresa-select').addEventListener('change', () => {
+      const id = Number(document.getElementById('empresa-select').value || 0);
+      const empresa = _empresasLogin.find(e => e.id === id);
+      aplicarIdentidadeLogin(empresa);
+    });
+
+    async function carregarConfigPublica() {
+      try {
+        const cfg = await fetch('/api/config/publico').then(r => r.json());
+        const nome = cfg.sistema_nome || 'IAHUB';
+        const frase = cfg.sistema_frase || 'Onde a gestão encontra a inteligência';
+        document.getElementById('footer-system-name').textContent = frase ? `${nome} - ${frase}` : nome;
+        document.getElementById('footer-system-version').textContent = cfg.sistema_versao || 'v2.0';
+        _loginLogoDefaultUrl = cfg.login_logo_default_url || '';
+        _loginBackgroundDefaultUrl = cfg.login_background_default_url || '';
+        aplicarIdentidadeLogin(_empresasLogin.find(e => String(e.id) === document.getElementById('empresa-select').value));
+      } catch (_) {}
+    }
 
     function toggleLoginPassword() {
       const input = document.getElementById('pass');
@@ -207,6 +443,7 @@
         }
 
         const data = await res.json();
+        sessionStorage.setItem(BROWSER_SESSION_KEY, '1');
         _role   = data.role;
         _logado = true;
         await carregarEmpresas();
@@ -222,12 +459,14 @@
       mostrarSpinner(true);
       const empresas = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
       mostrarSpinner(false);
+      _empresasLogin = Array.isArray(empresas) ? empresas : [];
 
       const sel = document.getElementById('empresa-select');
 
       // Admin sem empresas — entra direto para cadastrar
       if (!empresas.length && _role === 'admin') {
         _bypassAdmin = true;
+        aplicarIdentidadeLogin(null);
         sel.innerHTML = '<option value="__admin__">🔧 Administrador — Nenhuma empresa cadastrada</option>';
         sel.disabled  = false;
         document.getElementById('btn-login').textContent = 'Entrar como Administrador';
@@ -235,6 +474,7 @@
       }
 
       if (!empresas.length) {
+        aplicarIdentidadeLogin(null);
         resetSelect('— Nenhuma empresa disponível. Contate o administrador. —');
         return;
       }
@@ -250,9 +490,12 @@
       // Auto-seleciona se só há uma empresa
       if (empresas.length === 1) {
         sel.value = String(empresas[0].id);
+        aplicarIdentidadeLogin(empresas[0]);
         if (autoRedirecionar) {
           await selecionarEAvancar(empresas[0].id);
         }
+      } else {
+        aplicarIdentidadeLogin(null);
       }
     }
 
@@ -261,6 +504,41 @@
       sel.innerHTML = `<option value="">${placeholder}</option>`;
       sel.disabled  = true;
       _bypassAdmin  = false;
+      _empresasLogin = [];
+      aplicarIdentidadeLogin(null);
+    }
+
+    function cssUrl(url) {
+      return String(url || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    }
+
+    function aplicarIdentidadeLogin(empresa) {
+      const logoWrap = document.getElementById('login-logo-wrap');
+      const logoImg = document.getElementById('login-logo-img');
+      const visual = document.getElementById('login-visual');
+      const visualText = document.getElementById('login-visual-text');
+
+      const logoUrl = empresa?.login_logo_url || _loginLogoDefaultUrl;
+      if (logoUrl) {
+        logoImg.src = logoUrl;
+        logoImg.alt = empresa?.razao_social || empresa?.nome || 'Logomarca da empresa';
+        logoWrap.classList.add('has-image');
+      } else {
+        logoImg.removeAttribute('src');
+        logoImg.alt = '';
+        logoWrap.classList.remove('has-image');
+      }
+
+      const backgroundUrl = empresa?.login_background_url || _loginBackgroundDefaultUrl;
+      if (backgroundUrl) {
+        visual.classList.add('has-image');
+        visual.style.backgroundImage = `url("${cssUrl(backgroundUrl)}")`;
+      } else {
+        visual.classList.remove('has-image');
+        visual.style.backgroundImage = 'linear-gradient(135deg, #0f172a, #2563eb)';
+      }
+
+      visualText.textContent = empresa?.login_slogan?.trim() || (backgroundUrl ? '' : SLOGAN_PADRAO);
     }
 
     function mostrarSpinner(show) {
@@ -322,7 +600,7 @@
           const { error } = await res.json().catch(() => ({}));
           throw new Error(error || `Erro ${res.status}`);
         }
-        const dest = new URLSearchParams(location.search).get('next') || '/dashboard.html';
+        const dest = new URLSearchParams(location.search).get('next') || '/iahub.html';
         location.href = dest;
       } catch (err) {
         mostrarErro(err.message || 'Erro ao selecionar empresa. Tente novamente.');

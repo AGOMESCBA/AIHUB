@@ -116,6 +116,7 @@
     </div>
 
     <div class="page-content">
+      <div id="list-view">
 
       <!-- Indicador de configuração ativa -->
       <div class="cfg-info">
@@ -166,6 +167,22 @@
           <div style="overflow-x:auto"><div id="tabela"></div></div>
         </div>
       </div>
+
+      </div>
+
+      <section id="detail-view" class="editor-shell d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="detail-title">Integração</strong>
+            <span id="detail-subtitle"></span>
+          </div>
+          <div class="editor-actions" id="detail-actions"></div>
+        </div>
+        <div class="editor-grid editor-grid-wide">
+          <main class="editor-main" id="detail-main"></main>
+          <aside class="editor-side" id="detail-side"></aside>
+        </div>
+      </section>
 
     </div>
   </div>
@@ -836,6 +853,99 @@ function fecharModal() {
 }
 
 // ── Modal XML ───────────────────────────────────────────────────
+function abrirDetalheIntegracao() {
+  document.getElementById('list-view').classList.add('d-none');
+  document.getElementById('detail-view').classList.remove('d-none');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function fecharDetalheIntegracao() {
+  document.getElementById('detail-view').classList.add('d-none');
+  document.getElementById('list-view').classList.remove('d-none');
+  _modalLog = null;
+}
+
+async function verDetalhes(l) {
+  if (!l) return;
+  try {
+    const dt = new Date(l.data_envio);
+    const uid = ++_expandCounter;
+    const isFlow = l.integration_source === 'flow';
+    _modalLog = l;
+
+    if (isFlow) {
+      renderModalFlow(l, dt, uid);
+    } else {
+      renderModalLegado(l, dt, uid);
+    }
+
+    document.getElementById('detail-title').textContent = `#${l._seq || '-'} - ${l.curriculo_nome || 'Currículo sem nome'}`;
+    document.getElementById('detail-subtitle').innerHTML = `
+      <span>${statusBadgeFor(l, true)}</span>
+      <span>${dt.toLocaleDateString('pt-BR')} às ${dt.toLocaleTimeString('pt-BR')}</span>
+      <span>${isFlow ? 'Flow configurável' : 'Integração legada'}</span>
+    `;
+    document.getElementById('detail-main').innerHTML = `
+      <section class="form-section">
+        <div class="form-section-title">Dados e retorno</div>
+        ${document.getElementById('modal-body').innerHTML}
+      </section>`;
+    document.getElementById('detail-side').innerHTML = `
+      <section class="form-section">
+        <div class="form-section-title">Resumo</div>
+        <div class="detail-grid" style="grid-template-columns:1fr">
+          <div class="detail-item">
+            <div class="detail-item-lbl">Registro</div>
+            <div class="detail-item-val" style="font-family:monospace">#${esc(l._seq || '-')}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-item-lbl">Candidato</div>
+            <div class="detail-item-val">${esc(l.curriculo_nome || '-')}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-item-lbl">Vaga / Função</div>
+            <div class="detail-item-val">${esc(l.vaga_nome || '-')}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-item-lbl">Análise</div>
+            <div class="detail-item-val" style="font-family:monospace;font-size:12px">${esc(l.analise_id || '-')}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-item-lbl">Origem</div>
+            <div class="detail-item-val">${isFlow ? esc(l.flow_nome || 'Flow configurável') : 'Integração legada'}</div>
+          </div>
+        </div>
+      </section>`;
+
+    let btns = `<button class="btn btn-ghost" onclick="fecharDetalheIntegracao()">Cancelar</button>`;
+    if (isFlow) {
+      if (l.status === 'erro' || l.status === 'revertido' || l.status === 'parcial') {
+        btns += `<button class="btn btn-primary" onclick="reenviar(_modalLog)">Re-executar Flow completo</button>`;
+      } else if (l.status === 'sucesso') {
+        btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="desvincular(_modalLog)">Mudar Status</button>`;
+      }
+    } else if (l.status === 'erro' || l.status === 'revertido') {
+      if (l.ja_integrado) {
+        btns += `<span style="font-size:12px;color:var(--text-lo);font-style:italic;padding:8px">Já integrado com sucesso. Reverta o registro de sucesso para reenviar.</span>`;
+      } else {
+        btns += `<button class="btn btn-primary" onclick="reenviar(_modalLog)">Reenviar</button>`;
+        btns += `<button class="btn btn-ghost" style="color:#1d4ed8" onclick="marcarOK(_modalLog)">Marcar OK</button>`;
+      }
+    } else if (l.status === 'sucesso') {
+      btns += `<button class="btn btn-ghost" style="color:#92400e" onclick="desvincular(_modalLog)">Mudar Status</button>`;
+    }
+    document.getElementById('detail-actions').innerHTML = btns;
+    document.getElementById('modal-body').innerHTML = '';
+    document.getElementById('modal-actions').innerHTML = '';
+    document.getElementById('modal').classList.add('d-none');
+    abrirDetalheIntegracao();
+    if (isFlow) carregarSteps(l);
+  } catch (err) {
+    console.error('verDetalhes error:', err);
+    alert(`Erro ao abrir detalhes: ${err.message}`);
+  }
+}
+
 function verConteudo(l, tipo) {
   if (!l) return;
   let conteudo, titulo, subtipo;
@@ -906,9 +1016,11 @@ async function reenviar(log) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Erro no reenvio');
     alert(`✓ Currículo de "${log.curriculo_nome}" reenviado com sucesso!`);
+    fecharDetalheIntegracao();
     carregar();
   } catch (err) {
     alert(`✗ Erro ao reenviar: ${err.message}`);
+    fecharDetalheIntegracao();
     carregar();
   }
 }
@@ -924,6 +1036,7 @@ async function marcarOK(log) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Erro');
     alert(`✓ "${log.curriculo_nome}" marcado como integrado manualmente.`);
+    fecharDetalheIntegracao();
     carregar();
   } catch (err) {
     alert(`✗ Erro: ${err.message}`);
@@ -941,6 +1054,7 @@ async function desvincular(log) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Erro');
     alert(`⇄ Status de "${log.curriculo_nome}" alterado para Revertido.`);
+    fecharDetalheIntegracao();
     carregar();
   } catch (err) {
     alert(`✗ Erro: ${err.message}`);
@@ -948,7 +1062,7 @@ async function desvincular(log) {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { fecharModal(); fecharModalXML(); }
+  if (e.key === 'Escape') { fecharModal(); fecharModalXML(); fecharDetalheIntegracao(); }
 });
 
 // ── Inicialização ───────────────────────────────────────────────

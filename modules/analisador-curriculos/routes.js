@@ -4,6 +4,57 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const configDb = require('../configuracoes/database');
 const usageDb  = require('../ia/usage-db');
 
+const RICH_TEXT_FIELDS_FUNCAO = ['descricao', 'requisitos_obrigatorios', 'requisitos_desejaveis'];
+const RICH_TEXT_FIELDS_VAGA = ['observacoes'];
+
+function sanitizeRichText(value) {
+  if (value === undefined || value === null) return '';
+  const html = String(value)
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '');
+
+  return html
+    .replace(/<([a-z][a-z0-9]*)\b([^>]*)>/gi, (full, rawTag, attrs) => {
+      const tag = String(rawTag || '').toLowerCase();
+      if (!['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'span'].includes(tag)) return '';
+      if (tag !== 'span') return `<${tag}>`;
+
+      const color = String(attrs || '').match(/color\s*:\s*(#[0-9a-f]{3,8}|rgba?\([^)]+\))/i);
+      return color ? `<span style="color:${color[1]}">` : '<span>';
+    })
+    .replace(/<\/([a-z][a-z0-9]*)\s*>/gi, (full, rawTag) => {
+      const tag = String(rawTag || '').toLowerCase();
+      return ['p', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'span'].includes(tag) ? `</${tag}>` : '';
+    })
+    .replace(/<br>\s*<\/br>/gi, '<br>')
+    .replace(/<p>\s*<\/p>/gi, '<p><br></p>')
+    .trim();
+}
+
+function richTextToPlain(value) {
+  return sanitizeRichText(value)
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<li>/gi, '- ')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/?(?:p|strong|b|em|i|u|ul|ol|span)[^>]*>/gi, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function sanitizePayload(body, fields) {
+  const clean = { ...(body || {}) };
+  for (const field of fields) {
+    if (field in clean) clean[field] = sanitizeRichText(clean[field]);
+  }
+  return clean;
+}
+
 function _getGroq(empresaId) {
   const key = configDb.getApiKey('groq_api_key', empresaId) || process.env.GROQ_API_KEY;
   if (!key) throw new Error('Chave Groq não configurada. Acesse Configurações → Chaves de API.');
@@ -174,14 +225,14 @@ function curriculoCompleto(c) {
   const exps  = (c.experiencias || []).map(e => {
     const ativ = toArray(e.atividades).map(a => `      – ${String(a).slice(0, 400)}`).join('\n');
     return `  → ${e.cargo} | ${e.empresa} | ${e.periodo || '—'}` +
-      (e.descricao ? `\n    Descrição: ${e.descricao.slice(0, 500)}` : '') +
+      (e.descricao ? `\n    Descrição: ${richTextToPlain(e.descricao).slice(0, 500)}` : '') +
       (ativ        ? `\n    Atividades:\n${ativ}` : '');
   }).join('\n\n');
 
   // Quando experiencias está vazio o conteúdo está todo em descricao (parsing fallback)
   const perfilSection = (c.experiencias || []).length === 0 && c.descricao
-    ? c.descricao  // usa o texto completo sem truncamento
-    : (c.descricao || '—');
+    ? richTextToPlain(c.descricao)  // usa o texto completo sem truncamento
+    : (richTextToPlain(c.descricao) || '—');
 
   return `NOME: ${c.nome || '—'}
 EXPERIÊNCIA TOTAL CALCULADA: ${exp.texto} → Nível estimado pelo sistema: ${exp.nivel}
@@ -211,7 +262,7 @@ function curriculoResumo(c) {
     // Trunca cada atividade individualmente para evitar explosão de tokens
     const ativ = toArray(e.atividades).slice(0, 6).map(a => String(a).slice(0, 150)).join('; ');
     return `${e.cargo} em ${e.empresa} (${e.periodo})`
-      + (e.descricao ? ': ' + e.descricao.slice(0, 300) : '')
+      + (e.descricao ? ': ' + richTextToPlain(e.descricao).slice(0, 300) : '')
       + (ativ        ? ' | Atividades: ' + ativ.slice(0, 400) : '');
   }).join('\n');
   const form = (c.formacao || []).map(f => `${f.curso || f.nome || '—'} — ${f.instituicao || f['instituição'] || f.institution || '—'}`).join('; ');
@@ -220,8 +271,8 @@ function curriculoResumo(c) {
   // usa o descricao completo para não esconder informações relevantes
   const semExps  = (c.experiencias || []).length === 0;
   const descricao = semExps
-    ? (c.descricao || '').slice(0, 800)
-    : (c.descricao || '').slice(0, 350);
+    ? richTextToPlain(c.descricao || '').slice(0, 800)
+    : richTextToPlain(c.descricao || '').slice(0, 350);
 
   return `Nome: ${c.nome || '—'} | Exp.Total: ${exp.texto} (${exp.nivel})
 Perfil: ${descricao}
@@ -237,9 +288,9 @@ function perfilFuncao(funcao) {
 Área: ${funcao.area || '—'}
 Nível exigido: ${funcao.nivel_experiencia || '—'}
 Formação Necessária: ${funcao.formacao_necessaria || '—'}
-Descrição: ${funcao.descricao || '—'}
-Requisitos Obrigatórios: ${funcao.requisitos_obrigatorios || '—'}
-Requisitos Desejáveis: ${funcao.requisitos_desejaveis || '—'}
+Descrição: ${richTextToPlain(funcao.descricao) || '—'}
+Requisitos Obrigatórios: ${richTextToPlain(funcao.requisitos_obrigatorios) || '—'}
+Requisitos Desejáveis: ${richTextToPlain(funcao.requisitos_desejaveis) || '—'}
 Habilidades Técnicas: ${Array.isArray(funcao.habilidades_tecnicas) ? funcao.habilidades_tecnicas.join(', ') : (funcao.habilidades_tecnicas || '—')}
 Palavras-chave: ${Array.isArray(funcao.palavras_chave) ? funcao.palavras_chave.join(', ') : (funcao.palavras_chave || '—')}`;
 }
@@ -281,12 +332,12 @@ function getMergedEquivalencias(empresaId) {
 function curriculoTextoCompleto(c) {
   return [
     c.nome || '',
-    c.descricao || '',
+    richTextToPlain(c.descricao || ''),
     (c.habilidades || []).join(' '),
     (c.capacitacoes || []).map(stringifyCap).join(' '),
     (c.formacao || []).map(f => `${f.curso || f.nome || ''} ${f.instituicao || f['instituição'] || ''}`).join(' '),
     (c.experiencias || []).map(e => [
-      e.cargo || '', e.empresa || '', e.descricao || '',
+      e.cargo || '', e.empresa || '', richTextToPlain(e.descricao || ''),
       ...toArray(e.atividades),
     ].join(' ')).join(' '),
   ].join(' ').toLowerCase();
@@ -366,6 +417,25 @@ Responda SOMENTE com JSON válido, sem markdown.`;
   }
 }
 
+// ── Resolvedores de contexto de empresa (suporte MDI per-tab) ────────────────
+const _crud = require('../crud');
+
+function _resolverEid(req) {
+  const explicit = Number(req.body?.empresa_id || req.query?.empresa_id || 0);
+  if (!explicit) return req.session.empresa_id;
+  const { empresas: acesso, role } = req.session;
+  const ok = role === 'admin' || acesso === 'all' ||
+    (Array.isArray(acesso) && acesso.includes(explicit));
+  return ok ? explicit : req.session.empresa_id;
+}
+
+function _resolverEnome(req) {
+  const eid = _resolverEid(req);
+  if (String(eid) === String(req.session.empresa_id)) return req.session.empresa_nome || '';
+  const emp = _crud.buscarPorId('empresas', eid);
+  return emp?.razao_social || '';
+}
+
 module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa, registrarLog, io }) {
 
   function logMonitor(message, type = 'warning') {
@@ -375,62 +445,62 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
   }
 
   // ── Funções ──────────────────────────────────────────────────────────────────
-  app.get   ('/api/funcoes',     requireAuth, requireEmpresa, (req, res) => res.json(db.listFuncoes(req.session.empresa_id)));
+  app.get   ('/api/funcoes',     requireAuth, requireEmpresa, (req, res) => res.json(db.listFuncoes(_resolverEid(req))));
   app.get   ('/api/funcoes/:id', requireAuth, requireEmpresa, (req, res) => {
-    const f = db.getFuncao(req.session.empresa_id, Number(req.params.id));
+    const f = db.getFuncao(_resolverEid(req), Number(req.params.id));
     if (!f) return res.status(404).json({ error: 'Não encontrada' });
     res.json(f);
   });
   app.post  ('/api/funcoes',     requireAuth, requireEmpresa, (req, res) => {
-    const id = db.saveFuncao(req.session.empresa_id, req.body);
+    const id = db.saveFuncao(_resolverEid(req), sanitizePayload(req.body, RICH_TEXT_FIELDS_FUNCAO));
     res.json({ ok: true, id });
   });
   app.put   ('/api/funcoes/:id', requireAuth, requireEmpresa, (req, res) => {
-    const ok = db.updateFuncao(req.session.empresa_id, Number(req.params.id), req.body);
+    const ok = db.updateFuncao(_resolverEid(req), Number(req.params.id), sanitizePayload(req.body, RICH_TEXT_FIELDS_FUNCAO));
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
   app.delete('/api/funcoes/:id', requireAuth, requireEmpresa, (req, res) => {
-    const ok = db.deleteFuncao(req.session.empresa_id, Number(req.params.id));
+    const ok = db.deleteFuncao(_resolverEid(req), Number(req.params.id));
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
 
   // ── Vagas ────────────────────────────────────────────────────────────────────
-  app.get   ('/api/vagas',     requireAuth, requireEmpresa, (req, res) => res.json(db.listVagas(req.session.empresa_id)));
+  app.get   ('/api/vagas',     requireAuth, requireEmpresa, (req, res) => res.json(db.listVagas(_resolverEid(req))));
   app.get   ('/api/vagas/:id', requireAuth, requireEmpresa, (req, res) => {
-    const v = db.getVaga(req.session.empresa_id, Number(req.params.id));
+    const v = db.getVaga(_resolverEid(req), Number(req.params.id));
     if (!v) return res.status(404).json({ error: 'Não encontrada' });
     res.json(v);
   });
   app.post  ('/api/vagas',     requireAuth, requireEmpresa, (req, res) => {
-    const id = db.saveVaga(req.session.empresa_id, req.body);
+    const id = db.saveVaga(_resolverEid(req), sanitizePayload(req.body, RICH_TEXT_FIELDS_VAGA));
     res.json({ ok: true, id });
   });
   app.put   ('/api/vagas/:id', requireAuth, requireEmpresa, (req, res) => {
-    const ok = db.updateVaga(req.session.empresa_id, Number(req.params.id), req.body);
+    const ok = db.updateVaga(_resolverEid(req), Number(req.params.id), sanitizePayload(req.body, RICH_TEXT_FIELDS_VAGA));
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
   app.delete('/api/vagas/:id', requireAuth, requireEmpresa, (req, res) => {
-    const ok = db.deleteVaga(req.session.empresa_id, Number(req.params.id));
+    const ok = db.deleteVaga(_resolverEid(req), Number(req.params.id));
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
 
   // ── Config do analisador ──────────────────────────────────────────────────────
-  app.get ('/api/analisador/config', requireAuth, requireEmpresa, (req, res) => res.json(db.getAnalisadorConfig(req.session.empresa_id)));
+  app.get ('/api/analisador/config', requireAuth, requireEmpresa, (req, res) => res.json(db.getAnalisadorConfig(_resolverEid(req))));
   app.post('/api/analisador/config', requireAuth, requireEmpresa, (req, res) => {
     const { junior_max_meses, pleno_max_meses } = req.body;
     if (!junior_max_meses || !pleno_max_meses) return res.status(400).json({ error: 'Campos obrigatórios' });
     if (Number(junior_max_meses) >= Number(pleno_max_meses)) return res.status(400).json({ error: 'Limite Júnior deve ser menor que Pleno' });
-    db.setAnalisadorConfig(req.session.empresa_id, { junior_max_meses: Number(junior_max_meses), pleno_max_meses: Number(pleno_max_meses) });
+    db.setAnalisadorConfig(_resolverEid(req), { junior_max_meses: Number(junior_max_meses), pleno_max_meses: Number(pleno_max_meses) });
     res.json({ ok: true });
   });
 
   // ── Pesos de Pontuação ────────────────────────────────────────────────────────
   app.get('/api/pesos-pontuacao', requireAuth, requireEmpresa, (req, res) => {
-    res.json(db.getPesosPontuacao(req.session.empresa_id));
+    res.json(db.getPesosPontuacao(_resolverEid(req)));
   });
 
   app.post('/api/pesos-pontuacao', requireAuth, requireEmpresa, (req, res) => {
@@ -445,7 +515,7 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
       return res.status(400).json({ error: `A soma dos pesos deve ser exatamente 100. Atual: ${soma}` });
     if (!corte_minimo || isNaN(Number(corte_minimo)) || Number(corte_minimo) < 1 || Number(corte_minimo) > 99)
       return res.status(400).json({ error: 'Pontuação mínima deve ser entre 1 e 99' });
-    db.setPesosPontuacao(req.session.empresa_id, {
+    db.setPesosPontuacao(_resolverEid(req), {
       requisitos_obrigatorios: Number(requisitos_obrigatorios),
       requisitos_desejados:    Number(requisitos_desejados),
       formacao:                Number(formacao),
@@ -457,22 +527,22 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
 
   // ── Análises Salvas ──────────────────────────────────────────────────────────
   app.get('/api/analises', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
-    const empresaNome = req.session.empresa_nome || '';
+    const eid = _resolverEid(req);
+    const empresaNome = _resolverEnome(req);
     db.backfillAnalisesEmpresa(eid, empresaNome);
     res.json(db.listAnalises(eid));
   });
 
   app.get('/api/analises/:id', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
-    db.backfillAnalisesEmpresa(eid, req.session.empresa_nome || '');
+    const eid = _resolverEid(req);
+    db.backfillAnalisesEmpresa(eid, _resolverEnome(req));
     const a = db.getAnalise(eid, req.params.id);
     if (!a) return res.status(404).json({ error: 'Não encontrada' });
     res.json(a);
   });
 
   app.post('/api/analises', requireAuth, requireEmpresa, (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { force, ...analise } = req.body;
     if (!analise.id) return res.status(400).json({ error: 'ID obrigatório' });
     const existingByVaga = analise.vaga_id ? db.getAnaliseByVaga(eid, analise.vaga_id) : null;
@@ -497,21 +567,21 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
     db.saveAnalise(eid, {
       ...analise,
       empresa_id: Number(eid),
-      empresa_nome: req.session.empresa_nome || '',
+      empresa_nome: _resolverEnome(req),
       data: new Date().toISOString(),
     });
     res.json({ ok: true });
   });
 
   app.delete('/api/analises/:id', requireAuth, requireEmpresa, (req, res) => {
-    const ok = db.deleteAnalise(req.session.empresa_id, req.params.id);
+    const ok = db.deleteAnalise(_resolverEid(req), req.params.id);
     if (!ok) return res.status(404).json({ error: 'Não encontrada' });
     res.json({ ok: true });
   });
 
   // ── Analisador ───────────────────────────────────────────────────────────────
   app.post('/api/analisador/analisar', requireAuth, requireEmpresa, async (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { funcao_id, vaga_id, somente_vaga } = req.body;
     const funcao = db.getFuncao(eid, Number(funcao_id));
     const analiseExistente = vaga_id ? db.getAnaliseByVaga(eid, vaga_id) : null;
@@ -591,7 +661,7 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
 
   // ── Equivalências ─────────────────────────────────────────────────────────────
   app.get('/api/equivalencias', requireAuth, requireEmpresa, (req, res) => {
-    const eid       = req.session.empresa_id;
+    const eid       = _resolverEid(req);
     const dbEntries = db.listEquivalencias(eid);
     const dbMap     = new Map(dbEntries.map(e => [e.keyword, e.variantes]));
     const result    = [];
@@ -616,18 +686,18 @@ module.exports = function registerVagasRoutes(app, { requireAuth, requireEmpresa
     const { keyword, variantes } = req.body;
     if (!keyword?.trim() || !Array.isArray(variantes))
       return res.status(400).json({ error: 'keyword e variantes[] obrigatórios' });
-    db.saveEquivalencia(req.session.empresa_id, { keyword, variantes });
+    db.saveEquivalencia(_resolverEid(req), { keyword, variantes });
     res.json({ ok: true });
   });
 
   app.delete('/api/equivalencias/:keyword', requireAuth, requireEmpresa, (req, res) => {
-    db.deleteEquivalencia(req.session.empresa_id, req.params.keyword);
+    db.deleteEquivalencia(_resolverEid(req), req.params.keyword);
     res.json({ ok: true });
   });
 
   // ── Sugerir equivalências via IA (keyword única — modal de Configurações) ─────
   app.post('/api/equivalencias/sugerir', requireAuth, requireEmpresa, async (req, res) => {
-    const eid = req.session.empresa_id;
+    const eid = _resolverEid(req);
     const { keyword } = req.body;
     if (!keyword?.trim()) return res.status(400).json({ error: 'keyword obrigatório' });
 
@@ -653,7 +723,7 @@ Responda apenas o array JSON.`;
 
   // ── Sugerir equivalências em lote via IA (salva automaticamente as novas) ─────
   app.post('/api/equivalencias/sugerir-lote', requireAuth, requireEmpresa, async (req, res) => {
-    const eid              = req.session.empresa_id;
+    const eid              = _resolverEid(req);
     const { keywords, preview } = req.body;
     if (!Array.isArray(keywords) || !keywords.length)
       return res.status(400).json({ error: 'keywords[] obrigatório' });
