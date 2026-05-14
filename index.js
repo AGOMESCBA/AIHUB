@@ -14,6 +14,7 @@ const { requireEmpresa }            = require('./modules/empresa-context');
 const { inicializarConfig }         = require('./modules/configuracoes/database');
 const { inicializarSistemas }       = require('./modules/sistemas/database');
 const { requireSystemAccess }       = require('./modules/sistemas/access');
+const { APPS, LEGACY_STATIC_DIRS }   = require('./apps/registry');
 
 let puppeteer;
 try { puppeteer = require('puppeteer-core'); } catch (_) {}
@@ -87,6 +88,12 @@ inicializarSistemas();
 const requireRecrutamento = requireSystemAccess('recrutamento');
 const requireIaAdmin = requireSystemAccess('ia-admin');
 
+function mountStaticDirs(route, middleware, dirs) {
+  for (const dir of dirs) {
+    app.use(route, middleware, express.static(dir));
+  }
+}
+
 const RECRUTAMENTO_PAGES = new Set([
   '/dashboard.html',
   '/monitores.html',
@@ -125,41 +132,16 @@ app.get('/app/ia-administracao', requireIaAdmin, (req, res) => {
   res.redirect('/app/ia-administracao/administracao.html');
 });
 
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'processo-seletivo', 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEFuncao', 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEVaga', 'frontend')));
-app.use('/app/ia-recruit', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
-
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo', 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'processo-seletivo', 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'analisador-curriculos', 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEFuncao', 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEVaga', 'frontend')));
-app.use('/app/recrutamento', requireRecrutamento, express.static(path.join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
-
-app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'frontend')));
-app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'configuracoes', 'frontend')));
-app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'empresas', 'frontend')));
-app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'usuarios', 'frontend')));
-app.use('/app/ia-administracao', requireIaAdmin, express.static(path.join(__dirname, 'modules', 'seguranca', 'frontend')));
+mountStaticDirs('/app/ia-recruit', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
+mountStaticDirs('/app/recrutamento', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
+mountStaticDirs('/app/ia-administracao', requireIaAdmin, APPS.iaAdministracao.legacyStaticDirs);
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
-app.use(express.static(path.join(__dirname, 'frontend')));
+app.use(express.static(APPS.iahub.legacyFrontendDir));
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
-app.use(express.static(path.join(__dirname, 'modules', 'configuracoes',       'frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'empresas',            'frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'usuarios',            'frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'whatsapp-curriculo',  'frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'processo-seletivo',   'frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'analisador-curriculos','frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'seguranca',             'frontend')));
-app.use(express.static(path.join(__dirname, 'modules', 'integracoes', 'SECurriculo', 'frontend')));
+for (const dir of LEGACY_STATIC_DIRS.slice(1)) {
+  app.use(express.static(dir));
+}
 
 // ── Log em arquivo ────────────────────────────────────────────────────────────
 const LOG_DIR        = path.join(__dirname, 'logs');

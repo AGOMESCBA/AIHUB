@@ -1,5 +1,8 @@
 # IA Recruit
 
+> Compatibilidade: a estrutura nova do produto passa a ser `apps/IA Recruit`.
+> Esta pasta permanece por enquanto apenas como referencia da fase inicial.
+
 A inteligencia que encontra os talentos certos.
 
 Projeto do sistema de recrutamento da plataforma IA Hub.
