@@ -359,7 +359,15 @@ a { text-decoration: none; color: inherit; }
   background: var(--bg-sidebar);
 }
 
-.topbar-title { font-size: 15px; font-weight: 600; color: var(--text-hi); }
+.topbar-title { font-size: 15px; font-weight: 600; color: var(--text-hi); min-width:0; }
+.topbar-user {
+  margin-left: 4px;
+  color: var(--text-md);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
 .topbar-path  { font-size: 13px; font-weight: 400; color: var(--text-lo); margin-right: 2px; }
 
 /* classe legada — oculta caso ainda exista em alguma página */

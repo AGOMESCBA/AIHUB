@@ -232,7 +232,14 @@ function _mostrarOverlaySemAcesso(rotinaNome = 'esta rotina') {
   _atualizarSidebarUsuario(me);
 
   // Expõe dados do usuário globalmente em todas as páginas
-  window._iahubUser = { user: me.user, role: me.role };
+  window._iahubUser = {
+    user: me.user,
+    user_id: me.user_id,
+    nome: me.nome || me.user,
+    email: me.email || '',
+    role: me.role,
+  };
+  _atualizarTopbarUsuario(me);
 
   // 3. Verificar empresa nas páginas que exigem
   if (!_paginaLivre()) {
@@ -369,6 +376,21 @@ function _atualizarSidebarUsuario(me) {
 }
 
 // ── Combo de empresa no cabeçalho ─────────────────────────────────────────────
+function _atualizarTopbarUsuario(me) {
+  const nome = me.nome || me.user || '';
+  const email = me.email || '';
+  const label = [nome, email ? `(${email})` : ''].filter(Boolean).join(' ');
+  if (!label) return;
+
+  document.querySelectorAll('.topbar-title').forEach(title => {
+    const existing = title.querySelector('.topbar-user');
+    const userEl = existing || document.createElement('span');
+    userEl.className = 'topbar-user';
+    userEl.textContent = ` - ${label}`;
+    if (!existing) title.appendChild(userEl);
+  });
+}
+
 async function _injetarEmpresaTopbar() {
   const topbar = document.querySelector('.topbar');
   if (!topbar || document.getElementById('_empresa-badge')) return;

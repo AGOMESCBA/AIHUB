@@ -1,6 +1,7 @@
 const { verificarCredenciais, requireAuth } = require('./index');
 const tentativas  = require('./tentativas');
 const { registrarAuditoria } = require('./database');
+const usuariosDb = require('../usuarios/database');
 
 function obterIp(req) {
   return (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
@@ -74,9 +75,12 @@ module.exports = function registerAuthRoutes(app) {
 
   // ── Sessão atual ───────────────────────────────────────────────────────────
   app.get('/api/me', requireAuth, (req, res) => {
+    const usuario = usuariosDb.buscarPorId(req.session.user_id) || {};
     res.json({
       user:         req.session.user,
       user_id:      req.session.user_id,
+      nome:         usuario.nome || req.session.user,
+      email:        usuario.email || '',
       role:         req.session.role,
       empresas:     req.session.empresas,
       empresa_id:   req.session.empresa_id   ?? null,
