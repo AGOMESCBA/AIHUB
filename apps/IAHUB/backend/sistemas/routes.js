@@ -53,6 +53,19 @@ module.exports = function registerSistemasRoutes(app, { requireAuth, requireAdmi
     res.json(db.listarSystems());
   });
 
+  app.put('/api/sistemas/:code', requireAuth, requireAdmin, (req, res) => {
+    const code = String(req.params.code || '').trim();
+    const body = req.body || {};
+    const patch = {};
+    for (const key of ['name', 'description', 'url', 'image_url', 'accent', 'badge']) {
+      if (body[key] !== undefined) patch[key] = String(body[key] || '').trim();
+    }
+    if (body.active !== undefined) patch.active = body.active !== false;
+    const system = db.atualizarSystem(code, patch);
+    if (!system) return res.status(404).json({ error: 'Sistema nao encontrado.' });
+    res.json(system);
+  });
+
   app.get('/api/empresas/:id/sistemas', requireAuth, requireAdmin, (req, res) => {
     const companyId = Number(req.params.id);
     const rows = db.listarCompanySystems().filter(r => Number(r.company_id) === companyId);

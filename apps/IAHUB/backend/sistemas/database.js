@@ -50,6 +50,20 @@ function getSystem(code) {
   return listarSystems().find(s => s.code === code) || null;
 }
 
+function atualizarSystem(code, patch) {
+  const row = getSystem(code);
+  if (!row) return null;
+
+  const allowed = ['name', 'description', 'url', 'image_url', 'accent', 'badge', 'active'];
+  const data = {};
+  for (const key of allowed) {
+    if (patch[key] !== undefined) data[key] = patch[key];
+  }
+
+  if (!Object.keys(data).length) return row;
+  return crud.atualizar(SYSTEMS_FILE, row.id, data);
+}
+
 function listarCompanySystems() {
   return crud.listar(COMPANY_SYSTEMS_FILE);
 }
@@ -210,6 +224,7 @@ module.exports = {
   inicializarSistemas,
   listarSystems,
   getSystem,
+  atualizarSystem,
   listarCompanySystems,
   listarUserSystems,
   listarDisponiveis,
