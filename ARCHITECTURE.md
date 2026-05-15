@@ -72,5 +72,13 @@ nao em `modules/`, exceto quando forem stubs temporarios.
 
 ## IA Command
 
-`apps/IA Command` esta em desenvolvimento paralelo. A integracao final deve ser
-revisada antes de entrar no fluxo principal da arquitetura.
+Sistema operacional conversacional integrado ao ERP.
+
+- dashboard do IA Command
+- monitor de WhatsApp
+- conexoes ERP
+- configuracao de IA
+- intencoes, datasets, execucoes e auditoria
+
+O `system_code` e `ia-command`. As telas e APIs ficam protegidas pelo IAHub via
+`requireSystemAccess('ia-command')`.

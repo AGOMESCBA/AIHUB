@@ -12,7 +12,8 @@ const { requireAuth, requireAdmin } = require('./modules/auth');
 const { inicializarAdmin }          = require('./modules/auth/database');
 const { requireEmpresa }            = require('./modules/empresa-context');
 const { inicializarConfig }         = require('./modules/configuracoes/database');
-const { inicializarSistemas }       = require('./modules/sistemas/database');
+const sistemasDb                    = require('./modules/sistemas/database');
+const { inicializarSistemas }       = sistemasDb;
 const { requireSystemAccess }       = require('./modules/sistemas/access');
 const { APPS, LEGACY_STATIC_DIRS }   = require('./apps/registry');
 
@@ -86,7 +87,8 @@ inicializarConfig();
 inicializarSistemas();
 
 const requireRecrutamento = requireSystemAccess('recrutamento');
-const requireIaAdmin = requireSystemAccess('ia-admin');
+const requireIaAdmin      = requireSystemAccess('ia-admin');
+const requireIaCommand    = requireSystemAccess('ia-command');
 
 function mountStaticDirs(route, middleware, dirs) {
   for (const dir of dirs) {
@@ -142,9 +144,14 @@ app.get('/app/ia-administracao', requireIaAdmin, (req, res) => {
   res.redirect('/app/ia-administracao/administracao.html');
 });
 
+app.get('/app/ia-command', requireIaCommand, (req, res) => {
+  res.redirect('/app/ia-command/shell.html');
+});
+
 mountStaticDirs('/app/ia-recruit', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
 mountStaticDirs('/app/recrutamento', requireRecrutamento, APPS.iaRecruit.legacyStaticDirs);
 mountStaticDirs('/app/ia-administracao', requireIaAdmin, APPS.iaAdministracao.legacyStaticDirs);
+mountStaticDirs('/app/ia-command', requireIaCommand, APPS.iaCommand.staticDirs);
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
@@ -191,9 +198,33 @@ function registrarLog(entry, empresaId) {
 }
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
-const waManager = require('./modules/whatsapp-curriculo/service-manager');
-const emailSvcMgr = require('./modules/processo-seletivo/email-service-manager');
+const waManager    = require('./modules/whatsapp-curriculo/service-manager');
+const emailSvcMgr  = require('./modules/processo-seletivo/email-service-manager');
+const iacWaManager = require('./apps/IA Command/modules/whatsapp/service-manager');
 // Email log file is set per-instance when service starts
+
+function sessaoPodeReceberIaCommand(sess, empresaId) {
+  return !!(
+    sess?.authenticated &&
+    sess.system_code === 'ia-command' &&
+    empresaId &&
+    sistemasDb.hasUserSystem(sess.user_id, Number(empresaId), 'ia-command')
+  );
+}
+
+function emitirReplayIaCommand(socket, empresaId) {
+  if (!sessaoPodeReceberIaCommand(socket.request.session, empresaId)) return;
+
+  const svc = iacWaManager.get(empresaId);
+  if (svc) {
+    svc.getLogBuffer().forEach(entry => socket.emit('iac-log', entry));
+    socket.emit('iac-status', { status: svc.getStatus(), empresa_id: empresaId });
+    const qr = svc.getQr();
+    if (qr) socket.emit('iac-qr', qr);
+  } else {
+    socket.emit('iac-status', { status: 'stopped', empresa_id: empresaId });
+  }
+}
 
 io.on('connection', (socket) => {
   const eid = socket.request.session?.empresa_id;
@@ -225,6 +256,9 @@ io.on('connection', (socket) => {
   } else {
     socket.emit('email-status', 'stopped');
   }
+
+  // IA Command — replay apenas quando o sistema selecionado for o IA Command.
+  if (eid) emitirReplayIaCommand(socket, eid);
 
   // Permite monitorar uma empresa específica (ex.: ?empresa=2) independente da sessão ativa
   socket.on('join-empresa-monitor', ({ empresaId } = {}) => {
@@ -258,6 +292,8 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('email-status', 'stopped');
     }
+
+    emitirReplayIaCommand(socket, empresaId);
   });
 
   // Permite que o frontend force o ingresso na sala correta após auth assincrona
@@ -290,6 +326,8 @@ io.on('connection', (socket) => {
       } else {
         socket.emit('email-status', 'stopped');
       }
+
+      emitirReplayIaCommand(socket, freshEid);
     });
   });
 });
@@ -320,6 +358,10 @@ require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
 
 // ── Módulo Segurança ──────────────────────────────────────────────────────────
 require('./modules/seguranca/routes')(app, { requireAuth });
+
+// ── IA Command ────────────────────────────────────────────────────────────────
+require('./apps/IA Command/modules/database').inicializarDB();
+require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand, io });
 
 [
   '/api/service',

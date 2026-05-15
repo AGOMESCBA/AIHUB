@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log de Execuções — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+
+    .quick-panel  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row    { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .filter-area  { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status{ font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control  { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+
+    .gp-wrap      { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title   { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta    { font-size:12px;color:var(--text-lo);margin-top:1px; }
+
+    .badge-ok   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-fail { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fee2e2;color:#b91c1c; }
+
+    /* Detalhe modal */
+    .detail-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center; }
+    .detail-overlay.show { display:flex; }
+    .detail-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(760px,95vw);max-height:85vh;overflow-y:auto;padding:24px; }
+    .detail-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px; }
+    .detail-title  { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .detail-close  { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1; }
+    .detail-close:hover { color:var(--text-hi); }
+    .detail-lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px; }
+    .detail-pre { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto;color:var(--text-md); }
+    .detail-sec { margin-bottom:16px; }
+
+    .tabulator { border:none !important; background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Log de Execuções</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Administração</div>
+          <div class="page-title">Log de Execuções</div>
+          <div class="page-subtitle">Histórico das consultas processadas pelo motor de IA. Somente leitura.</div>
+        </div>
+        <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
+      </div>
+
+      <div class="quick-panel">
+        <div class="quick-row">
+          <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+          <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+        </div>
+        <div class="filter-area" id="filter-area" style="display:none">
+          <div class="quick-row" style="margin-bottom:10px">
+            <input id="f-intent" type="text" class="form-control" placeholder="Filtrar por intenção…" oninput="filtrar()">
+            <select id="f-sucesso" class="form-control" onchange="filtrar()">
+              <option value="">Todos os status</option>
+              <option value="1">Sucesso</option>
+              <option value="0">Erro</option>
+            </select>
+            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+          </div>
+          <div class="gp-wrap">
+            <div class="gp-chips-row" id="gp-chips-row">
+              <span class="gp-label">Agrupar por:</span>
+            </div>
+            <div id="dz"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="grid-toolbar">
+          <div>
+            <div class="grid-title">Execuções registradas</div>
+            <div id="count" class="grid-meta">Últimas 200 entradas</div>
+          </div>
+        </div>
+        <div id="tabela"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalhe -->
+<div class="detail-overlay" id="detail-overlay" onclick="if(event.target===this)fecharDetalhe()">
+  <div class="detail-modal">
+    <div class="detail-header">
+      <span class="detail-title" id="detail-title">Detalhe da Execução</span>
+      <button class="detail-close" onclick="fecharDetalhe()">✕</button>
+    </div>
+    <div class="detail-sec">
+      <div class="detail-lbl">Query Executada</div>
+      <pre class="detail-pre" id="detail-query"></pre>
+    </div>
+    <div class="detail-sec" id="detail-erro-wrap" style="display:none">
+      <div class="detail-lbl">Erro</div>
+      <pre class="detail-pre" style="color:#b91c1c" id="detail-erro"></pre>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let table, gp;
+  let _dados = [];
+  let _filtrosVisiveis = false;
+  let _quickFilterFn = null;
+
+  function toggleFiltros() {
+    _filtrosVisiveis = !_filtrosVisiveis;
+    document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
+    document.getElementById('btn-filtros').textContent = _filtrosVisiveis ? '− Ocultar filtros' : '+ Mostrar filtros';
+    if (_filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+  }
+
+  function filtrar() {
+    if (!table) return;
+    if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
+    const b = document.getElementById('f-intent').value.trim().toLowerCase();
+    const s = document.getElementById('f-sucesso').value;
+    if (b || s !== '') {
+      _quickFilterFn = row => {
+        if (s !== '' && String(row.sucesso) !== s) return false;
+        if (b && !(row.intent || '').toLowerCase().includes(b)) return false;
+        return true;
+      };
+      table.addFilter(_quickFilterFn);
+    }
+    const ativos = [b, s].filter(Boolean).length;
+    document.getElementById('filter-status').textContent =
+      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+  }
+
+  function limparFiltros() {
+    document.getElementById('f-intent').value  = '';
+    document.getElementById('f-sucesso').value = '';
+    filtrar();
+  }
+
+  function verDetalhe(row) {
+    document.getElementById('detail-title').textContent  = `Intenção: ${row.intent || '—'}`;
+    document.getElementById('detail-query').textContent  = row.query_executada || '(sem query)';
+    const erroWrap = document.getElementById('detail-erro-wrap');
+    if (row.erro) {
+      document.getElementById('detail-erro').textContent = row.erro;
+      erroWrap.style.display = '';
+    } else {
+      erroWrap.style.display = 'none';
+    }
+    document.getElementById('detail-overlay').classList.add('show');
+  }
+
+  function fecharDetalhe() { document.getElementById('detail-overlay').classList.remove('show'); }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function carregar() {
+    _dados = await fetch('/api/ia-command/admin/execucoes?limit=200').then(r => r.json()).catch(() => []);
+    if (table) { table.replaceData(_dados); return; }
+    _criarTabela(_dados);
+  }
+
+  function _criarTabela(data) {
+    gp = createGroupPanel({
+      chipsRowId: 'gp-chips-row', dropZoneId: 'dz',
+      storageKey: 'iac_admin_execucoes_group',
+      getTable: () => table,
+    });
+
+    table = new Tabulator('#tabela', {
+      data, index: 'id', layout: 'fitColumns', movableColumns: true,
+      height: 'calc(100vh - 330px)',
+      groupBy: gp.getActiveFields(), groupStartOpen: true,
+      placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma execução registrada.</div>',
+      columns: [
+        { title: 'Data/Hora', field: 'criado_em', width: 155,
+          formatter: c => c.getValue()?.slice(0,19).replace('T',' ') || '' },
+        { title: 'Intenção', field: 'intent', minWidth: 160, headerFilter: true,
+          formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue() || '—')}</strong>` },
+        { title: 'Status', field: 'sucesso', width: 95,
+          headerFilter: 'select',
+          headerFilterParams: { values: { '':'Todos', '1':'Sucesso', '0':'Erro' } },
+          formatter: c => c.getValue()
+            ? '<span class="badge-ok">● OK</span>'
+            : '<span class="badge-fail">✗ Erro</span>' },
+        { title: 'Duração (ms)', field: 'duracao_ms', width: 120,
+          formatter: c => {
+            const v = c.getValue();
+            if (v == null) return '—';
+            const color = v > 3000 ? '#b91c1c' : v > 1000 ? '#92400e' : '#15803d';
+            return `<span style="color:${color};font-weight:600">${v}</span>`;
+          },
+        },
+        { title: 'Query', field: 'query_executada', minWidth: 180, headerFilter: false, groupable: false,
+          formatter: c => {
+            const v = c.getValue();
+            return v
+              ? `<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${esc(v.slice(0,80))}${v.length > 80 ? '…' : ''}</span>`
+              : '<span style="color:var(--text-lo)">—</span>';
+          },
+        },
+        { title: 'Erro', field: 'erro', minWidth: 130, headerFilter: false, groupable: false,
+          formatter: c => {
+            const v = c.getValue();
+            return v ? `<span style="font-size:12px;color:#b91c1c">${esc(v.slice(0,60))}${v.length > 60 ? '…' : ''}</span>` : '';
+          },
+        },
+      ],
+      rowClick: (e, row) => verDetalhe(row.getData()),
+    });
+
+    gp.refresh();
+    gp.applyToTable();
+  }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

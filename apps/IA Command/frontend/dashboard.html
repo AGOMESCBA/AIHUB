@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent: #7c3aed; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background: #7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .page-kicker  { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title   { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle{ font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head    { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:24px; }
+
+    /* Stats */
+    .stats-row { display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px; }
+    .stat-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px; }
+    .stat-label{ font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600; }
+    .stat-value{ font-size:28px;font-weight:800;color:var(--text-hi);margin:6px 0 2px;line-height:1; }
+    .stat-sub  { font-size:12px;color:var(--text-lo); }
+    .stat-card.accent { border-color:#7c3aed;background:rgba(124,58,237,.04); }
+    .stat-card.accent .stat-value { color:#7c3aed; }
+
+    /* Status badge */
+    .status-badge { display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
+    .status-connected { background:#dcfce7;color:#15803d; }
+    .status-stopped   { background:var(--bg-hover);color:var(--text-lo); }
+    .status-starting  { background:#fef9c3;color:#92400e; }
+
+/* Quick nav */
+    .quick-nav { display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px; }
+    .qnav-btn { display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg-card);color:var(--text-md);font-size:13px;font-weight:500;text-decoration:none;transition:border-color .15s,color .15s,background .15s; }
+    .qnav-btn:hover { border-color:#7c3aed;color:#7c3aed;background:rgba(124,58,237,.05); }
+
+    /* Setup stepper */
+    .setup-grid   { display:grid;grid-template-columns:1fr 220px;gap:24px;align-items:start; }
+    @media(max-width:720px){ .setup-grid { grid-template-columns:1fr; } }
+
+    .setup-steps  { display:flex;flex-direction:column; }
+    .setup-step   { display:grid;grid-template-columns:36px 1fr;gap:0 14px; }
+
+    .step-left    { display:flex;flex-direction:column;align-items:center; }
+    .step-circle  { width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;transition:background var(--transition),border-color var(--transition); }
+    .step-circle.done    { background:#dcfce7;color:#15803d;border:2px solid #86efac; }
+    .step-circle.current { background:#7c3aed;color:#fff;border:2px solid #7c3aed;box-shadow:0 0 0 4px rgba(124,58,237,.15); }
+    .step-circle.pending { background:var(--bg-base);color:var(--text-lo);border:2px solid var(--border); }
+
+    .step-line    { width:2px;flex:1;min-height:14px;margin:4px 0;border-radius:1px;background:var(--border);transition:background var(--transition); }
+    .step-line.done { background:#86efac; }
+
+    .step-body    { padding-bottom:22px; }
+    .setup-step:last-child .step-body { padding-bottom:0; }
+
+    .step-title   { font-size:13px;font-weight:700;color:var(--text-hi);line-height:1.3;margin-bottom:3px; }
+    .step-title.pending { color:var(--text-md); }
+    .step-desc    { font-size:12px;color:var(--text-md);line-height:1.5;margin-bottom:6px; }
+    .step-tag     { display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px; }
+    .step-tag.done    { background:#dcfce7;color:#15803d; }
+    .step-tag.current { background:rgba(124,58,237,.1);color:#7c3aed; }
+    .step-tag.pending { background:var(--bg-hover);color:var(--text-lo); }
+    .step-link    { display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#7c3aed;cursor:pointer;margin-top:6px;text-decoration:none; }
+    .step-link:hover { text-decoration:underline; }
+
+    /* Progress card */
+    .progress-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:sticky;top:16px; }
+    .progress-title { font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:12px; }
+    .progress-bar-wrap { background:var(--bg-base);border-radius:99px;height:8px;overflow:hidden;margin-bottom:8px; }
+    .progress-bar { height:100%;border-radius:99px;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .5s ease; }
+    .progress-frac { font-size:24px;font-weight:800;color:var(--text-hi);line-height:1; }
+    .progress-sub  { font-size:12px;color:var(--text-lo);margin-bottom:16px; }
+    .progress-list { display:flex;flex-direction:column;gap:7px; }
+    .plist-item    { display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-md); }
+    .plist-dot     { width:8px;height:8px;border-radius:50%;flex-shrink:0; }
+    .plist-dot.done    { background:#22c55e; }
+    .plist-dot.current { background:#7c3aed; }
+    .plist-dot.pending { background:var(--border); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Dashboard</span>
+    </div>
+
+    <div class="page-content">
+
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">IA Command</div>
+          <div class="page-title">Dashboard</div>
+          <div class="page-subtitle">Visão geral do sistema e acesso rápido às rotinas.</div>
+        </div>
+      </div>
+
+      <!-- Quick nav -->
+      <div class="quick-nav">
+        <a class="qnav-btn" href="/app/ia-command/monitor.html" onclick="return parent.openTab?.('/app/ia-command/monitor.html','Monitor WhatsApp','💬') || true">
+          💬 Monitor WhatsApp
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/config-conexoes.html" onclick="return parent.openTab?.('/app/ia-command/config-conexoes.html','Conexões ERP','🔌') || true">
+          🔌 Conexões ERP
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/config-ia.html" onclick="return parent.openTab?.('/app/ia-command/config-ia.html','Configurar IA','🤖') || true">
+          🤖 Configurar IA
+        </a>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card accent">
+          <div class="stat-label">Migrações SQLite</div>
+          <div class="stat-value" id="stat-migracoes">—</div>
+          <div class="stat-sub">tabelas configuradas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">WhatsApp</div>
+          <div class="stat-value" style="font-size:14px;margin-top:10px" id="stat-wa">
+            <span class="status-badge status-stopped">⏹ Parado</span>
+          </div>
+          <div class="stat-sub" id="stat-wa-msgs"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Conexão ERP</div>
+          <div class="stat-value" style="font-size:14px;margin-top:10px" id="stat-erp">
+            <span class="status-badge status-stopped">Não configurada</span>
+          </div>
+          <div class="stat-sub" id="stat-erp-nome"></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">IA Configurada</div>
+          <div class="stat-value" style="font-size:14px;margin-top:10px" id="stat-ia">
+            <span class="status-badge status-stopped">Não configurada</span>
+          </div>
+          <div class="stat-sub" id="stat-ia-prov"></div>
+        </div>
+      </div>
+
+      <!-- Guia de Configuração -->
+      <div class="card">
+        <div class="card-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text-hi);">Como configurar o sistema</div>
+              <div style="font-size:12px;color:var(--text-lo);margin-top:2px;">Siga esta ordem para colocar o IA Command em operação.</div>
+            </div>
+            <span id="setup-pill" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;background:var(--bg-hover);color:var(--text-lo);">carregando…</span>
+          </div>
+
+          <div class="setup-grid">
+            <div class="setup-steps" id="setup-steps"></div>
+
+            <div class="progress-card">
+              <div class="progress-title">Progresso</div>
+              <div class="progress-frac"><span id="prog-done">0</span><span style="font-size:14px;font-weight:400;color:var(--text-lo)"> / <span id="prog-total">6</span></span></div>
+              <div class="progress-sub">etapas concluídas</div>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar" id="prog-bar" style="width:0%"></div>
+              </div>
+              <div class="progress-list" id="prog-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  function openTab(url, label, icon) {
+    if (window.parent !== window)
+      window.parent.postMessage({ type: 'mdi:open-tab', url, label, icon }, location.origin);
+    else location.href = url;
+  }
+
+  // ── Definição das etapas ────────────────────────────────────────────────────
+  const STEPS = [
+    {
+      id: 'ia',
+      icon: '🤖',
+      title: 'Configurar Inteligência Artificial',
+      desc: 'Informe a chave de API do Groq (principal) e/ou Gemini (fallback) para o motor de IA funcionar.',
+      url: '/app/ia-command/config-ia.html',
+      label: 'Configurar IA',
+    },
+    {
+      id: 'conexao',
+      icon: '🔌',
+      title: 'Criar Conexão com o ERP',
+      desc: 'Cadastre o banco de dados do seu ERP (Protheus, Sankhya, SAP…) com servidor, porta e credenciais.',
+      url: '/app/ia-command/config-conexoes.html',
+      label: 'Conexões ERP',
+    },
+    {
+      id: 'testar',
+      icon: '✅',
+      title: 'Ativar e Testar a Conexão',
+      desc: 'Ative a conexão como padrão e clique em "Testar" para confirmar que o ERP está acessível.',
+      url: '/app/ia-command/config-conexoes.html',
+      label: 'Conexões ERP',
+    },
+    {
+      id: 'datasets',
+      icon: '🗄️',
+      title: 'Cadastrar Datasets',
+      desc: 'Defina quais tabelas e campos do ERP cada módulo pode consultar (faturamento, financeiro, pedidos…).',
+      url: '/app/ia-command/admin-datasets.html',
+      label: 'Datasets',
+    },
+    {
+      id: 'intencoes',
+      icon: '💡',
+      title: 'Cadastrar Intenções',
+      desc: 'Registre as perguntas que o sistema deve reconhecer e associe cada uma ao módulo e dataset correto.',
+      url: '/app/ia-command/admin-intencoes.html',
+      label: 'Intenções',
+    },
+    {
+      id: 'whatsapp',
+      icon: '💬',
+      title: 'Conectar o WhatsApp',
+      desc: 'Acesse o Monitor, clique em "Iniciar" e escaneie o QR code com o celular para ativar o bot.',
+      url: '/app/ia-command/monitor.html',
+      label: 'Monitor WhatsApp',
+    },
+  ];
+
+  // ── Coleta de dados das APIs ────────────────────────────────────────────────
+  async function coletarStatus() {
+    const status = { ia: false, conexao: false, testar: false, datasets: false, intencoes: false, whatsapp: false };
+    const extra  = {};
+
+    try {
+      const ia = await fetch('/api/ia-command/ai-config').then(r => r.json());
+      if (ia.groq_key || ia.gemini_key || ia.groq_api_key || ia.gemini_api_key) {
+        status.ia = true;
+        extra.ia  = `Primário: ${ia.provedor_primario || 'groq'}`;
+        // Stats card
+        document.getElementById('stat-ia').innerHTML = `<span class="status-badge status-connected">● Configurada</span>`;
+        document.getElementById('stat-ia-prov').textContent = extra.ia;
+      }
+    } catch (_) {}
+
+    try {
+      const conns = await fetch('/api/ia-command/connections').then(r => r.json());
+      if (Array.isArray(conns) && conns.length > 0) {
+        status.conexao = true;
+        const ativa = conns.find(c => c.ativo);
+        if (ativa) {
+          status.testar = ativa.teste_ok === 1;
+          extra.conexao = `${ativa.nome} (${ativa.erp || ativa.tipo})`;
+          extra.testar  = ativa.teste_ok === 1 ? 'Teste OK' : 'Aguardando teste';
+          document.getElementById('stat-erp').innerHTML = `<span class="status-badge status-connected">● Ativa</span>`;
+          document.getElementById('stat-erp-nome').textContent = extra.conexao;
+        } else {
+          extra.conexao = `${conns.length} conexão(ões) cadastrada(s), nenhuma ativa`;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const ds = await fetch('/api/ia-command/admin/datasets').then(r => r.json());
+      if (Array.isArray(ds) && ds.length > 0) {
+        status.datasets = true;
+        extra.datasets  = `${ds.length} dataset(s) cadastrado(s)`;
+      }
+    } catch (_) {}
+
+    try {
+      const it = await fetch('/api/ia-command/admin/intencoes').then(r => r.json());
+      const ativos = Array.isArray(it) ? it.filter(i => i.ativo !== 0) : [];
+      if (ativos.length > 0) {
+        status.intencoes = true;
+        extra.intencoes  = `${ativos.length} intenção(ões) ativa(s)`;
+      }
+    } catch (_) {}
+
+    try {
+      const wa = await fetch('/api/ia-command/whatsapp/status').then(r => r.json());
+      const cls = { connected:'status-connected', starting:'status-starting', stopped:'status-stopped' }[wa.status] || 'status-stopped';
+      const lbl = { connected:'● Conectado', starting:'◌ Conectando', stopped:'⏹ Parado' }[wa.status] || wa.status;
+      document.getElementById('stat-wa').innerHTML = `<span class="status-badge ${cls}">${lbl}</span>`;
+      if (wa.msgCount) document.getElementById('stat-wa-msgs').textContent = `${wa.msgCount} msg(ns) recebida(s)`;
+      if (wa.status === 'connected') { status.whatsapp = true; extra.whatsapp = 'Bot ativo'; }
+    } catch (_) {}
+
+    return { status, extra };
+  }
+
+  // ── Renderização do stepper ─────────────────────────────────────────────────
+  function renderStepper(status, extra) {
+    const total = STEPS.length;
+    const done  = STEPS.filter(s => status[s.id]).length;
+    const firstPending = STEPS.findIndex(s => !status[s.id]);
+
+    // Pill header
+    document.getElementById('setup-pill').textContent = done === total
+      ? '✓ Sistema configurado'
+      : `${done} de ${total} etapas`;
+    document.getElementById('setup-pill').style.background = done === total ? '#dcfce7' : 'var(--bg-hover)';
+    document.getElementById('setup-pill').style.color      = done === total ? '#15803d' : 'var(--text-lo)';
+
+    // Progress sidebar
+    document.getElementById('prog-done').textContent  = done;
+    document.getElementById('prog-total').textContent = total;
+    document.getElementById('prog-bar').style.width   = `${Math.round(done / total * 100)}%`;
+
+    const plist = document.getElementById('prog-list');
+    plist.innerHTML = STEPS.map((s, i) => {
+      const state = status[s.id] ? 'done' : (i === firstPending ? 'current' : 'pending');
+      return `<div class="plist-item">
+        <div class="plist-dot ${state}"></div>
+        <span style="color:${state === 'done' ? 'var(--text-md)' : state === 'current' ? '#7c3aed' : 'var(--text-lo)'}">${s.title.split(' ').slice(0,3).join(' ')}</span>
+      </div>`;
+    }).join('');
+
+    // Steps
+    const stepsEl = document.getElementById('setup-steps');
+    stepsEl.innerHTML = STEPS.map((s, i) => {
+      const isDone    = status[s.id];
+      const isCurrent = !isDone && i === firstPending;
+      const state     = isDone ? 'done' : isCurrent ? 'current' : 'pending';
+      const isLast    = i === STEPS.length - 1;
+      const extraTxt  = extra[s.id] ? `<span style="font-size:11px;color:var(--text-lo);display:block;margin-top:2px">${extra[s.id]}</span>` : '';
+
+      const actionBtn = !isDone
+        ? `<a class="step-link" onclick="openTab('${s.url}','${s.label}','${s.icon}')">
+             → Ir para configuração
+           </a>`
+        : '';
+
+      return `<div class="setup-step">
+        <div class="step-left">
+          <div class="step-circle ${state}">${isDone ? '✓' : i + 1}</div>
+          ${!isLast ? `<div class="step-line ${isDone ? 'done' : ''}"></div>` : ''}
+        </div>
+        <div class="step-body">
+          <div class="step-title ${state !== 'done' && !isCurrent ? 'pending' : ''}">${s.icon} ${s.title}</div>
+          <div class="step-desc">${s.desc}</div>
+          <span class="step-tag ${state}">${isDone ? '✓ Concluído' : isCurrent ? '← Próxima etapa' : 'Aguardando'}</span>
+          ${extraTxt}
+          ${actionBtn}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  (async () => {
+    try {
+      const h = await fetch('/api/ia-command/health').then(r => r.json());
+      document.getElementById('stat-migracoes').textContent = h.migracoes ?? '—';
+    } catch (_) {}
+
+    const { status, extra } = await coletarStatus();
+    renderStepper(status, extra);
+  })();
+</script>
+</body>
+</html>

@@ -23,6 +23,19 @@ function _paginaEstrutural() {
 
 // Mapa página → id da rotina (deve espelhar os ids do sidebar.js)
 const _PAGINA_ROTINA = {
+  // ── IA Command (entradas completas antes dos curtos para evitar endsWith falso-positivo)
+  '/app/ia-command/dashboard.html':       'iac-dashboard',
+  '/app/ia-command/monitor.html':          'iac-monitor-whatsapp',
+  '/app/ia-command/config-conexoes.html':       'iac-config-conexoes',
+  '/app/ia-command/config-conexao-form.html':  'iac-config-conexoes',
+  '/app/ia-command/config-ia.html':            'iac-config-ia',
+  '/app/ia-command/admin-intencoes.html':      'iac-admin-intencoes',
+  '/app/ia-command/admin-intencao-form.html':  'iac-admin-intencoes',
+  '/app/ia-command/admin-datasets.html':       'iac-admin-datasets',
+  '/app/ia-command/admin-dataset-form.html':   'iac-admin-datasets',
+  '/app/ia-command/admin-execucoes.html':      'iac-admin-execucoes',
+  '/app/ia-command/admin-auditoria.html':      'iac-admin-auditoria',
+  // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
   '/monitor.html':          'monitor-whatsapp',
@@ -54,6 +67,16 @@ const _ROTINA_ALIASES = {
 };
 
 const _ROTINA_LABELS = {
+  // ── IA Command
+  'iac-dashboard':           'IA Command - Dashboard',
+  'iac-monitor-whatsapp':    'IA Command - Monitor WhatsApp',
+  'iac-config-conexoes':     'IA Command - Conexões ERP',
+  'iac-config-ia':           'IA Command - Configurar IA',
+  'iac-admin-intencoes':     'IA Command - Intenções',
+  'iac-admin-datasets':      'IA Command - Datasets ERP',
+  'iac-admin-execucoes':     'IA Command - Log de Execuções',
+  'iac-admin-auditoria':     'IA Command - Auditoria',
+  // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',
   'monitor-whatsapp': 'Monitor WhatsApp',
@@ -501,6 +524,7 @@ window.addEventListener('storage', (e) => {
 function logout() {
   fetch('/api/logout', { method: 'POST' }).finally(() => {
     try { sessionStorage.removeItem('iahub_mdi_state'); } catch(_) {}
+    try { sessionStorage.removeItem('iac_mdi_state');   } catch(_) {}
     try { sessionStorage.removeItem(_IAHUB_BROWSER_SESSION_KEY); } catch(_) {}
     location.href = '/login.html';
   });

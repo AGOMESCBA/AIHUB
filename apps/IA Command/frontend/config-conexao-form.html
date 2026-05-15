@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conexão ERP — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .form-row   { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+    .form-check { display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-md); }
+    .form-check input[type=checkbox] { accent-color:#7c3aed;width:15px;height:15px; }
+
+    .summary-grid  { display:grid;gap:10px; }
+    .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .summary-note  { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+
+    .test-result { margin-top:10px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px;display:none; }
+    .test-result.ok   { background:#dcfce7;color:#15803d;display:block; }
+    .test-result.fail { background:#fee2e2;color:#b91c1c;display:block; }
+
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="topbar-label">
+        <span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Conexão ERP
+      </span>
+    </div>
+
+    <div class="page-content">
+      <div class="editor-shell">
+
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="form-title">Nova Conexão ERP</strong>
+            <span id="form-subtitle">Preencha os dados de conexão com o banco de dados ERP.</span>
+          </div>
+          <div class="editor-actions">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+          </div>
+        </div>
+
+        <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+          <main class="editor-main">
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Identificação</div>
+                <div class="form-section-subtitle">Dados de controle preenchidos automaticamente.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">ID</label>
+                    <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)" style="font-family:monospace;font-size:13px">
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Empresa</label>
+                    <input type="text" id="f-empresa" class="form-control" disabled>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Dados da Conexão</div>
+                <div class="form-section-subtitle">Nome, tipo de banco e endereço do servidor.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group" style="grid-column:1/-1">
+                    <label class="form-label">Nome da Conexão <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="f-nome" class="form-control" placeholder="ex: Protheus Produção" oninput="atualizarResumo()">
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">Sistema ERP <span style="color:#dc2626">*</span></label>
+                    <select id="f-erp" class="form-control" onchange="onErpChange();atualizarResumo()">
+                      <option value="protheus">TOTVS Protheus</option>
+                      <option value="sankhya">Sankhya</option>
+                      <option value="sap">SAP Business One</option>
+                      <option value="senior">Senior Sistemas</option>
+                      <option value="mxm">MXM Sistemas</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Banco de dados (driver) <span style="color:#dc2626">*</span></label>
+                    <select id="f-tipo" class="form-control" onchange="onTipoChange();atualizarResumo()">
+                      <option value="sqlserver">SQL Server</option>
+                      <option value="postgresql">PostgreSQL</option>
+                      <option value="sqlite">SQLite (Demo / Testes)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px" id="grp-filial-row">
+                  <div class="form-group" id="grp-filial">
+                    <label class="form-label">Filial / Empresa (Protheus)</label>
+                    <input type="text" id="f-filial" class="form-control" placeholder="ex: 01">
+                  </div>
+                  <div class="form-group" id="grp-erp-status" style="align-self:flex-end">
+                    <div id="erp-implementado" style="font-size:12px;padding:8px 0;color:var(--text-lo)"></div>
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label" id="lbl-host">Servidor (host) <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="f-host" class="form-control" placeholder="192.168.1.10">
+                  </div>
+                  <div class="form-group" id="grp-port">
+                    <label class="form-label">Porta</label>
+                    <input type="number" id="f-port" class="form-control" placeholder="1433">
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px" id="grp-db-user">
+                  <div class="form-group">
+                    <label class="form-label" id="lbl-db">Database <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="f-database" class="form-control" placeholder="ex: PROTHEUS12">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Usuário</label>
+                    <input type="text" id="f-username" class="form-control" placeholder="ex: sa">
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:0" id="grp-pass-opts">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Senha</label>
+                    <input type="password" id="f-password" class="form-control" placeholder="••••••••">
+                    <div class="form-hint">Deixe em branco para manter a senha atual ao editar.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">&nbsp;</label>
+                    <div style="display:flex;gap:20px;margin-top:6px">
+                      <label class="form-check"><input type="checkbox" id="f-encrypt"> Encrypt</label>
+                      <label class="form-check"><input type="checkbox" id="f-trust" checked> Trust Cert</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Testar Conexão</div>
+                <div class="form-section-subtitle">Verifique se os dados estão corretos antes de salvar.</div>
+              </div>
+              <div class="form-section-body">
+                <button class="btn btn-ghost" id="btn-testar" onclick="testar()">🔌 Testar Conexão</button>
+                <div id="test-result" class="test-result"></div>
+              </div>
+            </section>
+
+          </main>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo do registro</div>
+                <div class="form-section-subtitle">Referência rápida durante a edição.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <div class="summary-label">Nome</div>
+                    <div class="summary-value" id="meta-nome">—</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Tipo</div>
+                    <div class="summary-value" id="meta-tipo">SQL Server</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Status</div>
+                    <div class="summary-value" id="meta-status">Nova conexão</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Teste</div>
+                    <div class="summary-value" id="meta-teste">—</div>
+                  </div>
+                </div>
+                <p class="summary-note">A senha nunca é exibida após salvar. Para alterar, basta digitar a nova senha e salvar.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+
+  function cancelar() {
+    if (window.parent !== window)
+      window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+    else history.back();
+  }
+
+  const ERP_LABELS = {
+    protheus: 'TOTVS Protheus', sankhya: 'Sankhya',
+    sap: 'SAP Business One', senior: 'Senior Sistemas', mxm: 'MXM Sistemas',
+  };
+  const ERP_IMPLEMENTADO = { protheus: true };
+
+  function onErpChange() {
+    const erp = document.getElementById('f-erp').value;
+    const impl = ERP_IMPLEMENTADO[erp] ?? false;
+    const el = document.getElementById('erp-implementado');
+    el.textContent = impl
+      ? '✓ Query builders implementados'
+      : '⚠ Stubs — query builders a implementar';
+    el.style.color = impl ? '#15803d' : '#92400e';
+    document.getElementById('grp-filial').style.display = erp === 'protheus' ? '' : 'none';
+  }
+
+  function onTipoChange() {
+    const tipo  = document.getElementById('f-tipo').value;
+    const isSql = tipo !== 'sqlite';
+    document.getElementById('lbl-host').textContent        = tipo === 'sqlite' ? 'Caminho do arquivo *' : 'Servidor (host) *';
+    document.getElementById('f-host').placeholder         = tipo === 'sqlite' ? 'C:\\dados\\protheus.db' : '192.168.1.10';
+    document.getElementById('grp-port').style.display     = isSql ? '' : 'none';
+    document.getElementById('grp-db-user').style.display  = isSql ? '' : 'none';
+    document.getElementById('grp-pass-opts').style.display = isSql ? '' : 'none';
+  }
+
+  function atualizarResumo() {
+    const nome = document.getElementById('f-nome').value.trim() || '—';
+    const erp  = document.getElementById('f-erp').value || 'protheus';
+    const tipo = document.getElementById('f-tipo').value || '—';
+    document.getElementById('meta-nome').textContent = nome;
+    document.getElementById('meta-tipo').textContent = `${ERP_LABELS[erp] || erp} / ${tipo}`;
+    document.getElementById('form-title').textContent = editId ? nome : `Nova Conexão — ${nome !== '—' ? nome : 'ERP'}`;
+  }
+
+  async function carregar() {
+    if (!editId) {
+      document.getElementById('f-empresa').value =
+        window._iahubEmpresa ? `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})` : '—';
+      onTipoChange();
+      onErpChange();
+      return;
+    }
+
+    const conn = await fetch(`/api/ia-command/connections`).then(r => r.json()).catch(() => [])
+      .then(list => list.find(c => c.id === editId));
+
+    if (!conn) { document.getElementById('form-subtitle').textContent = 'Conexão não encontrada.'; return; }
+
+    document.getElementById('f-id').value       = conn.id;
+    document.getElementById('f-empresa').value  = `ID ${conn.empresa_id}`;
+    document.getElementById('f-nome').value     = conn.nome     || '';
+    document.getElementById('f-erp').value      = conn.erp      || 'protheus';
+    document.getElementById('f-tipo').value     = conn.tipo     || 'sqlserver';
+    document.getElementById('f-host').value     = conn.host     || '';
+    document.getElementById('f-port').value     = conn.port     || '';
+    document.getElementById('f-database').value = conn.database || '';
+    document.getElementById('f-username').value = conn.username || '';
+    document.getElementById('f-filial').value   = conn.filial   || '';
+    document.getElementById('f-encrypt').checked = !!conn.encrypt;
+    document.getElementById('f-trust').checked   = conn.trust_cert !== 0;
+
+    document.getElementById('meta-status').textContent = conn.ativo ? '● Ativa' : '○ Inativa';
+    document.getElementById('meta-teste').textContent  =
+      conn.teste_ok === 1 ? '✓ OK' : conn.teste_ok === 0 ? '✗ Falhou' : '—';
+
+    document.getElementById('form-subtitle').textContent = editId
+      ? 'Revise os dados de conexão.' : 'Preencha os dados de conexão com o banco de dados ERP.';
+    document.getElementById('topbar-label').innerHTML =
+      `<span style="color:var(--text-lo);font-weight:400">IA Command ›</span> ${conn.nome}`;
+
+    onTipoChange();
+    onErpChange();
+    atualizarResumo();
+  }
+
+  async function testar() {
+    if (!editId) { _feedback('Salve a conexão antes de testar.', false); return; }
+    const div = document.getElementById('test-result');
+    div.className = 'test-result'; div.textContent = 'Testando…'; div.style.display = 'block';
+    const r    = await fetch(`/api/ia-command/connections/${editId}/test`, { method: 'POST' });
+    const data = await r.json();
+    div.className = `test-result ${data.ok ? 'ok' : 'fail'}`;
+    div.textContent = data.ok ? `✅ ${data.mensagem}` : `❌ ${data.mensagem}`;
+    document.getElementById('meta-teste').textContent = data.ok ? '✓ OK' : '✗ Falhou';
+  }
+
+  async function salvar() {
+    const nome = document.getElementById('f-nome').value.trim();
+    const host = document.getElementById('f-host').value.trim();
+    if (!nome || !host) { _feedback('Preencha nome e servidor/host.', false); return; }
+
+    const body = {
+      nome,
+      erp:        document.getElementById('f-erp').value,
+      tipo:       document.getElementById('f-tipo').value,
+      host,
+      port:       document.getElementById('f-port').value || null,
+      database:   document.getElementById('f-database').value.trim(),
+      username:   document.getElementById('f-username').value.trim(),
+      filial:     document.getElementById('f-filial').value.trim(),
+      encrypt:    document.getElementById('f-encrypt').checked,
+      trust_cert: document.getElementById('f-trust').checked,
+    };
+    const pw = document.getElementById('f-password').value;
+    if (pw) body.password = pw;
+
+    const url    = editId ? `/api/ia-command/connections/${editId}` : '/api/ia-command/connections';
+    const method = editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    const saved = await res.json();
+    _feedback('Salvo com sucesso!', true);
+
+    if (!editId) {
+      setTimeout(() => {
+        const url2 = `/app/ia-command/config-conexao-form.html?id=${saved.id}`;
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'mdi:open-tab', url: url2, label: saved.nome, icon: '🔌' }, location.origin);
+          window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+        } else {
+          location.href = url2;
+        }
+      }, 800);
+    } else {
+      document.getElementById('form-title').textContent = saved.nome;
+    }
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+    setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
+  }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

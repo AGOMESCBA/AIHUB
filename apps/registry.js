@@ -10,6 +10,7 @@ const sharedFrontend = fromRoot('frontend');
 const iahubFrontend = fromRoot('apps', 'IAHUB', 'frontend');
 const iaRecruitFrontend = fromRoot('apps', 'IA Recruit', 'frontend');
 const iaAdministracaoFrontend = fromRoot('apps', 'IA Administracao', 'frontend');
+const iaCommandFrontend = fromRoot('apps', 'IA Command', 'frontend');
 const uiFrontend = fromRoot('packages', 'ui', 'frontend');
 const authFrontend = fromRoot('packages', 'auth', 'frontend');
 
@@ -80,6 +81,14 @@ const APPS = {
     frontendDir: iaAdministracaoFrontend,
     backendDir: fromRoot('apps', 'IA Administracao', 'backend'),
     legacyStaticDirs: IA_ADMIN_STATIC_DIRS,
+  },
+  iaCommand: {
+    code: 'ia-command',
+    name: 'IA Command',
+    rootDir: fromRoot('apps', 'IA Command'),
+    frontendDir: iaCommandFrontend,
+    backendDir: fromRoot('apps', 'IA Command', 'modules'),
+    staticDirs: [iaCommandFrontend],
   },
 };
 

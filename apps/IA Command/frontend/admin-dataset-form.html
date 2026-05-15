@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dataset — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .form-row   { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+
+    .iac-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0; }
+    .iac-tab  { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 16px;border-bottom:2px solid transparent;transition:color var(--transition); }
+    .iac-tab:hover { color:var(--text-hi); }
+    .iac-tab.active { color:#7c3aed;border-bottom-color:#7c3aed; }
+    .iac-tab-panel { display:none; }
+    .iac-tab-panel.active { display:flex;flex-direction:column;gap:0; }
+
+    .summary-grid  { display:grid;gap:10px; }
+    .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .summary-note  { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="topbar-label">
+        <span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Dataset
+      </span>
+    </div>
+
+    <div class="page-content">
+      <div class="editor-shell">
+
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="form-title">Novo Dataset</strong>
+            <span id="form-subtitle">Preencha os campos e salve.</span>
+          </div>
+          <div class="editor-actions">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+          </div>
+        </div>
+
+        <div class="iac-tabs">
+          <button class="iac-tab active" onclick="mudarTab('basico',this)">Dados Básicos</button>
+          <button class="iac-tab"        onclick="mudarTab('mapeamento',this)">Mapeamento</button>
+          <button class="iac-tab"        onclick="mudarTab('comportamento',this)">Comportamento</button>
+        </div>
+
+        <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+          <main class="editor-main">
+
+            <!-- Tab: Dados Básicos -->
+            <div class="iac-tab-panel active" id="panel-basico">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Identificação</div>
+                  <div class="form-section-subtitle">Dados de controle preenchidos automaticamente.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">ID</label>
+                      <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)" style="font-family:monospace;font-size:13px">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Empresa</label>
+                      <input type="text" id="f-empresa" class="form-control" disabled>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados Básicos</div>
+                  <div class="form-section-subtitle">Nome, ERP de origem e limite de registros por consulta.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-row" style="margin-bottom:16px">
+                    <div class="form-group">
+                      <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-nome" class="form-control" placeholder="ex: faturamento_protheus" oninput="atualizarResumo()">
+                      <div class="form-hint">Use snake_case. Identificador único do dataset para esta empresa.</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">ERP</label>
+                      <select id="f-erp" class="form-control" onchange="atualizarResumo()">
+                        <option value="protheus">Protheus (TOTVS)</option>
+                        <option value="sankhya">Sankhya</option>
+                        <option value="sap">SAP</option>
+                        <option value="senior">Senior</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Limite máximo de registros</label>
+                      <input type="number" id="f-limite" class="form-control" value="1000" min="1" max="10000" style="max-width:200px" oninput="atualizarResumo()">
+                      <div class="form-hint">Máximo de linhas retornadas por consulta. Recomendado: 1000.</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Tab: Mapeamento -->
+            <div class="iac-tab-panel" id="panel-mapeamento">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Tabelas e Joins</div>
+                  <div class="form-section-subtitle">Defina as tabelas do ERP e as relações entre elas.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label">Tabelas (JSON array)</label>
+                    <textarea id="f-tabelas" class="form-control" rows="3" placeholder='["SF2010","SD2010"]'></textarea>
+                    <div class="form-hint">Array JSON com os nomes das tabelas envolvidas.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">JOINs (JSON array)</label>
+                    <textarea id="f-joins" class="form-control" rows="5"
+                      placeholder='[{"tipo":"INNER","tabela":"SD2010","on":"SF2.F2_DOC = SD2.D2_DOC"}]'></textarea>
+                    <div class="form-hint">Array JSON com tipo, tabela e condição ON de cada join.</div>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Campos Disponíveis</div>
+                  <div class="form-section-subtitle">Colunas que a IA pode utilizar nas consultas.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group" style="margin-bottom:0">
+                    <textarea id="f-campos" class="form-control" rows="8"
+                      placeholder='[{"campo":"F2_CLIENTE","alias":"cliente","tipo":"string"},{"campo":"F2_VALBRUT","alias":"valor_bruto","tipo":"number"}]'></textarea>
+                    <div class="form-hint">Array JSON com campo, alias e tipo (string, number, date) de cada coluna.</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <!-- Tab: Comportamento -->
+            <div class="iac-tab-panel" id="panel-comportamento">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Filtros e Ordenação Padrão</div>
+                  <div class="form-section-subtitle">Condições WHERE e ORDER BY aplicadas automaticamente em todas as consultas.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label">Filtros fixos (JSON array)</label>
+                    <textarea id="f-filtros" class="form-control" rows="4"
+                      placeholder='[{"campo":"D_E_L_E_T_","operador":"=","valor":""}]'></textarea>
+                    <div class="form-hint">Condições adicionadas ao WHERE em toda consulta (ex.: campo de exclusão lógica).</div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Agrupamentos padrão (JSON array)</label>
+                      <textarea id="f-agrupamentos" class="form-control" rows="4" placeholder='["F2_CLIENTE"]'></textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Ordenação padrão (JSON array)</label>
+                      <textarea id="f-ordenacoes" class="form-control" rows="4"
+                        placeholder='[{"campo":"F2_EMISSAO","direcao":"DESC"}]'></textarea>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+          </main>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo do registro</div>
+                <div class="form-section-subtitle">Referência rápida durante a edição.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <div class="summary-label">ID</div>
+                    <div class="summary-value" id="meta-id" style="font-family:monospace;font-size:12px">Novo</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Nome</div>
+                    <div class="summary-value" id="meta-nome">—</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">ERP</div>
+                    <div class="summary-value" id="meta-erp">—</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Limite de registros</div>
+                    <div class="summary-value" id="meta-limite">1000</div>
+                  </div>
+                </div>
+                <p class="summary-note">Após salvar, o ID é gerado automaticamente e não pode ser alterado.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+
+  function cancelar() {
+    if (window.parent !== window)
+      window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+    else history.back();
+  }
+
+  function mudarTab(id, btn) {
+    document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + id).classList.add('active');
+  }
+
+  function atualizarResumo() {
+    const nome   = document.getElementById('f-nome').value.trim() || '—';
+    const erp    = document.getElementById('f-erp').value || '—';
+    const limite = document.getElementById('f-limite').value || '—';
+    document.getElementById('meta-nome').textContent   = nome;
+    document.getElementById('meta-erp').textContent    = erp;
+    document.getElementById('meta-limite').textContent = limite;
+    document.getElementById('form-title').textContent  = editId ? nome : `Novo Dataset${nome !== '—' ? ' — ' + nome : ''}`;
+  }
+
+  async function carregar() {
+    if (!editId) {
+      document.getElementById('f-empresa').value =
+        window._iahubEmpresa ? `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})` : '—';
+      return;
+    }
+
+    const row = await fetch(`/api/ia-command/admin/datasets/${editId}`).then(r => r.json()).catch(() => null);
+    if (!row) { document.getElementById('form-subtitle').textContent = 'Registro não encontrado.'; return; }
+
+    document.getElementById('f-id').value     = row.id;
+    document.getElementById('f-empresa').value = `ID ${row.empresa_id}`;
+    document.getElementById('f-nome').value   = row.nome || '';
+    document.getElementById('f-erp').value    = row.erp  || 'protheus';
+    document.getElementById('f-limite').value = row.limite_max ?? 1000;
+
+    document.getElementById('f-tabelas').value     = _prettyJson(row.tabelas);
+    document.getElementById('f-joins').value        = _prettyJson(row.joins);
+    document.getElementById('f-campos').value       = _prettyJson(row.campos);
+    document.getElementById('f-filtros').value      = _prettyJson(row.filtros);
+    document.getElementById('f-agrupamentos').value = _prettyJson(row.agrupamentos);
+    document.getElementById('f-ordenacoes').value   = _prettyJson(row.ordenacoes);
+
+    document.getElementById('meta-id').textContent  = row.id.slice(0,8) + '…';
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+    document.getElementById('topbar-label').innerHTML =
+      `<span style="color:var(--text-lo);font-weight:400">IA Command ›</span> ${row.nome}`;
+    atualizarResumo();
+  }
+
+  function _prettyJson(v) {
+    if (!v) return '';
+    try { return JSON.stringify(JSON.parse(v), null, 2); } catch { return v; }
+  }
+
+  function _jsonOrNull(id) {
+    const v = document.getElementById(id).value.trim();
+    if (!v) return null;
+    try { JSON.parse(v); return v; }
+    catch { throw new Error(`JSON inválido no campo "${document.querySelector(`label[for="${id}"]`)?.textContent || id}".`); }
+  }
+
+  async function salvar() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
+
+    let tabelas, joins, campos, filtros, agrupamentos, ordenacoes;
+    try {
+      tabelas      = _jsonOrNull('f-tabelas');
+      joins        = _jsonOrNull('f-joins');
+      campos       = _jsonOrNull('f-campos');
+      filtros      = _jsonOrNull('f-filtros');
+      agrupamentos = _jsonOrNull('f-agrupamentos');
+      ordenacoes   = _jsonOrNull('f-ordenacoes');
+    } catch (err) {
+      _feedback(err.message, false);
+      return;
+    }
+
+    const body = {
+      nome,
+      erp:         document.getElementById('f-erp').value,
+      limite_max:  parseInt(document.getElementById('f-limite').value) || 1000,
+      tabelas, joins, campos, filtros, agrupamentos, ordenacoes,
+    };
+
+    const url    = editId ? `/api/ia-command/admin/datasets/${editId}` : '/api/ia-command/admin/datasets';
+    const method = editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    const saved = await res.json();
+    _feedback('Salvo com sucesso!', true);
+
+    if (!editId) {
+      setTimeout(() => {
+        const url2 = `/app/ia-command/admin-dataset-form.html?id=${saved.id}`;
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'mdi:open-tab', url: url2, label: saved.nome, icon: '📊' }, location.origin);
+          window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+        } else {
+          location.href = url2;
+        }
+      }, 800);
+    } else {
+      document.getElementById('form-title').textContent = saved.nome;
+      document.getElementById('meta-id').textContent    = saved.id.slice(0,8) + '…';
+    }
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+    setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
+  }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

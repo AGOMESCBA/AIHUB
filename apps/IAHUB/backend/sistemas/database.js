@@ -29,6 +29,16 @@ const DEFAULT_SYSTEMS = [
     admin_only: true,
     active: true,
   },
+  {
+    code: 'ia-command',
+    name: 'IA Command',
+    description: 'A inteligencia que conversa com seu ERP e executa comandos operacionais.',
+    url: '/app/ia-command',
+    image_url: '/guia/img/02-config-ia.png',
+    accent: '#7c3aed',
+    badge: 'IA Command',
+    active: true,
+  },
 ];
 
 function listarSystems() {

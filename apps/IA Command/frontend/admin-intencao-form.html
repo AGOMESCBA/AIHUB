@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Intenção — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .form-row   { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+
+    /* Tabs */
+    .iac-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0; }
+    .iac-tab  { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 16px;border-bottom:2px solid transparent;transition:color var(--transition); }
+    .iac-tab:hover { color:var(--text-hi); }
+    .iac-tab.active { color:#7c3aed;border-bottom-color:#7c3aed; }
+    .iac-tab-panel { display:none; }
+    .iac-tab-panel.active { display:flex;flex-direction:column;gap:0; }
+
+    /* Summary sidebar */
+    .summary-grid  { display:grid;gap:10px; }
+    .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .summary-note  { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+
+    /* Save feedback */
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="topbar-label">
+        <span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Intenção
+      </span>
+    </div>
+
+    <div class="page-content">
+      <div class="editor-shell">
+
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="form-title">Nova Intenção</strong>
+            <span id="form-subtitle">Preencha os campos e salve.</span>
+          </div>
+          <div class="editor-actions">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+          </div>
+        </div>
+
+        <div class="iac-tabs">
+          <button class="iac-tab active" onclick="mudarTab('config',this)">Configuração</button>
+          <button class="iac-tab"        onclick="mudarTab('frases',this)">Frases de Exemplo</button>
+        </div>
+
+        <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+          <main class="editor-main">
+
+            <!-- Painel: Configuração -->
+            <div class="iac-tab-panel active" id="panel-config">
+
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Identificação</div>
+                  <div class="form-section-subtitle">Dados de controle preenchidos automaticamente.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">ID</label>
+                      <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)" style="font-family:monospace;font-size:13px">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Empresa</label>
+                      <input type="text" id="f-empresa" class="form-control" disabled>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados Básicos</div>
+                  <div class="form-section-subtitle">Nome da intenção, módulo e ação correspondente no ERP.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-row" style="margin-bottom:16px">
+                    <div class="form-group">
+                      <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-nome" class="form-control" placeholder="ex: consultar_faturamento" oninput="atualizarResumo()">
+                      <div class="form-hint">Use snake_case. Deve corresponder à intenção retornada pela IA.</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Descrição</label>
+                      <input type="text" id="f-descricao" class="form-control" placeholder="ex: Consulta resumo de faturamento do período">
+                    </div>
+                  </div>
+                  <div class="form-row-3" style="margin-bottom:16px">
+                    <div class="form-group">
+                      <label class="form-label">Módulo</label>
+                      <select id="f-modulo" class="form-control" onchange="atualizarResumo()">
+                        <option value="">— selecione —</option>
+                        <option>faturamento</option>
+                        <option>financeiro</option>
+                        <option>pedidos</option>
+                        <option>clientes</option>
+                        <option>produtos</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Ação</label>
+                      <select id="f-acao" class="form-control">
+                        <option value="">— selecione —</option>
+                        <option>resumo</option>
+                        <option>detalhado</option>
+                        <option>top_n</option>
+                        <option>comparacao</option>
+                        <option>ticket_medio</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Status</label>
+                      <select id="f-ativo" class="form-control" onchange="atualizarResumo()">
+                        <option value="1">Ativo</option>
+                        <option value="0">Inativo</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Dataset vinculado</label>
+                    <select id="f-dataset" class="form-control">
+                      <option value="">— nenhum —</option>
+                    </select>
+                    <div class="form-hint">Dataset com o mapeamento de tabelas/campos do ERP para esta intenção.</div>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+
+            <!-- Painel: Frases -->
+            <div class="iac-tab-panel" id="panel-frases">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Frases de Exemplo</div>
+                  <div class="form-section-subtitle">Exemplos de perguntas que devem acionar esta intenção. Uma por linha.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group" style="margin-bottom:0">
+                    <textarea id="f-frases" class="form-control" rows="10"
+                      placeholder="Qual o faturamento deste mês?&#10;Quanto vendemos no mês passado?&#10;Faturamento do trimestre atual"></textarea>
+                    <div class="form-hint">Estes exemplos ajudam a melhorar a classificação da IA no futuro.</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+          </main>
+
+          <aside class="editor-side">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo do registro</div>
+                <div class="form-section-subtitle">Referência rápida durante a edição.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <div class="summary-label">ID</div>
+                    <div class="summary-value" id="meta-id" style="font-family:monospace;font-size:12px">Novo</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Nome</div>
+                    <div class="summary-value" id="meta-nome">—</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Módulo</div>
+                    <div class="summary-value" id="meta-modulo">—</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-label">Status</div>
+                    <div class="summary-value" id="meta-status">Ativo</div>
+                  </div>
+                </div>
+                <p class="summary-note">Após salvar, o ID é gerado automaticamente e não pode ser alterado.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+
+  function cancelar() {
+    if (window.parent !== window)
+      window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+    else history.back();
+  }
+
+  function mudarTab(id, btn) {
+    document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + id).classList.add('active');
+  }
+
+  function atualizarResumo() {
+    const nome   = document.getElementById('f-nome').value.trim() || '—';
+    const modulo = document.getElementById('f-modulo').value || '—';
+    const ativo  = document.getElementById('f-ativo').value === '1' ? 'Ativo' : 'Inativo';
+    document.getElementById('meta-nome').textContent   = nome;
+    document.getElementById('meta-modulo').textContent = modulo;
+    document.getElementById('meta-status').textContent = ativo;
+    document.getElementById('form-title').textContent  = editId ? nome : `Nova Intenção${nome !== '—' ? ' — ' + nome : ''}`;
+  }
+
+  async function _carregarDatasets() {
+    const rows = await fetch('/api/ia-command/admin/datasets').then(r => r.json()).catch(() => []);
+    const sel  = document.getElementById('f-dataset');
+    rows.forEach(ds => {
+      const opt = document.createElement('option');
+      opt.value = ds.id;
+      opt.textContent = `${ds.nome} (${ds.erp})`;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function carregar() {
+    await _carregarDatasets();
+
+    if (!editId) {
+      document.getElementById('f-empresa').value =
+        window._iahubEmpresa ? `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})` : '—';
+      return;
+    }
+
+    const row = await fetch(`/api/ia-command/admin/intencoes/${editId}`).then(r => r.json()).catch(() => null);
+    if (!row) { document.getElementById('form-subtitle').textContent = 'Registro não encontrado.'; return; }
+
+    document.getElementById('f-id').value        = row.id;
+    document.getElementById('f-empresa').value   = `ID ${row.empresa_id}`;
+    document.getElementById('f-nome').value      = row.nome      || '';
+    document.getElementById('f-descricao').value = row.descricao || '';
+    document.getElementById('f-modulo').value    = row.modulo    || '';
+    document.getElementById('f-acao').value      = row.acao      || '';
+    document.getElementById('f-ativo').value     = String(row.ativo ?? 1);
+    document.getElementById('f-dataset').value   = row.dataset_id     || '';
+    document.getElementById('f-frases').value    = row.frases_exemplo || '';
+
+    document.getElementById('meta-id').textContent  = row.id.slice(0,8) + '…';
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+    document.getElementById('topbar-label').innerHTML =
+      `<span style="color:var(--text-lo);font-weight:400">IA Command ›</span> ${row.nome}`;
+    atualizarResumo();
+  }
+
+  async function salvar() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
+
+    const body = {
+      nome,
+      descricao:      document.getElementById('f-descricao').value.trim() || null,
+      modulo:         document.getElementById('f-modulo').value  || null,
+      acao:           document.getElementById('f-acao').value    || null,
+      dataset_id:     document.getElementById('f-dataset').value || null,
+      frases_exemplo: document.getElementById('f-frases').value.trim() || null,
+      ativo:          parseInt(document.getElementById('f-ativo').value),
+    };
+
+    const url    = editId ? `/api/ia-command/admin/intencoes/${editId}` : '/api/ia-command/admin/intencoes';
+    const method = editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    const saved = await res.json();
+    _feedback('Salvo com sucesso!', true);
+
+    if (!editId) {
+      setTimeout(() => {
+        const url2 = `/app/ia-command/admin-intencao-form.html?id=${saved.id}`;
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'mdi:open-tab', url: url2, label: saved.nome, icon: '🧠' }, location.origin);
+          window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+        } else {
+          location.href = url2;
+        }
+      }, 800);
+    } else {
+      document.getElementById('form-title').textContent = saved.nome;
+      document.getElementById('meta-id').textContent    = saved.id.slice(0,8) + '…';
+    }
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+    setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
+  }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

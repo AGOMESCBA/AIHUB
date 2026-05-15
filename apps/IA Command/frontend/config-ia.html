@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Configurar IA — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    /* Editor shell */
+    .editor-shell     { display:flex;flex-direction:column;min-height:0; }
+    .editor-actionbar { position:sticky;top:-24px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 12px;margin:-24px 0 20px;background:var(--bg-base);border-bottom:1px solid var(--border); }
+    .editor-actionbar-title { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .editor-actions   { display:flex;align-items:center;gap:8px; }
+    .editor-grid      { display:grid;gap:18px; }
+    .editor-grid-wide { grid-template-columns:1fr 280px; }
+    @media(max-width:860px) { .editor-grid-wide { grid-template-columns:1fr; } }
+    .editor-main { min-width:0; }
+    .editor-side { min-width:0; }
+
+    /* Tabs */
+    .iac-tabs { display:flex;border-bottom:1px solid var(--border);margin-bottom:18px;gap:0; }
+    .iac-tab  { padding:9px 16px;font-size:13px;font-weight:500;color:var(--text-md);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color var(--transition);white-space:nowrap; }
+    .iac-tab:hover { color:var(--accent); }
+    .iac-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .iac-tab-panel { display:none; }
+    .iac-tab-panel.active { display:block; }
+
+    /* Summary sidebar */
+    .summary-grid  { display:flex;flex-direction:column;gap:10px; }
+    .summary-item  { display:flex;flex-direction:column;gap:2px; }
+    .summary-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo); }
+    .summary-value { font-size:13px;color:var(--text-hi);word-break:break-all; }
+    .summary-note  { font-size:11px;color:var(--text-lo);margin-top:2px; }
+
+    .form-hint { font-size:11px;color:var(--text-lo);margin-top:3px; }
+    .input-action { display:flex;gap:8px; }
+    .input-action .form-control { flex:1; }
+
+    .provider-badge { display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
+    .badge-groq   { background:rgba(249,115,22,.12);color:#ea580c; }
+    .badge-gemini { background:rgba(59,130,246,.12);color:#2563eb; }
+
+    .test-result { margin-top:10px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px; }
+    .test-result.ok   { background:#dcfce7;color:#15803d; }
+    .test-result.fail { background:#fee2e2;color:#b91c1c; }
+
+    .toast { position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:var(--transition);z-index:999; }
+    .toast.show { transform:translateY(0);opacity:1; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Configurar IA</span>
+    </div>
+
+    <div class="page-content">
+      <div class="editor-shell">
+
+        <div class="editor-actionbar">
+          <span class="editor-actionbar-title">Configurar IA</span>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" onclick="carregar()">↺ Descartar</button>
+            <button class="btn btn-primary" onclick="salvar()">Salvar configurações</button>
+          </div>
+        </div>
+
+        <div class="iac-tabs">
+          <button class="iac-tab active" onclick="mudarAba(this,'aba-provedores')">Provedores</button>
+          <button class="iac-tab" onclick="mudarAba(this,'aba-comportamento')">Comportamento</button>
+        </div>
+
+        <div class="editor-grid editor-grid-wide">
+          <div class="editor-main">
+
+            <!-- ABA PROVEDORES -->
+            <div class="iac-tab-panel active" id="aba-provedores">
+              <div class="form-section" style="margin-bottom:16px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Groq <span class="provider-badge badge-groq" style="margin-left:6px">⚡ Primário</span></div>
+                  <div class="form-section-subtitle">Provedor principal para classificação de intenções e transcrição de áudio.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">API Key Groq</label>
+                    <div class="input-action">
+                      <input type="password" id="groq-key" class="form-control" placeholder="gsk_…" oninput="atualizarResumo()">
+                      <button class="btn btn-ghost" onclick="testarProvedor('groq')">Testar</button>
+                    </div>
+                    <div class="form-hint">Obtenha em console.groq.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div class="test-result" id="test-groq" style="display:none"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Gemini <span class="provider-badge badge-gemini" style="margin-left:6px">✦ Fallback</span></div>
+                  <div class="form-section-subtitle">Provedor de fallback quando o Groq não está disponível.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">API Key Gemini</label>
+                    <div class="input-action">
+                      <input type="password" id="gemini-key" class="form-control" placeholder="AIzaSy…" oninput="atualizarResumo()">
+                      <button class="btn btn-ghost" onclick="testarProvedor('gemini')">Testar</button>
+                    </div>
+                    <div class="form-hint">Obtenha em aistudio.google.com → Get API Key. Deixe em branco para manter a chave atual.</div>
+                    <div class="test-result" id="test-gemini" style="display:none"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ABA COMPORTAMENTO -->
+            <div class="iac-tab-panel" id="aba-comportamento">
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Comportamento do Motor</div>
+                  <div class="form-section-subtitle">Configurações que afetam a interpretação e execução das consultas.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Provedor primário</label>
+                    <select id="provedor-primario" class="form-control" onchange="atualizarResumo()">
+                      <option value="groq">Groq (recomendado)</option>
+                      <option value="gemini">Gemini</option>
+                    </select>
+                    <div class="form-hint">O Gemini será usado automaticamente se o Groq falhar.</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Confiança mínima para executar consulta</label>
+                    <input type="number" id="confianca-min" class="form-control" min="0" max="1" step="0.05" value="0.6" style="max-width:180px" oninput="atualizarResumo()">
+                    <div class="form-hint">0.0 = sempre executar · 1.0 = exige altíssima confiança. Abaixo do limiar o sistema pede confirmação ao usuário.</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Idioma da transcrição de áudio</label>
+                    <select id="audio-idioma" class="form-control" style="max-width:260px" onchange="atualizarResumo()">
+                      <option value="pt">Português (pt)</option>
+                      <option value="en">Inglês (en)</option>
+                      <option value="es">Espanhol (es)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- SIDEBAR RESUMO -->
+          <div class="editor-side">
+            <div class="form-section" style="position:sticky;top:56px">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo</div>
+              </div>
+              <div class="form-section-body">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <span class="summary-label">Provedor primário</span>
+                    <span class="summary-value" id="rs-provedor">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Confiança mínima</span>
+                    <span class="summary-value" id="rs-confianca">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Idioma de áudio</span>
+                    <span class="summary-value" id="rs-idioma">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Chave Groq</span>
+                    <span class="summary-value" id="rs-groq">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Chave Gemini</span>
+                    <span class="summary-value" id="rs-gemini">—</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">✅ Configurações salvas!</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  function mudarAba(btn, painel) {
+    document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(painel).classList.add('active');
+  }
+
+  function atualizarResumo() {
+    const provedores = { groq: 'Groq', gemini: 'Gemini' };
+    const idiomas    = { pt: 'Português', en: 'Inglês', es: 'Espanhol' };
+    document.getElementById('rs-provedor').textContent  = provedores[document.getElementById('provedor-primario').value] || '—';
+    document.getElementById('rs-confianca').textContent = document.getElementById('confianca-min').value || '—';
+    document.getElementById('rs-idioma').textContent    = idiomas[document.getElementById('audio-idioma').value] || '—';
+    document.getElementById('rs-groq').textContent      = document.getElementById('groq-key').value ? '● preenchida' : '— (mantém atual)';
+    document.getElementById('rs-gemini').textContent    = document.getElementById('gemini-key').value ? '● preenchida' : '— (mantém atual)';
+  }
+
+  async function carregar() {
+    try {
+      const r = await fetch('/api/ia-command/ai-config');
+      const cfg = await r.json();
+      if (cfg.provedor_primario) document.getElementById('provedor-primario').value = cfg.provedor_primario;
+      if (cfg.confianca_minima != null) document.getElementById('confianca-min').value = cfg.confianca_minima;
+      if (cfg.audio_idioma) document.getElementById('audio-idioma').value = cfg.audio_idioma;
+      document.getElementById('groq-key').value   = '';
+      document.getElementById('gemini-key').value = '';
+      atualizarResumo();
+    } catch (e) { console.error(e); }
+  }
+
+  async function salvar() {
+    const groqKey   = document.getElementById('groq-key').value.trim();
+    const geminiKey = document.getElementById('gemini-key').value.trim();
+    const body = {
+      provedor_primario: document.getElementById('provedor-primario').value,
+      confianca_minima:  parseFloat(document.getElementById('confianca-min').value),
+      audio_idioma:      document.getElementById('audio-idioma').value,
+    };
+    if (groqKey)   body.groq_api_key   = groqKey;
+    if (geminiKey) body.gemini_api_key = geminiKey;
+    try {
+      const r = await fetch('/api/ia-command/ai-config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      if (!r.ok) { const e = await r.json(); alert(e.error || 'Erro ao salvar.'); return; }
+      document.getElementById('groq-key').value   = '';
+      document.getElementById('gemini-key').value = '';
+      atualizarResumo();
+      showToast();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function testarProvedor(provedor) {
+    const key = document.getElementById(provedor + '-key').value.trim();
+    const div = document.getElementById('test-' + provedor);
+    if (!key) {
+      div.className = 'test-result fail';
+      div.textContent = 'Cole a chave antes de testar.';
+      div.style.display = 'block';
+      return;
+    }
+    div.className = 'test-result';
+    div.textContent = 'Testando…';
+    div.style.display = 'block';
+    try {
+      const r    = await fetch('/api/ia-command/ai-config/test', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ provedor, api_key: key }) });
+      const data = await r.json();
+      div.className = `test-result ${data.ok ? 'ok' : 'fail'}`;
+      div.textContent = data.ok
+        ? `✅ Chave válida! Intenção teste: "${data.intencao}" (conf. ${(data.confianca*100).toFixed(0)}%)`
+        : `❌ ${data.mensagem}`;
+    } catch (e) {
+      div.className = 'test-result fail';
+      div.textContent = `❌ ${e.message}`;
+    }
+  }
+
+  function showToast() {
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  carregar();
+</script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monitor WhatsApp — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent: #7c3aed; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background: #7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    /* Modal */
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:center;justify-content:center; }
+    .modal         { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(480px,95vw);max-height:90vh;overflow-y:auto;padding:28px;position:relative; }
+    .modal-header  { display:flex;justify-content:space-between;align-items:center;margin-bottom:20px; }
+    .modal-title   { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .modal-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;padding:0;line-height:1; }
+    .modal-close:hover { color:var(--text-hi); }
+    .modal-footer  { display:flex;justify-content:flex-end;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid var(--border); }
+
+    .page-head   { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title  { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+
+    /* Toolbar */
+    .mon-toolbar { display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px; }
+    .mon-status-badge { display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;flex-shrink:0; }
+    .mon-status-badge.stopped   { background:var(--bg-hover);color:var(--text-lo); }
+    .mon-status-badge.starting  { background:#fef9c3;color:#92400e; }
+    .mon-status-badge.connected { background:#dcfce7;color:#15803d; }
+    .mon-dot { width:8px;height:8px;border-radius:99px;background:currentColor;flex-shrink:0; }
+    .mon-dot.pulse { animation:pulse-dot 1s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .mon-msg-count { margin-left:auto;font-size:12px;color:var(--text-lo); }
+
+    /* Body */
+    .mon-body { display:flex;gap:14px;height:calc(100vh - 290px);min-height:400px; }
+
+    /* Terminal */
+    .mon-terminal-wrap   { flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+    .mon-terminal-header { padding:9px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;color:var(--text-md);display:flex;align-items:center;gap:7px;flex-shrink:0; }
+    .mon-terminal        { flex:1;overflow-y:auto;padding:10px 14px;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12px;line-height:1.7;background:var(--bg-base);scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.3) transparent; }
+    .log-line { display:flex;gap:8px;padding:1px 0; }
+    .log-ts   { color:var(--text-lo);flex-shrink:0;user-select:none; }
+    .log-msg.info     { color:var(--text-md); }
+    .log-msg.success  { color:#22c55e; }
+    .log-msg.error    { color:#ef4444; }
+    .log-msg.warning  { color:#f59e0b; }
+    .log-msg.received { color:#a78bfa; }
+
+    /* QR Panel */
+    .mon-qr-panel { width:260px;min-width:260px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 16px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;overflow-y:auto; }
+    .mon-qr-title { font-size:13px;font-weight:800;color:var(--text-hi);border-bottom:1px solid var(--border);width:100%;padding-bottom:10px; }
+    .mon-waiting-box { background:var(--bg-hover);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;color:var(--text-md);line-height:1.5;width:100%; }
+    .mon-qr-img  { width:200px;height:200px;border:4px solid var(--border);border-radius:var(--radius-sm);object-fit:contain; }
+    .mon-qr-hint { font-size:11px;color:var(--text-md);line-height:1.6; }
+    .mon-connected-box { background:#dcfce7;border:1px solid #86efac;border-radius:var(--radius-sm);padding:14px;font-size:13px;color:#15803d;font-weight:700;line-height:1.5;width:100%; }
+    .mon-connected-num { font-size:18px;font-weight:900;margin-top:4px;color:#166534; }
+    .mon-stat  { display:flex;justify-content:space-between;width:100%;font-size:12px;color:var(--text-lo);border-top:1px solid var(--border);padding-top:8px; }
+    .mon-stat strong { color:var(--text-hi); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Monitor WhatsApp</span>
+    </div>
+
+    <div class="page-content">
+
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Operação</div>
+          <div class="page-title">Monitor WhatsApp</div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="mon-toolbar">
+        <div class="mon-status-badge stopped" id="status-badge">
+          <span class="mon-dot" id="status-dot"></span>
+          <span id="status-label">Desconectado</span>
+        </div>
+        <button class="btn btn-primary" id="btn-start" onclick="iniciar()">▶ Iniciar</button>
+        <button class="btn btn-ghost"   id="btn-stop"  onclick="parar()" disabled>■ Parar</button>
+        <button class="btn btn-ghost"   id="btn-test"  onclick="abrirModalTeste()" disabled>📤 Teste de envio</button>
+        <button class="btn btn-ghost"   onclick="limparLogs()">🗑 Limpar logs</button>
+        <span class="mon-msg-count">Mensagens recebidas: <strong id="msg-count">0</strong></span>
+      </div>
+
+      <!-- Corpo -->
+      <div class="mon-body">
+
+        <!-- Terminal -->
+        <div class="mon-terminal-wrap">
+          <div class="mon-terminal-header"><span>📋</span> Log em tempo real</div>
+          <div class="mon-terminal" id="terminal">
+            <div class="log-line"><span class="log-ts">--:--:--</span><span class="log-msg info">Aguardando inicialização...</span></div>
+          </div>
+        </div>
+
+        <!-- QR Panel -->
+        <div class="mon-qr-panel" id="qr-panel">
+          <div class="mon-qr-title">Conexão WhatsApp</div>
+          <div class="mon-waiting-box" id="qr-waiting">
+            Clique em <strong>Iniciar</strong> para conectar o WhatsApp ao IA Command.
+          </div>
+          <img id="qr-img" class="mon-qr-img" style="display:none" alt="QR Code WhatsApp">
+          <p class="mon-qr-hint" id="qr-hint" style="display:none">
+            Abra o WhatsApp → <strong>Aparelhos conectados</strong> → <strong>Conectar aparelho</strong> → escaneie.
+          </p>
+          <div class="mon-connected-box" id="qr-connected" style="display:none">
+            ✅ WhatsApp conectado
+            <div class="mon-connected-num" id="wa-number">—</div>
+          </div>
+          <div class="mon-stat"><span>Empresa</span><strong id="info-empresa">—</strong></div>
+          <div class="mon-stat"><span>Msgs recebidas</span><strong id="info-msgs">0</strong></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Teste de Envio -->
+<div class="modal-overlay" id="modal-teste" style="display:none" onclick="if(event.target===this)fecharModalTeste()">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">📤 Teste de envio</span>
+      <button class="modal-close" onclick="fecharModalTeste()">✕</button>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Número de destino</label>
+      <input id="test-numero" class="form-control" placeholder="5511999999999 (somente números)" type="tel">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mensagem</label>
+      <textarea id="test-msg" class="form-control" rows="3">✅ *IA Command* — Teste de envio realizado com sucesso!</textarea>
+    </div>
+    <div id="test-error" style="color:#dc2626;font-size:13px;display:none;margin-top:8px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModalTeste()">Cancelar</button>
+      <button class="btn btn-primary" onclick="enviarTeste()" id="btn-enviar-teste">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let _socket = null;
+  let _status = 'stopped';
+  let _msgCount = 0;
+
+  window._iahubAuthReady?.then(() => {
+    _socket = io({ transports: ['websocket', 'polling'] });
+
+    _socket.on('connect', () => {
+      addLog('Socket conectado ao servidor.', 'info');
+      _socket.emit('join-empresa');
+    });
+
+    _socket.on('iac-log',    (entry) => addLog(entry.message, entry.type));
+    _socket.on('iac-status', ({ status }) => aplicarStatus(status));
+    _socket.on('iac-qr',     (url) => mostrarQR(url));
+    _socket.on('iac-msg',    ({ sender, tipo, body }) => {
+      _msgCount++;
+      document.getElementById('msg-count').textContent = _msgCount;
+      document.getElementById('info-msgs').textContent = _msgCount;
+      addLog(`📩 [${tipo}] de ${sender}: ${body ? '"' + body.slice(0, 60) + '"' : '(mídia)'}`, 'received');
+    });
+
+    carregarStatus();
+  });
+
+  async function carregarStatus() {
+    try {
+      const d = await fetch('/api/ia-command/whatsapp/status').then(r => r.json());
+      aplicarStatus(d.status);
+      _msgCount = d.msgCount || 0;
+      document.getElementById('msg-count').textContent = _msgCount;
+      document.getElementById('info-msgs').textContent = _msgCount;
+      if (d.qr) mostrarQR(d.qr);
+      if (window._iahubEmpresa)
+        document.getElementById('info-empresa').textContent = `#${window._iahubEmpresa.id} — ${window._iahubEmpresa.nome || ''}`;
+    } catch (_) {}
+  }
+
+  function aplicarStatus(status) {
+    _status = status;
+    const badge  = document.getElementById('status-badge');
+    const label  = document.getElementById('status-label');
+    badge.className = `mon-status-badge ${status}`;
+    label.textContent = { stopped:'Desconectado', starting:'Conectando...', connected:'Conectado' }[status] || status;
+    document.getElementById('status-dot').className = `mon-dot ${status === 'starting' ? 'pulse' : ''}`;
+    document.getElementById('btn-start').disabled = status !== 'stopped';
+    document.getElementById('btn-stop').disabled  = status === 'stopped';
+    document.getElementById('btn-test').disabled  = status !== 'connected';
+    if (status === 'connected') mostrarConectado();
+    else if (status === 'stopped') {
+      document.getElementById('qr-img').style.display       = 'none';
+      document.getElementById('qr-hint').style.display      = 'none';
+      document.getElementById('qr-connected').style.display = 'none';
+      document.getElementById('qr-waiting').style.display   = 'block';
+    }
+  }
+
+  function mostrarQR(url) {
+    document.getElementById('qr-img').src               = url;
+    document.getElementById('qr-img').style.display     = 'block';
+    document.getElementById('qr-hint').style.display    = 'block';
+    document.getElementById('qr-waiting').style.display = 'none';
+    document.getElementById('qr-connected').style.display = 'none';
+  }
+
+  function mostrarConectado() {
+    document.getElementById('qr-img').style.display        = 'none';
+    document.getElementById('qr-hint').style.display       = 'none';
+    document.getElementById('qr-waiting').style.display    = 'none';
+    document.getElementById('qr-connected').style.display  = 'block';
+  }
+
+  async function iniciar() {
+    document.getElementById('btn-start').disabled = true;
+    const r = await fetch('/api/ia-command/whatsapp/start', { method:'POST', headers:{'Content-Type':'application/json'} });
+    if (!r.ok) { addLog('Erro ao iniciar.', 'error'); document.getElementById('btn-start').disabled = false; }
+  }
+
+  async function parar() {
+    document.getElementById('btn-stop').disabled = true;
+    await fetch('/api/ia-command/whatsapp/stop', { method:'POST' });
+  }
+
+  async function limparLogs() {
+    await fetch('/api/ia-command/whatsapp/clear-logs', { method:'POST' });
+    document.getElementById('terminal').innerHTML =
+      '<div class="log-line"><span class="log-ts">--:--:--</span><span class="log-msg info">Logs limpos.</span></div>';
+  }
+
+  function addLog(msg, type = 'info') {
+    const t   = document.getElementById('terminal');
+    const ts  = new Date().toLocaleTimeString('pt-BR');
+    const div = document.createElement('div');
+    div.className = 'log-line';
+    div.innerHTML = `<span class="log-ts">${esc(ts)}</span><span class="log-msg ${esc(type)}">${esc(msg)}</span>`;
+    t.appendChild(div);
+    if (t.children.length > 500) t.removeChild(t.firstChild);
+    t.scrollTop = t.scrollHeight;
+  }
+
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function abrirModalTeste() { document.getElementById('modal-teste').style.display = 'flex'; }
+  function fecharModalTeste() { document.getElementById('modal-teste').style.display = 'none'; }
+
+  async function enviarTeste() {
+    const numero   = document.getElementById('test-numero').value.trim();
+    const mensagem = document.getElementById('test-msg').value.trim();
+    const errEl    = document.getElementById('test-error');
+    const btn      = document.getElementById('btn-enviar-teste');
+    if (!numero) { errEl.textContent = 'Informe o número.'; errEl.style.display = 'block'; return; }
+    errEl.style.display = 'none';
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try {
+      const r = await fetch('/api/ia-command/whatsapp/send-test', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ numero, mensagem }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Erro ao enviar.');
+      fecharModalTeste();
+      addLog(`✅ Mensagem de teste enviada para ${numero}`, 'success');
+    } catch (err) {
+      errEl.textContent = err.message; errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Enviar';
+    }
+  }
+</script>
+</body>
+</html>
