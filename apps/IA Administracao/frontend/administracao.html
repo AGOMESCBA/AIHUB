@@ -3047,6 +3047,7 @@ let _admSisUsers = [];
 let _admSisCompanyRows = [];
 let _admSisUserRows = [];
 let _admSisDesignCode = null;
+const DEFAULT_SYSTEM_CARD_IMAGE = '/img/system-card-default.jpg';
 
 function admSisOptions(lista, labelFn) {
   return '<option value="">Selecione...</option>' + (lista || [])
@@ -3106,7 +3107,8 @@ function admSisRenderDesignForm() {
     el.innerHTML = '<div class="system-access-empty">Selecione um sistema para editar a aparencia do card.</div>';
     return;
   }
-  const previewBg = system.image_url ? ` style="background-image:url('${attr(system.image_url)}')"` : '';
+  const previewImage = system.image_url || DEFAULT_SYSTEM_CARD_IMAGE;
+  const previewBg = previewImage ? ` style="background-image:url('${attr(previewImage)}')"` : '';
   el.innerHTML = `
     <div class="form-row">
       <div class="form-group">
@@ -3135,7 +3137,7 @@ function admSisRenderDesignForm() {
     <div class="form-group">
       <label class="form-label">Imagem do card</label>
       <input id="adm-sis-design-image" class="form-control" value="${attr(system.image_url || '')}" placeholder="/uploads/... ou /guia/img/...">
-      <div class="hint">A imagem aparece como faixa superior do card. Se ficar vazio, o card usa apenas o icone.</div>
+      <div class="hint">A imagem aparece como faixa superior do card. Se ficar vazio, o IAHub usa a imagem padrao da plataforma.</div>
     </div>
     <div class="system-access-toolbar">
       <span class="hint" id="adm-sis-design-msg"></span>
