@@ -344,6 +344,9 @@
     .system-card-preview-icon { width:58px;height:58px;border-radius:14px;background:rgba(37,99,235,.08);margin-top:-26px;display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--accent);box-shadow:var(--shadow-sm); }
     .system-card-preview-title { margin-top:12px;font-size:16px;font-weight:900;color:var(--text-hi);padding:0 14px; }
     .system-card-preview-desc { margin-top:8px;font-size:12px;color:var(--text-md);line-height:1.4;padding:0 16px 16px; }
+    .system-design-form .system-page { padding:0; }
+    .system-design-form .system-head { align-items:flex-start; }
+    .system-config-parking { display:none; }
     @media (max-width: 900px) { .system-access-layout, .system-design-grid { grid-template-columns:1fr; } }
   </style>
 </head>
@@ -384,7 +387,6 @@
           <button class="tab-btn"        id="adm-btn-seguranca" onclick="mudarAbaAdmin('seguranca', this)">🔒 Segurança</button>
           <button class="tab-btn"        id="adm-btn-auditoria" onclick="mudarAbaAdmin('auditoria', this)">📋 Auditoria</button>
           <button class="tab-btn"        id="adm-btn-sistemas"  onclick="mudarAbaAdmin('sistemas',  this)">▦ Sistemas</button>
-          <button class="tab-btn"        id="adm-btn-sistema"   onclick="mudarAbaAdmin('sistema',   this)">⚙️ Sistema</button>
           <button class="tab-btn"        id="adm-btn-reset"     onclick="mudarAbaAdmin('reset',     this)">🗑 Reset de Dados</button>
         </div>
 
@@ -942,9 +944,9 @@
             </div>
 
             <section class="system-access-panel system-design-panel">
-              <div class="system-access-panel-title">Aparencia dos cards no IAHub</div>
+              <div class="system-access-panel-title">Configuracao dos sistemas</div>
               <div class="system-access-help">
-                Configure a imagem, cor e textos exibidos no card de cada sistema na tela principal do IAHub.
+                Selecione IAHub para configurar a plataforma principal ou escolha um sistema para ajustar o card exibido na tela inicial.
               </div>
               <div class="system-design-grid">
                 <div class="system-design-list" id="adm-sis-design-list">
@@ -1009,6 +1011,7 @@
         </div>
 
         <div id="adm-tab-sistema" class="adm-tab-content">
+          <div id="adm-sistema-config-parking" class="system-config-parking"></div>
           <div class="system-page">
             <div class="admin-grid-head system-head">
               <div>
@@ -1395,7 +1398,6 @@ function montarMenuAdmin() {
     ['sistemas', 'Sistemas', '▦'],
     ['seguranca', 'Seguranca', '🔒'],
     ['auditoria', 'Auditoria', '📋'],
-    ['sistema', 'Identidade', '⚙'],
     ['reset', 'Reset de Dados', '🗑'],
   ];
   nav.innerHTML = `
@@ -3048,6 +3050,8 @@ let _admSisCompanyRows = [];
 let _admSisUserRows = [];
 let _admSisDesignCode = null;
 const DEFAULT_SYSTEM_CARD_IMAGE = '/img/system-card-default.jpg';
+const IA_HUB_CONFIG_CODE = '__iahub__';
+let _admSisHubConfigPage = null;
 
 function admSisOptions(lista, labelFn) {
   return '<option value="">Selecione...</option>' + (lista || [])
@@ -3078,12 +3082,16 @@ function admSisCard(system, granted, onClickName, disabled = false) {
 function admSisRenderDesignList() {
   const el = document.getElementById('adm-sis-design-list');
   if (!el) return;
-  if (!_admSisSystems.length) {
-    el.innerHTML = '<div class="system-access-empty">Nenhum sistema cadastrado.</div>';
-    return;
-  }
-  if (!_admSisDesignCode) _admSisDesignCode = _admSisSystems[0].code;
-  el.innerHTML = _admSisSystems.map(system => `
+  if (!_admSisDesignCode) _admSisDesignCode = IA_HUB_CONFIG_CODE;
+  const iaHubItem = `
+    <div class="system-design-item${_admSisDesignCode === IA_HUB_CONFIG_CODE ? ' active' : ''}" onclick="admSisSelecionarDesign('${IA_HUB_CONFIG_CODE}')">
+      <span class="system-design-color" style="background:#0f172a"></span>
+      <div>
+        <div class="system-design-name">IAHub</div>
+        <div class="system-design-code">plataforma principal</div>
+      </div>
+    </div>`;
+  const systemItems = _admSisSystems.map(system => `
     <div class="system-design-item${system.code === _admSisDesignCode ? ' active' : ''}" onclick="admSisSelecionarDesign('${esc(system.code)}')">
       <span class="system-design-color" style="background:${esc(system.accent || '#2563eb')}"></span>
       <div>
@@ -3091,6 +3099,7 @@ function admSisRenderDesignList() {
         <div class="system-design-code">${esc(system.code)}</div>
       </div>
     </div>`).join('');
+  el.innerHTML = iaHubItem + systemItems;
   admSisRenderDesignForm();
 }
 
@@ -3102,6 +3111,10 @@ function admSisSelecionarDesign(code) {
 function admSisRenderDesignForm() {
   const el = document.getElementById('adm-sis-design-form');
   if (!el) return;
+  if (_admSisDesignCode === IA_HUB_CONFIG_CODE) {
+    admSisRenderHubConfig(el);
+    return;
+  }
   const system = _admSisSystems.find(s => s.code === _admSisDesignCode);
   if (!system) {
     el.innerHTML = '<div class="system-access-empty">Selecione um sistema para editar a aparencia do card.</div>';
@@ -3150,6 +3163,19 @@ function admSisRenderDesignForm() {
       <div class="system-card-preview-title">${esc(system.name || system.code)}</div>
       <div class="system-card-preview-desc">${esc(system.description || '')}</div>
     </div>`;
+}
+
+function admSisRenderHubConfig(el) {
+  if (!_admSisHubConfigPage) {
+    _admSisHubConfigPage = document.querySelector('#adm-tab-sistema .system-page');
+  }
+  if (!_admSisHubConfigPage) {
+    el.innerHTML = '<div class="system-access-empty">Configuracao do IAHub nao encontrada.</div>';
+    return;
+  }
+  el.innerHTML = '';
+  el.appendChild(_admSisHubConfigPage);
+  sisCarregarConfig();
 }
 
 async function admSisSalvarDesign() {
