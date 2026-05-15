@@ -304,7 +304,7 @@
     #_empresa-badge { order:4; margin-left:0 !important; }
     @media (max-width: 760px) { .shell-nav-btn span { display:none; } }
     .system-access-page { padding:18px 24px 24px; }
-    .system-access-layout { display:grid;grid-template-columns:minmax(260px,.8fr) minmax(420px,1.2fr);gap:16px;align-items:start; }
+    .system-access-layout { display:grid;grid-template-columns:minmax(320px,720px);gap:16px;align-items:start; }
     .system-access-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px; }
     .system-access-panel-title { font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin-bottom:14px; }
     .system-access-list { display:grid;gap:10px; }
@@ -963,7 +963,7 @@
               <section class="system-access-panel">
                 <div class="system-access-panel-title">Empresa</div>
                 <div class="system-access-help">
-                  Primeiro libere os sistemas para a empresa. O IA Hub so mostra sistemas ativos e liberados para a empresa selecionada.
+                  Libere quais sistemas estao disponiveis para a empresa. Depois, use Usuarios > Acessos para definir usuarios e rotinas.
                 </div>
                 <div class="form-group">
                   <label class="form-label">Empresa</label>
@@ -977,34 +977,6 @@
                 <div class="system-access-toolbar">
                   <span class="hint" id="adm-sis-company-msg"></span>
                   <button class="btn btn-primary" type="button" onclick="admSisSalvarEmpresa()">Salvar empresa</button>
-                </div>
-              </section>
-
-              <section class="system-access-panel">
-                <div class="system-access-panel-title">Usuario</div>
-                <div class="system-access-help">
-                  Depois libere os sistemas para o usuario dentro da empresa. Administradores mantem acesso irrestrito aos sistemas ativos da empresa.
-                </div>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label">Empresa</label>
-                    <select id="adm-sis-user-company" class="form-control" onchange="admSisCarregarUsuario()">
-                      <option value="">Selecione...</option>
-                    </select>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Usuario</label>
-                    <select id="adm-sis-user" class="form-control" onchange="admSisCarregarUsuario()">
-                      <option value="">Selecione...</option>
-                    </select>
-                  </div>
-                </div>
-                <div id="adm-sis-user-list" class="system-access-list">
-                  <div class="system-access-empty">Selecione empresa e usuario para configurar o acesso.</div>
-                </div>
-                <div class="system-access-toolbar">
-                  <span class="hint" id="adm-sis-user-msg"></span>
-                  <button class="btn btn-primary" type="button" onclick="admSisSalvarUsuario()">Salvar usuario</button>
                 </div>
               </section>
             </div>
@@ -3057,9 +3029,7 @@ function audLimparFiltros() {
 // Sistemas da plataforma
 let _admSisSystems = [];
 let _admSisCompanies = [];
-let _admSisUsers = [];
 let _admSisCompanyRows = [];
-let _admSisUserRows = [];
 let _admSisDesignCode = null;
 const DEFAULT_SYSTEM_CARD_IMAGES = {
   'ia-admin': '/img/system-card-admin.jpg',
@@ -3074,13 +3044,7 @@ function admSisDefaultCardImage(system) {
   return DEFAULT_SYSTEM_CARD_IMAGES[system?.code] || DEFAULT_SYSTEM_CARD_IMAGES.default;
 }
 
-function admSisOptions(lista, labelFn) {
-  return '<option value="">Selecione...</option>' + (lista || [])
-    .map(item => `<option value="${item.id}">${esc(labelFn(item))}</option>`)
-    .join('');
-}
-
-function admSisCard(system, granted, onClickName, disabled = false) {
+function admSisCard(system, granted, onClickName) {
   const initials = (system.name || system.code || '?')
     .split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
   const color = system.accent || '#2563eb';
@@ -3094,7 +3058,6 @@ function admSisCard(system, granted, onClickName, disabled = false) {
         <div class="system-access-meta">${esc(system.code)} - ${locked}</div>
       </div>
       <button class="system-toggle ${granted ? 'active' : ''}" type="button"
-        ${disabled ? 'disabled' : ''}
         onclick="${onClickName}('${esc(system.code)}')"
         title="${granted ? 'Liberado' : 'Bloqueado'}"></button>
     </div>`;
@@ -3227,7 +3190,6 @@ async function admSisSalvarDesign() {
   msg.textContent = 'Aparencia salva.';
   admSisRenderDesignList();
   admSisRenderCompanyRows();
-  admSisRenderUserRows();
 }
 
 function admSisRenderCompanyRows() {
@@ -3244,46 +3206,19 @@ function admSisRenderCompanyRows() {
   }).join('');
 }
 
-function admSisRenderUserRows() {
-  const el = document.getElementById('adm-sis-user-list');
-  if (!el) return;
-  const companyId = document.getElementById('adm-sis-user-company')?.value;
-  const userId = document.getElementById('adm-sis-user')?.value;
-  if (!companyId || !userId) {
-    el.innerHTML = '<div class="system-access-empty">Selecione empresa e usuario para configurar o acesso.</div>';
-    return;
-  }
-  const user = _admSisUsers.find(u => Number(u.id) === Number(userId));
-  if (user?.role === 'admin') {
-    el.innerHTML = '<div class="system-access-empty">Este usuario e administrador. O acesso aos sistemas ativos da empresa e irrestrito.</div>';
-    return;
-  }
-  el.innerHTML = _admSisSystems.map(system => {
-    const companyRow = _admSisCompanyRows.find(r => r.system_code === system.code || r.code === system.code);
-    const userRow = _admSisUserRows.find(r => r.system_code === system.code || r.code === system.code);
-    const disabled = !companyRow?.granted || system.admin_only;
-    return admSisCard(system, !!userRow?.granted && !disabled, 'admSisToggleUsuario', disabled);
-  }).join('');
-}
-
 async function admSisCarregar() {
   await window._iahubAuthReady;
-  const [systems, companies, users] = await Promise.all([
+  const [systems, companies] = await Promise.all([
     fetch('/api/sistemas').then(r => r.json()),
     fetch('/api/empresas').then(r => r.json()),
-    fetch('/api/usuarios').then(r => r.json()),
   ]);
   _admSisSystems = Array.isArray(systems) ? systems : [];
   _admSisCompanies = Array.isArray(companies) ? companies : [];
-  _admSisUsers = Array.isArray(users) ? users : [];
 
   document.getElementById('adm-sis-company').innerHTML = '<option value="">Selecione uma empresa...</option>' +
     _admSisCompanies.map(e => `<option value="${e.id}">${esc(e.razao_social || e.nome || `Empresa ${e.id}`)}</option>`).join('');
-  document.getElementById('adm-sis-user-company').innerHTML = admSisOptions(_admSisCompanies, e => e.razao_social || e.nome || `Empresa ${e.id}`);
-  document.getElementById('adm-sis-user').innerHTML = admSisOptions(_admSisUsers, u => `${u.nome || u.usuario} (${u.usuario})`);
   admSisRenderDesignList();
   admSisRenderCompanyRows();
-  admSisRenderUserRows();
 }
 
 async function admSisCarregarEmpresa() {
@@ -3295,37 +3230,13 @@ async function admSisCarregarEmpresa() {
     return;
   }
   _admSisCompanyRows = await fetch(`/api/empresas/${companyId}/sistemas`).then(r => r.json()).catch(() => []);
-  document.getElementById('adm-sis-user-company').value = companyId;
   admSisRenderCompanyRows();
-  await admSisCarregarUsuario();
-}
-
-async function admSisCarregarUsuario() {
-  const companyId = document.getElementById('adm-sis-user-company').value;
-  const userId = document.getElementById('adm-sis-user').value;
-  document.getElementById('adm-sis-user-msg').textContent = '';
-  if (!companyId || !userId) {
-    _admSisUserRows = [];
-    admSisRenderUserRows();
-    return;
-  }
-  if (!_admSisCompanyRows.length || document.getElementById('adm-sis-company').value !== companyId) {
-    _admSisCompanyRows = await fetch(`/api/empresas/${companyId}/sistemas`).then(r => r.json()).catch(() => []);
-  }
-  _admSisUserRows = await fetch(`/api/usuarios/${userId}/sistemas?empresa_id=${companyId}`).then(r => r.json()).catch(() => []);
-  admSisRenderUserRows();
 }
 
 function admSisToggleEmpresa(code) {
   const row = _admSisCompanyRows.find(r => r.system_code === code || r.code === code);
   if (row) row.granted = !row.granted;
   admSisRenderCompanyRows();
-}
-
-function admSisToggleUsuario(code) {
-  const row = _admSisUserRows.find(r => r.system_code === code || r.code === code);
-  if (row) row.granted = !row.granted;
-  admSisRenderUserRows();
 }
 
 async function admSisSalvarEmpresa() {
@@ -3339,23 +3250,6 @@ async function admSisSalvarEmpresa() {
   });
   document.getElementById('adm-sis-company-msg').textContent = res.ok ? 'Sistemas da empresa salvos.' : 'Erro ao salvar.';
   await admSisCarregarEmpresa();
-}
-
-async function admSisSalvarUsuario() {
-  const companyId = document.getElementById('adm-sis-user-company').value;
-  const userId = document.getElementById('adm-sis-user').value;
-  if (!companyId || !userId) return;
-  const payload = {
-    empresa_id: Number(companyId),
-    systems: _admSisUserRows.map(r => ({ system_code: r.system_code || r.code, active: !!r.granted })),
-  };
-  const res = await fetch(`/api/usuarios/${userId}/sistemas`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  document.getElementById('adm-sis-user-msg').textContent = res.ok ? 'Sistemas do usuario salvos.' : 'Erro ao salvar.';
-  await admSisCarregarUsuario();
 }
 
 // ── Fechar modais ao clicar no backdrop ──────────────────────────────────────
