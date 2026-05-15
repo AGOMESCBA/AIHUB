@@ -52,13 +52,20 @@
     .ap-bloqueado      { display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:40px;text-align:center;color:var(--text-lo);font-size:13px;gap:8px; }
     .btn-tiny          { font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);background:none;cursor:pointer;color:var(--text-md);transition:all .1s; }
     .btn-tiny:hover    { background:var(--bg-hover);color:var(--text-hi); }
-    .rot-grupo         { margin-bottom:14px; }
-    .rot-grupo-hdr     { display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .1s;margin-bottom:4px; }
+    .rot-grupo         { margin-bottom:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);overflow:hidden; }
+    .rot-grupo-hdr     { display:flex;align-items:center;gap:8px;padding:9px 10px;cursor:pointer;transition:background .1s;border-bottom:1px solid transparent; }
     .rot-grupo-hdr:hover { background:var(--bg-hover); }
     .rot-grupo-hdr input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
     .rot-grupo-nome    { font-size:12px;font-weight:700;color:var(--text-md);text-transform:uppercase;letter-spacing:.04em;flex:1; }
     .rot-grupo-icon    { font-size:15px; }
-    .rot-item          { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 30px;border-radius:6px;cursor:pointer;transition:background .1s; }
+    .rot-grupo-count   { font-size:10px;color:var(--text-lo);background:var(--bg-hover);border-radius:999px;padding:2px 7px;white-space:nowrap; }
+    .rot-grupo-toggle  { width:22px;height:22px;border:1px solid var(--border);border-radius:6px;background:var(--bg-card);color:var(--text-md);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:background .1s,color .1s,transform .1s; }
+    .rot-grupo-toggle:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .rot-grupo.collapsed .rot-grupo-hdr { border-bottom-color:transparent; }
+    .rot-grupo:not(.collapsed) .rot-grupo-hdr { border-bottom-color:var(--border); }
+    .rot-grupo.collapsed .rot-grupo-body { display:none; }
+    .rot-grupo-body    { padding:6px 8px 8px; }
+    .rot-item          { display:flex;align-items:center;gap:10px;padding:6px 8px 6px 22px;border-radius:6px;cursor:pointer;transition:background .1s; }
     .rot-item:hover    { background:var(--bg-hover); }
     .rot-item input[type=checkbox] { cursor:pointer;width:14px;height:14px;flex-shrink:0; }
     .rot-item-label    { font-size:13px;color:var(--text-hi); }
@@ -2026,6 +2033,7 @@ let _usuGp                 = null;
 let _usuEmpresaSelecionada = null;
 let _usuQuickFilterFn      = null;
 let _usuPermissoesMap      = {};  // { empresa_id: { ativo, rotinas: Set } }
+let _usuRotinasCollapsed   = {};
 
 const _USU_ROTINAS_BASE = [
   {
@@ -2518,29 +2526,41 @@ function usuRenderRotinas(empresaId) {
   body.innerHTML = _USU_ROTINAS_MENU.map(grupo => {
     const todos  = grupo.itens.every(i => pm.rotinas.has(i.id));
     const alguns = grupo.itens.some(i => pm.rotinas.has(i.id));
+    const qtd    = grupo.itens.filter(i => pm.rotinas.has(i.id)).length;
+    const collapsed = !!_usuRotinasCollapsed[grupo.id];
     return `
-      <div class="rot-grupo">
-        <div class="rot-grupo-hdr">
+      <div class="rot-grupo${collapsed?' collapsed':''}" id="usu-rot-grupo-${grupo.id}">
+        <div class="rot-grupo-hdr" onclick="usuToggleGrupoVisibilidade('${grupo.id}')">
+          <button type="button" class="rot-grupo-toggle" onclick="event.stopPropagation();usuToggleGrupoVisibilidade('${grupo.id}')" title="${collapsed?'Abrir grupo':'Recolher grupo'}">${collapsed?'+' : '-'}</button>
           <span class="rot-grupo-icon">${grupo.icon}</span>
           <input type="checkbox" id="usu-rot-grp-${empresaId}-${grupo.id}"
             ${todos?'checked':''} ${alguns&&!todos?'data-ind="1"':''}
+            onclick="event.stopPropagation()"
             onchange="usuToggleGrupoRotinas(${empresaId},'${grupo.id}',this.checked)">
           <span class="rot-grupo-nome">${esc(grupo.label)}</span>
+          <span class="rot-grupo-count">${qtd}/${grupo.itens.length}</span>
         </div>
-        ${grupo.itens.map(item=>`
-          <div class="rot-item">
-            <span class="rot-item-icon">${item.icon}</span>
-            <input type="checkbox" id="usu-rot-${empresaId}-${item.id}"
-              ${pm.rotinas.has(item.id)?'checked':''}
-              onchange="usuToggleRotina(${empresaId},'${item.id}',this.checked,'${grupo.id}')">
-            <label class="rot-item-label" for="usu-rot-${empresaId}-${item.id}">${esc(item.label)}</label>
-          </div>`).join('')}
+        <div class="rot-grupo-body">
+          ${grupo.itens.map(item=>`
+            <div class="rot-item">
+              <span class="rot-item-icon">${item.icon}</span>
+              <input type="checkbox" id="usu-rot-${empresaId}-${item.id}"
+                ${pm.rotinas.has(item.id)?'checked':''}
+                onchange="usuToggleRotina(${empresaId},'${item.id}',this.checked,'${grupo.id}')">
+              <label class="rot-item-label" for="usu-rot-${empresaId}-${item.id}">${esc(item.label)}</label>
+            </div>`).join('')}
+        </div>
       </div>`;
   }).join('');
   _USU_ROTINAS_MENU.forEach(grupo => {
     const cb = document.getElementById(`usu-rot-grp-${empresaId}-${grupo.id}`);
     if (cb && cb.dataset.ind === '1') cb.indeterminate = true;
   });
+}
+
+function usuToggleGrupoVisibilidade(grupoId) {
+  _usuRotinasCollapsed[grupoId] = !_usuRotinasCollapsed[grupoId];
+  if (_usuEmpresaSelecionada) usuRenderRotinas(_usuEmpresaSelecionada);
 }
 
 function usuToggleRotina(empresaId, rotinaId, marcado, grupoId) {
