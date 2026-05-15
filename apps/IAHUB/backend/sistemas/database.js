@@ -2,6 +2,7 @@ const crud = require('../crud');
 const empresasDb = require('../empresas/database');
 const usuariosDb = require('../usuarios/database');
 const permissoesDb = require('../permissoes/database');
+const { systemActiveFromRotinas } = require('../permissoes/system-routines');
 
 const SYSTEMS_FILE = 'systems';
 const COMPANY_SYSTEMS_FILE = 'company_systems';
@@ -152,6 +153,8 @@ function inicializarSistemas() {
     for (const empresaId of empresasUsuario) {
       for (const system of systems) {
         const rotinas = permissoesDb.getRotinas(usuario.id, empresaId);
+        const active = systemActiveFromRotinas(system.code, rotinas);
+
         ensureCrudRow(USER_SYSTEMS_FILE, r =>
           Number(r.user_id) === Number(usuario.id) &&
           Number(r.company_id) === Number(empresaId) &&
@@ -160,7 +163,7 @@ function inicializarSistemas() {
             user_id: Number(usuario.id),
             company_id: Number(empresaId),
             system_code: system.code,
-            active: rotinas === null ? false : Array.isArray(rotinas) && rotinas.length > 0,
+            active,
           }
         );
       }

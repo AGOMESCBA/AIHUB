@@ -1,6 +1,8 @@
 const { getDB } = require('./database');
+const { requireRotina } = require('./permissions');
 
 module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, io }) {
+  const canDashboard = requireRotina('iac-dashboard');
 
   // Rotas do WhatsApp
   require('./whatsapp/routes')(app, { requireAuth, requireIaCommand, io });
@@ -15,7 +17,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   require('./admin-routes')(app, { requireAuth, requireIaCommand });
 
   // Health check
-  app.get('/api/ia-command/health', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/health', requireAuth, requireIaCommand, canDashboard, (req, res) => {
     try {
       const db      = getDB();
       const versoes = db.prepare('SELECT COUNT(*) as total FROM schema_migrations').get();
@@ -32,7 +34,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   });
 
   // Status resumido para o dashboard
-  app.get('/api/ia-command/status', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/status', requireAuth, requireIaCommand, canDashboard, (req, res) => {
     res.json({
       fases: {
         fase1: { nome: 'Fundação + Integração IAHub',       status: 'concluida' },

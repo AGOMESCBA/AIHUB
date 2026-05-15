@@ -1,9 +1,14 @@
 const crud = require('./database/crud');
 const { getDB } = require('./database');
+const { requireRotina } = require('./permissions');
 
 module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaCommand }) {
 
   function eid(req) { return req.session.empresa_id; }
+  const canIntencoes = requireRotina('iac-admin-intencoes');
+  const canDatasets = requireRotina('iac-admin-datasets');
+  const canExecucoes = requireRotina('iac-admin-execucoes');
+  const canAuditoria = requireRotina('iac-admin-auditoria');
 
   function _audit(req, acao, detalhes) {
     try {
@@ -21,18 +26,18 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // INTENÇÕES
   // ────────────────────────────────────────────────────────────────────────────
 
-  app.get('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const rows = crud.listar('intentions', { empresa_id: eid(req) });
     res.json(rows);
   });
 
-  app.get('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const row = crud.buscarPorId('intentions', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     res.json(row);
   });
 
-  app.post('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const { nome, descricao, modulo, acao, dataset_id, frases_exemplo, ativo } = req.body;
     if (!nome) return res.status(400).json({ error: 'Campo obrigatório: nome.' });
     const row = crud.criar('intentions', {
@@ -49,7 +54,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.status(201).json(row);
   });
 
-  app.put('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.put('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const existing = crud.buscarPorId('intentions', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     const allowed = ['nome', 'descricao', 'modulo', 'acao', 'dataset_id', 'frases_exemplo', 'ativo'];
@@ -60,7 +65,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json(row);
   });
 
-  app.delete('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.delete('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const existing = crud.buscarPorId('intentions', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     crud.excluir('intentions', req.params.id);
@@ -72,18 +77,18 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // DATASETS
   // ────────────────────────────────────────────────────────────────────────────
 
-  app.get('/api/ia-command/admin/datasets', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/admin/datasets', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const rows = crud.listar('datasets', { empresa_id: eid(req) });
     res.json(rows);
   });
 
-  app.get('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const row = crud.buscarPorId('datasets', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     res.json(row);
   });
 
-  app.post('/api/ia-command/admin/datasets', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/admin/datasets', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const { nome, erp, tabelas, joins, campos, filtros, agrupamentos, ordenacoes, limite_max } = req.body;
     if (!nome) return res.status(400).json({ error: 'Campo obrigatório: nome.' });
     const row = crud.criar('datasets', {
@@ -102,7 +107,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.status(201).json(row);
   });
 
-  app.put('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.put('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const existing = crud.buscarPorId('datasets', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     const allowed = ['nome', 'erp', 'tabelas', 'joins', 'campos', 'filtros', 'agrupamentos', 'ordenacoes', 'limite_max'];
@@ -113,7 +118,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json(row);
   });
 
-  app.delete('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.delete('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const existing = crud.buscarPorId('datasets', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     crud.excluir('datasets', req.params.id);
@@ -125,7 +130,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // LOGS DE EXECUÇÃO (somente leitura)
   // ────────────────────────────────────────────────────────────────────────────
 
-  app.get('/api/ia-command/admin/execucoes', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/admin/execucoes', requireAuth, requireIaCommand, canExecucoes, (req, res) => {
     const db    = getDB();
     const empId = eid(req);
     const limit = Math.min(parseInt(req.query.limit) || 200, 500);
@@ -139,7 +144,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // AUDITORIA (somente leitura)
   // ────────────────────────────────────────────────────────────────────────────
 
-  app.get('/api/ia-command/admin/auditoria', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/admin/auditoria', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
     const db    = getDB();
     const empId = eid(req);
     const limit = Math.min(parseInt(req.query.limit) || 200, 500);

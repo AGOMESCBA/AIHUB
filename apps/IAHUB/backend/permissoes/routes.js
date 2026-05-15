@@ -1,5 +1,6 @@
 const db = require('./database');
 const sistemasDb = require('../sistemas/database');
+const { systemActiveFromRotinas } = require('./system-routines');
 
 module.exports = function registerRoutes(app, { requireAuth }) {
 
@@ -37,12 +38,14 @@ module.exports = function registerRoutes(app, { requireAuth }) {
     }
     db.salvar(req.params.usuarioId, permissoes);
     for (const permissao of permissoes) {
-      sistemasDb.salvarUserSystems(req.params.usuarioId, permissao.empresa_id, [
-        {
-          system_code: 'recrutamento',
-          active: Array.isArray(permissao.rotinas) && permissao.rotinas.length > 0,
-        },
-      ]);
+      sistemasDb.salvarUserSystems(
+        req.params.usuarioId,
+        permissao.empresa_id,
+        sistemasDb.listarSystems().map(system => ({
+          system_code: system.code,
+          active: systemActiveFromRotinas(system.code, permissao.rotinas),
+        }))
+      );
     }
     res.json({ ok: true });
   });

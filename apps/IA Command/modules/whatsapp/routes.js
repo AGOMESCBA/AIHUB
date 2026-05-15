@@ -1,9 +1,11 @@
 const manager = require('./service-manager');
 const crud    = require('../database/crud');
+const { requireRotina } = require('../permissions');
 
 module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCommand, io }) {
 
   function _eid(req) { return req.session.empresa_id; }
+  const canMonitorWhatsapp = requireRotina('iac-monitor-whatsapp');
 
   // Conecta eventos do service ao Socket.IO (executado uma única vez por instância)
   function wireEvents(svc, eid) {
@@ -36,7 +38,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   }
 
   // ── START ────────────────────────────────────────────────────────────────────
-  app.post('/api/ia-command/whatsapp/start', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/whatsapp/start', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const eid = _eid(req);
     const svc = manager.getOrCreate(eid);
     wireEvents(svc, eid);
@@ -45,7 +47,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   });
 
   // ── STOP ─────────────────────────────────────────────────────────────────────
-  app.post('/api/ia-command/whatsapp/stop', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/whatsapp/stop', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const eid = _eid(req);
     const svc = manager.get(eid);
     if (svc) svc.stop();
@@ -53,7 +55,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   });
 
   // ── STATUS ───────────────────────────────────────────────────────────────────
-  app.get('/api/ia-command/whatsapp/status', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/whatsapp/status', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const eid = _eid(req);
     const svc = manager.get(eid);
     res.json({
@@ -65,7 +67,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   });
 
   // ── ENVIAR MENSAGEM DE TESTE ──────────────────────────────────────────────────
-  app.post('/api/ia-command/whatsapp/send-test', requireAuth, requireIaCommand, async (req, res) => {
+  app.post('/api/ia-command/whatsapp/send-test', requireAuth, requireIaCommand, canMonitorWhatsapp, async (req, res) => {
     const eid    = _eid(req);
     const { numero, mensagem } = req.body || {};
     if (!numero) return res.status(400).json({ error: 'Campo "numero" é obrigatório.' });
@@ -83,7 +85,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   });
 
   // ── LIMPAR LOGS ───────────────────────────────────────────────────────────────
-  app.post('/api/ia-command/whatsapp/clear-logs', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/whatsapp/clear-logs', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const svc = manager.get(_eid(req));
     if (svc) svc.clearBuffer();
     res.json({ ok: true });

@@ -19,7 +19,6 @@
     /* Editor shell */
     .editor-shell     { display:flex;flex-direction:column;min-height:0; }
     .editor-actionbar { position:sticky;top:-24px;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 12px;margin:-24px 0 20px;background:var(--bg-base);border-bottom:1px solid var(--border); }
-    .editor-actionbar-title { font-size:15px;font-weight:700;color:var(--text-hi); }
     .editor-actions   { display:flex;align-items:center;gap:8px; }
     .editor-grid      { display:grid;gap:18px; }
     .editor-grid-wide { grid-template-columns:1fr 280px; }
@@ -43,8 +42,19 @@
     .summary-note  { font-size:11px;color:var(--text-lo);margin-top:2px; }
 
     .form-hint { font-size:11px;color:var(--text-lo);margin-top:3px; }
-    .input-action { display:flex;gap:8px; }
-    .input-action .form-control { flex:1; }
+
+    /* Password / API key toggle */
+    .pass-wrap { position:relative;display:flex;align-items:center; }
+    .pass-wrap .form-control { padding-right:42px; }
+    .btn-pass-toggle {
+      position:absolute;right:1px;top:1px;bottom:1px;width:38px;border:none;background:transparent;
+      color:var(--text-lo);cursor:pointer;border-radius:0 7px 7px 0;
+      display:flex;align-items:center;justify-content:center;
+      transition:color var(--transition),background var(--transition);
+    }
+    .btn-pass-toggle:hover { color:var(--text-hi);background:var(--bg-hover); }
+    .btn-pass-toggle svg * { pointer-events:none; }
+    .key-action { display:flex;align-items:center;gap:8px;margin-top:8px; }
 
     .provider-badge { display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
     .badge-groq   { background:rgba(249,115,22,.12);color:#ea580c; }
@@ -86,7 +96,10 @@
       <div class="editor-shell">
 
         <div class="editor-actionbar">
-          <span class="editor-actionbar-title">Configurar IA</span>
+          <div class="editor-actionbar-title">
+            <strong>Configurar IA</strong>
+            <span>Configure provedores de IA e parâmetros de comportamento.</span>
+          </div>
           <div class="editor-actions">
             <button class="btn btn-ghost" onclick="carregar()">↺ Descartar</button>
             <button class="btn btn-primary" onclick="salvar()">Salvar configurações</button>
@@ -110,12 +123,18 @@
                 </div>
                 <div class="form-section-body">
                   <div class="form-group">
-                    <label class="form-label">API Key Groq</label>
-                    <div class="input-action">
+                    <label class="form-label">Chave de API (Groq)</label>
+                    <div class="pass-wrap">
                       <input type="password" id="groq-key" class="form-control" placeholder="gsk_…" oninput="atualizarResumo()">
-                      <button class="btn btn-ghost" onclick="testarProvedor('groq')">Testar</button>
+                      <button type="button" class="btn-pass-toggle" id="toggle-groq" onclick="toggleKey('groq-key',this)" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
                     </div>
-                    <div class="form-hint">Obtenha em console.groq.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div class="form-hint">Obtida em console.groq.com → API Keys. Deixe em branco para manter a chave atual.</div>
+                    <div id="status-groq" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" onclick="testarProvedor('groq')">Testar conexão</button>
+                    </div>
                     <div class="test-result" id="test-groq" style="display:none"></div>
                   </div>
                 </div>
@@ -128,12 +147,18 @@
                 </div>
                 <div class="form-section-body">
                   <div class="form-group">
-                    <label class="form-label">API Key Gemini</label>
-                    <div class="input-action">
+                    <label class="form-label">Chave de API (Gemini)</label>
+                    <div class="pass-wrap">
                       <input type="password" id="gemini-key" class="form-control" placeholder="AIzaSy…" oninput="atualizarResumo()">
-                      <button class="btn btn-ghost" onclick="testarProvedor('gemini')">Testar</button>
+                      <button type="button" class="btn-pass-toggle" id="toggle-gemini" onclick="toggleKey('gemini-key',this)" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
                     </div>
-                    <div class="form-hint">Obtenha em aistudio.google.com → Get API Key. Deixe em branco para manter a chave atual.</div>
+                    <div class="form-hint">Obtida em aistudio.google.com → Get API Key. Deixe em branco para manter a chave atual.</div>
+                    <div id="status-gemini" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" onclick="testarProvedor('gemini')">Testar conexão</button>
+                    </div>
                     <div class="test-result" id="test-gemini" style="display:none"></div>
                   </div>
                 </div>
@@ -221,6 +246,13 @@
 <script src="/js/auth.js"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
+  const SVG_EYE      = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  const SVG_EYE_OFF  = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+
+  function _svgEye(show) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${show ? SVG_EYE_OFF : SVG_EYE}</svg>`;
+  }
+
   function mudarAba(btn, painel) {
     document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
@@ -238,15 +270,52 @@
     document.getElementById('rs-gemini').textContent    = document.getElementById('gemini-key').value ? '● preenchida' : '— (mantém atual)';
   }
 
+  async function toggleKey(id, btn) {
+    const inp  = document.getElementById(id);
+    const show = inp.type === 'password';
+    inp.type   = show ? 'text' : 'password';
+    btn.innerHTML = _svgEye(show);
+    btn.title     = show ? 'Ocultar chave' : 'Mostrar chave';
+
+    if (show && inp.value === '' && inp.dataset.configurada === '1') {
+      inp.type = 'password';
+      btn.innerHTML = _svgEye(false);
+      btn.title = 'Mostrar chave digitada';
+      return;
+    }
+  }
+
   async function carregar() {
     try {
-      const r = await fetch('/api/ia-command/ai-config');
+      const r   = await fetch('/api/ia-command/ai-config');
       const cfg = await r.json();
       if (cfg.provedor_primario) document.getElementById('provedor-primario').value = cfg.provedor_primario;
       if (cfg.confianca_minima != null) document.getElementById('confianca-min').value = cfg.confianca_minima;
       if (cfg.audio_idioma) document.getElementById('audio-idioma').value = cfg.audio_idioma;
-      document.getElementById('groq-key').value   = '';
-      document.getElementById('gemini-key').value = '';
+
+      const groqEl   = document.getElementById('groq-key');
+      const geminiEl = document.getElementById('gemini-key');
+      groqEl.value   = '';
+      geminiEl.value = '';
+      groqEl.type    = 'password';
+      geminiEl.type  = 'password';
+      document.getElementById('toggle-groq').innerHTML   = _svgEye(false);
+      document.getElementById('toggle-gemini').innerHTML = _svgEye(false);
+
+      const groqConf   = !!cfg.groq_api_key;
+      const geminiConf = !!cfg.gemini_api_key;
+      groqEl.dataset.configurada   = groqConf   ? '1' : '0';
+      geminiEl.dataset.configurada = geminiConf ? '1' : '0';
+      groqEl.placeholder   = groqConf   ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
+      geminiEl.placeholder = geminiConf ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui (opcional)';
+
+      document.getElementById('status-groq').innerHTML   = groqConf
+        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+        : '<span style="color:#dc2626">✗ Não configurada</span>';
+      document.getElementById('status-gemini').innerHTML = geminiConf
+        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+        : '<span style="color:var(--text-lo)">— Não configurada (opcional)</span>';
+
       atualizarResumo();
     } catch (e) { console.error(e); }
   }
@@ -264,8 +333,30 @@
     try {
       const r = await fetch('/api/ia-command/ai-config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
       if (!r.ok) { const e = await r.json(); alert(e.error || 'Erro ao salvar.'); return; }
-      document.getElementById('groq-key').value   = '';
-      document.getElementById('gemini-key').value = '';
+      const saved = await r.json().catch(() => ({}));
+
+      const groqEl   = document.getElementById('groq-key');
+      const geminiEl = document.getElementById('gemini-key');
+      groqEl.value   = '';
+      geminiEl.value = '';
+      groqEl.type    = 'password';
+      geminiEl.type  = 'password';
+      document.getElementById('toggle-groq').innerHTML   = _svgEye(false);
+      document.getElementById('toggle-gemini').innerHTML = _svgEye(false);
+
+      const groqConf   = !!(saved.groq_api_key   || (groqKey   && groqKey   !== '***') || groqEl.dataset.configurada   === '1');
+      const geminiConf = !!(saved.gemini_api_key || (geminiKey && geminiKey !== '***') || geminiEl.dataset.configurada === '1');
+      groqEl.dataset.configurada   = groqConf   ? '1' : '0';
+      geminiEl.dataset.configurada = geminiConf ? '1' : '0';
+      groqEl.placeholder   = groqConf   ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
+      geminiEl.placeholder = geminiConf ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui (opcional)';
+      document.getElementById('status-groq').innerHTML   = groqConf
+        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+        : '<span style="color:#dc2626">✗ Não configurada</span>';
+      document.getElementById('status-gemini').innerHTML = geminiConf
+        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+        : '<span style="color:var(--text-lo)">— Não configurada (opcional)</span>';
+
       atualizarResumo();
       showToast();
     } catch (e) { alert(e.message); }

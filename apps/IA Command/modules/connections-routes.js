@@ -1,32 +1,34 @@
 const crud        = require('./database/crud');
 const factory     = require('./erp/providers/connection-factory');
 const erpRegistry = require('./erp/erp-registry');
+const { requireRotina } = require('./permissions');
 
 module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCommand }) {
 
   function eid(req) { return req.session.empresa_id; }
+  const canConfigConexoes = requireRotina('iac-config-conexoes');
 
   // ── LIST SUPPORTED ERPS ──────────────────────────────────────────────────────
-  app.get('/api/ia-command/erps', requireAuth, requireIaCommand, (_req, res) => {
+  app.get('/api/ia-command/erps', requireAuth, requireIaCommand, canConfigConexoes, (_req, res) => {
     res.json(erpRegistry.listarErps());
   });
 
   // ── LIST ─────────────────────────────────────────────────────────────────────
-  app.get('/api/ia-command/connections', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/connections', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const rows = crud.listar('connections', { empresa_id: eid(req) });
     // Never expose password in list
     res.json(rows.map((r) => ({ ...r, password: undefined })));
   });
 
   // ── GET ONE ──────────────────────────────────────────────────────────────────
-  app.get('/api/ia-command/connections/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/connections/:id', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const row = crud.buscarPorId('connections', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     res.json({ ...row, password: undefined });
   });
 
   // ── CREATE ───────────────────────────────────────────────────────────────────
-  app.post('/api/ia-command/connections', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/connections', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const { nome, tipo, erp, host, port, database, username, password, filial, encrypt, trust_cert, ssl } = req.body;
     if (!nome || !tipo || !host || !database) {
       return res.status(400).json({ error: 'Campos obrigatórios: nome, tipo, host, database.' });
@@ -42,7 +44,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
   });
 
   // ── UPDATE ───────────────────────────────────────────────────────────────────
-  app.put('/api/ia-command/connections/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.put('/api/ia-command/connections/:id', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const existing = crud.buscarPorId('connections', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
 
@@ -57,7 +59,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
   });
 
   // ── DELETE ───────────────────────────────────────────────────────────────────
-  app.delete('/api/ia-command/connections/:id', requireAuth, requireIaCommand, (req, res) => {
+  app.delete('/api/ia-command/connections/:id', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const existing = crud.buscarPorId('connections', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     crud.excluir('connections', req.params.id);
@@ -65,7 +67,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
   });
 
   // ── TEST CONNECTION ───────────────────────────────────────────────────────────
-  app.post('/api/ia-command/connections/:id/test', requireAuth, requireIaCommand, async (req, res) => {
+  app.post('/api/ia-command/connections/:id/test', requireAuth, requireIaCommand, canConfigConexoes, async (req, res) => {
     const row = crud.buscarPorId('connections', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
 
@@ -81,7 +83,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
   });
 
   // ── ACTIVATE (set as default for company) ────────────────────────────────────
-  app.post('/api/ia-command/connections/:id/activate', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/connections/:id/activate', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const row = crud.buscarPorId('connections', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
 

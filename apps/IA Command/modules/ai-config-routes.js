@@ -1,11 +1,13 @@
 const crud = require('./database/crud');
+const { requireRotina } = require('./permissions');
 
 module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCommand }) {
 
   function eid(req) { return req.session.empresa_id; }
+  const canConfigIa = requireRotina('iac-config-ia');
 
   // ── GET config ───────────────────────────────────────────────────────────────
-  app.get('/api/ia-command/ai-config', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/ai-config', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
     if (!row) return res.json({});
     res.json({
@@ -16,7 +18,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
   });
 
   // ── SAVE / UPDATE config ─────────────────────────────────────────────────────
-  app.post('/api/ia-command/ai-config', requireAuth, requireIaCommand, (req, res) => {
+  app.post('/api/ia-command/ai-config', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const {
       groq_api_key, gemini_api_key,
       provedor_primario, confianca_minima,
@@ -51,7 +53,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
   });
 
   // ── TEST AI key (quick classify test) ───────────────────────────────────────
-  app.post('/api/ia-command/ai-config/test', requireAuth, requireIaCommand, async (req, res) => {
+  app.post('/api/ia-command/ai-config/test', requireAuth, requireIaCommand, canConfigIa, async (req, res) => {
     const { provedor, api_key } = req.body;
     const testMsg = 'Qual o faturamento deste mês?';
 
