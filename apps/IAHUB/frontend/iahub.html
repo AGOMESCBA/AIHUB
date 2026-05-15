@@ -210,7 +210,16 @@
       recrutamento: '<path d="M16 21v-2a4 4 0 0 0-8 0v2"/><circle cx="12" cy="8" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.8"/><path d="M16 4.2a4 4 0 0 1 0 7.6"/>',
       default: '<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>',
     };
-    const DEFAULT_SYSTEM_CARD_IMAGE = '/img/system-card-default.jpg';
+    const DEFAULT_SYSTEM_CARD_IMAGES = {
+      'ia-admin': '/img/system-card-admin.jpg',
+      'ia-command': '/img/system-card-command.jpg',
+      recrutamento: '/img/system-card-recruit.jpg',
+      default: '/img/system-card-default.jpg',
+    };
+
+    function defaultSystemCardImage(system) {
+      return DEFAULT_SYSTEM_CARD_IMAGES[system?.code] || DEFAULT_SYSTEM_CARD_IMAGES.default;
+    }
 
     function systemIcon(system) {
       const paths = SYSTEM_ICONS[system.code] || SYSTEM_ICONS.default;
@@ -266,7 +275,7 @@
 
       grid.innerHTML = sistemasOrdenados.map(system => {
         const accent = system.accent || '#2563eb';
-        const image = system.image_url || DEFAULT_SYSTEM_CARD_IMAGE;
+        const image = system.image_url || defaultSystemCardImage(system);
         const mediaStyle = image ? ` style="background-image:url('${attr(image)}')"` : '';
         return `
           <article class="system-card" style="--system-accent:${attr(accent)}" onclick="selecionarSistema('${attr(system.code)}')">
