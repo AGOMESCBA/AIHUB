@@ -234,8 +234,16 @@
         return;
       }
 
+      const ordem = { 'ia-admin': 0 };
+      const sistemasOrdenados = [...sistemas].sort((a, b) => {
+        const oa = ordem[a.code] ?? 10;
+        const ob = ordem[b.code] ?? 10;
+        if (oa !== ob) return oa - ob;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+      });
+
       grid.classList.toggle('single-system', total === 1);
-      grid.innerHTML = sistemas.map(system => {
+      grid.innerHTML = sistemasOrdenados.map(system => {
         const accent = system.accent || '#2563eb';
         return `
           <article class="system-card" style="--system-accent:${attr(accent)}" onclick="selecionarSistema('${attr(system.code)}')">
