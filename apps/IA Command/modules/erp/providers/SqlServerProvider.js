@@ -6,13 +6,13 @@ const pools = new Map();
 function _buildConfig(conn) {
   return {
     server:   conn.host,
-    port:     conn.port || 1433,
+    port:     conn.port ? Number(conn.port) : 1433,
     database: conn.database,
     user:     conn.username,
     password: conn.password,
     options: {
-      encrypt:                conn.encrypt ?? false,
-      trustServerCertificate: conn.trust_cert ?? true,
+      encrypt:                conn.encrypt === true || conn.encrypt === 1,
+      trustServerCertificate: conn.trust_cert !== false && conn.trust_cert !== 0,
       enableArithAbort:       true,
     },
     pool: { max: 10, min: 0, idleTimeoutMillis: 30000 },

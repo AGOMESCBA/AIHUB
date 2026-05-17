@@ -16,15 +16,12 @@
     .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
     .topbar-title { flex:1; min-width:0; font-weight:700; }
 
-    .form-row   { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
-    .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    @media(max-width:720px) { .form-row { grid-template-columns:1fr; } }
 
-    .iac-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0; }
-    .iac-tab  { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 16px;border-bottom:2px solid transparent;transition:color var(--transition); }
-    .iac-tab:hover { color:var(--text-hi); }
-    .iac-tab.active { color:#7c3aed;border-bottom-color:#7c3aed; }
-    .iac-tab-panel { display:none; }
-    .iac-tab-panel.active { display:flex;flex-direction:column;gap:0; }
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
 
     .summary-grid  { display:grid;gap:10px; }
     .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
@@ -32,11 +29,121 @@
     .summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
     .summary-note  { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
 
-    .save-feedback      { font-size:13px;color:var(--text-lo); }
-    .save-feedback.ok   { color:#15803d; }
-    .save-feedback.fail { color:#b91c1c; }
+    /* Tabs */
+    .iac-tabs { display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0; }
+    .iac-tab  {
+      background:none;border:none;color:var(--text-md);cursor:pointer;
+      font-size:13px;font-weight:600;padding:11px 18px;
+      border-bottom:2px solid transparent;margin-bottom:-2px;
+      transition:color var(--transition),border-color var(--transition);
+    }
+    .iac-tab:hover { color:var(--accent); }
+    .iac-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .iac-tab-panel { display:none; padding-top:20px; }
+    .iac-tab-panel.active { display:block; }
 
-    @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+    /* SQL tab — full width editor */
+    .sql-editor {
+      font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
+      font-size: 13px;
+      line-height: 1.65;
+      min-height: 840px !important;
+      height: auto !important;
+      max-height: none !important;
+      resize: vertical;
+      white-space: pre;
+      overflow-x: auto;
+      tab-size: 2;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .sql-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      border-radius: 0 0 var(--radius) var(--radius);
+      border-top: none;
+      margin-bottom: 16px;
+    }
+
+    .sql-toolbar-left  { display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap; }
+    .sql-toolbar-right { display:flex;align-items:center;gap:8px;flex-shrink:0; }
+
+    /* Preview grid */
+    .preview-wrap { margin-top:4px; }
+    .preview-bar  { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+    .preview-info { font-size:12px;color:var(--text-lo);flex:1; }
+    .preview-conn { font-size:12px;color:var(--text-md);font-weight:600; }
+
+    .preview-table-wrap {
+      overflow:auto;
+      max-height:360px;
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      background:var(--bg-card);
+    }
+
+    .preview-table { width:100%;border-collapse:collapse;font-size:12.5px; }
+    .preview-table th {
+      padding:8px 14px;
+      text-align:left;
+      font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+      color:var(--text-lo);background:var(--bg-card);
+      position:sticky;top:0;z-index:1;
+      border-bottom:2px solid var(--border);
+      white-space:nowrap;
+    }
+    .preview-table td {
+      padding:7px 14px;
+      border-bottom:1px solid var(--border);
+      color:var(--text-md);
+      white-space:nowrap;
+      max-width:300px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .preview-table tr:last-child td { border-bottom:none; }
+    .preview-table tr:hover td { background:var(--bg-hover); }
+    .preview-table td.null-val { color:var(--text-lo);font-style:italic; }
+
+    .preview-error {
+      padding:14px 16px;
+      background:#fee2e2;border:1px solid #fecaca;
+      border-radius:var(--radius);color:#b91c1c;font-size:13px;margin-top:4px;
+      font-family:monospace;white-space:pre-wrap;word-break:break-all;
+    }
+
+    .preview-empty {
+      text-align:center;padding:40px 24px;color:var(--text-lo);font-size:13px;
+    }
+
+    .sql-tip {
+      background:var(--bg-base);border:1px solid var(--border);border-radius:8px;
+      padding:12px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:16px;
+    }
+    .sql-tip code { font-family:monospace;background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -67,6 +174,7 @@
     <div class="page-content">
       <div class="editor-shell">
 
+        <!-- Action bar (sticky) -->
         <div class="editor-actionbar">
           <div class="editor-actionbar-title">
             <strong id="form-title">Novo Dataset</strong>
@@ -74,26 +182,31 @@
           </div>
           <div class="editor-actions">
             <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
             <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
             <button class="btn btn-primary" onclick="salvar()">Salvar</button>
           </div>
         </div>
 
-        <div class="iac-tabs">
-          <button class="iac-tab active" onclick="mudarTab('basico',this)">Dados Básicos</button>
-          <button class="iac-tab"        onclick="mudarTab('mapeamento',this)">Mapeamento</button>
-          <button class="iac-tab"        onclick="mudarTab('comportamento',this)">Comportamento</button>
+        <!-- Tabs -->
+        <div class="iac-tabs" style="margin-bottom:0;margin-top:4px">
+          <button class="iac-tab active" id="tab-cadastro" onclick="trocarAba('cadastro')">📋 Cadastro</button>
+          <button class="iac-tab" id="tab-sql" onclick="trocarAba('sql')">🗄️ SQL Base</button>
         </div>
 
-        <div class="editor-grid editor-grid-wide" style="margin-top:16px">
-          <main class="editor-main">
+        <!-- ══ ABA 1: CADASTRO ══════════════════════════════════════════════ -->
+        <div class="iac-tab-panel active" id="panel-cadastro">
+          <div class="editor-grid editor-grid-wide">
+            <main class="editor-main">
 
-            <!-- Tab: Dados Básicos -->
-            <div class="iac-tab-panel active" id="panel-basico">
+              <!-- Identificação -->
               <section class="form-section">
                 <div class="form-section-header">
                   <div class="form-section-title">Identificação</div>
-                  <div class="form-section-subtitle">Dados de controle preenchidos automaticamente.</div>
+                  <div class="form-section-subtitle">Dados de controle do dataset.</div>
                 </div>
                 <div class="form-section-body">
                   <div class="form-row">
@@ -108,17 +221,19 @@
                   </div>
                 </div>
               </section>
+
+              <!-- Dados Básicos -->
               <section class="form-section">
                 <div class="form-section-header">
                   <div class="form-section-title">Dados Básicos</div>
                   <div class="form-section-subtitle">Nome, ERP de origem e limite de registros por consulta.</div>
                 </div>
                 <div class="form-section-body">
-                  <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-row">
                     <div class="form-group">
                       <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
-                      <input type="text" id="f-nome" class="form-control" placeholder="ex: faturamento_protheus" oninput="atualizarResumo()">
-                      <div class="form-hint">Use snake_case. Identificador único do dataset para esta empresa.</div>
+                      <input type="text" id="f-nome" class="form-control" placeholder="ex: faturamento" oninput="atualizarResumo()">
+                      <div class="form-hint">Identificador único do dataset para esta empresa.</div>
                     </div>
                     <div class="form-group">
                       <label class="form-label">ERP</label>
@@ -130,114 +245,125 @@
                       </select>
                     </div>
                   </div>
-                  <div class="form-row">
-                    <div class="form-group" style="margin-bottom:0">
-                      <label class="form-label">Limite máximo de registros</label>
-                      <input type="number" id="f-limite" class="form-control" value="1000" min="1" max="10000" style="max-width:200px" oninput="atualizarResumo()">
-                      <div class="form-hint">Máximo de linhas retornadas por consulta. Recomendado: 1000.</div>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <!-- Tab: Mapeamento -->
-            <div class="iac-tab-panel" id="panel-mapeamento">
-              <section class="form-section">
-                <div class="form-section-header">
-                  <div class="form-section-title">Tabelas e Joins</div>
-                  <div class="form-section-subtitle">Defina as tabelas do ERP e as relações entre elas.</div>
-                </div>
-                <div class="form-section-body">
-                  <div class="form-group" style="margin-bottom:16px">
-                    <label class="form-label">Tabelas (JSON array)</label>
-                    <textarea id="f-tabelas" class="form-control" rows="3" placeholder='["SF2010","SD2010"]'></textarea>
-                    <div class="form-hint">Array JSON com os nomes das tabelas envolvidas.</div>
-                  </div>
                   <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">JOINs (JSON array)</label>
-                    <textarea id="f-joins" class="form-control" rows="5"
-                      placeholder='[{"tipo":"INNER","tabela":"SD2010","on":"SF2.F2_DOC = SD2.D2_DOC"}]'></textarea>
-                    <div class="form-hint">Array JSON com tipo, tabela e condição ON de cada join.</div>
+                    <label class="form-label">Limite máximo de registros</label>
+                    <input type="number" id="f-limite" class="form-control" value="1000" min="1" max="10000" style="max-width:200px" oninput="atualizarResumo()">
+                    <div class="form-hint">Máximo de linhas retornadas por consulta. Recomendado: 1000.</div>
                   </div>
                 </div>
               </section>
-              <section class="form-section">
+
+            </main>
+
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
                 <div class="form-section-header">
-                  <div class="form-section-title">Campos Disponíveis</div>
-                  <div class="form-section-subtitle">Colunas que a IA pode utilizar nas consultas.</div>
+                  <div class="form-section-title">Resumo</div>
                 </div>
                 <div class="form-section-body">
-                  <div class="form-group" style="margin-bottom:0">
-                    <textarea id="f-campos" class="form-control" rows="8"
-                      placeholder='[{"campo":"F2_CLIENTE","alias":"cliente","tipo":"string"},{"campo":"F2_VALBRUT","alias":"valor_bruto","tipo":"number"}]'></textarea>
-                    <div class="form-hint">Array JSON com campo, alias e tipo (string, number, date) de cada coluna.</div>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            <!-- Tab: Comportamento -->
-            <div class="iac-tab-panel" id="panel-comportamento">
-              <section class="form-section">
-                <div class="form-section-header">
-                  <div class="form-section-title">Filtros e Ordenação Padrão</div>
-                  <div class="form-section-subtitle">Condições WHERE e ORDER BY aplicadas automaticamente em todas as consultas.</div>
-                </div>
-                <div class="form-section-body">
-                  <div class="form-group" style="margin-bottom:16px">
-                    <label class="form-label">Filtros fixos (JSON array)</label>
-                    <textarea id="f-filtros" class="form-control" rows="4"
-                      placeholder='[{"campo":"D_E_L_E_T_","operador":"=","valor":""}]'></textarea>
-                    <div class="form-hint">Condições adicionadas ao WHERE em toda consulta (ex.: campo de exclusão lógica).</div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group" style="margin-bottom:0">
-                      <label class="form-label">Agrupamentos padrão (JSON array)</label>
-                      <textarea id="f-agrupamentos" class="form-control" rows="4" placeholder='["F2_CLIENTE"]'></textarea>
+                  <div class="summary-grid">
+                    <div class="summary-item">
+                      <div class="summary-label">ID</div>
+                      <div class="summary-value" id="meta-id" style="font-family:monospace;font-size:12px">Novo</div>
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
-                      <label class="form-label">Ordenação padrão (JSON array)</label>
-                      <textarea id="f-ordenacoes" class="form-control" rows="4"
-                        placeholder='[{"campo":"F2_EMISSAO","direcao":"DESC"}]'></textarea>
+                    <div class="summary-item">
+                      <div class="summary-label">Nome</div>
+                      <div class="summary-value" id="meta-nome">—</div>
+                    </div>
+                    <div class="summary-item">
+                      <div class="summary-label">ERP</div>
+                      <div class="summary-value" id="meta-erp">—</div>
+                    </div>
+                    <div class="summary-item">
+                      <div class="summary-label">Limite</div>
+                      <div class="summary-value" id="meta-limite">1000</div>
+                    </div>
+                    <div class="summary-item">
+                      <div class="summary-label">SQL Base</div>
+                      <div class="summary-value" id="meta-sql">—</div>
                     </div>
                   </div>
+                  <p class="summary-note">Após salvar, o ID é gerado automaticamente e não pode ser alterado.</p>
                 </div>
               </section>
-            </div>
-
-          </main>
-
-          <aside class="editor-side">
-            <section class="form-section">
-              <div class="form-section-header">
-                <div class="form-section-title">Resumo do registro</div>
-                <div class="form-section-subtitle">Referência rápida durante a edição.</div>
-              </div>
-              <div class="form-section-body">
-                <div class="summary-grid">
-                  <div class="summary-item">
-                    <div class="summary-label">ID</div>
-                    <div class="summary-value" id="meta-id" style="font-family:monospace;font-size:12px">Novo</div>
-                  </div>
-                  <div class="summary-item">
-                    <div class="summary-label">Nome</div>
-                    <div class="summary-value" id="meta-nome">—</div>
-                  </div>
-                  <div class="summary-item">
-                    <div class="summary-label">ERP</div>
-                    <div class="summary-value" id="meta-erp">—</div>
-                  </div>
-                  <div class="summary-item">
-                    <div class="summary-label">Limite de registros</div>
-                    <div class="summary-value" id="meta-limite">1000</div>
-                  </div>
-                </div>
-                <p class="summary-note">Após salvar, o ID é gerado automaticamente e não pode ser alterado.</p>
-              </div>
-            </section>
-          </aside>
+            </aside>
+          </div>
         </div>
+
+        <!-- ══ ABA 2: SQL BASE ═════════════════════════════════════════════ -->
+        <div class="iac-tab-panel" id="panel-sql">
+
+          <div class="sql-tip">
+            <strong>Convenções obrigatórias:</strong>
+            A coluna de data deve ter um alias (<code>AS data</code> ou o alias configurado abaixo).
+            Inclua filtros fixos (<code>D_E_L_E_T_ = ' '</code>) no WHERE do seu SQL.
+            Não use <code>TOP</code> ou <code>LIMIT</code> — o motor adiciona automaticamente.
+            O sistema executa: <code>SELECT TOP N * FROM (&lt;seu SQL&gt;) AS _base WHERE data BETWEEN @p0 AND @p1</code>
+          </div>
+
+          <!-- Editor SQL -->
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">SQL Base <span style="color:#dc2626">*</span></label>
+            <textarea id="f-sql-base" class="form-control sql-editor" spellcheck="false" rows="35"
+              placeholder="SELECT
+  F2_EMISSAO    AS data,
+  A1_NOME       AS cliente,
+  SUM(D2_TOTAL) AS total
+FROM SF2010 F2
+  INNER JOIN SD2010 D2 ON D2.D2_DOC = F2.F2_DOC
+                       AND D2.D_E_L_E_T_ = ' '
+  INNER JOIN SA1010 A1 ON A1.A1_COD  = F2.F2_CLIENTE
+                       AND A1.D_E_L_E_T_ = ' '
+WHERE F2.D_E_L_E_T_ = ' '
+  AND F2.F2_TIPO = 'N'
+GROUP BY F2_EMISSAO, A1_NOME"></textarea>
+          </div>
+
+          <!-- Toolbar abaixo do editor -->
+          <div class="sql-toolbar">
+            <div class="sql-toolbar-left">
+              <div style="display:flex;align-items:center;gap:8px">
+                <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Alias da coluna de data:</label>
+                <input type="text" id="f-campo-data" class="form-control" value="data"
+                  placeholder="data" style="max-width:140px;height:32px;font-size:13px"
+                  title="Alias (AS) da coluna de data no SELECT. A engine filtra: WHERE alias BETWEEN @p0 AND @p1">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Conexão:</label>
+                <select id="f-conexao-preview" class="form-control" style="max-width:220px;height:32px;font-size:13px">
+                  <option value="">Conexão ativa (padrão)</option>
+                </select>
+              </div>
+            </div>
+            <div class="sql-toolbar-right">
+              <span id="exec-status" style="font-size:12px;color:var(--text-lo)"></span>
+              <button class="btn btn-ghost" onclick="executarSql()" id="btn-executar"
+                style="display:flex;align-items:center;gap:7px;height:34px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                Executar SQL
+              </button>
+            </div>
+          </div>
+
+          <!-- Área de resultado -->
+          <div id="preview-wrap" class="preview-wrap" style="display:none">
+            <div class="preview-bar">
+              <span class="preview-info" id="preview-info"></span>
+              <span class="preview-conn" id="preview-conn"></span>
+            </div>
+            <div class="preview-table-wrap">
+              <table class="preview-table" id="preview-table">
+                <thead id="preview-thead"></thead>
+                <tbody id="preview-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="preview-error" class="preview-error" style="display:none"></div>
+
+        </div><!-- /panel-sql -->
 
       </div>
     </div>
@@ -250,30 +376,48 @@
   const params = new URLSearchParams(location.search);
   const editId = params.get('id');
 
-  function cancelar() {
-    if (window.parent !== window)
-      window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
-    else history.back();
-  }
-
-  function mudarTab(id, btn) {
-    document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
+  // ── Navegação entre abas ────────────────────────────────────────────────────
+  function trocarAba(aba) {
+    document.querySelectorAll('.iac-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + id).classList.add('active');
+    document.getElementById('tab-' + aba).classList.add('active');
+    document.getElementById('panel-' + aba).classList.add('active');
   }
 
+  // ── Resumo lateral ──────────────────────────────────────────────────────────
   function atualizarResumo() {
     const nome   = document.getElementById('f-nome').value.trim() || '—';
     const erp    = document.getElementById('f-erp').value || '—';
     const limite = document.getElementById('f-limite').value || '—';
+    const sql    = document.getElementById('f-sql-base').value.trim();
+
     document.getElementById('meta-nome').textContent   = nome;
     document.getElementById('meta-erp').textContent    = erp;
     document.getElementById('meta-limite').textContent = limite;
+    document.getElementById('meta-sql').textContent    = sql ? `${sql.split('\n').length} linhas` : '—';
     document.getElementById('form-title').textContent  = editId ? nome : `Novo Dataset${nome !== '—' ? ' — ' + nome : ''}`;
   }
 
+  // ── Carregar conexões no dropdown ───────────────────────────────────────────
+  async function carregarConexoes() {
+    try {
+      const lista = await fetch('/api/ia-command/connections/available').then(r => r.json());
+      if (!Array.isArray(lista) || !lista.length) return;
+      const sel = document.getElementById('f-conexao-preview');
+      lista.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.nome} (${c.tipo})${c.ativo ? ' ★ ativa' : ''}`;
+        if (c.ativo) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    } catch (_) {}
+  }
+
+  // ── Carregar registro para edição ───────────────────────────────────────────
   async function carregar() {
+    carregarConexoes();
+
     if (!editId) {
       document.getElementById('f-empresa').value =
         window._iahubEmpresa ? `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})` : '—';
@@ -283,66 +427,41 @@
     const row = await fetch(`/api/ia-command/admin/datasets/${editId}`).then(r => r.json()).catch(() => null);
     if (!row) { document.getElementById('form-subtitle').textContent = 'Registro não encontrado.'; return; }
 
-    document.getElementById('f-id').value     = row.id;
-    document.getElementById('f-empresa').value = `ID ${row.empresa_id}`;
-    document.getElementById('f-nome').value   = row.nome || '';
-    document.getElementById('f-erp').value    = row.erp  || 'protheus';
-    document.getElementById('f-limite').value = row.limite_max ?? 1000;
+    document.getElementById('f-id').value         = row.id;
+    document.getElementById('f-empresa').value    = `ID ${row.empresa_id}`;
+    document.getElementById('f-nome').value       = row.nome || '';
+    document.getElementById('f-erp').value        = row.erp  || 'protheus';
+    document.getElementById('f-limite').value     = row.limite_max ?? 1000;
+    document.getElementById('f-sql-base').value   = row.sql_base   || '';
+    document.getElementById('f-campo-data').value = row.campo_data || 'data';
 
-    document.getElementById('f-tabelas').value     = _prettyJson(row.tabelas);
-    document.getElementById('f-joins').value        = _prettyJson(row.joins);
-    document.getElementById('f-campos').value       = _prettyJson(row.campos);
-    document.getElementById('f-filtros').value      = _prettyJson(row.filtros);
-    document.getElementById('f-agrupamentos').value = _prettyJson(row.agrupamentos);
-    document.getElementById('f-ordenacoes').value   = _prettyJson(row.ordenacoes);
-
-    document.getElementById('meta-id').textContent  = row.id.slice(0,8) + '…';
+    document.getElementById('meta-id').textContent  = row.id.slice(0, 8) + '…';
     document.getElementById('form-subtitle').textContent =
-      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+      `ID ${row.id.slice(0, 8)}… · editado em ${row.atualizado_em?.slice(0, 16).replace('T', ' ') || '—'}`;
     document.getElementById('topbar-label').innerHTML =
       `<span style="color:var(--text-lo);font-weight:400">IA Command ›</span> ${row.nome}`;
     atualizarResumo();
   }
 
-  function _prettyJson(v) {
-    if (!v) return '';
-    try { return JSON.stringify(JSON.parse(v), null, 2); } catch { return v; }
-  }
-
-  function _jsonOrNull(id) {
-    const v = document.getElementById(id).value.trim();
-    if (!v) return null;
-    try { JSON.parse(v); return v; }
-    catch { throw new Error(`JSON inválido no campo "${document.querySelector(`label[for="${id}"]`)?.textContent || id}".`); }
-  }
-
+  // ── Salvar ──────────────────────────────────────────────────────────────────
   async function salvar() {
-    const nome = document.getElementById('f-nome').value.trim();
-    if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
+    const nome    = document.getElementById('f-nome').value.trim();
+    const sqlBase = document.getElementById('f-sql-base').value.trim();
 
-    let tabelas, joins, campos, filtros, agrupamentos, ordenacoes;
-    try {
-      tabelas      = _jsonOrNull('f-tabelas');
-      joins        = _jsonOrNull('f-joins');
-      campos       = _jsonOrNull('f-campos');
-      filtros      = _jsonOrNull('f-filtros');
-      agrupamentos = _jsonOrNull('f-agrupamentos');
-      ordenacoes   = _jsonOrNull('f-ordenacoes');
-    } catch (err) {
-      _feedback(err.message, false);
-      return;
-    }
+    if (!nome)    { _feedback('Campo Nome é obrigatório.', false); return; }
+    if (!sqlBase) { _feedback('O SQL Base é obrigatório.', false); trocarAba('sql'); return; }
 
     const body = {
       nome,
-      erp:         document.getElementById('f-erp').value,
-      limite_max:  parseInt(document.getElementById('f-limite').value) || 1000,
-      tabelas, joins, campos, filtros, agrupamentos, ordenacoes,
+      erp:        document.getElementById('f-erp').value,
+      limite_max: parseInt(document.getElementById('f-limite').value) || 1000,
+      sql_base:   sqlBase,
+      campo_data: document.getElementById('f-campo-data').value.trim() || 'data',
     };
 
     const url    = editId ? `/api/ia-command/admin/datasets/${editId}` : '/api/ia-command/admin/datasets';
     const method = editId ? 'PUT' : 'POST';
-    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const res    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
@@ -365,18 +484,157 @@
       }, 800);
     } else {
       document.getElementById('form-title').textContent = saved.nome;
-      document.getElementById('meta-id').textContent    = saved.id.slice(0,8) + '…';
+      document.getElementById('meta-id').textContent    = saved.id.slice(0, 8) + '…';
+      atualizarResumo();
     }
+  }
+
+  function cancelar() {
+    if (window.parent !== window)
+      window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+    else history.back();
   }
 
   function _feedback(msg, ok) {
     const el = document.getElementById('save-feedback');
     el.textContent = msg;
-    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+    el.className   = 'save-feedback ' + (ok ? 'ok' : 'fail');
     setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
   }
 
+  // ── Executar SQL preview ────────────────────────────────────────────────────
+  async function executarSql() {
+    const sqlBase   = document.getElementById('f-sql-base').value.trim();
+    const conexaoId = document.getElementById('f-conexao-preview').value || null;
+    const btn       = document.getElementById('btn-executar');
+    const status    = document.getElementById('exec-status');
+    const errorBox  = document.getElementById('preview-error');
+    const previewWr = document.getElementById('preview-wrap');
+
+    if (!sqlBase) {
+      errorBox.textContent = 'Escreva o SQL antes de executar.';
+      errorBox.style.display = 'block';
+      previewWr.style.display = 'none';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.innerHTML   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Executando…';
+    status.textContent  = '';
+    errorBox.style.display  = 'none';
+    previewWr.style.display = 'none';
+
+    try {
+      const res  = await fetch('/api/ia-command/admin/datasets/preview-sql', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ sql_base: sqlBase, conexao_id: conexaoId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        errorBox.textContent   = data.error || 'Erro ao executar.';
+        errorBox.style.display = 'block';
+        return;
+      }
+
+      // Renderizar tabela
+      _renderPreview(data);
+      status.textContent = `${data.total} linha${data.total !== 1 ? 's' : ''}`;
+
+    } catch (err) {
+      errorBox.textContent   = `Falha na requisição: ${err.message}`;
+      errorBox.style.display = 'block';
+    } finally {
+      btn.disabled  = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Executar SQL';
+    }
+  }
+
+  function _renderPreview({ columns, rows, total, conexao }) {
+    const thead = document.getElementById('preview-thead');
+    const tbody = document.getElementById('preview-tbody');
+    const info  = document.getElementById('preview-info');
+    const conn  = document.getElementById('preview-conn');
+    const wrap  = document.getElementById('preview-wrap');
+
+    // Header
+    thead.innerHTML = '<tr>' + columns.map(c =>
+      `<th title="${c}">${c}</th>`
+    ).join('') + '</tr>';
+
+    // Body
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${columns.length}" class="null-val" style="text-align:center;padding:32px">Nenhum registro retornado.</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(row =>
+        '<tr>' + columns.map(c => {
+          const v = row[c];
+          if (v === null || v === undefined) return '<td class="null-val">NULL</td>';
+          return `<td title="${String(v).replace(/"/g, '&quot;')}">${String(v)}</td>`;
+        }).join('') + '</tr>'
+      ).join('');
+    }
+
+    info.textContent = total >= 100
+      ? `Exibindo os primeiros 100 registros (pode haver mais). Use filtros no SQL para refinar.`
+      : `${total} registro${total !== 1 ? 's' : ''} retornado${total !== 1 ? 's' : ''}.`;
+
+    conn.textContent = conexao ? `Conexão: ${conexao}` : '';
+    wrap.style.display = 'block';
+  }
+
+  // Tab: insere 2 espaços ao pressionar Tab no editor
+  document.getElementById('f-sql-base').addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    const s = this.selectionStart, en = this.selectionEnd;
+    this.value = this.value.slice(0, s) + '  ' + this.value.slice(en);
+    this.selectionStart = this.selectionEnd = s + 2;
+  });
+
+  // Atualiza resumo quando SQL muda
+  document.getElementById('f-sql-base').addEventListener('input', atualizarResumo);
+
   window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Dataset SQL Base</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">O que é o SQL Base</div>
+      <div class="help-item-desc">O SQL Base é um SELECT completo e analítico que você escreve uma vez. O motor do IA Command envolve automaticamente com filtros de período: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">SELECT TOP N * FROM (&lt;seu_sql&gt;) AS _base WHERE campo_data BETWEEN @p0 AND @p1</code></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Regras do SQL Base</div>
+      <div class="help-item"><div class="help-item-label">1. SELECT completo e válido</div><div class="help-item-desc">Pode usar JOINs, subqueries, CTEs (WITH), funções de agregação. Não inclua TOP/LIMIT — o motor adiciona automaticamente.</div></div>
+      <div class="help-item"><div class="help-item-label">2. Coluna de data com alias</div><div class="help-item-desc">O SELECT deve ter uma coluna de data com o mesmo alias definido em "Alias da coluna de data". Ex: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">F2_EMISSAO AS data</code>.</div></div>
+      <div class="help-item"><div class="help-item-label">3. Filtrar deletados (Protheus)</div><div class="help-item-desc">Sempre inclua <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE D_E_L_E_T_ = ' '</code> para excluir registros marcados como excluídos.</div></div>
+      <div class="help-item"><div class="help-item-label">4. Aliases em português</div><div class="help-item-desc">Prefira aliases descritivos: <em>cliente</em>, <em>valor_total</em>, <em>data_emissao</em>. A IA usa esses nomes ao compor a resposta.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Executar SQL (preview)</div>
+      <div class="help-item-desc">O botão <strong>Executar SQL</strong> conecta à conexão ERP selecionada e retorna os primeiros 100 registros sem período — equivalente a ver a estrutura e dados brutos do Dataset. Use para validar aliases, JOINs e filtros antes de salvar.</div>
+      <div class="help-tip">Se o preview retornar erro, corrija o SQL antes de salvar. Um Dataset com SQL inválido não funciona em produção.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Modelos Protheus</div>
+      <div class="help-item"><div class="help-item-label">Modelo Clássico</div><div class="help-item-desc">Tabelas com sufixo: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SA1010</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SF2010</code>.</div></div>
+      <div class="help-item"><div class="help-item-label">Lobo Guará</div><div class="help-item-desc">Tabelas sem sufixo: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SA1</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SF2</code>. Adicione <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE A1_FILIAL = '01'</code>.</div></div>
+      <div class="help-tip">Não sabe qual modelo? Execute: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SELECT TOP 1 * FROM SYSOBJECTS WHERE NAME = 'SA1010'</code>. Se retornar resultado, é clássico.</div>
+    </div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

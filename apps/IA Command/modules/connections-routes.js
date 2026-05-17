@@ -2,10 +2,11 @@ const crud        = require('./database/crud');
 const factory     = require('./erp/providers/connection-factory');
 const erpRegistry = require('./erp/erp-registry');
 const { requireRotina } = require('./permissions');
+const { getEmpresaId } = require('./empresa-context');
 
 module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCommand }) {
 
-  function eid(req) { return req.session.empresa_id; }
+  function eid(req) { return getEmpresaId(req); }
   const canConfigConexoes = requireRotina('iac-config-conexoes');
 
   // ── LIST SUPPORTED ERPS ──────────────────────────────────────────────────────
@@ -13,11 +14,16 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
     res.json(erpRegistry.listarErps());
   });
 
-  // ── LIST ─────────────────────────────────────────────────────────────────────
+  // ── LIST (acesso completo — requer rotina de config) ─────────────────────────
   app.get('/api/ia-command/connections', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
     const rows = crud.listar('connections', { empresa_id: eid(req) });
-    // Never expose password in list
     res.json(rows.map((r) => ({ ...r, password: undefined })));
+  });
+
+  // ── LIST DISPONÍVEIS (dropdown em outros módulos — só requer requireIaCommand) ─
+  app.get('/api/ia-command/connections/available', requireAuth, requireIaCommand, (req, res) => {
+    const rows = crud.listar('connections', { empresa_id: eid(req) });
+    res.json(rows.map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, ativo: r.ativo })));
   });
 
   // ── GET ONE ──────────────────────────────────────────────────────────────────
@@ -29,33 +35,52 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
 
   // ── CREATE ───────────────────────────────────────────────────────────────────
   app.post('/api/ia-command/connections', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
-    const { nome, tipo, erp, host, port, database, username, password, filial, encrypt, trust_cert, ssl } = req.body;
-    if (!nome || !tipo || !host || !database) {
-      return res.status(400).json({ error: 'Campos obrigatórios: nome, tipo, host, database.' });
+    try {
+      const { nome, tipo, erp, host, port, database, username, password, encrypt, trust_cert, ssl } = req.body;
+      const isProxy = tipo === 'api_proxy';
+      if (!nome || !tipo || !host) {
+        return res.status(400).json({ error: 'Campos obrigatórios: nome, tipo, host.' });
+      }
+      if (!isProxy && !database) {
+        return res.status(400).json({ error: 'Campo obrigatório: database.' });
+      }
+      const row = crud.criar('connections', {
+        empresa_id: eid(req), nome, tipo, erp: erp || 'protheus', host,
+        port:       isProxy ? null : (port || null),
+        database:   database || null,
+        username:   isProxy ? null : (username || null),
+        password:   password || null,
+        encrypt:    isProxy ? 0 : (encrypt ? 1 : 0),
+        trust_cert: isProxy ? 0 : (trust_cert ? 1 : 0),
+        ssl:        ssl ? 1 : 0,
+        ativo:      0,
+      });
+      res.status(201).json({ ...row, password: undefined });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'Erro interno ao criar.' });
     }
-    const row = crud.criar('connections', {
-      empresa_id: eid(req), nome, tipo, erp: erp || 'protheus', host,
-      port: port || null, database, username: username || null,
-      password: password || null, filial: filial || null,
-      encrypt: encrypt ? 1 : 0, trust_cert: trust_cert ? 1 : 0, ssl: ssl ? 1 : 0,
-      ativo: 0,
-    });
-    res.status(201).json({ ...row, password: undefined });
   });
 
   // ── UPDATE ───────────────────────────────────────────────────────────────────
   app.put('/api/ia-command/connections/:id', requireAuth, requireIaCommand, canConfigConexoes, (req, res) => {
-    const existing = crud.buscarPorId('connections', req.params.id);
-    if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
+    try {
+      const existing = crud.buscarPorId('connections', req.params.id);
+      if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
 
-    const campos = {};
-    const allowed = ['nome', 'tipo', 'erp', 'host', 'port', 'database', 'username', 'password', 'filial', 'encrypt', 'trust_cert', 'ssl', 'ativo'];
-    for (const k of allowed) {
-      if (req.body[k] !== undefined) campos[k] = req.body[k];
+      const campos = {};
+      const allowed = ['nome', 'tipo', 'erp', 'host', 'port', 'database', 'username', 'password', 'filial', 'encrypt', 'trust_cert', 'ssl', 'ativo'];
+      for (const k of allowed) {
+        if (req.body[k] !== undefined) {
+          const v = req.body[k];
+          campos[k] = typeof v === 'boolean' ? (v ? 1 : 0) : v;
+        }
+      }
+
+      const row = crud.atualizar('connections', req.params.id, campos);
+      res.json({ ...row, password: undefined });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'Erro interno ao salvar.' });
     }
-
-    const row = crud.atualizar('connections', req.params.id, campos);
-    res.json({ ...row, password: undefined });
   });
 
   // ── DELETE ───────────────────────────────────────────────────────────────────

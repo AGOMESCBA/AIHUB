@@ -36,6 +36,60 @@
     .save-feedback.fail { color:#b91c1c; }
 
     @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+
+    /* Help drawer */
+    .help-overlay {
+      position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;
+      opacity:0;pointer-events:none;transition:opacity .25s;
+    }
+    .help-overlay.open { opacity:1;pointer-events:all; }
+    .help-drawer {
+      position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);
+      background:var(--bg-card);border-left:1px solid var(--border);
+      z-index:201;display:flex;flex-direction:column;
+      transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
+      overflow:hidden;
+    }
+    .help-drawer.open { transform:translateX(0); }
+    .help-drawer-header {
+      display:flex;align-items:center;justify-content:space-between;
+      padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;
+    }
+    .help-drawer-title { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .help-drawer-close {
+      width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;
+      color:var(--text-lo);display:flex;align-items:center;justify-content:center;
+      transition:background var(--transition),color var(--transition);
+    }
+    .help-drawer-close:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .help-drawer-body { flex:1;overflow-y:auto;padding:22px; }
+    .help-section { margin-bottom:28px; }
+    .help-section:last-child { margin-bottom:0; }
+    .help-section-title {
+      font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+      color:var(--accent);margin-bottom:12px;
+    }
+    .help-item { margin-bottom:14px; }
+    .help-item:last-child { margin-bottom:0; }
+    .help-item-label { font-size:13px;font-weight:600;color:var(--text-hi);margin-bottom:3px; }
+    .help-item-desc  { font-size:13px;color:var(--text-md);line-height:1.6; }
+    .help-item-desc code { font-family:monospace;font-size:12px;background:var(--bg-hover);padding:1px 5px;border-radius:4px; }
+    .help-tip {
+      background:rgba(124,58,237,.07);border:1px solid rgba(124,58,237,.2);border-radius:8px;
+      padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-top:10px;
+    }
+    .help-tip strong { color:#7c3aed; }
+
+    .pass-wrap { position:relative;display:flex;align-items:center; }
+    .pass-wrap .form-control { padding-right:42px; }
+    .btn-pass-toggle {
+      position:absolute;right:1px;top:1px;bottom:1px;width:38px;border:none;background:transparent;
+      color:var(--text-lo);cursor:pointer;border-radius:0 7px 7px 0;
+      display:flex;align-items:center;justify-content:center;
+      transition:color var(--transition),background var(--transition);
+    }
+    .btn-pass-toggle:hover { color:var(--text-hi);background:var(--bg-hover); }
+    .btn-pass-toggle svg * { pointer-events:none; }
   </style>
 </head>
 <body>
@@ -73,6 +127,10 @@
           </div>
           <div class="editor-actions">
             <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda sobre esta tela" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
             <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
             <button class="btn btn-primary" onclick="salvar()">Salvar</button>
           </div>
@@ -103,7 +161,7 @@
             <section class="form-section">
               <div class="form-section-header">
                 <div class="form-section-title">Dados da Conexão</div>
-                <div class="form-section-subtitle">Nome, tipo de banco e endereço do servidor.</div>
+                <div class="form-section-subtitle" id="section-conn-subtitle">Nome, tipo de banco e endereço do servidor.</div>
               </div>
               <div class="form-section-body">
                 <div class="form-row" style="margin-bottom:16px">
@@ -124,56 +182,108 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Banco de dados (driver) <span style="color:#dc2626">*</span></label>
+                    <label class="form-label">Tipo de Conexão <span style="color:#dc2626">*</span></label>
                     <select id="f-tipo" class="form-control" onchange="onTipoChange();atualizarResumo()">
-                      <option value="sqlserver">SQL Server</option>
-                      <option value="postgresql">PostgreSQL</option>
+                      <option value="sqlserver">SQL Server (direto)</option>
+                      <option value="postgresql">PostgreSQL (direto)</option>
                       <option value="sqlite">SQLite (Demo / Testes)</option>
+                      <option value="api_proxy">API REST (Protheus REST / Remoto)</option>
                     </select>
                   </div>
                 </div>
-                <div class="form-row" style="margin-bottom:16px" id="grp-filial-row">
-                  <div class="form-group" id="grp-filial">
-                    <label class="form-label">Filial / Empresa (Protheus)</label>
-                    <input type="text" id="f-filial" class="form-control" placeholder="ex: 01">
-                  </div>
-                  <div class="form-group" id="grp-erp-status" style="align-self:flex-end">
-                    <div id="erp-implementado" style="font-size:12px;padding:8px 0;color:var(--text-lo)"></div>
-                  </div>
-                </div>
-                <div class="form-row" style="margin-bottom:16px">
-                  <div class="form-group">
-                    <label class="form-label" id="lbl-host">Servidor (host) <span style="color:#dc2626">*</span></label>
-                    <input type="text" id="f-host" class="form-control" placeholder="192.168.1.10">
-                  </div>
-                  <div class="form-group" id="grp-port">
-                    <label class="form-label">Porta</label>
-                    <input type="number" id="f-port" class="form-control" placeholder="1433">
-                  </div>
-                </div>
-                <div class="form-row" style="margin-bottom:16px" id="grp-db-user">
-                  <div class="form-group">
-                    <label class="form-label" id="lbl-db">Database <span style="color:#dc2626">*</span></label>
-                    <input type="text" id="f-database" class="form-control" placeholder="ex: PROTHEUS12">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Usuário</label>
-                    <input type="text" id="f-username" class="form-control" placeholder="ex: sa">
-                  </div>
-                </div>
-                <div class="form-row" style="margin-bottom:0" id="grp-pass-opts">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">Senha</label>
-                    <input type="password" id="f-password" class="form-control" placeholder="••••••••">
-                    <div class="form-hint">Deixe em branco para manter a senha atual ao editar.</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">&nbsp;</label>
-                    <div style="display:flex;gap:20px;margin-top:6px">
-                      <label class="form-check"><input type="checkbox" id="f-encrypt"> Encrypt</label>
-                      <label class="form-check"><input type="checkbox" id="f-trust" checked> Trust Cert</label>
+
+                <!-- MODO: Conexão Direta (SQL Server, PostgreSQL, SQLite) -->
+                <div id="grp-direto">
+                  <div class="form-row" style="margin-bottom:16px">
+                    <div class="form-group">
+                      <label class="form-label" id="lbl-host">Servidor (host) <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-host" class="form-control" placeholder="192.168.1.10">
+                    </div>
+                    <div class="form-group" id="grp-port">
+                      <label class="form-label">Porta</label>
+                      <input type="number" id="f-port" class="form-control" placeholder="1433">
                     </div>
                   </div>
+                  <div class="form-row" style="margin-bottom:16px" id="grp-db-user">
+                    <div class="form-group">
+                      <label class="form-label" id="lbl-db">Database <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-database" class="form-control" placeholder="ex: PROTHEUS12">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Usuário</label>
+                      <input type="text" id="f-username" class="form-control" placeholder="ex: sa">
+                    </div>
+                  </div>
+                  <div class="form-row" style="margin-bottom:0" id="grp-pass-opts">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Senha</label>
+                      <div class="pass-wrap">
+                        <input type="password" id="f-password" class="form-control" placeholder="••••••••">
+                        <button type="button" class="btn-pass-toggle" onclick="toggleSenha('f-password',this)" title="Mostrar/ocultar senha">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                      </div>
+                      <div class="form-hint">Deixe em branco para manter a senha atual ao editar.</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">&nbsp;</label>
+                      <div style="display:flex;gap:20px;margin-top:6px">
+                        <label class="form-check" title="Criptografa o tráfego entre o IA Command e o SQL Server via TLS. Recomendado em redes públicas ou nuvem."><input type="checkbox" id="f-encrypt"> Encrypt</label>
+                        <label class="form-check" title="Aceita o certificado do servidor sem validar com uma autoridade certificadora. Necessário em instalações on-premise com certificado auto-assinado (padrão em ambientes Protheus)."><input type="checkbox" id="f-trust" checked> Trust Cert</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- MODO: API Proxy (Protheus REST / Remoto) -->
+                <div id="grp-proxy" style="display:none">
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label">URL Base do Servidor REST <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="f-proxy-host" class="form-control" placeholder="https://protheus.empresa.com.br:8080">
+                    <div class="form-hint">Endereço completo com protocolo e porta do servidor REST do Protheus.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label">Caminho do Endpoint <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="f-proxy-path" class="form-control" value="/rest/api/iacommand/v1" placeholder="/rest/api/iacommand/v1">
+                    <div class="form-hint">
+                      Prefixo das rotas do agente no Protheus REST.<br>
+                      Execute será chamado em: <code style="font-family:monospace">&lt;URL Base&gt;<span id="hint-path">/rest/api/iacommand/v1</span>/execute</code>
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">API Key / Bearer Token <span style="color:#dc2626">*</span></label>
+                    <div class="pass-wrap">
+                      <input type="password" id="f-proxy-key" class="form-control" placeholder="••••••••••••••••">
+                      <button type="button" class="btn-pass-toggle" onclick="toggleSenha('f-proxy-key',this)" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Chave configurada no endpoint AdvPL. Enviada no header <code style="font-family:monospace">Authorization: Bearer &lt;key&gt;</code>.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Bloco de configuração do lado Protheus — só aparece no modo api_proxy -->
+            <section class="form-section" id="grp-advpl" style="display:none">
+              <div class="form-section-header">
+                <div class="form-section-title">Como configurar o Protheus REST</div>
+                <div class="form-section-subtitle">Instale o endpoint AdvPL abaixo no seu ambiente Protheus para ativar a integração remota.</div>
+              </div>
+              <div class="form-section-body">
+                <div style="background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:14px;font-size:12px;color:var(--text-md);line-height:1.6">
+                  <strong style="color:var(--text-hi)">Passos:</strong><br>
+                  1. Copie o código AdvPL abaixo e salve como <code style="font-family:monospace">IACommandAgent.prw</code> no seu projeto Protheus.<br>
+                  2. Compile o fonte no Protheus IDE / TDS.<br>
+                  3. No <code style="font-family:monospace">rest.xml</code> do seu ambiente, certifique-se de que o path <code style="font-family:monospace">/rest</code> está habilitado.<br>
+                  4. Defina a API Key no próprio fonte (constante <code style="font-family:monospace">IAC_API_KEY</code>) e recompile.<br>
+                  5. Use a mesma chave no campo "API Key" desta tela.
+                </div>
+
+                <div style="position:relative">
+                  <button class="btn btn-ghost" style="position:absolute;top:10px;right:10px;font-size:11px;padding:4px 10px;z-index:1" onclick="copiarAdvpl(this)">Copiar</button>
+                  <textarea id="advpl-code" class="form-control" rows="32" readonly spellcheck="false"
+                    style="font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical;background:var(--bg-base);color:var(--text-hi)"></textarea>
                 </div>
               </div>
             </section>
@@ -227,6 +337,113 @@
   </div>
 </div>
 
+<!-- Help overlay + drawer -->
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Conexão ERP</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="help-drawer-body">
+
+    <div class="help-section">
+      <div class="help-section-title">Modos de Conexão</div>
+      <div class="help-item">
+        <div class="help-item-label">SQL Server / PostgreSQL / SQLite — Conexão Direta</div>
+        <div class="help-item-desc">O IA Command acessa o banco de dados do ERP diretamente via TCP. Requer que o servidor do IA Command esteja na mesma rede que o banco (ou que a porta esteja acessível via VPN/firewall).</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">API REST — Conexão Remota</div>
+        <div class="help-item-desc">O IA Command envia o SELECT via HTTP para um endpoint instalado no servidor Protheus. O Protheus executa a query no banco e retorna os dados em JSON. Ideal quando o banco não está acessível diretamente pela internet.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Campos — Conexão Direta</div>
+      <div class="help-item">
+        <div class="help-item-label">Sistema ERP</div>
+        <div class="help-item-desc">Identifica qual ERP está sendo conectado (Protheus, Sankhya, SAP…). Não afeta a conexão em si — as tabelas e joins são definidos no SQL Base de cada dataset.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Tipo de Conexão / Driver</div>
+        <div class="help-item-desc">Define qual biblioteca de banco usar. Use <code>SQL Server</code> para Protheus e a maioria dos ERPs brasileiros. <code>PostgreSQL</code> para instalações Linux/nuvem. <code>SQLite</code> apenas para testes locais.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Servidor (host) e Porta</div>
+        <div class="help-item-desc">Endereço IP ou hostname do servidor de banco de dados. Porta padrão SQL Server: <code>1433</code>. Se o SQL Server usar uma instância nomeada (ex: <code>SERVIDOR\SQLEXPRESS</code>), informe o hostname com o nome da instância.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Database</div>
+        <div class="help-item-desc">Nome do banco de dados dentro do SQL Server. No Protheus costuma ser <code>PROTHEUS12</code>, <code>PROTHEUS11</code> ou similar, dependendo da versão.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Usuário e Senha</div>
+        <div class="help-item-desc">Credenciais de acesso ao banco. Crie um usuário dedicado com permissão somente leitura (<code>SELECT</code>) nas tabelas do ERP. Nunca use <code>sa</code> em produção.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Encrypt</div>
+        <div class="help-item-desc">Força criptografia TLS entre o IA Command e o SQL Server. Nas versões mais novas do driver (<code>mssql v10+</code>) já vem ativado por padrão. Mantenha ativo em ambientes de nuvem ou redes públicas. Em redes internas corporativas pode ser desativado se o SQL Server não suportar TLS.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Trust Cert (Trust Server Certificate)</div>
+        <div class="help-item-desc">Quando a criptografia está ativa, esta opção diz ao IA Command para aceitar o certificado SSL do servidor sem validar com uma Autoridade Certificadora (CA). <strong>Deve ficar marcado</strong> na grande maioria das instalações Protheus on-premise, que usam certificados auto-assinados. Se desmarcar e o certificado não for válido, a conexão falha com erro de certificado.</div>
+        <div class="help-tip"><strong>Regra prática:</strong> Protheus on-premise → marque Trust Cert. SQL Server em nuvem com certificado válido (Azure, AWS RDS) → pode desmarcar para maior segurança.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Campos — API REST (Protheus)</div>
+      <div class="help-item">
+        <div class="help-item-label">URL Base do Servidor REST</div>
+        <div class="help-item-desc">Endereço completo do servidor REST do Protheus, incluindo protocolo e porta. Exemplo: <code>https://protheus.empresa.com.br:8080</code>. É o mesmo endereço usado para acessar os serviços REST do Protheus pelo navegador.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Caminho do Endpoint</div>
+        <div class="help-item-desc">Prefixo das rotas do agente IA Command instaladas no Protheus. Padrão: <code>/rest/api/iacommand/v1</code>. O IA Command chamará <code>/execute</code> e <code>/ping</code> neste caminho. Altere apenas se você modificou o fonte AdvPL.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">API Key / Bearer Token</div>
+        <div class="help-item-desc">Chave secreta definida na constante <code>IAC_API_KEY</code> do fonte AdvPL instalado no Protheus. O IA Command envia esta chave no header <code>Authorization: Bearer &lt;key&gt;</code> em cada chamada. Use uma string longa e aleatória.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Testando a Conexão</div>
+      <div class="help-item">
+        <div class="help-item-label">O que o teste faz?</div>
+        <div class="help-item-desc">
+          — <strong>Modo direto:</strong> abre uma conexão TCP com o banco e executa <code>SELECT 1</code>.<br>
+          — <strong>Modo API REST:</strong> chama <code>GET /ping</code> no agente Protheus e verifica a resposta.<br>
+          Salve a conexão antes de testar.
+        </div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Ativar como padrão</div>
+        <div class="help-item-desc">Após testar com sucesso, acesse a lista de conexões e clique em "Ativar" para definir esta conexão como a padrão da empresa. Somente a conexão ativa é usada pelo bot.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Boas Práticas de Segurança</div>
+      <div class="help-item">
+        <div class="help-item-label">Usuário somente leitura</div>
+        <div class="help-item-desc">Crie um login SQL com permissão apenas de <code>SELECT</code> nas tabelas que serão consultadas. O IA Command nunca precisa de <code>INSERT</code>, <code>UPDATE</code> ou <code>DELETE</code>.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Restringir acesso por IP</div>
+        <div class="help-item-desc">No firewall do servidor, libere a porta do banco (1433) ou do REST somente para o IP do servidor do IA Command. Evite abrir para <code>0.0.0.0/0</code>.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Modo API REST — troque a chave periodicamente</div>
+        <div class="help-item-desc">A <code>IAC_API_KEY</code> é a única barreira de acesso ao endpoint AdvPL. Troque-a periodicamente, recompile o fonte e atualize aqui. Considere usar HTTPS com certificado válido no servidor REST.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script src="/js/auth.js"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
@@ -243,28 +460,40 @@
     protheus: 'TOTVS Protheus', sankhya: 'Sankhya',
     sap: 'SAP Business One', senior: 'Senior Sistemas', mxm: 'MXM Sistemas',
   };
-  const ERP_IMPLEMENTADO = { protheus: true };
-
   function onErpChange() {
-    const erp = document.getElementById('f-erp').value;
-    const impl = ERP_IMPLEMENTADO[erp] ?? false;
-    const el = document.getElementById('erp-implementado');
-    el.textContent = impl
-      ? '✓ Query builders implementados'
-      : '⚠ Stubs — query builders a implementar';
-    el.style.color = impl ? '#15803d' : '#92400e';
-    document.getElementById('grp-filial').style.display = erp === 'protheus' ? '' : 'none';
+    // ERP só identifica o sistema — tabelas e joins ficam no sql_base do dataset.
   }
 
   function onTipoChange() {
-    const tipo  = document.getElementById('f-tipo').value;
-    const isSql = tipo !== 'sqlite';
-    document.getElementById('lbl-host').textContent        = tipo === 'sqlite' ? 'Caminho do arquivo *' : 'Servidor (host) *';
-    document.getElementById('f-host').placeholder         = tipo === 'sqlite' ? 'C:\\dados\\protheus.db' : '192.168.1.10';
-    document.getElementById('grp-port').style.display     = isSql ? '' : 'none';
-    document.getElementById('grp-db-user').style.display  = isSql ? '' : 'none';
-    document.getElementById('grp-pass-opts').style.display = isSql ? '' : 'none';
+    const tipo    = document.getElementById('f-tipo').value;
+    const isProxy = tipo === 'api_proxy';
+    const isSql   = !isProxy && tipo !== 'sqlite';
+
+    // Alterna entre modo direto e modo proxy
+    document.getElementById('grp-direto').style.display = isProxy ? 'none' : '';
+    document.getElementById('grp-proxy').style.display  = isProxy ? '' : 'none';
+    document.getElementById('grp-advpl').style.display  = isProxy ? '' : 'none';
+
+    // Ajustes do modo direto
+    if (!isProxy) {
+      document.getElementById('lbl-host').textContent       = tipo === 'sqlite' ? 'Caminho do arquivo *' : 'Servidor (host) *';
+      document.getElementById('f-host').placeholder         = tipo === 'sqlite' ? 'C:\\dados\\protheus.db' : '192.168.1.10';
+      document.getElementById('grp-port').style.display     = isSql ? '' : 'none';
+      document.getElementById('grp-db-user').style.display  = isSql ? '' : 'none';
+      document.getElementById('grp-pass-opts').style.display = isSql ? '' : 'none';
+    }
+
+    document.getElementById('section-conn-subtitle').textContent = isProxy
+      ? 'Integração via API REST — o Protheus executa as queries e retorna os dados.'
+      : 'Nome, tipo de banco e endereço do servidor.';
   }
+
+  // Atualiza hint da URL conforme o path é digitado
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('f-proxy-path')?.addEventListener('input', function () {
+      document.getElementById('hint-path').textContent = this.value || '/rest/api/iacommand/v1';
+    });
+  });
 
   function atualizarResumo() {
     const nome = document.getElementById('f-nome').value.trim() || '—';
@@ -291,16 +520,22 @@
 
     document.getElementById('f-id').value       = conn.id;
     document.getElementById('f-empresa').value  = `ID ${conn.empresa_id}`;
-    document.getElementById('f-nome').value     = conn.nome     || '';
-    document.getElementById('f-erp').value      = conn.erp      || 'protheus';
-    document.getElementById('f-tipo').value     = conn.tipo     || 'sqlserver';
-    document.getElementById('f-host').value     = conn.host     || '';
-    document.getElementById('f-port').value     = conn.port     || '';
-    document.getElementById('f-database').value = conn.database || '';
-    document.getElementById('f-username').value = conn.username || '';
-    document.getElementById('f-filial').value   = conn.filial   || '';
-    document.getElementById('f-encrypt').checked = !!conn.encrypt;
-    document.getElementById('f-trust').checked   = conn.trust_cert !== 0;
+    document.getElementById('f-nome').value     = conn.nome || '';
+    document.getElementById('f-erp').value      = conn.erp  || 'protheus';
+    document.getElementById('f-tipo').value     = conn.tipo || 'sqlserver';
+
+    if (conn.tipo === 'api_proxy') {
+      document.getElementById('f-proxy-host').value = conn.host     || '';
+      document.getElementById('f-proxy-path').value = conn.database || '/rest/api/iacommand/v1';
+      document.getElementById('hint-path').textContent = conn.database || '/rest/api/iacommand/v1';
+    } else {
+      document.getElementById('f-host').value     = conn.host     || '';
+      document.getElementById('f-port').value     = conn.port     || '';
+      document.getElementById('f-database').value = conn.database || '';
+      document.getElementById('f-username').value = conn.username || '';
+      document.getElementById('f-encrypt').checked = !!conn.encrypt;
+      document.getElementById('f-trust').checked   = conn.trust_cert !== 0;
+    }
 
     document.getElementById('meta-status').textContent = conn.ativo ? '● Ativa' : '○ Inativa';
     document.getElementById('meta-teste').textContent  =
@@ -328,24 +563,34 @@
   }
 
   async function salvar() {
-    const nome = document.getElementById('f-nome').value.trim();
-    const host = document.getElementById('f-host').value.trim();
-    if (!nome || !host) { _feedback('Preencha nome e servidor/host.', false); return; }
+    const nome  = document.getElementById('f-nome').value.trim();
+    const tipo  = document.getElementById('f-tipo').value;
+    const isProxy = tipo === 'api_proxy';
 
-    const body = {
-      nome,
-      erp:        document.getElementById('f-erp').value,
-      tipo:       document.getElementById('f-tipo').value,
-      host,
-      port:       document.getElementById('f-port').value || null,
-      database:   document.getElementById('f-database').value.trim(),
-      username:   document.getElementById('f-username').value.trim(),
-      filial:     document.getElementById('f-filial').value.trim(),
-      encrypt:    document.getElementById('f-encrypt').checked,
-      trust_cert: document.getElementById('f-trust').checked,
-    };
-    const pw = document.getElementById('f-password').value;
-    if (pw) body.password = pw;
+    let body;
+    if (isProxy) {
+      const host = document.getElementById('f-proxy-host').value.trim();
+      const path = document.getElementById('f-proxy-path').value.trim();
+      const key  = document.getElementById('f-proxy-key').value;
+      if (!nome || !host) { _feedback('Preencha nome e URL base do servidor REST.', false); return; }
+      body = { nome, tipo, erp: document.getElementById('f-erp').value, host, database: path || '/rest/api/iacommand/v1' };
+      if (key) body.password = key;
+    } else {
+      const host = document.getElementById('f-host').value.trim();
+      if (!nome || !host) { _feedback('Preencha nome e servidor/host.', false); return; }
+      body = {
+        nome, tipo,
+        erp:        document.getElementById('f-erp').value,
+        host,
+        port:       document.getElementById('f-port').value || null,
+        database:   document.getElementById('f-database').value.trim(),
+        username:   document.getElementById('f-username').value.trim(),
+        encrypt:    document.getElementById('f-encrypt').checked,
+        trust_cert: document.getElementById('f-trust').checked,
+      };
+      const pw = document.getElementById('f-password').value;
+      if (pw) body.password = pw;
+    }
 
     const url    = editId ? `/api/ia-command/connections/${editId}` : '/api/ia-command/connections';
     const method = editId ? 'PUT' : 'POST';
@@ -380,6 +625,167 @@
     el.textContent = msg;
     el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
     setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
+  }
+
+  function abrirAjuda() {
+    document.getElementById('help-overlay').classList.add('open');
+    document.getElementById('help-drawer').classList.add('open');
+  }
+  function fecharAjuda() {
+    document.getElementById('help-overlay').classList.remove('open');
+    document.getElementById('help-drawer').classList.remove('open');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
+
+  const SVG_EYE     = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  const SVG_EYE_OFF = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+  function _svgEye(show) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${show ? SVG_EYE_OFF : SVG_EYE}</svg>`;
+  }
+  function toggleSenha(id, btn) {
+    const inp  = document.getElementById(id);
+    const show = inp.type === 'password';
+    inp.type      = show ? 'text' : 'password';
+    btn.innerHTML = _svgEye(show);
+    btn.title     = show ? 'Ocultar senha' : 'Mostrar senha';
+  }
+
+  // ── Código AdvPL do agente ────────────────────────────────────────────────────
+  const ADVPL_CODE = `#Include "tlpp-core.th"
+#Include "tlpp-rest.th"
+
+// ============================================================
+// IA Command Agent — Endpoint REST para integração remota
+// Instale este fonte no Protheus, compile e configure o rest.xml
+// ============================================================
+
+#Define IAC_API_KEY  "COLOQUE_SUA_CHAVE_AQUI"   // Troque pela sua chave secreta
+
+// ──────────────────────────────────────────────────────────────
+// GET /rest/api/iacommand/v1/ping — verifica se o agente está ativo
+// ──────────────────────────────────────────────────────────────
+@Get("/api/iacommand/v1/ping")
+Function u_IACPing()
+  If !_IACValidarChave()
+    ReturnStatus(401, "Unauthorized", '{"error":"API Key invalida"}')
+    Return
+  EndIf
+  ReturnData(200, '{"status":"ok","agent":"IA Command Agent v1.0"}')
+Return
+
+// ──────────────────────────────────────────────────────────────
+// POST /rest/api/iacommand/v1/execute — executa uma query SELECT
+// Body: { "sql": "SELECT ..." }
+// ──────────────────────────────────────────────────────────────
+@Post("/api/iacommand/v1/execute")
+Function u_IACExecute()
+  Local oBody   := Nil
+  Local cSql    := ""
+  Local nLimit  := 0
+  Local aRows   := {}
+  Local cJson   := ""
+
+  If !_IACValidarChave()
+    ReturnStatus(401, "Unauthorized", '{"error":"API Key invalida"}')
+    Return
+  EndIf
+
+  oBody := FwJsonDeserialize(GetContent())
+  If ValType(oBody) <> "O" .Or. Empty(oBody["sql"])
+    ReturnStatus(400, "Bad Request", '{"error":"Campo sql obrigatorio"}')
+    Return
+  EndIf
+
+  cSql   := AllTrim(oBody["sql"])
+  // Limite: usa o enviado pelo IA Command, mas nunca ultrapassa o parâmetro IAC_MAXROWS
+  // Configure IAC_MAXROWS no Protheus (SIGACFG > Parâmetros) para ajustar sem recompilar.
+  nLimit := IIf(ValType(oBody["limit"]) == "N" .And. oBody["limit"] > 0, oBody["limit"], 10000)
+  nLimit := Min(nLimit, GetMv("IAC_MAXROWS", .F., 50000))
+
+  // Bloqueia qualquer comando que não seja SELECT
+  If !_IACIsSELECT(cSql)
+    ReturnStatus(400, "Bad Request", '{"error":"Apenas SELECT e permitido"}')
+    Return
+  EndIf
+
+  aRows := _IACExecutar(cSql, nLimit)
+  cJson := _IACRowsToJson(aRows)
+
+  ReturnData(200, '{"rows":' + cJson + ',"total":' + cValToChar(Len(aRows)) + '}')
+Return
+
+// ──────────────────────────────────────────────────────────────
+// Funções internas
+// ──────────────────────────────────────────────────────────────
+
+Static Function _IACValidarChave()
+  Local cHeader := GetHeader("Authorization")
+  Local cKey    := ""
+  If Left(cHeader, 7) == "Bearer "
+    cKey := SubStr(cHeader, 8)
+  EndIf
+  Return AllTrim(cKey) == IAC_API_KEY
+
+Static Function _IACIsSELECT(cSql)
+  Local cPrimeiro := Upper(AllTrim(cSql))
+  // Rejeita qualquer SQL que não comece com SELECT ou WITH (CTE)
+  Return Left(cPrimeiro, 6) == "SELECT" .Or. Left(cPrimeiro, 4) == "WITH"
+
+Static Function _IACExecutar(cSql, nLimit)
+  Local oQry   := Nil
+  Local aRows  := {}
+  Local aCols  := {}
+  Local aRow   := {}
+  Local nCol   := 0
+  Local nRows  := 0
+
+  Begin Sequence
+    oQry := TCQuery(cSql, .T.)
+    If oQry == Nil .Or. oQry:Error() <> ""
+      Break
+    EndIf
+
+    aCols := oQry:FieldNames()
+
+    Do While !oQry:EoF() .And. nRows < nLimit
+      aRow := {}
+      For nCol := 1 To Len(aCols)
+        AAdd(aRow, { aCols[nCol], oQry:FieldGet(aCols[nCol]) })
+      Next nCol
+      AAdd(aRows, aRow)
+      oQry:Skip()
+      nRows++
+    EndDo
+
+    oQry:Close()
+  End Sequence
+
+  Return aRows
+
+Static Function _IACRowsToJson(aRows)
+  Local oJson := JsonArray():New()
+  Local oRow  := Nil
+  Local aPar  := Nil
+  Local nI    := 0
+
+  For nI := 1 To Len(aRows)
+    oRow := JsonObject():New()
+    For Each aPar In aRows[nI]
+      oRow[ aPar[1] ] := aPar[2]
+    Next
+    oJson:Add(oRow)
+  Next
+
+  Return oJson:ToJson()`;
+
+  document.getElementById('advpl-code').value = ADVPL_CODE;
+
+  function copiarAdvpl(btn) {
+    navigator.clipboard.writeText(ADVPL_CODE).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copiado!';
+      setTimeout(() => { btn.textContent = orig; }, 2000);
+    });
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
