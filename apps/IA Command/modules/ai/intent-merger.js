@@ -36,6 +36,49 @@ function detectarContinuacao(mensagem) {
 }
 
 /**
+ * Extrai o ano calendário implicado pelo período de contexto.
+ * Retorna null se o período for ambíguo (ex.: comparação entre dois anos).
+ */
+function _extrairAnoContexto(periodo) {
+  if (!periodo) return null;
+  const ano = new Date().getFullYear();
+  const tipo = periodo.tipo || 'nenhum';
+
+  if (tipo === 'ano_anterior') return ano - 1;
+  if (tipo === 'ano_atual') return ano;
+
+  if (tipo === 'personalizado' && periodo.data_inicio) {
+    const y = parseInt(String(periodo.data_inicio).slice(0, 4), 10);
+    return Number.isFinite(y) && y >= 1900 && y <= 2099 ? y : null;
+  }
+
+  if (['mes_anterior', 'mes_atual'].includes(tipo)) return ano;
+
+  if (['primeiro_trimestre', 'segundo_trimestre', 'terceiro_trimestre', 'quarto_trimestre',
+       'primeiro_semestre', 'segundo_semestre'].includes(tipo)) {
+    return periodo.ano_ref === 'anterior' ? ano - 1 : ano;
+  }
+
+  return null;
+}
+
+/**
+ * Retorna true se o período for um "personalizado" de mês único gerado sem ano explícito
+ * na mensagem — ou seja, o period-resolver assumiu o ano corrente por padrão.
+ */
+function _ehMesSemAno(periodo, mensagem) {
+  if (!periodo || periodo.tipo !== 'personalizado') return false;
+  if (/\b(20\d{2}|19\d{2})\b/.test(String(mensagem || ''))) return false;
+
+  const ini = String(periodo.data_inicio || '');
+  const fim = String(periodo.data_fim   || '');
+  if (ini.length !== 8 || fim.length !== 8) return false;
+
+  // Mesma ano e mês no início e fim → bloco de um único mês
+  return ini.slice(0, 6) === fim.slice(0, 6);
+}
+
+/**
  * Mescla o intent classificado no turno atual com o contexto do turno anterior.
  *
  * Regras:
@@ -44,6 +87,7 @@ function detectarContinuacao(mensagem) {
  *  - Período ausente ("nenhum") → herda do contexto.
  *  - Período de refinamento (comparacao_mensal/anual) → vira agrupar_por temporal;
  *    período do contexto é preservado.
+ *  - Período de mês sem ano explícito + contexto com ano específico → ano herdado do contexto.
  *  - Filtros: mesclagem aditiva (novos somam aos herdados, não substituem).
  *  - Agrupamento: sempre respeita o novo (pode ser null intencionalmente).
  *  - Limite e ordenação: herda do contexto apenas se ausentes no novo intent.
@@ -51,9 +95,10 @@ function detectarContinuacao(mensagem) {
  * @param {object} novoIntent      - Intent classificado neste turno
  * @param {object} ultimoIntent    - Intent do turno anterior (contexto)
  * @param {number} ultimoIntentTs  - Timestamp do último intent salvo
+ * @param {string} mensagem        - Texto original da mensagem (usado para detectar ano explícito)
  * @returns {object} - Intent final, potencialmente enriquecido
  */
-function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0) {
+function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
   if (!ultimoIntent) return novoIntent;
 
   // Contexto expirado por inatividade
@@ -95,6 +140,21 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0) {
     merged._herdouPeriodo = true;
   }
   // Período explícito novo (qualquer outro tipo) → substitui, sem herança
+  // Regra extra: mês sem ano explícito + contexto com ano específico → ajusta o ano
+  if (!merged._herdouPeriodo && mensagem && _ehMesSemAno(merged.periodo, mensagem)) {
+    const anoCtx = _extrairAnoContexto(ultimoIntent.periodo);
+    if (anoCtx != null) {
+      const anoNovo = parseInt(String(merged.periodo.data_inicio).slice(0, 4), 10);
+      if (Number.isFinite(anoNovo) && anoNovo !== anoCtx) {
+        merged.periodo = {
+          ...merged.periodo,
+          data_inicio: String(anoCtx) + String(merged.periodo.data_inicio).slice(4),
+          data_fim:    String(anoCtx) + String(merged.periodo.data_fim).slice(4),
+        };
+        merged._anoHerdadoDoContexto = anoCtx;
+      }
+    }
+  }
 
   // 3. Filtros: mesclagem aditiva
   const filtrosHerdados = {};

@@ -564,7 +564,7 @@ class IACWhatsAppService extends EventEmitter {
 
     let intent = await intentService.classificar(textoExecucao, empresaId, { contextoAnterior });
     if (contextoAnterior) {
-      intent = intentMerger.mesclar(intent, contextoAnterior, lastIntentTs);
+      intent = intentMerger.mesclar(intent, contextoAnterior, lastIntentTs, textoExecucao);
     }
 
     const filtrosStr = Object.keys(intent.filtros || {}).length
@@ -655,7 +655,7 @@ class IACWhatsAppService extends EventEmitter {
     }
     if (!intent) intent = fallbackIntent || { intencao: 'desconhecido', _provedor: 'nenhum', _erro: 'Nenhuma chave de IA configurada.', confianca: 0, periodo: { tipo: 'nenhum' }, filtros: {}, agrupar_por: null, ordenar_por: null, limite: null, precisa_confirmacao: false };
     if (contextoAnteriorAll) {
-      intent = intentMerger.mesclar(intent, contextoAnteriorAll, lastIntentTsAll);
+      intent = intentMerger.mesclar(intent, contextoAnteriorAll, lastIntentTsAll, texto);
     }
     const empresaLogId = empresas[0].empresa_id;
     const senderAll = sender || '__all__';
