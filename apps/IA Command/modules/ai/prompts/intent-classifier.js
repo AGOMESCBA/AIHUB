@@ -70,6 +70,10 @@ function _buildContextSection(ctx) {
   linhas.push('Exceção: "mês a mês" / "por mês" / "por ano" em continuação = agrupar_por temporal,');
   linhas.push('mantendo o período anterior — NÃO é um novo período de comparação.');
   linhas.push('');
+  linhas.push('REGRA CRÍTICA DE PERÍODO: se a mensagem não contiver palavras temporais explícitas');
+  linhas.push('(mês, ano, semana, hoje, ontem, janeiro...dezembro, 2024, 2025, etc.),');
+  linhas.push('retorne periodo.tipo = "nenhum" — NUNCA assuma "mes_atual" ou "ano_atual" como padrão.');
+  linhas.push('O sistema herdará automaticamente o período do contexto acima.');
   return linhas.join('\n');
 }
 

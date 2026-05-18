@@ -18,6 +18,16 @@ const PERIODO_REFINAMENTO = {
 // Tempo máximo de inatividade para o contexto de intenção permanecer válido
 const CONTEXT_TTL_MS = 10 * 60 * 1000;
 
+// Períodos que o LLM tende a retornar como "padrão implícito" quando o usuário
+// não especificou período nenhum. Em contexto de continuação, esses períodos devem
+// ser sobrescritos pelo contexto anterior SE a mensagem não contiver referência
+// temporal explícita.
+const PERIODOS_GENERICOS = new Set(['mes_atual', 'ano_atual']);
+
+// Detecta se a mensagem contém alguma referência temporal explícita do usuário.
+// Se não contiver → período retornado pelo classificador é um "padrão implícito".
+const _TEM_TEMPORAL = /\b(hoje|ontem|semana|m[eê]s|ano|trimestre|semestre|[úu]ltim|janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|20\d{2}|19\d{2})\b/i;
+
 function _clonar(v) {
   return v == null ? v : JSON.parse(JSON.stringify(v));
 }
@@ -154,6 +164,20 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
         merged._anoHerdadoDoContexto = anoCtx;
       }
     }
+  }
+
+  // Sobrescreve período "genérico por padrão" (mes_atual / ano_atual) quando a mensagem
+  // não tem referência temporal explícita — impede que o LLM assuma um default que
+  // apague o contexto estabelecido (ex: "por dia" após "ano anterior" → não é mes_atual).
+  if (
+    !merged._herdouPeriodo &&
+    PERIODOS_GENERICOS.has(merged.periodo?.tipo) &&
+    mensagem &&
+    !_TEM_TEMPORAL.test(String(mensagem))
+  ) {
+    merged.periodo = _clonar(ultimoIntent.periodo);
+    merged._herdouPeriodo = true;
+    merged._periodoGenericoSobrescrito = merged.periodo?.tipo;
   }
 
   // 3. Filtros: mesclagem aditiva
