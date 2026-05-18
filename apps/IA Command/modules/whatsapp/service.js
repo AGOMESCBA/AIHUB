@@ -475,13 +475,21 @@ class IACWhatsAppService extends EventEmitter {
     let textoExecucao = texto;
 
     if (this._channelId) {
-      const _resetKeywords = [
-        'trocar empresa', 'mudar empresa', 'alterar empresa',
-        'trocar de empresa', 'mudar de empresa', 'alterar de empresa',
-        'empresa', 'voltar',
+      // Comandos explícitos de troca — sempre ativam o menu (independente de sessão prévia)
+      const _trocaExplicita = [
+        'trocar empresa',    'mudar empresa',    'alterar empresa',    'selecionar empresa',
+        'alternar empresa',  'escolher empresa',  'trocar de empresa', 'mudar de empresa',
+        'alterar de empresa','selecionar de empresa','alternar de empresa',
+        'trocar filial',     'mudar filial',     'alterar filial',     'selecionar filial',
+        'trocar de filial',  'mudar de filial',  'alterar de filial',
+        'change company',    'switch company',
       ];
+      // Palavras genéricas — só ativam quando já há empresa resolvida na sessão (evita falso positivo)
+      const _trocaComContexto = ['empresa', 'voltar'];
       const textoNorm = texto.toLowerCase().trim();
-      if (_resetKeywords.some(k => textoNorm === k) && this._getSenderContext(sender)?.empresaId) {
+      const isExplicitaTroca  = _trocaExplicita.some(k => textoNorm === k);
+      const isContextoTroca   = _trocaComContexto.some(k => textoNorm === k) && this._getSenderContext(sender)?.empresaId;
+      if (isExplicitaTroca || isContextoTroca) {
         // Sentinel '__trocar__': mantém pending=true para aceitar o próximo dígito/nome como seleção
         this._setSenderContext(sender, { empresaId: null, pendingText: '__trocar__' });
         return this._formatarClarificacao(channelStore.listarEmpresasDoCanal(this._channelId));
