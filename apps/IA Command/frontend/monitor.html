@@ -145,6 +145,7 @@
         <button class="btn btn-ghost"   id="btn-stop"  onclick="parar()" disabled>■ Parar</button>
         <button class="btn btn-ghost"   id="btn-disconnect" onclick="desconectarSessao()">Desconectar sessão</button>
         <button class="btn btn-ghost"   id="btn-test"  onclick="abrirModalTeste()" disabled>📤 Teste de envio</button>
+        <button class="btn btn-ghost"   onclick="abrirHistorico()">Histórico</button>
         <button class="btn btn-ghost"   onclick="salvarLog()">💾 Salvar log</button>
         <button class="btn btn-ghost"   onclick="limparLogs()">🗑 Limpar logs</button>
         <span class="mon-msg-count">Mensagens recebidas: <strong id="msg-count">0</strong></span>
@@ -399,6 +400,14 @@
       aplicarStatus('stopped');
     }
     document.getElementById('btn-disconnect').disabled = false;
+  }
+
+  function abrirHistorico() {
+    const empresaId = _monitorEmpresaId || Number(window._iahubEmpresa?.id) || null;
+    const url = empresaId
+      ? `/app/ia-command/admin-interpretacoes.html?_empresa=${encodeURIComponent(empresaId)}`
+      : '/app/ia-command/admin-interpretacoes.html';
+    window.parent.postMessage({ type: 'mdi:open-tab', url, label: 'Interpretações', icon: '📋' }, location.origin);
   }
 
   function salvarLog() {
