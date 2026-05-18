@@ -29,6 +29,13 @@
     .stat-sub  { font-size:12px;color:var(--text-lo); }
     .stat-card.accent { border-color:#7c3aed;background:rgba(124,58,237,.04); }
     .stat-card.accent .stat-value { color:#7c3aed; }
+    .stat-ai-list{display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:11px;color:var(--text-md);line-height:1.35;}
+    .stat-ai-item{display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(124,58,237,.12);padding-top:4px;}
+    .stat-ai-item:first-child{border-top:none;padding-top:0;}
+    .stat-ai-name{font-weight:700;color:var(--text-hi);}
+    .stat-ai-name[href]{text-decoration:none;}
+    .stat-ai-name[href]:hover{color:#7c3aed;text-decoration:underline;}
+    .stat-ai-detail{text-align:right;color:var(--text-lo);}
 
     /* Status badge */
     .status-badge { display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
@@ -83,6 +90,22 @@
     .plist-dot.done    { background:#22c55e; }
     .plist-dot.current { background:#7c3aed; }
     .plist-dot.pending { background:var(--border); }
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -117,27 +140,41 @@
           <div class="page-title">Dashboard</div>
           <div class="page-subtitle">Visão geral do sistema e acesso rápido às rotinas.</div>
         </div>
+        <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
       </div>
 
       <!-- Quick nav -->
       <div class="quick-nav">
-        <a class="qnav-btn" href="/app/ia-command/monitor.html" onclick="return parent.openTab?.('/app/ia-command/monitor.html','Monitor WhatsApp','💬') || true">
-          💬 Monitor WhatsApp
-        </a>
-        <a class="qnav-btn" href="/app/ia-command/config-conexoes.html" onclick="return parent.openTab?.('/app/ia-command/config-conexoes.html','Conexões ERP','🔌') || true">
-          🔌 Conexões ERP
-        </a>
-        <a class="qnav-btn" href="/app/ia-command/config-ia.html" onclick="return parent.openTab?.('/app/ia-command/config-ia.html','Configurar IA','🤖') || true">
+        <a class="qnav-btn" href="/app/ia-command/config-ia.html" onclick="openTab('/app/ia-command/config-ia.html','Configuração de IA','🤖'); return false;">
           🤖 Configurar IA
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/config-conexoes.html" onclick="openTab('/app/ia-command/config-conexoes.html','Conexões ERP','🔌'); return false;">
+          🔌 Conexões
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/admin-datasets.html" onclick="openTab('/app/ia-command/admin-datasets.html','Datasets ERP','📊'); return false;">
+          📊 Datasets
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/admin-intencoes.html" onclick="openTab('/app/ia-command/admin-intencoes.html','Intenções','🧠'); return false;">
+          🧠 Intenções
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/admin-canais-whatsapp.html" onclick="openTab('/app/ia-command/admin-canais-whatsapp.html','Canais WhatsApp','📡'); return false;">
+          📡 Canais
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/admin-numeros-whatsapp.html" onclick="openTab('/app/ia-command/admin-numeros-whatsapp.html','Números Autorizados','📱'); return false;">
+          📱 Números Aut
+        </a>
+        <a class="qnav-btn" href="/app/ia-command/admin-mensagens-whatsapp.html" onclick="openTab('/app/ia-command/admin-mensagens-whatsapp.html','Mensagens WhatsApp','✉️'); return false;">
+          ✉️ Mensagens
         </a>
       </div>
 
       <!-- Stats -->
       <div class="stats-row">
         <div class="stat-card accent">
-          <div class="stat-label">Migrações SQLite</div>
-          <div class="stat-value" id="stat-migracoes">—</div>
-          <div class="stat-sub">tabelas configuradas</div>
+          <div class="stat-label">Saldo das IAs</div>
+          <div class="stat-value" id="stat-ia-saldo">—</div>
+          <div class="stat-sub" id="stat-ia-saldo-sub">provedores configurados</div>
+          <div class="stat-ai-list" id="stat-ia-saldo-list"></div>
         </div>
         <div class="stat-card">
           <div class="stat-label">WhatsApp</div>
@@ -178,7 +215,7 @@
 
             <div class="progress-card">
               <div class="progress-title">Progresso</div>
-              <div class="progress-frac"><span id="prog-done">0</span><span style="font-size:14px;font-weight:400;color:var(--text-lo)"> / <span id="prog-total">6</span></span></div>
+              <div class="progress-frac"><span id="prog-done">0</span><span style="font-size:14px;font-weight:400;color:var(--text-lo)"> / <span id="prog-total">10</span></span></div>
               <div class="progress-sub">etapas concluídas</div>
               <div class="progress-bar-wrap">
                 <div class="progress-bar" id="prog-bar" style="width:0%"></div>
@@ -215,8 +252,8 @@
     {
       id: 'conexao',
       icon: '🔌',
-      title: 'Criar Conexão com o ERP',
-      desc: 'Cadastre o banco de dados do seu ERP (Protheus, Sankhya, SAP…) com servidor, porta e credenciais.',
+      title: 'Cadastrar Conexão com o ERP',
+      desc: 'Cadastre a integração ERP da empresa, seja conexão direta com o banco Protheus ou via REST/API Proxy.',
       url: '/app/ia-command/config-conexoes.html',
       label: 'Conexões ERP',
     },
@@ -229,39 +266,82 @@
       label: 'Conexões ERP',
     },
     {
+      id: 'canais',
+      icon: '📡',
+      title: 'Cadastrar Canais WhatsApp',
+      desc: 'Crie o canal do número WhatsApp e vincule somente as empresas do IAHub que podem operar por ele.',
+      url: '/app/ia-command/admin-canais-whatsapp.html',
+      label: 'Canais WhatsApp',
+    },
+    {
+      id: 'numeros',
+      icon: '📱',
+      title: 'Cadastrar Números Autorizados',
+      desc: 'Informe quais números de clientes ou usuários podem interagir com o IA Command em cada empresa.',
+      url: '/app/ia-command/admin-numeros-whatsapp.html',
+      label: 'Números Autorizados',
+    },
+    {
+      id: 'mensagens',
+      icon: '✉️',
+      title: 'Configurar Mensagens WhatsApp',
+      desc: 'Revise os templates internos de resposta, clarificação de empresa, bloqueio de acesso e falhas operacionais.',
+      url: '/app/ia-command/admin-mensagens-whatsapp.html',
+      label: 'Mensagens WhatsApp',
+    },
+    {
+      id: 'modulos',
+      icon: '📂',
+      title: 'Cadastrar Módulos',
+      desc: 'Organize as rotinas que agrupam datasets e intenções, respeitando a segurança por usuário e empresa.',
+      url: '/app/ia-command/admin-modulos.html',
+      label: 'Módulos',
+    },
+    {
       id: 'datasets',
-      icon: '🗄️',
-      title: 'Cadastrar Datasets',
-      desc: 'Defina quais tabelas e campos do ERP cada módulo pode consultar (faturamento, financeiro, pedidos…).',
+      icon: '📊',
+      title: 'Cadastrar Datasets ERP',
+      desc: 'Cadastre os datasets que executam as consultas do ERP, já preparados para receber os filtros de empresa, filial e período.',
       url: '/app/ia-command/admin-datasets.html',
-      label: 'Datasets',
+      label: 'Datasets ERP',
     },
     {
       id: 'intencoes',
-      icon: '💡',
+      icon: '🧠',
       title: 'Cadastrar Intenções',
-      desc: 'Registre as perguntas que o sistema deve reconhecer e associe cada uma ao módulo e dataset correto.',
+      desc: 'Vincule as frases e intenções da IA aos datasets corretos, garantindo que cada comando execute a rotina esperada.',
       url: '/app/ia-command/admin-intencoes.html',
       label: 'Intenções',
     },
     {
       id: 'whatsapp',
       icon: '💬',
-      title: 'Conectar o WhatsApp',
-      desc: 'Acesse o Monitor, clique em "Iniciar" e escaneie o QR code com o celular para ativar o bot.',
+      title: 'Conectar e Monitorar WhatsApp',
+      desc: 'No Monitor, selecione o canal da empresa, inicie o serviço e acompanhe conexão, QR Code, logs e mensagens recebidas.',
       url: '/app/ia-command/monitor.html',
-      label: 'Monitor WhatsApp',
+      label: 'Monitor',
     },
   ];
 
   // ── Coleta de dados das APIs ────────────────────────────────────────────────
   async function coletarStatus() {
-    const status = { ia: false, conexao: false, testar: false, datasets: false, intencoes: false, whatsapp: false };
+    const status = {
+      ia: false,
+      conexao: false,
+      testar: false,
+      canais: false,
+      numeros: false,
+      mensagens: false,
+      modulos: false,
+      datasets: false,
+      intencoes: false,
+      whatsapp: false,
+    };
     const extra  = {};
 
     try {
       const ia = await fetch('/api/ia-command/ai-config').then(r => r.json());
-      if (ia.groq_key || ia.gemini_key || ia.groq_api_key || ia.gemini_api_key) {
+      if (ia.groq_key || ia.gemini_key || ia.groq_api_key || ia.gemini_api_key || ia.deepseek_api_key || ia.claude_api_key) {
         status.ia = true;
         extra.ia  = `Primário: ${ia.provedor_primario || 'groq'}`;
         // Stats card
@@ -288,10 +368,50 @@
     } catch (_) {}
 
     try {
+      const canais = await fetch('/api/ia-command/whatsapp/channels').then(r => r.json());
+      if (Array.isArray(canais) && canais.length > 0) {
+        status.canais = true;
+        extra.canais = `${canais.length} canal(is) disponível(is) para esta empresa`;
+      }
+    } catch (_) {}
+
+    try {
+      const numeros = await fetch('/api/ia-command/admin/numeros-whatsapp').then(r => r.json());
+      const ativos = Array.isArray(numeros) ? numeros.filter(n => n.ativo !== 0) : [];
+      if (ativos.length > 0) {
+        status.numeros = true;
+        extra.numeros = `${ativos.length} número(s) autorizado(s)`;
+      }
+    } catch (_) {}
+
+    try {
+      const mensagens = await fetch('/api/ia-command/admin/mensagens-whatsapp').then(r => r.json());
+      if (Array.isArray(mensagens) && mensagens.length > 0) {
+        const customizadas = mensagens.filter(m => m.customizado).length;
+        status.mensagens = true;
+        extra.mensagens = customizadas > 0
+          ? `${customizadas} template(s) customizado(s)`
+          : 'Templates padrão disponíveis';
+      }
+    } catch (_) {}
+
+    try {
+      const modulos = await fetch('/api/ia-command/admin/modulos').then(r => r.json());
+      const ativos = Array.isArray(modulos) ? modulos.filter(m => m.ativo !== 0) : [];
+      if (ativos.length > 0) {
+        status.modulos = true;
+        extra.modulos = `${ativos.length} módulo(s) ativo(s)`;
+      }
+    } catch (_) {}
+
+    try {
       const ds = await fetch('/api/ia-command/admin/datasets').then(r => r.json());
       if (Array.isArray(ds) && ds.length > 0) {
-        status.datasets = true;
-        extra.datasets  = `${ds.length} dataset(s) cadastrado(s)`;
+        const comSql = ds.filter(d => d.sql_base?.trim());
+        status.datasets = comSql.length > 0;
+        extra.datasets  = comSql.length > 0
+          ? `${comSql.length} dataset(s) com SQL configurado`
+          : `${ds.length} dataset(s) sem SQL Base — configure o SQL em cada um`;
       }
     } catch (_) {}
 
@@ -375,15 +495,89 @@
   }
 
   // ── Init ────────────────────────────────────────────────────────────────────
-  (async () => {
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function carregarSaldoIa() {
+    const valueEl = document.getElementById('stat-ia-saldo');
+    const subEl   = document.getElementById('stat-ia-saldo-sub');
+    const listEl  = document.getElementById('stat-ia-saldo-list');
+
     try {
-      const h = await fetch('/api/ia-command/health').then(r => r.json());
-      document.getElementById('stat-migracoes').textContent = h.migracoes ?? '—';
-    } catch (_) {}
+      const data = await fetch('/api/ia-command/ai-config/saldo').then(r => r.json());
+      valueEl.textContent = data.configurados ?? 0;
+      subEl.textContent = (data.consultados || 0) > 0
+        ? `${data.consultados} saldo(s) consultado(s)`
+        : 'saldo automático limitado por provedor';
+
+      const configurados = Array.isArray(data.provedores)
+        ? data.provedores.filter(p => p.configurado)
+        : [];
+
+      listEl.innerHTML = configurados.length
+        ? configurados.map(p => {
+          const unidade = p.unidade ? ` ${p.unidade}` : '';
+          const saldo = `${p.valor ?? 0}${unidade}`;
+          return `<div class="stat-ai-item">
+            <a class="stat-ai-name" href="${esc(p.painel_url || '#')}" target="_blank" rel="noopener">${esc(p.nome)}</a>
+            <span class="stat-ai-detail">${esc(saldo)}</span>
+          </div>`;
+        }).join('')
+        : '<div class="stat-ai-item"><span class="stat-ai-name">Nenhuma IA</span><span class="stat-ai-detail">configure uma chave</span></div>';
+    } catch (_) {
+      valueEl.textContent = '0';
+      subEl.textContent = 'não foi possível consultar';
+      listEl.innerHTML = '<div class="stat-ai-item"><span class="stat-ai-name">Saldo</span><span class="stat-ai-detail">0</span></div>';
+    }
+  }
+
+  (async () => {
+    await carregarSaldoIa();
 
     const { status, extra } = await coletarStatus();
     renderStepper(status, extra);
   })();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Dashboard</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">Painel de estatísticas</div>
+      <div class="help-item"><div class="help-item-label">Saldo das IAs</div><div class="help-item-desc">Mostra os provedores configurados e, quando o provedor expõe essa informação por API, o saldo disponível. Alguns provedores exigem consulta no console de billing.</div></div>
+      <div class="help-item"><div class="help-item-label">WhatsApp</div><div class="help-item-desc">Status atual do serviço WhatsApp do canal selecionado. Verde indica conectado e apto a receber mensagens.</div></div>
+      <div class="help-item"><div class="help-item-label">Conexão ERP</div><div class="help-item-desc">Indica se existe uma conexão ERP ativa para a empresa aberta no IA Command.</div></div>
+      <div class="help-item"><div class="help-item-label">IA Configurada</div><div class="help-item-desc">Indica se a empresa possui provedor de IA configurado para interpretar os comandos recebidos.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Guia de configuração (passos)</div>
+      <div class="help-item"><div class="help-item-label">1. Configurar IA</div><div class="help-item-desc">Adicione as chaves Groq e/ou Gemini. Sem elas o sistema não processa nenhuma mensagem.</div></div>
+      <div class="help-item"><div class="help-item-label">2. Conexão ERP</div><div class="help-item-desc">Configure a conexão direta ou REST/API Proxy do ERP e deixe uma conexão ativa.</div></div>
+      <div class="help-item"><div class="help-item-label">3. Testar conexão</div><div class="help-item-desc">Execute o teste da conexão ativa antes de liberar datasets para uso operacional.</div></div>
+      <div class="help-item"><div class="help-item-label">4. Canais WhatsApp</div><div class="help-item-desc">Cadastre o canal do número WhatsApp e vincule apenas as empresas autorizadas a operar por ele.</div></div>
+      <div class="help-item"><div class="help-item-label">5. Números autorizados</div><div class="help-item-desc">Cadastre os números que podem enviar comandos ao IA Command naquela empresa.</div></div>
+      <div class="help-item"><div class="help-item-label">6. Mensagens</div><div class="help-item-desc">Revise ou personalize os templates internos usados em respostas, ambiguidades e bloqueios de acesso.</div></div>
+      <div class="help-item"><div class="help-item-label">7. Módulos</div><div class="help-item-desc">Organize as rotinas em módulos, mantendo a estrutura usada nas permissões por usuário e empresa.</div></div>
+      <div class="help-item"><div class="help-item-label">8. Datasets ERP</div><div class="help-item-desc">Crie os datasets com a consulta de cada tipo de informação que a IA poderá executar.</div></div>
+      <div class="help-item"><div class="help-item-label">9. Intenções</div><div class="help-item-desc">Cadastre as intenções, vincule cada uma ao dataset correspondente e ative-as.</div></div>
+      <div class="help-item"><div class="help-item-label">10. Monitor</div><div class="help-item-desc">Acesse o Monitor no menu Operação, selecione o canal, inicie o serviço e acompanhe QR Code e logs.</div></div>
+      <div class="help-tip">O sistema fica 100% operacional quando todos os passos mostram o ícone ✓ verde.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Acesso rápido</div>
+      <div class="help-item-desc">Os botões de acesso rápido abaixo das estatísticas levam diretamente às rotinas mais usadas na configuração: canais, números autorizados, mensagens, conexões, datasets, intenções e monitor.</div>
+    </div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

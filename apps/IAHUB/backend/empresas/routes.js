@@ -2,9 +2,11 @@ const fs   = require('fs');
 const path = require('path');
 const db   = require('./database');
 const sistemasDb = require('../sistemas/database');
+const { APP_DATA_DIR, appDataDir } = require('../data-paths');
+const { empresaDataFile } = require('../../../IA Recruit/backend/data-paths');
 
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', 'data');
-const UPLOADS_DIR = path.join(DATA_DIR, 'uploads', 'empresas');
+const DATA_DIR = APP_DATA_DIR;
+const UPLOADS_DIR = appDataDir('uploads', 'empresas');
 
 const IDENTIDADE_CAMPOS = {
   logo: {
@@ -24,13 +26,13 @@ const IDENTIDADE_CAMPOS = {
 };
 
 function loadEmpresa(eid) {
-  const f = path.join(DATA_DIR, `empresa_${eid}.json`);
+  const f = empresaDataFile(eid);
   if (!fs.existsSync(f)) return null;
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; }
 }
 
 function saveEmpresa(eid, data) {
-  fs.writeFileSync(path.join(DATA_DIR, `empresa_${eid}.json`), JSON.stringify(data, null, 2), 'utf8');
+  fs.writeFileSync(empresaDataFile(eid), JSON.stringify(data, null, 2), 'utf8');
 }
 
 function requireAdmin(req, res, next) {

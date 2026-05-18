@@ -36,7 +36,7 @@ Dentro do RDP, você pode colar arquivos diretamente pelo clipboard:
 
 No servidor, extraia o ZIP direto em `C:\`:
 - Clique com o botão direito no ZIP > **Extrair aqui** *(escolha C:\)*
-- O resultado será a pasta `C:\iahub\`
+- O resultado será a pasta `C:\Web\iahub\`
 
 Ou via PowerShell:
 
@@ -49,8 +49,8 @@ Expand-Archive -Path "C:\caminho\iahub-deploy-YYYYMMDD_HHMM.zip" -DestinationPat
 Copie o `.env.example` e preencha com os valores reais:
 
 ```powershell
-Copy-Item C:\iahub\.env.example C:\iahub\.env
-notepad C:\iahub\.env
+Copy-Item C:\Web\iahub\.env.example C:\Web\iahub\.env
+notepad C:\Web\iahub\.env
 ```
 
 Preencha no mínimo:
@@ -70,7 +70,7 @@ Preencha no mínimo:
 Clique com o botão direito no PowerShell > **Executar como administrador**, depois:
 
 ```powershell
-C:\iahub\deploy\1-instalar-dependencias.ps1
+C:\Web\iahub\deploy\1-instalar-dependencias.ps1
 ```
 
 Isso instala automaticamente: **Node.js**, **Google Chrome**, **NSSM** e **Nginx** via Chocolatey.
@@ -82,7 +82,7 @@ Isso instala automaticamente: **Node.js**, **Google Chrome**, **NSSM** e **Nginx
 Ainda no PowerShell como administrador:
 
 ```powershell
-C:\iahub\deploy\2-configurar-servico.ps1
+C:\Web\iahub\deploy\2-configurar-servico.ps1
 ```
 
 Esse script:
@@ -128,7 +128,7 @@ O Firewall do Windows já foi aberto pelos scripts, mas o servidor cloud da ADDI
 4. No celular, abra o WhatsApp > **Aparelhos conectados** > **Conectar aparelho**
 5. Escaneie o QR Code — a conexão estará estabelecida
 
-> O WhatsApp permanece conectado após reinicialização do servidor (sessão salva em `C:\iahub\.wwebjs_auth\`).
+> O WhatsApp permanece conectado após reinicialização do servidor (sessão salva em `C:\Web\iahub\.wwebjs_auth\`).
 
 ---
 
@@ -148,10 +148,10 @@ nssm stop iahub
 nssm start iahub
 
 # Ver logs em tempo real
-Get-Content C:\iahub\logs\output.log -Wait -Tail 50
+Get-Content C:\Web\iahub\logs\output.log -Wait -Tail 50
 
 # Ver logs de erro
-Get-Content C:\iahub\logs\error.log -Tail 50
+Get-Content C:\Web\iahub\logs\error.log -Tail 50
 
 # Abrir gerenciador de serviços Windows
 services.msc
@@ -170,7 +170,7 @@ Para aplicar uma nova versão do código:
 
 ```powershell
 nssm stop iahub
-Push-Location C:\iahub
+Push-Location C:\Web\iahub
 npm install --omit=dev
 Pop-Location
 nssm start iahub

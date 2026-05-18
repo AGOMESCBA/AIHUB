@@ -1,7 +1,5 @@
 const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', 'data');
+const { APP_DATA_DIR, iaUsageFile } = require('../data-paths');
 
 const DEFAULT_LIMITS = {
   groq: 0,
@@ -22,11 +20,11 @@ const PRICING_USD_PER_1M = {
 };
 
 function _arquivo(empresaId) {
-  return path.join(DATA_DIR, `ia-usage-${empresaId || 'global'}.json`);
+  return iaUsageFile(empresaId);
 }
 
 function _ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(APP_DATA_DIR)) fs.mkdirSync(APP_DATA_DIR, { recursive: true });
 }
 
 function _monthKey(date = new Date()) {

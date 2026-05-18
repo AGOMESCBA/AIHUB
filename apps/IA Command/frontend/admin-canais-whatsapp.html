@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Canais WhatsApp - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-row .form-control { height:36px;font-size:13px;flex:1;min-width:220px; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .badge-ativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-inativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .save-feedback { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field { margin-bottom:16px; }
+    .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+    .linked-list { display:grid;gap:8px; }
+    .linked-item { display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg-card); }
+    .linked-title { font-size:13px;font-weight:700;color:var(--text-hi); }
+    .linked-sub { font-size:12px;color:var(--text-lo);margin-top:2px; }
+    .inline-form { display:grid;grid-template-columns:minmax(240px,1fr) 1fr auto;gap:8px;align-items:end;margin-top:12px; }
+    .form-tabs { display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-top:18px; }
+    .form-tab-btn { border:0;background:transparent;color:var(--text-md);font-size:13px;font-weight:700;padding:10px 12px;border-bottom:2px solid transparent;cursor:pointer; }
+    .form-tab-btn:hover { color:var(--text-hi); }
+    .form-tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .form-tab-btn:disabled { opacity:.45;cursor:not-allowed; }
+    .tab-panel { display:none;margin-top:20px; }
+    .tab-panel.active { display:block; }
+    @media(max-width:720px){ .inline-form { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Canais WhatsApp</span>
+    </div>
+
+    <div class="page-content">
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">WhatsApp</div>
+            <div class="page-title">Canais WhatsApp</div>
+            <div class="page-subtitle">Cadastre canais e vincule apenas empresas que podem compartilhar o mesmo numero.</div>
+          </div>
+          <button class="btn btn-primary" onclick="abrirFormulario()">+ Novo Canal</button>
+        </div>
+        <div class="quick-panel">
+          <div class="quick-row">
+            <input id="q-busca" class="form-control" placeholder="Buscar por nome, numero ou empresa..." oninput="filtrar()">
+            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div><div class="grid-title">Canais vinculados a esta empresa</div><div id="count" class="grid-meta"></div></div>
+          </div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Novo Canal</strong>
+              <span id="form-subtitle">Configure o canal e seus vinculos.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="fecharFormulario()">Voltar</button>
+              <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+            </div>
+          </div>
+          <div class="form-tabs">
+            <button class="form-tab-btn active" id="tab-btn-dados" onclick="setAba('dados')">Dados do canal</button>
+            <button class="form-tab-btn" id="tab-btn-empresas" onclick="setAba('empresas')" disabled>Empresas vinculadas</button>
+          </div>
+          <div class="editor-grid editor-grid-wide tab-panel active" id="tab-dados">
+            <main class="editor-main">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Identificacao</div>
+                  <div class="form-section-subtitle">Dados do canal usado pelo monitor e pela sessao WhatsApp.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                    <input id="f-nome" class="form-control" placeholder="ex: WhatsApp Principal">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Numero esperado</label>
+                    <input id="f-numero" class="form-control" placeholder="5592999999999" oninput="this.value=this.value.replace(/\D/g,'').slice(0,15)">
+                    <div class="form-hint">Opcional. Quando conectado, o numero real tambem e atualizado pelo WhatsApp.</div>
+                  </div>
+                </div>
+              </section>
+            </main>
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
+                <div class="form-section-header"><div class="form-section-title">Registro</div></div>
+                <div class="form-section-body">
+                  <div class="reg-field"><div class="reg-label">ID</div><input id="f-id" class="form-control" disabled style="font-family:monospace;background:var(--bg-hover)"></div>
+                  <div class="reg-field"><div class="reg-label">Status</div><select id="f-ativo" class="form-control"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
+                  <div class="reg-field"><div class="reg-label">Padrao nesta empresa</div><select id="f-padrao" class="form-control"><option value="0">Nao</option><option value="1">Sim</option></select></div>
+                  <div class="reg-field"><div class="reg-label">Aliases nesta empresa</div><textarea id="f-aliases" class="form-control" rows="3"></textarea></div>
+                </div>
+              </section>
+            </aside>
+          </div>
+          <div class="tab-panel" id="tab-empresas">
+            <section class="form-section" id="sec-vinculos">
+              <div class="form-section-header">
+                <div class="form-section-title">Empresas vinculadas</div>
+                <div class="form-section-subtitle">Somente empresas autorizadas ao seu usuario podem ser adicionadas ou removidas.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="linked-list" id="linked-list"></div>
+                <div class="inline-form">
+                  <div>
+                    <label class="form-label">Empresa</label>
+                    <select id="add-empresa-id" class="form-control"></select>
+                  </div>
+                  <div>
+                    <label class="form-label">Aliases</label>
+                    <input id="add-aliases" class="form-control" placeholder="ex: matriz, caieira">
+                  </div>
+                  <button class="btn btn-ghost" onclick="adicionarEmpresa()">Adicionar empresa</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let table;
+  let dados = [];
+  let edit = null;
+  let quickFilterFn = null;
+  let empresasDisponiveis = [];
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtNumero(n) { const v = String(n || '').replace(/\D/g,''); return v ? `+${v}` : '-'; }
+
+  function empresaNome(e) { return e.razao_social || e.nome || `Empresa #${e.id}`; }
+
+  async function carregarEmpresasDisponiveis() {
+    empresasDisponiveis = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+    empresasDisponiveis.sort((a, b) => empresaNome(a).localeCompare(empresaNome(b), 'pt-BR'));
+    renderEmpresaSelect();
+  }
+
+  function renderEmpresaSelect() {
+    const sel = document.getElementById('add-empresa-id');
+    if (!sel) return;
+    const vinculadas = new Set((edit?.empresas || []).map(e => Number(e.empresa_id)));
+    const opcoes = empresasDisponiveis.filter(e => !vinculadas.has(Number(e.id)));
+    sel.innerHTML = opcoes.length
+      ? '<option value="">Selecione uma empresa...</option>' + opcoes.map(e => `<option value="${Number(e.id)}">${esc(empresaNome(e))}</option>`).join('')
+      : '<option value="">Todas as empresas permitidas ja estao vinculadas</option>';
+    sel.disabled = opcoes.length === 0;
+  }
+
+  function setAba(aba) {
+    const empresasLiberada = Boolean(edit);
+    if (aba === 'empresas' && !empresasLiberada) return feedback('Salve o canal antes de vincular empresas.', false);
+    document.getElementById('tab-dados').classList.toggle('active', aba === 'dados');
+    document.getElementById('tab-empresas').classList.toggle('active', aba === 'empresas');
+    document.getElementById('tab-btn-dados').classList.toggle('active', aba === 'dados');
+    document.getElementById('tab-btn-empresas').classList.toggle('active', aba === 'empresas');
+  }
+
+  async function carregar() {
+    dados = await fetch('/api/ia-command/admin/canais-whatsapp').then(r => r.json()).catch(() => []);
+    if (table) return table.replaceData(dados);
+    table = new Tabulator('#tabela', {
+      data:dados, index:'id', layout:'fitColumns', height:'calc(100vh - 300px)',
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum canal cadastrado.</div>',
+      columns:[
+        { title:'Nome', field:'nome', minWidth:180, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'Numero', field:'numero', width:150, formatter:c=>`<span style="font-family:monospace">${esc(fmtNumero(c.getValue()))}</span>` },
+        { title:'Empresas', field:'empresas', minWidth:220, formatter:c=>esc((c.getValue() || []).map(e => e.nome).join(', ') || '-') },
+        { title:'Padrao', field:'padrao', width:90, formatter:c=>c.getValue()?'<span class="badge-ativo">Sim</span>':'<span class="badge-inativo">Nao</span>' },
+        { title:'Status', field:'ativo', width:95, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
+        { title:'Acoes', field:'id', width:95, hozAlign:'right', formatter:c=>`<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${esc(c.getValue())}')" title="Editar">✏️</button><button class="btn-icon" onclick="event.stopPropagation();excluir('${esc(c.getValue())}')" title="Excluir" style="color:#dc2626">🗑</button>` },
+      ],
+      rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().id); },
+      dataFiltered:(_f, rows)=>document.getElementById('count').textContent = rows.length === 1 ? '1 canal' : `${rows.length} canais`,
+    });
+    document.getElementById('count').textContent = dados.length === 1 ? '1 canal' : `${dados.length} canais`;
+  }
+
+  function filtrar() {
+    if (!table) return;
+    if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
+    const busca = document.getElementById('q-busca').value.trim().toLowerCase();
+    if (!busca) return;
+    quickFilterFn = row => `${row.nome} ${row.numero} ${(row.empresas || []).map(e => e.nome).join(' ')}`.toLowerCase().includes(busca);
+    table.addFilter(quickFilterFn);
+  }
+  function limparFiltros() { document.getElementById('q-busca').value = ''; filtrar(); }
+
+  async function abrirFormulario(id) {
+    edit = id ? await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(id)}`).then(r => r.json()).catch(() => null) : null;
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-form').style.display = '';
+    document.getElementById('form-title').textContent = edit ? edit.nome : 'Novo Canal';
+    document.getElementById('f-id').value = edit?.id || '';
+    document.getElementById('f-nome').value = edit?.nome || '';
+    document.getElementById('f-numero').value = edit?.numero || '';
+    document.getElementById('f-ativo').value = String(edit?.ativo ?? 1);
+    document.getElementById('f-padrao').value = String(edit?.padrao ?? 0);
+    document.getElementById('f-aliases').value = edit?.aliases || '';
+    document.getElementById('tab-btn-empresas').disabled = !edit;
+    setAba('dados');
+    feedback('', true);
+    renderVinculos();
+  }
+
+  function renderVinculos() {
+    const el = document.getElementById('linked-list');
+    if (!edit) { el.innerHTML = ''; return; }
+    el.innerHTML = (edit.empresas || []).map(e => `
+      <div class="linked-item">
+        <div>
+          <div class="linked-title">#${esc(e.empresa_id)} - ${esc(e.nome)}</div>
+          <div class="linked-sub">Aliases: ${esc(e.aliases || '-')} ${e.padrao ? ' · padrao' : ''}</div>
+        </div>
+        <div>
+          <button class="btn-icon" onclick="editarVinculo(${Number(e.empresa_id)})" title="Editar">✏️</button>
+          <button class="btn-icon" onclick="removerVinculo(${Number(e.empresa_id)})" title="Remover" style="color:#dc2626">🗑</button>
+        </div>
+      </div>`).join('') || '<div style="color:var(--text-lo);font-size:13px">Nenhuma empresa vinculada.</div>';
+    renderEmpresaSelect();
+  }
+
+  function fecharFormulario() {
+    document.getElementById('sec-form').style.display = 'none';
+    document.getElementById('sec-lista').style.display = '';
+    edit = null;
+  }
+
+  async function salvar() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) return feedback('Campo Nome e obrigatorio.', false);
+    const body = {
+      nome,
+      numero: document.getElementById('f-numero').value.replace(/\D/g,''),
+      ativo: parseInt(document.getElementById('f-ativo').value),
+      padrao: parseInt(document.getElementById('f-padrao').value),
+      aliases: document.getElementById('f-aliases').value.trim() || null,
+    };
+    const url = edit ? `/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}` : '/api/ia-command/admin/canais-whatsapp';
+    const method = edit ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao salvar.', false);
+    feedback('Salvo com sucesso!', true);
+    setTimeout(() => { fecharFormulario(); carregar(); }, 600);
+  }
+
+  async function excluir(id) {
+    if (!confirm('Excluir/desvincular este canal desta empresa?')) return;
+    await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(id)}`, { method:'DELETE' });
+    carregar();
+  }
+
+  async function adicionarEmpresa() {
+    if (!edit) return;
+    const empresa_id = Number(document.getElementById('add-empresa-id').value);
+    const aliases = document.getElementById('add-aliases').value.trim();
+    if (!empresa_id) return feedback('Selecione a empresa.', false);
+    const res = await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}/empresas`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ target_empresa_id: empresa_id, aliases }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao vincular empresa.', false);
+    edit = data;
+    document.getElementById('add-aliases').value = '';
+    renderVinculos();
+    feedback('Empresa vinculada.', true);
+  }
+
+  async function editarVinculo(empresa_id) {
+    const atual = (edit.empresas || []).find(e => e.empresa_id === empresa_id) || {};
+    const aliases = prompt('Aliases desta empresa no canal:', atual.aliases || '');
+    if (aliases === null) return;
+    const padrao = confirm('Marcar este canal como padrao para esta empresa?');
+    const res = await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}/empresas/${empresa_id}`, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ aliases, padrao }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao editar vinculo.', false);
+    edit = data;
+    renderVinculos();
+  }
+
+  async function removerVinculo(empresa_id) {
+    if (!confirm('Remover esta empresa do canal?')) return;
+    const res = await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}/empresas/${empresa_id}`, { method:'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao remover vinculo.', false);
+    edit = data;
+    renderVinculos();
+  }
+
+  function feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+  }
+
+  window._iahubAuthReady?.then(async () => {
+    await carregarEmpresasDisponiveis();
+    await carregar();
+  }) ?? carregar();
+</script>
+</body>
+</html>

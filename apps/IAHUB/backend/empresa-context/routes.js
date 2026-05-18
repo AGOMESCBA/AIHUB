@@ -1,5 +1,6 @@
 const crud = require('../crud');
 const { registrarAuditoria } = require('../auth/database');
+const sistemasDb = require('../sistemas/database');
 
 function obterIp(req) {
   return (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
@@ -24,6 +25,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
   // ── Selecionar empresa ativa ───────────────────────────────────────────────
   app.post('/api/empresas/selecionar', requireAuth, (req, res) => {
     const { empresa_id } = req.body || {};
+    const systemCode = String(req.body?.system_code || '').trim();
     const ip = obterIp(req);
 
     if (!empresa_id) {
@@ -46,11 +48,23 @@ module.exports = function registerRoutes(app, { requireAuth }) {
       return res.status(404).json({ error: 'Empresa não encontrada' });
     }
 
+    let system = null;
+    if (systemCode) {
+      system = sistemasDb.getSystem(systemCode);
+      if (!system?.active) return res.status(404).json({ error: 'Sistema não encontrado ou inativo' });
+      if (!sistemasDb.hasCompanySystem(empresa.id, systemCode)) {
+        return res.status(403).json({ error: 'Empresa sem acesso ao sistema' });
+      }
+      if (!sistemasDb.hasUserSystem(req.session.user_id, empresa.id, systemCode)) {
+        return res.status(403).json({ error: 'Usuário sem acesso ao sistema nesta empresa' });
+      }
+    }
+
     const empresa_anterior = req.session.empresa_id || null;
     req.session.empresa_id   = empresa.id;
     req.session.empresa_nome = empresa.razao_social;
-    req.session.system_code  = null;
-    req.session.system_name  = null;
+    req.session.system_code  = system ? system.code : null;
+    req.session.system_name  = system ? system.name : null;
 
     registrarAuditoria({
       usuario:   req.session.user,
@@ -62,7 +76,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
     req.session.save((err) => {
       if (err) return res.status(500).json({ error: 'Erro ao salvar sessão' });
-      res.json({ ok: true, empresa_id: empresa.id, empresa_nome: empresa.razao_social });
+      res.json({ ok: true, empresa_id: empresa.id, empresa_nome: empresa.razao_social, system: system || null });
     });
   });
 

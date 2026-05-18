@@ -123,18 +123,21 @@
       transition: background var(--transition), color var(--transition);
     }
     .topbar-menu-btn:hover { background: var(--bg-hover); color: var(--text-hi); }
-    .iac-topbar .topbar-title { font-weight: 700; flex: 1; min-width: 0; }
+    .iac-topbar .topbar-title { font-weight: 800; flex: 1; min-width: 0; }
+    .iac-actions { display: flex; align-items: center; gap: 8px; }
     .shell-nav-btn {
-      height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
       padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
-      background: var(--bg-card); color: var(--text-hi); font-size: 13px; font-weight: 600;
-      text-decoration: none; transition: border-color .15s, background .15s, color .15s;
-      white-space: nowrap; flex-shrink: 0;
+      background: var(--bg-card); color: var(--text-hi); font-size: 13px; font-weight: 800;
+      text-decoration: none; transition: border-color .15s, background .15s, color .15s, transform .15s;
+      white-space: nowrap;
     }
-    .shell-nav-btn:hover { border-color: #7c3aed; background: rgba(124,58,237,.08); color: #7c3aed; }
-    /* Garante que guia btn e empresa badge ficam sem margin-left:auto extra */
-    #_guia-btn { margin-left: 0 !important; }
-    #_empresa-badge { margin-left: 0 !important; }
+    .shell-nav-btn:hover { border-color: #7c3aed; background: rgba(124,58,237,.08); color: #7c3aed; transform: translateY(-1px); }
+    .shell-nav-btn.primary {
+      background: #7c3aed; border-color: #7c3aed; color: #fff;
+      box-shadow: 0 8px 18px rgba(124,58,237,.25);
+    }
+    .shell-nav-btn.primary:hover { background: #6d28d9; color: #fff; }
     @media (max-width: 760px) { .shell-nav-btn span { display: none; } }
 
     /* Sidebar logo accent override */
@@ -168,13 +171,23 @@
         </svg>
       </button>
       <span class="topbar-title" id="shell-title">IA Command</span>
-      <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
-        </svg>
-        <span>IAHub</span>
-      </a>
+      <div class="iac-actions">
+        <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
+          </svg>
+          <span>IAHub</span>
+        </a>
+        <a class="shell-nav-btn primary" id="_guia-btn" href="/app/ia-command/guia/index.html" target="_blank" title="Guia de uso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+          </svg>
+          <span>Guia</span>
+        </a>
+      </div>
     </div>
 
     <div class="mdi-tabbar-wrap">
@@ -211,25 +224,33 @@
   // No shell MDI, trocar empresa atualiza variáveis e badge sem recarregar a página.
   // auth.js define _trocarEmpresa com location.reload() — sobrescrevemos aqui.
   window._iahubAuthReady?.then(() => {
+    let empresaSwitchQueue = Promise.resolve();
+
     window._trocarEmpresa = async function (empresa_id) {
-      const res = await fetch('/api/empresas/selecionar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ empresa_id }),
-      });
-      if (!res.ok) return;
+      empresaSwitchQueue = empresaSwitchQueue
+        .catch(() => null)
+        .then(async () => {
+          const res = await fetch('/api/empresas/selecionar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empresa_id, system_code: 'ia-command' }),
+          });
+          if (!res.ok) return;
 
-      const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
-      const emp = lista.find(e => Number(e.id) === Number(empresa_id));
-      if (emp) {
-        window._iahubEmpresa = { id: emp.id, nome: emp.razao_social || emp.nome || '' };
-        const nomeEl = document.getElementById('_empresa-nome');
-        if (nomeEl) nomeEl.textContent = emp.razao_social || emp.nome || '';
-      }
+          const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+          const emp = lista.find(e => Number(e.id) === Number(empresa_id));
+          if (emp) {
+            const empresaNome = emp.razao_social || emp.nome || '';
+            window._iahubEmpresa = { id: emp.id, nome: empresaNome };
+            window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
+            await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
+          }
 
-      // Fecha o dropdown da empresa
-      const drop = document.getElementById('_empresa-dropdown');
-      if (drop) drop.style.display = 'none';
+          // Fecha o dropdown da empresa
+          const drop = document.getElementById('_empresa-dropdown');
+          if (drop) drop.style.display = 'none';
+        });
+      return empresaSwitchQueue;
     };
   });
 </script>

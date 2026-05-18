@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mensagens WhatsApp - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-row .form-control { height:36px;font-size:13px;flex:1;min-width:220px; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .badge-ativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-inativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
+    .badge-custom { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--accent-glow);color:var(--accent); }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .save-feedback { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field { margin-bottom:16px; }
+    .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+    .vars { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
+    .var-chip { border:1px solid var(--border);background:var(--bg-hover);border-radius:99px;padding:3px 8px;font-family:monospace;font-size:11px;color:var(--text-md);cursor:pointer; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Mensagens WhatsApp</span>
+    </div>
+
+    <div class="page-content">
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">WhatsApp</div>
+            <div class="page-title">Mensagens Internas</div>
+            <div class="page-subtitle">Templates usados pelo IA Command nas respostas enviadas via biblioteca WhatsApp.</div>
+          </div>
+        </div>
+        <div class="quick-panel">
+          <div class="quick-row">
+            <input id="q-busca" type="text" class="form-control" placeholder="Buscar por chave, titulo ou texto..." oninput="filtrar()">
+            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Templates cadastrados</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Template</strong>
+              <span id="form-subtitle">Edite o texto usado pelo WhatsApp.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="restaurarPadrao()">Restaurar padrao</button>
+              <button class="btn btn-ghost" onclick="fecharFormulario()">Voltar</button>
+              <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+            </div>
+          </div>
+          <div class="editor-grid editor-grid-wide" style="margin-top:20px">
+            <main class="editor-main">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Mensagem</div>
+                  <div class="form-section-subtitle">Use variaveis entre chaves duplas quando necessario.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Titulo</label>
+                    <input id="f-titulo" class="form-control">
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Template</label>
+                    <textarea id="f-template" class="form-control" rows="9"></textarea>
+                    <div class="vars" id="vars"></div>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Padrao do Sistema</div>
+                </div>
+                <div class="form-section-body">
+                  <textarea id="f-padrao" class="form-control" rows="5" disabled style="background:var(--bg-hover)"></textarea>
+                </div>
+              </section>
+            </main>
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
+                <div class="form-section-header"><div class="form-section-title">Registro</div></div>
+                <div class="form-section-body">
+                  <div class="reg-field"><div class="reg-label">Chave</div><input id="f-chave" class="form-control" disabled style="font-family:monospace;background:var(--bg-hover)"></div>
+                  <div class="reg-field"><div class="reg-label">Status</div><select id="f-ativo" class="form-control"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
+                  <div class="reg-field"><div class="reg-label">Customizado</div><input id="f-customizado" class="form-control" disabled style="background:var(--bg-hover)"></div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let table;
+  let dados = [];
+  let edit = null;
+  let quickFilterFn = null;
+  const VARS = ['{{empresa_nome}}','{{empresa_id}}','{{canal_nome}}','{{numero}}','{{opcoes_empresas}}','{{erro}}','{{transcricao}}','{{resposta}}'];
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  async function carregar() {
+    dados = await fetch('/api/ia-command/admin/mensagens-whatsapp').then(r => r.json()).catch(() => []);
+    if (table) return table.replaceData(dados);
+    table = new Tabulator('#tabela', {
+      data:dados, index:'chave', layout:'fitColumns', height:'calc(100vh - 300px)',
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum template encontrado.</div>',
+      columns:[
+        { title:'Chave', field:'chave', width:210, formatter:c=>`<span style="font-family:monospace;font-size:12px">${esc(c.getValue())}</span>` },
+        { title:'Titulo', field:'titulo', minWidth:180, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'Texto', field:'template', minWidth:300, formatter:c=>`<span style="color:var(--text-lo)">${esc(String(c.getValue() || '').replace(/\n/g, ' ').slice(0, 140))}</span>` },
+        { title:'Tipo', field:'customizado', width:120, formatter:c=>c.getValue()?'<span class="badge-custom">Customizado</span>':'<span class="badge-inativo">Padrao</span>' },
+        { title:'Status', field:'ativo', width:100, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
+        { title:'Acoes', field:'chave', width:95, hozAlign:'right', formatter:c=>`<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${esc(c.getValue())}')" title="Editar">✏️</button>` },
+      ],
+      rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().chave); },
+      dataFiltered:(_f, rows)=>document.getElementById('count').textContent = `${rows.length} templates`,
+    });
+    document.getElementById('count').textContent = `${dados.length} templates`;
+  }
+
+  function filtrar() {
+    if (!table) return;
+    if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
+    const busca = document.getElementById('q-busca').value.trim().toLowerCase();
+    if (!busca) return;
+    quickFilterFn = row => `${row.chave} ${row.titulo} ${row.template}`.toLowerCase().includes(busca);
+    table.addFilter(quickFilterFn);
+  }
+
+  function limparFiltros() {
+    document.getElementById('q-busca').value = '';
+    filtrar();
+  }
+
+  function abrirFormulario(chave) {
+    edit = dados.find(x => x.chave === chave);
+    if (!edit) return;
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-form').style.display = '';
+    document.getElementById('form-title').textContent = edit.titulo;
+    document.getElementById('f-chave').value = edit.chave;
+    document.getElementById('f-titulo').value = edit.titulo || '';
+    document.getElementById('f-template').value = edit.template || '';
+    document.getElementById('f-padrao').value = edit.template_padrao || '';
+    document.getElementById('f-ativo').value = String(edit.ativo ?? 1);
+    document.getElementById('f-customizado').value = edit.customizado ? 'Sim' : 'Nao';
+    document.getElementById('save-feedback').textContent = '';
+    document.getElementById('vars').innerHTML = VARS.map(v => `<button type="button" class="var-chip" onclick="inserirVar('${v}')">${esc(v)}</button>`).join('');
+  }
+
+  function inserirVar(v) {
+    const el = document.getElementById('f-template');
+    const start = el.selectionStart || el.value.length;
+    el.value = el.value.slice(0, start) + v + el.value.slice(el.selectionEnd || start);
+    el.focus();
+    el.selectionStart = el.selectionEnd = start + v.length;
+  }
+
+  function fecharFormulario() {
+    document.getElementById('sec-form').style.display = 'none';
+    document.getElementById('sec-lista').style.display = '';
+    edit = null;
+  }
+
+  async function salvar() {
+    if (!edit) return;
+    const res = await fetch(`/api/ia-command/admin/mensagens-whatsapp/${encodeURIComponent(edit.chave)}`, {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        titulo: document.getElementById('f-titulo').value.trim(),
+        template: document.getElementById('f-template').value,
+        ativo: parseInt(document.getElementById('f-ativo').value),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    feedback(res.ok ? 'Salvo com sucesso!' : (data.error || 'Erro ao salvar.'), res.ok);
+    if (res.ok) setTimeout(() => { fecharFormulario(); carregar(); }, 700);
+  }
+
+  async function restaurarPadrao() {
+    if (!edit || !confirm('Restaurar o texto padrao deste template?')) return;
+    const res = await fetch(`/api/ia-command/admin/mensagens-whatsapp/${encodeURIComponent(edit.chave)}`, { method:'DELETE' });
+    feedback(res.ok ? 'Padrao restaurado.' : 'Erro ao restaurar.', res.ok);
+    if (res.ok) setTimeout(() => { fecharFormulario(); carregar(); }, 700);
+  }
+
+  function feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+  }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

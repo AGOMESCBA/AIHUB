@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Equivalências — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .quick-panel  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row    { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .filter-area  { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status{ font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control  { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .gp-wrap      { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title   { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta    { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .badge-ativo   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-inativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
+    .badge-sistema { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.1);color:#7c3aed; }
+    .badge-usuario { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(16,185,129,.1);color:#059669; }
+    .badge-camada-intencao { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.12);color:#7c3aed; }
+    .badge-camada-filtro   { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(234,88,12,.12);color:#ea580c; }
+    .badge-camada-coluna   { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(2,132,199,.12);color:#0284c7; }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field       { margin-bottom:16px; }
+    .reg-field:last-child { margin-bottom:0; }
+    .reg-label       { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Equivalências</span>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ── LISTA ─────────────────────────────────────── -->
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">Cadastros</div>
+            <div class="page-title">Dicionário de Equivalências</div>
+            <div class="page-subtitle">Ensine a IA os termos e jargões específicos da sua empresa.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-ghost" onclick="restaurarPadroes()" title="Recarrega os padrões do sistema para esta empresa" style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-lo)">
+              🔄 Restaurar padrões
+            </button>
+            <button class="btn btn-ghost" onclick="sugerirViaIA()" id="btn-sugerir-ia" style="display:flex;align-items:center;gap:6px">
+              <span>✨</span> Sugerir via IA
+            </button>
+            <button class="btn btn-primary" onclick="abrirFormulario()">＋ Nova Equivalência</button>
+          </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="quick-panel">
+          <div class="quick-row">
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="f-busca" type="text" class="form-control" placeholder="Buscar por termo…" oninput="filtrar()">
+              <select id="f-camada" class="form-control" onchange="filtrar()">
+                <option value="">Todas as camadas</option>
+                <option value="intencao">Intenção</option>
+                <option value="filtro">Filtro</option>
+                <option value="coluna">Coluna</option>
+              </select>
+              <select id="f-ativo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os status</option>
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Equivalências da empresa</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <!-- ── FORMULÁRIO ────────────────────────────────── -->
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Nova Equivalência</strong>
+              <span id="form-subtitle">Preencha os campos e salve.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="fecharModal()">← Voltar à lista</button>
+              <button class="btn btn-primary" onclick="salvarModal()">Salvar</button>
+            </div>
+          </div>
+
+          <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+            <main class="editor-main">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Equivalência</div>
+                  <div class="form-section-subtitle">Defina o termo que o usuário digita e o que ele significa para o sistema.</div>
+                </div>
+                <div class="form-section-body">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Termo digitado pelo usuário <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-termo" class="form-control" placeholder="ex: movimento, saída, faturado">
+                      <div class="form-hint">O que o usuário escreve no WhatsApp.</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Equivalência (significado real) <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-equivalencia" class="form-control" placeholder="ex: faturamento, CAIEIRA LTDA, quantidade"
+                        autocomplete="off" list="equiv-datalist" oninput="_atualizarExemplo()">
+                      <datalist id="equiv-datalist"></datalist>
+                      <div class="form-hint" id="equiv-hint">O que o sistema deve entender.</div>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Camada <span style="color:#dc2626">*</span></label>
+                      <select id="f-camada-form" class="form-control" onchange="atualizarContexto()">
+                        <option value="intencao">Intenção — identifica o que o usuário quer consultar</option>
+                        <option value="filtro">Filtro — normaliza valores como nomes de clientes ou produtos</option>
+                        <option value="coluna">Coluna — mapeia o que o usuário quer medir (valor, quantidade…)</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0" id="grupo-contexto">
+                      <label class="form-label">Contexto do filtro</label>
+                      <select id="f-contexto" class="form-control">
+                        <option value="">— selecione —</option>
+                        <option value="cliente">cliente</option>
+                        <option value="produto">produto</option>
+                        <option value="vendedor">vendedor</option>
+                        <option value="fornecedor">fornecedor</option>
+                        <option value="filial">filial</option>
+                      </select>
+                      <div class="form-hint">Em qual campo de filtro esta equivalência se aplica.</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="form-section" style="margin-top:16px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Como funciona na prática</div>
+                </div>
+                <div class="form-section-body" id="exemplo-dinamico" style="font-size:13px;color:var(--text-md);line-height:1.7"></div>
+              </section>
+            </main>
+
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados do Registro</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="reg-field">
+                    <div class="reg-label">ID do Registro</div>
+                    <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)"
+                      style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">Status</div>
+                    <select id="f-ativo-form" class="form-control">
+                      <option value="1">Ativo</option>
+                      <option value="0">Inativo</option>
+                    </select>
+                  </div>
+                  <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">
+                    Equivalências inativas são ignoradas pelo classificador de IA.
+                  </p>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── HELP DRAWER ───────────────────────────────────────────────────────── -->
+<style>
+  .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+  .help-overlay.open{opacity:1;pointer-events:all;}
+  .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(500px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+  .help-drawer.open{transform:translateX(0);}
+  .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+  .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+  .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+  .help-tabs{display:flex;gap:2px;padding:0 22px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-card);}
+  .help-tab{padding:10px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-lo);transition:color var(--transition);border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .help-tab:hover:not(.active){color:var(--text-hi);}
+  .help-panel{display:none;} .help-panel.active{display:block;}
+  .help-drawer-body{flex:1;overflow-y:auto;}
+  .help-section{margin-bottom:26px;padding:22px 22px 0;} .help-section:last-child{padding-bottom:22px;margin-bottom:0;}
+  .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:10px;}
+  .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+  .help-tip{background:rgba(124,58,237,.06);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:10px;}
+  .help-example{background:var(--bg-base);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:12px;font-family:monospace;color:var(--text-md);margin-top:8px;line-height:1.7;}
+  .camada-card{background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
+  .camada-card-title{font-size:12px;font-weight:700;margin-bottom:4px;}
+  .camada-card-desc{font-size:12px;color:var(--text-md);line-height:1.6;}
+  .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .fmt-table th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);padding:6px 8px;border-bottom:1px solid var(--border);}
+  .fmt-table td{padding:8px;border-bottom:1px solid var(--border);color:var(--text-md);line-height:1.5;vertical-align:top;}
+  .fmt-table td:first-child{font-family:monospace;font-size:11px;color:var(--accent);}
+  .fmt-table tr:last-child td{border-bottom:none;}
+</style>
+<!-- ── MODAL SUGESTÕES IA ──────────────────────────────────────────────────── -->
+<style>
+  .ia-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:400;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .ia-modal-overlay.open{opacity:1;pointer-events:all;}
+  .ia-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(680px,96vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.18);}
+  .ia-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .ia-modal-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+  .ia-modal-body{flex:1;overflow-y:auto;padding:16px 22px;}
+  .ia-modal-footer{padding:12px 22px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--bg-card);}
+  .sug-group-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+  .sug-group-title:first-child{margin-top:0;}
+  .sug-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+  .sug-item:last-child{border-bottom:none;}
+  .sug-check{margin-top:3px;width:16px;height:16px;cursor:pointer;accent-color:var(--accent);flex-shrink:0;}
+  .sug-info{flex:1;min-width:0;}
+  .sug-termo{font-weight:600;color:var(--text-hi);font-size:13px;}
+  .sug-equiv{font-size:12px;color:var(--text-lo);margin-top:2px;}
+  .sug-why{font-size:11px;color:var(--text-md);margin-top:4px;line-height:1.5;}
+  .ia-selecionar-todos{font-size:12px;color:var(--accent);cursor:pointer;background:none;border:none;padding:0;text-decoration:underline;}
+  .ia-selecionar-todos:hover{color:var(--accent-light);}
+</style>
+<div class="ia-modal-overlay" id="ia-sugestao-overlay" onclick="if(event.target===this)fecharSugestoes()">
+  <div class="ia-modal">
+    <div class="ia-modal-header">
+      <span class="ia-modal-title">✨ Sugestões da IA — Novos Termos</span>
+      <button class="help-drawer-close" onclick="fecharSugestoes()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="ia-modal-body">
+      <div id="ia-sug-loading" style="text-align:center;padding:48px 0;color:var(--text-lo)">
+        <div style="font-size:32px;margin-bottom:14px">🤖</div>
+        <div style="font-size:14px">Consultando a IA, aguarde…</div>
+        <div style="font-size:12px;margin-top:6px">Pode levar alguns segundos.</div>
+      </div>
+      <div id="ia-sug-content" style="display:none"></div>
+    </div>
+    <div class="ia-modal-footer">
+      <button class="ia-selecionar-todos" id="btn-sel-todos" onclick="_toggleTodosSug()" style="display:none">Selecionar todos</button>
+      <span id="ia-sug-count" style="font-size:12px;color:var(--text-lo);flex:1">—</span>
+      <button class="btn btn-ghost" onclick="fecharSugestoes()">Fechar</button>
+      <button class="btn btn-primary" id="btn-ia-importar" onclick="importarSugestoes()" disabled>Importar selecionadas</button>
+    </div>
+  </div>
+</div>
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Dicionário de Equivalências</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="help-tabs">
+    <button class="help-tab active" onclick="helpTab(this,'hs-geral')">Visão Geral</button>
+    <button class="help-tab" onclick="helpTab(this,'hs-cadastrar')">Como Cadastrar</button>
+  </div>
+  <div class="help-drawer-body">
+
+    <!-- ── ABA: VISÃO GERAL ── -->
+    <div class="help-panel active" id="hs-geral">
+      <div class="help-section">
+        <div class="help-section-title">O que são Equivalências</div>
+        <div class="help-item-desc">O Dicionário de Equivalências ensina a IA os termos específicos da sua empresa. Quando o usuário digitar um termo cadastrado aqui, a IA saberá exatamente o que ele quer dizer — sem depender de inferência.</div>
+        <div class="help-tip">A IA já conhece termos comuns como "fat", "vendas" e "receita". Cadastre aqui apenas o vocabulário específico da sua empresa que a IA provavelmente não conheceria.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Como entra na regra local</div>
+        <div class="help-item-desc">As equivalencias sao usadas antes da IA. O motor local procura termos nas camadas <strong>Intencao</strong>, <strong>Coluna</strong> e <strong>Filtro</strong>, soma esses sinais com periodo, agrupamento, limite e metricas do Dataset, e calcula uma confianca. Quando a confianca fica alta, a consulta executa sem consumir tokens.</div>
+        <div class="help-tip">Exemplo: "Fat do ano por produto" encontra "fat" como intencao de faturamento, "ano" como periodo e "produto" como agrupamento. Se o Dataset tambem tem metricas como faturamento/quantidade, a pontuacao fica forte e a IA nao precisa ser chamada.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">As três camadas</div>
+        <div class="camada-card">
+          <div class="camada-card-title" style="color:#7c3aed">🎯 Intenção</div>
+          <div class="camada-card-desc">Mapeia o que o usuário quer <strong>consultar</strong>. Use quando sua empresa chama o faturamento de outro nome.</div>
+          <div class="help-example">termo: "movimento"  →  equivalência: "faturamento"<br>Usuário digita: "movimento do mês"<br>IA entende: consulta de faturamento do mês</div>
+        </div>
+        <div class="camada-card">
+          <div class="camada-card-title" style="color:#ea580c">🔍 Filtro</div>
+          <div class="camada-card-desc">Normaliza <strong>valores de filtros</strong> como apelidos de clientes, siglas de produtos ou nomes abreviados.</div>
+          <div class="help-example">termo: "CAIEIRINHA"  →  equivalência: "CAIEIRA LTDA"  contexto: cliente<br>Usuário digita: "fat do ano cliente CAIEIRINHA"<br>IA filtra por: CAIEIRA LTDA</div>
+        </div>
+        <div class="camada-card">
+          <div class="camada-card-title" style="color:#0284c7">📊 Coluna</div>
+          <div class="camada-card-desc">Mapeia o que o usuário quer <strong>medir</strong> para o campo correto do dataset.</div>
+          <div class="help-example">termo: "valor de saída"  →  equivalência: "faturamento"<br>Usuário digita: "valor de saída do trimestre"<br>IA usa o campo: faturamento</div>
+        </div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Padrões do sistema</div>
+        <div class="help-item-desc">O sistema já vem com equivalências padrão cadastradas (visíveis no painel roxo da lista). Elas cobrem os termos mais comuns do mercado e não podem ser removidas, mas você pode complementá-las com os termos da sua empresa.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Dica de performance</div>
+        <div class="help-item-desc">Mantenha o dicionário enxuto. Cada equivalência ativa é injetada no prompt da IA a cada mensagem. Até 50 equivalências têm impacto negligenciável; acima de 100, considere desativar as menos usadas.</div>
+      </div>
+    </div>
+
+    <!-- ── ABA: COMO CADASTRAR ── -->
+    <div class="help-panel" id="hs-cadastrar">
+
+      <div class="help-section">
+        <div class="help-section-title">Regra de ouro</div>
+        <div class="help-item-desc">Use esta tabela para decidir qual camada cadastrar:</div>
+        <table class="fmt-table" style="margin-top:10px">
+          <thead><tr><th>O usuário errou em…</th><th>Camada correta</th></tr></thead>
+          <tbody>
+            <tr><td>…identificar a CONSULTA ("movimento do mês" e a IA não entendeu)</td><td style="color:#7c3aed;font-weight:600">Intenção</td></tr>
+            <tr><td>…nomear uma MÉTRICA ("volume" e veio dado errado ou vazio)</td><td style="color:#0284c7;font-weight:600">Coluna</td></tr>
+            <tr><td>…escrever um NOME ("CAIEIRINHA" e não encontrou nada)</td><td style="color:#ea580c;font-weight:600">Filtro</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title" style="color:#7c3aed">🎯 Camada Intenção</div>
+        <div class="help-item-desc" style="margin-bottom:10px">Use quando o usuário chama uma consulta por um nome diferente do cadastrado em <strong>Intenções</strong>.</div>
+        <table class="fmt-table">
+          <thead><tr><th>Termo</th><th>Equivalência</th><th>Exemplo de uso</th></tr></thead>
+          <tbody>
+            <tr><td>movimento</td><td>faturamento</td><td>"movimento do mês"</td></tr>
+            <tr><td>saída</td><td>faturamento</td><td>"saídas de ontem"</td></tr>
+            <tr><td>romaneio</td><td>pedidos</td><td>"romaneio de hoje"</td></tr>
+            <tr><td>duplicatas</td><td>titulos_abertos</td><td>"duplicatas vencidas"</td></tr>
+          </tbody>
+        </table>
+        <div class="help-tip">O campo <strong>Equivalência</strong> deve ser o nome exato da Intenção cadastrada. O campo exibe sugestões automaticamente ao digitar.</div>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title" style="color:#0284c7">📊 Camada Coluna</div>
+        <div class="help-item-desc" style="margin-bottom:10px">Use quando o usuário pede uma métrica com nome diferente do alias no SELECT do Dataset.</div>
+        <table class="fmt-table">
+          <thead><tr><th>Termo</th><th>Equivalência</th><th>Alias no SELECT</th></tr></thead>
+          <tbody>
+            <tr><td>volume</td><td>quantidade</td><td>SUM(QTD) AS quantidade</td></tr>
+            <tr><td>valor de saída</td><td>faturamento</td><td>SUM(VLR) AS faturamento</td></tr>
+            <tr><td>receita bruta</td><td>faturamento</td><td>SUM(VLR) AS faturamento</td></tr>
+            <tr><td>peças</td><td>quantidade</td><td>SUM(QTD) AS quantidade</td></tr>
+          </tbody>
+        </table>
+        <div class="help-tip">O sistema já cadastra <em>volume, qtde, valor total</em> como padrão. Adicione apenas os termos específicos da sua empresa.</div>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title" style="color:#ea580c">🔍 Camada Filtro</div>
+        <div class="help-item-desc" style="margin-bottom:10px">Use quando o usuário escreve apelidos, siglas ou nomes abreviados de clientes, produtos ou vendedores.</div>
+        <table class="fmt-table">
+          <thead><tr><th>Termo</th><th>Equivalência (nome no ERP)</th><th>Contexto</th></tr></thead>
+          <tbody>
+            <tr><td>CAIEIRINHA</td><td>CAIEIRA LTDA</td><td>cliente</td></tr>
+            <tr><td>MT</td><td>MATO GROSSO IND COM LTDA</td><td>cliente</td></tr>
+            <tr><td>FERRAO</td><td>FERRÃO &amp; FILHOS S/A</td><td>cliente</td></tr>
+            <tr><td>PARAF</td><td>PARAFUSO ESPECIAL XYZ</td><td>produto</td></tr>
+            <tr><td>JOAO</td><td>JOÃO CARLOS SILVA</td><td>vendedor</td></tr>
+          </tbody>
+        </table>
+        <div class="help-tip">A equivalência deve ser o nome <strong>exato</strong> como está gravado no ERP — maiúsculas, pontuação e acentos incluídos. Este é o cadastro mais frequente do dia a dia: alimente conforme os usuários reclamarem que "não achou".</div>
+      </div>
+
+    </div><!-- fim hs-cadastrar -->
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let table, gp;
+  let _dados = [];
+  let _filtrosVisiveis = false;
+  let _quickFilterFn = null;
+  let _editId = null;
+  let _opcoesEquiv = { intencao: [], coluna: [] };
+
+  async function restaurarPadroes() {
+    if (!confirm('Restaurar todos os padrões do sistema para esta empresa?\n\nIsso vai recriar os registros de sistema que foram excluídos. Registros que você editou serão substituídos.')) return;
+    const res = await fetch('/api/ia-command/admin/sinonimos/restaurar-sistema', { method: 'POST' });
+    if (!res.ok) { alert('Erro ao restaurar padrões.'); return; }
+    const data = await res.json();
+    alert(`${data.restaurados} padrão(ões) restaurado(s).`);
+    carregar();
+  }
+
+  // ── Datalist dinâmico de equivalência ─────────────────────────────────────
+  async function _carregarOpcoesEquiv() {
+    // Intenções cadastradas
+    try {
+      const rows = await fetch('/api/ia-command/admin/intencoes').then(r => r.json()).catch(() => []);
+      _opcoesEquiv.intencao = [...new Set(rows.map(r => r.nome).filter(Boolean))].sort();
+    } catch (_) {}
+
+    // Colunas: equivalências já usadas em registros de coluna (todos os registros da empresa, incluindo sistema)
+    try {
+      _opcoesEquiv.coluna = [...new Set(_dados.filter(r => r.camada === 'coluna').map(r => r.equivalencia).filter(Boolean))].sort();
+    } catch (_) {}
+  }
+
+  function _atualizarDatalist(camada) {
+    const dl = document.getElementById('equiv-datalist');
+    const hint = document.getElementById('equiv-hint');
+    const opcoes = _opcoesEquiv[camada] || [];
+    dl.innerHTML = opcoes.map(o => `<option value="${esc(o)}">`).join('');
+    if (camada === 'intencao') {
+      hint.textContent = opcoes.length
+        ? `Escolha uma das ${opcoes.length} intenções cadastradas ou digite livremente.`
+        : 'O que o sistema deve entender. (Nenhuma intenção cadastrada ainda.)';
+    } else if (camada === 'coluna') {
+      hint.textContent = opcoes.length
+        ? `Escolha um campo já mapeado ou digite o nome do alias no SELECT.`
+        : 'Digite o nome do alias da coluna numérica no SELECT do Dataset.';
+    } else {
+      hint.textContent = 'O valor real como está no ERP (ex: nome completo do cliente).';
+    }
+  }
+
+  // ── Formulário ─────────────────────────────────────────────────────────────
+  function atualizarContexto() {
+    const camada = document.getElementById('f-camada-form').value;
+    document.getElementById('grupo-contexto').style.display = camada === 'filtro' ? '' : 'none';
+    _atualizarDatalist(camada);
+    _atualizarExemplo();
+  }
+
+  function _atualizarExemplo() {
+    const termo = document.getElementById('f-termo').value.trim() || 'movimento';
+    const equiv = document.getElementById('f-equivalencia').value.trim() || 'faturamento';
+    const camada = document.getElementById('f-camada-form').value;
+    const ctx = document.getElementById('f-contexto').value;
+    const el = document.getElementById('exemplo-dinamico');
+    const msgs = {
+      intencao: `Quando o usuário digitar <strong>"${esc(termo)}"</strong>, a IA interpretará como <strong>"${esc(equiv)}"</strong> ao classificar a intenção.<br><br>Exemplo: <em>"${esc(termo)} do mês"</em> → consulta de ${esc(equiv)} do mês.`,
+      filtro:   `Quando o usuário digitar <strong>"${esc(termo)}"</strong> como filtro de ${ctx || 'valor'}, a IA normalizará para <strong>"${esc(equiv)}"</strong>.<br><br>Exemplo: <em>"fat do ano ${ctx || 'filtro'} ${esc(termo)}"</em> → filtra por ${esc(equiv)}.`,
+      coluna:   `Quando o usuário mencionar <strong>"${esc(termo)}"</strong> como métrica, a IA usará o campo <strong>"${esc(equiv)}"</strong>.<br><br>Exemplo: <em>"${esc(termo)} do trimestre"</em> → usa o campo ${esc(equiv)}.`,
+    };
+    el.innerHTML = msgs[camada] || '';
+  }
+
+  function abrirFormulario(id) {
+    _editId = id || null;
+    _resetForm();
+    document.getElementById('form-title').textContent    = id ? 'Editar Equivalência' : 'Nova Equivalência';
+    document.getElementById('form-subtitle').textContent = 'Preencha os campos e salve.';
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-form').style.display  = '';
+    atualizarContexto();
+    if (id) _carregarForm(id);
+  }
+
+  function fecharModal() {
+    document.getElementById('sec-form').style.display  = 'none';
+    document.getElementById('sec-lista').style.display = '';
+    _editId = null;
+  }
+
+  function _resetForm() {
+    ['f-id','f-termo','f-equivalencia'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('f-camada-form').value = 'intencao';
+    document.getElementById('f-contexto').value    = '';
+    document.getElementById('f-ativo-form').value  = '1';
+    document.getElementById('save-feedback').textContent = '';
+    document.getElementById('save-feedback').className   = 'save-feedback';
+    atualizarContexto();
+  }
+
+  async function _carregarForm(id) {
+    const row = await fetch(`/api/ia-command/admin/sinonimos/${id}`).then(r => r.json()).catch(() => null);
+    if (!row) return;
+    document.getElementById('f-id').value           = row.id;
+    document.getElementById('f-termo').value        = row.termo        || '';
+    document.getElementById('f-equivalencia').value = row.equivalencia || '';
+    document.getElementById('f-camada-form').value  = row.camada       || 'intencao';
+    document.getElementById('f-contexto').value     = row.contexto     || '';
+    document.getElementById('f-ativo-form').value   = String(row.ativo ?? 1);
+    document.getElementById('form-title').textContent = `"${row.termo}"`;
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+    atualizarContexto();
+  }
+
+  async function salvarModal() {
+    const termo       = document.getElementById('f-termo').value.trim();
+    const equivalencia = document.getElementById('f-equivalencia').value.trim();
+    if (!termo)       { _feedback('Campo Termo é obrigatório.', false); return; }
+    if (!equivalencia) { _feedback('Campo Equivalência é obrigatório.', false); return; }
+    const body = {
+      termo,
+      equivalencia,
+      camada:   document.getElementById('f-camada-form').value,
+      contexto: document.getElementById('f-contexto').value || null,
+      ativo:    parseInt(document.getElementById('f-ativo-form').value),
+    };
+    const url    = _editId ? `/api/ia-command/admin/sinonimos/${_editId}` : '/api/ia-command/admin/sinonimos';
+    const method = _editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); _feedback(e.error || 'Erro ao salvar.', false); return; }
+    const saved = await res.json();
+    if (!_editId) _editId = saved.id;
+    _feedback('Salvo com sucesso!', true);
+    setTimeout(() => { fecharModal(); carregar(); }, 700);
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg; el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+  }
+
+  // ── Filtros ────────────────────────────────────────────────────────────────
+  function toggleFiltros() {
+    _filtrosVisiveis = !_filtrosVisiveis;
+    document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
+    document.getElementById('btn-filtros').textContent   = _filtrosVisiveis ? '− Ocultar filtros' : '+ Mostrar filtros';
+    if (_filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+  }
+
+  function filtrar() {
+    if (!table) return;
+    if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
+    const b = document.getElementById('f-busca').value.trim().toLowerCase();
+    const c = document.getElementById('f-camada').value;
+    const a = document.getElementById('f-ativo').value;
+    if (b || c || a !== '') {
+      _quickFilterFn = row => {
+        if (c && row.camada !== c) return false;
+        if (a !== '' && String(row.ativo) !== a) return false;
+        if (b && !(row.termo + ' ' + row.equivalencia).toLowerCase().includes(b)) return false;
+        return true;
+      };
+      table.addFilter(_quickFilterFn);
+    }
+    const ativos = [b, c, a].filter(Boolean).length;
+    document.getElementById('filter-status').textContent =
+      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+  }
+
+  function limparFiltros() {
+    document.getElementById('f-busca').value  = '';
+    document.getElementById('f-camada').value = '';
+    document.getElementById('f-ativo').value  = '';
+    filtrar();
+  }
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
+  async function excluir(id) {
+    if (!confirm('Excluir esta equivalência?')) return;
+    await fetch(`/api/ia-command/admin/sinonimos/${id}`, { method: 'DELETE' });
+    carregar();
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Grid ───────────────────────────────────────────────────────────────────
+  async function carregar() {
+    _dados = await fetch('/api/ia-command/admin/sinonimos').then(r => r.json()).catch(() => []);
+    if (table) { table.replaceData(_dados); return; }
+    _criarTabela(_dados);
+  }
+
+  const CAMADA_LABEL = { intencao: 'Intenção', filtro: 'Filtro', coluna: 'Coluna' };
+  const CAMADA_CLS   = { intencao: 'badge-camada-intencao', filtro: 'badge-camada-filtro', coluna: 'badge-camada-coluna' };
+
+  function _criarTabela(data) {
+    gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_sinonimos_group', getTable:()=>table });
+    table = new Tabulator('#tabela', {
+      data, index:'id', layout:'fitColumns', movableColumns:true,
+      height:'calc(100vh - 380px)', groupBy:gp.getActiveFields(), groupStartOpen:true,
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma equivalência cadastrada.<br><small>Clique em "＋ Nova Equivalência" para começar.</small></div>',
+      columns:[
+        { title:'Termo', field:'termo', minWidth:140, headerFilter:true,
+          formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'Camada', field:'camada', width:110,
+          headerFilter:'select', headerFilterParams:{values:{'':'Todos','intencao':'Intenção','filtro':'Filtro','coluna':'Coluna'}},
+          formatter: c => { const v=c.getValue(); return `<span class="${CAMADA_CLS[v]||''}">${CAMADA_LABEL[v]||v}</span>`; } },
+        { title:'Equivalência', field:'equivalencia', minWidth:160, headerFilter:true,
+          formatter: c => esc(c.getValue()) },
+        { title:'Contexto', field:'contexto', width:100, headerFilter:true,
+          formatter: c => c.getValue() ? `<span style="font-size:11px;color:var(--text-lo)">${esc(c.getValue())}</span>` : '' },
+        { title:'Status', field:'ativo', width:90,
+          headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}},
+          formatter: c => c.getValue()
+            ? '<span class="badge-ativo">● Ativo</span>'
+            : '<span class="badge-inativo">○ Inativo</span>' },
+        { title:'Origem', field:'origem', width:105, groupable:false,
+          formatter: c => c.getValue() === 'sistema'
+            ? '<span class="badge-sistema">🔒 Sistema</span>'
+            : '<span class="badge-usuario">✎ Empresa</span>' },
+        { title:'Criado em', field:'criado_em', width:145,
+          formatter: c => c.getValue()?.slice(0,16).replace('T',' ') || '' },
+        { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
+          formatter: cell => {
+            const id = cell.getValue();
+            return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar">✏️</button>
+                    <button class="btn-icon" onclick="event.stopPropagation();excluir('${id}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+          }},
+      ],
+      rowClick: (e, row) => { if (!e.target.closest('button')) abrirFormulario(row.getData().id); },
+      dataFiltered: (_f, rows) => {
+        const total = _dados.length, qtd = rows?.length ?? total;
+        document.getElementById('count').textContent = qtd === total ? _label(qtd) : `${qtd} de ${total} equivalências`;
+      },
+    });
+    gp.refresh(); gp.applyToTable();
+    document.getElementById('count').textContent = _label(data.length);
+  }
+
+  function _label(n) { return n === 1 ? '1 equivalência' : `${n} equivalências`; }
+
+  // ── Help ───────────────────────────────────────────────────────────────────
+  function abrirAjuda()  { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  function helpTab(btn, panel) {
+    document.querySelectorAll('.help-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(panel).classList.add('active');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('sec-form').style.display !== 'none') fecharModal();
+    else fecharAjuda();
+  });
+
+  // Atualiza exemplo ao digitar
+  document.addEventListener('DOMContentLoaded', () => {
+    ['f-termo','f-equivalencia','f-contexto'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', _atualizarExemplo);
+    });
+  });
+
+  // ── Sugestões via IA ───────────────────────────────────────────────────────
+  let _sugestoes = [];
+  let _todosSelSug = false;
+
+  async function sugerirViaIA() {
+    _sugestoes = [];
+    _todosSelSug = false;
+    document.getElementById('ia-sugestao-overlay').classList.add('open');
+    document.getElementById('ia-sug-loading').style.display = '';
+    document.getElementById('ia-sug-content').style.display = 'none';
+    document.getElementById('btn-sel-todos').style.display = 'none';
+    document.getElementById('btn-ia-importar').disabled = true;
+    document.getElementById('ia-sug-count').textContent = '—';
+
+    try {
+      const res = await fetch('/api/ia-command/admin/sinonimos/sugerir', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Erro ${res.status}`); }
+      const data = await res.json();
+      _sugestoes = data.sugestoes || [];
+      _renderSugestoes(data.provedor);
+    } catch (err) {
+      document.getElementById('ia-sug-loading').innerHTML = `<div style="text-align:center;padding:48px 0;color:#dc2626">
+        <div style="font-size:32px;margin-bottom:14px">⚠️</div>
+        <div style="font-size:13px">${esc(err.message)}</div>
+      </div>`;
+    }
+  }
+
+  function _renderSugestoes(provedor) {
+    const el = document.getElementById('ia-sug-content');
+    if (!_sugestoes.length) {
+      el.innerHTML = '<div style="text-align:center;padding:48px 0;color:var(--text-lo)"><div style="font-size:28px;margin-bottom:12px">🎉</div>Nenhuma sugestão nova — seu dicionário já está completo!</div>';
+    } else {
+      const grupos = { intencao: [], coluna: [] };
+      _sugestoes.forEach((s, i) => { if (grupos[s.camada]) grupos[s.camada].push({ ...s, idx: i }); });
+      const CAMADA_LABEL = { intencao: '🎯 Intenção', coluna: '📊 Coluna' };
+      let html = provedor ? `<div style="font-size:11px;color:var(--text-lo);margin-bottom:14px">Gerado por <strong>${esc(provedor)}</strong> — revise antes de importar.</div>` : '';
+      for (const [camada, items] of Object.entries(grupos)) {
+        if (!items.length) continue;
+        html += `<div class="sug-group-title">${CAMADA_LABEL[camada]} — ${items.length} sugestão(ões)</div>`;
+        items.forEach(s => {
+          html += `<div class="sug-item">
+            <input type="checkbox" class="sug-check" id="sug-${s.idx}" data-idx="${s.idx}" onchange="_updateSugCount()">
+            <div class="sug-info">
+              <div class="sug-termo">${esc(s.termo)}</div>
+              <div class="sug-equiv">→ <strong>${esc(s.equivalencia)}</strong> <span style="color:var(--text-lo);font-size:11px">· ${esc(s.camada)}</span></div>
+              ${s.justificativa ? `<div class="sug-why">${esc(s.justificativa)}</div>` : ''}
+            </div>
+          </div>`;
+        });
+      }
+      el.innerHTML = html;
+      document.getElementById('btn-sel-todos').style.display = '';
+    }
+    document.getElementById('ia-sug-loading').style.display = 'none';
+    el.style.display = '';
+    _updateSugCount();
+  }
+
+  function _updateSugCount() {
+    const checks = document.querySelectorAll('.sug-check');
+    const checked = document.querySelectorAll('.sug-check:checked').length;
+    document.getElementById('ia-sug-count').textContent =
+      checked === 0 ? `${_sugestoes.length} sugestão(ões) — nenhuma selecionada` :
+      `${checked} de ${checks.length} selecionada(s)`;
+    document.getElementById('btn-ia-importar').disabled = checked === 0;
+    document.getElementById('btn-sel-todos').textContent = checked === checks.length ? 'Desmarcar todos' : 'Selecionar todos';
+    _todosSelSug = checked === checks.length;
+  }
+
+  function _toggleTodosSug() {
+    _todosSelSug = !_todosSelSug;
+    document.querySelectorAll('.sug-check').forEach(c => { c.checked = _todosSelSug; });
+    _updateSugCount();
+  }
+
+  function fecharSugestoes() {
+    document.getElementById('ia-sugestao-overlay').classList.remove('open');
+  }
+
+  async function importarSugestoes() {
+    const checks = [...document.querySelectorAll('.sug-check:checked')];
+    if (!checks.length) return;
+    const btn = document.getElementById('btn-ia-importar');
+    btn.disabled = true;
+    btn.textContent = 'Importando…';
+    let ok = 0, erros = 0;
+    for (const chk of checks) {
+      const s = _sugestoes[parseInt(chk.dataset.idx)];
+      try {
+        const r = await fetch('/api/ia-command/admin/sinonimos', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ termo: s.termo, camada: s.camada, equivalencia: s.equivalencia, contexto: s.contexto || null, ativo: 1 }),
+        });
+        r.ok ? ok++ : erros++;
+      } catch (_) { erros++; }
+    }
+    btn.textContent = `✓ ${ok} importada(s)${erros ? ` · ${erros} erro(s)` : ''}`;
+    setTimeout(() => { fecharSugestoes(); carregar(); btn.textContent = 'Importar selecionadas'; }, 1200);
+  }
+
+  const _init = async () => {
+    await carregar();
+    await _carregarOpcoesEquiv();
+  };
+  window._iahubAuthReady?.then(_init) ?? _init();
+</script>
+</body>
+</html>

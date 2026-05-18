@@ -59,6 +59,8 @@
     .provider-badge { display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
     .badge-groq   { background:rgba(249,115,22,.12);color:#ea580c; }
     .badge-gemini { background:rgba(59,130,246,.12);color:#2563eb; }
+    .badge-deepseek { background:rgba(20,184,166,.12);color:#0f766e; }
+    .badge-claude { background:rgba(168,85,247,.12);color:#7e22ce; }
 
     .test-result { margin-top:10px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px; }
     .test-result.ok   { background:#dcfce7;color:#15803d; }
@@ -66,6 +68,22 @@
 
     .toast { position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:var(--transition);z-index:999; }
     .toast.show { transform:translateY(0);opacity:1; }
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -101,6 +119,7 @@
             <span>Configure provedores de IA e parâmetros de comportamento.</span>
           </div>
           <div class="editor-actions">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
             <button class="btn btn-ghost" onclick="carregar()">↺ Descartar</button>
             <button class="btn btn-primary" onclick="salvar()">Salvar configurações</button>
           </div>
@@ -118,8 +137,8 @@
             <div class="iac-tab-panel active" id="aba-provedores">
               <div class="form-section" style="margin-bottom:16px">
                 <div class="form-section-header">
-                  <div class="form-section-title">Groq <span class="provider-badge badge-groq" style="margin-left:6px">⚡ Primário</span></div>
-                  <div class="form-section-subtitle">Provedor principal para classificação de intenções e transcrição de áudio.</div>
+                  <div class="form-section-title">Groq <span id="pbadge-groq" class="provider-badge badge-groq" style="margin-left:6px">⚡ Rápido</span></div>
+                  <div id="psub-groq" class="form-section-subtitle">Alta velocidade, ideal para respostas rápidas.</div>
                 </div>
                 <div class="form-section-body">
                   <div class="form-group">
@@ -142,8 +161,8 @@
 
               <div class="form-section">
                 <div class="form-section-header">
-                  <div class="form-section-title">Gemini <span class="provider-badge badge-gemini" style="margin-left:6px">✦ Fallback</span></div>
-                  <div class="form-section-subtitle">Provedor de fallback quando o Groq não está disponível.</div>
+                  <div class="form-section-title">Gemini <span id="pbadge-gemini" class="provider-badge badge-gemini" style="margin-left:6px">✦ Fallback</span></div>
+                  <div id="psub-gemini" class="form-section-subtitle">Provedor de fallback.</div>
                 </div>
                 <div class="form-section-body">
                   <div class="form-group">
@@ -163,6 +182,54 @@
                   </div>
                 </div>
               </div>
+
+              <div class="form-section" style="margin-top:16px">
+                <div class="form-section-header">
+                  <div class="form-section-title">DeepSeek <span id="pbadge-deepseek" class="provider-badge badge-deepseek" style="margin-left:6px">▣ Custo-benefício</span></div>
+                  <div id="psub-deepseek" class="form-section-subtitle">Fallback para lógica estruturada e controle de custo.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Chave de API (DeepSeek)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="deepseek-key" class="form-control" placeholder="sk-…" oninput="atualizarResumo()">
+                      <button type="button" class="btn-pass-toggle" id="toggle-deepseek" onclick="toggleKey('deepseek-key',this)" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Opcional. Usado quando provedores anteriores falharem.</div>
+                    <div id="status-deepseek" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" onclick="testarProvedor('deepseek')">Testar conexão</button>
+                    </div>
+                    <div class="test-result" id="test-deepseek" style="display:none"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-section" style="margin-top:16px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Claude <span id="pbadge-claude" class="provider-badge badge-claude" style="margin-left:6px">◆ Elite</span></div>
+                  <div id="psub-claude" class="form-section-subtitle">Fallback premium para casos complexos.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Chave de API (Claude/Anthropic)</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="claude-key" class="form-control" placeholder="sk-ant-…" oninput="atualizarResumo()">
+                      <button type="button" class="btn-pass-toggle" id="toggle-claude" onclick="toggleKey('claude-key',this)" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Opcional. Recomendado para cenários de maior qualidade, quando disponível.</div>
+                    <div id="status-claude" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-ghost" onclick="testarProvedor('claude')">Testar conexão</button>
+                    </div>
+                    <div class="test-result" id="test-claude" style="display:none"></div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- ABA COMPORTAMENTO -->
@@ -178,8 +245,16 @@
                     <select id="provedor-primario" class="form-control" onchange="atualizarResumo()">
                       <option value="groq">Groq (recomendado)</option>
                       <option value="gemini">Gemini</option>
+                      <option value="deepseek">DeepSeek</option>
+                      <option value="claude">Claude</option>
                     </select>
-                    <div class="form-hint">O Gemini será usado automaticamente se o Groq falhar.</div>
+                    <div class="form-hint">O provedor primário será tentado primeiro; depois entra a ordem de fallback abaixo.</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Ordem de fallback</label>
+                    <input id="fallback-ordem" class="form-control" value="groq,gemini,deepseek,claude" oninput="atualizarResumo()">
+                    <div class="form-hint">Separe por vírgula. Exemplo: groq,gemini,deepseek,claude.</div>
                   </div>
 
                   <div class="form-group">
@@ -223,12 +298,24 @@
                     <span class="summary-value" id="rs-idioma">—</span>
                   </div>
                   <div class="summary-item">
+                    <span class="summary-label">Fallback</span>
+                    <span class="summary-value" id="rs-fallback">—</span>
+                  </div>
+                  <div class="summary-item">
                     <span class="summary-label">Chave Groq</span>
                     <span class="summary-value" id="rs-groq">—</span>
                   </div>
                   <div class="summary-item">
                     <span class="summary-label">Chave Gemini</span>
                     <span class="summary-value" id="rs-gemini">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Chave DeepSeek</span>
+                    <span class="summary-value" id="rs-deepseek">—</span>
+                  </div>
+                  <div class="summary-item">
+                    <span class="summary-label">Chave Claude</span>
+                    <span class="summary-value" id="rs-claude">—</span>
                   </div>
                 </div>
               </div>
@@ -246,6 +333,13 @@
 <script src="/js/auth.js"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
+  const PROVIDERS = ['groq', 'gemini', 'deepseek', 'claude'];
+  const PROVIDER_FIELDS = {
+    groq: 'groq_api_key',
+    gemini: 'gemini_api_key',
+    deepseek: 'deepseek_api_key',
+    claude: 'claude_api_key',
+  };
   const SVG_EYE      = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
   const SVG_EYE_OFF  = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
 
@@ -260,28 +354,64 @@
     document.getElementById(painel).classList.add('active');
   }
 
+  const _PROVIDER_DEFAULTS = {
+    groq:     { icon: '⚡', label: 'Rápido',          sub: 'Alta velocidade, ideal para respostas rápidas.' },
+    gemini:   { icon: '✦', label: 'Multimodal',       sub: 'Provedor Google com grande janela de contexto.' },
+    deepseek: { icon: '▣', label: 'Custo-benefício',  sub: 'Fallback para lógica estruturada e controle de custo.' },
+    claude:   { icon: '◆', label: 'Elite',             sub: 'Fallback premium para casos complexos.' },
+  };
+
+  function _atualizarBadgesProvedores(primario) {
+    for (const [id, info] of Object.entries(_PROVIDER_DEFAULTS)) {
+      const badge = document.getElementById('pbadge-' + id);
+      const sub   = document.getElementById('psub-' + id);
+      if (!badge) continue;
+      if (id === primario) {
+        badge.textContent = '⚡ Primário';
+        if (sub) sub.textContent = 'Provedor principal para classificação de intenções e transcrição de áudio.';
+      } else {
+        badge.textContent = info.icon + ' ' + info.label;
+        if (sub) sub.textContent = info.sub;
+      }
+    }
+  }
+
   function atualizarResumo() {
-    const provedores = { groq: 'Groq', gemini: 'Gemini' };
+    const provedores = { groq: 'Groq', gemini: 'Gemini', deepseek: 'DeepSeek', claude: 'Claude' };
     const idiomas    = { pt: 'Português', en: 'Inglês', es: 'Espanhol' };
-    document.getElementById('rs-provedor').textContent  = provedores[document.getElementById('provedor-primario').value] || '—';
+    const prim = document.getElementById('provedor-primario').value;
+    _atualizarBadgesProvedores(prim);
+    document.getElementById('rs-provedor').textContent  = provedores[prim] || '—';
     document.getElementById('rs-confianca').textContent = document.getElementById('confianca-min').value || '—';
     document.getElementById('rs-idioma').textContent    = idiomas[document.getElementById('audio-idioma').value] || '—';
-    document.getElementById('rs-groq').textContent      = document.getElementById('groq-key').value ? '● preenchida' : '— (mantém atual)';
-    document.getElementById('rs-gemini').textContent    = document.getElementById('gemini-key').value ? '● preenchida' : '— (mantém atual)';
+    document.getElementById('rs-fallback').textContent  = document.getElementById('fallback-ordem').value || '—';
+    PROVIDERS.forEach(p => {
+      const el = document.getElementById(`${p}-key`);
+      document.getElementById(`rs-${p}`).textContent = el.value ? '● preenchida' : '— (mantém atual)';
+    });
   }
 
   async function toggleKey(id, btn) {
     const inp  = document.getElementById(id);
     const show = inp.type === 'password';
-    inp.type   = show ? 'text' : 'password';
+    inp.type      = show ? 'text' : 'password';
     btn.innerHTML = _svgEye(show);
     btn.title     = show ? 'Ocultar chave' : 'Mostrar chave';
 
     if (show && inp.value === '' && inp.dataset.configurada === '1') {
-      inp.type = 'password';
-      btn.innerHTML = _svgEye(false);
-      btn.title = 'Mostrar chave digitada';
-      return;
+      btn.disabled = true;
+      try {
+        const data  = await fetch('/api/ia-command/ai-config/reveal').then(r => r.json());
+        const campo = PROVIDER_FIELDS[id.replace('-key', '')];
+        inp.value   = data[campo] || '';
+      } catch (e) {
+        console.error('Erro ao revelar chave:', e);
+        inp.type      = 'password';
+        btn.innerHTML = _svgEye(false);
+        btn.title     = 'Mostrar chave';
+      } finally {
+        btn.disabled = false;
+      }
     }
   }
 
@@ -289,73 +419,60 @@
     try {
       const r   = await fetch('/api/ia-command/ai-config');
       const cfg = await r.json();
-      if (cfg.provedor_primario) document.getElementById('provedor-primario').value = cfg.provedor_primario;
+      if (cfg.provedor_primario) {
+        document.getElementById('provedor-primario').value = cfg.provedor_primario;
+        _atualizarBadgesProvedores(cfg.provedor_primario);
+      }
+      if (cfg.fallback_ordem) document.getElementById('fallback-ordem').value = cfg.fallback_ordem;
       if (cfg.confianca_minima != null) document.getElementById('confianca-min').value = cfg.confianca_minima;
       if (cfg.audio_idioma) document.getElementById('audio-idioma').value = cfg.audio_idioma;
 
-      const groqEl   = document.getElementById('groq-key');
-      const geminiEl = document.getElementById('gemini-key');
-      groqEl.value   = '';
-      geminiEl.value = '';
-      groqEl.type    = 'password';
-      geminiEl.type  = 'password';
-      document.getElementById('toggle-groq').innerHTML   = _svgEye(false);
-      document.getElementById('toggle-gemini').innerHTML = _svgEye(false);
-
-      const groqConf   = !!cfg.groq_api_key;
-      const geminiConf = !!cfg.gemini_api_key;
-      groqEl.dataset.configurada   = groqConf   ? '1' : '0';
-      geminiEl.dataset.configurada = geminiConf ? '1' : '0';
-      groqEl.placeholder   = groqConf   ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
-      geminiEl.placeholder = geminiConf ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui (opcional)';
-
-      document.getElementById('status-groq').innerHTML   = groqConf
-        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
-        : '<span style="color:#dc2626">✗ Não configurada</span>';
-      document.getElementById('status-gemini').innerHTML = geminiConf
-        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
-        : '<span style="color:var(--text-lo)">— Não configurada (opcional)</span>';
+      PROVIDERS.forEach(p => {
+        const el = document.getElementById(`${p}-key`);
+        el.value = '';
+        el.type = 'password';
+        document.getElementById(`toggle-${p}`).innerHTML = _svgEye(false);
+        const conf = !!cfg[PROVIDER_FIELDS[p]];
+        el.dataset.configurada = conf ? '1' : '0';
+        el.placeholder = conf ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
+        document.getElementById(`status-${p}`).innerHTML = conf
+          ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+          : '<span style="color:var(--text-lo)">— Não configurada</span>';
+      });
 
       atualizarResumo();
     } catch (e) { console.error(e); }
   }
 
   async function salvar() {
-    const groqKey   = document.getElementById('groq-key').value.trim();
-    const geminiKey = document.getElementById('gemini-key').value.trim();
     const body = {
       provedor_primario: document.getElementById('provedor-primario').value,
+      fallback_ordem:    document.getElementById('fallback-ordem').value.trim(),
       confianca_minima:  parseFloat(document.getElementById('confianca-min').value),
       audio_idioma:      document.getElementById('audio-idioma').value,
     };
-    if (groqKey)   body.groq_api_key   = groqKey;
-    if (geminiKey) body.gemini_api_key = geminiKey;
+    PROVIDERS.forEach(p => {
+      const val = document.getElementById(`${p}-key`).value.trim();
+      if (val) body[PROVIDER_FIELDS[p]] = val;
+    });
     try {
       const r = await fetch('/api/ia-command/ai-config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
       if (!r.ok) { const e = await r.json(); alert(e.error || 'Erro ao salvar.'); return; }
       const saved = await r.json().catch(() => ({}));
 
-      const groqEl   = document.getElementById('groq-key');
-      const geminiEl = document.getElementById('gemini-key');
-      groqEl.value   = '';
-      geminiEl.value = '';
-      groqEl.type    = 'password';
-      geminiEl.type  = 'password';
-      document.getElementById('toggle-groq').innerHTML   = _svgEye(false);
-      document.getElementById('toggle-gemini').innerHTML = _svgEye(false);
-
-      const groqConf   = !!(saved.groq_api_key   || (groqKey   && groqKey   !== '***') || groqEl.dataset.configurada   === '1');
-      const geminiConf = !!(saved.gemini_api_key || (geminiKey && geminiKey !== '***') || geminiEl.dataset.configurada === '1');
-      groqEl.dataset.configurada   = groqConf   ? '1' : '0';
-      geminiEl.dataset.configurada = geminiConf ? '1' : '0';
-      groqEl.placeholder   = groqConf   ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
-      geminiEl.placeholder = geminiConf ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui (opcional)';
-      document.getElementById('status-groq').innerHTML   = groqConf
-        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
-        : '<span style="color:#dc2626">✗ Não configurada</span>';
-      document.getElementById('status-gemini').innerHTML = geminiConf
-        ? '<span style="color:var(--success)">✓ Chave configurada</span>'
-        : '<span style="color:var(--text-lo)">— Não configurada (opcional)</span>';
+      PROVIDERS.forEach(p => {
+        const el = document.getElementById(`${p}-key`);
+        const tinhaValor = !!body[PROVIDER_FIELDS[p]];
+        el.value = '';
+        el.type = 'password';
+        document.getElementById(`toggle-${p}`).innerHTML = _svgEye(false);
+        const conf = !!(saved[PROVIDER_FIELDS[p]] || tinhaValor || el.dataset.configurada === '1');
+        el.dataset.configurada = conf ? '1' : '0';
+        el.placeholder = conf ? '••••••• (configurada — deixe em branco para manter)' : 'Cole a chave aqui';
+        document.getElementById(`status-${p}`).innerHTML = conf
+          ? '<span style="color:var(--success)">✓ Chave configurada</span>'
+          : '<span style="color:var(--text-lo)">— Não configurada</span>';
+      });
 
       atualizarResumo();
       showToast();
@@ -380,7 +497,7 @@
       div.className = `test-result ${data.ok ? 'ok' : 'fail'}`;
       div.textContent = data.ok
         ? `✅ Chave válida! Intenção teste: "${data.intencao}" (conf. ${(data.confianca*100).toFixed(0)}%)`
-        : `❌ ${data.mensagem}`;
+        : `❌ ${data.erro || data.mensagem || 'Erro desconhecido'}`;
     } catch (e) {
       div.className = 'test-result fail';
       div.textContent = `❌ ${e.message}`;
@@ -394,6 +511,48 @@
   }
 
   carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Configurar IA</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">Provedores de IA</div>
+      <div class="help-item"><div class="help-item-label">Groq (principal)</div><div class="help-item-desc">Provedor principal. Mais rápido e otimizado para classificação de intenções e geração de respostas. Obtenha a chave em <strong>console.groq.com</strong>.</div></div>
+      <div class="help-item"><div class="help-item-label">Google Gemini (fallback)</div><div class="help-item-desc">Usado automaticamente quando o Groq não está disponível. Obtenha a chave em <strong>aistudio.google.com</strong>. Recomendado configurar ambos para alta disponibilidade.</div></div>
+      <div class="help-item"><div class="help-item-label">DeepSeek (custo-benefício)</div><div class="help-item-desc">Provedor adicional de fallback, com foco em custo-benefício. Obtenha a chave em <strong>platform.deepseek.com</strong>. A conta precisa ter saldo disponível para executar chamadas.</div></div>
+      <div class="help-tip"><strong>Provedores não configurados não impedem o sistema de funcionar.</strong> O IA Command usa apenas os provedores que possuem chave válida cadastrada, pulando automaticamente os demais na ordem de fallback. Configure pelo menos o provedor principal (Groq) para garantir o funcionamento.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Teste de conexão</div>
+      <div class="help-item"><div class="help-item-label">O que o teste faz</div><div class="help-item-desc">Envia uma mensagem de exemplo ao provedor usando a chave cadastrada e verifica se a API responde corretamente. Um resultado com intenção e confiança confirma que a chave está válida e o provedor está acessível.</div></div>
+      <div class="help-item"><div class="help-item-label">Erros comuns</div><div class="help-item-desc">
+        <strong>Chave inválida / Unauthorized:</strong> a chave foi digitada incorretamente ou foi revogada — gere uma nova no painel do provedor.<br>
+        <strong>Insufficient Balance:</strong> a chave é válida e a conexão funciona, mas a conta não tem créditos. Adicione saldo no painel do provedor — isso não afeta outros provedores configurados.<br>
+        <strong>Quota exceeded / Rate limit:</strong> limite do plano atingido. Aguarde a renovação ou faça upgrade do plano.
+      </div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Segurança das chaves</div>
+      <div class="help-item-desc">As chaves de API ficam armazenadas no servidor e nunca são enviadas ao cliente. Use o botão do olhinho para revelar temporariamente e verificar se digitou corretamente. Nunca compartilhe suas chaves de API.</div>
+      <div class="help-tip">Se as respostas pararam de funcionar, verifique se as chaves não expiraram ou atingiram o limite de uso do plano.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Parâmetros de comportamento</div>
+      <div class="help-item"><div class="help-item-label">Modelo de classificação</div><div class="help-item-desc">Modelo usado para identificar a intenção da mensagem recebida. Modelos maiores são mais precisos mas mais lentos.</div></div>
+      <div class="help-item"><div class="help-item-label">Modelo de resposta</div><div class="help-item-desc">Modelo usado para formatar a resposta em linguagem natural a partir dos dados do ERP.</div></div>
+      <div class="help-item"><div class="help-item-label">Temperatura</div><div class="help-item-desc">Controla a criatividade das respostas. Valores baixos (0.1–0.3) geram respostas mais previsíveis e formais; valores altos (0.7–1.0) geram respostas mais variadas.</div></div>
+    </div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

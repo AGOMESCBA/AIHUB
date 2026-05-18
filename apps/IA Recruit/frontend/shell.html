@@ -249,6 +249,35 @@
     const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
     window.openTab(url, label, icon);
   });
+  window._iahubAuthReady?.then(() => {
+    let empresaSwitchQueue = Promise.resolve();
+
+    window._trocarEmpresa = async function (empresa_id) {
+      empresaSwitchQueue = empresaSwitchQueue
+        .catch(() => null)
+        .then(async () => {
+          const res = await fetch('/api/empresas/selecionar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empresa_id, system_code: 'recrutamento' }),
+          });
+          if (!res.ok) return;
+
+          const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+          const emp = lista.find(e => Number(e.id) === Number(empresa_id));
+          if (emp) {
+            const empresaNome = emp.razao_social || emp.nome || '';
+            window._iahubEmpresa = { id: emp.id, nome: empresaNome };
+            window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
+            await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
+          }
+
+          const drop = document.getElementById('_empresa-dropdown');
+          if (drop) drop.style.display = 'none';
+        });
+      return empresaSwitchQueue;
+    };
+  });
 </script>
 </body>
 </html>

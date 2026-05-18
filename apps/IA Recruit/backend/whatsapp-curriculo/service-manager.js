@@ -1,6 +1,7 @@
 const WhatsAppService     = require('./service');
 const MetaWhatsAppService = require('./service-meta');
 const db                  = require('./database');
+const { APP_DATA_DIR, ensureAppDataDir } = require('../data-paths');
 
 const instances = new Map(); // empresaId (Number) → service instance
 
@@ -33,8 +34,8 @@ function getAll() {
 // Usado para rotear webhooks Meta para a empresa correta.
 function findByMetaPhoneId(phoneNumberId) {
   const fs   = require('fs');
-  const path = require('path');
-  const dir  = path.join(__dirname, '..', '..', '..', '..', 'data');
+  const dir  = APP_DATA_DIR;
+  ensureAppDataDir();
   if (!fs.existsSync(dir)) return null;
 
   for (const file of fs.readdirSync(dir)) {
@@ -50,8 +51,8 @@ function findByMetaPhoneId(phoneNumberId) {
 // Usado na verificação do webhook Meta (GET).
 function findByMetaWebhookToken(token) {
   const fs   = require('fs');
-  const path = require('path');
-  const dir  = path.join(__dirname, '..', '..', '..', '..', 'data');
+  const dir  = APP_DATA_DIR;
+  ensureAppDataDir();
   if (!fs.existsSync(dir)) return null;
 
   for (const file of fs.readdirSync(dir)) {

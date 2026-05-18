@@ -9,19 +9,13 @@
   <style>
     :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
     .sidebar-logo .logo-icon { background:#7c3aed !important; }
-    .topbar-menu-btn {
-      flex-shrink:0; background:none; border:none; cursor:pointer;
-      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
-      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
-    }
-    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
-    .topbar-title { flex:1; min-width:0; font-weight:700; }
-
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
     .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
     .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
     .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
     .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
-
     .quick-panel  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
     .quick-row    { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
     .filter-area  { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
@@ -29,33 +23,67 @@
     .quick-row .form-control { height:36px;font-size:13px; }
     .quick-row input.form-control  { flex:1;min-width:200px; }
     .quick-row select.form-control { width:auto;min-width:145px; }
-
     .gp-wrap      { margin-top:10px; }
     .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
-
     .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
     .grid-title   { font-size:13px;font-weight:600;color:var(--text-hi); }
     .grid-meta    { font-size:12px;color:var(--text-lo);margin-top:1px; }
-
     .badge-ativo   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
     .badge-inativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
     .badge-modulo  { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.1);color:#7c3aed; }
-
     .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s; }
     .btn-icon:hover { background:var(--bg-hover); }
-
-    /* ── Tabulator overrides ── */
-    .tabulator { border:none !important; background:transparent !important; }
-    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
-    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
     .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
-    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
-    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
     .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
-    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
-    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
     .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    /* Form inline */
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field       { margin-bottom:16px; }
+    .reg-field:last-child { margin-bottom:0; }
+    .reg-label       { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+    .iac-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0; }
+    .iac-tab  { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:13px;font-weight:600;padding:10px 16px;border-bottom:2px solid transparent;transition:color var(--transition); }
+    .iac-tab:hover { color:var(--text-hi); }
+    .iac-tab.active { color:#7c3aed;border-bottom-color:#7c3aed; }
+    .iac-tab-panel { display:none; }
+    .iac-tab-panel.active { display:flex;flex-direction:column;gap:0; }
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+    .help-tabs{display:flex;gap:2px;padding:0 22px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-card);}
+    .help-tab{padding:10px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-lo);transition:color var(--transition);border-bottom:2px solid transparent;margin-bottom:-1px;}
+    .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .help-tab:hover:not(.active){color:var(--text-hi);}
+    .help-panel{display:none;} .help-panel.active{display:block;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);padding:6px 8px;border-bottom:1px solid var(--border);}
+    .fmt-table td{padding:8px;border-bottom:1px solid var(--border);color:var(--text-md);line-height:1.5;vertical-align:top;}
+    .fmt-table td:first-child{font-family:monospace;font-size:11px;color:var(--accent);white-space:nowrap;}
+    .fmt-table tr:last-child td{border-bottom:none;}
+    .fmt-table tr.default-row td{color:var(--text-lo);font-style:italic;}
   </style>
 </head>
 <body>
@@ -72,63 +100,186 @@
   <div class="main">
     <div class="topbar">
       <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6"  x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
       <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Intenções</span>
     </div>
 
     <div class="page-content">
-      <div class="page-head">
-        <div>
-          <div class="page-kicker">Administração</div>
-          <div class="page-title">Intenções de IA</div>
-          <div class="page-subtitle">Configure as intenções reconhecidas pelo motor de IA para cada empresa.</div>
-        </div>
-        <button class="btn btn-primary" onclick="abrirFormulario()">＋ Nova Intenção</button>
-      </div>
 
-      <div class="quick-panel">
-        <div class="quick-row">
-          <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
-          <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
-        </div>
-        <div class="filter-area" id="filter-area" style="display:none">
-          <div class="quick-row" style="margin-bottom:10px">
-            <input id="f-busca"  type="text"   class="form-control" placeholder="Buscar por nome…" oninput="filtrar()">
-            <select id="f-modulo" class="form-control" onchange="filtrar()">
-              <option value="">Todos os módulos</option>
-              <option>faturamento</option><option>financeiro</option><option>pedidos</option>
-              <option>clientes</option><option>produtos</option>
-            </select>
-            <select id="f-ativo" class="form-control" onchange="filtrar()">
-              <option value="">Todos os status</option>
-              <option value="1">Ativo</option>
-              <option value="0">Inativo</option>
-            </select>
-            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
-          </div>
-          <div class="gp-wrap">
-            <div class="gp-chips-row" id="gp-chips-row">
-              <span class="gp-label">Agrupar por:</span>
-            </div>
-            <div id="dz"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="padding:0;overflow:hidden">
-        <div class="grid-toolbar">
+      <!-- ── LISTA ─────────────────────────────────────── -->
+      <div id="sec-lista">
+        <div class="page-head">
           <div>
-            <div class="grid-title">Intenções cadastradas</div>
-            <div id="count" class="grid-meta"></div>
+            <div class="page-kicker">Administração</div>
+            <div class="page-title">Intenções de IA</div>
+            <div class="page-subtitle">Configure as intenções reconhecidas pelo motor de IA para cada empresa.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-primary" onclick="abrirFormulario()">＋ Nova Intenção</button>
           </div>
         </div>
-        <div id="tabela"></div>
+        <div class="quick-panel">
+          <div class="quick-row">
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="f-busca" type="text" class="form-control" placeholder="Buscar por nome…" oninput="filtrar()">
+              <select id="f-modulo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os módulos</option>
+              </select>
+              <select id="f-ativo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os status</option>
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Intenções cadastradas</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
       </div>
+
+      <!-- ── FORMULÁRIO ────────────────────────────────── -->
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Nova Intenção</strong>
+              <span id="form-subtitle">Preencha os campos e salve.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="fecharModal()">← Voltar à lista</button>
+              <button class="btn btn-primary" onclick="salvarModal()">Salvar</button>
+            </div>
+          </div>
+
+          <div class="iac-tabs" style="margin-top:4px">
+            <button class="iac-tab active" onclick="mudarTab('config',this)">Configuração</button>
+            <button class="iac-tab"        onclick="mudarTab('frases',this)">Frases de Exemplo</button>
+          </div>
+
+          <!-- ABA: Configuração -->
+          <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+            <main class="editor-main">
+              <div class="iac-tab-panel active" id="panel-config">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Identificação</div>
+                    <div class="form-section-subtitle">Nome interno e descrição da intenção.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div style="display:grid;grid-template-columns:1fr 3fr;gap:16px">
+                      <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="f-nome" class="form-control" placeholder="ex: consultar_faturamento">
+                        <div class="form-hint">Use snake_case.</div>
+                      </div>
+                      <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Descrição</label>
+                        <input type="text" id="f-descricao" class="form-control" placeholder="ex: Consulta resumo de faturamento do período">
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Configuração</div>
+                    <div class="form-section-subtitle">Módulo de agrupamento e dataset vinculado.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-group">
+                      <label class="form-label">Módulo</label>
+                      <select id="f-modulo-form" class="form-control" style="max-width:320px">
+                        <option value="">— selecione —</option>
+                      </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Dataset vinculado</label>
+                      <select id="f-dataset" class="form-control">
+                        <option value="">— nenhum —</option>
+                      </select>
+                      <div class="form-hint">Dataset cujo SQL será executado quando esta intenção for reconhecida.</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- ABA: Frases -->
+              <div class="iac-tab-panel" id="panel-frases">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Frases de Exemplo</div>
+                    <div class="form-section-subtitle">Exemplos de perguntas que devem acionar esta intenção. Uma por linha.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-group" style="margin-bottom:0">
+                      <textarea id="f-frases" class="form-control" rows="12"
+                        placeholder="Qual o faturamento deste mês?&#10;Quanto vendemos no mês passado?&#10;Faturamento do trimestre atual"></textarea>
+                      <div class="form-hint">Inclua variações informais. Ajudam a IA a classificar melhor.</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </main>
+
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados do Registro</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="reg-field">
+                    <div class="reg-label">ID do Registro</div>
+                    <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)"
+                      style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">ID da Empresa</div>
+                    <input type="text" id="f-empresa-id" class="form-control" disabled
+                      style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">Empresa</div>
+                    <input type="text" id="f-empresa-nome" class="form-control" disabled
+                      style="font-size:13px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">Status</div>
+                    <select id="f-ativo" class="form-control">
+                      <option value="1">Ativo</option>
+                      <option value="0">Inativo</option>
+                    </select>
+                  </div>
+                  <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">
+                    Após salvar, o ID é gerado automaticamente e não pode ser alterado.
+                  </p>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -142,26 +293,126 @@
   let _dados = [];
   let _filtrosVisiveis = false;
   let _quickFilterFn = null;
+  let _editId = null;
+  let _modulosOpts = [];
+  let _datasetsOpts = [];
 
-  function _openTab(url, label, icon) {
-    if (window.parent !== window)
-      window.parent.postMessage({ type: 'mdi:open-tab', url, label, icon }, location.origin);
-    else location.href = url;
+  // ── Formulário inline ──────────────────────────────────────────────────────
+  function mudarTab(id, btn) {
+    document.querySelectorAll('.iac-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + id).classList.add('active');
+  }
+
+  async function _carregarOpcoes() {
+    if (!_modulosOpts.length)
+      _modulosOpts = await fetch('/api/ia-command/modulos').then(r => r.json()).catch(() => []);
+    if (!_datasetsOpts.length)
+      _datasetsOpts = await fetch('/api/ia-command/admin/datasets').then(r => r.json()).catch(() => []);
+    const selMod = document.getElementById('f-modulo-form');
+    const selDs  = document.getElementById('f-dataset');
+    selMod.innerHTML = '<option value="">— selecione —</option>';
+    selDs.innerHTML  = '<option value="">— nenhum —</option>';
+    _modulosOpts.forEach(m => {
+      const o = document.createElement('option'); o.value = m.nome; o.textContent = m.nome; selMod.appendChild(o);
+    });
+    _datasetsOpts.forEach(ds => {
+      const o = document.createElement('option'); o.value = ds.id; o.textContent = `${ds.nome} (${ds.erp})`; selDs.appendChild(o);
+    });
   }
 
   function abrirFormulario(id) {
-    const url = id
-      ? `/app/ia-command/admin-intencao-form.html?id=${encodeURIComponent(id)}`
-      : '/app/ia-command/admin-intencao-form.html';
-    _openTab(url, id ? 'Editar Intenção' : 'Nova Intenção', '🧠');
+    _editId = id || null;
+    _resetForm();
+    document.getElementById('form-title').textContent    = id ? 'Editar Intenção' : 'Nova Intenção';
+    document.getElementById('form-subtitle').textContent = 'Preencha os campos e salve.';
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-form').style.display  = '';
+    mudarTab('config', document.querySelector('.iac-tab'));
+    _carregarOpcoes().then(() => {
+      if (id) _carregarForm(id);
+      else if (window._iahubEmpresa) {
+        document.getElementById('f-empresa-id').value   = window._iahubEmpresa.id;
+        document.getElementById('f-empresa-nome').value = window._iahubEmpresa.nome;
+      }
+    });
   }
 
-  // ── Filtros ─────────────────────────────────────────────────────────────────
+  function fecharModal() {
+    document.getElementById('sec-form').style.display  = 'none';
+    document.getElementById('sec-lista').style.display = '';
+    _editId = null;
+  }
+
+  function _resetForm() {
+    ['f-id','f-empresa-id','f-empresa-nome','f-nome','f-descricao','f-frases'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('f-ativo').value = '1';
+    document.getElementById('save-feedback').textContent = '';
+    document.getElementById('save-feedback').className   = 'save-feedback';
+  }
+
+  async function _carregarForm(id) {
+    const row = await fetch(`/api/ia-command/admin/intencoes/${id}`).then(r => r.json()).catch(() => null);
+    if (!row) return;
+    document.getElementById('f-id').value           = row.id;
+    document.getElementById('f-empresa-id').value   = row.empresa_id;
+    document.getElementById('f-empresa-nome').value = '—';
+    document.getElementById('f-nome').value         = row.nome        || '';
+    document.getElementById('f-descricao').value    = row.descricao   || '';
+    document.getElementById('f-modulo-form').value  = row.modulo      || '';
+    document.getElementById('f-dataset').value      = row.dataset_id  || '';
+    document.getElementById('f-frases').value       = row.frases_exemplo || '';
+    document.getElementById('f-ativo').value        = String(row.ativo ?? 1);
+    document.getElementById('form-title').textContent = row.nome;
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+  }
+
+  async function salvarModal() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
+
+    const body = {
+      nome,
+      descricao:      document.getElementById('f-descricao').value.trim() || null,
+      modulo:         document.getElementById('f-modulo-form').value || null,
+      dataset_id:     document.getElementById('f-dataset').value || null,
+      frases_exemplo: document.getElementById('f-frases').value.trim() || null,
+      ativo:          parseInt(document.getElementById('f-ativo').value),
+    };
+
+    const url    = _editId ? `/api/ia-command/admin/intencoes/${_editId}` : '/api/ia-command/admin/intencoes';
+    const method = _editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    const saved = await res.json();
+    if (!_editId) _editId = saved.id;
+    _feedback('Salvo com sucesso!', true);
+    document.getElementById('form-title').textContent = saved.nome;
+    setTimeout(() => { fecharModal(); carregar(); }, 700);
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className   = 'save-feedback ' + (ok ? 'ok' : 'fail');
+  }
+
+  // ── Filtros ────────────────────────────────────────────────────────────────
   function toggleFiltros() {
     _filtrosVisiveis = !_filtrosVisiveis;
     document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
-    document.getElementById('btn-filtros').textContent = _filtrosVisiveis ? '− Ocultar filtros' : '+ Mostrar filtros';
-    if (_filtrosVisiveis && gp) { setTimeout(() => gp.refresh(), 50); }
+    document.getElementById('btn-filtros').textContent   = _filtrosVisiveis ? '− Ocultar filtros' : '+ Mostrar filtros';
+    if (_filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
   }
 
   function filtrar() {
@@ -179,7 +430,9 @@
       };
       table.addFilter(_quickFilterFn);
     }
-    _atualizarStatus();
+    const ativos = [b, m, a].filter(Boolean).length;
+    document.getElementById('filter-status').textContent =
+      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
   }
 
   function limparFiltros() {
@@ -189,16 +442,7 @@
     filtrar();
   }
 
-  function _atualizarStatus() {
-    const b = document.getElementById('f-busca')?.value.trim();
-    const m = document.getElementById('f-modulo')?.value;
-    const a = document.getElementById('f-ativo')?.value;
-    const ativos = [b, m, a].filter(Boolean).length;
-    document.getElementById('filter-status').textContent =
-      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
-  }
-
-  // ── CRUD ────────────────────────────────────────────────────────────────────
+  // ── CRUD ───────────────────────────────────────────────────────────────────
   async function excluir(id) {
     if (!confirm('Excluir esta intenção?')) return;
     await fetch(`/api/ia-command/admin/intencoes/${id}`, { method: 'DELETE' });
@@ -209,71 +453,299 @@
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  // ── Dados ───────────────────────────────────────────────────────────────────
+  function _datasetLookup() {
+    return new Map(_datasetsOpts.map(ds => [ds.id, ds]));
+  }
+
+  function _datasetDescricao(ds) {
+    return ds?.descricao || ds?.nome || '';
+  }
+
+  function _prepararLinhas(rows) {
+    const datasets = _datasetLookup();
+    return rows.map(row => {
+      const ds = datasets.get(row.dataset_id);
+      return {
+        ...row,
+        dataset_descricao: _datasetDescricao(ds) || row.dataset_id || '',
+      };
+    });
+  }
+
+  // ── Dados ──────────────────────────────────────────────────────────────────
+  async function _carregarModulosFiltro() {
+    try {
+      const mods = await fetch('/api/ia-command/modulos').then(r => r.json());
+      const sel  = document.getElementById('f-modulo');
+      mods.forEach(m => {
+        const opt = document.createElement('option'); opt.value = m.nome; opt.textContent = m.nome; sel.appendChild(opt);
+      });
+    } catch (_) {}
+  }
+
   async function carregar() {
-    _dados = await fetch('/api/ia-command/admin/intencoes').then(r => r.json()).catch(() => []);
+    await _carregarModulosFiltro();
+    if (!_datasetsOpts.length)
+      _datasetsOpts = await fetch('/api/ia-command/admin/datasets').then(r => r.json()).catch(() => []);
+    _dados = _prepararLinhas(await fetch('/api/ia-command/admin/intencoes').then(r => r.json()).catch(() => []));
     if (table) { table.replaceData(_dados); return; }
     _criarTabela(_dados);
   }
 
   function _criarTabela(data) {
-    gp = createGroupPanel({
-      chipsRowId: 'gp-chips-row', dropZoneId: 'dz',
-      storageKey: 'iac_admin_intencoes_group',
-      getTable: () => table,
-    });
-
+    gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_intencoes_group', getTable:()=>table });
     table = new Tabulator('#tabela', {
-      data, index: 'id', layout: 'fitColumns', movableColumns: true,
-      height: 'calc(100vh - 330px)',
-      groupBy: gp.getActiveFields(), groupStartOpen: true,
-      placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma intenção cadastrada.</div>',
-      columns: [
-        { title: '#', field: 'id', width: 200, headerFilter: false, groupable: false,
-          formatter: c => `<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${c.getValue()?.slice(0,8)}…</span>` },
-        { title: 'Nome', field: 'nome', minWidth: 160, headerFilter: true,
-          formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
-        { title: 'Módulo', field: 'modulo', width: 130,
-          headerFilter: 'select',
-          headerFilterParams: { values: { '':'Todos', faturamento:'faturamento', financeiro:'financeiro', pedidos:'pedidos', clientes:'clientes', produtos:'produtos' } },
-          formatter: c => c.getValue() ? `<span class="badge-modulo">${esc(c.getValue())}</span>` : '' },
-        { title: 'Ação', field: 'acao', width: 120, headerFilter: true },
-        { title: 'Dataset', field: 'dataset_id', width: 110, groupable: false,
-          formatter: c => c.getValue()
-            ? `<span style="font-family:monospace;font-size:11px">${c.getValue().slice(0,8)}…</span>` : '—' },
-        { title: 'Status', field: 'ativo', width: 90,
-          headerFilter: 'select',
-          headerFilterParams: { values: { '':'Todos', '1':'Ativo', '0':'Inativo' } },
-          formatter: c => c.getValue()
-            ? '<span class="badge-ativo">● Ativo</span>'
-            : '<span class="badge-inativo">○ Inativo</span>' },
-        { title: 'Criado em', field: 'criado_em', width: 150,
-          formatter: c => c.getValue()?.slice(0,16).replace('T',' ') || '' },
-        { title: 'Ações', field: 'id', width: 80, headerFilter: false, groupable: false, hozAlign: 'right',
-          formatter: cell => {
-            const id = cell.getValue();
+      data, index:'id', layout:'fitColumns', movableColumns:true,
+      height:'calc(100vh - 330px)', groupBy:gp.getActiveFields(), groupStartOpen:true,
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma intenção cadastrada.</div>',
+      columns:[
+        { title:'#', field:'id', width:200, headerFilter:false, groupable:false,
+          formatter:c=>`<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${c.getValue()?.slice(0,8)}…</span>` },
+        { title:'Nome', field:'nome', minWidth:160, headerFilter:true,
+          formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'Módulo', field:'modulo', width:130, headerFilter:true,
+          formatter:c=>{ const val=c.getValue(); return val?`<span class="badge-modulo">${esc(val)}</span>`:''; } },
+        { title:'Ação', field:'acao', width:120, headerFilter:true },
+        { title:'Dataset', field:'dataset_descricao', minWidth:160, headerFilter:true, groupable:false,
+          formatter:c=>c.getValue()?esc(c.getValue()):'—' },
+        { title:'Status', field:'ativo', width:90,
+          headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}},
+          formatter:c=>c.getValue()?'<span class="badge-ativo">● Ativo</span>':'<span class="badge-inativo">○ Inativo</span>' },
+        { title:'Criado em', field:'criado_em', width:150,
+          formatter:c=>c.getValue()?.slice(0,16).replace('T',' ')||'' },
+        { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
+          formatter:cell=>{
+            const id=cell.getValue();
             return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar">✏️</button>
                     <button class="btn-icon" onclick="event.stopPropagation();excluir('${id}')" title="Excluir" style="color:#dc2626">🗑</button>`;
-          },
-        },
+          }},
       ],
-      rowClick: (e, row) => { if (!e.target.closest('button')) abrirFormulario(row.getData().id); },
-      dataFiltered: (_f, rows) => {
-        const total = _dados.length;
-        const qtd   = rows?.length ?? total;
-        document.getElementById('count').textContent =
-          qtd === total ? _label(qtd) : `${qtd} de ${total} intenções`;
+      rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().id); },
+      dataFiltered:(_f,rows)=>{
+        const total=_dados.length, qtd=rows?.length??total;
+        document.getElementById('count').textContent = qtd===total?_label(qtd):`${qtd} de ${total} intenções`;
       },
     });
-
-    gp.refresh();
-    gp.applyToTable();
+    gp.refresh(); gp.applyToTable();
     document.getElementById('count').textContent = _label(data.length);
   }
 
-  function _label(n) { return n === 1 ? '1 intenção' : `${n} intenções`; }
+  function _label(n) { return n===1?'1 intenção':`${n} intenções`; }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Intenções de IA</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-tabs">
+    <button class="help-tab active" onclick="helpTab(this,'geral')">Geral</button>
+    <button class="help-tab" onclick="helpTab(this,'nomes')">Nomes Sugeridos</button>
+    <button class="help-tab" onclick="helpTab(this,'perguntas')">Como Perguntar</button>
+    <button class="help-tab" onclick="helpTab(this,'sinonimos')">Equivalências</button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-panel active" id="hp-geral">
+      <div class="help-section">
+        <div class="help-section-title">O que são Intenções</div>
+        <div class="help-item-desc">Uma Intenção é o mapeamento entre o que o usuário quer saber e o Dataset que contém o SQL para responder essa pergunta.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Boas práticas</div>
+        <div class="help-item-desc">Cadastre intenções específicas: <em>consultar_faturamento</em>, <em>consultar_titulos_abertos</em>. Sempre vincule um Dataset antes de ativar.</div>
+        <div class="help-tip">Uma intenção sem Dataset retorna erro ao usuário.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">⚠️ Ponto de atenção</div>
+        <div class="help-item-desc">O nome da intenção determina qual template de resposta é usado no WhatsApp. Nomes que correspondem aos listados na aba <strong>Nomes Sugeridos</strong> recebem formatação rica (comparativos, totais, rankings). Qualquer outro nome usa a formatação genérica automática.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">🔤 Dicionário de Equivalências</div>
+        <div class="help-item-desc">O sistema já vem com equivalências padrão para os termos mais comuns do mercado — visíveis em <strong>Cadastros → Equivalências</strong> com o badge <span style="background:rgba(124,58,237,.1);color:#7c3aed;font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px">🔒 Sistema</span>. O passo essencial aqui é confirmar que o campo <strong>Equivalência</strong> de cada registro aponta para o nome <em>exato</em> da Intenção cadastrada.</div>
+        <div class="help-tip">Exemplo: o padrão <em>movimento → faturamento</em> já existe. Se a sua Intenção se chama <em>consultar_faturamento</em> em vez de <em>faturamento</em>, edite esse registro na grade e ajuste o campo Equivalência para <em>consultar_faturamento</em>.</div>
+      </div>
+    </div>
+    <div class="help-panel" id="hp-nomes">
+      <div class="help-section">
+        <div class="help-section-title">Nomes com formatação dedicada</div>
+        <div class="help-item-desc" style="margin-bottom:14px">Use exatamente estes nomes para ativar templates de resposta ricos. Nomes diferentes caem no modo automático.</div>
+        <table class="fmt-table">
+          <thead><tr><th>Nome da intenção</th><th>O que formata</th></tr></thead>
+          <tbody>
+            <tr><td>consultar_faturamento</td><td>Total, comparativo anual e mensal com variação %</td></tr>
+            <tr><td>consultar_quantidade</td><td>Total de itens, comparativo anual e mensal com variação %</td></tr>
+            <tr><td>consultar_faturamento_por_cliente</td><td>Lista de clientes com valor e nº de NFs</td></tr>
+            <tr><td>consultar_faturamento_por_vendedor</td><td>Lista de vendedores com valor faturado</td></tr>
+            <tr><td>consultar_top_clientes</td><td>Ranking de clientes por faturamento</td></tr>
+            <tr><td>consultar_ticket_medio</td><td>Ticket médio com total e nº de notas</td></tr>
+            <tr><td>comparar_faturamento</td><td>Comparativo direto (colunas <em>periodo_atual</em> / <em>periodo_anterior</em>)</td></tr>
+            <tr><td>consultar_titulos_abertos</td><td>Títulos em aberto com total e vencidos em destaque</td></tr>
+            <tr><td>consultar_pedidos_abertos</td><td>Pedidos em aberto com total</td></tr>
+            <tr><td>consultar_clientes_inativos</td><td>Clientes sem compra recente</td></tr>
+            <tr><td>consultar_produtos_mais_vendidos</td><td>Ranking de produtos por volume</td></tr>
+            <tr class="default-row"><td>(qualquer outro nome)</td><td>Modo automático: soma colunas numéricas e exibe o total</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- ABA: Como Perguntar -->
+    <div class="help-panel" id="hp-perguntas">
+
+      <div class="help-section">
+        <div class="help-section-title">Regras gerais</div>
+        <div class="help-item-desc">O assistente aceita linguagem informal, abreviações e erros de digitação. Os atalhos abaixo funcionam em qualquer intenção de faturamento.</div>
+        <table class="fmt-table" style="margin-top:10px">
+          <thead><tr><th>Abreviação / variação</th><th>Interpretado como</th></tr></thead>
+          <tbody>
+            <tr><td>fat, faturamente, faturameto</td><td>faturamento</td></tr>
+            <tr><td>qtd</td><td>quantidade</td></tr>
+            <tr><td>vlr</td><td>valor</td></tr>
+            <tr><td>cli</td><td>cliente</td></tr>
+            <tr><td>vend</td><td>vendedor</td></tr>
+            <tr><td>"fat ano" / "fat do ano"</td><td>Ano corrente (sem precisar dizer "atual")</td></tr>
+            <tr><td>"fat mes" / "fat do mes"</td><td>Mês corrente</td></tr>
+            <tr><td>"fat semana"</td><td>Semana corrente</td></tr>
+            <tr><td>"fat trim" / "fat trimestre"</td><td>Últimos 3 meses</td></tr>
+            <tr><td>"top 5", "os 10 maiores", "cinco maiores"</td><td>Limitar resultado aos N primeiros</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title">Períodos disponíveis</div>
+        <div class="help-item-desc" style="margin-bottom:10px">Funcionam em todas as intenções de faturamento.</div>
+        <table class="fmt-table">
+          <thead><tr><th>O usuário digita</th><th>Período buscado</th></tr></thead>
+          <tbody>
+            <tr><td>fat hoje / fat d hoje</td><td>Dia atual</td></tr>
+            <tr><td>fat ontem</td><td>Dia anterior</td></tr>
+            <tr><td>fat semana / fat da semana</td><td>Semana corrente (seg → hoje)</td></tr>
+            <tr><td>fat semana passada</td><td>Semana anterior completa</td></tr>
+            <tr><td>fat mes / fat do mes / fat mes atual</td><td>Mês corrente</td></tr>
+            <tr><td>fat mes passado / fat mes anterior</td><td>Mês anterior completo</td></tr>
+            <tr><td>fat ano / fat do ano / fat ano atual</td><td>Ano corrente (jan → hoje)</td></tr>
+            <tr><td>fat ano passado / fat ano anterior</td><td>Ano anterior completo</td></tr>
+            <tr><td>fat trim / fat trimestre / fat Q4</td><td>Últimos 3 meses corridos</td></tr>
+            <tr><td>fat Q1 / fat primeiro trimestre</td><td>Jan–Mar (ano atual ou passado)</td></tr>
+            <tr><td>fat Q2 / fat segundo trimestre</td><td>Abr–Jun</td></tr>
+            <tr><td>fat Q3 / fat terceiro trimestre</td><td>Jul–Set</td></tr>
+            <tr><td>fat primeiro semestre / fat H1</td><td>Jan–Jun</td></tr>
+            <tr><td>fat segundo semestre / fat H2</td><td>Jul–Dez</td></tr>
+            <tr><td>fat dos últimos 30 dias</td><td>Últimos N dias (informe o número)</td></tr>
+            <tr><td>fat de março a junho</td><td>Intervalo personalizado por extenso</td></tr>
+            <tr><td>fat de 01/01 a 31/03</td><td>Intervalo personalizado com datas</td></tr>
+            <tr><td>fat do ano vs ano passado</td><td>Comparativo entre os dois anos</td></tr>
+            <tr><td>fat do mês vs mês passado</td><td>Comparativo entre os dois meses</td></tr>
+            <tr><td>fat de maio deste ano vs maio passado</td><td>Comparativo do mesmo mês em dois anos</td></tr>
+            <tr><td>acumulado até maio vs ano passado</td><td>Acumulado jan→mai comparado ao ano anterior</td></tr>
+          </tbody>
+        </table>
+        <div class="help-tip">Para trimestres e semestres do ano passado, basta acrescentar "do ano passado": <em>"fat do Q2 do ano passado"</em>, <em>"fat do primeiro semestre do ano anterior"</em>.</div>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title">Filtros disponíveis</div>
+        <div class="help-item-desc" style="margin-bottom:10px">Podem ser combinados com qualquer período. O SQL do Dataset deve expor a coluna com o mesmo nome em <strong>minúsculo</strong> (ex: <code style="font-family:monospace;font-size:12px;color:var(--accent)">CLIENTE AS cliente</code>).</div>
+        <table class="fmt-table">
+          <thead><tr><th>Filtro</th><th>Como informar na mensagem</th><th>Coluna esperada no SQL</th></tr></thead>
+          <tbody>
+            <tr><td>cliente</td><td>"fat do ano cliente CAIEIRA"<br>"fat do mês da empresa ACME"</td><td>cliente</td></tr>
+            <tr><td>vendedor</td><td>"fat do mês vendedor Carlos"<br>"fat do mês rep 03"</td><td>vendedor</td></tr>
+            <tr><td>produto</td><td>"fat do ano produto AÇO 1020"<br>"fat do trim item X-50"</td><td>produto</td></tr>
+            <tr><td>fornecedor</td><td>"compras do fornecedor ACME"<br>"fat do forn. X"</td><td>fornecedor</td></tr>
+            <tr><td>filial</td><td>"fat do mês filial SP"<br>"fat unidade Rio"</td><td>filial</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title">consultar_faturamento</div>
+        <div class="help-item-desc">Retorna o total consolidado do período. Sem detalhe por cliente, produto ou vendedor.</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em">Exemplos</div>
+          <div class="help-tip" style="margin-top:0">"fat do ano"<br>"faturamento do mês"<br>"fat do primeiro semestre do ano passado"<br>"fat dos últimos 90 dias"<br>"fat do ano vs ano passado"</div>
+        </div>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title">consultar_faturamento_por_cliente</div>
+        <div class="help-item-desc">Retorna faturamento filtrado ou agrupado por cliente. Permite ver o total de um cliente específico, o ranking de todos ou o detalhamento por cliente num período.</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em">Exemplos</div>
+          <div class="help-tip" style="margin-top:0">"fat do ano cliente CAIEIRA"<br>"top 10 clientes do mês"<br>"maiores clientes do ano"<br>"quem mais comprou esse mês"<br>"fat do mês passado por cliente"<br>"fat do Q1 do ano passado por cliente"</div>
+        </div>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title">consultar_faturamento_por_produto</div>
+        <div class="help-item-desc">Retorna faturamento filtrado ou agrupado por produto. Permite identificar os itens mais vendidos em qualquer período.</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em">Exemplos</div>
+          <div class="help-tip" style="margin-top:0">"fat do ano por produto"<br>"top 5 produtos do mês"<br>"fat do trimestre produto AÇO 1020"<br>"quais produtos mais venderam essa semana"<br>"fat do Q2 por produto"</div>
+        </div>
+      </div>
+
+      <div class="help-section">
+        <div class="help-section-title">consultar_faturamento_por_vendedor</div>
+        <div class="help-item-desc">Retorna faturamento filtrado ou agrupado por vendedor. Permite acompanhar o desempenho individual da equipe comercial em qualquer período.</div>
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:12px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em">Exemplos</div>
+          <div class="help-tip" style="margin-top:0">"fat do ano por vendedor"<br>"quem mais vendeu esse mês"<br>"top 3 vendedores do trimestre"<br>"fat do mes vendedor 03"<br>"fat do semestre passado por vendedor"</div>
+        </div>
+      </div>
+
+    </div><!-- /hp-perguntas -->
+
+    <div class="help-panel" id="sinonimos">
+      <div class="help-section">
+        <div class="help-section-title">O que é o Dicionário de Equivalências</div>
+        <div class="help-item-desc">O Dicionário de Equivalências complementa as Intenções: enquanto as Intenções definem <em>o que o sistema sabe consultar</em>, as Equivalências ensinam à IA <em>os nomes que sua empresa usa</em> para chamar essas consultas.</div>
+        <div class="help-tip">Quando a IA responde "não entendi o que você quer consultar", a solução quase sempre é ajustar uma equivalência de <strong>Intenção</strong> para apontar para o nome correto.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Padrões do sistema — e como ajustá-los</div>
+        <div class="help-item-desc" style="margin-bottom:10px">O sistema já vem com dezenas de equivalências pré-cadastradas (ex: <em>vendas, movimento, fat, receita…</em> → faturamento). Elas aparecem na grade com o badge <span style="background:rgba(124,58,237,.1);color:#7c3aed;font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px">🔒 Sistema</span> e <strong>podem ser editadas normalmente</strong>.</div>
+        <div class="help-item-desc" style="margin-bottom:10px">O ponto crítico: o campo <strong>Equivalência</strong> de cada registro deve ser <strong>exatamente igual</strong> ao nome da Intenção cadastrada nesta tela.</div>
+        <table class="fmt-table">
+          <thead><tr><th>Usuário digita</th><th>Equivalência deve apontar para</th></tr></thead>
+          <tbody>
+            <tr><td>movimento, saída, fat…</td><td>nome exato da sua Intenção de faturamento</td></tr>
+            <tr><td>entradas, compras, oc…</td><td>nome exato da sua Intenção de compras</td></tr>
+            <tr><td>a pagar, cap, boletos…</td><td>nome exato da sua Intenção de contas a pagar</td></tr>
+            <tr><td>duplicatas, cobranças…</td><td>nome exato da sua Intenção de contas a receber</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Como ajustar</div>
+        <div class="help-item-desc">
+          1. Acesse <strong>Cadastros → Equivalências</strong>.<br>
+          2. Filtre pela camada <strong>Intenção</strong> e localize os registros <span style="background:rgba(124,58,237,.1);color:#7c3aed;font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px">🔒 Sistema</span>.<br>
+          3. Clique no registro e edite o campo <strong>Equivalência</strong> para o nome exato da Intenção.<br>
+          4. Para adicionar novos termos, use <strong>＋ Nova Equivalência</strong> ou <strong>✨ Sugerir via IA</strong>.
+        </div>
+        <div class="help-tip">Se excluir algum padrão por engano, use o botão <strong>🔄 Restaurar padrões</strong> na tela de Equivalências.</div>
+      </div>
+    </div><!-- /sinonimos -->
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  function helpTab(btn, panel) {
+    document.querySelectorAll('.help-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('hp-' + panel).classList.add('active');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('sec-form').style.display !== 'none') fecharModal();
+    else fecharAjuda();
+  });
 </script>
 </body>
 </html>

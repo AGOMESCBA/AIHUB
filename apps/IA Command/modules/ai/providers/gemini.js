@@ -2,8 +2,8 @@ const https = require('https');
 
 const GEMINI_MODEL = 'gemini-2.0-flash';
 
-async function classificarIntencao(mensagem, apiKey) {
-  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem);
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = []) {
+  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos);
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0, maxOutputTokens: 512, responseMimeType: 'application/json' },
@@ -16,8 +16,9 @@ async function classificarIntencao(mensagem, apiKey) {
       hostname: 'generativelanguage.googleapis.com',
       path,
       method: 'POST',
+      rejectUnauthorized: false,
       headers: {
-        'Content-Type':  'application/json',
+        'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(body),
       },
     };
@@ -34,6 +35,7 @@ async function classificarIntencao(mensagem, apiKey) {
         } catch (e) { reject(e); }
       });
     });
+    req.setTimeout(20000, () => req.destroy(new Error('Gemini: tempo limite de 20s excedido.')));
     req.on('error', reject);
     req.write(body);
     req.end();

@@ -16,6 +16,7 @@ const sistemasDb                    = require('./modules/sistemas/database');
 const { inicializarSistemas }       = sistemasDb;
 const { requireSystemAccess }       = require('./modules/sistemas/access');
 const { APPS, LEGACY_STATIC_DIRS }   = require('./apps/registry');
+const iahubData                     = require('./apps/IAHUB/backend/data-paths');
 
 let puppeteer;
 try { puppeteer = require('puppeteer-core'); } catch (_) {}
@@ -154,7 +155,7 @@ mountStaticDirs('/app/ia-administracao', requireIaAdmin, APPS.iaAdministracao.le
 mountStaticDirs('/app/ia-command', requireIaCommand, APPS.iaCommand.staticDirs);
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
-app.use('/uploads', express.static(path.join(__dirname, 'data', 'uploads')));
+app.use('/uploads', express.static(iahubData.appDataDir('uploads')));
 for (const dir of LEGACY_STATIC_DIRS) {
   app.use(express.static(dir));
 }
@@ -180,6 +181,7 @@ function migrarLogLegado(origemRelativa, destinoNome) {
 }
 
 migrarLogLegado('emailcurriculo.log', 'emailcurriculo.log');
+migrarLogLegado(path.join('apps', 'IAHUB', 'data', 'auditoria.log'), 'auditoria.log');
 migrarLogLegado(path.join('data', 'auditoria.log'), 'auditoria.log');
 for (const file of fs.readdirSync(__dirname)) {
   if (/^whatscurriculo_\d+\.log$/i.test(file)) migrarLogLegado(file, file);
@@ -462,6 +464,55 @@ app.get('/guia/exportar-pdf', async (req, res) => {
     res.end(pdf);
   } catch (err) {
     console.error('[Guia PDF] ERRO:', err.message);
+    res.status(500).send(`Erro ao gerar o PDF: ${err.message}`);
+  } finally {
+    if (browser) await browser.close();
+  }
+});
+
+// ── Exportacao do Guia IA Command em PDF ─────────────────────────────────────
+app.get('/app/ia-command/guia/exportar-pdf', requireIaCommand, async (req, res) => {
+  if (!puppeteer) return res.status(503).send('puppeteer-core nao esta instalado.');
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: CHROME_PATH,
+      headless: 'new',
+      args: ['--no-first-run', '--disable-extensions'],
+    });
+    const page = await browser.newPage();
+    if (req.headers.cookie) {
+      await page.setExtraHTTPHeaders({ cookie: req.headers.cookie });
+    }
+
+    await page.setRequestInterception(true);
+    page.on('request', r => {
+      if (r.resourceType() === 'websocket' || r.url().includes('socket.io')) r.abort();
+      else r.continue();
+    });
+
+    await page.goto(`http://127.0.0.1:${process.env.PORT || 3000}/app/ia-command/guia/index.html`, {
+      waitUntil: 'networkidle0',
+      timeout: 30000,
+    });
+
+    const pdfRaw = await page.pdf({
+      format: 'A4',
+      margin: { top: '16mm', right: '14mm', bottom: '16mm', left: '14mm' },
+      printBackground: true,
+    });
+    const pdf = Buffer.from(pdfRaw);
+
+    if (!pdf.slice(0, 4).toString().startsWith('%PDF')) {
+      throw new Error('PDF gerado invalido - header incorreto');
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="guia-ia-command.pdf"');
+    res.setHeader('Content-Length', pdf.length);
+    res.end(pdf);
+  } catch (err) {
+    console.error('[IA Command Guia PDF] ERRO:', err.message);
     res.status(500).send(`Erro ao gerar o PDF: ${err.message}`);
   } finally {
     if (browser) await browser.close();

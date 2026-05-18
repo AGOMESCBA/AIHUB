@@ -47,15 +47,18 @@
       font-family: 'Cascadia Code','Fira Code','Consolas',monospace;
       font-size: 13px;
       line-height: 1.65;
-      min-height: 840px !important;
-      height: auto !important;
-      max-height: none !important;
+      height: 380px;
+      min-height: 100px;
+      max-height: none;
       resize: vertical;
       white-space: pre;
       overflow-x: auto;
       tab-size: 2;
       width: 100%;
       box-sizing: border-box;
+      border-top: none !important;
+      border-radius: 0 0 var(--radius) var(--radius) !important;
+      margin-bottom: 16px;
     }
 
     .sql-toolbar {
@@ -66,9 +69,9 @@
       padding: 10px 14px;
       background: var(--bg-hover);
       border: 1px solid var(--border);
-      border-radius: 0 0 var(--radius) var(--radius);
-      border-top: none;
-      margin-bottom: 16px;
+      border-radius: var(--radius) var(--radius) 0 0;
+      border-bottom: none;
+      margin-bottom: 0;
     }
 
     .sql-toolbar-left  { display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap; }
@@ -140,6 +143,11 @@
     .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
     .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
     .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th,.fmt-table td{padding:6px 10px;border:1px solid var(--border);text-align:left;}
+    .fmt-table th{background:var(--bg-hover);font-weight:700;color:var(--text-hi);}
+    .fmt-table td:first-child{white-space:nowrap;}
+    .fmt-table code{background:var(--bg-hover);padding:1px 4px;border-radius:3px;font-size:11px;}
     .help-item{margin-bottom:14px;}
     .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
     .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
@@ -293,44 +301,30 @@
         <!-- ══ ABA 2: SQL BASE ═════════════════════════════════════════════ -->
         <div class="iac-tab-panel" id="panel-sql">
 
-          <div class="sql-tip">
-            <strong>Convenções obrigatórias:</strong>
-            A coluna de data deve ter um alias (<code>AS data</code> ou o alias configurado abaixo).
-            Inclua filtros fixos (<code>D_E_L_E_T_ = ' '</code>) no WHERE do seu SQL.
-            Não use <code>TOP</code> ou <code>LIMIT</code> — o motor adiciona automaticamente.
-            O sistema executa: <code>SELECT TOP N * FROM (&lt;seu SQL&gt;) AS _base WHERE data BETWEEN @p0 AND @p1</code>
-          </div>
+          <!-- Label -->
+          <label class="form-label" style="display:block;margin-bottom:4px">SQL Base <span style="color:#dc2626">*</span></label>
 
-          <!-- Editor SQL -->
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label">SQL Base <span style="color:#dc2626">*</span></label>
-            <textarea id="f-sql-base" class="form-control sql-editor" spellcheck="false" rows="35"
-              placeholder="SELECT
-  F2_EMISSAO    AS data,
-  A1_NOME       AS cliente,
-  SUM(D2_TOTAL) AS total
-FROM SF2010 F2
-  INNER JOIN SD2010 D2 ON D2.D2_DOC = F2.F2_DOC
-                       AND D2.D_E_L_E_T_ = ' '
-  INNER JOIN SA1010 A1 ON A1.A1_COD  = F2.F2_CLIENTE
-                       AND A1.D_E_L_E_T_ = ' '
-WHERE F2.D_E_L_E_T_ = ' '
-  AND F2.F2_TIPO = 'N'
-GROUP BY F2_EMISSAO, A1_NOME"></textarea>
-          </div>
-
-          <!-- Toolbar abaixo do editor -->
+          <!-- Toolbar acima do editor -->
           <div class="sql-toolbar">
             <div class="sql-toolbar-left">
               <div style="display:flex;align-items:center;gap:8px">
-                <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Alias da coluna de data:</label>
+                <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Alias data:</label>
                 <input type="text" id="f-campo-data" class="form-control" value="data"
-                  placeholder="data" style="max-width:140px;height:32px;font-size:13px"
-                  title="Alias (AS) da coluna de data no SELECT. A engine filtra: WHERE alias BETWEEN @p0 AND @p1">
+                  placeholder="data" style="max-width:110px;height:32px;font-size:13px"
+                  title="Alias da coluna de data no SELECT. Ex: data. O sistema normaliza automaticamente.">
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex:1">
+                <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px"
+                  title="Colunas numéricas separadas por vírgula que serão somadas no GROUP BY. Ex: VALOR,QUANTIDADE">
+                  Colunas métricas:
+                </label>
+                <input type="text" id="f-colunas-metrica" class="form-control"
+                  placeholder="valor,quantidade,margem" style="flex:1;min-width:240px;height:32px;font-size:13px;font-family:monospace"
+                  title="Colunas numéricas para SUM() no GROUP BY dinâmico. Separe por vírgula. Ex: valor,quantidade,margem">
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Conexão:</label>
-                <select id="f-conexao-preview" class="form-control" style="max-width:220px;height:32px;font-size:13px">
+                <select id="f-conexao-preview" class="form-control" style="min-width:260px;max-width:420px;height:32px;font-size:11px">
                   <option value="">Conexão ativa (padrão)</option>
                 </select>
               </div>
@@ -346,6 +340,21 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
               </button>
             </div>
           </div>
+
+          <!-- Editor SQL -->
+          <textarea id="f-sql-base" class="form-control sql-editor" spellcheck="false" rows="16"
+            placeholder="SELECT
+  F2_EMISSAO    AS data,
+  A1_NOME       AS cliente,
+  SUM(D2_TOTAL) AS total
+FROM SF2010 F2
+  INNER JOIN SD2010 D2 ON D2.D2_DOC = F2.F2_DOC
+                       AND D2.D_E_L_E_T_ = ' '
+  INNER JOIN SA1010 A1 ON A1.A1_COD  = F2.F2_CLIENTE
+                       AND A1.D_E_L_E_T_ = ' '
+WHERE F2.D_E_L_E_T_ = ' '
+  AND F2.F2_TIPO = 'N'
+GROUP BY F2_EMISSAO, A1_NOME"></textarea>
 
           <!-- Área de resultado -->
           <div id="preview-wrap" class="preview-wrap" style="display:none">
@@ -432,8 +441,9 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     document.getElementById('f-nome').value       = row.nome || '';
     document.getElementById('f-erp').value        = row.erp  || 'protheus';
     document.getElementById('f-limite').value     = row.limite_max ?? 1000;
-    document.getElementById('f-sql-base').value   = row.sql_base   || '';
-    document.getElementById('f-campo-data').value = row.campo_data || 'data';
+    document.getElementById('f-sql-base').value        = row.sql_base        || '';
+    document.getElementById('f-campo-data').value      = row.campo_data      || 'data';
+    document.getElementById('f-colunas-metrica').value = row.colunas_metrica || '';
 
     document.getElementById('meta-id').textContent  = row.id.slice(0, 8) + '…';
     document.getElementById('form-subtitle').textContent =
@@ -453,10 +463,11 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
 
     const body = {
       nome,
-      erp:        document.getElementById('f-erp').value,
-      limite_max: parseInt(document.getElementById('f-limite').value) || 1000,
-      sql_base:   sqlBase,
-      campo_data: document.getElementById('f-campo-data').value.trim() || 'data',
+      erp:             document.getElementById('f-erp').value,
+      limite_max:      parseInt(document.getElementById('f-limite').value) || 1000,
+      sql_base:        sqlBase,
+      campo_data:      document.getElementById('f-campo-data').value.trim() || 'data',
+      colunas_metrica: document.getElementById('f-colunas-metrica').value.trim() || null,
     };
 
     const url    = editId ? `/api/ia-command/admin/datasets/${editId}` : '/api/ia-command/admin/datasets';
@@ -608,6 +619,42 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   </div>
   <div class="help-drawer-body">
     <div class="help-section">
+      <div class="help-section-title">Convenções obrigatórias</div>
+      <div class="help-item">
+        <div class="help-item-label">1. Aliases livres, resolução automática</div>
+        <div class="help-item-desc">Você pode escrever os aliases do SELECT em maiúsculo, minúsculo ou misto: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">AS DATA</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">AS data</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">AS Quantidade</code>. O motor localiza o alias real e monta o wrapper com a caixa correta.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">2. Não use TOP ou LIMIT</div>
+        <div class="help-item-desc">O motor adiciona <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SELECT TOP N *</code> automaticamente com base no Limite configurado (padrão: 1000). Consultas com agrupamento dinâmico não têm TOP — o resultado é limitado pelo número de grupos, que naturalmente é pequeno.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">3. Filtros de deletados (Protheus)</div>
+        <div class="help-item-desc">Inclua <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">D_E_L_E_T_ = ' '</code> no WHERE de cada tabela do JOIN para excluir registros marcados como excluídos no Protheus.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">4. Colunas métricas para GROUP BY dinâmico</div>
+        <div class="help-item-desc">Preencha <em>Colunas métricas</em> com as colunas numéricas separadas por vírgula (ex: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">valor,quantidade,margem</code>). Quando o usuário perguntar "por produto" ou "por cliente", o motor gera GROUP BY no SQL Server com SUM() — muito mais eficiente do que agrupar em memória. Sem essa configuração o agrupamento ocorre em memória (fallback seguro, mas mais lento para grandes volumes).</div>
+      </div>
+      <div class="help-tip">
+        Consulta normal: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SELECT TOP 1000 * FROM (&lt;seu SQL&gt;) AS _base WHERE data &gt;= @p0 AND data &lt;= @p1</code><br>
+        Com GROUP BY: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SELECT produto, SUM(valor) AS valor FROM (&lt;seu SQL&gt;) AS _base WHERE data &gt;= @p0 GROUP BY produto ORDER BY valor DESC</code>
+      </div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Regra local antes da IA</div>
+      <div class="help-item-desc">Antes de chamar IA, o sistema tenta resolver a pergunta com regras internas. O Dataset participa diretamente dessa decisao: aliases, campo de data e colunas metricas ajudam o motor a identificar periodo, agrupamento, metrica e ordenacao.</div>
+      <div class="help-item">
+        <div class="help-item-label">Como a pontuacao local fica forte</div>
+        <div class="help-item-desc">A pergunta ganha confianca quando encontra varios sinais juntos: equivalencia de intencao, periodo reconhecido, agrupamento como "por produto", metrica presente em <em>Colunas metricas</em>, filtro conhecido e limite/ranking. Se a confianca ficar alta, executa sem IA.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">O que cadastrar no Dataset</div>
+        <div class="help-item-desc">Use aliases claros no SELECT e preencha <em>Colunas metricas</em> com os campos numericos que podem ser somados e ordenados. Ex: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">FATURAMENTO, QUANTIDADE</code>. O usuario pode digitar em qualquer caixa; o motor resolve o alias real.</div>
+      </div>
+      <div class="help-tip">Exemplo: "Fat do ano por produto" encontra "fat" nas equivalencias, "ano" no motor temporal, "produto" no agrupamento e "FATURAMENTO" nas metricas do Dataset. Com isso, a regra local executa sem gastar tokens de IA.</div>
+    </div>
+    <div class="help-section">
       <div class="help-section-title">O que é o SQL Base</div>
       <div class="help-item-desc">O SQL Base é um SELECT completo e analítico que você escreve uma vez. O motor do IA Command envolve automaticamente com filtros de período: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">SELECT TOP N * FROM (&lt;seu_sql&gt;) AS _base WHERE campo_data BETWEEN @p0 AND @p1</code></div>
     </div>
@@ -617,6 +664,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       <div class="help-item"><div class="help-item-label">2. Coluna de data com alias</div><div class="help-item-desc">O SELECT deve ter uma coluna de data com o mesmo alias definido em "Alias da coluna de data". Ex: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">F2_EMISSAO AS data</code>.</div></div>
       <div class="help-item"><div class="help-item-label">3. Filtrar deletados (Protheus)</div><div class="help-item-desc">Sempre inclua <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE D_E_L_E_T_ = ' '</code> para excluir registros marcados como excluídos.</div></div>
       <div class="help-item"><div class="help-item-label">4. Aliases em português</div><div class="help-item-desc">Prefira aliases descritivos: <em>cliente</em>, <em>valor_total</em>, <em>data_emissao</em>. A IA usa esses nomes ao compor a resposta.</div></div>
+      <div class="help-item"><div class="help-item-label">5. Aliases de filtro automático</div><div class="help-item-desc">Para que filtros por produto, cliente e vendedor funcionem automaticamente, nomeie as colunas no SELECT com os aliases reservados: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">produto</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">cliente</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">vendedor</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">filial</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">status</code>. Quando o usuário perguntar "fat do produto Aço 1020", o motor aplica automaticamente <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE produto LIKE '%Aço 1020%'</code>.</div></div>
     </div>
     <div class="help-section">
       <div class="help-section-title">Executar SQL (preview)</div>
@@ -624,10 +672,45 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       <div class="help-tip">Se o preview retornar erro, corrija o SQL antes de salvar. Um Dataset com SQL inválido não funciona em produção.</div>
     </div>
     <div class="help-section">
+      <div class="help-section-title">⚠️ Pontos de atenção</div>
+      <div class="help-item">
+        <div class="help-item-label">O período é aplicado como filtro externo, não dentro do seu SQL</div>
+        <div class="help-item-desc">O motor envolve seu SQL Base com <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE campo_data BETWEEN @p0 AND @p1</code>. Por isso, a coluna de data precisa aparecer no resultado do seu SELECT e ter o mesmo alias configurado no campo <em>Alias da coluna de data</em>. Se a coluna se chamar <em>DT_EMISSAO</em> no seu SELECT, configure o alias como <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">DT_EMISSAO</code>.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">O sistema não agrega — seu SQL deve fazer isso</div>
+        <div class="help-item-desc">Se o seu SELECT tiver <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">GROUP BY EMPRESA, DATA</code>, o resultado pode trazer dezenas de linhas. O IA Command somará automaticamente as colunas numéricas ao montar a resposta, mas se você quiser uma única linha consolidada, faça a agregação completa no próprio SQL Base (sem GROUP BY por data).</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">O nome das colunas influencia o formato da resposta</div>
+        <div class="help-item-desc">O formatador de respostas lê os aliases do seu SELECT para montar a mensagem enviada ao WhatsApp. Colunas com prefixo <em>id</em>, <em>cod</em>, <em>num</em>, <em>seq</em>, <em>ano</em>, <em>mes</em> ou <em>dia</em> são tratadas como identificadores e não são somadas. Todas as demais colunas com valor numérico são somadas e exibidas. Use aliases descritivos: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">faturamento_total</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">valor_pedido</code>.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Intenções com case específico têm prioridade</div>
+        <div class="help-item-desc">Algumas intenções (ex.: <em>consultar_faturamento</em>) têm formatação dedicada que exibe Total, Notas emitidas e Ticket médio. Quando a intenção vinculada não tem case específico, o sistema aplica a formatação genérica automática (soma das colunas numéricas). Verifique o nome exato da intenção na tela de Intenções.</div>
+      </div>
+    </div>
+    <div class="help-section">
       <div class="help-section-title">Modelos Protheus</div>
       <div class="help-item"><div class="help-item-label">Modelo Clássico</div><div class="help-item-desc">Tabelas com sufixo: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SA1010</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SF2010</code>.</div></div>
       <div class="help-item"><div class="help-item-label">Lobo Guará</div><div class="help-item-desc">Tabelas sem sufixo: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SA1</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SF2</code>. Adicione <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE A1_FILIAL = '01'</code>.</div></div>
       <div class="help-tip">Não sabe qual modelo? Execute: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SELECT TOP 1 * FROM SYSOBJECTS WHERE NAME = 'SA1010'</code>. Se retornar resultado, é clássico.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Detecção automática de dimensões</div>
+      <div class="help-item-desc">O sistema detecta automaticamente as colunas de cliente, produto, vendedor, fornecedor e empresa pelo nome do alias — sem configuração adicional. Use os nomes abaixo no SELECT para ativar agrupamento e filtros automáticos (vendas e compras).</div>
+      <table class="fmt-table" style="margin-top:12px">
+        <thead><tr><th>Dimensão</th><th>Aliases aceitos automaticamente</th></tr></thead>
+        <tbody>
+          <tr><td>📅 Data</td><td><code>DATA</code>, <code>DT_*</code>, <code>DATA_*</code></td></tr>
+          <tr><td>🏢 Cliente</td><td><code>CLIENTE</code>, <code>NM_CLI*</code>, <code>DS_CLI*</code>, <code>NOME_CLI*</code></td></tr>
+          <tr><td>📦 Produto</td><td><code>PRODUTO</code>, <code>NEGOCIO</code>, <code>DS_PROD*</code>, <code>NM_PROD*</code>, <code>DESCR*</code></td></tr>
+          <tr><td>👤 Vendedor</td><td><code>VENDEDOR</code>, <code>NM_VEND*</code>, <code>DS_VEND*</code>, <code>COD_VEND*</code></td></tr>
+          <tr><td>🏪 Fornecedor</td><td><code>FORNECEDOR</code>, <code>NM_FORN*</code>, <code>DS_FORN*</code>, <code>NOME_FORN*</code>, <code>RAZAO*</code></td></tr>
+          <tr><td>🏭 Empresa</td><td><code>EMPRESA</code>, <code>FILIAL</code>, <code>UNIDADE</code></td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">Nome fora do padrão? Adicione um alias no SELECT: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">RAZAO_SOCIAL AS cliente</code> — e passa a funcionar automaticamente.</div>
     </div>
   </div>
 </div>

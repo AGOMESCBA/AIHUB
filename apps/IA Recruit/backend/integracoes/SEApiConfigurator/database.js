@@ -1,7 +1,5 @@
 const fs   = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', '..', 'data');
+const { empresaDataFile } = require('../../data-paths');
 
 // ── Tabelas de origem disponíveis para carregamento automático ────────────────
 const SOURCE_TABLES = {
@@ -61,7 +59,7 @@ const SOURCE_TABLES = {
 
 function _file(empresaId) {
   if (!empresaId) throw new Error('empresa_id é obrigatório');
-  return path.join(DATA_DIR, `empresa_${empresaId}.json`);
+  return empresaDataFile(empresaId);
 }
 
 function load(empresaId) {

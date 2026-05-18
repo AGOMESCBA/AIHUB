@@ -71,6 +71,45 @@ function _adicionarColunaSeFaltar(tabela, coluna, definicao) {
 }
 
 function _garantirColunasCompatibilidade() {
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS interpretation_log (
+      id                    TEXT PRIMARY KEY,
+      empresa_id            INTEGER,
+      usuario               TEXT,
+      numero_wa             TEXT,
+      canal_id              TEXT,
+      texto_original        TEXT NOT NULL,
+      intent_json           TEXT,
+      intencao              TEXT,
+      periodo_json          TEXT,
+      filtros_json          TEXT,
+      agrupar_por           TEXT,
+      ordenar_por           TEXT,
+      limite                INTEGER,
+      sinonimos_aplicados   TEXT,
+      campos_inferidos_ia   TEXT,
+      provedor              TEXT,
+      confianca             REAL,
+      origem                TEXT,
+      cache_hit             INTEGER DEFAULT 0,
+      fallback_usado        INTEGER DEFAULT 0,
+      precisa_confirmacao   INTEGER DEFAULT 0,
+      resultado_tipo        TEXT,
+      dataset_id            TEXT,
+      dataset_nome          TEXT,
+      rows_count            INTEGER,
+      resposta_entregue     TEXT,
+      feedback              TEXT,
+      feedback_observacao   TEXT,
+      criado_em             TEXT NOT NULL,
+      atualizado_em         TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_iac_interpretation_empresa_data
+      ON interpretation_log (empresa_id, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_interpretation_intencao
+      ON interpretation_log (empresa_id, intencao, confianca);
+  `);
+
   const connections = {
     port: 'INTEGER',
     database: 'TEXT',
@@ -87,12 +126,24 @@ function _garantirColunasCompatibilidade() {
   const aiConfig = {
     groq_api_key: 'TEXT',
     gemini_api_key: 'TEXT',
-    openai_api_key: 'TEXT',
+    deepseek_api_key: 'TEXT',
     claude_api_key: 'TEXT',
+    openai_api_key: 'TEXT',
     provedor_primario: "TEXT DEFAULT 'groq'",
+    fallback_ordem: "TEXT DEFAULT 'groq,gemini,deepseek,claude'",
     confianca_minima: 'REAL DEFAULT 0.6',
     whisper_model: "TEXT DEFAULT 'whisper-large-v3'",
     audio_idioma: "TEXT DEFAULT 'pt'",
+  };
+
+  const datasets = {
+    sql_base:        'TEXT',
+    campo_data:      "TEXT DEFAULT 'data'",
+    colunas_metrica: 'TEXT',
+  };
+
+  const whatsappAllowedNumbers = {
+    wa_lid: 'TEXT',
   };
 
   for (const [coluna, definicao] of Object.entries(connections)) {
@@ -101,6 +152,14 @@ function _garantirColunasCompatibilidade() {
 
   for (const [coluna, definicao] of Object.entries(aiConfig)) {
     _adicionarColunaSeFaltar('ai_config', coluna, definicao);
+  }
+
+  for (const [coluna, definicao] of Object.entries(datasets)) {
+    _adicionarColunaSeFaltar('datasets', coluna, definicao);
+  }
+
+  for (const [coluna, definicao] of Object.entries(whatsappAllowedNumbers)) {
+    _adicionarColunaSeFaltar('whatsapp_allowed_numbers', coluna, definicao);
   }
 }
 

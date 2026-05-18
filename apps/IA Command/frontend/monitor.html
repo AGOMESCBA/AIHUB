@@ -63,8 +63,41 @@
     .mon-qr-hint { font-size:11px;color:var(--text-md);line-height:1.6; }
     .mon-connected-box { background:#dcfce7;border:1px solid #86efac;border-radius:var(--radius-sm);padding:14px;font-size:13px;color:#15803d;font-weight:700;line-height:1.5;width:100%; }
     .mon-connected-num { font-size:18px;font-weight:900;margin-top:4px;color:#166534; }
-    .mon-stat  { display:flex;justify-content:space-between;width:100%;font-size:12px;color:var(--text-lo);border-top:1px solid var(--border);padding-top:8px; }
-    .mon-stat strong { color:var(--text-hi); }
+    .mon-stat  { display:flex;justify-content:space-between;gap:10px;width:100%;font-size:12px;color:var(--text-lo);border-top:1px solid var(--border);padding-top:8px; }
+    .mon-stat strong { color:var(--text-hi);text-align:right;min-width:0;overflow-wrap:anywhere; }
+    .mon-stat-vinculos { align-items:flex-start; }
+    .mon-vinculos-box { display:grid;gap:4px;justify-items:end;line-height:1.35; }
+    .mon-vinculos-count { font-weight:800;color:var(--text-hi); }
+    .mon-vinculos-list { font-size:11px;font-weight:700;color:var(--text-md); }
+    /* Última intenção */
+    .mon-intent-panel { display:none;flex-direction:column;gap:6px;width:100%;border-top:1px solid var(--border);padding-top:10px;margin-top:2px; }
+    .mon-intent-title { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:2px; }
+    .mon-intent-row { display:flex;justify-content:space-between;align-items:baseline;gap:6px;font-size:11px; }
+    .mon-intent-row span:first-child { color:var(--text-lo);flex-shrink:0; }
+    .mon-intent-row strong { color:var(--text-hi);text-align:right;word-break:break-all;font-size:11px; }
+    .mon-intent-nome { font-size:12px;font-weight:800;color:var(--accent);word-break:break-all;line-height:1.3;margin-bottom:2px; }
+    .mon-intent-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700; }
+    .mon-intent-badge.ok  { background:#dcfce7;color:#15803d; }
+    .mon-intent-badge.err { background:#fee2e2;color:#b91c1c; }
+    .mon-intent-badge.unk { background:var(--bg-hover);color:var(--text-lo); }
+    .mon-intent-filtros { display:flex;flex-direction:column;gap:2px;width:100%; }
+    .mon-intent-filtro  { font-size:10px;background:var(--bg-hover);border-radius:4px;padding:2px 6px;color:var(--text-md);word-break:break-all; }
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -98,6 +131,7 @@
           <div class="page-kicker">Operação</div>
           <div class="page-title">Monitor WhatsApp</div>
         </div>
+        <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
       </div>
 
       <!-- Toolbar -->
@@ -106,9 +140,12 @@
           <span class="mon-dot" id="status-dot"></span>
           <span id="status-label">Desconectado</span>
         </div>
+        <select id="channel-select" class="form-control" style="width:auto;min-width:220px;height:34px" onchange="trocarCanal()"></select>
         <button class="btn btn-primary" id="btn-start" onclick="iniciar()">▶ Iniciar</button>
         <button class="btn btn-ghost"   id="btn-stop"  onclick="parar()" disabled>■ Parar</button>
+        <button class="btn btn-ghost"   id="btn-disconnect" onclick="desconectarSessao()">Desconectar sessão</button>
         <button class="btn btn-ghost"   id="btn-test"  onclick="abrirModalTeste()" disabled>📤 Teste de envio</button>
+        <button class="btn btn-ghost"   onclick="salvarLog()">💾 Salvar log</button>
         <button class="btn btn-ghost"   onclick="limparLogs()">🗑 Limpar logs</button>
         <span class="mon-msg-count">Mensagens recebidas: <strong id="msg-count">0</strong></span>
       </div>
@@ -139,7 +176,27 @@
             <div class="mon-connected-num" id="wa-number">—</div>
           </div>
           <div class="mon-stat"><span>Empresa</span><strong id="info-empresa">—</strong></div>
+          <div class="mon-stat"><span>Canal</span><strong id="info-canal">—</strong></div>
+          <div class="mon-stat mon-stat-vinculos"><span>Vínculos</span><strong id="info-vinculos">—</strong></div>
           <div class="mon-stat"><span>Msgs recebidas</span><strong id="info-msgs">0</strong></div>
+
+          <!-- Painel Última Intenção -->
+          <div class="mon-intent-panel" id="intent-panel">
+            <div class="mon-intent-title">🧠 Última consulta</div>
+            <div class="mon-intent-nome" id="intent-nome">—</div>
+            <div id="intent-badge-wrap"></div>
+            <div class="mon-intent-row"><span>Motor</span><strong id="intent-provedor">—</strong></div>
+            <div class="mon-intent-row"><span>Confiança</span><strong id="intent-confianca">—</strong></div>
+            <div class="mon-intent-row" id="intent-periodo-row" style="display:none"><span>Período</span><strong id="intent-periodo">—</strong></div>
+            <div class="mon-intent-row" id="intent-dataset-row" style="display:none"><span>Dataset</span><strong id="intent-dataset">—</strong></div>
+            <div class="mon-intent-row" id="intent-rows-row" style="display:none"><span>Registros</span><strong id="intent-rows">—</strong></div>
+            <div id="intent-filtros-wrap" style="display:none">
+              <div class="mon-intent-row" style="margin-bottom:3px"><span>Filtros</span></div>
+              <div class="mon-intent-filtros" id="intent-filtros"></div>
+            </div>
+            <div class="mon-intent-row" id="intent-group-row" style="display:none"><span>Agrupar por</span><strong id="intent-group">—</strong></div>
+            <div class="mon-intent-row" id="intent-err-row" style="display:none"><span>Detalhe</span><strong id="intent-err" style="color:#ef4444;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
+          </div>
         </div>
 
       </div>
@@ -177,18 +234,23 @@
   let _socket = null;
   let _status = 'stopped';
   let _msgCount = 0;
+  let _channels = [];
+  let _channelId = null;
+  const _monitorEmpresaId = Number(new URLSearchParams(location.search).get('_empresa')) || null;
 
   window._iahubAuthReady?.then(() => {
     _socket = io({ transports: ['websocket', 'polling'] });
 
     _socket.on('connect', () => {
       addLog('Socket conectado ao servidor.', 'info');
-      _socket.emit('join-empresa');
+      if (_monitorEmpresaId) _socket.emit('join-empresa-monitor', { empresaId: _monitorEmpresaId });
+      else _socket.emit('join-empresa');
     });
 
     _socket.on('iac-log',    (entry) => addLog(entry.message, entry.type));
     _socket.on('iac-status', ({ status }) => aplicarStatus(status));
     _socket.on('iac-qr',     (url) => mostrarQR(url));
+    _socket.on('iac-intent', (data) => renderIntent(data));
     _socket.on('iac-msg',    ({ sender, tipo, body }) => {
       _msgCount++;
       document.getElementById('msg-count').textContent = _msgCount;
@@ -196,17 +258,74 @@
       addLog(`📩 [${tipo}] de ${sender}: ${body ? '"' + body.slice(0, 60) + '"' : '(mídia)'}`, 'received');
     });
 
-    carregarStatus();
+    carregarCanais().then(carregarStatus);
   });
+
+  async function carregarCanais() {
+    _channels = await fetch('/api/ia-command/whatsapp/channels').then(r => r.json()).catch(() => []);
+    const sel = document.getElementById('channel-select');
+    sel.innerHTML = _channels.map(c => `<option value="${esc(c.id)}">${esc(c.nome || c.id)}</option>`).join('');
+    _channelId = _channels[0]?.id || null;
+    sel.value = _channelId || '';
+    atualizarInfoCanal();
+  }
+
+  function trocarCanal() {
+    _channelId = document.getElementById('channel-select').value || null;
+    atualizarInfoCanal();
+    carregarStatus();
+  }
+
+  function channelQuery() {
+    return _channelId ? `?channel_id=${encodeURIComponent(_channelId)}` : '';
+  }
+
+  function channelBody(extra = {}) {
+    return JSON.stringify({ ...extra, channel_id: _channelId });
+  }
+
+  function atualizarInfoCanal(channel = null) {
+    const c = channel || _channels.find(x => x.id === _channelId);
+    document.getElementById('info-canal').textContent = c?.nome || '—';
+    renderInfoVinculos(c?.empresas);
+  }
+
+  function apelidoEmpresaVinculada(empresa) {
+    const aliases = String(empresa?.aliases || '').split(',').map(x => x.trim()).filter(Boolean);
+    return aliases[0] || empresa?.apelido || empresa?.nome || `Empresa #${empresa?.empresa_id || ''}`.trim();
+  }
+
+  function renderInfoVinculos(empresas) {
+    const el = document.getElementById('info-vinculos');
+    if (!Array.isArray(empresas)) {
+      el.textContent = '—';
+      el.removeAttribute('title');
+      return;
+    }
+    if (!empresas.length) {
+      el.textContent = '0';
+      el.removeAttribute('title');
+      return;
+    }
+
+    const nomes = empresas.map(apelidoEmpresaVinculada).filter(Boolean);
+    el.title = nomes.join(', ');
+    el.innerHTML = `
+      <span class="mon-vinculos-box">
+        <span class="mon-vinculos-count">${empresas.length} ${empresas.length === 1 ? 'vínculo' : 'vínculos'}</span>
+        <span class="mon-vinculos-list">${nomes.map(esc).join('<br>')}</span>
+      </span>`;
+  }
 
   async function carregarStatus() {
     try {
-      const d = await fetch('/api/ia-command/whatsapp/status').then(r => r.json());
+      const d = await fetch('/api/ia-command/whatsapp/status' + channelQuery()).then(r => r.json());
       aplicarStatus(d.status);
       _msgCount = d.msgCount || 0;
       document.getElementById('msg-count').textContent = _msgCount;
       document.getElementById('info-msgs').textContent = _msgCount;
       if (d.qr) mostrarQR(d.qr);
+      if (d.channel) atualizarInfoCanal(d.channel);
       if (window._iahubEmpresa)
         document.getElementById('info-empresa').textContent = `#${window._iahubEmpresa.id} — ${window._iahubEmpresa.nome || ''}`;
     } catch (_) {}
@@ -221,6 +340,7 @@
     document.getElementById('status-dot').className = `mon-dot ${status === 'starting' ? 'pulse' : ''}`;
     document.getElementById('btn-start').disabled = status !== 'stopped';
     document.getElementById('btn-stop').disabled  = status === 'stopped';
+    document.getElementById('btn-disconnect').disabled = false;
     document.getElementById('btn-test').disabled  = status !== 'connected';
     if (status === 'connected') mostrarConectado();
     else if (status === 'stopped') {
@@ -248,17 +368,61 @@
 
   async function iniciar() {
     document.getElementById('btn-start').disabled = true;
-    const r = await fetch('/api/ia-command/whatsapp/start', { method:'POST', headers:{'Content-Type':'application/json'} });
+    const r = await fetch('/api/ia-command/whatsapp/start', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: channelBody(),
+    });
     if (!r.ok) { addLog('Erro ao iniciar.', 'error'); document.getElementById('btn-start').disabled = false; }
   }
 
   async function parar() {
     document.getElementById('btn-stop').disabled = true;
-    await fetch('/api/ia-command/whatsapp/stop', { method:'POST' });
+    await fetch('/api/ia-command/whatsapp/stop', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: channelBody(),
+    });
+  }
+
+  async function desconectarSessao() {
+    if (!confirm('Desconectar a sessão salva deste canal? Na próxima inicialização será necessário escanear um novo QR Code.')) return;
+    document.getElementById('btn-disconnect').disabled = true;
+    const r = await fetch('/api/ia-command/whatsapp/disconnect', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: channelBody(),
+    });
+    if (!r.ok) addLog('Erro ao desconectar sessão.', 'error');
+    else {
+      addLog('Sessão desconectada. Clique em Iniciar para conectar outro número.', 'warning');
+      aplicarStatus('stopped');
+    }
+    document.getElementById('btn-disconnect').disabled = false;
+  }
+
+  function salvarLog() {
+    const linhas = [...document.getElementById('terminal').querySelectorAll('.log-line')].map(el => {
+      const ts  = el.querySelector('.log-ts')?.textContent  || '';
+      const msg = el.querySelector('.log-msg')?.textContent || '';
+      return `[${ts}] ${msg}`;
+    });
+    const conteudo = linhas.join('\n');
+    const ts       = new Date().toISOString().slice(0,16).replace('T','_').replace(':','');
+    const nome     = `iacommand-log-${ts}.txt`;
+    const blob     = new Blob([conteudo], { type: 'text/plain;charset=utf-8' });
+    const url      = URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    a.href = url; a.download = nome; a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function limparLogs() {
-    await fetch('/api/ia-command/whatsapp/clear-logs', { method:'POST' });
+    await fetch('/api/ia-command/whatsapp/clear-logs', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: channelBody(),
+    });
     document.getElementById('terminal').innerHTML =
       '<div class="log-line"><span class="log-ts">--:--:--</span><span class="log-msg info">Logs limpos.</span></div>';
   }
@@ -278,6 +442,85 @@
     return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  function renderIntent(d) {
+    document.getElementById('intent-panel').style.display = 'flex';
+
+    document.getElementById('intent-nome').textContent = d.intencao || '—';
+
+    // Badge resultado
+    const badgeWrap = document.getElementById('intent-badge-wrap');
+    const tipo = d.resultado_tipo;
+    let badgeClass, badgeLabel;
+    if (tipo === 'sucesso')       { badgeClass = 'ok';  badgeLabel = `✅ ${d.rows_count ?? 0} registros`; }
+    else if (tipo === 'desconhecido') { badgeClass = 'unk'; badgeLabel = '❓ Não reconhecida'; }
+    else if (tipo === 'sem_dados')    { badgeClass = 'unk'; badgeLabel = 'ℹ️ Sem dados'; }
+    else                          { badgeClass = 'err'; badgeLabel = d.provedor === 'nenhum' ? '❌ Falha IA' : '❌ Erro'; }
+    badgeWrap.innerHTML = `<span class="mon-intent-badge ${badgeClass}">${badgeLabel}</span>`;
+
+    // Provedor + confiança
+    const conf = typeof d.confianca === 'number' ? `${Math.round(d.confianca * 100)}%` : (d.confianca ?? '—');
+    document.getElementById('intent-provedor').textContent  = d.motor || d.provedor || '—';
+    document.getElementById('intent-confianca').textContent = conf;
+
+    // Período
+    const periodoRow = document.getElementById('intent-periodo-row');
+    const ptipo = d.periodo?.tipo;
+    if (ptipo && ptipo !== 'nenhum') {
+      let ptxt = ptipo;
+      if (d.periodo.dataInicio) ptxt += ` (${d.periodo.dataInicio.slice(5)} → ${d.periodo.dataFim.slice(5)})`;
+      document.getElementById('intent-periodo').textContent = ptxt;
+      periodoRow.style.display = 'flex';
+    } else {
+      periodoRow.style.display = 'none';
+    }
+
+    // Dataset
+    const dsRow = document.getElementById('intent-dataset-row');
+    if (d.dataset_nome) {
+      document.getElementById('intent-dataset').textContent = d.dataset_nome;
+      dsRow.style.display = 'flex';
+    } else {
+      dsRow.style.display = 'none';
+    }
+
+    // Registros (só no sucesso)
+    const rowsRow = document.getElementById('intent-rows-row');
+    rowsRow.style.display = 'none';
+
+    // Filtros
+    const filtrosWrap = document.getElementById('intent-filtros-wrap');
+    const filtros = d.filtros || {};
+    const filtrosKeys = Object.keys(filtros).filter(k => filtros[k]);
+    if (filtrosKeys.length) {
+      document.getElementById('intent-filtros').innerHTML = filtrosKeys.map(k =>
+        `<span class="mon-intent-filtro">${esc(k)} = "${esc(filtros[k])}"</span>`
+      ).join('');
+      filtrosWrap.style.display = 'block';
+    } else {
+      filtrosWrap.style.display = 'none';
+    }
+
+    // Agrupamento
+    const groupRow = document.getElementById('intent-group-row');
+    if (d.agrupar_por) {
+      document.getElementById('intent-group').textContent = d.agrupar_por;
+      groupRow.style.display = 'flex';
+    } else {
+      groupRow.style.display = 'none';
+    }
+
+    // Erro / detalhe (erro, sem_dados, desconhecido com _erro)
+    const errRow = document.getElementById('intent-err-row');
+    const errMsg = d.resultado_msg || '';
+    if (errMsg && (tipo === 'erro' || tipo === 'sem_dados' || tipo === 'desconhecido')) {
+      document.getElementById('intent-err').textContent = errMsg;
+      document.getElementById('intent-err').style.color = tipo === 'erro' ? '#ef4444' : 'var(--text-md)';
+      errRow.style.display = 'flex';
+    } else {
+      errRow.style.display = 'none';
+    }
+  }
+
   function abrirModalTeste() { document.getElementById('modal-teste').style.display = 'flex'; }
   function fecharModalTeste() { document.getElementById('modal-teste').style.display = 'none'; }
 
@@ -292,7 +535,7 @@
     try {
       const r = await fetch('/api/ia-command/whatsapp/send-test', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ numero, mensagem }),
+        body: channelBody({ numero, mensagem }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'Erro ao enviar.');
@@ -304,6 +547,56 @@
       btn.disabled = false; btn.textContent = 'Enviar';
     }
   }
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Monitor WhatsApp</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">O que é esta tela</div>
+      <div class="help-item-desc">O Monitor WhatsApp controla a conexão do bot com o número de WhatsApp da empresa. É aqui que você inicia, para e acompanha o status do serviço em tempo real.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Botões da toolbar</div>
+      <div class="help-item">
+        <div class="help-item-label">▶ Iniciar</div>
+        <div class="help-item-desc">Inicia o serviço WhatsApp. O sistema gerará um QR Code no painel lateral para você escanear com o celular.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">■ Parar</div>
+        <div class="help-item-desc">Encerra a sessão WhatsApp. O número ficará desconectado e não receberá mais mensagens até o próximo início.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">📤 Teste de envio</div>
+        <div class="help-item-desc">Disponível apenas quando conectado. Envia uma mensagem de teste para qualquer número, útil para validar a conexão.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">🗑 Limpar logs</div>
+        <div class="help-item-desc">Apaga o terminal de log visualmente (não apaga histórico do servidor).</div>
+      </div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Painel QR Code</div>
+      <div class="help-item-desc">Ao iniciar, um QR Code aparece no painel direito. Escaneie com o WhatsApp do celular em <strong>Configurações → Aparelhos conectados → Conectar aparelho</strong>. O QR expira em ~60 segundos — se expirar, clique em Iniciar novamente.</div>
+      <div class="help-tip">Use um número dedicado ao bot. Enquanto conectado, o número não pode ser usado normalmente no celular.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Cores do log em tempo real</div>
+      <div class="help-item"><div class="help-item-label" style="color:#a78bfa">Roxo — Mensagem recebida</div><div class="help-item-desc">Uma mensagem chegou de um usuário. Mostra o remetente e o conteúdo (primeiros 60 caracteres).</div></div>
+      <div class="help-item"><div class="help-item-label" style="color:#22c55e">Verde — Sucesso</div><div class="help-item-desc">Operação concluída com êxito (consulta processada, resposta enviada, etc.).</div></div>
+      <div class="help-item"><div class="help-item-label" style="color:#ef4444">Vermelho — Erro</div><div class="help-item-desc">Falha no processamento. Verifique se a conexão ERP está ativa e o Dataset configurado.</div></div>
+      <div class="help-item"><div class="help-item-label" style="color:#f59e0b">Amarelo — Aviso</div><div class="help-item-desc">Situação que merece atenção mas não impediu o funcionamento (ex: intenção não reconhecida).</div></div>
+    </div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

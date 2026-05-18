@@ -1,5 +1,5 @@
 // Controle em memória de tentativas de login falhas e bloqueio por IP.
-// Lê MAX_TENTATIVAS e BLOQUEAR_MS dinamicamente de data/seguranca.json,
+// Le MAX_TENTATIVAS e BLOQUEAR_MS dinamicamente de apps/IAHUB/data/seguranca.json,
 // com fallback para variáveis de ambiente e depois para os defaults.
 
 const _mapa = new Map(); // ip → { count, bloqueado_ate }

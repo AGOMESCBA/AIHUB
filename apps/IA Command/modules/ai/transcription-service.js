@@ -1,9 +1,21 @@
 const https = require('https');
+const tls   = require('tls');
 const fs    = require('fs');
 const path  = require('path');
 const FormData = require('form-data');
 
 const WHISPER_MODEL = 'whisper-large-v3';
+let _httpsAgent = null;
+
+function _getHttpsAgent() {
+  if (_httpsAgent) return _httpsAgent;
+  const ca = [
+    ...tls.getCACertificates('default'),
+    ...tls.getCACertificates('system'),
+  ];
+  _httpsAgent = new https.Agent({ ca });
+  return _httpsAgent;
+}
 
 async function _resolveGroqKey(empresaId) {
   try {
@@ -40,6 +52,7 @@ async function transcrever(audioPath, empresaId) {
       hostname: 'api.groq.com',
       path:     '/openai/v1/audio/transcriptions',
       method:   'POST',
+      agent:    _getHttpsAgent(),
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         ...formHeaders,

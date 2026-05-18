@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Módulos — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .quick-panel  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row    { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .filter-area  { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status{ font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control  { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .gp-wrap      { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title   { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta    { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .badge-ativo   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-inativo { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    /* Form inline */
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field       { margin-bottom:16px; }
+    .reg-field:last-child { margin-bottom:0; }
+    .reg-label       { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+    .cor-wrap { display:flex;align-items:center;gap:10px; }
+    .cor-preview { width:32px;height:32px;border-radius:8px;border:1px solid var(--border);flex-shrink:0;cursor:pointer;transition:transform .15s; }
+    .cor-preview:hover { transform:scale(1.1); }
+    input[type="color"] { width:0;height:0;padding:0;border:none;opacity:0;position:absolute; }
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Módulos</span>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ── LISTA ─────────────────────────────────────── -->
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">Administração</div>
+            <div class="page-title">Módulos de Intenção</div>
+            <div class="page-subtitle">Categorias que agrupam as intenções de IA por área funcional da empresa.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-primary" onclick="abrirFormulario()">＋ Novo Módulo</button>
+          </div>
+        </div>
+        <div class="quick-panel">
+          <div class="quick-row">
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="f-busca" type="text" class="form-control" placeholder="Buscar por nome…" oninput="filtrar()">
+              <select id="f-ativo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os status</option>
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Módulos cadastrados</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <!-- ── FORMULÁRIO ────────────────────────────────── -->
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Novo Módulo</strong>
+              <span id="form-subtitle">Preencha os campos e salve.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="fecharModal()">← Voltar à lista</button>
+              <button class="btn btn-primary" onclick="salvarModal()">Salvar</button>
+            </div>
+          </div>
+
+          <div class="editor-grid editor-grid-wide" style="margin-top:20px">
+            <main class="editor-main">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Identificação</div>
+                  <div class="form-section-subtitle">Nome e descrição do módulo.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="f-nome" class="form-control" placeholder="ex: Faturamento">
+                    <div class="form-hint">Nome que aparece no filtro e no formulário de intenção. Prefira nomes simples e diretos.</div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Descrição</label>
+                    <textarea id="f-descricao" class="form-control" rows="3" placeholder="Descreva o propósito deste módulo..."></textarea>
+                    <div class="form-hint">Informação de apoio para a equipe de configuração.</div>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Aparência</div>
+                  <div class="form-section-subtitle">Cor usada no badge da lista de intenções.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Cor do badge</label>
+                    <div class="cor-wrap">
+                      <div class="cor-preview" id="cor-preview" onclick="document.getElementById('f-cor-picker').click()"></div>
+                      <input type="color" id="f-cor-picker" value="#7c3aed" oninput="sincronizarCor(this.value)">
+                      <input type="text" id="f-cor" class="form-control" value="#7c3aed"
+                        placeholder="#7c3aed" style="max-width:120px;font-family:monospace"
+                        oninput="sincronizarCorTexto(this.value)">
+                      <span style="font-size:12px;color:var(--text-lo)">Clique na bolinha ou digite o código hex</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </main>
+
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados do Registro</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="reg-field">
+                    <div class="reg-label">ID do Registro</div>
+                    <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)"
+                      style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">ID da Empresa</div>
+                    <input type="text" id="f-empresa-id" class="form-control" disabled
+                      style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">Empresa</div>
+                    <input type="text" id="f-empresa-nome" class="form-control" disabled
+                      style="font-size:13px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <div class="reg-field">
+                    <div class="reg-label">Status</div>
+                    <select id="f-ativo" class="form-control">
+                      <option value="1">Ativo</option>
+                      <option value="0">Inativo</option>
+                    </select>
+                  </div>
+                  <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">
+                    Após salvar, o ID é gerado automaticamente e não pode ser alterado.
+                  </p>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let table, gp;
+  let _dados = [];
+  let _filtrosVisiveis = false;
+  let _quickFilterFn = null;
+  let _editId = null;
+
+  // ── Formulário inline ──────────────────────────────────────────────────────
+  function abrirFormulario(id) {
+    _editId = id || null;
+    _resetForm();
+    document.getElementById('form-title').textContent    = id ? 'Editar Módulo' : 'Novo Módulo';
+    document.getElementById('form-subtitle').textContent = id ? 'Revise os campos e salve.' : 'Preencha os campos e salve.';
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-form').style.display  = '';
+    if (id) _carregarForm(id);
+    else if (window._iahubEmpresa) {
+      document.getElementById('f-empresa-id').value   = window._iahubEmpresa.id;
+      document.getElementById('f-empresa-nome').value = window._iahubEmpresa.nome;
+    }
+  }
+
+  function fecharModal() {
+    document.getElementById('sec-form').style.display  = 'none';
+    document.getElementById('sec-lista').style.display = '';
+    _editId = null;
+  }
+
+  function _resetForm() {
+    document.getElementById('f-id').value           = '';
+    document.getElementById('f-empresa-id').value   = '';
+    document.getElementById('f-empresa-nome').value = '';
+    document.getElementById('f-nome').value         = '';
+    document.getElementById('f-descricao').value    = '';
+    document.getElementById('f-ativo').value        = '1';
+    document.getElementById('save-feedback').textContent = '';
+    document.getElementById('save-feedback').className   = 'save-feedback';
+    sincronizarCor('#7c3aed');
+  }
+
+  async function _carregarForm(id) {
+    const row = await fetch(`/api/ia-command/admin/modulos/${id}`).then(r => r.json()).catch(() => null);
+    if (!row) return;
+    document.getElementById('f-id').value           = row.id;
+    document.getElementById('f-empresa-id').value   = row.empresa_id;
+    document.getElementById('f-empresa-nome').value = '—';
+    document.getElementById('f-nome').value         = row.nome      || '';
+    document.getElementById('f-descricao').value    = row.descricao || '';
+    document.getElementById('f-ativo').value        = String(row.ativo ?? 1);
+    sincronizarCor(row.cor || '#7c3aed');
+    document.getElementById('form-title').textContent    = row.nome;
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+  }
+
+  function sincronizarCor(val) {
+    document.getElementById('f-cor').value = val;
+    document.getElementById('f-cor-picker').value = val;
+    document.getElementById('cor-preview').style.background = val;
+  }
+
+  function sincronizarCorTexto(val) {
+    if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+      document.getElementById('f-cor-picker').value = val;
+      document.getElementById('cor-preview').style.background = val;
+    }
+  }
+
+  async function salvarModal() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
+
+    const body = {
+      nome,
+      descricao: document.getElementById('f-descricao').value.trim() || null,
+      cor:       document.getElementById('f-cor').value.trim() || '#7c3aed',
+      ativo:     parseInt(document.getElementById('f-ativo').value),
+    };
+
+    const url    = _editId ? `/api/ia-command/admin/modulos/${_editId}` : '/api/ia-command/admin/modulos';
+    const method = _editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    const saved = await res.json();
+    if (!_editId) _editId = saved.id;
+    _feedback('Salvo com sucesso!', true);
+    document.getElementById('form-title').textContent = saved.nome;
+    setTimeout(() => { fecharModal(); carregar(); }, 700);
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className   = 'save-feedback ' + (ok ? 'ok' : 'fail');
+  }
+
+  // ── Filtros ────────────────────────────────────────────────────────────────
+  function toggleFiltros() {
+    _filtrosVisiveis = !_filtrosVisiveis;
+    document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
+    document.getElementById('btn-filtros').textContent   = _filtrosVisiveis ? '− Ocultar filtros' : '+ Mostrar filtros';
+    if (_filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+  }
+
+  function filtrar() {
+    if (!table) return;
+    if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
+    const b = document.getElementById('f-busca').value.trim().toLowerCase();
+    const a = document.getElementById('f-ativo').value;
+    if (b || a !== '') {
+      _quickFilterFn = row => {
+        if (a !== '' && String(row.ativo) !== a) return false;
+        if (b && !(row.nome || '').toLowerCase().includes(b)) return false;
+        return true;
+      };
+      table.addFilter(_quickFilterFn);
+    }
+    const ativos = [b, a].filter(Boolean).length;
+    document.getElementById('filter-status').textContent =
+      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+  }
+
+  function limparFiltros() {
+    document.getElementById('f-busca').value = '';
+    document.getElementById('f-ativo').value = '';
+    filtrar();
+  }
+
+  // ── CRUD ───────────────────────────────────────────────────────────────────
+  async function excluir(id) {
+    if (!confirm('Excluir este módulo?')) return;
+    await fetch(`/api/ia-command/admin/modulos/${id}`, { method: 'DELETE' });
+    carregar();
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Dados ──────────────────────────────────────────────────────────────────
+  async function carregar() {
+    _dados = await fetch('/api/ia-command/admin/modulos').then(r => r.json()).catch(() => []);
+    if (table) { table.replaceData(_dados); return; }
+    _criarTabela(_dados);
+  }
+
+  function _criarTabela(data) {
+    gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_modulos_group', getTable:()=>table });
+    table = new Tabulator('#tabela', {
+      data, index:'id', layout:'fitColumns', movableColumns:true,
+      height:'calc(100vh - 330px)', groupBy:gp.getActiveFields(), groupStartOpen:true,
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum módulo cadastrado.</div>',
+      columns:[
+        { title:'#', field:'id', width:200, headerFilter:false, groupable:false,
+          formatter:c=>`<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${c.getValue()?.slice(0,8)}…</span>` },
+        { title:'Nome', field:'nome', minWidth:160, headerFilter:true,
+          formatter:c=>{
+            const row=c.getRow().getData(); const cor=row.cor||'#7c3aed';
+            return `<span style="display:inline-flex;align-items:center;gap:7px"><span style="width:10px;height:10px;border-radius:50%;background:${esc(cor)};flex-shrink:0"></span><strong style="color:var(--text-hi)">${esc(c.getValue())}</strong></span>`;
+          }},
+        { title:'Descrição', field:'descricao', minWidth:200, headerFilter:true,
+          formatter:c=>`<span style="color:var(--text-lo)">${esc(c.getValue()||'—')}</span>` },
+        { title:'Status', field:'ativo', width:100,
+          headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}},
+          formatter:c=>c.getValue()?'<span class="badge-ativo">● Ativo</span>':'<span class="badge-inativo">○ Inativo</span>' },
+        { title:'Criado em', field:'criado_em', width:150,
+          formatter:c=>c.getValue()?.slice(0,16).replace('T',' ')||'' },
+        { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
+          formatter:cell=>{
+            const id=cell.getValue();
+            return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar">✏️</button>
+                    <button class="btn-icon" onclick="event.stopPropagation();excluir('${id}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+          }},
+      ],
+      rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().id); },
+      dataFiltered:(_f,rows)=>{
+        const total=_dados.length, qtd=rows?.length??total;
+        document.getElementById('count').textContent = qtd===total?_label(qtd):`${qtd} de ${total} módulos`;
+      },
+    });
+    gp.refresh(); gp.applyToTable();
+    document.getElementById('count').textContent = _label(data.length);
+  }
+
+  function _label(n) { return n===1?'1 módulo':`${n} módulos`; }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Módulos de Intenção</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">O que são Módulos</div>
+      <div class="help-item-desc">Módulos são categorias que agrupam intenções por área funcional. Ex: <em>Faturamento</em>, <em>Financeiro</em>, <em>Estoque</em>.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Campos</div>
+      <div class="help-item"><div class="help-item-label">Nome</div><div class="help-item-desc">Nome simples: <em>Faturamento</em>, <em>Compras</em>.</div></div>
+      <div class="help-item"><div class="help-item-label">Cor</div><div class="help-item-desc">Cor do badge na lista de intenções.</div></div>
+      <div class="help-item"><div class="help-item-label">Ativo</div><div class="help-item-desc">Módulos inativos não aparecem nos selects de intenção.</div></div>
+    </div>
+    <div class="help-tip">Cadastre os módulos antes de criar as intenções.</div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('sec-form').style.display !== 'none') fecharModal();
+    else fecharAjuda();
+  });
+</script>
+</body>
+</html>

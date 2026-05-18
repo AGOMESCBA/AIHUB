@@ -1,9 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const db = require('./database');
+const { APP_DATA_DIR, appDataDir } = require('../data-paths');
 
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', 'data');
-const SISTEMA_UPLOAD_DIR = path.join(DATA_DIR, 'uploads', 'sistema');
+const DATA_DIR = APP_DATA_DIR;
+const SISTEMA_UPLOAD_DIR = appDataDir('uploads', 'sistema');
 
 function parseDataUrl(dataUrl) {
   const match = /^data:(image\/(?:png|jpe?g|webp));base64,([a-z0-9+/=\s]+)$/i.exec(String(dataUrl || ''));

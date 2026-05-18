@@ -213,6 +213,186 @@ const MIGRATIONS = [
       )
     `,
   },
+  {
+    version: 12,
+    descricao: 'Adiciona sql_base e campo_data aos datasets — motor de query por template SQL',
+    sql: `
+      ALTER TABLE datasets ADD COLUMN sql_base   TEXT;
+      ALTER TABLE datasets ADD COLUMN campo_data TEXT DEFAULT 'data';
+    `,
+  },
+  {
+    version: 13,
+    descricao: 'Módulos de intenção — categorias configuráveis por empresa',
+    sql: `
+      CREATE TABLE IF NOT EXISTS intention_modules (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        nome          TEXT NOT NULL,
+        descricao     TEXT,
+        cor           TEXT DEFAULT '#7c3aed',
+        ativo         INTEGER DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      )
+    `,
+  },
+  {
+    version: 14,
+    descricao: 'Numeros de WhatsApp autorizados a interagir com o IA Command',
+    sql: `
+      CREATE TABLE IF NOT EXISTS whatsapp_allowed_numbers (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        nome          TEXT NOT NULL,
+        numero        TEXT NOT NULL,
+        observacoes   TEXT,
+        ativo         INTEGER DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_allowed_numbers_empresa_numero
+        ON whatsapp_allowed_numbers (empresa_id, numero);
+    `,
+  },
+  {
+    version: 15,
+    descricao: 'Canais WhatsApp compartilhaveis entre empresas do IA Command',
+    sql: `
+      CREATE TABLE IF NOT EXISTS whatsapp_channels (
+        id                TEXT PRIMARY KEY,
+        nome              TEXT NOT NULL,
+        numero            TEXT,
+        provider          TEXT DEFAULT 'wweb',
+        auth_client_id    TEXT NOT NULL UNIQUE,
+        ativo             INTEGER DEFAULT 1,
+        criado_em         TEXT NOT NULL,
+        atualizado_em     TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS whatsapp_channel_companies (
+        id            TEXT PRIMARY KEY,
+        channel_id    TEXT NOT NULL REFERENCES whatsapp_channels(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        aliases       TEXT,
+        padrao        INTEGER DEFAULT 0,
+        ativo         INTEGER DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_channel_companies_unique
+        ON whatsapp_channel_companies (channel_id, empresa_id);
+    `,
+  },
+  {
+    version: 16,
+    descricao: 'Templates internos de mensagens WhatsApp por empresa',
+    sql: `
+      CREATE TABLE IF NOT EXISTS whatsapp_message_templates (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        chave         TEXT NOT NULL,
+        titulo        TEXT NOT NULL,
+        template      TEXT NOT NULL,
+        ativo         INTEGER DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_message_templates_empresa_chave
+        ON whatsapp_message_templates (empresa_id, chave);
+    `,
+  },
+  {
+    version: 17,
+    descricao: 'Identificador WhatsApp LID em numeros autorizados',
+    sql: `
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN wa_lid TEXT;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_allowed_numbers_empresa_lid
+        ON whatsapp_allowed_numbers (empresa_id, wa_lid);
+    `,
+  },
+  {
+    version: 18,
+    descricao: 'Fallback configuravel de provedores de IA',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN fallback_ordem TEXT DEFAULT 'groq,gemini,deepseek,claude';
+    `,
+  },
+  {
+    version: 19,
+    descricao: 'Dicionário de sinônimos — equivalências por empresa para o classificador de IA',
+    sql: `
+      CREATE TABLE IF NOT EXISTS synonyms (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        termo         TEXT NOT NULL,
+        camada        TEXT NOT NULL DEFAULT 'intencao',
+        equivalencia  TEXT NOT NULL,
+        contexto      TEXT,
+        ativo         INTEGER DEFAULT 1,
+        origem        TEXT DEFAULT 'usuario',
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_iac_synonyms_empresa_ativo
+        ON synonyms (empresa_id, ativo);
+    `,
+  },
+  {
+    version: 20,
+    descricao: 'Colunas métricas para GROUP BY dinâmico nos datasets',
+    sql: `
+      ALTER TABLE datasets ADD COLUMN colunas_metrica TEXT;
+    `,
+  },
+  {
+    version: 21,
+    descricao: 'Log detalhado de interpretacoes de linguagem natural',
+    sql: `
+      CREATE TABLE IF NOT EXISTS interpretation_log (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            INTEGER,
+        usuario               TEXT,
+        numero_wa             TEXT,
+        canal_id              TEXT,
+        texto_original        TEXT NOT NULL,
+        intent_json           TEXT,
+        intencao              TEXT,
+        periodo_json          TEXT,
+        filtros_json          TEXT,
+        agrupar_por           TEXT,
+        ordenar_por           TEXT,
+        limite                INTEGER,
+        sinonimos_aplicados   TEXT,
+        campos_inferidos_ia   TEXT,
+        provedor              TEXT,
+        confianca             REAL,
+        origem                TEXT,
+        cache_hit             INTEGER DEFAULT 0,
+        fallback_usado        INTEGER DEFAULT 0,
+        precisa_confirmacao   INTEGER DEFAULT 0,
+        resultado_tipo        TEXT,
+        dataset_id            TEXT,
+        dataset_nome          TEXT,
+        rows_count            INTEGER,
+        resposta_entregue     TEXT,
+        feedback              TEXT,
+        feedback_observacao   TEXT,
+        criado_em             TEXT NOT NULL,
+        atualizado_em         TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_empresa_data
+        ON interpretation_log (empresa_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_intencao
+        ON interpretation_log (empresa_id, intencao, confianca);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -1,7 +1,7 @@
 const fs   = require('fs');
-const path = require('path');
+const { appDataFile } = require('../data-paths');
 
-const FILE = path.join(__dirname, '..', '..', '..', '..', 'data', 'permissoes.json');
+const FILE = appDataFile('permissoes.json');
 
 function _ler() {
   if (!fs.existsSync(FILE)) return [];

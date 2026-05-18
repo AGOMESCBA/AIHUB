@@ -1,12 +1,10 @@
 const fs   = require('fs');
-const path = require('path');
+const { APP_DATA_DIR, appDataFile, ensureAppDataDir } = require('../data-paths');
 
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', 'data');
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+ensureAppDataDir();
 
 function _filePath(arquivo) {
-  return path.join(DATA_DIR, `${arquivo}.json`);
+  return appDataFile(`${arquivo}.json`);
 }
 
 function _ler(arquivo) {

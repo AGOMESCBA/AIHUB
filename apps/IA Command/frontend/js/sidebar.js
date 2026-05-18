@@ -3,26 +3,41 @@
 
   const MENU = [
     {
-      id: 'operacao', label: 'Operação', icon: '⚡', defaultOpen: true,
+      id: 'operacao', label: 'Monitor', icon: '⚡', defaultOpen: true,
       items: [
         { id: 'iac-dashboard',        label: 'Dashboard',        href: '/app/ia-command/dashboard.html',      icon: '⊞' },
-        { id: 'iac-monitor-whatsapp', label: 'Monitor WhatsApp', href: '/app/ia-command/monitor.html',        icon: '💬' },
+        { id: 'iac-monitor-whatsapp', label: 'Monitor',          href: '/app/ia-command/monitor.html',        icon: '💬' },
+      ],
+    },
+    {
+      id: 'whatsapp', label: 'WhatsApp', icon: '💬', defaultOpen: true,
+      items: [
+        { id: 'iac-admin-canais-whatsapp', label: 'Canais', href: '/app/ia-command/admin-canais-whatsapp.html', icon: '📡' },
+        { id: 'iac-admin-numeros-whatsapp', label: 'Números Autorizados', href: '/app/ia-command/admin-numeros-whatsapp.html', icon: '📱' },
+        { id: 'iac-admin-mensagens-whatsapp', label: 'Mensagens', href: '/app/ia-command/admin-mensagens-whatsapp.html', icon: '✉️' },
+      ],
+    },
+    {
+      id: 'cadastros', label: 'Cadastros', icon: '📁', defaultOpen: false,
+      items: [
+        { id: 'iac-admin-modulos',   label: 'Módulos',      href: '/app/ia-command/admin-modulos.html',    icon: '📂' },
+        { id: 'iac-admin-sinonimos', label: 'Equivalências', href: '/app/ia-command/admin-sinonimos.html',  icon: '🔤' },
       ],
     },
     {
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
         { id: 'iac-config-conexoes', label: 'Conexões ERP',  href: '/app/ia-command/config-conexoes.html', icon: '🔌' },
-        { id: 'iac-config-ia',       label: 'Configurar IA', href: '/app/ia-command/config-ia.html',       icon: '🤖' },
+        { id: 'iac-admin-datasets',  label: 'Datasets ERP', href: '/app/ia-command/admin-datasets.html',   icon: '📊' },
+        { id: 'iac-config-ia',       label: 'Configuração de IA', href: '/app/ia-command/config-ia.html',       icon: '🤖' },
+        { id: 'iac-admin-intencoes', label: 'Intenções',    href: '/app/ia-command/admin-intencoes.html',  icon: '🧠' },
       ],
     },
     {
       id: 'administracao', label: 'Administração', icon: '🛠', defaultOpen: false,
       items: [
-        { id: 'iac-admin-intencoes', label: 'Intenções',         href: '/app/ia-command/admin-intencoes.html', icon: '🧠' },
-        { id: 'iac-admin-datasets',  label: 'Datasets ERP',      href: '/app/ia-command/admin-datasets.html',  icon: '📊' },
-        { id: 'iac-admin-execucoes', label: 'Log Execuções',     href: '/app/ia-command/admin-execucoes.html', icon: '📋' },
-        { id: 'iac-admin-auditoria', label: 'Auditoria',         href: '/app/ia-command/admin-auditoria.html', icon: '🔍' },
+        { id: 'iac-admin-execucoes', label: 'Log Execuções', href: '/app/ia-command/admin-execucoes.html', icon: '📋' },
+        { id: 'iac-admin-auditoria', label: 'Auditoria',     href: '/app/ia-command/admin-auditoria.html', icon: '🔍' },
       ],
     },
   ];

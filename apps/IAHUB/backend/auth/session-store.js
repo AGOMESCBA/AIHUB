@@ -1,13 +1,14 @@
 /**
  * FileSessionStore — store de sessão em JSON.
  * Substitui o store em memória padrão do express-session.
- * Sessões ficam em data/sessions/, mas podem ser limpas ao iniciar o servidor.
+ * Sessoes ficam em apps/IAHUB/data/sessions/, mas podem ser limpas ao iniciar o servidor.
  */
 const session = require('express-session');
 const fs      = require('fs');
 const path    = require('path');
+const { appDataDir } = require('../data-paths');
 
-const SESSIONS_DIR    = path.join(__dirname, '..', '..', '..', '..', 'data', 'sessions');
+const SESSIONS_DIR    = appDataDir('sessions');
 const CLEANUP_INTERVAL = 30 * 60 * 1000; // limpa expiradas a cada 30 min
 
 class FileSessionStore extends session.Store {

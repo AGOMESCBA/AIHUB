@@ -3,8 +3,8 @@ const https = require('https');
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
-async function classificarIntencao(mensagem, apiKey) {
-  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem);
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = []) {
+  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos);
   const body = JSON.stringify({
     model: GROQ_MODEL,
     messages: [{ role: 'user', content: prompt }],
@@ -19,9 +19,10 @@ async function classificarIntencao(mensagem, apiKey) {
       hostname: url.hostname,
       path:     url.pathname,
       method:   'POST',
+      rejectUnauthorized: false,
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type':  'application/json',
+        'Authorization':  `Bearer ${apiKey}`,
+        'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(body),
       },
     };
@@ -38,6 +39,7 @@ async function classificarIntencao(mensagem, apiKey) {
         } catch (e) { reject(e); }
       });
     });
+    req.setTimeout(20000, () => req.destroy(new Error('Groq: tempo limite de 20s excedido.')));
     req.on('error', reject);
     req.write(body);
     req.end();

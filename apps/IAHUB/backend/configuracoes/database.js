@@ -1,8 +1,8 @@
 const fs   = require('fs');
-const path = require('path');
+const { APP_DATA_DIR, appDataFile, ensureAppDataDir } = require('../data-paths');
 
-const DATA_DIR     = path.join(__dirname, '..', '..', '..', '..', 'data');
-const GLOBAL_FILE  = path.join(DATA_DIR, 'config-sistema.json');
+const DATA_DIR     = APP_DATA_DIR;
+const GLOBAL_FILE  = appDataFile('config-sistema.json');
 
 const DEFAULTS = {
   groq_api_key:   '',
@@ -16,7 +16,7 @@ const DEFAULTS = {
 };
 
 function _arquivoEmpresa(empresaId) {
-  return path.join(DATA_DIR, `config-empresa-${empresaId}.json`);
+  return appDataFile(`config-empresa-${empresaId}.json`);
 }
 
 function _readJson(file) {
@@ -46,7 +46,7 @@ function _ler(empresaId) {
 }
 
 function _salvar(dados, empresaId) {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  ensureAppDataDir();
   const arq = empresaId ? _arquivoEmpresa(empresaId) : GLOBAL_FILE;
   fs.writeFileSync(arq, JSON.stringify(dados, null, 2), 'utf8');
 }
@@ -85,7 +85,7 @@ function inicializarConfig() {
 
   if (modificado) {
     _salvar(cfg, null);
-    console.log('   [config] Chaves de API migradas do .env -> data/config-sistema.json');
+    console.log('   [config] Chaves de API migradas do .env -> apps/IAHUB/data/config-sistema.json');
   }
 }
 

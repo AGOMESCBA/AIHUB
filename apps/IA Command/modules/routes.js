@@ -1,8 +1,11 @@
 const { getDB } = require('./database');
 const { requireRotina } = require('./permissions');
+const { requireEmpresaContext } = require('./empresa-context');
 
 module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, io }) {
   const canDashboard = requireRotina('iac-dashboard');
+
+  app.use('/api/ia-command', requireAuth, requireIaCommand, requireEmpresaContext);
 
   // Rotas do WhatsApp
   require('./whatsapp/routes')(app, { requireAuth, requireIaCommand, io });

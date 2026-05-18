@@ -62,7 +62,7 @@ Write-Host "  Instalacao concluida com sucesso!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Proximo passo:" -ForegroundColor Yellow
-Write-Host "  1. Copie a pasta do projeto para C:\iahub" -ForegroundColor White
-Write-Host "  2. Configure o arquivo C:\iahub\.env com suas chaves de API" -ForegroundColor White
+Write-Host "  1. Copie a pasta do projeto para C:\Web\iahub" -ForegroundColor White
+Write-Host "  2. Configure o arquivo C:\Web\iahub\.env com suas chaves de API" -ForegroundColor White
 Write-Host "  3. Execute: .\2-configurar-servico.ps1" -ForegroundColor White
 Write-Host ""

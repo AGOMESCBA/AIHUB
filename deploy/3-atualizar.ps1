@@ -1,5 +1,5 @@
 # ============================================================
-# IAHub — Atualizar Fontes no Servidor
+# IAHub - Atualizar Fontes no Servidor
 # Execute como Administrador apos copiar o novo ZIP para o servidor
 # Uso: .\3-atualizar.ps1 -Zip "C:\caminho\iahub-deploy-YYYYMMDD_HHMM.zip"
 # ============================================================
@@ -9,11 +9,11 @@ param(
     [string]$Zip
 )
 
-Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$PROJECT_PATH = "C:\iahub"
+$PROJECT_PATH = "C:\Web\iahub"
 $SERVICE_NAME = "iahub"
+$PARENT_PATH  = "C:\Web"
 
 # Verificar Administrador
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
@@ -50,34 +50,14 @@ if ($svc -and $svc.Status -eq "Running") {
 # ── 2. Extrair ZIP sobrescrevendo os fontes ───────────────────
 Write-Host "[2/4] Extraindo novos fontes..." -ForegroundColor Yellow
 
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-$zip = [System.IO.Compression.ZipFile]::OpenRead($Zip)
-foreach ($entry in $zip.Entries) {
-    # Ignora entradas de diretorio
-    if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) { continue }
-
-    # Remove o prefixo "iahub\" do caminho dentro do ZIP
-    $relative = $entry.FullName -replace '^iahub[\\/]', ''
-    $dest = Join-Path $PROJECT_PATH $relative
-
-    # Garante que a pasta de destino existe
-    $destDir = Split-Path $dest -Parent
-    if (!(Test-Path $destDir)) {
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-    }
-
-    # Extrai o arquivo sobrescrevendo
-    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dest, $true)
-}
-$zip.Dispose()
+Expand-Archive -Path $Zip -DestinationPath $PARENT_PATH -Force
 
 Write-Host "      Fontes atualizados!" -ForegroundColor Green
 
-# ── 3. Atualizar dependencias npm (se package.json mudou) ─────
+# ── 3. Atualizar dependencias npm ────────────────────────────
 Write-Host "[3/4] Atualizando dependencias npm..." -ForegroundColor Yellow
 Push-Location $PROJECT_PATH
-npm install --omit=dev --prefer-offline 2>&1 | Out-Null
+npm install --omit=dev
 Pop-Location
 Write-Host "      Dependencias ok!" -ForegroundColor Green
 

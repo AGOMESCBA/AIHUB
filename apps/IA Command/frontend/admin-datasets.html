@@ -52,6 +52,104 @@
     .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
     .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
     .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+
+    /* Form */
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    @media(max-width:720px) { .form-row { grid-template-columns:1fr; } }
+
+    .summary-grid  { display:grid;gap:10px; }
+    .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
+    .summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
+    .summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
+    .summary-note  { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
+
+    .iac-tabs { display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0; }
+    .iac-tab  {
+      background:none;border:none;color:var(--text-md);cursor:pointer;
+      font-size:13px;font-weight:600;padding:11px 18px;
+      border-bottom:2px solid transparent;margin-bottom:-2px;
+      transition:color var(--transition),border-color var(--transition);
+    }
+    .iac-tab:hover { color:var(--accent); }
+    .iac-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .iac-tab-panel { display:none;padding-top:20px; }
+    .iac-tab-panel.active { display:block; }
+
+    .sql-editor {
+      font-family:'Cascadia Code','Fira Code','Consolas',monospace;
+      font-size:13px;line-height:1.65;height:380px;min-height:100px;
+      max-height:none;resize:vertical;white-space:pre;overflow-x:auto;
+      tab-size:2;width:100%;box-sizing:border-box;
+      border-top:none !important;border-radius:0 0 var(--radius) var(--radius) !important;
+      margin-bottom:16px;
+    }
+    .sql-toolbar {
+      display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      padding:10px 14px;background:var(--bg-hover);border:1px solid var(--border);
+      border-radius:var(--radius) var(--radius) 0 0;border-bottom:none;margin-bottom:0;
+    }
+    .sql-toolbar-left  { display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap; }
+    .sql-toolbar-right { display:flex;align-items:center;gap:8px;flex-shrink:0; }
+
+    .preview-wrap { margin-top:4px; }
+    .preview-bar  { display:flex;align-items:center;gap:10px;margin-bottom:8px; }
+    .preview-info { font-size:12px;color:var(--text-lo);flex:1; }
+    .preview-conn { font-size:12px;color:var(--text-md);font-weight:600; }
+    .preview-table-wrap { overflow:auto;max-height:360px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-card); }
+    .preview-table { width:100%;border-collapse:collapse;font-size:12.5px; }
+    .preview-table th { padding:8px 14px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);background:var(--bg-card);position:sticky;top:0;z-index:1;border-bottom:2px solid var(--border);white-space:nowrap; }
+    .preview-table td { padding:7px 14px;border-bottom:1px solid var(--border);color:var(--text-md);white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis; }
+    .preview-table tr:last-child td { border-bottom:none; }
+    .preview-table tr:hover td { background:var(--bg-hover); }
+    .preview-table td.null-val { color:var(--text-lo);font-style:italic; }
+    .preview-error { padding:14px 16px;background:#fee2e2;border:1px solid #fecaca;border-radius:var(--radius);color:#b91c1c;font-size:13px;margin-top:4px;font-family:monospace;white-space:pre-wrap;word-break:break-all; }
+
+    .sql-tip { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:16px; }
+    .sql-tip code { font-family:monospace;background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px; }
+    .sql-grid-btn { border:none;background:transparent;color:var(--accent);font-weight:700;font-size:12px;cursor:pointer;padding:3px 6px;border-radius:5px; }
+    .sql-grid-btn:hover { background:var(--accent-glow); }
+    .sql-grid-empty { color:var(--text-lo);font-size:12px; }
+    .sql-view-overlay { position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:320;display:none;align-items:center;justify-content:center;padding:24px; }
+    .sql-view-overlay.open { display:flex; }
+    .sql-view-modal { width:min(1100px,100%);max-height:min(820px,92vh);background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden; }
+    .sql-view-header { display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border-bottom:1px solid var(--border); }
+    .sql-view-title { min-width:0; }
+    .sql-view-title strong { display:block;color:var(--text-hi);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .sql-view-title span { display:block;color:var(--text-lo);font-size:12px;margin-top:2px; }
+    .sql-view-actions { display:flex;align-items:center;gap:8px;flex-shrink:0; }
+    .sql-view-body { padding:16px 18px;overflow:auto;background:var(--bg-base); }
+    .sql-view-pre { margin:0;font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:12.5px;line-height:1.6;color:var(--text-hi);white-space:pre; }
+    .sql-view-code { max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);padding:14px;margin-bottom:14px; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;}
+    .help-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 22px;}
+    .help-tab{padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-lo);transition:color var(--transition),border-color var(--transition);}
+    .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .help-panel{display:none;padding:22px;} .help-panel.active{display:block;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th,.fmt-table td{padding:6px 10px;border:1px solid var(--border);text-align:left;}
+    .fmt-table th{background:var(--bg-hover);font-weight:700;color:var(--text-hi);}
+    .fmt-table td:first-child{white-space:nowrap;}
+    .fmt-table code{background:var(--bg-hover);padding:1px 4px;border-radius:3px;font-size:11px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -78,47 +176,248 @@
     </div>
 
     <div class="page-content">
-      <div class="page-head">
-        <div>
-          <div class="page-kicker">Administração</div>
-          <div class="page-title">Datasets ERP</div>
-          <div class="page-subtitle">Mapeamento de tabelas e campos do ERP para cada módulo de IA.</div>
-        </div>
-        <button class="btn btn-primary" onclick="abrirFormulario()">＋ Novo Dataset</button>
-      </div>
 
-      <div class="quick-panel">
-        <div class="quick-row">
-          <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
-          <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
-        </div>
-        <div class="filter-area" id="filter-area" style="display:none">
-          <div class="quick-row" style="margin-bottom:10px">
-            <input id="f-busca" type="text" class="form-control" placeholder="Buscar por nome…" oninput="filtrar()">
-            <select id="f-erp" class="form-control" onchange="filtrar()">
-              <option value="">Todos os ERPs</option>
-              <option>protheus</option><option>sankhya</option><option>sap</option><option>senior</option>
-            </select>
-            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
-          </div>
-          <div class="gp-wrap">
-            <div class="gp-chips-row" id="gp-chips-row">
-              <span class="gp-label">Agrupar por:</span>
-            </div>
-            <div id="dz"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="padding:0;overflow:hidden">
-        <div class="grid-toolbar">
+      <!-- ── LISTA ──────────────────────────────────────────────────────────── -->
+      <div id="sec-lista">
+        <div class="page-head">
           <div>
-            <div class="grid-title">Datasets cadastrados</div>
-            <div id="count" class="grid-meta"></div>
+            <div class="page-kicker">Administração</div>
+            <div class="page-title">Datasets ERP</div>
+            <div class="page-subtitle">Mapeamento de tabelas e campos do ERP para cada módulo de IA.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-primary" onclick="abrirFormulario()">＋ Novo Dataset</button>
           </div>
         </div>
-        <div id="tabela"></div>
+
+        <div class="quick-panel">
+          <div class="quick-row">
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="f-busca" type="text" class="form-control" placeholder="Buscar por nome…" oninput="filtrar()">
+              <select id="f-filtro-erp" class="form-control" onchange="filtrar()">
+                <option value="">Todos os ERPs</option>
+                <option>protheus</option><option>sankhya</option><option>sap</option><option>senior</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Datasets cadastrados</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
       </div>
+
+      <!-- ── FORMULÁRIO ─────────────────────────────────────────────────────── -->
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Novo Dataset</strong>
+              <span id="form-subtitle">Preencha os campos e salve.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Ajuda
+              </button>
+              <button class="btn btn-ghost" onclick="fecharModal()">← Voltar à lista</button>
+              <button class="btn btn-primary" onclick="salvarModal()">Salvar</button>
+            </div>
+          </div>
+
+          <div class="iac-tabs" style="margin-bottom:0;margin-top:4px">
+            <button class="iac-tab active" id="tab-cadastro" onclick="trocarAba('cadastro')">📋 Cadastro</button>
+            <button class="iac-tab" id="tab-sql" onclick="trocarAba('sql')">🗄️ SQL Base</button>
+          </div>
+
+          <!-- ABA 1: CADASTRO -->
+          <div class="iac-tab-panel active" id="panel-cadastro">
+            <div class="editor-grid editor-grid-wide">
+              <main class="editor-main">
+
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Identificação</div>
+                    <div class="form-section-subtitle">Dados de controle do dataset.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-row">
+                      <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">ID</label>
+                        <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)" style="font-family:monospace;font-size:13px">
+                      </div>
+                      <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Empresa</label>
+                        <input type="text" id="f-empresa" class="form-control" disabled>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Dados Básicos</div>
+                    <div class="form-section-subtitle">Nome, ERP de origem e limite de registros por consulta.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-row">
+                      <div class="form-group">
+                        <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="f-nome" class="form-control" placeholder="ex: faturamento" oninput="atualizarResumo()">
+                        <div class="form-hint">Identificador único do dataset para esta empresa.</div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">ERP</label>
+                        <select id="f-erp" class="form-control" onchange="atualizarResumo()">
+                          <option value="protheus">Protheus (TOTVS)</option>
+                          <option value="sankhya">Sankhya</option>
+                          <option value="sap">SAP</option>
+                          <option value="senior">Senior</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Limite máximo de registros</label>
+                      <input type="number" id="f-limite" class="form-control" value="1000" min="1" max="10000" style="max-width:200px" oninput="atualizarResumo()">
+                      <div class="form-hint">Máximo de linhas retornadas por consulta. Recomendado: 1000.</div>
+                    </div>
+                  </div>
+                </section>
+
+              </main>
+
+              <aside class="editor-side">
+                <section class="form-section" style="position:sticky;top:56px">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Resumo</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="summary-grid">
+                      <div class="summary-item">
+                        <div class="summary-label">ID</div>
+                        <div class="summary-value" id="meta-id" style="font-family:monospace;font-size:12px">Novo</div>
+                      </div>
+                      <div class="summary-item">
+                        <div class="summary-label">Nome</div>
+                        <div class="summary-value" id="meta-nome">—</div>
+                      </div>
+                      <div class="summary-item">
+                        <div class="summary-label">ERP</div>
+                        <div class="summary-value" id="meta-erp">—</div>
+                      </div>
+                      <div class="summary-item">
+                        <div class="summary-label">Limite</div>
+                        <div class="summary-value" id="meta-limite">1000</div>
+                      </div>
+                      <div class="summary-item">
+                        <div class="summary-label">SQL Base</div>
+                        <div class="summary-value" id="meta-sql">—</div>
+                      </div>
+                    </div>
+                    <p class="summary-note">Após salvar, o ID é gerado automaticamente e não pode ser alterado.</p>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </div>
+
+          <!-- ABA 2: SQL BASE -->
+          <div class="iac-tab-panel" id="panel-sql">
+
+            <!-- Label -->
+            <label class="form-label" style="display:block;margin-bottom:4px">SQL Base <span style="color:#dc2626">*</span></label>
+
+            <!-- Toolbar acima do editor -->
+            <div class="sql-toolbar">
+              <div class="sql-toolbar-left">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Alias data:</label>
+                  <input type="text" id="f-campo-data" class="form-control" value="data"
+                    placeholder="data" style="max-width:110px;height:32px;font-size:13px"
+                    title="Alias da coluna de data no SELECT. O motor resolve maiúsculas/minúsculas automaticamente.">
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex:1">
+                  <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px"
+                    title="Colunas numéricas para SUM() no GROUP BY dinâmico. Ex: valor,quantidade,margem">
+                    Colunas métricas:
+                  </label>
+                  <input type="text" id="f-colunas-metrica" class="form-control"
+                    placeholder="valor,quantidade,margem" style="flex:1;min-width:240px;height:32px;font-size:13px;font-family:monospace"
+                    title="Colunas para SUM() quando agrupar por produto/cliente/vendedor. Ex: valor,quantidade,margem">
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <label class="form-label" style="margin-bottom:0;white-space:nowrap;font-size:12px">Conexão:</label>
+                  <select id="f-conexao-preview" class="form-control" style="min-width:260px;max-width:420px;height:32px;font-size:11px">
+                    <option value="">Conexão ativa (padrão)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="sql-toolbar-right">
+                <span id="exec-status" style="font-size:12px;color:var(--text-lo)"></span>
+                <button class="btn btn-ghost" onclick="executarSql()" id="btn-executar"
+                  style="display:flex;align-items:center;gap:7px;height:34px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  Executar SQL
+                </button>
+              </div>
+            </div>
+
+            <!-- Editor SQL -->
+            <textarea id="f-sql-base" class="form-control sql-editor" spellcheck="false" rows="16"
+              placeholder="SELECT
+  F2_EMISSAO    AS data,
+  A1_NOME       AS cliente,
+  SUM(D2_TOTAL) AS total
+FROM SF2010 F2
+  INNER JOIN SD2010 D2 ON D2.D2_DOC = F2.F2_DOC
+                       AND D2.D_E_L_E_T_ = ' '
+  INNER JOIN SA1010 A1 ON A1.A1_COD  = F2.F2_CLIENTE
+                       AND A1.D_E_L_E_T_ = ' '
+WHERE F2.D_E_L_E_T_ = ' '
+  AND F2.F2_TIPO = 'N'
+GROUP BY F2_EMISSAO, A1_NOME"></textarea>
+
+            <div id="preview-wrap" class="preview-wrap" style="display:none">
+              <div class="preview-bar">
+                <span class="preview-info" id="preview-info"></span>
+                <span class="preview-conn" id="preview-conn"></span>
+              </div>
+              <div class="preview-table-wrap">
+                <table class="preview-table">
+                  <thead id="preview-thead"></thead>
+                  <tbody id="preview-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="preview-error" class="preview-error" style="display:none"></div>
+
+          </div>
+
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -130,22 +429,242 @@
 <script>
   let table, gp;
   let _dados = [];
+  let _conexoes = [];
   let _filtrosVisiveis = false;
   let _quickFilterFn = null;
+  let _editId = null;
+  let _sqlViewDatasetId = null;
+  let _conexoesCarregadas = false;
 
-  function _openTab(url, label, icon) {
-    if (window.parent !== window)
-      window.parent.postMessage({ type: 'mdi:open-tab', url, label, icon }, location.origin);
-    else location.href = url;
-  }
-
+  // ── Abrir / Fechar formulário ───────────────────────────────────────────────
   function abrirFormulario(id) {
-    const url = id
-      ? `/app/ia-command/admin-dataset-form.html?id=${encodeURIComponent(id)}`
-      : '/app/ia-command/admin-dataset-form.html';
-    _openTab(url, id ? 'Editar Dataset' : 'Novo Dataset', '📊');
+    _editId = id || null;
+    _resetForm();
+    document.getElementById('form-title').textContent = id ? 'Editar Dataset' : 'Novo Dataset';
+    document.getElementById('form-subtitle').textContent = 'Preencha os campos e salve.';
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-form').style.display  = '';
+    trocarAba('cadastro');
+    if (!_conexoesCarregadas) _carregarConexoes();
+    if (id) _carregarForm(id);
+    else if (window._iahubEmpresa) {
+      document.getElementById('f-empresa').value = `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})`;
+    }
   }
 
+  function fecharModal() {
+    document.getElementById('sec-form').style.display  = 'none';
+    document.getElementById('sec-lista').style.display = '';
+    _editId = null;
+  }
+
+  function _resetForm() {
+    ['f-id','f-empresa','f-nome','f-sql-base'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('f-erp').value        = 'protheus';
+    document.getElementById('f-limite').value     = '1000';
+    document.getElementById('f-campo-data').value      = 'data';
+    document.getElementById('f-colunas-metrica').value = '';
+    document.getElementById('save-feedback').textContent = '';
+    document.getElementById('save-feedback').className = 'save-feedback';
+    document.getElementById('preview-wrap').style.display  = 'none';
+    document.getElementById('preview-error').style.display = 'none';
+    document.getElementById('meta-id').textContent    = 'Novo';
+    document.getElementById('meta-nome').textContent  = '—';
+    document.getElementById('meta-erp').textContent   = '—';
+    document.getElementById('meta-limite').textContent = '1000';
+    document.getElementById('meta-sql').textContent   = '—';
+  }
+
+  // ── Tabs ────────────────────────────────────────────────────────────────────
+  function trocarAba(aba) {
+    document.querySelectorAll('.iac-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.iac-tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + aba).classList.add('active');
+    document.getElementById('panel-' + aba).classList.add('active');
+  }
+
+  // ── Resumo lateral ──────────────────────────────────────────────────────────
+  function atualizarResumo() {
+    const nome   = document.getElementById('f-nome').value.trim() || '—';
+    const erp    = document.getElementById('f-erp').value || '—';
+    const limite = document.getElementById('f-limite').value || '—';
+    const sql    = document.getElementById('f-sql-base').value.trim();
+    document.getElementById('meta-nome').textContent   = nome;
+    document.getElementById('meta-erp').textContent    = erp;
+    document.getElementById('meta-limite').textContent = limite;
+    document.getElementById('meta-sql').textContent    = sql ? `${sql.split('\n').length} linhas` : '—';
+  }
+
+  // ── Conexões para preview SQL ───────────────────────────────────────────────
+  async function _carregarConexoes() {
+    _conexoesCarregadas = true;
+    try {
+      const lista = await fetch('/api/ia-command/connections').then(r => r.json());
+      const sel   = document.getElementById('f-conexao-preview');
+      lista.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.nome} (${c.tipo})${c.ativo ? ' ★' : ''}`;
+        if (c.ativo) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    } catch (_) {}
+  }
+
+  // ── Carregar registro ───────────────────────────────────────────────────────
+  async function _carregarForm(id) {
+    const row = await fetch(`/api/ia-command/admin/datasets/${id}`).then(r => r.json()).catch(() => null);
+    if (!row) { document.getElementById('form-subtitle').textContent = 'Registro não encontrado.'; return; }
+
+    document.getElementById('f-id').value         = row.id;
+    document.getElementById('f-empresa').value    = `ID ${row.empresa_id}`;
+    document.getElementById('f-nome').value       = row.nome || '';
+    document.getElementById('f-erp').value        = row.erp  || 'protheus';
+    document.getElementById('f-limite').value     = row.limite_max ?? 1000;
+    document.getElementById('f-sql-base').value   = row.sql_base   || '';
+    document.getElementById('f-campo-data').value      = row.campo_data      || 'data';
+    document.getElementById('f-colunas-metrica').value = row.colunas_metrica || '';
+
+    document.getElementById('meta-id').textContent = row.id.slice(0, 8) + '…';
+    document.getElementById('form-title').textContent = row.nome || 'Editar Dataset';
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0, 8)}… · editado em ${row.atualizado_em?.slice(0, 16).replace('T', ' ') || '—'}`;
+    atualizarResumo();
+  }
+
+  // ── Salvar ──────────────────────────────────────────────────────────────────
+  async function salvarModal() {
+    const nome    = document.getElementById('f-nome').value.trim();
+    const sqlBase = document.getElementById('f-sql-base').value.trim();
+    if (!nome)    { _feedback('Campo Nome é obrigatório.', false); trocarAba('cadastro'); return; }
+    if (!sqlBase) { _feedback('O SQL Base é obrigatório.', false); trocarAba('sql'); return; }
+
+    const body = {
+      nome,
+      erp:        document.getElementById('f-erp').value,
+      limite_max: parseInt(document.getElementById('f-limite').value) || 1000,
+      sql_base:   sqlBase,
+      campo_data:      document.getElementById('f-campo-data').value.trim() || 'data',
+      colunas_metrica: document.getElementById('f-colunas-metrica').value.trim() || null,
+    };
+
+    const url    = _editId ? `/api/ia-command/admin/datasets/${_editId}` : '/api/ia-command/admin/datasets';
+    const method = _editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    _feedback('Salvo com sucesso!', true);
+    setTimeout(() => { fecharModal(); carregar(); }, 700);
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className   = 'save-feedback ' + (ok ? 'ok' : 'fail');
+    setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
+  }
+
+  // ── Executar SQL preview ────────────────────────────────────────────────────
+  async function executarSql() {
+    const sqlBase   = document.getElementById('f-sql-base').value.trim();
+    const conexaoId = document.getElementById('f-conexao-preview').value || null;
+    const btn       = document.getElementById('btn-executar');
+    const status    = document.getElementById('exec-status');
+    const errorBox  = document.getElementById('preview-error');
+    const previewWr = document.getElementById('preview-wrap');
+
+    if (!sqlBase) {
+      errorBox.textContent = 'Escreva o SQL antes de executar.';
+      errorBox.style.display = 'block';
+      previewWr.style.display = 'none';
+      return;
+    }
+
+    btn.disabled   = true;
+    btn.innerHTML  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Executando…';
+    status.textContent      = '';
+    errorBox.style.display  = 'none';
+    previewWr.style.display = 'none';
+
+    try {
+      const res  = await fetch('/api/ia-command/admin/datasets/preview-sql', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ sql_base: sqlBase, conexao_id: conexaoId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorBox.textContent   = data.error || 'Erro ao executar.';
+        errorBox.style.display = 'block';
+        return;
+      }
+      _renderPreview(data);
+      status.textContent = `${data.total} linha${data.total !== 1 ? 's' : ''}`;
+    } catch (err) {
+      errorBox.textContent   = `Falha na requisição: ${err.message}`;
+      errorBox.style.display = 'block';
+    } finally {
+      btn.disabled  = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Executar SQL';
+    }
+  }
+
+  function _renderPreview({ columns, rows, total, conexao }) {
+    _renderPreviewTarget({
+      columns, rows, total, conexao,
+      theadId: 'preview-thead',
+      tbodyId: 'preview-tbody',
+      infoId: 'preview-info',
+      connId: 'preview-conn',
+      wrapId: 'preview-wrap',
+    });
+  }
+
+  function _renderPreviewTarget({ columns, rows, total, conexao, theadId, tbodyId, infoId, connId, wrapId }) {
+    const thead = document.getElementById(theadId);
+    const tbody = document.getElementById(tbodyId);
+    const info  = document.getElementById(infoId);
+    const conn  = document.getElementById(connId);
+    const wrap  = document.getElementById(wrapId);
+
+    thead.innerHTML = '<tr>' + columns.map(c => `<th title="${c}">${c}</th>`).join('') + '</tr>';
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${columns.length}" class="null-val" style="text-align:center;padding:32px">Nenhum registro retornado.</td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map(row =>
+        '<tr>' + columns.map(c => {
+          const v = row[c];
+          if (v === null || v === undefined) return '<td class="null-val">NULL</td>';
+          return `<td title="${String(v).replace(/"/g, '&quot;')}">${String(v)}</td>`;
+        }).join('') + '</tr>'
+      ).join('');
+    }
+
+    info.textContent = total >= 100
+      ? 'Exibindo os primeiros 100 registros. Use filtros no SQL para refinar.'
+      : `${total} registro${total !== 1 ? 's' : ''} retornado${total !== 1 ? 's' : ''}.`;
+    conn.textContent   = conexao ? `Conexão: ${conexao}` : '';
+    wrap.style.display = 'block';
+  }
+
+  document.getElementById('f-sql-base').addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    const s = this.selectionStart, en = this.selectionEnd;
+    this.value = this.value.slice(0, s) + '  ' + this.value.slice(en);
+    this.selectionStart = this.selectionEnd = s + 2;
+  });
+  document.getElementById('f-sql-base').addEventListener('input', atualizarResumo);
+
+  // ── Filtros da lista ────────────────────────────────────────────────────────
   function toggleFiltros() {
     _filtrosVisiveis = !_filtrosVisiveis;
     document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
@@ -157,7 +676,7 @@
     if (!table) return;
     if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
     const b = document.getElementById('f-busca').value.trim().toLowerCase();
-    const e = document.getElementById('f-erp').value;
+    const e = document.getElementById('f-filtro-erp').value;
     if (b || e) {
       _quickFilterFn = row => {
         if (e && row.erp !== e) return false;
@@ -170,14 +689,14 @@
   }
 
   function limparFiltros() {
-    document.getElementById('f-busca').value = '';
-    document.getElementById('f-erp').value   = '';
+    document.getElementById('f-busca').value      = '';
+    document.getElementById('f-filtro-erp').value = '';
     filtrar();
   }
 
   function _atualizarStatus() {
     const b = document.getElementById('f-busca')?.value.trim();
-    const e = document.getElementById('f-erp')?.value;
+    const e = document.getElementById('f-filtro-erp')?.value;
     const ativos = [b, e].filter(Boolean).length;
     document.getElementById('filter-status').textContent =
       ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
@@ -193,8 +712,40 @@
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function _resumirSql(sql) {
+    const v = String(sql || '').trim();
+    if (!v) return '';
+    return v.replace(/\s+/g, ' ').slice(0, 90);
+  }
+
+  function _conexaoDoDataset(row) {
+    const porId = row.conexao_id || row.connection_id;
+    if (porId) return _conexoes.find(c => c.id === porId) || null;
+    return _conexoes.find(c => Number(c.ativo) === 1) || _conexoes[0] || null;
+  }
+
+  function _prepararDataset(row) {
+    const conn = _conexaoDoDataset(row);
+    return {
+      ...row,
+      conexao_nome: conn ? conn.nome : null,
+      conexao_tipo: conn ? conn.tipo : null,
+      sql_resumo: _resumirSql(row.sql_base),
+    };
+  }
+
+  function _datasetPorId(id) {
+    return _dados.find(d => d.id === id) || null;
+  }
+
+  // ── Tabela ──────────────────────────────────────────────────────────────────
   async function carregar() {
-    _dados = await fetch('/api/ia-command/admin/datasets').then(r => r.json()).catch(() => []);
+    const [datasets, conexoes] = await Promise.all([
+      fetch('/api/ia-command/admin/datasets').then(r => r.json()).catch(() => []),
+      fetch('/api/ia-command/connections/available').then(r => r.json()).catch(() => []),
+    ]);
+    _conexoes = Array.isArray(conexoes) ? conexoes : [];
+    _dados = (Array.isArray(datasets) ? datasets : []).map(_prepararDataset);
     if (table) { table.replaceData(_dados); return; }
     _criarTabela(_dados);
   }
@@ -220,12 +771,21 @@
           headerFilter: 'select',
           headerFilterParams: { values: { '':'Todos', protheus:'protheus', sankhya:'sankhya', sap:'sap', senior:'senior' } },
           formatter: c => c.getValue() ? `<span class="badge-erp">${esc(c.getValue())}</span>` : '' },
-        { title: 'Tabelas', field: 'tabelas', minWidth: 140, headerFilter: false,
+        { title: 'Conexão', field: 'conexao_nome', minWidth: 150, headerFilter: true,
           formatter: c => {
-            const v = c.getValue();
-            if (!v) return '<span style="color:var(--text-lo)">—</span>';
-            try { const a = JSON.parse(v); return Array.isArray(a) ? a.join(', ') : v; }
-            catch { return v; }
+            const row = c.getRow().getData();
+            if (!row.conexao_nome) return '<span style="color:var(--text-lo)">—</span>';
+            const tipo = row.conexao_tipo ? ` (${row.conexao_tipo})` : '';
+            return `${esc(row.conexao_nome)}<span style="color:var(--text-lo);font-size:11px">${esc(tipo)}</span>`;
+          },
+        },
+        { title: 'SQL Base', field: 'sql_resumo', minWidth: 220, headerFilter: true, groupable: false,
+          cellClick: (e, c) => { e.stopPropagation(); abrirSqlBase(c.getRow().getData().id); },
+          formatter: c => {
+            const row = c.getRow().getData();
+            if (!row.sql_base) return '<span class="sql-grid-empty">—</span>';
+            return `<button class="sql-grid-btn" title="${esc(row.sql_resumo)}" onclick="event.stopPropagation();abrirSqlBase('${row.id}')">Ver SQL</button>
+                    <span style="color:var(--text-lo);font-size:12px">${esc(row.sql_resumo)}</span>`;
           },
         },
         { title: 'Limite', field: 'limite_max', width: 90,
@@ -235,7 +795,7 @@
         { title: 'Ações', field: 'id', width: 80, headerFilter: false, groupable: false, hozAlign: 'right',
           formatter: cell => {
             const id = cell.getValue();
-            return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar">✏️</button>
+            return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="pointer-events:none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                     <button class="btn-icon" onclick="event.stopPropagation();excluir('${id}')" title="Excluir" style="color:#dc2626">🗑</button>`;
           },
         },
@@ -256,7 +816,371 @@
 
   function _label(n) { return n === 1 ? '1 dataset' : `${n} datasets`; }
 
+  function abrirSqlBase(id) {
+    const row = _datasetPorId(id);
+    if (!row) return;
+    _sqlViewDatasetId = id;
+    document.getElementById('sql-view-title').textContent = row.nome || 'Dataset';
+    document.getElementById('sql-view-subtitle').textContent =
+      row.conexao_nome ? `Conexão: ${row.conexao_nome}` : 'Sem conexão ativa vinculada';
+    document.getElementById('sql-view-pre').textContent = row.sql_base || 'SQL Base não configurado.';
+    document.getElementById('sql-view-status').textContent = '';
+    document.getElementById('sql-view-preview').style.display = 'none';
+    document.getElementById('sql-view-error').style.display = 'none';
+    document.getElementById('sql-view-overlay').classList.add('open');
+  }
+
+  function fecharSqlBase() {
+    _sqlViewDatasetId = null;
+    document.getElementById('sql-view-overlay').classList.remove('open');
+  }
+
+  async function executarSqlBaseModal() {
+    const row = _datasetPorId(_sqlViewDatasetId);
+    if (!row) return;
+
+    const btn       = document.getElementById('btn-sql-view-executar');
+    const status    = document.getElementById('sql-view-status');
+    const errorBox  = document.getElementById('sql-view-error');
+    const previewWr = document.getElementById('sql-view-preview');
+    const sqlBase   = String(row.sql_base || '').trim();
+    const conexaoId = row.conexao_id || row.connection_id || null;
+
+    if (!sqlBase) {
+      errorBox.textContent = 'Este dataset não tem SQL Base configurado.';
+      errorBox.style.display = 'block';
+      previewWr.style.display = 'none';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Executando…';
+    status.textContent = '';
+    errorBox.style.display = 'none';
+    previewWr.style.display = 'none';
+
+    try {
+      const res = await fetch('/api/ia-command/admin/datasets/preview-sql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql_base: sqlBase, conexao_id: conexaoId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        errorBox.textContent = data.error || 'Erro ao executar.';
+        errorBox.style.display = 'block';
+        return;
+      }
+      _renderPreviewTarget({
+        ...data,
+        theadId: 'sql-view-preview-thead',
+        tbodyId: 'sql-view-preview-tbody',
+        infoId: 'sql-view-preview-info',
+        connId: 'sql-view-preview-conn',
+        wrapId: 'sql-view-preview',
+      });
+      status.textContent = `${data.total} linha${data.total !== 1 ? 's' : ''}`;
+    } catch (err) {
+      errorBox.textContent = `Falha na requisição: ${err.message}`;
+      errorBox.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Executar SQL';
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('sql-view-overlay')?.classList.contains('open')) fecharSqlBase();
+    else if (document.getElementById('sec-form').style.display !== 'none') fecharModal();
+    else fecharAjuda();
+  });
+
   window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="sql-view-overlay" id="sql-view-overlay" onclick="if(event.target===this) fecharSqlBase()">
+  <div class="sql-view-modal">
+    <div class="sql-view-header">
+      <div class="sql-view-title">
+        <strong id="sql-view-title">SQL Base</strong>
+        <span id="sql-view-subtitle"></span>
+      </div>
+      <div class="sql-view-actions">
+        <span id="sql-view-status" style="font-size:12px;color:var(--text-lo)"></span>
+        <button class="btn btn-ghost" onclick="executarSqlBaseModal()" id="btn-sql-view-executar" style="display:flex;align-items:center;gap:7px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Executar SQL
+        </button>
+        <button class="btn btn-ghost" onclick="fecharSqlBase()">Fechar</button>
+      </div>
+    </div>
+    <div class="sql-view-body">
+      <div class="sql-view-code">
+        <pre class="sql-view-pre" id="sql-view-pre"></pre>
+      </div>
+      <div id="sql-view-preview" class="preview-wrap" style="display:none">
+        <div class="preview-bar">
+          <span class="preview-info" id="sql-view-preview-info"></span>
+          <span class="preview-conn" id="sql-view-preview-conn"></span>
+        </div>
+        <div class="preview-table-wrap">
+          <table class="preview-table">
+            <thead id="sql-view-preview-thead"></thead>
+            <tbody id="sql-view-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="sql-view-error" class="preview-error" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Datasets ERP</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-tabs">
+    <div class="help-tab active" onclick="helpTab(this,'ht-geral')">Geral</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-periodos')">Períodos</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-colunas')">Colunas</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-sinonimos')">Equivalências</div>
+  </div>
+  <div class="help-drawer-body" style="padding:0;overflow-y:auto;flex:1;">
+  <div id="ht-geral" class="help-panel active">
+    <div class="help-section">
+      <div class="help-section-title">O que é um Dataset</div>
+      <div class="help-item-desc">Um Dataset é um SELECT analítico completo que representa um conjunto de dados do ERP — faturamento, clientes, pedidos, etc. O motor do IA Command envolve esse SQL com filtros de período automaticamente ao executar.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Colunas da lista</div>
+      <div class="help-item"><div class="help-item-label">Nome</div><div class="help-item-desc">Identificador do Dataset. Aparece na tela de Intenções quando você vincula.</div></div>
+      <div class="help-item"><div class="help-item-label">ERP</div><div class="help-item-desc">Sistema ERP de origem dos dados (Protheus, SAP, Sankhya, etc.).</div></div>
+      <div class="help-item"><div class="help-item-label">Limite</div><div class="help-item-desc">Número máximo de linhas que o Dataset retorna por consulta.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">O que é o SQL Base</div>
+      <div class="help-item-desc">O SQL Base é um SELECT completo e analítico que você escreve uma vez. O motor do IA Command envolve automaticamente com filtros de período: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">SELECT TOP N * FROM (&lt;seu_sql&gt;) AS _base WHERE data &gt;= @p0 AND data &lt;= @p1</code>. Quando o usuário pede agrupamento ("por produto", "por cliente"…), o motor gera GROUP BY no SQL Server: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">SELECT produto, SUM(valor) AS valor FROM (...) WHERE data &gt;= @p0 GROUP BY produto ORDER BY valor DESC</code></div>
+      <div class="help-tip">Teste o SQL Base com o botão "Executar SQL" antes de salvar. Um Dataset com SQL inválido não funciona em produção.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Convenções obrigatórias</div>
+      <div class="help-item">
+        <div class="help-item-label">1. Aliases livres, resolução automática</div>
+        <div class="help-item-desc">Os aliases do SELECT podem estar em maiúsculo, minúsculo ou misto: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">AS DATA</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">AS data</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">AS Quantidade</code>. O motor resolve o alias real antes de montar o SQL externo.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">2. Não use TOP ou LIMIT</div>
+        <div class="help-item-desc">O motor adiciona <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">SELECT TOP N *</code> automaticamente com base no Limite configurado. Consultas com agrupamento dinâmico não têm TOP — o resultado é limitado pelo número de grupos.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">3. Filtros de deletados (Protheus)</div>
+        <div class="help-item-desc">Inclua <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">D_E_L_E_T_ = ' '</code> no WHERE de cada tabela do JOIN para excluir registros marcados como excluídos no Protheus.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">4. Colunas métricas para GROUP BY dinâmico</div>
+        <div class="help-item-desc">Preencha <em>Colunas métricas</em> com as colunas numéricas separadas por vírgula (ex: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">valor,quantidade,margem</code>). Quando o usuário perguntar "por produto" ou "por cliente", o motor gera GROUP BY com SUM() no SQL Server. Sem essa configuração o agrupamento ocorre em memória (fallback seguro, mas mais lento).</div>
+      </div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Regra local antes da IA</div>
+      <div class="help-item-desc">Antes de chamar IA, o IA Command tenta resolver a pergunta pelo proprio motor: equivalencias, intencoes, periodos, agrupamentos, limites e metricas do Dataset. O Dataset aumenta a pontuacao local quando expõe aliases claros e colunas metricas coerentes.</div>
+      <div class="help-tip">Exemplo: "Fat do ano por produto" combina "fat" nas equivalencias, "ano" no motor temporal, "produto" como agrupamento e a metrica faturamento no Dataset. Quando esses sinais fecham, a consulta executa localmente sem consumir tokens.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Fluxo recomendado</div>
+      <div class="help-item-desc">1. Crie o Dataset e escreva o SQL Base.<br>2. Defina o Campo Data (alias da coluna de data no SELECT).<br>3. Acesse Intenções e vincule esse Dataset à intenção correspondente.<br>4. Ative a intenção.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">⚠️ Pontos de atenção</div>
+      <div class="help-item">
+        <div class="help-item-label">O período é filtro externo, não interno ao SQL</div>
+        <div class="help-item-desc">O motor não altera seu SQL — ele o envolve com <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">WHERE campo_data BETWEEN @p0 AND @p1</code>. O alias da coluna de data no SELECT deve ser idêntico ao configurado no campo <em>Alias da coluna de data</em>.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">O sistema não agrega automaticamente no SQL</div>
+        <div class="help-item-desc">Se o SQL retornar múltiplas linhas (ex.: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">GROUP BY EMPRESA, DATA</code>), o IA Command somará as colunas numéricas ao formatar a resposta. Para resultados mais precisos, faça a agregação final dentro do próprio SQL Base.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Aliases numéricos são somados automaticamente</div>
+        <div class="help-item-desc">Colunas com valores numéricos são somadas e exibidas na resposta. Exceção: colunas cujo nome começa ou termina com <em>id</em>, <em>cod</em>, <em>num</em>, <em>seq</em>, <em>ano</em>, <em>mes</em> ou <em>dia</em> são tratadas como identificadores e ignoradas. Use aliases descritivos como <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">faturamento_total</code>.</div>
+      </div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Detecção automática de dimensões</div>
+      <div class="help-item-desc">O sistema detecta automaticamente as colunas de cliente, produto, vendedor, fornecedor e empresa pelo nome do alias — sem configuração adicional. Use os nomes abaixo no SELECT para ativar agrupamento e filtros automáticos (vendas e compras).</div>
+      <table class="fmt-table" style="margin-top:12px">
+        <thead><tr><th>Dimensão</th><th>Aliases aceitos automaticamente</th></tr></thead>
+        <tbody>
+          <tr><td>📅 Data</td><td><code>DATA</code>, <code>DT_*</code>, <code>DATA_*</code></td></tr>
+          <tr><td>🏢 Cliente</td><td><code>CLIENTE</code>, <code>NM_CLI*</code>, <code>DS_CLI*</code>, <code>NOME_CLI*</code></td></tr>
+          <tr><td>📦 Produto</td><td><code>PRODUTO</code>, <code>NEGOCIO</code>, <code>DS_PROD*</code>, <code>NM_PROD*</code>, <code>DESCR*</code></td></tr>
+          <tr><td>👤 Vendedor</td><td><code>VENDEDOR</code>, <code>NM_VEND*</code>, <code>DS_VEND*</code>, <code>COD_VEND*</code></td></tr>
+          <tr><td>🏪 Fornecedor</td><td><code>FORNECEDOR</code>, <code>NM_FORN*</code>, <code>DS_FORN*</code>, <code>NOME_FORN*</code>, <code>RAZAO*</code></td></tr>
+          <tr><td>🏭 Empresa</td><td><code>EMPRESA</code>, <code>FILIAL</code>, <code>UNIDADE</code></td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">Nome fora do padrão? Adicione um alias no SELECT: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">RAZAO_SOCIAL AS cliente</code> — e passa a funcionar automaticamente.</div>
+    </div>
+  </div><!-- fim ht-geral -->
+
+  <div id="ht-periodos" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Tipos de período suportados</div>
+      <div class="help-item-desc">O IA Command reconhece automaticamente os períodos abaixo nas perguntas do usuário. Não é necessário configurar nada — a IA interpreta a frase e aplica o filtro de data no SQL.</div>
+      <table class="fmt-table" style="margin-top:12px">
+        <thead><tr><th>Tipo</th><th>Exemplos de frases</th></tr></thead>
+        <tbody>
+          <tr><td>📅 Hoje</td><td>"hoje", "do dia", "agora"</td></tr>
+          <tr><td>📅 Ontem</td><td>"ontem", "fat de ontem"</td></tr>
+          <tr><td>📅 Esta semana</td><td>"essa semana", "esta semana"</td></tr>
+          <tr><td>📅 Semana passada</td><td>"semana passada", "semana anterior"</td></tr>
+          <tr><td>📅 Mês atual</td><td>"esse mês", "este mês", "do mês"</td></tr>
+          <tr><td>📅 Mês anterior</td><td>"mês passado", "mês anterior"</td></tr>
+          <tr><td>📅 Ano atual</td><td>"esse ano", "este ano", "YTD"</td></tr>
+          <tr><td>📅 Ano anterior</td><td>"ano passado", "ano anterior"</td></tr>
+          <tr><td>📅 Último trimestre</td><td>"último trimestre", "últimos 3 meses"</td></tr>
+          <tr><td>📅 Trimestres nomeados</td><td>"Q1 do ano passado", "segundo trimestre deste ano", "1º tri", "Q3"</td></tr>
+          <tr><td>📅 Semestres</td><td>"primeiro semestre", "H2 do ano passado", "2º semestre deste ano"</td></tr>
+          <tr><td>📅 Últimos N dias</td><td>"últimos 7 dias", "últimas 2 semanas", "últimos 90 dias"</td></tr>
+          <tr><td>📅 Mês específico</td><td>"fat de maio do ano passado", "março deste ano por produto"</td></tr>
+          <tr><td>📅 Acumulado</td><td>"fat acumulado até maio do ano passado", "jan a abril deste ano"</td></tr>
+          <tr><td>📅 Personalizado</td><td>"de 01/01 a 31/03", "entre março e junho de 2024"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Comparativos</div>
+      <div class="help-item-desc">Palavras como <em>vs</em>, <em>versus</em>, <em>comparar</em>, <em>comparativo</em> ativam o modo comparação. Sem essas palavras, a consulta retorna um único período.</div>
+      <table class="fmt-table" style="margin-top:8px">
+        <thead><tr><th>Tipo</th><th>Exemplos</th></tr></thead>
+        <tbody>
+          <tr><td>Anual</td><td>"fat deste ano vs ano passado", "comparar anos", "ano a ano"</td></tr>
+          <tr><td>Mensal</td><td>"esse mês vs mês passado", "mês a mês"</td></tr>
+          <tr><td>Mesmo mês</td><td>"fat de maio deste ano vs maio do ano passado"</td></tr>
+          <tr><td>Acumulado</td><td>"acumulado até maio deste ano vs ano passado"</td></tr>
+          <tr><td>Genérico</td><td>"fat do mês vs mesmo período do ano passado"</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Agrupamentos e filtros na pergunta</div>
+      <table class="fmt-table">
+        <thead><tr><th>Pedido</th><th>Exemplos de frases</th></tr></thead>
+        <tbody>
+          <tr><td>Por produto</td><td>"fat do mês por produto", "top 5 produtos"</td></tr>
+          <tr><td>Por cliente</td><td>"fat do mês por cliente", "ranking de clientes"</td></tr>
+          <tr><td>Por vendedor</td><td>"fat do mês por vendedor", "quem mais vendeu"</td></tr>
+          <tr><td>Por fornecedor</td><td>"compras do mês por fornecedor", "top fornecedores"</td></tr>
+          <tr><td>Filtro cliente</td><td>"fat do cliente Caieira", "vendas da empresa ACME"</td></tr>
+          <tr><td>Filtro produto</td><td>"fat do produto Aço 1020", "vendas do item X-50"</td></tr>
+          <tr><td>Filtro vendedor</td><td>"fat do vendedor 03", "rep Carlos"</td></tr>
+          <tr><td>Limite</td><td>"top 5 clientes", "dez maiores produtos", "cinco fornecedores"</td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">Para filtros automáticos funcionarem, o SELECT deve expor as colunas com os aliases corretos (ver aba <strong>Colunas</strong>).</div>
+    </div>
+  </div><!-- fim ht-periodos -->
+
+  <div id="ht-colunas" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Detecção automática de dimensões</div>
+      <div class="help-item-desc">O sistema detecta automaticamente as colunas de cliente, produto, vendedor, fornecedor e empresa pelo nome do alias — sem configuração adicional. Use os nomes abaixo no SELECT.</div>
+      <table class="fmt-table" style="margin-top:12px">
+        <thead><tr><th>Dimensão</th><th>Aliases aceitos automaticamente</th></tr></thead>
+        <tbody>
+          <tr><td>📅 Data</td><td><code>DATA</code>, <code>DT_*</code>, <code>DATA_*</code></td></tr>
+          <tr><td>🏢 Cliente</td><td><code>CLIENTE</code>, <code>NM_CLI*</code>, <code>DS_CLI*</code>, <code>NOME_CLI*</code></td></tr>
+          <tr><td>📦 Produto</td><td><code>PRODUTO</code>, <code>NEGOCIO</code>, <code>DS_PROD*</code>, <code>NM_PROD*</code>, <code>DESCR*</code></td></tr>
+          <tr><td>👤 Vendedor</td><td><code>VENDEDOR</code>, <code>NM_VEND*</code>, <code>DS_VEND*</code>, <code>COD_VEND*</code></td></tr>
+          <tr><td>🏪 Fornecedor</td><td><code>FORNECEDOR</code>, <code>NM_FORN*</code>, <code>DS_FORN*</code>, <code>NOME_FORN*</code>, <code>RAZAO*</code></td></tr>
+          <tr><td>🏭 Empresa</td><td><code>EMPRESA</code>, <code>FILIAL</code>, <code>UNIDADE</code></td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">Nome fora do padrão? Adicione um alias: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">RAZAO_SOCIAL AS cliente</code></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Colunas numéricas</div>
+      <div class="help-item-desc">Todas as colunas numéricas do resultado são somadas e exibidas. Exceção: colunas cujo nome começa ou termina com <em>id</em>, <em>cod</em>, <em>num</em>, <em>seq</em>, <em>ano</em>, <em>mes</em> ou <em>dia</em> são tratadas como identificadores e ignoradas.</div>
+      <div class="help-tip">Use aliases descritivos: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">faturamento_total</code>, <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px;font-size:12px">quantidade_vendida</code>.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">🔤 Equivalências de coluna</div>
+      <div class="help-item-desc">O sistema já vem com equivalências padrão para métricas comuns (<em>tonelada, ton, volume, qtde, receita bruta, lucro, custo…</em>), visíveis em <strong>Cadastros → Equivalências</strong> com o badge <span style="background:rgba(124,58,237,.1);color:#7c3aed;font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px">🔒 Sistema</span>. O campo <strong>Equivalência</strong> deve ser idêntico ao alias no SELECT deste Dataset — se o seu alias for diferente do padrão, edite o registro diretamente.</div>
+      <table class="fmt-table" style="margin-top:10px">
+        <thead><tr><th>Usuário digita</th><th>Equivalência aponta para</th><th>Campo no SELECT</th></tr></thead>
+        <tbody>
+          <tr><td>"valor de saída"</td><td>faturamento</td><td>SUM(VLR) AS faturamento</td></tr>
+          <tr><td>"qtde", "volume", "ton"</td><td>quantidade</td><td>SUM(QTD) AS quantidade</td></tr>
+          <tr><td>"lucro", "margem"</td><td>margem</td><td>SUM(MG) AS margem</td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">Equivalências de <strong>Filtro</strong> normalizam valores de cliente, produto e vendedor — ex: apelido <em>"CAIEIRINHA"</em> → nome real <em>"CAIEIRA LTDA"</em>. Esses são específicos da empresa e não vêm pré-cadastrados.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Resposta automática</div>
+      <div class="help-item-desc">O formatador adiciona automaticamente ao resultado:</div>
+      <div class="help-item"><div class="help-item-label">% de participação no agrupamento</div><div class="help-item-desc">Quando o usuário pede "por produto" ou "por cliente", cada item mostra o % do total. Ex: <em>Produto Aço — R$ 500k (32,1%)</em></div></div>
+      <div class="help-item"><div class="help-item-label">Média diária</div><div class="help-item-desc">Para períodos de 8 dias ou mais, exibe a média por dia junto ao total. Ex: <em>R$ 1.200.000 | Média: R$ 40.000/dia</em></div></div>
+    </div>
+  </div><!-- fim ht-colunas -->
+
+  <div id="ht-sinonimos" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Regra de ouro</div>
+      <div class="help-item-desc">Use esta tabela para decidir qual camada cadastrar em <strong>Cadastros → Equivalências</strong>:</div>
+      <table class="fmt-table" style="margin-top:10px">
+        <thead><tr><th>O usuário errou em…</th><th>Camada correta</th></tr></thead>
+        <tbody>
+          <tr><td>…identificar a CONSULTA ("movimento" e a IA não entendeu)</td><td style="color:#7c3aed;font-weight:600">Intenção</td></tr>
+          <tr><td>…nomear uma MÉTRICA ("volume" e veio dado errado ou vazio)</td><td style="color:#0284c7;font-weight:600">Coluna</td></tr>
+          <tr><td>…escrever um NOME ("CAIEIRINHA" e não encontrou nada)</td><td style="color:#ea580c;font-weight:600">Filtro</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title" style="color:#0284c7">📊 Camada Coluna</div>
+      <div class="help-item-desc" style="margin-bottom:10px">Use quando o usuário pede uma métrica com nome diferente do alias no SELECT deste Dataset. Os termos mais comuns (<em>volume, qtde, ton, receita bruta, lucro, custo…</em>) já vêm pré-cadastrados como <span style="background:rgba(124,58,237,.1);color:#7c3aed;font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px">🔒 Sistema</span> — verifique se o campo Equivalência bate com o alias do seu SELECT.</div>
+      <table class="fmt-table">
+        <thead><tr><th>Termo</th><th>Equivalência padrão</th><th>Alias no SELECT</th></tr></thead>
+        <tbody>
+          <tr><td>volume, qtde, ton, tonelada…</td><td>quantidade</td><td>SUM(QTD) AS <strong>quantidade</strong></td></tr>
+          <tr><td>valor de saída, receita bruta…</td><td>faturamento</td><td>SUM(VLR) AS <strong>faturamento</strong></td></tr>
+          <tr><td>lucro, margem, markup…</td><td>margem</td><td>SUM(MG) AS <strong>margem</strong></td></tr>
+          <tr><td>custo, cme, cmv…</td><td>custo</td><td>SUM(CME) AS <strong>custo</strong></td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">Se o alias no seu SELECT for diferente (ex: <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px">faturamento_total</code> em vez de <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px">faturamento</code>), edite o registro 🔒 Sistema correspondente e ajuste o campo Equivalência.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title" style="color:#ea580c">🔍 Camada Filtro</div>
+      <div class="help-item-desc" style="margin-bottom:10px">Use quando o usuário escreve apelidos ou nomes abreviados de clientes, produtos ou vendedores retornados por este Dataset.</div>
+      <table class="fmt-table">
+        <thead><tr><th>Termo</th><th>Equivalência (nome no ERP)</th><th>Contexto</th></tr></thead>
+        <tbody>
+          <tr><td>CAIEIRINHA</td><td>CAIEIRA LTDA</td><td>cliente</td></tr>
+          <tr><td>MT</td><td>MATO GROSSO IND COM LTDA</td><td>cliente</td></tr>
+          <tr><td>PARAF</td><td>PARAFUSO ESPECIAL XYZ</td><td>produto</td></tr>
+          <tr><td>JOAO</td><td>JOÃO CARLOS SILVA</td><td>vendedor</td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip" style="margin-top:10px">A equivalência deve ser o nome <strong>exato</strong> como está gravado no ERP — maiúsculas, pontuação e acentos incluídos. Alimente conforme os usuários reclamarem que "não achou".</div>
+    </div>
+  </div><!-- fim ht-sinonimos -->
+
+  </div><!-- fim help-drawer-body -->
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  function helpTab(el, id) {
+    el.closest('.help-drawer').querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+    el.closest('.help-drawer').querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(id).classList.add('active');
+  }
 </script>
 </body>
 </html>

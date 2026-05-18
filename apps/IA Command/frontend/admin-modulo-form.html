@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Módulo — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    @media(max-width:720px) { .form-row { grid-template-columns:1fr; } }
+
+    .save-feedback      { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok   { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+
+    /* Dados do Registro (aside) */
+    .reg-field       { margin-bottom:16px; }
+    .reg-field:last-child { margin-bottom:0; }
+    .reg-label       { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+
+    /* Color picker inline */
+    .cor-wrap { display:flex;align-items:center;gap:10px; }
+    .cor-preview { width:32px;height:32px;border-radius:8px;border:1px solid var(--border);flex-shrink:0;cursor:pointer;transition:transform .15s; }
+    .cor-preview:hover { transform:scale(1.1); }
+    input[type="color"] { width:0;height:0;padding:0;border:none;opacity:0;position:absolute; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="topbar-label">
+        <span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Módulo
+      </span>
+    </div>
+
+    <div class="page-content">
+      <div class="editor-shell">
+
+        <!-- Action bar (sticky) -->
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="form-title">Novo Módulo</strong>
+            <span id="form-subtitle">Preencha os campos e salve.</span>
+          </div>
+          <div class="editor-actions">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+          </div>
+        </div>
+
+        <!-- Layout: main + aside -->
+        <div class="editor-grid editor-grid-wide" style="margin-top:20px">
+          <main class="editor-main">
+
+            <!-- Identificação -->
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Identificação</div>
+                <div class="form-section-subtitle">Nome e descrição do módulo.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-group">
+                  <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                  <input type="text" id="f-nome" class="form-control" placeholder="ex: Faturamento" oninput="atualizarTitulo()">
+                  <div class="form-hint">Nome que aparece no filtro e no formulário de intenção. Prefira nomes simples e diretos.</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">Descrição</label>
+                  <textarea id="f-descricao" class="form-control" rows="3"
+                    placeholder="Descreva o propósito deste módulo..."></textarea>
+                  <div class="form-hint">Informação de apoio para a equipe de configuração.</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Aparência -->
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Aparência</div>
+                <div class="form-section-subtitle">Cor usada no badge da lista de intenções.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-group" style="margin-bottom:0">
+                  <label class="form-label">Cor do badge</label>
+                  <div class="cor-wrap">
+                    <div class="cor-preview" id="cor-preview" onclick="document.getElementById('f-cor-picker').click()"></div>
+                    <input type="color" id="f-cor-picker" value="#7c3aed" oninput="sincronizarCor(this.value)">
+                    <input type="text" id="f-cor" class="form-control" value="#7c3aed"
+                      placeholder="#7c3aed" style="max-width:120px;font-family:monospace"
+                      oninput="sincronizarCorTexto(this.value)">
+                    <span style="font-size:12px;color:var(--text-lo)">Clique na bolinha ou digite o código hex</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+          </main>
+
+          <!-- Aside: Dados do Registro -->
+          <aside class="editor-side">
+            <section class="form-section" style="position:sticky;top:56px">
+              <div class="form-section-header">
+                <div class="form-section-title">Dados do Registro</div>
+              </div>
+              <div class="form-section-body">
+
+                <div class="reg-field">
+                  <div class="reg-label">ID do Registro</div>
+                  <input type="text" id="f-id" class="form-control" disabled
+                    placeholder="(gerado automaticamente)"
+                    style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                </div>
+
+                <div class="reg-field">
+                  <div class="reg-label">ID da Empresa</div>
+                  <input type="text" id="f-empresa-id" class="form-control" disabled
+                    style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                </div>
+
+                <div class="reg-field">
+                  <div class="reg-label">Empresa</div>
+                  <input type="text" id="f-empresa-nome" class="form-control" disabled
+                    style="font-size:13px;color:var(--text-lo);background:var(--bg-hover)">
+                </div>
+
+                <div class="reg-field">
+                  <div class="reg-label">Status</div>
+                  <select id="f-ativo" class="form-control">
+                    <option value="1">Ativo</option>
+                    <option value="0">Inativo</option>
+                  </select>
+                </div>
+
+                <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">
+                  Após salvar, o ID é gerado automaticamente e não pode ser alterado.
+                </p>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+
+  function atualizarTitulo() {
+    const nome = document.getElementById('f-nome').value.trim();
+    document.getElementById('form-title').textContent =
+      editId ? (nome || 'Módulo') : `Novo Módulo${nome ? ' — ' + nome : ''}`;
+  }
+
+  function sincronizarCor(val) {
+    document.getElementById('f-cor').value           = val;
+    document.getElementById('cor-preview').style.background = val;
+  }
+
+  function sincronizarCorTexto(val) {
+    if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+      document.getElementById('f-cor-picker').value          = val;
+      document.getElementById('cor-preview').style.background = val;
+    }
+  }
+
+  async function carregar() {
+    // Preview inicial
+    const corInicial = '#7c3aed';
+    document.getElementById('cor-preview').style.background = corInicial;
+
+    if (!editId) {
+      if (window._iahubEmpresa) {
+        document.getElementById('f-empresa-id').value   = window._iahubEmpresa.id;
+        document.getElementById('f-empresa-nome').value = window._iahubEmpresa.nome;
+      }
+      return;
+    }
+
+    const row = await fetch(`/api/ia-command/admin/modulos/${editId}`).then(r => r.json()).catch(() => null);
+    if (!row) { document.getElementById('form-subtitle').textContent = 'Registro não encontrado.'; return; }
+
+    document.getElementById('f-id').value          = row.id;
+    document.getElementById('f-empresa-id').value  = row.empresa_id;
+    document.getElementById('f-empresa-nome').value = '—';
+    document.getElementById('f-nome').value        = row.nome      || '';
+    document.getElementById('f-descricao').value   = row.descricao || '';
+    document.getElementById('f-ativo').value       = String(row.ativo ?? 1);
+
+    const cor = row.cor || '#7c3aed';
+    document.getElementById('f-cor').value          = cor;
+    document.getElementById('f-cor-picker').value   = cor;
+    document.getElementById('cor-preview').style.background = cor;
+
+    document.getElementById('form-title').textContent = row.nome;
+    document.getElementById('form-subtitle').textContent =
+      `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+    document.getElementById('topbar-label').innerHTML =
+      `<span style="color:var(--text-lo);font-weight:400">IA Command ›</span> ${row.nome}`;
+  }
+
+  async function salvar() {
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
+
+    const cor = document.getElementById('f-cor').value.trim() || '#7c3aed';
+
+    const body = {
+      nome,
+      descricao: document.getElementById('f-descricao').value.trim() || null,
+      cor,
+      ativo: parseInt(document.getElementById('f-ativo').value),
+    };
+
+    const url    = editId ? `/api/ia-command/admin/modulos/${editId}` : '/api/ia-command/admin/modulos';
+    const method = editId ? 'PUT' : 'POST';
+    const res    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      _feedback(e.error || 'Erro ao salvar.', false);
+      return;
+    }
+
+    const saved = await res.json();
+    _feedback('Salvo com sucesso!', true);
+
+    if (!editId) {
+      setTimeout(() => {
+        const url2 = `/app/ia-command/admin-modulo-form.html?id=${saved.id}`;
+        if (window.parent !== window) {
+          window.parent.postMessage({ type: 'mdi:open-tab', url: url2, label: saved.nome, icon: '📂' }, location.origin);
+          window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+        } else {
+          location.href = url2;
+        }
+      }, 800);
+    } else {
+      document.getElementById('form-title').textContent = saved.nome;
+      atualizarTitulo();
+    }
+  }
+
+  function cancelar() {
+    if (window.parent !== window)
+      window.parent.postMessage({ type: 'mdi:close-self' }, location.origin);
+    else history.back();
+  }
+
+  function _feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg;
+    el.className   = 'save-feedback ' + (ok ? 'ok' : 'fail');
+    setTimeout(() => { el.textContent = ''; el.className = 'save-feedback'; }, 3000);
+  }
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Formulário de Módulo</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">Identificação</div>
+      <div class="help-item"><div class="help-item-label">Nome <span style="color:var(--accent);font-size:11px">obrigatório</span></div><div class="help-item-desc">Nome do módulo como aparece nos filtros da lista de intenções e no formulário de intenção. Use nomes funcionais simples: <em>Faturamento</em>, <em>Financeiro</em>, <em>Estoque</em>, <em>RH</em>.</div></div>
+      <div class="help-item"><div class="help-item-label">Descrição</div><div class="help-item-desc">Texto informativo para a equipe de configuração. Não aparece para o usuário final.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Aparência</div>
+      <div class="help-item"><div class="help-item-label">Cor do badge</div><div class="help-item-desc">Cor exibida no badge do módulo na lista de intenções. Clique na bolinha colorida ou digite um código hex (<em>#7c3aed</em>). Cada módulo pode ter uma cor diferente para facilitar a distinção visual.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Dados do Registro</div>
+      <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Módulos inativos não aparecem no seletor de módulo dentro do formulário de intenção. Use para desativar módulos que não estão mais em uso sem excluí-los.</div></div>
+    </div>
+    <div class="help-tip">Cadastre os módulos antes de configurar as intenções. Assim o campo Módulo no formulário de intenção já estará populado com as opções corretas.</div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
+</script>
+</body>
+</html>

@@ -67,14 +67,15 @@
 
     chip.addEventListener('click', (e) => {
       if (chip.dataset.dragSuppress === '1') return;
+      const currentKey = chip.dataset.url;
       if (e.target.closest('.mdi-tab-close')) {
         e.stopPropagation();
-        closeTab(tabKey);
+        closeTab(currentKey);
       } else {
-        _activateTab(tabKey);
+        _activateTab(currentKey);
       }
     });
-    chip.addEventListener('dragstart', (e) => _handleTabDragStart(e, tabKey));
+    chip.addEventListener('dragstart', (e) => _handleTabDragStart(e, chip.dataset.url));
     chip.addEventListener('dragend', () => _handleTabDragEnd(chip));
     bar.appendChild(chip);
 
@@ -82,7 +83,7 @@
     frame.className   = 'mdi-iframe';
     frame.dataset.url = tabKey;
     frame.src         = empresaId ? `${url}?_empresa=${empresaId}` : url;
-    frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(tabKey)));
+    frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(frame.dataset.url)));
     content.appendChild(frame);
 
     _tabs.set(tabKey, { label, icon, empresaId, empresaNome, url, chip, frame });
@@ -200,10 +201,78 @@
     const lista = await _getEmpresas();
     const emp   = lista.find(e => Number(e.id) === Number(empresaId));
     if (!emp) return;
-    t.empresaId   = emp.id;
-    t.empresaNome = emp.razao_social || emp.nome || '';
-    t.frame.src   = `${t.url}?_empresa=${emp.id}`;
+    _atualizarEmpresaTab(url, emp);
+  }
+
+  function _tabKey(tab, empresaId) {
+    return empresaId ? `${tab.url}?_empresa=${empresaId}` : tab.url;
+  }
+
+  function _aplicarEmpresaNaTab(oldKey, tab, emp) {
+    const newKey = _tabKey(tab, emp.id);
+    tab.empresaId   = emp.id;
+    tab.empresaNome = emp.razao_social || emp.nome || '';
+    tab.chip.dataset.url  = newKey;
+    tab.frame.dataset.url = newKey;
+    tab.frame.src         = `${tab.url}?_empresa=${emp.id}`;
+    if (_active === oldKey) _active = newKey;
+    return newKey;
+  }
+
+  function _atualizarEmpresaTab(oldKey, emp) {
+    const tab = _tabs.get(oldKey);
+    if (!tab) return;
+    const newKey = _aplicarEmpresaNaTab(oldKey, tab, emp);
+    if (newKey !== oldKey) {
+      _tabs.delete(oldKey);
+      const duplicate = _tabs.get(newKey);
+      if (duplicate) {
+        duplicate.chip.remove();
+        duplicate.frame.remove();
+      }
+      _tabs.set(newKey, tab);
+    }
+    _activateTab(newKey);
     _saveState();
+  }
+
+  async function trocarEmpresaTodasAbas(empresaId, empresaNome = null) {
+    const lista = empresaNome ? [] : await _getEmpresas();
+    const emp = empresaNome
+      ? { id: Number(empresaId), razao_social: empresaNome }
+      : lista.find(e => Number(e.id) === Number(empresaId));
+    if (!emp) return;
+
+    const entries = [..._tabs.entries()];
+    if (!entries.length) return;
+
+    const chosen = new Map();
+    for (const [oldKey, tab] of entries) {
+      const newKey = _tabKey(tab, emp.id);
+      const existing = chosen.get(newKey);
+      if (!existing || oldKey === _active) chosen.set(newKey, { oldKey, tab });
+    }
+
+    const keepTabs = new Set([...chosen.values()].map(({ tab }) => tab));
+    for (const [, tab] of entries) {
+      if (keepTabs.has(tab)) continue;
+      tab.chip.remove();
+      tab.frame.remove();
+    }
+
+    const nextTabs = new Map();
+    for (const [oldKey, tab] of entries) {
+      if (!keepTabs.has(tab)) continue;
+      const newKey = _aplicarEmpresaNaTab(oldKey, tab, emp);
+      nextTabs.set(newKey, tab);
+    }
+
+    _tabs.clear();
+    nextTabs.forEach((tab, key) => _tabs.set(key, tab));
+    if (_active && !_tabs.has(_active)) _active = [..._tabs.keys()][0] || null;
+    if (_active) _activateTab(_active);
+    _saveState();
+    setTimeout(_updateScrollBtns, 60);
   }
 
   let _dropdownAtivo = null;
@@ -400,6 +469,7 @@
   window.openTab       = openTab;
   window.closeTab      = closeTab;
   window.scrollMdiTabs = scrollMdiTabs;
+  window.trocarEmpresaTodasAbas = trocarEmpresaTodasAbas;
 
   // ── Escutar postMessages dos iframes ─────────────────────────────────────────
   window.addEventListener('message', (e) => {

@@ -10,6 +10,7 @@ dados e middlewares existentes.
 Estrutura atual:
 - `frontend/`: telas e assets do IA Recruit
 - `backend/`: rotas, servicos e modulos especificos do IA Recruit
+- `data/`: dados operacionais locais do IA Recruit, ignorados pelo git
 
 Os caminhos antigos em `modules/` permanecem apenas como stubs temporarios de
 compatibilidade para imports existentes e como local de algumas telas internas

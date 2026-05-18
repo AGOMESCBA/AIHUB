@@ -1,11 +1,9 @@
 const fs   = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', '..', 'data');
+const { empresaDataFile } = require('../../data-paths');
 
 function _file(empresaId) {
   if (!empresaId) throw new Error('empresa_id é obrigatório');
-  return path.join(DATA_DIR, `empresa_${empresaId}.json`);
+  return empresaDataFile(empresaId);
 }
 
 function load(empresaId) {

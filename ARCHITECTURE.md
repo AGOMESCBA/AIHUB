@@ -47,6 +47,10 @@ Sistema de recrutamento.
 O `system_code` permanece `recrutamento` para compatibilidade com permissoes e
 dados existentes.
 
+Os dados operacionais do recrutamento ficam em `apps/IA Recruit/data`, incluindo
+arquivos `empresa_<id>.json` e `ia-usage-<id>.json`. Dados globais da plataforma,
+como empresas, usuarios, permissoes e sistemas, ficam em `apps/IAHUB/data/`.
+
 ## Packages
 
 ### `packages/ui`

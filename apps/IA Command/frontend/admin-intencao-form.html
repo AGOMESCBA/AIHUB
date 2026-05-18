@@ -18,6 +18,7 @@
 
     .form-row   { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
     .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+    @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
 
     /* Tabs */
     .iac-tabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:0; }
@@ -27,19 +28,43 @@
     .iac-tab-panel { display:none; }
     .iac-tab-panel.active { display:flex;flex-direction:column;gap:0; }
 
-    /* Summary sidebar */
-    .summary-grid  { display:grid;gap:10px; }
-    .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
-    .summary-label { color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px; }
-    .summary-value { color:var(--text-hi);font-size:13px;font-weight:600;line-height:1.35;word-break:break-word; }
-    .summary-note  { color:var(--text-md);font-size:12px;line-height:1.5;margin-top:10px; }
-
     /* Save feedback */
     .save-feedback      { font-size:13px;color:var(--text-lo); }
     .save-feedback.ok   { color:#15803d; }
     .save-feedback.fail { color:#b91c1c; }
 
-    @media (max-width:720px) { .form-row,.form-row-3 { grid-template-columns:1fr; } }
+    /* Dados do Registro (aside) */
+    .reg-field       { margin-bottom:16px; }
+    .reg-field:last-child { margin-bottom:0; }
+    .reg-label       { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+    .help-tabs{display:flex;gap:2px;padding:0 22px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg-card);}
+    .help-tab{padding:10px 16px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--text-lo);transition:color var(--transition);border-bottom:2px solid transparent;margin-bottom:-1px;}
+    .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .help-tab:hover:not(.active){color:var(--text-hi);}
+    .help-panel{display:none;} .help-panel.active{display:block;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th{text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);padding:6px 8px;border-bottom:1px solid var(--border);}
+    .fmt-table td{padding:8px;border-bottom:1px solid var(--border);color:var(--text-md);line-height:1.5;vertical-align:top;}
+    .fmt-table td:first-child{font-family:monospace;font-size:11px;color:var(--accent);white-space:nowrap;}
+    .fmt-table tr:last-child td{border-bottom:none;}
+    .fmt-table tr.default-row td{color:var(--text-lo);font-style:italic;}
   </style>
 </head>
 <body>
@@ -70,6 +95,7 @@
     <div class="page-content">
       <div class="editor-shell">
 
+        <!-- Action bar -->
         <div class="editor-actionbar">
           <div class="editor-actionbar-title">
             <strong id="form-title">Nova Intenção</strong>
@@ -77,102 +103,78 @@
           </div>
           <div class="editor-actions">
             <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
             <button class="btn btn-ghost" onclick="cancelar()">Cancelar</button>
             <button class="btn btn-primary" onclick="salvar()">Salvar</button>
           </div>
         </div>
 
+        <!-- Tabs -->
         <div class="iac-tabs">
           <button class="iac-tab active" onclick="mudarTab('config',this)">Configuração</button>
           <button class="iac-tab"        onclick="mudarTab('frases',this)">Frases de Exemplo</button>
         </div>
 
+        <!-- ══ ABA: Configuração ══════════════════════════════════════════════ -->
         <div class="editor-grid editor-grid-wide" style="margin-top:16px">
           <main class="editor-main">
 
-            <!-- Painel: Configuração -->
             <div class="iac-tab-panel active" id="panel-config">
 
+              <!-- Identificação: Nome + Descrição na mesma linha -->
               <section class="form-section">
                 <div class="form-section-header">
                   <div class="form-section-title">Identificação</div>
-                  <div class="form-section-subtitle">Dados de controle preenchidos automaticamente.</div>
+                  <div class="form-section-subtitle">Nome interno e descrição da intenção.</div>
                 </div>
                 <div class="form-section-body">
-                  <div class="form-row">
+                  <div style="display:grid;grid-template-columns:1fr 3fr;gap:16px;margin-bottom:0">
                     <div class="form-group" style="margin-bottom:0">
-                      <label class="form-label">ID</label>
-                      <input type="text" id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)" style="font-family:monospace;font-size:13px">
+                      <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-nome" class="form-control"
+                        placeholder="ex: consultar_faturamento" oninput="atualizarTitulo()">
+                      <div class="form-hint">Use snake_case.</div>
                     </div>
                     <div class="form-group" style="margin-bottom:0">
-                      <label class="form-label">Empresa</label>
-                      <input type="text" id="f-empresa" class="form-control" disabled>
+                      <label class="form-label">Descrição</label>
+                      <input type="text" id="f-descricao" class="form-control"
+                        placeholder="ex: Consulta resumo de faturamento do período">
+                      <div class="form-hint">Descreva o que esta intenção representa. Auxilia na classificação pela IA.</div>
                     </div>
                   </div>
                 </div>
               </section>
 
+              <!-- Configuração: Módulo, Ação, Dataset -->
               <section class="form-section">
                 <div class="form-section-header">
-                  <div class="form-section-title">Dados Básicos</div>
-                  <div class="form-section-subtitle">Nome da intenção, módulo e ação correspondente no ERP.</div>
+                  <div class="form-section-title">Configuração</div>
+                  <div class="form-section-subtitle">Módulo de agrupamento, ação e dataset vinculado.</div>
                 </div>
                 <div class="form-section-body">
-                  <div class="form-row" style="margin-bottom:16px">
-                    <div class="form-group">
-                      <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
-                      <input type="text" id="f-nome" class="form-control" placeholder="ex: consultar_faturamento" oninput="atualizarResumo()">
-                      <div class="form-hint">Use snake_case. Deve corresponder à intenção retornada pela IA.</div>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Descrição</label>
-                      <input type="text" id="f-descricao" class="form-control" placeholder="ex: Consulta resumo de faturamento do período">
-                    </div>
-                  </div>
-                  <div class="form-row-3" style="margin-bottom:16px">
-                    <div class="form-group">
-                      <label class="form-label">Módulo</label>
-                      <select id="f-modulo" class="form-control" onchange="atualizarResumo()">
-                        <option value="">— selecione —</option>
-                        <option>faturamento</option>
-                        <option>financeiro</option>
-                        <option>pedidos</option>
-                        <option>clientes</option>
-                        <option>produtos</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Ação</label>
-                      <select id="f-acao" class="form-control">
-                        <option value="">— selecione —</option>
-                        <option>resumo</option>
-                        <option>detalhado</option>
-                        <option>top_n</option>
-                        <option>comparacao</option>
-                        <option>ticket_medio</option>
-                      </select>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label">Status</label>
-                      <select id="f-ativo" class="form-control" onchange="atualizarResumo()">
-                        <option value="1">Ativo</option>
-                        <option value="0">Inativo</option>
-                      </select>
-                    </div>
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label">Módulo</label>
+                    <select id="f-modulo" class="form-control" style="max-width:320px">
+                      <option value="">— selecione —</option>
+                    </select>
+                    <div class="form-hint">Categoria funcional desta intenção. Cadastre módulos em <em>Administração → Módulos</em>.</div>
                   </div>
                   <div class="form-group" style="margin-bottom:0">
                     <label class="form-label">Dataset vinculado</label>
                     <select id="f-dataset" class="form-control">
                       <option value="">— nenhum —</option>
                     </select>
-                    <div class="form-hint">Dataset com o mapeamento de tabelas/campos do ERP para esta intenção.</div>
+                    <div class="form-hint">Dataset cujo SQL será executado quando esta intenção for reconhecida. Obrigatório para ativar a intenção.</div>
                   </div>
                 </div>
               </section>
 
             </div>
 
-            <!-- Painel: Frases -->
+            <!-- ── ABA: Frases de Exemplo ── -->
             <div class="iac-tab-panel" id="panel-frases">
               <section class="form-section">
                 <div class="form-section-header">
@@ -181,9 +183,9 @@
                 </div>
                 <div class="form-section-body">
                   <div class="form-group" style="margin-bottom:0">
-                    <textarea id="f-frases" class="form-control" rows="10"
+                    <textarea id="f-frases" class="form-control" rows="12"
                       placeholder="Qual o faturamento deste mês?&#10;Quanto vendemos no mês passado?&#10;Faturamento do trimestre atual"></textarea>
-                    <div class="form-hint">Estes exemplos ajudam a melhorar a classificação da IA no futuro.</div>
+                    <div class="form-hint">Estes exemplos ajudam a melhorar a classificação da IA. Inclua variações informais e com pontuação diferente.</div>
                   </div>
                 </div>
               </section>
@@ -191,32 +193,44 @@
 
           </main>
 
+          <!-- Aside: Dados do Registro -->
           <aside class="editor-side">
-            <section class="form-section">
+            <section class="form-section" style="position:sticky;top:56px">
               <div class="form-section-header">
-                <div class="form-section-title">Resumo do registro</div>
-                <div class="form-section-subtitle">Referência rápida durante a edição.</div>
+                <div class="form-section-title">Dados do Registro</div>
               </div>
               <div class="form-section-body">
-                <div class="summary-grid">
-                  <div class="summary-item">
-                    <div class="summary-label">ID</div>
-                    <div class="summary-value" id="meta-id" style="font-family:monospace;font-size:12px">Novo</div>
-                  </div>
-                  <div class="summary-item">
-                    <div class="summary-label">Nome</div>
-                    <div class="summary-value" id="meta-nome">—</div>
-                  </div>
-                  <div class="summary-item">
-                    <div class="summary-label">Módulo</div>
-                    <div class="summary-value" id="meta-modulo">—</div>
-                  </div>
-                  <div class="summary-item">
-                    <div class="summary-label">Status</div>
-                    <div class="summary-value" id="meta-status">Ativo</div>
-                  </div>
+
+                <div class="reg-field">
+                  <div class="reg-label">ID do Registro</div>
+                  <input type="text" id="f-id" class="form-control" disabled
+                    placeholder="(gerado automaticamente)"
+                    style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
                 </div>
-                <p class="summary-note">Após salvar, o ID é gerado automaticamente e não pode ser alterado.</p>
+
+                <div class="reg-field">
+                  <div class="reg-label">ID da Empresa</div>
+                  <input type="text" id="f-empresa-id" class="form-control" disabled
+                    style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                </div>
+
+                <div class="reg-field">
+                  <div class="reg-label">Empresa</div>
+                  <input type="text" id="f-empresa-nome" class="form-control" disabled
+                    style="font-size:13px;color:var(--text-lo);background:var(--bg-hover)">
+                </div>
+
+                <div class="reg-field">
+                  <div class="reg-label">Status</div>
+                  <select id="f-ativo" class="form-control">
+                    <option value="1">Ativo</option>
+                    <option value="0">Inativo</option>
+                  </select>
+                </div>
+
+                <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">
+                  Após salvar, o ID é gerado automaticamente e não pode ser alterado.
+                </p>
               </div>
             </section>
           </aside>
@@ -246,14 +260,23 @@
     document.getElementById('panel-' + id).classList.add('active');
   }
 
-  function atualizarResumo() {
-    const nome   = document.getElementById('f-nome').value.trim() || '—';
-    const modulo = document.getElementById('f-modulo').value || '—';
-    const ativo  = document.getElementById('f-ativo').value === '1' ? 'Ativo' : 'Inativo';
-    document.getElementById('meta-nome').textContent   = nome;
-    document.getElementById('meta-modulo').textContent = modulo;
-    document.getElementById('meta-status').textContent = ativo;
-    document.getElementById('form-title').textContent  = editId ? nome : `Nova Intenção${nome !== '—' ? ' — ' + nome : ''}`;
+  function atualizarTitulo() {
+    const nome = document.getElementById('f-nome').value.trim();
+    document.getElementById('form-title').textContent =
+      editId ? (nome || 'Intenção') : `Nova Intenção${nome ? ' — ' + nome : ''}`;
+  }
+
+  async function _carregarModulos() {
+    try {
+      const mods = await fetch('/api/ia-command/modulos').then(r => r.json());
+      const sel  = document.getElementById('f-modulo');
+      mods.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.nome;
+        opt.textContent = m.nome;
+        sel.appendChild(opt);
+      });
+    } catch (_) {}
   }
 
   async function _carregarDatasets() {
@@ -268,33 +291,34 @@
   }
 
   async function carregar() {
-    await _carregarDatasets();
+    await Promise.all([_carregarModulos(), _carregarDatasets()]);
 
     if (!editId) {
-      document.getElementById('f-empresa').value =
-        window._iahubEmpresa ? `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})` : '—';
+      if (window._iahubEmpresa) {
+        document.getElementById('f-empresa-id').value   = window._iahubEmpresa.id;
+        document.getElementById('f-empresa-nome').value = window._iahubEmpresa.nome;
+      }
       return;
     }
 
     const row = await fetch(`/api/ia-command/admin/intencoes/${editId}`).then(r => r.json()).catch(() => null);
     if (!row) { document.getElementById('form-subtitle').textContent = 'Registro não encontrado.'; return; }
 
-    document.getElementById('f-id').value        = row.id;
-    document.getElementById('f-empresa').value   = `ID ${row.empresa_id}`;
-    document.getElementById('f-nome').value      = row.nome      || '';
-    document.getElementById('f-descricao').value = row.descricao || '';
-    document.getElementById('f-modulo').value    = row.modulo    || '';
-    document.getElementById('f-acao').value      = row.acao      || '';
-    document.getElementById('f-ativo').value     = String(row.ativo ?? 1);
-    document.getElementById('f-dataset').value   = row.dataset_id     || '';
-    document.getElementById('f-frases').value    = row.frases_exemplo || '';
+    document.getElementById('f-id').value           = row.id;
+    document.getElementById('f-empresa-id').value   = row.empresa_id;
+    document.getElementById('f-empresa-nome').value = '—';
+    document.getElementById('f-nome').value         = row.nome        || '';
+    document.getElementById('f-descricao').value    = row.descricao   || '';
+    document.getElementById('f-modulo').value       = row.modulo      || '';
+    document.getElementById('f-ativo').value        = String(row.ativo ?? 1);
+    document.getElementById('f-dataset').value      = row.dataset_id  || '';
+    document.getElementById('f-frases').value       = row.frases_exemplo || '';
 
-    document.getElementById('meta-id').textContent  = row.id.slice(0,8) + '…';
+    document.getElementById('form-title').textContent = row.nome;
     document.getElementById('form-subtitle').textContent =
       `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
     document.getElementById('topbar-label').innerHTML =
       `<span style="color:var(--text-lo);font-weight:400">IA Command ›</span> ${row.nome}`;
-    atualizarResumo();
   }
 
   async function salvar() {
@@ -305,7 +329,6 @@
       nome,
       descricao:      document.getElementById('f-descricao').value.trim() || null,
       modulo:         document.getElementById('f-modulo').value  || null,
-      acao:           document.getElementById('f-acao').value    || null,
       dataset_id:     document.getElementById('f-dataset').value || null,
       frases_exemplo: document.getElementById('f-frases').value.trim() || null,
       ativo:          parseInt(document.getElementById('f-ativo').value),
@@ -336,7 +359,6 @@
       }, 800);
     } else {
       document.getElementById('form-title').textContent = saved.nome;
-      document.getElementById('meta-id').textContent    = saved.id.slice(0,8) + '…';
     }
   }
 
@@ -348,6 +370,75 @@
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Formulário de Intenção</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-tabs">
+    <button class="help-tab active" onclick="helpTab(this,'config')">Configuração</button>
+    <button class="help-tab" onclick="helpTab(this,'nomes')">Nomes Sugeridos</button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-panel active" id="hp-config">
+      <div class="help-section">
+        <div class="help-section-title">Identificação</div>
+        <div class="help-item"><div class="help-item-label">Nome <span style="color:var(--accent);font-size:11px">obrigatório</span></div><div class="help-item-desc">Identificador interno sem espaços. Use underscores: <em>consultar_faturamento</em>, <em>consultar_titulos_abertos</em>. Veja a aba <strong>Nomes Sugeridos</strong> para nomes com formatação rica.</div></div>
+        <div class="help-item"><div class="help-item-label">Descrição</div><div class="help-item-desc">Texto que a IA usa para identificar quando o usuário quer esta informação. Seja específico: inclua exemplos de perguntas que a ativam.</div></div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Configuração</div>
+        <div class="help-item"><div class="help-item-label">Módulo</div><div class="help-item-desc">Categoria funcional (Faturamento, Financeiro, Compras, etc.) para organizar as intenções. Cadastre módulos em <strong>Administração → Módulos</strong>.</div></div>
+        <div class="help-item"><div class="help-item-label">Dataset vinculado <span style="color:var(--accent);font-size:11px">obrigatório para ativar</span></div><div class="help-item-desc">Dataset cujo SQL Base será executado quando esta intenção for reconhecida. Configure o dataset antes de vincular aqui.</div></div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Frases de Exemplo</div>
+        <div class="help-item-desc">Adicione as variações de pergunta que os usuários usam. Quanto mais exemplos, mais precisa é a classificação.</div>
+        <div class="help-tip">A IA aprende pelo contexto dos exemplos. Inclua variações informais que o seu time usa no dia a dia.</div>
+      </div>
+      <div class="help-section">
+        <div class="help-section-title">Dados do Registro</div>
+        <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Somente intenções ativas são reconhecidas pelo motor de IA. Desative para pausar sem excluir.</div></div>
+      </div>
+    </div>
+    <div class="help-panel" id="hp-nomes">
+      <div class="help-section">
+        <div class="help-section-title">Nomes com formatação dedicada</div>
+        <div class="help-item-desc" style="margin-bottom:14px">Use exatamente estes nomes para ativar templates de resposta ricos. Nomes diferentes caem no modo automático.</div>
+        <table class="fmt-table">
+          <thead><tr><th>Nome da intenção</th><th>O que formata</th></tr></thead>
+          <tbody>
+            <tr><td>consultar_faturamento</td><td>Total, comparativo anual e mensal com variação %</td></tr>
+            <tr><td>consultar_quantidade</td><td>Total de itens, comparativo anual e mensal com variação %</td></tr>
+            <tr><td>consultar_faturamento_por_cliente</td><td>Lista de clientes com valor e nº de NFs</td></tr>
+            <tr><td>consultar_faturamento_por_vendedor</td><td>Lista de vendedores com valor faturado</td></tr>
+            <tr><td>consultar_top_clientes</td><td>Ranking de clientes por faturamento</td></tr>
+            <tr><td>consultar_ticket_medio</td><td>Ticket médio com total e nº de notas</td></tr>
+            <tr><td>comparar_faturamento</td><td>Comparativo direto (colunas <em>periodo_atual</em> / <em>periodo_anterior</em>)</td></tr>
+            <tr><td>consultar_titulos_abertos</td><td>Títulos em aberto com total e vencidos em destaque</td></tr>
+            <tr><td>consultar_pedidos_abertos</td><td>Pedidos em aberto com total</td></tr>
+            <tr><td>consultar_clientes_inativos</td><td>Clientes sem compra recente</td></tr>
+            <tr><td>consultar_produtos_mais_vendidos</td><td>Ranking de produtos por volume</td></tr>
+            <tr class="default-row"><td>(qualquer outro nome)</td><td>Modo automático: soma colunas numéricas e exibe o total</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  function helpTab(btn, panel) {
+    document.querySelectorAll('.help-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('hp-' + panel).classList.add('active');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

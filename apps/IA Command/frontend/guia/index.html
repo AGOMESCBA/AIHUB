@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Guia de Uso - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root {
+      --accent: #7c3aed;
+      --accent-2: #a78bfa;
+      --accent-light: #a78bfa;
+      --accent-glow: rgba(124,58,237,.10);
+    }
+
+    body { overflow: hidden; }
+
+    .guia-layout {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .guia-nav {
+      width: 278px;
+      min-width: 278px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .guia-nav-header {
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .guia-nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+    .logo-icon {
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 900;
+      color: #fff;
+    }
+
+    .guia-nav-logo span {
+      font-size: 15px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .guia-nav-subtitle {
+      font-size: 11px;
+      color: var(--text-lo);
+      margin-top: 2px;
+      padding-left: 40px;
+    }
+
+    .guia-nav-body {
+      overflow-y: auto;
+      flex: 1;
+      padding: 12px 0;
+    }
+
+    .guia-nav-body::-webkit-scrollbar { width: 4px; }
+    .guia-nav-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .nav-fase-hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px 6px;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-lo);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .nav-fase-hdr:hover { color: var(--text-md); }
+
+    .nav-fase-num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--bg-hover);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--text-md);
+      flex-shrink: 0;
+    }
+
+    .nav-etapa {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 16px 7px 44px;
+      font-size: 12.5px;
+      color: var(--text-md);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+      text-decoration: none;
+    }
+
+    .nav-etapa:hover {
+      background: var(--bg-hover);
+      color: var(--text-hi);
+    }
+
+    .nav-etapa.active {
+      background: var(--accent-glow);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .nav-etapa-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--border-hi);
+      flex-shrink: 0;
+    }
+
+    .nav-etapa.active .nav-etapa-dot { background: var(--accent); }
+
+    .guia-nav-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .nav-back-btn,
+    .nav-pdf-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 7px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
+      width: 100%;
+      text-decoration: none;
+    }
+
+    .nav-back-btn {
+      color: var(--text-md);
+      border: none;
+      background: none;
+    }
+
+    .nav-back-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-hi);
+    }
+
+    .nav-pdf-btn {
+      font-weight: 800;
+      color: var(--accent);
+      border: 1px solid rgba(124,58,237,.25);
+      background: rgba(124,58,237,.06);
+    }
+
+    .nav-pdf-btn:hover {
+      background: rgba(124,58,237,.13);
+      border-color: var(--accent);
+    }
+
+    .guia-content {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg-base);
+      padding: 32px 40px;
+    }
+
+    .guia-content::-webkit-scrollbar { width: 6px; }
+    .guia-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .guia-hero {
+      background: linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%);
+      border-radius: var(--radius);
+      padding: 32px 36px;
+      margin-bottom: 36px;
+      color: #fff;
+    }
+
+    .guia-hero h1 {
+      font-size: 22px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .guia-hero p {
+      font-size: 14px;
+      opacity: .90;
+      max-width: 760px;
+      line-height: 1.75;
+    }
+
+    .guia-hero-meta {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .guia-hero-badge {
+      background: rgba(255,255,255,.20);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .fase-section {
+      margin-bottom: 48px;
+      scroll-margin-top: 24px;
+    }
+
+    .fase-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .fase-badge {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 900;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .f1 { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+    .f2 { background: linear-gradient(135deg, #0891b2, #0e7490); }
+    .f3 { background: linear-gradient(135deg, #059669, #15803d); }
+    .f4 { background: linear-gradient(135deg, #d97706, #b45309); }
+    .f5 { background: linear-gradient(135deg, #dc2626, #a78bfa); }
+    .f6 { background: linear-gradient(135deg, #0284c7, #0369a1); }
+    .f7 { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+
+    .fase-titulo h2 {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--text-hi);
+      margin-bottom: 2px;
+    }
+
+    .fase-titulo p {
+      font-size: 12px;
+      color: var(--text-lo);
+    }
+
+    .etapa-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 16px;
+      overflow: hidden;
+      scroll-margin-top: 24px;
+    }
+
+    .etapa-card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-hover);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .etapa-num {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--accent);
+      background: var(--accent-glow);
+      padding: 3px 8px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .etapa-titulo {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--text-hi);
+    }
+
+    .etapa-arrow {
+      font-size: 12px;
+      color: var(--text-lo);
+      transition: transform var(--transition);
+    }
+
+    .etapa-card.open .etapa-arrow { transform: rotate(180deg); }
+
+    .etapa-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .35s cubic-bezier(.4,0,.2,1);
+    }
+
+    .etapa-card.open .etapa-body { max-height: 5000px; }
+    .etapa-body-inner { padding: 24px 24px 28px; }
+
+    .etapa-desc {
+      font-size: 13.5px;
+      color: var(--text-md);
+      line-height: 1.75;
+      margin-bottom: 16px;
+    }
+
+    .campo-secao {
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-lo);
+      margin: 18px 0 7px;
+    }
+
+    .campo-lista {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-bottom: 16px;
+    }
+
+    .campo-item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      background: var(--bg-card);
+    }
+
+    .campo-obrigatorio { border-left: 3px solid var(--accent); }
+
+    .campo-nome {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text-hi);
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .campo-req {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--accent);
+      background: var(--accent-glow);
+      padding: 1px 7px;
+      border-radius: 10px;
+    }
+
+    .campo-desc {
+      font-size: 12.5px;
+      color: var(--text-md);
+      line-height: 1.62;
+    }
+
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .step-item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1px;
+    }
+
+    .step-body {
+      font-size: 13px;
+      color: var(--text-md);
+      line-height: 1.65;
+      flex: 1;
+    }
+
+    .step-body strong { color: var(--text-hi); }
+
+    .callout {
+      display: flex;
+      gap: 12px;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-md);
+    }
+
+    .callout-icon {
+      font-weight: 900;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .callout.info { background: rgba(124,58,237,.08); border-left: 3px solid var(--accent); }
+    .callout.warning { background: rgba(217,119,6,.08); border-left: 3px solid #d97706; }
+    .callout.success { background: rgba(5,150,105,.08); border-left: 3px solid #059669; }
+    .callout.danger { background: rgba(220,38,38,.08); border-left: 3px solid #dc2626; }
+
+    .guia-table-wrap { overflow-x: auto; margin: 14px 0; }
+
+    .guia-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .guia-table th {
+      text-align: left;
+      padding: 9px 14px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text-lo);
+      border-bottom: 2px solid var(--border);
+      background: var(--bg-hover);
+    }
+
+    .guia-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-md);
+      vertical-align: top;
+    }
+
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+
+    .code-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-lo);
+      margin: 16px 0 6px;
+    }
+
+    .code-block {
+      background: #1e1e2e;
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 12px 0;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #cdd6f4;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .guia-layout { display: block; height: auto; overflow: visible; }
+      .guia-nav { width: 100%; min-width: 0; height: auto; }
+      .guia-nav-body { display: none; }
+      .guia-content { padding: 22px 16px; overflow: visible; }
+    }
+
+    @media print {
+      @page { size: A4; margin: 16mm 14mm; }
+      body { overflow: visible !important; }
+      .guia-layout { display: block !important; height: auto !important; overflow: visible !important; }
+      .guia-nav { display: none !important; }
+      .guia-content { overflow: visible !important; padding: 0 !important; height: auto !important; }
+      .guia-hero { print-color-adjust: exact; -webkit-print-color-adjust: exact; border-radius: 6px !important; padding: 20px 24px !important; margin-bottom: 20px !important; }
+      .etapa-body { max-height: none !important; overflow: visible !important; }
+      .etapa-card { page-break-inside: avoid; }
+      .fase-section { margin-bottom: 20px !important; page-break-inside: avoid; }
+      .fase-header, .etapa-card-header { page-break-after: avoid; }
+      .etapa-arrow, .nav-pdf-btn, .nav-back-btn { display: none !important; }
+      .guia-content::after {
+        content: "IA Command - Guia de Uso do Sistema";
+        display: block;
+        text-align: center;
+        font-size: 9px;
+        color: #999;
+        margin-top: 24px;
+        border-top: 1px solid #eee;
+        padding-top: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="guia-layout">
+  <nav class="guia-nav">
+    <div class="guia-nav-header">
+      <div class="guia-nav-logo">
+        <div class="logo-icon">IC</div>
+        <span>IA Command</span>
+      </div>
+      <div class="guia-nav-subtitle">Guia de Uso do Sistema</div>
+    </div>
+
+    <div class="guia-nav-body">
+      <div class="nav-fase-hdr" onclick="scrollFase('f1')"><div class="nav-fase-num">1</div>Visao Geral</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-1', event)"><div class="nav-etapa-dot"></div>O que e o IA Command</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-2', event)"><div class="nav-etapa-dot"></div>Fluxo operacional</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-3', event)"><div class="nav-etapa-dot"></div>Regra local-first</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-4', event)"><div class="nav-etapa-dot"></div>Menu e permissao</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f2')"><div class="nav-fase-num">2</div>Configuracao Inicial</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-1', event)"><div class="nav-etapa-dot"></div>Configurar IA</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-2', event)"><div class="nav-etapa-dot"></div>Conexoes ERP</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-3', event)"><div class="nav-etapa-dot"></div>Testes e ativacao</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f3')"><div class="nav-fase-num">3</div>WhatsApp</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-1', event)"><div class="nav-etapa-dot"></div>Canais WhatsApp</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-2', event)"><div class="nav-etapa-dot"></div>Numeros autorizados</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-3', event)"><div class="nav-etapa-dot"></div>Mensagens internas</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-4', event)"><div class="nav-etapa-dot"></div>Monitor e QR Code</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f4')"><div class="nav-fase-num">4</div>Conhecimento ERP</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-1', event)"><div class="nav-etapa-dot"></div>Modulos</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-2', event)"><div class="nav-etapa-dot"></div>Datasets ERP</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-3', event)"><div class="nav-etapa-dot"></div>SQL Base</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-4', event)"><div class="nav-etapa-dot"></div>Intencoes</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e4-5', event)"><div class="nav-etapa-dot"></div>Equivalencias</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f5')"><div class="nav-fase-num">5</div>Uso Diario</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-1', event)"><div class="nav-etapa-dot"></div>Como perguntar</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-2', event)"><div class="nav-etapa-dot"></div>Audio e texto</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-3', event)"><div class="nav-etapa-dot"></div>Empresa e canal</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f6')"><div class="nav-fase-num">6</div>Auditoria</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-1', event)"><div class="nav-etapa-dot"></div>Log de execucoes</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-2', event)"><div class="nav-etapa-dot"></div>Auditoria</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-3', event)"><div class="nav-etapa-dot"></div>Diagnostico</a>
+
+      <div class="nav-fase-hdr" onclick="scrollFase('f7')"><div class="nav-fase-num">7</div>Checklist</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e7-1', event)"><div class="nav-etapa-dot"></div>Ordem recomendada</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e7-2', event)"><div class="nav-etapa-dot"></div>Problemas comuns</a>
+    </div>
+
+    <div class="guia-nav-footer">
+      <button class="nav-pdf-btn" id="btn-exportar-pdf" onclick="exportarPDF()">
+        <span>PDF</span> Baixar guia em PDF
+      </button>
+      <button class="nav-back-btn" onclick="history.back()">
+        <span>&larr;</span> Voltar ao IA Command
+      </button>
+    </div>
+  </nav>
+
+  <main class="guia-content" id="guia-content">
+    <div class="guia-hero">
+      <h1>Guia de Uso - IA Command</h1>
+      <p>
+        Este guia explica, em linguagem operacional, como configurar e usar o IA Command: conexao com ERP, provedores de IA,
+        canais WhatsApp, numeros autorizados, datasets, intencoes, equivalencias, monitoramento, logs e auditoria. A ideia e que
+        qualquer usuario autorizado consiga entender o que cada tela faz, em qual ordem configurar e como diagnosticar problemas.
+      </p>
+      <div class="guia-hero-meta">
+        <div class="guia-hero-badge">ERP via SQL ou API Proxy</div>
+        <div class="guia-hero-badge">WhatsApp multiempresa</div>
+        <div class="guia-hero-badge">Groq, Gemini, DeepSeek e Claude</div>
+        <div class="guia-hero-badge">Datasets e intencoes</div>
+        <div class="guia-hero-badge">Auditoria completa</div>
+      </div>
+    </div>
+
+    <section class="fase-section" id="f1">
+      <div class="fase-header">
+        <div class="fase-badge f1">1</div>
+        <div class="fase-titulo">
+          <h2>Visao Geral</h2>
+          <p>Entenda o objetivo do sistema antes de configurar</p>
+        </div>
+      </div>
+
+      <article class="etapa-card open" id="e1-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-1')">
+          <span class="etapa-num">1.1</span>
+          <span class="etapa-titulo">O que e o IA Command</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">
+              O <strong>IA Command</strong> e o modulo que permite consultar informacoes do ERP por linguagem natural. O usuario
+              envia uma pergunta por WhatsApp, o sistema interpreta o que foi pedido, executa um dataset autorizado no ERP e devolve
+              uma resposta resumida e compreensivel. A proposta nao e obrigar o usuario a decorar comandos, mas permitir perguntas
+              livres como "Fat por produto no mes", "Vendas do ano anterior" ou "Top clientes do trimestre".
+            </p>
+            <div class="campo-lista">
+              <div class="campo-item">
+                <div class="campo-nome">Ele transforma linguagem natural em uma consulta segura</div>
+                <div class="campo-desc">A mensagem livre e convertida em uma intencao estruturada: indicador, periodo, filtros, agrupamento, ordenacao e limite. Depois disso, apenas datasets cadastrados e autorizados podem ser executados.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Ele combina dicionario de negocio e IA</div>
+                <div class="campo-desc">Equivalencias cadastradas pela empresa ensinam termos como "fat", "movimento", "representante" ou nomes locais de clientes e produtos. Quando o termo nao esta cadastrado, a IA ainda pode inferir o contexto, sempre validando contra as intencoes e datasets disponiveis.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Ele entende dimensoes e periodos do Dataset Core</div>
+                <div class="campo-desc">As consultas podem envolver Cliente, Produto, Vendedor, Fornecedor e periodos como dia, mes, ano, trimestre, periodo atual, periodo anterior e comparacoes.</div>
+              </div>
+              <div class="campo-item">
+                <div class="campo-nome">Ele respeita empresa, permissao e configuracao</div>
+                <div class="campo-desc">Cada usuario acessa o sistema por uma empresa selecionada no IAHub. Rotinas, dados, conexoes, datasets, intencoes e equivalencias sao isolados por empresa.</div>
+              </div>
+            </div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Pense no IA Command como uma camada de interpretacao segura entre WhatsApp, IA e ERP. O usuario pergunta livremente; o sistema identifica o indicador correto; o ERP retorna os dados; a resposta volta em linguagem simples.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e1-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-2')">
+          <span class="etapa-num">1.2</span>
+          <span class="etapa-titulo">Fluxo operacional de uma pergunta</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Mensagem recebida:</strong> o WhatsApp conectado no Monitor recebe uma mensagem de texto ou audio.</div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-body"><strong>Autorizacao:</strong> se houver numeros autorizados ativos, o remetente precisa estar cadastrado para a empresa.</div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Contexto da empresa:</strong> o sistema identifica em qual empresa/canal a mensagem deve ser processada.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Interpretacao hibrida:</strong> o texto passa por normalizacao, equivalencias cadastradas, regras de periodo e inferencia da IA quando necessario.</div></div>
+              <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Validacao da intencao:</strong> o resultado precisa apontar para uma intencao real da empresa, com periodo, filtros, agrupamento e confianca coerentes.</div></div>
+              <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Dataset executa:</strong> o SQL Base ou a API Proxy consulta somente a fonte configurada para aquela intencao.</div></div>
+              <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Resposta enviada:</strong> a IA transforma os dados em texto curto e objetivo, e o WhatsApp envia ao usuario.</div></div>
+              <div class="step-item"><div class="step-num">8</div><div class="step-body"><strong>Registro:</strong> logs de execucao e auditoria ficam disponiveis para diagnostico, melhoria do dicionario e rastreabilidade.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e1-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-3')">
+          <span class="etapa-num">1.3</span>
+          <span class="etapa-titulo">Regra local-first antes da IA</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">
+              Antes de chamar qualquer provedor de IA, o IA Command tenta resolver a pergunta com regras internas, equivalencias e metadados do Dataset. A IA fica como fallback para frases ambiguas, termos ainda nao ensinados ou consultas que o motor local nao conseguiu pontuar com seguranca.
+            </p>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Normalizacao:</strong> o texto original e preservado para auditoria, mas uma copia interna remove acentos, padroniza caixa, limpa pontuacao e separa termos relevantes.</div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-body"><strong>Equivalencias:</strong> o sistema procura termos cadastrados nas camadas intencao, coluna e filtro. Exemplos: "fat" -> faturamento, "qtde" -> quantidade, "CAIEIRINHA" -> CAIEIRA LTDA.</div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Intencoes cadastradas:</strong> o motor compara a frase com nome, descricao e exemplos das intencoes ativas, incluindo tokens como faturamento, compras, produto, cliente e vendedor.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Motor temporal:</strong> periodos como "mes atual", "ano anterior", "semana passada", "ultimos 7 dias" e comparacoes sao resolvidos localmente.</div></div>
+              <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Agrupamento e limite:</strong> termos como "por produto", "por cliente", "top 10" e "ranking" viram agrupamento, ordenacao e limite sem IA.</div></div>
+              <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Metricas do dataset:</strong> o campo Colunas metricas ajuda o motor a reconhecer faturamento, quantidade, margem e custo, definindo SUM() e ORDER BY no SQL externo.</div></div>
+              <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Pontuacao local:</strong> cada evidencia soma pontos. Se a confianca final for alta, a consulta executa diretamente; se ficar baixa ou ambigua, o sistema chama a IA.</div></div>
+            </div>
+
+            <div class="guia-table-wrap" style="margin-top:16px">
+              <table class="guia-table">
+                <thead><tr><th>Sinal encontrado</th><th>Efeito na pontuacao</th><th>Exemplo</th></tr></thead>
+                <tbody>
+                  <tr><td>Sinonimo de intencao</td><td>Forte</td><td>"fat", "vendas", "movimento"</td></tr>
+                  <tr><td>Nome/descricao da intencao</td><td>Forte quando combina com uma unica intencao</td><td>consultar_faturamento_por_produto</td></tr>
+                  <tr><td>Periodo local</td><td>Medio</td><td>"do ano", "mes passado"</td></tr>
+                  <tr><td>Agrupamento</td><td>Medio e direciona intencoes especificas</td><td>"por produto"</td></tr>
+                  <tr><td>Metrica do dataset</td><td>Medio</td><td>"quantidade" em Colunas metricas</td></tr>
+                  <tr><td>Filtro conhecido</td><td>Medio</td><td>apelido de cliente/produto/vendedor</td></tr>
+                  <tr><td>Limite/ranking</td><td>Complementar</td><td>"top 5 clientes"</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="callout info"><span class="callout-icon">i</span><span>Exemplo: "Fat do ano por produto" encontra "fat" como faturamento, "ano" como periodo anual, "produto" como agrupamento e a metrica principal do dataset. Com esses sinais, a confianca local fica alta e a IA nao precisa ser chamada.</span></div>
+            <div class="callout warning"><span class="callout-icon">!</span><span>Quando duas intencoes ficam muito proximas na pontuacao ou faltam sinais importantes, o sistema prefere usar IA ou pedir confirmacao. Isso evita executar uma consulta errada apenas para economizar tokens.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e1-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-4')">
+          <span class="etapa-num">1.4</span>
+          <span class="etapa-titulo">Menu atual e permissoes</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="guia-table-wrap">
+              <table class="guia-table">
+                <thead><tr><th>Grupo</th><th>Rotina</th><th>Para que serve</th></tr></thead>
+                <tbody>
+                  <tr><td>Operacao</td><td>Dashboard</td><td>Mostra status de IA, ERP, WhatsApp e checklist de configuracao.</td></tr>
+                  <tr><td>Operacao</td><td>Monitor</td><td>Inicia, para e acompanha o WhatsApp em tempo real.</td></tr>
+                  <tr><td>WhatsApp</td><td>Canais</td><td>Controla canais compartilhaveis entre empresas.</td></tr>
+                  <tr><td>WhatsApp</td><td>Numeros Autorizados</td><td>Define quais contatos podem mandar comandos.</td></tr>
+                  <tr><td>WhatsApp</td><td>Mensagens</td><td>Personaliza templates internos enviados pelo bot.</td></tr>
+                  <tr><td>Cadastros</td><td>Modulos</td><td>Organiza as intencoes por areas ou temas.</td></tr>
+                  <tr><td>Cadastros</td><td>Datasets ERP</td><td>Define as consultas liberadas no ERP.</td></tr>
+                  <tr><td>Cadastros</td><td>Intencoes</td><td>Liga perguntas de usuarios aos datasets corretos.</td></tr>
+                  <tr><td>Cadastros</td><td>Equivalencias</td><td>Ensina equivalencias de termos, filtros e colunas.</td></tr>
+                  <tr><td>Configuracao</td><td>Conexoes ERP</td><td>Cadastra banco SQL Server, PostgreSQL, SQLite ou API Proxy.</td></tr>
+                  <tr><td>Configuracao</td><td>Configurar IA</td><td>Cadastra chaves de IA, fallback, confianca minima e audio.</td></tr>
+                  <tr><td>Administracao</td><td>Log Execucoes</td><td>Lista consultas processadas, status, duracao e origem.</td></tr>
+                  <tr><td>Administracao</td><td>Auditoria</td><td>Mostra alteracoes administrativas feitas no sistema.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout warning"><span class="callout-icon">!</span><span>Se uma rotina nao aparecer no menu, normalmente o usuario nao possui permissao para ela naquela empresa. Revise as permissoes no modulo administrativo do IAHub.</span></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="fase-section" id="f2">
+      <div class="fase-header">
+        <div class="fase-badge f2">2</div>
+        <div class="fase-titulo">
+          <h2>Configuracao Inicial</h2>
+          <p>IA e conexao ERP sao a base do sistema</p>
+        </div>
+      </div>
+
+      <article class="etapa-card" id="e2-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-1')">
+          <span class="etapa-num">2.1</span>
+          <span class="etapa-titulo">Configurar IA</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Configuracao -> Configurar IA</strong>. Essa tela define quais provedores podem interpretar perguntas, transcrever audio e gerar respostas.</p>
+            <div class="campo-secao">Provedores disponiveis</div>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Groq <span class="campo-req">principal recomendado</span></div><div class="campo-desc">Usado como provedor principal por padrao. Rapido para classificacao de intencoes, resposta e transcricao com Whisper.</div></div>
+              <div class="campo-item"><div class="campo-nome">Gemini</div><div class="campo-desc">Pode ser usado como fallback quando o Groq falhar, atingir limite ou ficar indisponivel.</div></div>
+              <div class="campo-item"><div class="campo-nome">DeepSeek</div><div class="campo-desc">Fallback adicional de custo-beneficio. A tela tambem consulta saldo quando a API do provedor permite.</div></div>
+              <div class="campo-item"><div class="campo-nome">Claude</div><div class="campo-desc">Fallback premium para casos mais complexos ou uso futuro em respostas mais elaboradas.</div></div>
+            </div>
+            <div class="campo-secao">Campos importantes</div>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Provedor primario</div><div class="campo-desc">Primeiro provedor tentado pelo sistema.</div></div>
+              <div class="campo-item"><div class="campo-nome">Ordem de fallback</div><div class="campo-desc">Lista separada por virgula. Exemplo: <code>groq,gemini,deepseek,claude</code>.</div></div>
+              <div class="campo-item"><div class="campo-nome">Confianca minima</div><div class="campo-desc">Valor entre 0 e 1. Abaixo desse limiar, o sistema evita executar consulta com baixa certeza.</div></div>
+              <div class="campo-item"><div class="campo-nome">Idioma da transcricao</div><div class="campo-desc">Define o idioma esperado para audios recebidos pelo WhatsApp.</div></div>
+            </div>
+            <div class="callout success"><span class="callout-icon">ok</span><span>Depois de colar uma chave, use <strong>Testar conexao</strong>. O teste envia uma pergunta simples e confirma se o provedor responde com intencao e confianca.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e2-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-2')">
+          <span class="etapa-num">2.2</span>
+          <span class="etapa-titulo">Conexoes ERP</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Configuracao -> Conexoes ERP</strong>. Cadastre a fonte de dados que os datasets irao consultar.</p>
+            <div class="guia-table-wrap">
+              <table class="guia-table">
+                <thead><tr><th>Tipo</th><th>Uso indicado</th><th>Campos principais</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="tag">sqlserver</span></td><td>Banco SQL Server do ERP, muito comum em Protheus.</td><td>host, porta, database, usuario, senha, encrypt e trust_cert.</td></tr>
+                  <tr><td><span class="tag">postgresql</span></td><td>Banco PostgreSQL direto.</td><td>host, porta, database, usuario, senha e SSL.</td></tr>
+                  <tr><td><span class="tag">sqlite</span></td><td>Ambientes simples, testes ou bases locais.</td><td>caminho/base de dados.</td></tr>
+                  <tr><td><span class="tag">api_proxy</span></td><td>Quando o ERP e acessado por uma API intermediaria, sem expor banco direto.</td><td>host/URL e senha/token quando aplicavel.</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout warning"><span class="callout-icon">!</span><span>Cadastre a conexao com usuario somente leitura sempre que possivel. O IA Command deve consultar informacoes, nao alterar dados do ERP.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e2-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-3')">
+          <span class="etapa-num">2.3</span>
+          <span class="etapa-titulo">Testar, ativar e manter uma conexao padrao</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-body">Crie ou abra uma conexao ERP.</div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-body">Preencha host, banco, usuario e senha ou URL da API Proxy.</div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-body">Clique em <strong>Testar</strong>. O sistema tenta abrir conexao com o ERP.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body">Se o teste passar, clique em <strong>Ativar</strong>. Somente uma conexao fica ativa por empresa.</div></div>
+              <div class="step-item"><div class="step-num">5</div><div class="step-body">Volte ao Dashboard e confirme se o card <strong>Conexao ERP</strong> aparece como ativa.</div></div>
+            </div>
+            <div class="callout danger"><span class="callout-icon">!</span><span>Datasets sem conexao ativa falham mesmo que o SQL esteja correto. Antes de investigar uma intencao, confirme sempre a conexao padrao.</span></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="fase-section" id="f3">
+      <div class="fase-header">
+        <div class="fase-badge f3">3</div>
+        <div class="fase-titulo">
+          <h2>WhatsApp</h2>
+          <p>Canais, autorizacao, mensagens e monitoramento</p>
+        </div>
+      </div>
+
+      <article class="etapa-card" id="e3-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-1')">
+          <span class="etapa-num">3.1</span>
+          <span class="etapa-titulo">Canais WhatsApp</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>WhatsApp -> Canais</strong>. Um canal representa uma sessao WhatsApp que pode ser vinculada a uma ou mais empresas.</p>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Nome</div><div class="campo-desc">Identificacao amigavel do canal. Exemplo: WhatsApp Matriz, Bot Comercial, Canal Diretoria.</div></div>
+              <div class="campo-item"><div class="campo-nome">Numero esperado</div><div class="campo-desc">Opcional. Ajuda a documentar qual numero deve ser conectado naquele canal.</div></div>
+              <div class="campo-item"><div class="campo-nome">Empresas vinculadas</div><div class="campo-desc">Lista quais empresas podem compartilhar o mesmo canal. O usuario so consegue vincular empresas que ele tambem pode administrar.</div></div>
+              <div class="campo-item"><div class="campo-nome">Padrao nesta empresa</div><div class="campo-desc">Define se o canal sera o principal para a empresa atual.</div></div>
+              <div class="campo-item"><div class="campo-nome">Aliases</div><div class="campo-desc">Apelidos usados para reconhecer a empresa no canal, como matriz, filial ou nome curto.</div></div>
+            </div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Use canais compartilhados apenas quando fizer sentido operacional. Se empresas exigem atendimento isolado, mantenha canais separados.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e3-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-2')">
+          <span class="etapa-num">3.2</span>
+          <span class="etapa-titulo">Numeros WhatsApp autorizados</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>WhatsApp -> Numeros Autorizados</strong>. Essa tela controla quem pode enviar comandos ao IA Command naquela empresa.</p>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Nome</div><div class="campo-desc">Identificacao interna do contato autorizado.</div></div>
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Numero WhatsApp</div><div class="campo-desc">Informe apenas digitos, com DDI e DDD. Exemplo: <code>5592999999999</code>.</div></div>
+              <div class="campo-item"><div class="campo-nome">Observacoes</div><div class="campo-desc">Campo livre para registrar area, cargo, motivo da liberacao ou restricoes.</div></div>
+              <div class="campo-item"><div class="campo-nome">Status</div><div class="campo-desc">Numeros inativos permanecem historicos, mas nao autorizam novas interacoes.</div></div>
+            </div>
+            <div class="callout warning"><span class="callout-icon">!</span><span>Quando existe pelo menos um numero ativo cadastrado, mensagens de numeros nao autorizados sao ignoradas/bloqueadas. Se nenhum numero ativo estiver cadastrado, o comportamento atual e mantido para evitar bloqueio acidental.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e3-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-3')">
+          <span class="etapa-num">3.3</span>
+          <span class="etapa-titulo">Mensagens internas do WhatsApp</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>WhatsApp -> Mensagens</strong>. Aqui ficam os templates enviados em situacoes automaticas do bot.</p>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Template padrao</div><div class="campo-desc">Texto original do sistema. Pode ser restaurado a qualquer momento.</div></div>
+              <div class="campo-item"><div class="campo-nome">Template customizado</div><div class="campo-desc">Texto editado para a empresa atual. Pode usar variaveis como <code>{{empresa_nome}}</code>, <code>{{numero}}</code>, <code>{{erro}}</code> e <code>{{resposta}}</code>.</div></div>
+              <div class="campo-item"><div class="campo-nome">Status</div><div class="campo-desc">Permite ativar ou inativar um template especifico.</div></div>
+            </div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Mantenha mensagens curtas e claras. WhatsApp nao e tela de relatorio; a resposta precisa ser facil de ler no celular.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e3-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-4')">
+          <span class="etapa-num">3.4</span>
+          <span class="etapa-titulo">Monitor, QR Code e teste de envio</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Operacao -> Monitor</strong>. Essa e a tela operacional do WhatsApp.</p>
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-body">Selecione o canal no campo superior.</div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-body">Clique em <strong>Iniciar</strong>. O sistema abre ou cria a sessao WhatsApp do canal.</div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-body">Se aparecer QR Code, escaneie em WhatsApp -> Aparelhos conectados -> Conectar aparelho.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body">Quando conectado, use <strong>Teste de envio</strong> para validar se o bot consegue mandar mensagem.</div></div>
+              <div class="step-item"><div class="step-num">5</div><div class="step-body">Acompanhe o terminal de log em tempo real para mensagens recebidas, avisos e erros.</div></div>
+            </div>
+            <div class="callout warning"><span class="callout-icon">!</span><span>Use preferencialmente um numero dedicado ao bot. Evite usar numero pessoal ou numero usado manualmente por varias pessoas.</span></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="fase-section" id="f4">
+      <div class="fase-header">
+        <div class="fase-badge f4">4</div>
+        <div class="fase-titulo">
+          <h2>Conhecimento ERP</h2>
+          <p>Como ensinar o IA Command a responder perguntas de negocio</p>
+        </div>
+      </div>
+
+      <article class="etapa-card" id="e4-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-1')">
+          <span class="etapa-num">4.1</span>
+          <span class="etapa-titulo">Modulos</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Cadastros -> Modulos</strong>. Modulos agrupam intencoes por area, assunto ou rotina.</p>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Nome</div><div class="campo-desc">Exemplos: Financeiro, Comercial, Estoque, Compras, Diretoria.</div></div>
+              <div class="campo-item"><div class="campo-nome">Descricao</div><div class="campo-desc">Explique quais tipos de perguntas pertencem ao modulo.</div></div>
+              <div class="campo-item"><div class="campo-nome">Cor</div><div class="campo-desc">Ajuda a diferenciar visualmente areas no cadastro.</div></div>
+              <div class="campo-item"><div class="campo-nome">Ativo</div><div class="campo-desc">Somente modulos ativos devem ser usados em intencoes operacionais.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e4-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-2')">
+          <span class="etapa-num">4.2</span>
+          <span class="etapa-titulo">Datasets ERP</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Cadastros -> Datasets ERP</strong>. Um dataset e a consulta liberada para a IA executar. Ele deve responder uma pergunta de negocio especifica.</p>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Nome</div><div class="campo-desc">Nome claro do conjunto de dados. Exemplo: Faturamento por periodo, Pedidos pendentes, Clientes com titulos vencidos.</div></div>
+              <div class="campo-item"><div class="campo-nome">ERP</div><div class="campo-desc">Identifica o sistema de origem. O padrao atual e Protheus, mas a arquitetura aceita outros ERPs.</div></div>
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">SQL Base</div><div class="campo-desc">SELECT que retorna os dados permitidos para aquela rotina.</div></div>
+              <div class="campo-item"><div class="campo-nome">Campo data</div><div class="campo-desc">Nome da coluna de data que o motor usa para filtrar periodos como hoje, ontem, este mes e semana passada.</div></div>
+              <div class="campo-item"><div class="campo-nome">Limite maximo</div><div class="campo-desc">Quantidade maxima de linhas retornadas para proteger desempenho e evitar respostas extensas demais.</div></div>
+            </div>
+            <div class="callout success"><span class="callout-icon">ok</span><span>Use o preview SQL antes de salvar/liberar. Ele executa uma amostra e mostra colunas retornadas para validar o dataset.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e4-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-3')">
+          <span class="etapa-num">4.3</span>
+          <span class="etapa-titulo">Como escrever o SQL Base</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-body">Escreva um <strong>SELECT completo</strong>, sem comando de alteracao, insert, update ou delete.</div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-body">Inclua aliases claros em portugues, pois eles ajudam a IA a explicar os dados.</div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-body">Inclua uma coluna de data com o mesmo nome informado no campo <strong>Campo data</strong>.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body">No Protheus, filtre registros deletados com <code>D_E_L_E_T_ = ' '</code>.</div></div>
+              <div class="step-item"><div class="step-num">5</div><div class="step-body">Evite trazer colunas sensiveis que nao precisam aparecer para o usuario final.</div></div>
+            </div>
+            <div class="code-label">Exemplo - faturamento Protheus</div>
+            <div class="code-block">SELECT
+  SF2.F2_EMISSAO AS data,
+  SF2.F2_CLIENTE AS codigo_cliente,
+  SA1.A1_NOME    AS nome_cliente,
+  SF2.F2_DOC     AS numero_nf,
+  SF2.F2_VALBRUT AS valor_bruto,
+  SF2.F2_VALFAT  AS valor_faturado
+FROM SF2010 SF2
+INNER JOIN SA1010 SA1
+  ON SA1.A1_COD = SF2.F2_CLIENTE
+ AND SA1.A1_LOJA = SF2.F2_LOJA
+ AND SA1.D_E_L_E_T_ = ' '
+WHERE SF2.D_E_L_E_T_ = ' '
+  AND SF2.F2_TIPO = 'N'</div>
+            <div class="callout warning"><span class="callout-icon">!</span><span>Se o campo data estiver configurado como <code>data</code>, o SELECT precisa retornar exatamente uma coluna/alias chamada <code>data</code>.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e4-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-4')">
+          <span class="etapa-num">4.4</span>
+          <span class="etapa-titulo">Intencoes</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Cadastros -> Intencoes</strong>. Intencao e o cadastro que liga frases do usuario a um dataset.</p>
+            <div class="campo-lista">
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Nome</div><div class="campo-desc">Identificador curto, sem ambiguidade. Exemplo: <code>faturamento_periodo</code>.</div></div>
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Descricao</div><div class="campo-desc">Explique quando essa intencao deve ser usada e quando nao deve ser usada.</div></div>
+              <div class="campo-item"><div class="campo-nome">Modulo</div><div class="campo-desc">Agrupa a intencao em uma area funcional.</div></div>
+              <div class="campo-item"><div class="campo-nome">Acao</div><div class="campo-desc">Nome operacional da acao executada. Ajuda a organizar logs e entendimento tecnico.</div></div>
+              <div class="campo-item campo-obrigatorio"><div class="campo-nome">Dataset</div><div class="campo-desc">Consulta ERP que sera executada quando a intencao for identificada.</div></div>
+              <div class="campo-item"><div class="campo-nome">Frases de exemplo</div><div class="campo-desc">Perguntas reais que usuarios fariam: "quanto vendemos hoje?", "faturamento de ontem", "vendas do mes".</div></div>
+              <div class="campo-item"><div class="campo-nome">Ativo</div><div class="campo-desc">A intencao precisa estar ativa para ser usada em producao.</div></div>
+            </div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Quanto melhor a descricao e os exemplos, menor a chance de a IA escolher a intencao errada.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e4-5">
+        <div class="etapa-card-header" onclick="toggleEtapa('e4-5')">
+          <span class="etapa-num">4.5</span>
+          <span class="etapa-titulo">Equivalencias</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Cadastros -> Equivalencias</strong>. Essa tela cria equivalencias por empresa para o classificador entender termos locais.</p>
+            <div class="guia-table-wrap">
+              <table class="guia-table">
+                <thead><tr><th>Camada</th><th>Quando usar</th><th>Exemplo</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="tag">intencao</span></td><td>Quando usuarios usam nomes diferentes para a mesma rotina.</td><td>"vendas" = "faturamento"</td></tr>
+                  <tr><td><span class="tag">filtro</span></td><td>Quando um valor de filtro possui apelidos.</td><td>"matriz" = "filial 01"</td></tr>
+                  <tr><td><span class="tag">coluna</span></td><td>Quando uma coluna e conhecida por outro nome.</td><td>"NF" = "numero_nf"</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Essas equivalencias entram na regra local antes da IA. Elas ajudam a pontuar a intencao, a metrica e o filtro correto. Quanto mais sinais coerentes forem encontrados junto com periodo, agrupamento e metricas do dataset, maior a chance de o sistema executar sem consumir tokens.</span></div>
+            <div class="callout success"><span class="callout-icon">ok</span><span>Use equivalencias para adaptar o sistema ao vocabulario da empresa, nao para corrigir SQL ruim. A base tecnica ainda precisa estar bem modelada no dataset.</span></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="fase-section" id="f5">
+      <div class="fase-header">
+        <div class="fase-badge f5">5</div>
+        <div class="fase-titulo">
+          <h2>Uso Diario</h2>
+          <p>Como orientar usuarios finais</p>
+        </div>
+      </div>
+
+      <article class="etapa-card" id="e5-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-1')">
+          <span class="etapa-num">5.1</span>
+          <span class="etapa-titulo">Como perguntar ao IA Command</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Perguntas boas</div><div class="campo-desc">"Quanto faturamos hoje?", "Quais pedidos estao pendentes?", "Top 10 clientes do mes", "Titulos vencidos desta semana".</div></div>
+              <div class="campo-item"><div class="campo-nome">Inclua periodo quando necessario</div><div class="campo-desc">Use termos como hoje, ontem, este mes, mes passado, janeiro de 2026 ou entre duas datas.</div></div>
+              <div class="campo-item"><div class="campo-nome">Seja especifico</div><div class="campo-desc">Perguntas especificas ajudam a IA a escolher a intencao correta e reduzem ambiguidade.</div></div>
+              <div class="campo-item"><div class="campo-nome">O que evitar</div><div class="campo-desc">Perguntas genericas como "me passa um relatorio" sem assunto, periodo ou indicador.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e5-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-2')">
+          <span class="etapa-num">5.2</span>
+          <span class="etapa-titulo">Mensagens de texto e audio</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">O IA Command processa mensagens de texto e pode transcrever audio quando o provedor de transcricao esta configurado.</p>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Texto</div><div class="campo-desc">E o formato mais seguro para perguntas com datas, valores e nomes de clientes.</div></div>
+              <div class="campo-item"><div class="campo-nome">Audio</div><div class="campo-desc">O sistema transcreve o audio e depois trata o texto transcrito como uma pergunta normal.</div></div>
+              <div class="campo-item"><div class="campo-nome">Limites operacionais</div><div class="campo-desc">Audios muito longos, ruido ou fala pouco clara podem reduzir a qualidade da classificacao.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e5-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-3')">
+          <span class="etapa-num">5.3</span>
+          <span class="etapa-titulo">Empresa, canal e ambiguidades</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Em cenarios multiempresa, o mesmo canal pode atender mais de uma empresa. Por isso, aliases e vinculos precisam estar bem configurados.</p>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Canal com uma empresa</div><div class="campo-desc">O sistema usa diretamente a empresa vinculada ao canal.</div></div>
+              <div class="campo-item"><div class="campo-nome">Canal com varias empresas</div><div class="campo-desc">Use aliases claros para ajudar a escolher a empresa correta.</div></div>
+              <div class="campo-item"><div class="campo-nome">Quando houver duvida</div><div class="campo-desc">O bot pode pedir esclarecimento em vez de executar uma consulta na empresa errada.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="fase-section" id="f6">
+      <div class="fase-header">
+        <div class="fase-badge f6">6</div>
+        <div class="fase-titulo">
+          <h2>Auditoria e Diagnostico</h2>
+          <p>Como acompanhar o que aconteceu no sistema</p>
+        </div>
+      </div>
+
+      <article class="etapa-card" id="e6-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-1')">
+          <span class="etapa-num">6.1</span>
+          <span class="etapa-titulo">Log de execucoes</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Administracao -> Log Execucoes</strong>. Essa tela lista processamentos realizados pelo IA Command.</p>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Correlation ID</div><div class="campo-desc">Identificador unico da execucao. Use para rastrear problemas em log tecnico.</div></div>
+              <div class="campo-item"><div class="campo-nome">Usuario / numero WhatsApp</div><div class="campo-desc">Mostra quem originou a pergunta.</div></div>
+              <div class="campo-item"><div class="campo-nome">Intencao</div><div class="campo-desc">Indica qual intencao foi identificada pela IA.</div></div>
+              <div class="campo-item"><div class="campo-nome">Status e duracao</div><div class="campo-desc">Ajuda a encontrar erros e lentidao.</div></div>
+              <div class="campo-item"><div class="campo-nome">Tipo de mensagem</div><div class="campo-desc">Texto, audio ou outro tipo suportado pelo fluxo.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e6-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-2')">
+          <span class="etapa-num">6.2</span>
+          <span class="etapa-titulo">Auditoria administrativa</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Administracao -> Auditoria</strong>. Aqui ficam alteracoes feitas em cadastros e configuracoes sensiveis.</p>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Acao</div><div class="campo-desc">Exemplo: criar_intencao, editar_dataset, excluir_equivalencia, criar_numero_whatsapp.</div></div>
+              <div class="campo-item"><div class="campo-nome">Usuario</div><div class="campo-desc">Usuario logado que executou a acao.</div></div>
+              <div class="campo-item"><div class="campo-nome">Detalhes</div><div class="campo-desc">Resumo do registro alterado e campos envolvidos.</div></div>
+              <div class="campo-item"><div class="campo-nome">IP e data/hora</div><div class="campo-desc">Informacoes uteis para rastreabilidade.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e6-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-3')">
+          <span class="etapa-num">6.3</span>
+          <span class="etapa-titulo">Diagnostico rapido</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="guia-table-wrap">
+              <table class="guia-table">
+                <thead><tr><th>Sintoma</th><th>Onde verificar</th><th>Correcao provavel</th></tr></thead>
+                <tbody>
+                  <tr><td>WhatsApp nao conecta</td><td>Monitor</td><td>Reiniciar canal, desconectar sessao salva e escanear novo QR Code.</td></tr>
+                  <tr><td>Usuario nao recebe resposta</td><td>Monitor e Numeros Autorizados</td><td>Verificar se o numero esta cadastrado/ativo e se o canal esta conectado.</td></tr>
+                  <tr><td>IA nao entende pergunta</td><td>Intencoes e Equivalencias</td><td>Melhorar descricao, exemplos e equivalencias.</td></tr>
+                  <tr><td>Erro de SQL</td><td>Dataset e Log Execucoes</td><td>Rodar preview, validar aliases e campo data.</td></tr>
+                  <tr><td>Sem dados</td><td>SQL Base e periodo informado</td><td>Testar query direto no banco e verificar filtro de data/filial.</td></tr>
+                  <tr><td>Resposta de empresa errada</td><td>Canais e aliases</td><td>Revisar empresas vinculadas ao canal e nomes alternativos.</td></tr>
+                  <tr><td>Rotina nao aparece no menu</td><td>Permissoes IAHub</td><td>Conceder a rotina correta ao usuario naquela empresa.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="fase-section" id="f7">
+      <div class="fase-header">
+        <div class="fase-badge f7">7</div>
+        <div class="fase-titulo">
+          <h2>Checklist Final</h2>
+          <p>Ordem recomendada para colocar em producao</p>
+        </div>
+      </div>
+
+      <article class="etapa-card" id="e7-1">
+        <div class="etapa-card-header" onclick="toggleEtapa('e7-1')">
+          <span class="etapa-num">7.1</span>
+          <span class="etapa-titulo">Ordem recomendada de implantacao</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="step-list">
+              <div class="step-item"><div class="step-num">1</div><div class="step-body">Liberar sistema IA Command e rotinas para a empresa/usuarios no IAHub.</div></div>
+              <div class="step-item"><div class="step-num">2</div><div class="step-body">Configurar pelo menos uma chave de IA e testar o provedor.</div></div>
+              <div class="step-item"><div class="step-num">3</div><div class="step-body">Cadastrar conexao ERP, testar e ativar como padrao.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body">Criar canal WhatsApp e vincular a empresa correta.</div></div>
+              <div class="step-item"><div class="step-num">5</div><div class="step-body">Cadastrar numeros autorizados e revisar mensagens internas.</div></div>
+              <div class="step-item"><div class="step-num">6</div><div class="step-body">Criar modulos para organizar as intencoes.</div></div>
+              <div class="step-item"><div class="step-num">7</div><div class="step-body">Criar datasets, validar preview SQL e conferir campo data.</div></div>
+              <div class="step-item"><div class="step-num">8</div><div class="step-body">Criar intencoes, vincular datasets e preencher frases de exemplo.</div></div>
+              <div class="step-item"><div class="step-num">9</div><div class="step-body">Cadastrar equivalencias do vocabulario real da empresa.</div></div>
+              <div class="step-item"><div class="step-num">10</div><div class="step-body">Conectar WhatsApp no Monitor, enviar pergunta teste e acompanhar logs.</div></div>
+            </div>
+            <div class="callout success"><span class="callout-icon">ok</span><span>O Dashboard tambem mostra esse checklist automaticamente com base no que ja esta configurado na empresa atual.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e7-2">
+        <div class="etapa-card-header" onclick="toggleEtapa('e7-2')">
+          <span class="etapa-num">7.2</span>
+          <span class="etapa-titulo">Boas praticas e problemas comuns</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Comece pequeno</div><div class="campo-desc">Libere poucas intencoes bem testadas antes de criar dezenas de consultas.</div></div>
+              <div class="campo-item"><div class="campo-nome">Valide SQL fora do WhatsApp</div><div class="campo-desc">Use preview SQL e, quando necessario, execute no banco antes de expor para usuarios.</div></div>
+              <div class="campo-item"><div class="campo-nome">Use nomes de coluna legiveis</div><div class="campo-desc">Aliases como <code>valor_faturado</code> e <code>nome_cliente</code> geram respostas melhores que nomes tecnicos crus.</div></div>
+              <div class="campo-item"><div class="campo-nome">Revise seguranca</div><div class="campo-desc">Nao traga dados sensiveis desnecessarios nos datasets. O que vier no SQL pode aparecer na resposta.</div></div>
+              <div class="campo-item"><div class="campo-nome">Monitore as primeiras semanas</div><div class="campo-desc">Use Log Execucoes e Auditoria para ajustar equivalencias, exemplos e datasets com base no uso real.</div></div>
+              <div class="campo-item"><div class="campo-nome">Documente cada dataset</div><div class="campo-desc">Nome, objetivo, periodo esperado e responsavel tecnico ajudam a manter o sistema saudavel.</div></div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</div>
+
+<script>
+  function toggleEtapa(id) {
+    const card = document.getElementById(id);
+    if (!card) return;
+    card.classList.toggle('open');
+  }
+
+  function scrollFase(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function abrirEtapa(id, e) {
+    const card = document.getElementById(id);
+    if (!card) return;
+    if (!card.classList.contains('open')) card.classList.add('open');
+    setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
+    document.querySelectorAll('.nav-etapa').forEach(el => el.classList.remove('active'));
+    e?.currentTarget?.classList.add('active');
+  }
+
+  async function exportarPDF() {
+    const btn = document.getElementById('btn-exportar-pdf');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span>...</span> Gerando PDF...';
+    try {
+      const res = await fetch('/app/ia-command/guia/exportar-pdf');
+      if (!res.ok) throw new Error('Falha na geracao');
+      if (!res.headers.get('Content-Type')?.includes('application/pdf')) {
+        throw new Error('Resposta inesperada ao gerar PDF');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'guia-ia-command.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      alert('Erro ao gerar o PDF do guia. Verifique o console do servidor.');
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  }
+
+  const content = document.getElementById('guia-content');
+  const cards = [...document.querySelectorAll('.etapa-card')];
+  const navItems = [...document.querySelectorAll('.nav-etapa')];
+
+  content.addEventListener('scroll', () => {
+    const scrollTop = content.scrollTop + 90;
+    let current = null;
+    for (const card of cards) {
+      if (card.offsetTop <= scrollTop) current = card.id;
+    }
+    navItems.forEach(el => {
+      const fn = el.getAttribute('onclick') || '';
+      el.classList.toggle('active', current && fn.includes(current));
+    });
+  });
+</script>
+</body>
+</html>

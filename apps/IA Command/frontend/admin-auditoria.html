@@ -63,6 +63,22 @@
     .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
     .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
     .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -95,7 +111,10 @@
           <div class="page-title">Auditoria</div>
           <div class="page-subtitle">Registro de ações administrativas realizadas no sistema. Somente leitura.</div>
         </div>
-        <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
+          <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
+        </div>
       </div>
 
       <div class="quick-panel">
@@ -258,6 +277,37 @@
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Auditoria</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">O que é registrado aqui</div>
+      <div class="help-item-desc">A Auditoria registra todas as ações administrativas realizadas no IA Command: criação, edição e exclusão de Conexões, Datasets, Intenções e configurações de IA. Somente leitura — não é possível editar ou excluir registros de auditoria.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Colunas</div>
+      <div class="help-item"><div class="help-item-label">Data/Hora</div><div class="help-item-desc">Momento exato em que a ação foi realizada.</div></div>
+      <div class="help-item"><div class="help-item-label">Usuário</div><div class="help-item-desc">Usuário do IAHub que realizou a ação.</div></div>
+      <div class="help-item"><div class="help-item-label">Ação</div><div class="help-item-desc">Tipo de operação: <em>criar</em>, <em>atualizar</em>, <em>excluir</em>, <em>ativar</em>, <em>testar</em>, etc.</div></div>
+      <div class="help-item"><div class="help-item-label">Recurso</div><div class="help-item-desc">O que foi alterado (ex: "conexão", "dataset", "intenção").</div></div>
+      <div class="help-item"><div class="help-item-label">Detalhes</div><div class="help-item-desc">Clique na linha para ver o payload completo da mudança (valores anteriores e novos).</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Quando usar</div>
+      <div class="help-item-desc">Use a Auditoria para rastrear quem fez uma alteração e quando, investigar mudanças acidentais em Datasets ou Conexões, e garantir conformidade em ambientes com múltiplos administradores.</div>
+    </div>
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

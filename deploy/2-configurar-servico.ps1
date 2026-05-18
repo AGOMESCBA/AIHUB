@@ -7,7 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ── Configuracao — altere se necessario ──────────────────────
-$PROJECT_PATH  = "C:\iahub"
+$PROJECT_PATH  = "C:\Web\iahub"
 $SERVICE_NAME  = "iahub"
 $CHROME_PATH   = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $APP_PORT      = 3000

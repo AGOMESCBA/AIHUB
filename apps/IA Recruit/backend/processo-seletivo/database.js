@@ -1,12 +1,10 @@
 const fs     = require('fs');
-const path   = require('path');
 const crypto = require('crypto');
-
-const DATA_DIR = path.join(__dirname, '..', '..', '..', '..', 'data');
+const { empresaDataFile, platformDataFile } = require('../data-paths');
 
 function _file(empresaId) {
   if (!empresaId) throw new Error('empresa_id é obrigatório');
-  return path.join(DATA_DIR, `empresa_${empresaId}.json`);
+  return empresaDataFile(empresaId);
 }
 
 function load(empresaId) {
@@ -130,12 +128,12 @@ module.exports = {
   // Busca o empresaId a partir de um token ou slug (percorre todos os arquivos de empresa)
   findEmpresaIdByToken(identifier) {
     if (!identifier) return null;
-    const empresasFile = path.join(DATA_DIR, 'empresas.json');
+    const empresasFile = platformDataFile('empresas.json');
     if (!fs.existsSync(empresasFile)) return null;
     let empresas = [];
     try { empresas = JSON.parse(fs.readFileSync(empresasFile, 'utf8')) || []; } catch { return null; }
     for (const empresa of empresas) {
-      const f = path.join(DATA_DIR, `empresa_${empresa.id}.json`);
+      const f = _file(empresa.id);
       if (!fs.existsSync(f)) continue;
       try {
         const d = JSON.parse(fs.readFileSync(f, 'utf8'));

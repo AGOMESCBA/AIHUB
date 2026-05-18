@@ -29,6 +29,8 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/config-conexoes.html':       'iac-config-conexoes',
   '/app/ia-command/config-conexao-form.html':  'iac-config-conexoes',
   '/app/ia-command/config-ia.html':            'iac-config-ia',
+  '/app/ia-command/admin-modulos.html':        'iac-admin-modulos',
+  '/app/ia-command/admin-modulo-form.html':    'iac-admin-modulos',
   '/app/ia-command/admin-intencoes.html':      'iac-admin-intencoes',
   '/app/ia-command/admin-intencao-form.html':  'iac-admin-intencoes',
   '/app/ia-command/admin-datasets.html':       'iac-admin-datasets',
@@ -72,6 +74,7 @@ const _ROTINA_LABELS = {
   'iac-monitor-whatsapp':    'IA Command - Monitor WhatsApp',
   'iac-config-conexoes':     'IA Command - Conexões ERP',
   'iac-config-ia':           'IA Command - Configurar IA',
+  'iac-admin-modulos':       'IA Command - Módulos',
   'iac-admin-intencoes':     'IA Command - Intenções',
   'iac-admin-datasets':      'IA Command - Datasets ERP',
   'iac-admin-execucoes':     'IA Command - Log de Execuções',
@@ -480,6 +483,15 @@ async function _injetarEmpresaTopbar() {
   const dropdown = document.getElementById('_empresa-dropdown');
   let   aberto   = false;
   let   eidAtual = sessao.empresa_id;
+
+  window._iahubAtualizarEmpresaBadge = function ({ id, nome } = {}) {
+    if (id !== undefined && id !== null) eidAtual = Number(id);
+    if (nome !== undefined) {
+      const nomeEl = document.getElementById('_empresa-nome');
+      if (nomeEl) nomeEl.textContent = nome || '';
+    }
+    fecharDropdown();
+  };
 
   btn.addEventListener('click', async (e) => {
     e.stopPropagation();

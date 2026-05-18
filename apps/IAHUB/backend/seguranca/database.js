@@ -1,9 +1,9 @@
 const fs   = require('fs');
 const path = require('path');
+const { APP_DATA_DIR, appDataFile } = require('../data-paths');
 
-const DATA_DIR  = path.join(__dirname, '..', '..', '..', '..', 'data');
 const LOG_DIR   = path.join(__dirname, '..', '..', '..', '..', 'logs');
-const ARQUIVO   = path.join(DATA_DIR, 'seguranca.json');
+const ARQUIVO   = appDataFile('seguranca.json');
 const AUDIT_LOG = path.join(LOG_DIR, 'auditoria.log');
 
 // Valores padrão — usados quando seguranca.json ainda não existe
