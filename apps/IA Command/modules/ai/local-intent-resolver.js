@@ -1,4 +1,5 @@
 const { identificarPeriodoTexto } = require('./period-resolver');
+const { normalizarTexto, normalizarBasico, extrairRegrasNormalizacao } = require('./text-normalizer');
 
 const PERIOD_TYPES = new Set([
   'nenhum',
@@ -20,6 +21,7 @@ const PERIOD_TYPES = new Set([
   'ultimos_N_dias',
   'comparacao_anual',
   'comparacao_mensal',
+  'comparacao_mensal_entre_anos',
   'comparacao_mesmo_mes',
   'comparacao_acumulado_mes',
   'personalizado',
@@ -31,6 +33,9 @@ const DIMENSIONS = {
   vendedor: ['por vendedor', 'vendedores', 'vendedor', 'representante', 'rep', 'quem vendeu'],
   fornecedor: ['por fornecedor', 'fornecedores', 'fornecedor', 'forn'],
   empresa: ['por empresa', 'por filial', 'empresa', 'filial', 'unidade', 'loja'],
+  mes: ['por mes', 'mes a mes', 'mensal', 'mes com maior', 'mes maior', 'melhor mes', 'pior mes', 'qual o mes'],
+  ano: ['por ano', 'ano a ano', 'anual', 'ano com maior', 'ano maior', 'melhor ano', 'pior ano', 'qual o ano'],
+  dia: ['por dia', 'dia a dia', 'diario', 'diaria', 'diariamente', 'cada dia', 'detalhe dia', 'detalhado por dia'],
 };
 
 const STOPWORDS_INTENCAO = new Set([
@@ -39,22 +44,13 @@ const STOPWORDS_INTENCAO = new Set([
   'atual', 'anterior', 'passado', 'semana', 'dia',
 ]);
 
-function normalizarTexto(valor) {
-  return String(valor || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^\w\s/-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
-  const texto = normalizarTexto(mensagem);
+  const normalizacoes = opts.normalizacoes || extrairRegrasNormalizacao(sinonimos);
+  const texto = normalizarTexto(mensagem, normalizacoes);
   if (!texto || !intencoes.length) return null;
 
   const matches = _matchSinonimos(texto, sinonimos);
-  const periodo = identificarPeriodoTexto(mensagem);
+  const periodo = identificarPeriodoTexto(mensagem, { normalizacoes });
   const agruparPor = _resolverAgrupamento(texto, matches.coluna);
   const intencaoInfo = _resolverIntencao(texto, intencoes, matches.intencao, { periodo, agruparPor });
   if (!intencaoInfo) return null;
@@ -63,16 +59,18 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
   const limite = _resolverLimite(texto);
   const metricasDataset = _metricasDataset(intencao, opts.datasets || []);
   const metricasTexto = _resolverMetricas(texto, matches.coluna, metricasDataset);
-  const ordenarPor = limite || agruparPor ? _resolverOrdenacao(metricasTexto, metricasDataset) : null;
+  const operacaoAnalitica = _resolverOperacaoAnalitica(texto, metricasTexto, metricasDataset);
+  const ordenarPor = limite || agruparPor ? _resolverOrdenacao(metricasTexto, metricasDataset, texto) : null;
 
-  const confianca = _calcularConfianca({ matches, periodo, agruparPor, filtros, limite, intencaoInfo, metricasTexto });
-  if (confianca < 0.82) return null;
+  const confianca = _calcularConfianca({ matches, periodo, agruparPor, filtros, limite, intencaoInfo, metricasTexto, operacaoAnalitica });
+  if (confianca < 0.85) return null;
 
   return {
     intencao: intencao.nome,
     periodo,
     filtros,
     agrupar_por: agruparPor,
+    operacao_analitica: operacaoAnalitica,
     ordenar_por: ordenarPor,
     limite,
     confianca,
@@ -98,7 +96,7 @@ function _matchSinonimos(texto, sinonimos) {
     if (!s?.termo || !s?.equivalencia || s.ativo === 0) continue;
     const camada = String(s.camada || '').toLowerCase();
     if (!out[camada]) continue;
-    const termo = normalizarTexto(s.termo);
+    const termo = normalizarBasico(s.termo);
     if (!termo || !_containsTerm(texto, termo)) continue;
     out[camada].push({ ...s, termo_normalizado: termo });
   }
@@ -195,7 +193,7 @@ function _resolverFiltros(texto, sinonimosFiltro) {
 
 function _resolverLimite(texto) {
   const m = texto.match(/\b(?:top|maiores|maior|ranking|rank)\s+(\d{1,3})\b/) || texto.match(/\b(\d{1,3})\s+(?:maiores|mais vendidos|clientes|produtos|fornecedores)\b/);
-  if (!m) return null;
+  if (!m) return _containsAny(texto, ['maior', 'melhor', 'menor', 'pior']) ? 1 : null;
   const n = parseInt(m[1], 10);
   return Number.isFinite(n) ? Math.min(Math.max(n, 1), 100) : null;
 }
@@ -213,14 +211,36 @@ function _resolverMetricas(texto, sinonimosColuna, metricasDataset) {
   return out;
 }
 
-function _resolverOrdenacao(metricasTexto, metricasDataset) {
+function _resolverOrdenacao(metricasTexto, metricasDataset, texto = '') {
   const metric = metricasTexto[0] || metricasDataset[0];
   if (!metric) return null;
   const coluna = _normalizarColuna(metric);
-  return coluna ? `${coluna}:desc` : null;
+  const dir = _containsAny(texto, ['menor', 'pior']) ? 'asc' : 'desc';
+  return coluna ? `${coluna}:${dir}` : null;
 }
 
-function _calcularConfianca({ matches, periodo, agruparPor, filtros, limite, intencaoInfo, metricasTexto }) {
+function _resolverOperacaoAnalitica(texto, metricasTexto, metricasDataset) {
+  if (!_containsAny(texto, ['media', 'medio', 'promedio'])) return null;
+
+  let granularidade = null;
+  if (_containsAny(texto, ['mensal', 'por mes', 'ao mes', 'mes a mes'])) granularidade = 'mes';
+  if (_containsAny(texto, ['anual', 'por ano', 'ao ano', 'ano a ano'])) granularidade = 'ano';
+  if (_containsAny(texto, ['diaria', 'diario', 'por dia', 'ao dia'])) granularidade = 'dia';
+  if (!granularidade) granularidade = 'mes';
+
+  const metrica = metricasTexto[0] || metricasDataset.find(m => _normalizarColuna(m).includes('faturamento')) || metricasDataset[0] || null;
+  return {
+    operacao: 'media',
+    granularidade,
+    metrica,
+  };
+}
+
+function _containsAny(texto, termos) {
+  return termos.some(t => _containsTerm(texto, normalizarTexto(t)));
+}
+
+function _calcularConfianca({ matches, periodo, agruparPor, filtros, limite, intencaoInfo, metricasTexto, operacaoAnalitica }) {
   let score = 0.66;
   if (intencaoInfo?.score) score += Math.min(0.18, intencaoInfo.score * 0.16);
   if (matches.intencao.length) score += 0.12;
@@ -229,6 +249,7 @@ function _calcularConfianca({ matches, periodo, agruparPor, filtros, limite, int
   if (Object.keys(filtros || {}).length) score += 0.03;
   if (limite) score += 0.02;
   if (metricasTexto?.length) score += 0.02;
+  if (operacaoAnalitica) score += 0.03;
   return Math.min(0.97, Number(score.toFixed(2)));
 }
 
@@ -244,6 +265,8 @@ function normalizarIntent(intent) {
   if (!PERIOD_TYPES.has(periodo.tipo)) periodo.tipo = 'nenhum';
   if (periodo.dias != null) periodo.dias = Math.min(Math.max(parseInt(periodo.dias, 10) || 7, 1), 365);
   if (periodo.mes != null) periodo.mes = Math.min(Math.max(parseInt(periodo.mes, 10) || 1, 1), 12);
+  if (periodo.ano_base != null) periodo.ano_base = Math.min(Math.max(parseInt(periodo.ano_base, 10) || 0, 1900), 2099);
+  if (periodo.ano_comparacao != null) periodo.ano_comparacao = Math.min(Math.max(parseInt(periodo.ano_comparacao, 10) || 0, 1900), 2099);
   intent.periodo = periodo;
   return intent;
 }

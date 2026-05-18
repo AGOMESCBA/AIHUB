@@ -1,7 +1,9 @@
 const { PERIOD_TYPES, normalizarIntent } = require('./local-intent-resolver');
 
 const FILTROS_PERMITIDOS = new Set(['cliente', 'vendedor', 'fornecedor', 'produto', 'filial', 'status']);
-const AGRUPAMENTOS_PERMITIDOS = new Set(['cliente', 'produto', 'vendedor', 'fornecedor', 'empresa']);
+const AGRUPAMENTOS_PERMITIDOS = new Set(['cliente', 'produto', 'vendedor', 'fornecedor', 'empresa', 'mes', 'ano', 'dia']);
+const OPERACOES_PERMITIDAS = new Set(['soma', 'media']);
+const GRANULARIDADES_PERMITIDAS = new Set(['dia', 'mes', 'ano']);
 
 // Valida e normaliza o JSON retornado pela IA de classificacao.
 // nomesPermitidos: array de nomes validos, carregado do banco + "desconhecido".
@@ -33,6 +35,9 @@ function validar(intent, nomesPermitidos) {
   if (['comparacao_mesmo_mes', 'comparacao_acumulado_mes'].includes(intent.periodo.tipo) && !intent.periodo.mes) {
     erros.push(`Periodo ${intent.periodo.tipo} exige campo "mes"`);
   }
+  if (intent.periodo.tipo === 'comparacao_mensal_entre_anos' && (!intent.periodo.ano_base || !intent.periodo.ano_comparacao)) {
+    erros.push('Periodo comparacao_mensal_entre_anos exige campos "ano_base" e "ano_comparacao"');
+  }
   if (intent.periodo.tipo === 'personalizado') {
     const ini = intent.periodo.data_inicio;
     const fim = intent.periodo.data_fim || ini;
@@ -57,6 +62,26 @@ function validar(intent, nomesPermitidos) {
   if (intent.agrupar_por && !AGRUPAMENTOS_PERMITIDOS.has(intent.agrupar_por)) {
     erros.push(`Agrupamento invalido: "${intent.agrupar_por}"`);
     intent.agrupar_por = null;
+  }
+
+  if (intent.operacao_analitica && typeof intent.operacao_analitica === 'object') {
+    const op = String(intent.operacao_analitica.operacao || '').toLowerCase();
+    const granularidade = String(intent.operacao_analitica.granularidade || '').toLowerCase();
+    if (!OPERACOES_PERMITIDAS.has(op)) {
+      erros.push(`Operacao analitica invalida: "${intent.operacao_analitica.operacao}"`);
+      intent.operacao_analitica = null;
+    } else if (op === 'media' && !GRANULARIDADES_PERMITIDAS.has(granularidade)) {
+      erros.push(`Granularidade analitica invalida: "${intent.operacao_analitica.granularidade}"`);
+      intent.operacao_analitica = null;
+    } else {
+      intent.operacao_analitica = {
+        operacao: op,
+        granularidade: GRANULARIDADES_PERMITIDAS.has(granularidade) ? granularidade : null,
+        metrica: intent.operacao_analitica.metrica ? String(intent.operacao_analitica.metrica).replace(/[^\w]/g, '').toLowerCase() : null,
+      };
+    }
+  } else {
+    intent.operacao_analitica = null;
   }
 
   intent.ordenar_por = intent.ordenar_por || null;
