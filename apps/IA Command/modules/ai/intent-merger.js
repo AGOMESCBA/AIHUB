@@ -28,6 +28,12 @@ const PERIODOS_GENERICOS = new Set(['mes_atual', 'ano_atual']);
 // Se não contiver → período retornado pelo classificador é um "padrão implícito".
 const _TEM_TEMPORAL = /\b(hoje|ontem|semana|m[eê]s|ano|trimestre|semestre|[úu]ltim|janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|20\d{2}|19\d{2})\b/i;
 
+// Detecta granularidade temporal explícita ("por mês", "por dia", "por ano") —
+// indica agrupamento, não especificação de período novo.
+const _AGRUPAR_MES = /\bpor\s+m[eê]s\b|\bm[eê]s\s+a\s+m[eê]s\b/i;
+const _AGRUPAR_DIA = /\bpor\s+dia\b|\bdia\s+a\s+dia\b/i;
+const _AGRUPAR_ANO = /\bpor\s+ano\b|\bano\s+a\s+ano\b/i;
+
 function _clonar(v) {
   return v == null ? v : JSON.parse(JSON.stringify(v));
 }
@@ -149,6 +155,25 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
     merged._periodoRefinamento = tipoPeriodo;
     merged._herdouPeriodo = true;
   }
+
+  // 2a. Granularidade temporal na mensagem ("por mês", "por dia", "por ano")
+  // → define agrupar_por e herda o período do contexto (é agrupamento, não novo período)
+  if (!merged.agrupar_por && mensagem) {
+    let granularidade = null;
+    if (_AGRUPAR_MES.test(mensagem))      granularidade = 'mes';
+    else if (_AGRUPAR_DIA.test(mensagem)) granularidade = 'dia';
+    else if (_AGRUPAR_ANO.test(mensagem)) granularidade = 'ano';
+
+    if (granularidade) {
+      merged.agrupar_por = granularidade;
+      if (!merged._herdouPeriodo) {
+        merged.periodo = _clonar(ultimoIntent.periodo);
+        merged._herdouPeriodo = true;
+      }
+      merged._granularidadeDetectada = granularidade;
+    }
+  }
+
   // Período explícito novo (qualquer outro tipo) → substitui, sem herança
   // Regra extra: mês sem ano explícito + contexto com ano específico → ajusta o ano
   if (!merged._herdouPeriodo && mensagem && _ehMesSemAno(merged.periodo, mensagem)) {
