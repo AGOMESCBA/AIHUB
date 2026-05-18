@@ -11,8 +11,8 @@ function _extractJson(text) {
   throw new Error('Claude nao retornou JSON valido.');
 }
 
-async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = []) {
-  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos);
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null) {
+  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos, contextoAnterior);
   const body = JSON.stringify({
     model: CLAUDE_MODEL,
     max_tokens: 512,

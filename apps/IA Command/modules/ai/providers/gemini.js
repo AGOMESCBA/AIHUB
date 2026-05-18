@@ -2,8 +2,8 @@ const https = require('https');
 
 const GEMINI_MODEL = 'gemini-2.0-flash';
 
-async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = []) {
-  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos);
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null) {
+  const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos, contextoAnterior);
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0, maxOutputTokens: 512, responseMimeType: 'application/json' },

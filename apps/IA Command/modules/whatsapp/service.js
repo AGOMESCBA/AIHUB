@@ -6,6 +6,7 @@ const fs                   = require('fs');
 const { exec }             = require('child_process');
 
 const intentService       = require('../ai/intent-service');
+const intentMerger        = require('../ai/intent-merger');
 const transcriptionService = require('../ai/transcription-service');
 const intentRouter        = require('../erp/intent-router');
 const responseFormatter   = require('../erp/response-formatter');
@@ -235,7 +236,7 @@ class IACWhatsAppService extends EventEmitter {
         'SELECT COUNT(*) AS total FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND ativo = 1'
       ).get(this._empresaId)?.total || 0;
 
-      if (!total) return true;
+      if (!total) return false;
 
       const numeros = channelStore.variantesNumeroBrasil(sender);
       const lid = channelStore.extrairLid(sender);
@@ -249,7 +250,7 @@ class IACWhatsAppService extends EventEmitter {
       return !!row;
     } catch (err) {
       this.log(`Falha ao validar numero autorizado: ${err.message}`, 'warning');
-      return true;
+      return false;
     }
   }
 
@@ -531,7 +532,41 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
 
-    const intent    = await intentService.classificar(textoExecucao, empresaId);
+    if (!intentService.temConfiguracaoMinima(empresaId)) {
+      this.log(`Empresa #${empresaId} sem datasets/intencoes configurados - consulta ignorada sem acionar IA.`, 'warning');
+      const resposta = 'Esta empresa ainda nao possui intencoes e datasets configurados para consultas pelo IA Command.';
+      this._registrarInterpretacao({
+        empresaId,
+        sender,
+        texto: textoExecucao,
+        intent: {
+          intencao: 'desconhecido',
+          periodo: { tipo: 'nenhum' },
+          filtros: {},
+          confianca: 0,
+          _provedor: 'nenhum',
+          _erro: 'Empresa sem intencoes e datasets configurados.',
+          _erroTipo: 'sem_configuracao',
+        },
+        resultado: {
+          tipo: 'erro',
+          subtipo: 'sem_configuracao',
+          mensagem: resposta,
+        },
+        resposta,
+      });
+      return resposta;
+    }
+
+    const ctxSender      = this._getSenderContext(sender);
+    const contextoAnterior = ctxSender?.lastIntent  || null;
+    const lastIntentTs     = ctxSender?.lastIntentTs || 0;
+
+    let intent = await intentService.classificar(textoExecucao, empresaId, { contextoAnterior });
+    if (contextoAnterior) {
+      intent = intentMerger.mesclar(intent, contextoAnterior, lastIntentTs);
+    }
+
     const filtrosStr = Object.keys(intent.filtros || {}).length
       ? ' | filtros: ' + Object.entries(intent.filtros).map(([k,v]) => `${k}="${v}"`).join(', ')
       : '';
@@ -567,6 +602,12 @@ class IACWhatsAppService extends EventEmitter {
     });
     const resposta = responseFormatter.formatar(resultado, intent, { empresaId, messageTemplates });
 
+    // Persiste o intent na sessão para uso como contexto no próximo turno.
+    // Salva apenas quando a execução produziu um resultado real (não erro ou desconhecido).
+    if (resultado.tipo !== 'erro' && resultado.tipo !== 'desconhecido' && intent.intencao !== 'desconhecido') {
+      this._setSenderContext(sender, { lastIntent: intent, lastIntentTs: Date.now() });
+    }
+
     if (this._channelId && channelStore.listarEmpresasDoCanal(this._channelId).length > 1 && empresaResolvida?.nome) {
       const respostaFinal = messageTemplates.render(empresaId, 'resposta_empresa_prefixo', {
         empresa_nome: empresaResolvida.nome,
@@ -592,10 +633,14 @@ class IACWhatsAppService extends EventEmitter {
 
     // Tenta classificar usando cada empresa do canal até encontrar uma com IA configurada.
     // classificar() nunca lança — retorna _provedor='nenhum' quando sem chaves.
+    const ctxSenderAll      = sender ? this._getSenderContext(sender) : null;
+    const contextoAnteriorAll = ctxSenderAll?.lastIntent  || null;
+    const lastIntentTsAll     = ctxSenderAll?.lastIntentTs || 0;
+
     let intent = null;
     let fallbackIntent = null;
     for (const emp of empresasLoop) {
-      const result = await intentService.classificar(texto, emp.empresa_id);
+      const result = await intentService.classificar(texto, emp.empresa_id, { contextoAnterior: contextoAnteriorAll });
       if (result._provedor !== 'nenhum') {
         intent = result;
         this.log(`🧠 Intenção (all) via empresa #${emp.empresa_id}: "${intent.intencao}" | motor: ${this._rotuloMotor(intent)} | provedor: ${intent._provedor} | confiança: ${(intent.confianca * 100).toFixed(0)}%`, 'info');
@@ -609,6 +654,9 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
     if (!intent) intent = fallbackIntent || { intencao: 'desconhecido', _provedor: 'nenhum', _erro: 'Nenhuma chave de IA configurada.', confianca: 0, periodo: { tipo: 'nenhum' }, filtros: {}, agrupar_por: null, ordenar_por: null, limite: null, precisa_confirmacao: false };
+    if (contextoAnteriorAll) {
+      intent = intentMerger.mesclar(intent, contextoAnteriorAll, lastIntentTsAll);
+    }
     const empresaLogId = empresas[0].empresa_id;
     const senderAll = sender || '__all__';
 
@@ -735,6 +783,11 @@ class IACWhatsAppService extends EventEmitter {
     if (semDados.length)   cabecalho.push(`ℹ️ _Sem dados no período: ${semDados.join(', ')}_`);
 
     const respostaFinal = cabecalho.join('\n') + '\n' + resposta;
+
+    if (sender && intent.intencao !== 'desconhecido') {
+      this._setSenderContext(sender, { lastIntent: intent, lastIntentTs: Date.now() });
+    }
+
     this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoCombinado, resposta: respostaFinal });
     return respostaFinal;
   }

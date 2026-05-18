@@ -4,6 +4,7 @@ const deepseekProvider = require('./providers/deepseek');
 const claudeProvider = require('./providers/claude');
 const validator      = require('./schema-validator');
 const localResolver  = require('./local-intent-resolver');
+const { extrairRegrasNormalizacao } = require('./text-normalizer');
 const crud           = require('../database/crud');
 
 const PROVIDERS = {
@@ -352,22 +353,43 @@ function _simplificarErro(msg) {
   return { tipo: 'indisponivel', pt: 'indisponível' };
 }
 
-async function classificar(mensagem, empresaId) {
+async function classificar(mensagem, empresaId, opts = {}) {
+  const { contextoAnterior = null } = opts;
   const cacheKey = _classificationKey(empresaId, mensagem);
   const cached = _cacheGet(_cache.classificacoes, cacheKey);
   if (cached) return { ..._clone(cached), _cache: true };
 
-  const { keys, cfg } = await _resolveKeys(empresaId);
   const intencoes = _carregarIntencoes(empresaId);
+  const sinonimos = _carregarSinonimos(empresaId);
+  const normalizacoes = extrairRegrasNormalizacao(sinonimos);
+  const datasets = _carregarDatasets(empresaId);
+
+  if (!intencoes.length || !datasets.length) {
+    console.log(`[IA classificar] empresaId=${empresaId} | intencoes=${intencoes.length} | datasets=${datasets.length} | sem configuracao minima`);
+    return {
+      intencao:            'desconhecido',
+      periodo:             { tipo: 'nenhum' },
+      filtros:             {},
+      agrupar_por:         null,
+      ordenar_por:         null,
+      limite:              null,
+      confianca:           0,
+      precisa_confirmacao: false,
+      origem:              'texto',
+      _provedor:           'nenhum',
+      _erro:               'Empresa sem intencoes e datasets configurados.',
+      _erroTipo:           'sem_configuracao',
+      _erros:              [],
+    };
+  }
+
+  const { keys, cfg } = await _resolveKeys(empresaId);
   const nomesPermitidos = intencoes.map(i => i.nome).concat(['desconhecido']);
   const ordem = _normalizarOrdem(cfg);
   const confiancaMinima = Number(cfg.confianca_minima ?? 0.6) || 0.6;
-
-  const sinonimos = _carregarSinonimos(empresaId);
-  const datasets = _carregarDatasets(empresaId);
   console.log(`[IA classificar] empresaId=${empresaId} | intencoes=${intencoes.length} | sinonimos=${sinonimos.length} | ordem=${ordem.join(',')} | keys: groq=${!!keys.groq} gemini=${!!keys.gemini} deepseek=${!!keys.deepseek} claude=${!!keys.claude}`);
 
-  const local = localResolver.resolverLocal(mensagem, intencoes, sinonimos, { datasets });
+  const local = localResolver.resolverLocal(mensagem, intencoes, sinonimos, { datasets, normalizacoes });
   if (local) {
     _cacheClassification(cacheKey, local);
     return local;
@@ -377,7 +399,7 @@ async function classificar(mensagem, empresaId) {
   for (const provedor of ordem) {
     if (!keys[provedor]) continue;
     try {
-      const raw = await PROVIDERS[provedor].classificarIntencao(mensagem, keys[provedor], intencoes, sinonimos);
+      const raw = await PROVIDERS[provedor].classificarIntencao(mensagem, keys[provedor], intencoes, sinonimos, contextoAnterior);
       const result = validator.validar(raw, nomesPermitidos);
       if (result.valido) {
         const intent = { ...result.intent, _provedor: provedor, _fallback: provedor !== ordem[0] };
