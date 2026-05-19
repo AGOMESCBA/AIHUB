@@ -872,6 +872,7 @@ class IACWhatsAppService extends EventEmitter {
     const lastIntentTs     = scopedContexto.ts;
 
     let intent = await intentService.classificar(textoExecucao, empresaId, { contextoAnterior });
+    intent._mensagemOriginal = textoExecucao;
     if (contextoAnterior) {
       intent = intentMerger.mesclar(intent, contextoAnterior, lastIntentTs, textoExecucao, this._configAnaliticaEmpresa(empresaId));
     }

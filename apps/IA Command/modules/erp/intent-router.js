@@ -26,6 +26,13 @@ async function rotear(intent, empresaId) {
     };
   }
 
+  // Roteamento para o motor Text-to-SQL dinâmico (ex: módulo de Compras)
+  if (registro.acao === 'ai_text_to_sql') {
+    const AiSqlHandler = require('./compras/ai-sql-handler');
+    const resultado = await AiSqlHandler.executar(intent, empresaId);
+    return { dataset_id: null, dataset_nome: registro.modulo || 'ai_sql', ...resultado };
+  }
+
   if (!registro.dataset_id) {
     return {
       tipo: 'erro',

@@ -731,6 +731,16 @@ function _formatarOperacaoAnalitica(rows, intent, periodo, periodoStr, filtrosSt
 }
 
 function formatar(resultado, intent, opts = {}) {
+  // Resultado do motor Text-to-SQL dinâmico (ex: módulo de Compras)
+  // A resposta já vem formatada pela IA ou pelo fallback interno do handler.
+  if (resultado.tipo === 'sucesso_ai_sql') {
+    return resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+  }
+
+  if (resultado.tipo === 'erro' && resultado.resposta_direta) {
+    return resultado.resposta_direta;
+  }
+
   if (resultado.tipo === 'desconhecido') {
     if (opts.messageTemplates && opts.empresaId) {
       if (intent?._erroTipo === 'cota_esgotada') {

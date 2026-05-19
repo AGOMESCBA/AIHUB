@@ -382,7 +382,8 @@ async function classificar(mensagem, empresaId, opts = {}) {
   const normalizacoes = extrairRegrasNormalizacao(sinonimos);
   const datasets = _carregarDatasets(empresaId);
 
-  if (!intencoes.length || !datasets.length) {
+  const temAiSql = intencoes.some(i => i.acao === 'ai_text_to_sql');
+  if (!intencoes.length || (!datasets.length && !temAiSql)) {
     console.log(`[IA classificar] empresaId=${empresaId} | intencoes=${intencoes.length} | datasets=${datasets.length} | sem configuracao minima`);
     return {
       intencao:            'desconhecido',
@@ -477,6 +478,7 @@ function temConfiguracaoMinima(empresaId) {
   try {
     const intencoes = crud.listar('intentions', { empresa_id: empresaId, ativo: 1 });
     if (!intencoes.length) return false;
+    if (intencoes.some(i => i.acao === 'ai_text_to_sql')) return true;
     const datasets = crud.listar('datasets', { empresa_id: empresaId });
     return datasets.length > 0;
   } catch (_) {

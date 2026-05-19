@@ -29,6 +29,26 @@ const DEFAULT_TEMPLATES = {
     titulo: 'IA com cota esgotada',
     template: '⚠️ As IAs estao temporariamente indisponiveis ({{provedores}}: cota esgotada).\n\nAguarde alguns minutos e tente novamente.',
   },
+  compras_processando: {
+    titulo: 'Compras — processando consulta',
+    template: '🔍 Consultando os dados de compras no ERP... aguarde um instante.',
+  },
+  compras_sem_resultado: {
+    titulo: 'Compras — sem resultado',
+    template: 'Não encontrei registros de compras para essa consulta no período informado. Tente ajustar o período ou os filtros.',
+  },
+  compras_erro_interpretacao: {
+    titulo: 'Compras — não entendeu a pergunta',
+    template: 'Não consegui interpretar sua pergunta sobre compras. Pode reformular ou ser mais específico? Por exemplo: "Compras do mês", "Top fornecedores de abril" ou "Compras por produto".',
+  },
+  compras_cota_esgotada: {
+    titulo: 'Compras — IA indisponível',
+    template: 'Estou com muitas consultas agora e não consigo processar sua pergunta de compras. Tente novamente em alguns instantes.',
+  },
+  compras_erro_erp: {
+    titulo: 'Compras — erro no ERP',
+    template: 'Não consegui buscar essa informação no sistema. Tente um período menor ou filtros mais específicos.',
+  },
   numero_nao_autorizado: {
     titulo: 'Numero nao autorizado',
     template: 'Este numero nao esta autorizado a interagir com o IA Command.',
