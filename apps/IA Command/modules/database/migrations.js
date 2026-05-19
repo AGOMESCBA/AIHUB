@@ -431,6 +431,14 @@ const MIGRATIONS = [
         ON unmatched_messages (empresa_id, promovido, criado_em);
     `,
   },
+  {
+    version: 24,
+    descricao: 'Compras Text-to-SQL — campos sql_gerado e duracao_ms na interpretation_log',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN sql_gerado  TEXT    DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN duracao_ms  INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

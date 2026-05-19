@@ -62,6 +62,8 @@ function registrar(payload = {}) {
     dataset_nome: resultado.dataset_nome || null,
     rows_count: Array.isArray(resultado.rows) ? resultado.rows.length : (payload.rows_count ?? null),
     resposta_entregue: payload.resposta_entregue || null,
+    sql_gerado: resultado.sql_gerado || payload.sql_gerado || null,
+    duracao_ms: payload.duracao_ms ?? null,
     feedback: payload.feedback || null,
     feedback_observacao: payload.feedback_observacao || null,
     criado_em: now,

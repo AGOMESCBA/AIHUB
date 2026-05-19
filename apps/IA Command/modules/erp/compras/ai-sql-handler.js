@@ -321,6 +321,7 @@ function _sufixoTabela(empresaId) {
 // ── Handler principal ────────────────────────────────────────────────────────
 
 async function executar(intent, empresaId) {
+  const _t0 = Date.now();
   _garantirIntencao(empresaId);
 
   // Resolve chaves e config da IA para esta empresa
@@ -329,12 +330,12 @@ async function executar(intent, empresaId) {
     ({ keys, cfg } = await _resolverKeysEOrdem(empresaId));
   } catch (e) {
     console.error('[ComprasAI] Falha ao resolver chaves:', e.message);
-    return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: _mensagemErro('ia_indisponivel') };
+    return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: _mensagemErro('ia_indisponivel'), sql_gerado: null, duracao_ms: Date.now() - _t0 };
   }
 
   const temIA = Object.values(keys).some(Boolean);
   if (!temIA) {
-    return { tipo: 'erro', subtipo: 'sem_chave', resposta_direta: _mensagemErro('ia_indisponivel') };
+    return { tipo: 'erro', subtipo: 'sem_chave', resposta_direta: _mensagemErro('ia_indisponivel'), sql_gerado: null, duracao_ms: Date.now() - _t0 };
   }
 
   // Monta contexto para o prompt
@@ -349,7 +350,7 @@ async function executar(intent, empresaId) {
   const mensagem = intent._mensagemOriginal || intent.intencao || 'consulta de compras';
 
   // ── Passo 1: Gerar SQL ───────────────────────────────────────────────────────
-  let sql;
+  let sql = null;
   try {
     const systemSql = schema.buildSqlSystemPrompt();
     const userSql   = schema.buildSqlUserPrompt(mensagem, contexto);
@@ -359,12 +360,12 @@ async function executar(intent, empresaId) {
   } catch (e) {
     const tipo = e._cotaEsgotada ? 'cota_esgotada' : 'ia_indisponivel';
     console.error('[ComprasAI] Falha na geração de SQL:', e.message);
-    return { tipo: 'erro', subtipo: tipo, resposta_direta: _mensagemErro(tipo) };
+    return { tipo: 'erro', subtipo: tipo, resposta_direta: _mensagemErro(tipo), sql_gerado: null, duracao_ms: Date.now() - _t0 };
   }
 
   if (!sql || !_validarSQL(sql)) {
     console.warn('[ComprasAI] SQL inválido ou inseguro, descartado.');
-    return { tipo: 'erro', subtipo: 'sql_invalido', resposta_direta: _mensagemErro('sql_invalido') };
+    return { tipo: 'erro', subtipo: 'sql_invalido', resposta_direta: _mensagemErro('sql_invalido'), sql_gerado: sql, duracao_ms: Date.now() - _t0 };
   }
 
   // ── Passo 2: Executar SQL no ERP ─────────────────────────────────────────────
@@ -379,11 +380,13 @@ async function executar(intent, empresaId) {
       tipo: 'erro',
       subtipo: semConexao ? 'sem_conexao' : 'erro_erp',
       resposta_direta: _mensagemErro(semConexao ? 'sem_conexao' : 'erro_erp'),
+      sql_gerado: sql,
+      duracao_ms: Date.now() - _t0,
     };
   }
 
   if (!rows || rows.length === 0) {
-    return { tipo: 'sucesso_ai_sql', resposta_direta: _mensagemErro('sem_resultado'), rows: [] };
+    return { tipo: 'sucesso_ai_sql', resposta_direta: _mensagemErro('sem_resultado'), rows: [], sql_gerado: sql, duracao_ms: Date.now() - _t0 };
   }
 
   // ── Passo 3: Formatar resposta com IA ────────────────────────────────────────
@@ -397,7 +400,7 @@ async function executar(intent, empresaId) {
     resposta = _formatarFallback(rows, mensagem);
   }
 
-  return { tipo: 'sucesso_ai_sql', resposta_direta: resposta, rows };
+  return { tipo: 'sucesso_ai_sql', resposta_direta: resposta, rows, sql_gerado: sql, duracao_ms: Date.now() - _t0 };
 }
 
 module.exports = { executar };

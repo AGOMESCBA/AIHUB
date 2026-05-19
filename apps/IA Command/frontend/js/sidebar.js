@@ -35,6 +35,12 @@
       ],
     },
     {
+      id: 'compras', label: 'Compras', icon: '📦', defaultOpen: false,
+      items: [
+        { id: 'iac-admin-compras', label: 'Consultas de Compras', href: '/app/ia-command/admin-compras-queries.html', icon: '🔍' },
+      ],
+    },
+    {
       id: 'administracao', label: 'Administração', icon: '🛠', defaultOpen: false,
       items: [
         { id: 'iac-admin-execucoes', label: 'Log Execuções', href: '/app/ia-command/admin-execucoes.html', icon: '📋' },

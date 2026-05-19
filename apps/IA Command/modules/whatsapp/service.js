@@ -532,6 +532,8 @@ class IACWhatsAppService extends EventEmitter {
         intent,
         resultado,
         resposta_entregue: resposta,
+        sql_gerado: resultado?.sql_gerado || null,
+        duracao_ms: duracaoMs ?? null,
       });
     } catch (err) {
       this.log(`Falha ao registrar interpretacao: ${err.message}`, 'warning');
@@ -925,7 +927,9 @@ class IACWhatsAppService extends EventEmitter {
       dataset_nome:    resultado.dataset_nome || null,
       resultado_tipo:  resultado.tipo,
       resultado_msg:   resultado.mensagem   || null,
-      rows_count:      resultado.rows?.length ?? null,
+      rows_count:      resultado.rows?.length ?? (resultado.rows === null ? null : resultado.rows?.length ?? null),
+      sql_gerado:      resultado.sql_gerado   || null,
+      duracao_ms:      resultado.duracao_ms   || null,
     });
     const resposta = responseFormatter.formatar(resultado, intent, { empresaId, messageTemplates });
 

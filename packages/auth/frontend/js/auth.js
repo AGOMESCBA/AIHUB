@@ -42,6 +42,7 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-sinonimos.html':      'iac-admin-sinonimos',
   '/app/ia-command/admin-normalizacao.html':   'iac-admin-normalizacao',
   '/app/ia-command/admin-dialogos.html':       'iac-admin-dialogos',
+  '/app/ia-command/admin-compras-queries.html': 'iac-admin-compras',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',

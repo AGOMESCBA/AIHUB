@@ -838,6 +838,36 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json(interpretationLog.listar(eid(req), { limit: req.query.limit }));
   });
 
+  // ── COMPRAS — Consultas Text-to-SQL ─────────────────────────────────────────
+  const canCompras = requireRotina('iac-admin-compras');
+
+  app.get('/api/ia-command/admin/compras/consultas', requireAuth, requireIaCommand, canCompras, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
+    const inicio = String(req.query.inicio || '').trim();
+    const fim    = String(req.query.fim    || '').trim();
+    const status = String(req.query.status || '').trim();
+
+    const wheres = ["empresa_id = ?", "intencao = 'compras_dinamico'"];
+    const params = [empresaId];
+
+    if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
+    if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
+    if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, criado_em, texto_original, sql_gerado, rows_count,
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue
+      FROM interpretation_log
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+    res.json(rows);
+  });
+
   app.post('/api/ia-command/admin/interpretacoes/limpar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
     const interpretationLog = require('./ai/interpretation-log');
     const modo = String(req.body?.modo || 'periodo');
