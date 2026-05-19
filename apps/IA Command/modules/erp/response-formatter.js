@@ -49,11 +49,7 @@ function _formatarValorMetrica(col, valor) {
 }
 
 function _iconeMetrica(col) {
-  const tipo = _tipoMetrica(col);
-  if (tipo === 'moeda') return '💰';
-  if (tipo === 'quantidade') return '📦';
-  if (tipo === 'percentual') return '📈';
-  return '📊';
+  return '';
 }
 
 function _metricasPedidas(intent) {
@@ -78,7 +74,7 @@ function _filtrarMetricasSolicitadas(cols, intent) {
 
 function formatarPeriodo(periodo) {
   if (!periodo?.dataInicio) return '';
-  return `\n📅 Período: ${_fmtData(periodo.dataInicio)} a ${_fmtData(periodo.dataFim)}`;
+  return `\nPeriodo: ${_fmtData(periodo.dataInicio)} a ${_fmtData(periodo.dataFim)}`;
 }
 
 function formatarFiltros(filtros) {
@@ -87,7 +83,7 @@ function formatarFiltros(filtros) {
   const ativos = Object.entries(filtros)
     .filter(([, v]) => v && typeof v === 'string' && v.trim())
     .map(([k, v]) => `${LABELS[k] || k}: *${v.trim()}*`);
-  return ativos.length ? `\n🔍 ${ativos.join(' | ')}` : '';
+  return ativos.length ? `\nFiltros: ${ativos.join(' | ')}` : '';
 }
 
 function _mediaDiaria(periodo, total) {
@@ -138,7 +134,7 @@ function _extrairAno(row) {
   const dk = Object.keys(row).find(_DETECTORES.data);
   if (!dk) return null;
   const v = row[dk];
-  if (v instanceof Date) return String(v.getFullYear());
+  if (v instanceof Date) return String(v.getUTCFullYear());
   const s = String(v);
   if (/^\d{8}$/.test(s))              return s.slice(0, 4);
   if (/^\d{4}-\d{2}-\d{2}/.test(s))  return s.slice(0, 4);
@@ -157,7 +153,7 @@ function _extrairMes(row) {
   const dk = Object.keys(row).find(_DETECTORES.data);
   if (!dk) return null;
   const v = row[dk];
-  if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}`;
+  if (v instanceof Date) return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}`;
   const s = String(v);
   if (/^\d{8}$/.test(s))              return `${s.slice(0, 4)}-${s.slice(4, 6)}`;
   if (/^\d{4}-\d{2}-\d{2}/.test(s))  return s.slice(0, 7);
@@ -169,7 +165,7 @@ function _extrairDia(row) {
   const dk = Object.keys(row).find(_DETECTORES.data);
   if (!dk) return null;
   const v = row[dk];
-  if (v instanceof Date) return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  if (v instanceof Date) return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}-${String(v.getUTCDate()).padStart(2, '0')}`;
   const s = String(v);
   if (/^\d{8}$/.test(s))              return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
   if (/^\d{4}-\d{2}-\d{2}/.test(s))  return s.slice(0, 10);
@@ -399,6 +395,10 @@ function _formatarComparacaoMensalEntreAnosLimpo(rows, periodo, filtrosStr, inte
 }
 
 function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, intent) {
+  if (Array.isArray(intent?.agrupar_por_composto) && intent.agrupar_por_composto.length >= 2) {
+    return _formatarAgrupamentoComposto(rows, intent.agrupar_por_composto, periodoStr, filtrosStr, limite, intent);
+  }
+
   if (['mes', 'ano', 'dia'].includes(String(agruparPor || '').toLowerCase())) {
     return _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, limite, intent);
   }
@@ -438,23 +438,25 @@ function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, 
 
   // Ordena pelo primeiro campo numérico (geralmente faturamento/quantidade)
   const colOrdem = numCols[0];
+  const limitePadrao = String(agruparPor || '').toLowerCase() === 'empresa'
+    ? Object.keys(grupos).length
+    : 15;
   const top = Object.entries(grupos)
     .sort(([, a], [, b]) => (b[colOrdem] || 0) - (a[colOrdem] || 0))
-    .slice(0, limite || 15);
+    .slice(0, limite || limitePadrao);
 
   // Totais gerais
   const totais = {};
   for (const col of numCols) totais[col] = rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0);
 
-  // Monta emoji e label do agrupamento
-  const EMOJIS = { cliente: '🏢', produto: '📦', vendedor: '👤', fornecedor: '🏪', empresa: '🏭' };
-  const emoji = EMOJIS[agruparPor.toLowerCase()] || '📋';
+  // Monta label do agrupamento sem depender de emoji no cliente WhatsApp.
   const labelGrupo = agruparPor.charAt(0).toUpperCase() + agruparPor.slice(1).toLowerCase();
 
   const linhas = top.map(([nome, vals], i) => {
     const partes = numCols.map(col => {
       const pct = totais[col] ? ` (${(vals[col] / totais[col] * 100).toFixed(1)}%)` : '';
-      return `${_formatarValorMetrica(col, vals[col])}${pct}`;
+      const label = col.replace(/_/g, ' ').toLowerCase();
+      return `${label}: ${_formatarValorMetrica(col, vals[col])}${pct}`;
     }).join(' | ');
     return `${i + 1}. *${nome}* — ${partes}`;
   });
@@ -465,11 +467,91 @@ function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, 
     : '';
 
   return (
-    `${emoji} *Por ${labelGrupo}*${periodoStr}${filtrosStr}\n\n` +
+    `*Por ${labelGrupo}*${periodoStr}${filtrosStr}\n\n` +
     linhas.join('\n') +
     maisStr +
-    `\n\n💰 Total: ${totalStr}`
+    `\n\nTotal: ${totalStr}`
   );
+}
+
+function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, limite, intent) {
+  const dims = (dimensoes || []).map(d => String(d || '').toLowerCase()).filter(Boolean).slice(0, 2);
+  const temporal = dims.find(d => ['dia', 'mes', 'ano'].includes(d));
+  const negocio = dims.find(d => !['dia', 'mes', 'ano'].includes(d));
+  if (!temporal || !negocio) {
+    return _formatarAgrupamento(rows, dims[0] || intent?.agrupar_por, periodoStr, filtrosStr, limite, { ...intent, agrupar_por_composto: null });
+  }
+
+  const firstRow = rows[0] || {};
+  const colunaNegocio = _detectarColuna(firstRow, negocio)
+    || Object.keys(firstRow).find(k => k.toLowerCase() === negocio)
+    || null;
+
+  if (!colunaNegocio) {
+    return `Atencao: coluna "${negocio}" nao encontrada no resultado. Verifique o alias no SQL do dataset.`;
+  }
+
+  const extrairTemporal = temporal === 'ano' ? _extrairAno : temporal === 'dia' ? _extrairDia : _extrairMes;
+  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const numColsTodas = Object.keys(firstRow).filter(k => {
+    if (k === colunaNegocio) return false;
+    if (_DETECTORES.data(k)) return false;
+    const kl = k.toLowerCase();
+    if (SKIP.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;
+    const v = firstRow[k];
+    return typeof v === 'number' || (typeof v === 'string' && v !== '' && !isNaN(parseFloat(v)));
+  });
+  const numCols = _filtrarMetricasSolicitadas(numColsTodas, intent);
+  if (!numCols.length) return `Consulta retornou ${rows.length} registro(s).${periodoStr}${filtrosStr}`;
+
+  const grupos = {};
+  const totais = {};
+  for (const col of numCols) totais[col] = 0;
+
+  for (const row of rows) {
+    const chaveTemporal = extrairTemporal(row);
+    if (!chaveTemporal) continue;
+    const chaveNegocio = String(row[colunaNegocio] || '—').trim() || '—';
+    if (!grupos[chaveTemporal]) grupos[chaveTemporal] = {};
+    if (!grupos[chaveTemporal][chaveNegocio]) grupos[chaveTemporal][chaveNegocio] = {};
+    for (const col of numCols) {
+      const valor = parseFloat(row[col]) || 0;
+      grupos[chaveTemporal][chaveNegocio][col] = (grupos[chaveTemporal][chaveNegocio][col] || 0) + valor;
+      totais[col] += valor;
+    }
+  }
+
+  const chavesTemporais = Object.keys(grupos).sort();
+  if (!chavesTemporais.length) {
+    return `Atencao: nao encontrei coluna de data/competencia para agrupar por ${temporal}. Verifique o alias DATA, ano+mes ou campo_data do dataset.`;
+  }
+
+  const limitePorPeriodo = Math.min(limite || 10, 50);
+  const colOrdem = numCols[0];
+  const blocos = chavesTemporais.map(chaveTemporal => {
+    const itens = Object.entries(grupos[chaveTemporal])
+      .sort(([, a], [, b]) => (b[colOrdem] || 0) - (a[colOrdem] || 0));
+    const visiveis = itens.slice(0, limitePorPeriodo);
+    const linhas = visiveis.map(([nome, vals], idx) => {
+      const partes = numCols.map(col => {
+        const label = col.replace(/_/g, ' ').toLowerCase();
+        return `${label}: *${_formatarValorMetrica(col, vals[col] || 0)}*`;
+      }).join(' | ');
+      return `  ${idx + 1}. *${nome}* — ${partes}`;
+    });
+    if (itens.length > visiveis.length) {
+      linhas.push(`  ... e mais ${itens.length - visiveis.length}`);
+    }
+    return `*${_labelTemporal(chaveTemporal, temporal)}*\n${linhas.join('\n')}`;
+  });
+
+  const labelTemporal = temporal === 'ano' ? 'Ano' : temporal === 'dia' ? 'Dia' : 'Mes';
+  const labelNegocio = negocio.charAt(0).toUpperCase() + negocio.slice(1);
+  const totalStr = numCols
+    .map(col => `${col.replace(/_/g, ' ')}: *${_formatarValorMetrica(col, totais[col])}*`)
+    .join(' | ');
+
+  return `*Por ${labelTemporal} e ${labelNegocio}*${periodoStr}${filtrosStr}\n\n${blocos.join('\n\n')}\n\nTotal: ${totalStr}`;
 }
 
 function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, limite, intent) {
@@ -485,7 +567,7 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
     return typeof v === 'number' || (typeof v === 'string' && v !== '' && !isNaN(parseFloat(v)));
   });
   const numCols = _filtrarMetricasSolicitadas(numColsTodas, intent);
-  if (!numCols.length) return `âœ… Consulta retornou ${rows.length} registro(s).${periodoStr}${filtrosStr}`;
+  if (!numCols.length) return `Consulta retornou ${rows.length} registro(s).${periodoStr}${filtrosStr}`;
 
   const grupos = {};
   for (const row of rows) {
@@ -499,18 +581,18 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
 
   const chaves = Object.keys(grupos);
   if (!chaves.length) {
-    return `âš ï¸ Nao encontrei coluna de data/competencia para agrupar por ${dimensao}. Verifique o alias DATA, ano+mes ou campo_data do dataset.`;
+    return `Atencao: nao encontrei coluna de data/competencia para agrupar por ${dimensao}. Verifique o alias DATA, ano+mes ou campo_data do dataset.`;
   }
 
   const orderParts = String(intent?.ordenar_por || '').split(':');
   const orderCol = orderParts[0] && numCols.includes(orderParts[0]) ? orderParts[0] : numCols[0];
   const asc = String(orderParts[1] || 'desc').toLowerCase() === 'asc';
   const limitePadrao = dimensao === 'dia' ? 31 : 15;
-  // Para agrupamento diário sem ordenação explícita, exibe cronologicamente (asc por chave)
-  const ordenacaoExplicita = !!intent?.ordenar_por;
+  // Sem ranking/top/limite, agrupamentos temporais devem ser cronologicos.
+  const ordenarPorValor = !!intent?.limite;
   const top = chaves
     .sort((a, b) => {
-      if (!ordenacaoExplicita && dimensao === 'dia') return a < b ? -1 : a > b ? 1 : 0;
+      if (!ordenarPorValor) return a < b ? -1 : a > b ? 1 : 0;
       return asc ? (grupos[a][orderCol] || 0) - (grupos[b][orderCol] || 0) : (grupos[b][orderCol] || 0) - (grupos[a][orderCol] || 0);
     })
     .slice(0, limite || limitePadrao);
@@ -527,7 +609,7 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
     .map(col => `${col.replace(/_/g, ' ')}: *${_formatarValorMetrica(col, rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0))}*`)
     .join(' | ');
 
-  return `ðŸ“… *${titulo}*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}\n\nðŸ’° Total: ${totalStr}`;
+  return `*${titulo}*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}\n\nTotal: ${totalStr}`;
 }
 
 function _labelTemporal(chave, dimensao) {

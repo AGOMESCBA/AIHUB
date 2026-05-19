@@ -592,8 +592,9 @@
 
       <div class="nav-fase-hdr" onclick="scrollFase('f6')"><div class="nav-fase-num">6</div>Auditoria</div>
       <a class="nav-etapa" onclick="abrirEtapa('e6-1', event)"><div class="nav-etapa-dot"></div>Log de execucoes</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e6-2', event)"><div class="nav-etapa-dot"></div>Auditoria</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e6-3', event)"><div class="nav-etapa-dot"></div>Diagnostico</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-2', event)"><div class="nav-etapa-dot"></div>Interpretacoes</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-3', event)"><div class="nav-etapa-dot"></div>Auditoria</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e6-4', event)"><div class="nav-etapa-dot"></div>Diagnostico</a>
 
       <div class="nav-fase-hdr" onclick="scrollFase('f7')"><div class="nav-fase-num">7</div>Checklist</div>
       <a class="nav-etapa" onclick="abrirEtapa('e7-1', event)"><div class="nav-etapa-dot"></div>Ordem recomendada</a>
@@ -685,10 +686,10 @@
               <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Mensagem recebida:</strong> o WhatsApp conectado no Monitor recebe uma mensagem de texto ou audio.</div></div>
               <div class="step-item"><div class="step-num">2</div><div class="step-body"><strong>Autorizacao:</strong> se houver numeros autorizados ativos, o remetente precisa estar cadastrado para a empresa.</div></div>
               <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Contexto da empresa:</strong> o sistema identifica em qual empresa/canal a mensagem deve ser processada.</div></div>
-              <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Interpretacao hibrida:</strong> o texto passa por normalizacao, equivalencias cadastradas, regras de periodo e inferencia da IA quando necessario.</div></div>
+              <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Interpretacao hibrida:</strong> o sistema tenta entender primeiro com o motor local. Ele olha equivalencias, periodo, agrupamento, filtros e metricas. A IA externa entra somente quando essa leitura local nao fica segura.</div></div>
               <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Validacao da intencao:</strong> o resultado precisa apontar para uma intencao real da empresa, com periodo, filtros, agrupamento e confianca coerentes.</div></div>
               <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Dataset executa:</strong> o SQL Base ou a API Proxy consulta somente a fonte configurada para aquela intencao.</div></div>
-              <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Resposta enviada:</strong> a IA transforma os dados em texto curto e objetivo, e o WhatsApp envia ao usuario.</div></div>
+              <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Resposta enviada:</strong> o formatador do sistema monta uma resposta curta com totais, medias, ranking ou comparativos, e o WhatsApp envia ao usuario.</div></div>
               <div class="step-item"><div class="step-num">8</div><div class="step-body"><strong>Registro:</strong> logs de execucao e auditoria ficam disponiveis para diagnostico, melhoria do dicionario e rastreabilidade.</div></div>
             </div>
           </div>
@@ -704,7 +705,7 @@
         <div class="etapa-body">
           <div class="etapa-body-inner">
             <p class="etapa-desc">
-              Antes de chamar qualquer provedor de IA, o IA Command tenta resolver a pergunta com regras internas, equivalencias e metadados do Dataset. A IA fica como fallback para frases ambiguas, termos ainda nao ensinados ou consultas que o motor local nao conseguiu pontuar com seguranca.
+              O IA Command trabalha no modelo "local primeiro". Em perguntas comuns, ele nao precisa chamar uma IA externa: ele usa o que ja foi cadastrado no sistema para entender o pedido. A IA entra como apoio quando a frase esta ambigua, usa termos que ainda nao foram ensinados ou quando duas possibilidades ficam muito parecidas.
             </p>
             <div class="step-list">
               <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Normalizacao:</strong> o texto original e preservado para auditoria, mas uma copia interna remove acentos, padroniza caixa, limpa pontuacao e separa termos relevantes.</div></div>
@@ -714,6 +715,7 @@
               <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Agrupamento e limite:</strong> termos como "por produto", "por cliente", "top 10" e "ranking" viram agrupamento, ordenacao e limite sem IA.</div></div>
               <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Metricas do dataset:</strong> o campo Colunas metricas ajuda o motor a reconhecer faturamento, quantidade, margem e custo, definindo SUM() e ORDER BY no SQL externo.</div></div>
               <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Pontuacao local:</strong> cada evidencia soma pontos. Se a confianca final for alta, a consulta executa diretamente; se ficar baixa ou ambigua, o sistema chama a IA.</div></div>
+              <div class="step-item"><div class="step-num">8</div><div class="step-body"><strong>Consulta e resposta:</strong> depois que a intencao foi escolhida, o dataset consulta o ERP e o formatador monta a resposta. Nessa parte nao ha decisao de IA; o sistema apenas soma, agrupa, calcula medias e apresenta o resultado.</div></div>
             </div>
 
             <div class="guia-table-wrap" style="margin-top:16px">
@@ -733,6 +735,7 @@
 
             <div class="callout info"><span class="callout-icon">i</span><span>Exemplo: "Fat do ano por produto" encontra "fat" como faturamento, "ano" como periodo anual, "produto" como agrupamento e a metrica principal do dataset. Com esses sinais, a confianca local fica alta e a IA nao precisa ser chamada.</span></div>
             <div class="callout warning"><span class="callout-icon">!</span><span>Quando duas intencoes ficam muito proximas na pontuacao ou faltam sinais importantes, o sistema prefere usar IA ou pedir confirmacao. Isso evita executar uma consulta errada apenas para economizar tokens.</span></div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Pense assim: a IA externa ajuda a entender a pergunta. O ERP continua sendo consultado somente pelos datasets permitidos, e a resposta final segue os modelos do IA Command. A IA nao inventa SQL nem muda a regra de calculo nessa etapa.</span></div>
           </div>
         </div>
       </article>
@@ -1174,6 +1177,28 @@ WHERE SF2.D_E_L_E_T_ = ' '
       <article class="etapa-card" id="e6-2">
         <div class="etapa-card-header" onclick="toggleEtapa('e6-2')">
           <span class="etapa-num">6.2</span>
+          <span class="etapa-titulo">Interpretacoes</span>
+          <span class="etapa-arrow">v</span>
+        </div>
+        <div class="etapa-body">
+          <div class="etapa-body-inner">
+            <p class="etapa-desc">Acesse <strong>Administracao -> Interpretacoes</strong>. Essa tela mostra como cada texto livre foi entendido antes da execucao, sem alterar o motor nem a regra de negocio.</p>
+            <div class="campo-lista">
+              <div class="campo-item"><div class="campo-nome">Texto original</div><div class="campo-desc">Mensagem enviada pelo usuario, preservada para auditoria e criacao de cenarios de teste.</div></div>
+              <div class="campo-item"><div class="campo-nome">Motor</div><div class="campo-desc">Indica quem entendeu a pergunta: a IA interna do sistema, o cache/regras locais ou uma IA externa usada como apoio.</div></div>
+              <div class="campo-item"><div class="campo-nome">Intencao e confianca</div><div class="campo-desc">Mostra qual intencao foi escolhida e a pontuacao usada para aceitar a interpretacao.</div></div>
+              <div class="campo-item"><div class="campo-nome">Sinais usados</div><div class="campo-desc">Exibe periodo, filtros, agrupamento, sinonimos aplicados, campos inferidos pela IA, fallback e confirmacao.</div></div>
+              <div class="campo-item"><div class="campo-nome">Feedback</div><div class="campo-desc">Permite marcar a interpretacao como correta, incorreta, corrigida ou ignorada, com observacao para orientar ajustes futuros.</div></div>
+            </div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Se o motor aparecer como IA interna, significa que as equivalencias, intencoes, periodo e dataset foram suficientes. Se aparecer IA externa, o sistema precisou de ajuda para interpretar a frase, mas a consulta e a resposta continuaram seguindo os datasets e modelos cadastrados.</span></div>
+            <div class="callout info"><span class="callout-icon">i</span><span>Interpretacoes sao historico. A manutencao do aprendizado continua em Equivalencias, Intencoes, Datasets e na suite de testes regressivos.</span></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="etapa-card" id="e6-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-3')">
+          <span class="etapa-num">6.3</span>
           <span class="etapa-titulo">Auditoria administrativa</span>
           <span class="etapa-arrow">v</span>
         </div>
@@ -1190,9 +1215,9 @@ WHERE SF2.D_E_L_E_T_ = ' '
         </div>
       </article>
 
-      <article class="etapa-card" id="e6-3">
-        <div class="etapa-card-header" onclick="toggleEtapa('e6-3')">
-          <span class="etapa-num">6.3</span>
+      <article class="etapa-card" id="e6-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e6-4')">
+          <span class="etapa-num">6.4</span>
           <span class="etapa-titulo">Diagnostico rapido</span>
           <span class="etapa-arrow">v</span>
         </div>

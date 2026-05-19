@@ -36,6 +36,7 @@
     .badge-camada-intencao { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.12);color:#7c3aed; }
     .badge-camada-filtro   { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(234,88,12,.12);color:#ea580c; }
     .badge-camada-coluna   { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(2,132,199,.12);color:#0284c7; }
+    .badge-camada-normalizacao { display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(16,185,129,.12);color:#059669; }
     .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:15px;transition:background .15s; }
     .btn-icon:hover { background:var(--bg-hover); }
     .tabulator { border:none !important;background:transparent !important; }
@@ -114,6 +115,7 @@
                 <option value="intencao">Intenção</option>
                 <option value="filtro">Filtro</option>
                 <option value="coluna">Coluna</option>
+                <option value="normalizacao">NormalizaÃ§Ã£o</option>
               </select>
               <select id="f-ativo" class="form-control" onchange="filtrar()">
                 <option value="">Todos os status</option>
@@ -181,6 +183,7 @@
                     <div class="form-group" style="margin-bottom:0">
                       <label class="form-label">Camada <span style="color:#dc2626">*</span></label>
                       <select id="f-camada-form" class="form-control" onchange="atualizarContexto()">
+                        <option value="normalizacao">NormalizaÃ§Ã£o â€” corrige escrita antes da interpretaÃ§Ã£o</option>
                         <option value="intencao">Intenção — identifica o que o usuário quer consultar</option>
                         <option value="filtro">Filtro — normaliza valores como nomes de clientes ou produtos</option>
                         <option value="coluna">Coluna — mapeia o que o usuário quer medir (valor, quantidade…)</option>
@@ -494,6 +497,7 @@
   function atualizarContexto() {
     const camada = document.getElementById('f-camada-form').value;
     document.getElementById('grupo-contexto').style.display = camada === 'filtro' ? '' : 'none';
+    if (camada !== 'filtro') document.getElementById('f-contexto').value = '';
     _atualizarDatalist(camada);
     _atualizarExemplo();
   }
@@ -505,6 +509,7 @@
     const ctx = document.getElementById('f-contexto').value;
     const el = document.getElementById('exemplo-dinamico');
     const msgs = {
+      normalizacao: `Antes de procurar intenÃ§Ã£o, perÃ­odo ou mÃ©trica, o texto <strong>"${esc(termo)}"</strong> serÃ¡ reescrito como <strong>"${esc(equiv)}"</strong>.<br><br>Use para erros de portuguÃªs, abreviaÃ§Ãµes e variaÃ§Ãµes de verbo.`,
       intencao: `Quando o usuário digitar <strong>"${esc(termo)}"</strong>, a IA interpretará como <strong>"${esc(equiv)}"</strong> ao classificar a intenção.<br><br>Exemplo: <em>"${esc(termo)} do mês"</em> → consulta de ${esc(equiv)} do mês.`,
       filtro:   `Quando o usuário digitar <strong>"${esc(termo)}"</strong> como filtro de ${ctx || 'valor'}, a IA normalizará para <strong>"${esc(equiv)}"</strong>.<br><br>Exemplo: <em>"fat do ano ${ctx || 'filtro'} ${esc(termo)}"</em> → filtra por ${esc(equiv)}.`,
       coluna:   `Quando o usuário mencionar <strong>"${esc(termo)}"</strong> como métrica, a IA usará o campo <strong>"${esc(equiv)}"</strong>.<br><br>Exemplo: <em>"${esc(termo)} do trimestre"</em> → usa o campo ${esc(equiv)}.`,
@@ -635,7 +640,7 @@
   }
 
   const CAMADA_LABEL = { intencao: 'Intenção', filtro: 'Filtro', coluna: 'Coluna' };
-  const CAMADA_CLS   = { intencao: 'badge-camada-intencao', filtro: 'badge-camada-filtro', coluna: 'badge-camada-coluna' };
+  const CAMADA_CLS   = { intencao: 'badge-camada-intencao', filtro: 'badge-camada-filtro', coluna: 'badge-camada-coluna', normalizacao: 'badge-camada-normalizacao' };
 
   function _criarTabela(data) {
     gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_sinonimos_group', getTable:()=>table });
@@ -648,7 +653,7 @@
           formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
         { title:'Camada', field:'camada', width:110,
           headerFilter:'select', headerFilterParams:{values:{'':'Todos','intencao':'Intenção','filtro':'Filtro','coluna':'Coluna'}},
-          formatter: c => { const v=c.getValue(); return `<span class="${CAMADA_CLS[v]||''}">${CAMADA_LABEL[v]||v}</span>`; } },
+          formatter: c => { const v=c.getValue(); const label = v === 'normalizacao' ? 'Normalizacao' : (CAMADA_LABEL[v] || v); return `<span class="${CAMADA_CLS[v]||''}">${label}</span>`; } },
         { title:'Equivalência', field:'equivalencia', minWidth:160, headerFilter:true,
           formatter: c => esc(c.getValue()) },
         { title:'Contexto', field:'contexto', width:100, headerFilter:true,
@@ -701,6 +706,7 @@
 
   // Atualiza exemplo ao digitar
   document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('option[value="normalizacao"]').forEach(opt => opt.remove());
     ['f-termo','f-equivalencia','f-contexto'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', _atualizarExemplo);
     });

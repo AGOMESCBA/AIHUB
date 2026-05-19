@@ -187,15 +187,18 @@
             <div class="mon-intent-nome" id="intent-nome">—</div>
             <div id="intent-badge-wrap"></div>
             <div class="mon-intent-row"><span>Motor</span><strong id="intent-provedor">—</strong></div>
+            <div class="mon-intent-row" id="intent-origem-row" style="display:none"><span>Origem</span><strong id="intent-origem">—</strong></div>
             <div class="mon-intent-row"><span>Confiança</span><strong id="intent-confianca">—</strong></div>
             <div class="mon-intent-row" id="intent-periodo-row" style="display:none"><span>Período</span><strong id="intent-periodo">—</strong></div>
             <div class="mon-intent-row" id="intent-dataset-row" style="display:none"><span>Dataset</span><strong id="intent-dataset">—</strong></div>
             <div class="mon-intent-row" id="intent-rows-row" style="display:none"><span>Registros</span><strong id="intent-rows">—</strong></div>
+            <div class="mon-intent-row" id="intent-metricas-row" style="display:none"><span>Métricas</span><strong id="intent-metricas">—</strong></div>
             <div id="intent-filtros-wrap" style="display:none">
               <div class="mon-intent-row" style="margin-bottom:3px"><span>Filtros</span></div>
               <div class="mon-intent-filtros" id="intent-filtros"></div>
             </div>
             <div class="mon-intent-row" id="intent-group-row" style="display:none"><span>Agrupar por</span><strong id="intent-group">—</strong></div>
+            <div class="mon-intent-row" id="intent-contexto-row" style="display:none"><span>Contexto</span><strong id="intent-contexto">—</strong></div>
             <div class="mon-intent-row" id="intent-err-row" style="display:none"><span>Detalhe</span><strong id="intent-err" style="color:#ef4444;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
           </div>
         </div>
@@ -451,6 +454,34 @@
     return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  function setIntentRow(rowId, valueId, value) {
+    const row = document.getElementById(rowId);
+    const el = document.getElementById(valueId);
+    if (!row || !el) return;
+    if (value === null || value === undefined || value === '') {
+      row.style.display = 'none';
+      return;
+    }
+    el.textContent = value;
+    row.style.display = 'flex';
+  }
+
+  function contextoIntent(d) {
+    const partes = [];
+    if (d.contexto_aplicado) partes.push('aplicado');
+    if (d.herdou_intencao) partes.push('herdou intenção');
+    if (d.herdou_periodo) partes.push('herdou período');
+    if (d.herdou_filtros) partes.push('herdou filtros');
+    if (d.herdou_metricas) partes.push('herdou métricas');
+    if (d.periodo_mes_contexto) partes.push('mês recortado do contexto');
+    if (d.dimensao_detectada) partes.push(`dimensão: ${d.dimensao_detectada}`);
+    if (d.granularidade_detectada) partes.push(`granularidade: ${d.granularidade_detectada}`);
+    if (Array.isArray(d.agrupamento_composto) && d.agrupamento_composto.length) {
+      partes.push(`agrupamento composto: ${d.agrupamento_composto.join(' + ')}`);
+    }
+    return partes.join(' | ');
+  }
+
   function renderIntent(d) {
     document.getElementById('intent-panel').style.display = 'flex';
 
@@ -470,6 +501,7 @@
     const conf = typeof d.confianca === 'number' ? `${Math.round(d.confianca * 100)}%` : (d.confianca ?? '—');
     document.getElementById('intent-provedor').textContent  = d.motor || d.provedor || '—';
     document.getElementById('intent-confianca').textContent = conf;
+    setIntentRow('intent-origem-row', 'intent-origem', d.origem || null);
 
     // Período
     const periodoRow = document.getElementById('intent-periodo-row');
@@ -494,7 +526,15 @@
 
     // Registros (só no sucesso)
     const rowsRow = document.getElementById('intent-rows-row');
-    rowsRow.style.display = 'none';
+    if (typeof d.rows_count === 'number') {
+      document.getElementById('intent-rows').textContent = d.rows_count;
+      rowsRow.style.display = 'flex';
+    } else {
+      rowsRow.style.display = 'none';
+    }
+
+    const metricas = Array.isArray(d.metricas) ? d.metricas.filter(Boolean) : [];
+    setIntentRow('intent-metricas-row', 'intent-metricas', metricas.length ? metricas.join(', ') : null);
 
     // Filtros
     const filtrosWrap = document.getElementById('intent-filtros-wrap');
@@ -512,11 +552,16 @@
     // Agrupamento
     const groupRow = document.getElementById('intent-group-row');
     if (d.agrupar_por) {
-      document.getElementById('intent-group').textContent = d.agrupar_por;
+      const composto = Array.isArray(d.agrupamento_composto) && d.agrupamento_composto.length
+        ? d.agrupamento_composto.join(' + ')
+        : d.agrupar_por;
+      document.getElementById('intent-group').textContent = composto;
       groupRow.style.display = 'flex';
     } else {
       groupRow.style.display = 'none';
     }
+
+    setIntentRow('intent-contexto-row', 'intent-contexto', contextoIntent(d));
 
     // Erro / detalhe (erro, sem_dados, desconhecido com _erro)
     const errRow = document.getElementById('intent-err-row');

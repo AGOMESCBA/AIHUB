@@ -51,6 +51,11 @@ function _buildWrapper(intent, dataset) {
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+  if (Array.isArray(intent.agrupar_por_composto) && intent.agrupar_por_composto.length >= 2) {
+    const sql = `SELECT *\nFROM (\n${dataset.sql_base}\n) AS _base\n${where}`.trimEnd();
+    return { sql, params };
+  }
+
   if (intent.agrupar_por) {
     const agrupamentoTemporal = ['mes', 'ano', 'dia'].includes(String(intent.agrupar_por || '').toLowerCase());
     if (agrupamentoTemporal) {

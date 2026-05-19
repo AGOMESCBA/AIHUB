@@ -37,6 +37,10 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-dataset-form.html':   'iac-admin-datasets',
   '/app/ia-command/admin-execucoes.html':      'iac-admin-execucoes',
   '/app/ia-command/admin-auditoria.html':      'iac-admin-auditoria',
+  '/app/ia-command/admin-interpretacoes.html': 'iac-admin-auditoria',
+  '/app/ia-command/admin-sinonimos.html':      'iac-admin-sinonimos',
+  '/app/ia-command/admin-normalizacao.html':   'iac-admin-normalizacao',
+  '/app/ia-command/admin-dialogos.html':       'iac-admin-dialogos',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -79,6 +83,9 @@ const _ROTINA_LABELS = {
   'iac-admin-datasets':      'IA Command - Datasets ERP',
   'iac-admin-execucoes':     'IA Command - Log de Execuções',
   'iac-admin-auditoria':     'IA Command - Auditoria',
+  'iac-admin-sinonimos':     'IA Command - Equivalências',
+  'iac-admin-normalizacao':  'IA Command - Normalização',
+  'iac-admin-dialogos':      'IA Command - Diálogos Conversacionais',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',

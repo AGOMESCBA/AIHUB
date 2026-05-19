@@ -64,6 +64,19 @@ function validar(intent, nomesPermitidos) {
     intent.agrupar_por = null;
   }
 
+  if (Array.isArray(intent.agrupar_por_composto)) {
+    intent.agrupar_por_composto = intent.agrupar_por_composto
+      .map(v => String(v || '').trim().toLowerCase())
+      .filter(v => AGRUPAMENTOS_PERMITIDOS.has(v));
+    if (intent.agrupar_por_composto.length < 2) {
+      intent.agrupar_por_composto = null;
+    } else {
+      intent.agrupar_por_composto = intent.agrupar_por_composto.slice(0, 2);
+    }
+  } else {
+    intent.agrupar_por_composto = null;
+  }
+
   if (intent.operacao_analitica && typeof intent.operacao_analitica === 'object') {
     const op = String(intent.operacao_analitica.operacao || '').toLowerCase();
     const granularidade = String(intent.operacao_analitica.granularidade || '').toLowerCase();

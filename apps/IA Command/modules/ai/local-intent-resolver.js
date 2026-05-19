@@ -44,6 +44,25 @@ const STOPWORDS_INTENCAO = new Set([
   'atual', 'anterior', 'passado', 'semana', 'dia',
 ]);
 
+const METRIC_ALIASES = {
+  faturamento: [
+    'faturamento', 'valor', 'valor financeiro', 'valor faturado',
+    'valor total', 'vlr', 'vlr total', 'receita', 'receita bruta', 'receita total',
+  ],
+  quantidade: [
+    'quantidade', 'qtd', 'qtde', 'qte', 'volume', 'unidades', 'itens',
+    'pecas', 'tonelada', 'toneladas', 'ton', 'tn', 'kg', 'quilos', 'kilos',
+  ],
+};
+
+const TERMOS_TODAS_METRICAS = [
+  'os dois', 'as duas', 'ambos', 'ambas', 'tudo', 'todos',
+  'valor e quantidade', 'quantidade e valor', 'faturamento e quantidade',
+  'quantidade e faturamento',
+];
+
+const AGRUPAMENTOS_TEMPORAIS = new Set(['dia', 'mes', 'ano']);
+
 function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
   const normalizacoes = opts.normalizacoes || extrairRegrasNormalizacao(sinonimos);
   const texto = normalizarTexto(mensagem, normalizacoes);
@@ -51,14 +70,15 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
 
   const matches = _matchSinonimos(texto, sinonimos);
   const periodo = identificarPeriodoTexto(mensagem, { normalizacoes });
-  const agruparPor = _resolverAgrupamento(texto, matches.coluna);
+  const agruparPorComposto = _resolverAgrupamentoComposto(texto);
+  const agruparPor = _resolverAgrupamentoPrincipal(agruparPorComposto) || _resolverAgrupamento(texto, matches.coluna);
   const intencaoInfo = _resolverIntencao(texto, intencoes, matches.intencao, { periodo, agruparPor });
   if (!intencaoInfo) return null;
   const intencao = intencaoInfo.intent;
   const filtros = _resolverFiltros(texto, matches.filtro);
   const limite = _resolverLimite(texto);
   const metricasDataset = _metricasDataset(intencao, opts.datasets || []);
-  const metricasTexto = _resolverMetricas(texto, matches.coluna, metricasDataset);
+  const metricasTexto = _resolverMetricas(texto, matches.coluna, metricasDataset, mensagem);
   const operacaoAnalitica = _resolverOperacaoAnalitica(texto, metricasTexto, metricasDataset);
   const ordenarPor = limite || agruparPor ? _resolverOrdenacao(metricasTexto, metricasDataset, texto) : null;
 
@@ -70,6 +90,7 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
     periodo,
     filtros,
     agrupar_por: agruparPor,
+    agrupar_por_composto: agruparPorComposto,
     operacao_analitica: operacaoAnalitica,
     ordenar_por: ordenarPor,
     limite,
@@ -181,6 +202,30 @@ function _resolverAgrupamento(texto) {
   return null;
 }
 
+function _resolverAgrupamentoComposto(texto) {
+  const encontrados = [];
+  for (const [dim, termos] of Object.entries(DIMENSIONS)) {
+    if (termos.some(t => _containsTerm(texto, normalizarTexto(t)))) encontrados.push(dim);
+  }
+
+  const negocio = encontrados.filter(dim => !AGRUPAMENTOS_TEMPORAIS.has(dim));
+  if (negocio.length) {
+    if (!encontrados.includes('dia') && /\b(e|por)\s+dias?\b|\bdias?\s+e\b/.test(texto)) encontrados.push('dia');
+    if (!encontrados.includes('mes') && /\b(e|por)\s+m[eê]s\b|\bm[eê]s\s+e\b/.test(texto)) encontrados.push('mes');
+    if (!encontrados.includes('ano') && /\b(e|por)\s+ano\b|\bano\s+e\b/.test(texto)) encontrados.push('ano');
+  }
+
+  const temporais = encontrados.filter(dim => AGRUPAMENTOS_TEMPORAIS.has(dim));
+  if (!temporais.length || !negocio.length) return null;
+
+  return [temporais[0], negocio[0]];
+}
+
+function _resolverAgrupamentoPrincipal(composto) {
+  if (!Array.isArray(composto) || composto.length < 2) return null;
+  return composto.find(dim => !AGRUPAMENTOS_TEMPORAIS.has(dim)) || composto[0] || null;
+}
+
 function _resolverFiltros(texto, sinonimosFiltro) {
   const filtros = {};
   for (const s of sinonimosFiltro) {
@@ -198,16 +243,44 @@ function _resolverLimite(texto) {
   return Number.isFinite(n) ? Math.min(Math.max(n, 1), 100) : null;
 }
 
-function _resolverMetricas(texto, sinonimosColuna, metricasDataset) {
+function _resolverMetricas(texto, sinonimosColuna, metricasDataset, mensagemOriginal = '') {
   const out = [];
+  const textoOriginal = normalizarBasico(mensagemOriginal);
+  const add = (metrica) => {
+    const found = _resolverMetricaDataset(metrica, metricasDataset);
+    if (found && !out.includes(found)) out.push(found);
+  };
+
+  if (TERMOS_TODAS_METRICAS.some(t => _containsTerm(texto, normalizarTexto(t)))) {
+    metricasDataset.forEach(add);
+    return out;
+  }
+
   for (const s of sinonimosColuna) {
     const eq = _normalizarColuna(s.equivalencia);
-    const found = _resolverMetricaDataset(eq, metricasDataset);
-    if (found && !out.includes(found)) out.push(found);
+    add(eq);
+  }
+  for (const [metrica, aliases] of Object.entries(METRIC_ALIASES)) {
+    if (aliases.some(t => _containsTerm(texto, normalizarTexto(t)))) {
+      add(metrica);
+    }
   }
   for (const metrica of metricasDataset) {
     if (_containsTerm(texto, normalizarTexto(metrica)) && !out.includes(metrica)) out.push(metrica);
   }
+
+  const pediuQuantidade = out.includes(_resolverMetricaDataset('quantidade', metricasDataset));
+  const pediuTudo = TERMOS_TODAS_METRICAS.some(t => _containsTerm(textoOriginal, normalizarBasico(t)));
+  const pediuValorExplicitamente = [
+    'faturamento', 'valor', 'valor financeiro', 'valor faturado',
+    'valor total', 'vlr', 'receita',
+  ].some(t => _containsTerm(textoOriginal, normalizarBasico(t)));
+
+  if (pediuQuantidade && !pediuTudo && !pediuValorExplicitamente) {
+    const metricaFaturamento = _resolverMetricaDataset('faturamento', metricasDataset);
+    return out.filter(m => m !== metricaFaturamento);
+  }
+
   return out;
 }
 

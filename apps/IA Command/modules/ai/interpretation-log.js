@@ -21,6 +21,7 @@ function camposInferidos(intent = {}) {
   if (intent.periodo?.tipo && intent.periodo.tipo !== 'nenhum') campos.push('periodo');
   if (Object.keys(intent.filtros || {}).length) campos.push('filtros');
   if (intent.agrupar_por) campos.push('agrupar_por');
+  if (intent.operacao_analitica) campos.push('operacao_analitica');
   if (intent.ordenar_por) campos.push('ordenar_por');
   if (intent.limite) campos.push('limite');
   if (intent.intencao && intent.intencao !== 'desconhecido') campos.push('intencao');
@@ -96,4 +97,23 @@ function registrarFeedback(id, empresaId, feedback, observacao = null) {
   return info.changes > 0;
 }
 
-module.exports = { registrar, listar, registrarFeedback, camposInferidos };
+function limpar(empresaId, opts = {}) {
+  const db = getDB();
+  const params = [empresaId];
+  const where = ['empresa_id = ?'];
+
+  if (opts.inicio) {
+    where.push('criado_em >= ?');
+    params.push(opts.inicio);
+  }
+
+  if (opts.fim) {
+    where.push('criado_em <= ?');
+    params.push(opts.fim);
+  }
+
+  const info = db.prepare(`DELETE FROM interpretation_log WHERE ${where.join(' AND ')}`).run(params);
+  return info.changes || 0;
+}
+
+module.exports = { registrar, listar, registrarFeedback, limpar, camposInferidos };

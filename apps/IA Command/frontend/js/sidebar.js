@@ -37,10 +37,17 @@
       id: 'administracao', label: 'Administração', icon: '🛠', defaultOpen: false,
       items: [
         { id: 'iac-admin-execucoes', label: 'Log Execuções', href: '/app/ia-command/admin-execucoes.html', icon: '📋' },
+        { id: 'iac-admin-auditoria', label: 'Interpretações', href: '/app/ia-command/admin-interpretacoes.html', icon: '🧭' },
         { id: 'iac-admin-auditoria', label: 'Auditoria',     href: '/app/ia-command/admin-auditoria.html', icon: '🔍' },
+        { id: 'iac-admin-dialogos',  label: 'Diálogos Conversacionais', href: '/app/ia-command/admin-dialogos.html', icon: '💬' },
       ],
     },
   ];
+
+  const cadastros = MENU.find(s => s.id === 'cadastros');
+  if (cadastros && !cadastros.items.some(i => i.id === 'iac-admin-normalizacao')) {
+    cadastros.items.push({ id: 'iac-admin-normalizacao', label: 'Normalizacao', href: '/app/ia-command/admin-normalizacao.html', icon: 'Aa' });
+  }
 
   const curPath = location.pathname;
 

@@ -393,6 +393,44 @@ const MIGRATIONS = [
         ON interpretation_log (empresa_id, intencao, confianca);
     `,
   },
+  {
+    version: 22,
+    descricao: 'Diálogos conversacionais — respostas locais quando a IA externa falha',
+    sql: `
+      CREATE TABLE IF NOT EXISTS conversational_dialogs (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER,
+        tipo          TEXT NOT NULL DEFAULT 'outro',
+        titulo        TEXT NOT NULL,
+        padroes       TEXT NOT NULL DEFAULT '[]',
+        resposta      TEXT NOT NULL,
+        prioridade    INTEGER DEFAULT 0,
+        protegido     INTEGER DEFAULT 0,
+        origem        TEXT DEFAULT 'usuario',
+        ativo         INTEGER DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_iac_conv_dialogs_empresa_ativo
+        ON conversational_dialogs (empresa_id, ativo);
+    `,
+  },
+  {
+    version: 23,
+    descricao: 'Mensagens sem resposta — fila de aprendizado assistido',
+    sql: `
+      CREATE TABLE IF NOT EXISTS unmatched_messages (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER,
+        sender        TEXT,
+        mensagem      TEXT NOT NULL,
+        promovido     INTEGER DEFAULT 0,
+        criado_em     TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_iac_unmatched_empresa_promovido
+        ON unmatched_messages (empresa_id, promovido, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

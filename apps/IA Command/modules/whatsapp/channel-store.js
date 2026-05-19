@@ -228,7 +228,7 @@ function senderAutorizadoEmpresa(empresaId, sender) {
   `).get(Number(empresaId), ...numeros, lid);
 }
 
-function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = null, pending = null }) {
+function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = null, pending = null, usarPadrao = true }) {
   const empresas = listarEmpresasDoCanal(channelId).filter(e => senderAutorizadoEmpresa(e.empresa_id, sender));
   if (!empresas.length) return { status: 'unauthorized', empresas: [] };
   if (empresas.length === 1) return { status: 'resolved', empresaId: empresas[0].empresa_id, empresa: empresas[0], origem: 'unica' };
@@ -275,7 +275,7 @@ function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = nu
   }
 
   const padroes = empresas.filter(e => e.padrao);
-  if (padroes.length === 1) return { status: 'resolved', empresaId: padroes[0].empresa_id, empresa: padroes[0], origem: 'padrao' };
+  if (usarPadrao && padroes.length === 1) return { status: 'resolved', empresaId: padroes[0].empresa_id, empresa: padroes[0], origem: 'padrao' };
 
   return { status: 'ambiguous', empresas };
 }

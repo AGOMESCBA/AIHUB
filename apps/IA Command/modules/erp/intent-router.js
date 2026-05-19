@@ -3,7 +3,7 @@ const crud          = require('../database/crud');
 
 async function rotear(intent, empresaId) {
   if (intent.intencao === 'desconhecido') {
-    return { tipo: 'desconhecido', mensagem: intent._erro || 'Nao entendi sua pergunta. Pode reformular?' };
+    return { tipo: 'desconhecido', mensagem: intent._erro || 'Fiquei em duvida sobre qual indicador, periodo ou detalhe voce quer consultar.' };
   }
 
   if (intent.precisa_confirmacao || intent._baixaConfianca) {

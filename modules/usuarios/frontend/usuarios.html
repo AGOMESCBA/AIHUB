@@ -526,6 +526,26 @@ const ROTINAS_MENU = [
   },
 ];
 
+ROTINAS_MENU.push({
+  id: 'ia-command',
+  label: 'IA Command',
+  icon: 'IA',
+  itens: [
+    { id: 'iac-dashboard', label: 'Dashboard', icon: 'D' },
+    { id: 'iac-monitor-whatsapp', label: 'Monitor', icon: 'M' },
+    { id: 'iac-admin-modulos', label: 'Modulos', icon: 'M' },
+    { id: 'iac-admin-sinonimos', label: 'Equivalencias', icon: 'E' },
+    { id: 'iac-admin-normalizacao', label: 'Normalizacao', icon: 'Aa' },
+    { id: 'iac-admin-datasets', label: 'Datasets ERP', icon: 'D' },
+    { id: 'iac-admin-intencoes', label: 'Intencoes', icon: 'I' },
+    { id: 'iac-admin-canais-whatsapp', label: 'Canais WhatsApp', icon: 'C' },
+    { id: 'iac-admin-numeros-whatsapp', label: 'Numeros Autorizados', icon: 'N' },
+    { id: 'iac-admin-mensagens-whatsapp', label: 'Mensagens', icon: 'M' },
+    { id: 'iac-admin-execucoes', label: 'Log Execucoes', icon: 'L' },
+    { id: 'iac-admin-auditoria', label: 'Auditoria e Interpretacoes', icon: 'A' },
+  ],
+});
+
 const TOTAL_ROTINAS = ROTINAS_MENU.reduce((n, g) => n + g.itens.length, 0);
 
 // ── Estado do formulário ──────────────────────────────────────────────────────

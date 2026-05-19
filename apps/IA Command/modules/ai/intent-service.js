@@ -355,9 +355,12 @@ function _simplificarErro(msg) {
 
 async function classificar(mensagem, empresaId, opts = {}) {
   const { contextoAnterior = null } = opts;
-  const cacheKey = _classificationKey(empresaId, mensagem);
-  const cached = _cacheGet(_cache.classificacoes, cacheKey);
-  if (cached) return { ..._clone(cached), _cache: true };
+  const usarCacheClassificacao = !contextoAnterior;
+  const cacheKey = usarCacheClassificacao ? _classificationKey(empresaId, mensagem) : null;
+  if (cacheKey) {
+    const cached = _cacheGet(_cache.classificacoes, cacheKey);
+    if (cached) return { ..._clone(cached), _cache: true };
+  }
 
   const intencoes = _carregarIntencoes(empresaId);
   const sinonimos = _carregarSinonimos(empresaId);
@@ -391,7 +394,7 @@ async function classificar(mensagem, empresaId, opts = {}) {
 
   const local = localResolver.resolverLocal(mensagem, intencoes, sinonimos, { datasets, normalizacoes });
   if (local) {
-    _cacheClassification(cacheKey, local);
+    if (cacheKey) _cacheClassification(cacheKey, local);
     return local;
   }
 
@@ -411,7 +414,7 @@ async function classificar(mensagem, empresaId, opts = {}) {
             _erro: `Interpretacao com confianca baixa (${Math.round(intent.confianca * 100)}%).`,
           };
         }
-        _cacheClassification(cacheKey, intent);
+        if (cacheKey) _cacheClassification(cacheKey, intent);
         return intent;
       }
       const msg = `retornou intenção inválida: ${result.erros.join(', ')}`;

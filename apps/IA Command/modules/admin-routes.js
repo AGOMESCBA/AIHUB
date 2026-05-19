@@ -416,6 +416,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // ────────────────────────────────────────────────────────────────────────────
 
   const canSinonimos = requireRotina('iac-admin-sinonimos');
+  const canNormalizacao = requireRotina('iac-admin-normalizacao');
 
   function _seedarSistema(empresaId) {
     const { _SINONIMOS_SISTEMA } = require('./ai/intent-service');
@@ -484,7 +485,15 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
   app.get('/api/ia-command/admin/sinonimos', requireAuth, requireIaCommand, canSinonimos, (req, res) => {
     _seedarSistema(eid(req));
-    res.json(crud.listar('synonyms', { empresa_id: eid(req) }));
+    res.json(crud.listar('synonyms', { empresa_id: eid(req) }).filter(r => String(r.camada || '').toLowerCase() !== 'normalizacao'));
+  });
+
+  app.use('/api/ia-command/admin/sinonimos/:id', requireAuth, requireIaCommand, canSinonimos, (req, res, next) => {
+    const row = crud.buscarPorId('synonyms', req.params.id);
+    if (row && row.empresa_id === eid(req) && String(row.camada || '').toLowerCase() === 'normalizacao') {
+      return res.status(404).json({ error: 'Nao encontrado.' });
+    }
+    next();
   });
 
   app.get('/api/ia-command/admin/sinonimos/:id', requireAuth, requireIaCommand, canSinonimos, (req, res) => {
@@ -569,6 +578,81 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   });
 
   // Sugestões de novos termos via IA
+  // NORMALIZACAO LINGUISTICA — regras de pre-processamento por empresa
+  function _validarNormalizacaoPayload(empresaId, dados, idAtual = null) {
+    const termo = String(dados.termo || '').trim();
+    const equivalencia = String(dados.equivalencia || '').trim();
+    const contexto = dados.contexto == null ? 'geral' : String(dados.contexto).trim().toLowerCase() || 'geral';
+
+    if (!termo) return { error: 'Campo obrigatorio: termo.' };
+    if (!equivalencia) return { error: 'Campo obrigatorio: equivalencia.' };
+    if (!['geral','correcao','abreviacao','verbo','metrica'].includes(contexto)) {
+      return { error: 'Tipo invalido. Use: geral, correcao, abreviacao, verbo ou metrica.' };
+    }
+
+    const termoNorm = normalizarTexto(termo);
+    const eqNorm = normalizarTexto(equivalencia);
+    if (termoNorm === eqNorm) return { error: 'Termo e equivalencia normalizada sao iguais. Nao ha regra para aplicar.' };
+
+    const conflitos = crud.listar('synonyms', { empresa_id: empresaId })
+      .filter(s => s.id !== idAtual && s.ativo !== 0)
+      .filter(s => String(s.camada || '').toLowerCase() === 'normalizacao')
+      .filter(s => normalizarTexto(s.termo) === termoNorm);
+
+    const conflitoDiferente = conflitos.find(s => normalizarTexto(s.equivalencia) !== eqNorm);
+    if (conflitoDiferente) return { error: `Conflito de normalizacao: "${termo}" ja aponta para "${conflitoDiferente.equivalencia}".` };
+    if (conflitos.find(s => normalizarTexto(s.equivalencia) === eqNorm)) return { error: `Normalizacao duplicada: "${termo}" ja existe.` };
+
+    return { termo, equivalencia, contexto };
+  }
+
+  app.get('/api/ia-command/admin/normalizacao', requireAuth, requireIaCommand, canNormalizacao, (req, res) => {
+    const rows = crud.listar('synonyms', { empresa_id: eid(req) }).filter(r => String(r.camada || '').toLowerCase() === 'normalizacao');
+    res.json(rows);
+  });
+
+  app.get('/api/ia-command/admin/normalizacao/:id', requireAuth, requireIaCommand, canNormalizacao, (req, res) => {
+    const row = crud.buscarPorId('synonyms', req.params.id);
+    if (!row || row.empresa_id !== eid(req) || String(row.camada || '').toLowerCase() !== 'normalizacao') return res.status(404).json({ error: 'Nao encontrado.' });
+    res.json(row);
+  });
+
+  app.post('/api/ia-command/admin/normalizacao', requireAuth, requireIaCommand, canNormalizacao, (req, res) => {
+    const validado = _validarNormalizacaoPayload(eid(req), req.body);
+    if (validado.error) return res.status(409).json({ error: validado.error });
+    const row = crud.criar('synonyms', { empresa_id: eid(req), termo: validado.termo, camada: 'normalizacao', equivalencia: validado.equivalencia, contexto: validado.contexto, ativo: _ativoFlag(req.body.ativo), origem: 'usuario' });
+    _audit(req, 'criar_normalizacao', { id: row.id, termo: row.termo, equivalencia: row.equivalencia });
+    _invalidateIntentCache(eid(req));
+    res.status(201).json(row);
+  });
+
+  app.put('/api/ia-command/admin/normalizacao/:id', requireAuth, requireIaCommand, canNormalizacao, (req, res) => {
+    const existing = crud.buscarPorId('synonyms', req.params.id);
+    if (!existing || existing.empresa_id !== eid(req) || String(existing.camada || '').toLowerCase() !== 'normalizacao') return res.status(404).json({ error: 'Nao encontrado.' });
+    const campos = {};
+    for (const k of ['termo','equivalencia','contexto','ativo']) if (req.body[k] !== undefined) campos[k] = req.body[k];
+    if (campos.ativo !== undefined) campos.ativo = _ativoFlag(campos.ativo);
+    const validado = _validarNormalizacaoPayload(eid(req), { ...existing, ...campos }, req.params.id);
+    if (validado.error) return res.status(409).json({ error: validado.error });
+    campos.termo = validado.termo;
+    campos.equivalencia = validado.equivalencia;
+    campos.contexto = validado.contexto;
+    campos.camada = 'normalizacao';
+    const row = crud.atualizar('synonyms', req.params.id, campos);
+    _audit(req, 'editar_normalizacao', { id: req.params.id, campos: Object.keys(campos) });
+    _invalidateIntentCache(eid(req));
+    res.json(row);
+  });
+
+  app.delete('/api/ia-command/admin/normalizacao/:id', requireAuth, requireIaCommand, canNormalizacao, (req, res) => {
+    const existing = crud.buscarPorId('synonyms', req.params.id);
+    if (!existing || existing.empresa_id !== eid(req) || String(existing.camada || '').toLowerCase() !== 'normalizacao') return res.status(404).json({ error: 'Nao encontrado.' });
+    crud.excluir('synonyms', req.params.id);
+    _audit(req, 'excluir_normalizacao', { id: req.params.id, termo: existing.termo });
+    _invalidateIntentCache(eid(req));
+    res.json({ ok: true });
+  });
+
   app.post('/api/ia-command/admin/sinonimos/sugerir', requireAuth, requireIaCommand, canSinonimos, async (req, res) => {
     const https = require('https');
     const { _SINONIMOS_SISTEMA, _resolveKeys, _normalizarOrdem } = require('./ai/intent-service');
@@ -754,6 +838,31 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json(interpretationLog.listar(eid(req), { limit: req.query.limit }));
   });
 
+  app.post('/api/ia-command/admin/interpretacoes/limpar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const interpretationLog = require('./ai/interpretation-log');
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim = String(req.body?.data_fim || '').trim();
+
+    let inicio = null;
+    let fim = null;
+
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) {
+        return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      }
+      if (dataInicio > dataFim) {
+        return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+      }
+      inicio = `${dataInicio}T00:00:00.000`;
+      fim = `${dataFim}T23:59:59.999`;
+    }
+
+    const removidos = interpretationLog.limpar(eid(req), { inicio, fim });
+    _audit(req, 'limpar_interpretacoes', { modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos });
+    res.json({ ok: true, removidos });
+  });
+
   app.post('/api/ia-command/admin/interpretacoes/:id/feedback', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
     const interpretationLog = require('./ai/interpretation-log');
     const ok = interpretationLog.registrarFeedback(
@@ -765,6 +874,292 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (!ok) return res.status(404).json({ error: 'Interpretacao nao encontrada.' });
     _audit(req, 'feedback_interpretacao', { id: req.params.id, feedback: req.body.feedback });
     res.json({ ok: true });
+  });
+
+  // ---------------------------------------------------------------------------
+  // DIÁLOGOS CONVERSACIONAIS
+  // ---------------------------------------------------------------------------
+
+  const canDialogos = requireRotina('iac-admin-dialogos');
+
+  app.get('/api/ia-command/admin/dialogos', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const rows = db.prepare(`
+      SELECT * FROM conversational_dialogs
+      WHERE empresa_id IS NULL OR empresa_id = ?
+      ORDER BY prioridade DESC, rowid DESC
+    `).all(empresaId);
+    res.json(rows);
+  });
+
+  // Rotas estáticas ANTES da rota dinâmica /:id para evitar conflito no Express
+  app.get('/api/ia-command/admin/dialogos/nao-respondidas', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const apenas_pendentes = req.query.apenas_pendentes !== '0';
+    const limit = Math.min(parseInt(req.query.limit || '200'), 500);
+    const rows = db.prepare(`
+      SELECT * FROM unmatched_messages
+      WHERE empresa_id = ?
+      ${apenas_pendentes ? 'AND promovido = 0' : ''}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(empresaId, limit);
+    res.json(rows);
+  });
+
+  app.get('/api/ia-command/admin/dialogos/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const row = crud.buscarPorId('conversational_dialogs', req.params.id);
+    if (!row) return res.status(404).json({ error: 'Não encontrado.' });
+    const empresaId = eid(req);
+    if (row.empresa_id !== null && row.empresa_id !== empresaId) return res.status(404).json({ error: 'Não encontrado.' });
+    res.json(row);
+  });
+
+  app.post('/api/ia-command/admin/dialogos', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const { tipo, titulo, padroes, resposta, prioridade, ativo } = req.body;
+    if (!titulo?.trim()) return res.status(400).json({ error: 'Campo obrigatório: titulo.' });
+    if (!resposta?.trim()) return res.status(400).json({ error: 'Campo obrigatório: resposta.' });
+    const padroesArr = Array.isArray(padroes) ? padroes : [];
+    if (!padroesArr.length) return res.status(400).json({ error: 'Informe ao menos um padrão de disparo.' });
+    const row = crud.criar('conversational_dialogs', {
+      empresa_id: eid(req),
+      tipo:       tipo || 'outro',
+      titulo:     titulo.trim(),
+      padroes:    JSON.stringify(padroesArr.map(p => String(p).trim()).filter(Boolean)),
+      resposta:   resposta.trim(),
+      prioridade: Number(prioridade) || 0,
+      protegido:  0,
+      origem:     'usuario',
+      ativo:      ativo !== false && Number(ativo) !== 0 ? 1 : 0,
+    });
+    _audit(req, 'criar_dialogo', { id: row.id, titulo: row.titulo });
+    require('./ai/dialog-resolver').invalidateCache(eid(req));
+    res.status(201).json(row);
+  });
+
+  app.put('/api/ia-command/admin/dialogos/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const existing = crud.buscarPorId('conversational_dialogs', req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Não encontrado.' });
+    const empresaId = eid(req);
+    if (existing.empresa_id !== null && existing.empresa_id !== empresaId) return res.status(404).json({ error: 'Não encontrado.' });
+    const campos = {};
+    if (req.body.tipo      !== undefined) campos.tipo      = req.body.tipo;
+    if (req.body.titulo    !== undefined) campos.titulo    = String(req.body.titulo).trim();
+    if (req.body.resposta  !== undefined) campos.resposta  = String(req.body.resposta).trim();
+    if (req.body.padroes   !== undefined) {
+      const arr = Array.isArray(req.body.padroes) ? req.body.padroes : [];
+      campos.padroes = JSON.stringify(arr.map(p => String(p).trim()).filter(Boolean));
+    }
+    if (req.body.prioridade !== undefined) campos.prioridade = Number(req.body.prioridade) || 0;
+    if (req.body.ativo      !== undefined) campos.ativo      = req.body.ativo !== false && Number(req.body.ativo) !== 0 ? 1 : 0;
+    const row = crud.atualizar('conversational_dialogs', req.params.id, campos);
+    _audit(req, 'editar_dialogo', { id: req.params.id, campos: Object.keys(campos) });
+    require('./ai/dialog-resolver').invalidateCache(empresaId);
+    res.json(row);
+  });
+
+  app.delete('/api/ia-command/admin/dialogos/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const existing = crud.buscarPorId('conversational_dialogs', req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Não encontrado.' });
+    const empresaId = eid(req);
+    if (existing.empresa_id !== null && existing.empresa_id !== empresaId) return res.status(404).json({ error: 'Não encontrado.' });
+    if (existing.protegido) return res.status(403).json({ error: 'Este diálogo é protegido pelo sistema e não pode ser excluído. Desative-o se não quiser que seja usado.' });
+    crud.excluir('conversational_dialogs', req.params.id);
+    _audit(req, 'excluir_dialogo', { id: req.params.id, titulo: existing.titulo });
+    require('./ai/dialog-resolver').invalidateCache(empresaId);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/ia-command/admin/dialogos/restaurar-sistema', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const restaurados = require('./ai/dialog-resolver').restaurarSistema();
+    _audit(req, 'restaurar_dialogos_sistema', { restaurados });
+    res.json({ ok: true, restaurados });
+  });
+
+  // ---------------------------------------------------------------------------
+  // MENSAGENS NÃO RESPONDIDAS (aprendizado assistido)
+  // ---------------------------------------------------------------------------
+
+  app.post('/api/ia-command/admin/dialogos/nao-respondidas/:id/promover', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const msg = db.prepare('SELECT * FROM unmatched_messages WHERE id = ? AND empresa_id = ?').get(req.params.id, empresaId);
+    if (!msg) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+
+    const { tipo, titulo, resposta, prioridade } = req.body;
+    if (!resposta?.trim()) return res.status(400).json({ error: 'Informe a resposta para promover.' });
+
+    const row = crud.criar('conversational_dialogs', {
+      empresa_id: empresaId,
+      tipo:       tipo || 'outro',
+      titulo:     (titulo || msg.mensagem).trim().slice(0, 120),
+      padroes:    JSON.stringify([msg.mensagem]),
+      resposta:   resposta.trim(),
+      prioridade: Number(prioridade) || 0,
+      protegido:  0,
+      origem:     'usuario',
+      ativo:      1,
+    });
+
+    db.prepare('UPDATE unmatched_messages SET promovido = 1 WHERE id = ?').run(req.params.id);
+    _audit(req, 'promover_msg_nao_respondida', { msg_id: req.params.id, dialogo_id: row.id });
+    require('./ai/dialog-resolver').invalidateCache(empresaId);
+    res.status(201).json({ ok: true, dialogo: row });
+  });
+
+  app.delete('/api/ia-command/admin/dialogos/nao-respondidas/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
+    const db = getDB();
+    const info = db.prepare('DELETE FROM unmatched_messages WHERE id = ? AND empresa_id = ?').run(req.params.id, eid(req));
+    if (!info.changes) return res.status(404).json({ error: 'Não encontrado.' });
+    res.json({ ok: true });
+  });
+
+  // ---------------------------------------------------------------------------
+  // SUGESTÃO DE DIÁLOGOS VIA IA
+  // ---------------------------------------------------------------------------
+
+  app.post('/api/ia-command/admin/dialogos/sugerir', requireAuth, requireIaCommand, canDialogos, async (req, res) => {
+    const https = require('https');
+    const { _resolveKeys, _normalizarOrdem } = require('./ai/intent-service');
+    const empresaId = eid(req);
+
+    let keys, cfg;
+    try { ({ keys, cfg } = await _resolveKeys(empresaId)); } catch (_) { keys = {}; cfg = {}; }
+
+    const ordem = _normalizarOrdem(cfg);
+    const provedor = ordem.find(p => keys[p]);
+    if (!provedor) return res.status(503).json({ error: 'Nenhuma chave de IA configurada. Configure em "Configurar IA".' });
+
+    // Mensagens não respondidas (máx 50 para não estourar contexto)
+    const naoRespondidas = getDB()
+      .prepare('SELECT mensagem FROM unmatched_messages WHERE empresa_id = ? AND promovido = 0 ORDER BY criado_em DESC LIMIT 50')
+      .all(empresaId).map(r => r.mensagem);
+
+    if (!naoRespondidas.length) return res.json({ sugestoes: [], provedor, aviso: 'Não há mensagens sem resposta para analisar.' });
+
+    // Diálogos já existentes (para não repetir)
+    const dialogosExistentes = getDB()
+      .prepare('SELECT padroes FROM conversational_dialogs WHERE (empresa_id IS NULL OR empresa_id = ?) AND ativo = 1')
+      .all(empresaId);
+    const padroesExistentes = new Set();
+    dialogosExistentes.forEach(d => {
+      try { JSON.parse(d.padroes || '[]').forEach(p => padroesExistentes.add(p.toLowerCase())); } catch (_) {}
+    });
+
+    const listaMensagens = naoRespondidas.map((m, i) => `${i + 1}. "${m}"`).join('\n');
+
+    const prompt = `Você é especialista em assistentes conversacionais para sistemas ERP via WhatsApp.
+
+Os clientes enviaram as seguintes mensagens e o sistema não conseguiu responder:
+${listaMensagens}
+
+Sua tarefa: agrupar mensagens similares e sugerir NOVOS diálogos conversacionais para o sistema.
+Cada diálogo precisa de:
+- tipo: saudacao | despedida | agradecimento | ajuda | confusao | outro
+- titulo: nome curto para identificar o diálogo (máx 60 chars)
+- padroes: lista de palavras/frases que disparam este diálogo (inclua variações)
+- resposta: mensagem clara e amigável para enviar ao cliente (pode usar *negrito* e _itálico_ do WhatsApp)
+- justificativa: por que esse diálogo é útil (1 linha)
+
+REGRAS:
+1. Agrupe mensagens parecidas em um único diálogo
+2. Inclua variações nos padrões (com/sem acento, abreviações, erros comuns)
+3. As respostas devem mencionar que o sistema consulta dados do ERP via WhatsApp
+4. Para perguntas sobre funcionalidades, descreva brevemente o que o sistema faz
+5. Seja objetivo e cordial no tom das respostas
+6. Sugira entre 3 e 8 diálogos novos e úteis
+
+Responda SOMENTE com JSON válido, sem markdown:
+{"sugestoes":[{"tipo":"...","titulo":"...","padroes":["...","..."],"resposta":"...","justificativa":"..."}]}`;
+
+    const _callGroq = (apiKey) => new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.4, max_tokens: 3000,
+        response_format: { type: 'json_object' },
+      });
+      const url = new URL('https://api.groq.com/openai/v1/chat/completions');
+      const opts = { hostname: url.hostname, path: url.pathname, method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(opts, (resp) => {
+        let raw = ''; resp.on('data', c => { raw += c; });
+        resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); resolve(JSON.parse(p.choices?.[0]?.message?.content)); } catch (e) { reject(e); } });
+      });
+      r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
+    });
+
+    const _callGemini = (apiKey) => new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 3000, responseMimeType: 'application/json' },
+      });
+      const path = `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const opts = { hostname: 'generativelanguage.googleapis.com', path, method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(opts, (resp) => {
+        let raw = ''; resp.on('data', c => { raw += c; });
+        resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); resolve(JSON.parse(p.candidates?.[0]?.content?.parts?.[0]?.text)); } catch (e) { reject(e); } });
+      });
+      r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
+    });
+
+    const _callDeepSeek = (apiKey) => new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.4, max_tokens: 3000,
+        response_format: { type: 'json_object' },
+      });
+      const opts = { hostname: 'api.deepseek.com', path: '/chat/completions', method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(opts, (resp) => {
+        let raw = ''; resp.on('data', c => { raw += c; });
+        resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); resolve(JSON.parse(p.choices?.[0]?.message?.content)); } catch (e) { reject(e); } });
+      });
+      r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
+    });
+
+    const _callClaude = (apiKey) => new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        model: 'claude-haiku-4-5-20251001', max_tokens: 3000,
+        messages: [{ role: 'user', content: prompt + '\n\nIMPORTANT: respond only with valid JSON, no markdown.' }],
+      });
+      const opts = { hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(opts, (resp) => {
+        let raw = ''; resp.on('data', c => { raw += c; });
+        resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message)); const text = p.content?.[0]?.text || ''; const match = text.match(/\{[\s\S]*\}/); resolve(JSON.parse(match?.[0] || text)); } catch (e) { reject(e); } });
+      });
+      r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
+    });
+
+    const CALLERS = { groq: _callGroq, gemini: _callGemini, deepseek: _callDeepSeek, claude: _callClaude };
+    const TIPOS_VALIDOS = ['saudacao', 'despedida', 'agradecimento', 'ajuda', 'confusao', 'outro'];
+
+    for (const p of ordem) {
+      if (!keys[p] || !CALLERS[p]) continue;
+      try {
+        const data = await CALLERS[p](keys[p]);
+        const sugestoes = (data.sugestoes || [])
+          .filter(s => s.titulo && s.resposta && Array.isArray(s.padroes) && s.padroes.length)
+          .map(s => ({
+            tipo:          TIPOS_VALIDOS.includes(s.tipo) ? s.tipo : 'outro',
+            titulo:        String(s.titulo).slice(0, 120),
+            padroes:       s.padroes.map(pad => String(pad).trim().toLowerCase()).filter(Boolean),
+            resposta:      String(s.resposta),
+            justificativa: s.justificativa || '',
+          }))
+          .filter(s => !s.padroes.every(pad => padroesExistentes.has(pad)));
+        _audit(req, 'sugerir_dialogos', { provedor: p, total: sugestoes.length, msgs_analisadas: naoRespondidas.length });
+        return res.json({ sugestoes, provedor: p, msgs_analisadas: naoRespondidas.length });
+      } catch (e) {
+        console.warn(`[sugerir_dialogos] ${p} falhou:`, e.message);
+      }
+    }
+    res.status(502).json({ error: 'Todos os provedores de IA falharam. Tente novamente.' });
   });
 
 };

@@ -19,7 +19,7 @@ const DEFAULT_TEMPLATES = {
   },
   intencao_desconhecida: {
     titulo: 'Intencao desconhecida',
-    template: '❓ {{mensagem}}\n\nTente perguntar, por exemplo:\n* "Qual o faturamento deste mes?"\n* "Top 10 clientes do mes passado"\n* "Titulos em aberto"\n* "Pedidos abertos esta semana"\n* "Produtos mais vendidos do trimestre"',
+    template: 'Nao consegui entender exatamente qual consulta voce quer fazer.\n\n{{mensagem}}\n\nTente escrever de forma mais especifica, por exemplo:\n* "Qual o faturamento do ano passado?"\n* "Detalhe o faturamento mes a mes"\n* "Mostre o faturamento por empresa"\n* "Quero a quantidade por produto em abril"\n* "Traga valor e quantidade por cliente"',
   },
   ia_cota_esgotada: {
     titulo: 'IA com cota esgotada',
