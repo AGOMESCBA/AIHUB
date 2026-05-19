@@ -61,6 +61,22 @@ const _DIALOGOS_SISTEMA = [
     origem: 'sistema',
   },
   {
+    tipo: 'apresentacao',
+    titulo: 'Apresentação / Nome do bot',
+    padroes: JSON.stringify([
+      'como se chama', 'qual seu nome', 'quem e voce', 'quem é você',
+      'voce tem nome', 'você tem nome', 'qual e seu nome', 'qual é seu nome',
+      'me apresente', 'se apresente', 'quem sou eu falando',
+      'com quem estou falando', 'voce e um robo', 'você é um robô',
+      'voce e uma ia', 'você é uma ia', 'e uma ia', 'é uma ia',
+      'qual e o seu nome', 'qual é o seu nome',
+    ]),
+    resposta: 'Me chamo *IA Command*! 🤖\n\nSou um assistente de consultas ao ERP via WhatsApp. Posso te ajudar com faturamento, vendas, compras, financeiro e muito mais — é só perguntar naturalmente!\n\nExemplo: *"faturamento de hoje"*, *"vendas do mês"*, *"contas a pagar desta semana"*.',
+    prioridade: 10,
+    protegido: 1,
+    origem: 'sistema',
+  },
+  {
     tipo: 'confusao',
     titulo: 'Não entendi / Não compreendi',
     padroes: JSON.stringify([
@@ -75,9 +91,10 @@ const _DIALOGOS_SISTEMA = [
   },
 ];
 
-function _semear() {
+function semearParaEmpresa(empresaId) {
+  if (!empresaId) return;
   const db = getDB();
-  const existing = db.prepare(`SELECT COUNT(*) as c FROM conversational_dialogs WHERE origem = 'sistema' AND empresa_id IS NULL`).get();
+  const existing = db.prepare(`SELECT COUNT(*) as c FROM conversational_dialogs WHERE origem = 'sistema' AND empresa_id = ?`).get(empresaId);
   if (existing?.c > 0) return;
 
   const agora = new Date().toISOString();
@@ -85,13 +102,14 @@ function _semear() {
 
   const stmt = db.prepare(`
     INSERT INTO conversational_dialogs (id, empresa_id, tipo, titulo, padroes, resposta, prioridade, protegido, origem, ativo, criado_em, atualizado_em)
-    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `);
 
   for (const d of _DIALOGOS_SISTEMA) {
-    stmt.run(uuid(), d.tipo, d.titulo, d.padroes, d.resposta, d.prioridade, d.protegido, d.origem, agora, agora);
+    stmt.run(uuid(), empresaId, d.tipo, d.titulo, d.padroes, d.resposta, d.prioridade, d.protegido, d.origem, agora, agora);
   }
-  console.log(`[IA Command] ${_DIALOGOS_SISTEMA.length} diálogos padrão semeados.`);
+  invalidateCache(empresaId);
+  console.log(`[IA Command] ${_DIALOGOS_SISTEMA.length} diálogos padrão semeados para empresa ${empresaId}.`);
 }
 
 function _carregarDialogos(empresaId) {
@@ -101,10 +119,9 @@ function _carregarDialogos(empresaId) {
 
   try {
     const db = getDB();
-    // Carrega globais (empresa_id IS NULL) + da empresa, ordenados por prioridade desc
     const rows = db.prepare(`
       SELECT * FROM conversational_dialogs
-      WHERE ativo = 1 AND (empresa_id IS NULL OR empresa_id = ?)
+      WHERE ativo = 1 AND empresa_id = ?
       ORDER BY prioridade DESC, rowid ASC
     `).all(empresaId);
 
@@ -120,7 +137,13 @@ function _matchPadroes(padroes, textoNorm) {
   try { lista = JSON.parse(padroes); } catch (_) { lista = []; }
   for (const p of lista) {
     const padNorm = normalizarTexto(String(p));
-    if (padNorm && (textoNorm === padNorm || textoNorm.startsWith(padNorm) || textoNorm.endsWith(padNorm) || textoNorm.includes(padNorm))) {
+    if (!padNorm) continue;
+    if (textoNorm === padNorm) {
+      return true;
+    }
+    const palavras = padNorm.split(/\s+/).filter(Boolean);
+    if (palavras.length === 1 && padNorm.length <= 4) continue;
+    if (textoNorm.startsWith(`${padNorm} `) || textoNorm.endsWith(` ${padNorm}`) || textoNorm.includes(` ${padNorm} `)) {
       return true;
     }
   }
@@ -129,7 +152,7 @@ function _matchPadroes(padroes, textoNorm) {
 
 function resolver(mensagem, empresaId) {
   try {
-    _semear();
+    semearParaEmpresa(empresaId);
     const textoNorm = normalizarTexto(mensagem);
     const dialogos  = _carregarDialogos(empresaId);
 
@@ -159,19 +182,20 @@ function invalidateCache(empresaId = null) {
   _cache.delete('null');
 }
 
-function restaurarSistema() {
+function restaurarSistema(empresaId) {
+  if (!empresaId) return 0;
   const db = getDB();
   const agora = new Date().toISOString();
   const uuid = () => require('crypto').randomUUID ? require('crypto').randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
   let restaurados = 0;
 
   for (const d of _DIALOGOS_SISTEMA) {
-    const existing = db.prepare(`SELECT id FROM conversational_dialogs WHERE titulo = ? AND origem = 'sistema' AND empresa_id IS NULL`).get(d.titulo);
+    const existing = db.prepare(`SELECT id FROM conversational_dialogs WHERE titulo = ? AND origem = 'sistema' AND empresa_id = ?`).get(d.titulo, empresaId);
     if (!existing) {
       db.prepare(`
         INSERT INTO conversational_dialogs (id, empresa_id, tipo, titulo, padroes, resposta, prioridade, protegido, origem, ativo, criado_em, atualizado_em)
-        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-      `).run(uuid(), d.tipo, d.titulo, d.padroes, d.resposta, d.prioridade, d.protegido, d.origem, agora, agora);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      `).run(uuid(), empresaId, d.tipo, d.titulo, d.padroes, d.resposta, d.prioridade, d.protegido, d.origem, agora, agora);
       restaurados++;
     } else {
       db.prepare(`UPDATE conversational_dialogs SET padroes = ?, resposta = ?, prioridade = ?, ativo = 1, atualizado_em = ? WHERE id = ?`)
@@ -180,8 +204,8 @@ function restaurarSistema() {
     }
   }
 
-  invalidateCache();
+  invalidateCache(empresaId);
   return restaurados;
 }
 
-module.exports = { resolver, logarNaoRespondida, invalidateCache, restaurarSistema, _DIALOGOS_SISTEMA };
+module.exports = { resolver, logarNaoRespondida, invalidateCache, restaurarSistema, semearParaEmpresa, _DIALOGOS_SISTEMA, _matchPadroes };

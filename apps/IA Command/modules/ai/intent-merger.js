@@ -1,4 +1,7 @@
 // Conectores que indicam que a mensagem é uma continuação da anterior
+const { identificarPeriodoTexto } = require('./period-resolver');
+const unsupportedRequest = require('./unsupported-request');
+
 const CONECTORES_CONTINUACAO = [
   'e ', 'e o ', 'e a ', 'e os ', 'e as ', 'mas ', 'agora ',
   'também ', 'tambem ', 'detalhe ', 'detalha ', 'detalhes ',
@@ -33,6 +36,7 @@ const _TEM_TEMPORAL = /\b(hoje|ontem|semana|m[eê]s|ano|trimestre|semestre|[úu]
 const _AGRUPAR_MES = /\bpor\s+m[eê]s\b|\bm[eê]s\s+a\s+m[eê]s\b/i;
 const _AGRUPAR_DIA = /\bpor\s+dia\b|\bdia\s+a\s+dia\b/i;
 const _AGRUPAR_ANO = /\bpor\s+ano\b|\bano\s+a\s+ano\b/i;
+const _RANKING_MES = /\bmes(?:es)?\s+(?:com|de)\s+(?:maior|menor|melhor|pior)\b|\b(?:maior|menor|melhor|pior)\s+mes(?:es)?\b|\bqual\s+o\s+mes\b/i;
 const _METRICA_FATURAMENTO = /\b(faturamento|valor(?:\s+financeiro|\s+faturado|\s+total)?|vlr|receita)\b/i;
 const _METRICA_QUANTIDADE = /\b(quantidade|qtd|qtde|qte|volume|unidades?|itens?|toneladas?|ton|tn|kg|quilos?|kilos?)\b/i;
 const _TODAS_METRICAS = /\b(os\s+dois|as\s+duas|ambos|ambas|valor\s+e\s+quantidade|quantidade\s+e\s+valor|faturamento\s+e\s+quantidade|quantidade\s+e\s+faturamento)\b/i;
@@ -58,7 +62,9 @@ const DIMENSOES = [
   ['produto', /\bpor\s+produtos?\b|\bprodutos?\b|\bitens?\b/i],
   ['vendedor', /\bpor\s+vendedores?\b|\bvendedores?\b|\brepresentantes?\b/i],
   ['fornecedor', /\bpor\s+fornecedores?\b|\bfornecedores?\b/i],
-  ['empresa', /\bpor\s+empresas?\b|\bpor\s+filiais?\b|\bpor\s+unidades?\b|\bpor\s+lojas?\b/i],
+  ['empresa', /\bpor\s+empresas?\b|\bempresas?\b/i],
+  ['filial', /\bpor\s+filia(?:l|is)\b|\bfilia(?:l|is)\b|\bpor\s+lojas?\b|\blojas?\b/i],
+  ['unidade', /\bpor\s+unidades?(?:\s+de\s+negocio)?\b|\bunidades?(?:\s+de\s+negocio)?\b/i],
 ];
 
 function _clonar(v) {
@@ -144,6 +150,30 @@ function _dimensaoDaMensagem(mensagem) {
   return found ? found[0] : null;
 }
 
+function _matchesDimensoes(mensagem) {
+  const texto = _normalizar(mensagem);
+  const out = [];
+  for (const [dim, re] of DIMENSOES) {
+    const match = re.exec(texto);
+    if (match) out.push({ dim, index: match.index });
+  }
+
+  const temporal = [
+    ['dia', /\bpor\s+dias?\b|\bdias?\s+a\s+dias?\b|\bdias?\s+e\b|\be\s+dias?\b/],
+    ['mes', /\bpor\s+mes\b|\bmes\s+a\s+mes\b|\bmes\s+e\b|\be\s+mes\b/],
+    ['ano', /\bpor\s+ano\b|\bano\s+a\s+ano\b|\bano\s+e\b|\be\s+ano\b/],
+  ];
+  for (const [dim, re] of temporal) {
+    const match = re.exec(texto);
+    if (match && !out.some(x => x.dim === dim)) out.push({ dim, index: match.index });
+  }
+
+  return out
+    .sort((a, b) => a.index - b.index)
+    .map(x => x.dim)
+    .filter((dim, idx, arr) => arr.indexOf(dim) === idx);
+}
+
 function _granularidadeDaMensagem(mensagem) {
   if (_AGRUPAR_MES.test(mensagem)) return 'mes';
   if (_AGRUPAR_DIA.test(mensagem)) return 'dia';
@@ -156,10 +186,46 @@ function _granularidadeDaMensagem(mensagem) {
 }
 
 function _agrupamentoCompostoDaMensagem(mensagem) {
-  const granularidade = _granularidadeDaMensagem(mensagem);
-  const dimensao = _dimensaoDaMensagem(mensagem);
-  if (!granularidade || !dimensao) return null;
-  return [granularidade, dimensao];
+  const groupBy = _matchesDimensoes(mensagem);
+  return groupBy.length >= 2 ? groupBy : null;
+}
+
+function _groupByIntent(intent) {
+  if (Array.isArray(intent?.group_by) && intent.group_by.length) {
+    return intent.group_by.map(d => String(d || '').toLowerCase()).filter(Boolean);
+  }
+  if (Array.isArray(intent?.agrupar_por_composto) && intent.agrupar_por_composto.length) {
+    return intent.agrupar_por_composto.map(d => String(d || '').toLowerCase()).filter(Boolean);
+  }
+  return intent?.agrupar_por ? [String(intent.agrupar_por).toLowerCase()] : [];
+}
+
+function _anosComparacaoContexto(periodo) {
+  if (!periodo || !['comparacao_anual', 'comparacao_mensal_entre_anos', 'comparacao_acumulado_mes'].includes(periodo.tipo)) return null;
+  const anoBase = parseInt(periodo.ano_base, 10);
+  const anoComparacao = parseInt(periodo.ano_comparacao, 10);
+  if (!Number.isFinite(anoBase) || !Number.isFinite(anoComparacao)) {
+    const ini = String(periodo.data_inicio || periodo.dataInicio || '');
+    const fim = String(periodo.data_fim || periodo.dataFim || '');
+    const anoIni = parseInt(ini.slice(0, 4), 10);
+    const anoFim = parseInt(fim.slice(0, 4), 10);
+    if (Number.isFinite(anoIni) && Number.isFinite(anoFim) && anoIni !== anoFim) {
+      return { ano_base: anoIni, ano_comparacao: anoFim };
+    }
+    return null;
+  }
+  return { ano_base: anoBase, ano_comparacao: anoComparacao };
+}
+
+function _mesAcumuladoMensagem(mensagem) {
+  const texto = _normalizar(mensagem);
+  if (!/\bate\b/.test(texto) || !/\b(mes|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/.test(texto)) {
+    return null;
+  }
+  const mesNome = Object.keys(MESES)
+    .sort((a, b) => b.length - a.length)
+    .find(nome => new RegExp(`\\b${nome}\\b`, 'i').test(texto));
+  return mesNome ? MESES[mesNome] : null;
 }
 
 function _periodoMesMensagem(mensagem, periodoContexto) {
@@ -204,8 +270,14 @@ function _periodoMesMensagem(mensagem, periodoContexto) {
  * @param {string} mensagem        - Texto original da mensagem (usado para detectar ano explícito)
  * @returns {object} - Intent final, potencialmente enriquecido
  */
-function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
+function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', opts = {}) {
   if (!ultimoIntent) return novoIntent;
+
+  const bloqueado = unsupportedRequest.aplicarBloqueioSeNecessario(novoIntent, mensagem, opts);
+  if (bloqueado !== novoIntent) {
+    bloqueado._contextoAplicado = true;
+    return bloqueado;
+  }
 
   // Contexto expirado por inatividade
   if (ultimoIntentTs && Date.now() - ultimoIntentTs > CONTEXT_TTL_MS) {
@@ -233,10 +305,14 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
   // 2. Resolução de período
   const tipoPeriodo = merged.periodo?.tipo;
   const periodoMesMensagem = mensagem ? _periodoMesMensagem(mensagem, ultimoIntent.periodo) : null;
+  const periodoDeterministico = mensagem ? identificarPeriodoTexto(mensagem) : null;
   if (_eVazio(tipoPeriodo)) {
     if (periodoMesMensagem) {
       merged.periodo = periodoMesMensagem;
       merged._periodoMesDoContexto = true;
+    } else if (!_eVazio(periodoDeterministico?.tipo)) {
+      merged.periodo = periodoDeterministico;
+      merged._periodoDetectadoNoTexto = true;
     } else {
       // Sem período detectado → herda do contexto integralmente
       merged.periodo = _clonar(ultimoIntent.periodo);
@@ -258,6 +334,22 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
     delete merged._herdouPeriodo;
   }
 
+  const anosComparacaoContexto = _anosComparacaoContexto(ultimoIntent.periodo);
+  const mesAcumuladoContexto = mensagem && anosComparacaoContexto ? _mesAcumuladoMensagem(mensagem) : null;
+  if ((merged.periodo?.tipo === 'comparacao_acumulado_mes' || mesAcumuladoContexto) && anosComparacaoContexto) {
+    merged.periodo = {
+      tipo: 'comparacao_acumulado_mes',
+      mes: mesAcumuladoContexto || merged.periodo?.mes,
+      ...anosComparacaoContexto,
+    };
+    merged.agrupar_por = null;
+    merged.group_by = null;
+    merged.agrupar_por_composto = null;
+    merged.ordenar_por = null;
+    merged.limite = null;
+    merged._comparacaoAcumuladaDoContexto = true;
+  }
+
   // 2a. Granularidade temporal na mensagem ("por mês", "por dia", "por ano")
   // → define agrupar_por e herda o período do contexto (é agrupamento, não novo período)
   if (!merged.agrupar_por && mensagem) {
@@ -273,6 +365,23 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
     }
   }
 
+  if (mensagem && _RANKING_MES.test(_normalizar(mensagem))) {
+    merged.agrupar_por = 'mes';
+    merged.group_by = ['mes'];
+    merged.agrupar_por_composto = null;
+    merged.limite = merged.limite || 1;
+    if (!merged.ordenar_por) {
+      merged.ordenar_por = _normalizar(mensagem).match(/\b(menor|pior)\b/)
+        ? 'faturamento:asc'
+        : 'faturamento:desc';
+    }
+    if (PERIODOS_GENERICOS.has(merged.periodo?.tipo)) {
+      merged.periodo = _clonar(ultimoIntent.periodo);
+      merged._herdouPeriodo = true;
+      merged._periodoRankingTemporalSobrescrito = true;
+    }
+  }
+
   if (!merged.agrupar_por && mensagem) {
     const dimensao = _dimensaoDaMensagem(mensagem);
     if (dimensao) {
@@ -284,28 +393,63 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '') {
   // Se a conversa estava detalhada em uma granularidade temporal e o usuario pede
   // uma dimensao de negocio em seguida, preserva as duas dimensoes.
   // Ex: "por dia em dezembro" -> "por cliente" = por dia e cliente em dezembro.
-  if (mensagem && !merged.agrupar_por_composto) {
+  if (mensagem) {
     const compostoMensagem = _agrupamentoCompostoDaMensagem(mensagem);
     if (compostoMensagem) {
-      const [, dimensaoMensagem] = compostoMensagem;
-      merged.agrupar_por = dimensaoMensagem;
+      merged.group_by = compostoMensagem;
+      merged.agrupar_por = compostoMensagem[0];
       merged.agrupar_por_composto = compostoMensagem;
-      merged._dimensaoDetectada = dimensaoMensagem;
-      merged._granularidadeDetectada = compostoMensagem[0];
+      merged._dimensaoDetectada = compostoMensagem.find(d => !AGRUPAMENTOS_TEMPORAIS.has(d)) || null;
+      merged._granularidadeDetectada = compostoMensagem.find(d => AGRUPAMENTOS_TEMPORAIS.has(d)) || null;
       merged._agrupamentoCompostoDetectado = true;
     }
   }
 
   if (mensagem && !merged.agrupar_por_composto) {
+    const groupByMensagem = _matchesDimensoes(mensagem);
+    const groupByAnterior = _groupByIntent(ultimoIntent);
+    const pedidoSubstituicao = /\b(?:so|somente|apenas)\s+por\b/i.test(_normalizar(mensagem));
+    const refinouPeriodoMensal = !!merged._periodoMesDoContexto && groupByAnterior.every(d => AGRUPAMENTOS_TEMPORAIS.has(d));
+    if (
+      groupByMensagem.length === 1 &&
+      groupByAnterior.length &&
+      !groupByAnterior.includes(groupByMensagem[0]) &&
+      groupByAnterior.some(d => !AGRUPAMENTOS_TEMPORAIS.has(d)) &&
+      (!AGRUPAMENTOS_TEMPORAIS.has(groupByMensagem[0]) || groupByAnterior.some(d => !AGRUPAMENTOS_TEMPORAIS.has(d))) &&
+      !refinouPeriodoMensal &&
+      !pedidoSubstituicao
+    ) {
+      merged.group_by = [...groupByAnterior, groupByMensagem[0]];
+      merged.agrupar_por = merged.group_by[0];
+      merged.agrupar_por_composto = merged.group_by;
+      merged._agrupamentoCompostoDoContexto = true;
+    }
+  }
+
+  if (mensagem && !merged.agrupar_por_composto) {
     const dimensao = _dimensaoDaMensagem(mensagem);
-    const agrupamentoAnterior = String(ultimoIntent.agrupar_por || '').toLowerCase();
+    const groupByAnterior = _groupByIntent(ultimoIntent);
+    const agrupamentoAnterior = groupByAnterior[groupByAnterior.length - 1] || '';
     if (
       dimensao &&
       AGRUPAMENTOS_TEMPORAIS.has(agrupamentoAnterior) &&
-      !AGRUPAMENTOS_TEMPORAIS.has(dimensao)
+      !AGRUPAMENTOS_TEMPORAIS.has(dimensao) &&
+      !(merged._periodoMesDoContexto && groupByAnterior.every(d => AGRUPAMENTOS_TEMPORAIS.has(d)))
     ) {
+      merged.group_by = [...groupByAnterior, dimensao].filter((d, idx, arr) => arr.indexOf(d) === idx);
       merged.agrupar_por = dimensao;
-      merged.agrupar_por_composto = [agrupamentoAnterior, dimensao];
+      merged.agrupar_por_composto = merged.group_by;
+      merged._dimensaoDetectada = dimensao;
+      merged._agrupamentoCompostoDoContexto = true;
+    } else if (
+      dimensao &&
+      groupByAnterior.length &&
+      !groupByAnterior.includes(dimensao) &&
+      !(merged._periodoMesDoContexto && groupByAnterior.every(d => AGRUPAMENTOS_TEMPORAIS.has(d)))
+    ) {
+      merged.group_by = [...groupByAnterior, dimensao];
+      merged.agrupar_por = merged.group_by[0];
+      merged.agrupar_por_composto = merged.group_by.length >= 2 ? merged.group_by : null;
       merged._dimensaoDetectada = dimensao;
       merged._agrupamentoCompostoDoContexto = true;
     }

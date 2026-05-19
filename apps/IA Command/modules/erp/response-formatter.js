@@ -15,6 +15,7 @@ const PCT = (v) => {
   return `${n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 };
 
+const LIMITE_PADRAO_AGRUPAMENTO = 20;
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function _normalizarNome(nome) {
@@ -79,7 +80,7 @@ function formatarPeriodo(periodo) {
 
 function formatarFiltros(filtros) {
   if (!filtros || typeof filtros !== 'object') return '';
-  const LABELS = { produto: 'Produto', cliente: 'Cliente', vendedor: 'Vendedor', fornecedor: 'Fornecedor', filial: 'Filial', status: 'Status' };
+  const LABELS = { produto: 'Produto', cliente: 'Cliente', vendedor: 'Vendedor', fornecedor: 'Fornecedor', empresa: 'Empresa', filial: 'Filial', unidade: 'Unidade', status: 'Status' };
   const ativos = Object.entries(filtros)
     .filter(([, v]) => v && typeof v === 'string' && v.trim())
     .map(([k, v]) => `${LABELS[k] || k}: *${v.trim()}*`);
@@ -119,7 +120,9 @@ const _DETECTORES = {
   produto:  k => /^produto$/i.test(k) || /^negocio$/i.test(k) || /^ds_prod/i.test(k) || /^nm_prod/i.test(k) || /^descr/i.test(k),
   vendedor:    k => /^vendedor$/i.test(k) || /^nm_vend/i.test(k) || /^ds_vend/i.test(k) || /^cod_vend/i.test(k),
   fornecedor:  k => /^fornecedor$/i.test(k) || /^nm_forn/i.test(k) || /^ds_forn/i.test(k) || /^nome_forn/i.test(k) || /^razao/i.test(k),
-  empresa:     k => /^empresa$/i.test(k) || /^filial$/i.test(k) || /^unidade$/i.test(k),
+  empresa:     k => /^empresa$/i.test(k),
+  filial:      k => /^filial$/i.test(k) || /^loja$/i.test(k),
+  unidade:     k => /^unidade$/i.test(k) || /^unidade_negocio$/i.test(k) || /^unidade_de_negocio$/i.test(k),
 };
 
 function _detectarColuna(row, dimensao) {
@@ -395,8 +398,9 @@ function _formatarComparacaoMensalEntreAnosLimpo(rows, periodo, filtrosStr, inte
 }
 
 function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, intent) {
-  if (Array.isArray(intent?.agrupar_por_composto) && intent.agrupar_por_composto.length >= 2) {
-    return _formatarAgrupamentoComposto(rows, intent.agrupar_por_composto, periodoStr, filtrosStr, limite, intent);
+  const groupBy = _groupByIntent(intent);
+  if (groupBy.length >= 2) {
+    return _formatarAgrupamentoComposto(rows, groupBy, periodoStr, filtrosStr, limite, intent);
   }
 
   if (['mes', 'ano', 'dia'].includes(String(agruparPor || '').toLowerCase())) {
@@ -440,7 +444,7 @@ function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, 
   const colOrdem = numCols[0];
   const limitePadrao = String(agruparPor || '').toLowerCase() === 'empresa'
     ? Object.keys(grupos).length
-    : 15;
+    : LIMITE_PADRAO_AGRUPAMENTO;
   const top = Object.entries(grupos)
     .sort(([, a], [, b]) => (b[colOrdem] || 0) - (a[colOrdem] || 0))
     .slice(0, limite || limitePadrao);
@@ -474,27 +478,57 @@ function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, 
   );
 }
 
-function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, limite, intent) {
-  const dims = (dimensoes || []).map(d => String(d || '').toLowerCase()).filter(Boolean).slice(0, 2);
-  const temporal = dims.find(d => ['dia', 'mes', 'ano'].includes(d));
-  const negocio = dims.find(d => !['dia', 'mes', 'ano'].includes(d));
-  if (!temporal || !negocio) {
-    return _formatarAgrupamento(rows, dims[0] || intent?.agrupar_por, periodoStr, filtrosStr, limite, { ...intent, agrupar_por_composto: null });
-  }
+function _groupByIntent(intent) {
+  const raw = Array.isArray(intent?.group_by) && intent.group_by.length
+    ? intent.group_by
+    : Array.isArray(intent?.agrupar_por_composto) && intent.agrupar_por_composto.length
+      ? intent.agrupar_por_composto
+      : intent?.agrupar_por ? [intent.agrupar_por] : [];
+  return raw
+    .map(d => String(d || '').toLowerCase())
+    .filter(Boolean)
+    .filter((d, idx, arr) => arr.indexOf(d) === idx);
+}
 
-  const firstRow = rows[0] || {};
-  const colunaNegocio = _detectarColuna(firstRow, negocio)
-    || Object.keys(firstRow).find(k => k.toLowerCase() === negocio)
+function _labelDimensao(dimensao) {
+  const d = String(dimensao || '').toLowerCase();
+  if (d === 'mes') return 'Mes';
+  return d.charAt(0).toUpperCase() + d.slice(1);
+}
+
+function _resolverDimensao(row, dimensao) {
+  const dim = String(dimensao || '').toLowerCase();
+  if (dim === 'ano') return { tipo: 'temporal', extrair: _extrairAno };
+  if (dim === 'mes') return { tipo: 'temporal', extrair: _extrairMes };
+  if (dim === 'dia') return { tipo: 'temporal', extrair: _extrairDia };
+
+  const coluna = _detectarColuna(row, dim)
+    || Object.keys(row).find(k => k.toLowerCase() === dim)
     || null;
+  return coluna ? { tipo: 'coluna', coluna } : null;
+}
 
-  if (!colunaNegocio) {
-    return `Atencao: coluna "${negocio}" nao encontrada no resultado. Verifique o alias no SQL do dataset.`;
+function _chaveDimensao(row, resolver, dimensao) {
+  if (!resolver) return null;
+  if (resolver.tipo === 'temporal') return resolver.extrair(row);
+  return String(row[resolver.coluna] || '—').trim() || '—';
+}
+
+function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, limite, intent) {
+  const dims = (dimensoes || []).map(d => String(d || '').toLowerCase()).filter(Boolean);
+  if (dims.length < 2) return _formatarAgrupamento(rows, dims[0] || intent?.agrupar_por, periodoStr, filtrosStr, limite, { ...intent, group_by: null, agrupar_por_composto: null });
+  const firstRow = rows[0] || {};
+  const resolvers = dims.map(dim => _resolverDimensao(firstRow, dim));
+  const faltanteIdx = resolvers.findIndex(r => !r);
+
+  if (faltanteIdx >= 0) {
+    return `Atencao: coluna "${dims[faltanteIdx]}" nao encontrada no resultado. Verifique o alias no SQL do dataset.`;
   }
 
-  const extrairTemporal = temporal === 'ano' ? _extrairAno : temporal === 'dia' ? _extrairDia : _extrairMes;
   const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const colunasDimensao = new Set(resolvers.filter(r => r.tipo === 'coluna').map(r => r.coluna));
   const numColsTodas = Object.keys(firstRow).filter(k => {
-    if (k === colunaNegocio) return false;
+    if (colunasDimensao.has(k)) return false;
     if (_DETECTORES.data(k)) return false;
     const kl = k.toLowerCase();
     if (SKIP.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;
@@ -504,54 +538,75 @@ function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, l
   const numCols = _filtrarMetricasSolicitadas(numColsTodas, intent);
   if (!numCols.length) return `Consulta retornou ${rows.length} registro(s).${periodoStr}${filtrosStr}`;
 
-  const grupos = {};
+  const root = { children: new Map(), totais: {} };
   const totais = {};
   for (const col of numCols) totais[col] = 0;
 
   for (const row of rows) {
-    const chaveTemporal = extrairTemporal(row);
-    if (!chaveTemporal) continue;
-    const chaveNegocio = String(row[colunaNegocio] || '—').trim() || '—';
-    if (!grupos[chaveTemporal]) grupos[chaveTemporal] = {};
-    if (!grupos[chaveTemporal][chaveNegocio]) grupos[chaveTemporal][chaveNegocio] = {};
+    const chaves = resolvers.map((resolver, idx) => _chaveDimensao(row, resolver, dims[idx]));
+    if (chaves.some(chave => !chave)) continue;
+
+    let node = root;
+    for (const chave of chaves) {
+      if (!node.children.has(chave)) node.children.set(chave, { children: new Map(), totais: {} });
+      node = node.children.get(chave);
+      for (const col of numCols) {
+        const valor = parseFloat(row[col]) || 0;
+        node.totais[col] = (node.totais[col] || 0) + valor;
+      }
+    }
+
     for (const col of numCols) {
       const valor = parseFloat(row[col]) || 0;
-      grupos[chaveTemporal][chaveNegocio][col] = (grupos[chaveTemporal][chaveNegocio][col] || 0) + valor;
       totais[col] += valor;
     }
   }
 
-  const chavesTemporais = Object.keys(grupos).sort();
-  if (!chavesTemporais.length) {
-    return `Atencao: nao encontrei coluna de data/competencia para agrupar por ${temporal}. Verifique o alias DATA, ano+mes ou campo_data do dataset.`;
+  if (!root.children.size) {
+    return `Atencao: nao encontrei dados suficientes para agrupar por ${dims.join(' e ')}. Verifique aliases e coluna de data do dataset.`;
   }
 
-  const limitePorPeriodo = Math.min(limite || 10, 50);
   const colOrdem = numCols[0];
-  const blocos = chavesTemporais.map(chaveTemporal => {
-    const itens = Object.entries(grupos[chaveTemporal])
-      .sort(([, a], [, b]) => (b[colOrdem] || 0) - (a[colOrdem] || 0));
-    const visiveis = itens.slice(0, limitePorPeriodo);
-    const linhas = visiveis.map(([nome, vals], idx) => {
-      const partes = numCols.map(col => {
-        const label = col.replace(/_/g, ' ').toLowerCase();
-        return `${label}: *${_formatarValorMetrica(col, vals[col] || 0)}*`;
-      }).join(' | ');
-      return `  ${idx + 1}. *${nome}* — ${partes}`;
-    });
-    if (itens.length > visiveis.length) {
-      linhas.push(`  ... e mais ${itens.length - visiveis.length}`);
-    }
-    return `*${_labelTemporal(chaveTemporal, temporal)}*\n${linhas.join('\n')}`;
-  });
+  const temDimensaoTemporal = dims.some(dim => ['ano', 'mes', 'dia'].includes(dim));
+  const limitePorNivel = limite
+    ? Math.min(limite, 50)
+    : temDimensaoTemporal
+      ? Infinity
+      : LIMITE_PADRAO_AGRUPAMENTO;
 
-  const labelTemporal = temporal === 'ano' ? 'Ano' : temporal === 'dia' ? 'Dia' : 'Mes';
-  const labelNegocio = negocio.charAt(0).toUpperCase() + negocio.slice(1);
+  const ordenarFilhos = (entries, nivel) => {
+    const dim = dims[nivel];
+    if (['ano', 'mes', 'dia'].includes(dim)) return entries.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return entries.sort(([, a], [, b]) => (b.totais[colOrdem] || 0) - (a.totais[colOrdem] || 0));
+  };
+
+  const renderNivel = (node, nivel, indent = '') => {
+    const entries = ordenarFilhos([...node.children.entries()], nivel);
+    const visiveis = entries.slice(0, limitePorNivel);
+    const linhas = [];
+    for (const [chave, child] of visiveis) {
+      const label = ['ano', 'mes', 'dia'].includes(dims[nivel]) ? _labelTemporal(chave, dims[nivel]) : chave;
+      if (nivel === dims.length - 1) {
+        const partes = numCols.map(col => {
+          const nome = col.replace(/_/g, ' ').toLowerCase();
+          return `${nome}: *${_formatarValorMetrica(col, child.totais[col] || 0)}*`;
+        }).join(' | ');
+        linhas.push(`${indent}${linhas.length + 1}. *${label}* — ${partes}`);
+      } else {
+        linhas.push(`${indent}*${label}*`);
+        linhas.push(renderNivel(child, nivel + 1, indent + '  '));
+      }
+    }
+    if (entries.length > visiveis.length) linhas.push(`${indent}... e mais ${entries.length - visiveis.length}`);
+    return linhas.filter(Boolean).join('\n');
+  };
+
+  const titulo = dims.map(_labelDimensao).join(' e ');
   const totalStr = numCols
     .map(col => `${col.replace(/_/g, ' ')}: *${_formatarValorMetrica(col, totais[col])}*`)
     .join(' | ');
 
-  return `*Por ${labelTemporal} e ${labelNegocio}*${periodoStr}${filtrosStr}\n\n${blocos.join('\n\n')}\n\nTotal: ${totalStr}`;
+  return `*Por ${titulo}*${periodoStr}${filtrosStr}\n\n${renderNivel(root, 0)}\n\nTotal: ${totalStr}`;
 }
 
 function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, limite, intent) {
@@ -587,7 +642,7 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
   const orderParts = String(intent?.ordenar_por || '').split(':');
   const orderCol = orderParts[0] && numCols.includes(orderParts[0]) ? orderParts[0] : numCols[0];
   const asc = String(orderParts[1] || 'desc').toLowerCase() === 'asc';
-  const limitePadrao = dimensao === 'dia' ? 31 : 15;
+  const limitePadrao = dimensao === 'dia' ? 31 : LIMITE_PADRAO_AGRUPAMENTO;
   // Sem ranking/top/limite, agrupamentos temporais devem ser cronologicos.
   const ordenarPorValor = !!intent?.limite;
   const top = chaves
@@ -682,9 +737,18 @@ function formatar(resultado, intent, opts = {}) {
         const provedores = intent._erros?.map(e => e.provedor).join(' e ') || 'IA';
         return opts.messageTemplates.render(opts.empresaId, 'ia_cota_esgotada', { provedores });
       }
+      if (intent?._erroTipo === 'dataset_sem_informacao') {
+        return opts.messageTemplates.render(opts.empresaId, 'dataset_sem_informacao', {
+          mensagem: intent._erro || resultado.mensagem,
+          dimensao: intent._dimensaoIndisponivel || '',
+        });
+      }
       return opts.messageTemplates.render(opts.empresaId, 'intencao_desconhecida', {
         mensagem: resultado.mensagem,
       });
+    }
+    if (intent?._erroTipo === 'dataset_sem_informacao') {
+      return `${intent._erro || resultado.mensagem}\n\nO dataset disponivel para esta consulta nao possui os campos ou o nivel de detalhe necessario para responder com seguranca.\n\nDeseja consultar outra informacao?`;
     }
     return `❓ ${resultado.mensagem}`;
   }

@@ -31,6 +31,7 @@
         { id: 'iac-admin-datasets',  label: 'Datasets ERP', href: '/app/ia-command/admin-datasets.html',   icon: '📊' },
         { id: 'iac-config-ia',       label: 'Configuração de IA', href: '/app/ia-command/config-ia.html',       icon: '🤖' },
         { id: 'iac-admin-intencoes', label: 'Intenções',    href: '/app/ia-command/admin-intencoes.html',  icon: '🧠' },
+        { id: 'iac-migrar-dados',    label: 'Migrar Dados', href: '/app/ia-command/migrar-dados.html',     icon: '⇄' },
       ],
     },
     {
@@ -46,7 +47,7 @@
 
   const cadastros = MENU.find(s => s.id === 'cadastros');
   if (cadastros && !cadastros.items.some(i => i.id === 'iac-admin-normalizacao')) {
-    cadastros.items.push({ id: 'iac-admin-normalizacao', label: 'Normalizacao', href: '/app/ia-command/admin-normalizacao.html', icon: 'Aa' });
+    cadastros.items.push({ id: 'iac-admin-normalizacao', label: 'Normalizacao', href: '/app/ia-command/admin-normalizacao.html', icon: '🧹' });
   }
 
   const curPath = location.pathname;

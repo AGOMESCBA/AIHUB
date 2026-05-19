@@ -3,9 +3,19 @@ const qrcode   = require('qrcode');
 const pdfParse = require('pdf-parse/lib/pdf-parse.js');
 const { EventEmitter } = require('events');
 const path = require('path');
+const fs = require('fs');
 const db = require('./database');
 const empresasDb = require('../empresas/database');
 const ia = require('../ia');
+
+function resolveChromePath() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ].filter(Boolean);
+  return candidates.find(p => fs.existsSync(p)) || process.env.CHROME_PATH || null;
+}
 
 class WhatsAppService extends EventEmitter {
   constructor() {
@@ -66,8 +76,9 @@ class WhatsAppService extends EventEmitter {
       ? `empresa #${this._empresaId} - ${this._empresaNome}`
       : `empresa #${this._empresaId}`;
     this.log(`Iniciando serviço WhatsApp para ${empLabel}...`, 'info');
-    if (process.env.CHROME_PATH) {
-      this.log(`Usando Chrome: ${process.env.CHROME_PATH}`, 'info');
+    const chromePath = resolveChromePath();
+    if (chromePath) {
+      this.log(`Usando Chrome: ${chromePath}`, 'info');
     }
 
     // Restaura confirmações pendentes salvas antes do último restart
@@ -101,7 +112,7 @@ class WhatsAppService extends EventEmitter {
         '--metrics-recording-only',
       ],
     };
-    if (process.env.CHROME_PATH) puppeteerConfig.executablePath = process.env.CHROME_PATH;
+    if (chromePath) puppeteerConfig.executablePath = chromePath;
 
     // Sessão isolada por empresa
     const authDataPath = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');

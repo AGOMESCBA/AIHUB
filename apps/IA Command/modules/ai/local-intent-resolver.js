@@ -32,8 +32,10 @@ const DIMENSIONS = {
   cliente: ['por cliente', 'clientes', 'cliente', 'quem comprou'],
   vendedor: ['por vendedor', 'vendedores', 'vendedor', 'representante', 'rep', 'quem vendeu'],
   fornecedor: ['por fornecedor', 'fornecedores', 'fornecedor', 'forn'],
-  empresa: ['por empresa', 'por filial', 'empresa', 'filial', 'unidade', 'loja'],
-  mes: ['por mes', 'mes a mes', 'mensal', 'mes com maior', 'mes maior', 'melhor mes', 'pior mes', 'qual o mes'],
+  empresa: ['por empresa', 'por empresas', 'empresa', 'empresas'],
+  filial: ['por filial', 'por filiais', 'filial', 'filiais', 'loja', 'lojas'],
+  unidade: ['por unidade', 'por unidades', 'unidade', 'unidades', 'unidade de negocio', 'unidades de negocio'],
+  mes: ['por mes', 'por meses', 'todos os meses', 'cada mes', 'mes a mes', 'mensal', 'mes com maior', 'mes de maior', 'mes com menor', 'mes de menor', 'mes maior', 'melhor mes', 'pior mes', 'qual o mes'],
   ano: ['por ano', 'ano a ano', 'anual', 'ano com maior', 'ano maior', 'melhor ano', 'pior ano', 'qual o ano'],
   dia: ['por dia', 'dia a dia', 'diario', 'diaria', 'diariamente', 'cada dia', 'detalhe dia', 'detalhado por dia'],
 };
@@ -70,8 +72,9 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
 
   const matches = _matchSinonimos(texto, sinonimos);
   const periodo = identificarPeriodoTexto(mensagem, { normalizacoes });
-  const agruparPorComposto = _resolverAgrupamentoComposto(texto);
-  const agruparPor = _resolverAgrupamentoPrincipal(agruparPorComposto) || _resolverAgrupamento(texto, matches.coluna);
+  const groupBy = _resolverGroupBy(texto);
+  const agruparPorComposto = groupBy.length >= 2 ? groupBy : null;
+  const agruparPor = groupBy[0] || _resolverAgrupamento(texto, matches.coluna);
   const intencaoInfo = _resolverIntencao(texto, intencoes, matches.intencao, { periodo, agruparPor });
   if (!intencaoInfo) return null;
   const intencao = intencaoInfo.intent;
@@ -89,6 +92,7 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
     intencao: intencao.nome,
     periodo,
     filtros,
+    group_by: groupBy.length ? groupBy : null,
     agrupar_por: agruparPor,
     agrupar_por_composto: agruparPorComposto,
     operacao_analitica: operacaoAnalitica,
@@ -200,6 +204,49 @@ function _resolverAgrupamento(texto) {
     if (termos.some(t => _containsTerm(texto, normalizarTexto(t)))) return dim;
   }
   return null;
+}
+
+function _dimensionMatch(texto, dim, termos) {
+  let best = null;
+  const candidatos = [...termos];
+  if (dim === 'dia') candidatos.push('dia', 'dias');
+  if (dim === 'mes') candidatos.push('mes', 'meses');
+  if (dim === 'ano') candidatos.push('ano');
+
+  for (const termo of candidatos) {
+    const t = normalizarTexto(termo);
+    if (!t) continue;
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(^|\\s)${escaped}(\\s|$)`, 'i');
+    const m = re.exec(texto);
+    if (!m) continue;
+    const idx = m.index + (m[1] ? m[1].length : 0);
+
+    if (dim === 'produto' && t === 'negocio') {
+      const antes = texto.slice(Math.max(0, idx - 12), idx).trim();
+      if (/\bunidade\s+de$/.test(antes)) continue;
+    }
+
+    if (AGRUPAMENTOS_TEMPORAIS.has(dim) && ['dia', 'dias', 'mes', 'ano'].includes(t)) {
+      const antes = texto.slice(Math.max(0, idx - 4), idx).trim();
+      const depois = texto.slice(idx + t.length, idx + t.length + 4).trim();
+      if (!/\b(por|e)$/.test(antes) && !/^e\b/.test(depois)) continue;
+    }
+
+    if (!best || idx < best.index || (idx === best.index && t.length > best.termo.length)) {
+      best = { dim, index: idx, termo: t };
+    }
+  }
+  return best;
+}
+
+function _resolverGroupBy(texto) {
+  return Object.entries(DIMENSIONS)
+    .map(([dim, termos]) => _dimensionMatch(texto, dim, termos))
+    .filter(Boolean)
+    .sort((a, b) => a.index - b.index)
+    .map(x => x.dim)
+    .filter((dim, idx, arr) => arr.indexOf(dim) === idx);
 }
 
 function _resolverAgrupamentoComposto(texto) {

@@ -47,12 +47,29 @@
     return _listaEmpresas;
   }
 
+  function _stripEmpresaParam(url) {
+    try {
+      const [path, qs] = url.split('?');
+      if (!qs) return url;
+      const params = new URLSearchParams(qs);
+      params.delete('_empresa');
+      const cleaned = params.toString();
+      return cleaned ? `${path}?${cleaned}` : path;
+    } catch (_) { return url; }
+  }
+
   function openTab(url, label, icon, empresaIdOverride = null, empresaNomeOverride = null) {
+    const baseUrl   = _stripEmpresaParam(url);
     const empresaId   = (empresaIdOverride != null) ? empresaIdOverride : (window._iahubEmpresa?.id ?? null);
     const empresaNome = empresaNomeOverride ?? window._iahubEmpresa?.nome ?? '';
-    const tabKey = empresaId ? `${url}?_empresa=${empresaId}` : url;
+    const tabKey = empresaId ? `${baseUrl}?_empresa=${empresaId}` : baseUrl;
 
     if (_tabs.has(tabKey)) { _activateTab(tabKey); return; }
+
+    // Fallback: aba com mesma URL base já aberta (ex.: empresa mudou mas página é a mesma)
+    for (const [key, tab] of _tabs) {
+      if (tab.url === baseUrl) { _activateTab(key); return; }
+    }
 
     const bar     = document.getElementById('mdi-tabbar');
     const content = document.getElementById('mdi-content');
@@ -82,11 +99,11 @@
     const frame = document.createElement('iframe');
     frame.className   = 'mdi-iframe';
     frame.dataset.url = tabKey;
-    frame.src         = empresaId ? `${url}?_empresa=${empresaId}` : url;
+    frame.src         = empresaId ? `${baseUrl}?_empresa=${empresaId}` : baseUrl;
     frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(frame.dataset.url)));
     content.appendChild(frame);
 
-    _tabs.set(tabKey, { label, icon, empresaId, empresaNome, url, chip, frame });
+    _tabs.set(tabKey, { label, icon, empresaId, empresaNome, url: baseUrl, chip, frame });
     _activateTab(tabKey);
     _saveState();
     setTimeout(_updateScrollBtns, 60);
@@ -433,9 +450,10 @@
   }
 
   function _syncSidebarActive(url) {
+    const baseUrl = url ? url.split('?')[0] : null;
     document.querySelectorAll('#sidebar .nav-item').forEach(a => {
       const href  = a.getAttribute('href');
-      const match = url && href && (url === href || url.endsWith(href));
+      const match = baseUrl && href && (baseUrl === href || baseUrl.endsWith(href));
       a.classList.toggle('active', !!match);
     });
   }

@@ -21,6 +21,10 @@ const DEFAULT_TEMPLATES = {
     titulo: 'Intencao desconhecida',
     template: 'Nao consegui entender exatamente qual consulta voce quer fazer.\n\n{{mensagem}}\n\nTente escrever de forma mais especifica, por exemplo:\n* "Qual o faturamento do ano passado?"\n* "Detalhe o faturamento mes a mes"\n* "Mostre o faturamento por empresa"\n* "Quero a quantidade por produto em abril"\n* "Traga valor e quantidade por cliente"',
   },
+  dataset_sem_informacao: {
+    titulo: 'Informacao nao disponivel no dataset',
+    template: '{{mensagem}}\n\nO dataset disponivel para esta consulta nao possui os campos ou o nivel de detalhe necessario para responder com seguranca.\n\nDeseja consultar outra informacao?',
+  },
   ia_cota_esgotada: {
     titulo: 'IA com cota esgotada',
     template: '⚠️ As IAs estao temporariamente indisponiveis ({{provedores}}: cota esgotada).\n\nAguarde alguns minutos e tente novamente.',
@@ -31,7 +35,7 @@ const DEFAULT_TEMPLATES = {
   },
   empresa_ambigua: {
     titulo: 'Escolha de empresa',
-    template: 'Identifiquei mais de uma empresa vinculada a este WhatsApp.\n\n{{opcoes_empresas}}\n\nResponda com o numero ou nome da empresa para continuar.',
+    template: 'Para responder sua consulta, preciso saber qual empresa considerar:\n\n{{opcoes_empresas}}\n\nResponda com o número ou o nome da empresa.',
   },
   resposta_empresa_prefixo: {
     titulo: 'Prefixo com empresa',

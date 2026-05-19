@@ -51,19 +51,26 @@ function _buildWrapper(intent, dataset) {
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  if (Array.isArray(intent.agrupar_por_composto) && intent.agrupar_por_composto.length >= 2) {
+  const groupBy = Array.isArray(intent.group_by) && intent.group_by.length
+    ? intent.group_by
+    : Array.isArray(intent.agrupar_por_composto) && intent.agrupar_por_composto.length
+      ? intent.agrupar_por_composto
+      : intent.agrupar_por ? [intent.agrupar_por] : [];
+
+  if (groupBy.length >= 2) {
     const sql = `SELECT *\nFROM (\n${dataset.sql_base}\n) AS _base\n${where}`.trimEnd();
     return { sql, params };
   }
 
-  if (intent.agrupar_por) {
-    const agrupamentoTemporal = ['mes', 'ano', 'dia'].includes(String(intent.agrupar_por || '').toLowerCase());
+  if (groupBy.length === 1) {
+    const agruparPor = groupBy[0];
+    const agrupamentoTemporal = ['mes', 'ano', 'dia'].includes(String(agruparPor || '').toLowerCase());
     if (agrupamentoTemporal) {
       const sql = `SELECT *\nFROM (\n${dataset.sql_base}\n) AS _base\n${where}`.trimEnd();
       return { sql, params };
     }
 
-    const dimCol = _resolverAlias(intent.agrupar_por, aliases);
+    const dimCol = _resolverAlias(agruparPor, aliases);
 
     if (dataset.colunas_metrica?.trim()) {
       const metricas = dataset.colunas_metrica

@@ -287,7 +287,7 @@
                     <div class="reg-label">Escopo</div>
                     <input type="text" id="f-escopo" class="form-control" disabled
                       style="font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
-                    <p style="font-size:11px;color:var(--text-lo);line-height:1.5;margin-top:6px">Diálogos <strong>globais</strong> valem para todas as empresas. Diálogos <strong>da empresa</strong> têm prioridade sobre os globais quando o padrão bater em ambos.</p>
+                    <p style="font-size:11px;color:var(--text-lo);line-height:1.5;margin-top:6px"><strong>Padrão</strong> = diálogo instalado pelo sistema, editável mas não excluível. <strong>Personalizado</strong> = criado pela empresa.</p>
                   </div>
                   <div class="reg-field">
                     <div class="reg-label">Prioridade</div>
@@ -485,8 +485,8 @@
         <div class="help-item-desc">Número de 0 a 100. Diálogos com maior prioridade são verificados primeiro. Use para que um diálogo da empresa sobreponha um global. Padrões do sistema têm prioridade 10.</div>
       </div>
       <div class="help-item">
-        <div class="help-item-label">Escopo</div>
-        <div class="help-item-desc">Preenchido automaticamente. <strong>Sistema</strong> = global, vale para todas as empresas. <strong>Empresa</strong> = vale só para esta empresa.</div>
+        <div class="help-item-label">Origem</div>
+        <div class="help-item-desc">Preenchido automaticamente. <strong>Padrão</strong> = instalado pelo sistema para esta empresa, pode ser editado mas não excluído. <strong>Personalizado</strong> = criado pela empresa.</div>
       </div>
       <div class="help-item">
         <div class="help-item-label">Status</div>
@@ -502,7 +502,7 @@
 
     <div class="help-section">
       <div class="help-section-title">Registros protegidos</div>
-      <div class="help-item-desc">Diálogos de origem <strong>Sistema</strong> são protegidos contra exclusão. Para desativá-los, use o botão de status. Para restaurar os padrões originais, use o botão <strong>Restaurar Sistema</strong>.</div>
+      <div class="help-item-desc">Diálogos de origem <strong>Padrão</strong> são protegidos contra exclusão — cada empresa tem os seus. Para desativá-los, altere o status para Inativo. Para restaurar os textos originais, use o botão <strong>Restaurar padrões</strong>.</div>
     </div>
 
   </div>
@@ -568,19 +568,15 @@
           }},
         { title:'Prioridade', field:'prioridade', width:95, headerFilter:false,
           formatter: c => `<span style="font-size:12px;color:var(--text-lo)">${c.getValue()}</span>` },
-        { title:'Escopo', field:'empresa_id', width:95, headerFilter:false,
-          formatter: c => c.getValue() == null
-            ? '<span class="badge-global">🌐 Global</span>'
-            : '<span class="badge-usuario">🏢 Empresa</span>' },
+        { title:'Origem', field:'origem', width:110, groupable:false,
+          formatter: c => c.getValue() === 'sistema'
+            ? '<span class="badge-sistema">🔒 Padrão</span>'
+            : '<span class="badge-usuario">✎ Personalizado</span>' },
         { title:'Status', field:'ativo', width:90,
           headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}},
           formatter: c => c.getValue()
             ? '<span class="badge-ativo">● Ativo</span>'
             : '<span class="badge-inativo">○ Inativo</span>' },
-        { title:'Origem', field:'origem', width:100, groupable:false,
-          formatter: c => c.getValue() === 'sistema'
-            ? '<span class="badge-sistema">🔒 Sistema</span>'
-            : '<span class="badge-usuario">✎ Empresa</span>' },
         { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
           formatter: cell => {
             const row = cell.getRow().getData();
@@ -708,7 +704,7 @@
     document.getElementById('f-tipo-form').value  = 'outro';
     document.getElementById('f-prioridade').value = '0';
     document.getElementById('f-ativo-form').value = '1';
-    document.getElementById('f-escopo').value     = '(nova empresa)';
+    document.getElementById('f-escopo').value     = 'Personalizado';
     document.getElementById('aviso-protegido').style.display = 'none';
     document.getElementById('save-feedback').textContent = '';
     document.getElementById('save-feedback').className   = 'save-feedback';
@@ -723,7 +719,7 @@
     document.getElementById('f-tipo-form').value  = row.tipo          || 'outro';
     document.getElementById('f-prioridade').value = row.prioridade    ?? 0;
     document.getElementById('f-ativo-form').value = String(row.ativo  ?? 1);
-    document.getElementById('f-escopo').value     = row.empresa_id == null ? 'Global (Sistema)' : 'Esta empresa';
+    document.getElementById('f-escopo').value     = row.origem === 'sistema' ? 'Padrão da empresa' : 'Personalizado';
     document.getElementById('aviso-protegido').style.display = row.protegido ? '' : 'none';
     document.getElementById('form-title').textContent    = `"${row.titulo}"`;
     document.getElementById('form-subtitle').textContent = `ID ${row.id.slice(0,8)}… · ${row.origem === 'sistema' ? 'Padrão do sistema' : 'Criado pela empresa'}`;

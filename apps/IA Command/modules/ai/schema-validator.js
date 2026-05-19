@@ -1,7 +1,7 @@
 const { PERIOD_TYPES, normalizarIntent } = require('./local-intent-resolver');
 
-const FILTROS_PERMITIDOS = new Set(['cliente', 'vendedor', 'fornecedor', 'produto', 'filial', 'status']);
-const AGRUPAMENTOS_PERMITIDOS = new Set(['cliente', 'produto', 'vendedor', 'fornecedor', 'empresa', 'mes', 'ano', 'dia']);
+const FILTROS_PERMITIDOS = new Set(['cliente', 'vendedor', 'fornecedor', 'produto', 'filial', 'unidade', 'status']);
+const AGRUPAMENTOS_PERMITIDOS = new Set(['cliente', 'produto', 'vendedor', 'fornecedor', 'empresa', 'filial', 'unidade', 'mes', 'ano', 'dia']);
 const OPERACOES_PERMITIDAS = new Set(['soma', 'media']);
 const GRANULARIDADES_PERMITIDAS = new Set(['dia', 'mes', 'ano']);
 
@@ -58,7 +58,17 @@ function validar(intent, nomesPermitidos) {
   intent.limite = intent.limite == null ? null : Math.min(Math.max(parseInt(intent.limite, 10) || 0, 1), 100);
   if (intent.limite === 0) intent.limite = null;
 
-  intent.agrupar_por = intent.agrupar_por || null;
+  if (Array.isArray(intent.group_by)) {
+    intent.group_by = intent.group_by
+      .map(v => String(v || '').trim().toLowerCase())
+      .filter(v => AGRUPAMENTOS_PERMITIDOS.has(v))
+      .filter((v, idx, arr) => arr.indexOf(v) === idx);
+    if (!intent.group_by.length) intent.group_by = null;
+  } else {
+    intent.group_by = null;
+  }
+
+  intent.agrupar_por = intent.agrupar_por || intent.group_by?.[0] || null;
   if (intent.agrupar_por && !AGRUPAMENTOS_PERMITIDOS.has(intent.agrupar_por)) {
     erros.push(`Agrupamento invalido: "${intent.agrupar_por}"`);
     intent.agrupar_por = null;
@@ -71,11 +81,14 @@ function validar(intent, nomesPermitidos) {
     if (intent.agrupar_por_composto.length < 2) {
       intent.agrupar_por_composto = null;
     } else {
-      intent.agrupar_por_composto = intent.agrupar_por_composto.slice(0, 2);
+      intent.agrupar_por_composto = intent.agrupar_por_composto;
     }
   } else {
-    intent.agrupar_por_composto = null;
+    intent.agrupar_por_composto = intent.group_by && intent.group_by.length >= 2 ? intent.group_by : null;
   }
+
+  if (!intent.group_by && intent.agrupar_por_composto) intent.group_by = intent.agrupar_por_composto;
+  if (!intent.group_by && intent.agrupar_por) intent.group_by = [intent.agrupar_por];
 
   if (intent.operacao_analitica && typeof intent.operacao_analitica === 'object') {
     const op = String(intent.operacao_analitica.operacao || '').toLowerCase();

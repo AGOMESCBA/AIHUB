@@ -885,9 +885,10 @@ Responda SOMENTE com JSON válido, sem markdown:
   app.get('/api/ia-command/admin/dialogos', requireAuth, requireIaCommand, canDialogos, (req, res) => {
     const db = getDB();
     const empresaId = eid(req);
+    require('./ai/dialog-resolver').semearParaEmpresa(empresaId);
     const rows = db.prepare(`
       SELECT * FROM conversational_dialogs
-      WHERE empresa_id IS NULL OR empresa_id = ?
+      WHERE empresa_id = ?
       ORDER BY prioridade DESC, rowid DESC
     `).all(empresaId);
     res.json(rows);
@@ -911,9 +912,7 @@ Responda SOMENTE com JSON válido, sem markdown:
 
   app.get('/api/ia-command/admin/dialogos/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
     const row = crud.buscarPorId('conversational_dialogs', req.params.id);
-    if (!row) return res.status(404).json({ error: 'Não encontrado.' });
-    const empresaId = eid(req);
-    if (row.empresa_id !== null && row.empresa_id !== empresaId) return res.status(404).json({ error: 'Não encontrado.' });
+    if (!row || Number(row.empresa_id) !== Number(eid(req))) return res.status(404).json({ error: 'Não encontrado.' });
     res.json(row);
   });
 
@@ -941,9 +940,8 @@ Responda SOMENTE com JSON válido, sem markdown:
 
   app.put('/api/ia-command/admin/dialogos/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
     const existing = crud.buscarPorId('conversational_dialogs', req.params.id);
-    if (!existing) return res.status(404).json({ error: 'Não encontrado.' });
     const empresaId = eid(req);
-    if (existing.empresa_id !== null && existing.empresa_id !== empresaId) return res.status(404).json({ error: 'Não encontrado.' });
+    if (!existing || Number(existing.empresa_id) !== Number(empresaId)) return res.status(404).json({ error: 'Não encontrado.' });
     const campos = {};
     if (req.body.tipo      !== undefined) campos.tipo      = req.body.tipo;
     if (req.body.titulo    !== undefined) campos.titulo    = String(req.body.titulo).trim();
@@ -962,9 +960,8 @@ Responda SOMENTE com JSON válido, sem markdown:
 
   app.delete('/api/ia-command/admin/dialogos/:id', requireAuth, requireIaCommand, canDialogos, (req, res) => {
     const existing = crud.buscarPorId('conversational_dialogs', req.params.id);
-    if (!existing) return res.status(404).json({ error: 'Não encontrado.' });
     const empresaId = eid(req);
-    if (existing.empresa_id !== null && existing.empresa_id !== empresaId) return res.status(404).json({ error: 'Não encontrado.' });
+    if (!existing || Number(existing.empresa_id) !== Number(empresaId)) return res.status(404).json({ error: 'Não encontrado.' });
     if (existing.protegido) return res.status(403).json({ error: 'Este diálogo é protegido pelo sistema e não pode ser excluído. Desative-o se não quiser que seja usado.' });
     crud.excluir('conversational_dialogs', req.params.id);
     _audit(req, 'excluir_dialogo', { id: req.params.id, titulo: existing.titulo });
@@ -973,7 +970,7 @@ Responda SOMENTE com JSON válido, sem markdown:
   });
 
   app.post('/api/ia-command/admin/dialogos/restaurar-sistema', requireAuth, requireIaCommand, canDialogos, (req, res) => {
-    const restaurados = require('./ai/dialog-resolver').restaurarSistema();
+    const restaurados = require('./ai/dialog-resolver').restaurarSistema(eid(req));
     _audit(req, 'restaurar_dialogos_sistema', { restaurados });
     res.json({ ok: true, restaurados });
   });

@@ -40,6 +40,8 @@
 
     .badge-ok   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
     .badge-fail { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fee2e2;color:#b91c1c; }
+    .badge-warn { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#854d0e; }
+    .badge-info { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8; }
 
     /* Detalhe modal */
     .detail-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center; }
@@ -127,8 +129,11 @@
             <input id="f-intent" type="text" class="form-control" placeholder="Filtrar por intenção…" oninput="filtrar()">
             <select id="f-sucesso" class="form-control" onchange="filtrar()">
               <option value="">Todos os status</option>
-              <option value="1">Sucesso</option>
-              <option value="0">Erro</option>
+              <option value="sucesso">Sucesso</option>
+              <option value="erro">Erro</option>
+              <option value="sem_dados">Sem dados</option>
+              <option value="dialogo">Diálogo</option>
+              <option value="desconhecido">Desconhecido</option>
             </select>
             <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
           </div>
@@ -162,7 +167,7 @@
       <button class="detail-close" onclick="fecharDetalhe()">✕</button>
     </div>
     <div class="detail-sec">
-      <div class="detail-lbl">Query Executada</div>
+      <div class="detail-lbl">Detalhes da Execução</div>
       <pre class="detail-pre" id="detail-query"></pre>
     </div>
     <div class="detail-sec" id="detail-erro-wrap" style="display:none">
@@ -196,8 +201,8 @@
     const s = document.getElementById('f-sucesso').value;
     if (b || s !== '') {
       _quickFilterFn = row => {
-        if (s !== '' && String(row.sucesso) !== s) return false;
-        if (b && !(row.intent || '').toLowerCase().includes(b)) return false;
+        if (s !== '' && row.status !== s) return false;
+        if (b && !(row.intencao || '').toLowerCase().includes(b)) return false;
         return true;
       };
       table.addFilter(_quickFilterFn);
@@ -214,15 +219,16 @@
   }
 
   function verDetalhe(row) {
-    document.getElementById('detail-title').textContent  = `Intenção: ${row.intent || '—'}`;
-    document.getElementById('detail-query').textContent  = row.query_executada || '(sem query)';
-    const erroWrap = document.getElementById('detail-erro-wrap');
-    if (row.erro) {
-      document.getElementById('detail-erro').textContent = row.erro;
-      erroWrap.style.display = '';
-    } else {
-      erroWrap.style.display = 'none';
-    }
+    document.getElementById('detail-title').textContent = `Intenção: ${row.intencao || '—'}`;
+    document.getElementById('detail-query').textContent =
+      [
+        `Status     : ${row.status || '—'}`,
+        `Remetente  : ${row.numero_wa || row.usuario || '—'}`,
+        `Tipo       : ${row.tipo_mensagem || '—'}`,
+        `Duração    : ${row.duracao_ms != null ? row.duracao_ms + ' ms' : '—'}`,
+        `ID         : ${row.correlation_id || '—'}`,
+      ].join('\n');
+    document.getElementById('detail-erro-wrap').style.display = 'none';
     document.getElementById('detail-overlay').classList.add('show');
   }
 
@@ -246,21 +252,29 @@
     });
 
     table = new Tabulator('#tabela', {
-      data, index: 'id', layout: 'fitColumns', movableColumns: true,
+      data, index: 'correlation_id', layout: 'fitColumns', movableColumns: true,
       height: 'calc(100vh - 330px)',
       groupBy: gp.getActiveFields(), groupStartOpen: true,
       placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma execução registrada.</div>',
       columns: [
         { title: 'Data/Hora', field: 'criado_em', width: 155,
           formatter: c => c.getValue()?.slice(0,19).replace('T',' ') || '' },
-        { title: 'Intenção', field: 'intent', minWidth: 160, headerFilter: true,
+        { title: 'Usuário / Remetente', field: 'numero_wa', minWidth: 140, headerFilter: true,
+          formatter: c => esc(c.getValue() || '—') },
+        { title: 'Intenção', field: 'intencao', minWidth: 160, headerFilter: true,
           formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue() || '—')}</strong>` },
-        { title: 'Status', field: 'sucesso', width: 95,
+        { title: 'Status', field: 'status', width: 115,
           headerFilter: 'select',
-          headerFilterParams: { values: { '':'Todos', '1':'Sucesso', '0':'Erro' } },
-          formatter: c => c.getValue()
-            ? '<span class="badge-ok">● OK</span>'
-            : '<span class="badge-fail">✗ Erro</span>' },
+          headerFilterParams: { values: { '':'Todos', 'sucesso':'Sucesso', 'erro':'Erro', 'sem_dados':'Sem dados', 'dialogo':'Diálogo', 'desconhecido':'Desconhecido' } },
+          formatter: c => {
+            const v = c.getValue();
+            if (v === 'sucesso')      return '<span class="badge-ok">✓ Sucesso</span>';
+            if (v === 'erro')         return '<span class="badge-fail">✗ Erro</span>';
+            if (v === 'sem_dados')    return '<span class="badge-warn">— Sem dados</span>';
+            if (v === 'dialogo')      return '<span class="badge-info">💬 Diálogo</span>';
+            return `<span style="color:var(--text-lo)">${esc(v || '?')}</span>`;
+          },
+        },
         { title: 'Duração (ms)', field: 'duracao_ms', width: 120,
           formatter: c => {
             const v = c.getValue();
@@ -269,19 +283,9 @@
             return `<span style="color:${color};font-weight:600">${v}</span>`;
           },
         },
-        { title: 'Query', field: 'query_executada', minWidth: 180, headerFilter: false, groupable: false,
-          formatter: c => {
-            const v = c.getValue();
-            return v
-              ? `<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${esc(v.slice(0,80))}${v.length > 80 ? '…' : ''}</span>`
-              : '<span style="color:var(--text-lo)">—</span>';
-          },
-        },
-        { title: 'Erro', field: 'erro', minWidth: 130, headerFilter: false, groupable: false,
-          formatter: c => {
-            const v = c.getValue();
-            return v ? `<span style="font-size:12px;color:#b91c1c">${esc(v.slice(0,60))}${v.length > 60 ? '…' : ''}</span>` : '';
-          },
+        { title: 'Tipo', field: 'tipo_mensagem', width: 90, headerFilter: 'select',
+          headerFilterParams: { values: { '':'Todos', 'texto':'Texto', 'audio':'Áudio', 'imagem':'Imagem' } },
+          formatter: c => esc(c.getValue() || '—'),
         },
       ],
       rowClick: (e, row) => verDetalhe(row.getData()),

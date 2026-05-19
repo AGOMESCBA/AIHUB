@@ -47,6 +47,32 @@
     .save-feedback.fail { color:#b91c1c; }
     .reg-field { margin-bottom:16px; }
     .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;}
+    .help-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 22px;}
+    .help-tab{padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-lo);transition:color var(--transition),border-color var(--transition);}
+    .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .help-panel{display:none;padding:22px;} .help-panel.active{display:block;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th,.fmt-table td{padding:6px 10px;border:1px solid var(--border);text-align:left;}
+    .fmt-table th{background:var(--bg-hover);font-weight:700;color:var(--text-hi);}
+    .fmt-table td:first-child{white-space:nowrap;}
+    .fmt-table code{background:var(--bg-hover);padding:1px 4px;border-radius:3px;font-size:11px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -76,7 +102,13 @@
             <div class="page-title">Normalizacao Linguistica</div>
             <div class="page-subtitle">Corrija erros de digitacao, abreviacoes e variacoes antes da interpretacao da engine.</div>
           </div>
-          <button class="btn btn-primary" onclick="abrirFormulario()">+ Nova Regra</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-primary" onclick="abrirFormulario()">+ Nova Regra</button>
+          </div>
         </div>
 
         <div class="quick-panel">
@@ -372,6 +404,126 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const init = async () => { await carregar(); };
 window._iahubAuthReady?.then(init) ?? init();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Normalização Linguística</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-tabs">
+    <div class="help-tab active" onclick="helpTab(this,'ht-geral')">Geral</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-tipos')">Tipos</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-pratica')">Boas Práticas</div>
+  </div>
+  <div class="help-drawer-body" style="padding:0;overflow-y:auto;flex:1;">
+
+  <div id="ht-geral" class="help-panel active">
+    <div class="help-section">
+      <div class="help-section-title">O que é a Normalização Linguística</div>
+      <div class="help-item-desc">A Normalização é a <strong>primeira camada de processamento</strong> do IA Command. Antes de qualquer interpretação de intenção, período, filtro ou chamada à IA, o motor substitui termos digitados pelo usuário por suas formas corretas — corrigindo erros de digitação, expandindo abreviações e padronizando variações de escrita.</div>
+      <div class="help-tip">Exemplo: o usuário envia <em>"conparar faturamnto desse mes"</em>. A normalização transforma para <em>"comparar faturamento desse mes"</em> antes de qualquer análise.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Posição no pipeline</div>
+      <div class="help-item-desc">A normalização ocorre nesta ordem dentro do IA Command:</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:12px 16px;font-size:12px;line-height:2;margin-top:8px">
+        <strong style="color:var(--accent)">1. Normalização Linguística</strong> ← você está aqui<br>
+        2. Intenção (qual consulta o usuário quer)<br>
+        3. Período (quando)<br>
+        4. Filtros e agrupamentos<br>
+        5. Execução no dataset / chamada à IA
+      </div>
+      <div class="help-tip">Uma regra de normalização bem configurada aumenta o índice de resolução local e reduz chamadas à IA externa, economizando tokens.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Campos do cadastro</div>
+      <div class="help-item">
+        <div class="help-item-label">Termo digitado</div>
+        <div class="help-item-desc">O texto exato que o usuário pode escrever no WhatsApp — com erro, abreviação ou variação. Não precisa ser uma palavra inteira; funciona como busca de substring na mensagem.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Forma normalizada</div>
+        <div class="help-item-desc">O texto correto que o motor deve usar no lugar do termo digitado antes de interpretar o pedido.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Tipo</div>
+        <div class="help-item-desc">Classifica a regra para facilitar organização e filtragem. Não altera o comportamento — ver aba <strong>Tipos</strong>.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Status</div>
+        <div class="help-item-desc">Apenas regras <strong>Ativas</strong> são aplicadas pelo motor. Inative uma regra para suspendê-la sem excluir.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ht-tipos" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Tipos disponíveis</div>
+      <div class="help-item-desc">O tipo é apenas uma categoria organizacional — não muda como a regra é aplicada. Use-o para filtrar e entender a origem dos cadastros.</div>
+      <table class="fmt-table" style="margin-top:12px">
+        <thead><tr><th>Tipo</th><th>Quando usar</th><th>Exemplo</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Geral</strong></td><td>Termos que não se encaixam nas categorias abaixo</td><td><code>fat</code> → <code>faturamento</code></td></tr>
+          <tr><td><strong>Correcao</strong></td><td>Erros de digitação comuns no WhatsApp</td><td><code>conparar</code> → <code>comparar</code></td></tr>
+          <tr><td><strong>Abreviacao</strong></td><td>Formas curtas que o usuário usa no dia a dia</td><td><code>qtde</code> → <code>quantidade</code></td></tr>
+          <tr><td><strong>Verbo</strong></td><td>Conjugações ou formas verbais alternativas</td><td><code>compara</code> → <code>comparar</code></td></tr>
+          <tr><td><strong>Metrica</strong></td><td>Nomes alternativos de indicadores financeiros</td><td><code>faturamnto</code> → <code>faturamento</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Regras embutidas no sistema</div>
+      <div class="help-item-desc">O IA Command já vem com variantes pré-definidas no motor (não aparecem nesta lista, pois estão no código): conjugações dos verbos <em>comparar, mostrar, trazer, listar</em>, além de variações ortográficas de palavras frequentes como <em>faturamento, vendas, pedidos</em>. As regras cadastradas aqui são aplicadas <strong>adicionalmente</strong> — priorize termos específicos do vocabulário da empresa que não estão cobertos pelo motor padrão.</div>
+      <div class="help-tip">Não recadastre termos já cobertos pelo motor. Se a normalização já está funcionando para uma palavra, cadastrar novamente não causa dano, mas é redundante.</div>
+    </div>
+  </div>
+
+  <div id="ht-pratica" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Normalização vs. Equivalências</div>
+      <div class="help-item-desc">São camadas distintas — use esta tabela para decidir onde cadastrar:</div>
+      <table class="fmt-table" style="margin-top:10px">
+        <thead><tr><th>O problema é…</th><th>Solução correta</th></tr></thead>
+        <tbody>
+          <tr><td>Erro de digitação ou abreviação (<em>"conparar"</em>)</td><td style="color:#059669;font-weight:600">Normalização (esta tela)</td></tr>
+          <tr><td>Nome alternativo de métrica (<em>"volume"</em> em vez de <em>"quantidade"</em>)</td><td style="color:#0284c7;font-weight:600">Equivalência → Coluna</td></tr>
+          <tr><td>Apelido de cliente, produto ou vendedor</td><td style="color:#ea580c;font-weight:600">Equivalência → Filtro</td></tr>
+          <tr><td>Nome diferente para uma consulta (<em>"movimento"</em>)</td><td style="color:#7c3aed;font-weight:600">Equivalência → Intenção</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Boas práticas de cadastro</div>
+      <div class="help-item">
+        <div class="help-item-label">Termos curtos, sem espaços desnecessários</div>
+        <div class="help-item-desc">A normalização faz correspondência de substring. Prefira termos curtos como <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px">qtde</code> em vez de <code style="background:var(--bg-hover);padding:1px 5px;border-radius:4px">qtde total</code> para evitar falsos positivos.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Sempre teste após cadastrar</div>
+        <div class="help-item-desc">Envie a mensagem com o erro pelo WhatsApp e observe se a resposta melhora. O painel <strong>Monitor</strong> mostra a mensagem recebida e o que o motor interpretou.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Alimente a partir das reclamações reais</div>
+        <div class="help-item-desc">Quando um usuário reclamar que <em>"não entendeu"</em>, verifique no Monitor qual foi a mensagem recebida. Se havia um erro de digitação não coberto, cadastre a regra aqui.</div>
+      </div>
+      <div class="help-tip">Inative regras que causarem substituições indesejadas em vez de excluir — assim você mantém o histórico e pode reativar se necessário.</div>
+    </div>
+  </div>
+
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  function helpTab(el, id) {
+    el.closest('.help-drawer').querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+    el.closest('.help-drawer').querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(id).classList.add('active');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>

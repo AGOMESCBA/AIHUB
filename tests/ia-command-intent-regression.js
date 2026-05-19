@@ -2,10 +2,13 @@ const assert = require('assert');
 
 const localResolver = require('../apps/IA Command/modules/ai/local-intent-resolver');
 const intentMerger = require('../apps/IA Command/modules/ai/intent-merger');
+const dialogResolver = require('../apps/IA Command/modules/ai/dialog-resolver');
+const unsupportedRequest = require('../apps/IA Command/modules/ai/unsupported-request');
 const { identificarPeriodoTexto, resolverPeriodo } = require('../apps/IA Command/modules/ai/period-resolver');
 const { _SINONIMOS_SISTEMA } = require('../apps/IA Command/modules/ai/intent-service');
 const { _buildWrapper, _mapAliases } = require('../apps/IA Command/modules/erp/dataset-query-engine');
 const responseFormatter = require('../apps/IA Command/modules/erp/response-formatter');
+const IACWhatsAppService = require('../apps/IA Command/modules/whatsapp/service');
 
 const intencoes = [
   { nome: 'faturamento_periodo', descricao: 'Faturamento por periodo', frases_exemplo: '', dataset_id: 'ds-fat' },
@@ -122,12 +125,34 @@ assert.deepStrictEqual(intentValorQuantidade._metricasDetectadas, ['faturamento'
 const intentProdutoDia = localResolver.resolverLocal('faturamento por produto e dia no mes', intencoes, _SINONIMOS_SISTEMA, { datasets });
 assert(intentProdutoDia, 'agrupamento composto produto e dia deve resolver localmente');
 assert.strictEqual(intentProdutoDia.agrupar_por, 'produto', 'produto e dia: agrupamento principal');
-assert.deepStrictEqual(intentProdutoDia.agrupar_por_composto, ['dia', 'produto'], 'produto e dia: agrupamento composto');
+assert.deepStrictEqual(intentProdutoDia.group_by, ['produto', 'dia'], 'produto e dia: group_by preserva ordem');
+assert.deepStrictEqual(intentProdutoDia.agrupar_por_composto, ['produto', 'dia'], 'produto e dia: agrupamento composto');
 
 const intentDiaProduto = localResolver.resolverLocal('faturamento por dia e produto no mes', intencoes, _SINONIMOS_SISTEMA, { datasets });
 assert(intentDiaProduto, 'agrupamento composto dia e produto deve resolver localmente');
-assert.strictEqual(intentDiaProduto.agrupar_por, 'produto', 'dia e produto: agrupamento principal');
+assert.strictEqual(intentDiaProduto.agrupar_por, 'dia', 'dia e produto: agrupamento principal');
+assert.deepStrictEqual(intentDiaProduto.group_by, ['dia', 'produto'], 'dia e produto: group_by preserva ordem');
 assert.deepStrictEqual(intentDiaProduto.agrupar_por_composto, ['dia', 'produto'], 'dia e produto: agrupamento composto');
+
+const intentProdutoCliente = localResolver.resolverLocal('vendas por produto e cliente do ano passado', intencoes, _SINONIMOS_SISTEMA, { datasets });
+assert(intentProdutoCliente, 'produto e cliente deve resolver localmente');
+assert.strictEqual(intentProdutoCliente.agrupar_por, 'produto', 'produto e cliente: agrupamento principal');
+assert.deepStrictEqual(intentProdutoCliente.group_by, ['produto', 'cliente'], 'produto e cliente: ordem');
+
+const intentClienteProduto = localResolver.resolverLocal('vendas por cliente e produto do ano passado', intencoes, _SINONIMOS_SISTEMA, { datasets });
+assert(intentClienteProduto, 'cliente e produto deve resolver localmente');
+assert.strictEqual(intentClienteProduto.agrupar_por, 'cliente', 'cliente e produto: agrupamento principal');
+assert.deepStrictEqual(intentClienteProduto.group_by, ['cliente', 'produto'], 'cliente e produto: ordem');
+
+const intentAnoMesClienteProduto = localResolver.resolverLocal('Faturamento do ano por mes e por cliente e produto', intencoes, _SINONIMOS_SISTEMA, { datasets });
+assert(intentAnoMesClienteProduto, 'ano por mes cliente produto deve resolver localmente');
+assert.strictEqual(intentAnoMesClienteProduto.periodo.tipo, 'ano_atual', 'ano por mes cliente produto: periodo ano atual');
+assert.deepStrictEqual(intentAnoMesClienteProduto.group_by, ['mes', 'cliente', 'produto'], 'ano por mes cliente produto: group_by completo');
+
+const intentAnoTodosMesesClienteProduto = localResolver.resolverLocal('Faturamento por ano e todos os meses por cliente e produto', intencoes, _SINONIMOS_SISTEMA, { datasets });
+assert(intentAnoTodosMesesClienteProduto, 'ano todos os meses cliente produto deve resolver localmente');
+assert.strictEqual(intentAnoTodosMesesClienteProduto.periodo.tipo, 'nenhum', 'ano todos os meses cliente produto: nao assume mes atual');
+assert.deepStrictEqual(intentAnoTodosMesesClienteProduto.group_by, ['ano', 'mes', 'cliente', 'produto'], 'ano todos os meses cliente produto: group_by completo');
 
 const intentSoQuantidade = localResolver.resolverLocal('volume de vendas por produto no ano', intencoes, _SINONIMOS_SISTEMA, { datasets });
 assert(intentSoQuantidade, 'quantidade deve resolver localmente');
@@ -220,6 +245,17 @@ expectLocal('compras por fornecedor semana passada', {
 
 expectNoLocal('me mostra esse negocio ai');
 
+assert.strictEqual(
+  dialogResolver._matchPadroes(JSON.stringify(['ate']), localResolver.normalizarTexto('Compare somente ate o mes de maio')),
+  false,
+  'dialogo: "ate" nao deve capturar consulta com ate maio'
+);
+assert.strictEqual(
+  dialogResolver._matchPadroes(JSON.stringify(['ate']), localResolver.normalizarTexto('ate')),
+  true,
+  'dialogo: "ate" sozinho continua sendo despedida'
+);
+
 expectPeriod('fat de maio do ano passado', new Date('2026-05-17T12:00:00'), {
   tipo: 'personalizado',
   dataInicio: '20250501',
@@ -246,6 +282,50 @@ expectPeriod('media mensal de faturamento dos ultimos 24 meses', new Date('2026-
 
 expectPeriod('media mensal de faturamento do ano de 2025 ate maio de 2026', new Date('2026-05-18T12:00:00'), {
   tipo: 'personalizado',
+  dataInicio: '20250101',
+  dataFim: '20260531',
+});
+
+expectPeriod('faturamento do ano por mes e por cliente e produto', new Date('2026-05-18T12:00:00'), {
+  tipo: 'ano_atual',
+  dataInicio: '20260101',
+  dataFim: '20261231',
+});
+
+expectPeriod('faturamento do mes por ano', new Date('2026-05-18T12:00:00'), {
+  tipo: 'mes_atual',
+  dataInicio: '20260501',
+  dataFim: '20260531',
+});
+
+expectPeriod('faturamento por ano e mes e cliente e produto', new Date('2026-05-18T12:00:00'), {
+  tipo: 'nenhum',
+  dataInicio: null,
+  dataFim: null,
+});
+
+expectPeriod('faturamento 2025', new Date('2026-05-18T12:00:00'), {
+  tipo: 'personalizado',
+  dataInicio: '20250101',
+  dataFim: '20251231',
+});
+
+expectPeriod('fat 2026', new Date('2026-05-18T12:00:00'), {
+  tipo: 'personalizado',
+  dataInicio: '20260101',
+  dataFim: '20261231',
+});
+
+expectPeriod('Compare o fat de 2026 com 2025', new Date('2026-05-18T12:00:00'), {
+  tipo: 'comparacao_anual',
+  ano_base: 2026,
+  ano_comparacao: 2025,
+  dataInicio: '20250101',
+  dataFim: '20261231',
+});
+
+expectPeriod('Compare somente ate o mes de maio', new Date('2026-05-18T12:00:00'), {
+  tipo: 'comparacao_acumulado_mes',
   dataInicio: '20250101',
   dataFim: '20260531',
 });
@@ -280,6 +360,63 @@ assert.strictEqual(turnoMesAMes.intencao, 'faturamento_periodo', 'multi-turn 2: 
 assert.strictEqual(turnoMesAMes.periodo.tipo, 'ano_anterior', 'multi-turn 2: herda periodo');
 assert.strictEqual(turnoMesAMes.agrupar_por, 'mes', 'multi-turn 2: agrupa por mes');
 assert.strictEqual(turnoMesAMes._contextoAplicado, true, 'multi-turn 2: contexto aplicado');
+
+const turnoFaturamentoAnoAnterior = resolverTurno('Faturamento ano anterior');
+const turnoFaturamento2026 = resolverTurno('E 2026?', turnoFaturamentoAnoAnterior);
+assert.strictEqual(turnoFaturamento2026.periodo.tipo, 'personalizado', 'multi-turn ano explicito: periodo personalizado');
+assert.strictEqual(turnoFaturamento2026.periodo.data_inicio, '20260101', 'multi-turn ano explicito: data inicio');
+assert.strictEqual(turnoFaturamento2026.periodo.data_fim, '20261231', 'multi-turn ano explicito: data fim');
+
+const turnoMaiorMes2026 = resolverTurno('E o mes de maior faturamento?', turnoFaturamento2026);
+assert.strictEqual(turnoMaiorMes2026.periodo.tipo, 'personalizado', 'multi-turn maior mes: mantem ano do contexto');
+assert.strictEqual(turnoMaiorMes2026.periodo.data_inicio, '20260101', 'multi-turn maior mes: data inicio');
+assert.strictEqual(turnoMaiorMes2026.periodo.data_fim, '20261231', 'multi-turn maior mes: data fim');
+assert.strictEqual(turnoMaiorMes2026.agrupar_por, 'mes', 'multi-turn maior mes: agrupa por mes');
+assert.strictEqual(turnoMaiorMes2026.ordenar_por, 'faturamento:desc', 'multi-turn maior mes: ordenacao');
+assert.strictEqual(turnoMaiorMes2026.limite, 1, 'multi-turn maior mes: limite');
+
+const turnoMaiorMes2026ComPeriodoGenerico = intentMerger.mesclar({
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'mes_atual' },
+  filtros: {},
+  agrupar_por: null,
+  ordenar_por: 'faturamento:desc',
+  limite: 1,
+  confianca: 0.9,
+  precisa_confirmacao: false,
+  origem: 'ia',
+}, turnoFaturamento2026, Date.now(), 'E o mes de maior faturamento?');
+assert.strictEqual(turnoMaiorMes2026ComPeriodoGenerico.periodo.data_inicio, '20260101', 'multi-turn maior mes generico: herda ano');
+assert.strictEqual(turnoMaiorMes2026ComPeriodoGenerico.periodo.data_fim, '20261231', 'multi-turn maior mes generico: herda ano fim');
+assert.strictEqual(turnoMaiorMes2026ComPeriodoGenerico.agrupar_por, 'mes', 'multi-turn maior mes generico: agrupa por mes');
+
+const turnoComparacaoAnos = resolverTurno('Compare o fat de 2026 com 2025');
+assert.strictEqual(turnoComparacaoAnos.periodo.tipo, 'comparacao_anual', 'multi-turn comparacao anual: periodo');
+assert.strictEqual(turnoComparacaoAnos.periodo.ano_base, 2026, 'multi-turn comparacao anual: ano base');
+assert.strictEqual(turnoComparacaoAnos.periodo.ano_comparacao, 2025, 'multi-turn comparacao anual: ano comparacao');
+
+const turnoComparacaoAteMaio = resolverTurno('Compare somente ate o mes de maio', turnoComparacaoAnos);
+assert.strictEqual(turnoComparacaoAteMaio.periodo.tipo, 'comparacao_acumulado_mes', 'multi-turn acumulado maio: periodo');
+assert.strictEqual(turnoComparacaoAteMaio.periodo.mes, 5, 'multi-turn acumulado maio: mes');
+assert.strictEqual(turnoComparacaoAteMaio.periodo.ano_base, 2026, 'multi-turn acumulado maio: ano base do contexto');
+assert.strictEqual(turnoComparacaoAteMaio.periodo.ano_comparacao, 2025, 'multi-turn acumulado maio: ano comparacao do contexto');
+assert.strictEqual(turnoComparacaoAteMaio.agrupar_por, null, 'multi-turn acumulado maio: sem agrupamento');
+
+const turnoComparacaoAteMaioPeriodoSimples = intentMerger.mesclar({
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', data_inicio: '20250101', data_fim: '20250531' },
+  filtros: {},
+  agrupar_por: null,
+  ordenar_por: null,
+  limite: null,
+  confianca: 0.9,
+  precisa_confirmacao: false,
+  origem: 'ia',
+}, turnoComparacaoAnos, Date.now(), 'Compare somente ate o mes de maio');
+assert.strictEqual(turnoComparacaoAteMaioPeriodoSimples.periodo.tipo, 'comparacao_acumulado_mes', 'multi-turn acumulado maio: corrige periodo simples da IA');
+assert.strictEqual(turnoComparacaoAteMaioPeriodoSimples.periodo.mes, 5, 'multi-turn acumulado maio: corrige mes do periodo simples');
+assert.strictEqual(turnoComparacaoAteMaioPeriodoSimples.periodo.ano_base, 2026, 'multi-turn acumulado maio: preserva ano base contra periodo simples');
+assert.strictEqual(turnoComparacaoAteMaioPeriodoSimples.periodo.ano_comparacao, 2025, 'multi-turn acumulado maio: preserva ano comparacao contra periodo simples');
 
 const turnoAbrilDia = resolverTurno('Detalhe o faturamento por dia do mes de Abril', turnoMesAMes);
 assert.strictEqual(turnoAbrilDia.intencao, 'faturamento_periodo', 'multi-turn 3: intencao');
@@ -325,13 +462,83 @@ const turnoClienteDepoisDia = resolverTurno('Detalhe por cliente', turnoDezembro
 assert.strictEqual(turnoClienteDepoisDia.periodo.data_inicio, '20251201', 'multi-turn composto: mantem inicio dezembro');
 assert.strictEqual(turnoClienteDepoisDia.periodo.data_fim, '20251231', 'multi-turn composto: mantem fim dezembro');
 assert.strictEqual(turnoClienteDepoisDia.agrupar_por, 'cliente', 'multi-turn composto: agrupamento principal cliente');
+assert.deepStrictEqual(turnoClienteDepoisDia.group_by, ['dia', 'cliente'], 'multi-turn composto: group_by dia + cliente');
 assert.deepStrictEqual(turnoClienteDepoisDia.agrupar_por_composto, ['dia', 'cliente'], 'multi-turn composto: dia + cliente');
 assert.strictEqual(turnoClienteDepoisDia._agrupamentoCompostoDoContexto, true, 'multi-turn composto: marcado como contexto');
 
 const turnoDiaProdutoDireto = resolverTurno('Detalha por dia e produto', turnoAnoPassado);
 assert.strictEqual(turnoDiaProdutoDireto.periodo.tipo, 'ano_anterior', 'multi-turn composto direto: herda periodo');
-assert.strictEqual(turnoDiaProdutoDireto.agrupar_por, 'produto', 'multi-turn composto direto: agrupamento principal produto');
+assert.strictEqual(turnoDiaProdutoDireto.agrupar_por, 'dia', 'multi-turn composto direto: agrupamento principal dia');
+assert.deepStrictEqual(turnoDiaProdutoDireto.group_by, ['dia', 'produto'], 'multi-turn composto direto: group_by dia + produto');
 assert.deepStrictEqual(turnoDiaProdutoDireto.agrupar_por_composto, ['dia', 'produto'], 'multi-turn composto direto: dia + produto');
+
+const turnoMesEmpresa = resolverTurno('Detalhe por mes e empresa', turnoAnoPassado);
+assert.deepStrictEqual(turnoMesEmpresa.group_by, ['mes', 'empresa'], 'multi-turn composto: mes + empresa');
+
+const turnoEmpresaMes = resolverTurno('Detalhe por empresa e mes', turnoAnoPassado);
+assert.deepStrictEqual(turnoEmpresaMes.group_by, ['empresa', 'mes'], 'multi-turn composto: empresa + mes');
+
+const turnoFilial = resolverTurno('Detalhe por filial', turnoAnoPassado);
+assert.strictEqual(turnoFilial.agrupar_por, 'filial', 'multi-turn filial: agrupamento simples');
+
+const turnoFilialMes = resolverTurno('Detalhe por mes', turnoFilial);
+assert.deepStrictEqual(turnoFilialMes.group_by, ['filial', 'mes'], 'multi-turn drilldown: filial + mes');
+
+const turnoFilialMesDia = resolverTurno('Detalhe por dia', turnoFilialMes);
+assert.deepStrictEqual(turnoFilialMesDia.group_by, ['filial', 'mes', 'dia'], 'multi-turn drilldown: filial + mes + dia');
+
+const turnoFilialMesDireto = resolverTurno('Detalhe por filial e por mes', turnoAnoPassado);
+assert.deepStrictEqual(turnoFilialMesDireto.group_by, ['filial', 'mes'], 'multi-turn direto: filial + mes');
+
+const turnoFilialMesDiaDireto = resolverTurno('Detalhe por filial por mes e por dia', turnoAnoPassado);
+assert.deepStrictEqual(turnoFilialMesDiaDireto.group_by, ['filial', 'mes', 'dia'], 'multi-turn direto: filial + mes + dia');
+
+const turnoUnidadeMes = resolverTurno('Detalhe por unidade de negocio e mes', turnoAnoPassado);
+assert.deepStrictEqual(turnoUnidadeMes.group_by, ['unidade', 'mes'], 'multi-turn direto: unidade + mes');
+
+const turnoProdutoClienteMaio = resolverTurno('Faturamento do mes de maio de 2026 por produto e cliente');
+assert.strictEqual(turnoProdutoClienteMaio.periodo.data_inicio, '20260501', 'multi-turn nota fiscal: contexto inicio maio');
+assert.deepStrictEqual(turnoProdutoClienteMaio.group_by, ['produto', 'cliente'], 'multi-turn nota fiscal: contexto produto cliente');
+
+const turnoNotaFiscal = resolverTurno('Por nota fiscal', turnoProdutoClienteMaio);
+assert.strictEqual(turnoNotaFiscal.intencao, 'desconhecido', 'multi-turn nota fiscal: bloqueia consulta sem dataset');
+assert.strictEqual(turnoNotaFiscal._erroTipo, 'dataset_sem_informacao', 'multi-turn nota fiscal: tipo de erro');
+assert.strictEqual(turnoNotaFiscal.agrupar_por, null, 'multi-turn nota fiscal: nao herda agrupamento');
+assert.strictEqual(turnoNotaFiscal.periodo.tipo, 'nenhum', 'multi-turn nota fiscal: nao executa periodo herdado');
+
+const bloqueioNota = unsupportedRequest.detectarAgrupamentoIndisponivel('Por nota fiscal');
+assert(bloqueioNota, 'nota fiscal: detecta dimensao solicitada');
+assert.strictEqual(
+  unsupportedRequest.temSuporteConfigurado(bloqueioNota, { intencoes, datasets }),
+  false,
+  'nota fiscal: sem suporte nos datasets padrao'
+);
+assert.strictEqual(
+  unsupportedRequest.temSuporteConfigurado(bloqueioNota, {
+    intencoes: [
+      ...intencoes,
+      { nome: 'faturamento_por_nota_fiscal', descricao: 'Faturamento por nota fiscal', frases_exemplo: 'por NF', dataset_id: 'ds-nf' },
+    ],
+    datasets: [
+      ...datasets,
+      { id: 'ds-nf', nome: 'Notas fiscais', colunas_metrica: 'faturamento', sql_base: 'SELECT NOTA_FISCAL, DATA, FATURAMENTO FROM VW_NF' },
+    ],
+  }),
+  true,
+  'nota fiscal: libera quando ha intencao/dataset configurado'
+);
+
+const intentComSuporteNf = unsupportedRequest.aplicarBloqueioSeNecessario({
+  intencao: 'faturamento_por_nota_fiscal',
+  periodo: { tipo: 'nenhum' },
+  filtros: {},
+  agrupar_por: null,
+  confianca: 0.9,
+}, 'Por nota fiscal', {
+  intencoes: [{ nome: 'faturamento_por_nota_fiscal', descricao: 'Faturamento por nota fiscal', frases_exemplo: 'por NF' }],
+  datasets: [{ nome: 'Notas fiscais', sql_base: 'SELECT NF, DATA, FATURAMENTO FROM VW_NF' }],
+});
+assert.strictEqual(intentComSuporteNf.intencao, 'faturamento_por_nota_fiscal', 'nota fiscal: nao bloqueia quando suportado');
 
 const sqlMaiusculo = `
 SELECT
@@ -391,6 +598,7 @@ const wrapperComposto = _buildWrapper({
   intencao: 'faturamento_periodo',
   periodo: { tipo: 'personalizado', dataInicio: '20251201', dataFim: '20251231' },
   filtros: {},
+  group_by: ['dia', 'cliente'],
   agrupar_por: 'cliente',
   agrupar_por_composto: ['dia', 'cliente'],
   ordenar_por: null,
@@ -406,6 +614,28 @@ const wrapperComposto = _buildWrapper({
 assert(wrapperComposto.sql.includes('SELECT *'), 'wrapper composto retorna linhas base');
 assert(wrapperComposto.sql.includes('WHERE [DATA] >= @p0 AND [DATA] <= @p1'), 'wrapper composto filtra periodo');
 assert(!wrapperComposto.sql.includes('GROUP BY [CLIENTE]'), 'wrapper composto nao agrupa no SQL por uma dimensao so');
+
+const whatsappService = new IACWhatsAppService();
+const intentPorEmpresa = {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'ano_atual', dataInicio: '20260101', dataFim: '20261231' },
+  filtros: {},
+  group_by: ['empresa'],
+  agrupar_por: 'empresa',
+  ordenar_por: 'faturamento:desc',
+  limite: 10,
+};
+const intentConsolidadoEmpresa = whatsappService._intentConsultaConsolidada(intentPorEmpresa);
+assert.strictEqual(intentConsolidadoEmpresa.agrupar_por, null, 'por empresa: executa dataset sem agrupar por empresa');
+assert.strictEqual(intentConsolidadoEmpresa.group_by, null, 'por empresa: limpa group_by na execucao por empresa');
+assert.strictEqual(intentConsolidadoEmpresa.ordenar_por, null, 'por empresa: limpa ordenacao interna por empresa');
+
+const resumoEmpresa = whatsappService._resumirEmpresa({ nome: 'J2A Consultoria', empresa_id: 1 }, [
+  { DATA: '20260101', faturamento: 1000, quantidade: 3 },
+  { DATA: '20260102', FATURAMENTO_TOTAL: 2500, QUANTIDADE: 7 },
+]);
+assert.strictEqual(resumoEmpresa.faturamento, 3500, 'por empresa: resumo soma faturamento consolidado');
+assert.strictEqual(resumoEmpresa.quantidade, 10, 'por empresa: resumo soma quantidade consolidada');
 
 const respostaQuantidade = responseFormatter.formatar({
   tipo: 'ok',
@@ -615,6 +845,7 @@ const respostaComposta = responseFormatter.formatar({
   intencao: 'faturamento_periodo',
   periodo: { tipo: 'personalizado', dataInicio: '20251201', dataFim: '20251231' },
   filtros: {},
+  group_by: ['dia', 'cliente'],
   agrupar_por: 'cliente',
   agrupar_por_composto: ['dia', 'cliente'],
   _metricasDetectadas: ['faturamento'],
@@ -623,6 +854,138 @@ const respostaComposta = responseFormatter.formatar({
 assert(respostaComposta.includes('*Por Dia e Cliente*'), 'formatter composto: titulo');
 assert(respostaComposta.indexOf('*01/12*') < respostaComposta.indexOf('*02/12*'), 'formatter composto: ordem por dia');
 assert(respostaComposta.includes('*Cliente A*'), 'formatter composto: cliente');
+
+const respostaCompostaDiaUtc = responseFormatter.formatar({
+  tipo: 'sucesso',
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20260401', dataFim: '20260430' },
+  rows: [
+    { DATA: new Date('2026-04-01T00:00:00.000Z'), produto: 'PROTHEUS', quantidade: 10 },
+  ],
+}, {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20260401', dataFim: '20260430' },
+  filtros: {},
+  group_by: ['dia', 'produto'],
+  agrupar_por: 'dia',
+  agrupar_por_composto: ['dia', 'produto'],
+  _metricasDetectadas: ['quantidade'],
+});
+
+assert(respostaCompostaDiaUtc.includes('*01/04*'), 'formatter composto dia usa UTC para Date');
+assert(!respostaCompostaDiaUtc.includes('31/03'), 'formatter composto dia nao volta para mes anterior por fuso');
+
+const respostaProdutoCliente = responseFormatter.formatar({
+  tipo: 'sucesso',
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  rows: [
+    { produto: 'PROTHEUS', cliente: 'Cliente B', faturamento: 20 },
+    { produto: 'SOFTEXPERT', cliente: 'Cliente A', faturamento: 100 },
+    { produto: 'PROTHEUS', cliente: 'Cliente A', faturamento: 50 },
+  ],
+}, {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  filtros: {},
+  group_by: ['produto', 'cliente'],
+  agrupar_por: 'produto',
+  agrupar_por_composto: ['produto', 'cliente'],
+  _metricasDetectadas: ['faturamento'],
+});
+
+const respostaClienteProduto = responseFormatter.formatar({
+  tipo: 'sucesso',
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  rows: [
+    { produto: 'PROTHEUS', cliente: 'Cliente B', faturamento: 20 },
+    { produto: 'SOFTEXPERT', cliente: 'Cliente A', faturamento: 100 },
+    { produto: 'PROTHEUS', cliente: 'Cliente A', faturamento: 50 },
+  ],
+}, {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  filtros: {},
+  group_by: ['cliente', 'produto'],
+  agrupar_por: 'cliente',
+  agrupar_por_composto: ['cliente', 'produto'],
+  _metricasDetectadas: ['faturamento'],
+});
+
+assert(respostaProdutoCliente.includes('*Por Produto e Cliente*'), 'formatter produto cliente: titulo');
+assert(respostaClienteProduto.includes('*Por Cliente e Produto*'), 'formatter cliente produto: titulo');
+assert(respostaProdutoCliente.indexOf('*SOFTEXPERT*') < respostaProdutoCliente.indexOf('*Cliente A*'), 'formatter produto cliente: produto primeiro');
+assert(respostaClienteProduto.indexOf('*Cliente A*') < respostaClienteProduto.indexOf('*PROTHEUS*'), 'formatter cliente produto: cliente primeiro');
+
+const rowsTop20 = Array.from({ length: 21 }, (_, i) => ({
+  cliente: `Cliente ${String(i + 1).padStart(2, '0')}`,
+  produto: `Produto ${String(i + 1).padStart(2, '0')}`,
+  faturamento: 1000 - i,
+}));
+
+const respostaTop20Simples = responseFormatter.formatar({
+  tipo: 'sucesso',
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  rows: rowsTop20,
+}, {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  filtros: {},
+  group_by: ['cliente'],
+  agrupar_por: 'cliente',
+  _metricasDetectadas: ['faturamento'],
+});
+
+assert(respostaTop20Simples.includes('Cliente 20'), 'formatter agrupamento simples exibe top 20 por padrao');
+assert(!respostaTop20Simples.includes('Cliente 21'), 'formatter agrupamento simples oculta item 21 por padrao');
+
+const respostaTop20Composto = responseFormatter.formatar({
+  tipo: 'sucesso',
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  rows: rowsTop20.map(r => ({ grupo: 'Grupo A', ...r })),
+}, {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20251231' },
+  filtros: {},
+  group_by: ['grupo', 'cliente'],
+  agrupar_por: 'grupo',
+  agrupar_por_composto: ['grupo', 'cliente'],
+  _metricasDetectadas: ['faturamento'],
+});
+
+assert(respostaTop20Composto.includes('Cliente 20'), 'formatter agrupamento composto exibe top 20 por nivel');
+assert(!respostaTop20Composto.includes('Cliente 21'), 'formatter agrupamento composto oculta item 21 por nivel');
+
+const respostaTemporalSemLimite = responseFormatter.formatar({
+  tipo: 'sucesso',
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20261231' },
+  rows: rowsTop20.map(r => ({ DATA: '20260115', ...r })),
+}, {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20261231' },
+  filtros: {},
+  group_by: ['mes', 'cliente', 'produto'],
+  agrupar_por: 'mes',
+  agrupar_por_composto: ['mes', 'cliente', 'produto'],
+  _metricasDetectadas: ['faturamento'],
+});
+
+assert(respostaTemporalSemLimite.includes('Cliente 21'), 'formatter agrupamento temporal composto nao limita itens por padrao');
+
+const respostaDatasetSemInfo = responseFormatter.formatar({
+  tipo: 'desconhecido',
+  mensagem: 'Nao temos informacoes na base de dados para retornar por nota fiscal.',
+}, {
+  intencao: 'desconhecido',
+  _erroTipo: 'dataset_sem_informacao',
+  _erro: 'Nao temos informacoes na base de dados (dataset) disponibilizada no IA Command para retornar a consulta por nota fiscal.',
+});
+assert(respostaDatasetSemInfo.includes('dataset'), 'formatter sem informacao menciona dataset');
+assert(respostaDatasetSemInfo.includes('Deseja consultar outra informacao?'), 'formatter sem informacao pergunta proxima acao');
 
 const respostaPorEmpresaZeros = responseFormatter.formatar({
   tipo: 'ok',

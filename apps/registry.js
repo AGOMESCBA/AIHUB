@@ -88,7 +88,10 @@ const APPS = {
     rootDir: fromRoot('apps', 'IA Command'),
     frontendDir: iaCommandFrontend,
     backendDir: fromRoot('apps', 'IA Command', 'modules'),
-    staticDirs: [iaCommandFrontend],
+    staticDirs: [
+      iaCommandFrontend,
+      fromRoot('modules', 'configuracoes', 'frontend'),
+    ],
   },
 };
 

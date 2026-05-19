@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Migrar Dados - IAHub</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    .page-content { padding-top: 16px; }
+    .mig-layout { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+    .mig-card { border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; overflow: hidden; }
+    .mig-card-hd { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 800; color: var(--text-hi); }
+    .mig-card-bd { padding: 16px; }
+    .mig-grid { display: grid; gap: 12px; }
+    .mig-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .mig-alert { display: none; border-radius: 8px; padding: 11px 13px; font-size: 13px; line-height: 1.45; margin-top: 12px; }
+    .mig-alert.show { display: block; }
+    .mig-alert.ok { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .mig-alert.err { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
+    .mig-alert.info { color: var(--text-md); background: var(--bg-hover); border: 1px solid var(--border); }
+    .mig-table-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-hover); }
+    .mig-table-tools-left { display: flex; gap: 8px; flex-wrap: wrap; }
+    .mig-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .mig-table th { text-align: left; color: var(--text-lo); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; background: var(--bg-hover); padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .mig-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .mig-table tr:hover td { background: var(--bg-hover); }
+    .mig-group { font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+    .mig-check { width: 18px; height: 18px; accent-color: var(--accent); }
+    .mig-count { font-variant-numeric: tabular-nums; color: var(--text-md); }
+    .mig-count.destino.cheio { color: #b45309; font-weight: 700; }
+    .mig-confirm { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .mig-confirm input { text-transform: uppercase; }
+    .btn-light { background: var(--bg-hover); color: var(--text-hi); border: 1px solid var(--border); border-radius: 8px; padding: 8px 13px; cursor: pointer; font: inherit; font-weight: 700; }
+    .btn-light:hover { border-color: var(--accent); color: var(--accent); }
+    body.iac-mode { --accent: #7c3aed; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.1); }
+    body.iac-mode .sidebar-logo .logo-icon { background: #7c3aed !important; }
+    @media (max-width: 920px) {
+      .mig-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon" id="mig-logo-icon">IA</div>
+      <span class="logo-text" id="mig-logo-text">IAHub</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title"><span class="topbar-path" id="mig-topbar-path">Configurador &gt;</span> Migrar Dados</span>
+    </div>
+
+    <div class="page-content">
+      <div class="mig-layout">
+        <section class="mig-card">
+          <div class="mig-card-hd">Origem e destino</div>
+          <div class="mig-card-bd">
+            <div class="mig-grid">
+              <div class="form-group">
+                <label class="form-label" for="origem">Empresa origem</label>
+                <select class="form-control" id="origem"></select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="destino">Empresa destino</label>
+                <select class="form-control" id="destino"></select>
+              </div>
+            </div>
+
+            <div class="mig-actions">
+              <button class="btn btn-primary" id="btn-preview" onclick="carregarPreview()">Atualizar previa</button>
+            </div>
+
+            <div class="mig-alert info show">
+              A migracao substitui no destino apenas as tabelas selecionadas. Antes de gravar, o sistema cria um backup do arquivo da empresa destino.
+            </div>
+            <div id="msg" class="mig-alert"></div>
+          </div>
+        </section>
+
+        <section class="mig-card">
+          <div class="mig-card-hd">Tabelas para migrar</div>
+          <div class="mig-table-tools">
+            <div class="mig-table-tools-left">
+              <button class="btn-light" onclick="marcarDefaults()">Regras e configuracoes</button>
+              <button class="btn-light" onclick="marcarTodas(true)">Marcar todas</button>
+              <button class="btn-light" onclick="marcarTodas(false)">Limpar</button>
+            </div>
+            <span id="sel-count" class="mig-count">0 selecionadas</span>
+          </div>
+          <div style="overflow:auto">
+            <table class="mig-table">
+              <thead>
+                <tr>
+                  <th style="width:46px"></th>
+                  <th>Grupo</th>
+                  <th>Tabela</th>
+                  <th>Origem</th>
+                  <th>Destino atual</th>
+                </tr>
+              </thead>
+              <tbody id="tabelas-body">
+                <tr><td colspan="5" style="color:var(--text-lo)">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mig-card-bd mig-confirm">
+            <div class="form-group">
+              <label class="form-label" for="confirmar">Digite MIGRAR para confirmar</label>
+              <input class="form-control" id="confirmar" placeholder="MIGRAR">
+            </div>
+            <button class="btn btn-primary" id="btn-exec" onclick="executarMigracao()">Migrar selecionadas</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script>
+const IAC_MODE = location.pathname.startsWith('/app/ia-command/');
+if (IAC_MODE) {
+  document.body.classList.add('iac-mode');
+  document.getElementById('mig-logo-icon').textContent = '⚡';
+  document.getElementById('mig-logo-text').textContent = 'IA Command';
+  document.getElementById('mig-topbar-path').textContent = 'Configuração >';
+}
+
+const sidebarScript = document.createElement('script');
+sidebarScript.src = IAC_MODE ? '/app/ia-command/js/sidebar.js' : '/js/sidebar.js';
+document.head.appendChild(sidebarScript);
+
+let tabelas = [];
+let preview = [];
+
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function setMsg(texto, tipo = 'info') {
+  const el = document.getElementById('msg');
+  el.className = `mig-alert ${tipo} show`;
+  el.textContent = texto;
+}
+
+function limparMsg() {
+  const el = document.getElementById('msg');
+  el.className = 'mig-alert';
+  el.textContent = '';
+}
+
+function popularSelect(id, empresas) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = empresas.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('');
+}
+
+function renderTabelas() {
+  const mapPreview = new Map(preview.map(t => [t.id, t]));
+  const body = document.getElementById('tabelas-body');
+  body.innerHTML = tabelas.map(t => {
+    const p = mapPreview.get(t.id) || {};
+    const destinoCheio = Number(p.destino || 0) > 0 ? ' cheio' : '';
+    return `
+      <tr>
+        <td><input class="mig-check" type="checkbox" data-id="${esc(t.id)}" ${t.default ? 'checked' : ''} onchange="atualizarSelecionadas()"></td>
+        <td><span class="mig-group">${esc(t.grupo)}</span></td>
+        <td>${esc(t.label)}</td>
+        <td class="mig-count">${p.origem ?? '-'}</td>
+        <td class="mig-count destino${destinoCheio}">${p.destino ?? '-'}</td>
+      </tr>`;
+  }).join('');
+  atualizarSelecionadas();
+}
+
+function selecionadas() {
+  return Array.from(document.querySelectorAll('.mig-check:checked')).map(c => c.dataset.id);
+}
+
+function atualizarSelecionadas() {
+  const total = selecionadas().length;
+  document.getElementById('sel-count').textContent = `${total} selecionada${total === 1 ? '' : 's'}`;
+}
+
+function marcarTodas(valor) {
+  document.querySelectorAll('.mig-check').forEach(c => { c.checked = valor; });
+  atualizarSelecionadas();
+}
+
+function marcarDefaults() {
+  document.querySelectorAll('.mig-check').forEach(c => {
+    const def = tabelas.find(t => t.id === c.dataset.id);
+    c.checked = !!def?.default;
+  });
+  atualizarSelecionadas();
+}
+
+async function carregarMeta() {
+  const data = await fetch('/api/config/migracao/meta').then(r => r.json());
+  if (data.error) throw new Error(data.error);
+  tabelas = data.tabelas || [];
+  popularSelect('origem', data.empresas || []);
+  popularSelect('destino', data.empresas || []);
+  if (data.empresas?.[1]) document.getElementById('destino').value = data.empresas[1].id;
+  renderTabelas();
+  await carregarPreview();
+}
+
+async function carregarPreview() {
+  limparMsg();
+  const origem = document.getElementById('origem').value;
+  const destino = document.getElementById('destino').value;
+  if (!origem || !destino) return;
+  if (origem === destino) {
+    preview = [];
+    renderTabelas();
+    setMsg('Escolha empresas diferentes para origem e destino.', 'err');
+    return;
+  }
+  const params = new URLSearchParams({ origem_id: origem, destino_id: destino });
+  const res = await fetch(`/api/config/migracao/preview?${params}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Erro ao carregar previa.');
+  preview = data.tabelas || [];
+  renderTabelas();
+}
+
+async function executarMigracao() {
+  limparMsg();
+  const body = {
+    origem_id: Number(document.getElementById('origem').value),
+    destino_id: Number(document.getElementById('destino').value),
+    tabelas: selecionadas(),
+    confirmar: document.getElementById('confirmar').value,
+  };
+  if (!body.tabelas.length) {
+    setMsg('Selecione ao menos uma tabela.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btn-exec');
+  btn.disabled = true;
+  btn.textContent = 'Migrando...';
+  try {
+    const res = await fetch('/api/config/migracao/executar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao migrar dados.');
+    document.getElementById('confirmar').value = '';
+    setMsg(`Migracao concluida. ${data.migradas.length} tabela(s) substituida(s) no destino.`, 'ok');
+    await carregarPreview();
+  } catch (err) {
+    setMsg(err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Migrar selecionadas';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await (window._iahubAuthReady || Promise.resolve());
+    await carregarMeta();
+  } catch (err) {
+    setMsg(err.message || 'Erro ao carregar migracao.', 'err');
+  }
+});
+</script>
+</body>
+</html>

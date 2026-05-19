@@ -14,6 +14,7 @@ const interpretationLog   = require('../ai/interpretation-log');
 const channelStore        = require('./channel-store');
 const messageTemplates    = require('./message-templates');
 const dialogResolver      = require('../ai/dialog-resolver');
+const crud                = require('../database/crud');
 
 const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
@@ -26,6 +27,15 @@ const PUPPETEER_ARGS = [
   '--disable-default-apps', '--disable-sync', '--mute-audio',
   '--hide-scrollbars', '--metrics-recording-only',
 ];
+
+function resolveChromePath() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ].filter(Boolean);
+  return candidates.find(p => fs.existsSync(p)) || process.env.CHROME_PATH || null;
+}
 
 class IACWhatsAppService extends EventEmitter {
   constructor() {
@@ -88,10 +98,11 @@ class IACWhatsAppService extends EventEmitter {
     this.setStatus('starting');
     this._startTime = Date.now();
     this.log(`Iniciando IA Command WhatsApp no canal "${this._channelName}"...`, 'info');
-    if (process.env.CHROME_PATH) this.log(`Chrome: ${process.env.CHROME_PATH}`, 'info');
+    const chromePath = resolveChromePath();
+    if (chromePath) this.log(`Chrome: ${chromePath}`, 'info');
 
     const puppeteerCfg = { headless: true, args: PUPPETEER_ARGS };
-    if (process.env.CHROME_PATH) puppeteerCfg.executablePath = process.env.CHROME_PATH;
+    if (chromePath) puppeteerCfg.executablePath = chromePath;
 
     // Prefixo 'iac_' evita conflito com sessões do IAHub Recrutamento
     this.client = new Client({
@@ -315,7 +326,7 @@ class IACWhatsAppService extends EventEmitter {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
-    return /\bpor\s+(empresa|empresas|filial|filiais|unidade|unidades|loja|lojas)\b/.test(normalizado);
+    return /\bpor\s+empresas?\b/.test(normalizado);
   }
 
   _isColunaNumericaResumo(nome, valor) {
@@ -370,6 +381,28 @@ class IACWhatsAppService extends EventEmitter {
     return resumo;
   }
 
+  _intentConsultaConsolidada(intent = {}) {
+    return {
+      ...intent,
+      group_by: null,
+      agrupar_por: null,
+      agrupar_por_composto: null,
+      ordenar_por: null,
+      limite: null,
+    };
+  }
+
+  _configAnaliticaEmpresa(empresaId) {
+    try {
+      return {
+        intencoes: crud.listar('intentions', { empresa_id: empresaId, ativo: 1 }),
+        datasets: crud.listar('datasets', { empresa_id: empresaId }),
+      };
+    } catch (_) {
+      return { intencoes: [], datasets: [] };
+    }
+  }
+
   _completarMetricasEmpresa(rows, metricas) {
     return rows.map(row => {
       const out = { ...row };
@@ -396,11 +429,69 @@ class IACWhatsAppService extends EventEmitter {
   }
 
   _rotuloMotor(intent = {}) {
+    if (intent._contextoAplicado) {
+      return 'IA interna do sistema (contexto da conversa)';
+    }
     if (intent._provedor === 'deterministico' || intent._resolvidoLocalmente) {
       return 'IA interna do sistema (motor local)';
     }
     if (intent._provedor === 'nenhum') return 'sem IA disponivel';
     return `IA externa (${intent._provedor})`;
+  }
+
+  _resumoPeriodoMonitor(periodo = {}) {
+    const tipo = periodo?.tipo || 'nenhum';
+    const inicio = periodo?.dataInicio || periodo?.data_inicio || null;
+    const fim = periodo?.dataFim || periodo?.data_fim || null;
+    if (inicio && fim) return `${tipo} (${inicio} -> ${fim})`;
+    return tipo;
+  }
+
+  _resumoGroupByMonitor(intent = {}) {
+    const groupBy = Array.isArray(intent.group_by) && intent.group_by.length
+      ? intent.group_by
+      : Array.isArray(intent.agrupar_por_composto) && intent.agrupar_por_composto.length
+        ? intent.agrupar_por_composto
+        : intent.agrupar_por ? [intent.agrupar_por] : [];
+    return groupBy.length ? groupBy.join(' > ') : 'consolidado';
+  }
+
+  _resumoFiltrosMonitor(filtros = {}) {
+    const ativos = Object.entries(filtros || {}).filter(([, v]) => v);
+    return ativos.length ? ativos.map(([k, v]) => `${k}=${v}`).join(', ') : 'nenhum';
+  }
+
+  _resumoMetricasMonitor(intent = {}) {
+    const metricas = Array.isArray(intent._metricasDetectadas) && intent._metricasDetectadas.length
+      ? intent._metricasDetectadas
+      : [];
+    return metricas.length ? metricas.join(', ') : 'padrao do dataset';
+  }
+
+  _logCaminhoIntent({ intent = {}, contextoAnterior = null, escopo = 'single' } = {}) {
+    const partes = [
+      `escopo=${escopo}`,
+      `motor=${this._rotuloMotor(intent)}`,
+      `provedor=${intent._provedor || 'n/a'}`,
+      `intencao=${intent.intencao || 'desconhecido'}`,
+      `periodo=${this._resumoPeriodoMonitor(intent.periodo)}`,
+      `group_by=${this._resumoGroupByMonitor(intent)}`,
+      `filtros=${this._resumoFiltrosMonitor(intent.filtros)}`,
+      `metricas=${this._resumoMetricasMonitor(intent)}`,
+    ];
+
+    const flags = [];
+    if (contextoAnterior) flags.push(`contexto_anterior=${contextoAnterior.intencao || 'desconhecido'}/${this._resumoGroupByMonitor(contextoAnterior)}`);
+    if (intent._contextoAplicado) flags.push('contexto_aplicado');
+    if (intent._herdouIntencao) flags.push('herdou_intencao');
+    if (intent._herdouPeriodo) flags.push('herdou_periodo');
+    if (intent._periodoMesDoContexto) flags.push('refinou_mes_no_contexto');
+    if (intent._agrupamentoCompostoDoContexto) flags.push('drilldown_contexto');
+    if (intent._agrupamentoCompostoDetectado) flags.push('group_by_da_mensagem');
+    if (intent._dimensaoDetectada) flags.push(`dimensao=${intent._dimensaoDetectada}`);
+    if (intent._granularidadeDetectada) flags.push(`granularidade=${intent._granularidadeDetectada}`);
+
+    this.log(`Caminho IA Command: ${partes.join(' | ')}${flags.length ? ` | flags=${flags.join(', ')}` : ''}`, 'info');
   }
 
   _metaMonitorIntent(intent = {}) {
@@ -423,13 +514,14 @@ class IACWhatsAppService extends EventEmitter {
       periodo_mes_contexto: !!intent._periodoMesDoContexto,
       dimensao_detectada: intent._dimensaoDetectada || null,
       granularidade_detectada: intent._granularidadeDetectada || null,
-      agrupamento_composto: Array.isArray(intent.agrupar_por_composto) ? intent.agrupar_por_composto : null,
+      group_by: Array.isArray(intent.group_by) ? intent.group_by : null,
+      agrupamento_composto: Array.isArray(intent.group_by) ? intent.group_by : Array.isArray(intent.agrupar_por_composto) ? intent.agrupar_por_composto : null,
       agrupamento_composto_contexto: !!intent._agrupamentoCompostoDoContexto,
       metricas,
     };
   }
 
-  _registrarInterpretacao({ empresaId, sender, texto, intent, resultado, resposta }) {
+  _registrarInterpretacao({ empresaId, sender, texto, intent, resultado, resposta, duracaoMs }) {
     try {
       interpretationLog.registrar({
         empresa_id: empresaId,
@@ -443,6 +535,28 @@ class IACWhatsAppService extends EventEmitter {
       });
     } catch (err) {
       this.log(`Falha ao registrar interpretacao: ${err.message}`, 'warning');
+    }
+
+    try {
+      const { getDB } = require('../database');
+      const STATUS_MAP = { sucesso: 'sucesso', erro: 'erro', sem_dados: 'sem_dados', dialogo: 'dialogo', desconhecido: 'desconhecido' };
+      getDB().prepare(
+        `INSERT OR IGNORE INTO execution_log
+           (correlation_id, empresa_id, usuario, numero_wa, intencao, status, duracao_ms, tipo_mensagem, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        require('crypto').randomUUID(),
+        empresaId,
+        sender,
+        this._normalizarNumeroWa(sender),
+        intent?.intencao || 'desconhecido',
+        STATUS_MAP[resultado?.tipo] ?? resultado?.tipo ?? 'desconhecido',
+        duracaoMs ?? null,
+        this._tipoMensagemAtual || 'texto',
+        new Date().toISOString(),
+      );
+    } catch (err) {
+      this.log(`Falha ao registrar execucao: ${err.message}`, 'warning');
     }
   }
 
@@ -522,6 +636,7 @@ class IACWhatsAppService extends EventEmitter {
 
   async _handleText(msg, sender = msg.from) {
     const texto = (msg.body || '').trim();
+    this._tipoMensagemAtual = 'texto';
     this.log(`📩 Texto recebido: "${texto.slice(0, 100)}"`, 'received');
 
     const chat = await msg.getChat();
@@ -543,6 +658,7 @@ class IACWhatsAppService extends EventEmitter {
   }
 
   async _handleAudio(msg, sender = msg.from) {
+    this._tipoMensagemAtual = msg.type || 'audio';
     this.log(`Áudio recebido de ${sender} (${msg.type}) — baixando...`, 'info');
 
     fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -598,6 +714,7 @@ class IACWhatsAppService extends EventEmitter {
   // ── IA Pipeline: classify → route → format ──────────────────────────────────
 
   async _pipeline(texto, sender) {
+    const _t0 = Date.now();
     let empresaId = this._empresaId;
     let empresaResolvida = null;
     let textoExecucao = texto;
@@ -625,6 +742,25 @@ class IACWhatsAppService extends EventEmitter {
       }
 
       const ctx = this._getSenderContext(sender);
+
+      // Para mensagens frescas (sem pendência de seleção de empresa):
+      // diálogos conversacionais são respondidos ANTES de pedir escolha de empresa.
+      // Saudações, despedidas, perguntas sobre o bot, etc., nunca devem acionar o menu.
+      if (!ctx?.pendingText) {
+        const dialogRapido = dialogResolver.resolver(texto, this._empresaId);
+        if (dialogRapido.matched) {
+          this.log(`💬 Diálogo pré-empresa (tipo: ${dialogRapido.tipo})`, 'info');
+          this._registrarInterpretacao({
+            empresaId: this._empresaId, sender, texto,
+            intent: { intencao: 'dialogo_conversacional', periodo: { tipo: 'nenhum' }, filtros: {}, confianca: 1, _provedor: 'dialogo', _dialogo_id: dialogRapido.dialogo_id },
+            resultado: { tipo: 'dialogo', mensagem: dialogRapido.resposta },
+            resposta: dialogRapido.resposta,
+            duracaoMs: Date.now() - _t0,
+          });
+          return dialogRapido.resposta;
+        }
+      }
+
       const resolucao = channelStore.resolverEmpresaDoCanal({
         channelId: this._channelId,
         sender,
@@ -707,6 +843,7 @@ class IACWhatsAppService extends EventEmitter {
           mensagem: resposta,
         },
         resposta,
+        duracaoMs: Date.now() - _t0,
       });
       return resposta;
     }
@@ -725,6 +862,7 @@ class IACWhatsAppService extends EventEmitter {
         },
         resultado: { tipo: 'dialogo', mensagem: dialogAntecipado.resposta },
         resposta: dialogAntecipado.resposta,
+        duracaoMs: Date.now() - _t0,
       });
       return dialogAntecipado.resposta;
     }
@@ -735,8 +873,9 @@ class IACWhatsAppService extends EventEmitter {
 
     let intent = await intentService.classificar(textoExecucao, empresaId, { contextoAnterior });
     if (contextoAnterior) {
-      intent = intentMerger.mesclar(intent, contextoAnterior, lastIntentTs, textoExecucao);
+      intent = intentMerger.mesclar(intent, contextoAnterior, lastIntentTs, textoExecucao, this._configAnaliticaEmpresa(empresaId));
     }
+    this._logCaminhoIntent({ intent, contextoAnterior, escopo: 'single' });
 
     const filtrosStr = Object.keys(intent.filtros || {}).length
       ? ' | filtros: ' + Object.entries(intent.filtros).map(([k,v]) => `${k}="${v}"`).join(', ')
@@ -763,6 +902,7 @@ class IACWhatsAppService extends EventEmitter {
         intent,
         resultado: { tipo: 'erro', subtipo: 'sem_dialogo', mensagem: respostaFallback },
         resposta: respostaFallback,
+        duracaoMs: Date.now() - _t0,
       });
       return respostaFallback;
     }
@@ -801,14 +941,15 @@ class IACWhatsAppService extends EventEmitter {
         resposta,
         canal_nome: this._channelName || '',
       });
-      this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal });
+      this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: Date.now() - _t0 });
       return respostaFinal;
     }
-    this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta });
+    this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta, duracaoMs: Date.now() - _t0 });
     return resposta;
   }
 
   async _pipelineAll(texto, empresas, sender = null) {
+    const _t0 = Date.now();
     // Filtra empresas que têm intenções E datasets cadastrados. Se nenhuma qualificar,
     // usa a lista original para ao menos tentar (garante fallback com mensagem adequada).
     const empresasAptas = empresas.filter(e => intentService.temConfiguracaoMinima(e.empresa_id));
@@ -825,6 +966,7 @@ class IACWhatsAppService extends EventEmitter {
 
     let intent = null;
     let fallbackIntent = null;
+    const falhasClassificacao = [];
     for (const emp of empresasLoop) {
       const result = await intentService.classificar(texto, emp.empresa_id, { contextoAnterior: contextoAnteriorAll });
       if (result._provedor !== 'nenhum') {
@@ -834,18 +976,35 @@ class IACWhatsAppService extends EventEmitter {
       }
       if (!fallbackIntent) fallbackIntent = result;
       if (result._erros?.length) {
-        this.log(`❌ Empresa #${emp.empresa_id} — IA falhou: ${result._erro}`, 'error');
+        const falha = `Empresa #${emp.empresa_id}: ${result._erro}`;
+        falhasClassificacao.push(falha);
+        if (!contextoAnteriorAll) {
+          this.log(`❌ ${falha}`, 'error');
+        }
       } else {
         this.log(`⚠️  Empresa #${emp.empresa_id} sem chave de IA configurada — tentando próxima.`, 'warning');
       }
     }
     if (!intent) intent = fallbackIntent || { intencao: 'desconhecido', _provedor: 'nenhum', _erro: 'Nenhuma chave de IA configurada.', confianca: 0, periodo: { tipo: 'nenhum' }, filtros: {}, agrupar_por: null, ordenar_por: null, limite: null, precisa_confirmacao: false };
     if (contextoAnteriorAll) {
-      intent = intentMerger.mesclar(intent, contextoAnteriorAll, lastIntentTsAll, texto);
+      intent = intentMerger.mesclar(intent, contextoAnteriorAll, lastIntentTsAll, texto, this._configAnaliticaEmpresa(empresasLoop[0]?.empresa_id || empresas[0]?.empresa_id));
     }
+    if (intent._contextoAplicado && falhasClassificacao.length) {
+      this.log('ℹ️  IA externa indisponivel, mas a engine interna resolveu pelo contexto da conversa.', 'info');
+    }
+    this._logCaminhoIntent({ intent, contextoAnterior: contextoAnteriorAll, escopo: 'all' });
     const pedidoPorEmpresa = this._isPedidoPorEmpresa(texto);
-    if (pedidoPorEmpresa) {
+    const groupByAll = Array.isArray(intent.group_by) && intent.group_by.length
+      ? intent.group_by.map(d => String(d || '').toLowerCase()).filter(Boolean)
+      : Array.isArray(intent.agrupar_por_composto) && intent.agrupar_por_composto.length
+        ? intent.agrupar_por_composto.map(d => String(d || '').toLowerCase()).filter(Boolean)
+        : intent.agrupar_por ? [String(intent.agrupar_por).toLowerCase()] : [];
+    const agrupamentoCompostoComEmpresa = pedidoPorEmpresa && groupByAll.includes('empresa') && groupByAll.length >= 2;
+    const usarResumoPorEmpresa = pedidoPorEmpresa && !agrupamentoCompostoComEmpresa;
+    if (usarResumoPorEmpresa) {
       intent.agrupar_por = 'empresa';
+      intent.group_by = ['empresa'];
+      intent.agrupar_por_composto = null;
       intent.limite = null;
     }
     const empresaLogId = empresas[0].empresa_id;
@@ -877,7 +1036,7 @@ class IACWhatsAppService extends EventEmitter {
         intent,
         { empresaId: empresaLogId, messageTemplates }
       );
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoErro, resposta: respostaErro });
+      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoErro, resposta: respostaErro, duracaoMs: Date.now() - _t0 });
       return respostaErro;
     }
 
@@ -890,7 +1049,8 @@ class IACWhatsAppService extends EventEmitter {
 
     for (const emp of empresas) {
       try {
-        const resultado = await intentRouter.rotear(intent, emp.empresa_id);
+        const intentExecucao = usarResumoPorEmpresa ? this._intentConsultaConsolidada(intent) : intent;
+        const resultado = await intentRouter.rotear(intentExecucao, emp.empresa_id);
         if (resultado.tipo === 'erro') {
           if (resultado.subtipo === 'sem_intencao') {
             this.log(`[All] Empresa #${emp.empresa_id} sem intenção configurada — ignorada.`, 'info');
@@ -898,7 +1058,7 @@ class IACWhatsAppService extends EventEmitter {
             semDataset.push(emp.nome);
             this.log(`[All] Empresa #${emp.empresa_id} erro: ${resultado.mensagem}`, 'warning');
           }
-          if (intent.agrupar_por === 'empresa') {
+          if (usarResumoPorEmpresa) {
             rowsPorEmpresa.push({ empresa: emp.nome, _semDados: true });
           }
           continue;
@@ -906,28 +1066,28 @@ class IACWhatsAppService extends EventEmitter {
         if (!resultado.rows || resultado.rows.length === 0) {
           semDados.push(emp.nome);
           ultimoResultado = ultimoResultado || resultado;
-          if (intent.agrupar_por === 'empresa') {
+          if (usarResumoPorEmpresa) {
             rowsPorEmpresa.push({ empresa: emp.nome, _semDados: true });
           }
           continue;
         }
-        if (intent.agrupar_por === 'empresa') {
+        if (usarResumoPorEmpresa) {
           rowsPorEmpresa.push(this._resumirEmpresa(emp, resultado.rows));
         } else {
-          todosRows.push(...resultado.rows);
+          todosRows.push(...resultado.rows.map(row => ({ empresa: emp.nome, ...row })));
         }
         sucessos.push(emp.nome);
         ultimoResultado = resultado;
       } catch (err) {
         semDataset.push(emp.nome);
-        if (intent.agrupar_por === 'empresa') {
+        if (usarResumoPorEmpresa) {
           rowsPorEmpresa.push({ empresa: emp.nome, _semDados: true });
         }
         this.log(`[All] Empresa #${emp.empresa_id} (${emp.nome}): ${err.message}`, 'warning');
       }
     }
 
-    if (intent.agrupar_por === 'empresa') {
+    if (usarResumoPorEmpresa) {
       const metricas = this._metricasEmpresa(intent, rowsPorEmpresa);
       const rowsEmpresaCompletos = this._completarMetricasEmpresa(rowsPorEmpresa, metricas);
       const resultadoEmpresas = {
@@ -964,7 +1124,7 @@ class IACWhatsAppService extends EventEmitter {
         this._saveLastIntent(sender, intent, '__all__');
       }
 
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoEmpresas, resposta });
+      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoEmpresas, resposta, duracaoMs: Date.now() - _t0 });
       return resposta;
     }
 
@@ -999,7 +1159,7 @@ class IACWhatsAppService extends EventEmitter {
         resultado_msg:  `Nenhum dado encontrado${detalhe}`,
         rows_count:     0,
       });
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoSemDados, resposta: respostaSemDados });
+      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoSemDados, resposta: respostaSemDados, duracaoMs: Date.now() - _t0 });
       return respostaSemDados;
     }
 
@@ -1037,7 +1197,7 @@ class IACWhatsAppService extends EventEmitter {
       this._saveLastIntent(sender, intent, '__all__');
     }
 
-    this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoCombinado, resposta: respostaFinal });
+    this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoCombinado, resposta: respostaFinal, duracaoMs: Date.now() - _t0 });
     return respostaFinal;
   }
 }

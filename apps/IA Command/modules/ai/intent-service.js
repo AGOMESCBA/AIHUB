@@ -1,20 +1,23 @@
-const groqProvider   = require('./providers/groq');
-const geminiProvider = require('./providers/gemini');
+const groqProvider     = require('./providers/groq');
+const geminiProvider   = require('./providers/gemini');
 const deepseekProvider = require('./providers/deepseek');
-const claudeProvider = require('./providers/claude');
-const validator      = require('./schema-validator');
-const localResolver  = require('./local-intent-resolver');
+const claudeProvider   = require('./providers/claude');
+const openaiProvider   = require('./providers/openai');
+const validator        = require('./schema-validator');
+const localResolver    = require('./local-intent-resolver');
 const { extrairRegrasNormalizacao } = require('./text-normalizer');
-const crud           = require('../database/crud');
+const unsupportedRequest = require('./unsupported-request');
+const crud             = require('../database/crud');
 
 const PROVIDERS = {
   groq: groqProvider,
   gemini: geminiProvider,
   deepseek: deepseekProvider,
   claude: claudeProvider,
+  openai: openaiProvider,
 };
 
-const DEFAULT_ORDER = ['groq', 'gemini', 'deepseek', 'claude'];
+const DEFAULT_ORDER = ['groq', 'gemini', 'deepseek', 'claude', 'openai'];
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CLASSIFICATION_CACHE_TTL_MS = 2 * 60 * 1000;
 const MAX_CLASSIFICATION_CACHE = 300;
@@ -78,7 +81,7 @@ async function _resolveKeys(empresaId) {
   const cached = _cacheGet(_cache.keys, empresaId);
   if (cached) return _clone(cached);
 
-  const keys = { groq: null, gemini: null, deepseek: null, claude: null };
+  const keys = { groq: null, gemini: null, deepseek: null, claude: null, openai: null };
   let cfg = {};
 
   // 1. IA Command own config (SQLite)
@@ -86,16 +89,17 @@ async function _resolveKeys(empresaId) {
     const { getDB } = require('../database');
     const db  = getDB();
     const row = db.prepare(`
-      SELECT groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, provedor_primario, fallback_ordem, confianca_minima
+      SELECT groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, openai_api_key, provedor_primario, fallback_ordem, confianca_minima
       FROM ai_config
       WHERE empresa_id = ?
       LIMIT 1
     `).get(empresaId);
     cfg = row || {};
-    if (row?.groq_api_key)   keys.groq   = row.groq_api_key;
-    if (row?.gemini_api_key) keys.gemini = row.gemini_api_key;
+    if (row?.groq_api_key)     keys.groq     = row.groq_api_key;
+    if (row?.gemini_api_key)   keys.gemini   = row.gemini_api_key;
     if (row?.deepseek_api_key) keys.deepseek = row.deepseek_api_key;
-    if (row?.claude_api_key) keys.claude = row.claude_api_key;
+    if (row?.claude_api_key)   keys.claude   = row.claude_api_key;
+    if (row?.openai_api_key)   keys.openai   = row.openai_api_key;
   } catch (_) {}
 
   // 2. IAHub configuracoes (fallback)
@@ -123,15 +127,22 @@ async function _resolveKeys(empresaId) {
       keys.claude = await getApiKey(empresaId, 'claude_api_key');
     } catch (_) {}
   }
+  if (!keys.openai) {
+    try {
+      const { getApiKey } = require('../../../../modules/configuracoes/database');
+      keys.openai = await getApiKey(empresaId, 'openai_api_key');
+    } catch (_) {}
+  }
 
   // 3. Environment variables
-  if (!keys.groq)   keys.groq   = process.env.GROQ_API_KEY  || null;
-  if (!keys.gemini) keys.gemini = process.env.GEMINI_API_KEY || null;
+  if (!keys.groq)     keys.groq     = process.env.GROQ_API_KEY    || null;
+  if (!keys.gemini)   keys.gemini   = process.env.GEMINI_API_KEY  || null;
   if (!keys.deepseek) keys.deepseek = process.env.DEEPSEEK_API_KEY || null;
-  if (!keys.claude) keys.claude = process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || null;
+  if (!keys.claude)   keys.claude   = process.env.CLAUDE_API_KEY  || process.env.ANTHROPIC_API_KEY || null;
+  if (!keys.openai)   keys.openai   = process.env.OPENAI_API_KEY  || null;
 
   // 4. Fallback global: se a empresa_id do canal não tem chave própria, usa qualquer config disponível
-  if (!keys.groq && !keys.gemini && !keys.deepseek && !keys.claude) {
+  if (!keys.groq && !keys.gemini && !keys.deepseek && !keys.claude && !keys.openai) {
     try {
       const { getDB } = require('../database');
       const anyRow = getDB().prepare('SELECT * FROM ai_config LIMIT 1').get();
@@ -140,6 +151,7 @@ async function _resolveKeys(empresaId) {
         if (anyRow.gemini_api_key)   keys.gemini   = anyRow.gemini_api_key;
         if (anyRow.deepseek_api_key) keys.deepseek = anyRow.deepseek_api_key;
         if (anyRow.claude_api_key)   keys.claude   = anyRow.claude_api_key;
+        if (anyRow.openai_api_key)   keys.openai   = anyRow.openai_api_key;
         if (!cfg.provedor_primario)  cfg = anyRow;
         console.log(`[IA] Fallback: usando ai_config da empresa #${anyRow.empresa_id} para classificar empresa #${empresaId}`);
       }
@@ -194,6 +206,9 @@ function _carregarDatasets(empresaId) {
       nome: r.nome,
       campo_data: r.campo_data || 'data',
       colunas_metrica: r.colunas_metrica || '',
+      sql_base: r.sql_base || '',
+      campos: r.campos || '',
+      agrupamentos: r.agrupamentos || '',
     }));
     return _clone(_cacheSet(_cache.datasets, empresaId, datasets));
   } catch (_) {
@@ -394,6 +409,8 @@ async function classificar(mensagem, empresaId, opts = {}) {
 
   const local = localResolver.resolverLocal(mensagem, intencoes, sinonimos, { datasets, normalizacoes });
   if (local) {
+    const bloqueado = unsupportedRequest.aplicarBloqueioSeNecessario(local, mensagem, { intencoes, datasets });
+    if (bloqueado !== local) return bloqueado;
     if (cacheKey) _cacheClassification(cacheKey, local);
     return local;
   }
@@ -405,7 +422,9 @@ async function classificar(mensagem, empresaId, opts = {}) {
       const raw = await PROVIDERS[provedor].classificarIntencao(mensagem, keys[provedor], intencoes, sinonimos, contextoAnterior);
       const result = validator.validar(raw, nomesPermitidos);
       if (result.valido) {
-        const intent = { ...result.intent, _provedor: provedor, _fallback: provedor !== ordem[0] };
+        let intent = { ...result.intent, _provedor: provedor, _fallback: provedor !== ordem[0] };
+        intent = unsupportedRequest.aplicarBloqueioSeNecessario(intent, mensagem, { intencoes, datasets });
+        if (intent._erroTipo === 'dataset_sem_informacao') return intent;
         if (intent.confianca < confiancaMinima) {
           return {
             ...intent,

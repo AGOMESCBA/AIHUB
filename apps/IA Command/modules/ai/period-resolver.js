@@ -97,10 +97,13 @@ function resolverPeriodo(periodo, opts = {}) {
       fim = new Date(ano - 1, 11, 31);
       break;
 
-    case 'comparacao_anual':
-      inicio = new Date(ano - 1, 0, 1);
-      fim = new Date(ano, 11, 31);
+    case 'comparacao_anual': {
+      const anoBase = _clampInt(periodo.ano_base, ano - 1, 1900, 2099);
+      const anoComparacao = _clampInt(periodo.ano_comparacao, ano, 1900, 2099);
+      inicio = new Date(Math.min(anoBase, anoComparacao), 0, 1);
+      fim = new Date(Math.max(anoBase, anoComparacao), 11, 31);
       break;
+    }
 
     case 'comparacao_mensal':
       inicio = _startOfMonth(ano, mes - 1);
@@ -126,8 +129,10 @@ function resolverPeriodo(periodo, opts = {}) {
 
     case 'comparacao_acumulado_mes': {
       const m = _clampInt(periodo.mes, mes + 1, 1, 12) - 1;
-      inicio = new Date(ano - 1, 0, 1);
-      fim = _endOfMonth(ano, m);
+      const anoBase = _clampInt(periodo.ano_base, ano - 1, 1900, 2099);
+      const anoComparacao = _clampInt(periodo.ano_comparacao, ano, 1900, 2099);
+      inicio = new Date(Math.min(anoBase, anoComparacao), 0, 1);
+      fim = _endOfMonth(Math.max(anoBase, anoComparacao), m);
       break;
     }
 
@@ -170,6 +175,13 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
       return { tipo: 'comparacao_acumulado_mes', mes: mesTexto || hoje.getMonth() + 1 };
     }
     if (mesTexto) return { tipo: 'comparacao_mesmo_mes', mes: mesTexto };
+    if (anosComparacao.length >= 2) {
+      return {
+        tipo: 'comparacao_anual',
+        ano_base: anosComparacao[0],
+        ano_comparacao: anosComparacao[1],
+      };
+    }
     if (_containsTerm(texto, 'mesmo periodo') && _containsAny(texto, ['mes', 'mensal'])) return { tipo: 'comparacao_mensal' };
     if (_containsAny(texto, ['mes', 'mensal'])) return { tipo: 'comparacao_mensal' };
     if (_containsAny(texto, ['ano a ano', 'anual'])) return { tipo: 'comparacao_anual' };
@@ -195,6 +207,12 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   const anoSolto = texto.match(/\b(?:em|de|do|da|no|na)\s+(20\d{2}|19\d{2})\b/);
   if (anoSolto) {
     const ano = parseInt(anoSolto[1], 10);
+    return { tipo: 'personalizado', data_inicio: `${ano}0101`, data_fim: `${ano}1231` };
+  }
+
+  const anoNumericoSolto = texto.match(/\b(20\d{2}|19\d{2})\b/);
+  if (anoNumericoSolto && !_temIndicadorDataParcial(texto, anoNumericoSolto[1])) {
+    const ano = parseInt(anoNumericoSolto[1], 10);
     return { tipo: 'personalizado', data_inicio: `${ano}0101`, data_fim: `${ano}1231` };
   }
 
@@ -225,13 +243,32 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   if (_containsAny(texto, ['primeiro semestre', 'h1'])) return { tipo: 'primeiro_semestre', ano_ref: _anoRefTexto(texto) };
   if (_containsAny(texto, ['segundo semestre', 'h2'])) return { tipo: 'segundo_semestre', ano_ref: _anoRefTexto(texto) };
 
-  if (_containsAny(texto, ['mes passado', 'mes anterior', 'ultimo mes'])) return { tipo: 'mes_anterior' };
-  if (_containsAny(texto, ['este mes', 'esse mes', 'mes atual', 'do mes', 'no mes', 'mes'])) return { tipo: 'mes_atual' };
+  const textoPeriodo = _removerAgrupamentosTemporais(texto);
 
-  if (_containsAny(texto, ['ano passado', 'ano anterior', 'ultimo ano'])) return { tipo: 'ano_anterior' };
-  if (_containsAny(texto, ['este ano', 'esse ano', 'ano atual', 'do ano', 'no ano', 'ano'])) return { tipo: 'ano_atual' };
+  if (_containsAny(textoPeriodo, ['mes passado', 'mes anterior', 'ultimo mes'])) return { tipo: 'mes_anterior' };
+  if (_containsAny(textoPeriodo, ['este mes', 'esse mes', 'mes atual', 'do mes', 'no mes', 'mes'])) return { tipo: 'mes_atual' };
+
+  if (_containsAny(textoPeriodo, ['ano passado', 'ano anterior', 'ultimo ano'])) return { tipo: 'ano_anterior' };
+  if (_containsAny(textoPeriodo, ['este ano', 'esse ano', 'ano atual', 'do ano', 'no ano', 'ano'])) return { tipo: 'ano_atual' };
 
   return { tipo: 'nenhum' };
+}
+
+function _removerAgrupamentosTemporais(texto) {
+  return String(texto || '')
+    .replace(/\bmes(?:es)?\s+(?:com|de)\s+(?:maior|menor|melhor|pior)\b/g, ' ')
+    .replace(/\b(?:maior|menor|melhor|pior)\s+mes(?:es)?\b/g, ' ')
+    .replace(/\bpor\s+dias?\b/g, ' ')
+    .replace(/\be\s+dias?\b/g, ' ')
+    .replace(/\bdias?\s+e\b/g, ' ')
+    .replace(/\bdias?\s+a\s+dias?\b/g, ' ')
+    .replace(/\bpor\s+mes(?:es)?\b/g, ' ')
+    .replace(/\be\s+mes(?:es)?\b/g, ' ')
+    .replace(/\bmes(?:es)?\s+e\b/g, ' ')
+    .replace(/\bmes\s+a\s+mes\b/g, ' ')
+    .replace(/\bpor\s+ano\b/g, ' ')
+    .replace(/\be\s+ano\b/g, ' ')
+    .replace(/\bano\s+a\s+ano\b/g, ' ');
 }
 
 function _resolverPersonalizado(periodo, hoje) {
@@ -241,6 +278,12 @@ function _resolverPersonalizado(periodo, hoje) {
 
   const n = _clampInt(periodo.meses_atras, 1, 1, 60);
   return _range(_startOfMonth(hoje.getFullYear(), hoje.getMonth() - n), _endOfMonth(hoje.getFullYear(), hoje.getMonth() - 1));
+}
+
+function _temIndicadorDataParcial(texto, ano) {
+  const idx = String(texto || '').indexOf(String(ano));
+  const janela = idx >= 0 ? String(texto || '').slice(Math.max(0, idx - 8), idx + 12) : String(texto || '');
+  return /(\d{1,2}[/-]\d{1,2})|(\b(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez|janeiro|fevereiro|marco|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b)/i.test(janela);
 }
 
 function _explicitDateRange(texto, hoje) {

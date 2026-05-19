@@ -4,10 +4,11 @@ const { getEmpresaId } = require('./empresa-context');
 const https = require('https');
 
 const PROVIDERS = [
-  { id: 'groq',     label: 'Groq',     keyField: 'groq_api_key',     painelUrl: 'https://console.groq.com/settings/billing' },
-  { id: 'gemini',   label: 'Gemini',   keyField: 'gemini_api_key',   painelUrl: 'https://console.cloud.google.com/billing' },
-  { id: 'deepseek', label: 'DeepSeek', keyField: 'deepseek_api_key', painelUrl: 'https://platform.deepseek.com/top_up' },
-  { id: 'claude',   label: 'Claude',   keyField: 'claude_api_key',   painelUrl: 'https://console.anthropic.com/settings/billing' },
+  { id: 'groq',     label: 'Groq',         keyField: 'groq_api_key',     painelUrl: 'https://console.groq.com/settings/billing' },
+  { id: 'gemini',   label: 'Gemini',       keyField: 'gemini_api_key',   painelUrl: 'https://console.cloud.google.com/billing' },
+  { id: 'deepseek', label: 'DeepSeek',     keyField: 'deepseek_api_key', painelUrl: 'https://platform.deepseek.com/top_up' },
+  { id: 'claude',   label: 'Claude',       keyField: 'claude_api_key',   painelUrl: 'https://console.anthropic.com/settings/billing' },
+  { id: 'openai',   label: 'OpenAI / GPT', keyField: 'openai_api_key',   painelUrl: 'https://platform.openai.com/account/billing' },
 ];
 
 function _getJson({ hostname, path, headers = {} }) {
@@ -64,13 +65,14 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       gemini_api_key:   row.gemini_api_key   ? '***' : null,
       deepseek_api_key: row.deepseek_api_key ? '***' : null,
       claude_api_key:   row.claude_api_key   ? '***' : null,
+      openai_api_key:   row.openai_api_key   ? '***' : null,
     });
   });
 
   // ── SAVE / UPDATE config ─────────────────────────────────────────────────────
   app.post('/api/ia-command/ai-config', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const {
-      groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key,
+      groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, openai_api_key,
       provedor_primario, fallback_ordem, confianca_minima,
       whisper_model, audio_idioma,
     } = req.body;
@@ -79,7 +81,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
 
     const dados = {
       provedor_primario: provedor_primario || 'groq',
-      fallback_ordem:    fallback_ordem    || 'groq,gemini,deepseek,claude',
+      fallback_ordem:    fallback_ordem    || 'groq,gemini,deepseek,claude,openai',
       confianca_minima:  parseFloat(confianca_minima) || 0.6,
       whisper_model:     whisper_model     || 'whisper-large-v3',
       audio_idioma:      audio_idioma      || 'pt',
@@ -90,6 +92,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     if (gemini_api_key   && gemini_api_key   !== '***') dados.gemini_api_key   = gemini_api_key;
     if (deepseek_api_key && deepseek_api_key !== '***') dados.deepseek_api_key = deepseek_api_key;
     if (claude_api_key   && claude_api_key   !== '***') dados.claude_api_key   = claude_api_key;
+    if (openai_api_key   && openai_api_key   !== '***') dados.openai_api_key   = openai_api_key;
 
     let row;
     if (existing) {
@@ -105,6 +108,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       gemini_api_key:   row.gemini_api_key   ? '***' : null,
       deepseek_api_key: row.deepseek_api_key ? '***' : null,
       claude_api_key:   row.claude_api_key   ? '***' : null,
+      openai_api_key:   row.openai_api_key   ? '***' : null,
     });
   });
 
@@ -121,6 +125,8 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
         result = await require('./ai/providers/deepseek').classificarIntencao(testMsg, api_key);
       } else if (provedor === 'claude') {
         result = await require('./ai/providers/claude').classificarIntencao(testMsg, api_key);
+      } else if (provedor === 'openai') {
+        result = await require('./ai/providers/openai').classificarIntencao(testMsg, api_key);
       } else {
         result = await require('./ai/providers/groq').classificarIntencao(testMsg, api_key);
       }
@@ -169,12 +175,13 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
   // ── REVEAL raw keys (autenticado, somente para a empresa da sessão) ──────────
   app.get('/api/ia-command/ai-config/reveal', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
-    if (!row) return res.json({ groq_api_key: null, gemini_api_key: null, deepseek_api_key: null, claude_api_key: null });
+    if (!row) return res.json({ groq_api_key: null, gemini_api_key: null, deepseek_api_key: null, claude_api_key: null, openai_api_key: null });
     res.json({
-      groq_api_key: row.groq_api_key || null,
-      gemini_api_key: row.gemini_api_key || null,
+      groq_api_key:     row.groq_api_key     || null,
+      gemini_api_key:   row.gemini_api_key   || null,
       deepseek_api_key: row.deepseek_api_key || null,
-      claude_api_key: row.claude_api_key || null,
+      claude_api_key:   row.claude_api_key   || null,
+      openai_api_key:   row.openai_api_key   || null,
     });
   });
 };

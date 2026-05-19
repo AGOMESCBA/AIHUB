@@ -40,6 +40,32 @@
     .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
     .vars { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
     .var-chip { border:1px solid var(--border);background:var(--bg-hover);border-radius:99px;padding:3px 8px;font-family:monospace;font-size:11px;color:var(--text-md);cursor:pointer; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;}
+    .help-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 22px;}
+    .help-tab{padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-lo);transition:color var(--transition),border-color var(--transition);}
+    .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .help-panel{display:none;padding:22px;} .help-panel.active{display:block;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th,.fmt-table td{padding:6px 10px;border:1px solid var(--border);text-align:left;}
+    .fmt-table th{background:var(--bg-hover);font-weight:700;color:var(--text-hi);}
+    .fmt-table td:first-child{white-space:nowrap;}
+    .fmt-table code{background:var(--bg-hover);padding:1px 4px;border-radius:3px;font-size:11px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -69,6 +95,10 @@
             <div class="page-title">Mensagens Internas</div>
             <div class="page-subtitle">Templates usados pelo IA Command nas respostas enviadas via biblioteca WhatsApp.</div>
           </div>
+          <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Ajuda
+          </button>
         </div>
         <div class="quick-panel">
           <div class="quick-row">
@@ -252,6 +282,136 @@
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Mensagens WhatsApp</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-tabs">
+    <div class="help-tab active" onclick="helpTab(this,'ht-geral')">Geral</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-variaveis')">Variáveis</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-pratica')">Boas Práticas</div>
+  </div>
+  <div class="help-drawer-body" style="padding:0;overflow-y:auto;flex:1;">
+
+  <div id="ht-geral" class="help-panel active">
+    <div class="help-section">
+      <div class="help-section-title">O que são os templates</div>
+      <div class="help-item-desc">Os templates são os textos que o IA Command envia automaticamente pelo WhatsApp em resposta a eventos específicos — boas-vindas, erros, seleção de empresa, resultado de consulta, etc. Cada template tem uma <strong>chave única</strong> que identifica em qual situação ele é usado.</div>
+      <div class="help-tip">Os templates não controlam a lógica — apenas o texto. A situação em que cada um é disparado é fixada no código do sistema.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Padrão vs. Customizado</div>
+      <div class="help-item">
+        <div class="help-item-label">Padrão</div>
+        <div class="help-item-desc">Texto original definido pelo sistema. Sempre disponível como referência no campo <strong>Padrão do Sistema</strong> ao editar.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Customizado</div>
+        <div class="help-item-desc">Indica que o texto foi editado pela empresa. O motor usa este texto no lugar do padrão. A coluna <em>Tipo</em> na lista exibe o badge <span style="background:rgba(124,58,237,.1);color:#7c3aed;font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px">Customizado</span> para facilitar identificação.</div>
+      </div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Campos do formulário</div>
+      <div class="help-item">
+        <div class="help-item-label">Chave</div>
+        <div class="help-item-desc">Identificador técnico do template. Não pode ser alterado — é o código que o sistema usa para encontrar a mensagem certa.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Título</div>
+        <div class="help-item-desc">Nome descritivo para facilitar identificação na lista. Pode ser editado livremente.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Template</div>
+        <div class="help-item-desc">Texto que será enviado no WhatsApp. Suporta variáveis entre chaves duplas, quebras de linha e formatação simples.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Status</div>
+        <div class="help-item-desc">Quando <strong>Inativo</strong>, o template é ignorado e o sistema usa o texto padrão embutido.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ht-variaveis" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Como usar variáveis</div>
+      <div class="help-item-desc">Variáveis são substituídas em tempo real pelos valores reais do contexto da mensagem. Escreva entre chaves duplas: <code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px">&#123;&#123;nome_da_variavel&#125;&#125;</code>. Na tela de edição, clique nos chips abaixo do textarea para inserir no cursor.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Variáveis disponíveis</div>
+      <table class="fmt-table" style="margin-top:8px">
+        <thead><tr><th>Variável</th><th>O que substitui</th></tr></thead>
+        <tbody>
+          <tr><td><code>&#123;&#123;empresa_nome&#125;&#125;</code></td><td>Nome da empresa da sessão ativa do usuário</td></tr>
+          <tr><td><code>&#123;&#123;empresa_id&#125;&#125;</code></td><td>ID interno da empresa ativa</td></tr>
+          <tr><td><code>&#123;&#123;canal_nome&#125;&#125;</code></td><td>Nome do canal WhatsApp que recebeu a mensagem</td></tr>
+          <tr><td><code>&#123;&#123;numero&#125;&#125;</code></td><td>Número de telefone do remetente (formato internacional)</td></tr>
+          <tr><td><code>&#123;&#123;opcoes_empresas&#125;&#125;</code></td><td>Lista numerada de empresas disponíveis para seleção</td></tr>
+          <tr><td><code>&#123;&#123;erro&#125;&#125;</code></td><td>Descrição técnica do erro ocorrido</td></tr>
+          <tr><td><code>&#123;&#123;transcricao&#125;&#125;</code></td><td>Texto transcrito de um áudio enviado pelo usuário</td></tr>
+          <tr><td><code>&#123;&#123;resposta&#125;&#125;</code></td><td>Resposta gerada pelo motor de IA para a consulta</td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip">Nem toda variável está disponível em todos os templates — depende do contexto do evento. Se uma variável não tiver valor, ela é substituída por vazio. Verifique o <strong>Padrão do Sistema</strong> para saber quais variáveis o template original usa.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Exemplo de template com variáveis</div>
+      <div style="background:var(--bg-hover);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.75;font-family:monospace;color:var(--text-hi)">
+        Olá! Você está conectado ao IA Command.<br>
+        Empresa ativa: <strong>&#123;&#123;empresa_nome&#125;&#125;</strong><br><br>
+        Como posso ajudar?
+      </div>
+      <div style="margin-top:10px;font-size:13px;color:var(--text-md)">O usuário recebe:</div>
+      <div style="background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.75;margin-top:6px;color:var(--text-hi)">
+        Olá! Você está conectado ao IA Command.<br>
+        Empresa ativa: <strong>J2A Consultoria</strong><br><br>
+        Como posso ajudar?
+      </div>
+    </div>
+  </div>
+
+  <div id="ht-pratica" class="help-panel">
+    <div class="help-section">
+      <div class="help-section-title">Quando customizar</div>
+      <div class="help-item">
+        <div class="help-item-label">Adaptar ao tom da empresa</div>
+        <div class="help-item-desc">O padrão usa uma linguagem neutra e técnica. Se a empresa preferir um tom mais informal, comercial ou com a identidade da marca, edite os templates relevantes.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Corrigir mensagens de erro confusas</div>
+        <div class="help-item-desc">Se os usuários reclamarem que uma mensagem específica está difícil de entender, localize o template pela chave ou pelo texto no campo de busca e reescreva com linguagem mais clara.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Adicionar orientações específicas</div>
+        <div class="help-item-desc">Em templates como boas-vindas ou seleção de empresa, você pode incluir instruções extras — por exemplo, listar os tipos de consulta disponíveis.</div>
+      </div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Restaurar padrão</div>
+      <div class="help-item-desc">O botão <strong>Restaurar padrão</strong> no formulário desfaz todas as customizações do template e volta ao texto original do sistema. Use quando uma edição causar problemas ou o template ficar desatualizado após uma atualização do sistema.</div>
+      <div class="help-tip">Antes de restaurar, copie o texto customizado se quiser guardar como referência — a ação não tem desfazer.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Inativar vs. Excluir</div>
+      <div class="help-item-desc">Os templates não podem ser excluídos — apenas inativados. Quando inativo, o sistema usa o texto padrão embutido. Isso garante que o IA Command sempre tenha uma mensagem de fallback para cada situação, mesmo que o template customizado esteja com problema.</div>
+    </div>
+  </div>
+
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  function helpTab(el, id) {
+    el.closest('.help-drawer').querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+    el.closest('.help-drawer').querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(id).classList.add('active');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
 </script>
 </body>
 </html>
