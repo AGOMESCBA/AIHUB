@@ -103,6 +103,7 @@ Exemplos obrigatorios:
   - "Qual vendedor teve maior comissao?" → "O vendedor com maior comissao foi *JOAO SILVA* com R$ 5.200,00."
   - "Qual produto mais vendido?" → "O produto mais vendido foi *PARAFUSO M8* com 1.250 un."
   - "Qual o mes com menor faturamento?" → "O mes com menor faturamento foi *Fevereiro/2025* com R$ 42.300,00."
+  - "Qual o mes com MAIOR e MENOR faturamento?" → "O mes com maior faturamento foi *Agosto/2025* com R$ 709.709,49. O mes com menor faturamento foi *Fevereiro/2026* com R$ 45.230,00." (identifique ambos os extremos a partir do conjunto completo de dados recebidos — NUNCA diga "nao foi informado" se os dados estiverem presentes)
 
 Quando a resposta tiver dados de MULTIPLAS empresas (multiempresa), use a linha de contexto no consolidado:
   - "O mes com maior faturamento consolidado foi *Agosto/2025* com R$ 879.605,99."
@@ -257,6 +258,8 @@ function _detectarColunas(rows) {
     if (mesKey && anoKey) {
       colTemporal = mesKey;   // mês = bloco externo
       colEntidade = anoKey;   // ano = item interno de cada bloco
+    } else if (anoKey) {
+      colTemporal = anoKey;   // histórico por ano (sem mês): trata ano como dimensão temporal
     }
   }
 
@@ -966,7 +969,7 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [] } = {}) {
 // Cobre o caso mais comum gerado pela IA: YEAR()/MONTH() como colunas separadas.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildFormatAnoMesDireto(rows, { contextoConsulta = null } = {}) {
+function buildFormatAnoMesDireto(rows, { contextoConsulta = null, nomeModulo = null } = {}) {
   if (!Array.isArray(rows) || !rows.length) return null;
   const first = rows[0];
   const keys = Object.keys(first);
@@ -1010,11 +1013,30 @@ function buildFormatAnoMesDireto(rows, { contextoConsulta = null } = {}) {
   }
   if (!byPeriodo.size) return null;
 
+  // Deriva range de período a partir das chaves AAAAMM disponíveis
+  const sortedPeriodoKeys = [...byPeriodo.keys()].sort();
+  const firstK = sortedPeriodoKeys[0];
+  const lastK  = sortedPeriodoKeys[sortedPeriodoKeys.length - 1];
+  let periodoStr = null;
+  if (firstK) {
+    const fAno = firstK.slice(0, 4), fMes = parseInt(firstK.slice(4, 6), 10);
+    const lAno = lastK.slice(0, 4),  lMes = parseInt(lastK.slice(4, 6), 10);
+    const abr = i => MESES[i - 1].slice(0, 3);
+    if (firstK === lastK) {
+      periodoStr = `${abr(fMes)}/${fAno}`;
+    } else if (fAno === lAno) {
+      periodoStr = `${abr(fMes)} a ${abr(lMes)}/${fAno}`;
+    } else {
+      periodoStr = `${abr(fMes)}/${fAno} a ${abr(lMes)}/${lAno}`;
+    }
+  }
+
   const primaryCol = numCols[0];
   const totalGlobal = {}; for (const c of numCols) totalGlobal[c] = 0;
   const linhas = [];
 
-  if (contextoConsulta) linhas.push(`💰 ${contextoConsulta}`);
+  const headerParts = [nomeModulo, contextoConsulta, periodoStr].filter(Boolean);
+  if (headerParts.length) linhas.push(`💰 ${headerParts.join(' — ')}`);
 
   let primeiro = true;
   for (const [key, byEnt] of [...byPeriodo.entries()].sort()) {

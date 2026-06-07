@@ -684,6 +684,36 @@ function extrairExpressoesWindow(conteudoOver = '') {
   return partes.flatMap(parte => dividirExpressoesSql(parte).map(expr => expr.replace(/\s+(ASC|DESC)\s*$/i, '').trim()).filter(Boolean));
 }
 
+function validarEscopoSubqueryExterno(sql = '') {
+  const texto = String(sql || '').trim();
+  // Só verifica quando a query tem FROM subquery (tabela derivada): FROM (SELECT...)
+  const posFrom = localizarKeywordNivelZero(texto, 'FROM');
+  if (posFrom < 0) return { ok: true, erros: [] };
+  let i = posFrom + 4;
+  while (i < texto.length && /\s/.test(texto[i])) i++;
+  if (texto[i] !== '(') return { ok: true, erros: [] };
+
+  const { select, group } = extrairSelectEGroupByNivelZero(texto);
+  if (!select) return { ok: true, erros: [] };
+  const parteExterna = (select || '') + ' ' + (group || '');
+
+  const aliases = ['SF2','SD2','SF1','SD1','SA1','SA2','SA3','SB1','SBM','SF4','CTT',
+                   'SE1','SE2','SE3','SE5','SE8','SED','SA6','SC7','SE3'];
+  for (const alias of aliases) {
+    const re = new RegExp(`\\b${alias}\\s*\\.\\s*[A-Z][A-Z0-9_]*`, 'i');
+    const m = parteExterna.match(re);
+    if (m) {
+      return { ok: false, erros: [
+        `Violacao de escopo de subquery: "${m[0]}" referenciado na query externa mas pertence ao escopo interno. ` +
+        `Na query externa (FROM (...) AS h), use APENAS aliases exportados pela subquery — ex: h.ano, h.faturamento_mes. ` +
+        `NUNCA referencie ${alias}.* fora da subquery. ` +
+        `Corrija: substitua "${m[0]}" por h.<alias_correto> no SELECT e GROUP BY externos.`,
+      ]};
+    }
+  }
+  return { ok: true, erros: [] };
+}
+
 function validarSelectContraGroupBy(sql = '') {
   const texto = String(sql || '');
   const { select, group } = extrairSelectEGroupByNivelZero(texto);
@@ -739,7 +769,12 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   if (/\b[A-Z]{2,4}\d{3,4}\s*\./i.test(texto)) {
     erros.push('Use alias base para qualificar campos (SD1.D1_TOTAL), nunca tabela fisica como qualificador (SD1990.D1_TOTAL).');
   }
-  erros.push(...validarSelectContraGroupBy(texto).erros);
+  const escopoCheck = validarEscopoSubqueryExterno(texto);
+  if (!escopoCheck.ok) {
+    erros.push(...escopoCheck.erros);
+  } else {
+    erros.push(...validarSelectContraGroupBy(texto).erros);
+  }
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
   const keywords = new Set(['ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'JOIN', 'CROSS']);
@@ -783,27 +818,52 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   return { ok: erros.length === 0, erros };
 }
 
-function _buildContextoConsulta(intent) {
+function _buildContextoConsulta(intent, periodoResolvido = null) {
   if (!intent) return null;
-  // Datas técnicas (dataInicio/dataFim) são omitidas — a IA infere o período descritivo
-  // diretamente da pergunta original ("últimos 12 meses", "ano atual", etc.).
-  // Aqui passamos apenas filtros de entidade (cliente, vendedor, produto…) que a pergunta
-  // pode não tornar óbvios no cabeçalho.
+
   const entidades = Array.isArray(intent._entidadesResolvidas) ? intent._entidadesResolvidas : [];
   const _labelTipo = t => ({ cliente: 'Cliente', fornecedor: 'Fornecedor', vendedor: 'Vendedor', produto: 'Produto', grupo_produto: 'Grupo', centro_custo: 'C.Custo' }[t] || t);
   const filtroEnt = entidades.filter(e => e && e.nome && e.tipo).map(e => `${_labelTipo(e.tipo)}: ${e.nome}`).join(', ');
-  return filtroEnt || null;
+
+  // Usa o período resolvido pela IA-OWNER (plano.obj.periodo) com fallback para intent.periodo.
+  // Isso evita que o formatter alucine anos (ex: 2023) quando o SQL retorna apenas
+  // mes="04" sem coluna de ano — o contexto explícito ancora o formatter no ano correto.
+  let filtroPeriodo = null;
+  const p = periodoResolvido || intent.periodo;
+  if (p && (p.dataInicio || p.data_inicio) && (p.dataFim || p.data_fim)) {
+    const ini = String(p.dataInicio || p.data_inicio), fim = String(p.dataFim || p.data_fim);
+    if (/^\d{8}$/.test(ini) && /^\d{8}$/.test(fim)) {
+      const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const anoIni = ini.slice(0, 4), mesIni = parseInt(ini.slice(4, 6), 10);
+      const anoFim = fim.slice(0, 4), mesFim = parseInt(fim.slice(4, 6), 10);
+      const mIni = mesIni >= 1 && mesIni <= 12 ? MESES_ABR[mesIni - 1] : null;
+      const mFim = mesFim >= 1 && mesFim <= 12 ? MESES_ABR[mesFim - 1] : null;
+      if (anoIni === anoFim && ini.endsWith('0101') && fim.endsWith('1231')) {
+        filtroPeriodo = `Ano ${anoIni}`;
+      } else if (mIni && mFim && anoIni === anoFim) {
+        filtroPeriodo = `${mIni} a ${mFim}/${anoFim}`;
+      } else if (mIni && mFim) {
+        filtroPeriodo = `${mIni}/${anoIni} a ${mFim}/${anoFim}`;
+      }
+    }
+  }
+
+  const partes = [filtroPeriodo, filtroEnt].filter(Boolean);
+  return partes.length ? partes.join(' | ') : null;
 }
 
-async function formatarResposta(spec, mensagem, rows, keys, cfg, intent) {
+async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodoResolvido = null) {
   if (typeof spec.formatarResposta === 'function') return spec.formatarResposta({ mensagem, rows, keys, cfg });
   if (!rows || !rows.length) return mensagemErro(spec, 'sem_resultado');
   const whatsappFormat = require('../whatsapp-format-prompt');
-  const contextoConsulta = _buildContextoConsulta(intent);
+  const contextoConsulta = _buildContextoConsulta(intent, periodoResolvido);
+
+  const _NOME_DISPLAY = { faturamento: 'Faturamento', compras: 'Compras', financeiro: 'Financeiro', comissao: 'Comissão' };
+  const nomeModulo = _NOME_DISPLAY[(spec.nome || '').replace('_dinamico', '')] || null;
 
   // Tenta formatters programáticos antes de chamar IA (sem limite de tokens, sem truncamento)
   const direto = whatsappFormat.buildFormatDirect(mensagem, rows)
-    || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta });
+    || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta, nomeModulo });
   if (direto) return direto;
 
   try {
@@ -851,7 +911,18 @@ function interpolarRespostaPlanejada(template, rows = []) {
     valores[String(k).toLowerCase()] = { chave: k, valor: v };
   }
   const saida = texto.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, chave) => {
-    const item = valores[String(chave || '').toLowerCase()];
+    const chaveNorm = String(chave || '').toLowerCase();
+    let item = valores[chaveNorm];
+    // Fuzzy: se não achou exato, tenta parcial (ex: {faturamento} → media_faturamento)
+    if (!item) {
+      const fuzzy = Object.keys(valores).filter(k => k.includes(chaveNorm) || chaveNorm.includes(k));
+      if (fuzzy.length === 1) item = valores[fuzzy[0]];
+      // Último recurso: única coluna numérica da linha quando placeholder é métrica
+      if (!item && chaveRespostaPlanejadaEhMetrica(chave)) {
+        const numericas = Object.values(valores).filter(v => typeof v.valor === 'number' || (typeof v.valor === 'string' && !isNaN(Number(v.valor))));
+        if (numericas.length === 1) item = numericas[0];
+      }
+    }
     if (!item) {
       if (chaveRespostaPlanejadaEhMetrica(chave)) return formatarValorRespostaPlanejada(chave, 0);
       return match;
@@ -1102,7 +1173,7 @@ async function executar(spec, intent, empresaId) {
       conn._empresa_id = empresaId         || '';
       const rows = await connectionFactory.executar(conn, preparado.sqlFinal, {});
       const resposta = rows && rows.length
-        ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent)
+        ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent, plano.obj.periodo || null)
         : mensagemErro(spec, 'sem_resultado');
       const respostaDireta = interpolarRespostaPlanejada(plano.obj.resposta_planejada, rows) || resposta;
       return {

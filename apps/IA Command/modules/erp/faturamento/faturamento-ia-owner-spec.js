@@ -222,6 +222,37 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - Para YoY limitado a meses especificos (ex: Janeiro a Junho), filtre o mes no WHERE com SUBSTRING(SF2.F2_EMISSAO, 5, 2) IN ('01','02','03','04','05','06') e filtre os anos explicitamente com SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN (...), evitando BETWEEN continuo quando isso puder incluir meses fora do escopo.
 - REGRA CRITICA — sintaxe SQL Server/ANSI: NUNCA use LIMIT (sintaxe MySQL — causa erro no SQL Server). Para limitar linhas use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY. Exemplo: "ORDER BY faturamento DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY".
 - Inclua no SELECT somente as granularidades solicitadas. Se o usuario pedir "por mes", nao inclua dia/data no SELECT. Toda expressao nao agregada presente no SELECT deve estar representada corretamente no GROUP BY.
+- Historico por ano (ex: "historico de faturamento por ano", "ano a ano", "cada ano"): GROUP BY simples em SF2 — sem subquery, sem AVG. Retorna N linhas, uma por ano.
+  SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento
+  FROM SF2990 SF2
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
+  GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4)
+  ORDER BY ano;
+- Media mensal por ano (ex: "faturamento medio mensal por ano", "media mensal agrupada por ano", "media mensal de cada ano"): subquery 2 camadas — interna agrupa por (ano, mes), externa agrupa por ano com AVG. Alias: h.ano AS ano, AVG AS faturamento. ESCOPO: camada externa usa SOMENTE h.ano e h.faturamento_mes — NUNCA SF2.*.
+  Exemplo correto:
+  SELECT h.ano, COALESCE(AVG(h.faturamento_mes), 0) AS faturamento
+  FROM (
+    SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS mes, SUM(SF2.F2_VALBRUT) AS faturamento_mes
+    FROM SF2990 SF2 WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
+    GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4), SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+  ) AS h GROUP BY h.ano ORDER BY h.ano;
+- Media anual escalar (ex: "media de faturamento dos anos", "media anual de faturamento", "media dos anos", "media historica", "faturamento medio anual"):
+  PROIBIDO: AVG(SF2.F2_VALBRUT) diretamente — isso calcula ticket medio por nota fiscal, nao faturamento medio por ano.
+  Exemplo do erro: 2025 com NF R$100k + NF R$2k → AVG errado = R$51k; faturamento real = R$102k.
+  PROIBIDO: GROUP BY ano com AVG — gera ticket medio por ano, nao media dos totais anuais.
+  Use OBRIGATORIAMENTE subquery de duas camadas sem BETWEEN:
+  Camada interna: GROUP BY ano, SUM(SF2.F2_VALBRUT) AS faturamento_ano — calcula o total real de cada ano.
+  Camada externa: SELECT COALESCE(AVG(h.faturamento_ano), 0) AS faturamento FROM (...) AS h — media dos totais.
+  ESCOPO CRITICO: camada externa usa APENAS h.faturamento_ano — NUNCA SF2 (nao existe no escopo externo).
+  Retorna UMA linha → habilita resposta_planejada.
+  Exemplo correto:
+  SELECT COALESCE(AVG(h.faturamento_ano), 0) AS faturamento
+  FROM (
+    SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, SUM(SF2.F2_VALBRUT) AS faturamento_ano
+    FROM SF2990 SF2
+    WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
+    GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4)
+  ) AS h;
 - Media mensal de periodo (ex: "media mensal dos ultimos 12 meses", "media mensal de 2025"): PROIBIDO dividir SUM por COUNT(DISTINCT competencia) no SELECT principal com GROUP BY — COUNT e sempre 1 dentro do grupo, nao produz media real. Use OBRIGATORIAMENTE subquery em duas camadas:
   Camada interna: GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6), SUM(SF2.F2_VALBRUT) AS faturamento_mes — com filtro de periodo no WHERE.
   Camada externa: SELECT COALESCE(AVG(h.faturamento_mes), 0) AS media_faturamento_mensal FROM (...) h.

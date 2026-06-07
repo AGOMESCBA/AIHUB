@@ -208,6 +208,10 @@ Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, n
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
 - "por mes": use OBRIGATORIAMENTE SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia no SELECT e GROUP BY. Resultado: '202506', '202507' etc. NUNCA use YEAR() ou MONTH() isolados — a coluna competencia AAAAMM garante agrupamento correto em qualquer ano e e compativel com todos os provedores de conexao.
 - REGRA CRITICA — sintaxe SQL Server/ANSI: NUNCA use LIMIT (sintaxe MySQL — causa erro no SQL Server). Para limitar linhas use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY. Exemplo: "ORDER BY valor_compra DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY".
+- Media anual historica (ex: "media anual de compras", "compras medias por ano"): PROIBIDO AVG(D1_TOTAL) diretamente e PROIBIDO filtro de periodo. Use subquery de duas camadas sem BETWEEN. Alias da camada externa OBRIGATORIO: AS valor_compra:
+  Camada interna: GROUP BY SUBSTRING(SD1.D1_DTDIGIT, 1, 4) AS ano, SUM(SD1.D1_TOTAL) AS valor_ano.
+  Camada externa: SELECT COALESCE(AVG(h.valor_ano), 0) AS valor_compra FROM (...) h.
+  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
 - Media mensal de periodo (ex: "media mensal dos ultimos 12 meses"): PROIBIDO dividir SUM por COUNT(DISTINCT competencia) no SELECT com GROUP BY — COUNT e sempre 1 dentro do grupo. Use subquery em duas camadas com filtro de periodo no WHERE:
   Camada interna: GROUP BY SUBSTRING(SD1.D1_DTDIGIT, 1, 6), SUM(SD1.D1_TOTAL) AS valor_mes.
   Camada externa: SELECT COALESCE(AVG(h.valor_mes), 0) AS media_compra_mensal FROM (...) h.

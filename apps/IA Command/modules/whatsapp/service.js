@@ -117,6 +117,29 @@ function _scoreEmpresaTexto(termo, empresa) {
   return melhor;
 }
 
+// Padrões léxicos de refinamento de consulta — usados pelo fallback de continuidade.
+// Fora da classe para evitar referência pelo nome da classe (que pode mudar).
+const _SINAIS_CONTINUIDADE = [
+  /\bordered(ar?|ando|em|e)\b/i,
+  /\bdecrescent[ei]\b/i,
+  /\bcrescent[ei]\b/i,
+  /\bdo\s+maior\s+para\b/i,
+  /\bdo\s+menor\s+para\b/i,
+  /\binvert(e|er|endo|a)\b/i,
+  /\bclassific(ar?|ando)\b/i,
+  /\bfilt(rar?|rando)\b/i,
+  /\besse\s+result/i,
+  /\besses?\s+dados\b/i,
+  /\btop\s+\d+\b/i,
+  /\bprimeiros?\s+\d+\b/i,
+  /\bagora\s+(ordenar?|classific|filtrar?)\b/i,
+  /\bmudar\s+(a\s+)?ordem\b/i,
+  /\bexibir\s+(s[oe]mente|apenas)\b/i,
+];
+function _ehSinalContinuidade(texto) {
+  return _SINAIS_CONTINUIDADE.some(p => p.test(String(texto || '')));
+}
+
 class IACWhatsAppService extends EventEmitter {
   constructor() {
     super();
@@ -581,6 +604,13 @@ class IACWhatsAppService extends EventEmitter {
     if (resultado?._contextoIAAnterior) {
       enriquecido._contextoIAAnterior = resultado._contextoIAAnterior;
     }
+    // Propaga o SQL canônico para o próximo turno poder herdar a estrutura exata
+    // (evita que a IA-OWNER regenere do zero ao receber pedidos de reordenamento/refinamento)
+    if (resultado?._sql_canonico_original) {
+      enriquecido._sqlCanonicoOriginal = resultado._sql_canonico_original;
+    } else if (resultado?._sql_canonico) {
+      enriquecido._sqlCanonicoOriginal = resultado._sql_canonico;
+    }
     return enriquecido;
   }
 
@@ -819,6 +849,31 @@ class IACWhatsAppService extends EventEmitter {
     const nome = String(intent.intencao || '').toLowerCase();
     const acao = String(intent.acao || '').toLowerCase();
     return acao === 'ai_text_to_sql' || intent._dynamicAiScope || nome.endsWith('_dinamico');
+  }
+
+  // ── Fallback de continuidade ──────────────────────────────────────────────
+
+  // Verifica se o intent pertence a um módulo ERP dinâmico (faturamento, compras, etc.)
+  _ehIntentDinamica(intent) {
+    if (!intent) return false;
+    const modulo = String(intent._moduloDinamico || intent.intencao || '')
+      .replace('_dinamico', '').toLowerCase();
+    return ['faturamento', 'compras', 'financeiro', 'comissao'].includes(modulo);
+  }
+
+  // Constrói um intent de continuidade a partir do contexto anterior + mensagem nova.
+  // A IA-OWNER receberá a mensagem atual + histórico e decidirá se é continuidade real.
+  _buildIntentContinuidade(contextoAnterior, intentOriginal, mensagemAtual) {
+    return {
+      ...contextoAnterior,
+      _mensagemOriginal: mensagemAtual,
+      _herdouContextoOrquestrador: true,
+      _tentativaContinuidade: true,
+      _nivel_contexto: (contextoAnterior._nivel_contexto || 1) + 1,
+      _remetente: intentOriginal._remetente || contextoAnterior._remetente,
+      _historicoResumido: intentOriginal._historicoResumido || null,
+      _entidadesResolvidas: intentOriginal._entidadesResolvidas || contextoAnterior._entidadesResolvidas || [],
+    };
   }
 
   _configAnaliticaEmpresa(empresaId) {
@@ -2312,29 +2367,44 @@ class IACWhatsAppService extends EventEmitter {
         const roteamento = await conversationService.rotear(textoExecucao, this._empresaId, chatHistory);
         this.log(`🔍 ConversationRouter: ${roteamento.tipo} (${roteamento.provedor || 'fallback'}) hist=${chatHistory.length / 2} turnos`, 'info');
         if (roteamento.tipo === 'conversacional') {
-          // Acumula histórico para o próximo turno
-          const novoHistorico = [
-            ...chatHistory,
-            { role: 'user', content: textoExecucao },
-            { role: 'assistant', content: roteamento.resposta },
-          ].slice(-20);
-          this._setSenderContext(sender, { _chatHistory: novoHistorico });
-          this._registrarInterpretacao({
-            empresaId: this._empresaId,
-            sender,
-            texto: textoExecucao,
-            intent: {
-              intencao: 'dialogo_conversacional',
-              periodo: { tipo: 'nenhum' },
-              filtros: {},
-              confianca: 0.9,
-              _provedor: roteamento.provedor || 'conversation_router',
-            },
-            resultado: { tipo: 'dialogo', mensagem: roteamento.resposta, provedor: roteamento.provedor },
-            resposta: roteamento.resposta,
-            duracaoMs: Date.now() - _t0,
-          });
-          return roteamento.resposta;
+          // Hook 1 — Fallback de continuidade: mensagem classificada como conversacional
+          // mas com sinais explícitos de refinamento (ordenar, filtrar, top-N, etc.)
+          // e contexto dinâmico ativo → tratar como data_request e continuar o pipeline.
+          const ctxAtivo = this._getSenderContext(sender);
+          const temContextoDinamicoAtivo = ctxAtivo?.lastIntent
+            && this._ehIntentDinamica(ctxAtivo.lastIntent)
+            && ctxAtivo.lastIntentTs
+            && (Date.now() - ctxAtivo.lastIntentTs) < 30 * 60 * 1000;
+          if (_ehSinalContinuidade(textoExecucao) && temContextoDinamicoAtivo) {
+            this.log(`🔄 [Hook1] Fallback continuidade conv→data: "${textoExecucao.slice(0, 60)}"`, 'info');
+            // Limpa chatHistory como faria um data_request normal
+            this._setSenderContext(sender, { _chatHistory: [] });
+            // Não retorna — continua pipeline para empresa resolution e classificação
+          } else {
+            // Comportamento original: acumula histórico e retorna resposta conversacional
+            const novoHistorico = [
+              ...chatHistory,
+              { role: 'user', content: textoExecucao },
+              { role: 'assistant', content: roteamento.resposta },
+            ].slice(-20);
+            this._setSenderContext(sender, { _chatHistory: novoHistorico });
+            this._registrarInterpretacao({
+              empresaId: this._empresaId,
+              sender,
+              texto: textoExecucao,
+              intent: {
+                intencao: 'dialogo_conversacional',
+                periodo: { tipo: 'nenhum' },
+                filtros: {},
+                confianca: 0.9,
+                _provedor: roteamento.provedor || 'conversation_router',
+              },
+              resultado: { tipo: 'dialogo', mensagem: roteamento.resposta, provedor: roteamento.provedor },
+              resposta: roteamento.resposta,
+              duracaoMs: Date.now() - _t0,
+            });
+            return roteamento.resposta;
+          }
         }
         // data_request: limpa histórico de chat e usa consulta reformulada pela IA
         this._setSenderContext(sender, { _chatHistory: [] });
@@ -2641,6 +2711,29 @@ class IACWhatsAppService extends EventEmitter {
       this.log(`Roteador retornou resultado inválido (${typeof resultado}) para empresa #${empresaId}. Abortando pipeline.`, 'error');
       return '⚠️ Ocorreu um erro interno ao processar sua consulta. Tente novamente.';
     }
+
+    // Hook 2 — Fallback de continuidade: intent não classificado (desconhecido) +
+    // contexto dinâmico ativo → passa mensagem para IA-OWNER como continuidade.
+    // A IA-OWNER decide autonomamente se é continuidade real ou nova consulta.
+    if (resultado.tipo === 'desconhecido' && contextoAnterior && this._ehIntentDinamica(contextoAnterior)) {
+      this.log(`🔄 [Hook2] Fallback continuidade desconhecido→IA-OWNER: "${textoExecucao.slice(0, 60)}" | módulo: ${contextoAnterior._moduloDinamico || contextoAnterior.intencao}`, 'info');
+      const intentCont = this._buildIntentContinuidade(contextoAnterior, intent, textoExecucao);
+      if (this._isIntentAiSqlDinamica(intentCont)) {
+        intentService._garantirIntencoesDinamicasPadrao(empresaId);
+        intentCont._historicoResumido = this._buildHistoricoResumido(
+          sender, empresaId, this._historicoTurnosConfig(empresaId)
+        );
+      }
+      const resultadoCont = await intentRouter.rotear(intentCont, empresaId);
+      if (resultadoCont && resultadoCont.tipo !== 'desconhecido' && resultadoCont.tipo !== 'erro') {
+        this.log(`✅ [Hook2] Fallback resolvido: tipo=${resultadoCont.tipo}`, 'info');
+        resultado = resultadoCont;
+        intent = intentCont;
+      } else {
+        this.log(`⚠️ [Hook2] Fallback não resolveu (tipo=${resultadoCont?.tipo}), mantendo resposta original`, 'info');
+      }
+    }
+
     this._logResultadoIntent({ intent, resultado, escopo: 'single' });
 
     // Compras perguntou qual filial — armazena intent pendente e devolve pergunta

@@ -241,6 +241,10 @@ Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, n
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por mes": use OBRIGATORIAMENTE SUBSTRING(SE3.E3_VENCTO, 1, 6) AS competencia no SELECT e GROUP BY. Resultado: '202506', '202507' etc. NUNCA use YEAR() ou MONTH() isolados — a coluna competencia AAAAMM garante agrupamento correto em qualquer ano e e compativel com todos os provedores de conexao.
 - REGRA CRITICA — sintaxe SQL Server/ANSI: NUNCA use LIMIT (sintaxe MySQL — causa erro no SQL Server). Para limitar linhas use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY. Exemplo: "ORDER BY valor_comissao DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY".
+- Media anual historica (ex: "media anual de comissao", "comissao media por ano"): PROIBIDO AVG(E3_COMIS) diretamente e PROIBIDO filtro de periodo. Use subquery de duas camadas sem BETWEEN. Alias da camada externa OBRIGATORIO: AS valor_comissao:
+  Camada interna: GROUP BY SUBSTRING(SE3.E3_VENCTO, 1, 4) AS ano, SUM(SE3.E3_COMIS) AS comissao_ano.
+  Camada externa: SELECT COALESCE(AVG(h.comissao_ano), 0) AS valor_comissao FROM (...) h.
+  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
 - Media mensal de periodo (ex: "media mensal dos ultimos 12 meses"): PROIBIDO dividir SUM por COUNT(DISTINCT competencia) no SELECT com GROUP BY — COUNT e sempre 1 dentro do grupo. Use subquery em duas camadas com filtro de periodo no WHERE:
   Camada interna: GROUP BY SUBSTRING(SE3.E3_VENCTO, 1, 6), SUM(SE3.E3_COMIS) AS comissao_mes.
   Camada externa: SELECT COALESCE(AVG(h.comissao_mes), 0) AS media_comissao_mensal FROM (...) h.
