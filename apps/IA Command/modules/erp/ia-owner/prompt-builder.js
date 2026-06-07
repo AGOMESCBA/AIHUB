@@ -68,6 +68,11 @@ function buildSystemPrompt(spec = {}) {
     '- Quando a query externa nao precisar de GROUP BY (subquery ja agrupa), omita-o — nao repita a expressao de agrupamento na camada externa.',
     '',
 
+    '## Extremo Duplo — Maior E Menor Simultaneamente',
+    '- Quando a pergunta pedir o maior E o menor ao mesmo tempo (ex: "mes com maior e menor faturamento", "melhor e pior mes"): PROIBIDO usar OFFSET/FETCH NEXT — retornaria apenas 1 linha, perdendo um dos extremos.',
+    '- Retorne TODOS os registros do agrupamento sem limite. O formatter identifica o maior e o menor automaticamente.',
+    '',
+
     '## Sintaxe SQL — Padrao ANSI SQL:2008 (SQL Server)',
     'Gere sempre SQL compativel com SQL Server. NUNCA use extensoes especificas de MySQL ou PostgreSQL.',
     '- LIMIT: PROIBIDO. Use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY',
