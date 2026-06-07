@@ -185,55 +185,12 @@ async function validarCorrigirSqlGerado({ sql, contexto }) {
 }
 
 const regrasTecnicas = `
-## Principio IA-OWNER
-Voce decide se a pergunta atual e nova consulta, continuidade ou troca de assunto.
-O historico e evidencia. Nao herde periodo, carteira, estado, filtros ou agrupamentos automaticamente.
-
-## Analise Historica Multianual — Consulta de Extremo por Ano (SEM filtro de periodo)
-- Quando a pergunta buscar um extremo historico ENTRE ANOS — ex: "qual o ano com maior/menor volume financeiro", "qual o melhor/pior ano", "o ano que mais pagou/recebeu" — a palavra "ano" e DIMENSAO DE ANALISE, nao referencia de periodo.
-- PROIBIDO aplicar BETWEEN ou qualquer filtro de data no WHERE nesses casos.
-- Gere SQL sem filtro temporal: GROUP BY SUBSTRING([campo_data], 1, 4) AS ano, ORDER BY [metrica] DESC/ASC, OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY.
-- Ignore periodo.tipo = "ano_atual" vindo do estado anterior quando a mensagem pedir explicitamente o "maior/menor/melhor/pior ano" historico.
-- EXCECAO: se o usuario especificar range ("ultimos 5 anos", "de 2022 a 2024"), aplique o filtro correspondente.
-
-## Consultas de Frequencia Mensal Completa ("todos os meses do ano")
-- Quando o usuario pedir "clientes/fornecedores com movimentacao em todos os meses do ano [X]" ou "todos os meses do ano" (sem especificar ano):
-  1. Se [X] nao for informado, assuma o ano atual (SUBSTRING(data_atual, 1, 4)).
-  2. Se [X] for o ano atual AINDA EM CURSO (ano nao terminou): o threshold do HAVING e o numero de meses JA DECORRIDOS: CAST(SUBSTRING(data_atual, 5, 2) AS INT). Exemplo: data_atual=2026-06-06 → HAVING COUNT(DISTINCT SUBSTRING([campo_data], 5, 2)) = 6.
-  3. Se [X] for um ano passado completamente encerrado: use HAVING COUNT(DISTINCT ...) = 12.
-- PROIBIDO usar HAVING COUNT(...) = 12 para o ano atual quando o ano ainda nao terminou.
-- PROIBIDO declarar frases operacionais como "possuem movimentacao todos os meses" em entidades_necessarias — isso nao e uma entidade cadastral.
-
-## Periodos
-- Se o usuario disser "ano" sem ano explicito, use o ano atual completo.
-- Se disser "mes" sem mes/ano explicito, use o mes atual completo.
-- Se disser "dia" sem data explicita, use o dia atual.
-- "por mes", "mensal", "por dia" e "por ano" podem ser agrupamento/granularidade; decida pelo texto completo.
-- Em aberto, posicao, saldo a pagar ou saldo a receber sem periodo explicito: nao assuma mes atual; consulte toda a carteira em aberto.
-- Datas Protheus sao CHAR(8) YYYYMMDD. Compare com BETWEEN em texto YYYYMMDD.
-
-## Comparacao de um Mes nos Ultimos N Anos (financeiro)
-- Quando o usuario pedir "[mes] dos ultimos N anos" (Ex: "Maio dos ultimos 3 anos"), calcule os N anos a partir de data_atual.
-- data_atual=2026 + "ultimos 3 anos" = anos 2024, 2025, 2026. Nunca herde anos do estado anterior.
-- NUNCA gere BETWEEN cobrindo apenas 1 mes de 1 ano quando o usuario pediu N anos.
-
-## Sintaxe SQL — Padrao ANSI SQL:2008 (SQL Server)
-Gere sempre SQL compativel com SQL Server usando construcoes do padrao ANSI. NUNCA use extensoes especificas de MySQL ou PostgreSQL — elas causam erro de sintaxe no SQL Server.
-
-- LIMIT: PROIBIDO. SQL Server nao reconhece LIMIT (sintaxe MySQL). Para limitar linhas use OBRIGATORIAMENTE a sintaxe ANSI SQL:2008, que requer ORDER BY:
-    ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY
-  Exemplo correto:  ORDER BY valor DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY
-  Exemplo errado:   LIMIT 1
-
-- TOP N + OFFSET/FETCH NEXT: PROIBIDO juntos. SQL Server nao permite SELECT TOP N e OFFSET/FETCH NEXT na mesma query (erro 10741). Escolha UM dos dois mecanismos: prefira sempre OFFSET/FETCH NEXT (ANSI). NUNCA escreva SELECT TOP N quando a query ja tiver OFFSET ... FETCH NEXT.
-
-- YEAR() / MONTH() para agrupamento: PROIBIDO. Use SUBSTRING(campo, 1, 6) AS competencia para extrair 'AAAAMM' (ex: '202506'). Garante compatibilidade entre provedores e ordenacao cronologica correta como string.
-
-- Valor nulo: Use COALESCE(expr, 0) (padrao ANSI) em vez de ISNULL(expr, 0) (especifico SQL Server).
-
-- Diferenca: Use <> (padrao ANSI) em vez de !=.
-
-- Conversao: Prefira CAST(x AS tipo) (padrao ANSI) a CONVERT(tipo, x, estilo) para conversoes basicas sem mascara de formato.
+## Campos de data padrao
+- Vencimento a pagar: SE2.E2_VENCREA (ou SE2.E2_VENCTO se VENCREA nao existir).
+- Vencimento a receber: SE1.E1_VENCREA (ou SE1.E1_VENCTO se VENCREA nao existir).
+- Baixa/pagamento real: SE2.E2_BAIXA ou SE5.E5_DATA ou FK2 conforme disponivel.
+- Baixa/recebimento real: SE1.E1_BAIXA ou SE5.E5_DATA ou FK1 conforme disponivel.
+- Em aberto sem periodo explicito: consulte toda a carteira em aberto (sem BETWEEN).
 
 ## Carteiras
 - Contas a pagar usa SE2 e fornecedor SA2.
@@ -293,62 +250,30 @@ Gere sempre SQL compativel com SQL Server usando construcoes do padrao ANSI. NUN
 - SE8 -> SA6: SE8.E8_BANCO = SA6.A6_COD AND SE8.E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON.
 
 ## Regras obrigatorias de SQL
-- Retorne apenas SELECT, sempre iniciando com SET ROWCOUNT 50000.
-- OBRIGATORIO SEM EXCECAO: toda tabela no FROM ou em qualquer JOIN deve ter D_E_L_E_T_ = ' ' filtrado. Aplique no WHERE para a tabela principal e na condicao ON para cada JOIN. Exemplo correto: FROM SE1990 SE1 JOIN SA1990 SA1 ON ... AND SA1.D_E_L_E_T_ = ' ' JOIN SED990 SED ON ... AND SED.D_E_L_E_T_ = ' ' WHERE SE1.D_E_L_E_T_ = ' '. Isso vale inclusive para SA1, SA2, SA3, SA6, SED, FK1, FK2, FK5, FK6, FK7, FKA, FKB — todas as tabelas sem excecao.
-- REGRA DE INTEGRIDADE DE JOINS: E terminantemente PROIBIDO usar qualificadores de tabelas cadastrais (ex: SA1.A1_NOME, SA2.A2_NOME, SA6.A6_NOME, SED.ED_DESCRIC) em qualquer parte do SQL (SELECT, WHERE, GROUP BY, ORDER BY) sem declarar o JOIN correspondente no FROM. Sempre que o usuario pedir agrupamento ou exibicao por entidade ("por cliente", "por fornecedor", "por banco", "por natureza"), voce deve: (1) identificar o nome fisico da tabela no sx2 do tenant ativo; (2) adicionar o JOIN com as chaves padrao e com D_E_L_E_T_ = ' ' na condicao ON. SQL com qualificadores sem JOIN declarado e INVALIDO — revise antes de retornar.
+- Inicie sempre com SET ROWCOUNT 50000.
 - Use aliases explicitos iguais a base da tabela: SE1, SE2, SE5, SE8, SA1, SA2, SA3, SA6, SED, FK1, FK2, FK5, FK6, FK7, FKA, FKB.
-- Se o contexto tecnico trouxer nomes fisicos SX2, use exatamente esses nomes em FROM/JOIN com alias base. Exemplo: FROM SE2990 SE2, JOIN SA2990 SA2.
-- Qualifique campos sempre pelo alias base, nunca pela tabela fisica. Use SE2.E2_SALDO, nao SE2990.E2_SALDO.
+- Qualifique campos sempre pelo alias base (SE2.E2_SALDO, nunca SE2990.E2_SALDO).
 - Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
-- Nao use WITH (NOLOCK).
-- Nao use FORMAT() nem TRY_CONVERT().
 
 ## Exibicao de entidades
-Sempre retorne nome/descricao para o usuario. Codigo sozinho nao serve.
-- fornecedor: SA2.A2_NOME AS fornecedor. Codigo/loja podem vir como cod_fornecedor e loja_fornecedor.
-- cliente: SA1.A1_NOME AS cliente. Codigo/loja podem vir como cod_cliente e loja_cliente.
+- fornecedor: SA2.A2_NOME AS fornecedor. Codigo/loja como cod_fornecedor e loja_fornecedor.
+- cliente: SA1.A1_NOME AS cliente. Codigo/loja como cod_cliente e loja_cliente.
 - natureza: SED.ED_DESCRIC AS natureza.
 - vendedor: SA3.A3_NOME AS vendedor.
 - banco: SA6.A6_NOME AS banco.
 Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP BY.
 
-## Regra Critica — entidades_necessarias Somente para Nomes Proprios Cadastrais
-- PROIBIDO declarar em entidades_necessarias qualquer texto que seja uma condicao de filtro, criterio operacional ou frase descritiva — ex: "possuem movimentacao todos os meses", "maior saldo", "todos os clientes em aberto".
-- entidades_necessarias e EXCLUSIVAMENTE para nomes proprios de entidades cadastrais: nome de cliente, nome de fornecedor, nome de natureza financeira, etc.
-- Se a pergunta nao citar um nome proprio de entidade cadastral, deixe entidades_necessarias vazio ([]).
-- Teste interno: o texto declarado seria resultado valido de LIKE '%...%' em SA1.A1_NOME ou SA2.A2_NOME? Se nao for um nome proprio real, nao declare.
-
-## Entidades cadastrais
-Quando precisar filtrar cliente, fornecedor, vendedor ou natureza por nome citado pelo usuario, retorne em entidades_necessarias.
-Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, nao por LIKE de nome.
-- Se a mensagem mencionar "empresa(s) J2A/C3I/todas as empresas" ou o estado tecnico trouxer empresas_iahub_mencionadas, trate esses nomes como escopo de tenant IAHub, nunca como cliente ou fornecedor. Nao gere filtro em SA1.A1_NOME, SA2.A2_NOME ou subquery em SA1/SA2 por esses termos.
-- REGRA CRITICA — palavra "empresa" como escopo de tenant: Quando a mensagem usa "empresa(s) [NOME1] e/ou [NOME2]" e esses nomes estao em empresas_iahub_mencionadas, a palavra "empresa" indica APENAS o escopo de execucao multiempresa. Ela NAO e um agrupamento SQL nem um filtro cadastral. Nao adicione GROUP BY, nao agrupe por empresa/cliente/fornecedor baseado nesses nomes.
-- REGRA CRITICA — agrupamentos: ["empresa"] no estado anterior: Quando contrato_orquestrador ou estado anterior trouxer agrupamentos: ["empresa"], isso e metadata do backend, NAO e instrucao para GROUP BY SQL. Ignore-o. So adicione GROUP BY SQL quando o usuario pedir explicitamente agrupamento por mes, cliente, fornecedor, natureza, etc.
-
-## Agregacoes
-- "total/saldo a pagar" sem agrupamento: COALESCE(SUM(SE2.E2_SALDO),0) AS saldo_a_pagar.
-- "total/saldo a receber" sem agrupamento: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
-- Quando o usuario pedir SIMULTANEAMENTE saldo a pagar e saldo a receber, retorne ambas as metricas. Avalie se o contexto permite um SELECT combinado (UNION ou subqueries) ou se sao consultas separadas por tabela (SE2 para pagar, SE1 para receber).
-- "valor pago": COALESCE(SUM(SE2.E2_VALOR - SE2.E2_SALDO),0) AS valor_pago quando usar SE2, ou SUM(SE5.E5_VALOR) quando usar baixa/movimento.
-- "valor recebido": COALESCE(SUM(SE1.E1_VALOR - SE1.E1_SALDO),0) AS valor_recebido quando usar SE1, ou SUM(SE5.E5_VALOR) quando usar baixa/movimento.
+## Metrica por agrupamento
+- saldo_a_pagar: COALESCE(SUM(SE2.E2_SALDO),0) AS saldo_a_pagar.
+- saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
+- valor_pago: COALESCE(SUM(SE2.E2_VALOR - SE2.E2_SALDO),0) AS valor_pago (ou SUM(SE5.E5_VALOR) via baixa).
+- valor_recebido: COALESCE(SUM(SE1.E1_VALOR - SE1.E1_SALDO),0) AS valor_recebido (ou SUM(SE5.E5_VALOR) via baixa).
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por natureza": agrupe por SED.ED_CODIGO, SED.ED_DESCRIC.
-- "por mes": use OBRIGATORIAMENTE SUBSTRING(campo_data, 1, 6) AS competencia no SELECT e GROUP BY, onde campo_data e o campo de data relevante para a consulta. Resultado: '202506', '202507' etc. NUNCA use YEAR() ou MONTH() isolados — a coluna competencia AAAAMM garante agrupamento correto em qualquer ano e e compativel com todos os provedores de conexao.
-- REGRA CRITICA — sintaxe SQL Server/ANSI: NUNCA use LIMIT (sintaxe MySQL — causa erro no SQL Server). Para limitar linhas use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY. Exemplo: "ORDER BY valor DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY".
-- Media anual historica (ex: "media anual de recebimentos/pagamentos", "media por ano"): PROIBIDO AVG direto sobre linhas da tabela fato e PROIBIDO filtro de periodo. Use subquery de duas camadas sem BETWEEN. Alias da camada externa OBRIGATORIO: AS saldo (para a carteira consultada):
-  Camada interna: GROUP BY SUBSTRING([campo_data], 1, 4) AS ano, SUM([metrica]) AS valor_ano.
-  Camada externa: SELECT COALESCE(AVG(h.valor_ano), 0) AS saldo FROM (...) h.
-  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
-- Media mensal de periodo (ex: "media mensal dos ultimos 12 meses"): PROIBIDO dividir SUM por COUNT(DISTINCT competencia) no SELECT com GROUP BY — COUNT e sempre 1 dentro do grupo. Use subquery em duas camadas com filtro de periodo no WHERE:
-  Camada interna: GROUP BY SUBSTRING([campo_data], 1, 6), SUM([metrica]) AS valor_mes.
-  Camada externa: SELECT COALESCE(AVG(h.valor_mes), 0) AS media_mensal FROM (...) h.
-  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
-- Media sazonal por mes do ano (ex: "media de cada mes do ano", "sazonalidade de recebimentos/pagamentos"): subquery sem filtro de ano, agrupando por (ano, mes) na camada interna e apenas por mes na externa.
-  Camada interna: GROUP BY SUBSTRING([campo_data], 1, 4), SUBSTRING([campo_data], 5, 2), SUM([metrica]).
-  Camada externa: SELECT mes, AVG(valor_mes) GROUP BY mes ORDER BY mes — retorna 12 linhas, resposta_planejada = null.
-  PROIBIDO aplicar BETWEEN de ano unico no CASO sazonal.
+- "por mes": SUBSTRING(campo_data, 1, 6) AS competencia no SELECT e GROUP BY.
+- Media anual: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS saldo.
 `.trim();
 
 module.exports = {

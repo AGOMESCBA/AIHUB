@@ -50,58 +50,9 @@ function garantirIntencao(empresaId) {
 }
 
 const regrasTecnicas = `
-## Principio IA-OWNER
-Voce decide se a pergunta atual e uma nova consulta, continuidade ou troca de assunto.
-O historico e evidencia. Nao herde periodo, filtros ou agrupamentos automaticamente: herde apenas quando fizer sentido pela conversa.
-
-## Analise Historica Multianual — Consulta de Extremo por Ano (SEM filtro de periodo)
-- Quando a pergunta buscar um extremo historico ENTRE ANOS — ex: "qual o ano com maior/menor volume de compras", "qual o melhor/pior ano", "o ano que mais comprou" — a palavra "ano" e DIMENSAO DE ANALISE, nao referencia de periodo.
-- PROIBIDO aplicar BETWEEN ou qualquer filtro de data no WHERE nesses casos.
-- Gere SQL sem filtro temporal: GROUP BY SUBSTRING([campo_data], 1, 4) AS ano, ORDER BY [metrica] DESC/ASC, OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY.
-- Ignore periodo.tipo = "ano_atual" vindo do estado anterior quando a mensagem pedir explicitamente o "maior/menor/melhor/pior ano" historico.
-- EXCECAO: se o usuario especificar range ("ultimos 5 anos", "de 2022 a 2024"), aplique o filtro correspondente.
-
-## Consultas de Frequencia Mensal Completa ("todos os meses do ano")
-- Quando o usuario pedir "fornecedores/produtos com compras em todos os meses do ano [X]" ou "todos os meses do ano" (sem especificar ano):
-  1. Se [X] nao for informado, assuma o ano atual (SUBSTRING(data_atual, 1, 4)).
-  2. Se [X] for o ano atual AINDA EM CURSO (ano nao terminou): o threshold do HAVING e o numero de meses JA DECORRIDOS: CAST(SUBSTRING(data_atual, 5, 2) AS INT). Exemplo: data_atual=2026-06-06 → HAVING COUNT(DISTINCT SUBSTRING(SD1.D1_DTDIGIT, 5, 2)) = 6.
-  3. Se [X] for um ano passado completamente encerrado: use HAVING COUNT(DISTINCT ...) = 12.
-- PROIBIDO usar HAVING COUNT(...) = 12 para o ano atual quando o ano ainda nao terminou.
-- PROIBIDO declarar frases como "possuem compras todos os meses" em entidades_necessarias — isso nao e uma entidade cadastral.
-- Para queries de frequencia por fornecedor, SELECT e GROUP BY devem incluir SA2.A2_NOME AS fornecedor — nunca retornar apenas codigo.
-
-## Periodos
-- Se o usuario disser "ano" sem ano explicito, use o ano atual completo.
-- Se disser "mes" sem mes/ano explicito, use o mes atual completo.
-- Se disser "dia" sem data explicita, use o dia atual.
-- "por mes", "mensal", "mes a mes" podem ser granularidade/agrupamento. Decida pelo texto completo e pelo historico.
-- Datas Protheus sao CHAR(8) YYYYMMDD. Compare com BETWEEN em texto YYYYMMDD.
-- Campo de data padrao de compras em notas de entrada: SD1.D1_DTDIGIT.
-- Campo de data padrao de pedidos: SC7.C7_EMISSAO.
-
-## Comparacao de um Mes nos Ultimos N Anos (compras)
-- Quando o usuario pedir "[mes] dos ultimos N anos" (Ex: "Maio dos ultimos 3 anos"), calcule os N anos a partir de data_atual.
-- data_atual=2026 + "ultimos 3 anos" = anos 2024, 2025, 2026. Nunca herde anos do estado anterior.
-- SQL obrigatorio: filtre por mes via SUBSTRING(SD1.D1_DTDIGIT, 5, 2) e range de anos. GROUP BY SUBSTRING(SD1.D1_DTDIGIT, 1, 4) AS ano.
-- NUNCA gere BETWEEN cobrindo apenas 1 mes de 1 ano quando o usuario pediu N anos.
-
-## Sintaxe SQL — Padrao ANSI SQL:2008 (SQL Server)
-Gere sempre SQL compativel com SQL Server usando construcoes do padrao ANSI. NUNCA use extensoes especificas de MySQL ou PostgreSQL — elas causam erro de sintaxe no SQL Server.
-
-- LIMIT: PROIBIDO. SQL Server nao reconhece LIMIT (sintaxe MySQL). Para limitar linhas use OBRIGATORIAMENTE a sintaxe ANSI SQL:2008, que requer ORDER BY:
-    ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY
-  Exemplo correto:  ORDER BY valor_compra DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY
-  Exemplo errado:   LIMIT 1
-
-- TOP N + OFFSET/FETCH NEXT: PROIBIDO juntos. SQL Server nao permite SELECT TOP N e OFFSET/FETCH NEXT na mesma query (erro 10741). Escolha UM dos dois mecanismos: prefira sempre OFFSET/FETCH NEXT (ANSI). NUNCA escreva SELECT TOP N quando a query ja tiver OFFSET ... FETCH NEXT.
-
-- YEAR() / MONTH() para agrupamento: PROIBIDO. Use SUBSTRING(campo, 1, 6) AS competencia para extrair 'AAAAMM' (ex: '202506'). Garante compatibilidade entre provedores e ordenacao cronologica correta como string.
-
-- Valor nulo: Use COALESCE(expr, 0) (padrao ANSI) em vez de ISNULL(expr, 0) (especifico SQL Server).
-
-- Diferenca: Use <> (padrao ANSI) em vez de !=.
-
-- Conversao: Prefira CAST(x AS tipo) (padrao ANSI) a CONVERT(tipo, x, estilo) para conversoes basicas sem mascara de formato.
+## Campos de data padrao
+- Notas de entrada (compras): SD1.D1_DTDIGIT (CHAR(8) YYYYMMDD).
+- Pedidos de compra: SC7.C7_EMISSAO.
 
 ## Devolucoes
 - Nao inclua devolucoes nas metricas de compras por padrao.
@@ -168,32 +119,20 @@ Gere sempre SQL compativel com SQL Server usando construcoes do padrao ANSI. NUN
   AND SF2.F2_LOJA = SA2.A2_LOJA
 
 ## Regras obrigatorias de SQL
-- Retorne apenas SELECT, sempre iniciando com SET ROWCOUNT 50000.
-- OBRIGATORIO SEM EXCECAO: toda tabela no FROM ou em qualquer JOIN deve ter D_E_L_E_T_ = ' ' filtrado. Aplique no WHERE para a tabela principal e na condicao ON para cada JOIN. Exemplo correto: FROM SD1990 SD1 JOIN SF1990 SF1 ON ... AND SF1.D_E_L_E_T_ = ' ' JOIN SA2990 SA2 ON ... AND SA2.D_E_L_E_T_ = ' ' WHERE SD1.D_E_L_E_T_ = ' '. Isso vale inclusive para SB1, SBM, SC7, CTT, SED, SF4 — todas as tabelas sem excecao.
-- REGRA DE INTEGRIDADE DE JOINS: E terminantemente PROIBIDO usar qualificadores de tabelas cadastrais (ex: SB1.B1_DESC, SA2.A2_NOME, SBM.BM_DESC, CTT.CTT_DESC01, SED.ED_DESCRIC) em qualquer parte do SQL (SELECT, WHERE, GROUP BY, ORDER BY) sem declarar o JOIN correspondente no FROM. Sempre que o usuario pedir agrupamento ou exibicao por entidade ("por produto", "por fornecedor", "por grupo"), voce deve: (1) identificar o nome fisico da tabela no sx2 do tenant ativo; (2) adicionar o JOIN com as chaves padrao e com D_E_L_E_T_ = ' ' na condicao ON. SQL com qualificadores sem JOIN declarado e INVALIDO — revise antes de retornar.
+- Inicie sempre com SET ROWCOUNT 50000.
 - Use aliases explicitos iguais a base da tabela: SD1, SF1, SA2, SB1, SBM, SC7, CTT, SED, SF4.
-- Se o contexto tecnico trouxer nomes fisicos SX2, use exatamente esses nomes em FROM/JOIN com alias base. Exemplo: FROM SD1990 SD1, JOIN SF1990 SF1.
-- Qualifique campos sempre pelo alias base, nunca pela tabela fisica. Use SD1.D1_TOTAL, nao SD1990.D1_TOTAL.
-- Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL). Junte cadastros apenas quando precisar exibir descricao ou filtrar entidade resolvida.
+- Qualifique campos sempre pelo alias base (SD1.D1_TOTAL, nunca SD1990.D1_TOTAL).
+- Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
-- Nao use WITH (NOLOCK).
-- Nao use FORMAT() nem TRY_CONVERT().
 
 ## Exibicao de entidades
-Sempre retorne nome/descricao para o usuario. Codigo sozinho nao serve.
-- fornecedor: SA2.A2_NOME AS fornecedor. Codigo/loja podem vir como cod_fornecedor e loja_fornecedor.
-- produto: SB1.B1_DESC AS produto. Codigo pode vir como cod_produto.
+- fornecedor: SA2.A2_NOME AS fornecedor. Codigo/loja como cod_fornecedor e loja_fornecedor.
+- produto: SB1.B1_DESC AS produto. Codigo como cod_produto.
 - grupo_produto: SBM.BM_DESC AS grupo_produto.
 - centro_custo: CTT.CTT_DESC01 AS centro_custo.
 - natureza: SED.ED_DESCRIC AS natureza.
 - tes: SF4.F4_TEXTO AS tes.
 Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP BY.
-
-## Regra Critica — entidades_necessarias Somente para Nomes Proprios Cadastrais
-- PROIBIDO declarar em entidades_necessarias qualquer texto que seja uma condicao de filtro, criterio operacional ou frase descritiva — ex: "possuem compras todos os meses", "maior volume", "todos os fornecedores ativos".
-- entidades_necessarias e EXCLUSIVAMENTE para nomes proprios de entidades cadastrais: nome de fornecedor, nome de produto, nome de grupo de produto, etc.
-- Se a pergunta nao citar um nome proprio de entidade cadastral, deixe entidades_necessarias vazio ([]).
-- Teste interno: o texto declarado seria resultado valido de LIKE '%...%' em SA2.A2_NOME ou SB1.B1_DESC? Se nao for um nome proprio real, nao declare.
 
 ## Entidades cadastrais
 Quando precisar filtrar fornecedor, produto, grupo_produto, centro_custo, natureza ou TES por nome citado pelo usuario, retorne em entidades_necessarias.
@@ -202,28 +141,12 @@ Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, n
 - REGRA CRITICA — palavra "empresa" como escopo de tenant: Quando a mensagem usa "empresa(s) [NOME1] e/ou [NOME2]" e esses nomes estao em empresas_iahub_mencionadas, a palavra "empresa" indica APENAS o escopo de execucao multiempresa. Ela NAO e um agrupamento SQL nem um filtro cadastral. Nao adicione GROUP BY, nao agrupe por empresa, nao filtre por fornecedor/filial baseado nesses nomes.
 - REGRA CRITICA — agrupamentos: ["empresa"] no estado anterior: Quando contrato_orquestrador ou estado anterior trouxer agrupamentos: ["empresa"], isso e metadata do backend (agrupamento multiempresa para exibicao), NAO e instrucao para GROUP BY SQL. Ignore-o na geracao do SQL. So adicione GROUP BY SQL quando o usuario pedir explicitamente agrupamento por mes, fornecedor, produto, etc.
 
-## Agregacoes
-- "total de compras" sem agrupamento: retorne uma linha com COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_compra.
+## Metrica por agrupamento
+- "por mes": SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia no SELECT e GROUP BY.
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
-- "por mes": use OBRIGATORIAMENTE SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia no SELECT e GROUP BY. Resultado: '202506', '202507' etc. NUNCA use YEAR() ou MONTH() isolados — a coluna competencia AAAAMM garante agrupamento correto em qualquer ano e e compativel com todos os provedores de conexao.
-- REGRA CRITICA — sintaxe SQL Server/ANSI: NUNCA use LIMIT (sintaxe MySQL — causa erro no SQL Server). Para limitar linhas use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY. Exemplo: "ORDER BY valor_compra DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY".
-- Media anual historica (ex: "media anual de compras", "compras medias por ano"): PROIBIDO AVG(D1_TOTAL) diretamente e PROIBIDO filtro de periodo. Use subquery de duas camadas sem BETWEEN. Alias da camada externa OBRIGATORIO: AS valor_compra:
-  Camada interna: GROUP BY SUBSTRING(SD1.D1_DTDIGIT, 1, 4) AS ano, SUM(SD1.D1_TOTAL) AS valor_ano.
-  Camada externa: SELECT COALESCE(AVG(h.valor_ano), 0) AS valor_compra FROM (...) h.
-  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
-- Media mensal de periodo (ex: "media mensal dos ultimos 12 meses"): PROIBIDO dividir SUM por COUNT(DISTINCT competencia) no SELECT com GROUP BY — COUNT e sempre 1 dentro do grupo. Use subquery em duas camadas com filtro de periodo no WHERE:
-  Camada interna: GROUP BY SUBSTRING(SD1.D1_DTDIGIT, 1, 6), SUM(SD1.D1_TOTAL) AS valor_mes.
-  Camada externa: SELECT COALESCE(AVG(h.valor_mes), 0) AS media_compra_mensal FROM (...) h.
-  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
-- Media sazonal por mes do ano (ex: "media de cada mes do ano", "sazonalidade de compras"): subquery sem filtro de ano, agrupando por (ano, mes) na camada interna e apenas por mes na externa.
-  Camada interna: GROUP BY SUBSTRING(SD1.D1_DTDIGIT, 1, 4), SUBSTRING(SD1.D1_DTDIGIT, 5, 2), SUM(SD1.D1_TOTAL).
-  Camada externa: SELECT mes, AVG(valor_mes) GROUP BY mes ORDER BY mes — retorna 12 linhas, resposta_planejada = null.
-  PROIBIDO aplicar BETWEEN de ano unico no CASO sazonal.
-
-## Resposta Planejada WhatsApp
-- Quando devolucoes forem consideradas, preencha resposta_planejada com uma mensagem amigavel contendo as tres metricas: total_compras, total_devolucoes e total_liquido.
-- Template sugerido: "Aqui esta o resumo das compras para o periodo solicitado:\n\n*Total de Compras:* {total_compras}\n*Total de Devolucoes:* {total_devolucoes}\n*Total de Compras Liquida:* {total_liquido}"
+- Media anual: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_compra.
+- Resposta planejada com devolucoes: template com {total_compras}, {total_devolucoes}, {total_liquido}.
 `.trim();
 
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {

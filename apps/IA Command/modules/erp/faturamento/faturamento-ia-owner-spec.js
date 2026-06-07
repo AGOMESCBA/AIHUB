@@ -49,61 +49,9 @@ function garantirIntencao(empresaId) {
 }
 
 const regrasTecnicas = `
-## Principio IA-OWNER
-Voce decide se a pergunta atual e uma nova consulta, continuidade ou troca de assunto.
-O historico e evidencia. Nao herde periodo, filtros ou agrupamentos automaticamente: herde apenas quando fizer sentido pela conversa.
-
-## Analise Historica Multianual — Consulta de Extremo por Ano (SEM filtro de periodo)
-- Quando a pergunta buscar um extremo historico ENTRE ANOS — ex: "qual o ano com maior/menor faturamento", "qual o melhor/pior ano", "o ano que mais vendeu" — a palavra "ano" e DIMENSAO DE ANALISE, nao referencia de periodo.
-- PROIBIDO aplicar BETWEEN ou qualquer filtro de data no WHERE nesses casos.
-- Gere SQL sem filtro temporal: GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, ORDER BY faturamento DESC/ASC, OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY.
-- Ignore periodo.tipo = "ano_atual" vindo do estado anterior quando a mensagem pedir explicitamente o "maior/menor/melhor/pior ano" historico.
-- EXCECAO: se o usuario especificar range ("ultimos 5 anos", "de 2022 a 2024"), aplique o filtro correspondente.
-
-## Consultas de Frequencia Mensal Completa ("todos os meses do ano")
-- Quando o usuario pedir "clientes/produtos com faturamento em todos os meses do ano [X]" ou "todos os meses do ano" (sem especificar ano):
-  1. Se [X] nao for informado, assuma o ano atual (SUBSTRING(data_atual, 1, 4)).
-  2. Se [X] for o ano atual AINDA EM CURSO (ano nao terminou): o threshold do HAVING e o numero de meses JA DECORRIDOS: CAST(SUBSTRING(data_atual, 5, 2) AS INT). Exemplo: data_atual=2026-06-06 → HAVING COUNT(DISTINCT SUBSTRING(SF2.F2_EMISSAO, 5, 2)) = 6.
-  3. Se [X] for um ano passado completamente encerrado: use HAVING COUNT(DISTINCT ...) = 12.
-- PROIBIDO usar HAVING COUNT(...) = 12 para o ano atual quando o ano ainda nao terminou.
-- PROIBIDO declarar frases como "possuem faturamento todos os meses" ou "todos os meses" em entidades_necessarias — isso nao e uma entidade cadastral.
-- Para essas queries de frequencia, use FROM SF2 JOIN SA1 (nunca SD2 como base). Declare o JOIN SA1 com as chaves SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '.
-- SELECT e GROUP BY devem incluir SA1.A1_NOME AS cliente — nunca retornar apenas codigo.
-
-## Periodos
-- Se o usuario disser "ano" sem ano explicito, use o ano atual completo.
-- Se disser "mes" sem mes/ano explicito, use o mes atual completo.
-- Se disser "dia" sem data explicita, use o dia atual.
-- "por mes", "mensal", "mes a mes" podem ser granularidade/agrupamento. Decida pelo texto completo e pelo historico.
-- Datas Protheus sao CHAR(8) YYYYMMDD. Compare com BETWEEN em texto YYYYMMDD.
-- Campo de data padrao de faturamento: SF2.F2_EMISSAO.
-
-## Comparacao de um Mes nos Ultimos N Anos (faturamento)
-- Quando o usuario pedir "[mes] dos ultimos N anos" (Ex: "Maio dos ultimos 3 anos"), calcule os N anos a partir de data_atual.
-- data_atual=2026 + "ultimos 3 anos" = anos 2024, 2025, 2026. Nunca herde anos do estado anterior.
-- SQL obrigatorio: filtre por mes via SUBSTRING(SF2.F2_EMISSAO, 5, 2) e range de anos:
-  WHERE SF2.D_E_L_E_T_ = ' ' AND SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '05' AND SF2.F2_EMISSAO >= '20240501' AND SF2.F2_EMISSAO <= '20260531'
-  GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4) ORDER BY ano
-- NUNCA gere BETWEEN cobrindo apenas 1 mes de 1 ano quando o usuario pediu N anos.
-- Campo de data padrao de devolucoes de vendas: SF1.F1_DTDIGIT ou SF1.F1_EMISSAO conforme campos disponiveis; prefira SF1.F1_DTDIGIT para entrada digitada no periodo.
-
-## Sintaxe SQL — Padrao ANSI SQL:2008 (SQL Server)
-Gere sempre SQL compativel com SQL Server usando construcoes do padrao ANSI. NUNCA use extensoes especificas de MySQL ou PostgreSQL — elas causam erro de sintaxe no SQL Server.
-
-- LIMIT: PROIBIDO. SQL Server nao reconhece LIMIT (sintaxe MySQL). Para limitar linhas use OBRIGATORIAMENTE a sintaxe ANSI SQL:2008, que requer ORDER BY:
-    ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY
-  Exemplo correto:  ORDER BY faturamento DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY
-  Exemplo errado:   LIMIT 1
-
-- TOP N + OFFSET/FETCH NEXT: PROIBIDO juntos. SQL Server nao permite SELECT TOP N e OFFSET/FETCH NEXT na mesma query (erro 10741). Escolha UM dos dois mecanismos: prefira sempre OFFSET/FETCH NEXT (ANSI). NUNCA escreva SELECT TOP N quando a query ja tiver OFFSET ... FETCH NEXT.
-
-- YEAR() / MONTH() para agrupamento: PROIBIDO. Use SUBSTRING(campo, 1, 6) AS competencia para extrair 'AAAAMM' (ex: '202506'). Garante compatibilidade entre provedores e ordenacao cronologica correta como string.
-
-- Valor nulo: Use COALESCE(expr, 0) (padrao ANSI) em vez de ISNULL(expr, 0) (especifico SQL Server).
-
-- Diferenca: Use <> (padrao ANSI) em vez de !=.
-
-- Conversao: Prefira CAST(x AS tipo) (padrao ANSI) a CONVERT(tipo, x, estilo) para conversoes basicas sem mascara de formato.
+## Campo de data padrao
+- Faturamento: SF2.F2_EMISSAO (CHAR(8) YYYYMMDD).
+- Devolucoes de venda: SF1.F1_DTDIGIT ou SF1.F1_EMISSAO; prefira SF1.F1_DTDIGIT.
 
 ## Devolucoes de Vendas
 - Nao inclua devolucoes de vendas nas metricas de faturamento por padrao.
@@ -176,16 +124,11 @@ Gere sempre SQL compativel com SQL Server usando construcoes do padrao ANSI. NUN
   HAVING COUNT(DISTINCT SUBSTRING(SF2.F2_EMISSAO, 5, 2)) = CAST(SUBSTRING(data_atual, 5, 2) AS INT)  -- ou = 12 para ano encerrado
 
 ## Regras obrigatorias de SQL
-- Retorne apenas SELECT, sempre iniciando com SET ROWCOUNT 50000.
-- OBRIGATORIO SEM EXCECAO: toda tabela no FROM ou em qualquer JOIN deve ter D_E_L_E_T_ = ' ' filtrado. Aplique no WHERE para a tabela principal e na condicao ON para cada JOIN. Exemplo correto: FROM SD2990 SD2 JOIN SF2990 SF2 ON ... AND SF2.D_E_L_E_T_ = ' ' JOIN SB1990 SB1 ON ... AND SB1.D_E_L_E_T_ = ' ' WHERE SD2.D_E_L_E_T_ = ' '. Isso vale inclusive para SA1, SA3, SBM, SF4, CTT — todas as tabelas sem excecao.
-- REGRA DE INTEGRIDADE DE JOINS: E terminantemente PROIBIDO usar qualificadores de tabelas cadastrais (ex: SB1.B1_DESC, SA1.A1_NOME, SA3.A3_NOME, CTT.CTT_DESC01) em qualquer parte do SQL (SELECT, WHERE, GROUP BY, ORDER BY) sem declarar o JOIN correspondente no FROM. Sempre que o usuario pedir agrupamento ou exibicao por entidade ("por produto", "por cliente", "por vendedor"), voce deve: (1) identificar o nome fisico da tabela no sx2 do tenant ativo; (2) adicionar o JOIN com as chaves padrao e com D_E_L_E_T_ = ' ' na condicao ON. SQL com qualificadores sem JOIN declarado e INVALIDO — revise antes de retornar.
+- Inicie sempre com SET ROWCOUNT 50000.
 - Use aliases explicitos iguais a base da tabela: SF2, SD2, SF1, SD1, SA1, SA3, SB1, SBM, SF4, CTT.
-- Se o contexto tecnico trouxer nomes fisicos SX2, use exatamente esses nomes em FROM/JOIN com alias base. Exemplo: FROM SD2990 SD2, JOIN SF2990 SF2.
-- Qualifique campos sempre pelo alias base, nunca pela tabela fisica. Use SD2.D2_TOTAL, nao SD2990.D2_TOTAL.
-- Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL). Junte cadastros apenas quando precisar exibir descricao ou filtrar entidade resolvida.
+- Qualifique campos sempre pelo alias base (SD2.D2_TOTAL, nunca SD2990.D2_TOTAL).
+- Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
-- Nao use WITH (NOLOCK).
-- Nao use FORMAT() nem TRY_CONVERT().
 
 ## Exibicao de entidades
 Sempre retorne nome/descricao para o usuario. Codigo sozinho nao serve.
@@ -211,81 +154,14 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - REGRA CRITICA — palavra "empresa" como escopo de tenant: Quando a mensagem usa "empresa(s) [NOME1] e/ou [NOME2]" e esses nomes estao em empresas_iahub_mencionadas, a palavra "empresa" indica APENAS o escopo de execucao multiempresa. Ela NAO e um agrupamento SQL nem um filtro cadastral. Nao adicione GROUP BY, nao agrupe por empresa, nao filtre por cliente/filial baseado nesses nomes. O backend ja executa uma query separada por tenant — voce so precisa gerar o SQL correto para UM tenant.
 - REGRA CRITICA — agrupamentos: ["empresa"] no estado anterior: Quando contrato_orquestrador ou estado anterior trouxer agrupamentos: ["empresa"], isso e metadata do backend (agrupamento multiempresa para exibicao), NAO e instrucao para GROUP BY SQL. Ignore-o na geracao do SQL. So adicione GROUP BY SQL quando o usuario pedir explicitamente agrupamento por mes, cliente, produto, vendedor, etc.
 
-## Agregacoes
-- "total de faturamento" sem agrupamento, sem produto e sem devolucao: retorne uma linha com COALESCE(SUM(SF2.F2_VALBRUT),0) AS faturamento. INVALIDO quando SD2 estiver no FROM/JOIN.
-- Consultas por produto/grupo/quantidade/valor medio devem usar SD2 JOIN SF2 e adotar COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_total e, quando solicitado, COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada. Nunca use F2_VALBRUT nessas consultas.
+## Metrica por agrupamento
+- "por mes": SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia no SELECT e GROUP BY.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
-- "por mes": use OBRIGATORIAMENTE SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia no SELECT e GROUP BY. Resultado: '202506', '202507' etc. NUNCA use YEAR() ou MONTH() isolados — a coluna competencia AAAAMM garante agrupamento correto em qualquer ano e e compativel com todos os provedores de conexao.
-- Excecao YoY/crescimento contra anos anteriores: quando o usuario pedir "crescimento", "comparado ao mesmo mes do ano anterior", "YoY" ou comparacao ano contra ano por mes, NAO use competencia AAAAMM como unica granularidade. O comparativo pode envolver dois ou mais anos; gere uma consulta em duas camadas: a subquery interna agrupa por ano (SUBSTRING(SF2.F2_EMISSAO, 1, 4)) e mes (SUBSTRING(SF2.F2_EMISSAO, 5, 2)) e calcula SUM(SF2.F2_VALBRUT); a query externa aplica LAG(faturamento) OVER (PARTITION BY mes ORDER BY ano) ou calcula colunas/percentuais condicionais quando o usuario pedir anos lado a lado. No mesmo nivel de uma query com GROUP BY, nunca use em PARTITION BY/ORDER BY do OVER uma expressao que nao esteja agrupada nessa mesma camada.
-- Para YoY limitado a meses especificos (ex: Janeiro a Junho), filtre o mes no WHERE com SUBSTRING(SF2.F2_EMISSAO, 5, 2) IN ('01','02','03','04','05','06') e filtre os anos explicitamente com SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN (...), evitando BETWEEN continuo quando isso puder incluir meses fora do escopo.
-- REGRA CRITICA — sintaxe SQL Server/ANSI: NUNCA use LIMIT (sintaxe MySQL — causa erro no SQL Server). Para limitar linhas use OBRIGATORIAMENTE: ORDER BY <coluna> OFFSET 0 ROWS FETCH NEXT N ROWS ONLY. Exemplo: "ORDER BY faturamento DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY".
-- Inclua no SELECT somente as granularidades solicitadas. Se o usuario pedir "por mes", nao inclua dia/data no SELECT. Toda expressao nao agregada presente no SELECT deve estar representada corretamente no GROUP BY.
-- Historico por ano (ex: "historico de faturamento por ano", "ano a ano", "cada ano"): GROUP BY simples em SF2 — sem subquery, sem AVG. Retorna N linhas, uma por ano.
-  SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento
-  FROM SF2990 SF2
-  WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
-  GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4)
-  ORDER BY ano;
-- Media mensal por ano (ex: "faturamento medio mensal por ano", "media mensal agrupada por ano", "media mensal de cada ano"): subquery 2 camadas — interna agrupa por (ano, mes), externa agrupa por ano com AVG. Alias: h.ano AS ano, AVG AS faturamento. ESCOPO: camada externa usa SOMENTE h.ano e h.faturamento_mes — NUNCA SF2.*.
-  Exemplo correto:
-  SELECT h.ano, COALESCE(AVG(h.faturamento_mes), 0) AS faturamento
-  FROM (
-    SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS mes, SUM(SF2.F2_VALBRUT) AS faturamento_mes
-    FROM SF2990 SF2 WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
-    GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4), SUBSTRING(SF2.F2_EMISSAO, 1, 6)
-  ) AS h GROUP BY h.ano ORDER BY h.ano;
-- Media anual escalar (ex: "media de faturamento dos anos", "media anual de faturamento", "media dos anos", "media historica", "faturamento medio anual"):
-  PROIBIDO: AVG(SF2.F2_VALBRUT) diretamente — isso calcula ticket medio por nota fiscal, nao faturamento medio por ano.
-  Exemplo do erro: 2025 com NF R$100k + NF R$2k → AVG errado = R$51k; faturamento real = R$102k.
-  PROIBIDO: GROUP BY ano com AVG — gera ticket medio por ano, nao media dos totais anuais.
-  Use OBRIGATORIAMENTE subquery de duas camadas sem BETWEEN:
-  Camada interna: GROUP BY ano, SUM(SF2.F2_VALBRUT) AS faturamento_ano — calcula o total real de cada ano.
-  Camada externa: SELECT COALESCE(AVG(h.faturamento_ano), 0) AS faturamento FROM (...) AS h — media dos totais.
-  ESCOPO CRITICO: camada externa usa APENAS h.faturamento_ano — NUNCA SF2 (nao existe no escopo externo).
-  Retorna UMA linha → habilita resposta_planejada.
-  Exemplo correto:
-  SELECT COALESCE(AVG(h.faturamento_ano), 0) AS faturamento
-  FROM (
-    SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, SUM(SF2.F2_VALBRUT) AS faturamento_ano
-    FROM SF2990 SF2
-    WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
-    GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4)
-  ) AS h;
-- Media mensal de periodo (ex: "media mensal dos ultimos 12 meses", "media mensal de 2025"): PROIBIDO dividir SUM por COUNT(DISTINCT competencia) no SELECT principal com GROUP BY — COUNT e sempre 1 dentro do grupo, nao produz media real. Use OBRIGATORIAMENTE subquery em duas camadas:
-  Camada interna: GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6), SUM(SF2.F2_VALBRUT) AS faturamento_mes — com filtro de periodo no WHERE.
-  Camada externa: SELECT COALESCE(AVG(h.faturamento_mes), 0) AS media_faturamento_mensal FROM (...) h.
-  Retorna UMA linha → habilita resposta_planejada no WhatsApp.
-  Exemplo correto:
-  SELECT COALESCE(AVG(h.faturamento_mes), 0) AS media_faturamento_mensal
-  FROM (
-    SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia, SUM(SF2.F2_VALBRUT) AS faturamento_mes
-    FROM SF2990 SF2
-    WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
-      AND SF2.F2_EMISSAO >= '20250601' AND SF2.F2_EMISSAO < '20260601'
-    GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
-  ) AS h;
-- Media sazonal por mes do ano (ex: "media de cada mes do ano", "media historica de cada mes", "media de todos os janeiros", "sazonalidade mensal"): objetivo e descobrir a media de todos os Janeiros, todos os Fevereiros, etc., acumulados em todo o historico. Use subquery de duas camadas SEM filtro de ano no WHERE:
-  Camada interna: GROUP BY ano (SUBSTRING(SF2.F2_EMISSAO, 1, 4)) E mes (SUBSTRING(SF2.F2_EMISSAO, 5, 2)), SUM(SF2.F2_VALBRUT) AS faturamento_mes — varre todo o historico.
-  Camada externa: SELECT mes, COALESCE(AVG(faturamento_mes), 0) AS media_faturamento GROUP BY mes ORDER BY mes.
-  Retorna 12 linhas (uma por mes) → resposta_planejada = null.
-  Exemplo correto:
-  SELECT h.mes, COALESCE(AVG(h.faturamento_mes), 0) AS media_faturamento
-  FROM (
-    SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano, SUBSTRING(SF2.F2_EMISSAO, 5, 2) AS mes,
-           SUM(SF2.F2_VALBRUT) AS faturamento_mes
-    FROM SF2990 SF2
-    WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
-    GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4), SUBSTRING(SF2.F2_EMISSAO, 5, 2)
-  ) AS h
-  GROUP BY h.mes ORDER BY h.mes;
-  PROIBIDO aplicar BETWEEN de um unico ano no WHERE do CASO sazonal — destruiria a media historica.
-
-## Resposta Planejada WhatsApp
-- REGRA: preencha resposta_planejada SOMENTE quando o SQL retornar UMA UNICA LINHA (total geral sem agrupamento). Consultas com GROUP BY (por mes, produto, cliente, etc.) devem ter resposta_planejada vazio — o sistema formatara automaticamente.
-- Para total sem agrupamento com devolucoes: "Aqui esta o resumo do faturamento para o periodo solicitado:\n\n*Faturamento Bruto:* {total_faturamento}\n*Devolucoes de Vendas:* {total_devolucoes}\n*Faturamento Liquido:* {faturamento_liquido}"
-- Para total sem agrupamento sem devolucoes: "Aqui esta o resumo do faturamento para o periodo solicitado:\n\n📊 *Faturamento Bruto:* {faturamento}"
+- Media mensal por ano (subquery 2 camadas): interna SUM por (ano, mes) → externa AVG por ano. Camada externa usa SOMENTE h.ano e h.faturamento_mes — nunca SF2.*.
+- Media anual escalar: interna SUM por ano → externa AVG dos totais. Camada externa usa SOMENTE h.faturamento_ano — nunca SF2.*. Retorna 1 linha.
+- Resposta planejada com devolucoes: "Faturamento Bruto: {total_faturamento} | Devolucoes: {total_devolucoes} | Liquido: {faturamento_liquido}"
 `.trim();
 
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {
