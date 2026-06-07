@@ -141,6 +141,63 @@ function sucessoRetryJ2A(iteracao) {
       );
     }
 
+    {
+      const svc = new IACWhatsAppService();
+      svc._empresaId = 1;
+      svc._buildHistoricoResumido = () => [];
+      svc._historicoTurnosConfig = () => 5;
+      svc._formatarConsolidadoDinamicoAll = () => '';
+      svc._saveLastIntent = () => {};
+      svc._moduloMonitorIntent = () => 'faturamento';
+
+      const interpretacoes = [];
+      svc._registrarInterpretacao = payload => interpretacoes.push(payload);
+
+      intentRouter.rotear = async (intent, empresaId) => {
+        if (empresaId === 1) return undefined;
+        return sucessoC3I(900);
+      };
+
+      await svc._pipelineAll('faturamento da SOFTEXPERT em todas as empresas', empresas, null);
+
+      assert(
+        interpretacoes.some(p => (
+          p.empresaId === 1
+          && p.resultado?._diagnostico_tecnico?.codigo === 'resultado_invalido_roteador'
+        )),
+        'resultado invalido do roteador deve ser registrado como anomalia tecnica',
+      );
+    }
+
+    {
+      const svc = new IACWhatsAppService();
+      svc._empresaId = 1;
+      svc._buildHistoricoResumido = () => [];
+      svc._historicoTurnosConfig = () => 5;
+      svc._formatarConsolidadoDinamicoAll = () => '';
+      svc._saveLastIntent = () => {};
+      svc._moduloMonitorIntent = () => 'faturamento';
+
+      const interpretacoes = [];
+      svc._registrarInterpretacao = payload => interpretacoes.push(payload);
+
+      intentRouter.rotear = async (intent, empresaId) => {
+        if (empresaId === 1) throw new Error('falha simulada no roteador');
+        return sucessoC3I(901);
+      };
+
+      await svc._pipelineAll('faturamento da SOFTEXPERT em todas as empresas', empresas, null);
+
+      assert(
+        interpretacoes.some(p => (
+          p.empresaId === 1
+          && p.resultado?._diagnostico_tecnico?.codigo === 'excecao_pipeline_multiempresa'
+          && p.resultado?._diagnostico_tecnico?.detalhe === 'falha simulada no roteador'
+        )),
+        'excecao do pipeline multiempresa deve ser registrada como anomalia tecnica',
+      );
+    }
+
     console.log('whatsapp-all-retry-canonico.test.js: ok');
   } finally {
     intentService._garantirIntencoesDinamicasPadrao = orig.garantir;

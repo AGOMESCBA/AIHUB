@@ -2910,6 +2910,12 @@ class IACWhatsAppService extends EventEmitter {
           sql_nao_extraido: 'IA nao retornou um SQL executavel',
           entidade_nao_encontrada_tenant: 'Entidade nao encontrada no cadastro da empresa',
           entidade_ambigua_tenant: 'Entidade ambigua no cadastro da empresa',
+          resultado_invalido_roteador: 'Roteador retornou resultado invalido',
+          resultado_invalido_retry_canonico: 'Retry canonico retornou resultado invalido',
+          sql_canonico_reuso_bloqueado: 'Reuso do SQL canonico foi bloqueado',
+          resultado_dinamico_nao_tratado: 'Resultado dinamico nao foi tratado pelo pipeline',
+          excecao_pipeline_multiempresa: 'Excecao inesperada no pipeline multiempresa',
+          excecao_retry_canonico: 'Excecao inesperada no retry canonico',
         };
         const acaoSistema = retrySucesso
           ? `Empresa recuperada com retry canonico usando SQL base da empresa #${canonicoOrigem || 'n/a'}.`
@@ -2933,6 +2939,32 @@ class IACWhatsAppService extends EventEmitter {
           canonico_empresa_origem: canonicoOrigem || null,
           acao_sistema: acaoSistema,
         };
+      };
+      const registrarAnomaliaDinamica = ({ emp, intentExecucao = null, subtipo, mensagem, detalhe = null, retryExecutado = false, retrySucesso = false, canonicoOrigem = null }) => {
+        const resultadoAnomalia = {
+          tipo: 'erro',
+          subtipo: subtipo || 'anomalia_multiempresa',
+          resposta_direta: mensagem || 'Anomalia tecnica registrada no processamento multiempresa.',
+          mensagem: detalhe || mensagem || null,
+        };
+        resultadoAnomalia._diagnostico_tecnico = diagnosticoErroEmpresa({
+          emp,
+          resultado: resultadoAnomalia,
+          respostaUsuario: mensagem,
+          retryExecutado,
+          retrySucesso,
+          canonicoOrigem,
+        });
+        this._registrarInterpretacao({
+          empresaId: emp?.empresa_id || empresaLogId,
+          sender: senderAll,
+          texto,
+          intent: intentExecucao || { ...intent, _escopoExecucao: 'whatsapp_all' },
+          resultado: resultadoAnomalia,
+          resposta: mensagem || resultadoAnomalia.resposta_direta,
+          duracaoMs: Date.now() - _t0,
+        });
+        return resultadoAnomalia;
       };
       const registrarSucessoDinamico = (emp, intentExecucao, resultado, respostaAiSql, nomeEmpresa, rows, registrado = true) => {
         const intentExecucaoContextual = this._intentComContextoDoResultado(intentExecucao, resultado, emp.empresa_id);
@@ -2977,6 +3009,15 @@ class IACWhatsAppService extends EventEmitter {
             const resultadoRetry = await intentRouter.rotear(intentRetry, empRetry.empresa_id);
             if (!resultadoRetry || typeof resultadoRetry !== 'object') {
               this.log(`[All] Retry canonico empresa #${empRetry.empresa_id}: resultado invalido (${typeof resultadoRetry}).`, 'error');
+              registrarAnomaliaDinamica({
+                emp: empRetry,
+                intentExecucao: intentRetry,
+                subtipo: 'resultado_invalido_retry_canonico',
+                mensagem: 'Retry canonico retornou resultado invalido.',
+                detalhe: `typeof=${typeof resultadoRetry}`,
+                retryExecutado: true,
+                canonicoOrigem: intentRetry._sqlCanonicoEmpresaOrigem,
+              });
               continue;
             }
             this._logResultadoIntent({ intent: intentRetry, resultado: resultadoRetry, escopo: 'all_retry_canonico' });
@@ -3053,6 +3094,13 @@ class IACWhatsAppService extends EventEmitter {
             }
           } catch (err) {
             this.log(`[All] Retry canonico empresa #${empRetry.empresa_id} falhou: ${err.message}`, 'warning');
+            registrarAnomaliaDinamica({
+              emp: empRetry,
+              subtipo: 'excecao_retry_canonico',
+              mensagem: 'Retry canonico falhou por excecao inesperada.',
+              detalhe: err.message,
+              retryExecutado: true,
+            });
           }
         }
       };
@@ -3064,6 +3112,12 @@ class IACWhatsAppService extends EventEmitter {
             const resposta = `O SQL canonico unico nao pode ser adaptado com seguranca para ${nomeEmpresa}: ${bloqueioReusoCanonicoDinamico}.`;
             errosDinamicos.push(`${nomeEmpresa}: ${resposta}`);
             this.log(`[All] ${resposta} Nenhum SQL adicional sera gerado.`, 'warning');
+            registrarAnomaliaDinamica({
+              emp,
+              subtipo: 'sql_canonico_reuso_bloqueado',
+              mensagem: resposta,
+              detalhe: bloqueioReusoCanonicoDinamico,
+            });
             continue;
           }
           const _historicoEmp = this._buildHistoricoResumido(sender, emp.empresa_id, this._historicoTurnosConfig(emp.empresa_id));
@@ -3093,7 +3147,15 @@ class IACWhatsAppService extends EventEmitter {
           let resultado = await intentRouter.rotear(intentExecucao, emp.empresa_id);
           if (!resultado || typeof resultado !== 'object') {
             this.log(`[All] Empresa #${emp.empresa_id}: resultado inválido do roteador (${typeof resultado}). Ignorando.`, 'error');
-            errosDinamicos.push(`Empresa #${emp.empresa_id}: erro interno no roteador.`);
+            const erroMsg = `${emp.nome || `Empresa #${emp.empresa_id}`}: erro interno no roteador.`;
+            errosDinamicos.push(erroMsg);
+            registrarAnomaliaDinamica({
+              emp,
+              intentExecucao,
+              subtipo: 'resultado_invalido_roteador',
+              mensagem: 'Roteador retornou resultado invalido no processamento multiempresa.',
+              detalhe: `typeof=${typeof resultado}`,
+            });
             continue;
           }
           this._logResultadoIntent({ intent: intentExecucao, resultado, escopo: 'all' });
@@ -3243,9 +3305,22 @@ class IACWhatsAppService extends EventEmitter {
 
           errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${resultado.mensagem || resultado.subtipo || resultado.tipo}`);
           this.log(`[All] Empresa #${emp.empresa_id} dinamica ignorada: ${resultado.mensagem || resultado.subtipo || resultado.tipo}`, 'info');
+          registrarAnomaliaDinamica({
+            emp,
+            intentExecucao,
+            subtipo: resultado.subtipo || resultado.tipo || 'resultado_dinamico_nao_tratado',
+            mensagem: 'Resultado dinamico nao foi tratado pelo pipeline multiempresa.',
+            detalhe: resultado.mensagem || resultado.subtipo || resultado.tipo || null,
+          });
         } catch (err) {
           errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${err.message}`);
           this.log(`[All] Empresa #${emp.empresa_id} dinamica falhou: ${err.message}`, 'warning');
+          registrarAnomaliaDinamica({
+            emp,
+            subtipo: 'excecao_pipeline_multiempresa',
+            mensagem: 'Empresa falhou por excecao inesperada no pipeline multiempresa.',
+            detalhe: err.message,
+          });
         }
       }
 
