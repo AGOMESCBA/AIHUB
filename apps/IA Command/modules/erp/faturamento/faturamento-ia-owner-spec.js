@@ -310,6 +310,10 @@ module.exports = {
       regex: /^(?![\s\S]*\bJOIN\s+\w+\s+SB1\b)[\s\S]*\bSB1\s*\.\s*B1_\w+/i,
       mensagem: 'Campo SB1.B1_* usado sem JOIN SB1 declarado no FROM. Adicione JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = " " antes de usar campos de produto.',
     },
+    {
+      regex: /\bAVG\s*\(\s*SF2\s*\.\s*F2_VALBRUT\s*\)/i,
+      mensagem: 'AVG(SF2.F2_VALBRUT) calcula ticket medio por nota fiscal, nao faturamento medio anual. Use subquery de 2 camadas: interna SUM por ano (faturamento_ano), externa AVG dos totais — SELECT COALESCE(AVG(h.faturamento_ano),0) AS faturamento FROM (SELECT SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano, SUM(SF2.F2_VALBRUT) AS faturamento_ano FROM SF2... GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,4)) AS h.',
+    },
   ],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta de faturamento no momento. Tente novamente em breve.',
