@@ -45,6 +45,22 @@ function moduloDinamico(payload = {}) {
   return candidatos.find(v => conhecido.has(v)) || null;
 }
 
+function faseExecucao(payload = {}) {
+  const resultado = payload.resultado || {};
+  if (payload.fase_execucao || resultado._fase_execucao) {
+    return payload.fase_execucao || resultado._fase_execucao;
+  }
+
+  const temSqlExecutado = !!(
+    payload.sql_final_executado
+    || resultado._sql_auditoria?.sql_final_executado
+    || resultado.sql_gerado
+  );
+  if (resultado.tipo === 'sucesso_ai_sql' || temSqlExecutado) return 'execucao_normal';
+  if (resultado._diagnostico_tecnico && resultado.tipo === 'erro') return 'pre_execucao_tecnica';
+  return 'sem_execucao';
+}
+
 function registrar(payload = {}) {
   const db = getDB();
   const now = agora();
@@ -53,6 +69,7 @@ function registrar(payload = {}) {
   const resultado = payload.resultado || {};
   const modulo = moduloDinamico(payload);
   const intencaoPersistida = modulo ? `${modulo}_dinamico` : (intent.intencao || null);
+  const fase = faseExecucao(payload);
 
   const row = {
     id,
@@ -98,6 +115,7 @@ function registrar(payload = {}) {
       ? null
       : ((resultado._sql_canonico_reuso_permitido ?? payload.sql_canonico_reuso_permitido) ? 1 : 0),
     sql_canonico_empresa_atual: payload.empresa_id ?? resultado._sql_auditoria?.empresa_id ?? null,
+    fase_execucao: fase,
     duracao_ms: payload.duracao_ms ?? resultado.duracao_ms ?? null,
     trace_json: json(payload.trace || intent._trace || resultado.trace || []),
     pipeline_origem: resultado._pipeline_origem || payload.pipeline_origem || null,
@@ -118,13 +136,21 @@ function registrar(payload = {}) {
 
 function listar(empresaId, opts = {}) {
   const limit = Math.min(parseInt(opts.limit, 10) || 200, 1000);
+  const fase = String(opts.fase_execucao || '').trim();
+  const params = [empresaId];
+  const where = ['empresa_id = ?'];
+  if (fase) {
+    where.push('fase_execucao = ?');
+    params.push(fase);
+  }
+  params.push(limit);
   return getDB().prepare(`
     SELECT *
     FROM interpretation_log
-    WHERE empresa_id = ?
+    WHERE ${where.join(' AND ')}
     ORDER BY criado_em DESC
     LIMIT ?
-  `).all(empresaId, limit);
+  `).all(...params);
 }
 
 function registrarFeedback(id, empresaId, feedback, observacao = null) {
@@ -157,4 +183,4 @@ function limpar(empresaId, opts = {}) {
   return info.changes || 0;
 }
 
-module.exports = { registrar, listar, registrarFeedback, limpar, camposInferidos, moduloDinamico };
+module.exports = { registrar, listar, registrarFeedback, limpar, camposInferidos, moduloDinamico, faseExecucao };

@@ -43,6 +43,8 @@
     .badge-chat    { background:#f3e8ff;color:#7c3aed; }
     .badge-reuso   { background:#dbeafe;color:#1d4ed8; }
     .badge-classico{ background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .badge-pre-exec { background:#fee2e2;color:#b91c1c; }
+    .badge-exec-ok  { background:#dcfce7;color:#15803d; }
     .sql-erro-box  { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:10px;white-space:pre-wrap;word-break:break-word; }
     .grid-text-preview { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;line-height:1.35;word-break:break-word; }
     .grid-text-preview.question { color:var(--text-hi);font-weight:700; }
@@ -269,6 +271,7 @@
               <div class="meta-item"><span>Duração</span><strong id="d-duracao">-</strong></div>
               <div class="meta-item"><span>Confiança</span><strong id="d-confianca">-</strong></div>
               <div class="meta-item"><span>Resultado</span><strong id="d-resultado">-</strong></div>
+              <div class="meta-item"><span>Fase</span><strong id="d-fase-execucao">-</strong></div>
               <div class="meta-item"><span>Intenção</span><strong id="d-intencao">-</strong></div>
               <div class="meta-item"><span>Dataset</span><strong id="d-dataset">-</strong></div>
               <div class="meta-item"><span>Grupo</span><strong id="d-grupo">-</strong></div>
@@ -464,6 +467,13 @@
     return p ? `<span class="badge badge-neutro">${esc(p)}</span>` : '<span class="badge badge-neutro">—</span>';
   }
 
+  function faseExecucaoBadge(fase) {
+    if (fase === 'pre_execucao_tecnica') return '<span class="badge badge-pre-exec">Tecnico antes</span>';
+    if (fase === 'execucao_normal') return '<span class="badge badge-exec-ok">Normal</span>';
+    if (fase === 'sem_execucao') return '<span class="badge badge-neutro">Sem execucao</span>';
+    return fase ? `<span class="badge badge-neutro">${esc(fase)}</span>` : '<span class="badge badge-neutro">-</span>';
+  }
+
   function conf(row) {
     if (typeof row.confianca !== 'number') return '-';
     const valor = row.confianca <= 1 ? row.confianca * 100 : row.confianca;
@@ -603,6 +613,7 @@
     document.getElementById('d-duracao').textContent = row.duracao_ms != null ? `${row.duracao_ms} ms` : '—';
     document.getElementById('d-confianca').textContent = conf(row);
     document.getElementById('d-resultado').textContent = row.resultado_tipo || '-';
+    document.getElementById('d-fase-execucao').innerHTML = faseExecucaoBadge(row.fase_execucao);
     document.getElementById('d-intencao').textContent = row.intencao || '-';
     document.getElementById('d-dataset').textContent = row.dataset_nome || row.dataset_id || '-';
     document.getElementById('d-grupo').textContent = row.agrupar_por || '-';
@@ -651,6 +662,7 @@
       sql_canonico_original: row.sql_canonico_original || null,
       sql_ia_bruto: row.sql_ia_bruto || null,
       sql_final_executado: row.sql_final_executado || null,
+      fase_execucao: row.fase_execucao || null,
       sql_auditoria: parseJson(row.sql_auditoria_json, null),
       fallback_usado: !!row.fallback_usado,
       cache_hit: !!row.cache_hit,
@@ -889,6 +901,9 @@
         { title: 'Pipeline', field: 'pipeline_origem', width: 125,
           headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', chat: 'Chat-first', classico: 'Clássico', canonico_reuso: 'Reuso' } },
           formatter: c => pipelineBadgeHtml(c.getValue()) },
+        { title: 'Fase', field: 'fase_execucao', width: 145,
+          headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', pre_execucao_tecnica: 'Tecnico antes', execucao_normal: 'Execucao normal', sem_execucao: 'Sem execucao' } },
+          formatter: c => faseExecucaoBadge(c.getValue()) },
         { title: 'Dataset', field: 'dataset_nome', minWidth: 140, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
         { title: 'Origem', field: 'intent_json', width: 145, groupable: false,

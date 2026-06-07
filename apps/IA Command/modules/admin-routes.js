@@ -900,7 +900,10 @@ Responda SOMENTE com JSON válido, sem markdown:
 
   app.get('/api/ia-command/admin/interpretacoes', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
     const interpretationLog = require('./ai/interpretation-log');
-    res.json(interpretationLog.listar(eid(req), { limit: req.query.limit }));
+    res.json(interpretationLog.listar(eid(req), {
+      limit: req.query.limit,
+      fase_execucao: req.query.fase_execucao,
+    }));
   });
 
   // ── COMPRAS — Consultas Text-to-SQL ─────────────────────────────────────────
@@ -917,6 +920,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const inicio = String(req.query.inicio || '').trim();
     const fim    = String(req.query.fim    || '').trim();
     const status = String(req.query.status || '').trim();
+    const faseExecucao = String(req.query.fase_execucao || '').trim();
 
     const filtroModulo = _whereLogModuloDinamico('compras');
     const wheres = ["empresa_id = ?", filtroModulo.where];
@@ -925,6 +929,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
     if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
     if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+    if (faseExecucao) { wheres.push("fase_execucao = ?"); params.push(faseExecucao); }
 
     params.push(limit);
     const rows = db.prepare(`
@@ -932,7 +937,7 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -954,6 +959,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const inicio = String(req.query.inicio || '').trim();
     const fim    = String(req.query.fim    || '').trim();
     const status = String(req.query.status || '').trim();
+    const faseExecucao = String(req.query.fase_execucao || '').trim();
 
     const filtroModulo = _whereLogModuloDinamico('faturamento');
     const wheres = ["empresa_id = ?", filtroModulo.where];
@@ -962,6 +968,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
     if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
     if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+    if (faseExecucao) { wheres.push("fase_execucao = ?"); params.push(faseExecucao); }
 
     params.push(limit);
     const rows = db.prepare(`
@@ -969,7 +976,7 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -991,6 +998,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const inicio = String(req.query.inicio || '').trim();
     const fim    = String(req.query.fim    || '').trim();
     const status = String(req.query.status || '').trim();
+    const faseExecucao = String(req.query.fase_execucao || '').trim();
 
     const filtroModulo = _whereLogModuloDinamico('financeiro');
     const wheres = ["empresa_id = ?", filtroModulo.where];
@@ -999,6 +1007,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
     if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
     if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+    if (faseExecucao) { wheres.push("fase_execucao = ?"); params.push(faseExecucao); }
 
     params.push(limit);
     const rows = db.prepare(`
@@ -1006,7 +1015,7 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -1028,6 +1037,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const inicio = String(req.query.inicio || '').trim();
     const fim    = String(req.query.fim    || '').trim();
     const status = String(req.query.status || '').trim();
+    const faseExecucao = String(req.query.fase_execucao || '').trim();
 
     const filtroModulo = _whereLogModuloDinamico('comissao');
     const wheres = ["empresa_id = ?", filtroModulo.where];
@@ -1036,6 +1046,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
     if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
     if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+    if (faseExecucao) { wheres.push("fase_execucao = ?"); params.push(faseExecucao); }
 
     params.push(limit);
     const rows = db.prepare(`
@@ -1043,7 +1054,7 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -1181,6 +1192,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const inicio  = String(req.query.inicio  || '').trim();
     const fim     = String(req.query.fim     || '').trim();
     const status  = String(req.query.status  || '').trim();
+    const faseExecucao = String(req.query.fase_execucao || '').trim();
     const provedor = String(req.query.provedor || '').trim();
     const modulo  = String(req.query.modulo  || '').trim().toLowerCase();
 
@@ -1194,6 +1206,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (inicio)   { wheres.push('criado_em >= ?'); params.push(inicio); }
     if (fim)      { wheres.push('criado_em <= ?'); params.push(fim + 'T23:59:59'); }
     if (status)   { wheres.push('resultado_tipo = ?'); params.push(status); }
+    if (faseExecucao) { wheres.push('fase_execucao = ?'); params.push(faseExecucao); }
     if (provedor) { wheres.push('provedor = ?'); params.push(provedor); }
 
     params.push(limit);
@@ -1203,7 +1216,7 @@ Responda SOMENTE com JSON válido, sem markdown:
              trace_json, intencao, usuario, numero_wa,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC

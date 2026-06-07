@@ -129,11 +129,17 @@ function _garantirColunasCompatibilidade() {
     sql_canonico_reuso_motivo: 'TEXT',
     sql_canonico_reuso_permitido: 'INTEGER DEFAULT NULL',
     sql_canonico_empresa_atual: 'INTEGER DEFAULT NULL',
+    fase_execucao: 'TEXT DEFAULT NULL',
   };
 
   for (const [coluna, definicao] of Object.entries(interpretationLog)) {
     _adicionarColunaSeFaltar('interpretation_log', coluna, definicao);
   }
+
+  _db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_iac_interpretation_fase_execucao
+      ON interpretation_log (empresa_id, fase_execucao, criado_em);
+  `);
 
   const connections = {
     port: 'INTEGER',

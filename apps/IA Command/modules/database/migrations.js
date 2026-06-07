@@ -623,6 +623,27 @@ const MIGRATIONS = [
       ALTER TABLE whatsapp_channel_companies ADD COLUMN ocultar_selecao INTEGER DEFAULT 0;
     `,
   },
+  {
+    version: 38,
+    descricao: 'IA Command - classificacao da fase de execucao no log de interpretacoes',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN fase_execucao TEXT DEFAULT NULL;
+
+      UPDATE interpretation_log
+         SET fase_execucao =
+           CASE
+             WHEN sql_final_executado IS NOT NULL OR sql_gerado IS NOT NULL OR resultado_tipo = 'sucesso_ai_sql'
+               THEN 'execucao_normal'
+             WHEN resultado_tipo = 'erro'
+               THEN 'pre_execucao_tecnica'
+             ELSE 'sem_execucao'
+           END
+       WHERE fase_execucao IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_fase_execucao
+        ON interpretation_log (empresa_id, fase_execucao, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
