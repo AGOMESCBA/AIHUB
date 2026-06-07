@@ -16,7 +16,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
   // ── Criar ──────────────────────────────────────────────────────────────────
   app.post('/api/usuarios', requireAuth, async (req, res) => {
-    const { nome, usuario, senha, celular, email, role, empresas } = req.body || {};
+    const { nome, usuario, senha, celular, email, role, empresas, erp_telefone, erp_cpf_cnpj, erp_id, erp_tipo } = req.body || {};
 
     if (!nome?.trim())    return res.status(400).json({ error: 'Nome é obrigatório' });
     if (!usuario?.trim()) return res.status(400).json({ error: 'Usuário é obrigatório' });
@@ -31,14 +31,18 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
     try {
       const novo = await db.criar({
-        nome:     nome.trim(),
-        usuario:  usuario.trim().toLowerCase(),
+        nome:         nome.trim(),
+        usuario:      usuario.trim().toLowerCase(),
         senha,
-        celular:  (celular  || '').trim(),
-        email:    (email    || '').trim(),
-        role:     role === 'admin' ? 'admin' : 'usuario',
-        empresas: role === 'admin' ? 'all' : (Array.isArray(empresas) ? empresas : []),
-        ativo:    true,
+        celular:      (celular      || '').trim(),
+        email:        (email        || '').trim(),
+        role:         role === 'admin' ? 'admin' : 'usuario',
+        empresas:     role === 'admin' ? 'all' : (Array.isArray(empresas) ? empresas : []),
+        ativo:        true,
+        erp_telefone: (erp_telefone || '').trim(),
+        erp_cpf_cnpj: (erp_cpf_cnpj || '').trim(),
+        erp_id:       (erp_id       || '').trim().toUpperCase(),
+        erp_tipo:     ['vendedor', 'gestor'].includes(erp_tipo) ? erp_tipo : '',
       });
       res.status(201).json(novo);
     } catch (err) {
@@ -48,7 +52,7 @@ module.exports = function registerRoutes(app, { requireAuth }) {
 
   // ── Atualizar ──────────────────────────────────────────────────────────────
   app.put('/api/usuarios/:id', requireAuth, async (req, res) => {
-    const { nome, usuario, senha, celular, email, role, empresas, ativo } = req.body || {};
+    const { nome, usuario, senha, celular, email, role, empresas, ativo, erp_telefone, erp_cpf_cnpj, erp_id, erp_tipo } = req.body || {};
 
     if (!nome?.trim())    return res.status(400).json({ error: 'Nome é obrigatório' });
     if (!usuario?.trim()) return res.status(400).json({ error: 'Usuário é obrigatório' });
@@ -60,13 +64,17 @@ module.exports = function registerRoutes(app, { requireAuth }) {
     }
 
     const patch = {
-      nome:     nome.trim(),
-      usuario:  usuario.trim().toLowerCase(),
-      celular:  (celular || '').trim(),
-      email:    (email   || '').trim(),
-      role:     role === 'admin' ? 'admin' : 'usuario',
-      empresas: role === 'admin' ? 'all' : (Array.isArray(empresas) ? empresas : []),
-      ativo:    ativo !== false,
+      nome:         nome.trim(),
+      usuario:      usuario.trim().toLowerCase(),
+      celular:      (celular      || '').trim(),
+      email:        (email        || '').trim(),
+      role:         role === 'admin' ? 'admin' : 'usuario',
+      empresas:     role === 'admin' ? 'all' : (Array.isArray(empresas) ? empresas : []),
+      ativo:        ativo !== false,
+      erp_telefone: (erp_telefone || '').trim(),
+      erp_cpf_cnpj: (erp_cpf_cnpj || '').trim(),
+      erp_id:       (erp_id       || '').trim().toUpperCase(),
+      erp_tipo:     ['vendedor', 'gestor'].includes(erp_tipo) ? erp_tipo : '',
     };
     if (senha) patch.senha = senha;
 

@@ -13,6 +13,11 @@ async function executar(intent, dataset, empresaId) {
 
   const conn = factory.carregarConexao(empresaId);
   if (!conn) throw new Error('Nenhuma conexao ERP ativa para esta empresa.');
+  conn._empresa_id = empresaId              || '';
+  conn._pergunta   = intent._mensagemOriginal || '';
+  conn._sender     = intent._remetente       || '';
+  conn._modulo     = dataset.nome            || '';
+  conn._operacao   = intent.intencao         || '';
 
   const { sql, params } = _buildWrapper(intent, dataset);
   const rows = await factory.executar(conn, sql, params);

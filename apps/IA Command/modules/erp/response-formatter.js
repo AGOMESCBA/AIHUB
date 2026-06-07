@@ -53,6 +53,53 @@ function _iconeMetrica(col) {
   return '';
 }
 
+// Detecta colunas com sufixo de ano (ex: FATURAMENTO_2025, FATURAMENTO_2026).
+// Retorna [anoMenor, anoMaior] se exatamente 2 anos forem encontrados; null caso contrário.
+function _detectarColunasAnoPivotadas(rows) {
+  if (!rows.length) return null;
+  const firstRow = rows[0];
+  const re = /^(.+?)_((?:19|20)\d{2})$/i;
+  const anoSet = new Set();
+  for (const k of Object.keys(firstRow)) {
+    const m = k.match(re);
+    if (!m) continue;
+    const v = firstRow[k];
+    if (typeof v !== 'number' && (typeof v !== 'string' || isNaN(parseFloat(v)))) continue;
+    anoSet.add(parseInt(m[2], 10));
+  }
+  const anos = [...anoSet].sort((a, b) => a - b);
+  return anos.length === 2 ? anos : null;
+}
+
+// Remove colunas pivotadas por ano (xxx_2025, xxx_2026) e substitui pelo valor do ano
+// correspondente à data da linha, preservando a coluna original sem sufixo de ano.
+function _normalizarRowsPivotadas(rows, anoBase, anoComparacao) {
+  const re = /^(.+?)_((?:19|20)\d{2})$/i;
+  return rows.map(row => {
+    const ym = _extrairMes(row);
+    const rowAno = ym ? parseInt(ym.split('-')[0], 10) : null;
+    if (!rowAno || ![anoBase, anoComparacao].includes(rowAno)) return row;
+    const toRemove = new Set();
+    const additions = {};
+    for (const k of Object.keys(row)) {
+      const m = k.match(re);
+      if (!m) continue;
+      const colAno = parseInt(m[2], 10);
+      if (![anoBase, anoComparacao].includes(colAno)) continue;
+      toRemove.add(k);
+      if (colAno === rowAno && !(m[1] in additions)) {
+        additions[m[1]] = parseFloat(row[k]) || 0;
+      }
+    }
+    if (!toRemove.size) return row;
+    const newRow = {};
+    for (const [k, v] of Object.entries(row)) {
+      if (!toRemove.has(k)) newRow[k] = v;
+    }
+    return Object.assign(newRow, additions);
+  });
+}
+
 function _metricasPedidas(intent) {
   const metricas = new Set();
   for (const m of intent?._metricasDetectadas || []) metricas.add(_normalizarNome(m));
@@ -115,14 +162,32 @@ function _fmtData(yyyymmdd) {
 
 // Detectores de colunas por semântica — mesma ideia do campo_data, mas para dimensões
 const _DETECTORES = {
-  data:     k => /^data$/i.test(k) || /^dt_/i.test(k) || /^data_/i.test(k) || /^_data$/i.test(k),
-  cliente:  k => /^cliente$/i.test(k) || /^nm_cli/i.test(k) || /^ds_cli/i.test(k) || /^nome_cli/i.test(k),
-  produto:  k => /^produto$/i.test(k) || /^negocio$/i.test(k) || /^ds_prod/i.test(k) || /^nm_prod/i.test(k) || /^descr/i.test(k),
-  vendedor:    k => /^vendedor$/i.test(k) || /^nm_vend/i.test(k) || /^ds_vend/i.test(k) || /^cod_vend/i.test(k),
-  fornecedor:  k => /^fornecedor$/i.test(k) || /^nm_forn/i.test(k) || /^ds_forn/i.test(k) || /^nome_forn/i.test(k) || /^razao/i.test(k),
-  empresa:     k => /^empresa$/i.test(k),
-  filial:      k => /^filial$/i.test(k) || /^loja$/i.test(k),
-  unidade:     k => /^unidade$/i.test(k) || /^unidade_negocio$/i.test(k) || /^unidade_de_negocio$/i.test(k),
+  data:     k => /^data$/i.test(k) || /^dt_/i.test(k) || /^data_/i.test(k) || /^_data$/i.test(k)
+             || /^vencimento$/i.test(k) || /^vencto/i.test(k)
+             || /^emissao$/i.test(k) || /^emissão$/i.test(k),
+  // Protheus: F2_CLIENTE, A1_COD, D2_CLIENTE, E1_CLIENTE, etc. — aliases comuns: cliente, cod_cliente
+  cliente:  k => /^cliente$/i.test(k) || /^nm_cli/i.test(k) || /^ds_cli/i.test(k) || /^nome_cli/i.test(k)
+             || /^cod_cliente/i.test(k) || /^[a-z]\d_cliente$/i.test(k) || /^[a-z]\d_cod$/i.test(k)
+             || /^a1_cod$/i.test(k) || /^a1_nome$/i.test(k) || /^a1_nreduz$/i.test(k),
+  // Protheus: B1_COD, D2_COD, B1_DESC — aliases: produto, cod_produto
+  produto:  k => /^produto$/i.test(k) || /^negocio$/i.test(k) || /^ds_prod/i.test(k) || /^nm_prod/i.test(k) || /^descr/i.test(k)
+             || /^cod_produto/i.test(k) || /^b1_cod$/i.test(k) || /^b1_desc$/i.test(k) || /^d2_cod$/i.test(k),
+  // Protheus: A3_COD, A3_NOME — aliases: vendedor, cod_vendedor
+  vendedor:    k => /^vendedor$/i.test(k) || /^nm_vend/i.test(k) || /^ds_vend/i.test(k) || /^cod_vend/i.test(k)
+               || /^a3_cod$/i.test(k) || /^a3_nome$/i.test(k) || /^[a-z]\d_vend\d?$/i.test(k),
+  // Protheus: A2_COD, A2_NOME — aliases: fornecedor
+  fornecedor:  k => /^fornecedor$/i.test(k) || /^nm_forn/i.test(k) || /^ds_forn/i.test(k) || /^nome_forn/i.test(k) || /^razao/i.test(k)
+               || /^a2_cod$/i.test(k) || /^a2_nome$/i.test(k) || /^[a-z]\d_fornece$/i.test(k),
+  empresa:          k => /^empresa$/i.test(k),
+  // Protheus: F2_FILIAL, D2_FILIAL, E2_FILIAL, etc.
+  filial:           k => /^filial$/i.test(k) || /^loja$/i.test(k) || /^[a-z]\d_filial$/i.test(k),
+  unidade:          k => /^unidade$/i.test(k) || /^unidade_negocio$/i.test(k) || /^unidade_de_negocio$/i.test(k),
+  grupo_produto:    k => /^grupo_produto$/i.test(k) || /^grupo$/i.test(k) || /^bm_grupo/i.test(k) || /^b1_grupo$/i.test(k),
+  grupo_de_produto: k => /^grupo_produto$/i.test(k) || /^grupo$/i.test(k) || /^bm_grupo/i.test(k) || /^b1_grupo$/i.test(k),
+  // Protheus: F4_CODIGO — aliases: tes
+  tes:              k => /^tes$/i.test(k) || /^f4_codigo$/i.test(k) || /^d2_tes$/i.test(k),
+  // Protheus: CTT_CUSTO — aliases: centro_custo
+  centro_custo:     k => /^centro_custo$/i.test(k) || /^ctt_custo$/i.test(k) || /^ccusto/i.test(k) || /^d2_ccusto$/i.test(k),
 };
 
 function _detectarColuna(row, dimensao) {
@@ -134,6 +199,9 @@ function _detectarColuna(row, dimensao) {
 function _extrairAno(row) {
   const anoKey = Object.keys(row).find(k => /^ano$/i.test(k) || /^year$/i.test(k));
   if (anoKey && /^\d{4}$/.test(String(row[anoKey]))) return String(row[anoKey]);
+  // Se a linha tem coluna AAAAMM, extrai apenas o ano (evita retornar null quando nao ha coluna "ano" separada)
+  const aaaamm = _extrairAaaamm(row);
+  if (aaaamm) return aaaamm.slice(0, 4);
   const dk = Object.keys(row).find(_DETECTORES.data);
   if (!dk) return null;
   const v = row[dk];
@@ -145,6 +213,19 @@ function _extrairAno(row) {
   return null;
 }
 
+// Detecta formato AAAAMM (6 dígitos, ex: 202501) gerado por YEAR()*100+MONTH() no Protheus.
+// Procura primeiro em colunas com nome temporal; evita falsos positivos com IDs numéricos.
+const _NOMES_COLUNA_TEMPORAL = /^(mes|month|competencia|competência|aaaa_mm|ano_mes|periodo|período|referencia|referência|aaaamm)$/i;
+function _extrairAaaamm(row) {
+  for (const k of Object.keys(row)) {
+    if (!_NOMES_COLUNA_TEMPORAL.test(k)) continue;
+    const v = String(row[k] || '');
+    if (/^\d{6}$/.test(v) && parseInt(v.slice(0, 4), 10) >= 2000) return `${v.slice(0, 4)}-${v.slice(4, 6)}`;
+    if (/^\d{4}-\d{2}$/.test(v)) return v;
+  }
+  return null;
+}
+
 function _extrairMes(row) {
   const anoKey = Object.keys(row).find(k => /^ano$/i.test(k) || /^year$/i.test(k));
   const mesKey = Object.keys(row).find(k => /^mes$/i.test(k) || /^month$/i.test(k));
@@ -153,6 +234,9 @@ function _extrairMes(row) {
     const mes = String(parseInt(row[mesKey], 10)).padStart(2, '0');
     if (/^\d{4}$/.test(ano) && /^\d{2}$/.test(mes)) return `${ano}-${mes}`;
   }
+  // AAAAMM (6-digit) gerado por YEAR()*100+MONTH() no Protheus
+  const aaaamm = _extrairAaaamm(row);
+  if (aaaamm) return aaaamm;
   const dk = Object.keys(row).find(_DETECTORES.data);
   if (!dk) return null;
   const v = row[dk];
@@ -345,8 +429,16 @@ function _formatarComparacaoMensalEntreAnosLimpo(rows, periodo, filtrosStr, inte
     return _formatarComparacao(rows, { ...periodo, tipo: 'comparacao_mensal' }, filtrosStr, intent);
   }
 
+  // Normaliza colunas pivotadas (ex: faturamento_2025 / faturamento_2026 → faturamento)
+  const pivotAnos = _detectarColunasAnoPivotadas(rows);
+  const rowsProcessados = (pivotAnos &&
+    pivotAnos[0] === Math.min(anoBase, anoComparacao) &&
+    pivotAnos[1] === Math.max(anoBase, anoComparacao))
+    ? _normalizarRowsPivotadas(rows, anoBase, anoComparacao)
+    : rows;
+
   const grupos = {};
-  for (const row of rows) {
+  for (const row of rowsProcessados) {
     const ym = _extrairMes(row);
     if (!ym || !/^\d{4}-\d{2}$/.test(ym)) continue;
     const [anoStr, mesStr] = ym.split('-');
@@ -415,7 +507,7 @@ function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, 
     || null;
 
   if (!colunaGrupo) {
-    return `⚠️ Coluna "${agruparPor}" não encontrada no resultado. Verifique o alias no SQL do dataset.`;
+    return `⚠️ Não foi possível agrupar por "${agruparPor}". Tente reformular a pergunta.`;
   }
 
   // Detecta colunas numéricas para somar (ignora IDs, datas e a própria coluna de grupo)
@@ -522,7 +614,7 @@ function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, l
   const faltanteIdx = resolvers.findIndex(r => !r);
 
   if (faltanteIdx >= 0) {
-    return `Atencao: coluna "${dims[faltanteIdx]}" nao encontrada no resultado. Verifique o alias no SQL do dataset.`;
+    return `Atenção: não foi possível agrupar por "${dims[faltanteIdx]}". Tente reformular a pergunta.`;
   }
 
   const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
@@ -563,7 +655,7 @@ function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, l
   }
 
   if (!root.children.size) {
-    return `Atencao: nao encontrei dados suficientes para agrupar por ${dims.join(' e ')}. Verifique aliases e coluna de data do dataset.`;
+    return `Atenção: não encontrei dados suficientes para agrupar por ${dims.join(' e ')}.`;
   }
 
   const colOrdem = numCols[0];
@@ -583,22 +675,39 @@ function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, l
   const renderNivel = (node, nivel, indent = '') => {
     const entries = ordenarFilhos([...node.children.entries()], nivel);
     const visiveis = entries.slice(0, limitePorNivel);
-    const linhas = [];
+    const grupos = [];
     for (const [chave, child] of visiveis) {
       const label = ['ano', 'mes', 'dia'].includes(dims[nivel]) ? _labelTemporal(chave, dims[nivel]) : chave;
+      const emoji = _emojiDimensao(dims[nivel]);
       if (nivel === dims.length - 1) {
-        const partes = numCols.map(col => {
-          const nome = col.replace(/_/g, ' ').toLowerCase();
-          return `${nome}: *${_formatarValorMetrica(col, child.totais[col] || 0)}*`;
-        }).join(' | ');
-        linhas.push(`${indent}${linhas.length + 1}. *${label}* — ${partes}`);
+        let itemStr;
+        if (numCols.length === 1) {
+          itemStr = `*${_formatarValorMetrica(numCols[0], child.totais[numCols[0]] || 0)}*`;
+          grupos.push(`  ${grupos.length + 1}. *${label}*: ${itemStr}`);
+        } else {
+          const partes = numCols.map(col => {
+            const nome = col.replace(/_/g, ' ').toLowerCase();
+            return `${nome}: *${_formatarValorMetrica(col, child.totais[col] || 0)}*`;
+          }).join(' | ');
+          grupos.push(`  ${grupos.length + 1}. *${label}* — ${partes}`);
+        }
       } else {
-        linhas.push(`${indent}*${label}*`);
-        linhas.push(renderNivel(child, nivel + 1, indent + '  '));
+        const filhos = renderNivel(child, nivel + 1, indent + '  ');
+        const ehPaiTemporal = ['ano', 'mes', 'dia'].includes(dims[nivel]);
+        const temFilhosLeaf = nivel === dims.length - 2;
+        let subtotalStr = '';
+        if (ehPaiTemporal && temFilhosLeaf) {
+          const subtotalPartes = numCols.map(col =>
+            `*${_formatarValorMetrica(col, child.totais[col] || 0)}*`
+          ).join(' | ');
+          subtotalStr = `\n${indent}🧾 *Subtotal*: ${subtotalPartes}`;
+        }
+        grupos.push(`${indent}${emoji} *${label}*\n${filhos}${subtotalStr}`);
       }
     }
-    if (entries.length > visiveis.length) linhas.push(`${indent}... e mais ${entries.length - visiveis.length}`);
-    return linhas.filter(Boolean).join('\n');
+    if (entries.length > visiveis.length) grupos.push(`${indent}... e mais ${entries.length - visiveis.length}`);
+    const sep = nivel < dims.length - 1 ? '\n\n' : '\n';
+    return grupos.filter(Boolean).join(sep);
   };
 
   const titulo = dims.map(_labelDimensao).join(' e ');
@@ -611,6 +720,20 @@ function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, l
 
 function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, limite, intent) {
   const dimensao = String(agruparPor || '').toLowerCase();
+
+  // Quando agrupando por mês e as colunas são pivotadas por ano (ex: faturamento_2025 / faturamento_2026),
+  // redireciona para o comparador mensal entre anos que produz a saída correta.
+  if (dimensao === 'mes') {
+    const anosDetectados = _detectarColunasAnoPivotadas(rows);
+    if (anosDetectados) {
+      return _formatarComparacaoMensalEntreAnosLimpo(rows, {
+        tipo: 'comparacao_mensal_entre_anos',
+        ano_base: anosDetectados[0],
+        ano_comparacao: anosDetectados[1],
+      }, filtrosStr, intent);
+    }
+  }
+
   const extrairChave = dimensao === 'ano' ? _extrairAno : dimensao === 'dia' ? _extrairDia : _extrairMes;
   const firstRow = rows[0] || {};
   const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
@@ -636,6 +759,10 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
 
   const chaves = Object.keys(grupos);
   if (!chaves.length) {
+    if (rows.length === 1 && numCols.length) {
+      const totais = numCols.map(col => `${col.replace(/_/g, ' ')}: *${_formatarValorMetrica(col, parseFloat(rows[0][col]) || 0)}*`);
+      return `*Resultado*${periodoStr}${filtrosStr}\n\n${totais.join('\n')}`;
+    }
     return `Atencao: nao encontrei coluna de data/competencia para agrupar por ${dimensao}. Verifique o alias DATA, ano+mes ou campo_data do dataset.`;
   }
 
@@ -667,11 +794,21 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
   return `*${titulo}*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}\n\nTotal: ${totalStr}`;
 }
 
+function _emojiDimensao(dim) {
+  const d = String(dim || '').toLowerCase();
+  if (['ano', 'mes', 'dia'].includes(d)) return '🗓';
+  if (['fornecedor', 'cliente', 'vendedor', 'representante'].includes(d)) return '👤';
+  if (['filial', 'estado', 'uf', 'regiao'].includes(d)) return '📍';
+  if (['grupo', 'categoria', 'produto', 'almoxarifado', 'natureza'].includes(d)) return '📦';
+  if (['banco', 'conta'].includes(d)) return '🏦';
+  return '📋';
+}
+
 function _labelTemporal(chave, dimensao) {
   if (dimensao === 'ano') return chave;
   if (dimensao === 'dia' && /^\d{4}-\d{2}-\d{2}$/.test(chave)) {
-    const [, mes, dia] = chave.split('-');
-    return `${dia}/${mes}`;
+    const [ano, mes, dia] = chave.split('-');
+    return `${dia}/${mes}/${ano}`;
   }
   if (/^\d{4}-\d{2}$/.test(chave)) {
     const [ano, mes] = chave.split('-');
@@ -728,6 +865,30 @@ function _formatarOperacaoAnalitica(rows, intent, periodo, periodoStr, filtrosSt
 
   const origem = divisor.origem === 'dados' ? 'periodos com dados' : 'periodo solicitado';
   return `ðŸ“Š *Media ${labelGran.charAt(0).toUpperCase() + labelGran.slice(1)}*${periodoStr}${filtrosStr}\n\n${linhas.join('\n\n')}\n\n_Base: ${origem}_`;
+}
+
+const _LINHA_PAI_MES = /^\s*\d+\.\s+\*?(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+\d{4}\*?\s*:/i;
+
+function normalizarAgrupamentosPais(texto) {
+  if (typeof texto !== 'string' || !texto.includes('\n')) return texto;
+  const linhas = texto.replace(/\r\n/g, '\n').split('\n');
+  const normalizadas = [];
+  let ultimaNaoVazia = '';
+
+  for (const linha of linhas) {
+    const linhaAtualEhPaiMes = _LINHA_PAI_MES.test(linha);
+    const anteriorEhPaiMes = _LINHA_PAI_MES.test(ultimaNaoVazia);
+    const jaTemLinhaEmBranco = normalizadas.length > 0 && normalizadas[normalizadas.length - 1].trim() === '';
+
+    if (linhaAtualEhPaiMes && ultimaNaoVazia && !anteriorEhPaiMes && !jaTemLinhaEmBranco) {
+      normalizadas.push('');
+    }
+
+    normalizadas.push(linha);
+    if (linha.trim()) ultimaNaoVazia = linha;
+  }
+
+  return normalizadas.join('\n');
 }
 
 function formatar(resultado, intent, opts = {}) {
@@ -791,26 +952,6 @@ function formatar(resultado, intent, opts = {}) {
 
   switch (intencao) {
 
-    case 'consultar_faturamento': {
-      const _col = (row, ...names) => {
-        for (const k of Object.keys(row)) {
-          if (names.includes(k.toLowerCase())) return parseFloat(row[k]) || 0;
-        }
-        return 0;
-      };
-      const total  = rows.reduce((s, r) => s + _col(r, 'faturamento_total', 'faturamento', 'valor_total', 'total'), 0);
-      const notas  = rows[0] ? (_col(rows[0], 'total_notas', 'qtd_notas', 'notas') || rows.length) : rows.length;
-      const ticket = rows[0] ? _col(rows[0], 'ticket_medio', 'ticket') || (notas ? total / notas : 0) : 0;
-      const md = _mediaDiaria(periodo, total);
-      return (
-        `📊 *Faturamento*${periodoStr}${filtrosStr}\n\n` +
-        `💰 Total: *${BRL(total)}*\n` +
-        (md ? `📆 Média diária: ${BRL(md.media)} (${md.dias} dias)\n` : '') +
-        `📄 Notas emitidas: ${notas}\n` +
-        `🎯 Ticket médio: ${BRL(ticket)}`
-      );
-    }
-
     case 'consultar_quantidade': {
       const _col = (row, ...names) => {
         for (const k of Object.keys(row)) {
@@ -823,20 +964,6 @@ function formatar(resultado, intent, opts = {}) {
         `📦 *Quantidade*${periodoStr}${filtrosStr}\n\n` +
         `🔢 Total: *${NUM(total)} unidades*`
       );
-    }
-
-    case 'consultar_faturamento_por_cliente': {
-      const linhas = rows.slice(0, 15).map((r, i) =>
-        `${i + 1}. *${r.cliente || r.cod_cliente}* — ${BRL(r.faturamento_total)} (${r.total_notas} NF)`
-      );
-      return `📊 *Faturamento por Cliente*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}`;
-    }
-
-    case 'consultar_faturamento_por_vendedor': {
-      const linhas = rows.slice(0, 15).map((r, i) =>
-        `${i + 1}. Vendedor ${r.cod_vendedor} — ${BRL(r.faturamento_total)} (${r.total_clientes ?? 0} clientes)`
-      );
-      return `📊 *Faturamento por Vendedor*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}`;
     }
 
     case 'consultar_top_clientes': {
@@ -853,23 +980,6 @@ function formatar(resultado, intent, opts = {}) {
         `Ticket médio: *${BRL(r.ticket_medio)}*\n` +
         `Faturamento total: ${BRL(r.faturamento_total)}\n` +
         `Total de notas: ${r.total_notas}`
-      );
-    }
-
-    case 'comparar_faturamento': {
-      const r = rows[0];
-      const atual    = parseFloat(r.periodo_atual)    || 0;
-      const anterior = parseFloat(r.periodo_anterior) || 0;
-      const diff     = anterior ? ((atual - anterior) / anterior * 100) : null;
-      const tendencia = diff === null ? '' : diff >= 0
-        ? `📈 Alta de ${diff.toFixed(1)}%`
-        : `📉 Queda de ${Math.abs(diff).toFixed(1)}%`;
-
-      return (
-        `📊 *Comparativo de Faturamento*${filtrosStr}\n\n` +
-        `Período atual:    *${BRL(atual)}* (${r.notas_periodo_atual ?? '—'} NF)\n` +
-        (anterior ? `Período anterior: ${BRL(anterior)} (${r.notas_periodo_anterior ?? '—'} NF)\n` : '') +
-        (tendencia ? `\n${tendencia}` : '')
       );
     }
 
@@ -915,13 +1025,6 @@ function formatar(resultado, intent, opts = {}) {
       );
     }
 
-    case 'consultar_produtos_mais_vendidos': {
-      const linhas = rows.map((r, i) =>
-        `${i + 1}. *${r.produto || r.cod_produto}* — ${BRL(r.faturamento_total)} — ${NUM(r.quantidade_vendida)} ${r.unidade || 'un'}`
-      );
-      return `📦 *Produtos Mais Vendidos*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}`;
-    }
-
     default: {
       const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
       const firstRow = rows[0] || {};
@@ -950,4 +1053,54 @@ function formatar(resultado, intent, opts = {}) {
   }
 }
 
-module.exports = { formatar };
+function formatarAiSqlLocal(rows, intent) {
+  if (!rows || !rows.length) return 'Nenhum dado encontrado para sua consulta.';
+  const periodo = intent?.periodo || {};
+  const periodoStr = formatarPeriodo(periodo);
+  const filtrosStr = formatarFiltros(intent?.filtros);
+  const groupBy = _groupByIntent(intent);
+  if (groupBy.length >= 2) {
+    return _formatarAgrupamentoComposto(rows, groupBy, periodoStr, filtrosStr, intent?.limite, intent);
+  }
+  const agruparPor = groupBy[0] || null;
+  if (agruparPor && ['mes', 'dia', 'ano'].includes(agruparPor)) {
+    return _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, intent?.limite, intent);
+  }
+  if (agruparPor) {
+    return _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, intent?.limite, intent);
+  }
+  const firstRow = rows[0] || {};
+  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const numColsTodas = Object.keys(firstRow).filter(k => {
+    const kl = k.toLowerCase();
+    if (SKIP.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;
+    const v = firstRow[k];
+    return typeof v === 'number' || (typeof v === 'string' && v !== '' && !isNaN(parseFloat(v)));
+  });
+  const numCols = _filtrarMetricasSolicitadas(numColsTodas, intent);
+  if (!numCols.length) return `Consulta retornou ${rows.length} registro(s).${periodoStr}${filtrosStr}`;
+  const linhas = numCols.map(col => {
+    const total = rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0);
+    const label = col.replace(/_/g, ' ').toLowerCase();
+    return `${_iconeMetrica(col)} *${label}*: ${_formatarValorMetrica(col, total)}`;
+  });
+  return `*Resultado*${periodoStr}${filtrosStr}\n\n${linhas.join('\n')}\n\n_${rows.length} registro(s) consolidados_`;
+}
+
+/**
+ * Detecta a primeira dimensão categórica reconhecível em uma linha de resultado SQL.
+ * Usado pelo Consolidado para saber como agrupar quando o SQL não tem coluna temporal.
+ * Ordem de prioridade: vendedor > fornecedor > cliente > produto > grupo > filial > unidade.
+ */
+function detectarDimensaoCategorica(firstRow) {
+  if (!firstRow) return null;
+  const keys = Object.keys(firstRow);
+  const PRIORIDADE = ['vendedor', 'fornecedor', 'cliente', 'produto', 'grupo', 'filial', 'unidade'];
+  for (const dim of PRIORIDADE) {
+    const detector = _DETECTORES[dim];
+    if (detector && keys.find(detector)) return dim;
+  }
+  return null;
+}
+
+module.exports = { formatar, formatarAiSqlLocal, normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica };

@@ -43,7 +43,13 @@ const DEFAULT_SYSTEMS = [
 ];
 
 function listarSystems() {
-  return crud.listar(SYSTEMS_FILE);
+  const all = crud.listar(SYSTEMS_FILE);
+  const seen = new Set();
+  return all.filter(s => {
+    if (seen.has(s.code)) return false;
+    seen.add(s.code);
+    return true;
+  });
 }
 
 function getSystem(code) {

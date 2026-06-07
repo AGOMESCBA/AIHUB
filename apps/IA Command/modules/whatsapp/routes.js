@@ -4,6 +4,7 @@ const { requireRotina } = require('../permissions');
 const { getEmpresaId } = require('../empresa-context');
 const sistemasDb = require('../../../../modules/sistemas/database');
 const permissoesDb = require('../../../../modules/permissoes/database');
+const intentService = require('../ai/intent-service');
 
 module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCommand, io }) {
   function eid(req) { return getEmpresaId(req); }
@@ -39,6 +40,15 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
       ? channels.ensureDefaultForEmpresa(empresaId)
       : channels.getDefaultForEmpresa(empresaId);
     return { empresaId, channel };
+  }
+
+  function empresaInicialDoCanal(channel, fallbackEmpresaId = null) {
+    const empresasAptas = channels.listarEmpresasDoCanal(channel.id)
+      .filter(empresa => intentService.temConfiguracaoMinima(empresa.empresa_id));
+    return channels.empresaProprietariaCanal(channel, empresasAptas)
+      || empresasAptas.find(empresa => Number(empresa.empresa_id) === Number(fallbackEmpresaId))
+      || empresasAptas[0]
+      || null;
   }
 
   function emitToChannelCompanies(channelId, event, payload) {
@@ -167,6 +177,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
       aliases: req.body?.aliases || null,
       padrao: req.body?.padrao ? 1 : 0,
       ativo: 1,
+      ocultar_selecao: req.body?.ocultar_selecao !== undefined ? (req.body.ocultar_selecao ? 1 : 0) : undefined,
     });
     res.json(channels.buscarCanalDaEmpresa(channel.id, origemEmpresaId));
   });
@@ -214,10 +225,12 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     const { empresaId, channel, error } = resolveChannel(req);
     if (error) return res.status(404).json({ error });
     if (!channel) return res.status(400).json({ error: 'Nenhum canal WhatsApp vinculado a esta empresa.' });
+    const empresaInicial = empresaInicialDoCanal(channel, empresaId);
+    if (!empresaInicial) return res.status(400).json({ error: 'Nenhuma empresa apta para iniciar este canal WhatsApp.' });
 
     const svc = manager.getOrCreate(channel.id);
     wireEvents(svc, channel);
-    svc.start({ empresaId, channel });
+    svc.start({ empresaId: empresaInicial.empresa_id, channel });
     res.json({ ok: true, channel });
   });
 
@@ -277,4 +290,5 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     if (svc) svc.clearBuffer();
     res.json({ ok: true });
   });
+
 };

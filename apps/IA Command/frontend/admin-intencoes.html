@@ -513,7 +513,7 @@
           formatter:c=>c.getValue()?'<span class="badge-ativo">● Ativo</span>':'<span class="badge-inativo">○ Inativo</span>' },
         { title:'Criado em', field:'criado_em', width:150,
           formatter:c=>c.getValue()?.slice(0,16).replace('T',' ')||'' },
-        { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
+        { title:'Ações', field:'id', width:90, headerFilter:false, groupable:false, hozAlign:'right',
           formatter:cell=>{
             const id=cell.getValue();
             return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar">✏️</button>

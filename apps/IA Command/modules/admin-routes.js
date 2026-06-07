@@ -34,6 +34,24 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     } catch (_) {}
   }
 
+  function _whereLogModuloDinamico(modulo) {
+    const intencao = `${modulo}_dinamico`;
+    return {
+      where: `(
+        intencao = ?
+        OR intent_json LIKE ?
+        OR trace_json LIKE ?
+        OR dataset_nome = ?
+      )`,
+      params: [
+        intencao,
+        `%"_moduloDinamico":"${modulo}"%`,
+        `%"modulo":"${modulo}"%`,
+        modulo,
+      ],
+    };
+  }
+
   function normalizarNumero(numero) {
     return String(numero || '').replace(/\D/g, '');
   }
@@ -262,6 +280,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // ────────────────────────────────────────────────────────────────────────────
 
   app.get('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
+    try { require('./ai/intent-service')._garantirIntencoesDinamicasPadrao(eid(req)); } catch (_) {}
     const rows = crud.listar('intentions', { empresa_id: eid(req) });
     res.json(rows);
   });
@@ -409,6 +428,25 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       `SELECT * FROM execution_log WHERE empresa_id = ? ORDER BY criado_em DESC LIMIT ?`
     ).all(empId, limit);
     res.json(rows);
+  });
+
+  app.post('/api/ia-command/admin/execucoes/limpar', requireAuth, requireIaCommand, canExecucoes, (req, res) => {
+    const db      = getDB();
+    const empId   = eid(req);
+    const modo    = String(req.body?.modo || 'total');
+    const inicio  = String(req.body?.data_inicio || '').trim();
+    const fim     = String(req.body?.data_fim    || '').trim();
+
+    let info;
+    if (modo !== 'total' && inicio && fim) {
+      info = db.prepare(
+        `DELETE FROM execution_log WHERE empresa_id = ? AND criado_em >= ? AND criado_em <= ?`
+      ).run(empId, `${inicio}T00:00:00.000`, `${fim}T23:59:59.999`);
+    } else {
+      info = db.prepare(`DELETE FROM execution_log WHERE empresa_id = ?`).run(empId);
+    }
+    _audit(req, 'limpar_execucoes', { modo, data_inicio: inicio || null, data_fim: fim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -728,6 +766,33 @@ Responda SOMENTE com JSON válido, sem markdown:
       r.end();
     });
 
+    const _callOpenAI = (apiKey) => new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+        max_tokens: 2048,
+        response_format: { type: 'json_object' },
+      });
+      const opts = { hostname: 'api.openai.com', path: '/v1/chat/completions', method: 'POST', rejectUnauthorized: false,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(opts, (resp) => {
+        let raw = '';
+        resp.on('data', c => { raw += c; });
+        resp.on('end', () => {
+          try {
+            const p = JSON.parse(raw);
+            if (p.error) return reject(new Error(p.error.message || 'OpenAI error'));
+            resolve(JSON.parse(p.choices?.[0]?.message?.content));
+          } catch (e) { reject(e); }
+        });
+      });
+      r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.')));
+      r.on('error', reject);
+      r.write(body);
+      r.end();
+    });
+
     const _callGemini = (apiKey) => new Promise((resolve, reject) => {
       const body = JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
@@ -801,7 +866,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
     });
 
-    const CALLERS = { groq: _callGroq, gemini: _callGemini, deepseek: _callDeepSeek, claude: _callClaude };
+    const CALLERS = { groq: _callGroq, openai: _callOpenAI, gemini: _callGemini, deepseek: _callDeepSeek, claude: _callClaude };
 
     for (const p of ordem) {
       if (!keys[p] || !CALLERS[p]) continue;
@@ -844,13 +909,18 @@ Responda SOMENTE com JSON válido, sem markdown:
   app.get('/api/ia-command/admin/compras/consultas', requireAuth, requireIaCommand, canCompras, (req, res) => {
     const db = getDB();
     const empresaId = eid(req);
+
+    // Garante que a intenção compras_dinamico existe para esta empresa (bootstrap automático)
+    try { require('./erp/compras/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+
     const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
     const inicio = String(req.query.inicio || '').trim();
     const fim    = String(req.query.fim    || '').trim();
     const status = String(req.query.status || '').trim();
 
-    const wheres = ["empresa_id = ?", "intencao = 'compras_dinamico'"];
-    const params = [empresaId];
+    const filtroModulo = _whereLogModuloDinamico('compras');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
 
     if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
     if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
@@ -859,7 +929,121 @@ Responda SOMENTE com JSON válido, sem markdown:
     params.push(limit);
     const rows = db.prepare(`
       SELECT id, criado_em, texto_original, sql_gerado, rows_count,
-             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
+             escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             pipeline_origem, chat_turno, sql_validacao_erro
+      FROM interpretation_log
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+    res.json(rows);
+  });
+
+  // ── FATURAMENTO — Consultas Text-to-SQL ─────────────────────────────────────
+  const canFaturamento = requireRotina('iac-admin-faturamento');
+
+  app.get('/api/ia-command/admin/faturamento/consultas', requireAuth, requireIaCommand, canFaturamento, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+
+    try { require('./erp/faturamento/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+
+    const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
+    const inicio = String(req.query.inicio || '').trim();
+    const fim    = String(req.query.fim    || '').trim();
+    const status = String(req.query.status || '').trim();
+
+    const filtroModulo = _whereLogModuloDinamico('faturamento');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+
+    if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
+    if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
+    if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, criado_em, texto_original, sql_gerado, rows_count,
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
+             escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             pipeline_origem, chat_turno, sql_validacao_erro
+      FROM interpretation_log
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+    res.json(rows);
+  });
+
+  // ── FINANCEIRO — Consultas Text-to-SQL ──────────────────────────────────────
+  const canFinanceiro = requireRotina('iac-admin-financeiro');
+
+  app.get('/api/ia-command/admin/financeiro/consultas', requireAuth, requireIaCommand, canFinanceiro, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+
+    try { require('./erp/financeiro/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+
+    const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
+    const inicio = String(req.query.inicio || '').trim();
+    const fim    = String(req.query.fim    || '').trim();
+    const status = String(req.query.status || '').trim();
+
+    const filtroModulo = _whereLogModuloDinamico('financeiro');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+
+    if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
+    if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
+    if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, criado_em, texto_original, sql_gerado, rows_count,
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
+             escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             pipeline_origem, chat_turno, sql_validacao_erro
+      FROM interpretation_log
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+    res.json(rows);
+  });
+
+  // ── COMISSÃO — Consultas Text-to-SQL ────────────────────────────────────────
+  const canComissao = requireRotina('iac-admin-comissao');
+
+  app.get('/api/ia-command/admin/comissao/consultas', requireAuth, requireIaCommand, canComissao, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+
+    try { require('./erp/comissao/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+
+    const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
+    const inicio = String(req.query.inicio || '').trim();
+    const fim    = String(req.query.fim    || '').trim();
+    const status = String(req.query.status || '').trim();
+
+    const filtroModulo = _whereLogModuloDinamico('comissao');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+
+    if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
+    if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
+    if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, criado_em, texto_original, sql_gerado, rows_count,
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
+             escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             pipeline_origem, chat_turno, sql_validacao_erro
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -904,6 +1088,158 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (!ok) return res.status(404).json({ error: 'Interpretacao nao encontrada.' });
     _audit(req, 'feedback_interpretacao', { id: req.params.id, feedback: req.body.feedback });
     res.json({ ok: true });
+  });
+
+  // ── COMPRAS — Limpar log ────────────────────────────────────────────────────
+  app.post('/api/ia-command/admin/compras/consultas/limpar', requireAuth, requireIaCommand, canCompras, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim    = String(req.body?.data_fim    || '').trim();
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      if (dataInicio > dataFim)    return res.status(400).json({ error: 'Data inicial não pode ser maior que a data final.' });
+    }
+    const filtroModulo = _whereLogModuloDinamico('compras');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+    if (modo !== 'total') { wheres.push("criado_em >= ?", "criado_em <= ?"); params.push(`${dataInicio}T00:00:00.000`, `${dataFim}T23:59:59.999`); }
+    const info = db.prepare(`DELETE FROM interpretation_log WHERE ${wheres.join(' AND ')}`).run(...params);
+    _audit(req, 'limpar_log_compras', { modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
+  });
+
+  // ── FATURAMENTO — Limpar log ─────────────────────────────────────────────────
+  app.post('/api/ia-command/admin/faturamento/consultas/limpar', requireAuth, requireIaCommand, canFaturamento, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim    = String(req.body?.data_fim    || '').trim();
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      if (dataInicio > dataFim)    return res.status(400).json({ error: 'Data inicial não pode ser maior que a data final.' });
+    }
+    const filtroModulo = _whereLogModuloDinamico('faturamento');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+    if (modo !== 'total') { wheres.push("criado_em >= ?", "criado_em <= ?"); params.push(`${dataInicio}T00:00:00.000`, `${dataFim}T23:59:59.999`); }
+    const info = db.prepare(`DELETE FROM interpretation_log WHERE ${wheres.join(' AND ')}`).run(...params);
+    _audit(req, 'limpar_log_faturamento', { modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
+  });
+
+  // ── FINANCEIRO — Limpar log ──────────────────────────────────────────────────
+  app.post('/api/ia-command/admin/financeiro/consultas/limpar', requireAuth, requireIaCommand, canFinanceiro, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim    = String(req.body?.data_fim    || '').trim();
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      if (dataInicio > dataFim)    return res.status(400).json({ error: 'Data inicial não pode ser maior que a data final.' });
+    }
+    const filtroModulo = _whereLogModuloDinamico('financeiro');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+    if (modo !== 'total') { wheres.push("criado_em >= ?", "criado_em <= ?"); params.push(`${dataInicio}T00:00:00.000`, `${dataFim}T23:59:59.999`); }
+    const info = db.prepare(`DELETE FROM interpretation_log WHERE ${wheres.join(' AND ')}`).run(...params);
+    _audit(req, 'limpar_log_financeiro', { modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
+  });
+
+  // ── COMISSÃO — Limpar log ────────────────────────────────────────────────────
+  app.post('/api/ia-command/admin/comissao/consultas/limpar', requireAuth, requireIaCommand, canComissao, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim    = String(req.body?.data_fim    || '').trim();
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      if (dataInicio > dataFim)    return res.status(400).json({ error: 'Data inicial não pode ser maior que a data final.' });
+    }
+    const filtroModulo = _whereLogModuloDinamico('comissao');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+    if (modo !== 'total') { wheres.push("criado_em >= ?", "criado_em <= ?"); params.push(`${dataInicio}T00:00:00.000`, `${dataFim}T23:59:59.999`); }
+    const info = db.prepare(`DELETE FROM interpretation_log WHERE ${wheres.join(' AND ')}`).run(...params);
+    _audit(req, 'limpar_log_comissao', { modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
+  });
+
+  // ── LOG UNIFICADO DE CONSULTAS (todos os módulos) ───────────────────────────
+  const MODULOS_VALIDOS = new Set(['compras', 'faturamento', 'financeiro', 'comissao']);
+
+  app.get('/api/ia-command/admin/logs/consultas', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+
+    const limit   = Math.min(parseInt(req.query.limit   || '500', 10), 2000);
+    const inicio  = String(req.query.inicio  || '').trim();
+    const fim     = String(req.query.fim     || '').trim();
+    const status  = String(req.query.status  || '').trim();
+    const provedor = String(req.query.provedor || '').trim();
+    const modulo  = String(req.query.modulo  || '').trim().toLowerCase();
+
+    const wheres = ['empresa_id = ?'];
+    const params = [empresaId];
+
+    if (modulo && MODULOS_VALIDOS.has(modulo)) {
+      wheres.push('modulo = ?');
+      params.push(modulo);
+    }
+    if (inicio)   { wheres.push('criado_em >= ?'); params.push(inicio); }
+    if (fim)      { wheres.push('criado_em <= ?'); params.push(fim + 'T23:59:59'); }
+    if (status)   { wheres.push('resultado_tipo = ?'); params.push(status); }
+    if (provedor) { wheres.push('provedor = ?'); params.push(provedor); }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, criado_em, modulo, texto_original, sql_gerado, rows_count,
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue,
+             trace_json, intencao, usuario, numero_wa,
+             escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             pipeline_origem, chat_turno, sql_validacao_erro
+      FROM interpretation_log
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+    res.json(rows);
+  });
+
+  app.post('/api/ia-command/admin/logs/consultas/limpar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim    = String(req.body?.data_fim    || '').trim();
+    const modulo     = String(req.body?.modulo      || '').trim().toLowerCase();
+
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      if (dataInicio > dataFim)    return res.status(400).json({ error: 'Data inicial não pode ser maior que a data final.' });
+    }
+
+    const wheres = ['empresa_id = ?'];
+    const params = [empresaId];
+
+    if (modulo && MODULOS_VALIDOS.has(modulo)) {
+      wheres.push('modulo = ?');
+      params.push(modulo);
+    }
+    if (modo !== 'total') {
+      wheres.push('criado_em >= ?', 'criado_em <= ?');
+      params.push(`${dataInicio}T00:00:00.000`, `${dataFim}T23:59:59.999`);
+    }
+
+    const info = db.prepare(`DELETE FROM interpretation_log WHERE ${wheres.join(' AND ')}`).run(...params);
+    _audit(req, 'limpar_log_consultas', { modulo: modulo || 'todos', modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
   });
 
   // ---------------------------------------------------------------------------
@@ -1118,6 +1454,23 @@ Responda SOMENTE com JSON válido, sem markdown:
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
     });
 
+    const _callOpenAI = (apiKey) => new Promise((resolve, reject) => {
+      const body = JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.4,
+        max_tokens: 3000,
+        response_format: { type: 'json_object' },
+      });
+      const opts = { hostname: 'api.openai.com', path: '/v1/chat/completions', method: 'POST', rejectUnauthorized: false,
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const r = https.request(opts, (resp) => {
+        let raw = ''; resp.on('data', c => { raw += c; });
+        resp.on('end', () => { try { const p = JSON.parse(raw); if (p.error) return reject(new Error(p.error.message || 'OpenAI error')); resolve(JSON.parse(p.choices?.[0]?.message?.content)); } catch (e) { reject(e); } });
+      });
+      r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
+    });
+
     const _callGemini = (apiKey) => new Promise((resolve, reject) => {
       const body = JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
@@ -1163,7 +1516,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       r.setTimeout(30000, () => r.destroy(new Error('Tempo limite excedido.'))); r.on('error', reject); r.write(body); r.end();
     });
 
-    const CALLERS = { groq: _callGroq, gemini: _callGemini, deepseek: _callDeepSeek, claude: _callClaude };
+    const CALLERS = { groq: _callGroq, openai: _callOpenAI, gemini: _callGemini, deepseek: _callDeepSeek, claude: _callClaude };
     const TIPOS_VALIDOS = ['saudacao', 'despedida', 'agradecimento', 'ajuda', 'confusao', 'outro'];
 
     for (const p of ordem) {
@@ -1190,3 +1543,4 @@ Responda SOMENTE com JSON válido, sem markdown:
   });
 
 };
+

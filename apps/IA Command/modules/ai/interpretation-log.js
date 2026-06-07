@@ -28,12 +28,31 @@ function camposInferidos(intent = {}) {
   return campos;
 }
 
+function moduloDinamico(payload = {}) {
+  const intent = payload.intent || {};
+  const resultado = payload.resultado || {};
+  const conhecido = new Set(['compras', 'financeiro', 'faturamento', 'comissao']);
+
+  const candidatos = [
+    intent._moduloDinamico,
+    resultado.dataset_nome,
+    ...(Array.isArray(intent._trace) ? intent._trace.map(t => t?.modulo) : []),
+    ...(Array.isArray(resultado.trace) ? resultado.trace.map(t => t?.modulo) : []),
+    ...(Array.isArray(payload.trace) ? payload.trace.map(t => t?.modulo) : []),
+    String(intent.intencao || '').replace(/_dinamico$/i, ''),
+  ].filter(Boolean).map(v => String(v).toLowerCase());
+
+  return candidatos.find(v => conhecido.has(v)) || null;
+}
+
 function registrar(payload = {}) {
   const db = getDB();
   const now = agora();
   const id = payload.id || uuid();
   const intent = payload.intent || {};
   const resultado = payload.resultado || {};
+  const modulo = moduloDinamico(payload);
+  const intencaoPersistida = modulo ? `${modulo}_dinamico` : (intent.intencao || null);
 
   const row = {
     id,
@@ -43,7 +62,7 @@ function registrar(payload = {}) {
     canal_id: payload.canal_id || null,
     texto_original: payload.texto_original || '',
     intent_json: json(intent),
-    intencao: intent.intencao || null,
+    intencao: intencaoPersistida,
     periodo_json: json(intent.periodo || {}),
     filtros_json: json(intent.filtros || {}),
     agrupar_por: intent.agrupar_por || null,
@@ -62,8 +81,28 @@ function registrar(payload = {}) {
     dataset_nome: resultado.dataset_nome || null,
     rows_count: Array.isArray(resultado.rows) ? resultado.rows.length : (payload.rows_count ?? null),
     resposta_entregue: payload.resposta_entregue || null,
+    modulo: modulo || null,
     sql_gerado: resultado.sql_gerado || payload.sql_gerado || null,
-    duracao_ms: payload.duracao_ms ?? null,
+    escopo_execucao: payload.escopo_execucao || resultado.escopo_execucao || intent._escopoExecucao || null,
+    sql_canonico_origem: resultado._sql_canonico_origem || payload.sql_canonico_origem || null,
+    sql_canonico_empresa_origem: resultado._sql_canonico_empresa_origem || payload.sql_canonico_empresa_origem || null,
+    sql_canonico_original: resultado._sql_canonico_original || payload.sql_canonico_original || null,
+    sql_canonico_adaptado: resultado._sql_canonico || payload.sql_canonico_adaptado || null,
+    sql_auditoria_json: json(resultado._sql_auditoria || payload.sql_auditoria || null),
+    sql_canonico_parametros_json: json(resultado._sql_canonico_parametros || payload.sql_canonico_parametros || []),
+    sql_canonico_parametrizado: (resultado._sql_canonico_parametrizado || payload.sql_canonico_parametrizado) ? 1 : 0,
+    sql_ia_bruto: resultado._sql_auditoria?.sql_ia_bruto || payload.sql_ia_bruto || null,
+    sql_final_executado: resultado._sql_auditoria?.sql_final_executado || resultado.sql_gerado || payload.sql_final_executado || null,
+    sql_canonico_reuso_motivo: resultado._sql_canonico_reuso_motivo || payload.sql_canonico_reuso_motivo || null,
+    sql_canonico_reuso_permitido: resultado._sql_canonico_reuso_permitido == null && payload.sql_canonico_reuso_permitido == null
+      ? null
+      : ((resultado._sql_canonico_reuso_permitido ?? payload.sql_canonico_reuso_permitido) ? 1 : 0),
+    sql_canonico_empresa_atual: payload.empresa_id ?? resultado._sql_auditoria?.empresa_id ?? null,
+    duracao_ms: payload.duracao_ms ?? resultado.duracao_ms ?? null,
+    trace_json: json(payload.trace || intent._trace || resultado.trace || []),
+    pipeline_origem: resultado._pipeline_origem || payload.pipeline_origem || null,
+    chat_turno: resultado._chat_turno ?? payload.chat_turno ?? null,
+    sql_validacao_erro: resultado._sql_validacao_erro || payload.sql_validacao_erro || null,
     feedback: payload.feedback || null,
     feedback_observacao: payload.feedback_observacao || null,
     criado_em: now,
@@ -118,4 +157,4 @@ function limpar(empresaId, opts = {}) {
   return info.changes || 0;
 }
 
-module.exports = { registrar, listar, registrarFeedback, limpar, camposInferidos };
+module.exports = { registrar, listar, registrarFeedback, limpar, camposInferidos, moduloDinamico };

@@ -1,0 +1,226 @@
+import base64
+import json
+import sqlite3
+from datetime import datetime
+from pathlib import Path
+
+DB_PATH    = Path(__file__).parent / "audit.db"
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _conn():
+    c = sqlite3.connect(DB_PATH)
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def init_db():
+    with _conn() as db:
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS execucoes (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid           TEXT,
+                modulo         TEXT,
+                operacao       TEXT,
+                ip_origem      TEXT,
+                pergunta       TEXT,
+                sender         TEXT,
+                sql_entrada    TEXT,
+                sql_executado  TEXT,
+                payload_saida  TEXT,
+                duracao_ms     INTEGER,
+                status         TEXT NOT NULL DEFAULT 'ok',
+                erro           TEXT,
+                chegada_em     TEXT NOT NULL,
+                finalizado_em  TEXT NOT NULL
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_exec_modulo  ON execucoes (modulo,  chegada_em)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_exec_status  ON execucoes (status,  chegada_em)")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_exec_uuid    ON execucoes (uuid)")
+        # Migrações: adiciona colunas em bases existentes sem recriar a tabela
+        for col, typ in [
+            ("pergunta",          "TEXT"),
+            ("sender",            "TEXT"),
+            ("empresa_id",        "TEXT"),
+            ("usuario",           "TEXT"),
+            ("linhas_retornadas", "INTEGER"),
+            ("limite_solicitado", "INTEGER"),
+            ("tipo_erro",         "TEXT"),
+        ]:
+            try:
+                db.execute(f"ALTER TABLE execucoes ADD COLUMN {col} {typ}")
+            except Exception:
+                pass
+
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS empresas (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                empresa_id      TEXT NOT NULL UNIQUE,
+                nome            TEXT NOT NULL,
+                cnpj            TEXT,
+                ativo           INTEGER DEFAULT 1,
+                sincronizado_em TEXT NOT NULL,
+                logo_url        TEXT,
+                bg_url          TEXT,
+                slogan          TEXT
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_empresas_eid ON empresas (empresa_id)")
+        for col, typ in [("logo_url", "TEXT"), ("bg_url", "TEXT"), ("slogan", "TEXT")]:
+            try:
+                db.execute(f"ALTER TABLE empresas ADD COLUMN {col} {typ}")
+            except Exception:
+                pass
+
+
+def registrar_execucao(
+    *, uuid, modulo, operacao, sql_entrada, sql_executado,
+    payload_saida, duracao_ms, status, erro, ip_origem,
+    pergunta=None, sender=None, empresa_id=None, usuario=None,
+    linhas_retornadas=None, limite_solicitado=None, tipo_erro=None,
+):
+    agora = datetime.utcnow().isoformat()
+    # Grava apenas amostra (primeiras 10 linhas) + total — evita JSON gigante no SQLite
+    amostra = None
+    if payload_saida is not None:
+        try:
+            rows = payload_saida if isinstance(payload_saida, list) else []
+            amostra = json.dumps(rows[:10], ensure_ascii=False, default=str)
+        except Exception:
+            amostra = str(payload_saida)[:4000]
+
+    with _conn() as db:
+        db.execute(
+            """INSERT INTO execucoes
+               (uuid, modulo, operacao, ip_origem, pergunta, sender, empresa_id, usuario,
+                sql_entrada, sql_executado, payload_saida, duracao_ms,
+                status, erro, linhas_retornadas, limite_solicitado, tipo_erro,
+                chegada_em, finalizado_em)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (uuid, modulo, operacao, ip_origem, pergunta, sender, empresa_id, usuario,
+             sql_entrada, sql_executado, amostra, duracao_ms,
+             status, erro, linhas_retornadas, limite_solicitado, tipo_erro,
+             agora, agora),
+        )
+
+
+_COLS_LISTA = (
+    "id, uuid, modulo, operacao, ip_origem, pergunta, sender, sql_entrada, sql_executado, "
+    "duracao_ms, status, erro, chegada_em, finalizado_em, empresa_id, usuario, "
+    "linhas_retornadas, limite_solicitado, tipo_erro"
+)
+
+def listar_execucoes(*, modulo="", status="", data_ini="", data_fim="", empresa_id="", limit=200):
+    where, params = ["1=1"], []
+    if modulo:     where.append("modulo = ?");        params.append(modulo)
+    if status:     where.append("status = ?");        params.append(status)
+    if empresa_id: where.append("empresa_id = ?");    params.append(empresa_id)
+    if data_ini:   where.append("chegada_em >= ?");   params.append(data_ini)
+    if data_fim:   where.append("chegada_em <= ?");   params.append(data_fim + "T23:59:59")
+    params.append(min(limit, 1000))
+
+    with _conn() as db:
+        rows = db.execute(
+            f"SELECT {_COLS_LISTA} FROM execucoes WHERE {' AND '.join(where)} ORDER BY chegada_em DESC LIMIT ?",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_execucao(id_: int):
+    with _conn() as db:
+        row = db.execute("SELECT * FROM execucoes WHERE id = ?", (id_,)).fetchone()
+    return dict(row) if row else None
+
+
+def limpar_historico():
+    with _conn() as db:
+        db.execute("DELETE FROM execucoes")
+
+
+# ── Empresas ─────────────────────────────────────────────────────────────────
+
+_IMG_EXTS = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+
+
+def _salvar_imagem(eid: str, nome_arquivo: str, data_b64: str, mime: str) -> str | None:
+    ext = _IMG_EXTS.get(mime, "png")
+    try:
+        pasta = STATIC_DIR / "empresas" / eid
+        pasta.mkdir(parents=True, exist_ok=True)
+        caminho = pasta / f"{nome_arquivo}.{ext}"
+        caminho.write_bytes(base64.b64decode(data_b64))
+        return f"/static/empresas/{eid}/{nome_arquivo}.{ext}"
+    except Exception:
+        return None
+
+
+def sincronizar_empresas(lista: list):
+    """Recebe lista de dicts {empresa_id, nome, cnpj?, logo_data?, bg_data?, slogan?} e faz upsert."""
+    agora = datetime.utcnow().isoformat()
+    with _conn() as db:
+        for emp in lista:
+            eid    = str(emp.get("empresa_id", "")).strip()
+            nome   = str(emp.get("nome", "")).strip()
+            cnpj   = str(emp.get("cnpj",   "") or "").strip() or None
+            slogan = str(emp.get("slogan", "") or "").strip() or None
+            if not eid or not nome:
+                continue
+
+            logo_url = _salvar_imagem(eid, "logo",       emp["logo_data"], emp.get("logo_mime", "image/png")) \
+                       if emp.get("logo_data") else None
+            bg_url   = _salvar_imagem(eid, "background", emp["bg_data"],   emp.get("bg_mime",   "image/jpeg")) \
+                       if emp.get("bg_data")   else None
+
+            db.execute(
+                """INSERT INTO empresas (empresa_id, nome, cnpj, ativo, sincronizado_em, slogan, logo_url, bg_url)
+                   VALUES (?,?,?,1,?,?,?,?)
+                   ON CONFLICT(empresa_id) DO UPDATE SET
+                     nome=excluded.nome,
+                     cnpj=excluded.cnpj,
+                     ativo=1,
+                     sincronizado_em=excluded.sincronizado_em,
+                     slogan=COALESCE(excluded.slogan, slogan),
+                     logo_url=COALESCE(excluded.logo_url, logo_url),
+                     bg_url=COALESCE(excluded.bg_url, bg_url)""",
+                (eid, nome, cnpj, agora, slogan, logo_url, bg_url),
+            )
+
+
+def listar_empresas() -> list:
+    with _conn() as db:
+        rows = db.execute("SELECT * FROM empresas ORDER BY nome").fetchall()
+    return [dict(r) for r in rows]
+
+
+def remover_empresa(empresa_id: str):
+    with _conn() as db:
+        db.execute("DELETE FROM empresas WHERE empresa_id = ?", (empresa_id,))
+
+
+def listar_empresas_public() -> list:
+    """Retorna apenas dados públicos (sem dados sensíveis) para a página de login."""
+    with _conn() as db:
+        rows = db.execute(
+            "SELECT empresa_id, nome, logo_url, bg_url, slogan FROM empresas WHERE ativo=1 ORDER BY nome"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_stats() -> dict:
+    with _conn() as db:
+        total   = db.execute("SELECT COUNT(*) FROM execucoes").fetchone()[0]
+        sucesso = db.execute("SELECT COUNT(*) FROM execucoes WHERE status='ok'").fetchone()[0]
+        erros   = db.execute("SELECT COUNT(*) FROM execucoes WHERE status='erro'").fetchone()[0]
+        avg_ms  = db.execute("SELECT AVG(duracao_ms) FROM execucoes WHERE status='ok'").fetchone()[0]
+        modulos = db.execute(
+            "SELECT modulo, COUNT(*) as total FROM execucoes WHERE modulo != '' GROUP BY modulo ORDER BY total DESC"
+        ).fetchall()
+    return {
+        "total":   total,
+        "sucesso": sucesso,
+        "erros":   erros,
+        "avg_ms":  round(avg_ms or 0),
+        "modulos": [dict(m) for m in modulos],
+    }

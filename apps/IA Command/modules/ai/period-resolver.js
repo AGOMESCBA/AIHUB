@@ -163,6 +163,13 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
 
   if (comparacao) {
     const anosComparacao = _yearsFromText(texto);
+    if (_containsTerm(texto, 'ano') && _containsAny(texto, ['ano anterior', 'ano passado']) && _containsAny(texto, ['ano atual', 'este ano', 'esse ano', 'atual'])) {
+      return {
+        tipo: 'comparacao_anual',
+        ano_base: hoje.getFullYear() - 1,
+        ano_comparacao: hoje.getFullYear(),
+      };
+    }
     if (anosComparacao.length >= 2 && _isMonthlyComparison(texto) && !mesTexto) {
       return {
         tipo: 'comparacao_mensal_entre_anos',
@@ -171,8 +178,15 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
       };
     }
     if (_containsTerm(texto, 'mes a mes')) return { tipo: 'comparacao_mensal' };
-    if (_containsAny(texto, ['acumulado', 'ytd', 'ate'])) {
-      return { tipo: 'comparacao_acumulado_mes', mes: mesTexto || hoje.getMonth() + 1 };
+    if (_containsAny(texto, ['acumulado', 'ytd', 'ate', 'jan a', 'janeiro a'])) {
+      const meses = _monthsFromText(texto);
+      const mesFinal = meses.length >= 2 ? Math.max(...meses) : (meses[0] || hoje.getMonth() + 1);
+      return { tipo: 'comparacao_acumulado_mes', mes: mesFinal, ano_base: anosComparacao[0] || hoje.getFullYear() - 1, ano_comparacao: anosComparacao[1] || hoje.getFullYear() };
+    }
+    // range de meses explícito ("de janeiro a maio", "janeiro a maio") com dois anos = acumulado
+    const mesesRange = _monthsFromText(texto);
+    if (mesesRange.length >= 2 && anosComparacao.length >= 2) {
+      return { tipo: 'comparacao_acumulado_mes', mes: Math.max(...mesesRange), ano_base: anosComparacao[0], ano_comparacao: anosComparacao[1] };
     }
     if (mesTexto) return { tipo: 'comparacao_mesmo_mes', mes: mesTexto };
     if (anosComparacao.length >= 2) {
@@ -197,6 +211,9 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
 
   const mesNomeado = _namedMonthRange(texto, hoje);
   if (mesNomeado) return { tipo: 'personalizado', data_inicio: mesNomeado.data_inicio, data_fim: mesNomeado.data_fim };
+
+  const rangeAnos = _multiYearRange(texto);
+  if (rangeAnos) return { tipo: 'personalizado', data_inicio: rangeAnos.data_inicio, data_fim: rangeAnos.data_fim };
 
   const anoExplicito = texto.match(/\b(?:ano\s+de\s+|ano\s+)?(20\d{2}|19\d{2})\b/);
   if (anoExplicito && _containsTerm(texto, 'ano')) {
@@ -344,6 +361,18 @@ function _yearToNamedMonthRange(texto) {
   return null;
 }
 
+function _multiYearRange(texto) {
+  if (!_containsAny(texto, ['ano', 'anos'])) return null;
+  const anos = _yearsFromText(texto);
+  if (anos.length < 2) return null;
+  const primeiro = Math.min(...anos);
+  const ultimo = Math.max(...anos);
+  return {
+    data_inicio: `${primeiro}0101`,
+    data_fim: `${ultimo}1231`,
+  };
+}
+
 function _ultimosMeses(hoje, meses) {
   const n = _clampInt(meses, 1, 1, 120);
   const inicio = _startOfMonth(hoje.getFullYear(), hoje.getMonth() - n + 1);
@@ -410,7 +439,7 @@ function _anoRefTexto(texto) {
 }
 
 function _hasComparison(texto) {
-  return _containsAny(texto, ['vs', 'versus', 'contra', 'comparar', 'comparativo', 'comparado', 'mesmo periodo', 'ano a ano', 'mes a mes']);
+  return _containsAny(texto, ['vs', 'versus', 'contra', 'comparar', 'comparando', 'comparativo', 'comparado', 'crescimento', 'mesmo periodo', 'ano a ano', 'mes a mes']);
 }
 
 function _containsAny(texto, termos) {

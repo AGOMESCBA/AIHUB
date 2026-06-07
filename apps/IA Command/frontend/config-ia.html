@@ -42,6 +42,7 @@
     .prov-icon-deepseek { background:rgba(20,184,166,.12); }
     .prov-icon-claude   { background:rgba(168,85,247,.12); }
     .prov-icon-openai   { background:rgba(16,163,127,.12); }
+    .prov-icon-agente   { background:rgba(14,165,233,.12); font-size:20px; }
     .prov-meta          { flex:1;min-width:0; }
     .prov-name          { font-size:16px;font-weight:700;color:var(--text-hi);display:flex;align-items:center;gap:8px; }
     .prov-desc          { font-size:13px;color:var(--text-md);margin-top:2px; }
@@ -74,6 +75,18 @@
     .badge-claude   { background:rgba(168,85,247,.12);color:#7e22ce; }
     .badge-openai   { background:rgba(16,163,127,.12);color:#047857; }
     .badge-primario { background:rgba(124,58,237,.15);color:var(--accent); }
+    .badge-agente-ativo   { background:rgba(16,185,129,.12);color:#059669; }
+    .badge-agente-inativo { background:var(--bg-hover);color:var(--text-lo); }
+
+    .btn-warning { background:rgba(234,88,12,.1);color:#c2410c;border:1px solid rgba(234,88,12,.2);transition:background var(--transition),color var(--transition); }
+    .btn-warning:hover { background:rgba(234,88,12,.18);color:#9a3412; }
+    .agente-info-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px; }
+    @media(max-width:600px) { .agente-info-grid { grid-template-columns:1fr; } }
+    .agente-info-item { background:var(--bg-hover);border-radius:var(--radius-sm);padding:10px 14px; }
+    .agente-info-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:3px; }
+    .agente-info-value { font-size:13px;color:var(--text-hi);word-break:break-all; }
+    .copy-btn { background:none;border:none;cursor:pointer;color:var(--text-lo);padding:2px 5px;border-radius:4px;font-size:12px;transition:color var(--transition),background var(--transition); }
+    .copy-btn:hover { color:var(--text-hi);background:var(--bg-hover); }
 
     .test-result { margin-top:10px;padding:9px 14px;border-radius:var(--radius-sm);font-size:13px; }
     .test-result.ok   { background:#dcfce7;color:#15803d; }
@@ -150,6 +163,7 @@
           <button class="iac-tab"         onclick="mudarAba(this,'aba-deepseek')">▣ DeepSeek</button>
           <button class="iac-tab"         onclick="mudarAba(this,'aba-claude')">◆ Claude</button>
           <button class="iac-tab"         onclick="mudarAba(this,'aba-comportamento')">⚙ Comportamento</button>
+          <button class="iac-tab"         onclick="mudarAba(this,'aba-agente')">🔌 Agente Local</button>
         </div>
 
         <div class="editor-grid editor-grid-wide">
@@ -305,6 +319,68 @@
               </div>
             </div>
 
+            <!-- ABA AGENTE LOCAL -->
+            <div class="iac-tab-panel" id="aba-agente">
+              <div class="form-section">
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-agente">🔌</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Agente Local &nbsp;<span id="agente-status-badge" class="provider-badge badge-agente-inativo">○ Inativo</span></div>
+                      <div class="prov-desc">API Python instalada no servidor do cliente que executa SQL diretamente no banco do ERP local (Protheus/TOTVS), sem expor credenciais para a internet.</div>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">URL do Agente</label>
+                    <input type="url" id="agente-url" class="form-control" placeholder="http://192.168.1.10:8765" oninput="atualizarResumoAgente()">
+                    <div class="form-hint">Endereço completo onde o agente está escutando. Inclua o protocolo e a porta (padrão: 8765).</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Bearer Token</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="agente-token" class="form-control" placeholder="Clique em &quot;Gerar Token&quot; para criar">
+                      <button type="button" class="btn-pass-toggle" id="toggle-agente-token" onclick="toggleAgenteToken()" title="Mostrar/ocultar token">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Token compartilhado entre a nuvem e o agente. Gere aqui, copie e cole no arquivo <code>.env</code> do agente (<code>API_TOKEN=…</code>).</div>
+                    <div id="status-agente-token" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-warning" onclick="regerarToken()">↻ Gerar novo token</button>
+                      <button class="btn btn-ghost" id="btn-copiar-token" onclick="copiarToken()" style="display:none">⎘ Copiar</button>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Status da integração</label>
+                    <select id="agente-ativo" class="form-control" style="max-width:420px" onchange="atualizarResumoAgente()">
+                      <option value="0">Inativo — usa conexão ERP direta</option>
+                      <option value="1">Ativo — roteia via Agente Local</option>
+                    </select>
+                    <div class="form-hint">Quando ativo, o IA Command envia o SQL gerado ao agente para execução no ERP do cliente.</div>
+                  </div>
+
+                  <div class="agente-info-grid" id="agente-info-grid" style="display:none">
+                    <div class="agente-info-item">
+                      <div class="agente-info-label">Último teste</div>
+                      <div class="agente-info-value" id="agente-ultimo-teste">—</div>
+                    </div>
+                    <div class="agente-info-item">
+                      <div class="agente-info-label">Resultado</div>
+                      <div class="agente-info-value" id="agente-ultimo-resultado">—</div>
+                    </div>
+                  </div>
+
+                  <div class="key-action" style="margin-top:20px">
+                    <button class="btn btn-ghost" onclick="testarAgente()">⚡ Testar conexão com agente</button>
+                  </div>
+                  <div class="test-result" id="test-agente" style="display:none"></div>
+                </div>
+              </div>
+            </div>
+
             <!-- ABA COMPORTAMENTO -->
             <div class="iac-tab-panel" id="aba-comportamento">
               <div class="form-section">
@@ -338,6 +414,12 @@
                   </div>
 
                   <div class="form-group">
+                    <label class="form-label">Turnos de histórico conversacional</label>
+                    <input type="number" id="historico-turnos" class="form-control" min="1" max="10" step="1" value="5" style="max-width:120px" oninput="atualizarResumo()">
+                    <div class="form-hint">Quantas consultas anteriores são enviadas à IA de SQL como contexto. Mín. 1 · Máx. 10 · Padrão 5.</div>
+                  </div>
+
+                  <div class="form-group">
                     <label class="form-label">Idioma da transcrição de áudio</label>
                     <select id="audio-idioma" class="form-control" style="max-width:260px" onchange="atualizarResumo()">
                       <option value="pt">Português (pt)</option>
@@ -368,6 +450,10 @@
                     <span class="summary-value" id="rs-confianca">—</span>
                   </div>
                   <div class="summary-item">
+                    <span class="summary-label">Turnos histórico</span>
+                    <span class="summary-value" id="rs-historico-turnos">—</span>
+                  </div>
+                  <div class="summary-item">
                     <span class="summary-label">Idioma de áudio</span>
                     <span class="summary-value" id="rs-idioma">—</span>
                   </div>
@@ -394,6 +480,16 @@
                   <div class="summary-item">
                     <span class="summary-label">Claude</span>
                     <span class="summary-value" id="rs-claude">—</span>
+                  </div>
+                  <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;display:flex;flex-direction:column;gap:10px">
+                    <div class="summary-item">
+                      <span class="summary-label">🔌 Agente Local</span>
+                      <span class="summary-value" id="rs-agente-status">—</span>
+                    </div>
+                    <div class="summary-item">
+                      <span class="summary-label">URL do agente</span>
+                      <span class="summary-value" id="rs-agente-url" style="font-size:11px;word-break:break-all">—</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -464,8 +560,9 @@
     const prim = document.getElementById('provedor-primario').value;
     _atualizarBadgesProvedores(prim);
     document.getElementById('rs-provedor').textContent  = labels[prim] || '—';
-    document.getElementById('rs-confianca').textContent = document.getElementById('confianca-min').value || '—';
-    document.getElementById('rs-idioma').textContent    = idiomas[document.getElementById('audio-idioma').value] || '—';
+    document.getElementById('rs-confianca').textContent         = document.getElementById('confianca-min').value || '—';
+    document.getElementById('rs-historico-turnos').textContent  = document.getElementById('historico-turnos').value || '—';
+    document.getElementById('rs-idioma').textContent            = idiomas[document.getElementById('audio-idioma').value] || '—';
     document.getElementById('rs-fallback').textContent  = document.getElementById('fallback-ordem').value || '—';
     PROVIDERS.forEach(p => {
       const el = document.getElementById(`${p}-key`);
@@ -507,6 +604,7 @@
       }
       if (cfg.fallback_ordem) document.getElementById('fallback-ordem').value = cfg.fallback_ordem;
       if (cfg.confianca_minima != null) document.getElementById('confianca-min').value = cfg.confianca_minima;
+      if (cfg.historico_turnos != null) document.getElementById('historico-turnos').value = cfg.historico_turnos;
       if (cfg.audio_idioma) document.getElementById('audio-idioma').value = cfg.audio_idioma;
 
       PROVIDERS.forEach(p => {
@@ -531,6 +629,7 @@
       provedor_primario: document.getElementById('provedor-primario').value,
       fallback_ordem:    document.getElementById('fallback-ordem').value.trim(),
       confianca_minima:  parseFloat(document.getElementById('confianca-min').value),
+      historico_turnos:  parseInt(document.getElementById('historico-turnos').value, 10) || 5,
       audio_idioma:      document.getElementById('audio-idioma').value,
     };
     PROVIDERS.forEach(p => {
@@ -541,6 +640,7 @@
       const r = await fetch('/api/ia-command/ai-config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
       if (!r.ok) { const e = await r.json(); alert(e.error || 'Erro ao salvar.'); return; }
       const saved = await r.json().catch(() => ({}));
+      await salvarAgente();
 
       PROVIDERS.forEach(p => {
         const el = document.getElementById(`${p}-key`);
@@ -592,7 +692,180 @@
     setTimeout(() => t.classList.remove('show'), 3000);
   }
 
+  // ── Agente Local ─────────────────────────────────────────────────────────────
+  const SVG_EYE_AGENTE    = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`;
+  const SVG_EYE_OFF_AGENTE = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+
+  function _svgEyeAgente(visible) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${visible ? SVG_EYE_OFF_AGENTE : SVG_EYE_AGENTE}</svg>`;
+  }
+
+  function atualizarResumoAgente(cfg) {
+    const ativo = cfg?.agente_local_ativo ?? parseInt(document.getElementById('agente-ativo')?.value || '0');
+    const url   = cfg?.agente_local_url   || document.getElementById('agente-url')?.value || '';
+
+    const badge = document.getElementById('agente-status-badge');
+    if (badge) {
+      if (ativo) { badge.className = 'provider-badge badge-agente-ativo';   badge.textContent = '● Ativo'; }
+      else        { badge.className = 'provider-badge badge-agente-inativo'; badge.textContent = '○ Inativo'; }
+    }
+
+    const rsStatus = document.getElementById('rs-agente-status');
+    const rsUrl    = document.getElementById('rs-agente-url');
+    if (rsStatus) rsStatus.innerHTML = ativo
+      ? '<span style="color:#059669">● Ativo</span>'
+      : '<span style="color:var(--text-lo)">○ Inativo</span>';
+    if (rsUrl) rsUrl.textContent = url ? url.replace(/^https?:\/\//, '') : '—';
+  }
+
+  async function carregarAgente() {
+    try {
+      const r   = await fetch('/api/ia-command/agente-local/config');
+      const cfg = await r.json();
+
+      document.getElementById('agente-url').value   = cfg.agente_local_url || '';
+      document.getElementById('agente-ativo').value = (cfg.agente_local_ativo ?? 0).toString();
+
+      const tokenEl = document.getElementById('agente-token');
+      tokenEl.value = '';
+      tokenEl.type  = 'password';
+      document.getElementById('toggle-agente-token').innerHTML = _svgEyeAgente(false);
+
+      if (cfg.token_configurado) {
+        tokenEl.dataset.configurado = '1';
+        tokenEl.placeholder = '••••••• (configurado — deixe em branco para manter)';
+        document.getElementById('status-agente-token').innerHTML = '<span style="color:var(--success)">✓ Token configurado</span>';
+      } else {
+        tokenEl.dataset.configurado = '0';
+        tokenEl.placeholder = 'Clique em "Gerar Token" para criar';
+        document.getElementById('status-agente-token').innerHTML = '<span style="color:var(--text-lo)">— Não configurado</span>';
+      }
+
+      if (cfg.agente_local_ultimo_teste) {
+        document.getElementById('agente-info-grid').style.display = 'grid';
+        const dt = new Date(cfg.agente_local_ultimo_teste);
+        document.getElementById('agente-ultimo-teste').textContent = dt.toLocaleString('pt-BR');
+        document.getElementById('agente-ultimo-resultado').innerHTML = cfg.agente_local_teste_ok
+          ? '<span style="color:#059669">✅ Sucesso</span>'
+          : '<span style="color:#dc2626">❌ Falha</span>';
+      }
+
+      atualizarResumoAgente(cfg);
+    } catch (e) { console.error('Erro ao carregar config do agente:', e); }
+  }
+
+  async function salvarAgente() {
+    const url   = document.getElementById('agente-url').value.trim();
+    const ativo = document.getElementById('agente-ativo').value === '1';
+    const token = document.getElementById('agente-token').value.trim();
+
+    const body = { url: url || null, ativo };
+    if (token && token !== '***') body.token = token;
+
+    await fetch('/api/ia-command/agente-local/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function testarAgente() {
+    const div = document.getElementById('test-agente');
+    div.className    = 'test-result';
+    div.textContent  = '⏳ Conectando ao agente…';
+    div.style.display = 'block';
+
+    const url   = document.getElementById('agente-url').value.trim();
+    const token = document.getElementById('agente-token').value.trim();
+
+    const body = {};
+    if (url)                       body.url   = url;
+    if (token && token !== '***')  body.token = token;
+
+    try {
+      const r    = await fetch('/api/ia-command/agente-local/testar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await r.json();
+
+      if (data.ok) {
+        div.className   = 'test-result ok';
+        div.textContent = `✅ Agente respondeu em ${data.latencia_ms}ms${data.versao ? ` — versão ${data.versao}` : ''}`;
+      } else {
+        div.className   = 'test-result fail';
+        div.textContent = `❌ ${data.erro || 'Erro desconhecido'}`;
+      }
+
+      document.getElementById('agente-info-grid').style.display = 'grid';
+      if (data.ultimo_teste) {
+        document.getElementById('agente-ultimo-teste').textContent = new Date(data.ultimo_teste).toLocaleString('pt-BR');
+        document.getElementById('agente-ultimo-resultado').innerHTML = data.ok
+          ? '<span style="color:#059669">✅ Sucesso</span>'
+          : '<span style="color:#dc2626">❌ Falha</span>';
+      }
+    } catch (e) {
+      div.className   = 'test-result fail';
+      div.textContent = `❌ ${e.message}`;
+    }
+  }
+
+  async function regerarToken() {
+    if (!confirm('Isso irá gerar um novo token e invalidar o anterior.\nVocê precisará atualizar o arquivo .env do agente local.\n\nContinuar?')) return;
+
+    try {
+      const r    = await fetch('/api/ia-command/agente-local/regerar-token', { method: 'POST' });
+      const data = await r.json();
+
+      const tokenEl = document.getElementById('agente-token');
+      tokenEl.value              = data.token;
+      tokenEl.type               = 'text';
+      tokenEl.dataset.configurado = '1';
+      tokenEl.placeholder        = '';
+      document.getElementById('toggle-agente-token').innerHTML = _svgEyeAgente(true);
+      document.getElementById('status-agente-token').innerHTML = '<span style="color:#d97706">⚠ Novo token gerado — copie antes de sair e configure no agente local</span>';
+      document.getElementById('btn-copiar-token').style.display = 'inline-flex';
+
+      const div = document.getElementById('test-agente');
+      div.className    = 'test-result ok';
+      div.textContent  = '🔑 Token gerado. Copie-o acima, salve as configurações e cole no .env do agente (API_TOKEN=…).';
+      div.style.display = 'block';
+    } catch (e) {
+      alert('Erro ao gerar token: ' + e.message);
+    }
+  }
+
+  function copiarToken() {
+    const tokenEl = document.getElementById('agente-token');
+    const val = tokenEl.value.trim();
+    if (!val || val === '***') return;
+    navigator.clipboard.writeText(val).then(() => {
+      const btn = document.getElementById('btn-copiar-token');
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.textContent = '⎘ Copiar'; }, 2000);
+    }).catch(() => { tokenEl.select(); document.execCommand('copy'); });
+  }
+
+  async function toggleAgenteToken() {
+    const inp = document.getElementById('agente-token');
+    const btn = document.getElementById('toggle-agente-token');
+    const show = inp.type === 'password';
+    inp.type      = show ? 'text' : 'password';
+    btn.innerHTML = _svgEyeAgente(show);
+
+    if (show && inp.value === '' && inp.dataset.configurado === '1') {
+      btn.disabled = true;
+      try {
+        const data = await fetch('/api/ia-command/agente-local/reveal-token').then(r => r.json());
+        inp.value = data.token || '';
+        if (data.token) document.getElementById('btn-copiar-token').style.display = 'inline-flex';
+      } catch (_) {
+        inp.type      = 'password';
+        btn.innerHTML = _svgEyeAgente(false);
+      } finally { btn.disabled = false; }
+    }
+  }
+  // ── fim Agente Local ──────────────────────────────────────────────────────────
+
   carregar();
+  carregarAgente();
 </script>
 
 <div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
@@ -630,6 +903,7 @@
       <div class="help-item"><div class="help-item-label">Provedor primário</div><div class="help-item-desc">Provedor tentado primeiro para cada consulta. Se falhar, o sistema usa a ordem de fallback.</div></div>
       <div class="help-item"><div class="help-item-label">Ordem de fallback</div><div class="help-item-desc">Lista separada por vírgula com a sequência de provedores a tentar quando o primário falha. Provedores sem chave são pulados automaticamente.</div></div>
       <div class="help-item"><div class="help-item-label">Confiança mínima</div><div class="help-item-desc">Limiar para executar uma consulta automaticamente. Abaixo desse valor o sistema pede confirmação ao usuário antes de executar.</div></div>
+      <div class="help-item"><div class="help-item-label">Turnos de histórico conversacional</div><div class="help-item-desc">Número de consultas anteriores enviadas à IA de SQL como contexto. Valores maiores dão mais contexto mas aumentam levemente o tempo de resposta. Recomendado: 3 a 5. Máximo 10.</div></div>
     </div>
   </div>
 </div>

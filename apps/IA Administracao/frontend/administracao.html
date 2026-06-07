@@ -652,6 +652,7 @@
                 <div class="emp-modal-tabs">
                   <button type="button" class="emp-modal-tab active" id="usu-tab-cadastro" onclick="usuMudarTab('cadastro')">Cadastro</button>
                   <button type="button" class="emp-modal-tab" id="usu-tab-acessos" onclick="usuMudarTab('acessos')">Acessos</button>
+                  <button type="button" class="emp-modal-tab" id="usu-tab-erp" onclick="usuMudarTab('erp')">ERP</button>
                 </div>
 
                 <div id="usu-panel-cadastro" class="emp-tab-panel active">
@@ -767,6 +768,46 @@
                             </div>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                </div>
+
+                <div id="usu-panel-erp" class="emp-tab-panel">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <div class="form-section-title">Integração ERP</div>
+                      <div class="form-section-subtitle">Identifica o usuário no ERP Protheus para consultas via WhatsApp.</div>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-row" style="margin-bottom:16px">
+                      <div class="form-group">
+                        <label class="form-label">Telefone WhatsApp</label>
+                        <input id="usu-f-erp-telefone" type="text" class="form-control" placeholder="5565999990000">
+                        <div class="hint">Número com código do país e DDD, sem espaços ou símbolos. Usado para identificar o usuário pela mensagem recebida.</div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">CPF / CNPJ</label>
+                        <input id="usu-f-erp-cpf-cnpj" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00">
+                      </div>
+                    </div>
+                    <div class="form-row" style="margin-bottom:16px">
+                      <div class="form-group">
+                        <label class="form-label">ID ERP (código do vendedor)</label>
+                        <input id="usu-f-erp-id" type="text" class="form-control" placeholder="000001" maxlength="6" style="text-transform:uppercase">
+                        <div class="hint">Código de até 6 caracteres, equivalente ao A3_COD no cadastro de vendedores do Protheus (SA3).</div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Tipo no ERP</label>
+                        <select id="usu-f-erp-tipo" class="form-control">
+                          <option value="">- não configurado -</option>
+                          <option value="vendedor">Vendedor</option>
+                          <option value="gestor">Gestor</option>
+                        </select>
+                        <div class="hint">Vendedor vê apenas as próprias comissões. Gestor pode consultar qualquer vendedor.</div>
                       </div>
                     </div>
                   </div>
@@ -1962,8 +2003,10 @@ function empMudarTab(tab) {
 function usuMudarTab(tab) {
   document.getElementById('usu-tab-cadastro').classList.toggle('active', tab === 'cadastro');
   document.getElementById('usu-tab-acessos').classList.toggle('active', tab === 'acessos');
+  document.getElementById('usu-tab-erp').classList.toggle('active', tab === 'erp');
   document.getElementById('usu-panel-cadastro').classList.toggle('active', tab === 'cadastro');
   document.getElementById('usu-panel-acessos').classList.toggle('active', tab === 'acessos');
+  document.getElementById('usu-panel-erp').classList.toggle('active', tab === 'erp');
 }
 
 function empRenderIdentidade(empresa) {
@@ -2405,6 +2448,10 @@ async function usuAbrirModal(usuario = null) {
   document.getElementById('usu-f-email').value   = usuario?.email   ?? '';
   document.getElementById('usu-f-role').value    = usuario?.role    ?? 'usuario';
   document.getElementById('usu-f-ativo').checked = usuario?.ativo   ?? true;
+  document.getElementById('usu-f-erp-telefone').value = usuario?.erp_telefone ?? '';
+  document.getElementById('usu-f-erp-cpf-cnpj').value = usuario?.erp_cpf_cnpj ?? '';
+  document.getElementById('usu-f-erp-id').value       = usuario?.erp_id       ?? '';
+  document.getElementById('usu-f-erp-tipo').value     = usuario?.erp_tipo     ?? '';
   document.getElementById('usu-grp-ativo').style.display      = isEdit ? 'block' : 'none';
   document.getElementById('usu-grp-senha-novo').style.display = isEdit ? 'none'  : 'block';
   document.getElementById('usu-grp-senha-edit').style.display = isEdit ? 'block' : 'none';
@@ -2756,9 +2803,13 @@ async function usuSalvar() {
   }
   const dados = {
     nome, usuario, celular, email,
-    role:     document.getElementById('usu-f-role').value,
-    empresas: usuGetEmpresasSelecionadas(),
-    ativo:    document.getElementById('usu-f-ativo').checked,
+    role:         document.getElementById('usu-f-role').value,
+    empresas:     usuGetEmpresasSelecionadas(),
+    ativo:        document.getElementById('usu-f-ativo').checked,
+    erp_telefone: document.getElementById('usu-f-erp-telefone').value.trim(),
+    erp_cpf_cnpj: document.getElementById('usu-f-erp-cpf-cnpj').value.trim(),
+    erp_id:       document.getElementById('usu-f-erp-id').value.trim().toUpperCase(),
+    erp_tipo:     document.getElementById('usu-f-erp-tipo').value,
   };
   if (senha) dados.senha = senha;
   const btn = document.getElementById('usu-btn-salvar');

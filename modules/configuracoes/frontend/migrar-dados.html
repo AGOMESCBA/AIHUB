@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
     .page-content { padding-top: 16px; }
-    .mig-layout { display: grid; grid-template-columns: minmax(280px, 380px) minmax(0, 1fr); gap: 16px; align-items: start; }
+    .mig-layout { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
     .mig-card { border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; overflow: hidden; }
     .mig-card-hd { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 800; color: var(--text-hi); }
     .mig-card-bd { padding: 16px; }
@@ -15,31 +15,228 @@
     .mig-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     .mig-alert { display: none; border-radius: 8px; padding: 11px 13px; font-size: 13px; line-height: 1.45; margin-top: 12px; }
     .mig-alert.show { display: block; }
-    .mig-alert.ok { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .mig-alert.ok  { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
     .mig-alert.err { color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
     .mig-alert.info { color: var(--text-md); background: var(--bg-hover); border: 1px solid var(--border); }
-    .mig-table-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-hover); }
-    .mig-table-tools-left { display: flex; gap: 8px; flex-wrap: wrap; }
-    .mig-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .mig-table th { text-align: left; color: var(--text-lo); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; background: var(--bg-hover); padding: 10px 12px; border-bottom: 1px solid var(--border); }
-    .mig-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    .mig-table tr:hover td { background: var(--bg-hover); }
-    .mig-group { font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
-    .mig-check { width: 18px; height: 18px; accent-color: var(--accent); }
-    .mig-count { font-variant-numeric: tabular-nums; color: var(--text-md); }
-    .mig-count.destino.cheio { color: #b45309; font-weight: 700; }
     .mig-confirm { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-    .mig-confirm input { text-transform: uppercase; }
     .btn-light { background: var(--bg-hover); color: var(--text-hi); border: 1px solid var(--border); border-radius: 8px; padding: 8px 13px; cursor: pointer; font: inherit; font-weight: 700; }
     .btn-light:hover { border-color: var(--accent); color: var(--accent); }
-    body.iac-mode { --accent: #7c3aed; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.1); }
-    body.iac-mode .sidebar-logo .logo-icon { background: #7c3aed !important; }
-    @media (max-width: 920px) {
-      .mig-layout { grid-template-columns: 1fr; }
+
+    /* Painel de tabelas */
+    .mig-panel-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-hover); }
+    .mig-panel-tools-left { display: flex; gap: 8px; flex-wrap: wrap; }
+    #sel-count { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-md); white-space: nowrap; }
+
+    .mig-cols-hd {
+      display: grid;
+      grid-template-columns: 38px 1fr 72px 72px;
+      padding: 8px 12px;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--text-lo);
     }
+
+    /* Sistema */
+    .sys-section { border-bottom: 2px solid var(--border); }
+    .sys-section:last-child { border-bottom: none; }
+    .sys-hd {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 14px; cursor: pointer; user-select: none;
+      background: var(--bg-card); border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    .sys-hd:hover { background: var(--bg-hover); }
+    .sys-icon { font-size: 15px; flex-shrink: 0; }
+    .sys-name { font-size: 13px; font-weight: 800; color: var(--text-hi); flex: 1; }
+    .sys-chevron { font-size: 11px; color: var(--text-lo); transition: transform var(--transition); }
+    .sys-chevron.closed { transform: rotate(-90deg); }
+    .sys-body { max-height: 6000px; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
+    .sys-body.collapsed { max-height: 0; }
+
+    /* Grupo */
+    .grp-section { border-bottom: 1px solid var(--border); }
+    .grp-section:last-child { border-bottom: none; }
+    .grp-hd {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px 8px 20px; cursor: pointer; user-select: none;
+      background: var(--bg-hover); transition: background var(--transition);
+    }
+    .grp-hd:hover { background: var(--bg-base); }
+    .grp-label { font-size: 11px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; flex: 1; }
+    .grp-chevron { font-size: 10px; color: var(--text-lo); transition: transform var(--transition); }
+    .grp-chevron.closed { transform: rotate(-90deg); }
+    .grp-body { max-height: 2000px; overflow: hidden; transition: max-height .25s cubic-bezier(.4,0,.2,1); }
+    .grp-body.collapsed { max-height: 0; }
+
+    /* Linha de tabela */
+    .mig-row {
+      display: grid; grid-template-columns: 38px 1fr 72px 72px;
+      align-items: center; padding: 9px 12px 9px 28px;
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    .mig-row:last-child { border-bottom: none; }
+    .mig-row:hover { background: var(--bg-hover); }
+    .mig-check { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+    .mig-row-label { font-size: 13px; color: var(--text-hi); }
+    .mig-num { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-md); text-align: right; padding-right: 8px; }
+    .mig-num.cheio { color: #b45309; font-weight: 700; }
+
+    /* ── SPLASH ─────────────────────────────────────────────────────────── */
+    .mig-splash-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,.48);
+      backdrop-filter: blur(3px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .2s ease;
+    }
+    .mig-splash-overlay.visible { opacity: 1; }
+
+    .mig-splash-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      width: min(520px, calc(100vw - 32px));
+      max-height: calc(100vh - 64px);
+      display: flex; flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,.28);
+      overflow: hidden;
+    }
+
+    .mig-splash-hd {
+      padding: 22px 24px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mig-splash-title {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 17px; font-weight: 800; color: var(--text-hi);
+    }
+    .mig-splash-sub {
+      font-size: 13px; color: var(--text-md); margin-top: 5px; margin-left: 36px;
+    }
+
+    .mig-splash-list {
+      overflow-y: auto; flex: 1;
+      padding: 6px 0;
+    }
+
+    .mig-splash-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 11px 24px;
+      border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    .mig-splash-row:last-child { border-bottom: none; }
+    .mig-splash-row.current { background: var(--bg-hover); }
+    .mig-splash-row.done    { opacity: .75; }
+
+    .mig-splash-row-icon {
+      width: 24px; height: 24px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 1px;
+    }
+    .mig-splash-row-info { flex: 1; min-width: 0; }
+    .mig-splash-row-label { font-size: 13px; font-weight: 600; color: var(--text-hi); }
+    .mig-splash-row-meta  { font-size: 11px; color: var(--text-lo); margin-top: 2px; }
+    .mig-splash-row-err   { font-size: 11px; color: #dc2626; margin-top: 3px; }
+
+    /* Spinner */
+    @keyframes _spin { to { transform: rotate(360deg); } }
+    .mig-spin {
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: _spin .6s linear infinite;
+    }
+
+    /* Ícones de estado */
+    .ico-pending { color: var(--text-lo); font-size: 18px; line-height: 1; }
+    .ico-ok      { color: #16a34a; font-size: 18px; font-weight: 900; line-height: 1; }
+    .ico-err     { color: #dc2626; font-size: 18px; font-weight: 900; line-height: 1; }
+
+    /* Barra de progresso */
+    .mig-splash-progress {
+      height: 4px; background: var(--border);
+      border-radius: 0;
+      overflow: hidden;
+    }
+    .mig-splash-progress-bar {
+      height: 100%; background: var(--accent);
+      width: 0%; transition: width .3s ease;
+      border-radius: 0;
+    }
+
+    /* Rodapé do splash */
+    .mig-splash-ft {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .mig-splash-ft-info { font-size: 13px; color: var(--text-md); }
+    .mig-splash-ft-info strong { color: var(--text-hi); }
+
+    /* Resumo final */
+    .mig-splash-summary {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--bg-hover);
+    }
+    .mig-splash-summary-title {
+      font-size: 13px; font-weight: 800; color: var(--text-hi); margin-bottom: 6px;
+    }
+    .mig-splash-summary-list {
+      list-style: none; margin: 0; padding: 0;
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .mig-splash-summary-list li {
+      font-size: 12px; padding: 3px 9px; border-radius: 99px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      color: var(--text-md);
+    }
+    .mig-splash-summary-list li.err {
+      border-color: #fecaca; background: #fef2f2; color: #991b1b;
+    }
+
+    body.iac-mode { --accent: #7c3aed; }
+    body.iac-mode .sidebar-logo .logo-icon { background: #7c3aed !important; }
+    @media (max-width: 920px) { .mig-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
+
+<!-- ── SPLASH ──────────────────────────────────────────────────────────────── -->
+<div id="mig-splash" class="mig-splash-overlay" style="display:none">
+  <div class="mig-splash-card">
+    <div class="mig-splash-hd">
+      <div class="mig-splash-title">
+        <div id="sp-title-icon" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center"></div>
+        <span id="sp-title">Copiando dados...</span>
+      </div>
+      <div class="mig-splash-sub" id="sp-sub"></div>
+    </div>
+
+    <div class="mig-splash-progress">
+      <div class="mig-splash-progress-bar" id="sp-progress-bar"></div>
+    </div>
+
+    <div class="mig-splash-list" id="sp-list"></div>
+
+    <div id="sp-summary" style="display:none" class="mig-splash-summary">
+      <div class="mig-splash-summary-title" id="sp-summary-title"></div>
+      <ul class="mig-splash-summary-list" id="sp-summary-list"></ul>
+    </div>
+
+    <div class="mig-splash-ft">
+      <span class="mig-splash-ft-info" id="sp-ft-info"></span>
+      <button class="btn btn-primary" id="sp-btn-fechar" onclick="fecharSplash()" style="display:none">
+        Fechar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LAYOUT ──────────────────────────────────────────────────────────────── -->
 <div class="layout">
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
@@ -52,71 +249,69 @@
 
   <div class="main">
     <div class="topbar">
-      <span class="topbar-title"><span class="topbar-path" id="mig-topbar-path">Configurador &gt;</span> Migrar Dados</span>
+      <span class="topbar-title">
+        <span class="topbar-path" id="mig-topbar-path">Configurador &gt;</span> Copiar Dados
+      </span>
     </div>
 
     <div class="page-content">
       <div class="mig-layout">
+
         <section class="mig-card">
           <div class="mig-card-hd">Origem e destino</div>
           <div class="mig-card-bd">
             <div class="mig-grid">
               <div class="form-group">
                 <label class="form-label" for="origem">Empresa origem</label>
-                <select class="form-control" id="origem"></select>
+                <select class="form-control" id="origem" onchange="carregarPreview()"></select>
               </div>
               <div class="form-group">
                 <label class="form-label" for="destino">Empresa destino</label>
-                <select class="form-control" id="destino"></select>
+                <select class="form-control" id="destino" onchange="carregarPreview()"></select>
               </div>
             </div>
-
             <div class="mig-actions">
-              <button class="btn btn-primary" id="btn-preview" onclick="carregarPreview()">Atualizar previa</button>
+              <button class="btn btn-primary" onclick="carregarPreview()">Atualizar prévia</button>
             </div>
-
             <div class="mig-alert info show">
-              A migracao substitui no destino apenas as tabelas selecionadas. Antes de gravar, o sistema cria um backup do arquivo da empresa destino.
+              Os dados da origem são <strong>copiados</strong> para o destino. A origem não é alterada.
+              Antes de gravar, o sistema cria um backup do arquivo da empresa destino.
             </div>
             <div id="msg" class="mig-alert"></div>
           </div>
         </section>
 
         <section class="mig-card">
-          <div class="mig-card-hd">Tabelas para migrar</div>
-          <div class="mig-table-tools">
-            <div class="mig-table-tools-left">
-              <button class="btn-light" onclick="marcarDefaults()">Regras e configuracoes</button>
+          <div class="mig-card-hd">Tabelas para copiar</div>
+          <div class="mig-panel-tools">
+            <div class="mig-panel-tools-left">
+              <button class="btn-light" onclick="marcarDefaults()">Regras e configurações</button>
               <button class="btn-light" onclick="marcarTodas(true)">Marcar todas</button>
               <button class="btn-light" onclick="marcarTodas(false)">Limpar</button>
             </div>
-            <span id="sel-count" class="mig-count">0 selecionadas</span>
+            <span id="sel-count">0 selecionadas</span>
           </div>
-          <div style="overflow:auto">
-            <table class="mig-table">
-              <thead>
-                <tr>
-                  <th style="width:46px"></th>
-                  <th>Grupo</th>
-                  <th>Tabela</th>
-                  <th>Origem</th>
-                  <th>Destino atual</th>
-                </tr>
-              </thead>
-              <tbody id="tabelas-body">
-                <tr><td colspan="5" style="color:var(--text-lo)">Carregando...</td></tr>
-              </tbody>
-            </table>
+
+          <div class="mig-cols-hd">
+            <div></div>
+            <div>Tabela</div>
+            <div style="text-align:right;padding-right:8px">Origem</div>
+            <div style="text-align:right;padding-right:8px">Destino</div>
+          </div>
+
+          <div id="tabelas-panel">
+            <div style="padding:16px;color:var(--text-lo);font-size:13px">Carregando...</div>
           </div>
 
           <div class="mig-card-bd mig-confirm">
             <div class="form-group">
               <label class="form-label" for="confirmar">Digite MIGRAR para confirmar</label>
-              <input class="form-control" id="confirmar" placeholder="MIGRAR">
+              <input class="form-control" id="confirmar" placeholder="MIGRAR" style="text-transform:uppercase">
             </div>
-            <button class="btn btn-primary" id="btn-exec" onclick="executarMigracao()">Migrar selecionadas</button>
+            <button class="btn btn-primary" id="btn-exec" onclick="executarMigracao()">Copiar selecionadas</button>
           </div>
         </section>
+
       </div>
     </div>
   </div>
@@ -131,75 +326,273 @@ if (IAC_MODE) {
   document.getElementById('mig-logo-text').textContent = 'IA Command';
   document.getElementById('mig-topbar-path').textContent = 'Configuração >';
 }
-
 const sidebarScript = document.createElement('script');
 sidebarScript.src = IAC_MODE ? '/app/ia-command/js/sidebar.js' : '/js/sidebar.js';
 document.head.appendChild(sidebarScript);
 
+// ─── Estado ────────────────────────────────────────────────────────────────
 let tabelas = [];
 let preview = [];
 
+const SISTEMA_META = {
+  iahub: { label: 'IAHub — IA Recruit', icon: '🏢' },
+  iac:   { label: 'IA Command',          icon: '⚡' },
+};
+
+const STORE_KEY = 'mig_collapse_v1';
+function loadCollapse() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; } }
+function saveCollapse(s) { localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
+
+// ─── Utilitários ───────────────────────────────────────────────────────────
 function esc(v) {
-  return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+function safeId(v) { return String(v).replace(/[^a-z0-9_]/gi, '_'); }
 
 function setMsg(texto, tipo = 'info') {
   const el = document.getElementById('msg');
   el.className = `mig-alert ${tipo} show`;
-  el.textContent = texto;
+  el.innerHTML = texto;
 }
-
-function limparMsg() {
-  const el = document.getElementById('msg');
-  el.className = 'mig-alert';
-  el.textContent = '';
-}
+function limparMsg() { const el = document.getElementById('msg'); el.className = 'mig-alert'; el.textContent = ''; }
 
 function popularSelect(id, empresas) {
-  const sel = document.getElementById(id);
-  sel.innerHTML = empresas.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('');
+  document.getElementById(id).innerHTML = empresas.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('');
 }
 
+// ─── Colapso ───────────────────────────────────────────────────────────────
+function toggleSys(sisId) {
+  const body = document.getElementById(`sysbody-${safeId(sisId)}`);
+  const chev = document.getElementById(`syschev-${safeId(sisId)}`);
+  const state = loadCollapse();
+  const now = body.classList.toggle('collapsed');
+  chev.classList.toggle('closed', now);
+  state[`sys_${sisId}`] = now;
+  saveCollapse(state);
+}
+function toggleGrp(grpId) {
+  const body = document.getElementById(`grpbody-${safeId(grpId)}`);
+  const chev = document.getElementById(`grpchev-${safeId(grpId)}`);
+  const state = loadCollapse();
+  const now = body.classList.toggle('collapsed');
+  chev.classList.toggle('closed', now);
+  state[`grp_${grpId}`] = now;
+  saveCollapse(state);
+}
+
+// ─── Render tabelas ────────────────────────────────────────────────────────
 function renderTabelas() {
-  const mapPreview = new Map(preview.map(t => [t.id, t]));
-  const body = document.getElementById('tabelas-body');
-  body.innerHTML = tabelas.map(t => {
-    const p = mapPreview.get(t.id) || {};
-    const destinoCheio = Number(p.destino || 0) > 0 ? ' cheio' : '';
-    return `
-      <tr>
-        <td><input class="mig-check" type="checkbox" data-id="${esc(t.id)}" ${t.default ? 'checked' : ''} onchange="atualizarSelecionadas()"></td>
-        <td><span class="mig-group">${esc(t.grupo)}</span></td>
-        <td>${esc(t.label)}</td>
-        <td class="mig-count">${p.origem ?? '-'}</td>
-        <td class="mig-count destino${destinoCheio}">${p.destino ?? '-'}</td>
-      </tr>`;
-  }).join('');
+  const mapPv   = new Map(preview.map(t => [t.id, t]));
+  const collapse = loadCollapse();
+  const sistemas = {};
+  for (const t of tabelas) {
+    const sis = t.sistema || 'iahub';
+    if (!sistemas[sis]) sistemas[sis] = {};
+    if (!sistemas[sis][t.grupo]) sistemas[sis][t.grupo] = [];
+    sistemas[sis][t.grupo].push(t);
+  }
+  let html = '';
+  for (const [sisId, grupos] of Object.entries(sistemas)) {
+    const meta    = SISTEMA_META[sisId] || { label: sisId, icon: '📦' };
+    const sysColl = !!collapse[`sys_${sisId}`];
+    html += `<div class="sys-section">
+      <div class="sys-hd" onclick="toggleSys('${esc(sisId)}')">
+        <span class="sys-icon">${meta.icon}</span>
+        <span class="sys-name">${esc(meta.label)}</span>
+        <span class="sys-chevron${sysColl ? ' closed' : ''}" id="syschev-${safeId(sisId)}">▼</span>
+      </div>
+      <div class="sys-body${sysColl ? ' collapsed' : ''}" id="sysbody-${safeId(sisId)}">`;
+    for (const [grupo, rows] of Object.entries(grupos)) {
+      const grpId   = `${sisId}_${grupo.replace(/[^a-z0-9]/gi, '_')}`;
+      const grpColl = !!collapse[`grp_${grpId}`];
+      html += `<div class="grp-section">
+        <div class="grp-hd" onclick="toggleGrp('${esc(grpId)}')">
+          <span class="grp-label">${esc(grupo)}</span>
+          <span class="grp-chevron${grpColl ? ' closed' : ''}" id="grpchev-${safeId(grpId)}">▼</span>
+        </div>
+        <div class="grp-body${grpColl ? ' collapsed' : ''}" id="grpbody-${safeId(grpId)}">`;
+      for (const t of rows) {
+        const p   = mapPv.get(t.id) || {};
+        const cls = Number(p.destino || 0) > 0 ? ' cheio' : '';
+        html += `<div class="mig-row">
+          <div><input class="mig-check" type="checkbox" data-id="${esc(t.id)}" ${t.default ? 'checked' : ''} onchange="atualizarSelecionadas()"></div>
+          <div class="mig-row-label">${esc(t.label)}</div>
+          <div class="mig-num">${p.origem ?? '-'}</div>
+          <div class="mig-num${cls}">${p.destino ?? '-'}</div>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `</div></div>`;
+  }
+  document.getElementById('tabelas-panel').innerHTML = html || '<div style="padding:16px;color:var(--text-lo);font-size:13px">Nenhuma tabela disponível.</div>';
   atualizarSelecionadas();
 }
 
-function selecionadas() {
-  return Array.from(document.querySelectorAll('.mig-check:checked')).map(c => c.dataset.id);
+// ─── Dependências entre tabelas ────────────────────────────────────────────
+// SX2 e SX3 têm FK em connections — conexões devem ser migradas primeiro.
+const DEPS = { iac_sx2: ['iac_conexoes'], iac_sx3: ['iac_conexoes'] };
+
+function aplicarDependencias() {
+  const checks = document.querySelectorAll('.mig-check');
+  // Descobre quais pré-requisitos são obrigatórios por causa de dependentes marcados
+  const obrigatorios = new Set();
+  for (const [dep, reqs] of Object.entries(DEPS)) {
+    const el = document.querySelector(`.mig-check[data-id="${dep}"]`);
+    if (el?.checked) reqs.forEach(r => obrigatorios.add(r));
+  }
+  for (const c of checks) {
+    if (obrigatorios.has(c.dataset.id)) {
+      c.checked = true;
+      c.disabled = true;
+      c.title = 'Obrigatório como pré-requisito das tabelas SX selecionadas';
+    } else {
+      c.disabled = false;
+      c.title = '';
+    }
+  }
 }
 
+// ─── Seleção ───────────────────────────────────────────────────────────────
+function selecionadas() { return Array.from(document.querySelectorAll('.mig-check:checked')).map(c => c.dataset.id); }
 function atualizarSelecionadas() {
-  const total = selecionadas().length;
-  document.getElementById('sel-count').textContent = `${total} selecionada${total === 1 ? '' : 's'}`;
+  aplicarDependencias();
+  const n = selecionadas().length;
+  document.getElementById('sel-count').textContent = `${n} selecionada${n === 1 ? '' : 's'}`;
 }
-
-function marcarTodas(valor) {
-  document.querySelectorAll('.mig-check').forEach(c => { c.checked = valor; });
-  atualizarSelecionadas();
-}
-
+function marcarTodas(v) { document.querySelectorAll('.mig-check').forEach(c => { c.checked = v; }); atualizarSelecionadas(); }
 function marcarDefaults() {
   document.querySelectorAll('.mig-check').forEach(c => {
-    const def = tabelas.find(t => t.id === c.dataset.id);
-    c.checked = !!def?.default;
+    c.checked = !!(tabelas.find(t => t.id === c.dataset.id)?.default);
   });
   atualizarSelecionadas();
 }
 
+// ─── SPLASH ────────────────────────────────────────────────────────────────
+let _splashTotal = 0;
+let _splashDone  = 0;
+let _splashOk    = 0;
+let _splashErro  = 0;
+
+function mostrarSplash(ids) {
+  _splashTotal = ids.length;
+  _splashDone  = 0;
+  _splashOk    = 0;
+  _splashErro  = 0;
+
+  // Monta lista de itens
+  const SIS = { iahub: 'IAHub', iac: 'IA Command' };
+  const listHtml = ids.map(id => {
+    const t   = tabelas.find(x => x.id === id) || { label: id, grupo: '', sistema: 'iahub' };
+    const sid = safeId(id);
+    return `<div class="mig-splash-row" id="sp-row-${sid}">
+      <div class="mig-splash-row-icon" id="sp-icon-${sid}">
+        <span class="ico-pending">·</span>
+      </div>
+      <div class="mig-splash-row-info">
+        <div class="mig-splash-row-label">${esc(t.label)}</div>
+        <div class="mig-splash-row-meta">${esc(SIS[t.sistema] || t.sistema)} · ${esc(t.grupo)}</div>
+        <div class="mig-splash-row-err" id="sp-err-${sid}" style="display:none"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('sp-list').innerHTML = listHtml;
+  document.getElementById('sp-title').textContent = 'Copiando dados...';
+  document.getElementById('sp-title-icon').innerHTML = '<div class="mig-spin"></div>';
+  document.getElementById('sp-sub').textContent = `0 de ${_splashTotal} tabela(s) processada(s)`;
+  document.getElementById('sp-ft-info').textContent = '';
+  document.getElementById('sp-btn-fechar').style.display = 'none';
+  document.getElementById('sp-summary').style.display = 'none';
+  document.getElementById('sp-progress-bar').style.width = '0%';
+
+  const overlay = document.getElementById('mig-splash');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function atualizarSplashItem(id, estado, erroMsg) {
+  const sid  = safeId(id);
+  const row  = document.getElementById(`sp-row-${sid}`);
+  const icon = document.getElementById(`sp-icon-${sid}`);
+  const err  = document.getElementById(`sp-err-${sid}`);
+  if (!row) return;
+
+  row.classList.remove('current', 'done');
+
+  if (estado === 'processando') {
+    row.classList.add('current');
+    icon.innerHTML = '<div class="mig-spin"></div>';
+    row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else if (estado === 'ok') {
+    row.classList.add('done');
+    icon.innerHTML = '<span class="ico-ok">✓</span>';
+    _splashDone++;
+    _splashOk++;
+    _atualizarProgresso();
+  } else if (estado === 'erro') {
+    row.classList.add('done');
+    icon.innerHTML = '<span class="ico-err">✗</span>';
+    _splashDone++;
+    _splashErro++;
+    if (erroMsg) { err.textContent = erroMsg; err.style.display = 'block'; }
+    _atualizarProgresso();
+  }
+}
+
+function _atualizarProgresso() {
+  const pct = Math.round((_splashDone / _splashTotal) * 100);
+  document.getElementById('sp-progress-bar').style.width = pct + '%';
+  document.getElementById('sp-sub').textContent = `${_splashDone} de ${_splashTotal} tabela(s) processada(s)`;
+}
+
+function finalizarSplash(migradas, erros) {
+  const temErro = erros.length > 0;
+
+  document.getElementById('sp-title').textContent = temErro
+    ? `Concluído com ${erros.length} erro(s)`
+    : 'Cópia concluída!';
+
+  document.getElementById('sp-title-icon').innerHTML = temErro
+    ? '<span style="font-size:20px;line-height:1">⚠️</span>'
+    : '<span class="ico-ok" style="font-size:22px">✓</span>';
+
+  document.getElementById('sp-progress-bar').style.width = '100%';
+
+  // Resumo
+  const sumEl    = document.getElementById('sp-summary');
+  const sumTitle = document.getElementById('sp-summary-title');
+  const sumList  = document.getElementById('sp-summary-list');
+  sumTitle.textContent = `${migradas.length} tabela(s) copiada(s) com sucesso`;
+  const itens = [
+    ...migradas.map(id => {
+      const t = tabelas.find(x => x.id === id);
+      return `<li>${esc(t?.label || id)}</li>`;
+    }),
+    ...erros.map(({ id, erro }) => {
+      const t = tabelas.find(x => x.id === id);
+      return `<li class="err" title="${esc(erro)}">${esc(t?.label || id)} — erro</li>`;
+    }),
+  ];
+  sumList.innerHTML = itens.join('');
+  sumEl.style.display = 'block';
+
+  // Rodapé
+  const ftInfo = document.getElementById('sp-ft-info');
+  ftInfo.innerHTML = `<strong>${migradas.length}</strong> copiada(s)` +
+    (erros.length ? `, <strong style="color:#dc2626">${erros.length}</strong> com erro` : '');
+  document.getElementById('sp-btn-fechar').style.display = 'block';
+}
+
+function fecharSplash() {
+  const overlay = document.getElementById('mig-splash');
+  overlay.classList.remove('visible');
+  setTimeout(() => { overlay.style.display = 'none'; }, 220);
+  document.getElementById('confirmar').value = '';
+  carregarPreview();
+}
+
+// ─── Dados ─────────────────────────────────────────────────────────────────
 async function carregarMeta() {
   const data = await fetch('/api/config/migracao/meta').then(r => r.json());
   if (data.error) throw new Error(data.error);
@@ -213,64 +606,76 @@ async function carregarMeta() {
 
 async function carregarPreview() {
   limparMsg();
-  const origem = document.getElementById('origem').value;
+  const origem  = document.getElementById('origem').value;
   const destino = document.getElementById('destino').value;
   if (!origem || !destino) return;
   if (origem === destino) {
-    preview = [];
-    renderTabelas();
+    preview = []; renderTabelas();
     setMsg('Escolha empresas diferentes para origem e destino.', 'err');
     return;
   }
   const params = new URLSearchParams({ origem_id: origem, destino_id: destino });
-  const res = await fetch(`/api/config/migracao/preview?${params}`);
+  const res  = await fetch(`/api/config/migracao/preview?${params}`);
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Erro ao carregar previa.');
+  if (!res.ok) { setMsg(data.error || 'Erro ao carregar prévia.', 'err'); return; }
   preview = data.tabelas || [];
   renderTabelas();
 }
 
+// ─── Execução — uma tabela por vez para progresso real ─────────────────────
 async function executarMigracao() {
   limparMsg();
-  const body = {
-    origem_id: Number(document.getElementById('origem').value),
-    destino_id: Number(document.getElementById('destino').value),
-    tabelas: selecionadas(),
-    confirmar: document.getElementById('confirmar').value,
-  };
-  if (!body.tabelas.length) {
-    setMsg('Selecione ao menos uma tabela.', 'err');
-    return;
+
+  const ids      = selecionadas();
+  const confirmar = document.getElementById('confirmar').value.toUpperCase().trim();
+  const origemId  = Number(document.getElementById('origem').value);
+  const destinoId = Number(document.getElementById('destino').value);
+
+  if (!ids.length) { setMsg('Selecione ao menos uma tabela.', 'err'); return; }
+  if (origemId === destinoId) { setMsg('Escolha empresas diferentes para origem e destino.', 'err'); return; }
+  if (confirmar !== 'MIGRAR') { setMsg('Digite <strong>MIGRAR</strong> no campo de confirmação.', 'err'); return; }
+
+  // Bloqueia botão e abre splash
+  document.getElementById('btn-exec').disabled = true;
+  mostrarSplash(ids);
+
+  const migradas = [];
+  const erros    = [];
+
+  for (const tabelaId of ids) {
+    atualizarSplashItem(tabelaId, 'processando');
+    try {
+      const res = await fetch('/api/config/migracao/executar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origem_id:  origemId,
+          destino_id: destinoId,
+          tabelas:    [tabelaId],
+          confirmar:  'MIGRAR',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro desconhecido.');
+      atualizarSplashItem(tabelaId, 'ok');
+      migradas.push(tabelaId);
+    } catch (err) {
+      atualizarSplashItem(tabelaId, 'erro', err.message);
+      erros.push({ id: tabelaId, erro: err.message });
+    }
   }
 
-  const btn = document.getElementById('btn-exec');
-  btn.disabled = true;
-  btn.textContent = 'Migrando...';
-  try {
-    const res = await fetch('/api/config/migracao/executar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erro ao migrar dados.');
-    document.getElementById('confirmar').value = '';
-    setMsg(`Migracao concluida. ${data.migradas.length} tabela(s) substituida(s) no destino.`, 'ok');
-    await carregarPreview();
-  } catch (err) {
-    setMsg(err.message, 'err');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Migrar selecionadas';
-  }
+  document.getElementById('btn-exec').disabled = false;
+  finalizarSplash(migradas, erros);
 }
 
+// ─── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     await (window._iahubAuthReady || Promise.resolve());
     await carregarMeta();
   } catch (err) {
-    setMsg(err.message || 'Erro ao carregar migracao.', 'err');
+    setMsg(err.message || 'Erro ao carregar dados.', 'err');
   }
 });
 </script>

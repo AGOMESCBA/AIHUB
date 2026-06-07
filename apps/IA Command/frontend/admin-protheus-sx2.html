@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dicionário SX2 - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .filter-area { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status { font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:160px; }
+    .gp-wrap { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .badge-E { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.12);color:#7c3aed; }
+    .badge-C { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(5,150,105,.12);color:#059669; }
+    .badge-G { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(2,132,199,.12);color:#0284c7; }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:13px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .save-feedback { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field { margin-bottom:16px; }
+    .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+
+    /* Modal de importação */
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .22s; }
+    .modal-overlay.open { opacity:1;pointer-events:all; }
+    .modal-box { background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:min(560px,95vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);transform:translateY(10px);transition:transform .22s; }
+    .modal-overlay.open .modal-box { transform:none; }
+    .modal-header { display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border); }
+    .modal-title { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .modal-close { width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition); }
+    .modal-close:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .modal-tabs { display:flex;border-bottom:1px solid var(--border);padding:0 22px;flex-shrink:0; }
+    .modal-tab { padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-lo);transition:color var(--transition),border-color var(--transition); }
+    .modal-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .modal-panel { display:none; }
+    .modal-panel.active { display:flex;flex-direction:column;flex:1;min-height:0; }
+    .modal-panel-head { padding:22px 22px 0;flex-shrink:0; }
+    .modal-panel-body { padding:0 22px 22px;flex:1;min-height:0;overflow-y:auto; }
+    .modal-footer { display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0; }
+
+    /* Lista de tabelas SX2 do banco */
+    .tabela-item { display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;cursor:pointer;transition:background var(--transition),border-color var(--transition); }
+    .tabela-item:hover { background:var(--bg-hover); }
+    .tabela-item.selected { border-color:var(--accent);background:var(--accent-glow); }
+    .tabela-item input[type=radio] { accent-color:var(--accent); }
+    .tabela-nome { font-size:13px;font-weight:600;color:var(--text-hi); }
+
+    /* Info/Warn boxes */
+    .info-box { background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:16px; }
+    .warn-box { background:rgba(234,88,12,.08);border-left:3px solid #ea580c;border-radius:0 6px 6px 0;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:16px; }
+    .import-status { font-size:13px;margin-top:10px;color:var(--text-lo); }
+    .import-status.ok { color:#15803d; }
+    .import-status.fail { color:#b91c1c; }
+
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(540px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command / Protheus ></span> Dicionário SX2</span>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ── SEÇÃO LISTA ── -->
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">ERP Protheus</div>
+            <div class="page-title">Dicionário SX2</div>
+            <div class="page-subtitle">Modos de compartilhamento das tabelas Protheus — usados pela IA para aplicar o filtro de filial correto.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-ghost" onclick="abrirImportar()">↑ Importar</button>
+            <button class="btn btn-primary" onclick="abrirFormulario()">+ Nova Tabela</button>
+          </div>
+        </div>
+
+        <div class="quick-panel">
+          <div class="quick-row">
+            <select id="f-conexao-lista" class="form-control" onchange="filtrar()">
+              <option value="">Todas as conexões</option>
+            </select>
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="f-busca" type="text" class="form-control" placeholder="Buscar por chave ou descrição..." oninput="filtrar()">
+              <select id="f-modo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os modos</option>
+                <option value="E">E — Exclusivo</option>
+                <option value="C">C — Compartilhado</option>
+                <option value="G">G — Global</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Tabelas cadastradas</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <!-- ── SEÇÃO FORMULÁRIO ── -->
+      <div id="sec-form" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="form-title">Nova Tabela SX2</strong>
+              <span id="form-subtitle">Preencha os campos e salve.</span>
+            </div>
+            <div class="editor-actions">
+              <span class="save-feedback" id="save-feedback"></span>
+              <button class="btn btn-ghost" onclick="fecharFormulario()">Voltar à lista</button>
+              <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+            </div>
+          </div>
+
+          <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+            <main class="editor-main">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados da Tabela SX2</div>
+                  <div class="form-section-subtitle">Informe a chave da tabela Protheus e seu modo de compartilhamento.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+                    <select id="f-conexao-form" class="form-control"></select>
+                    <div class="form-hint">Conexão ERP à qual esta tabela pertence.</div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Chave (X2_CHAVE) <span style="color:#dc2626">*</span></label>
+                      <input id="f-chave" class="form-control" placeholder="ex: SD1" style="text-transform:uppercase">
+                      <div class="form-hint">Identificador lógico da tabela</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Arquivo (X2_ARQUIVO) <span style="color:#dc2626">*</span></label>
+                      <input id="f-arquivo" class="form-control" placeholder="ex: SD1010" style="text-transform:uppercase">
+                      <div class="form-hint">Nome real da tabela no banco</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Modo (X2_MODO) <span style="color:#dc2626">*</span></label>
+                      <select id="f-modo-form" class="form-control">
+                        <option value="E">E — Exclusivo (filtra pela filial)</option>
+                        <option value="C">C — Compartilhado (filtra por dois espaços)</option>
+                        <option value="G">G — Global (filtra por dois espaços)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Descrição (X2_NOME)</label>
+                    <input id="f-descricao" class="form-control" placeholder="ex: Itens de NF de Entrada">
+                  </div>
+                </div>
+              </section>
+
+              <section class="form-section" style="margin-top:16px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Como o modo é aplicado</div>
+                </div>
+                <div class="form-section-body" id="modo-explicacao" style="font-size:13px;color:var(--text-md);line-height:1.7"></div>
+              </section>
+            </main>
+
+            <aside class="editor-side">
+              <section class="form-section" style="position:sticky;top:56px">
+                <div class="form-section-header">
+                  <div class="form-section-title">Dados do Registro</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="reg-field">
+                    <div class="reg-label">ID do Registro</div>
+                    <input id="f-id" class="form-control" disabled placeholder="(gerado automaticamente)" style="font-family:monospace;font-size:12px;color:var(--text-lo);background:var(--bg-hover)">
+                  </div>
+                  <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">
+                    O dicionário SX2 é consultado pela IA antes de gerar cada query SQL para aplicar o filtro de filial correto conforme o modo da tabela.
+                  </p>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL DE IMPORTAÇÃO ── -->
+<div class="modal-overlay" id="modal-importar">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">↑ Importar Dicionário SX2</span>
+      <button class="modal-close" onclick="fecharImportar()" title="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-tabs">
+      <div class="modal-tab active" onclick="modalTab(this,'tab-banco')">Do banco de dados</div>
+      <div class="modal-tab" onclick="modalTab(this,'tab-dbf')">De arquivo DBF</div>
+    </div>
+
+    <!-- Seletor de modo de importação -->
+    <div style="padding:12px 22px;border-bottom:1px solid var(--border);background:var(--bg-base);flex-shrink:0">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:8px">Modo de importação</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-hi)">
+          <input type="radio" name="import-mode-sx2" value="adicionar" onchange="modoImport=this.value" style="accent-color:var(--accent)">
+          <span><strong>Importar</strong> — adiciona sem apagar registros existentes</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-hi)">
+          <input type="radio" name="import-mode-sx2" value="apagar" onchange="modoImport=this.value" checked style="accent-color:var(--accent)">
+          <span><strong>Apagar e Importar</strong> — apaga tudo desta conexão e reimporta</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- TAB: Banco de dados -->
+    <div id="tab-banco" class="modal-panel active">
+      <div class="modal-panel-head">
+        <div class="info-box">Conecta ao banco ERP da conexão selecionada e lista as tabelas SX2 disponíveis. Selecione uma e clique em Importar.</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="imp-conexao-banco" class="form-control"></select>
+        </div>
+        <button class="btn btn-ghost" onclick="buscarTabelasBanco()" id="btn-buscar-tabelas">Buscar tabelas SX2...</button>
+      </div>
+      <div class="modal-panel-body">
+        <div id="lista-tabelas-banco" style="margin-top:14px"></div>
+        <div class="import-status" id="status-banco"></div>
+      </div>
+    </div>
+
+    <!-- TAB: Arquivo DBF -->
+    <div id="tab-dbf" class="modal-panel">
+      <div class="modal-panel-head">
+        <div class="info-box">Selecione o arquivo <strong>SX2010.DBF</strong> (ou similar) diretamente do seu computador. O arquivo é lido localmente — nada é enviado ao servidor além dos registros processados.</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="imp-conexao-dbf" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Arquivo DBF</label>
+          <input type="file" id="imp-arquivo-dbf" class="form-control" accept=".dbf" onchange="lerArquivoDBF(this)">
+        </div>
+        <div id="dbf-preview" style="font-size:13px;color:var(--text-md);margin-top:8px"></div>
+        <div class="import-status" id="status-dbf"></div>
+      </div>
+      <div class="modal-panel-body"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharImportar()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-import" onclick="confirmarImportacao()" disabled>Importar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+'use strict';
+let table, gp;
+let dados = [];
+let conexoes = [];
+let editId = null;
+let filtrosVisiveis = false;
+let quickFilterFn = null;
+let tabelaBancoSelecionada = null;
+let dbfRegistros = null;
+let abaImportAtiva = 'banco';
+let modoImport = 'apagar';
+
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function label(n) { return n === 1 ? '1 tabela' : `${n} tabelas`; }
+function empresaIdAtiva() { return Number(window._iahubEmpresa?.id || window._empresaId || 0) || null; }
+function apiUrl(path, params = {}) {
+  const url = new URL(path, window.location.origin);
+  const empresaId = empresaIdAtiva();
+  if (empresaId) url.searchParams.set('empresa_id', empresaId);
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+  }
+  return url.pathname + url.search;
+}
+function comEmpresa(body = {}) {
+  const empresaId = empresaIdAtiva();
+  return empresaId ? { ...body, empresa_id: empresaId } : body;
+}
+
+// ── Carregamento inicial ─────────────────────────────────────────────────────
+
+async function carregar() {
+  [conexoes, dados] = await Promise.all([
+    fetch('/api/ia-command/connections/available').then(r => r.json()).catch(() => []),
+    fetch(apiUrl('/api/ia-command/protheus/sx2')).then(r => r.json()).catch(() => []),
+  ]);
+  popularSelectConexoes();
+  if (table) { table.replaceData(dados); } else { criarTabela(dados); }
+}
+
+function popularSelectConexoes() {
+  const proteusConns = conexoes.filter(c => (c.erp || '').toLowerCase() === 'protheus');
+  const selects = ['f-conexao-lista', 'f-conexao-form', 'imp-conexao-banco', 'imp-conexao-dbf'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const val = el.value;
+    const extra = id === 'f-conexao-lista' ? '<option value="">Todas as conexões</option>' : '';
+    el.innerHTML = extra + proteusConns.map(c =>
+      `<option value="${c.id}">${esc(c.nome || String(c.id))}</option>`
+    ).join('');
+    if (val) el.value = val;
+  });
+}
+
+function nomeConexao(id) {
+  const c = conexoes.find(x => String(x.id) === String(id));
+  return c ? (c.nome || String(c.id)) : String(id);
+}
+
+// ── Grid ─────────────────────────────────────────────────────────────────────
+
+function criarTabela(data) {
+  gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_sx2_group', getTable:()=>table });
+  table = new Tabulator('#tabela', {
+    data, index:'id', layout:'fitColumns', movableColumns:true,
+    height:'calc(100vh - 380px)', groupBy:gp.getActiveFields(), groupStartOpen:true,
+    tableBuilt: function() { gp.refresh(); gp.applyToTable(); },
+    placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma tabela cadastrada.<br><small>Use "Importar" ou "+ Nova Tabela" para começar.</small></div>',
+    columns:[
+      { title:'Conexão', field:'connection_id', minWidth:140, headerFilter:'select',
+        headerFilterParams:{ values: Object.fromEntries([['','Todas'],...conexoes.filter(c=>(c.erp||'').toLowerCase()==='protheus').map(c=>[String(c.id), c.nome||String(c.id)])]) },
+        formatter: c => esc(nomeConexao(c.getValue())) },
+      { title:'Chave', field:'chave', minWidth:80, headerFilter:true,
+        formatter: c => `<strong style="color:var(--text-hi);font-family:monospace">${esc(c.getValue())}</strong>` },
+      { title:'Arquivo (X2_ARQUIVO)', field:'arquivo', minWidth:110, headerFilter:true,
+        formatter: c => `<span style="font-family:monospace;font-size:12px">${esc(c.getValue())}</span>` },
+      { title:'Modo', field:'modo', width:120, headerFilter:'select',
+        headerFilterParams:{values:{'':'Todos','E':'E — Exclusivo','C':'C — Compartilhado','G':'G — Global'}},
+        formatter: c => { const v = c.getValue() || 'E'; return `<span class="badge-${v}">${esc(v)}</span>`; }},
+      { title:'Descrição', field:'descricao', minWidth:200, headerFilter:true, formatter: c => esc(c.getValue()) },
+      { title:'Ações', field:'id', width:110, headerFilter:false, groupable:false, hozAlign:'right',
+        formatter: cell => {
+          const id = cell.getValue();
+          return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${id}')" title="Editar">✏️</button>
+                  <button class="btn-icon" onclick="event.stopPropagation();excluir('${id}')" title="Excluir" style="color:#dc2626">🗑</button>`;
+        }},
+    ],
+    rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().id); },
+    dataFiltered:(_f, rows)=>{
+      const total = dados.length, qtd = rows?.length ?? total;
+      document.getElementById('count').textContent = qtd === total ? label(qtd) : `${qtd} de ${total} tabelas`;
+    },
+  });
+  document.getElementById('count').textContent = label(data.length);
+}
+
+// ── Filtros ──────────────────────────────────────────────────────────────────
+
+function toggleFiltros() {
+  filtrosVisiveis = !filtrosVisiveis;
+  document.getElementById('filter-area').style.display = filtrosVisiveis ? '' : 'none';
+  document.getElementById('btn-filtros').textContent = filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
+  if (filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+}
+
+function filtrar() {
+  if (!table) return;
+  if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
+  const conn  = document.getElementById('f-conexao-lista').value;
+  const busca = (document.getElementById('f-busca')?.value || '').trim().toLowerCase();
+  const modo  = (document.getElementById('f-modo')?.value || '');
+  if (conn || busca || modo) {
+    quickFilterFn = row => {
+      if (conn && String(row.connection_id) !== conn) return false;
+      if (modo && row.modo !== modo) return false;
+      if (busca && !(String(row.chave||'') + ' ' + String(row.descricao||'')).toLowerCase().includes(busca)) return false;
+      return true;
+    };
+    table.addFilter(quickFilterFn);
+  }
+  const ativos = [conn, busca, modo].filter(Boolean).length;
+  document.getElementById('filter-status').textContent = ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ativos';
+}
+
+function limparFiltros() {
+  ['f-busca','f-modo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  filtrar();
+}
+
+// ── Formulário CRUD ───────────────────────────────────────────────────────────
+
+function abrirFormulario(id) {
+  editId = id || null;
+  resetForm();
+  document.getElementById('form-title').textContent = id ? 'Editar Tabela SX2' : 'Nova Tabela SX2';
+  document.getElementById('sec-lista').style.display = 'none';
+  document.getElementById('sec-form').style.display = '';
+  if (id) carregarForm(id);
+  atualizarExplicacao();
+}
+
+function fecharFormulario() {
+  document.getElementById('sec-form').style.display = 'none';
+  document.getElementById('sec-lista').style.display = '';
+  editId = null;
+}
+
+function resetForm() {
+  document.getElementById('f-id').value = '';
+  document.getElementById('f-chave').value = '';
+  document.getElementById('f-arquivo').value = '';
+  document.getElementById('f-descricao').value = '';
+  document.getElementById('f-modo-form').value = 'E';
+  document.getElementById('save-feedback').textContent = '';
+  document.getElementById('save-feedback').className = 'save-feedback';
+}
+
+function carregarForm(id) {
+  const row = dados.find(r => String(r.id) === String(id));
+  if (!row) return;
+  document.getElementById('f-id').value = row.id || '';
+  document.getElementById('f-conexao-form').value = row.connection_id || '';
+  document.getElementById('f-chave').value = row.chave || '';
+  document.getElementById('f-arquivo').value = row.arquivo || row.chave || '';
+  document.getElementById('f-modo-form').value = row.modo || 'E';
+  document.getElementById('f-descricao').value = row.descricao || '';
+  document.getElementById('form-title').textContent = `"${row.chave}"`;
+  atualizarExplicacao();
+}
+
+function atualizarExplicacao() {
+  const modo  = document.getElementById('f-modo-form')?.value || 'E';
+  const chave = (document.getElementById('f-chave')?.value || 'SD1').trim().toUpperCase() || 'SD1';
+  const msgs = {
+    E: `A tabela <strong>${esc(chave)}</strong> é <strong>Exclusiva</strong>. A IA aplicará o filtro de filial com o valor configurado na conexão:<br><code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">AND ${esc(chave)}.D1_FILIAL = '01'</code><br><br>Cada filial tem seus próprios registros nessa tabela.`,
+    C: `A tabela <strong>${esc(chave)}</strong> é <strong>Compartilhada</strong>. A IA aplicará filtro com dois espaços:<br><code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">AND ${esc(chave)}.D1_FILIAL = '  '</code><br><br>Os registros são compartilhados entre todas as filiais.`,
+    G: `A tabela <strong>${esc(chave)}</strong> é <strong>Global</strong>. A IA aplicará filtro com dois espaços:<br><code style="background:var(--bg-hover);padding:2px 6px;border-radius:4px;font-size:12px">AND ${esc(chave)}.D1_FILIAL = '  '</code><br><br>Dados globais — não segmentados por filial.`,
+  };
+  document.getElementById('modo-explicacao').innerHTML = msgs[modo] || msgs['E'];
+}
+
+async function salvar() {
+  const conexao_id = document.getElementById('f-conexao-form').value;
+  const chave      = document.getElementById('f-chave').value.trim().toUpperCase();
+  const arquivo    = document.getElementById('f-arquivo').value.trim().toUpperCase() || chave;
+  const modo       = document.getElementById('f-modo-form').value;
+  const descricao  = document.getElementById('f-descricao').value.trim();
+  if (!conexao_id) return feedback('Selecione uma conexão.', false);
+  if (!chave)      return feedback('Informe a chave da tabela.', false);
+  if (!arquivo)    return feedback('Informe o arquivo da tabela (X2_ARQUIVO).', false);
+  const body = comEmpresa({ conexao_id, chave, arquivo, modo, descricao });
+  const url    = editId ? apiUrl(`/api/ia-command/protheus/sx2/${encodeURIComponent(editId)}`) : apiUrl('/api/ia-command/protheus/sx2');
+  const method = editId ? 'PUT' : 'POST';
+  const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (!res.ok) { const e = await res.json().catch(()=>({})); return feedback(e.error || 'Erro ao salvar.', false); }
+  feedback('Salvo!', true);
+  setTimeout(() => { fecharFormulario(); carregar(); }, 600);
+}
+
+async function excluir(id) {
+  if (!confirm('Excluir esta entrada do dicionário SX2?')) return;
+  await fetch(apiUrl(`/api/ia-command/protheus/sx2/${encodeURIComponent(id)}`), { method:'DELETE' });
+  carregar();
+}
+
+function feedback(msg, ok) {
+  const el = document.getElementById('save-feedback');
+  el.textContent = msg;
+  el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+}
+
+// ── Modal de importação ───────────────────────────────────────────────────────
+
+function abrirImportar() {
+  tabelaBancoSelecionada = null;
+  dbfRegistros = null;
+  modoImport = 'apagar';
+  document.querySelectorAll('input[name="import-mode-sx2"]').forEach(r => { r.checked = r.value === 'apagar'; });
+  document.getElementById('lista-tabelas-banco').innerHTML = '';
+  document.getElementById('status-banco').textContent = '';
+  document.getElementById('status-dbf').textContent = '';
+  document.getElementById('dbf-preview').textContent = '';
+  document.getElementById('imp-arquivo-dbf').value = '';
+  document.getElementById('btn-confirmar-import').disabled = true;
+  document.getElementById('modal-importar').classList.add('open');
+}
+
+function fecharImportar() {
+  document.getElementById('modal-importar').classList.remove('open');
+}
+
+function modalTab(el, id) {
+  el.closest('.modal-box').querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+  el.closest('.modal-box').querySelectorAll('.modal-panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  abaImportAtiva = id === 'tab-banco' ? 'banco' : 'dbf';
+  document.getElementById('btn-confirmar-import').disabled = true;
+}
+
+// Tab banco ───────────────────────────────────────────────────────────────────
+
+async function buscarTabelasBanco() {
+  const conexaoId = document.getElementById('imp-conexao-banco').value;
+  if (!conexaoId) { alert('Selecione uma conexão primeiro.'); return; }
+  const listEl   = document.getElementById('lista-tabelas-banco');
+  const statusEl = document.getElementById('status-banco');
+  const btn      = document.getElementById('btn-buscar-tabelas');
+  btn.disabled = true; btn.textContent = 'Buscando...';
+  listEl.innerHTML = ''; statusEl.textContent = '';
+  tabelaBancoSelecionada = null;
+  document.getElementById('btn-confirmar-import').disabled = true;
+  try {
+    const res  = await fetch(apiUrl('/api/ia-command/protheus/sx2/tabelas-disponiveis', { conexao_id: conexaoId }));
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro ao buscar tabelas.'; statusEl.className = 'import-status fail'; return; }
+    if (!body.length) { listEl.innerHTML = '<div style="color:var(--text-lo);font-size:13px">Nenhuma tabela SX2 encontrada no banco.</div>'; return; }
+    listEl.innerHTML = body.map(t =>
+      `<label class="tabela-item" onclick="selecionarTabela(this,'${esc(t)}')">
+        <input type="radio" name="sx2-tabela" value="${esc(t)}">
+        <span class="tabela-nome">${esc(t)}</span>
+      </label>`
+    ).join('');
+    statusEl.textContent = `${body.length} tabela(s) encontrada(s).`;
+    statusEl.className = 'import-status ok';
+  } catch (e) {
+    statusEl.textContent = 'Falha na conexão: ' + e.message;
+    statusEl.className = 'import-status fail';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Buscar tabelas SX2...';
+  }
+}
+
+function selecionarTabela(el, nome) {
+  document.querySelectorAll('.tabela-item').forEach(i => i.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input[type=radio]').checked = true;
+  tabelaBancoSelecionada = nome;
+  document.getElementById('btn-confirmar-import').disabled = false;
+}
+
+// Tab DBF ─────────────────────────────────────────────────────────────────────
+
+function lerArquivoDBF(input) {
+  dbfRegistros = null;
+  document.getElementById('dbf-preview').textContent = '';
+  document.getElementById('btn-confirmar-import').disabled = true;
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      dbfRegistros = parsearDBF(e.target.result);
+      document.getElementById('dbf-preview').textContent = `✔ ${dbfRegistros.length} registros lidos do arquivo.`;
+      document.getElementById('btn-confirmar-import').disabled = !document.getElementById('imp-conexao-dbf').value;
+    } catch (err) {
+      document.getElementById('dbf-preview').textContent = 'Erro ao ler DBF: ' + err.message;
+      document.getElementById('btn-confirmar-import').disabled = true;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parsearDBF(buffer) {
+  const view    = new DataView(buffer);
+  const decoder = new TextDecoder('windows-1252');
+  const numRecs    = view.getUint32(4, true);
+  const headerSize = view.getUint16(8, true);
+  const recSize    = view.getUint16(10, true);
+
+  const campos = [];
+  let offset = 32;
+  while (offset + 32 <= headerSize) {
+    if (view.getUint8(offset) === 0x0D) break;
+    const nome     = decoder.decode(new Uint8Array(buffer, offset, 11)).replace(/\0/g,'').trim();
+    const tamanho  = view.getUint8(offset + 16);
+    campos.push({ nome, tamanho });
+    offset += 32;
+  }
+
+  const registros = [];
+  for (let i = 0; i < numRecs; i++) {
+    const recOffset = headerSize + i * recSize;
+    if (recOffset + recSize > buffer.byteLength) break;
+    if (view.getUint8(recOffset) === 0x2A) continue; // deletado
+    const rec = {};
+    let fieldOffset = recOffset + 1;
+    for (const campo of campos) {
+      rec[campo.nome] = decoder.decode(new Uint8Array(buffer, fieldOffset, campo.tamanho)).trimEnd();
+      fieldOffset += campo.tamanho;
+    }
+    registros.push(rec);
+  }
+
+  return registros.map(r => ({
+    chave:    (r.X2_CHAVE   || '').trim(),
+    arquivo:  (r.X2_ARQUIVO || r.X2_CHAVE || '').trim(),
+    modo:     (r.X2_MODO    || 'E').trim() || 'E',
+    descricao:(r.X2_NOME    || '').trim(),
+  })).filter(r => r.chave);
+}
+
+// Confirmação ─────────────────────────────────────────────────────────────────
+
+async function confirmarImportacao() {
+  const btn = document.getElementById('btn-confirmar-import');
+  btn.disabled = true; btn.textContent = 'Importando...';
+  try {
+    if (abaImportAtiva === 'banco') await importarDoBanco();
+    else await importarDoDBF();
+  } finally {
+    btn.disabled = false; btn.textContent = 'Importar';
+  }
+}
+
+async function importarDoBanco() {
+  const conexaoId = document.getElementById('imp-conexao-banco').value;
+  const statusEl  = document.getElementById('status-banco');
+  if (!conexaoId || !tabelaBancoSelecionada) return;
+  try {
+    const res  = await fetch('/api/ia-command/protheus/sx2/reload', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, tabela: tabelaBancoSelecionada, limpar: modoImport === 'apagar' })),
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro na importação.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = `✔ ${body.importados} registro(s) importados com sucesso.`;
+    statusEl.className = 'import-status ok';
+    setTimeout(() => { fecharImportar(); carregar(); }, 1200);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+async function importarDoDBF() {
+  const conexaoId = document.getElementById('imp-conexao-dbf').value;
+  const statusEl  = document.getElementById('status-dbf');
+  if (!conexaoId || !dbfRegistros) return;
+  try {
+    const res  = await fetch('/api/ia-command/protheus/sx2/import', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, registros: dbfRegistros, limpar: modoImport === 'apagar' })),
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro na importação.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = `✔ ${body.importados} registro(s) importados com sucesso.`;
+    statusEl.className = 'import-status ok';
+    setTimeout(() => { fecharImportar(); carregar(); }, 1200);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+// Eventos ─────────────────────────────────────────────────────────────────────
+
+document.getElementById('imp-conexao-dbf')?.addEventListener('change', () => {
+  document.getElementById('btn-confirmar-import').disabled = !dbfRegistros || !document.getElementById('imp-conexao-dbf').value;
+});
+document.getElementById('modal-importar')?.addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-importar')) fecharImportar();
+});
+document.getElementById('f-modo-form')?.addEventListener('change', atualizarExplicacao);
+document.getElementById('f-chave')?.addEventListener('input', atualizarExplicacao);
+
+const init = async () => { await carregar(); };
+window._iahubAuthReady?.then(init) ?? init();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda - Dicionário SX2</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+
+    <div class="help-section">
+      <div class="help-section-title">O que é esta tela</div>
+      <div class="help-item-desc">O <strong>Dicionário SX2</strong> registra o modo de compartilhamento de cada tabela do Protheus. Antes de gerar qualquer SQL, a IA consulta esta tabela para saber qual filtro de filial aplicar — sem isso, queries podem retornar dados de filiais erradas ou cruzar registros que deveriam ser isolados.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Modos de compartilhamento</div>
+      <div class="help-item">
+        <div class="help-item-label">E — Exclusivo</div>
+        <div class="help-item-desc">A tabela pertence exclusivamente à filial. A IA aplica o filtro <code style="background:var(--bg-hover);padding:1px 5px;border-radius:3px;font-size:12px">FILIAL = '01'</code> (ou o valor configurado na conexão). Cada filial tem seus próprios registros.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">C — Compartilhado</div>
+        <div class="help-item-desc">Registros compartilhados entre todas as filiais. A IA aplica o filtro <code style="background:var(--bg-hover);padding:1px 5px;border-radius:3px;font-size:12px">FILIAL = '  '</code> (dois espaços). Os dados são comuns a toda a empresa.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">G — Global</div>
+        <div class="help-item-desc">Tabela global, também filtrada por dois espaços. Usado em tabelas de parâmetros e configurações que não pertencem a nenhuma filial específica.</div>
+      </div>
+      <div class="help-tip">Na dúvida sobre o modo de uma tabela, consulte o próprio Protheus em <strong>Configurador &rsaquo; Dicionários &rsaquo; SX2</strong> ou use a importação direta do banco.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Quando usar</div>
+      <div class="help-item">
+        <div class="help-item-label">A IA está gerando SQL com filtro de filial errado</div>
+        <div class="help-item-desc">Verifique se a tabela está cadastrada no SX2 com o modo correto. Se estiver ausente, a IA usa o modo padrão configurado na conexão, que pode não corresponder à realidade do Protheus.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Adicionei uma nova tabela ao escopo de consultas da IA</div>
+        <div class="help-item-desc">Cadastre o modo da tabela aqui antes de criar o dataset correspondente. Assim o filtro de filial já estará correto na primeira consulta gerada.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Atualização após mudança no ERP</div>
+        <div class="help-item-desc">Se o modo de uma tabela mudou no Protheus (ex.: passou de Exclusiva para Compartilhada), atualize o registro aqui para que a IA reflita a nova configuração imediatamente.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Colunas da grade</div>
+      <div class="help-item">
+        <div class="help-item-label">Chave (X2_CHAVE)</div>
+        <div class="help-item-desc">Identificador lógico da tabela no Protheus (ex.: SD1, SE2, SA2). É o prefixo usado nos campos dentro das queries SQL.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Arquivo (X2_ARQUIVO)</div>
+        <div class="help-item-desc">Nome real da tabela no banco de dados (ex.: SD1010, SE2990). Pode ter sufixo numérico correspondente à empresa.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Modo</div>
+        <div class="help-item-desc">E, C ou G — define o filtro de filial que a IA irá aplicar ao gerar SQL para esta tabela.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Importação</div>
+      <div class="help-item">
+        <div class="help-item-label">Do banco de dados</div>
+        <div class="help-item-desc">Conecta diretamente ao banco ERP pela conexão selecionada e lista as tabelas SX2 disponíveis. É a forma mais rápida e garante dados atualizados. Os registros existentes da conexão são substituídos.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">De arquivo DBF</div>
+        <div class="help-item-desc">Permite carregar o arquivo <strong>SX2010.DBF</strong> exportado do Protheus diretamente do seu computador. Útil quando não há acesso direto ao banco. O arquivo é processado localmente no navegador — nenhum dado binário é enviado ao servidor.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relatório WhatsApp — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+
+    .two-col {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:16px;
+      align-items:start;
+    }
+    @media(max-width:860px){ .two-col{ grid-template-columns:1fr; } }
+
+    .panel {
+      background:var(--bg-card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);
+      display:flex;
+      flex-direction:column;
+    }
+    .panel-head {
+      padding:14px 18px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .panel-title { font-size:13px;font-weight:700;color:var(--text-hi); }
+    .panel-body  { padding:16px 18px; display:flex; flex-direction:column; gap:14px; }
+
+    .form-group { display:flex; flex-direction:column; gap:5px; }
+    .form-label { font-size:12px;font-weight:600;color:var(--text-lo);text-transform:uppercase;letter-spacing:.04em; }
+    .form-control {
+      background:var(--bg-base);
+      border:1px solid var(--border);
+      border-radius:var(--radius-sm);
+      color:var(--text-hi);
+      font-size:13px;
+      padding:8px 10px;
+      transition:border-color var(--transition);
+      outline:none;
+      font-family:inherit;
+      width:100%;
+      box-sizing:border-box;
+    }
+    .form-control:focus { border-color:var(--accent); }
+    textarea.form-control { resize:vertical; min-height:280px; font-family:ui-monospace,monospace; font-size:12px; line-height:1.6; }
+
+    .hint { font-size:11px;color:var(--text-lo);line-height:1.55; }
+    .hint code { background:var(--bg-base); padding:1px 5px; border-radius:3px; font-family:ui-monospace,monospace; border:1px solid var(--border); }
+
+    .output-pre {
+      background:var(--bg-base);
+      border:1px solid var(--border);
+      border-radius:var(--radius-sm);
+      padding:14px 16px;
+      font-family:ui-monospace,monospace;
+      font-size:13px;
+      line-height:1.75;
+      white-space:pre-wrap;
+      word-break:break-word;
+      color:var(--text-md);
+      min-height:280px;
+      max-height:600px;
+      overflow-y:auto;
+    }
+    .output-empty { color:var(--text-lo); font-style:italic; font-family:inherit; }
+
+    .total-badge {
+      display:inline-flex;align-items:center;gap:6px;
+      background:var(--accent-glow);
+      border:1px solid rgba(124,58,237,.2);
+      border-radius:var(--radius-sm);
+      padding:5px 12px;
+      font-size:12px;
+      font-weight:700;
+      color:var(--accent-light);
+    }
+    .copy-ok {
+      display:none;
+      font-size:12px;
+      color:#22c55e;
+      font-weight:600;
+    }
+
+    .empresa-chips {
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+    }
+    .chip-empresa {
+      display:inline-flex;align-items:center;gap:6px;
+      background:var(--bg-base);
+      border:1px solid var(--border);
+      border-radius:99px;
+      padding:3px 10px;
+      font-size:12px;
+      color:var(--text-md);
+      cursor:pointer;
+      transition:background var(--transition),border-color var(--transition),color var(--transition);
+      user-select:none;
+    }
+    .chip-empresa.active {
+      background:var(--accent-glow);
+      border-color:rgba(124,58,237,.4);
+      color:var(--accent-light);
+      font-weight:600;
+    }
+    .chip-empresa:hover:not(.active) { background:var(--bg-hover); }
+
+    .empresa-list { display:flex;flex-direction:column;gap:2px; }
+    .empresa-item {
+      display:flex;align-items:center;gap:8px;
+      padding:6px 8px;
+      border-radius:var(--radius-sm);
+      cursor:pointer;
+      transition:background var(--transition);
+    }
+    .empresa-item:hover { background:var(--bg-hover); }
+    .empresa-item-nome { font-size:13px;color:var(--text-hi);font-weight:600; flex:1; }
+    .empresa-item-total { font-size:12px;color:var(--text-lo); }
+    .empresa-item-icon { font-size:14px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()">☰</button>
+      <span class="topbar-title">IA Command › Relatório WhatsApp Financeiro</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">IA Command · WhatsApp</div>
+          <div class="page-title">Relatório Financeiro para WhatsApp</div>
+          <div class="page-subtitle">Cole os dados brutos de Contas a Pagar e gere a mensagem formatada por empresa e mês.</div>
+        </div>
+      </div>
+
+      <div class="two-col">
+
+        <!-- PAINEL ENTRADA -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">📋 Dados Brutos</span>
+          </div>
+          <div class="panel-body">
+            <div class="form-group">
+              <label class="form-label">Nome da Empresa</label>
+              <input id="inp-empresa" class="form-control" type="text"
+                     placeholder="Ex: C3I, J2A Consultoria…"
+                     oninput="sincronizarEmpresas()">
+              <span class="hint">
+                Para <strong>múltiplas empresas</strong>, insira um bloco por empresa:
+                a primeira linha deve ser <code>##NOME DA EMPRESA##</code>.
+              </span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Dataset (uma linha por título)</label>
+              <textarea id="inp-dados" class="form-control"
+                placeholder="202605 ALELO 3375
+202605 AMTU 297
+202606 RECEITA FEDERAL 6556,34
+…"></textarea>
+              <span class="hint">
+                Formato: <code>AAAAMM FORNECEDOR VALOR</code><br>
+                Separador: um ou mais espaços. Valores negativos são aceitos.
+              </span>
+            </div>
+
+            <div id="empresa-chips-wrap" style="display:none">
+              <div class="form-label" style="margin-bottom:6px">Empresas detectadas</div>
+              <div class="empresa-chips" id="empresa-chips"></div>
+            </div>
+
+            <button class="btn btn-primary" onclick="formatar()" style="align-self:flex-start">
+              Formatar para WhatsApp
+            </button>
+          </div>
+        </div>
+
+        <!-- PAINEL SAÍDA -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">📱 Mensagem Formatada</span>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span id="copy-ok" class="copy-ok">✓ Copiado!</span>
+              <button class="btn btn-ghost" onclick="copiar()" id="btn-copiar" style="display:none">Copiar</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div id="empresa-resumo" class="empresa-list" style="display:none"></div>
+            <pre id="output" class="output-pre"><span class="output-empty">A mensagem formatada aparecerá aqui…</span></pre>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+(function () {
+
+  const MESES = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO',
+                 'JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+
+  /* ─── parse ───────────────────────────────────────────────────────────── */
+
+  function parseLinha(linha) {
+    linha = linha.trim();
+    if (!linha) return null;
+    // Captura: AAAAMM  FORNECEDOR (pode ter espaços)  VALOR (último token)
+    const m = linha.match(/^(\d{6})\s+(.+?)\s+([-\d.,]+)\s*$/);
+    if (!m) return null;
+    const periodo   = m[1];
+    const fornecedor = m[2].trim().toUpperCase();
+    const valorStr  = m[3].replace('.', '').replace(',', '.');
+    const valor     = parseFloat(valorStr);
+    if (isNaN(valor)) return null;
+    return { periodo, fornecedor, valor };
+  }
+
+  function parseBloco(texto, nomeEmpresa) {
+    const linhas = texto.split('\n');
+    const titulos = [];
+    for (const linha of linhas) {
+      const t = parseLinha(linha);
+      if (t) titulos.push(t);
+    }
+    return { nome: nomeEmpresa, titulos };
+  }
+
+  function parseInput(textoCompleto, nomeAvulso) {
+    /* Detecta múltiplos blocos via ##NOME## */
+    const blocos = [];
+    const empresaRe = /##([^#]+)##/g;
+    let match;
+    const indices = [];
+    while ((match = empresaRe.exec(textoCompleto)) !== null) {
+      indices.push({ inicio: match.index, fim: match.index + match[0].length, nome: match[1].trim() });
+    }
+
+    if (indices.length === 0) {
+      blocos.push(parseBloco(textoCompleto, nomeAvulso || 'Empresa'));
+    } else {
+      for (let i = 0; i < indices.length; i++) {
+        const { fim, nome } = indices[i];
+        const proximo = indices[i + 1] ? indices[i + 1].inicio : textoCompleto.length;
+        const corpo   = textoCompleto.slice(fim, proximo);
+        blocos.push(parseBloco(corpo, nome));
+      }
+    }
+    return blocos.filter(b => b.titulos.length > 0);
+  }
+
+  /* ─── formatação ──────────────────────────────────────────────────────── */
+
+  function formatarValor(v) {
+    const abs      = Math.abs(v);
+    const inteiro  = Math.floor(abs);
+    const decimal  = Math.round((abs - inteiro) * 100);
+    const inteiroFmt = inteiro.toLocaleString('pt-BR');
+    const decimalFmt = String(decimal).padStart(2, '0');
+    return (v < 0 ? 'R$ -' : 'R$ ') + inteiroFmt + ',' + decimalFmt;
+  }
+
+  function periodoLabel(periodo) {
+    const ano = periodo.slice(0, 4);
+    const mes = parseInt(periodo.slice(4, 6), 10) - 1;
+    return MESES[mes] + ' / ' + ano;
+  }
+
+  function formatarEmpresa(bloco) {
+    const { nome, titulos } = bloco;
+
+    // Agrupar por período
+    const mapa = new Map();
+    for (const t of titulos) {
+      if (!mapa.has(t.periodo)) mapa.set(t.periodo, []);
+      mapa.get(t.periodo).push(t);
+    }
+
+    const periodos = [...mapa.keys()].sort();
+    let total = 0;
+    const linhas = [];
+
+    linhas.push(`🏢 *${nome}*`);
+    linhas.push(`💰 *Detalhe por Fornecedor*`);
+
+    for (const periodo of periodos) {
+      const itens = mapa.get(periodo);
+      linhas.push('');
+      linhas.push(`🗓 *${periodoLabel(periodo)}*`);
+      itens.forEach((item, idx) => {
+        total += item.valor;
+        linhas.push(`  ${idx + 1}. *${item.fornecedor}:* ${formatarValor(item.valor)}`);
+      });
+    }
+
+    linhas.push('');
+    linhas.push(`*Total da Empresa: ${formatarValor(total)}*`);
+    linhas.push('---');
+
+    return { texto: linhas.join('\n'), total };
+  }
+
+  /* ─── sincronizar chips de empresa ───────────────────────────────────── */
+
+  let empresasDetectadas = [];
+
+  function sincronizarEmpresas() {
+    const textoCompleto = document.getElementById('inp-dados').value;
+    const empresaRe     = /##([^#]+)##/g;
+    const nomes         = [];
+    let match;
+    while ((match = empresaRe.exec(textoCompleto)) !== null) {
+      nomes.push(match[1].trim());
+    }
+    empresasDetectadas = nomes;
+
+    const wrap   = document.getElementById('empresa-chips-wrap');
+    const chips  = document.getElementById('empresa-chips');
+    const inpEmp = document.getElementById('inp-empresa');
+
+    if (nomes.length > 1) {
+      wrap.style.display = 'block';
+      inpEmp.parentElement.style.display = 'none';
+      chips.innerHTML = nomes.map(n =>
+        `<span class="chip-empresa" title="${n}">${n}</span>`
+      ).join('');
+    } else {
+      wrap.style.display = 'none';
+      inpEmp.parentElement.style.display = 'flex';
+    }
+  }
+
+  /* ─── ação principal ──────────────────────────────────────────────────── */
+
+  function formatar() {
+    const texto     = document.getElementById('inp-dados').value.trim();
+    const nomeAvulso = document.getElementById('inp-empresa').value.trim();
+    const output    = document.getElementById('output');
+    const btnCopiar = document.getElementById('btn-copiar');
+    const resumoEl  = document.getElementById('empresa-resumo');
+
+    if (!texto) {
+      output.innerHTML = '<span class="output-empty">Cole os dados no campo ao lado.</span>';
+      btnCopiar.style.display = 'none';
+      resumoEl.style.display  = 'none';
+      return;
+    }
+
+    const blocos     = parseInput(texto, nomeAvulso || 'Empresa');
+    const resultados = blocos.map(formatarEmpresa);
+    const mensagem   = resultados.map(r => r.texto).join('\n\n');
+
+    output.textContent = mensagem;
+    btnCopiar.style.display = 'block';
+
+    // Resumo por empresa
+    if (blocos.length > 1) {
+      resumoEl.style.display = 'flex';
+      resumoEl.innerHTML = blocos.map((b, i) =>
+        `<div class="empresa-item">
+          <span class="empresa-item-icon">🏢</span>
+          <span class="empresa-item-nome">${b.nome}</span>
+          <span class="empresa-item-total">${formatarValor(resultados[i].total)}</span>
+        </div>`
+      ).join('');
+    } else {
+      resumoEl.style.display = 'none';
+    }
+  }
+
+  /* ─── copiar ──────────────────────────────────────────────────────────── */
+
+  function copiar() {
+    const texto = document.getElementById('output').textContent;
+    if (!texto || texto.includes('aparecerá aqui')) return;
+    navigator.clipboard.writeText(texto).then(() => {
+      const ok = document.getElementById('copy-ok');
+      ok.style.display = 'inline';
+      setTimeout(() => { ok.style.display = 'none'; }, 2000);
+    });
+  }
+
+  /* ─── listener do textarea para detecção de blocos ───────────────────── */
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('inp-dados').addEventListener('input', sincronizarEmpresas);
+    // Atalho Ctrl+Enter para formatar
+    document.getElementById('inp-dados').addEventListener('keydown', e => {
+      if (e.ctrlKey && e.key === 'Enter') formatar();
+    });
+  });
+
+  window.formatar = formatar;
+  window.copiar   = copiar;
+  window.sincronizarEmpresas = sincronizarEmpresas;
+
+})();
+</script>
+</body>
+</html>

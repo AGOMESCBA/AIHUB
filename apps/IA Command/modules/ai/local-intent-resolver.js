@@ -69,6 +69,7 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
   const normalizacoes = opts.normalizacoes || extrairRegrasNormalizacao(sinonimos);
   const texto = normalizarTexto(mensagem, normalizacoes);
   if (!texto || !intencoes.length) return null;
+  if (_pareceConsultaFinanceira(texto) && !_temIntencaoFinanceira(intencoes)) return null;
 
   const matches = _matchSinonimos(texto, sinonimos);
   const periodo = identificarPeriodoTexto(mensagem, { normalizacoes });
@@ -113,6 +114,24 @@ function resolverLocal(mensagem, intencoes = [], sinonimos = [], opts = {}) {
       origem: s.origem || null,
     })),
   };
+}
+
+function _pareceConsultaFinanceira(texto) {
+  return [
+    'contas a pagar', 'contas pagar', 'a pagar', 'pagar',
+    'contas a receber', 'contas receber', 'a receber', 'receber',
+    'titulo', 'titulos', 'duplicata', 'duplicatas', 'boleto', 'boletos',
+    'fluxo de caixa', 'fluxo de caixa realizado', 'fluxo de caixa projetado',
+    'saldo bancario', 'saldos bancarios', 'saldo a pagar', 'saldo a receber',
+  ].some(t => _containsTerm(texto, normalizarTexto(t)));
+}
+
+function _temIntencaoFinanceira(intencoes = []) {
+  return intencoes.some(i => {
+    const texto = normalizarTexto([i.nome, i.modulo, i.descricao, i.frases_exemplo].filter(Boolean).join(' ')).replace(/_/g, ' ');
+    return ['financeiro', 'contas pagar', 'contas receber', 'fluxo caixa', 'saldo bancario', 'pagar', 'receber']
+      .some(t => _containsTerm(texto, normalizarTexto(t)));
+  });
 }
 
 function _matchSinonimos(texto, sinonimos) {
@@ -409,4 +428,4 @@ function _normalizarColuna(valor) {
   return String(valor || '').replace(/[^\w]/g, '').toLowerCase();
 }
 
-module.exports = { resolverLocal, normalizarTexto, normalizarIntent, PERIOD_TYPES };
+module.exports = { resolverLocal, normalizarTexto, normalizarIntent, PERIOD_TYPES, _pareceConsultaFinanceira, _temIntencaoFinanceira };

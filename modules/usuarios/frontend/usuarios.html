@@ -194,6 +194,18 @@
     .tabulator-header-filter input,
     .tabulator-header-filter select { width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:#fff;color:var(--text);margin-top:4px; }
     .tabulator-group { background:var(--bg-hover) !important;border-bottom:1px solid var(--border) !important;font-weight:600;font-size:13px;padding:8px 14px !important; }
+    /* ── Abas do editor ── */
+    .editor-tabs { display:flex;gap:2px;margin-bottom:22px;border-bottom:1px solid var(--border); }
+    .editor-tab-btn {
+      padding:8px 20px;font-size:13px;font-weight:600;color:var(--text-md);
+      background:none;border:none;border-bottom:2px solid transparent;
+      margin-bottom:-1px;cursor:pointer;transition:var(--transition);
+    }
+    .editor-tab-btn:hover { color:var(--text-hi); }
+    .editor-tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
     @media (max-width: 920px) {
       .page-head { flex-direction:column; }
       .page-head .btn { align-self:flex-start; }
@@ -292,6 +304,13 @@
 
         <div class="editor-grid editor-grid-wide">
           <main class="editor-main">
+            <div class="editor-tabs">
+              <button class="editor-tab-btn active" onclick="showTab('dados')">Dados Principais</button>
+              <button class="editor-tab-btn" onclick="showTab('acessos')">Acessos</button>
+              <button class="editor-tab-btn" onclick="showTab('erp')">ERP</button>
+            </div>
+
+            <div class="tab-panel active" id="tabp-dados">
             <section class="form-section">
               <div class="form-section-header">
                 <div>
@@ -356,6 +375,9 @@
               </div>
             </section>
 
+            </div><!-- /tabp-dados -->
+
+            <div class="tab-panel" id="tabp-acessos">
             <section class="form-section">
               <div class="form-section-header">
                 <div>
@@ -404,6 +426,48 @@
                 <div id="form-error" class="login-error" style="display:none;margin-top:16px;margin-bottom:0"></div>
               </div>
             </section>
+            </div><!-- /tabp-acessos -->
+
+            <div class="tab-panel" id="tabp-erp">
+            <section class="form-section">
+              <div class="form-section-header">
+                <div>
+                  <div class="form-section-title">Integração ERP</div>
+                  <div class="form-section-subtitle">Identifica o usuário no ERP Protheus para consultas via WhatsApp.</div>
+                </div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">Telefone WhatsApp</label>
+                    <input id="f-erp-telefone" type="text" class="form-control" placeholder="5565999990000">
+                    <div class="hint">Número com código do país e DDD, sem espaços ou símbolos (ex: 5565999990000). Usado para identificar o usuário pela mensagem recebida.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">CPF / CNPJ</label>
+                    <input id="f-erp-cpf-cnpj" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00">
+                  </div>
+                </div>
+                <div class="form-row" style="margin-bottom:16px">
+                  <div class="form-group">
+                    <label class="form-label">ID ERP (código do vendedor)</label>
+                    <input id="f-erp-id" type="text" class="form-control" placeholder="000001" maxlength="6" style="text-transform:uppercase">
+                    <div class="hint">Código de até 6 caracteres — equivale ao A3_COD no cadastro de vendedores do Protheus (SA3).</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Tipo no ERP</label>
+                    <select id="f-erp-tipo" class="form-control">
+                      <option value="">— não configurado —</option>
+                      <option value="vendedor">Vendedor</option>
+                      <option value="gestor">Gestor</option>
+                    </select>
+                    <div class="hint">Vendedor vê apenas as próprias comissões. Gestor pode consultar qualquer vendedor.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+            </div><!-- /tabp-erp -->
+
           </main>
 
           <aside class="editor-side">
@@ -777,6 +841,13 @@ async function abrirModal(usuario = null) {
   document.getElementById('f-role').value    = usuario?.role    ?? 'usuario';
   document.getElementById('f-ativo').checked = usuario?.ativo   ?? true;
 
+  document.getElementById('f-erp-telefone').value  = usuario?.erp_telefone  ?? '';
+  document.getElementById('f-erp-cpf-cnpj').value  = usuario?.erp_cpf_cnpj  ?? '';
+  document.getElementById('f-erp-id').value         = usuario?.erp_id         ?? '';
+  document.getElementById('f-erp-tipo').value       = usuario?.erp_tipo       ?? '';
+
+  showTab('dados');
+
   document.getElementById('grp-ativo').style.display      = isEdit ? 'block' : 'none';
   document.getElementById('grp-senha-novo').style.display = isEdit ? 'none'  : 'block';
   document.getElementById('grp-senha-edit').style.display = isEdit ? 'block' : 'none';
@@ -1017,6 +1088,16 @@ function marcarTodasRotinas(marcar) {
   atualizarEmpresaItem(empresaSelecionadaId);
 }
 
+// ── Abas do editor ───────────────────────────────────────────────────────────
+function showTab(nome) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.editor-tab-btn').forEach(b => b.classList.remove('active'));
+  const painel = document.getElementById('tabp-' + nome);
+  if (painel) painel.classList.add('active');
+  const btn = document.querySelector(`.editor-tab-btn[onclick="showTab('${nome}')"]`);
+  if (btn) btn.classList.add('active');
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function onRoleChange() {
   const isAdmin = document.getElementById('f-role').value === 'admin';
@@ -1071,9 +1152,13 @@ async function salvar() {
 
   const dados = {
     nome, usuario, celular, email,
-    role:     document.getElementById('f-role').value,
-    empresas: getEmpresasSelecionadas(),
-    ativo:    document.getElementById('f-ativo').checked,
+    role:         document.getElementById('f-role').value,
+    empresas:     getEmpresasSelecionadas(),
+    ativo:        document.getElementById('f-ativo').checked,
+    erp_telefone: document.getElementById('f-erp-telefone').value.trim(),
+    erp_cpf_cnpj: document.getElementById('f-erp-cpf-cnpj').value.trim(),
+    erp_id:       document.getElementById('f-erp-id').value.trim().toUpperCase(),
+    erp_tipo:     document.getElementById('f-erp-tipo').value,
   };
   if (senha) dados.senha = senha;
 

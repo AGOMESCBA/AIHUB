@@ -46,6 +46,22 @@ const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
 
+// ── Console do Servidor — intercepta console.* e emite via Socket.IO ──────────
+const _consoleBuffer = [];
+const _CONSOLE_BUFFER_MAX = 500;
+
+function _consoleEmit(level, args) {
+  const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+  const entry = { ts: new Date().toISOString(), level, msg };
+  _consoleBuffer.push(entry);
+  if (_consoleBuffer.length > _CONSOLE_BUFFER_MAX) _consoleBuffer.shift();
+  try { io.to('iac-console').emit('iac-console', entry); } catch (_) {}
+}
+['log', 'info', 'warn', 'error'].forEach(level => {
+  const orig = console[level].bind(console);
+  console[level] = (...args) => { orig(...args); _consoleEmit(level === 'log' ? 'info' : level, args); };
+});
+
 // ── Segurança: headers HTTP ───────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false, // desativado para não bloquear scripts inline das páginas atuais
@@ -91,9 +107,30 @@ const requireRecrutamento = requireSystemAccess('recrutamento');
 const requireIaAdmin      = requireSystemAccess('ia-admin');
 const requireIaCommand    = requireSystemAccess('ia-command');
 
+// Versão gerada a cada startup — usada para cache-busting de HTML e JS
+const APP_VERSION = Date.now();
+app.get('/api/version', (_req, res) => res.json({ v: APP_VERSION }));
+
+// HTML e JS sempre revalidados com o servidor (no-cache).
+// Se o arquivo não mudou → 304 (rápido, sem tráfego).
+// Se mudou (após deploy + restart) → 200 com conteúdo novo.
+const _noCacheExts = /\.(html|js)$/i;
+function _staticOpts() {
+  return {
+    etag: true,
+    lastModified: true,
+    setHeaders(res, fp) {
+      if (_noCacheExts.test(fp)) {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      }
+    },
+  };
+}
+
 function mountStaticDirs(route, middleware, dirs) {
+  const opts = _staticOpts();
   for (const dir of dirs) {
-    app.use(route, middleware, express.static(dir));
+    app.use(route, middleware, express.static(dir, opts));
   }
 }
 
@@ -155,9 +192,16 @@ mountStaticDirs('/app/ia-administracao', requireIaAdmin, APPS.iaAdministracao.le
 mountStaticDirs('/app/ia-command', requireIaCommand, APPS.iaCommand.staticDirs);
 
 // ── Arquivos estáticos ────────────────────────────────────────────────────────
-app.use('/uploads', express.static(iahubData.appDataDir('uploads')));
+// Uploads têm timestamp no nome (imutáveis) — cache de 1 ano no browser.
+app.use('/uploads', express.static(iahubData.appDataDir('uploads'), {
+  etag: true,
+  lastModified: true,
+  setHeaders(res) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  },
+}));
 for (const dir of LEGACY_STATIC_DIRS) {
-  app.use(express.static(dir));
+  app.use(express.static(dir, _staticOpts()));
 }
 
 // ── Log em arquivo ────────────────────────────────────────────────────────────
@@ -296,6 +340,14 @@ io.on('connection', (socket) => {
     }
 
     emitirReplayIaCommand(socket, empresaId);
+  });
+
+  // Console do Servidor — cliente solicita entrar na sala e recebe replay do buffer
+  socket.on('join-iac-console', () => {
+    const sess = socket.request.session;
+    if (!sess?.authenticated) return;
+    socket.join('iac-console');
+    _consoleBuffer.forEach(entry => socket.emit('iac-console', entry));
   });
 
   // Permite que o frontend force o ingresso na sala correta após auth assincrona

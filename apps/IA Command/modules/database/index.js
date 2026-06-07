@@ -99,6 +99,7 @@ function _garantirColunasCompatibilidade() {
       dataset_nome          TEXT,
       rows_count            INTEGER,
       resposta_entregue     TEXT,
+      trace_json            TEXT,
       feedback              TEXT,
       feedback_observacao   TEXT,
       criado_em             TEXT NOT NULL,
@@ -109,6 +110,30 @@ function _garantirColunasCompatibilidade() {
     CREATE INDEX IF NOT EXISTS idx_iac_interpretation_intencao
       ON interpretation_log (empresa_id, intencao, confianca);
   `);
+
+  const interpretationLog = {
+    sql_gerado: 'TEXT',
+    duracao_ms: 'INTEGER',
+    trace_json: 'TEXT',
+    modulo: 'TEXT',
+    escopo_execucao: 'TEXT',
+    sql_canonico_origem: 'TEXT',
+    sql_canonico_empresa_origem: 'INTEGER',
+    sql_canonico_original: 'TEXT',
+    sql_canonico_adaptado: 'TEXT',
+    sql_auditoria_json: 'TEXT',
+    sql_canonico_parametros_json: 'TEXT',
+    sql_canonico_parametrizado: 'INTEGER DEFAULT 0',
+    sql_ia_bruto: 'TEXT',
+    sql_final_executado: 'TEXT',
+    sql_canonico_reuso_motivo: 'TEXT',
+    sql_canonico_reuso_permitido: 'INTEGER DEFAULT NULL',
+    sql_canonico_empresa_atual: 'INTEGER DEFAULT NULL',
+  };
+
+  for (const [coluna, definicao] of Object.entries(interpretationLog)) {
+    _adicionarColunaSeFaltar('interpretation_log', coluna, definicao);
+  }
 
   const connections = {
     port: 'INTEGER',
@@ -121,6 +146,7 @@ function _garantirColunasCompatibilidade() {
     ssl: 'INTEGER DEFAULT 0',
     ultimo_teste: 'TEXT',
     teste_ok: 'INTEGER DEFAULT 0',
+    configuracoes: 'TEXT',
   };
 
   const aiConfig = {
@@ -130,7 +156,7 @@ function _garantirColunasCompatibilidade() {
     claude_api_key: 'TEXT',
     openai_api_key: 'TEXT',
     provedor_primario: "TEXT DEFAULT 'groq'",
-    fallback_ordem: "TEXT DEFAULT 'groq,gemini,deepseek,claude'",
+    fallback_ordem: "TEXT DEFAULT 'groq,openai,gemini,deepseek,claude'",
     confianca_minima: 'REAL DEFAULT 0.6',
     whisper_model: "TEXT DEFAULT 'whisper-large-v3'",
     audio_idioma: "TEXT DEFAULT 'pt'",
@@ -157,6 +183,35 @@ function _garantirColunasCompatibilidade() {
   for (const [coluna, definicao] of Object.entries(datasets)) {
     _adicionarColunaSeFaltar('datasets', coluna, definicao);
   }
+
+  const protheus_sx2 = {
+    arquivo: 'TEXT',
+  };
+
+  for (const [coluna, definicao] of Object.entries(protheus_sx2)) {
+    _adicionarColunaSeFaltar('protheus_sx2', coluna, definicao);
+  }
+
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS protheus_sx3 (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+      empresa_id    INTEGER NOT NULL,
+      tabela        TEXT NOT NULL,
+      campo         TEXT NOT NULL,
+      tipo          TEXT,
+      tamanho       INTEGER,
+      decimal       INTEGER,
+      titulo        TEXT,
+      descricao     TEXT,
+      usado         TEXT,
+      ordem         INTEGER,
+      criado_em     TEXT NOT NULL,
+      atualizado_em TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_protheus_sx3_conn_tabela_campo
+      ON protheus_sx3 (connection_id, tabela, campo);
+  `);
 
   for (const [coluna, definicao] of Object.entries(whatsappAllowedNumbers)) {
     _adicionarColunaSeFaltar('whatsapp_allowed_numbers', coluna, definicao);

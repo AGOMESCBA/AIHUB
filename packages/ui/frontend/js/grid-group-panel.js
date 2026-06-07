@@ -50,6 +50,9 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
         color: var(--text-md, #555);
       }
       .ggp-chip-avail:hover { border-color: #6366f1; color: #6366f1; }
+      .ggp-chip-avail.ggp-chip-on {
+        background: #eef2ff; border-color: #6366f1; color: #6366f1; font-weight: 600;
+      }
       .ggp-chip-active { background: #6366f1; color: #fff; padding-right: 8px; }
       .ggp-chip-sep    { opacity: .55; font-size: 13px; }
       .ggp-chip-rm     { cursor: pointer; font-size: 16px; line-height: 1; opacity: .7; }
@@ -213,8 +216,22 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
       chip.dataset.field = field;
       chip.dataset.label = label;
       chip.textContent   = label;
+      if (activeGroups.find(g => g.field === field)) chip.classList.add('ggp-chip-on');
       chip.addEventListener('dragstart', e => {
         e.dataTransfer.setData('application/json', JSON.stringify({ field, label }));
+      });
+      chip.addEventListener('click', () => {
+        const alreadyActive = !!activeGroups.find(g => g.field === field);
+        if (alreadyActive) {
+          activeGroups = activeGroups.filter(g => g.field !== field);
+        } else {
+          activeGroups.push({ field, label });
+        }
+        saveActive();
+        renderDropZone();
+        renderChips();
+        applyGrouping();
+        notifyChange();
       });
       // Insere antes do botão de configurar (se existir) ou ao final
       const configBtn = chipsRow.querySelector('.ggp-config-btn');
@@ -235,7 +252,7 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
 
   function renderDropZone() {
     if (!activeGroups.length) {
-      dz.innerHTML = '<span class="ggp-dz-hint">↑ Arraste um campo acima para agrupar os dados</span>';
+      dz.innerHTML = '<span class="ggp-dz-hint">Clique ou arraste um campo acima para agrupar os dados</span>';
       return;
     }
     dz.innerHTML = activeGroups.map((g, i) => `
@@ -250,6 +267,7 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
         activeGroups = activeGroups.filter(g => g.field !== btn.dataset.field);
         saveActive();
         renderDropZone();
+        renderChips();
         applyGrouping();
         notifyChange();
       })
@@ -266,12 +284,23 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
     activeGroups.push({ field, label });
     saveActive();
     renderDropZone();
+    renderChips();
     applyGrouping();
     notifyChange();
   });
 
   function applyGrouping() {
-    getTable()?.setGroupBy(activeGroups.map(g => g.field));
+    const t = getTable?.();
+    if (!t) return;
+    const fields = activeGroups.map(g => g.field);
+    // Tabulator 6 requer string para 1 campo e false para limpar (array de 1 elemento não funciona)
+    if (!fields.length) {
+      t.setGroupBy(false);
+    } else if (fields.length === 1) {
+      t.setGroupBy(fields[0]);
+    } else {
+      t.setGroupBy(fields);
+    }
   }
 
   // ── Inicialização ─────────────────────────────────────────────

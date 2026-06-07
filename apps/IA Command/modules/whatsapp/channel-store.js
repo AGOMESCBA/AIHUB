@@ -76,7 +76,7 @@ function criarCanal({ nome, numero, auth_client_id, ativo = 1 }) {
 }
 
 function vincularEmpresa(channelId, empresaId, opts = {}) {
-  const { aliases, padrao = 0, ativo = 1 } = opts;
+  const { aliases, padrao = 0, ativo = 1, ocultar_selecao } = opts;
   const db = getDB();
   const now = agora();
   if (padrao) {
@@ -90,17 +90,24 @@ function vincularEmpresa(channelId, empresaId, opts = {}) {
   if (existing) {
     db.prepare(`
       UPDATE whatsapp_channel_companies
-      SET aliases = ?, padrao = ?, ativo = ?, atualizado_em = ?
+      SET aliases = ?, padrao = ?, ativo = ?, ocultar_selecao = ?, atualizado_em = ?
       WHERE id = ?
-    `).run(aliases !== undefined ? aliases : existing.aliases, padrao ? 1 : 0, ativo ? 1 : 0, now, existing.id);
+    `).run(
+      aliases !== undefined ? aliases : existing.aliases,
+      padrao ? 1 : 0,
+      ativo ? 1 : 0,
+      ocultar_selecao !== undefined ? (ocultar_selecao ? 1 : 0) : (existing.ocultar_selecao ?? 0),
+      now,
+      existing.id
+    );
     return existing.id;
   }
 
   const id = uuid();
   db.prepare(`
-    INSERT INTO whatsapp_channel_companies (id, channel_id, empresa_id, aliases, padrao, ativo, criado_em, atualizado_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, channelId, Number(empresaId), aliases || null, padrao ? 1 : 0, ativo ? 1 : 0, now, now);
+    INSERT INTO whatsapp_channel_companies (id, channel_id, empresa_id, aliases, padrao, ativo, ocultar_selecao, criado_em, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, channelId, Number(empresaId), aliases || null, padrao ? 1 : 0, ativo ? 1 : 0, ocultar_selecao ? 1 : 0, now, now);
   return id;
 }
 
@@ -137,6 +144,16 @@ function desativarCanal(channelId) {
 
 function buscarCanal(channelId) {
   return _channelFromRow(getDB().prepare('SELECT * FROM whatsapp_channels WHERE id = ?').get(channelId));
+}
+
+function listarAtivosComSessao() {
+  return getDB().prepare(`
+    SELECT * FROM whatsapp_channels
+    WHERE ativo = 1
+      AND TRIM(COALESCE(numero, '')) <> ''
+      AND TRIM(COALESCE(auth_client_id, '')) <> ''
+    ORDER BY criado_em ASC
+  `).all().map(_channelFromRow);
 }
 
 function listarPorEmpresa(empresaId) {
@@ -196,7 +213,7 @@ function ensureDefaultForEmpresa(empresaId) {
 
 function listarEmpresasDoCanal(channelId) {
   return getDB().prepare(`
-    SELECT empresa_id, aliases, padrao, ativo
+    SELECT empresa_id, aliases, padrao, ativo, ocultar_selecao
     FROM whatsapp_channel_companies
     WHERE channel_id = ? AND ativo = 1
     ORDER BY padrao DESC, empresa_id ASC
@@ -205,7 +222,21 @@ function listarEmpresasDoCanal(channelId) {
     nome: empresaNome(row.empresa_id),
     aliases: row.aliases || '',
     padrao: row.padrao ? 1 : 0,
+    ocultar_selecao: row.ocultar_selecao ? 1 : 0,
   }));
+}
+
+function empresaProprietariaCanal(channel, empresas = []) {
+  const referencias = [channel?.id, channel?.auth_client_id]
+    .map(valor => String(valor || '').match(/^(?:emp|iac)_(\d+)$/i)?.[1])
+    .map(Number)
+    .filter(Number.isInteger);
+
+  for (const empresaId of referencias) {
+    const empresa = empresas.find(item => Number(item?.empresa_id) === empresaId);
+    if (empresa) return empresa;
+  }
+  return null;
 }
 
 function senderAutorizadoEmpresa(empresaId, sender) {
@@ -228,8 +259,9 @@ function senderAutorizadoEmpresa(empresaId, sender) {
   `).get(Number(empresaId), ...numeros, lid);
 }
 
-function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = null, pending = null, usarPadrao = true }) {
-  const empresas = listarEmpresasDoCanal(channelId).filter(e => senderAutorizadoEmpresa(e.empresa_id, sender));
+function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = null, pending = null, usarPadrao = true, empresasDisponiveis = null }) {
+  const empresasBase = Array.isArray(empresasDisponiveis) ? empresasDisponiveis : listarEmpresasDoCanal(channelId);
+  const empresas = empresasBase.filter(e => senderAutorizadoEmpresa(e.empresa_id, sender));
   if (!empresas.length) return { status: 'unauthorized', empresas: [] };
   if (empresas.length === 1) return { status: 'resolved', empresaId: empresas[0].empresa_id, empresa: empresas[0], origem: 'unica' };
 
@@ -287,11 +319,13 @@ module.exports = {
   desativarCanal,
   vincularEmpresa,
   buscarCanal,
+  listarAtivosComSessao,
   listarPorEmpresa,
   buscarCanalDaEmpresa,
   getDefaultForEmpresa,
   ensureDefaultForEmpresa,
   listarEmpresasDoCanal,
+  empresaProprietariaCanal,
   senderAutorizadoEmpresa,
   resolverEmpresaDoCanal,
   normalizarNumero,

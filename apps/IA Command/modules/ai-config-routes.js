@@ -13,7 +13,7 @@ const PROVIDERS = [
 
 function _getJson({ hostname, path, headers = {} }) {
   return new Promise((resolve, reject) => {
-    const req = https.request({ hostname, path, method: 'GET', headers }, (res) => {
+    const req = https.request({ hostname, path, method: 'GET', rejectUnauthorized: false, headers }, (res) => {
       let raw = '';
       res.on('data', (chunk) => { raw += chunk; });
       res.on('end', () => {
@@ -21,7 +21,10 @@ function _getJson({ hostname, path, headers = {} }) {
         try { parsed = raw ? JSON.parse(raw) : null; } catch (_) {}
         if (res.statusCode < 200 || res.statusCode >= 300) {
           const msg = parsed?.error?.message || parsed?.message || `HTTP ${res.statusCode}`;
-          return reject(new Error(msg));
+          const err = new Error(msg);
+          err.statusCode = res.statusCode;
+          err.payload = parsed;
+          return reject(err);
         }
         resolve(parsed);
       });
@@ -30,6 +33,45 @@ function _getJson({ hostname, path, headers = {} }) {
     req.on('error', reject);
     req.end();
   });
+}
+
+async function _consultarSaldoOpenAI(apiKey) {
+  const now = new Date();
+  await _getJson({
+    hostname: 'api.openai.com',
+    path: '/v1/models',
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+
+  const startTime = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), 1) / 1000);
+
+  try {
+    const costs = await _getJson({
+      hostname: 'api.openai.com',
+      path: `/v1/organization/costs?start_time=${startTime}&limit=31`,
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const buckets = Array.isArray(costs?.data) ? costs.data : [];
+    const total = buckets.reduce((sum, bucket) => {
+      const results = Array.isArray(bucket?.results) ? bucket.results : [];
+      return sum + results.reduce((acc, item) => acc + (Number(item?.amount?.value) || 0), 0);
+    }, 0);
+    return {
+      disponivel: true,
+      unidade: 'USD',
+      valor: parseFloat(total.toFixed(4)),
+      detalhe: `API operacional. Custo do mês: $${total.toFixed(4)}.`,
+    };
+  } catch (err) {
+    return {
+      disponivel: true,
+      unidade: 'USD',
+      valor: null,
+      detalhe: err.statusCode === 403
+        ? 'API operacional. A chave não tem permissão api.usage.read para consultar custos; veja o saldo no painel OpenAI.'
+        : 'API operacional. Consulte o painel OpenAI para saldo/custos atualizados.',
+    };
+  }
 }
 
 async function _consultarSaldoDeepSeek(apiKey) {
@@ -74,17 +116,19 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     const {
       groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, openai_api_key,
       provedor_primario, fallback_ordem, confianca_minima,
-      whisper_model, audio_idioma,
+      whisper_model, audio_idioma, historico_turnos,
     } = req.body;
 
     const existing = crud.buscarPor('ai_config', 'empresa_id', eid(req));
 
+    const turnosVal = parseInt(historico_turnos, 10);
     const dados = {
       provedor_primario: provedor_primario || 'groq',
-      fallback_ordem:    fallback_ordem    || 'groq,gemini,deepseek,claude,openai',
+      fallback_ordem:    fallback_ordem    || 'groq,openai,gemini,deepseek,claude',
       confianca_minima:  parseFloat(confianca_minima) || 0.6,
       whisper_model:     whisper_model     || 'whisper-large-v3',
       audio_idioma:      audio_idioma      || 'pt',
+      historico_turnos:  (!isNaN(turnosVal) && turnosVal >= 1 && turnosVal <= 10) ? turnosVal : 5,
     };
 
     // Only update keys if non-empty strings were sent (not '***')
@@ -149,9 +193,9 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
         configurado,
         disponivel: null,
         consultado: false,
-        valor: 0,
+        valor: null,
         unidade: '',
-        detalhe: '0',
+        detalhe: 'Saldo não consultado por API.',
       };
 
       if (!configurado) return base;
@@ -164,12 +208,63 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
         }
       }
 
+      if (p.id === 'openai') {
+        try {
+          return { ...base, consultado: true, ...(await _consultarSaldoOpenAI(row[p.keyField])) };
+        } catch (err) {
+          return base;
+        }
+      }
+
       return base;
     }));
 
     const configurados = provedores.filter(p => p.configurado).length;
     const consultados = provedores.filter(p => p.configurado && p.consultado).length;
     res.json({ configurados, consultados, provedores });
+  });
+
+  // ── TESTAR todos os provedores ao vivo ──────────────────────────────────────
+  app.get('/api/ia-command/ai-config/testar-provedores', requireAuth, requireIaCommand, canConfigIa, async (req, res) => {
+    const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
+    if (!row) return res.json({ provedores: [], primario: null });
+
+    const PROVIDER_MODULES = {
+      groq:     () => require('./ai/providers/groq'),
+      gemini:   () => require('./ai/providers/gemini'),
+      deepseek: () => require('./ai/providers/deepseek'),
+      claude:   () => require('./ai/providers/claude'),
+      openai:   () => require('./ai/providers/openai'),
+    };
+
+    const testMsg = 'Faturamento do mês';
+    const TIMEOUT_MS = 8000;
+
+    function _classificarStatus(msg = '') {
+      const m = msg.toLowerCase();
+      if (m.includes('quota') || m.includes('rate limit') || m.includes('free_tier') || m.includes('exceeded') || m.includes('429')) return 'cota_esgotada';
+      if (m.includes('unauthorized') || m.includes('invalid key') || m.includes('authentication') || m.includes('401')) return 'chave_invalida';
+      if (m.includes('timeout') || m.includes('timed out')) return 'timeout';
+      return 'erro';
+    }
+
+    const resultados = await Promise.all(PROVIDERS.map(async (p) => {
+      const chave = row[p.keyField];
+      if (!chave) return { id: p.id, nome: p.label, painel_url: p.painelUrl, status: 'sem_chave', latencia_ms: null, detalhe: null };
+
+      const t0 = Date.now();
+      try {
+        const mod = PROVIDER_MODULES[p.id]?.();
+        const promessa = mod.classificarIntencao(testMsg, chave, [], []);
+        const timeout  = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de 8s excedido.')), TIMEOUT_MS));
+        await Promise.race([promessa, timeout]);
+        return { id: p.id, nome: p.label, painel_url: p.painelUrl, status: 'operacional', latencia_ms: Date.now() - t0, detalhe: null };
+      } catch (err) {
+        return { id: p.id, nome: p.label, painel_url: p.painelUrl, status: _classificarStatus(err.message), latencia_ms: Date.now() - t0, detalhe: err.message };
+      }
+    }));
+
+    res.json({ provedores: resultados, primario: row.provedor_primario || 'groq' });
   });
 
   // ── REVEAL raw keys (autenticado, somente para a empresa da sessão) ──────────

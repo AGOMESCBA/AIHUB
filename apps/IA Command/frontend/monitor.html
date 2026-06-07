@@ -40,8 +40,16 @@
     @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
     .mon-msg-count { margin-left:auto;font-size:12px;color:var(--text-lo); }
 
-    /* Body */
-    .mon-body { display:flex;gap:14px;height:calc(100vh - 290px);min-height:400px; }
+    /* Controls no painel direito */
+    .mon-qr-controls { display:flex;flex-direction:column;gap:8px;width:100%;padding-bottom:12px;border-bottom:1px solid var(--border);margin-bottom:4px; }
+    .mon-qr-controls-btns { display:flex;gap:6px; }
+    .mon-qr-controls-btns .btn { flex:1;justify-content:center; }
+
+    /* Comprime padding da página para subir o monitor */
+    .page-content { padding-top:8px !important; padding-bottom:6px !important; }
+
+    /* Body — ocupa até próximo do rodapé, ambas as colunas alinhadas */
+    .mon-body { display:flex;gap:14px;height:calc(100vh - 72px);min-height:400px; }
 
     /* Terminal */
     .mon-terminal-wrap   { flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
@@ -82,6 +90,14 @@
     .mon-intent-badge.unk { background:var(--bg-hover);color:var(--text-lo); }
     .mon-intent-filtros { display:flex;flex-direction:column;gap:2px;width:100%; }
     .mon-intent-filtro  { font-size:10px;background:var(--bg-hover);border-radius:4px;padding:2px 6px;color:var(--text-md);word-break:break-all; }
+    /* Pipeline badges */
+    .mon-pipeline-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700; }
+    .mon-pipeline-badge.chat    { background:#ede9fe;color:#6d28d9; }
+    .mon-pipeline-badge.classico { background:var(--bg-hover);color:var(--text-md); }
+    .mon-pipeline-badge.canonico { background:#dbeafe;color:#1d4ed8; }
+    /* SQL preview */
+    .mon-sql-preview { font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:9px;line-height:1.5;background:var(--bg-base);border:1px solid var(--border);border-radius:4px;padding:6px 8px;overflow-x:auto;max-height:130px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:var(--text-md);margin:2px 0 0;width:100%;box-sizing:border-box; }
+    .mon-sql-toggle { font-size:10px;color:var(--accent);cursor:pointer;user-select:none;flex-shrink:0; }
     /* Help drawer */
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
     .help-overlay.open{opacity:1;pointer-events:all;}
@@ -122,34 +138,16 @@
         </svg>
       </button>
       <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Monitor WhatsApp</span>
+      <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px;font-size:13px;margin-left:auto"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
     </div>
 
     <div class="page-content">
 
-      <div class="page-head">
-        <div>
-          <div class="page-kicker">Operação</div>
-          <div class="page-title">Monitor WhatsApp</div>
-        </div>
-        <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
-      </div>
-
-      <!-- Toolbar -->
-      <div class="mon-toolbar">
-        <div class="mon-status-badge stopped" id="status-badge">
-          <span class="mon-dot" id="status-dot"></span>
-          <span id="status-label">Desconectado</span>
-        </div>
-        <select id="channel-select" class="form-control" style="width:auto;min-width:220px;height:34px" onchange="trocarCanal()"></select>
-        <button class="btn btn-primary" id="btn-start" onclick="iniciar()">▶ Iniciar</button>
-        <button class="btn btn-ghost"   id="btn-stop"  onclick="parar()" disabled>■ Parar</button>
-        <button class="btn btn-ghost"   id="btn-disconnect" onclick="desconectarSessao()">Desconectar sessão</button>
-        <button class="btn btn-ghost"   id="btn-test"  onclick="abrirModalTeste()" disabled>📤 Teste de envio</button>
-        <button class="btn btn-ghost"   onclick="abrirHistorico()">Histórico</button>
-        <button class="btn btn-ghost"   onclick="salvarLog()">💾 Salvar log</button>
-        <button class="btn btn-ghost"   onclick="limparLogs()">🗑 Limpar logs</button>
-        <span class="mon-msg-count">Mensagens recebidas: <strong id="msg-count">0</strong></span>
-      </div>
+      <!-- span oculto mantido para compatibilidade com JS -->
+      <span id="msg-count" style="display:none">0</span>
+      <!-- botões ocultos mantidos para compatibilidade com JS -->
+      <button id="btn-disconnect" style="display:none" onclick="desconectarSessao()"></button>
+      <button id="btn-test"       style="display:none" onclick="abrirModalTeste()"></button>
 
       <!-- Corpo -->
       <div class="mon-body">
@@ -164,6 +162,22 @@
 
         <!-- QR Panel -->
         <div class="mon-qr-panel" id="qr-panel">
+          <!-- Controles principais -->
+          <div class="mon-qr-controls">
+            <div class="mon-status-badge stopped" id="status-badge">
+              <span class="mon-dot" id="status-dot"></span>
+              <span id="status-label">Desconectado</span>
+            </div>
+            <select id="channel-select" class="form-control" style="width:100%;height:34px" onchange="trocarCanal()"></select>
+            <div class="mon-qr-controls-btns">
+              <button class="btn btn-primary" id="btn-start" onclick="iniciar()">▶ Iniciar</button>
+              <button class="btn btn-ghost"   id="btn-stop"  onclick="parar()" disabled>■ Parar</button>
+            </div>
+            <div class="mon-qr-controls-btns">
+              <button class="btn btn-ghost" onclick="limparLogs()" style="font-size:12px">🗑 Limpar Log</button>
+              <button class="btn btn-ghost" onclick="salvarLog()"  style="font-size:12px">💾 Salvar Log</button>
+            </div>
+          </div>
           <div class="mon-qr-title">Conexão WhatsApp</div>
           <div class="mon-waiting-box" id="qr-waiting">
             Clique em <strong>Iniciar</strong> para conectar o WhatsApp ao IA Command.
@@ -186,12 +200,16 @@
             <div class="mon-intent-title">🧠 Última consulta</div>
             <div class="mon-intent-nome" id="intent-nome">—</div>
             <div id="intent-badge-wrap"></div>
-            <div class="mon-intent-row"><span>Motor</span><strong id="intent-provedor">—</strong></div>
-            <div class="mon-intent-row" id="intent-origem-row" style="display:none"><span>Origem</span><strong id="intent-origem">—</strong></div>
+            <!-- pipeline badge inline sob o resultado -->
+            <div id="intent-pipeline-wrap" style="display:none;margin-top:2px"></div>
+            <div class="mon-intent-row" id="intent-modulo-row" style="display:none"><span>Módulo</span><strong id="intent-modulo">—</strong></div>
+            <div class="mon-intent-row"><span>IA usada</span><strong id="intent-provedor">—</strong></div>
             <div class="mon-intent-row"><span>Confiança</span><strong id="intent-confianca">—</strong></div>
+            <div class="mon-intent-row" id="intent-turno-row" style="display:none"><span>Turno chat</span><strong id="intent-turno">—</strong></div>
+            <div class="mon-intent-row" id="intent-duracao-row" style="display:none"><span>Duração</span><strong id="intent-duracao">—</strong></div>
+            <div class="mon-intent-row" id="intent-rows-row" style="display:none"><span>Registros</span><strong id="intent-rows">—</strong></div>
             <div class="mon-intent-row" id="intent-periodo-row" style="display:none"><span>Período</span><strong id="intent-periodo">—</strong></div>
             <div class="mon-intent-row" id="intent-dataset-row" style="display:none"><span>Dataset</span><strong id="intent-dataset">—</strong></div>
-            <div class="mon-intent-row" id="intent-rows-row" style="display:none"><span>Registros</span><strong id="intent-rows">—</strong></div>
             <div class="mon-intent-row" id="intent-metricas-row" style="display:none"><span>Métricas</span><strong id="intent-metricas">—</strong></div>
             <div id="intent-filtros-wrap" style="display:none">
               <div class="mon-intent-row" style="margin-bottom:3px"><span>Filtros</span></div>
@@ -199,6 +217,16 @@
             </div>
             <div class="mon-intent-row" id="intent-group-row" style="display:none"><span>Agrupar por</span><strong id="intent-group">—</strong></div>
             <div class="mon-intent-row" id="intent-contexto-row" style="display:none"><span>Contexto</span><strong id="intent-contexto">—</strong></div>
+            <div class="mon-intent-row" id="intent-trace-row" style="display:none"><span>Caminho</span><strong id="intent-trace" style="font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
+            <!-- SQL preview colapsável -->
+            <div id="intent-sql-wrap" style="display:none;width:100%">
+              <div class="mon-intent-row" style="cursor:pointer" onclick="toggleIntentSql()">
+                <span>SQL gerado</span><span class="mon-sql-toggle" id="intent-sql-toggle">▼ ver</span>
+              </div>
+              <pre class="mon-sql-preview" id="intent-sql-preview" style="display:none"></pre>
+            </div>
+            <!-- erro de validação chat-service -->
+            <div class="mon-intent-row" id="intent-validerro-row" style="display:none"><span>Validação</span><strong id="intent-validerro" style="color:#f59e0b;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
             <div class="mon-intent-row" id="intent-err-row" style="display:none"><span>Detalhe</span><strong id="intent-err" style="color:#ef4444;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
           </div>
         </div>
@@ -377,7 +405,12 @@
       headers:{'Content-Type':'application/json'},
       body: channelBody(),
     });
-    if (!r.ok) { addLog('Erro ao iniciar.', 'error'); document.getElementById('btn-start').disabled = false; }
+    if (!r.ok) {
+      let msg = 'Erro ao iniciar.';
+      try { const d = await r.json(); if (d?.error) msg = `Erro ao iniciar: ${d.error}`; } catch(_) {}
+      addLog(msg, 'error');
+      document.getElementById('btn-start').disabled = false;
+    }
   }
 
   async function parar() {
@@ -482,65 +515,97 @@
     return partes.join(' | ');
   }
 
+  function iaUsadaIntent(d) {
+    const provedor = String(d.provedor || '').trim();
+    const origem   = String(d.origem   || '').toLowerCase();
+    const motor    = String(d.motor    || '').trim();
+    const pipeline = String(d.pipeline_origem || '').toLowerCase();
+
+    // Novo fluxo chat-first
+    if (pipeline === 'chat')          return `Chat-first${provedor ? ` (${provedor})` : ''}`;
+    if (pipeline === 'canonico_reuso') return 'Reuso canônico multi-empresa';
+    if (pipeline === 'classico')       return `Clássico${provedor ? ` (${provedor})` : ''}`;
+
+    // Legado
+    if (d.contexto_aplicado || origem.includes('contexto')) return 'ENGINE interna (contexto da conversa)';
+    if (provedor === 'deterministico' || origem.includes('motor local')) return 'ENGINE interna do sistema';
+    if (provedor === 'escopo_dinamico') return 'ENGINE interna (escopo_dinamico)';
+    if (provedor === 'nenhum' || origem.includes('nao reconhecida')) return 'Nenhuma IA usada';
+    if (origem.includes('ia externa') || motor.includes('IA externa')) return `IA externa${provedor ? ` (${provedor})` : ''}`;
+    return motor || provedor || '—';
+  }
+
   function renderIntent(d) {
     document.getElementById('intent-panel').style.display = 'flex';
 
     document.getElementById('intent-nome').textContent = d.intencao || '—';
 
     // Badge resultado
-    const badgeWrap = document.getElementById('intent-badge-wrap');
     const tipo = d.resultado_tipo;
     let badgeClass, badgeLabel;
-    if (tipo === 'sucesso')       { badgeClass = 'ok';  badgeLabel = `✅ ${d.rows_count ?? 0} registros`; }
+    if (tipo === 'sucesso_ai_sql' || tipo === 'sucesso') { badgeClass = 'ok'; badgeLabel = `✅ ${d.rows_count ?? 0} registros`; }
     else if (tipo === 'desconhecido') { badgeClass = 'unk'; badgeLabel = '❓ Não reconhecida'; }
     else if (tipo === 'sem_dados')    { badgeClass = 'unk'; badgeLabel = 'ℹ️ Sem dados'; }
-    else                          { badgeClass = 'err'; badgeLabel = d.provedor === 'nenhum' ? '❌ Falha IA' : '❌ Erro'; }
-    badgeWrap.innerHTML = `<span class="mon-intent-badge ${badgeClass}">${badgeLabel}</span>`;
+    else                              { badgeClass = 'err'; badgeLabel = d.provedor === 'nenhum' ? '❌ Falha IA' : '❌ Erro'; }
+    document.getElementById('intent-badge-wrap').innerHTML =
+      `<span class="mon-intent-badge ${badgeClass}">${badgeLabel}</span>`;
 
-    // Provedor + confiança
+    // Badge pipeline (chat-first / clássico / reuso)
+    const pipelineWrap = document.getElementById('intent-pipeline-wrap');
+    const pipeline = String(d.pipeline_origem || '').toLowerCase();
+    if (pipeline) {
+      const plabels = {
+        chat:           ['chat',    '🔵 Chat-first'],
+        classico:       ['classico','⚙️ Clássico'],
+        canonico_reuso: ['canonico','♻️ Reuso canônico'],
+      };
+      const [cls, lbl] = plabels[pipeline] || ['classico', pipeline];
+      pipelineWrap.innerHTML = `<span class="mon-pipeline-badge ${cls}">${lbl}</span>`;
+      pipelineWrap.style.display = 'block';
+    } else {
+      pipelineWrap.style.display = 'none';
+    }
+
+    // IA usada + confiança + módulo
     const conf = typeof d.confianca === 'number' ? `${Math.round(d.confianca * 100)}%` : (d.confianca ?? '—');
-    document.getElementById('intent-provedor').textContent  = d.motor || d.provedor || '—';
+    document.getElementById('intent-provedor').textContent  = iaUsadaIntent(d);
     document.getElementById('intent-confianca').textContent = conf;
-    setIntentRow('intent-origem-row', 'intent-origem', d.origem || null);
+    setIntentRow('intent-modulo-row', 'intent-modulo', d.modulo || null);
 
-    // Período
+    // Turno chat
+    setIntentRow('intent-turno-row', 'intent-turno',
+      d.chat_turno != null ? `Turno ${d.chat_turno} da conversa` : null);
+
+    // Duração
+    setIntentRow('intent-duracao-row', 'intent-duracao',
+      d.duracao_ms != null ? `${d.duracao_ms} ms` : null);
+
+    // Registros
+    setIntentRow('intent-rows-row', 'intent-rows',
+      typeof d.rows_count === 'number' ? String(d.rows_count) : null);
+
+    // Período (pipeline legado ou clássico)
     const periodoRow = document.getElementById('intent-periodo-row');
     const ptipo = d.periodo?.tipo;
-    if (ptipo && ptipo !== 'nenhum') {
+    if (ptipo && ptipo !== 'nenhum' && pipeline !== 'chat' && pipeline !== 'canonico_reuso') {
       let ptxt = ptipo;
-      if (d.periodo.dataInicio) ptxt += ` (${d.periodo.dataInicio.slice(5)} → ${d.periodo.dataFim.slice(5)})`;
+      if (d.periodo.dataInicio) ptxt += ` (${d.periodo.dataInicio.slice(5)} → ${(d.periodo.dataFim||'').slice(5)})`;
       document.getElementById('intent-periodo').textContent = ptxt;
       periodoRow.style.display = 'flex';
     } else {
       periodoRow.style.display = 'none';
     }
 
-    // Dataset
-    const dsRow = document.getElementById('intent-dataset-row');
-    if (d.dataset_nome) {
-      document.getElementById('intent-dataset').textContent = d.dataset_nome;
-      dsRow.style.display = 'flex';
-    } else {
-      dsRow.style.display = 'none';
-    }
-
-    // Registros (só no sucesso)
-    const rowsRow = document.getElementById('intent-rows-row');
-    if (typeof d.rows_count === 'number') {
-      document.getElementById('intent-rows').textContent = d.rows_count;
-      rowsRow.style.display = 'flex';
-    } else {
-      rowsRow.style.display = 'none';
-    }
+    setIntentRow('intent-dataset-row', 'intent-dataset', d.dataset_nome || null);
 
     const metricas = Array.isArray(d.metricas) ? d.metricas.filter(Boolean) : [];
     setIntentRow('intent-metricas-row', 'intent-metricas', metricas.length ? metricas.join(', ') : null);
 
-    // Filtros
+    // Filtros (pipeline legado)
     const filtrosWrap = document.getElementById('intent-filtros-wrap');
     const filtros = d.filtros || {};
     const filtrosKeys = Object.keys(filtros).filter(k => filtros[k]);
-    if (filtrosKeys.length) {
+    if (filtrosKeys.length && pipeline !== 'chat' && pipeline !== 'canonico_reuso') {
       document.getElementById('intent-filtros').innerHTML = filtrosKeys.map(k =>
         `<span class="mon-intent-filtro">${esc(k)} = "${esc(filtros[k])}"</span>`
       ).join('');
@@ -549,12 +614,11 @@
       filtrosWrap.style.display = 'none';
     }
 
-    // Agrupamento
+    // Agrupamento (pipeline legado)
     const groupRow = document.getElementById('intent-group-row');
-    if (d.agrupar_por) {
+    if (d.agrupar_por && pipeline !== 'chat' && pipeline !== 'canonico_reuso') {
       const composto = Array.isArray(d.agrupamento_composto) && d.agrupamento_composto.length
-        ? d.agrupamento_composto.join(' + ')
-        : d.agrupar_por;
+        ? d.agrupamento_composto.join(' + ') : d.agrupar_por;
       document.getElementById('intent-group').textContent = composto;
       groupRow.style.display = 'flex';
     } else {
@@ -562,8 +626,24 @@
     }
 
     setIntentRow('intent-contexto-row', 'intent-contexto', contextoIntent(d));
+    setIntentRow('intent-trace-row', 'intent-trace', d.trace_resumo || resumoTrace(d.trace));
 
-    // Erro / detalhe (erro, sem_dados, desconhecido com _erro)
+    // SQL preview colapsável
+    const sqlWrap = document.getElementById('intent-sql-wrap');
+    const sqlGerado = d.sql_gerado || d.sql_canonico_adaptado || null;
+    if (sqlGerado) {
+      document.getElementById('intent-sql-preview').textContent = sqlGerado;
+      document.getElementById('intent-sql-preview').style.display = 'none';
+      document.getElementById('intent-sql-toggle').textContent = '▼ ver';
+      sqlWrap.style.display = 'block';
+    } else {
+      sqlWrap.style.display = 'none';
+    }
+
+    // Erro de validação do chat-service (fallback para clássico)
+    setIntentRow('intent-validerro-row', 'intent-validerro', d.sql_validacao_erro || null);
+
+    // Erro / detalhe execução
     const errRow = document.getElementById('intent-err-row');
     const errMsg = d.resultado_msg || '';
     if (errMsg && (tipo === 'erro' || tipo === 'sem_dados' || tipo === 'desconhecido')) {
@@ -573,6 +653,19 @@
     } else {
       errRow.style.display = 'none';
     }
+  }
+
+  function toggleIntentSql() {
+    const pre    = document.getElementById('intent-sql-preview');
+    const toggle = document.getElementById('intent-sql-toggle');
+    const aberto = pre.style.display !== 'none';
+    pre.style.display    = aberto ? 'none' : 'block';
+    toggle.textContent   = aberto ? '▼ ver' : '▲ fechar';
+  }
+
+  function resumoTrace(trace) {
+    if (!Array.isArray(trace) || !trace.length) return null;
+    return trace.map(item => [item.etapa, item.acao, item.modulo || item.motor || item.intencao].filter(Boolean).join(':')).join(' -> ');
   }
 
   function abrirModalTeste() { document.getElementById('modal-teste').style.display = 'flex'; }
@@ -637,6 +730,27 @@
       <div class="help-section-title">Painel QR Code</div>
       <div class="help-item-desc">Ao iniciar, um QR Code aparece no painel direito. Escaneie com o WhatsApp do celular em <strong>Configurações → Aparelhos conectados → Conectar aparelho</strong>. O QR expira em ~60 segundos — se expirar, clique em Iniciar novamente.</div>
       <div class="help-tip">Use um número dedicado ao bot. Enquanto conectado, o número não pode ser usado normalmente no celular.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Painel Última Consulta</div>
+      <div class="help-item-desc">Exibido após cada consulta ao ERP. Campos-chave para diagnóstico:</div>
+      <div class="help-item" style="margin-top:8px">
+        <div class="help-item-label">🔵 Chat-first / ⚙️ Clássico / ♻️ Reuso canônico</div>
+        <div class="help-item-desc">Badge de pipeline — indica qual caminho processou a mensagem. <em>Chat-first</em> é o novo fluxo conversacional. <em>Clássico</em> indica que o chat falhou e o pipeline de 3 fases assumiu. <em>Reuso canônico</em> significa que o SQL já foi gerado por outra empresa no mesmo envio.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Turno chat</div>
+        <div class="help-item-desc">Número da pergunta na conversa atual (1 = primeira mensagem, 3 = terceira, etc.). Útil para depurar falhas de herança de contexto.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">SQL gerado ▼ ver</div>
+        <div class="help-item-desc">O SQL produzido pela IA (canônico, sem sufixo de empresa). Clique em "ver" para expandir. Compare com o SQL executado no histórico de interpretações para identificar transformações da camada SX2.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Validação (aviso amarelo)</div>
+        <div class="help-item-desc">Aparece quando o chat-service gerou SQL inválido e o sistema caiu para o pipeline clássico. Indica o motivo da rejeição (ex: CONSULTA_NAO_COMPREENDIDA, operação não permitida).</div>
+      </div>
+      <div class="help-tip">Para ver o histórico completo com todos os campos (SQL canônico, SQL executado, duração, trace), abra a tela de <strong>Interpretações</strong> no menu.</div>
     </div>
     <div class="help-section">
       <div class="help-section-title">Cores do log em tempo real</div>

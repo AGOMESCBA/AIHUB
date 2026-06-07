@@ -42,6 +42,17 @@
     .linked-title { font-size:13px;font-weight:700;color:var(--text-hi); }
     .linked-sub { font-size:12px;color:var(--text-lo);margin-top:2px; }
     .inline-form { display:grid;grid-template-columns:minmax(240px,1fr) 1fr auto;gap:8px;align-items:end;margin-top:12px; }
+    .filter-area { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status { font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row input.form-control { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .gp-wrap { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
     .form-tabs { display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-top:18px; }
     .form-tab-btn { border:0;background:transparent;color:var(--text-md);font-size:13px;font-weight:700;padding:10px 12px;border-bottom:2px solid transparent;cursor:pointer; }
     .form-tab-btn:hover { color:var(--text-hi); }
@@ -83,8 +94,23 @@
         </div>
         <div class="quick-panel">
           <div class="quick-row">
-            <input id="q-busca" class="form-control" placeholder="Buscar por nome, numero ou empresa..." oninput="filtrar()">
-            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="q-busca" class="form-control" placeholder="Buscar por nome, numero ou empresa..." oninput="filtrar()">
+              <select id="q-ativo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os status</option>
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
           </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden">
@@ -174,12 +200,14 @@
 
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
-  let table;
+  let table, gp;
   let dados = [];
   let edit = null;
   let quickFilterFn = null;
+  let filtrosVisiveis = false;
   let empresasDisponiveis = [];
 
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -216,32 +244,53 @@
   async function carregar() {
     dados = await fetch('/api/ia-command/admin/canais-whatsapp').then(r => r.json()).catch(() => []);
     if (table) return table.replaceData(dados);
+    gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_canais_whatsapp_group', getTable:()=>table });
     table = new Tabulator('#tabela', {
       data:dados, index:'id', layout:'fitColumns', height:'calc(100vh - 300px)',
+      movableColumns:true,
+      groupBy:gp.getActiveFields(),
+      groupStartOpen:true,
       placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum canal cadastrado.</div>',
       columns:[
-        { title:'Nome', field:'nome', minWidth:180, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
-        { title:'Numero', field:'numero', width:150, formatter:c=>`<span style="font-family:monospace">${esc(fmtNumero(c.getValue()))}</span>` },
-        { title:'Empresas', field:'empresas', minWidth:220, formatter:c=>esc((c.getValue() || []).map(e => e.nome).join(', ') || '-') },
-        { title:'Padrao', field:'padrao', width:90, formatter:c=>c.getValue()?'<span class="badge-ativo">Sim</span>':'<span class="badge-inativo">Nao</span>' },
-        { title:'Status', field:'ativo', width:95, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
-        { title:'Acoes', field:'id', width:95, hozAlign:'right', formatter:c=>`<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${esc(c.getValue())}')" title="Editar">✏️</button><button class="btn-icon" onclick="event.stopPropagation();excluir('${esc(c.getValue())}')" title="Excluir" style="color:#dc2626">🗑</button>` },
+        { title:'Nome', field:'nome', minWidth:180, headerFilter:true, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'Numero', field:'numero', width:150, headerFilter:true, formatter:c=>`<span style="font-family:monospace">${esc(fmtNumero(c.getValue()))}</span>` },
+        { title:'Empresas', field:'empresas', minWidth:220, headerFilter:true, headerFilterFunc:(hv,rv)=>!hv||(rv||[]).some(e=>e.nome?.toLowerCase().includes(hv.toLowerCase())), formatter:c=>esc((c.getValue() || []).map(e => e.nome).join(', ') || '-') },
+        { title:'Padrao', field:'padrao', width:90, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Sim','0':'Nao'}}, headerFilterFunc:(hv,rv)=>hv===''||(hv==='1'?!!rv:!rv), formatter:c=>c.getValue()?'<span class="badge-ativo">Sim</span>':'<span class="badge-inativo">Nao</span>' },
+        { title:'Status', field:'ativo', width:95, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}}, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
+        { title:'Acoes', field:'id', width:95, hozAlign:'right', headerFilter:false, groupable:false, formatter:c=>`<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${esc(c.getValue())}')" title="Editar">✏️</button><button class="btn-icon" onclick="event.stopPropagation();excluir('${esc(c.getValue())}')" title="Excluir" style="color:#dc2626">🗑</button>` },
       ],
       rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().id); },
       dataFiltered:(_f, rows)=>document.getElementById('count').textContent = rows.length === 1 ? '1 canal' : `${rows.length} canais`,
     });
+    gp.refresh();
+    gp.applyToTable();
     document.getElementById('count').textContent = dados.length === 1 ? '1 canal' : `${dados.length} canais`;
+  }
+
+  function toggleFiltros() {
+    filtrosVisiveis = !filtrosVisiveis;
+    document.getElementById('filter-area').style.display = filtrosVisiveis ? '' : 'none';
+    document.getElementById('btn-filtros').textContent = filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
+    if (filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
   }
 
   function filtrar() {
     if (!table) return;
     if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
     const busca = document.getElementById('q-busca').value.trim().toLowerCase();
-    if (!busca) return;
-    quickFilterFn = row => `${row.nome} ${row.numero} ${(row.empresas || []).map(e => e.nome).join(' ')}`.toLowerCase().includes(busca);
-    table.addFilter(quickFilterFn);
+    const ativo = document.getElementById('q-ativo').value;
+    if (busca || ativo !== '') {
+      quickFilterFn = row => {
+        if (ativo !== '' && String(row.ativo) !== ativo) return false;
+        const texto = `${row.nome} ${row.numero} ${(row.empresas || []).map(e => e.nome).join(' ')}`.toLowerCase();
+        return !busca || texto.includes(busca);
+      };
+      table.addFilter(quickFilterFn);
+    }
+    const qtd = [busca, ativo].filter(Boolean).length;
+    document.getElementById('filter-status').textContent = qtd ? `${qtd} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
   }
-  function limparFiltros() { document.getElementById('q-busca').value = ''; filtrar(); }
+  function limparFiltros() { document.getElementById('q-busca').value = ''; document.getElementById('q-ativo').value = ''; filtrar(); }
 
   async function abrirFormulario(id) {
     edit = id ? await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(id)}`).then(r => r.json()).catch(() => null) : null;
@@ -263,18 +312,39 @@
   function renderVinculos() {
     const el = document.getElementById('linked-list');
     if (!edit) { el.innerHTML = ''; return; }
-    el.innerHTML = (edit.empresas || []).map(e => `
+    el.innerHTML = (edit.empresas || []).map(e => {
+      const oculta = !!e.ocultar_selecao;
+      return `
       <div class="linked-item">
         <div>
           <div class="linked-title">#${esc(e.empresa_id)} - ${esc(e.nome)}</div>
-          <div class="linked-sub">Aliases: ${esc(e.aliases || '-')} ${e.padrao ? ' · padrao' : ''}</div>
+          <div class="linked-sub">Aliases: ${esc(e.aliases || '-')}${e.padrao ? ' · padrão' : ''}</div>
         </div>
-        <div>
-          <button class="btn-icon" onclick="editarVinculo(${Number(e.empresa_id)})" title="Editar">✏️</button>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button class="btn btn-ghost" style="font-size:12px;padding:3px 10px;${oculta ? 'color:#b45309;border-color:#b45309' : ''}"
+            onclick="toggleOcultarSelecao(${Number(e.empresa_id)},${oculta ? 0 : 1})"
+            title="${oculta ? 'Empresa oculta do menu WhatsApp — clique para tornar visível' : 'Clique para ocultar do menu WhatsApp'}">
+            ${oculta ? '🚫 Oculta do menu' : '👁 Visível no menu'}
+          </button>
+          <button class="btn-icon" onclick="editarVinculo(${Number(e.empresa_id)})" title="Editar aliases/padrão">✏️</button>
           <button class="btn-icon" onclick="removerVinculo(${Number(e.empresa_id)})" title="Remover" style="color:#dc2626">🗑</button>
         </div>
-      </div>`).join('') || '<div style="color:var(--text-lo);font-size:13px">Nenhuma empresa vinculada.</div>';
+      </div>`;
+    }).join('') || '<div style="color:var(--text-lo);font-size:13px">Nenhuma empresa vinculada.</div>';
     renderEmpresaSelect();
+  }
+
+  async function toggleOcultarSelecao(empresa_id, novoValor) {
+    const res = await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}/empresas/${empresa_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ocultar_selecao: novoValor }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao atualizar visibilidade.', false);
+    edit = data;
+    renderVinculos();
+    feedback(novoValor ? 'Empresa ocultada do menu WhatsApp.' : 'Empresa voltou a aparecer no menu WhatsApp.', true);
   }
 
   function fecharFormulario() {
@@ -330,7 +400,7 @@
     const atual = (edit.empresas || []).find(e => e.empresa_id === empresa_id) || {};
     const aliases = prompt('Aliases desta empresa no canal:', atual.aliases || '');
     if (aliases === null) return;
-    const padrao = confirm('Marcar este canal como padrao para esta empresa?');
+    const padrao = confirm('Marcar este canal como padrão para esta empresa?');
     const res = await fetch(`/api/ia-command/admin/canais-whatsapp/${encodeURIComponent(edit.id)}/empresas/${empresa_id}`, {
       method:'PUT',
       headers:{'Content-Type':'application/json'},

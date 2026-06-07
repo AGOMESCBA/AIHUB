@@ -8,8 +8,9 @@
 //   database — caminho do endpoint              (ex: /rest/api/iacommand/v1)
 //   password — API Key / Bearer token
 
-const https = require('https');
-const http  = require('http');
+const https  = require('https');
+const http   = require('http');
+const crypto = require('crypto');
 
 function _buildUrl(conn, path) {
   const base     = (conn.host || '').replace(/\/$/, '');
@@ -84,12 +85,22 @@ function _resolverParams(sql, params) {
 }
 
 async function executar(conn, query, params = {}) {
-  const apiKey  = conn.password;
+  const apiKey   = conn.password;
   const sqlFinal = _resolverParams(query, params);
   const url      = _buildUrl(conn, '/execute');
 
   const limit = Math.min(conn.limite_max || 10000, 50000);
-  const data  = await _request(url, 'POST', { sql: sqlFinal, limit }, apiKey);
+  const data  = await _request(url, 'POST', {
+    sql:        sqlFinal,
+    limit,
+    uuid:       crypto.randomUUID(),
+    modulo:     conn._modulo      || '',
+    operacao:   conn._operacao    || '',
+    pergunta:   conn._pergunta    || '',
+    sender:     conn._sender      || '',
+    usuario:    conn._usuario     || '',
+    empresa_id: conn._empresa_id  || '',
+  }, apiKey);
 
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.rows)) return data.rows;

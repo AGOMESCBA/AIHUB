@@ -40,6 +40,17 @@
     .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
     .vars { display:flex;flex-wrap:wrap;gap:6px;margin-top:8px; }
     .var-chip { border:1px solid var(--border);background:var(--bg-hover);border-radius:99px;padding:3px 8px;font-family:monospace;font-size:11px;color:var(--text-md);cursor:pointer; }
+    .filter-area { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status { font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row input.form-control { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .gp-wrap { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
 
     /* Help drawer */
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
@@ -102,8 +113,23 @@
         </div>
         <div class="quick-panel">
           <div class="quick-row">
-            <input id="q-busca" type="text" class="form-control" placeholder="Buscar por chave, titulo ou texto..." oninput="filtrar()">
-            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="q-busca" type="text" class="form-control" placeholder="Buscar por chave, titulo ou texto..." oninput="filtrar()">
+              <select id="q-ativo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os status</option>
+                <option value="1">Ativo</option>
+                <option value="0">Inativo</option>
+              </select>
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
           </div>
         </div>
         <div class="card" style="padding:0;overflow:hidden">
@@ -178,12 +204,14 @@
 
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
-  let table;
+  let table, gp;
   let dados = [];
   let edit = null;
   let quickFilterFn = null;
+  let filtrosVisiveis = false;
   const VARS = ['{{empresa_nome}}','{{empresa_id}}','{{canal_nome}}','{{numero}}','{{opcoes_empresas}}','{{erro}}','{{transcricao}}','{{resposta}}'];
 
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -191,34 +219,72 @@
   async function carregar() {
     dados = await fetch('/api/ia-command/admin/mensagens-whatsapp').then(r => r.json()).catch(() => []);
     if (table) return table.replaceData(dados);
+    gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_mensagens_whatsapp_group', getTable:()=>table });
     table = new Tabulator('#tabela', {
       data:dados, index:'chave', layout:'fitColumns', height:'calc(100vh - 300px)',
+      movableColumns:true,
+      groupBy:gp.getActiveFields(),
+      groupStartOpen:true,
       placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum template encontrado.</div>',
       columns:[
-        { title:'Chave', field:'chave', width:210, formatter:c=>`<span style="font-family:monospace;font-size:12px">${esc(c.getValue())}</span>` },
-        { title:'Titulo', field:'titulo', minWidth:180, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
-        { title:'Texto', field:'template', minWidth:300, formatter:c=>`<span style="color:var(--text-lo)">${esc(String(c.getValue() || '').replace(/\n/g, ' ').slice(0, 140))}</span>` },
-        { title:'Tipo', field:'customizado', width:120, formatter:c=>c.getValue()?'<span class="badge-custom">Customizado</span>':'<span class="badge-inativo">Padrao</span>' },
-        { title:'Status', field:'ativo', width:100, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
-        { title:'Acoes', field:'chave', width:95, hozAlign:'right', formatter:c=>`<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${esc(c.getValue())}')" title="Editar">✏️</button>` },
+        { title:'Chave', field:'chave', width:210, headerFilter:true, formatter:c=>`<span style="font-family:monospace;font-size:12px">${esc(c.getValue())}</span>` },
+        { title:'Titulo', field:'titulo', minWidth:180, headerFilter:true, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'Texto', field:'template', minWidth:300, headerFilter:true, formatter:c=>`<span style="color:var(--text-lo)">${esc(String(c.getValue() || '').replace(/\n/g, ' ').slice(0, 140))}</span>` },
+        { title:'Tipo', field:'customizado', width:120, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Customizado','0':'Padrao'}}, headerFilterFunc:(hv,rv)=>hv===''||(hv==='1'?!!rv:!rv), formatter:c=>c.getValue()?'<span class="badge-custom">Customizado</span>':'<span class="badge-inativo">Padrao</span>' },
+        { title:'Status', field:'ativo', width:100, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}}, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
+        { title:'Acoes', field:'chave', width:95, hozAlign:'right', headerFilter:false, groupable:false, formatter:c=>{
+          const ch = esc(c.getValue());
+          return `<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${ch}')" title="Editar">✏️</button>
+                  <button class="btn-icon" onclick="event.stopPropagation();excluirTemplate('${ch}')" title="Restaurar padrão" style="color:#dc2626">🗑</button>`;
+        }},
       ],
       rowClick:(e,row)=>{ if(!e.target.closest('button')) abrirFormulario(row.getData().chave); },
       dataFiltered:(_f, rows)=>document.getElementById('count').textContent = `${rows.length} templates`,
     });
+    gp.refresh();
+    gp.applyToTable();
     document.getElementById('count').textContent = `${dados.length} templates`;
+  }
+
+  function toggleFiltros() {
+    filtrosVisiveis = !filtrosVisiveis;
+    document.getElementById('filter-area').style.display = filtrosVisiveis ? '' : 'none';
+    document.getElementById('btn-filtros').textContent = filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
+    if (filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
   }
 
   function filtrar() {
     if (!table) return;
     if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
     const busca = document.getElementById('q-busca').value.trim().toLowerCase();
-    if (!busca) return;
-    quickFilterFn = row => `${row.chave} ${row.titulo} ${row.template}`.toLowerCase().includes(busca);
-    table.addFilter(quickFilterFn);
+    const ativo = document.getElementById('q-ativo').value;
+    if (busca || ativo !== '') {
+      quickFilterFn = row => {
+        if (ativo !== '' && String(row.ativo) !== ativo) return false;
+        const texto = `${row.chave} ${row.titulo} ${row.template}`.toLowerCase();
+        return !busca || texto.includes(busca);
+      };
+      table.addFilter(quickFilterFn);
+    }
+    const qtd = [busca, ativo].filter(Boolean).length;
+    document.getElementById('filter-status').textContent = qtd ? `${qtd} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+  }
+
+  async function excluirTemplate(chave) {
+    const row = dados.find(x => x.chave === chave);
+    if (!row) return;
+    if (row.customizado) {
+      if (!confirm('Restaurar o padrão deste template?\n\nIsso remove a customização da empresa e volta ao texto original do sistema.')) return;
+    } else {
+      if (!confirm('Excluir este registro?\n\nComo o template não está customizado, isso não tem efeito visível — o sistema já usa o padrão.')) return;
+    }
+    await fetch(`/api/ia-command/admin/mensagens-whatsapp/${encodeURIComponent(chave)}`, { method: 'DELETE' });
+    carregar();
   }
 
   function limparFiltros() {
     document.getElementById('q-busca').value = '';
+    document.getElementById('q-ativo').value = '';
     filtrar();
   }
 

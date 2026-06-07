@@ -5,16 +5,18 @@
     {
       id: 'operacao', label: 'Monitor', icon: '⚡', defaultOpen: true,
       items: [
-        { id: 'iac-dashboard',        label: 'Dashboard',        href: '/app/ia-command/dashboard.html',      icon: '⊞' },
-        { id: 'iac-monitor-whatsapp', label: 'Monitor',          href: '/app/ia-command/monitor.html',        icon: '💬' },
+        { id: 'iac-dashboard',        label: 'Dashboard',        href: '/app/ia-command/dashboard.html',             icon: '⊞' },
+        { id: 'iac-monitor-whatsapp', label: 'Monitor',          href: '/app/ia-command/monitor.html',               icon: '💬' },
+        { id: 'iac-admin-auditoria',  label: 'Histórico',        href: '/app/ia-command/admin-interpretacoes.html',  icon: '🧭' },
       ],
     },
     {
       id: 'whatsapp', label: 'WhatsApp', icon: '💬', defaultOpen: true,
       items: [
-        { id: 'iac-admin-canais-whatsapp', label: 'Canais', href: '/app/ia-command/admin-canais-whatsapp.html', icon: '📡' },
-        { id: 'iac-admin-numeros-whatsapp', label: 'Números Autorizados', href: '/app/ia-command/admin-numeros-whatsapp.html', icon: '📱' },
-        { id: 'iac-admin-mensagens-whatsapp', label: 'Mensagens', href: '/app/ia-command/admin-mensagens-whatsapp.html', icon: '✉️' },
+        { id: 'iac-admin-canais-whatsapp',        label: 'Canais',              href: '/app/ia-command/admin-canais-whatsapp.html',        icon: '📡' },
+        { id: 'iac-admin-numeros-whatsapp',       label: 'Números Autorizados', href: '/app/ia-command/admin-numeros-whatsapp.html',       icon: '📱' },
+        { id: 'iac-admin-mensagens-whatsapp',     label: 'Mensagens',           href: '/app/ia-command/admin-mensagens-whatsapp.html',     icon: '✉️' },
+        { id: 'iac-financeiro-whatsapp',          label: 'Relatório Financeiro', href: '/app/ia-command/admin-financeiro-whatsapp.html',   icon: '💰' },
       ],
     },
     {
@@ -27,26 +29,42 @@
     {
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
-        { id: 'iac-config-conexoes', label: 'Conexões ERP',  href: '/app/ia-command/config-conexoes.html', icon: '🔌' },
-        { id: 'iac-admin-datasets',  label: 'Datasets ERP', href: '/app/ia-command/admin-datasets.html',   icon: '📊' },
+        { id: 'iac-config-conexoes', label: 'Conexões ERP',      href: '/app/ia-command/config-conexoes.html',  icon: '🔌' },
+        { id: 'iac-admin-datasets',  label: 'Datasets ERP',      href: '/app/ia-command/admin-datasets.html',   icon: '📊' },
         { id: 'iac-config-ia',       label: 'Configuração de IA', href: '/app/ia-command/config-ia.html',       icon: '🤖' },
-        { id: 'iac-admin-intencoes', label: 'Intenções',    href: '/app/ia-command/admin-intencoes.html',  icon: '🧠' },
-        { id: 'iac-migrar-dados',    label: 'Migrar Dados', href: '/app/ia-command/migrar-dados.html',     icon: '⇄' },
+        { id: 'iac-admin-intencoes', label: 'Intenções',          href: '/app/ia-command/admin-intencoes.html', icon: '🧠' },
+        { id: 'iac-migrar-dados',    label: 'Migrar Dados',       href: '/app/ia-command/migrar-dados.html',    icon: '⇄' },
       ],
     },
     {
-      id: 'compras', label: 'Compras', icon: '📦', defaultOpen: false,
+      id: 'integracao', label: 'Integração', icon: '🔗', defaultOpen: false,
       items: [
-        { id: 'iac-admin-compras', label: 'Consultas de Compras', href: '/app/ia-command/admin-compras-queries.html', icon: '🔍' },
+        {
+          type: 'group', id: 'erp-protheus', label: 'ERP Protheus', icon: '🏭',
+          items: [
+            { id: 'iac-config-middleware',    label: 'Middleware SQL',   href: '/app/ia-command/config-middleware-protheus.html', icon: '🛡' },
+            { id: 'iac-admin-logs-consultas', label: 'Log de Consultas', href: '/app/ia-command/admin-logs-consultas.html',        icon: '📋' },
+            { id: 'iac-admin-protheus-sx2',   label: 'Dicionário SX2',  href: '/app/ia-command/admin-protheus-sx2.html',          icon: '📖' },
+            { id: 'iac-admin-protheus-sx3',   label: 'Dicionário SX3',  href: '/app/ia-command/admin-protheus-sx3.html',          icon: '📑' },
+          ],
+        },
+        {
+          type: 'group', id: 'agente-local', label: 'Agente Local', icon: '🤖',
+          items: [
+            { id: 'iac-agente-local-cargas', label: 'Cargas', href: '/app/ia-command/admin-agente-local-cargas.html', icon: '📤' },
+          ],
+        },
       ],
     },
     {
       id: 'administracao', label: 'Administração', icon: '🛠', defaultOpen: false,
       items: [
-        { id: 'iac-admin-execucoes', label: 'Log Execuções', href: '/app/ia-command/admin-execucoes.html', icon: '📋' },
-        { id: 'iac-admin-auditoria', label: 'Interpretações', href: '/app/ia-command/admin-interpretacoes.html', icon: '🧭' },
-        { id: 'iac-admin-auditoria', label: 'Auditoria',     href: '/app/ia-command/admin-auditoria.html', icon: '🔍' },
-        { id: 'iac-admin-dialogos',  label: 'Diálogos Conversacionais', href: '/app/ia-command/admin-dialogos.html', icon: '💬' },
+        { id: 'iac-admin-execucoes',          label: 'Log Execuções',            href: '/app/ia-command/admin-execucoes.html',          icon: '📋' },
+        { id: 'iac-admin-auditoria',          label: 'Interpretações',           href: '/app/ia-command/admin-interpretacoes.html',     icon: '🧭' },
+        { id: 'iac-admin-auditoria',          label: 'Auditoria',                href: '/app/ia-command/admin-auditoria.html',           icon: '🔍' },
+        { id: 'iac-admin-dialogos',           label: 'Diálogos Conversacionais', href: '/app/ia-command/admin-dialogos.html',            icon: '💬' },
+        { id: 'iac-console-servidor',         label: 'Console do Servidor',      href: '/app/ia-command/console-servidor.html',          icon: '🖥' },
+        { id: 'iac-admin-instalador-agente',  label: 'Gerar Inst Agente-local',  href: '/app/ia-command/admin-instalador-agente.html',   icon: '📦' },
       ],
     },
   ];
@@ -59,30 +77,67 @@
   const curPath = location.pathname;
 
   function isActive(href) {
-    return curPath === href || curPath.endsWith(href);
+    const hrefPath = href.split('?')[0];
+    return curPath === hrefPath || curPath.endsWith(hrefPath);
   }
 
   function itemsContainActive(items) {
-    return items.some(i => (i.href && isActive(i.href)) || (i.items && itemsContainActive(i.items)));
+    return items.some(i =>
+      (i.href && isActive(i.href)) ||
+      (i.items && itemsContainActive(i.items))
+    );
   }
 
   function filtrarMenu(rotinas) {
     if (rotinas === null) return MENU;
     return MENU.map(section => ({
       ...section,
-      items: section.items.filter(item =>
-        rotinas.includes(item.id) || (item.aliases || []).some(alias => rotinas.includes(alias))
-      ),
+      items: section.items
+        .map(item => {
+          if (item.type === 'group') {
+            const filteredItems = item.items.filter(gi =>
+              rotinas.includes(gi.id) || (gi.aliases || []).some(a => rotinas.includes(a))
+            );
+            return filteredItems.length ? { ...item, items: filteredItems } : null;
+          }
+          return (rotinas.includes(item.id) || (item.aliases || []).some(a => rotinas.includes(a))) ? item : null;
+        })
+        .filter(Boolean),
     })).filter(section => section.items.length > 0);
   }
 
   function navItemHtml(item) {
+    if (item.type === 'group') return groupHtml(item);
     const active = item.href && isActive(item.href);
     const cls = ['nav-item', 'sub', active ? 'active' : ''].filter(Boolean).join(' ');
     return `<a href="${item.href}" class="${cls}">
       <span class="nav-icon">${item.icon}</span>
       <span class="nav-label">${item.label}</span>
     </a>`;
+  }
+
+  function groupItemHtml(item) {
+    const active = item.href && isActive(item.href);
+    const cls = ['nav-item', 'sub2', active ? 'active' : ''].filter(Boolean).join(' ');
+    return `<a href="${item.href}" class="${cls}">
+      <span class="nav-icon">${item.icon}</span>
+      <span class="nav-label">${item.label}</span>
+    </a>`;
+  }
+
+  function groupHtml(group) {
+    const hasActive = itemsContainActive(group.items);
+    const openCls = hasActive ? ' open' : '';
+    const itemsHtml = group.items.map(gi => groupItemHtml(gi)).join('');
+    return `
+      <div class="nav-parent${openCls}" onclick="toggleGroup('${group.id}')">
+        <span class="nav-icon">${group.icon}</span>
+        <span class="nav-label">${group.label}</span>
+        <span class="nav-arrow">▾</span>
+      </div>
+      <div class="submenu${openCls}" id="group-${group.id}">
+        ${itemsHtml}
+      </div>`;
   }
 
   function sectionHtml(section, isOpen) {
@@ -130,6 +185,15 @@
     hdr?.classList.toggle('open', opening);
   }
 
+  function toggleGroup(id) {
+    const body = document.getElementById('group-' + id);
+    const hdr  = body?.previousElementSibling;
+    if (!body) return;
+    const opening = !body.classList.contains('open');
+    body.classList.toggle('open', opening);
+    hdr?.classList.toggle('open', opening);
+  }
+
   function getSidebar() { return document.getElementById('sidebar'); }
   function getLayout()  { return document.querySelector('.layout'); }
 
@@ -153,8 +217,29 @@
     localStorage.setItem(PIN_KEY, pinned ? '1' : '0');
   }
 
+  async function sair() {
+    try {
+      await fetch('/api/logout', { method: 'POST' });
+    } catch (_) {}
+    location.href = '/';
+  }
+
+  function buildFooter() {
+    const sb = getSidebar();
+    if (!sb || sb.querySelector('.sidebar-footer')) return;
+    const footer = document.createElement('div');
+    footer.className = 'sidebar-footer';
+    footer.innerHTML = `
+      <button class="nav-item sub sidebar-logout-btn" onclick="window._sidebarSair()" title="Sair do sistema">
+        <span class="nav-icon">↩</span>
+        <span class="nav-label">Sair</span>
+      </button>`;
+    sb.appendChild(footer);
+  }
+
   function init() {
     buildNav();
+    buildFooter();
     const sb = getSidebar();
     if (sb && !sb.querySelector('.sidebar-pin-btn')) {
       const btn = document.createElement('button');
@@ -165,8 +250,11 @@
     applyPin(localStorage.getItem(PIN_KEY) === '1');
   }
 
+  window._sidebarSair = sair;
+
   window.toggleSidebar = toggle;
   window.toggleSection = toggleSection;
+  window.toggleGroup   = toggleGroup;
   window.MENU = MENU;
 
   document.addEventListener('DOMContentLoaded', async () => {

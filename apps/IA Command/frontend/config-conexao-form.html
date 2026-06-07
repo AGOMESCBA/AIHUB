@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Conexão ERP — IA Command</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
@@ -90,6 +93,18 @@
     }
     .btn-pass-toggle:hover { color:var(--text-hi);background:var(--bg-hover); }
     .btn-pass-toggle svg * { pointer-events:none; }
+
+    .tab-bar { display:flex; gap:2px; border-bottom:2px solid var(--border); margin-bottom:20px; }
+    .tab-btn {
+      padding:9px 20px; border:none; background:none; cursor:pointer;
+      font-size:13px; font-weight:600; color:var(--text-md);
+      border-bottom:2px solid transparent; margin-bottom:-2px;
+      border-radius:var(--radius-sm) var(--radius-sm) 0 0;
+      transition:color var(--transition),border-color var(--transition),background var(--transition);
+    }
+    .tab-btn:hover:not(:disabled) { color:var(--text-hi); background:var(--bg-hover); }
+    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-btn:disabled { color:var(--text-lo); cursor:not-allowed; opacity:.45; }
   </style>
 </head>
 <body>
@@ -138,6 +153,14 @@
 
         <div class="editor-grid editor-grid-wide" style="margin-top:16px">
           <main class="editor-main">
+
+            <div class="tab-bar">
+              <button class="tab-btn active" id="tab-btn-config"   onclick="switchTab('config')">Configuração</button>
+              <button class="tab-btn"        id="tab-btn-protheus" onclick="switchTab('protheus')" disabled title="Selecione TOTVS Protheus no campo Sistema ERP para acessar esta aba">Protheus</button>
+            </div>
+
+            <!-- ── ABA: Configuração ─────────────────────────────── -->
+            <div id="tab-config">
 
             <section class="form-section">
               <div class="form-section-header">
@@ -298,6 +321,34 @@
                 <div id="test-result" class="test-result"></div>
               </div>
             </section>
+
+            </div><!-- /tab-config -->
+
+            <!-- ── ABA: Protheus ──────────────────────────────────── -->
+            <div id="tab-protheus" style="display:none">
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Configurações Protheus</div>
+                <div class="form-section-subtitle">Parâmetros específicos do TOTVS Protheus para geração de SQL pelo assistente.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Filial padrão (opcional)</label>
+                    <input type="text" id="f-filial" class="form-control" placeholder="Ex.: 01, 0101">
+                    <div class="form-hint">Código da filial usado como filtro padrão nas tabelas Exclusivas (X2_MODO = E) quando o usuário não informar uma filial específica.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Sufixo de tabela</label>
+                    <input type="text" id="f-sufixo" class="form-control" placeholder="Ex.: 010, 020">
+                    <div class="form-hint">Sufixo numérico das tabelas físicas no banco (ex.: SF2<strong>010</strong>, SD2<strong>020</strong>). Cada empresa Protheus costuma ter um sufixo diferente.</div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            </div><!-- /tab-protheus -->
 
           </main>
 
@@ -460,8 +511,20 @@
     protheus: 'TOTVS Protheus', sankhya: 'Sankhya',
     sap: 'SAP Business One', senior: 'Senior Sistemas', mxm: 'MXM Sistemas',
   };
+  function switchTab(tab) {
+    document.getElementById('tab-config').style.display    = tab === 'config'   ? '' : 'none';
+    document.getElementById('tab-protheus').style.display  = tab === 'protheus' ? '' : 'none';
+    document.getElementById('tab-btn-config').classList.toggle('active',   tab === 'config');
+    document.getElementById('tab-btn-protheus').classList.toggle('active', tab === 'protheus');
+  }
+
   function onErpChange() {
-    // ERP só identifica o sistema — tabelas e joins ficam no sql_base do dataset.
+    const erp = document.getElementById('f-erp').value;
+    const isProtheus = erp === 'protheus';
+    const tabBtn = document.getElementById('tab-btn-protheus');
+    tabBtn.disabled = !isProtheus;
+    tabBtn.title = isProtheus ? '' : 'Selecione TOTVS Protheus no campo Sistema ERP para acessar esta aba';
+    if (!isProtheus) switchTab('config');
   }
 
   function onTipoChange() {
@@ -490,6 +553,8 @@
 
   // Atualiza hint da URL conforme o path é digitado
   document.addEventListener('DOMContentLoaded', () => {
+    onTipoChange();
+    onErpChange();
     document.getElementById('f-proxy-path')?.addEventListener('input', function () {
       document.getElementById('hint-path').textContent = this.value || '/rest/api/iacommand/v1';
     });
@@ -537,6 +602,11 @@
       document.getElementById('f-trust').checked   = conn.trust_cert !== 0;
     }
 
+    // Configurações Protheus (JSON guardado em configuracoes)
+    const cfg = conn.configuracoes ? JSON.parse(conn.configuracoes) : {};
+    document.getElementById('f-filial').value  = conn.filial || cfg.filial_padrao || '';
+    document.getElementById('f-sufixo').value  = cfg.sufixo_tabela || '';
+
     document.getElementById('meta-status').textContent = conn.ativo ? '● Ativa' : '○ Inativa';
     document.getElementById('meta-teste').textContent  =
       conn.teste_ok === 1 ? '✓ OK' : conn.teste_ok === 0 ? '✗ Falhou' : '—';
@@ -578,15 +648,23 @@
     } else {
       const host = document.getElementById('f-host').value.trim();
       if (!nome || !host) { _feedback('Preencha nome e servidor/host.', false); return; }
+      const erp = document.getElementById('f-erp').value;
+      const filial  = document.getElementById('f-filial').value.trim();
+      const sufixo  = document.getElementById('f-sufixo').value.trim();
+      const configProtheus = erp === 'protheus'
+        ? JSON.stringify({ filial_padrao: filial || null, sufixo_tabela: sufixo || null })
+        : null;
       body = {
         nome, tipo,
-        erp:        document.getElementById('f-erp').value,
+        erp,
         host,
-        port:       document.getElementById('f-port').value || null,
-        database:   document.getElementById('f-database').value.trim(),
-        username:   document.getElementById('f-username').value.trim(),
-        encrypt:    document.getElementById('f-encrypt').checked,
-        trust_cert: document.getElementById('f-trust').checked,
+        port:          document.getElementById('f-port').value || null,
+        database:      document.getElementById('f-database').value.trim(),
+        username:      document.getElementById('f-username').value.trim(),
+        encrypt:       document.getElementById('f-encrypt').checked,
+        trust_cert:    document.getElementById('f-trust').checked,
+        filial:        filial || null,
+        configuracoes: configProtheus,
       };
       const pw = document.getElementById('f-password').value;
       if (pw) body.password = pw;
@@ -787,6 +865,10 @@ Static Function _IACRowsToJson(aRows)
       setTimeout(() => { btn.textContent = orig; }, 2000);
     });
   }
+
+  // habilita a aba Protheus imediatamente (script está ao fim do body, DOM já disponível)
+  onTipoChange();
+  onErpChange();
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
 </script>

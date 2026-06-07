@@ -368,6 +368,15 @@
       aplicarIdentidadeLogin(empresa);
     });
 
+    function preloadImagem(url) {
+      if (!url || document.querySelector(`link[rel="preload"][href="${url}"]`)) return;
+      const link = document.createElement('link');
+      link.rel  = 'preload';
+      link.as   = 'image';
+      link.href = url;
+      document.head.appendChild(link);
+    }
+
     async function carregarConfigPublica() {
       try {
         const cfg = await fetch('/api/config/publico').then(r => r.json());
@@ -377,6 +386,9 @@
         document.getElementById('footer-system-version').textContent = cfg.sistema_versao || 'v2.0';
         _loginLogoDefaultUrl = cfg.login_logo_default_url || '';
         _loginBackgroundDefaultUrl = cfg.login_background_default_url || '';
+        // Inicia download das imagens padrão imediatamente, em paralelo com o restante do JS.
+        preloadImagem(_loginLogoDefaultUrl);
+        preloadImagem(_loginBackgroundDefaultUrl);
         aplicarIdentidadeLogin(_empresasLogin.find(e => String(e.id) === document.getElementById('empresa-select').value));
       } catch (_) {}
     }
@@ -478,6 +490,9 @@
         resetSelect('— Nenhuma empresa disponível. Contate o administrador. —');
         return;
       }
+
+      // Pré-carrega imagens de todas as empresas enquanto o usuário escolhe.
+      empresas.forEach(e => { preloadImagem(e.login_logo_url); preloadImagem(e.login_background_url); });
 
       // Popula as opções (ordem alfabética)
       empresas.sort((a, b) => (a.razao_social || a.nome || '').localeCompare(b.razao_social || b.nome || '', 'pt-BR'));

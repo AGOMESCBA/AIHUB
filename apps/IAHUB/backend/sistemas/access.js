@@ -54,7 +54,12 @@ function requireSystemAccess(systemCode) {
       return deny(req, res, 403, { error: 'Sistema inativo' });
     }
 
-    if (req.session.system_code !== systemCode) {
+    // Em modo MDI, empresa_id vem explicitamente na request (query ou body).
+    // Nesse caso a verificação de session.system_code é ignorada pois o usuário
+    // pode estar em outra aba com outro sistema — a segurança é garantida por
+    // hasCompanySystem + hasUserSystem abaixo.
+    const isMdi = !!(req.query?.empresa_id || req.body?.empresa_id);
+    if (!isMdi && req.session.system_code !== systemCode) {
       return deny(req, res, 403, { error: 'Sistema nao selecionado', precisaSistema: true });
     }
 

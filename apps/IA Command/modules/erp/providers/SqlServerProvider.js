@@ -3,6 +3,26 @@ const sql = require('mssql');
 // Pool keyed by connection id
 const pools = new Map();
 
+const _NOLOCK_RESERVED = new Set([
+  'WHERE', 'ON', 'SET', 'SELECT', 'GROUP', 'ORDER', 'HAVING', 'UNION',
+  'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'OUTER', 'AND', 'OR',
+  'NOT', 'IN', 'IS', 'AS', 'BY', 'NULL', 'BETWEEN', 'LIKE', 'JOIN',
+  'CASE', 'WHEN', 'THEN', 'ELSE', 'END',
+]);
+
+function _injetarNolock(query) {
+  if (!query || !/\b(?:FROM|JOIN)\b/i.test(query)) return query;
+  return query.replace(
+    /\b(FROM|JOIN)\s+(\w[\w.]*)\s+(?:AS\s+)?(\w+)(?!\s*WITH\s*\()/gi,
+    (match, kw, table, alias) => {
+      if (_NOLOCK_RESERVED.has(alias.toUpperCase())) {
+        return `${kw} ${table} WITH (NOLOCK) ${alias}`;
+      }
+      return `${kw} ${table} ${alias} WITH (NOLOCK)`;
+    }
+  );
+}
+
 function _buildConfig(conn) {
   return {
     server:   conn.host,
@@ -53,7 +73,7 @@ async function executar(conn, query, params = {}) {
     }
   }
 
-  const result = await req.query(query);
+  const result = await req.query(_injetarNolock(query));
   return result.recordset;
 }
 

@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log de Consultas IA</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+
+    .ctrl-bar       { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
+    .ctrl-bar-left  { min-width:0; }
+    .ctrl-bar-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.25;display:flex;align-items:baseline;gap:8px; }
+    .ctrl-count     { font-size:12px;color:var(--text-lo);font-weight:400; }
+    .ctrl-bar-right { display:flex;gap:8px;align-items:center;flex-shrink:0; }
+
+    .filter-bar     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm); }
+
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+
+    .badge-ok   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-fail { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fee2e2;color:#b91c1c; }
+    .badge-warn { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#854d0e; }
+    .badge-info { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8; }
+    .badge-purple { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#ede9fe;color:#6d28d9; }
+
+    .tabulator { border:none !important; background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+
+    .filter-area { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .gp-wrap { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
+
+    .reg-field { margin-bottom:16px; }
+    .reg-field:last-child { margin-bottom:0; }
+    .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+    .detail-val { font-size:13px;color:var(--text-hi); }
+
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:14px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .detail-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center; }
+    .detail-modal   { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+    .detail-header  { display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-bottom:1px solid var(--border); }
+    .detail-title   { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .detail-close   { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1; }
+    .detail-close:hover { color:var(--text-hi); }
+    .btn-danger { background:#dc2626;color:#fff;border:none; }
+    .btn-danger:hover { background:#b91c1c; }
+  </style>
+</head>
+<body>
+<div id="sidebar-mount"></div>
+<div class="layout-main">
+  <div class="topbar">
+    <button class="topbar-menu-btn" onclick="document.body.classList.toggle('sidebar-collapsed')" title="Menu">☰</button>
+    <span class="topbar-title">Log de Consultas IA</span>
+  </div>
+  <div class="page-content">
+
+    <!-- SEÇÃO LISTA -->
+    <div id="sec-lista">
+
+      <div class="ctrl-bar">
+        <div class="ctrl-bar-left">
+          <div class="page-kicker">IA Command · ERP Protheus</div>
+          <div class="ctrl-bar-title">
+            <span id="page-title">Log de Consultas</span>
+            <span id="count" class="ctrl-count">—</span>
+          </div>
+        </div>
+        <div class="ctrl-bar-right">
+          <button class="btn btn-ghost" onclick="abrirLimpeza()">🗑 Limpar log</button>
+          <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-ghost" id="btn-grupo" onclick="toggleGrupo()">+ Mostrar agrupamento</button>
+          <span style="font-size:12px;color:var(--text-lo)" id="grupo-status">Sem agrupamento ativo</span>
+        </div>
+        <div id="grupo-area" style="display:none;padding-top:12px;border-top:1px solid var(--border);margin-top:12px">
+          <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+          <div id="dz"></div>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="bg-card" style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+        <div id="grid-logs"></div>
+      </div>
+
+    </div><!-- /sec-lista -->
+
+    <!-- SEÇÃO DETALHE -->
+    <div id="sec-detalhe" style="display:none">
+      <div class="editor-shell">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="d-title">Detalhe da Consulta</strong>
+            <span id="d-subtitle"></span>
+          </div>
+          <div class="editor-actions">
+            <button class="btn btn-ghost" onclick="fecharDetalhe()">← Voltar à lista</button>
+            <button class="btn btn-secondary" id="copy-btn" onclick="copiarSQL()">📋 Copiar SQL</button>
+          </div>
+        </div>
+        <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+          <main class="editor-main">
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Pergunta do Usuário</div>
+              </div>
+              <div class="form-section-body">
+                <div id="d-pergunta" style="font-size:14px;color:var(--text-hi);font-style:italic;line-height:1.65"></div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">SQL Gerado pela IA</div>
+              </div>
+              <div class="form-section-body">
+                <pre id="d-sql" style="background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;overflow-y:auto;color:var(--text-md);line-height:1.55;min-height:180px;max-height:600px;margin:0"></pre>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Resposta Entregue ao Usuário</div>
+              </div>
+              <div class="form-section-body">
+                <pre id="d-resposta" style="background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-family:inherit;font-size:13px;white-space:pre-wrap;word-break:break-all;overflow-y:auto;color:var(--text-md);line-height:1.65;min-height:80px;max-height:340px;margin:0"></pre>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Caminho Percorrido</div>
+              </div>
+              <div class="form-section-body">
+                <pre id="d-trace" style="background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;overflow-y:auto;color:var(--text-md);line-height:1.55;min-height:80px;max-height:340px;margin:0"></pre>
+              </div>
+            </section>
+
+          </main>
+          <aside class="editor-side">
+            <section class="form-section" style="position:sticky;top:56px">
+              <div class="form-section-header">
+                <div class="form-section-title">Metadados</div>
+              </div>
+              <div class="form-section-body">
+                <div class="reg-field">
+                  <div class="reg-label">Data / Hora</div>
+                  <div class="detail-val" id="d-data">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Módulo</div>
+                  <div id="d-modulo">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Status</div>
+                  <div id="d-status">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Provider IA</div>
+                  <div class="detail-val" id="d-provider">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Usuário / Número</div>
+                  <div class="detail-val" id="d-usuario">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Linhas retornadas</div>
+                  <div class="detail-val" id="d-rows">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Tempo de execução</div>
+                  <div class="detail-val" id="d-tempo">—</div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div><!-- /sec-detalhe -->
+
+  </div>
+</div>
+
+<!-- Modal Limpar Log -->
+<div class="detail-overlay" id="cleanup-overlay" onclick="if(event.target===this)fecharLimpeza()">
+  <div class="detail-modal" style="width:min(520px,96vw)">
+    <div class="detail-header">
+      <span class="detail-title" id="cleanup-title">Limpar log de Consultas</span>
+      <button class="detail-close" onclick="fecharLimpeza()">×</button>
+    </div>
+    <div style="padding:20px 24px">
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;color:var(--text-lo);display:block;margin-bottom:5px">Módulo</label>
+        <select id="cleanup-modulo" class="form-control" style="width:100%">
+          <option value="">Todos os módulos</option>
+          <option value="compras">📦 Compras</option>
+          <option value="faturamento">🧾 Faturamento</option>
+          <option value="financeiro">🏦 Financeiro</option>
+          <option value="comissao">💰 Comissão</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+          <input type="radio" name="cleanup-modo" value="periodo" checked onchange="atualizarModoLimpeza()">
+          Limpar somente um período
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+          <input type="radio" name="cleanup-modo" value="total" onchange="atualizarModoLimpeza()">
+          Limpar todo o histórico desta empresa
+        </label>
+      </div>
+      <div id="cleanup-period" style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <label style="font-size:12px;color:var(--text-lo);white-space:nowrap">De</label>
+        <input id="cleanup-inicio" type="date" class="form-control" style="max-width:145px">
+        <label style="font-size:12px;color:var(--text-lo);white-space:nowrap">Até</label>
+        <input id="cleanup-fim" type="date" class="form-control" style="max-width:145px">
+      </div>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;color:#b91c1c;margin-bottom:16px">
+        ⚠️ Esta ação remove definitivamente os registros. Não é possível desfazer.
+      </div>
+      <div id="cleanup-error" style="font-size:13px;color:#b91c1c;margin-bottom:10px;display:none"></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="fecharLimpeza()">Cancelar</button>
+        <button class="btn btn-danger" id="cleanup-btn" onclick="confirmarLimpeza()">Limpar registros</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/iahub.js"></script>
+<script src="/js/grid-group-panel.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script>
+  let table, gp;
+  let _sqlAtual = '';
+  let _grupoVisivel = false;
+
+  function toggleGrupo() {
+    _grupoVisivel = !_grupoVisivel;
+    document.getElementById('grupo-area').style.display = _grupoVisivel ? '' : 'none';
+    document.getElementById('btn-grupo').textContent = _grupoVisivel ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+    if (table) table.setHeight(_grupoVisivel ? 'calc(100vh - 240px)' : 'calc(100vh - 172px)');
+    if (_grupoVisivel && gp) setTimeout(() => gp.refresh(), 50);
+  }
+
+  const MODULOS = {
+    compras:     { label: 'Compras',     icon: '📦', badge: 'badge-info' },
+    faturamento: { label: 'Faturamento', icon: '🧾', badge: 'badge-warn' },
+    financeiro:  { label: 'Financeiro',  icon: '🏦', badge: 'badge-ok' },
+    comissao:    { label: 'Comissão',    icon: '💰', badge: 'badge-purple' },
+  };
+
+  const fmtData = (iso) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  };
+
+  const prettyJson = (v) => {
+    if (!v) return '[]';
+    try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v, null, 2); }
+    catch (_) { return String(v); }
+  };
+
+  const badgeModulo = (v) => {
+    if (!v) return '<span style="color:var(--text-lo);font-size:12px">—</span>';
+    const m = MODULOS[v];
+    if (!m) return `<span class="badge-info">${v}</span>`;
+    return `<span class="${m.badge}">${m.icon} ${m.label}</span>`;
+  };
+
+  const badgeStatus = (v) => {
+    if (!v) return '<span class="badge-warn">—</span>';
+    if (v === 'sucesso_ai_sql' || v === 'sucesso') return '<span class="badge-ok">✓ Sucesso</span>';
+    if (v === 'erro')      return '<span class="badge-fail">✗ Erro</span>';
+    if (v === 'sem_dados') return '<span class="badge-warn">⚠ Sem dados</span>';
+    if (v === 'dialogo')   return '<span class="badge-info">💬 Diálogo</span>';
+    return `<span class="badge-info">${v}</span>`;
+  };
+
+  // Lê ?modulo= da URL para pré-filtrar por header filter
+  const _urlParams = new URLSearchParams(location.search);
+  const _moduloInicial = _urlParams.get('modulo') || '';
+
+  function inicializarTabela(dados) {
+    if (table) { table.replaceData(dados); return; }
+    if (!gp) gp = createGroupPanel({
+      chipsRowId:'gp-chips-row', dropZoneId:'dz',
+      storageKey:'iac_admin_logs_consultas_group', getTable:()=>table,
+      onChange: (fields) => {
+        const el = document.getElementById('grupo-status');
+        if (el) el.textContent = fields.length ? `${fields.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+      },
+    });
+    table = new Tabulator('#grid-logs', {
+      data: dados,
+      layout: 'fitColumns',
+      height: 'calc(100vh - 172px)',
+      movableColumns: true,
+      groupBy: gp.getActiveFields(),
+      groupStartOpen: true,
+      placeholder: 'Nenhuma consulta encontrada.',
+      tableBuilt: () => {
+        gp.refresh(); gp.applyToTable();
+        if (_moduloInicial) table.setHeaderFilterValue('modulo', _moduloInicial);
+      },
+      rowClick: (e, row) => abrirDetalhe(row.getData()),
+      columns: [
+        {
+          title: 'Data/Hora', field: 'criado_em', width: 155, sorter: 'string', sorterParams:{alignEmptyValues:'bottom'},
+          formatter: c => fmtData(c.getValue()),
+          headerFilter: false, groupable: false,
+        },
+        {
+          title: 'Módulo', field: 'modulo', width: 130,
+          headerFilter: 'select',
+          headerFilterParams: { values: { '':'Todos', compras:'Compras', faturamento:'Faturamento', financeiro:'Financeiro', comissao:'Comissão' } },
+          formatter: c => badgeModulo(c.getValue()),
+        },
+        {
+          title: 'Pergunta', field: 'texto_original', minWidth: 220, sorter: 'string',
+          headerFilter: 'input',
+          formatter: c => {
+            const v = c.getValue() || '';
+            return `<span title="${v.replace(/"/g,'&quot;')}">${v.length > 75 ? v.slice(0,75)+'…' : v}</span>`;
+          },
+        },
+        {
+          title: 'SQL gerado', field: 'sql_gerado', minWidth: 160, sorter: 'string',
+          headerFilter: 'input',
+          formatter: c => {
+            const v = c.getValue() || '';
+            if (!v) return '<span style="color:var(--text-lo)">—</span>';
+            const trecho = v.replace(/\s+/g,' ').slice(0, 65);
+            return `<code style="font-size:11px;color:var(--text-md)">${trecho}${v.length > 65 ? '…' : ''}</code>`;
+          },
+        },
+        {
+          title: 'Status', field: 'resultado_tipo', width: 130,
+          headerFilter: 'select',
+          headerFilterParams: { values: { '':'Todos', sucesso_ai_sql:'Sucesso', sucesso:'Sucesso (geral)', erro:'Erro', sem_dados:'Sem dados', dialogo:'Diálogo' } },
+          formatter: c => badgeStatus(c.getValue()),
+        },
+        {
+          title: 'Rows', field: 'rows_count', width: 75, sorter: 'number', hozAlign: 'right',
+          formatter: c => c.getValue() != null ? c.getValue().toLocaleString('pt-BR') : '—',
+          headerFilter: false,
+        },
+        {
+          title: 'Provider', field: 'provedor', width: 95,
+          headerFilter: 'input',
+          formatter: c => c.getValue() || '—',
+        },
+        {
+          title: 'Tempo (ms)', field: 'duracao_ms', width: 110, sorter: 'number', hozAlign: 'right',
+          formatter: c => c.getValue() != null ? c.getValue().toLocaleString('pt-BR') + ' ms' : '—',
+          headerFilter: false,
+          groupable: false,
+        },
+        {
+          title: '', field: 'id', width: 60, hozAlign: 'center', headerFilter: false, groupable: false, resizable: false, sorter: false,
+          formatter: (cell) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn-icon';
+            btn.title = 'Ver detalhes';
+            btn.textContent = '🔍';
+            btn.addEventListener('click', e => { e.stopPropagation(); abrirDetalhe(cell.getRow().getData()); });
+            return btn;
+          },
+        },
+      ],
+    });
+  }
+
+  function abrirDetalhe(row) {
+    _sqlAtual = row.sql_gerado || '';
+    const m = MODULOS[row.modulo];
+    document.getElementById('d-title').textContent    = 'Detalhe da Consulta';
+    document.getElementById('d-subtitle').textContent = fmtData(row.criado_em);
+    document.getElementById('d-pergunta').textContent = row.texto_original || '—';
+    document.getElementById('d-sql').textContent      = row.sql_gerado || '(SQL não registrado)';
+    document.getElementById('d-resposta').textContent = row.resposta_entregue || '—';
+    document.getElementById('d-trace').textContent    = prettyJson(row.trace_json);
+    document.getElementById('d-data').textContent     = fmtData(row.criado_em);
+    document.getElementById('d-modulo').innerHTML     = badgeModulo(row.modulo);
+    document.getElementById('d-provider').textContent = row.provedor || '—';
+    document.getElementById('d-usuario').textContent  = [row.usuario, row.numero_wa].filter(Boolean).join(' · ') || '—';
+    document.getElementById('d-rows').textContent     = row.rows_count != null ? row.rows_count.toLocaleString('pt-BR') + ' linha(s)' : '—';
+    document.getElementById('d-tempo').textContent    = row.duracao_ms != null ? row.duracao_ms.toLocaleString('pt-BR') + ' ms' : '—';
+    document.getElementById('d-status').innerHTML     = badgeStatus(row.resultado_tipo);
+    document.getElementById('copy-btn').textContent   = '📋 Copiar SQL';
+    document.getElementById('sec-lista').style.display   = 'none';
+    document.getElementById('sec-detalhe').style.display = '';
+  }
+
+  function fecharDetalhe() {
+    document.getElementById('sec-detalhe').style.display = 'none';
+    document.getElementById('sec-lista').style.display   = '';
+  }
+
+  function copiarSQL() {
+    if (!_sqlAtual) return;
+    navigator.clipboard.writeText(_sqlAtual).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = '✓ Copiado!';
+      setTimeout(() => { btn.textContent = '📋 Copiar SQL'; }, 2000);
+    });
+  }
+
+  async function carregar() {
+    document.getElementById('count').textContent = '• carregando...';
+    try {
+      const res  = await fetch('/api/ia-command/admin/logs/consultas');
+      if (!res.ok) {
+        const msg = res.status === 403 ? 'Sem permissão (iac-admin-auditoria)' : `Erro ${res.status}`;
+        throw new Error(msg);
+      }
+      const dados = await res.json();
+      inicializarTabela(dados);
+      document.getElementById('count').textContent = `• ${dados.length} registro(s)`;
+    } catch (e) {
+      document.getElementById('count').textContent = '• erro ao carregar';
+    }
+  }
+
+  function abrirLimpeza() {
+    const hoje = new Date(); const h30 = new Date(hoje); h30.setDate(h30.getDate() - 30);
+    const toISO = d => d.toISOString().slice(0, 10);
+    document.getElementById('cleanup-inicio').value = toISO(h30);
+    document.getElementById('cleanup-fim').value    = toISO(hoje);
+    document.getElementById('cleanup-modulo').value = '';
+    document.querySelector('input[name="cleanup-modo"][value="periodo"]').checked = true;
+    atualizarModoLimpeza();
+    document.getElementById('cleanup-error').style.display = 'none';
+    document.getElementById('cleanup-btn').textContent = 'Limpar registros';
+    document.getElementById('cleanup-btn').disabled = false;
+    document.getElementById('cleanup-overlay').style.display = 'flex';
+  }
+
+  function fecharLimpeza() {
+    document.getElementById('cleanup-overlay').style.display = 'none';
+  }
+
+  function atualizarModoLimpeza() {
+    const modo = document.querySelector('input[name="cleanup-modo"]:checked')?.value || 'periodo';
+    document.getElementById('cleanup-period').style.display = modo === 'periodo' ? 'flex' : 'none';
+  }
+
+  async function confirmarLimpeza() {
+    const modo   = document.querySelector('input[name="cleanup-modo"]:checked')?.value || 'periodo';
+    const modulo = document.getElementById('cleanup-modulo').value;
+    const body   = { modo, modulo: modulo || undefined };
+    if (modo === 'periodo') {
+      body.data_inicio = document.getElementById('cleanup-inicio').value;
+      body.data_fim    = document.getElementById('cleanup-fim').value;
+    }
+    const errEl = document.getElementById('cleanup-error');
+    errEl.style.display = 'none';
+    const btn = document.getElementById('cleanup-btn');
+    btn.disabled = true; btn.textContent = 'Limpando...';
+    try {
+      const res = await fetch('/api/ia-command/admin/logs/consultas/limpar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+      fecharLimpeza();
+      carregar();
+    } catch (e) {
+      errEl.textContent = e.message; errEl.style.display = 'block';
+      btn.disabled = false; btn.textContent = 'Limpar registros';
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('cleanup-overlay')?.style.display === 'flex') fecharLimpeza();
+    else if (document.getElementById('sec-detalhe').style.display !== 'none') fecharDetalhe();
+  });
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

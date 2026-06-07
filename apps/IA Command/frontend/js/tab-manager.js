@@ -99,7 +99,7 @@
     const frame = document.createElement('iframe');
     frame.className   = 'mdi-iframe';
     frame.dataset.url = tabKey;
-    frame.src         = empresaId ? `${baseUrl}?_empresa=${empresaId}` : baseUrl;
+    frame.src         = empresaId ? `${baseUrl}?_empresa=${empresaId}&_v=${Date.now()}` : `${baseUrl}?_v=${Date.now()}`;
     frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(frame.dataset.url)));
     content.appendChild(frame);
 

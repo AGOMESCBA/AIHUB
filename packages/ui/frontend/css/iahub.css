@@ -114,6 +114,25 @@ a { text-decoration: none; color: inherit; }
 }
 .sidebar-nav::-webkit-scrollbar { display: none; }
 
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 6px 0;
+  flex-shrink: 0;
+}
+
+.sidebar-logout-btn {
+  width: 100%;
+  border: none;
+  background: none;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text-lo);
+}
+.sidebar-logout-btn:hover {
+  background: var(--bg-hover);
+  color: var(--error);
+}
+
 .nav-section-title {
   font-size: 10px; text-transform: uppercase; letter-spacing: .1em;
   color: var(--text-lo);

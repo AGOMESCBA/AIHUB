@@ -18,42 +18,109 @@
     .topbar-title { flex:1; min-width:0; font-weight:700; }
 
     .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
-    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
-    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
-    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
 
-    .quick-panel  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
-    .quick-row    { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
-    .filter-area  { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
-    .filter-status{ font-size:12px;color:var(--text-lo);flex:1; }
-    .quick-row .form-control { height:36px;font-size:13px; }
-    .quick-row input.form-control  { flex:1;min-width:200px; }
-    .quick-row select.form-control { width:auto;min-width:145px; }
+    .ctrl-bar       { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
+    .ctrl-bar-left  { min-width:0; }
+    .ctrl-bar-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.25;display:flex;align-items:baseline;gap:8px; }
+    .ctrl-count     { font-size:12px;color:var(--text-lo);font-weight:400; }
+    .ctrl-bar-right { display:flex;gap:8px;align-items:center;flex-shrink:0; }
 
-    .gp-wrap      { margin-top:10px; }
+    .filter-bar     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm); }
+    .filter-bar-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px; }
+    .filter-bar-row .form-control { height:34px;font-size:13px; }
+    .filter-bar-row input.form-control  { flex:1;min-width:180px; }
+    .filter-bar-row select.form-control { width:auto;min-width:150px; }
+
     .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
-
-    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
-    .grid-title   { font-size:13px;font-weight:600;color:var(--text-hi); }
-    .grid-meta    { font-size:12px;color:var(--text-lo);margin-top:1px; }
 
     .badge-ok   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
     .badge-fail { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fee2e2;color:#b91c1c; }
     .badge-warn { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#854d0e; }
     .badge-info { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8; }
+    .badge-neutro { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
 
-    /* Detalhe modal */
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--text-md);transition:background .15s,color .15s; }
+    .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
+
+    /* ── Detalhe / Abas ─────────────────────────────────────────────────────── */
+    .detail-tab-bar {
+      display:flex; gap:2px; border-bottom:1px solid var(--border);
+      background:var(--bg-card); padding:0 20px;
+    }
+    .detail-tab {
+      padding:10px 18px; font-size:13px; font-weight:600; color:var(--text-lo);
+      border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;
+      margin-bottom:-1px; transition:color var(--transition),border-color var(--transition);
+      white-space:nowrap;
+    }
+    .detail-tab:hover { color:var(--text-hi); }
+    .detail-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+    .detail-tab-panel { display:none; padding:20px; }
+    .detail-tab-panel.active { display:block; }
+
+    /* Aba 1 — Dados gerais */
+    .meta-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+      gap:10px; margin-bottom:18px;
+    }
+    .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
+    .meta-item span { color:var(--text-lo);font-size:11px;display:block;margin-bottom:4px; }
+    .meta-item strong { color:var(--text-hi);font-size:13px;word-break:break-word; }
+
+    /* Aba 2 — SQL splitter */
+    .split-wrap {
+      display:flex; gap:0; height:calc(100vh - 260px); min-height:300px;
+      border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;
+    }
+    .split-pane { display:flex; flex-direction:column; overflow:auto; min-width:120px; }
+    .split-pane-left  { flex:1; border-right:1px solid var(--border); }
+    .split-pane-right { flex:1; }
+    .split-handle {
+      width:6px; background:var(--bg-base); cursor:col-resize; flex-shrink:0;
+      border-left:1px solid var(--border); border-right:1px solid var(--border);
+      transition:background var(--transition);
+    }
+    .split-handle:hover, .split-handle.dragging { background:var(--accent-glow); }
+    .split-pane-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 14px; border-bottom:1px solid var(--border);
+      background:var(--bg-card); flex-shrink:0;
+    }
+    .split-pane-title { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo); }
+    .split-pane-body {
+      min-height:120px; height:calc(100% - 45px); box-sizing:border-box;
+      overflow:auto; padding:14px;
+      font-family:ui-monospace,monospace; font-size:12.5px;
+      white-space:pre-wrap; word-break:break-word; line-height:1.55;
+      color:var(--text-md); background:var(--bg-base);
+    }
+
+    /* Aba 3 — Detalhes técnicos */
+    .tech-pre {
+      background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);
+      padding:14px;font-family:ui-monospace,monospace;font-size:12px;
+      white-space:pre-wrap;word-break:break-word;
+      overflow-y:auto; color:var(--text-md);
+      max-height:calc(100vh - 320px); min-height:200px;
+    }
+    .tech-lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px; }
+
+    /* Limpeza modal */
     .detail-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center; }
     .detail-overlay.show { display:flex; }
-    .detail-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(760px,95vw);max-height:85vh;overflow-y:auto;padding:24px; }
-    .detail-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px; }
+    .detail-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(540px,96vw);max-height:88vh;overflow-y:auto;padding:24px; }
+    .detail-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:14px; }
     .detail-title  { font-size:15px;font-weight:700;color:var(--text-hi); }
     .detail-close  { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1; }
     .detail-close:hover { color:var(--text-hi); }
-    .detail-lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px; }
-    .detail-pre { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto;color:var(--text-md); }
-    .detail-sec { margin-bottom:16px; }
+    .cleanup-options { display:grid;gap:10px;margin:12px 0 14px; }
+    .cleanup-option { display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--text-md); }
+    .cleanup-period { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px; }
+    .cleanup-warning { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.5;margin-top:12px; }
+    .cleanup-error { color:#b91c1c;font-size:13px;margin-top:10px;display:none; }
 
     .tabulator { border:none !important; background:transparent !important; }
     .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
@@ -65,6 +132,7 @@
     .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
     .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
     .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+
     /* Help drawer */
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
     .help-overlay.open{opacity:1;pointer-events:all;}
@@ -81,6 +149,14 @@
     .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
     .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
     .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+
+    @media (max-width: 860px) {
+      .meta-grid { grid-template-columns:1fr 1fr; }
+      .split-wrap { flex-direction:column; height:auto; }
+      .split-handle { display:none; }
+      .split-pane-left { border-right:none; border-bottom:1px solid var(--border); }
+      .split-pane-body { max-height:280px; }
+    }
   </style>
 </head>
 <body>
@@ -107,25 +183,29 @@
     </div>
 
     <div class="page-content">
-      <div class="page-head">
-        <div>
-          <div class="page-kicker">Administração</div>
-          <div class="page-title">Log de Execuções</div>
-          <div class="page-subtitle">Histórico das consultas processadas pelo motor de IA. Somente leitura.</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Ajuda</button>
-          <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
-        </div>
-      </div>
 
-      <div class="quick-panel">
-        <div class="quick-row">
-          <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
-          <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+      <!-- ── SEÇÃO LISTA ──────────────────────────────────────────────────── -->
+      <div id="sec-lista">
+        <div class="ctrl-bar">
+          <div class="ctrl-bar-left">
+            <div class="page-kicker">Administração</div>
+            <div class="ctrl-bar-title">
+              Log de Execuções
+              <span id="count" class="ctrl-count">—</span>
+            </div>
+          </div>
+          <div class="ctrl-bar-right">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-ghost" onclick="abrirLimpeza()" style="color:#dc2626">🗑 Limpar log</button>
+            <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
+          </div>
         </div>
-        <div class="filter-area" id="filter-area" style="display:none">
-          <div class="quick-row" style="margin-bottom:10px">
+
+        <div class="filter-bar">
+          <div class="filter-bar-row">
             <input id="f-intent" type="text" class="form-control" placeholder="Filtrar por intenção…" oninput="filtrar()">
             <select id="f-sucesso" class="form-control" onchange="filtrar()">
               <option value="">Todos os status</option>
@@ -137,42 +217,124 @@
             </select>
             <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
           </div>
-          <div class="gp-wrap">
-            <div class="gp-chips-row" id="gp-chips-row">
-              <span class="gp-label">Agrupar por:</span>
-            </div>
-            <div id="dz"></div>
+          <div class="gp-chips-row" id="gp-chips-row">
+            <span class="gp-label">Agrupar por:</span>
           </div>
+          <div id="dz"></div>
         </div>
-      </div>
 
-      <div class="card" style="padding:0;overflow:hidden">
-        <div class="grid-toolbar">
-          <div>
-            <div class="grid-title">Execuções registradas</div>
-            <div id="count" class="grid-meta">Últimas 200 entradas</div>
-          </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div id="tabela"></div>
         </div>
-        <div id="tabela"></div>
-      </div>
+      </div><!-- /sec-lista -->
+
+      <!-- ── SEÇÃO DETALHE ────────────────────────────────────────────────── -->
+      <div id="sec-detalhe" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="d-title-header">Detalhe da Execução</strong>
+              <span id="d-subtitle-header" style="font-size:13px;color:var(--text-lo)">-</span>
+            </div>
+            <div class="editor-actions">
+              <button class="btn btn-ghost" onclick="fecharDetalhe()">← Voltar à lista</button>
+            </div>
+          </div>
+
+          <!-- Abas -->
+          <div class="detail-tab-bar" style="margin-top:16px">
+            <button class="detail-tab active" onclick="ativarAba('aba-geral',this)">Dados gerais</button>
+            <button class="detail-tab" onclick="ativarAba('aba-sql',this)">SQL / Auditoria</button>
+            <button class="detail-tab" onclick="ativarAba('aba-tech',this)">Detalhes técnicos</button>
+          </div>
+
+          <!-- Aba 1 — Dados gerais -->
+          <div id="aba-geral" class="detail-tab-panel active">
+            <div class="meta-grid">
+              <div class="meta-item"><span>Data/Hora</span><strong id="d-data">-</strong></div>
+              <div class="meta-item"><span>Remetente</span><strong id="d-remetente">-</strong></div>
+              <div class="meta-item"><span>Intenção</span><strong id="d-intencao">-</strong></div>
+              <div class="meta-item"><span>Status</span><strong id="d-status">-</strong></div>
+              <div class="meta-item"><span>Duração</span><strong id="d-duracao">-</strong></div>
+              <div class="meta-item"><span>Tipo</span><strong id="d-tipo">-</strong></div>
+              <div class="meta-item"><span>Módulo</span><strong id="d-modulo">-</strong></div>
+              <div class="meta-item"><span>Linhas retornadas</span><strong id="d-rows">-</strong></div>
+              <div class="meta-item"><span>Subtipo</span><strong id="d-subtipo">-</strong></div>
+              <div class="meta-item"><span>Escopo</span><strong id="d-escopo">-</strong></div>
+              <div class="meta-item"><span>SQL canônico</span><strong id="d-canonico">-</strong></div>
+              <div class="meta-item"><span>Reuso canônico</span><strong id="d-reuso">-</strong></div>
+              <div class="meta-item"><span>ID correlação</span><strong id="d-id" style="font-size:11px;word-break:break-all">-</strong></div>
+            </div>
+          </div>
+
+          <!-- Aba 2 — SQL / Auditoria -->
+          <div id="aba-sql" class="detail-tab-panel">
+            <div class="split-wrap" id="split-wrap-sql">
+              <div class="split-pane split-pane-left" id="pane-sql-final">
+                <div class="split-pane-header">
+                  <span class="split-pane-title">SQL Final Executado</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarEl('d-sql-final')">Copiar</button>
+                </div>
+                <pre class="split-pane-body" id="d-sql-final"></pre>
+              </div>
+              <div class="split-handle" id="split-handle-sql" title="Arraste para redimensionar"></div>
+              <div class="split-pane split-pane-right" id="pane-sql-audit">
+                <div class="split-pane-header">
+                  <span class="split-pane-title">Auditoria SQL completa</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarEl('d-sql-audit')">Copiar</button>
+                </div>
+                <pre class="split-pane-body" id="d-sql-audit"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aba 3 — Detalhes técnicos -->
+          <div id="aba-tech" class="detail-tab-panel">
+            <div style="margin-bottom:16px">
+              <div class="tech-lbl">detalhes_json (dados brutos)</div>
+              <pre class="tech-pre" id="d-raw-json"></pre>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /sec-detalhe -->
+
     </div>
   </div>
 </div>
 
-<!-- Modal detalhe -->
-<div class="detail-overlay" id="detail-overlay" onclick="if(event.target===this)fecharDetalhe()">
+<!-- Modal limpeza -->
+<div class="detail-overlay" id="cleanup-overlay" onclick="if(event.target===this)fecharLimpeza()">
   <div class="detail-modal">
     <div class="detail-header">
-      <span class="detail-title" id="detail-title">Detalhe da Execução</span>
-      <button class="detail-close" onclick="fecharDetalhe()">✕</button>
+      <span class="detail-title">Limpar log de Execuções</span>
+      <button class="detail-close" onclick="fecharLimpeza()">×</button>
     </div>
-    <div class="detail-sec">
-      <div class="detail-lbl">Detalhes da Execução</div>
-      <pre class="detail-pre" id="detail-query"></pre>
+    <div class="cleanup-options">
+      <label class="cleanup-option">
+        <input type="radio" name="cleanup-modo" value="periodo" checked onchange="atualizarModoLimpeza()">
+        <span>Limpar somente um período</span>
+      </label>
+      <label class="cleanup-option">
+        <input type="radio" name="cleanup-modo" value="total" onchange="atualizarModoLimpeza()">
+        <span>Limpar todo o histórico desta empresa</span>
+      </label>
     </div>
-    <div class="detail-sec" id="detail-erro-wrap" style="display:none">
-      <div class="detail-lbl">Erro</div>
-      <pre class="detail-pre" style="color:#b91c1c" id="detail-erro"></pre>
+    <div id="cleanup-period" class="cleanup-period">
+      <div class="form-group">
+        <label class="form-label">De</label>
+        <input id="cleanup-inicio" class="form-control" type="date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Até</label>
+        <input id="cleanup-fim" class="form-control" type="date">
+      </div>
+    </div>
+    <div class="cleanup-warning">Esta ação remove definitivamente os registros do log de execuções. A auditoria da limpeza será registrada.</div>
+    <div id="cleanup-error" class="cleanup-error"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+      <button class="btn btn-ghost" onclick="fecharLimpeza()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-limpeza" onclick="confirmarLimpeza()">Limpar</button>
     </div>
   </div>
 </div>
@@ -184,16 +346,168 @@
 <script>
   let table, gp;
   let _dados = [];
-  let _filtrosVisiveis = false;
   let _quickFilterFn = null;
 
-  function toggleFiltros() {
-    _filtrosVisiveis = !_filtrosVisiveis;
-    document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
-    document.getElementById('btn-filtros').textContent = _filtrosVisiveis ? '− Ocultar filtros' : '+ Mostrar filtros';
-    if (_filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  function fmtData(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    const p = n => String(n).padStart(2,'0');
+    return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  function fmtFone(num) {
+    if (!num) return '-';
+    const d = String(num).replace(/\D/g,'');
+    const local = d.length >= 12 && d.startsWith('55') ? d.slice(2) : d;
+    if (local.length === 11) return `(${local.slice(0,2)}) ${local.slice(2,7)}-${local.slice(7)}`;
+    if (local.length === 10) return `(${local.slice(0,2)}) ${local.slice(2,6)}-${local.slice(6)}`;
+    return d || '-';
+  }
+
+  function parseJson(v, fallback) {
+    if (!v) return fallback;
+    if (typeof v !== 'string') return v;
+    try { return JSON.parse(v); } catch { return fallback; }
+  }
+
+  function statusBadgeHtml(v) {
+    if (v === 'sucesso')      return '<span class="badge-ok">✓ Sucesso</span>';
+    if (v === 'erro')         return '<span class="badge-fail">✗ Erro</span>';
+    if (v === 'sem_dados')    return '<span class="badge-warn">— Sem dados</span>';
+    if (v === 'dialogo')      return '<span class="badge-info">💬 Diálogo</span>';
+    return `<span class="badge-neutro">${esc(v || '?')}</span>`;
+  }
+
+  // ── Abas ──────────────────────────────────────────────────────────────────
+  function ativarAba(id, btn) {
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  // ── Splitter ───────────────────────────────────────────────────────────────
+  function initSplitter(handleId, leftId, rightId, wrapId) {
+    let dragging = false, startX = 0, startLeftW = 0;
+    document.addEventListener('mousedown', e => {
+      const h = document.getElementById(handleId);
+      if (!h || !h.contains(e.target)) return;
+      dragging = true; startX = e.clientX;
+      startLeftW = document.getElementById(leftId).getBoundingClientRect().width;
+      h.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const wrap = document.getElementById(wrapId);
+      if (!wrap) return;
+      const wrapW = wrap.getBoundingClientRect().width - 6;
+      const newLeftW = Math.max(120, Math.min(wrapW - 120, startLeftW + (e.clientX - startX)));
+      document.getElementById(leftId).style.flex  = `0 0 ${newLeftW}px`;
+      document.getElementById(rightId).style.flex = `0 0 ${wrapW - newLeftW}px`;
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      const h = document.getElementById(handleId);
+      if (h) h.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  }
+
+  initSplitter('split-handle-sql', 'pane-sql-final', 'pane-sql-audit', 'split-wrap-sql');
+
+  // ── Copiar (com fallback para HTTP) ───────────────────────────────────────
+  function _copiarTexto(texto, btn) {
+    const orig = btn.textContent;
+    const ok  = () => { btn.textContent = 'Copiado!'; setTimeout(() => { btn.textContent = orig; }, 1500); };
+    const err = () => { btn.textContent = 'Erro!';   setTimeout(() => { btn.textContent = orig; }, 1500); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).then(ok).catch(() => _clipboardFallback(texto, ok, err));
+    } else {
+      _clipboardFallback(texto, ok, err);
+    }
+  }
+
+  function _clipboardFallback(texto, ok, err) {
+    const ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy') ? ok() : err(); } catch { err(); }
+    document.body.removeChild(ta);
+  }
+
+  function copiarEl(id) { _copiarTexto(document.getElementById(id)?.textContent || '', event.target.closest('button')); }
+
+  // ── Detalhe ───────────────────────────────────────────────────────────────
+  function verDetalhe(row) {
+    const det = parseJson(row.detalhes_json, {}) || {};
+    const aud = det.sql_auditoria || {};
+
+    // Header
+    const idCurto = String(row.correlation_id || '').slice(0,8) || '-';
+    document.getElementById('d-title-header').textContent = `Execução #${idCurto}`;
+    document.getElementById('d-subtitle-header').textContent = fmtData(row.criado_em) + (row.intencao ? ` · ${row.intencao}` : '');
+
+    // Aba 1 — Dados gerais
+    document.getElementById('d-data').textContent      = fmtData(row.criado_em);
+    document.getElementById('d-remetente').textContent = fmtFone(row.numero_wa) || row.usuario || '-';
+    document.getElementById('d-intencao').textContent  = row.intencao || '-';
+    document.getElementById('d-status').innerHTML      = statusBadgeHtml(row.status);
+    document.getElementById('d-duracao').textContent   = row.duracao_ms != null ? `${row.duracao_ms} ms` : '-';
+    document.getElementById('d-tipo').textContent      = row.tipo_mensagem || '-';
+    document.getElementById('d-modulo').textContent    = det.modulo || '-';
+    document.getElementById('d-rows').textContent      = det.rows_count != null ? String(det.rows_count) : '-';
+    document.getElementById('d-subtipo').textContent   = det.subtipo || '-';
+    document.getElementById('d-escopo').textContent    = det.escopo_execucao || '-';
+    document.getElementById('d-canonico').textContent  = det.sql_canonico_origem || '-';
+    document.getElementById('d-reuso').textContent     = det.sql_canonico_reuso_motivo || (det.sql_canonico_reuso_permitido === false ? 'Não permitido' : '-');
+    document.getElementById('d-id').textContent        = row.correlation_id || '-';
+
+    // Aba 2 — SQL
+    const sqlFinal =
+      aud.sql_final_executado ||
+      aud.sql_apos_sx2 ||
+      aud.sql_apos_sx3 ||
+      aud.sql_apos_parametros ||
+      aud.sql_ia_bruto ||
+      '(SQL não registrado nesta execução)';
+
+    document.getElementById('d-sql-final').textContent = sqlFinal;
+    document.getElementById('d-sql-audit').textContent = Object.keys(aud).length
+      ? JSON.stringify(aud, null, 2)
+      : '(Auditoria SQL não registrada nesta execução)';
+
+    // Aba 3 — Detalhes técnicos
+    document.getElementById('d-raw-json').textContent = Object.keys(det).length
+      ? JSON.stringify(det, null, 2)
+      : '(Sem dados extras registrados)';
+
+    // Ir para aba 1
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('aba-geral').classList.add('active');
+    document.querySelectorAll('.detail-tab')[0].classList.add('active');
+
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-detalhe').style.display = '';
+  }
+
+  function fecharDetalhe() {
+    document.getElementById('sec-detalhe').style.display = 'none';
+    document.getElementById('sec-lista').style.display = '';
+  }
+
+  // ── Filtros ───────────────────────────────────────────────────────────────
   function filtrar() {
     if (!table) return;
     if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
@@ -207,9 +521,6 @@
       };
       table.addFilter(_quickFilterFn);
     }
-    const ativos = [b, s].filter(Boolean).length;
-    document.getElementById('filter-status').textContent =
-      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
   }
 
   function limparFiltros() {
@@ -218,29 +529,11 @@
     filtrar();
   }
 
-  function verDetalhe(row) {
-    document.getElementById('detail-title').textContent = `Intenção: ${row.intencao || '—'}`;
-    document.getElementById('detail-query').textContent =
-      [
-        `Status     : ${row.status || '—'}`,
-        `Remetente  : ${row.numero_wa || row.usuario || '—'}`,
-        `Tipo       : ${row.tipo_mensagem || '—'}`,
-        `Duração    : ${row.duracao_ms != null ? row.duracao_ms + ' ms' : '—'}`,
-        `ID         : ${row.correlation_id || '—'}`,
-      ].join('\n');
-    document.getElementById('detail-erro-wrap').style.display = 'none';
-    document.getElementById('detail-overlay').classList.add('show');
-  }
-
-  function fecharDetalhe() { document.getElementById('detail-overlay').classList.remove('show'); }
-
-  function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
+  // ── Grid ──────────────────────────────────────────────────────────────────
   async function carregar() {
     _dados = await fetch('/api/ia-command/admin/execucoes?limit=200').then(r => r.json()).catch(() => []);
-    if (table) { table.replaceData(_dados); return; }
+    document.getElementById('count').textContent = `• ${_dados.length} registro(s)`;
+    if (table) { table.replaceData(_dados); filtrar(); return; }
     _criarTabela(_dados);
   }
 
@@ -253,27 +546,27 @@
 
     table = new Tabulator('#tabela', {
       data, index: 'correlation_id', layout: 'fitColumns', movableColumns: true,
-      height: 'calc(100vh - 330px)',
+      height: 'calc(100vh - 240px)',
       groupBy: gp.getActiveFields(), groupStartOpen: true,
       placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma execução registrada.</div>',
+      tableBuilt: () => { gp.refresh(); gp.applyToTable(); },
       columns: [
+        { title: '', field: 'correlation_id', width: 46, hozAlign: 'center', groupable: false,
+          formatter: () => `<button class="btn-icon" title="Visualizar" style="pointer-events:none">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>`,
+          cellClick: (e, cell) => { e.stopPropagation(); verDetalhe(cell.getRow().getData()); },
+        },
         { title: 'Data/Hora', field: 'criado_em', width: 155,
-          formatter: c => c.getValue()?.slice(0,19).replace('T',' ') || '' },
+          formatter: c => fmtData(c.getValue()) },
         { title: 'Usuário / Remetente', field: 'numero_wa', minWidth: 140, headerFilter: true,
-          formatter: c => esc(c.getValue() || '—') },
+          formatter: c => esc(fmtFone(c.getValue()) || c.getValue() || '—') },
         { title: 'Intenção', field: 'intencao', minWidth: 160, headerFilter: true,
           formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue() || '—')}</strong>` },
-        { title: 'Status', field: 'status', width: 115,
+        { title: 'Status', field: 'status', width: 130,
           headerFilter: 'select',
           headerFilterParams: { values: { '':'Todos', 'sucesso':'Sucesso', 'erro':'Erro', 'sem_dados':'Sem dados', 'dialogo':'Diálogo', 'desconhecido':'Desconhecido' } },
-          formatter: c => {
-            const v = c.getValue();
-            if (v === 'sucesso')      return '<span class="badge-ok">✓ Sucesso</span>';
-            if (v === 'erro')         return '<span class="badge-fail">✗ Erro</span>';
-            if (v === 'sem_dados')    return '<span class="badge-warn">— Sem dados</span>';
-            if (v === 'dialogo')      return '<span class="badge-info">💬 Diálogo</span>';
-            return `<span style="color:var(--text-lo)">${esc(v || '?')}</span>`;
-          },
+          formatter: c => statusBadgeHtml(c.getValue()),
         },
         { title: 'Duração (ms)', field: 'duracao_ms', width: 120,
           formatter: c => {
@@ -283,16 +576,71 @@
             return `<span style="color:${color};font-weight:600">${v}</span>`;
           },
         },
-        { title: 'Tipo', field: 'tipo_mensagem', width: 90, headerFilter: 'select',
+        { title: 'Tipo', field: 'tipo_mensagem', width: 90,
+          headerFilter: 'select',
           headerFilterParams: { values: { '':'Todos', 'texto':'Texto', 'audio':'Áudio', 'imagem':'Imagem' } },
           formatter: c => esc(c.getValue() || '—'),
         },
       ],
       rowClick: (e, row) => verDetalhe(row.getData()),
     });
+  }
 
-    gp.refresh();
-    gp.applyToTable();
+  // ── Limpeza ───────────────────────────────────────────────────────────────
+  function abrirLimpeza() {
+    const hoje = new Date().toISOString().slice(0,10);
+    document.querySelector('input[name="cleanup-modo"][value="periodo"]').checked = true;
+    document.getElementById('cleanup-inicio').value = hoje;
+    document.getElementById('cleanup-fim').value = hoje;
+    document.getElementById('cleanup-error').style.display = 'none';
+    atualizarModoLimpeza();
+    document.getElementById('cleanup-overlay').classList.add('show');
+  }
+
+  function fecharLimpeza() { document.getElementById('cleanup-overlay').classList.remove('show'); }
+
+  function atualizarModoLimpeza() {
+    const modo = document.querySelector('input[name="cleanup-modo"]:checked')?.value || 'periodo';
+    document.getElementById('cleanup-period').style.display = modo === 'total' ? 'none' : 'grid';
+  }
+
+  async function confirmarLimpeza() {
+    const modo       = document.querySelector('input[name="cleanup-modo"]:checked')?.value || 'periodo';
+    const dataInicio = document.getElementById('cleanup-inicio').value;
+    const dataFim    = document.getElementById('cleanup-fim').value;
+    const errEl      = document.getElementById('cleanup-error');
+    const btn        = document.getElementById('btn-confirmar-limpeza');
+
+    errEl.style.display = 'none';
+    if (modo !== 'total' && (!dataInicio || !dataFim)) {
+      errEl.textContent = 'Informe o período de início e fim.';
+      errEl.style.display = 'block'; return;
+    }
+    if (modo !== 'total' && dataInicio > dataFim) {
+      errEl.textContent = 'A data inicial não pode ser maior que a data final.';
+      errEl.style.display = 'block'; return;
+    }
+    const alvo = modo === 'total' ? 'todo o histórico desta empresa' : `o período de ${dataInicio} até ${dataFim}`;
+    if (!confirm(`Confirma limpar ${alvo}? Esta ação não pode ser desfeita.`)) return;
+
+    btn.disabled = true; btn.textContent = 'Limpando...';
+    try {
+      const res = await fetch('/api/ia-command/admin/execucoes/limpar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modo, data_inicio: dataInicio, data_fim: dataFim }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Não foi possível limpar o log.');
+      fecharLimpeza();
+      await carregar();
+      alert(`${data.removidos || 0} registro(s) removido(s).`);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Limpar';
+    }
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
@@ -307,19 +655,21 @@
   <div class="help-drawer-body">
     <div class="help-section">
       <div class="help-section-title">O que aparece aqui</div>
-      <div class="help-item-desc">Cada linha representa uma consulta processada pelo motor de IA — seja via WhatsApp, seja via o chat interno. Somente leitura. Os dados não podem ser editados ou excluídos por aqui.</div>
+      <div class="help-item-desc">Cada linha representa uma consulta processada pelo motor de IA — seja via WhatsApp, seja via o chat interno. Clique em qualquer linha ou no ícone de olho para abrir o detalhe completo.</div>
     </div>
     <div class="help-section">
       <div class="help-section-title">Colunas</div>
       <div class="help-item"><div class="help-item-label">Data/Hora</div><div class="help-item-desc">Momento em que a consulta foi processada.</div></div>
       <div class="help-item"><div class="help-item-label">Usuário / Remetente</div><div class="help-item-desc">Número do WhatsApp ou usuário do chat interno que fez a pergunta.</div></div>
       <div class="help-item"><div class="help-item-label">Intenção</div><div class="help-item-desc">Intenção identificada pela IA para a mensagem recebida.</div></div>
-      <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc"><span style="color:#15803d;font-weight:600">✓ Sucesso</span> — consulta executada e resposta enviada. <span style="color:#b91c1c;font-weight:600">✗ Erro</span> — falha na execução (ver detalhe).</div></div>
-      <div class="help-item"><div class="help-item-label">Tempo</div><div class="help-item-desc">Tempo total de processamento em milissegundos (IA + banco de dados).</div></div>
+      <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc"><span style="color:#15803d;font-weight:600">✓ Sucesso</span> — consulta executada. <span style="color:#b91c1c;font-weight:600">✗ Erro</span> — falha (ver detalhe). <span style="color:#854d0e;font-weight:600">— Sem dados</span> — consulta executou mas retornou zero linhas.</div></div>
+      <div class="help-item"><div class="help-item-label">Duração</div><div class="help-item-desc">Tempo total em milissegundos (IA + banco). Verde &lt; 1s, amarelo 1-3s, vermelho &gt; 3s.</div></div>
     </div>
     <div class="help-section">
-      <div class="help-section-title">Diagnosticando erros</div>
-      <div class="help-item-desc">Clique em qualquer linha para abrir o detalhe completo: pergunta original, SQL executado, resposta da IA e mensagem de erro (se houver). Use isso para identificar problemas no SQL Base ou na classificação de intenções.</div>
+      <div class="help-section-title">Abas do detalhe</div>
+      <div class="help-item"><div class="help-item-label">Dados gerais</div><div class="help-item-desc">Resumo dos metadados da execução: remetente, intenção, status, módulo, linhas retornadas e informações sobre o SQL canônico utilizado.</div></div>
+      <div class="help-item"><div class="help-item-label">SQL / Auditoria</div><div class="help-item-desc">Exibe lado a lado o SQL final executado e a auditoria completa em JSON. Use o botão Copiar para transportar o SQL para outro ambiente. Arraste a divisória para redimensionar.</div></div>
+      <div class="help-item"><div class="help-item-label">Detalhes técnicos</div><div class="help-item-desc">JSON bruto do campo <code>detalhes_json</code> — útil para diagnóstico avançado e debugging de reuso canônico.</div></div>
       <div class="help-tip">Se muitas consultas retornam "intenção desconhecida", adicione mais exemplos de frases nas intenções relevantes.</div>
     </div>
   </div>
@@ -327,7 +677,13 @@
 <script>
   function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
   function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      fecharAjuda();
+      fecharLimpeza();
+      if (document.getElementById('sec-detalhe').style.display !== 'none') fecharDetalhe();
+    }
+  });
 </script>
 </body>
 </html>

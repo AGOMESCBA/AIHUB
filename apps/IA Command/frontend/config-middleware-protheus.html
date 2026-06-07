@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Middleware SQL Protheus — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:24px; }
+
+    .section-card  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;box-shadow:var(--shadow-sm); }
+    .section-title { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .section-desc  { font-size:12px;color:var(--text-lo);margin-bottom:18px; }
+
+    .form-row      { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
+    .form-row.one  { grid-template-columns:1fr; }
+    .form-row.three{ grid-template-columns:2fr 1fr 1fr; }
+
+    .tag-input-wrap { border:1px solid var(--border);border-radius:var(--radius-input);padding:6px 10px;min-height:40px;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;background:var(--bg-sidebar);cursor:text;transition:border-color var(--transition); }
+    .tag-input-wrap:focus-within { border-color:var(--accent); }
+    .tag-item { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;background:var(--accent-glow);border:1px solid var(--accent-light);border-radius:99px;font-size:12px;color:var(--accent);white-space:nowrap; }
+    .tag-item button { background:none;border:none;cursor:pointer;color:var(--accent);font-size:14px;line-height:1;padding:0;display:flex;align-items:center; }
+    .tag-item button:hover { color:var(--error); }
+    .tag-ghost { flex:1;min-width:80px;border:none;outline:none;background:transparent;font-size:13px;color:var(--text-hi);padding:1px 2px; }
+    .tag-ghost::placeholder { color:var(--text-lo); }
+
+    .modelo-cards { display:flex;gap:12px;margin-top:4px; }
+    .modelo-card  { flex:1;border:2px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:all var(--transition);user-select:none; }
+    .modelo-card:hover { border-color:var(--accent-light);background:var(--accent-glow); }
+    .modelo-card.selected { border-color:var(--accent);background:var(--accent-glow); }
+    .modelo-card .mc-title  { font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px; }
+    .modelo-card .mc-badge  { display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px; }
+    .mc-badge.simples  { background:#dcfce7;color:#15803d; }
+    .mc-badge.avancado { background:#fef3c7;color:#b45309; }
+    .modelo-card .mc-desc  { font-size:12px;color:var(--text-lo);line-height:1.5; }
+
+    .tenant-fields { overflow:hidden;max-height:0;transition:max-height .28s cubic-bezier(.4,0,.2,1); }
+    .tenant-fields.open { max-height:400px; }
+
+    .info-box { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:18px; }
+    .info-box strong { color:var(--text-hi); }
+
+    .alert-ok   { background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:8px; }
+    .alert-err  { background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:8px; }
+
+    .test-result { margin-top:16px;display:none; }
+    .test-output { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:260px;overflow-y:auto;color:var(--text-md);line-height:1.55;margin-top:8px; }
+
+    .layout-main { display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+    /* Help drawer */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;}
+    .help-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;padding:0 22px;}
+    .help-tab{padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-lo);transition:color var(--transition),border-color var(--transition);}
+    .help-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .help-panel{display:none;padding:22px;} .help-panel.active{display:block;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .fmt-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .fmt-table th,.fmt-table td{padding:6px 10px;border:1px solid var(--border);text-align:left;vertical-align:top;}
+    .fmt-table th{background:var(--bg-hover);font-weight:700;color:var(--text-hi);}
+    .fmt-table td:first-child{white-space:nowrap;}
+    .fmt-table code{background:var(--bg-hover);padding:1px 4px;border-radius:3px;font-size:11px;font-family:ui-monospace,monospace;}
+    .help-item{margin-bottom:16px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+    .help-warn{background:#fef3c7;border-left:3px solid #b45309;border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:#78350f;line-height:1.6;margin-top:12px;}
+    .help-pipeline{background:var(--bg-hover);border-radius:8px;padding:12px 16px;font-size:12px;line-height:2.1;margin-top:8px;}
+  </style>
+</head>
+<body>
+<div id="sidebar-mount"></div>
+<div class="layout-main">
+  <div class="topbar">
+    <button class="topbar-menu-btn" onclick="document.body.classList.toggle('sidebar-collapsed')" title="Menu">☰</button>
+    <span class="topbar-title">ERP Protheus — Middleware SQL</span>
+  </div>
+  <div class="page-content">
+
+    <div class="page-head">
+      <div>
+        <div class="page-kicker">IA Command · Integração · ERP Protheus</div>
+        <div class="page-title">Middleware de Proteção SQL</div>
+        <div class="page-subtitle">Define regras de segurança aplicadas ao SQL gerado pela IA antes de executar no Protheus</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Ajuda
+        </button>
+        <button class="btn btn-secondary" onclick="testarMiddleware()">⚡ Testar</button>
+        <button class="btn btn-primary" onclick="salvar()">Salvar configuração</button>
+      </div>
+    </div>
+
+    <div id="msg-area"></div>
+
+    <!-- Modelo de dados -->
+    <div class="section-card">
+      <div class="section-title">Modelo de dados do Protheus</div>
+      <div class="section-desc">Define como as empresas estão organizadas no banco de dados do ERP.</div>
+
+      <div class="modelo-cards">
+        <div class="modelo-card selected" id="card-TRADICIONAL" onclick="selecionarModelo('TRADICIONAL')">
+          <div class="mc-badge simples">Padrão</div>
+          <div class="mc-title">TRADICIONAL</div>
+          <div class="mc-desc">Cada empresa possui suas próprias tabelas físicas com sufixo (ex.: SF1<strong>010</strong>, SD1<strong>010</strong>). Sem necessidade de filtro de empresa no SQL.</div>
+        </div>
+        <div class="modelo-card" id="card-LOBO_GUARA" onclick="selecionarModelo('LOBO_GUARA')">
+          <div class="mc-badge avancado">Multi-empresa</div>
+          <div class="mc-title">LOBO_GUARA</div>
+          <div class="mc-desc">Múltiplas empresas compartilham as mesmas tabelas físicas. O middleware injeta automaticamente o filtro de isolamento por empresa.</div>
+        </div>
+      </div>
+
+      <div class="tenant-fields" id="tenant-fields">
+        <div style="height:18px"></div>
+        <div class="info-box">
+          No modelo <strong>LOBO_GUARA</strong>, o middleware adiciona automaticamente a cláusula
+          <code>WHERE [campo_empresa] = '[tenant_id]'</code> em cada SQL gerado pela IA, garantindo
+          que os dados retornados pertençam apenas à empresa configurada.
+        </div>
+        <div class="form-row three">
+          <div class="form-group">
+            <label class="form-label">Tenant ID (código da empresa no ERP)</label>
+            <input type="text" id="f-tenant-id" class="form-control" placeholder="Ex.: 01, T1, MATRIZ">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Campo empresa na tabela</label>
+            <input type="text" id="f-campo-empresa" class="form-control" placeholder="Ex.: A1_EMP, FILIAL">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Campo filial (opcional)</label>
+            <input type="text" id="f-campo-filial" class="form-control" placeholder="Ex.: A1_FILIAL">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Limites e performance -->
+    <div class="section-card">
+      <div class="section-title">Limites de execução</div>
+      <div class="section-desc">Controla a quantidade máxima de registros retornados e o timeout de cada consulta.</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Limite de registros (SET ROWCOUNT)</label>
+          <input type="number" id="f-limite" class="form-control" min="100" max="50000" placeholder="10000">
+          <div style="font-size:11px;color:var(--text-lo);margin-top:4px">Mínimo: 100 · Máximo: 50.000</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Timeout da consulta (ms)</label>
+          <input type="number" id="f-timeout" class="form-control" min="5000" max="300000" placeholder="30000">
+          <div style="font-size:11px;color:var(--text-lo);margin-top:4px">Mínimo: 5.000 ms · Máximo: 300.000 ms</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabelas bloqueadas -->
+    <div class="section-card">
+      <div class="section-title">Tabelas bloqueadas</div>
+      <div class="section-desc">SQL que referenciar qualquer prefixo de tabela desta lista será <strong>bloqueado</strong> pelo middleware antes de chegar ao ERP. Digite o prefixo e pressione <kbd>Enter</kbd> ou <kbd>,</kbd>.</div>
+      <div class="form-group">
+        <label class="form-label">Prefixos de tabelas bloqueadas</label>
+        <div class="tag-input-wrap" id="wrap-tabelas" onclick="document.getElementById('inp-tabelas').focus()">
+          <input type="text" id="inp-tabelas" class="tag-ghost" placeholder="Ex.: SED, SE2, SY… (Enter para adicionar)">
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-lo);margin-top:6px">
+        Sugestões de tabelas sensíveis do Protheus: <span id="sugestoes-tabelas" style="color:var(--accent);cursor:pointer"></span>
+      </div>
+    </div>
+
+    <!-- Campos sensíveis -->
+    <div class="section-card">
+      <div class="section-title">Campos sensíveis (alerta)</div>
+      <div class="section-desc">Quando o SQL gerado pela IA referenciar estes campos, o middleware registra um alerta no log mas <strong>não bloqueia</strong> a execução. Útil para auditoria.</div>
+      <div class="form-group">
+        <label class="form-label">Nomes ou padrões de campos sensíveis</label>
+        <div class="tag-input-wrap" id="wrap-campos" onclick="document.getElementById('inp-campos').focus()">
+          <input type="text" id="inp-campos" class="tag-ghost" placeholder="Ex.: SENHA, CGC, CPF… (Enter para adicionar)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Testar middleware -->
+    <div class="section-card">
+      <div class="section-title">Testar middleware com SQL personalizado</div>
+      <div class="section-desc">Cole um SQL abaixo para ver como o middleware se comporta com a configuração atual (não executa no ERP).</div>
+      <div class="form-group">
+        <label class="form-label">SQL para testar</label>
+        <textarea id="f-sql-teste" class="form-control" rows="5" style="font-family:ui-monospace,monospace;font-size:12px;resize:vertical"
+          placeholder="SET ROWCOUNT 10000;&#10;SELECT SA2.A2_NOME, SUM(SD1.D1_TOTAL) AS total&#10;FROM SD1010 SD1&#10;INNER JOIN SA2010 SA2 ON SD1.D1_FORNECE = SA2.A2_COD&#10;WHERE SD1.D_E_L_E_T_ = ' '&#10;GROUP BY SA2.A2_NOME&#10;ORDER BY total DESC"></textarea>
+      </div>
+      <button class="btn btn-secondary" onclick="testarMiddleware()" style="margin-top:4px">⚡ Executar teste</button>
+      <div class="test-result" id="test-result">
+        <div id="test-status"></div>
+        <div class="test-output" id="test-output"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  // ── Estado das tags ──────────────────────────────────────────────────────────
+  const tags = { tabelas: [], campos: [] };
+
+  const SUGESTOES_TABELAS = ['SED', 'SE2', 'SY0', 'SY1', 'SY2', 'SY3', 'SY6', 'SYP', 'SYS'];
+
+  function renderSugestoes() {
+    const el = document.getElementById('sugestoes-tabelas');
+    el.innerHTML = SUGESTOES_TABELAS
+      .filter(s => !tags.tabelas.includes(s))
+      .map(s => `<span onclick="adicionarTag('tabelas','${s}')" style="margin-right:6px;text-decoration:underline dotted">${s}</span>`)
+      .join('');
+  }
+
+  function renderTags(grupo) {
+    const wrap = document.getElementById(`wrap-${grupo}`);
+    const inp  = document.getElementById(`inp-${grupo}`);
+    // Remove tags existentes (preserva input)
+    [...wrap.querySelectorAll('.tag-item')].forEach(t => t.remove());
+    tags[grupo].forEach(val => {
+      const tag = document.createElement('span');
+      tag.className = 'tag-item';
+      tag.innerHTML = `${val}<button onclick="removerTag('${grupo}','${val}')" title="Remover">×</button>`;
+      wrap.insertBefore(tag, inp);
+    });
+    if (grupo === 'tabelas') renderSugestoes();
+  }
+
+  function adicionarTag(grupo, val) {
+    val = val.trim().toUpperCase();
+    if (!val || tags[grupo].includes(val)) return;
+    tags[grupo].push(val);
+    renderTags(grupo);
+  }
+
+  function removerTag(grupo, val) {
+    tags[grupo] = tags[grupo].filter(t => t !== val);
+    renderTags(grupo);
+  }
+
+  function setupTagInput(grupo) {
+    const inp = document.getElementById(`inp-${grupo}`);
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        adicionarTag(grupo, inp.value);
+        inp.value = '';
+      } else if (e.key === 'Backspace' && !inp.value && tags[grupo].length) {
+        removerTag(grupo, tags[grupo][tags[grupo].length - 1]);
+      }
+    });
+    inp.addEventListener('blur', () => {
+      if (inp.value.trim()) { adicionarTag(grupo, inp.value); inp.value = ''; }
+    });
+  }
+
+  // ── Modelo de dados ──────────────────────────────────────────────────────────
+
+  let modeloSelecionado = 'TRADICIONAL';
+
+  function selecionarModelo(modelo) {
+    modeloSelecionado = modelo;
+    document.getElementById('card-TRADICIONAL').classList.toggle('selected', modelo === 'TRADICIONAL');
+    document.getElementById('card-LOBO_GUARA').classList.toggle('selected', modelo === 'LOBO_GUARA');
+    document.getElementById('tenant-fields').classList.toggle('open', modelo === 'LOBO_GUARA');
+  }
+
+  // ── Mensagens ────────────────────────────────────────────────────────────────
+
+  function mostrarMsg(tipo, txt) {
+    const el = document.getElementById('msg-area');
+    const cls = tipo === 'ok' ? 'alert-ok' : 'alert-err';
+    el.innerHTML = `<div class="${cls}" style="margin-bottom:16px">${tipo === 'ok' ? '✓' : '✗'} ${txt}</div>`;
+    setTimeout(() => { el.innerHTML = ''; }, 5000);
+  }
+
+  // ── Carregar configuração ────────────────────────────────────────────────────
+
+  async function carregar() {
+    try {
+      const res = await fetch('/api/ia-command/compras/middleware-config');
+      if (!res.ok) throw new Error(await res.text());
+      const cfg = await res.json();
+      aplicarCfg(cfg);
+    } catch (e) {
+      mostrarMsg('err', 'Erro ao carregar configuração: ' + e.message);
+    }
+  }
+
+  function aplicarCfg(cfg) {
+    selecionarModelo(cfg.modelo_dados || 'TRADICIONAL');
+    document.getElementById('f-tenant-id').value    = cfg.tenant_id      || '';
+    document.getElementById('f-campo-empresa').value= cfg.campo_empresa  || '';
+    document.getElementById('f-campo-filial').value = cfg.campo_filial   || '';
+    document.getElementById('f-limite').value       = cfg.limite_registros != null ? cfg.limite_registros : 10000;
+    document.getElementById('f-timeout').value      = cfg.timeout_ms      != null ? cfg.timeout_ms        : 30000;
+
+    tags.tabelas = _parseLista(cfg.tabelas_bloqueadas);
+    tags.campos  = _parseLista(cfg.campos_sensiveis);
+    renderTags('tabelas');
+    renderTags('campos');
+  }
+
+  function _parseLista(v) {
+    if (!v) return [];
+    if (Array.isArray(v)) return v;
+    try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch (_) {}
+    return v.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  // ── Salvar ───────────────────────────────────────────────────────────────────
+
+  async function salvar() {
+    const payload = {
+      modelo_dados:       modeloSelecionado,
+      tenant_id:          document.getElementById('f-tenant-id').value.trim(),
+      campo_empresa:      document.getElementById('f-campo-empresa').value.trim(),
+      campo_filial:       document.getElementById('f-campo-filial').value.trim(),
+      tabelas_bloqueadas: JSON.stringify(tags.tabelas),
+      campos_sensiveis:   JSON.stringify(tags.campos),
+      limite_registros:   parseInt(document.getElementById('f-limite').value)  || 10000,
+      timeout_ms:         parseInt(document.getElementById('f-timeout').value) || 30000,
+    };
+
+    if (modeloSelecionado === 'LOBO_GUARA' && !payload.tenant_id) {
+      mostrarMsg('err', 'Informe o Tenant ID para o modelo LOBO_GUARA.');
+      document.getElementById('f-tenant-id').focus();
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/ia-command/compras/middleware-config', {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
+      await carregar();
+      mostrarMsg('ok', 'Configuração salva com sucesso.');
+    } catch (e) {
+      mostrarMsg('err', 'Erro ao salvar: ' + e.message);
+    }
+  }
+
+  // ── Testar middleware ────────────────────────────────────────────────────────
+
+  async function testarMiddleware() {
+    const sql = document.getElementById('f-sql-teste').value.trim();
+    if (!sql) { mostrarMsg('err', 'Informe um SQL para testar.'); return; }
+
+    const cfg = {
+      modelo_dados:       modeloSelecionado,
+      tenant_id:          document.getElementById('f-tenant-id').value.trim(),
+      campo_empresa:      document.getElementById('f-campo-empresa').value.trim(),
+      campo_filial:       document.getElementById('f-campo-filial').value.trim(),
+      tabelas_bloqueadas: JSON.stringify(tags.tabelas),
+      campos_sensiveis:   JSON.stringify(tags.campos),
+      limite_registros:   parseInt(document.getElementById('f-limite').value)  || 10000,
+      timeout_ms:         parseInt(document.getElementById('f-timeout').value) || 30000,
+    };
+
+    try {
+      const res = await fetch('/api/ia-command/compras/middleware-test', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ sql, cfg }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
+      const r = await res.json();
+      mostrarResultadoTeste(r);
+    } catch (e) {
+      mostrarMsg('err', 'Erro ao testar: ' + e.message);
+    }
+  }
+
+  function mostrarResultadoTeste(r) {
+    const area   = document.getElementById('test-result');
+    const status = document.getElementById('test-status');
+    const output = document.getElementById('test-output');
+    area.style.display = 'block';
+
+    if (r.bloqueado) {
+      status.innerHTML = `<div class="alert-err">✗ SQL bloqueado: ${r.motivo_bloqueio}</div>`;
+    } else {
+      const alertasTxt = r.alertas?.length
+        ? `\nAlertas: ${r.alertas.join(' | ')}`
+        : '\nSem alertas.';
+      status.innerHTML = `<div class="alert-ok">✓ SQL aprovado pelo middleware${alertasTxt}</div>`;
+    }
+
+    const saida = [
+      '── SQL Original ──────────────────────────',
+      r.sql_original || '(vazio)',
+    ];
+    if (!r.bloqueado && r.sql_processado !== r.sql_original) {
+      saida.push('', '── SQL Processado (após middleware) ──────', r.sql_processado);
+    }
+    output.textContent = saida.join('\n');
+  }
+
+  // ── Init ─────────────────────────────────────────────────────────────────────
+
+  setupTagInput('tabelas');
+  setupTagInput('campos');
+  renderSugestoes();
+
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════ HELP DRAWER ══ -->
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Middleware de Proteção SQL</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="help-tabs">
+    <div class="help-tab active" onclick="helpTab(this,'ht-conceito')">Visão Geral</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-campos')">Campos</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-protheus')">Protheus</div>
+    <div class="help-tab" onclick="helpTab(this,'ht-pratica')">Boas Práticas</div>
+  </div>
+  <div class="help-drawer-body">
+
+  <!-- ── ABA 1: VISÃO GERAL ──────────────────────────────────────────── -->
+  <div id="ht-conceito" class="help-panel active">
+
+    <div class="help-section">
+      <div class="help-section-title">O que é o Middleware de Proteção SQL</div>
+      <div class="help-item-desc">
+        O Middleware SQL é a <strong>camada de segurança obrigatória</strong> que fica entre a IA e o banco de dados do seu ERP. Toda vez que um usuário faz uma pergunta em linguagem natural, a IA gera um comando SQL para buscar a resposta. Antes desse SQL chegar ao banco, o middleware o intercepta, analisa e decide: <strong>aprovar, modificar ou bloquear</strong>.
+      </div>
+      <div class="help-tip">
+        Pense no middleware como um porteiro: a IA pode ser criativa, mas só entra no banco o que for seguro, limitado e dentro das regras que você configurou aqui.
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Posição no pipeline do IA Command</div>
+      <div class="help-item-desc">O middleware age neste ponto do fluxo de resposta:</div>
+      <div class="help-pipeline">
+        1. Usuário envia mensagem no WhatsApp<br>
+        2. IA interpreta a intenção e o período<br>
+        3. IA gera o SQL para responder<br>
+        <strong style="color:var(--accent)">4. Middleware analisa o SQL ← você está aqui</strong><br>
+        5. SQL aprovado é executado no banco do ERP<br>
+        6. Resultado é formatado e enviado de volta
+      </div>
+      <div class="help-tip">Se o middleware bloquear o SQL, o usuário recebe uma mensagem de erro amigável e nenhuma consulta é feita ao banco.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">O que o middleware faz em cada consulta</div>
+      <table class="fmt-table" style="margin-top:4px">
+        <thead><tr><th>Ação</th><th>Descrição</th><th>Resultado</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Bloqueia DDL/DML</strong></td><td>Detecta <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>DROP</code> e outros comandos destrutivos</td><td>SQL bloqueado</td></tr>
+          <tr><td><strong>Exige SELECT</strong></td><td>Rejeita qualquer SQL que não seja uma consulta de leitura</td><td>SQL bloqueado</td></tr>
+          <tr><td><strong>Verifica tabelas</strong></td><td>Bloqueia acesso às tabelas que você listou como proibidas</td><td>SQL bloqueado</td></tr>
+          <tr><td><strong>Alerta campos</strong></td><td>Registra no log quando a IA referencia campos sensíveis</td><td>Alerta (não bloqueia)</td></tr>
+          <tr><td><strong>Limita registros</strong></td><td>Garante ou reduz o <code>SET ROWCOUNT</code> ao máximo configurado</td><td>SQL modificado</td></tr>
+          <tr><td><strong>Injeta tenant</strong></td><td>Apenas no modelo LOBO_GUARA: adiciona <code>WHERE campo = 'tenant'</code></td><td>SQL modificado</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">O que o middleware NÃO faz</div>
+      <div class="help-item-desc">
+        O middleware <strong>não executa o SQL</strong> — ele apenas valida e transforma. A execução no banco de dados é feita pelo módulo de conexão separado, que usa as credenciais configuradas na tela de Conexões. O middleware também não altera a lógica de negócio da query, não reescreve JOINs e não conhece o schema das tabelas — ele age em nível de texto.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ABA 2: CAMPOS ───────────────────────────────────────────────── -->
+  <div id="ht-campos" class="help-panel">
+
+    <div class="help-section">
+      <div class="help-section-title">Modelo de dados do Protheus</div>
+      <div class="help-item">
+        <div class="help-item-label">TRADICIONAL</div>
+        <div class="help-item-desc">
+          Configuração padrão da maioria das instalações Protheus. Cada empresa tem suas <strong>próprias tabelas físicas no banco</strong>, identificadas por um sufixo numérico. Exemplo: a empresa "01" tem as tabelas <code>SF1010</code>, <code>SD1010</code>, <code>SA2010</code>. O isolamento entre empresas é garantido pelo próprio sufixo — não é necessário nenhum filtro adicional no SQL. <strong>Deixe os campos de Tenant, Campo empresa e Campo filial em branco.</strong>
+        </div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">LOBO_GUARA (Multi-empresa)</div>
+        <div class="help-item-desc">
+          Modelo avançado onde múltiplas empresas <strong>compartilham as mesmas tabelas físicas</strong>. As tabelas não têm sufixo por empresa — em vez disso, cada registro tem um campo que identifica a qual empresa pertence. O middleware injeta automaticamente um filtro <code>WHERE [campo_empresa] = '[tenant_id]'</code> em todos os SQLs gerados pela IA, garantindo que uma empresa nunca enxergue dados de outra. Use apenas se o seu Protheus foi configurado neste modelo (consulte o DBA ou o parceiro TOTVS).
+        </div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Campos do modelo LOBO_GUARA</div>
+      <div class="help-item">
+        <div class="help-item-label">Tenant ID — Código da empresa no ERP</div>
+        <div class="help-item-desc">
+          É o código que identifica a sua empresa no banco de dados compartilhado. Pode ser numérico (<code>01</code>, <code>02</code>) ou alfanumérico (<code>T1</code>, <code>MATRIZ</code>), dependendo de como o Protheus foi configurado. Este valor será inserido literalmente no filtro SQL gerado. <strong>Campo obrigatório quando o modelo for LOBO_GUARA.</strong>
+        </div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Campo empresa na tabela</div>
+        <div class="help-item-desc">
+          Nome do campo, dentro das tabelas do banco, que armazena o código da empresa. No modelo LOBO_GUARA de ERPs genéricos, este campo pode ser algo como <code>EMP_ID</code> ou <code>COD_EMPRESA</code>. No Protheus especificamente, o conceito equivalente é o campo <code>[PREFIXO]_FILIAL</code>, mas como cada tabela tem um prefixo diferente, este campo estático tem uso limitado — veja a aba <strong>Protheus</strong> para orientação específica.
+        </div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Campo filial (opcional)</div>
+        <div class="help-item-desc">
+          Usado quando o ERP separa o isolamento em dois níveis: empresa e filial. Preencha apenas se o seu ERP tiver um campo de filial distinto do campo de empresa. No Protheus, o campo <code>_FILIAL</code> já combina empresa e filial no mesmo valor — este campo raramente é necessário para instalações Protheus padrão.
+        </div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Limites de execução</div>
+      <div class="help-item">
+        <div class="help-item-label">Limite de registros (SET ROWCOUNT)</div>
+        <div class="help-item-desc">
+          Define o número máximo de linhas que qualquer consulta pode retornar. O middleware garante que o SQL sempre tenha um <code>SET ROWCOUNT N</code> antes do <code>SELECT</code>. Se a IA gerar um ROWCOUNT maior do que este limite, o middleware o rebaixa automaticamente para o valor configurado. <strong>Valor padrão: 10.000. Mínimo: 100. Máximo: 50.000.</strong> Consultas muito grandes impactam a performance do banco e o tempo de resposta no WhatsApp — mantenha em um valor razoável para o volume do seu ERP.
+        </div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Timeout da consulta (ms)</div>
+        <div class="help-item-desc">
+          Tempo máximo, em milissegundos, que uma consulta pode ficar rodando no banco antes de ser cancelada automaticamente. Evita que uma query mal gerada pela IA trave conexões ou consuma recursos do servidor por tempo indeterminado. <strong>Valor padrão: 30.000 ms (30 s). Mínimo: 5.000 ms. Máximo: 300.000 ms (5 min).</strong> Para relatórios analíticos complexos com JOINs em tabelas grandes, considere aumentar para 60.000–120.000 ms.
+        </div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Tabelas bloqueadas</div>
+      <div class="help-item-desc">
+        Lista de <strong>prefixos de tabelas</strong> que o middleware deve proibir completamente. Se o SQL gerado pela IA referenciar qualquer tabela cujo nome começa com um dos prefixos listados, a consulta é <strong>rejeitada antes de chegar ao banco</strong> e o usuário recebe uma mensagem de erro. O bloqueio é por prefixo — adicionar <code>SE2</code> bloqueia <code>SE2010</code>, <code>SE2990</code> e qualquer variação com sufixo.
+      </div>
+      <div class="help-tip">
+        Use para proteger tabelas de módulos que o usuário não deve acessar via WhatsApp, como financeiro (<code>SE1</code>, <code>SE2</code>), folha de pagamento (<code>SRH</code>), configurações do sistema (<code>SY0</code>–<code>SY6</code>) e usuários (<code>SYP</code>).
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Campos sensíveis (alerta)</div>
+      <div class="help-item-desc">
+        Lista de nomes de campos que devem gerar um alerta de auditoria quando referenciados pela IA. Ao contrário das tabelas bloqueadas, este mecanismo <strong>não bloqueia a consulta</strong> — ele apenas registra no log que um campo sensível foi acessado. Útil para rastrear consultas a dados como CNPJ de fornecedores, CPF de funcionários ou valores de custo.
+      </div>
+      <div class="help-warn">
+        Campos sensíveis geram alertas mas não protegem os dados. Se um campo não deve ser acessado em hipótese alguma, bloqueie a tabela inteira em vez de confiar apenas no alerta de campo.
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── ABA 3: PROTHEUS ─────────────────────────────────────────────── -->
+  <div id="ht-protheus" class="help-panel">
+
+    <div class="help-section">
+      <div class="help-section-title">Como o Protheus isola dados por empresa</div>
+      <div class="help-item-desc">
+        No Protheus, o isolamento entre empresas é feito de duas formas dependendo da versão e configuração:
+      </div>
+      <table class="fmt-table" style="margin-top:10px">
+        <thead><tr><th>Modelo</th><th>Como funciona</th><th>Exemplo de tabela</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>TRADICIONAL</strong><br><span style="color:#15803d;font-size:11px">Mais comum</span></td>
+            <td>Cada empresa tem tabelas físicas próprias com sufixo de 3 dígitos. O sufixo codifica empresa + filial.</td>
+            <td><code>SF1010</code> = tabela SF1, empresa 01, filial 01</td>
+          </tr>
+          <tr>
+            <td><strong>LOBO_GUARA</strong><br><span style="color:#b45309;font-size:11px">Menos comum</span></td>
+            <td>Todas as empresas compartilham as mesmas tabelas físicas. O campo <code>[PREFIXO]_FILIAL</code> identifica empresa+filial em cada registro.</td>
+            <td><code>SF1</code> compartilhada — filtro: <code>F1_FILIAL = '0101'</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Por que Campo empresa e Campo filial ficam em branco no Protheus</div>
+      <div class="help-item-desc">
+        No Protheus, o campo de filial tem um prefixo diferente para cada tabela: <code>F1_FILIAL</code> (SF1), <code>D1_FILIAL</code> (SD1), <code>C7_FILIAL</code> (SC7), <code>A2_FILIAL</code> (SA2) e assim por diante. O middleware usa <strong>um único valor estático</strong> de campo — ele não consegue derivar automaticamente o prefixo correto para cada tabela no JOIN. Forçar um campo genérico como <code>FILIAL</code> quebraria o SQL gerado.
+      </div>
+      <div class="help-tip">
+        No IA Command, o filtro de filial do Protheus é resolvido diretamente no <strong>prompt da IA</strong>, que conhece o prefixo de cada tabela e o modo de compartilhamento (SX2). Configure a filial e o modo SX2 na tela de <strong>Conexões Protheus</strong> — não aqui.
+      </div>
+      <table class="fmt-table" style="margin-top:12px">
+        <thead><tr><th>Campo do middleware</th><th>Modelo TRADICIONAL</th><th>Modelo LOBO_GUARA</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Modelo de dados</strong></td><td>Selecione TRADICIONAL</td><td>Selecione LOBO_GUARA</td></tr>
+          <tr><td><strong>Tenant ID</strong></td><td>Deixar em branco</td><td>Preencher com o código da empresa</td></tr>
+          <tr><td><strong>Campo empresa</strong></td><td>Deixar em branco</td><td>Deixar em branco (IA resolve por tabela)</td></tr>
+          <tr><td><strong>Campo filial</strong></td><td>Deixar em branco</td><td>Deixar em branco (IA resolve por tabela)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Tabelas Protheus recomendadas para bloqueio</div>
+      <div class="help-item-desc">Estas tabelas contêm dados sensíveis e raramente devem ser acessadas via WhatsApp. Adicione os prefixos conforme a necessidade da sua empresa:</div>
+      <table class="fmt-table" style="margin-top:10px">
+        <thead><tr><th>Prefixo</th><th>O que contém</th></tr></thead>
+        <tbody>
+          <tr><td><code>SE1</code></td><td>Contas a receber — títulos e vencimentos de clientes</td></tr>
+          <tr><td><code>SE2</code></td><td>Contas a pagar — títulos e vencimentos de fornecedores</td></tr>
+          <tr><td><code>SE5</code></td><td>Movimentações bancárias e conciliação financeira</td></tr>
+          <tr><td><code>SEJ</code></td><td>Boletos e cobranças bancárias</td></tr>
+          <tr><td><code>SRH</code> / <code>SRA</code></td><td>Recursos humanos — salários, afastamentos e dados pessoais</td></tr>
+          <tr><td><code>SYS</code> / <code>SY0</code></td><td>Configurações do sistema e parâmetros internos do Protheus</td></tr>
+          <tr><td><code>SYP</code></td><td>Usuários e senhas do Protheus</td></tr>
+          <tr><td><code>SY1</code> – <code>SY6</code></td><td>Tabelas de segurança e controle de acesso</td></tr>
+          <tr><td><code>SED</code></td><td>Naturezas financeiras e plano de contas</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Campos Protheus recomendados para alerta</div>
+      <table class="fmt-table" style="margin-top:4px">
+        <thead><tr><th>Campo</th><th>Tabela</th><th>Por que monitorar</th></tr></thead>
+        <tbody>
+          <tr><td><code>A2_CGC</code></td><td>SA2</td><td>CNPJ/CPF de fornecedores</td></tr>
+          <tr><td><code>A1_CGC</code></td><td>SA1</td><td>CNPJ/CPF de clientes</td></tr>
+          <tr><td><code>D1_VUNIT</code></td><td>SD1</td><td>Custo unitário de compra</td></tr>
+          <tr><td><code>F1_VALFRETE</code></td><td>SF1</td><td>Valor de frete — informação comercialmente sensível</td></tr>
+          <tr><td><code>C7_PRECO</code></td><td>SC7</td><td>Preço negociado no pedido de compra</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ── ABA 4: BOAS PRÁTICAS ────────────────────────────────────────── -->
+  <div id="ht-pratica" class="help-panel">
+
+    <div class="help-section">
+      <div class="help-section-title">Use o testador antes de salvar</div>
+      <div class="help-item-desc">
+        A tela tem uma área de teste ao final da página. Cole um SQL real — de uma conversa no Monitor, por exemplo — e clique em <strong>Executar teste</strong> para ver exatamente o que o middleware fará: se vai aprovar, bloquear, quais alertas gerará e qual será o SQL final enviado ao banco. O teste <strong>não executa no ERP</strong>, é 100% seguro para qualquer SQL.
+      </div>
+      <div class="help-tip">Sempre teste após alterar tabelas bloqueadas ou campos sensíveis. Uma configuração muito restritiva pode bloquear consultas legítimas e frustrar o usuário no WhatsApp.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Calibre os limites com base no seu ambiente</div>
+      <div class="help-item">
+        <div class="help-item-label">Limite de registros</div>
+        <div class="help-item-desc">Comece com 10.000 (padrão). Se usuários relatarem que respostas estão sendo cortadas em consultas analíticas, aumente para 20.000 ou 30.000. Valores muito altos aumentam o tempo de resposta e o consumo de memória no servidor de banco.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Timeout</div>
+        <div class="help-item-desc">30 segundos atende a maioria dos casos. Para consultas de BI com múltiplos JOINs em tabelas volumosas de NF, considere 60–90 segundos. Nunca coloque acima de 5 minutos — prefira otimizar o schema ou adicionar índices no banco do ERP.</div>
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Bloqueie com cuidado</div>
+      <div class="help-item-desc">
+        Não bloqueie tabelas que o módulo configurado realmente precisa. Por exemplo, se o módulo de Compras usa SA2 (fornecedores), bloqueá-la vai quebrar todas as consultas que envolvem nome de fornecedor. Bloqueie apenas módulos completamente fora do escopo pretendido, como financeiro, folha de pagamento e configurações do sistema.
+      </div>
+      <div class="help-warn">
+        Um bloqueio excessivo não aparece como erro de configuração — ele se manifesta como "consulta não entendida" para o usuário no WhatsApp. Use o testador regularmente para verificar se as regras ainda fazem sentido.
+      </div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Esta tela vs. tela de Conexões</div>
+      <div class="help-item-desc">São configurações complementares e independentes — não se sobrepõem:</div>
+      <table class="fmt-table" style="margin-top:10px">
+        <thead><tr><th>Configure aqui (Middleware)</th><th>Configure em Conexões</th></tr></thead>
+        <tbody>
+          <tr><td>Regras de segurança do SQL</td><td>String de conexão ODBC/driver</td></tr>
+          <tr><td>Tabelas e campos proibidos</td><td>Usuário e senha do banco</td></tr>
+          <tr><td>Limite de linhas e timeout</td><td>Filial padrão e modos SX2</td></tr>
+          <tr><td>Modelo de dados (TRADICIONAL/LOBO_GUARA)</td><td>Schema de tabelas do módulo</td></tr>
+        </tbody>
+      </table>
+      <div class="help-tip">A configuração desta tela é <strong>por empresa do IAHub</strong> — cada empresa cadastrada pode ter suas próprias regras de middleware, independentes umas das outras.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Monitoramento contínuo</div>
+      <div class="help-item-desc">
+        Acompanhe o <strong>Monitor do IA Command</strong> periodicamente para ver quais SQLs estão sendo gerados, se há bloqueios frequentes e se os alertas de campos sensíveis estão disparando. Um bloqueio recorrente pode indicar que a IA está tentando acessar uma tabela legítima bloqueada por engano — ou que um usuário está consultando dados fora do escopo autorizado.
+      </div>
+    </div>
+
+  </div>
+
+  </div><!-- /help-drawer-body -->
+</div><!-- /help-drawer -->
+
+<script>
+  function abrirAjuda() {
+    document.getElementById('help-overlay').classList.add('open');
+    document.getElementById('help-drawer').classList.add('open');
+  }
+  function fecharAjuda() {
+    document.getElementById('help-overlay').classList.remove('open');
+    document.getElementById('help-drawer').classList.remove('open');
+  }
+  function helpTab(el, id) {
+    el.closest('.help-drawer').querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+    el.closest('.help-drawer').querySelectorAll('.help-panel').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(id).classList.add('active');
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
+</script>
+</body>
+</html>

@@ -24,7 +24,8 @@ const _DIALOGOS_SISTEMA = [
     titulo: 'O que você faz / Como pode me ajudar',
     padroes: JSON.stringify([
       'o que voce faz', 'o que você faz', 'como pode me ajudar', 'o que voce pode fazer',
-      'como vc pode me ajudar', 'me ajuda', 'o que o sistema faz', 'quais consultas',
+      'como voce pode me ajudar', 'como você pode me ajudar', 'como vc pode me ajudar',
+      'me ajuda', 'o que o sistema faz', 'quais consultas',
       'quais relatorios', 'quais relatórios', 'para que serve', 'como funciona',
       'o que posso consultar', 'what can you do', 'ajuda', 'help',
       'como vc me ajuda', 'como você me ajuda', 'no que voce ajuda',
@@ -66,7 +67,9 @@ const _DIALOGOS_SISTEMA = [
     padroes: JSON.stringify([
       'como se chama', 'qual seu nome', 'quem e voce', 'quem é você',
       'voce tem nome', 'você tem nome', 'qual e seu nome', 'qual é seu nome',
-      'me apresente', 'se apresente', 'quem sou eu falando',
+      'qual o nome do sistema', 'qual e o nome do sistema', 'qual é o nome do sistema',
+      'nome do sistema', 'como chama o sistema', 'como se chama o sistema',
+      'se apresente', 'quem sou eu falando',
       'com quem estou falando', 'voce e um robo', 'você é um robô',
       'voce e uma ia', 'você é uma ia', 'e uma ia', 'é uma ia',
       'qual e o seu nome', 'qual é o seu nome',
@@ -150,10 +153,28 @@ function _matchPadroes(padroes, textoNorm) {
   return false;
 }
 
+// Termos que indicam consulta de dados ERP — presença deles inibe match de diálogo por prefixo
+const _TERMOS_CONSULTA_ERP = [
+  'contas a pagar', 'contas a receber', 'contas pagar', 'contas receber',
+  'faturamento', 'faturado', 'vendas', 'compras', 'financeiro',
+  'a pagar', 'a receber', 'em aberto', 'vencido', 'vencidos',
+  'pagamento', 'recebimento', 'fluxo de caixa', 'saldo',
+  'nota fiscal', 'pedido', 'titulo', 'titulos', 'duplicata',
+  'total de', 'por ano', 'por mes', 'por cliente', 'por fornecedor',
+];
+
+function _pareceConsultaERP(textoNorm) {
+  return _TERMOS_CONSULTA_ERP.some(t => textoNorm.includes(normalizarTexto(t)));
+}
+
 function resolver(mensagem, empresaId) {
+  const textoNorm = normalizarTexto(mensagem);
+  // Mensagens longas com termos ERP não devem ser interceptadas como diálogo conversacional
+  const bloqueadoPorERP = textoNorm.split(/\s+/).length > 5 && _pareceConsultaERP(textoNorm);
+  if (bloqueadoPorERP) return { matched: false };
+
   try {
     semearParaEmpresa(empresaId);
-    const textoNorm = normalizarTexto(mensagem);
     const dialogos  = _carregarDialogos(empresaId);
 
     for (const d of dialogos) {
@@ -162,6 +183,12 @@ function resolver(mensagem, empresaId) {
       }
     }
   } catch (_) {}
+
+  for (const d of _DIALOGOS_SISTEMA) {
+    if (_matchPadroes(d.padroes, textoNorm)) {
+      return { matched: true, resposta: d.resposta, dialogo_id: null, tipo: d.tipo };
+    }
+  }
   return { matched: false };
 }
 

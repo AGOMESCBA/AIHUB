@@ -93,6 +93,11 @@
     .btn-pass-toggle svg * { pointer-events:none; }
 
     /* Help drawer */
+    .tab-bar{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:20px;}
+    .tab-btn{padding:9px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-md);border-bottom:2px solid transparent;margin-bottom:-2px;border-radius:var(--radius-sm) var(--radius-sm) 0 0;transition:color var(--transition),border-color var(--transition),background var(--transition);}
+    .tab-btn:hover:not(:disabled){color:var(--text-hi);background:var(--bg-hover);}
+    .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+    .tab-btn:disabled{color:var(--text-lo);cursor:not-allowed;opacity:.45;}
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
     .help-overlay.open{opacity:1;pointer-events:all;}
     .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
@@ -215,6 +220,13 @@
 
           <div class="editor-grid editor-grid-wide" style="margin-top:16px">
             <main class="editor-main">
+
+              <div class="tab-bar">
+                <button class="tab-btn active" id="tab-btn-config"   onclick="switchTab('config')">Configuração</button>
+                <button class="tab-btn"        id="tab-btn-protheus" onclick="switchTab('protheus')" disabled title="Selecione TOTVS Protheus no campo Sistema ERP para acessar esta aba">Protheus</button>
+              </div>
+
+              <div id="tab-config">
 
               <section class="form-section">
                 <div class="form-section-header">
@@ -375,6 +387,31 @@
                 </div>
               </section>
 
+              </div><!-- /tab-config -->
+
+              <div id="tab-protheus" style="display:none">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Configurações Protheus</div>
+                  <div class="form-section-subtitle">Parâmetros específicos do TOTVS Protheus para geração de SQL pelo assistente.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Sufixo das tabelas</label>
+                      <input type="text" id="f-sufixo" class="form-control" placeholder="Ex.: 010, 990, T1" maxlength="10">
+                      <div class="form-hint">Sufixo anexado ao nome de cada tabela Protheus (ex.: SF1<strong>010</strong>, SD1<strong>010</strong>). Use <strong>010</strong> para empresa única ou <strong>990</strong> para consultas consolidadas multi-empresa.</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Filial padrão (opcional)</label>
+                      <input type="text" id="f-filial" class="form-control" placeholder="Ex.: 01, 0101">
+                      <div class="form-hint">Código da filial que o assistente usará como filtro padrão nas consultas quando o usuário não informar uma filial específica.</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              </div><!-- /tab-protheus -->
+
             </main>
 
             <aside class="editor-side">
@@ -489,11 +526,30 @@
     document.getElementById('meta-tipo').textContent   = 'SQL Server';
     document.getElementById('meta-status').textContent = 'Nova conexão';
     document.getElementById('meta-teste').textContent  = '—';
+    document.getElementById('f-sufixo').value = '';
+    document.getElementById('f-filial').value  = '';
+    switchTab('config');
     onTipoChange();
+    onErpChange();
+  }
+
+  // ── Abas do formulário ──────────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('tab-config').style.display    = tab === 'config'   ? '' : 'none';
+    document.getElementById('tab-protheus').style.display  = tab === 'protheus' ? '' : 'none';
+    document.getElementById('tab-btn-config').classList.toggle('active',   tab === 'config');
+    document.getElementById('tab-btn-protheus').classList.toggle('active', tab === 'protheus');
   }
 
   // ── Lógica do tipo de conexão ───────────────────────────────────────────────
-  function onErpChange() { /* ERP só identifica o sistema — tabelas e joins ficam no sql_base */ }
+  function onErpChange() {
+    const erp = document.getElementById('f-erp').value;
+    const isProtheus = erp === 'protheus';
+    const tabBtn = document.getElementById('tab-btn-protheus');
+    tabBtn.disabled = !isProtheus;
+    tabBtn.title = isProtheus ? '' : 'Selecione TOTVS Protheus no campo Sistema ERP para acessar esta aba';
+    if (!isProtheus) switchTab('config');
+  }
 
   function onTipoChange() {
     const tipo    = document.getElementById('f-tipo').value;
@@ -555,6 +611,11 @@
       document.getElementById('f-trust').checked   = conn.trust_cert !== 0;
     }
 
+    // Campos Protheus
+    const cfg = conn.configuracoes ? JSON.parse(conn.configuracoes) : {};
+    document.getElementById('f-sufixo').value = cfg.sufixo_tabela || '';
+    document.getElementById('f-filial').value  = conn.filial || cfg.filial_padrao || '';
+
     document.getElementById('meta-status').textContent = conn.ativo ? '● Ativa' : '○ Inativa';
     document.getElementById('meta-teste').textContent  =
       conn.teste_ok === 1 ? '✓ OK' : conn.teste_ok === 0 ? '✗ Falhou' : '—';
@@ -595,9 +656,9 @@
     } else {
       const host = document.getElementById('f-host').value.trim();
       if (!nome || !host) { _feedback('Preencha nome e servidor/host.', false); return; }
+      const erp = document.getElementById('f-erp').value;
       body = {
-        nome, tipo,
-        erp:        document.getElementById('f-erp').value,
+        nome, tipo, erp,
         host,
         port:       document.getElementById('f-port').value || null,
         database:   document.getElementById('f-database').value.trim(),
@@ -605,6 +666,12 @@
         encrypt:    document.getElementById('f-encrypt').checked,
         trust_cert: document.getElementById('f-trust').checked,
       };
+      if (erp === 'protheus') {
+        body.filial = document.getElementById('f-filial').value.trim() || null;
+        body.configuracoes = JSON.stringify({
+          sufixo_tabela: document.getElementById('f-sufixo').value.trim() || '',
+        });
+      }
       const pw = document.getElementById('f-password').value;
       if (pw) body.password = pw;
     }

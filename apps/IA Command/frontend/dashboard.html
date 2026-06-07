@@ -22,20 +22,40 @@
     .page-head    { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:24px; }
 
     /* Stats */
-    .stats-row { display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px; }
-    .stat-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px; }
+    .stats-row { display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:16px;margin-bottom:24px; }
+    @media(max-width:900px){ .stats-row { grid-template-columns:1fr 1fr; } }
+    @media(max-width:560px){ .stats-row { grid-template-columns:1fr; } }
+    .stat-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px; }
     .stat-label{ font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600; }
-    .stat-value{ font-size:28px;font-weight:800;color:var(--text-hi);margin:6px 0 2px;line-height:1; }
-    .stat-sub  { font-size:12px;color:var(--text-lo); }
+    .stat-value{ font-size:22px;font-weight:800;color:var(--text-hi);margin:4px 0 2px;line-height:1; }
+    .stat-sub  { font-size:11px;color:var(--text-lo); }
     .stat-card.accent { border-color:#7c3aed;background:rgba(124,58,237,.04); }
-    .stat-card.accent .stat-value { color:#7c3aed; }
-    .stat-ai-list{display:flex;flex-direction:column;gap:4px;margin-top:10px;font-size:11px;color:var(--text-md);line-height:1.35;}
-    .stat-ai-item{display:flex;justify-content:space-between;gap:8px;border-top:1px solid rgba(124,58,237,.12);padding-top:4px;}
-    .stat-ai-item:first-child{border-top:none;padding-top:0;}
-    .stat-ai-name{font-weight:700;color:var(--text-hi);}
-    .stat-ai-name[href]{text-decoration:none;}
-    .stat-ai-name[href]:hover{color:#7c3aed;text-decoration:underline;}
-    .stat-ai-detail{text-align:right;color:var(--text-lo);}
+
+    /* Card IA — lista de provedores */
+    .ia-card-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:12px; }
+    .ia-card-title{ font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600; }
+    .ia-test-btn  { display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-base);color:var(--text-md);font-size:11px;font-weight:600;cursor:pointer;transition:border-color .15s,color .15s; }
+    .ia-test-btn:hover { border-color:#7c3aed;color:#7c3aed; }
+    .ia-test-btn:disabled { opacity:.5;cursor:default; }
+    .ia-prov-list { display:flex;flex-direction:column;gap:6px; }
+    .ia-prov-row  { display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--border); }
+    .ia-prov-row:first-child { border-top:none; }
+    .ia-prov-name { font-size:12px;font-weight:700;color:var(--text-hi);flex:1;min-width:0; }
+    .ia-prov-name a { color:inherit;text-decoration:none; }
+    .ia-prov-name a:hover { color:#7c3aed;text-decoration:underline; }
+    .ia-prov-badge{ display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;white-space:nowrap; }
+    .badge-ok      { background:#dcfce7;color:#15803d; }
+    .badge-cota    { background:#fef3c7;color:#92400e; }
+    .badge-chave   { background:#fee2e2;color:#b91c1c; }
+    .badge-timeout { background:#fef3c7;color:#92400e; }
+    .badge-erro    { background:#fee2e2;color:#b91c1c; }
+    .badge-semchave{ background:var(--bg-hover);color:var(--text-lo); }
+    .badge-loading { background:var(--bg-hover);color:var(--text-lo); }
+    .ia-prov-lat  { font-size:11px;color:var(--text-lo);min-width:48px;text-align:right; }
+    .ia-primario  { font-size:11px;color:var(--text-lo);margin-top:10px;padding-top:8px;border-top:1px solid var(--border); }
+    .ia-primario strong { color:#7c3aed; }
+    .ia-last-test { font-size:10px;color:var(--text-lo);margin-top:4px; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
     /* Status badge */
     .status-badge { display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600; }
@@ -170,33 +190,50 @@
 
       <!-- Stats -->
       <div class="stats-row">
+
+        <!-- Card IA — expandido -->
         <div class="stat-card accent">
-          <div class="stat-label">Saldo das IAs</div>
-          <div class="stat-value" id="stat-ia-saldo">—</div>
-          <div class="stat-sub" id="stat-ia-saldo-sub">provedores configurados</div>
-          <div class="stat-ai-list" id="stat-ia-saldo-list"></div>
+          <div class="ia-card-head">
+            <div class="ia-card-title">Provedores de IA</div>
+            <button class="ia-test-btn" id="btn-testar-ia" onclick="testarProvedores()">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Testar agora
+            </button>
+          </div>
+          <div class="ia-prov-list" id="ia-prov-list">
+            <div class="ia-prov-row"><span class="ia-prov-name">Carregando…</span></div>
+          </div>
+          <div class="ia-primario" id="ia-primario" style="display:none"></div>
+          <div class="ia-last-test" id="ia-last-test"></div>
         </div>
+
+        <!-- WhatsApp -->
         <div class="stat-card">
           <div class="stat-label">WhatsApp</div>
-          <div class="stat-value" style="font-size:14px;margin-top:10px" id="stat-wa">
+          <div style="margin-top:10px" id="stat-wa">
             <span class="status-badge status-stopped">⏹ Parado</span>
           </div>
-          <div class="stat-sub" id="stat-wa-msgs"></div>
+          <div class="stat-sub" style="margin-top:6px" id="stat-wa-msgs"></div>
         </div>
+
+        <!-- ERP -->
         <div class="stat-card">
           <div class="stat-label">Conexão ERP</div>
-          <div class="stat-value" style="font-size:14px;margin-top:10px" id="stat-erp">
+          <div style="margin-top:10px" id="stat-erp">
             <span class="status-badge status-stopped">Não configurada</span>
           </div>
-          <div class="stat-sub" id="stat-erp-nome"></div>
+          <div class="stat-sub" style="margin-top:6px" id="stat-erp-nome"></div>
         </div>
+
+        <!-- IA config -->
         <div class="stat-card">
           <div class="stat-label">IA Configurada</div>
-          <div class="stat-value" style="font-size:14px;margin-top:10px" id="stat-ia">
+          <div style="margin-top:10px" id="stat-ia">
             <span class="status-badge status-stopped">Não configurada</span>
           </div>
-          <div class="stat-sub" id="stat-ia-prov"></div>
+          <div class="stat-sub" style="margin-top:6px" id="stat-ia-prov"></div>
         </div>
+
       </div>
 
       <!-- Guia de Configuração -->
@@ -341,7 +378,7 @@
 
     try {
       const ia = await fetch('/api/ia-command/ai-config').then(r => r.json());
-      if (ia.groq_key || ia.gemini_key || ia.groq_api_key || ia.gemini_api_key || ia.deepseek_api_key || ia.claude_api_key) {
+      if (ia.groq_api_key || ia.openai_api_key || ia.gemini_api_key || ia.deepseek_api_key || ia.claude_api_key) {
         status.ia = true;
         extra.ia  = `Primário: ${ia.provedor_primario || 'groq'}`;
         // Stats card
@@ -499,42 +536,77 @@
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  async function carregarSaldoIa() {
-    const valueEl = document.getElementById('stat-ia-saldo');
-    const subEl   = document.getElementById('stat-ia-saldo-sub');
-    const listEl  = document.getElementById('stat-ia-saldo-list');
+  const BADGE_CFG = {
+    operacional: { cls: 'badge-ok',       label: '● Operacional'   },
+    cota_esgotada:{ cls: 'badge-cota',    label: '⚠ Cota esgotada' },
+    chave_invalida:{ cls: 'badge-chave',  label: '✕ Chave inválida' },
+    timeout:     { cls: 'badge-timeout',  label: '⏱ Timeout'       },
+    erro:        { cls: 'badge-erro',     label: '✕ Erro'           },
+    sem_chave:   { cls: 'badge-semchave', label: '— Sem chave'      },
+    carregando:  { cls: 'badge-loading',  label: '… Testando'       },
+  };
+
+  const TODOS_PROVEDORES = [
+    { id: 'groq',     nome: 'Groq'         },
+    { id: 'gemini',   nome: 'Gemini'       },
+    { id: 'deepseek', nome: 'DeepSeek'     },
+    { id: 'claude',   nome: 'Claude'       },
+    { id: 'openai',   nome: 'OpenAI / GPT' },
+  ];
+
+  function renderProvList(provedores, primario) {
+    const listEl = document.getElementById('ia-prov-list');
+    const primEl = document.getElementById('ia-primario');
+
+    listEl.innerHTML = provedores.map(p => {
+      const cfg    = BADGE_CFG[p.status] || BADGE_CFG.erro;
+      const lat    = p.latencia_ms != null && p.status === 'operacional' ? `${p.latencia_ms}ms` : '';
+      const title  = p.detalhe ? ` title="${esc(p.detalhe)}"` : '';
+      const nome   = p.painel_url
+        ? `<a href="${esc(p.painel_url)}" target="_blank" rel="noopener">${esc(p.nome)}</a>`
+        : esc(p.nome);
+      return `<div class="ia-prov-row">
+        <span class="ia-prov-name">${nome}</span>
+        <span class="ia-prov-badge ${cfg.cls}"${title}>${cfg.label}</span>
+        <span class="ia-prov-lat">${esc(lat)}</span>
+      </div>`;
+    }).join('');
+
+    if (primario) {
+      primEl.style.display = '';
+      primEl.innerHTML = `Primário: <strong>${esc(primario)}</strong>`;
+    }
+  }
+
+  function mostrarCarregando() {
+    renderProvList(TODOS_PROVEDORES.map(p => ({ ...p, status: 'carregando', latencia_ms: null, detalhe: null, painel_url: null })), null);
+  }
+
+  async function testarProvedores() {
+    const btn = document.getElementById('btn-testar-ia');
+    const lastEl = document.getElementById('ia-last-test');
+    btn.disabled = true;
+    btn.querySelector('svg').style.animation = 'spin 1s linear infinite';
+    mostrarCarregando();
+    lastEl.textContent = 'Testando…';
 
     try {
-      const data = await fetch('/api/ia-command/ai-config/saldo').then(r => r.json());
-      valueEl.textContent = data.configurados ?? 0;
-      subEl.textContent = (data.consultados || 0) > 0
-        ? `${data.consultados} saldo(s) consultado(s)`
-        : 'saldo automático limitado por provedor';
-
-      const configurados = Array.isArray(data.provedores)
-        ? data.provedores.filter(p => p.configurado)
-        : [];
-
-      listEl.innerHTML = configurados.length
-        ? configurados.map(p => {
-          const unidade = p.unidade ? ` ${p.unidade}` : '';
-          const saldo = `${p.valor ?? 0}${unidade}`;
-          return `<div class="stat-ai-item">
-            <a class="stat-ai-name" href="${esc(p.painel_url || '#')}" target="_blank" rel="noopener">${esc(p.nome)}</a>
-            <span class="stat-ai-detail">${esc(saldo)}</span>
-          </div>`;
-        }).join('')
-        : '<div class="stat-ai-item"><span class="stat-ai-name">Nenhuma IA</span><span class="stat-ai-detail">configure uma chave</span></div>';
+      const data = await fetch('/api/ia-command/ai-config/testar-provedores').then(r => r.json());
+      renderProvList(Array.isArray(data.provedores) ? data.provedores : [], data.primario);
+      const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      lastEl.textContent = `Último teste: ${agora}`;
     } catch (_) {
-      valueEl.textContent = '0';
-      subEl.textContent = 'não foi possível consultar';
-      listEl.innerHTML = '<div class="stat-ai-item"><span class="stat-ai-name">Saldo</span><span class="stat-ai-detail">0</span></div>';
+      document.getElementById('ia-prov-list').innerHTML =
+        '<div class="ia-prov-row"><span class="ia-prov-name">Erro ao consultar provedores.</span></div>';
+      lastEl.textContent = '';
+    } finally {
+      btn.disabled = false;
+      btn.querySelector('svg').style.animation = '';
     }
   }
 
   (async () => {
-    await carregarSaldoIa();
-
+    testarProvedores();
     const { status, extra } = await coletarStatus();
     renderStepper(status, extra);
   })();
@@ -556,7 +628,7 @@
     </div>
     <div class="help-section">
       <div class="help-section-title">Guia de configuração (passos)</div>
-      <div class="help-item"><div class="help-item-label">1. Configurar IA</div><div class="help-item-desc">Adicione as chaves Groq e/ou Gemini. Sem elas o sistema não processa nenhuma mensagem.</div></div>
+      <div class="help-item"><div class="help-item-label">1. Configurar IA</div><div class="help-item-desc">Adicione as chaves dos provedores e defina a ordem de uso/fallback. Sem ao menos uma chave, o sistema nao processa mensagens com IA.</div></div>
       <div class="help-item"><div class="help-item-label">2. Conexão ERP</div><div class="help-item-desc">Configure a conexão direta ou REST/API Proxy do ERP e deixe uma conexão ativa.</div></div>
       <div class="help-item"><div class="help-item-label">3. Testar conexão</div><div class="help-item-desc">Execute o teste da conexão ativa antes de liberar datasets para uso operacional.</div></div>
       <div class="help-item"><div class="help-item-label">4. Canais WhatsApp</div><div class="help-item-desc">Cadastre o canal do número WhatsApp e vincule apenas as empresas autorizadas a operar por ele.</div></div>

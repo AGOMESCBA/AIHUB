@@ -62,6 +62,7 @@ const DIMENSOES = [
   ['produto', /\bpor\s+produtos?\b|\bprodutos?\b|\bitens?\b/i],
   ['vendedor', /\bpor\s+vendedores?\b|\bvendedores?\b|\brepresentantes?\b/i],
   ['fornecedor', /\bpor\s+fornecedores?\b|\bfornecedores?\b/i],
+  ['documento', /\bpor\s+(?:documentos?|titulos?|duplicatas?)\b|\b(documentos?|titulos?|duplicatas?)\b/i],
   ['empresa', /\bpor\s+empresas?\b|\bempresas?\b/i],
   ['filial', /\bpor\s+filia(?:l|is)\b|\bfilia(?:l|is)\b|\bpor\s+lojas?\b|\blojas?\b/i],
   ['unidade', /\bpor\s+unidades?(?:\s+de\s+negocio)?\b|\bunidades?(?:\s+de\s+negocio)?\b/i],
@@ -79,7 +80,65 @@ function _normalizar(v) {
   return String(v || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
+    .toLowerCase()
+    .trim();
+}
+
+const FILTRO_POR_TIPO_ENTIDADE = {
+  cliente: 'cliente',
+  fornecedor: 'fornecedor',
+  vendedor: 'vendedor',
+  produto: 'produto',
+  grupo_produto: 'grupo_produto',
+  centro_custo: 'centro_custo',
+  natureza: 'natureza',
+  tes: 'tes',
+};
+const FILTROS_ENTIDADE = new Set(Object.values(FILTRO_POR_TIPO_ENTIDADE));
+const TERMOS_NAO_ENTIDADE_CURTA = new Set([
+  'ano', 'mes', 'mês', 'dia', 'semana', 'trimestre', 'semestre',
+  'periodo', 'período', 'cliente', 'clientes', 'produto', 'produtos',
+  'fornecedor', 'fornecedores', 'vendedor', 'vendedores', 'empresa', 'empresas',
+  'filial', 'filiais', 'loja', 'lojas', 'todos', 'todas',
+]);
+
+function _tipoEntidadeAindaCompativel(tipo, filtrosAtuais = {}, filtrosAnteriores = {}) {
+  const chave = FILTRO_POR_TIPO_ENTIDADE[String(tipo || '').toLowerCase()];
+  if (!chave) return true;
+  const atual = filtrosAtuais?.[chave];
+  const anterior = filtrosAnteriores?.[chave];
+  if (!atual) return true;
+  return !!anterior && _normalizar(atual) === _normalizar(anterior);
+}
+
+function _filtrarEntidadesCompativeis(entidades = [], filtrosAtuais = {}, filtrosAnteriores = {}) {
+  return (Array.isArray(entidades) ? entidades : [])
+    .filter(e => _tipoEntidadeAindaCompativel(e?.tipo, filtrosAtuais, filtrosAnteriores));
+}
+
+function _filtrarEntidadesPorEmpresaCompativeis(entidadesPorEmpresa = {}, filtrosAtuais = {}, filtrosAnteriores = {}) {
+  const out = {};
+  for (const [empresaId, entidades] of Object.entries(entidadesPorEmpresa || {})) {
+    const filtradas = _filtrarEntidadesCompativeis(entidades, filtrosAtuais, filtrosAnteriores);
+    if (filtradas.length) out[empresaId] = filtradas;
+  }
+  return out;
+}
+
+function _extrairNomeEntidadeCurta(mensagem = '') {
+  const texto = String(mensagem || '').trim();
+  const m = texto.match(/\b(?:do|da|de|dos|das)\s+([A-Za-z0-9À-ÿ][A-Za-z0-9À-ÿ .&'_-]{1,80})\s*[?.!]*$/i);
+  if (!m) return null;
+  const nome = m[1].trim().replace(/\s+/g, ' ');
+  const normalizado = _normalizar(nome);
+  if (!nome || TERMOS_NAO_ENTIDADE_CURTA.has(normalizado)) return null;
+  return nome;
+}
+
+function _chaveEntidadeDoContexto(ultimoIntent = {}) {
+  const filtros = Object.entries(ultimoIntent.filtros || {})
+    .filter(([k, v]) => FILTROS_ENTIDADE.has(String(k).toLowerCase()) && String(v || '').trim());
+  return filtros.length === 1 ? filtros[0][0] : null;
 }
 
 /**
@@ -89,6 +148,18 @@ function _normalizar(v) {
 function detectarContinuacao(mensagem) {
   const m = String(mensagem || '').trim().toLowerCase();
   return CONECTORES_CONTINUACAO.some(c => m.startsWith(c) || m === c.trim());
+}
+
+function _moduloDinamicoDoIntent(intent = {}) {
+  return String(
+    intent._moduloDinamico ||
+    String(intent.intencao || '').replace(/_dinamico$/i, '')
+  || '').toLowerCase();
+}
+
+function _mensagemMencionaDominioExplicito(mensagem = '') {
+  const texto = _normalizar(mensagem);
+  return /\b(compras?|pedido(?:s)?\s+de\s+compra|fornecedores?|faturamento|vendas?|receita|comissao|comissoes|financeiro|contas?\s+a\s+pagar|contas?\s+a\s+receber|saldo\s+bancario|fluxo\s+de\s+caixa)\b/.test(texto);
 }
 
 /**
@@ -162,6 +233,7 @@ function _matchesDimensoes(mensagem) {
     ['dia', /\bpor\s+dias?\b|\bdias?\s+a\s+dias?\b|\bdias?\s+e\b|\be\s+dias?\b/],
     ['mes', /\bpor\s+mes\b|\bmes\s+a\s+mes\b|\bmes\s+e\b|\be\s+mes\b/],
     ['ano', /\bpor\s+ano\b|\bano\s+a\s+ano\b|\bano\s+e\b|\be\s+ano\b/],
+    ['documento', /\bpor\s+(?:documentos?|titulos?|duplicatas?)\b/],
   ];
   for (const [dim, re] of temporal) {
     const match = re.exec(texto);
@@ -271,29 +343,63 @@ function _periodoMesMensagem(mensagem, periodoContexto) {
  * @returns {object} - Intent final, potencialmente enriquecido
  */
 function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', opts = {}) {
-  if (!ultimoIntent) return novoIntent;
+  if (!ultimoIntent) {
+    if (!novoIntent._nivel_contexto) novoIntent._nivel_contexto = 1;
+    return novoIntent;
+  }
 
-  const bloqueado = unsupportedRequest.aplicarBloqueioSeNecessario(novoIntent, mensagem, opts);
-  if (bloqueado !== novoIntent) {
-    bloqueado._contextoAplicado = true;
-    return bloqueado;
+  const ultimoDinamico = String(ultimoIntent.intencao || '').toLowerCase().endsWith('_dinamico')
+    || String(ultimoIntent.acao || '').toLowerCase() === 'ai_text_to_sql'
+    || ultimoIntent._dynamicAiScope;
+  if (!ultimoDinamico) {
+    const bloqueado = unsupportedRequest.aplicarBloqueioSeNecessario(novoIntent, mensagem, opts);
+    if (bloqueado !== novoIntent) {
+      bloqueado._contextoAplicado = true;
+      return bloqueado;
+    }
   }
 
   // Contexto expirado por inatividade
   if (ultimoIntentTs && Date.now() - ultimoIntentTs > CONTEXT_TTL_MS) {
+    novoIntent._nivel_contexto = 1;
     return novoIntent;
   }
 
   // Novo intent com alta confiança e intenção diferente → nova conversa, ignora contexto
+  // Exceção: se o novo intent não especificou período, herda o do contexto anterior para evitar
+  // que trocas de módulo (ex: faturamento → compras) percam a janela temporal estabelecida.
+  const refinamentoSemDominioNovo = detectarContinuacao(mensagem)
+    && !_mensagemMencionaDominioExplicito(mensagem)
+    && _moduloDinamicoDoIntent(novoIntent)
+    && _moduloDinamicoDoIntent(ultimoIntent)
+    && _moduloDinamicoDoIntent(novoIntent) !== _moduloDinamicoDoIntent(ultimoIntent);
+
   if (
     !_eVazio(novoIntent.intencao) &&
     novoIntent.intencao !== ultimoIntent.intencao &&
-    novoIntent.confianca >= 0.80
+    novoIntent.confianca >= 0.85 &&
+    !refinamentoSemDominioNovo
   ) {
+    if (_eVazio(novoIntent.periodo?.tipo) && !_eVazio(ultimoIntent.periodo?.tipo)) {
+      novoIntent.periodo = _clonar(ultimoIntent.periodo);
+      novoIntent._herdouPeriodo = true;
+      novoIntent._periodoHerdadoTrocaModulo = true;
+    }
+    if (ultimoIntent._mensagemOriginal && !novoIntent._mensagemOriginalAnterior) {
+      novoIntent._mensagemOriginalAnterior = ultimoIntent._mensagemOriginal;
+    }
+    novoIntent._nivel_contexto = 1;
     return novoIntent;
   }
 
   const merged = _clonar(novoIntent);
+  if (refinamentoSemDominioNovo) {
+    merged.intencao = ultimoIntent.intencao;
+    merged._moduloDinamico = ultimoIntent._moduloDinamico || _moduloDinamicoDoIntent(ultimoIntent);
+    merged.acao = ultimoIntent.acao || merged.acao;
+    merged._dynamicAiScope = ultimoIntent._dynamicAiScope || merged._dynamicAiScope;
+    merged._dominioPreservadoPorRefinamento = true;
+  }
 
   // 1. Herança de intenção
   if (_eVazio(merged.intencao)) {
@@ -487,6 +593,13 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
   }
 
   // 3. Filtros: mesclagem aditiva
+  const nomeEntidadeCurta = _extrairNomeEntidadeCurta(mensagem);
+  const chaveEntidadeCurta = nomeEntidadeCurta ? _chaveEntidadeDoContexto(ultimoIntent) : null;
+  if (chaveEntidadeCurta) {
+    merged.filtros = { ...(merged.filtros || {}), [chaveEntidadeCurta]: nomeEntidadeCurta };
+    merged._filtroEntidadeExplicitaMensagem = { [chaveEntidadeCurta]: nomeEntidadeCurta };
+  }
+
   const filtrosHerdados = {};
   for (const [k, v] of Object.entries(ultimoIntent.filtros || {})) {
     if (v && !merged.filtros?.[k]) filtrosHerdados[k] = v;
@@ -494,6 +607,37 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
   if (Object.keys(filtrosHerdados).length) {
     merged.filtros = { ...filtrosHerdados, ...(merged.filtros || {}) };
     merged._herdouFiltros = true;
+  }
+
+  if ((!Array.isArray(merged._entidadesResolvidas) || !merged._entidadesResolvidas.length) && Array.isArray(ultimoIntent._entidadesResolvidas) && ultimoIntent._entidadesResolvidas.length) {
+    const entidadesCompativeis = _filtrarEntidadesCompativeis(
+      ultimoIntent._entidadesResolvidas,
+      merged.filtros || {},
+      ultimoIntent.filtros || {}
+    );
+    if (entidadesCompativeis.length) {
+      merged._entidadesResolvidas = _clonar(entidadesCompativeis);
+      merged._herdouEntidadesResolvidas = true;
+    }
+  }
+  if (!merged._entidadesResolvidasPorEmpresa && ultimoIntent._entidadesResolvidasPorEmpresa) {
+    const entidadesPorEmpresaCompativeis = _filtrarEntidadesPorEmpresaCompativeis(
+      ultimoIntent._entidadesResolvidasPorEmpresa,
+      merged.filtros || {},
+      ultimoIntent.filtros || {}
+    );
+    if (Object.keys(entidadesPorEmpresaCompativeis).length) {
+      merged._entidadesResolvidasPorEmpresa = _clonar(entidadesPorEmpresaCompativeis);
+      merged._herdouEntidadesResolvidasPorEmpresa = true;
+    }
+  }
+
+  if (ultimoIntent._mensagemOriginal && !merged._mensagemOriginalAnterior) {
+    merged._mensagemOriginalAnterior = ultimoIntent._mensagemOriginal;
+  }
+
+  if (ultimoIntent._contextoIAAnterior && !merged._contextoIAAnterior) {
+    merged._contextoIAAnterior = ultimoIntent._contextoIAAnterior;
   }
 
   // 4. Limite e ordenação: herda apenas se ausentes
@@ -517,7 +661,17 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
   }
 
   merged._contextoAplicado = true;
+  merged._nivel_contexto = Math.min((ultimoIntent._nivel_contexto || 1) + 1, opts?.limiteContexto || 5);
+
+  if (!merged._trace) merged._trace = [];
+  merged._trace.push({ etapa: 'merger', nivel_contexto: merged._nivel_contexto, herdou: { intencao: !!merged._herdouIntencao, periodo: !!merged._herdouPeriodo, filtros: !!merged._herdouFiltros } });
+
+  if (merged.intencao === ultimoIntent.intencao) {
+    merged.precisa_confirmacao = false;
+    delete merged._baixaConfianca;
+    if (merged._erro && /confianca baixa/i.test(String(merged._erro))) delete merged._erro;
+  }
   return merged;
 }
 
-module.exports = { mesclar, detectarContinuacao, CONTEXT_TTL_MS };
+module.exports = { mesclar, detectarContinuacao, CONTEXT_TTL_MS, CONECTORES_CONTINUACAO, DIMENSOES };

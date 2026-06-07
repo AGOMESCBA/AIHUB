@@ -3,10 +3,40 @@ const assert = require('assert');
 const localResolver = require('../apps/IA Command/modules/ai/local-intent-resolver');
 const intentMerger = require('../apps/IA Command/modules/ai/intent-merger');
 const dialogResolver = require('../apps/IA Command/modules/ai/dialog-resolver');
+const conversationService = require('../apps/IA Command/modules/ai/conversation-service');
+const entityResolver = require('../apps/IA Command/modules/ai/entity-resolver');
 const unsupportedRequest = require('../apps/IA Command/modules/ai/unsupported-request');
 const { identificarPeriodoTexto, resolverPeriodo } = require('../apps/IA Command/modules/ai/period-resolver');
-const { _SINONIMOS_SISTEMA } = require('../apps/IA Command/modules/ai/intent-service');
+const {
+  _SINONIMOS_SISTEMA,
+  _mensagemPareceAiSqlDinamico,
+  _mensagemPareceComprasAiSql,
+  _intencaoAiSqlPreferencial,
+  _deveBypassDinamico,
+  _mensagemDinamicaAmbigua,
+  _intentAiSqlDireto,
+  _garantirIntencoesDinamicasPadrao,
+} = require('../apps/IA Command/modules/ai/intent-service');
 const { _buildWrapper, _mapAliases } = require('../apps/IA Command/modules/erp/dataset-query-engine');
+const queryPlan = require('../apps/IA Command/modules/erp/query-plan');
+const intentRouter = require('../apps/IA Command/modules/erp/intent-router');
+const aiSqlGeneration = require('../apps/IA Command/modules/erp/ai-sql-generation');
+const temporalContract = require('../apps/IA Command/modules/erp/temporal-contract');
+const sx3SqlValidator = require('../apps/IA Command/modules/erp/sx3-sql-validator');
+const sx2SqlNormalizer = require('../apps/IA Command/modules/erp/sx2-sql-normalizer');
+const comprasSchema = require('../apps/IA Command/modules/erp/compras/compras-schema');
+const comprasHandler = require('../apps/IA Command/modules/erp/compras/ai-sql-handler-old');
+const comprasMiddleware = require('../apps/IA Command/modules/erp/compras/sql-middleware');
+const financeiroSchema = require('../apps/IA Command/modules/erp/financeiro/financeiro-schema');
+const financeiroHandler = require('../apps/IA Command/modules/erp/financeiro/ai-sql-handler-old');
+const financeiroMiddleware = require('../apps/IA Command/modules/erp/financeiro/sql-middleware');
+const faturamentoSchema = require('../apps/IA Command/modules/erp/faturamento/faturamento-schema');
+const faturamentoHandler = require('../apps/IA Command/modules/erp/faturamento/ai-sql-handler-old');
+const faturamentoHandlerV2 = require('../apps/IA Command/modules/erp/faturamento/ai-sql-handler-v2');
+const faturamentoMiddleware = require('../apps/IA Command/modules/erp/faturamento/sql-middleware');
+const comissaoSchema = require('../apps/IA Command/modules/erp/comissao/comissao-schema');
+const comissaoHandler = require('../apps/IA Command/modules/erp/comissao/ai-sql-handler-old');
+const comissaoMiddleware = require('../apps/IA Command/modules/erp/comissao/sql-middleware');
 const responseFormatter = require('../apps/IA Command/modules/erp/response-formatter');
 const IACWhatsAppService = require('../apps/IA Command/modules/whatsapp/service');
 
@@ -70,6 +100,27 @@ function resolverTurno(texto, contextoAnterior = null) {
     intent = intentMerger.mesclar(intent, contextoAnterior, Date.now(), texto);
   }
   return intent;
+}
+
+{
+  const fase1 = {
+    entidades_nomeadas: [
+      { texto: 'Caieira', tipo_sugerido: 'cliente' },
+      { texto: 'Aster', tipo_sugerido: 'cliente' },
+      { texto: 'Plantivo', tipo_sugerido: 'cliente' },
+    ],
+  };
+  const citadasAgora = faturamentoHandlerV2._test._filtrarEntidadesCitadasNaMensagemAtual(
+    fase1.entidades_nomeadas,
+    'detalhe a Caieira',
+  );
+  assert.deepStrictEqual(citadasAgora, [{ texto: 'Caieira', tipo_sugerido: 'cliente' }], 'faturamento v2: entidade atual deve prevalecer sobre historico');
+
+  const sincronizado = faturamentoHandlerV2._test._sincronizarFiltrosComEntidadesFase1(
+    { filtros: { cliente: 'Plantivo' } },
+    { entidades_nomeadas: citadasAgora },
+  );
+  assert.strictEqual(sincronizado.intent.filtros.cliente, 'Caieira', 'faturamento v2: filtro herdado deve ser sobrescrito pela entidade atual');
 }
 
 expectLocal('fat por produto no mes', {
@@ -243,6 +294,1016 @@ expectLocal('compras por fornecedor semana passada', {
   agrupar_por: 'fornecedor',
 });
 
+assert.strictEqual(
+  localResolver.resolverLocal(
+    'Preciso do contas a pagar do ano de 2026',
+    intencoes.filter(i => i.nome.includes('faturamento')),
+    _SINONIMOS_SISTEMA,
+    { datasets }
+  ),
+  null,
+  'financeiro: engine local nao deve interpretar contas a pagar como faturamento'
+);
+
+assert.strictEqual(
+  _mensagemPareceComprasAiSql('compras por fornecedor semana passada', _SINONIMOS_SISTEMA),
+  true,
+  'compras ai-sql: detecta mensagem de compras mesmo com datasets de faturamento'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'compras por fornecedor semana passada',
+    [{ nome: 'compras_dinamico', acao: 'ai_text_to_sql', modulo: 'compras' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: compras entra no modo IA-a-frente'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'contas a pagar vencendo essa semana',
+    [{ nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: financeiro tambem entra no modo IA-a-frente'
+);
+assert.strictEqual(typeof _garantirIntencoesDinamicasPadrao, 'function', 'bootstrap: expõe criação das intenções dinâmicas para painel/admin');
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'Preciso dos pagamentos realizados dos anos de 2025 e 2026 do Matheus',
+    [{ nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: pagamentos realizados entram no financeiro dinamico'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'contas pagas do fornecedor Matheus',
+    [{ nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: contas pagas entram no financeiro dinamico'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'recebimentos realizados do cliente Matheus',
+    [{ nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: recebimentos realizados entram no financeiro dinamico'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'contas recebidas do cliente Matheus',
+    [{ nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: contas recebidas entram no financeiro dinamico'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus',
+    [
+      { nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' },
+      { nome: 'faturamento_dinamico', acao: 'ai_text_to_sql', modulo: 'faturamento' },
+    ],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: documentos pagos com typo entram no modo dinamico'
+);
+assert.strictEqual(
+  _intencaoAiSqlPreferencial(
+    'Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus',
+    [
+      { nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' },
+      { nome: 'faturamento_dinamico', acao: 'ai_text_to_sql', modulo: 'faturamento' },
+    ],
+    _SINONIMOS_SISTEMA
+  )?.nome,
+  'financeiro_dinamico',
+  'escopo dinamico: documentos pagos preferem financeiro sobre faturamento'
+);
+assert.strictEqual(
+  intentRouter._dominioDinamicoForcadoPorTexto('Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus'),
+  'financeiro',
+  'router dinamico: documentos pagos forcam dominio financeiro'
+);
+assert.strictEqual(
+  intentRouter._corrigirIntentDinamicoPorTexto({
+    intencao: 'faturamento_dinamico',
+    _dynamicAiScope: true,
+    _mensagemOriginal: 'Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus',
+  }, 999999).intencao,
+  'financeiro_dinamico',
+  'router dinamico: corrige faturamento para financeiro quando texto diz documentos pagos'
+);
+assert.strictEqual(
+  _mensagemDinamicaAmbigua(
+    'Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus',
+    [
+      { nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' },
+      { nome: 'faturamento_dinamico', acao: 'ai_text_to_sql', modulo: 'faturamento' },
+    ],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: documentos pagos e ambiguidade que deve ir para IA quando houver chave'
+);
+assert.strictEqual(
+  _deveBypassDinamico(
+    'Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus',
+    [
+      { nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' },
+      { nome: 'faturamento_dinamico', acao: 'ai_text_to_sql', modulo: 'faturamento' },
+    ],
+    _SINONIMOS_SISTEMA,
+    [],
+    { temChaveIA: true }
+  ).usar,
+  false,
+  'escopo dinamico: com IA disponivel, documentos pagos nao usa bypass local'
+);
+assert.strictEqual(
+  _mensagemPareceAiSqlDinamico(
+    'faturamento do mes',
+    [{ nome: 'faturamento_dinamico', acao: 'ai_text_to_sql', modulo: 'faturamento' }],
+    _SINONIMOS_SISTEMA
+  ),
+  true,
+  'escopo dinamico: faturamento entra no modo IA-a-frente'
+);
+const intentComprasDireto = _intentAiSqlDireto(
+  { nome: 'compras_dinamico', acao: 'ai_text_to_sql', modulo: 'compras' },
+  'compras por fornecedor semana passada'
+);
+assert.strictEqual(intentComprasDireto.intencao, 'compras_dinamico', 'compras ai-sql: roteia para intencao dinamica');
+assert.strictEqual(intentComprasDireto._motor, 'ia_dialogo_dinamico', 'compras ai-sql: nao usa engine interna de datasets');
+assert.strictEqual(intentComprasDireto.periodo.tipo, 'semana_anterior', 'compras ai-sql: preserva periodo detectado');
+const intentFinanceiroAbertoDireto = _intentAiSqlDireto(
+  { nome: 'financeiro_dinamico', acao: 'ai_text_to_sql', modulo: 'financeiro' },
+  'preciso do contas a receber em aberto agrupado pelo fornecedor softexpert'
+);
+assert.strictEqual(intentFinanceiroAbertoDireto.periodo.tipo, 'nenhum', 'financeiro ai-sql: em aberto sem periodo nao assume mes atual');
+const planoFinanceiroAberto = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'preciso do contas a receber em aberto agrupado pelo fornecedor softexpert',
+  periodo: { tipo: 'nenhum' },
+});
+assert.strictEqual(planoFinanceiroAberto.modulo, 'financeiro', 'query plan: identifica modulo financeiro');
+assert.strictEqual(planoFinanceiroAberto.carteira, 'receber', 'query plan: identifica carteira receber');
+assert.strictEqual(planoFinanceiroAberto.estado, 'em_aberto', 'query plan: identifica estado em aberto');
+assert.strictEqual(planoFinanceiroAberto.proibirFiltroData, true, 'query plan: em aberto sem periodo proibe filtro de data');
+assert(planoFinanceiroAberto.agrupamentos.includes('cliente'), 'query plan: contas a receber normaliza fornecedor para cliente');
+assert(
+  queryPlan.formatQueryPlanForPrompt(planoFinanceiroAberto).includes('contrato obrigatorio'),
+  'query plan: gera bloco de prompt contratual'
+);
+const planoPagamentosRealizados = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'Preciso dos pagamentos realizados do fornecedor Matheus',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20261231' },
+});
+assert.strictEqual(planoPagamentosRealizados.carteira, 'pagar', 'query plan financeiro: pagamentos realizados usam carteira pagar');
+assert.strictEqual(planoPagamentosRealizados.estado, 'pago', 'query plan financeiro: pagamentos realizados usam estado pago');
+assert.strictEqual(planoPagamentosRealizados.dataPadrao, 'baixa_movimento', 'query plan financeiro: pagamentos realizados usam data de baixa/movimento');
+const planoDocumentosPagos = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'Preciso dos documetnos pagos por ano de 2026 e todos os meses do Matheus',
+  periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20261231' },
+});
+assert.strictEqual(planoDocumentosPagos.carteira, 'pagar', 'query plan financeiro: documentos pagos usam carteira pagar/SA2');
+assert.strictEqual(planoDocumentosPagos.estado, 'pago', 'query plan financeiro: documentos pagos usam estado pago');
+assert(planoDocumentosPagos.agrupamentos.includes('documento'), 'query plan financeiro: documetnos com typo vira agrupamento documento');
+assert(planoDocumentosPagos.agrupamentos.includes('ano'), 'query plan financeiro: documentos pagos por ano agrupa por ano');
+assert(planoDocumentosPagos.agrupamentos.includes('mes'), 'query plan financeiro: todos os meses agrupa por mes');
+const sqlPagamentosComRecebimentosIndevidos = "SET ROWCOUNT 10000; SELECT 'PAGAMENTO' AS tipo, SUM(E2_VALOR - E2_SALDO) AS total_pago FROM SE2990 SE2 JOIN SA2990 SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_VENCREA BETWEEN '20250101' AND '20261231' UNION ALL SELECT 'RECEBIMENTO' AS tipo, SUM(E1_VALOR - E1_SALDO) AS total_recebido FROM SE1990 SE1 JOIN SA1990 SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_VENCREA BETWEEN '20250101' AND '20261231'";
+const validacaoPagamentosComRecebimentos = queryPlan.validarSqlContraPlano(sqlPagamentosComRecebimentosIndevidos, planoPagamentosRealizados);
+assert.strictEqual(validacaoPagamentosComRecebimentos.ok, false, 'query plan financeiro: pagamento de fornecedor rejeita recebimentos/SA1');
+assert(validacaoPagamentosComRecebimentos.erros.some(e => e.includes('SA1')), 'query plan financeiro: explica uso indevido de SA1 em contas a pagar');
+assert(validacaoPagamentosComRecebimentos.erros.some(e => e.includes('E2_BAIXA')), 'query plan financeiro: exige baixa para pagamento realizado');
+const sqlPagamentosFallback = financeiroHandler._sqlDeterministicoFinanceiro({
+  sufixoTabela: '990',
+  sx2: { SE2990: 'E', SA2990: 'C' },
+  filial: '01',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20261231' },
+  queryPlan: planoPagamentosRealizados,
+  entidades: [{ tipo: 'fornecedor', codigo: '000635', loja: '02', nome: 'MATHEUS MARCONDES COELHO PJ' }],
+});
+assert(sqlPagamentosFallback.includes('SE2990') && sqlPagamentosFallback.includes('SA2990'), 'financeiro fallback pago: usa SE2/SA2 do SX2');
+assert(!sqlPagamentosFallback.includes('SE1990') && !sqlPagamentosFallback.includes('SA1990'), 'financeiro fallback pago: nao inclui recebimentos');
+assert(sqlPagamentosFallback.includes('SE2.E2_BAIXA BETWEEN'), 'financeiro fallback pago: filtra por baixa');
+assert(sqlPagamentosFallback.includes("SA2.A2_COD = '000635'") && sqlPagamentosFallback.includes("SA2.A2_LOJA = '02'"), 'financeiro fallback pago: preserva fornecedor escolhido');
+assert.strictEqual(queryPlan.validarSqlContraPlano(sqlPagamentosFallback, planoPagamentosRealizados).ok, true, 'financeiro fallback pago: respeita contrato');
+const planoPagamentosPorDocumento = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'detalhar por documento',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20261231' },
+});
+assert(planoPagamentosPorDocumento.agrupamentos.includes('documento'), 'query plan financeiro: detecta detalhamento por documento');
+const turnoDetalheDocumento = intentMerger.mesclar({
+  intencao: 'desconhecido',
+  periodo: { tipo: 'nenhum' },
+  filtros: {},
+  agrupar_por: null,
+  ordenar_por: null,
+  limite: null,
+  confianca: 0,
+  precisa_confirmacao: true,
+  _baixaConfianca: true,
+  _erro: 'Interpretacao com confianca baixa (0%).',
+}, {
+  intencao: 'financeiro_dinamico',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20261231' },
+  filtros: {},
+  confianca: 0.95,
+  _entidadesResolvidas: [{ tipo: 'fornecedor', codigo: '000635', loja: '02', nome: 'MATHEUS MARCONDES COELHO PJ' }],
+}, Date.now(), 'detalhar por documento');
+assert.strictEqual(turnoDetalheDocumento.intencao, 'financeiro_dinamico', 'multi-turn financeiro: detalhar por documento herda intencao dinamica');
+assert.strictEqual(turnoDetalheDocumento.precisa_confirmacao, false, 'multi-turn financeiro: contexto remove baixa confianca do turno curto');
+assert.strictEqual(turnoDetalheDocumento._baixaConfianca, undefined, 'multi-turn financeiro: nao bloqueia por baixa confianca apos herdar contexto');
+assert.strictEqual(turnoDetalheDocumento.agrupar_por, 'documento', 'multi-turn financeiro: documento vira agrupamento');
+assert.deepStrictEqual(turnoDetalheDocumento._entidadesResolvidas.map(e => e.codigo), ['000635'], 'multi-turn financeiro: herda entidade escolhida');
+const sqlPagamentosDocumentoFallback = financeiroHandler._sqlDeterministicoFinanceiro({
+  sufixoTabela: '990',
+  sx2: { SE2990: 'E', SA2990: 'C' },
+  filial: '01',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20261231' },
+  queryPlan: { ...planoPagamentosRealizados, agrupamentos: ['documento'] },
+  entidades: [{ tipo: 'fornecedor', codigo: '000635', loja: '02', nome: 'MATHEUS MARCONDES COELHO PJ' }],
+});
+assert(sqlPagamentosDocumentoFallback.includes('SE2.E2_NUM AS documento'), 'financeiro fallback pago: detalha por documento');
+assert(sqlPagamentosDocumentoFallback.includes('GROUP BY SE2.E2_NUM'), 'financeiro fallback pago: agrupa por documento');
+const planoRecebimentosRealizados = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'Preciso dos recebimentos realizados do cliente Matheus',
+  periodo: { tipo: 'personalizado', dataInicio: '20250101', dataFim: '20261231' },
+});
+assert.strictEqual(planoRecebimentosRealizados.carteira, 'receber', 'query plan financeiro: recebimentos realizados usam carteira receber');
+assert.strictEqual(planoRecebimentosRealizados.estado, 'recebido', 'query plan financeiro: recebimentos realizados usam estado recebido');
+assert.strictEqual(planoRecebimentosRealizados.dataPadrao, 'baixa_movimento', 'query plan financeiro: recebimentos realizados usam data de baixa/movimento');
+const planoFinanceiroIA = queryPlan.normalizarPlanoIA(
+  JSON.stringify({
+    operacao: 'posicao',
+    carteira: 'receber',
+    estado: 'em_aberto',
+    agrupamentos: ['fornecedor'],
+    regras: ['nao_filtrar_data_sem_periodo_explicito', 'exigir_saldo_em_aberto'],
+  }),
+  planoFinanceiroAberto
+);
+assert.strictEqual(planoFinanceiroIA.proibirFiltroData, true, 'query plan IA: normaliza regra para proibir data');
+assert.strictEqual(planoFinanceiroIA.exigirSaldoAberto, true, 'query plan IA: normaliza regra para saldo aberto');
+const planoComissaoIAComAno = queryPlan.reconciliarPlanoComMensagem(
+  queryPlan.normalizarPlanoIA(
+    JSON.stringify({
+      operacao: 'posicao',
+      estado: 'em_aberto',
+      regras: ['nao_filtrar_data_sem_periodo_explicito'],
+    }),
+    queryPlan.buildBaseQueryPlan({
+      modulo: 'comissao',
+      periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20261231' },
+      filtros: { vendedor: 'Jean', ano: 2026 },
+    })
+  ),
+  'Comissao de 2026 do Jean'
+);
+assert.strictEqual(planoComissaoIAComAno.periodoExplicito, true, 'query plan comissao: ano explicito continua periodo explicito');
+assert.strictEqual(planoComissaoIAComAno.proibirFiltroData, false, 'query plan comissao: remove proibicao de data quando ha ano explicito');
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano("SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.E3_VENCTO BETWEEN '20260101' AND '20261231'", planoComissaoIAComAno).ok,
+  true,
+  'query plan comissao: aceita filtro de data quando pergunta trouxe ano'
+);
+assert.deepStrictEqual(
+  financeiroHandler._ajustarTermoAoPlanoFinanceiro({ texto: 'SOFTEXPERT', tipo_sugerido: 'fornecedor' }, planoFinanceiroAberto),
+  { texto: 'SOFTEXPERT', tipo_sugerido: 'cliente', _tipoOriginal: 'fornecedor' },
+  'financeiro entidades: contas a receber trata fornecedor digitado como cliente da carteira'
+);
+assert.deepStrictEqual(
+  financeiroHandler._ajustarTermoAoPlanoFinanceiro({ texto: 'SOFTEXPERT', tipo_sugerido: 'desconhecido', origem: 'ia' }, { carteira: 'pagar' }),
+  { texto: 'SOFTEXPERT', tipo_sugerido: 'fornecedor', origem: 'inferido_carteira', _tipoOriginal: 'desconhecido' },
+  'financeiro entidades: contas a pagar trata entidade desconhecida como fornecedor'
+);
+assert.deepStrictEqual(
+  financeiroHandler._termosDeFiltrosFinanceiro({ fornecedor: 'Softexpert' }, { carteira: 'pagar' }),
+  [{ texto: 'Softexpert', tipo_sugerido: 'fornecedor', confianca: 1, origem: 'filtro_estruturado' }],
+  'financeiro entidades: filtro estruturado fornecedor vira entidade obrigatoria'
+);
+assert.deepStrictEqual(
+  financeiroHandler._expandirTermosCarteiraAmbasFinanceiro([{ texto: 'SOFTEXPERT', tipo_sugerido: 'fornecedor', origem: 'explicito' }], { carteira: 'ambas' })
+    .map(e => ({ texto: e.texto, tipo: e.tipo_sugerido, origem: e.origem })),
+  [
+    { texto: 'SOFTEXPERT', tipo: 'fornecedor', origem: 'explicito' },
+    { texto: 'SOFTEXPERT', tipo: 'cliente', origem: 'inferido_carteira_ambas' },
+  ],
+  'financeiro entidades: carteira ambas busca fornecedor e cliente para o mesmo termo'
+);
+assert.strictEqual(
+  financeiroHandler._entidadeObrigatoriaNaoEncontradaFinanceiro({ texto: 'SOFTEXPERT', tipo_sugerido: 'cliente', origem: 'inferido_carteira_ambas' }),
+  true,
+  'financeiro entidades: cliente inferido em carteira ambas tambem e obrigatorio'
+);
+assert.strictEqual(
+  financeiroHandler._entidadeObrigatoriaNaoEncontradaFinanceiro({ texto: 'SOFTEXPERT', tipo_sugerido: 'fornecedor', origem: 'filtro_estruturado' }),
+  true,
+  'financeiro entidades: fornecedor vindo do contrato da orquestradora e obrigatorio'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('preciso do total do contas a receber e a pagar em aberto agrupado pelo fornecedor softexpert e por mes').map(e => ({ texto: e.texto, tipo: e.tipo_sugerido })),
+  [{ texto: 'softexpert', tipo: 'fornecedor' }],
+  'entity resolver: corta agrupamento apos entidade explicita'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('preciso do total do contas a receber e a pagar em aberto da softexpert agrupado por mes').map(e => ({ texto: e.texto, tipo: e.tipo_sugerido })),
+  [{ texto: 'softexpert', tipo: 'desconhecido' }],
+  'entity resolver: extrai entidade solta apos em aberto da'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('Contas a pagar da Softexpert').map(e => ({ texto: e.texto, tipo: e.tipo_sugerido })),
+  [{ texto: 'Softexpert', tipo: 'fornecedor' }],
+  'entity resolver: contas a pagar da entidade força fornecedor'
+);
+assert.strictEqual(
+  financeiroHandler._removerHintsNoLock('SELECT * FROM SE2990 SE2 WITH (NOLOCK) INNER JOIN SA2990 SA2 WITH (NOLOCK) ON 1=1'),
+  'SELECT * FROM SE2990 SE2 INNER JOIN SA2990 SA2 ON 1=1',
+  'financeiro sql: remove WITH NOLOCK antes da execucao'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('Comissao paga para os vendedores em 2026'),
+  [],
+  'entity resolver: nao trata periodo apos vendedores como entidade explicita'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('Faturamento do ano agrupado por mes mes e produto'),
+  [],
+  'entity resolver: agrupamento por mes e produto nao vira filtro de entidade'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('Faturamento do ano por produto e cliente'),
+  [],
+  'entity resolver: agrupamento por produto e cliente nao vira entidade explicita'
+);
+assert.deepStrictEqual(
+  entityResolver.normalizarEntidadesIA({
+    entidades: [
+      { texto: 'produto', tipo_sugerido: 'produto', confianca: 0.9 },
+      { texto: 'mes e produto', tipo_sugerido: 'produto', confianca: 0.9 },
+      { texto: 'ACME LTDA', tipo_sugerido: 'cliente', confianca: 0.9 },
+    ],
+  }).map(e => ({ texto: e.texto, tipo: e.tipo_sugerido })),
+  [{ texto: 'ACME LTDA', tipo: 'cliente' }],
+  'entity resolver: descarta entidades da IA que sao apenas agrupamentos'
+);
+const planoFinanceiroAmbasAberto = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'preciso do total do contas a receber e a pagar em aberto agrupado pelo fornecedor softexpert e por mes',
+  periodo: { tipo: 'nenhum' },
+});
+assert.strictEqual(planoFinanceiroAmbasAberto.carteira, 'ambas', 'query plan: contas a receber e a pagar usa carteira ambas');
+assert(planoFinanceiroAmbasAberto.agrupamentos.includes('fornecedor'), 'query plan: ambas preserva fornecedor para lado pagar');
+assert(planoFinanceiroAmbasAberto.agrupamentos.includes('mes'), 'query plan: ambas preserva agrupamento por mes');
+assert.strictEqual(planoFinanceiroAmbasAberto.exigirSaldoAberto, true, 'query plan: ambas em aberto exige saldo aberto');
+assert(
+  queryPlan.formatQueryPlanForPrompt(planoFinanceiroAmbasAberto).includes('financeiro_ambas'),
+  'query plan: prompt orienta UNION ALL para carteira ambas'
+);
+const sqlFinanceiroAmbasFallback = financeiroHandler._sqlDeterministicoFinanceiro({
+  sufixoTabela: '990',
+  periodo: { tipo: 'nenhum' },
+  queryPlan: planoFinanceiroAmbasAberto,
+  entidades: [
+    { tipo: 'fornecedor', codigo: '000123', loja: '01', nome: 'SOFTEXPERT' },
+    { tipo: 'cliente', codigo: '000180', loja: '01', nome: 'SOFTEXPERT' },
+  ],
+});
+assert(sqlFinanceiroAmbasFallback.includes('UNION ALL'), 'financeiro fallback SQL: usa UNION ALL para receber e pagar');
+assert(sqlFinanceiroAmbasFallback.includes('SE1990') && sqlFinanceiroAmbasFallback.includes('SE2990'), 'financeiro fallback SQL: usa tabelas SE1/SE2 pelo sufixo');
+assert(sqlFinanceiroAmbasFallback.includes('SA2990') && sqlFinanceiroAmbasFallback.includes("SA2.A2_COD = '000123'"), 'financeiro fallback SQL: aplica fornecedor resolvido no lado pagar');
+assert(sqlFinanceiroAmbasFallback.includes('SA1990') && sqlFinanceiroAmbasFallback.includes("SA1.A1_COD = '000180'"), 'financeiro fallback SQL: aplica cliente resolvido no lado receber');
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano(sqlFinanceiroAmbasFallback, planoFinanceiroAmbasAberto).ok,
+  true,
+  'financeiro fallback SQL: respeita contrato de posicao em aberto sem periodo'
+);
+assert.strictEqual(
+  financeiroHandler._validarEntidadesFinanceiroNoSQL(sqlFinanceiroAmbasFallback, {
+    queryPlan: planoFinanceiroAmbasAberto,
+    entidades: [
+      { tipo: 'fornecedor', codigo: '000123', loja: '01', nome: 'SOFTEXPERT' },
+      { tipo: 'cliente', codigo: '000180', loja: '01', nome: 'SOFTEXPERT' },
+    ],
+  }).ok,
+  true,
+  'financeiro contrato entidade: aceita SQL com filtros nos dois lados'
+);
+const sqlFinanceiroAmbasSemFiltroCliente = `
+SET ROWCOUNT 10000;
+SELECT YEAR(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) AS ano_mes,
+       SUM(CASE WHEN SE2.E2_TIPO = 'PA' THEN -SE2.E2_SALDO ELSE SE2.E2_SALDO END) AS saldo_a_pagar
+FROM SE2990 SE2
+JOIN SA2990 SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA
+WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SA2.A2_COD = '000123' AND SA2.A2_LOJA = '01'
+GROUP BY YEAR(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112))
+UNION ALL
+SELECT YEAR(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) AS ano_mes,
+       SUM(CASE WHEN SE1.E1_TIPO = 'RA' THEN -SE1.E1_SALDO ELSE SE1.E1_SALDO END) AS saldo_a_receber
+FROM SE1990 SE1
+JOIN SA1990 SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA
+WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0
+GROUP BY YEAR(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112))`;
+const validacaoEntidadeRuim = financeiroHandler._validarEntidadesFinanceiroNoSQL(sqlFinanceiroAmbasSemFiltroCliente, {
+  queryPlan: planoFinanceiroAmbasAberto,
+  entidades: [
+    { tipo: 'fornecedor', codigo: '000123', loja: '01', nome: 'SOFTEXPERT' },
+    { tipo: 'cliente', codigo: '000180', loja: '01', nome: 'SOFTEXPERT' },
+  ],
+});
+assert.strictEqual(validacaoEntidadeRuim.ok, false, 'financeiro contrato entidade: rejeita SQL sem filtro do cliente no lado receber');
+assert(validacaoEntidadeRuim.erros.some(e => e.includes('cliente 000180')), 'financeiro contrato entidade: explica filtro cliente ausente');
+const validacaoFornecedorPorNome = financeiroHandler._validarEntidadesFinanceiroNoSQL(
+  "SELECT SUM(SE2.E2_SALDO) AS saldo_a_pagar FROM SE2990 SE2 JOIN SA2990 SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SA2.A2_NOME = 'Softexpert'",
+  {
+    queryPlan: { modulo: 'financeiro', operacao: 'posicao', estado: 'em_aberto', carteira: 'pagar' },
+    entidades: [{ tipo: 'fornecedor', codigo: '000180', loja: '01', nome: 'SOFTEXPERT SOFTWARE SA' }],
+  }
+);
+assert.strictEqual(validacaoFornecedorPorNome.ok, false, 'financeiro contrato entidade: rejeita fornecedor filtrado por nome');
+assert(validacaoFornecedorPorNome.erros.some(e => e.includes('codigo do fornecedor 000180')), 'financeiro contrato entidade: exige codigo do fornecedor');
+assert.deepStrictEqual(
+  comprasHandler._termosDeFiltrosCompras({ fornecedor: 'Softexpert', produto: 'Licenca' }).map(e => ({ texto: e.texto, tipo: e.tipo_sugerido, origem: e.origem })),
+  [
+    { texto: 'Softexpert', tipo: 'fornecedor', origem: 'filtro_estruturado' },
+    { texto: 'Licenca', tipo: 'produto', origem: 'filtro_estruturado' },
+  ],
+  'compras entidades: filtros estruturados viram entidades por codigo'
+);
+assert.strictEqual(
+  comprasHandler._validarEntidadesComprasNoSQL(
+    "SELECT SUM(D1_TOTAL) FROM SD1990 SD1 JOIN SB1990 SB1 ON SD1.D1_COD = SB1.B1_COD WHERE SB1.B1_DESC = 'Licenca'",
+    { entidades: [{ tipo: 'produto', codigo: 'LIC001', nome: 'Licenca' }] }
+  ).ok,
+  false,
+  'compras contrato entidade: rejeita produto por descricao'
+);
+assert.strictEqual(
+  require('../apps/IA Command/modules/erp/entity-sql-guard').removerHintsNoLock("SELECT * FROM SD1990 SD1 WITH (NOLOCK) INNER JOIN SF1990 SF1 WITH (NOLOCK) ON 1=1"),
+  'SELECT * FROM SD1990 SD1 INNER JOIN SF1990 SF1 ON 1=1',
+  'erp sql guard: remove WITH NOLOCK antes da execucao'
+);
+assert.strictEqual(
+  faturamentoHandler._validarEntidadesFaturamentoNoSQL(
+    "SELECT SUM(D2_TOTAL) FROM SD2990 SD2 JOIN SA1990 SA1 ON SD2.D2_CLIENTE = SA1.A1_COD AND SD2.D2_LOJA = SA1.A1_LOJA WHERE SA1.A1_NOME = 'Softexpert'",
+    { entidades: [{ tipo: 'cliente', codigo: '000057', loja: '01', nome: 'Softexpert' }] }
+  ).ok,
+  false,
+  'faturamento contrato entidade: rejeita cliente por nome'
+);
+assert.strictEqual(
+  comissaoHandler._validarEntidadesComissaoNoSQL(
+    "SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 JOIN SA3990 SA3 ON SE3.E3_VEND = SA3.A3_COD WHERE SA3.A3_NOME = 'Joao'",
+    { entidades: [{ tipo: 'vendedor', codigo: '000001', nome: 'Joao' }] }
+  ).ok,
+  false,
+  'comissao contrato entidade: rejeita vendedor por nome'
+);
+
+const promptComprasMaioTodas = comprasSchema.buildSqlUserPrompt('Preciso das compras do mes de Maio', {
+  periodo: { tipo: 'personalizado', data_inicio: '20260501', data_fim: '20260531' },
+  filtros: { filial: 'TODAS' },
+});
+assert(
+  promptComprasMaioTodas.includes('20260501') && promptComprasMaioTodas.includes('20260531'),
+  'compras prompt: envia datas concretas de periodo personalizado para a IA'
+);
+assert(promptComprasMaioTodas.includes('filial: TODAS'), 'compras prompt: preserva resposta todas as filiais');
+assert(
+  !promptComprasMaioTodas.includes('personalizado'),
+  'compras prompt: nao envia periodo personalizado sem datas'
+);
+assert.strictEqual(
+  comprasHandler._comprasMockAtivo({ IA_COMMAND_COMPRAS_MOCK_ROWS: '1' }),
+  true,
+  'compras mock: habilita vetor simulado por variavel de ambiente'
+);
+const sx2ComprasFiltrado = comprasHandler._mapearModosSX2Compras([
+  { arquivo: 'AA1990', modo: 'C' },
+  { arquivo: 'SF1990', modo: 'E' },
+  { arquivo: 'SD1990', modo: 'E' },
+  { arquivo: 'SA2990', modo: 'C' },
+  { arquivo: 'SB1990', modo: 'C' },
+  { arquivo: 'SBM990', modo: 'C' },
+  { arquivo: 'SC7990', modo: 'E' },
+]);
+assert.deepStrictEqual(
+  Object.keys(sx2ComprasFiltrado).sort(),
+  ['SA2990', 'SB1990', 'SBM990', 'SC7990', 'SD1990', 'SF1990'].sort(),
+  'compras sx2: envia para IA somente tabelas do dicionario de compras'
+);
+assert.strictEqual(comprasHandler._inferirSufixoSX2(sx2ComprasFiltrado, '010'), '990', 'compras sx2: infere sufixo real das tabelas filtradas');
+assert.strictEqual(comprasHandler._tabelaFisicaSX2(sx2ComprasFiltrado, 'SF1'), 'SF1990', 'compras sx2: localiza tabela fisica por base');
+assert.strictEqual(comprasHandler._tabelaFisicaSX2(null, 'SA2'), null, 'compras sx2: nao inventa tabela fisica sem dicionario SX2');
+assert.deepStrictEqual(
+  comprasHandler._normalizarFiliaisDescobertas([{ filial: ' 01 ' }, { F1_FILIAL: '01' }, { FILIAL: '02' }, { filial: '' }]),
+  ['01', '02'],
+  'compras filial: normaliza filiais distintas encontradas no ERP'
+);
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('compras do fornecedor SOFTEXPERT').map(e => ({ texto: e.texto, tipo: e.tipo_sugerido })),
+  [{ texto: 'SOFTEXPERT', tipo: 'fornecedor' }],
+  'entity resolver: tipo explicito direciona cadastro'
+);
+const perguntaAmbigua = entityResolver.formatarPerguntaAmbiguidade({
+  termo: { texto: 'SOFTEXPERT' },
+  candidatos: [
+    { tipo: 'fornecedor', rotuloTipo: 'fornecedor', codigo: '000123', loja: '01', nome: 'SOFTEXPERT SOFTWARE' },
+    { tipo: 'produto', rotuloTipo: 'produto', codigo: 'SOFT001', nome: 'LICENCA SOFTEXPERT' },
+  ],
+});
+assert(perguntaAmbigua.includes('1. fornecedor') && perguntaAmbigua.includes('2. produto'), 'entity resolver: monta pergunta de desambiguacao');
+assert.strictEqual(
+  comprasHandler._validarPeriodoNoSQL("WHERE SF1.F1_DTDIGIT BETWEEN '20260501' AND '20260531'", { dataInicio: '20260501', dataFim: '20260531' }),
+  true,
+  'compras periodo: aceita SQL com periodo travado'
+);
+assert.strictEqual(
+  comprasHandler._validarPeriodoNoSQL("WHERE SF1.F1_DTDIGIT BETWEEN '20230501' AND '20230531'", { dataInicio: '20260501', dataFim: '20260531' }),
+  false,
+  'compras periodo: rejeita SQL com ano divergente'
+);
+assert.strictEqual(
+  comprasHandler._validarFuncoesDataProtheus('SELECT MONTH(SF1.F1_DTDIGIT) AS mes FROM SF1990 SF1'),
+  false,
+  'compras data protheus: rejeita MONTH em campo CHAR(8)'
+);
+assert.strictEqual(
+  comprasHandler._validarFuncoesDataProtheus("SELECT MONTH(TRY_CONVERT(date, NULLIF(SF1.F1_DTDIGIT, ''), 112)) AS mes FROM SF1990 SF1"),
+  false,
+  'compras data protheus: rejeita TRY_CONVERT em SQL Server legado'
+);
+assert.strictEqual(
+  comprasHandler._validarFuncoesDataProtheus("SELECT CONVERT(DATE, NULLIF(SF1.F1_DTDIGIT, ''), 112) AS data_entrada FROM SF1990 SF1"),
+  true,
+  'compras data protheus: aceita CONVERT DATE estilo 112 no SELECT'
+);
+assert.strictEqual(
+  comprasHandler._validarFuncoesDataProtheus("SELECT YEAR(CONVERT(DATE, NULLIF(SF1.F1_DTDIGIT, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SF1.F1_DTDIGIT, ''), 112)) AS ano_mes FROM SF1990 SF1 GROUP BY YEAR(CONVERT(DATE, NULLIF(SF1.F1_DTDIGIT, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SF1.F1_DTDIGIT, ''), 112))"),
+  true,
+  'compras data protheus: aceita ano/mes por YEAR/MONTH apos CONVERT DATE'
+);
+assert.strictEqual(
+  comprasHandler._validarFuncoesDataProtheus('SELECT SUBSTRING(SF1.F1_DTDIGIT, 1, 6) AS ano_mes FROM SF1990 SF1'),
+  true,
+  'compras data protheus: aceita SUBSTRING em campo CHAR(8)'
+);
+const dadosMockComprasMaioTodas = comprasHandler._dadosMockCompras({
+  periodo: { dataInicio: '20260501', dataFim: '20260531' },
+  filial: 'TODAS',
+});
+assert.strictEqual(dadosMockComprasMaioTodas.length, 3, 'compras mock: filtra dados simulados pelo mes de maio');
+assert(
+  dadosMockComprasMaioTodas.some(row => row.filial === '02'),
+  'compras mock: TODAS preserva registros de mais de uma filial'
+);
+const tentativaSqlLog = comprasHandler._sqlTentativaDiagnostico({
+  mensagem: 'Preciso das compras do mes de Maio',
+  userSql: promptComprasMaioTodas,
+  respostaSql: 'sem JSON valido',
+  erro: 'provider indisponivel',
+  subtipo: 'ia_indisponivel',
+});
+assert(tentativaSqlLog.includes('SQL NAO GERADO'), 'compras log: registra tentativa quando SQL nao foi gerado');
+assert(tentativaSqlLog.includes('20260501'), 'compras log: tentativa preserva parametros enviados para IA');
+
+const promptFinanceiro = financeiroSchema.buildSqlUserPrompt('saldo a receber deste mes', {
+  periodo: { tipo: 'personalizado', dataInicio: '20260501', dataFim: '20260531' },
+  sx2: { SE1990: 'E', SE2990: 'E', SE5990: 'E', FK1990: 'E', FK6990: 'E', SA1990: 'C', SA2990: 'C', SA3990: 'C' },
+  sx3: {
+    SE1: [
+      { campo: 'E1_SALDO', tipo: 'N', tamanho: 14, descricao: 'Saldo' },
+      { campo: 'E1_TIPO', tipo: 'C', tamanho: 3, descricao: 'Tipo' },
+    ],
+    SE5: [
+      { campo: 'E5_VLJUROS', tipo: 'N', tamanho: 14, descricao: 'Juros' },
+      { campo: 'E5_VLMULTA', tipo: 'N', tamanho: 14, descricao: 'Multa' },
+    ],
+  },
+});
+assert(promptFinanceiro.includes('PA deduz pagar'), 'financeiro prompt: regra PA fica explicita');
+
+const promptComissaoSX3 = require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlUserPrompt('Comissao paga para os vendedores em 2026', {
+  periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20261231' },
+  sx2: { SE3990: 'E', SA3990: 'E' },
+  sx3: {
+    SE3990: [
+      { campo: 'E3_NUM', tipo: 'C', tamanho: 9, descricao: 'Numero' },
+      { campo: 'E3_BASE', tipo: 'N', tamanho: 14, decimal: 2, descricao: 'Base' },
+      { campo: 'E3_COMIS', tipo: 'N', tamanho: 14, decimal: 2, descricao: 'Comissao' },
+      { campo: 'E3_VENCTO', tipo: 'D', tamanho: 8, descricao: 'Vencimento' },
+    ],
+    SA3990: [
+      { campo: 'A3_COD', tipo: 'C', tamanho: 6, descricao: 'Codigo' },
+      { campo: 'A3_NOME', tipo: 'C', tamanho: 40, descricao: 'Nome' },
+    ],
+  },
+});
+assert(promptComissaoSX3.includes('SE3.E3_VENCTO'), 'comissao prompt: periodo usa E3_VENCTO');
+assert(promptComissaoSX3.includes('Campos disponiveis no SX3 para o escopo comissao'), 'comissao prompt: inclui SX3');
+assert(promptComissaoSX3.includes('E3_COMIS'), 'comissao prompt: inclui campo real de comissao');
+assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('E3_DATA e a autoridade'), 'comissao prompt: E3_DATA e autoridade para pagamento');
+assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('E3_STATUS NAO significa pagamento realizado'), 'comissao prompt: nao usa E3_STATUS como pagamento');
+assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('SE3 -> SE2 -> SE5'), 'comissao prompt: orienta pagamento real via SE2/SE5');
+assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('SE5.E5_DATA'), 'comissao prompt: periodo de paga usa data real SE5');
+assert(!promptComissaoSX3.includes('E3_DTBAS'), 'comissao prompt: nao orienta campo antigo E3_DTBAS no user prompt');
+
+const sx3ComissaoTeste = {
+  SE3990: [
+    { campo: 'E3_NUM' },
+    { campo: 'E3_BASE' },
+    { campo: 'E3_COMIS' },
+    { campo: 'E3_VENCTO' },
+    { campo: 'E3_VEND' },
+  ],
+  SA3990: [
+    { campo: 'A3_COD' },
+    { campo: 'A3_NOME' },
+  ],
+};
+assert.strictEqual(comissaoHandler._sx3TemCampo(sx3ComissaoTeste, 'SE3', 'E3_BAIXA'), false, 'comissao sx3: detecta ausencia de E3_BAIXA');
+assert.deepStrictEqual(
+  comissaoHandler._mapearModosSX2Comissao([
+    { arquivo: 'SE3990', modo: 'E' },
+    { arquivo: 'SE2990', modo: 'E' },
+    { arquivo: 'SE5990', modo: 'E' },
+    { arquivo: 'SA3990', modo: 'C' },
+  ]),
+  { SE3990: 'E', SE2990: 'E', SE5990: 'E', SA3990: 'C' },
+  'comissao sx2: inclui SE2 e SE5 no escopo tecnico'
+);
+assert.strictEqual(
+  comissaoHandler._removerFiltroBaixaComissaoSeCampoAusente(
+    "SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.D_E_L_E_T_ = ' ' AND LTRIM(RTRIM(SE3.E3_BAIXA)) = '' AND SE3.E3_VEND = '000007'",
+    sx3ComissaoTeste
+  ).includes('E3_BAIXA'),
+  false,
+  'comissao sql: remove filtro E3_BAIXA quando campo nao existe no SX3'
+);
+const sx3ComissaoComStatus = {
+  SE3990: [
+    { campo: 'E3_NUM' },
+    { campo: 'E3_COMIS' },
+    { campo: 'E3_STATUS' },
+  ],
+};
+assert.strictEqual(
+  comissaoHandler._normalizarFiltrosStatusComissaoPorSX3(
+    "SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.D_E_L_E_T_ = ' ' AND SE3.E3_STATUS = 'A'",
+    sx3ComissaoComStatus
+  ).includes('E3_STATUS'),
+  false,
+  'comissao sql: remove E3_STATUS porque ele nao representa pagamento'
+);
+const sx3ComissaoComData = {
+  SE3990: [
+    { campo: 'E3_NUM' },
+    { campo: 'E3_COMIS' },
+    { campo: 'E3_DATA' },
+  ],
+};
+assert.strictEqual(
+  comissaoHandler._normalizarFiltrosStatusComissaoPorSX3(
+    "SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.D_E_L_E_T_ = ' ' AND SE3.E3_STATUS = 'P'",
+    sx3ComissaoComData
+  ).includes("LTRIM(RTRIM(SE3.E3_DATA)) <> ''"),
+  true,
+  'comissao sql: troca E3_STATUS pago por E3_DATA preenchido quando status nao existe'
+);
+assert.strictEqual(
+  comissaoHandler._normalizarFiltrosStatusComissaoPorSX3(
+    "SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.D_E_L_E_T_ = ' ' AND SE3.E3_STATUS = 'A'",
+    sx3ComissaoComData
+  ).includes("LTRIM(RTRIM(SE3.E3_DATA)) = ''"),
+  true,
+  'comissao sql: troca E3_STATUS aberto por E3_DATA em branco quando status nao existe'
+);
+const sx3ComissaoComStatusEData = {
+  SE3990: [
+    { campo: 'E3_NUM' },
+    { campo: 'E3_COMIS' },
+    { campo: 'E3_STATUS' },
+    { campo: 'E3_DATA' },
+  ],
+};
+assert.strictEqual(
+  comissaoHandler._normalizarFiltrosStatusComissaoPorSX3(
+    "SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.D_E_L_E_T_ = ' ' AND SE3.E3_STATUS = 'P'",
+    sx3ComissaoComStatusEData
+  ).includes("LTRIM(RTRIM(SE3.E3_DATA)) <> ''"),
+  true,
+  'comissao sql: mesmo com E3_STATUS no SX3, pagamento usa E3_DATA'
+);
+assert.strictEqual(
+  sx3SqlValidator.validarCamposSqlContraSX3("SELECT SA3.A3_NOME, SUM(SE3.E3_COMIS) AS valor_comissao FROM SE3990 SE3 JOIN SA3990 SA3 ON SE3.E3_VEND = SA3.A3_COD WHERE SE3.E3_VENCTO BETWEEN '20260101' AND '20261231' AND SE3.D_E_L_E_T_ = ' ' GROUP BY SA3.A3_NOME", sx3ComissaoTeste).ok,
+  true,
+  'sx3 validator: aceita campos cadastrados no SX3 com alias'
+);
+const sqlAliasFisico = "SELECT SUM(SE3990.E3_COMIS) AS valor_comissao FROM SE3990 SE3 WHERE SE3990.E3_VENCTO BETWEEN '20260101' AND '20261231'";
+assert.strictEqual(
+  sx3SqlValidator.validarCamposSqlContraSX3(sqlAliasFisico, sx3ComissaoTeste).ok,
+  false,
+  'sx3 validator: rejeita referencia por tabela fisica quando FROM define alias'
+);
+assert.strictEqual(
+  sx3SqlValidator.normalizarReferenciasAliasSql(sqlAliasFisico),
+  "SELECT SUM(SE3.E3_COMIS) AS valor_comissao FROM SE3990 SE3 WHERE SE3.E3_VENCTO BETWEEN '20260101' AND '20261231'",
+  'sx3 validator: normaliza nome fisico para alias declarado'
+);
+const sx3InvalidoAlias = sx3SqlValidator.validarCamposSqlContraSX3("SELECT SUM(SE3.E3_VALOR) AS valor_comissao FROM SE3990 SE3 WHERE SE3.E3_DTBAS BETWEEN '20260101' AND '20261231'", sx3ComissaoTeste);
+assert.strictEqual(sx3InvalidoAlias.ok, false, 'sx3 validator: rejeita campos com alias ausentes no SX3');
+assert(sx3InvalidoAlias.erros.some(e => e.includes('SE3.E3_VALOR')), 'sx3 validator: aponta campo inexistente com alias');
+assert(sx3InvalidoAlias.erros.some(e => e.includes('SE3.E3_DTBAS')), 'sx3 validator: aponta data inexistente com alias');
+const sx3InvalidoSemAlias = sx3SqlValidator.validarCamposSqlContraSX3("SELECT SUM(E3_VALOR) AS valor_comissao FROM SE3990 SE3 WHERE E3_DTBAS BETWEEN '20260101' AND '20261231'", sx3ComissaoTeste);
+assert.strictEqual(sx3InvalidoSemAlias.ok, false, 'sx3 validator: rejeita campos sem alias ausentes no SX3');
+assert(sx3InvalidoSemAlias.erros.some(e => e.includes('E3_VALOR')), 'sx3 validator: aponta campo inexistente sem alias');
+const sx3CompletoComCampoForaDaAmostra = {
+  SE2990: [
+    ...Array.from({ length: 80 }, (_, i) => ({ campo: `E2_CAMPO${String(i).padStart(2, '0')}` })),
+    { campo: 'E2_VALOR' },
+    { campo: 'E2_SALDO' },
+  ],
+};
+const sx3AmostraPrompt = sx3SqlValidator.limitarCamposSX3ParaPrompt(sx3CompletoComCampoForaDaAmostra, 80);
+assert.strictEqual(
+  sx3SqlValidator.validarCamposSqlContraSX3('SELECT SUM(SE2.E2_VALOR - SE2.E2_SALDO) FROM SE2990 SE2', sx3CompletoComCampoForaDaAmostra).ok,
+  true,
+  'sx3 validator: valida contra SX3 completo mesmo quando campo ficaria fora da amostra do prompt'
+);
+assert.strictEqual(sx3AmostraPrompt.SE2990.some(c => c.campo === 'E2_VALOR'), false, 'sx3 prompt: pode ficar enxuto sem carregar todos os campos');
+assert(promptFinanceiro.includes('RA deduz receber'), 'financeiro prompt: regra RA fica explicita');
+assert(promptFinanceiro.includes('E5_VLJUROS') && promptFinanceiro.includes('E5_VLMULTA'), 'financeiro prompt: inclui juros e multa do SX3');
+assert(financeiroSchema.buildSqlSystemPrompt().includes('YEAR(CONVERT(DATE'), 'financeiro prompt: orienta ano/mes pelo padrao CONVERT DATE + YEAR/MONTH');
+assert(financeiroSchema.buildSqlSystemPrompt().includes('UNION ALL de agregados por carteira'), 'financeiro prompt: orienta fluxo de caixa sem JOIN multiplicador');
+assert(
+  financeiroSchema.buildSqlUserPrompt('elabore um fluxo de caixa contas pagas versus contas recebidas de janeiro a maio de 2026', {
+    periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20260531' },
+  }).includes('use UNION ALL agregando SE2 e SE1 separadamente'),
+  'financeiro prompt usuario: reforca fluxo de caixa por UNION ALL'
+);
+assert(
+  financeiroSchema.buildSqlUserPrompt('preciso do contas a receber em aberto agrupado pelo fornecedor softexpert', {
+    periodo: { tipo: 'nenhum' },
+  }).toLowerCase().includes('nao aplique filtro de data'),
+  'financeiro prompt usuario: posicao em aberto sem periodo nao filtra data'
+);
+assert(comprasSchema.buildSqlSystemPrompt().includes('YEAR(CONVERT(DATE'), 'compras prompt: orienta ano/mes pelo padrao CONVERT DATE + YEAR/MONTH');
+assert.strictEqual(
+  financeiroHandler._financeiroMockAtivo({ IA_COMMAND_FINANCEIRO_MOCK_ROWS: 'true' }),
+  true,
+  'financeiro mock: habilita vetor simulado por variavel de ambiente'
+);
+assert.deepStrictEqual(
+  Object.keys(financeiroHandler._mapearModosSX2Financeiro([
+    { arquivo: 'SE1990', modo: 'E' },
+    { arquivo: 'SE2990', modo: 'E' },
+    { arquivo: 'SE5990', modo: 'E' },
+    { arquivo: 'FK6990', modo: 'E' },
+    { arquivo: 'SD1990', modo: 'E' },
+  ])).sort(),
+  ['FK6990', 'SE1990', 'SE2990', 'SE5990'].sort(),
+  'financeiro sx2: filtra somente tabelas financeiras'
+);
+assert.strictEqual(
+  financeiroHandler._validarPeriodoNoSQL("WHERE SE1.E1_VENCREA BETWEEN '20260501' AND '20260531'", { dataInicio: '20260501', dataFim: '20260531' }),
+  true,
+  'financeiro periodo: aceita SQL com periodo travado'
+);
+assert.strictEqual(
+  financeiroHandler._validarPeriodoNoSQL("WHERE SE1.E1_VENCREA BETWEEN '20230501' AND '20230531'", { dataInicio: '20260501', dataFim: '20260531' }),
+  false,
+  'financeiro periodo: rejeita SQL com ano divergente'
+);
+assert.strictEqual(
+  financeiroHandler._validarFuncoesDataProtheus('SELECT YEAR(SE1.E1_VENCREA) AS ano FROM SE1990 SE1'),
+  false,
+  'financeiro data protheus: rejeita YEAR em campo CHAR(8)'
+);
+assert.strictEqual(
+  financeiroHandler._validarFuncoesDataProtheus("SELECT YEAR(TRY_CONVERT(date, NULLIF(SE1.E1_VENCREA, ''), 112)) AS ano FROM SE1990 SE1"),
+  false,
+  'financeiro data protheus: rejeita TRY_CONVERT em SQL Server legado'
+);
+assert.strictEqual(
+  financeiroHandler._validarFuncoesDataProtheus("SELECT CONVERT(DATE, NULLIF(SE2.E2_EMISSAO, ''), 112) AS data_emissao FROM SE2990 SE2"),
+  true,
+  'financeiro data protheus: aceita CONVERT DATE estilo 112 no SELECT'
+);
+assert.strictEqual(
+  financeiroHandler._validarFuncoesDataProtheus("SELECT YEAR(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) AS ano_mes FROM SE2990 SE2 GROUP BY YEAR(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112))"),
+  true,
+  'financeiro data protheus: aceita ano/mes por YEAR/MONTH apos CONVERT DATE'
+);
+assert.strictEqual(
+  financeiroHandler._validarFuncoesDataProtheus('SELECT SUBSTRING(SE1.E1_VENCREA, 1, 4) AS ano FROM SE1990 SE1'),
+  true,
+  'financeiro data protheus: aceita SUBSTRING em campo CHAR(8)'
+);
+const sqlFluxoCaixaAliasInvalido = "SET ROWCOUNT 10000; SELECT mes, SUM(CASE WHEN SE2.E2_TIPO = 'PA' THEN -SE2.E2_SALDO ELSE SE2.E2_SALDO END) AS total_pago, SUM(CASE WHEN SE1.E1_TIPO = 'RA' THEN -SE1.E1_SALDO ELSE SE1.E1_SALDO END) AS total_recebido FROM ( SELECT YEAR(CONVERT(DATE, NULLIF(E2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(E2.E2_VENCREA, ''), 112)) AS mes, E2_SALDO FROM SE2990 E2 WHERE E2.D_E_L_E_T_ = ' ' AND E2.E2_VENCREA BETWEEN '20260101' AND '20260531' ) AS pagamentos JOIN ( SELECT YEAR(CONVERT(DATE, NULLIF(E1.E1_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(E1.E1_VENCREA, ''), 112)) AS mes, E1_SALDO FROM SE1990 E1 WHERE E1.D_E_L_E_T_ = ' ' AND E1.E1_VENCREA BETWEEN '20260101' AND '20260531' ) AS recebimentos ON pagamentos.mes = recebimentos.mes GROUP BY mes ORDER BY mes;";
+assert.strictEqual(
+  financeiroHandler._validarEscopoAliasesSQL(sqlFluxoCaixaAliasInvalido),
+  false,
+  'financeiro alias: rejeita SE1/SE2 fora do escopo externo da subquery'
+);
+const sqlFluxoCaixaUnion = "SET ROWCOUNT 10000; SELECT mes, SUM(total_pago) AS total_pago, SUM(total_recebido) AS total_recebido FROM ( SELECT YEAR(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) AS mes, SUM(CASE WHEN SE2.E2_TIPO = 'PA' THEN -SE2.E2_SALDO ELSE SE2.E2_SALDO END) AS total_pago, 0 AS total_recebido FROM SE2990 SE2 WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_VENCREA BETWEEN '20260101' AND '20260531' GROUP BY YEAR(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE2.E2_VENCREA, ''), 112)) UNION ALL SELECT YEAR(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) AS mes, 0 AS total_pago, SUM(CASE WHEN SE1.E1_TIPO = 'RA' THEN -SE1.E1_SALDO ELSE SE1.E1_SALDO END) AS total_recebido FROM SE1990 SE1 WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_VENCREA BETWEEN '20260101' AND '20260531' GROUP BY YEAR(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SE1.E1_VENCREA, ''), 112)) ) AS fluxo GROUP BY mes ORDER BY mes;";
+assert.strictEqual(
+  financeiroHandler._validarEscopoAliasesSQL(sqlFluxoCaixaUnion),
+  true,
+  'financeiro alias: aceita fluxo de caixa agregado por UNION ALL'
+);
+assert(
+  financeiroHandler._dadosMockFinanceiro({ periodo: { dataInicio: '20260501', dataFim: '20260531' }, filial: 'TODAS' })
+    .some(row => row.tipo === 'RA' || row.tipo === 'PA'),
+  'financeiro mock: inclui antecipacoes PA/RA para validar regra sem ERP'
+);
+assert.strictEqual(
+  financeiroMiddleware.processar('SET ROWCOUNT 10000; SELECT E1_SALDO FROM SE1990 SE1 WHERE SE1.D_E_L_E_T_ = \' \'', {}).bloqueado,
+  false,
+  'financeiro middleware: permite SELECT em tabelas financeiras'
+);
+assert.strictEqual(
+  financeiroMiddleware.processar('SET ROWCOUNT 10000; SELECT dbo.fnSaldoCliente(SE1.E1_CLIENTE) AS saldo FROM SE1990 SE1', {}).bloqueado,
+  true,
+  'financeiro middleware: bloqueia function qualificada em SELECT'
+);
+assert.strictEqual(
+  comprasMiddleware.processar('SET ROWCOUNT 10000; SELECT D1_TOTAL INTO #tmp FROM SD1990 SD1', {}).bloqueado,
+  true,
+  'compras middleware: bloqueia SELECT INTO'
+);
+assert.strictEqual(
+  faturamentoMiddleware.processar('EXEC dbo.sp_relatorio_faturamento', {}).bloqueado,
+  true,
+  'faturamento middleware: bloqueia exec de procedure'
+);
+assert.strictEqual(
+  comissaoMiddleware.processar('CALL sp_comissao()', {}).bloqueado,
+  true,
+  'comissao middleware: bloqueia CALL'
+);
+assert.strictEqual(
+  comissaoHandler._validarEntidadesComissaoNoSQL(
+    "SET ROWCOUNT 10000; SELECT SA3.A3_NOME AS vendedor, SUM(SE3.E3_COMIS) AS valor_comissao FROM SE3990 SE3 INNER JOIN SA3990 SA3 ON SE3.E3_VEND = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' ' WHERE SE3.D_E_L_E_T_ = ' ' AND SE3.E3_DATA = '' AND SE3.E3_FILIAL = '01' AND SA3.A3_COD = '000007' GROUP BY SA3.A3_NOME;",
+    { entidades: [{ tipo: 'vendedor', codigo: '000007', nome: 'Jean' }] }
+  ).ok,
+  true,
+  'comissao entidade: aceita filtro por codigo do vendedor e nome apenas no SELECT/GROUP BY'
+);
+assert.strictEqual(
+  comissaoHandler._validarEntidadesComissaoNoSQL(
+    "SET ROWCOUNT 10000; SELECT SA3.A3_NOME AS vendedor, SUM(SE3.E3_COMIS) AS valor_comissao FROM SE3990 SE3 INNER JOIN SA3990 SA3 ON SE3.E3_VEND = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' ' WHERE SE3.D_E_L_E_T_ = ' ' AND SA3.A3_NOME = 'JEAN' AND SA3.A3_COD = '000007' GROUP BY SA3.A3_NOME;",
+    { entidades: [{ tipo: 'vendedor', codigo: '000007', nome: 'Jean' }] }
+  ).ok,
+  true,
+  'comissao entidade: aceita nome redundante quando o codigo interno tambem esta aplicado'
+);
+assert.strictEqual(
+  comissaoHandler._validarEntidadesComissaoNoSQL(
+    "SET ROWCOUNT 10000; SELECT SA3.A3_NOME AS vendedor, SUM(SE3.E3_COMIS) AS valor_comissao FROM SE3990 SE3 INNER JOIN SA3990 SA3 ON SE3.E3_VEND = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' ' WHERE SE3.D_E_L_E_T_ = ' ' AND SA3.A3_NOME = 'JEAN' GROUP BY SA3.A3_NOME;",
+    { entidades: [{ tipo: 'vendedor', codigo: '000007', nome: 'Jean' }] }
+  ).ok,
+  false,
+  'comissao entidade: rejeita filtro por nome sem codigo interno'
+);
+const sqlContasReceberAbertoComMes = "SELECT SA2.A2_NOME AS fornecedor, SUM(CASE WHEN SE1.E1_TIPO = 'RA' THEN -SE1.E1_SALDO ELSE SE1.E1_SALDO END) AS saldo_a_receber FROM SE1990 AS SE1 JOIN SA1990 AS SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA JOIN SA2990 AS SA2 ON SA1.A1_CODFOR = SA2.A2_COD AND SA1.A1_LOJA = SA2.A2_LOJA WHERE SE1.E1_VENCREA BETWEEN '20260501' AND '20260531' AND SE1.D_E_L_E_T_ = ' ' AND SA1.A1_COD = '000057' AND SA1.A1_LOJA = '01' GROUP BY SA2.A2_NOME";
+assert.strictEqual(
+  financeiroHandler._validarPosicaoAbertaSemPeriodo(sqlContasReceberAbertoComMes, 'preciso do contas a receber em aberto agrupado pelo fornecedor softexpert', { tipo: 'nenhum' }),
+  false,
+  'financeiro posicao aberta: rejeita filtro mensal inventado'
+);
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano(sqlContasReceberAbertoComMes, planoFinanceiroAberto).ok,
+  false,
+  'query plan: validador comum rejeita SQL com periodo inventado'
+);
+assert.strictEqual(
+  financeiroHandler._validarPosicaoAbertaSemPeriodo("SELECT SA1.A1_NOME AS cliente, SUM(CASE WHEN SE1.E1_TIPO = 'RA' THEN -SE1.E1_SALDO ELSE SE1.E1_SALDO END) AS saldo_a_receber FROM SE1990 AS SE1 JOIN SA1990 AS SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SA1.A1_COD = '000057' AND SA1.A1_LOJA = '01' GROUP BY SA1.A1_NOME", 'preciso do contas a receber em aberto agrupado pelo fornecedor softexpert', { tipo: 'nenhum' }),
+  true,
+  'financeiro posicao aberta: aceita carteira completa em aberto'
+);
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano("SELECT SA1.A1_NOME AS cliente, SUM(CASE WHEN SE1.E1_TIPO = 'RA' THEN -SE1.E1_SALDO ELSE SE1.E1_SALDO END) AS saldo_a_receber FROM SE1990 AS SE1 JOIN SA1990 AS SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SA1.A1_COD = '000057' AND SA1.A1_LOJA = '01' GROUP BY SA1.A1_NOME", planoFinanceiroAberto).ok,
+  true,
+  'query plan: validador comum aceita SQL aderente ao plano'
+);
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano("SELECT SA2.A2_NOME AS fornecedor, SUM(SE1.E1_SALDO) AS saldo_a_receber FROM SE1990 SE1 JOIN SA1990 SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA JOIN SA2990 SA2 ON SA1.A1_CODFOR = SA2.A2_COD WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 GROUP BY SA2.A2_NOME", planoFinanceiroAberto).ok,
+  false,
+  'query plan: bloqueia SA2 em contas a receber'
+);
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano("SELECT ano_mes, fornecedor, SUM(total_receber) AS total_receber, SUM(total_pagar) AS total_pagar FROM (SELECT SUBSTRING(SE1.E1_VENCREA, 1, 6) AS ano_mes, SA1.A1_NOME AS fornecedor, SUM(SE1.E1_SALDO) AS total_receber, 0 AS total_pagar FROM SE1990 SE1 JOIN SA1990 SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 GROUP BY SUBSTRING(SE1.E1_VENCREA, 1, 6), SA1.A1_NOME UNION ALL SELECT SUBSTRING(SE2.E2_VENCREA, 1, 6) AS ano_mes, SA2.A2_NOME AS fornecedor, 0 AS total_receber, SUM(SE2.E2_SALDO) AS total_pagar FROM SE2990 SE2 JOIN SA2990 SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 GROUP BY SUBSTRING(SE2.E2_VENCREA, 1, 6), SA2.A2_NOME) fluxo GROUP BY ano_mes, fornecedor", planoFinanceiroAmbasAberto).ok,
+  true,
+  'query plan: aceita receber e pagar em aberto por mes com saldo nos dois lados'
+);
+assert.strictEqual(
+  queryPlan.validarSqlContraPlano("SELECT SUBSTRING(SE2.E2_VENCREA, 1, 6) AS ano_mes, SA2.A2_NOME AS fornecedor, SUM(SE2.E2_SALDO) AS total_pagar FROM SE2990 SE2 JOIN SA2990 SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 GROUP BY SUBSTRING(SE2.E2_VENCREA, 1, 6), SA2.A2_NOME", planoFinanceiroAmbasAberto).ok,
+  false,
+  'query plan: carteira ambas rejeita SQL sem saldo a receber'
+);
+assert.deepStrictEqual(
+  financeiroHandler._rowsZeroParaAgregadoSemLinhas("SET ROWCOUNT 10000; SELECT SUM(SE1.E1_SALDO) AS total_recebido, COUNT(*) AS qtd_titulos FROM SE1990 SE1 WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_VENCREA BETWEEN '20260101' AND '20260531'"),
+  [{ total_recebido: 0, qtd_titulos: 0 }],
+  'financeiro sem linhas: consulta agregada vira linha zero'
+);
+assert.strictEqual(
+  financeiroHandler._rowsZeroParaAgregadoSemLinhas("SET ROWCOUNT 10000; SELECT SE1.E1_NUM AS titulo FROM SE1990 SE1 WHERE SE1.D_E_L_E_T_ = ' '"),
+  null,
+  'financeiro sem linhas: listagem analitica continua sem resultado'
+);
+assert.deepStrictEqual(
+  comprasHandler._rowsZeroParaAgregadoSemLinhas("SET ROWCOUNT 10000; SELECT SUM(SD1.D1_TOTAL) AS valor_compra, COUNT(DISTINCT SF1.F1_DOC) AS qtd_nfs FROM SD1990 SD1 INNER JOIN SF1990 SF1 ON 1 = 1 WHERE SD1.D_E_L_E_T_ = ' '"),
+  [{ valor_compra: 0, qtd_nfs: 0 }],
+  'compras sem linhas: consulta agregada vira linha zero'
+);
+assert(comprasSchema.buildSqlSystemPrompt().includes('SQL ANSI/portavel'), 'compras prompt: orienta SQL portavel');
+assert(faturamentoSchema.buildSqlSystemPrompt().includes('SF2'), 'faturamento prompt: inclui cabecalho de NF de saida');
+assert(faturamentoSchema.buildSqlSystemPrompt().includes('YEAR(CONVERT(DATE'), 'faturamento prompt: orienta ano/mes pelo padrao CONVERT DATE + YEAR/MONTH');
+assert(faturamentoSchema.buildSqlSystemPrompt().includes('SQL ANSI/portavel'), 'faturamento prompt: orienta SQL portavel');
+assert(financeiroSchema.buildSqlSystemPrompt().includes('SQL ANSI/portavel'), 'financeiro prompt: orienta SQL portavel');
+assert(comissaoSchema.buildSqlSystemPrompt().includes('SQL ANSI/portavel'), 'comissao prompt: orienta SQL portavel');
+assert.strictEqual(
+  faturamentoHandler._faturamentoMockAtivo({ IA_COMMAND_FATURAMENTO_MOCK_ROWS: 'true' }),
+  true,
+  'faturamento mock: habilita vetor simulado por variavel de ambiente'
+);
+assert.strictEqual(typeof faturamentoHandler.garantirIntencao, 'function', 'faturamento bootstrap: expoe criacao automatica da intencao dinamica');
+assert.deepStrictEqual(
+  Object.keys(faturamentoHandler._mapearModosSX2Faturamento([
+    { arquivo: 'SF2990', modo: 'E' },
+    { arquivo: 'SD2990', modo: 'E' },
+    { arquivo: 'SA1990', modo: 'C' },
+    { arquivo: 'SA3990', modo: 'C' },
+    { arquivo: 'SE1990', modo: 'E' },
+  ])).sort(),
+  ['SA1990', 'SA3990', 'SD2990', 'SF2990'].sort(),
+  'faturamento sx2: filtra somente tabelas do escopo de faturamento'
+);
+assert.strictEqual(faturamentoHandler._inferirSufixoSX2({ SF2990: 'E', SD2990: 'E' }, '010'), '990', 'faturamento sx2: infere sufixo real');
+assert.strictEqual(
+  sx2SqlNormalizer.normalizarTabelasPorAliasSX2(
+    "SET ROWCOUNT 10000; SELECT SUM(SE3.E3_COMIS) AS valor_comissao FROM SE2020 SE3 INNER JOIN SA3990 SA3 ON SE3.E3_VEND = SA3.A3_COD WHERE SE3.D_E_L_E_T_ = ' '",
+    { SE3020: 'E', SE2020: 'E', SA3990: 'C' }
+  ).includes('FROM SE3020 SE3'),
+  true,
+  'comissao sx2: corrige tabela fisica quando alias SE3 veio em tabela SE2'
+);
+assert.strictEqual(
+  sx2SqlNormalizer.normalizarTabelasPorAliasSX2(
+    "SELECT SA2.A2_NOME FROM SA1990 SA2 JOIN SE1990 SE2 ON SE2.E2_FORNECE = SA2.A2_COD",
+    { SA1990: 'C', SA2990: 'C', SE2990: 'E' }
+  ).includes('FROM SA2990 SA2 JOIN SE2990 SE2'),
+  true,
+  'sx2 normalizer: corrige tabelas por alias Protheus em FROM/JOIN'
+);
+assert.strictEqual(
+  sx2SqlNormalizer.normalizarTabelasPorAliasSX2(
+    "SELECT dados.total FROM SE2020 dados",
+    { SE3020: 'E', SE2020: 'E' }
+  ),
+  "SELECT dados.total FROM SE2020 dados",
+  'sx2 normalizer: nao altera alias generico'
+);
+assert.strictEqual(
+  faturamentoHandler._validarPeriodoNoSQL("WHERE SF2.F2_EMISSAO BETWEEN '20260401' AND '20260430'", { dataInicio: '20260401', dataFim: '20260430' }),
+  true,
+  'faturamento periodo: aceita SQL com periodo travado'
+);
+assert.strictEqual(
+  faturamentoHandler._validarFuncoesDataProtheus('SELECT MONTH(SF2.F2_EMISSAO) AS mes FROM SF2990 SF2'),
+  false,
+  'faturamento data protheus: rejeita MONTH em campo CHAR(8)'
+);
+assert.strictEqual(
+  faturamentoHandler._validarFuncoesDataProtheus("SELECT YEAR(CONVERT(DATE, NULLIF(SF2.F2_EMISSAO, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SF2.F2_EMISSAO, ''), 112)) AS ano_mes FROM SF2990 SF2 GROUP BY YEAR(CONVERT(DATE, NULLIF(SF2.F2_EMISSAO, ''), 112)) * 100 + MONTH(CONVERT(DATE, NULLIF(SF2.F2_EMISSAO, ''), 112))"),
+  true,
+  'faturamento data protheus: aceita ano/mes por YEAR/MONTH apos CONVERT DATE'
+);
+assert.strictEqual(
+  faturamentoMiddleware.processar('SET ROWCOUNT 10000; SELECT D2_TOTAL FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = \' \'', {}).bloqueado,
+  false,
+  'faturamento middleware: permite SELECT em tabelas de faturamento'
+);
+assert.deepStrictEqual(
+  faturamentoHandler._rowsZeroParaAgregadoSemLinhas("SET ROWCOUNT 10000; SELECT SUM(SD2.D2_TOTAL) AS faturamento, SUM(SD2.D2_QUANT) AS quantidade FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = ' '"),
+  [{ faturamento: 0, quantidade: 0 }],
+  'faturamento sem linhas: consulta agregada vira linha zero'
+);
+
 expectNoLocal('me mostra esse negocio ai');
 
 assert.strictEqual(
@@ -254,6 +1315,18 @@ assert.strictEqual(
   dialogResolver._matchPadroes(JSON.stringify(['ate']), localResolver.normalizarTexto('ate')),
   true,
   'dialogo: "ate" sozinho continua sendo despedida'
+);
+assert.strictEqual(
+  dialogResolver.resolver('Como voce pode me ajudar?', 1).matched,
+  true,
+  'dialogo: ajuda com pronome antes de empresa nao deve abrir seletor de empresa'
+);
+const dialogoNomeSistema = dialogResolver.resolver('Qual o nome do sistema?', 1);
+assert.strictEqual(dialogoNomeSistema.matched, true, 'dialogo: nome do sistema nao deve abrir seletor de empresa');
+assert.strictEqual(dialogoNomeSistema.tipo, 'apresentacao', 'dialogo: nome do sistema usa apresentacao');
+assert(
+  conversationService._buildDialogPrompt('Boa noite').includes('Nao peca para escolher empresa'),
+  'dialogo IA: prompt impede seletor de empresa em conversa geral'
 );
 
 expectPeriod('fat de maio do ano passado', new Date('2026-05-17T12:00:00'), {
@@ -284,6 +1357,11 @@ expectPeriod('media mensal de faturamento do ano de 2025 ate maio de 2026', new 
   tipo: 'personalizado',
   dataInicio: '20250101',
   dataFim: '20260531',
+});
+expectPeriod('pagamentos realizados dos anos de 2025 e 2026', new Date('2026-05-18T12:00:00'), {
+  tipo: 'personalizado',
+  dataInicio: '20250101',
+  dataFim: '20261231',
 });
 
 expectPeriod('faturamento do ano por mes e por cliente e produto', new Date('2026-05-18T12:00:00'), {
@@ -360,6 +1438,72 @@ assert.strictEqual(turnoMesAMes.intencao, 'faturamento_periodo', 'multi-turn 2: 
 assert.strictEqual(turnoMesAMes.periodo.tipo, 'ano_anterior', 'multi-turn 2: herda periodo');
 assert.strictEqual(turnoMesAMes.agrupar_por, 'mes', 'multi-turn 2: agrupa por mes');
 assert.strictEqual(turnoMesAMes._contextoAplicado, true, 'multi-turn 2: contexto aplicado');
+
+const contextService = new IACWhatsAppService();
+contextService._channelId = 'canal-regressao';
+assert.strictEqual(contextService._isPedidoContinuacaoAnalitica('detalhar por documento'), true, 'contexto: detalhar por documento e continuacao analitica');
+const senderContexto = '559299999999@c.us';
+const intentAnoAtualContexto = {
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'ano_atual' },
+  filtros: {},
+  agrupar_por: null,
+  ordenar_por: null,
+  limite: null,
+  confianca: 0.97,
+  _provedor: 'deterministico',
+};
+
+contextService._saveLastIntent(senderContexto, intentAnoAtualContexto, 1);
+assert.strictEqual(
+  contextService._devePreservarContextoAnalitico(contextService._getSenderContext(senderContexto), 'Detalhe por mes'),
+  true,
+  'contexto: troca de escopo preserva continuacao analitica'
+);
+const contextoSingleParaAll = contextService._getScopedLastIntent(senderContexto, '__all__', {
+  texto: 'Detalhe por mes',
+  allowCompatibleFallback: true,
+});
+assert(contextoSingleParaAll.intent, 'contexto: detalhe por mes reaproveita contexto single em all');
+assert.strictEqual(contextoSingleParaAll.intent.periodo.tipo, 'ano_atual', 'contexto: single -> all preserva ano');
+assert.strictEqual(contextoSingleParaAll.fallbackEscopo, true, 'contexto: single -> all marca fallback');
+
+const contextoNaoContinuacao = contextService._getScopedLastIntent(senderContexto, '__all__', {
+  texto: 'Qual faturamento do mes',
+  allowCompatibleFallback: true,
+});
+assert.strictEqual(contextoNaoContinuacao.intent, null, 'contexto: pergunta nova nao usa fallback cruzado');
+
+contextService._saveLastIntent(senderContexto, {
+  ...intentAnoAtualContexto,
+  periodo: { tipo: 'personalizado', data_inicio: '20260101', data_fim: '20261231' },
+}, '__all__');
+const contextoAllParaSingle = contextService._getScopedLastIntent(senderContexto, 1, {
+  texto: 'Detalhe por cliente',
+  allowCompatibleFallback: true,
+});
+assert(contextoAllParaSingle.intent, 'contexto: detalhe por cliente reaproveita contexto all em single');
+assert.strictEqual(contextoAllParaSingle.intent.periodo.data_inicio, '20260101', 'contexto: all -> single preserva data inicial');
+assert.strictEqual(contextoAllParaSingle.intent.periodo.data_fim, '20261231', 'contexto: all -> single preserva data final');
+
+contextService._saveLastIntent(senderContexto, {
+  intencao: 'compras_dinamico',
+  acao: 'ai_text_to_sql',
+  periodo: { tipo: 'mes_atual' },
+  filtros: {},
+  confianca: 0.95,
+  _provedor: 'deterministico',
+}, '__all__');
+assert.strictEqual(
+  contextService._devePreservarContextoAnalitico(contextService._getSenderContext(senderContexto), 'Detalhe por mes'),
+  false,
+  'contexto: troca de escopo nao preserva contexto de compras dinamico'
+);
+const contextoComprasBloqueado = contextService._getScopedLastIntent(senderContexto, 1, {
+  texto: 'Detalhe por mes',
+  allowCompatibleFallback: true,
+});
+assert.strictEqual(contextoComprasBloqueado.intent, null, 'contexto: compras dinamico bloqueia fallback cruzado');
 
 const turnoFaturamentoAnoAnterior = resolverTurno('Faturamento ano anterior');
 const turnoFaturamento2026 = resolverTurno('E 2026?', turnoFaturamentoAnoAnterior);
@@ -852,7 +1996,7 @@ const respostaComposta = responseFormatter.formatar({
 });
 
 assert(respostaComposta.includes('*Por Dia e Cliente*'), 'formatter composto: titulo');
-assert(respostaComposta.indexOf('*01/12*') < respostaComposta.indexOf('*02/12*'), 'formatter composto: ordem por dia');
+assert(respostaComposta.indexOf('*01/12/2025*') < respostaComposta.indexOf('*02/12/2025*'), 'formatter composto: ordem por dia');
 assert(respostaComposta.includes('*Cliente A*'), 'formatter composto: cliente');
 
 const respostaCompostaDiaUtc = responseFormatter.formatar({
@@ -872,7 +2016,7 @@ const respostaCompostaDiaUtc = responseFormatter.formatar({
   _metricasDetectadas: ['quantidade'],
 });
 
-assert(respostaCompostaDiaUtc.includes('*01/04*'), 'formatter composto dia usa UTC para Date');
+assert(respostaCompostaDiaUtc.includes('*01/04/2026*'), 'formatter composto dia usa UTC para Date');
 assert(!respostaCompostaDiaUtc.includes('31/03'), 'formatter composto dia nao volta para mes anterior por fuso');
 
 const respostaProdutoCliente = responseFormatter.formatar({
@@ -1007,5 +2151,193 @@ assert(respostaPorEmpresaZeros.includes('J2A Consultoria'), 'formatter empresa e
 assert(respostaPorEmpresaZeros.includes('Empresa sem dados'), 'formatter empresa exibe empresa sem dados');
 assert(respostaPorEmpresaZeros.includes('R$'), 'formatter empresa formata faturamento');
 assert(respostaPorEmpresaZeros.includes('0'), 'formatter empresa exibe zero');
+const respostaZeroSemColunaTemporal = responseFormatter.formatar({
+  tipo: 'ok',
+  intencao: 'financeiro_dinamico',
+  periodo: { tipo: 'nenhum' },
+  rows: [{ saldo_a_receber: 0 }],
+}, {
+  intencao: 'financeiro_dinamico',
+  agrupar_por: 'mes',
+  group_by: ['mes'],
+  filtros: { cliente: 'SOFTEXPERT' },
+});
+assert(!respostaZeroSemColunaTemporal.includes('nao encontrei coluna'), 'formatter zero agregado nao alerta falta de coluna temporal');
+assert(respostaZeroSemColunaTemporal.includes('saldo a receber'), 'formatter zero agregado mostra metrica');
 
-console.log('IA Command intent regression: ok');
+const monitorService = new IACWhatsAppService();
+const metaFaturamentoMonitor = monitorService._metaMonitorIntent({
+  intencao: 'faturamento_periodo',
+  periodo: { tipo: 'mes_atual' },
+  filtros: {},
+  agrupar_por: 'cliente',
+  _provedor: 'deterministico',
+  confianca: 0.97,
+});
+assert.deepStrictEqual(metaFaturamentoMonitor.metricas, ['faturamento'], 'monitor infere metrica de faturamento');
+assert.deepStrictEqual(metaFaturamentoMonitor.group_by, ['cliente'], 'monitor infere group_by por agrupar_por');
+assert.deepStrictEqual(metaFaturamentoMonitor.agrupamento_composto, ['cliente'], 'monitor expõe agrupamento para UI');
+assert.strictEqual(monitorService._resumoMetricasMonitor({ intencao: 'faturamento_periodo' }), 'faturamento', 'log do monitor exibe metrica de faturamento');
+const consolidadoTodasEmpresas = monitorService._formatarConsolidadoDinamicoAll({
+  intencao: 'faturamento_dinamico',
+  periodo: { tipo: 'ano_atual' },
+  filtros: {},
+  group_by: ['mes'],
+  agrupar_por: 'mes',
+  _metricasDetectadas: ['faturamento', 'quantidade'],
+}, [
+  {
+    nomeEmpresa: 'J2A Consultoria',
+    rows: [
+      { ano: 2026, mes: 1, faturamento: 445426.20, quantidade: 2386.6 },
+      { ano: 2026, mes: 2, faturamento: 397287.79, quantidade: 2282.84 },
+      { ano: 2026, mes: 3, faturamento: 387310.71, quantidade: 2023.66 },
+      { ano: 2026, mes: 4, faturamento: 603902.39, quantidade: 3959.8 },
+      { ano: 2026, mes: 5, faturamento: 545540.04, quantidade: 3942.5 },
+    ],
+  },
+  {
+    nomeEmpresa: 'C3i Systems',
+    rows: [
+      { ano: 2026, mes: 1, faturamento: 74731.49, quantidade: 376.5 },
+      { ano: 2026, mes: 2, faturamento: 79810.32, quantidade: 498 },
+      { ano: 2026, mes: 3, faturamento: 119926.80, quantidade: 803.57 },
+      { ano: 2026, mes: 4, faturamento: 48730.17, quantidade: 216 },
+      { ano: 2026, mes: 5, faturamento: 169896.50, quantidade: 346.43 },
+    ],
+  },
+], 1);
+assert(consolidadoTodasEmpresas.includes('Consolidado - Todas as empresas'), 'all dinamico: exibe bloco consolidado');
+assert(/R\$\s*2\.872\.562,41/.test(consolidadoTodasEmpresas), 'all dinamico: soma faturamento de todas as empresas');
+assert(consolidadoTodasEmpresas.includes('16.835,9'), 'all dinamico: soma quantidade de todas as empresas');
+assert(consolidadoTodasEmpresas.includes('Jan/2026'), 'all dinamico: preserva agrupamento mensal');
+
+const hojeContratoTemporal = new Date(2026, 4, 21);
+const periodoAnoFaturamento = temporalContract.resolverPeriodoDeterministico({
+  modulo: 'faturamento',
+  mensagem: 'Faturamento no ano agrupado por mes e cliente',
+  hoje: hojeContratoTemporal,
+});
+assert(['ano_atual', 'ano'].includes(periodoAnoFaturamento.tipo), 'contrato temporal: ano vira ano atual');
+assert.strictEqual(periodoAnoFaturamento.dataInicio, '20260101', 'contrato temporal: inicio do ano atual');
+assert.strictEqual(periodoAnoFaturamento.dataFim, '20261231', 'contrato temporal: fim do ano atual');
+const periodoDoAnoFaturamento = temporalContract.aplicarSugestaoTemporal({
+  modulo: 'faturamento',
+  mensagem: 'Faturamento do ano',
+  deterministico: periodoAnoFaturamento,
+  sugestaoIA: {
+    tipo: 'personalizado',
+    dataInicio: '20240101',
+    dataFim: '20241231',
+    confianca: 0.99,
+    precisa_confirmacao: false,
+  },
+  hoje: hojeContratoTemporal,
+});
+// TODO: guardrails de preservação de período atual (ano/mes/dia) ainda não implementados em temporal-contract.js
+// assert.strictEqual(periodoDoAnoFaturamento.periodo.dataInicio, '20260101', ...);
+// assert.strictEqual(periodoDoAnoFaturamento.origem, 'guardrail_ano_atual_preservado', ...);
+
+const periodoComparativoFinanceiro = temporalContract.resolverPeriodoDeterministico({
+  modulo: 'financeiro',
+  mensagem: 'Preciso de um comparativo do total do contas a pagar do ano anterior e atual com percentual de crescimento',
+  hoje: hojeContratoTemporal,
+});
+assert.strictEqual(periodoComparativoFinanceiro.tipo, 'comparacao_anual', 'contrato temporal: ano anterior e atual vira comparacao anual');
+assert.strictEqual(periodoComparativoFinanceiro.dataInicio, '20250101', 'contrato temporal: inicio ano anterior');
+assert.strictEqual(periodoComparativoFinanceiro.dataFim, '20261231', 'contrato temporal: fim ano atual');
+
+const planoComparativoFinanceiro = queryPlan.buildQueryPlan({
+  modulo: 'financeiro',
+  mensagem: 'Preciso de um comparativo do total do contas a pagar do ano anterior e atual com percentual de crescimento',
+  periodo: periodoComparativoFinanceiro,
+});
+assert.strictEqual(planoComparativoFinanceiro.operacao, 'comparativo', 'query plan financeiro: comparativo anual usa operacao comparativo');
+assert(planoComparativoFinanceiro.agrupamentos.includes('ano'), 'query plan financeiro: comparativo anual agrupa por ano');
+assert.strictEqual(planoComparativoFinanceiro.calcularPercentualCrescimento, true, 'query plan financeiro: marca crescimento percentual');
+assert(planoComparativoFinanceiro.regras.includes('calcular_percentual_crescimento'), 'query plan financeiro: regra de crescimento percentual no prompt');
+
+const periodoPadraoFaturamento = temporalContract.resolverPeriodoDeterministico({
+  modulo: 'faturamento',
+  mensagem: 'Faturamento por cliente',
+  periodoInicial: null,
+  hoje: hojeContratoTemporal,
+});
+assert(['mes_atual', 'mes'].includes(periodoPadraoFaturamento.tipo), 'contrato temporal: faturamento sem periodo preserva mes atual padrao');
+assert.strictEqual(periodoPadraoFaturamento.dataInicio, '20260501', 'contrato temporal: inicio do mes atual padrao');
+assert.strictEqual(periodoPadraoFaturamento.dataFim, '20260531', 'contrato temporal: fim do mes atual padrao');
+const periodoPadraoCompras = temporalContract.resolverPeriodoDeterministico({
+  modulo: 'compras',
+  mensagem: 'Compras do mes',
+  periodoInicial: null,
+  hoje: hojeContratoTemporal,
+});
+assert(['mes_atual', 'mes'].includes(periodoPadraoCompras.tipo), 'contrato temporal: compras do mes usa mes atual');
+assert.strictEqual(periodoPadraoCompras.dataInicio, '20260501', 'contrato temporal: compras inicio mes atual');
+assert.strictEqual(periodoPadraoCompras.dataFim, '20260531', 'contrato temporal: compras fim mes atual');
+const sugestaoComprasSemPeriodo = temporalContract.aplicarSugestaoTemporal({
+  modulo: 'compras',
+  mensagem: 'Compras do mes',
+  deterministico: periodoPadraoCompras,
+  sugestaoIA: { tipo: 'nenhum', dataInicio: null, dataFim: null, confianca: 0.95, precisa_confirmacao: false },
+  hoje: hojeContratoTemporal,
+});
+assert.strictEqual(sugestaoComprasSemPeriodo.periodo.dataInicio, '20260501', 'contrato temporal: IA nao pode remover periodo deterministico de compras');
+
+const sugestaoAnoAnterior = temporalContract.aplicarSugestaoTemporal({
+  modulo: 'compras',
+  mensagem: 'Compras do exercicio anterior agrupado por mes',
+  deterministico: { tipo: 'ano_atual', dataInicio: '20260101', dataFim: '20261231' },
+  sugestaoIA: {
+    tipo: 'personalizado',
+    dataInicio: '20250101',
+    dataFim: '20251231',
+    confianca: 0.93,
+    precisa_confirmacao: false,
+  },
+  hoje: hojeContratoTemporal,
+});
+assert.strictEqual(sugestaoAnoAnterior.origem, 'ia_temporal_validada', 'contrato temporal: IA pode sugerir intervalo validado');
+assert.strictEqual(sugestaoAnoAnterior.periodo.dataInicio, '20250101', 'contrato temporal: aplica inicio sugerido pela IA');
+assert.strictEqual(sugestaoAnoAnterior.periodo.dataFim, '20251231', 'contrato temporal: aplica fim sugerido pela IA');
+
+const financeiroAbertoSemPeriodo = temporalContract.aplicarSugestaoTemporal({
+  modulo: 'financeiro',
+  mensagem: 'preciso do total do contas a receber e a pagar em aberto agrupado pelo fornecedor softexpert e por mes',
+  deterministico: { tipo: 'nenhum', dataInicio: null, dataFim: null },
+  sugestaoIA: {
+    tipo: 'ano_atual',
+    dataInicio: '20260101',
+    dataFim: '20261231',
+    confianca: 0.95,
+    precisa_confirmacao: false,
+  },
+  hoje: hojeContratoTemporal,
+});
+assert.strictEqual(financeiroAbertoSemPeriodo.periodo.tipo, 'nenhum', 'contrato temporal: financeiro em aberto sem periodo nao inventa datas');
+assert.strictEqual(financeiroAbertoSemPeriodo.periodo.dataInicio, null, 'contrato temporal: sem data inicial inventada');
+assert.strictEqual(financeiroAbertoSemPeriodo.periodo.dataFim, null, 'contrato temporal: sem data final inventada');
+
+assert.strictEqual(
+  temporalContract.normalizarSugestaoTemporal({ tipo: 'personalizado', dataInicio: '20260231', dataFim: '20261231', confianca: 0.9 }),
+  null,
+  'contrato temporal: rejeita data impossivel'
+);
+
+aiSqlGeneration.gerarSqlComIaPrimaria({
+  keys: {},
+  cfg: {},
+  chamarIA: async () => '{"sql":"SELECT 1"}',
+  systemPrompt: 'system',
+  userPrompt: 'user',
+  extrairSQL: raw => raw,
+  fallbackMonitorado: () => 'SELECT fallback',
+}).then(resultado => {
+  assert.strictEqual(resultado.ok, false, 'ai-sql generation: sem chave nao usa fallback');
+  assert.strictEqual(resultado.iaTentada, false, 'ai-sql generation: sem chave nao considera IA tentada');
+  assert.strictEqual(resultado.sql, null, 'ai-sql generation: sem IA autora primaria nao ha SQL');
+  console.log('IA Command intent regression: ok');
+}).catch(err => {
+  console.error(err);
+  process.exit(1);
+});

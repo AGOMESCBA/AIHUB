@@ -34,9 +34,35 @@ async function fechar(conn) {
 function carregarConexao(empresaId) {
   const { getDB } = require('../../database');
   const db  = getDB();
-  const row = db.prepare(
+
+  // Se agente local estiver ativo, roteia para ele em vez da conexão ERP direta
+  const aiCfg = db.prepare(
+    'SELECT agente_local_ativo, agente_local_url, agente_local_token FROM ai_config WHERE empresa_id = ? LIMIT 1'
+  ).get(empresaId);
+  if (aiCfg?.agente_local_ativo && aiCfg?.agente_local_url && aiCfg?.agente_local_token) {
+    // Normaliza: usa só scheme://host:port, ignora qualquer path que o usuário tenha digitado
+    let baseUrl = aiCfg.agente_local_url.trim();
+    try {
+      const u = new URL(baseUrl);
+      baseUrl = `${u.protocol}//${u.host}`;
+    } catch (_) { /* mantém como está */ }
+    return {
+      tipo:     'api_proxy',
+      host:     baseUrl,
+      database: '/',
+      password: aiCfg.agente_local_token,
+    };
+  }
+
+  let row = db.prepare(
     "SELECT * FROM connections WHERE empresa_id = ? AND ativo = 1 ORDER BY criado_em DESC LIMIT 1"
   ).get(empresaId);
+  if (!row) {
+    const sx2Row = db.prepare("SELECT connection_id FROM protheus_sx2 WHERE empresa_id = ? LIMIT 1").get(empresaId);
+    if (sx2Row?.connection_id) {
+      row = db.prepare("SELECT * FROM connections WHERE id = ? AND ativo = 1").get(sx2Row.connection_id);
+    }
+  }
   if (!row) throw new Error('Nenhuma conexão ativa configurada para esta empresa.');
   return row;
 }

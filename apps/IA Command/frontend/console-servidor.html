@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Console do Servidor — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    .page-head   { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:12px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title  { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+
+    .page-content { padding-top:8px !important; padding-bottom:6px !important; }
+
+    /* Toolbar */
+    .con-toolbar {
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);
+      border-radius:var(--radius);margin-bottom:12px;
+    }
+    .con-badge {
+      display:inline-flex;align-items:center;gap:6px;padding:4px 12px;
+      border-radius:99px;font-size:12px;font-weight:700;flex-shrink:0;
+    }
+    .con-badge.connected { background:#dcfce7;color:#15803d; }
+    .con-badge.waiting   { background:#fef3c7;color:#92400e; }
+    .con-dot { width:8px;height:8px;border-radius:99px;background:currentColor;flex-shrink:0; }
+    .con-dot.pulse { animation:pulse-dot 1.2s ease-in-out infinite; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .con-filter {
+      display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;
+    }
+    .con-filter label { font-size:12px;color:var(--text-lo);display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none; }
+    .con-filter input[type=checkbox] { accent-color:var(--accent); }
+    .con-count { font-size:12px;color:var(--text-lo);white-space:nowrap; }
+
+    /* Terminal */
+    .con-terminal-wrap {
+      flex:1;display:flex;flex-direction:column;
+      background:var(--bg-card);border:1px solid var(--border);
+      border-radius:var(--radius);overflow:hidden;
+      height:calc(100vh - 160px);min-height:300px;
+    }
+    .con-terminal-header {
+      padding:9px 14px;border-bottom:1px solid var(--border);
+      font-size:12px;font-weight:700;color:var(--text-md);
+      display:flex;align-items:center;justify-content:space-between;gap:7px;flex-shrink:0;
+    }
+    .con-terminal-header-left { display:flex;align-items:center;gap:7px; }
+    .con-terminal {
+      flex:1;overflow-y:auto;padding:10px 14px;
+      font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12px;
+      line-height:1.7;background:var(--bg-base);
+      scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.3) transparent;
+    }
+    .log-line  { display:flex;gap:8px;padding:1px 0;align-items:baseline; }
+    .log-ts    { color:var(--text-lo);flex-shrink:0;user-select:none;font-size:11px; }
+    .log-level { font-size:10px;font-weight:700;flex-shrink:0;width:42px;text-align:right;user-select:none; }
+    .log-msg   { word-break:break-all;white-space:pre-wrap;flex:1;min-width:0; }
+    .log-msg.info    { color:var(--text-md); }
+    .log-msg.warn    { color:#f59e0b; }
+    .log-msg.error   { color:#ef4444; }
+    .log-level.info  { color:var(--text-lo); }
+    .log-level.warn  { color:#f59e0b; }
+    .log-level.error { color:#ef4444; }
+
+    .con-empty {
+      flex:1;display:flex;align-items:center;justify-content:center;
+      flex-direction:column;gap:10px;color:var(--text-lo);font-size:13px;
+      padding:40px;text-align:center;
+    }
+    .con-empty-icon { font-size:36px; }
+
+    .busca-wrap {
+      display:flex;align-items:center;gap:6px;
+    }
+    .busca-wrap input {
+      height:32px;font-size:12px;padding:0 10px;border:1px solid var(--border);
+      border-radius:var(--radius-sm);background:var(--bg-base);color:var(--text-hi);
+      min-width:200px;font-family:ui-monospace,monospace;
+    }
+    .busca-wrap input:focus { outline:none;border-color:var(--accent); }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &rsaquo;</span> Console do Servidor</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Administração</div>
+          <div class="page-title">Console do Servidor</div>
+        </div>
+      </div>
+
+      <div class="con-toolbar">
+        <div id="con-badge" class="con-badge waiting">
+          <span class="con-dot pulse" id="con-dot"></span>
+          <span id="con-badge-txt">Conectando...</span>
+        </div>
+        <span id="con-count" class="con-count">0 linhas</span>
+        <div class="busca-wrap">
+          <input type="text" id="busca" placeholder="Filtrar mensagens..." oninput="filtrarBusca()" />
+        </div>
+        <div class="con-filter" style="margin-left:auto">
+          <label><input type="checkbox" id="chk-info" checked onchange="aplicarFiltros()"> INFO</label>
+          <label><input type="checkbox" id="chk-warn" checked onchange="aplicarFiltros()"> WARN</label>
+          <label><input type="checkbox" id="chk-error" checked onchange="aplicarFiltros()"> ERROR</label>
+          <label><input type="checkbox" id="chk-auto-scroll" checked> Auto-scroll</label>
+        </div>
+        <button class="btn btn-ghost" onclick="limparConsole()" style="font-size:12px">Limpar</button>
+      </div>
+
+      <div class="con-terminal-wrap">
+        <div class="con-terminal-header">
+          <div class="con-terminal-header-left">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            stdout / stderr do processo Node.js
+          </div>
+          <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarTudo()">Copiar tudo</button>
+        </div>
+        <div class="con-terminal" id="terminal">
+          <div class="con-empty" id="empty-state">
+            <div class="con-empty-icon">📡</div>
+            <div>Aguardando mensagens do servidor...</div>
+            <div style="font-size:11px;color:var(--text-lo);margin-top:4px">Os logs aparecerão aqui em tempo real.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  const terminal     = document.getElementById('terminal');
+  const emptyState   = document.getElementById('empty-state');
+  const countEl      = document.getElementById('con-count');
+  const badgeEl      = document.getElementById('con-badge');
+  const badgeTxtEl   = document.getElementById('con-badge-txt');
+  const dotEl        = document.getElementById('con-dot');
+
+  let _todas = [];
+  let _buscaAtiva = '';
+
+  function fmtTs(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3,'0')}`;
+  }
+
+  function criarLinha(entry) {
+    const div = document.createElement('div');
+    div.className  = 'log-line';
+    div.dataset.level = entry.level || 'info';
+    div.dataset.msg   = (entry.msg || '').toLowerCase();
+
+    const ts    = document.createElement('span');
+    ts.className = 'log-ts';
+    ts.textContent = fmtTs(entry.ts);
+
+    const lvl = document.createElement('span');
+    lvl.className = `log-level ${entry.level || 'info'}`;
+    lvl.textContent = (entry.level || 'info').toUpperCase();
+
+    const msg = document.createElement('span');
+    msg.className = `log-msg ${entry.level || 'info'}`;
+    msg.textContent = entry.msg || '';
+
+    div.appendChild(ts);
+    div.appendChild(lvl);
+    div.appendChild(msg);
+    return div;
+  }
+
+  function deveExibir(entry) {
+    const level = entry.level || 'info';
+    const chkInfo  = document.getElementById('chk-info').checked;
+    const chkWarn  = document.getElementById('chk-warn').checked;
+    const chkError = document.getElementById('chk-error').checked;
+    if (level === 'warn'  && !chkWarn)  return false;
+    if (level === 'error' && !chkError) return false;
+    if (level === 'info'  && !chkInfo)  return false;
+    if (_buscaAtiva && !String(entry.msg || '').toLowerCase().includes(_buscaAtiva)) return false;
+    return true;
+  }
+
+  function renderizarTudo() {
+    const visíveis = _todas.filter(deveExibir);
+    terminal.innerHTML = '';
+    if (!visíveis.length) {
+      emptyState.style.display = '';
+      terminal.appendChild(emptyState);
+      countEl.textContent = `${_todas.length} linha(s) • ${visíveis.length} visível(is)`;
+      return;
+    }
+    emptyState.style.display = 'none';
+    const frag = document.createDocumentFragment();
+    visíveis.forEach(e => frag.appendChild(criarLinha(e)));
+    terminal.appendChild(frag);
+    contarEScrollar();
+  }
+
+  function adicionarEntrada(entry) {
+    _todas.push(entry);
+    if (!deveExibir(entry)) {
+      countEl.textContent = `${_todas.length} linha(s)`;
+      return;
+    }
+    if (emptyState.parentNode === terminal) terminal.removeChild(emptyState);
+    const linha = criarLinha(entry);
+    terminal.appendChild(linha);
+    contarEScrollar();
+  }
+
+  function contarEScrollar() {
+    const visíveis = terminal.querySelectorAll('.log-line').length;
+    countEl.textContent = `${_todas.length} linha(s) • ${visíveis} visível(is)`;
+    if (document.getElementById('chk-auto-scroll').checked) {
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+  }
+
+  function aplicarFiltros() { renderizarTudo(); }
+  function filtrarBusca()   { _buscaAtiva = document.getElementById('busca').value.toLowerCase().trim(); renderizarTudo(); }
+  function limparConsole()  { _todas = []; renderizarTudo(); }
+
+  function copiarTudo() {
+    const txt = _todas.map(e => `[${fmtTs(e.ts)}] [${(e.level||'info').toUpperCase()}] ${e.msg}`).join('\n');
+    const btn  = event.target.closest('button');
+    const orig = btn.textContent;
+    const ok  = () => { btn.textContent = 'Copiado!'; setTimeout(() => { btn.textContent = orig; }, 1500); };
+    const err = () => { btn.textContent = 'Erro!';   setTimeout(() => { btn.textContent = orig; }, 1500); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(txt).then(ok).catch(() => _clipboardFallback(txt, ok, err));
+    } else {
+      _clipboardFallback(txt, ok, err);
+    }
+  }
+
+  function _clipboardFallback(texto, ok, err) {
+    const ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy') ? ok() : err(); } catch { err(); }
+    document.body.removeChild(ta);
+  }
+
+  // ── Socket.IO ──────────────────────────────────────────────────────────────
+  const socket = io();
+
+  socket.on('connect', () => {
+    badgeEl.className = 'con-badge connected';
+    badgeTxtEl.textContent = 'Conectado';
+    dotEl.classList.remove('pulse');
+    socket.emit('join-iac-console');
+  });
+
+  socket.on('disconnect', () => {
+    badgeEl.className = 'con-badge waiting';
+    badgeTxtEl.textContent = 'Desconectado';
+    dotEl.classList.add('pulse');
+  });
+
+  socket.on('iac-console', entry => adicionarEntrada(entry));
+
+  // Após auth: solicita entrada na sala
+  window._iahubAuthReady?.then(() => {
+    if (socket.connected) socket.emit('join-iac-console');
+  });
+</script>
+</body>
+</html>

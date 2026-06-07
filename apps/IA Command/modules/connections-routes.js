@@ -23,7 +23,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
   // ── LIST DISPONÍVEIS (dropdown em outros módulos — só requer requireIaCommand) ─
   app.get('/api/ia-command/connections/available', requireAuth, requireIaCommand, (req, res) => {
     const rows = crud.listar('connections', { empresa_id: eid(req) });
-    res.json(rows.map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, ativo: r.ativo })));
+    res.json(rows.map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, erp: r.erp, ativo: r.ativo })));
   });
 
   // ── GET ONE ──────────────────────────────────────────────────────────────────
@@ -44,16 +44,19 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
       if (!isProxy && !database) {
         return res.status(400).json({ error: 'Campo obrigatório: database.' });
       }
+      const { filial, configuracoes } = req.body;
       const row = crud.criar('connections', {
-        empresa_id: eid(req), nome, tipo, erp: erp || 'protheus', host,
-        port:       isProxy ? null : (port || null),
-        database:   database || null,
-        username:   isProxy ? null : (username || null),
-        password:   password || null,
-        encrypt:    isProxy ? 0 : (encrypt ? 1 : 0),
-        trust_cert: isProxy ? 0 : (trust_cert ? 1 : 0),
-        ssl:        ssl ? 1 : 0,
-        ativo:      0,
+        empresa_id:   eid(req), nome, tipo, erp: erp || 'protheus', host,
+        port:         isProxy ? null : (port || null),
+        database:     database || null,
+        username:     isProxy ? null : (username || null),
+        password:     password || null,
+        encrypt:      isProxy ? 0 : (encrypt ? 1 : 0),
+        trust_cert:   isProxy ? 0 : (trust_cert ? 1 : 0),
+        ssl:          ssl ? 1 : 0,
+        filial:       filial || null,
+        configuracoes: configuracoes || null,
+        ativo:        0,
       });
       res.status(201).json({ ...row, password: undefined });
     } catch (err) {
@@ -68,7 +71,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
       if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
 
       const campos = {};
-      const allowed = ['nome', 'tipo', 'erp', 'host', 'port', 'database', 'username', 'password', 'filial', 'encrypt', 'trust_cert', 'ssl', 'ativo'];
+      const allowed = ['nome', 'tipo', 'erp', 'host', 'port', 'database', 'username', 'password', 'filial', 'encrypt', 'trust_cert', 'ssl', 'ativo', 'configuracoes'];
       for (const k of allowed) {
         if (req.body[k] !== undefined) {
           const v = req.body[k];

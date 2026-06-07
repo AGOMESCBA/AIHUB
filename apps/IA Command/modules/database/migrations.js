@@ -319,7 +319,7 @@ const MIGRATIONS = [
     version: 18,
     descricao: 'Fallback configuravel de provedores de IA',
     sql: `
-      ALTER TABLE ai_config ADD COLUMN fallback_ordem TEXT DEFAULT 'groq,gemini,deepseek,claude';
+      ALTER TABLE ai_config ADD COLUMN fallback_ordem TEXT DEFAULT 'groq,openai,gemini,deepseek,claude';
     `,
   },
   {
@@ -437,6 +437,190 @@ const MIGRATIONS = [
     sql: `
       ALTER TABLE interpretation_log ADD COLUMN sql_gerado  TEXT    DEFAULT NULL;
       ALTER TABLE interpretation_log ADD COLUMN duracao_ms  INTEGER DEFAULT NULL;
+    `,
+  },
+  {
+    version: 25,
+    descricao: 'erp_config — torna connection_id opcional (config de middleware independe de conexão)',
+    sql: `
+      CREATE TABLE IF NOT EXISTS erp_config_new (
+        id            TEXT PRIMARY KEY,
+        connection_id TEXT,
+        empresa_id    INTEGER NOT NULL,
+        erp           TEXT NOT NULL,
+        config        TEXT,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      INSERT INTO erp_config_new SELECT id, connection_id, empresa_id, erp, config, criado_em, atualizado_em FROM erp_config;
+      DROP TABLE erp_config;
+      ALTER TABLE erp_config_new RENAME TO erp_config;
+    `,
+  },
+  {
+    version: 26,
+    descricao: 'Dicionário SX2 do Protheus — modos de compartilhamento por conexão',
+    sql: `
+      CREATE TABLE IF NOT EXISTS protheus_sx2 (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        chave         TEXT NOT NULL,
+        arquivo       TEXT,
+        modo          TEXT NOT NULL DEFAULT 'E',
+        descricao     TEXT,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_protheus_sx2_conn_chave
+        ON protheus_sx2 (connection_id, chave);
+    `,
+  },
+  {
+    version: 27,
+    descricao: 'Dicionario SX3 do Protheus - campos por conexao',
+    sql: `
+      CREATE TABLE IF NOT EXISTS protheus_sx3 (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        tabela        TEXT NOT NULL,
+        campo         TEXT NOT NULL,
+        tipo          TEXT,
+        tamanho       INTEGER,
+        decimal       INTEGER,
+        titulo        TEXT,
+        descricao     TEXT,
+        usado         TEXT,
+        ordem         INTEGER,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_protheus_sx3_conn_tabela_campo
+        ON protheus_sx3 (connection_id, tabela, campo);
+    `,
+  },
+  {
+    version: 28,
+    descricao: 'IA Command - trace detalhado da interpretacao',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN trace_json TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 29,
+    descricao: 'IA Command - turnos de historico conversacional configuravel',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN historico_turnos INTEGER DEFAULT 5;
+    `,
+  },
+  {
+    version: 30,
+    descricao: 'IA Command - remover "me apresente" dos padroes de dialogo de apresentacao (ambiguo com consultas ERP)',
+    sql: `
+      UPDATE conversational_dialogs
+      SET padroes = REPLACE(padroes, '"me apresente", ', '')
+      WHERE tipo = 'apresentacao' AND origem = 'sistema' AND padroes LIKE '%"me apresente"%';
+    `,
+  },
+  {
+    version: 31,
+    descricao: 'IA Command - coluna modulo canonico na interpretation_log para unificar log de consultas',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN modulo TEXT DEFAULT NULL;
+
+      UPDATE interpretation_log SET modulo =
+        CASE
+          WHEN intencao LIKE 'compras%'    OR intent_json LIKE '%"_moduloDinamico":"compras"%'    THEN 'compras'
+          WHEN intencao LIKE 'faturamento%' OR intent_json LIKE '%"_moduloDinamico":"faturamento"%' THEN 'faturamento'
+          WHEN intencao LIKE 'financeiro%' OR intent_json LIKE '%"_moduloDinamico":"financeiro"%'  THEN 'financeiro'
+          WHEN intencao LIKE 'comissao%'   OR intent_json LIKE '%"_moduloDinamico":"comissao"%'    THEN 'comissao'
+          ELSE NULL
+        END
+      WHERE modulo IS NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_modulo
+        ON interpretation_log (empresa_id, modulo, criado_em);
+    `,
+  },
+  {
+    version: 32,
+    descricao: 'IA Command - rastreabilidade de SQL canonico multiempresa',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN escopo_execucao TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_origem TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_empresa_origem INTEGER DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_original TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_adaptado TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_sql_canonico
+        ON interpretation_log (empresa_id, sql_canonico_origem, criado_em);
+
+      ALTER TABLE execution_log ADD COLUMN detalhes_json TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 33,
+    descricao: 'IA Command - auditoria detalhada do ciclo de SQL dinamico',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN sql_auditoria_json TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_parametros_json TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_parametrizado INTEGER DEFAULT 0;
+      ALTER TABLE interpretation_log ADD COLUMN sql_ia_bruto TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_final_executado TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_reuso_motivo TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_reuso_permitido INTEGER DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_canonico_empresa_atual INTEGER DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_sql_auditoria
+        ON interpretation_log (empresa_id, modulo, sql_canonico_origem, criado_em);
+    `,
+  },
+  {
+    version: 34,
+    descricao: 'IA Command - histórico de chat para Text-to-SQL multi-turn',
+    sql: `
+      CREATE TABLE IF NOT EXISTS chat_history (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id TEXT    NOT NULL,
+        sender     TEXT    NOT NULL,
+        role       TEXT    NOT NULL,
+        content    TEXT    NOT NULL,
+        criado_em  TEXT    NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_chat_history_lookup
+        ON chat_history (empresa_id, sender, criado_em);
+    `,
+  },
+  {
+    version: 35,
+    descricao: 'IA Command - rastreabilidade do pipeline chat-first',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN pipeline_origem TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN chat_turno INTEGER DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_validacao_erro TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_pipeline
+        ON interpretation_log (empresa_id, pipeline_origem, criado_em);
+    `,
+  },
+  {
+    version: 36,
+    descricao: 'IA Command - configuração do Agente Local por empresa',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN agente_local_url   TEXT    DEFAULT NULL;
+      ALTER TABLE ai_config ADD COLUMN agente_local_token TEXT    DEFAULT NULL;
+      ALTER TABLE ai_config ADD COLUMN agente_local_ativo INTEGER DEFAULT 0;
+      ALTER TABLE ai_config ADD COLUMN agente_local_ultimo_teste TEXT DEFAULT NULL;
+      ALTER TABLE ai_config ADD COLUMN agente_local_teste_ok     INTEGER DEFAULT NULL;
+    `,
+  },
+  {
+    version: 37,
+    descricao: 'IA Command - ocultar empresa do menu de seleção WhatsApp sem removê-la do canal',
+    sql: `
+      ALTER TABLE whatsapp_channel_companies ADD COLUMN ocultar_selecao INTEGER DEFAULT 0;
     `,
   },
 ];

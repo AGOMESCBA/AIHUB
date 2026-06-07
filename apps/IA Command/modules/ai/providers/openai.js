@@ -16,9 +16,10 @@ async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], 
   return new Promise((resolve, reject) => {
     const url  = new URL(OPENAI_API_URL);
     const opts = {
-      hostname: url.hostname,
-      path:     url.pathname,
-      method:   'POST',
+      hostname:             url.hostname,
+      path:                 url.pathname,
+      method:               'POST',
+      rejectUnauthorized:   false,
       headers: {
         'Authorization':  `Bearer ${apiKey}`,
         'Content-Type':   'application/json',
@@ -32,10 +33,11 @@ async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], 
       res.on('end', () => {
         try {
           const parsed = JSON.parse(raw);
-          if (parsed.error) return reject(new Error(parsed.error.message || 'OpenAI error'));
+          if (parsed.error) return reject(new Error(`[HTTP ${res.statusCode}] ${parsed.error.message || 'OpenAI error'}`));
           const content = parsed.choices?.[0]?.message?.content;
+          if (!content) return reject(new Error(`[HTTP ${res.statusCode}] OpenAI nao retornou conteudo.`));
           resolve(JSON.parse(content));
-        } catch (e) { reject(e); }
+        } catch (e) { reject(new Error(`[HTTP ${res.statusCode}] ${e.message} | raw: ${raw.slice(0, 200)}`)); }
       });
     });
     req.setTimeout(20000, () => req.destroy(new Error('OpenAI: tempo limite de 20s excedido.')));

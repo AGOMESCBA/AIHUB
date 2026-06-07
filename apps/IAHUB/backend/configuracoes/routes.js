@@ -8,6 +8,210 @@ const { empresaDataFile } = require('../../../IA Recruit/backend/data-paths');
 const DATA_DIR = APP_DATA_DIR;
 const SISTEMA_UPLOAD_DIR = appDataDir('uploads', 'sistema');
 
+// --- IA Command SQLite helpers ---
+
+const crypto = require('crypto');
+
+let _iacDb = null;
+function getIacDb() {
+  if (_iacDb) return _iacDb;
+  try {
+    const { getDB } = require('../../../IA Command/modules/database/index');
+    _iacDb = getDB();
+  } catch (_) { _iacDb = null; }
+  return _iacDb;
+}
+
+function countIacTabela(iacDb, tabela, empresaId) {
+  try {
+    return iacDb.prepare(`SELECT COUNT(*) AS n FROM ${tabela} WHERE empresa_id = ?`).get(empresaId)?.n ?? 0;
+  } catch (_) { return 0; }
+}
+
+// Gera ID determinístico para a empresa destino a partir do ID original.
+// Garante que origem e destino NUNCA compartilham o mesmo PK, evitando
+// que INSERT OR REPLACE sobrescreva registros da empresa origem.
+function remapId(oldId, destinoId) {
+  if (!oldId) return oldId;
+  const h = crypto.createHash('sha256').update(`iac_copy:${destinoId}:${oldId}`).digest('hex');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20,32)}`;
+}
+
+// opts.autoincPk  = true  → tabela tem PK INTEGER AUTOINCREMENT, não remapeia id
+// opts.camposRef  = ['campo'] → campos TEXT que referenciam IDs de outra tabela
+//                               e devem ser remapeados com o mesmo remapId
+function migrarIacSimples(iacDb, tabela, origemId, destinoId, opts = {}) {
+  const { autoincPk = false, camposRef = [] } = opts;
+  const linhas = iacDb.prepare(`SELECT * FROM ${tabela} WHERE empresa_id = ?`).all(origemId);
+  iacDb.prepare(`DELETE FROM ${tabela} WHERE empresa_id = ?`).run(destinoId);
+  if (!linhas.length) return;
+
+  const allCols = Object.keys(linhas[0]);
+  const cols    = autoincPk ? allCols.filter(c => c !== 'id') : allCols;
+  const stmt    = iacDb.prepare(
+    `INSERT INTO ${tabela} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+  );
+
+  const tx = iacDb.transaction(() => {
+    for (const row of linhas) {
+      const r = { ...row };
+      if (!autoincPk) r.id = remapId(row.id, destinoId);
+      r.empresa_id = destinoId;
+      for (const campo of camposRef) {
+        if (r[campo]) r[campo] = remapId(r[campo], destinoId);
+      }
+      stmt.run(cols.map(c => r[c]));
+    }
+  });
+  tx();
+}
+
+// Migra protheus_sx2 ou protheus_sx3 individualmente.
+// PK é AUTOINCREMENT; connection_id precisa ser remapeado igual ao feito em migrarConexoes.
+function migrarSxDict(iacDb, tabela, origemId, destinoId) {
+  const conns = iacDb.prepare('SELECT id FROM connections WHERE empresa_id = ?').all(origemId);
+  const connIdMap = {};
+  for (const c of conns) connIdMap[c.id] = remapId(c.id, destinoId);
+
+  // Valida que as conexões remapeadas já existem no destino (FK obrigatória).
+  if (conns.length > 0) {
+    const newIds = Object.values(connIdMap);
+    const ph = newIds.map(() => '?').join(', ');
+    const existentes = iacDb.prepare(`SELECT id FROM connections WHERE id IN (${ph})`).all(...newIds);
+    if (existentes.length === 0) {
+      throw new Error(
+        `Dicionário SX depende das Conexões ERP. Marque também "Conexões ERP + config Protheus" e execute novamente.`
+      );
+    }
+  }
+
+  const linhas = iacDb.prepare(`SELECT * FROM ${tabela} WHERE empresa_id = ?`).all(origemId);
+  iacDb.prepare(`DELETE FROM ${tabela} WHERE empresa_id = ?`).run(destinoId);
+  if (!linhas.length) return;
+
+  const cols = Object.keys(linhas[0]).filter(c => c !== 'id');
+  const stmt = iacDb.prepare(`INSERT INTO ${tabela} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+  const tx   = iacDb.transaction(() => {
+    for (const row of linhas) {
+      const r = { ...row };
+      r.empresa_id   = destinoId;
+      r.connection_id = connIdMap[row.connection_id] ?? row.connection_id;
+      stmt.run(cols.map(c => r[c]));
+    }
+  });
+  tx();
+}
+
+function migrarConexoes(iacDb, origemId, destinoId) {
+  const conns    = iacDb.prepare('SELECT * FROM connections WHERE empresa_id = ?').all(origemId);
+  const oldIds   = conns.map(c => c.id);
+  const ph       = oldIds.length ? oldIds.map(() => '?').join(', ') : "'__noop__'";
+
+  // Constrói mapa de remapeamento de IDs de conexão: oldId → newId
+  const connIdMap = {};
+  for (const c of conns) connIdMap[c.id] = remapId(c.id, destinoId);
+  const newIds = Object.values(connIdMap);
+
+  const phConfigs  = iacDb.prepare(`SELECT * FROM protheus_config WHERE connection_id IN (${ph})`).all(...oldIds);
+  const erpConfigs = iacDb.prepare('SELECT * FROM erp_config WHERE empresa_id = ?').all(origemId);
+  const sx2        = iacDb.prepare(`SELECT * FROM protheus_sx2 WHERE connection_id IN (${ph})`).all(...oldIds);
+  const sx3        = iacDb.prepare(`SELECT * FROM protheus_sx3 WHERE connection_id IN (${ph})`).all(...oldIds);
+
+  const tx = iacDb.transaction(() => {
+    // Apaga destino (CASCADE em protheus_config, sx2, sx3)
+    iacDb.prepare('DELETE FROM connections WHERE empresa_id = ?').run(destinoId);
+    // Apaga também quaisquer conexões cujos novos IDs já existam (migração anterior)
+    if (newIds.length) {
+      const phNew = newIds.map(() => '?').join(', ');
+      iacDb.prepare(`DELETE FROM connections WHERE id IN (${phNew})`).run(...newIds);
+    }
+    iacDb.prepare('DELETE FROM erp_config WHERE empresa_id = ?').run(destinoId);
+
+    // Insere conexões com IDs remapeados
+    if (conns.length) {
+      const cols = Object.keys(conns[0]);
+      const stmt = iacDb.prepare(`INSERT INTO connections (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of conns) {
+        const r = { ...row };
+        r.id = connIdMap[row.id];
+        r.empresa_id = destinoId;
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+
+    // protheus_config — PK AUTOINCREMENT, remapeia apenas connection_id
+    if (phConfigs.length) {
+      const cols = Object.keys(phConfigs[0]).filter(c => c !== 'id');
+      const stmt = iacDb.prepare(`INSERT INTO protheus_config (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of phConfigs) {
+        const r = { ...row };
+        r.connection_id = connIdMap[row.connection_id] ?? row.connection_id;
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+
+    // erp_config — id TEXT, empresa_id e connection_id remapeados
+    if (erpConfigs.length) {
+      const cols = Object.keys(erpConfigs[0]);
+      const stmt = iacDb.prepare(`INSERT INTO erp_config (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of erpConfigs) {
+        const r = { ...row };
+        r.id = remapId(row.id, destinoId);
+        r.empresa_id = destinoId;
+        if (r.connection_id) r.connection_id = connIdMap[row.connection_id] ?? row.connection_id;
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+
+    // protheus_sx2 / sx3 — PK AUTOINCREMENT, remapeia connection_id e empresa_id
+    for (const [tabela, linhas] of [['protheus_sx2', sx2], ['protheus_sx3', sx3]]) {
+      if (!linhas.length) continue;
+      const cols = Object.keys(linhas[0]).filter(c => c !== 'id');
+      const stmt = iacDb.prepare(`INSERT INTO ${tabela} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of linhas) {
+        const r = { ...row };
+        r.empresa_id    = destinoId;
+        r.connection_id = connIdMap[row.connection_id] ?? row.connection_id;
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+  });
+  tx();
+}
+
+// Tabelas do IA Command disponíveis para migração
+// opts.autoincPk = true  → PK é INTEGER AUTOINCREMENT (ai_config, audio_config, whatsapp_config)
+// opts.camposRef = [...]  → campos TEXT que referenciam IDs de outras tabelas IAC e devem ser remapeados
+const IAC_TABELAS = {
+  // Configuração IA — PK AUTOINCREMENT, sem referências cruzadas
+  iac_ai_config:    { sistema: 'iac', grupo: 'Configuração IA', label: 'Configuração de IA',       tabela: 'ai_config',    tipo: 'simples', default: true,  opts: { autoincPk: true } },
+  iac_audio_config: { sistema: 'iac', grupo: 'Configuração IA', label: 'Configuração de áudio',    tabela: 'audio_config', tipo: 'simples', default: true,  opts: { autoincPk: true } },
+
+  // IA / NLP — PK TEXT; intentions referencia intention_modules.id e datasets.id
+  iac_intention_modules: { sistema: 'iac', grupo: 'IA / NLP', label: 'Módulos de intenção',        tabela: 'intention_modules',     tipo: 'simples', default: true, opts: {} },
+  iac_datasets:          { sistema: 'iac', grupo: 'IA / NLP', label: 'Datasets',                   tabela: 'datasets',              tipo: 'simples', default: true, opts: {} },
+  iac_intentions:        { sistema: 'iac', grupo: 'IA / NLP', label: 'Intenções',                  tabela: 'intentions',            tipo: 'simples', default: true, opts: { camposRef: ['modulo', 'dataset_id'] } },
+  iac_synonyms:          { sistema: 'iac', grupo: 'IA / NLP', label: 'Sinônimos / equivalências',  tabela: 'synonyms',              tipo: 'simples', default: true, opts: {} },
+  iac_conv_dialogs:      { sistema: 'iac', grupo: 'IA / NLP', label: 'Diálogos conversacionais',  tabela: 'conversational_dialogs', tipo: 'simples', default: true, opts: {} },
+
+  // WhatsApp — config tem PK AUTOINCREMENT; demais têm PK TEXT
+  iac_wa_config:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Configuração WhatsApp', tabela: 'whatsapp_config',            tipo: 'simples', default: true,  opts: { autoincPk: true } },
+  iac_wa_numeros:   { sistema: 'iac', grupo: 'WhatsApp', label: 'Números autorizados',   tabela: 'whatsapp_allowed_numbers',   tipo: 'simples', default: true,  opts: {} },
+  iac_wa_templates: { sistema: 'iac', grupo: 'WhatsApp', label: 'Templates de mensagem', tabela: 'whatsapp_message_templates', tipo: 'simples', default: true,  opts: {} },
+  iac_wa_canais:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Canais — associações',  tabela: 'whatsapp_channel_companies', tipo: 'simples', default: false, opts: {} },
+
+  // Conexão ERP — migração especial: cascateia protheus_config e erp_config
+  iac_conexoes: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Conexões ERP + config Protheus',              tabela: 'connections',  tipo: 'conexoes', default: true },
+  // Dicionários Protheus — migrados individualmente; dependem de connections existir no destino
+  iac_sx2: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Dicionário SX2 — compartilhamento de tabelas', tabela: 'protheus_sx2', tipo: 'sx',      default: true,  opts: {} },
+  iac_sx3: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Dicionário SX3 — campos do Protheus',          tabela: 'protheus_sx3', tipo: 'sx',      default: false, opts: {} },
+
+  // Logs — desligado por padrão
+  iac_exec_log:   { sistema: 'iac', grupo: 'Logs', label: 'Log de execuções',      tabela: 'execution_log',      tipo: 'simples', default: false, opts: {} },
+  iac_interp_log: { sistema: 'iac', grupo: 'Logs', label: 'Log de interpretações', tabela: 'interpretation_log', tipo: 'simples', default: false, opts: {} },
+  iac_unmatched:  { sistema: 'iac', grupo: 'Logs', label: 'Mensagens sem resposta', tabela: 'unmatched_messages', tipo: 'simples', default: false, opts: {} },
+};
+
 const MIGRACAO_TABELAS = {
   config:             { grupo: 'Configuracoes', label: 'WhatsApp Curriculo', campos: ['config'], defaults: { config: {} }, default: true },
   email_config:       { grupo: 'Configuracoes', label: 'E-mail por vaga', campos: ['email_config'], defaults: { email_config: {} }, default: true },
@@ -115,6 +319,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
 
   app.get('/api/config/publico', (req, res) => {
     const cfg = db.getConfig(null);
+    // Cache de 5 minutos — configuração muda raramente; elimina latência na tela de login.
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.json({
       sistema_frase:  cfg.sistema_frase || 'Onde a gestão encontra a inteligência',
       sistema_nome:   cfg.sistema_nome || 'IAHUB',
@@ -260,13 +466,22 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
       nome: e.razao_social || e.nome || `Empresa ${e.id}`,
     }));
 
-    const tabelas = Object.entries(MIGRACAO_TABELAS).map(([id, def]) => ({
-      id,
-      grupo: def.grupo,
-      label: def.label,
-      campos: def.campos,
-      default: !!def.default,
-    }));
+    const tabelas = [
+      ...Object.entries(MIGRACAO_TABELAS).map(([id, def]) => ({
+        id,
+        sistema: 'iahub',
+        grupo: def.grupo,
+        label: def.label,
+        default: !!def.default,
+      })),
+      ...Object.entries(IAC_TABELAS).map(([id, def]) => ({
+        id,
+        sistema: 'iac',
+        grupo: def.grupo,
+        label: def.label,
+        default: !!def.default,
+      })),
+    ];
 
     res.json({ empresas, tabelas });
   });
@@ -288,17 +503,28 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
 
     const origemData = readEmpresaData(origemId);
     const destinoData = readEmpresaData(destinoId);
+    const iacDb = getIacDb();
+
+    const tabelasIahub = Object.entries(MIGRACAO_TABELAS).map(([id, def]) => ({
+      id,
+      grupo: def.grupo,
+      label: def.label,
+      origem: previewTabela(origemData, id),
+      destino: previewTabela(destinoData, id),
+    }));
+
+    const tabelasIac = Object.entries(IAC_TABELAS).map(([id, def]) => ({
+      id,
+      grupo: def.grupo,
+      label: def.label,
+      origem: iacDb ? countIacTabela(iacDb, def.tabela, origemId) : null,
+      destino: iacDb ? countIacTabela(iacDb, def.tabela, destinoId) : null,
+    }));
 
     res.json({
       origem: { id: origem.id, nome: origem.razao_social || origem.nome || `Empresa ${origem.id}` },
       destino: { id: destino.id, nome: destino.razao_social || destino.nome || `Empresa ${destino.id}` },
-      tabelas: Object.entries(MIGRACAO_TABELAS).map(([id, def]) => ({
-        id,
-        grupo: def.grupo,
-        label: def.label,
-        origem: previewTabela(origemData, id),
-        destino: previewTabela(destinoData, id),
-      })),
+      tabelas: [...tabelasIahub, ...tabelasIac],
     });
   });
 
@@ -322,34 +548,60 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
     const destino = empresasDb.buscarPorId(destinoId);
     if (!origem || !destino) return res.status(404).json({ error: 'Empresa origem ou destino nao encontrada.' });
 
-    const invalidas = tabelas.filter(t => !MIGRACAO_TABELAS[t]);
+    const invalidas = tabelas.filter(t => !MIGRACAO_TABELAS[t] && !IAC_TABELAS[t]);
     if (invalidas.length) {
       return res.status(400).json({ error: `Tabela invalida: ${invalidas.join(', ')}` });
     }
 
-    const origemData = readEmpresaData(origemId);
-    const destinoData = readEmpresaData(destinoId);
-    const destinoNome = destino.razao_social || destino.nome || `Empresa ${destino.id}`;
-    const backup = criarBackupDestino(destinoId);
+    const tabelasIahub = tabelas.filter(t => MIGRACAO_TABELAS[t]);
+    const tabelasIac   = tabelas.filter(t => IAC_TABELAS[t]);
+
     const migradas = [];
 
-    for (const tabela of tabelas) {
-      const def = MIGRACAO_TABELAS[tabela];
-      for (const campo of def.campos) {
-        const valor = Object.prototype.hasOwnProperty.call(origemData, campo)
-          ? clone(origemData[campo])
-          : clone(def.defaults[campo]);
-        destinoData[campo] = normalizarEmpresa(valor, destinoId, destinoNome);
+    try {
+      // --- migrar IAHub (JSON) ---
+      if (tabelasIahub.length) {
+        const origemData = readEmpresaData(origemId);
+        const destinoData = readEmpresaData(destinoId);
+        const destinoNome = destino.razao_social || destino.nome || `Empresa ${destino.id}`;
+        criarBackupDestino(destinoId);
+
+        for (const tabela of tabelasIahub) {
+          const def = MIGRACAO_TABELAS[tabela];
+          for (const campo of def.campos) {
+            const valor = Object.prototype.hasOwnProperty.call(origemData, campo)
+              ? clone(origemData[campo])
+              : clone(def.defaults[campo]);
+            destinoData[campo] = normalizarEmpresa(valor, destinoId, destinoNome);
+          }
+          migradas.push({ id: tabela, label: def.label, sistema: 'iahub' });
+        }
+        saveEmpresaData(destinoId, destinoData);
       }
-      migradas.push({
-        id: tabela,
-        label: def.label,
-        origem: previewTabela(origemData, tabela),
-      });
+
+      // --- migrar IA Command (SQLite) ---
+      if (tabelasIac.length) {
+        const iacDb = getIacDb();
+        if (!iacDb) {
+          return res.status(503).json({ error: 'IA Command nao disponivel. Verifique se o modulo esta ativo.' });
+        }
+        for (const tabela of tabelasIac) {
+          const def = IAC_TABELAS[tabela];
+          if (def.tipo === 'conexoes') {
+            migrarConexoes(iacDb, origemId, destinoId);
+          } else if (def.tipo === 'sx') {
+            migrarSxDict(iacDb, def.tabela, origemId, destinoId);
+          } else {
+            migrarIacSimples(iacDb, def.tabela, origemId, destinoId, def.opts || {});
+          }
+          migradas.push({ id: tabela, label: def.label, sistema: 'iac' });
+        }
+      }
+    } catch (err) {
+      return res.status(500).json({ error: err.message || 'Erro interno ao migrar dados.' });
     }
 
-    saveEmpresaData(destinoId, destinoData);
-    res.json({ ok: true, migradas, backup });
+    res.json({ ok: true, migradas });
   });
 
 };

@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agente Local — IA Command</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    /* ── Botão Sair (igual ao IA Command) ── */
+    .sidebar-logout-btn {
+      width:100%; border:none; background:none; text-align:left;
+      font-family:inherit; color:var(--text-lo); cursor:pointer;
+    }
+    .sidebar-logout-btn:hover { background:var(--bg-hover); color:var(--danger); }
+    /* ── Botões toolbar Monitor (igual ao IA Command) ── */
+    .toolbar-btn { font-weight:700; color:#1e3a8a; padding:5px 14px; }
+    /* ── Botão ícone (olho) ── */
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--text-md);transition:background .15s,color .15s; }
+    .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
+    /* ── Detail: sec-lista / sec-detalhe ── */
+    .detail-tab-bar { display:flex;gap:2px;border-bottom:1px solid var(--border);background:var(--bg-card);padding:0 20px; }
+    .detail-tab { padding:10px 18px;font-size:13px;font-weight:600;color:var(--text-lo);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:color var(--transition),border-color var(--transition);white-space:nowrap; }
+    .detail-tab:hover { color:var(--text-hi); }
+    .detail-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .detail-tab-panel { display:none;padding:20px; }
+    .detail-tab-panel.active { display:block; }
+    /* ── Aba Dados — tabela de resultados brutos ── */
+    .dados-wrap { overflow:auto;max-height:calc(100vh - 300px);min-height:200px;border:1px solid var(--border);border-radius:var(--radius-sm); }
+    .dados-table { width:100%;border-collapse:collapse;font-size:12.5px; }
+    .dados-table thead tr { background:var(--bg-card);position:sticky;top:0;z-index:1; }
+    .dados-table th { padding:9px 12px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);border-bottom:1px solid var(--border);white-space:nowrap; }
+    .dados-table td { padding:8px 12px;color:var(--text-md);border-bottom:1px solid var(--border);white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis; }
+    .dados-table tbody tr:hover td { background:var(--bg-hover); }
+    .dados-table tbody tr:last-child td { border-bottom:none; }
+    .dados-empty { padding:32px;text-align:center;color:var(--text-lo);font-size:13px; }
+    .dados-info { font-size:11px;color:var(--text-lo);margin-bottom:10px; }
+    .meta-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:18px; }
+    .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
+    .meta-item span { color:var(--text-lo);font-size:11px;display:block;margin-bottom:4px; }
+    .meta-item strong { color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .pergunta-box { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px; }
+    .pergunta-box .lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px; }
+    .pergunta-box pre { font-family:inherit;font-size:14px;font-weight:600;color:var(--text-hi);white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.55; }
+    .split-wrap { display:flex;gap:0;height:calc(100vh - 270px);min-height:300px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden; }
+    .split-pane { display:flex;flex-direction:column;overflow:auto;min-width:120px; }
+    .split-pane-left  { flex:1;border-right:1px solid var(--border); }
+    .split-pane-right { flex:1; }
+    .split-handle { width:6px;background:var(--bg-base);cursor:col-resize;flex-shrink:0;border-left:1px solid var(--border);border-right:1px solid var(--border);transition:background var(--transition); }
+    .split-handle:hover { background:var(--accent-lt); }
+    .split-pane-header { display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg-card);flex-shrink:0; }
+    .split-pane-title { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo); }
+    .split-pane-body { min-height:120px;height:calc(100% - 45px);box-sizing:border-box;overflow:auto;padding:14px;font-family:ui-monospace,monospace;font-size:12.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55;color:var(--text-md);background:var(--bg-base); }
+    .sql-erro-box { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:10px;white-space:pre-wrap;word-break:break-word; }
+    /* editor-shell / editor-actionbar (reutilizando padrão iahub) */
+    .editor-shell { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+    .editor-actionbar { display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid var(--border);gap:14px; }
+    .editor-actionbar-title { display:flex;align-items:baseline;gap:8px;min-width:0; }
+    .editor-actionbar-title strong { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .editor-actionbar-title span { font-size:13px;color:var(--text-lo); }
+    .editor-actions { display:flex;gap:8px;flex-shrink:0; }
+    /* ── Tabulator tema IA Command ── */
+    .tabulator { border:none !important; background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row.tabulator-selected { background:var(--accent-lt) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:9px 12px !important; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    /* ── Sub-abas (Segurança, etc.) ── */
+    .form-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px; }
+    .form-tab-btn {
+      border:0; background:transparent; color:var(--text-md);
+      font-size:13px; font-weight:600; padding:10px 16px;
+      border-bottom:2px solid transparent; cursor:pointer;
+      display:inline-flex; align-items:center;
+      transition:color var(--transition), border-color var(--transition);
+    }
+    .form-tab-btn:hover { color:var(--text-hi); }
+    .form-tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+    /* ── Monitor layout ── */
+    /* ── Quick panel (filtros) ── */
+    .quick-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:12px 16px; margin-bottom:14px; box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .filter-area { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+    .filter-row { display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+    .filter-row .form-group { margin-bottom:0; min-width:160px; flex:1; }
+    .filter-status { font-size:12px; color:var(--text-lo); flex:1; }
+    .gp-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:10px; }
+    .gp-label { font-size:11px; color:var(--text-lo); white-space:nowrap; }
+    .gp-chip {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:3px 10px; border-radius:99px; font-size:11px; font-weight:600;
+      background:var(--bg-hover); color:var(--text-md); border:1px solid var(--border);
+      cursor:pointer; transition:background var(--transition);
+    }
+    .gp-chip.active { background:var(--accent-lt); color:var(--accent); border-color:rgba(124,58,237,.3); }
+    .gp-chip:hover:not(.active) { background:var(--border); }
+    /* ── Grid toolbar ── */
+    .grid-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--bg-card); }
+    .grid-title { font-size:13px; font-weight:600; color:var(--text-hi); }
+    .grid-meta { font-size:12px; color:var(--text-lo); margin-top:1px; }
+    /* ── Agrupamento ── */
+    .gp-section { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+    .gp-section-label { font-size:11px; font-weight:600; color:var(--text-lo); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px; }
+    .gp-available { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .gp-drop-zone {
+      min-height:36px; border:2px dashed var(--border); border-radius:var(--radius-sm);
+      display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:4px 8px;
+      background:var(--bg-base); transition:border-color var(--transition);
+      font-size:12px; color:var(--text-lo);
+    }
+    .gp-drop-zone.has-items { border-color:var(--accent); border-style:solid; background:var(--accent-lt); }
+    .gp-drop-zone-hint { font-size:12px; color:var(--text-lo); pointer-events:none; }
+    .gp-active-chip {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:3px 8px 3px 10px; border-radius:99px; font-size:11px; font-weight:600;
+      background:var(--accent); color:#fff; user-select:none;
+    }
+    .gp-active-chip button {
+      border:0; background:rgba(255,255,255,.25); color:#fff; border-radius:50%;
+      width:14px; height:14px; cursor:pointer; display:flex; align-items:center;
+      justify-content:center; font-size:9px; padding:0; line-height:1;
+    }
+    .gp-active-chip button:hover { background:rgba(255,255,255,.45); }
+    /* ── Empresas grid ── */
+    .empresa-logo-cell { width:36px;height:36px;border-radius:6px;object-fit:contain;background:var(--bg-base);border:1px solid var(--border);padding:2px; }
+    /* ── Editor de código ── */
+    .editor-layout { display:grid; grid-template-columns:220px 1fr; gap:0; height:calc(100vh - 230px); }
+    .editor-files { border-right:1px solid var(--border); overflow-y:auto; background:var(--bg-card); }
+    .editor-file-item {
+      display:flex; flex-direction:column; padding:10px 14px;
+      border-bottom:1px solid var(--border); cursor:pointer;
+      transition:background var(--transition);
+    }
+    .editor-file-item:hover { background:var(--bg-hover); }
+    .editor-file-item.active { background:var(--accent-lt); border-left:3px solid var(--accent); }
+    .editor-file-name { font-size:12px; font-weight:700; color:var(--text-hi); font-family:monospace; }
+    .editor-file-desc { font-size:11px; color:var(--text-lo); margin-top:2px; }
+    .editor-pane { display:flex; flex-direction:column; min-height:0; }
+    .editor-toolbar {
+      display:flex; align-items:center; gap:10px; padding:8px 14px;
+      background:var(--bg-card); border-bottom:1px solid var(--border); flex-shrink:0;
+    }
+    .editor-filename { font-size:12px; font-weight:700; color:var(--text-hi); font-family:monospace; flex:1; }
+    .editor-hint { font-size:11px; color:var(--text-lo); }
+    .editor-status { font-size:11px; padding:2px 8px; border-radius:99px; }
+    .editor-status.saved { background:#dcfce7; color:#15803d; }
+    .editor-status.modified { background:#fef9c3; color:#854d0e; }
+    .code-editor {
+      flex:1; min-height:0; width:100%; resize:none; border:0;
+      font-family:'Cascadia Code','Fira Code','Consolas','Courier New',monospace;
+      font-size:13px; line-height:1.65; tab-size:4;
+      background:#0f172a; color:#e2e8f0; padding:16px 20px;
+      outline:none; overflow:auto; white-space:pre; overflow-wrap:normal;
+    }
+    .editor-empty {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      height:100%; color:var(--text-lo); gap:10px; font-size:13px;
+    }
+    /* ── Badges Tabulator ── */
+    .tbadge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600; }
+    .tbadge-ok   { background:var(--success-lt); color:var(--success); }
+    .tbadge-erro { background:var(--danger-lt);  color:var(--danger); }
+    .tbadge-faturamento { background:rgba(37,99,235,.1);  color:#1d4ed8; }
+    .tbadge-compras     { background:rgba(5,150,105,.1);   color:#065f46; }
+    .tbadge-financeiro  { background:rgba(217,119,6,.1);   color:#92400e; }
+    .tbadge-comissao    { background:var(--accent-lt);     color:var(--accent); }
+    .tbadge-sistema     { background:rgba(100,116,139,.12); color:#475569; }
+    .tbadge-default     { background:var(--bg-hover);      color:var(--text-lo); }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">⚡</div>
+      <div style="min-width:0;flex:1">
+        <div class="logo-text">IA Command</div>
+        <div class="logo-sub">Agente Local</div>
+      </div>
+      <button class="sidebar-pin-btn" id="sidebar-pin-btn" onclick="toggleSidebarPin(event)" title="Fixar menu">▶</button>
+    </div>
+    <div class="sidebar-nav">
+      <button class="nav-item active" onclick="mudarAba('monitor', this)">
+        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+        <span class="nav-label">Monitor</span>
+      </button>
+      <button class="nav-item" onclick="mudarAba('erp', this)">
+        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
+        <span class="nav-label">Conexão ERP</span>
+      </button>
+      <button class="nav-item" onclick="mudarAba('seguranca', this)">
+        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+        <span class="nav-label">Segurança</span>
+      </button>
+      <button class="nav-item" onclick="mudarAba('sistema', this)">
+        <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></span>
+        <span class="nav-label">Sistema</span>
+      </button>
+    </div>
+    <div class="sidebar-footer">
+      <button class="nav-item sidebar-logout-btn" onclick="location.href='/logout'" title="Sair do sistema">
+        <span class="nav-icon" style="font-size:15px">↩</span>
+        <span class="nav-label">Sair</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbar-title">Monitor de Atividades</span>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+        <div id="empresa-lockup" style="position:relative">
+          <button id="empresa-btn" onclick="toggleEmpresaDropdown(event)" style="
+            display:flex;align-items:center;gap:7px;
+            background:var(--bg-hover);border:1px solid var(--border);
+            border-radius:7px;padding:5px 12px;cursor:pointer;
+            font-size:13px;font-weight:600;color:var(--text-hi);
+            transition:border-color .15s,background .15s;white-space:nowrap;
+          ">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            <span id="empresa-nome-label">Todas as empresas</span>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="opacity:.6"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div id="empresa-dropdown" style="
+            display:none;position:absolute;right:0;top:calc(100% + 6px);z-index:9999;
+            background:var(--bg-card);border:1px solid var(--border);border-radius:10px;
+            box-shadow:0 8px 32px rgba(0,0,0,.35);min-width:220px;padding:6px;max-height:320px;overflow-y:auto;
+          "></div>
+        </div>
+        <span class="topbar-meta">Porta {{ porta }} &nbsp;·&nbsp; v{{ versao }}</span>
+      </div>
+    </div>
+
+    <div class="page-content">
+
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total de execuções</div>
+          <div class="stat-value">{{ stats.total }}</div>
+        </div>
+        <div class="stat-card success">
+          <div class="stat-label">Sucesso</div>
+          <div class="stat-value">{{ stats.sucesso }}</div>
+        </div>
+        <div class="stat-card danger">
+          <div class="stat-label">Erros</div>
+          <div class="stat-value">{{ stats.erros }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tempo médio ERP</div>
+          <div class="stat-value">{{ stats.avg_ms }}</div>
+          <div class="stat-sub">milissegundos</div>
+        </div>
+      </div>
+
+      <!-- ── ABA MONITOR ── -->
+      <div class="tab-panel active" id="tab-monitor">
+
+        <!-- Painel de filtros rápidos -->
+        <div class="quick-panel">
+          <div class="quick-row">
+            <button class="btn btn-ghost btn-sm" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
+            <div style="display:flex;gap:8px;margin-left:auto">
+              <button class="btn btn-ghost toolbar-btn" id="btn-atualizar" onclick="atualizarLogs()">↻ Atualizar</button>
+              <button class="btn btn-ghost toolbar-btn" onclick="limparLogs()">Limpar log</button>
+            </div>
+          </div>
+
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="filter-row">
+              <div class="form-group">
+                <label class="form-label">Busca livre</label>
+                <input id="q-busca" class="form-control" placeholder="Pergunta, usuário, IP…" oninput="aplicarFiltroRapido()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select id="q-status" class="form-control" onchange="aplicarFiltroRapido()">
+                  <option value="">Todos</option>
+                  <option value="ok">Sucesso</option>
+                  <option value="erro">Erro</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data início</label>
+                <input type="date" id="q-ini" class="form-control" onchange="_recarregarLogs()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data fim</label>
+                <input type="date" id="q-fim" class="form-control" onchange="_recarregarLogs()">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Limite</label>
+                <select id="q-limit" class="form-control" onchange="_recarregarLogs()">
+                  <option value="50">50 registros</option>
+                  <option value="100">100 registros</option>
+                  <option value="200" selected>200 registros</option>
+                  <option value="500">500 registros</option>
+                </select>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="limparFiltros()" style="align-self:flex-end;margin-bottom:0">Limpar</button>
+            </div>
+
+            <div class="gp-section">
+              <div class="gp-section-label">Agrupar por</div>
+              <div class="gp-available" id="gp-chips-disponiveis"></div>
+              <div class="gp-drop-zone" id="gp-zona-ativa">
+                <span class="gp-drop-zone-hint" id="gp-zona-hint">Clique em um campo acima para agrupar</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- sec-lista: grade -->
+        <div id="sec-lista">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="grid-toolbar">
+              <div>
+                <div class="grid-title">Histórico de Execuções</div>
+                <div id="grid-meta" class="grid-meta">SQLs enviados pela nuvem e executados no ERP local</div>
+              </div>
+            </div>
+            <div id="tabela"></div>
+          </div>
+        </div>
+
+        <!-- sec-detalhe: visualização completa (padrão IA Command) -->
+        <div id="sec-detalhe" style="display:none">
+          <div class="editor-shell">
+            <div class="editor-actionbar">
+              <div class="editor-actionbar-title">
+                <strong id="d-title-header">Detalhe da Execução</strong>
+                <span id="d-subtitle-header"></span>
+              </div>
+              <div class="editor-actions">
+                <button class="btn btn-ghost" onclick="fecharDetalhe()">← Voltar à lista</button>
+              </div>
+            </div>
+
+            <!-- Abas -->
+            <div class="detail-tab-bar">
+              <button class="detail-tab active" onclick="ativarAbaDetalhe('aba-geral',this)">Dados gerais</button>
+              <button class="detail-tab"        onclick="ativarAbaDetalhe('aba-query',this)">SQL &amp; Payload</button>
+              <button class="detail-tab"        onclick="ativarAbaDetalhe('aba-dados',this)">Dados</button>
+            </div>
+
+            <!-- Aba 1 — Dados gerais -->
+            <div id="aba-geral" class="detail-tab-panel active">
+              <div class="meta-grid">
+                <div class="meta-item"><span>Timestamp</span><strong id="d-timestamp">—</strong></div>
+                <div class="meta-item"><span>Módulo</span><strong id="d-modulo">—</strong></div>
+                <div class="meta-item"><span>Operação</span><strong id="d-operacao">—</strong></div>
+                <div class="meta-item"><span>Status</span><strong id="d-status">—</strong></div>
+                <div class="meta-item"><span>Duração</span><strong id="d-duracao">—</strong></div>
+                <div class="meta-item"><span>Linhas retornadas</span><strong id="d-linhas">—</strong></div>
+                <div class="meta-item"><span>Empresa</span><strong id="d-empresa">—</strong></div>
+                <div class="meta-item"><span>Usuário (WhatsApp)</span><strong id="d-sender">—</strong></div>
+                <div class="meta-item"><span>IP origem</span><strong id="d-ip">—</strong></div>
+                <div class="meta-item"><span>Tipo de erro</span><strong id="d-tipo-erro">—</strong></div>
+                <div class="meta-item" style="grid-column:1/-1"><span>UUID de correlação</span><strong id="d-uuid" style="font-family:monospace;font-size:12px;word-break:break-all">—</strong></div>
+              </div>
+              <div class="pergunta-box" id="d-pergunta-wrap">
+                <div class="lbl">Pergunta original</div>
+                <pre id="d-pergunta"></pre>
+              </div>
+              <div class="sql-erro-box" id="d-erro-wrap" style="display:none;margin-top:14px"></div>
+            </div>
+
+            <!-- Aba 2 — SQL & Payload -->
+            <div id="aba-query" class="detail-tab-panel">
+              <div class="split-wrap">
+                <div class="split-pane split-pane-left">
+                  <div class="split-pane-header">
+                    <span class="split-pane-title">SQL executado</span>
+                    <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarSQL()">Copiar</button>
+                  </div>
+                  <div class="split-pane-body" id="d-sql-body"></div>
+                </div>
+                <div class="split-handle" id="split-handle" title="Arraste para redimensionar"></div>
+                <div class="split-pane split-pane-right">
+                  <div class="split-pane-header">
+                    <span class="split-pane-title">Payload de saída (amostra — primeiras 10 linhas)</span>
+                    <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarPayload()">Copiar</button>
+                  </div>
+                  <div class="split-pane-body" id="d-payload-body"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Aba 3 — Dados brutos -->
+            <div id="aba-dados" class="detail-tab-panel">
+              <p class="dados-info" id="d-dados-info"></p>
+              <div class="dados-wrap" id="d-dados-wrap">
+                <div class="dados-empty">Nenhum dado disponível.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /tab-monitor -->
+
+      <!-- ── ABA ERP ── -->
+      <div class="tab-panel" id="tab-erp">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Conexão com o ERP</div>
+              <div class="card-subtitle">Banco de dados local Protheus / TOTVS</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="salvarERP()">Salvar conexão</button>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Host / IP do servidor</label>
+                <input id="DB_HOST" class="form-control" placeholder="192.168.1.100">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Porta</label>
+                <input id="DB_PORT" class="form-control" placeholder="1433" value="1433">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nome do banco</label>
+                <input id="DB_NAME" class="form-control" placeholder="PROTHEUS">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Filial padrão</label>
+                <input id="FILIAL" class="form-control" placeholder="01" value="01">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Usuário</label>
+                <input id="DB_USER" class="form-control" placeholder="sa">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Senha</label>
+                <div class="pass-wrap">
+                  <input id="DB_PASS" type="password" class="form-control" placeholder="••••••••">
+                  <button type="button" class="btn-pass-toggle" onclick="togglePass('DB_PASS')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" style="max-width:400px">
+              <label class="form-label">Driver ODBC</label>
+              <select id="DB_DRIVER" class="form-control">
+                <option value="ODBC Driver 17 for SQL Server">ODBC Driver 17 for SQL Server</option>
+                <option value="ODBC Driver 18 for SQL Server">ODBC Driver 18 for SQL Server</option>
+                <option value="SQL Server">SQL Server (legado)</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-8 mt-12">
+              <button class="btn btn-ghost btn-sm" onclick="testarERP()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Testar conexão
+              </button>
+            </div>
+            <div id="erp-result" class="alert" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ABA SEGURANÇA ── -->
+      <div class="tab-panel" id="tab-seguranca">
+
+        <!-- Sub-abas -->
+        <div class="form-tabs" id="seg-tabs">
+          <button class="form-tab-btn active" id="seg-tab-btn-token" onclick="mudarSegTab('token', this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Token de API
+          </button>
+          <button class="form-tab-btn" id="seg-tab-btn-senha" onclick="mudarSegTab('senha', this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            Senha de Acesso
+          </button>
+        </div>
+
+        <!-- Sub-aba: Token -->
+        <div id="seg-panel-token">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Bearer Token de API</div>
+                <div class="card-subtitle">Usado para autenticar a nuvem IA Command neste agente local</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group" style="max-width:600px">
+                <label class="form-label">Token atual</label>
+                <div class="pass-wrap">
+                  <input id="token-field" type="password" class="form-control" placeholder="Não configurado" readonly style="font-family:monospace;font-size:12px">
+                  <button type="button" class="btn-pass-toggle" onclick="revelarToken()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="flex items-center gap-8 mt-8">
+                <button class="btn btn-warn btn-sm" onclick="regerarToken()">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  Gerar novo token
+                </button>
+                <button class="btn btn-ghost btn-sm" id="btn-copiar" onclick="copiarToken()" style="display:none">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  Copiar token
+                </button>
+              </div>
+              <div class="form-hint mt-8" style="background:var(--accent-lt);border-radius:var(--radius-sm);padding:8px 12px;color:var(--accent);font-weight:600">
+                ✓ O token é <strong>salvo automaticamente</strong> ao ser gerado — não há botão de salvar.
+              </div>
+              <div id="token-alert" class="alert" style="display:none"></div>
+              <div class="form-hint mt-8">
+                Após gerar, copie e cole em
+                <strong>Configurar IA → Agente Local → Bearer Token</strong>
+                no painel nuvem do IA Command.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-aba: Senha -->
+        <div id="seg-panel-senha" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Alterar senha de acesso</div>
+                <div class="card-subtitle">Senha usada para entrar neste painel administrativo</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group" style="max-width:340px">
+                <label class="form-label">Senha atual</label>
+                <div class="pass-wrap">
+                  <input id="senha-atual" type="password" class="form-control" placeholder="••••••••">
+                  <button type="button" class="btn-pass-toggle" onclick="togglePass('senha-atual')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="form-group" style="max-width:340px">
+                <label class="form-label">Nova senha</label>
+                <div class="pass-wrap">
+                  <input id="nova-senha" type="password" class="form-control" placeholder="Mínimo 6 caracteres">
+                  <button type="button" class="btn-pass-toggle" onclick="togglePass('nova-senha')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="form-group" style="max-width:340px">
+                <label class="form-label">Confirmar nova senha</label>
+                <div class="pass-wrap">
+                  <input id="conf-senha" type="password" class="form-control" placeholder="Repita a nova senha">
+                  <button type="button" class="btn-pass-toggle" onclick="togglePass('conf-senha')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="alterarSenha()">Salvar nova senha</button>
+              <div id="senha-alert" class="alert" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── ABA SISTEMA (com sub-abas: Empresas / Código API / Serviço) ── -->
+      <div class="tab-panel" id="tab-sistema">
+
+        <!-- Sub-abas Sistema -->
+        <div class="form-tabs" id="sis-tabs">
+          <button class="form-tab-btn active" id="sis-tab-btn-empresas" onclick="mudarSisTab('empresas', this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+            Empresas
+          </button>
+          <button class="form-tab-btn" id="sis-tab-btn-codigo" onclick="mudarSisTab('codigo', this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Código API
+          </button>
+          <button class="form-tab-btn" id="sis-tab-btn-servico" onclick="mudarSisTab('servico', this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            Serviço
+          </button>
+        </div>
+
+        <!-- Sub-painel: Empresas -->
+        <div id="sis-panel-empresas">
+          <div class="form-hint mb-12" style="background:var(--accent-lt);border-radius:var(--radius-sm);padding:8px 14px;color:var(--accent);font-size:12px">
+            ℹ Para sincronizar ou atualizar empresas (nome, logo, slogan), acesse o painel nuvem IA Command → <strong>Agente Local → Sincronizar Empresas</strong>.
+            Você pode sincronizar a mesma empresa quantas vezes quiser — os dados são sempre atualizados.
+          </div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="grid-toolbar">
+              <div>
+                <div class="grid-title">Empresas Sincronizadas</div>
+                <div id="emp-grid-meta" class="grid-meta">Empresas recebidas da nuvem IA Command</div>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="carregarEmpresasGrid()">↺ Atualizar</button>
+            </div>
+            <div id="tabela-empresas"></div>
+          </div>
+        </div>
+
+        <!-- Sub-painel: Código API -->
+        <div id="sis-panel-codigo" style="display:none">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="editor-layout">
+              <!-- Lista de arquivos -->
+              <div class="editor-files" id="editor-files-list">
+                <div style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)">Arquivos editáveis</div>
+              </div>
+              <!-- Painel de edição -->
+              <div class="editor-pane" id="editor-pane">
+                <div class="editor-empty" id="editor-empty">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-lo)"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <div>Selecione um arquivo na lista para editar</div>
+                </div>
+                <div id="editor-active" style="display:none;flex-direction:column;height:100%">
+                  <div class="editor-toolbar">
+                    <span class="editor-filename" id="editor-fname">—</span>
+                    <span class="editor-hint">Ctrl+S para salvar</span>
+                    <span class="editor-status saved" id="editor-status">Salvo</span>
+                    <button class="btn btn-primary btn-sm" onclick="salvarArquivo()">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                      Salvar
+                    </button>
+                  </div>
+                  <textarea class="code-editor" id="code-editor" spellcheck="false" oninput="marcarModificado()"></textarea>
+                </div>
+              </div>
+            </div>
+            <div style="padding:8px 16px;background:var(--bg-base);border-top:1px solid var(--border);font-size:12px;color:var(--text-lo)">
+              ⚠ Alterações entram em vigor após reiniciar o serviço Windows.
+              Use a sub-aba <strong>Serviço → Factory Reset</strong> para restaurar os arquivos originais.
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-painel: Serviço -->
+        <div id="sis-panel-servico" style="display:none">
+          <div class="card mb-16">
+            <div class="card-header">
+              <div class="card-title">Informações do serviço</div>
+            </div>
+            <div class="card-body">
+              <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+                <div>
+                  <div class="form-label">Versão</div>
+                  <div style="font-size:15px;font-weight:700;color:var(--text-hi)">{{ versao }}</div>
+                </div>
+                <div>
+                  <div class="form-label">Porta</div>
+                  <div style="font-size:15px;font-weight:700;color:var(--text-hi)">{{ porta }}</div>
+                </div>
+                <div>
+                  <div class="form-label">Serviço Windows</div>
+                  <div style="font-size:12px;color:var(--text-md);font-family:monospace">IA Hub - IACommand_AgenteLocal_API</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="danger-zone">
+            <div class="card-header">
+              <div>
+                <div class="card-title" style="color:var(--danger)">Restaurar Código Original (Factory Reset)</div>
+                <div class="card-subtitle">Sobrescreve todos os arquivos Python com as versões originais de fábrica e reinicia o serviço.</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <p style="color:var(--text-md);font-size:13px;margin-bottom:16px;line-height:1.6">
+                Use esta opção caso os arquivos do agente tenham sido modificados e causem problemas.
+                <strong style="color:var(--danger)">Esta ação é irreversível</strong> — todas as customizações serão perdidas.
+                As configurações do <code>.env</code> (token, senha, banco) serão mantidas.
+              </p>
+              <button class="btn btn-danger" onclick="abrirModalReset()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                Restaurar código original
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div><!-- /page-content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- Modal Factory Reset -->
+<div class="modal-overlay" id="modal-reset" onclick="fecharModalReset()">
+  <div class="modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title" style="color:var(--danger)">Confirmar Factory Reset</span>
+      <button class="modal-close" onclick="fecharModalReset()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-md);font-size:13px;margin-bottom:20px;line-height:1.6">
+        Para confirmar, digite <strong style="color:var(--danger)">RESTAURAR</strong> no campo abaixo:
+      </p>
+      <div class="form-group">
+        <input id="reset-confirm" class="form-control" placeholder="RESTAURAR" oninput="validarReset()">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button id="btn-reset-confirm" class="btn btn-danger" disabled onclick="executarReset()">Confirmar e restaurar</button>
+        <button class="btn btn-ghost" onclick="fecharModalReset()">Cancelar</button>
+      </div>
+      <div id="reset-alert" class="alert" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script>
+// ── Navegação ──────────────────────────────────────────────────────────────
+const TOPBAR_TITLES = { monitor: 'Monitor de Atividades', erp: 'Conexão ERP', seguranca: 'Segurança', sistema: 'Sistema' };
+
+function mudarAba(nome, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + nome).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('topbar-title').textContent = TOPBAR_TITLES[nome] || nome;
+  if (nome === 'monitor')   _recarregarLogs();
+  if (nome === 'erp')       carregarConfigERP();
+  if (nome === 'seguranca') carregarStatusToken();
+  if (nome === 'sistema')   mudarSisTab(_sisTabAtual, document.getElementById('sis-tab-btn-' + _sisTabAtual));
+}
+
+// ── Sub-abas Sistema ───────────────────────────────────────────────────────
+let _sisTabAtual = 'empresas';
+
+function mudarSisTab(nome, btn) {
+  _sisTabAtual = nome;
+  document.querySelectorAll('#sis-tabs .form-tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  ['empresas','codigo','servico'].forEach(n => {
+    const el = document.getElementById('sis-panel-' + n);
+    if (el) el.style.display = n === nome ? '' : 'none';
+  });
+  if (nome === 'empresas') carregarEmpresasGrid();
+  if (nome === 'codigo')   carregarArquivosEditor();
+}
+
+// ── Monitor — Tabulator ────────────────────────────────────────────────────
+let table       = null;
+let _logsCache  = {};
+let filtrosVisiveis = false;
+let quickFn     = null;
+const _empNomes = new Map(); // empresa_id → nome (preenchido em carregarEmpresas)
+let _empresaAtual = { id: '', nome: 'Todas as empresas' };
+let _empresaDropdownAberto = false;
+let _logsAbortCtrl = null; // AbortController da última requisição /api/logs
+
+const MODULO_CLS = { faturamento:'tbadge-faturamento', compras:'tbadge-compras', financeiro:'tbadge-financeiro', comissao:'tbadge-comissao', sistema:'tbadge-sistema' };
+const GRUPOS = [
+  { field:'empresa_id', label:'Empresa' },
+  { field:'modulo',     label:'Módulo' },
+  { field:'status',     label:'Status' },
+  { field:'ip_origem',  label:'IP origem' },
+];
+
+function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _formatJson(val) { if (!val) return '—'; try { return JSON.stringify(JSON.parse(val), null, 2); } catch { return val; } }
+
+function fmtTs(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso + 'Z').toLocaleString('pt-BR'); } catch { return iso; }
+}
+const MODULO_LABELS = { faturamento:'Faturamento', compras:'Compras', financeiro:'Financeiro', comissao:'Comissões', sistema:'Sistema' };
+function fmtModulo(v) {
+  if (!v) return '<span class="tbadge tbadge-default">—</span>';
+  const cls   = MODULO_CLS[v]    || 'tbadge-default';
+  const label = MODULO_LABELS[v] || (v.charAt(0).toUpperCase() + v.slice(1));
+  return `<span class="tbadge ${cls}">${_esc(label)}</span>`;
+}
+function fmtStatus(v) {
+  return v === 'ok'
+    ? '<span class="tbadge tbadge-ok">✓ Sucesso</span>'
+    : '<span class="tbadge tbadge-erro">✕ Erro</span>';
+}
+
+// Versão fire-and-forget de carregarLogs — ignora AbortError silenciosamente
+function _recarregarLogs() {
+  carregarLogs().catch(e => { if (e?.name !== 'AbortError') console.error('Erro ao carregar logs:', e); });
+}
+
+async function carregarLogs() {
+  // Cancela qualquer requisição ainda em andamento
+  if (_logsAbortCtrl) { _logsAbortCtrl.abort(); }
+  _logsAbortCtrl = new AbortController();
+  const signal = _logsAbortCtrl.signal;
+
+  const ini        = document.getElementById('q-ini').value;
+  const fim        = document.getElementById('q-fim').value;
+  const limit      = document.getElementById('q-limit').value;
+  const empresaId  = _empresaAtual.id;
+  const params = new URLSearchParams({ data_ini: ini, data_fim: fim, limit, empresa_id: empresaId });
+
+  const resp = await fetch('/api/logs?' + params, { signal });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const logs = await resp.json();
+
+  _logsCache = {};
+  logs.forEach(l => { _logsCache[l.id] = l; });
+
+  if (!table) _criarTable(logs);
+  else        table.replaceData(logs);
+
+  document.getElementById('grid-meta').textContent = `${logs.length} registro${logs.length !== 1 ? 's' : ''} carregado${logs.length !== 1 ? 's' : ''}`;
+  _aplicarGrupo();
+  aplicarFiltroRapido();
+}
+
+function _criarTable(dados) {
+  const mostrarEmpresa = !_empresaAtual.id;
+  table = new Tabulator('#tabela', {
+    data: dados,
+    index: 'id',
+    layout: 'fitColumns',
+    height: 'calc(100vh - 320px)',
+    movableColumns: true,
+    groupStartOpen: true,
+    groupHeader: (value, count, _data, group) => {
+      const field = Array.isArray(group._group?.field) ? group._group.field[0] : group._group?.field;
+      const label = field === 'empresa_id' ? (_empNomes.get(value) || value || '(sem empresa)') : (value || '(vazio)');
+      return `${label} <span style="font-size:11px;font-weight:400;opacity:.6">(${count})</span>`;
+    },
+    placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum registro encontrado.</div>',
+    columns: [
+      { title: '', field: 'id', width: 46, hozAlign: 'center', groupable: false, headerSort: false,
+        formatter: () => `<button class="btn-icon" title="Visualizar" style="pointer-events:none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>`,
+        cellClick: (e, cell) => { e.stopPropagation(); verDetalhe(cell.getRow().getData()); },
+      },
+      { title: 'Empresa', field: 'empresa_id', width: 160, headerFilter: 'input',
+        visible: mostrarEmpresa,
+        formatter: c => {
+          const v = c.getValue();
+          if (!v) return '<span style="color:var(--text-lo)">—</span>';
+          const nome = _empNomes.get(v) || v;
+          return `<span style="font-size:12px;font-weight:600;color:var(--text-hi)">${_esc(nome)}</span>`;
+        }
+      },
+      { title: 'Módulo',    field: 'modulo',    width: 135,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '':'Todos', faturamento:'Faturamento', compras:'Compras', financeiro:'Financeiro', comissao:'Comissões', sistema:'Sistema' } },
+        formatter: c => fmtModulo(c.getValue()) },
+      { title: 'Operação',  field: 'operacao',  minWidth: 140, headerFilter: 'input',
+        formatter: c => `<span style="font-weight:600;color:var(--text-hi)">${_esc(c.getValue()||'—')}</span>` },
+      { title: 'Pergunta',  field: 'pergunta',  minWidth: 170, headerFilter: 'input',
+        formatter: c => { const v = c.getValue(); return v ? `<span style="color:var(--text-md)">${_esc(v.slice(0,70))}${v.length>70?'…':''}</span>` : '<span style="color:var(--text-lo)">—</span>'; } },
+      { title: 'Status',    field: 'status',    width: 110,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '':'Todos', ok:'Sucesso', erro:'Erro' } },
+        formatter: c => fmtStatus(c.getValue()) },
+      { title: 'Duração',   field: 'duracao_ms', width: 90, hozAlign:'right',
+        formatter: c => `<span style="font-size:12px;font-family:monospace">${c.getValue()??'—'} ms</span>` },
+      { title: 'Timestamp', field: 'chegada_em', minWidth: 145,
+        formatter: c => `<span style="font-size:12px;color:var(--text-lo)">${fmtTs(c.getValue())}</span>` },
+      { title: 'Usuário', field: 'sender', width: 140, headerFilter: 'input',
+        formatter: c => { const v = c.getValue(); return v ? `<span style="font-size:11px;background:var(--bg-hover);border-radius:4px;padding:1px 5px">${_esc(v)}</span>` : '<span style="color:var(--text-lo)">—</span>'; } },
+      { title: 'IP origem', field: 'ip_origem', width: 120, headerFilter: 'input',
+        formatter: c => `<span style="font-size:12px;font-family:monospace">${_esc(c.getValue()||'—')}</span>` },
+    ],
+    rowClick: (_e, row) => verDetalhe(row.getData()),
+    dataFiltered: (_f, rows) => {
+      const n = rows.length;
+      document.getElementById('grid-meta').textContent = `${n} registro${n!==1?'s':''} exibido${n!==1?'s':''}`;
+    },
+  });
+
+  _renderGrupo();
+  _aplicarGrupo();
+}
+
+let _detalheAtual = null;
+
+function _preencherDetalhe(l) {
+  _detalheAtual = l;
+  const empNome = _empNomes.get(l.empresa_id) || l.empresa_id || '—';
+
+  document.getElementById('d-title-header').textContent    = l.operacao || 'Detalhe da Execução';
+  document.getElementById('d-subtitle-header').textContent = fmtTs(l.chegada_em);
+
+  document.getElementById('d-timestamp').textContent = fmtTs(l.chegada_em);
+  document.getElementById('d-modulo').innerHTML       = fmtModulo(l.modulo);
+  document.getElementById('d-operacao').textContent   = l.operacao   || '—';
+  document.getElementById('d-status').innerHTML       = fmtStatus(l.status);
+  document.getElementById('d-duracao').textContent    = (l.duracao_ms != null ? l.duracao_ms + ' ms' : '—');
+  document.getElementById('d-linhas').textContent     = (l.linhas_retornadas != null ? l.linhas_retornadas : '—');
+  document.getElementById('d-empresa').textContent    = empNome;
+  document.getElementById('d-sender').textContent     = l.sender     || '—';
+  document.getElementById('d-ip').textContent         = l.ip_origem  || '—';
+  document.getElementById('d-tipo-erro').textContent  = l.tipo_erro  || '—';
+  document.getElementById('d-uuid').textContent       = l.uuid       || '—';
+
+  const pergEl = document.getElementById('d-pergunta-wrap');
+  if (l.pergunta) {
+    document.getElementById('d-pergunta').textContent = l.pergunta;
+    pergEl.style.display = '';
+  } else {
+    pergEl.style.display = 'none';
+  }
+
+  const erroEl = document.getElementById('d-erro-wrap');
+  if (l.erro) { erroEl.style.display = ''; erroEl.textContent = '❌ ' + l.erro; }
+  else         { erroEl.style.display = 'none'; }
+
+  const sql = l.sql_executado || l.sql_entrada || '—';
+  document.getElementById('d-sql-body').textContent     = sql;
+  document.getElementById('d-payload-body').textContent = _formatJson(l.payload_saida);
+
+  _renderDados(l);
+}
+
+function verDetalhe(l) {
+  // Exibe detalhe imediatamente com dados já disponíveis
+  _preencherDetalhe(l);
+  document.getElementById('sec-lista').style.display   = 'none';
+  document.getElementById('sec-detalhe').style.display = '';
+  ativarAbaDetalhe('aba-geral', document.querySelector('.detail-tab'));
+  _initSplitHandle();
+
+  // Carrega payload_saida sob demanda (não vem na listagem para economizar banda)
+  if (l.payload_saida === undefined) {
+    document.getElementById('d-payload-body').textContent = '⏳ Carregando...';
+    fetch(`/api/logs/${l.id}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(full => {
+        _logsCache[full.id] = full;
+        if (_detalheAtual?.id === full.id) {
+          document.getElementById('d-payload-body').textContent = _formatJson(full.payload_saida);
+          _renderDados(full);
+        }
+      })
+      .catch(err => {
+        if (_detalheAtual?.id === l.id)
+          document.getElementById('d-payload-body').textContent = `Erro ao carregar payload (${err}).`;
+      });
+  }
+}
+
+function fecharDetalhe() {
+  _detalheAtual = null;
+  document.getElementById('sec-detalhe').style.display = 'none';
+  document.getElementById('sec-lista').style.display   = '';
+}
+
+function ativarAbaDetalhe(id, btn) {
+  document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+  btn?.classList.add('active');
+}
+
+function _renderDados(l) {
+  const wrap = document.getElementById('d-dados-wrap');
+  const info = document.getElementById('d-dados-info');
+
+  let rows = [];
+  try {
+    const raw = l.payload_saida;
+    if (raw) rows = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch { rows = []; }
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    wrap.innerHTML = '<div class="dados-empty">Nenhum dado retornado para esta execução.</div>';
+    info.textContent = '';
+    return;
+  }
+
+  const totalBD = l.linhas_retornadas != null ? l.linhas_retornadas : '?';
+  const amostra = rows.length;
+  info.textContent = `Amostra: ${amostra} de ${totalBD} linha(s) retornada(s) pelo banco.`;
+
+  const cols = Object.keys(rows[0]);
+  const esc  = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const thead = `<thead><tr>${cols.map(c => `<th title="${esc(c)}">${esc(c)}</th>`).join('')}</tr></thead>`;
+  const tbody = `<tbody>${rows.map(r =>
+    `<tr>${cols.map(c => `<td title="${esc(r[c])}">${esc(r[c])}</td>`).join('')}</tr>`
+  ).join('')}</tbody>`;
+
+  wrap.innerHTML = `<table class="dados-table">${thead}${tbody}</table>`;
+}
+
+function _clipboardFallback(texto, ok, err) {
+  const ta = document.createElement('textarea');
+  ta.value = texto;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy') ? ok() : err(); } catch { err(); }
+  document.body.removeChild(ta);
+}
+
+function _copiarTexto(texto, btn) {
+  const orig = btn.textContent;
+  const ok  = () => { btn.textContent = 'Copiado!'; setTimeout(() => { btn.textContent = orig; }, 1500); };
+  const err = () => { btn.textContent = 'Erro!';    setTimeout(() => { btn.textContent = orig; }, 1500); };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(texto).then(ok).catch(() => _clipboardFallback(texto, ok, err));
+  } else {
+    _clipboardFallback(texto, ok, err);
+  }
+}
+
+function copiarSQL() {
+  const txt = document.getElementById('d-sql-body')?.textContent || '';
+  _copiarTexto(txt, event.target.closest('button'));
+}
+
+function copiarPayload() {
+  const txt = document.getElementById('d-payload-body')?.textContent || '';
+  _copiarTexto(txt, event.target.closest('button'));
+}
+
+function _initSplitHandle() {
+  const handle = document.getElementById('split-handle');
+  if (!handle || handle._init) return;
+  handle._init = true;
+  const wrap  = handle.closest('.split-wrap');
+  const left  = wrap?.querySelector('.split-pane-left');
+  let dragging = false, startX = 0, startW = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = left.offsetWidth;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', () => {
+      dragging = false; handle.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+    }, { once: true });
+  });
+  function onMove(e) {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const total = wrap.offsetWidth;
+    const newW  = Math.min(Math.max(startW + dx, 200), total - 200);
+    left.style.flex = `0 0 ${newW}px`;
+  }
+}
+
+async function atualizarLogs() {
+  const btn = document.getElementById('btn-atualizar');
+  if (!btn) { carregarLogs().catch(console.error); return; }
+  btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = '↻ Atualizando...';
+  try {
+    await carregarLogs();
+    btn.textContent = '✓ Atualizado!'; btn.style.color = '#15803d'; btn.style.opacity = '';
+    setTimeout(() => { btn.textContent = '↻ Atualizar'; btn.style.color = ''; btn.disabled = false; }, 1500);
+  } catch(e) {
+    if (e?.name === 'AbortError') return; // nova requisição já foi iniciada — não reabilita
+    btn.textContent = '↻ Atualizar'; btn.style.color = '#dc2626'; btn.style.opacity = '';
+    setTimeout(() => { btn.style.color = ''; btn.disabled = false; }, 2000);
+    console.error('Erro ao atualizar logs:', e);
+  }
+}
+
+async function limparLogs() {
+  if (!confirm('Limpar todo o histórico? Esta ação não pode ser desfeita.')) return;
+  await fetch('/api/logs', { method: 'DELETE' });
+  if (table) table.clearData();
+  document.getElementById('grid-meta').textContent = '0 registros';
+  fecharDetalhe();
+  toast('Histórico limpo.');
+}
+
+// ── Filtros ────────────────────────────────────────────────────────────────
+function toggleFiltros() {
+  filtrosVisiveis = !filtrosVisiveis;
+  document.getElementById('filter-area').style.display = filtrosVisiveis ? '' : 'none';
+  document.getElementById('btn-filtros').textContent   = filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
+  if (filtrosVisiveis) _renderGrupo();
+}
+
+function aplicarFiltroRapido() {
+  if (!table) return;
+  if (quickFn) { table.removeFilter(quickFn); quickFn = null; }
+  const busca  = document.getElementById('q-busca').value.trim().toLowerCase();
+  const status = document.getElementById('q-status').value;
+  if (busca || status) {
+    quickFn = row => {
+      if (status && row.status !== status) return false;
+      if (busca) {
+        const txt = `${row.pergunta||''} ${row.sender||''} ${row.ip_origem||''} ${row.operacao||''}`.toLowerCase();
+        if (!txt.includes(busca)) return false;
+      }
+      return true;
+    };
+    table.addFilter(quickFn);
+  }
+  const qtd = [busca, status].filter(Boolean).length;
+  document.getElementById('filter-status').textContent = qtd ? `${qtd} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+}
+
+function limparFiltros() {
+  document.getElementById('q-busca').value  = '';
+  document.getElementById('q-status').value = '';
+  document.getElementById('q-ini').value    = '';
+  document.getElementById('q-fim').value    = '';
+  if (quickFn && table) { table.removeFilter(quickFn); quickFn = null; }
+  gruposAtivos = [];
+  _renderGrupo();
+  _aplicarGrupo();
+  document.getElementById('filter-status').textContent = 'Sem filtros ou agrupamentos ativos';
+  _recarregarLogs();
+}
+
+// ── Agrupamento multi-nível ────────────────────────────────────────────────
+let gruposAtivos = []; // array de fields na ordem de agrupamento
+
+function _renderGrupo() {
+  const dispEl  = document.getElementById('gp-chips-disponiveis');
+  const zonaEl  = document.getElementById('gp-zona-ativa');
+  const hintEl  = document.getElementById('gp-zona-hint');
+  if (!dispEl || !zonaEl) return;
+
+  // Chips disponíveis (os que ainda não estão ativos)
+  const disponiveis = GRUPOS.filter(g => !gruposAtivos.includes(g.field));
+  dispEl.innerHTML = disponiveis.length
+    ? disponiveis.map(g =>
+        `<span class="gp-chip" onclick="adicionarGrupo('${g.field}')" title="Clique para agrupar por ${g.label}">${g.label}</span>`
+      ).join('')
+    : `<span style="font-size:12px;color:var(--text-lo);font-style:italic">Todos os campos estão agrupados</span>`;
+
+  // Zona ativa com chips removíveis
+  if (gruposAtivos.length === 0) {
+    zonaEl.classList.remove('has-items');
+    zonaEl.innerHTML = `<span class="gp-drop-zone-hint" id="gp-zona-hint">Clique em um campo acima para agrupar</span>`;
+  } else {
+    zonaEl.classList.add('has-items');
+    zonaEl.innerHTML = gruposAtivos.map((field, i) => {
+      const g = GRUPOS.find(x => x.field === field);
+      return `<span class="gp-active-chip">
+        ${i > 0 ? '<span style="opacity:.6;font-size:10px">›</span>' : ''}
+        ${g?.label || field}
+        <button onclick="removerGrupo('${field}')" title="Remover agrupamento">✕</button>
+      </span>`;
+    }).join('');
+  }
+
+  // Atualiza status
+  const statusEl = document.getElementById('filter-status');
+  if (statusEl) {
+    const labels = gruposAtivos.map(f => GRUPOS.find(g => g.field === f)?.label || f);
+    statusEl.textContent = gruposAtivos.length
+      ? `Agrupado por: ${labels.join(' › ')}`
+      : 'Sem filtros ou agrupamentos ativos';
+  }
+}
+
+function adicionarGrupo(field) {
+  if (!gruposAtivos.includes(field)) gruposAtivos.push(field);
+  _renderGrupo();
+  _aplicarGrupo();
+}
+
+function removerGrupo(field) {
+  gruposAtivos = gruposAtivos.filter(f => f !== field);
+  _renderGrupo();
+  _aplicarGrupo();
+}
+
+function _aplicarGrupo() {
+  if (!table) return;
+  table.setGroupBy(gruposAtivos.length ? gruposAtivos : []);
+}
+
+// ── Sub-abas Segurança ─────────────────────────────────────────────────────
+function mudarSegTab(nome, btn) {
+  document.querySelectorAll('#seg-tabs .form-tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('seg-panel-token').style.display = nome === 'token' ? '' : 'none';
+  document.getElementById('seg-panel-senha').style.display = nome === 'senha' ? '' : 'none';
+  if (nome === 'token') carregarStatusToken();
+}
+
+// ── Config ERP ─────────────────────────────────────────────────────────────
+async function carregarConfigERP() {
+  const c = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+  ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_DRIVER','FILIAL'].forEach(k => {
+    const el = document.getElementById(k); if (el) el.value = c[k] || '';
+  });
+}
+
+async function salvarERP() {
+  const body = {};
+  ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_DRIVER','FILIAL'].forEach(k => {
+    const el = document.getElementById(k); if (el) body[k] = el.value.trim();
+  });
+  const pass = document.getElementById('DB_PASS').value.trim();
+  if (pass) body.DB_PASS = pass;
+  const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (r.ok) toast('Conexão salva!'); else toast('Erro ao salvar.', 'err');
+}
+
+async function testarERP() {
+  const div = document.getElementById('erp-result');
+  div.style.display = 'block'; div.className = 'alert alert-warn'; div.textContent = '⏳ Testando conexão com o ERP…';
+  const data = await fetch('/api/config/testar-erp', { method:'POST' }).then(r=>r.json());
+  if (data.ok) { div.className = 'alert alert-ok'; div.textContent = '✅ ' + data.mensagem; }
+  else         { div.className = 'alert alert-err'; div.textContent = '❌ ' + (data.erro || 'Falha na conexão.'); }
+}
+
+function togglePass(id) { const e = document.getElementById(id); e.type = e.type==='password'?'text':'password'; }
+
+// ── Token ──────────────────────────────────────────────────────────────────
+async function carregarStatusToken() {
+  const r = await fetch('/api/token/reveal').then(r=>r.json());
+  const el = document.getElementById('token-field');
+  el.value = r.token ? '••••••••••••••••' : '';
+  el.dataset.token = r.token || '';
+  el.placeholder = r.configurado ? 'Token configurado' : 'Token não configurado — clique em Gerar';
+}
+
+async function revelarToken() {
+  const el = document.getElementById('token-field');
+  if (el.type === 'password') { el.type='text'; el.value=el.dataset.token||''; if (el.dataset.token) document.getElementById('btn-copiar').style.display='inline-flex'; }
+  else { el.type='password'; el.value=el.dataset.token?'••••••••••••••••':''; }
+}
+
+async function regerarToken() {
+  if (!confirm('Gerar um novo token irá invalidar o token anterior configurado na nuvem.\n\nContinuar?')) return;
+  const data = await fetch('/api/token/regerar', { method:'POST' }).then(r=>r.json());
+  const el = document.getElementById('token-field');
+  el.type='text'; el.value=data.token; el.dataset.token=data.token;
+  document.getElementById('btn-copiar').style.display='inline-flex';
+  const al = document.getElementById('token-alert');
+  al.style.display='block'; al.className='alert alert-warn';
+  al.textContent='⚠ Novo token gerado! Copie e cole em Configurar IA → Agente Local → Bearer Token no painel nuvem do IA Command.';
+}
+
+function copiarToken() {
+  const val = document.getElementById('token-field').dataset.token;
+  if (!val) return;
+  const btn  = document.getElementById('btn-copiar');
+  const orig = btn.innerHTML;
+  const ok   = () => { btn.textContent = '✓ Copiado!'; setTimeout(() => { btn.innerHTML = orig; }, 2000); };
+  const err  = () => { btn.textContent = 'Erro!';       setTimeout(() => { btn.innerHTML = orig; }, 2000); };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(val).then(ok).catch(() => _clipboardFallback(val, ok, err));
+  } else {
+    _clipboardFallback(val, ok, err);
+  }
+}
+
+// ── Senha ──────────────────────────────────────────────────────────────────
+async function alterarSenha() {
+  const atual = document.getElementById('senha-atual').value;
+  const nova  = document.getElementById('nova-senha').value;
+  const conf  = document.getElementById('conf-senha').value;
+  const al    = document.getElementById('senha-alert');
+  if (nova !== conf) { al.style.display='block'; al.className='alert alert-err'; al.textContent='As senhas não coincidem.'; return; }
+  if (nova.length < 6) { al.style.display='block'; al.className='alert alert-err'; al.textContent='A nova senha deve ter no mínimo 6 caracteres.'; return; }
+  const r = await fetch('/api/senha', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ senha_atual:atual, nova_senha:nova }) });
+  if (r.ok) {
+    al.style.display='block'; al.className='alert alert-ok'; al.textContent='✅ Senha alterada com sucesso.';
+    ['senha-atual','nova-senha','conf-senha'].forEach(id => { document.getElementById(id).value=''; });
+  } else {
+    const data = await r.json().catch(() => ({}));
+    al.style.display='block'; al.className='alert alert-err'; al.textContent='❌ ' + (data.detail || 'Erro ao alterar senha.');
+  }
+}
+
+// ── Factory Reset ──────────────────────────────────────────────────────────
+function abrirModalReset()  { document.getElementById('modal-reset').classList.add('open'); }
+function fecharModalReset() { document.getElementById('modal-reset').classList.remove('open'); document.getElementById('reset-confirm').value=''; validarReset(); }
+function validarReset() { document.getElementById('btn-reset-confirm').disabled = document.getElementById('reset-confirm').value !== 'RESTAURAR'; }
+
+async function executarReset() {
+  const al = document.getElementById('reset-alert');
+  al.style.display='block'; al.className='alert alert-warn'; al.textContent='⏳ Restaurando arquivos originais…';
+  document.getElementById('btn-reset-confirm').disabled = true;
+  try {
+    const data = await fetch('/api/factory-reset', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ confirmacao:'RESTAURAR' }) }).then(r=>r.json());
+    if (data.ok) { al.className='alert alert-ok'; al.textContent='✅ ' + data.mensagem; }
+    else throw new Error(data.detail || 'Erro.');
+  } catch(e) {
+    al.className='alert alert-err'; al.textContent='❌ ' + e.message;
+    document.getElementById('btn-reset-confirm').disabled = false;
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = (type==='err'?'❌ ':'✅ ') + msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Empresas (lockup no topbar) ────────────────────────────────────────────
+async function carregarEmpresas() {
+  try {
+    const lista = await fetch('/api/empresas').then(r => r.json());
+    if (!Array.isArray(lista)) return;
+    lista.forEach(e => _empNomes.set(e.empresa_id, e.nome));
+    _renderEmpresaDropdown(lista);
+  } catch (_) {}
+}
+
+function _renderEmpresaDropdown(lista) {
+  const dropdown = document.getElementById('empresa-dropdown');
+  if (!dropdown) return;
+  const opcoes = [
+    { id: '', nome: 'Todas as empresas' },
+    ...lista.map(e => ({ id: e.empresa_id, nome: e.nome })),
+  ];
+  dropdown.innerHTML = opcoes.map(e => {
+    const ativo   = e.id === _empresaAtual.id;
+    const eidAttr = _esc(String(e.id));
+    const nomAttr = _esc(e.nome);
+    return `<button data-eid="${eidAttr}" data-enome="${nomAttr}" onclick="_onSelecionarEmpresa(this)" style="
+      display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;
+      background:${ativo ? 'var(--bg-hover)' : 'none'};
+      border:none;border-radius:7px;cursor:pointer;text-align:left;
+      color:var(--text-hi);font-size:13px;transition:background .12s;
+    " onmouseover="this.style.background='var(--bg-hover)'"
+       onmouseout="this.style.background='${ativo ? 'var(--bg-hover)' : 'none'}'">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;opacity:.6"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      <span style="flex:1;font-weight:${ativo ? '700' : '500'}">${e.nome}</span>
+      ${ativo ? '<span style="font-size:10px;color:var(--accent)">✓ ativa</span>' : ''}
+    </button>`;
+  }).join('');
+}
+
+function _onSelecionarEmpresa(btn) {
+  selecionarEmpresa(btn.dataset.eid, btn.dataset.enome);
+}
+
+function toggleEmpresaDropdown(ev) {
+  ev.stopPropagation();
+  _empresaDropdownAberto = !_empresaDropdownAberto;
+  const btn = document.getElementById('empresa-btn');
+  const dd  = document.getElementById('empresa-dropdown');
+  if (_empresaDropdownAberto) {
+    btn.style.borderColor = 'var(--accent)';
+    dd.style.display = 'block';
+    // Atualiza lista ao abrir (empresas podem ter mudado)
+    fetch('/api/empresas').then(r => r.json()).then(lista => {
+      lista.forEach(e => _empNomes.set(e.empresa_id, e.nome));
+      _renderEmpresaDropdown(lista);
+    }).catch(() => {});
+  } else {
+    btn.style.borderColor = '';
+    dd.style.display = 'none';
+  }
+}
+
+function selecionarEmpresa(eid, nome) {
+  _empresaAtual = { id: eid, nome };
+  document.getElementById('empresa-nome-label').textContent = nome;
+  document.getElementById('empresa-btn').style.borderColor = '';
+  document.getElementById('empresa-dropdown').style.display = 'none';
+  _empresaDropdownAberto = false;
+  trocarEmpresa();
+}
+
+function trocarEmpresa() {
+  const eid  = _empresaAtual.id;
+  const nome = _empresaAtual.nome;
+  const topTitle = document.getElementById('topbar-title');
+  if (document.querySelector('#tab-monitor.active')) {
+    topTitle.textContent = eid ? `Monitor — ${nome}` : 'Monitor de Atividades';
+  }
+  if (table) {
+    if (eid) table.hideColumn('empresa_id');
+    else     table.showColumn('empresa_id');
+  }
+  _recarregarLogs();
+}
+
+// ── Empresas Grid ─────────────────────────────────────────────────────────
+let tableEmpresas = null;
+
+async function carregarEmpresasGrid() {
+  try {
+    const lista = await fetch('/api/empresas').then(r => r.json());
+    const meta  = document.getElementById('emp-grid-meta');
+    if (meta) meta.textContent = `${lista.length} empresa${lista.length !== 1 ? 's' : ''} sincronizada${lista.length !== 1 ? 's' : ''}`;
+    if (!tableEmpresas) {
+      tableEmpresas = new Tabulator('#tabela-empresas', {
+        data: lista,
+        index: 'empresa_id',
+        layout: 'fitColumns',
+        height: 'calc(100vh - 230px)',
+        placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma empresa sincronizada.<br>Use o painel IA Command para enviar empresas.</div>',
+        columns: [
+          { title: '', field: 'logo_url', width: 54, hozAlign: 'center', headerSort: false,
+            formatter: c => {
+              const v = c.getValue();
+              return v
+                ? `<img src="${_esc(v)}" class="empresa-logo-cell" onerror="this.style.display='none'">`
+                : `<div class="empresa-logo-cell" style="display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:16px">🏢</div>`;
+            }
+          },
+          { title: 'Nome', field: 'nome', minWidth: 200, headerFilter: 'input',
+            formatter: c => `<span style="font-weight:600;color:var(--text-hi)">${_esc(c.getValue())}</span>`
+          },
+          { title: 'ID', field: 'empresa_id', width: 130, headerFilter: 'input',
+            formatter: c => `<span style="font-family:monospace;font-size:12px">${_esc(c.getValue())}</span>`
+          },
+          { title: 'CNPJ', field: 'cnpj', width: 160,
+            formatter: c => `<span style="font-size:13px">${_esc(c.getValue() || '—')}</span>`
+          },
+          { title: 'Slogan', field: 'slogan', minWidth: 160,
+            formatter: c => { const v = c.getValue(); return v ? `<span style="color:var(--text-md);font-style:italic">${_esc(v)}</span>` : '<span style="color:var(--text-lo)">—</span>'; }
+          },
+          { title: 'Sincronizado em', field: 'sincronizado_em', width: 165,
+            formatter: c => `<span style="font-size:12px;color:var(--text-lo)">${fmtTs(c.getValue())}</span>`
+          },
+          { title: '', field: 'empresa_id', width: 56, hozAlign: 'center', headerSort: false,
+            formatter: c => {
+              const eid  = _esc(c.getValue());
+              const nome = _esc(c.getRow().getData().nome || '');
+              return `<button class="btn btn-ghost btn-sm" style="color:var(--danger);padding:2px 8px;font-size:13px" onclick="event.stopPropagation();removerEmpresa('${eid}','${nome}')" title="Remover">✕</button>`;
+            }
+          },
+        ],
+      });
+    } else {
+      tableEmpresas.replaceData(lista);
+    }
+  } catch(e) { console.error('carregarEmpresasGrid', e); }
+}
+
+async function removerEmpresa(eid, nome) {
+  if (!confirm(`Remover a empresa "${nome}" do agente local?\n\nEla poderá ser sincronizada novamente pelo IA Command.`)) return;
+  const r = await fetch(`/api/empresas/${encodeURIComponent(eid)}`, { method: 'DELETE' });
+  if (r.ok) { toast(`Empresa "${nome}" removida.`); carregarEmpresasGrid(); }
+  else toast('Erro ao remover empresa.', 'err');
+}
+
+// ── Editor de código ───────────────────────────────────────────────────────
+let editorArquivoAtual = null;
+let editorModificado   = false;
+
+async function carregarArquivosEditor() {
+  try {
+    const lista = await fetch('/api/codigo/arquivos').then(r => r.json());
+    const listEl = document.getElementById('editor-files-list');
+    listEl.innerHTML = `<div style="padding:10px 14px;font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)">Arquivos editáveis</div>`;
+    lista.forEach(item => {
+      const div = document.createElement('div');
+      div.className   = 'editor-file-item' + (editorArquivoAtual === item.arquivo ? ' active' : '');
+      div.id          = 'efi-' + item.arquivo.replace(/[^a-z0-9]/gi, '_');
+      div.onclick     = () => abrirArquivo(item.arquivo);
+      div.innerHTML   = `<span class="editor-file-name">${_esc(item.arquivo)}</span><span class="editor-file-desc">${_esc(item.descricao)}</span>`;
+      listEl.appendChild(div);
+    });
+    if (editorArquivoAtual) _highlightEditorFile(editorArquivoAtual);
+  } catch(e) { console.error('carregarArquivosEditor', e); }
+}
+
+function _highlightEditorFile(nome) {
+  document.querySelectorAll('.editor-file-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('efi-' + nome.replace(/[^a-z0-9]/gi, '_'));
+  if (el) el.classList.add('active');
+}
+
+async function abrirArquivo(nome) {
+  if (editorModificado && editorArquivoAtual && editorArquivoAtual !== nome) {
+    if (!confirm('Há alterações não salvas. Deseja descartar e abrir outro arquivo?')) return;
+  }
+  editorArquivoAtual = nome;
+  editorModificado   = false;
+  _highlightEditorFile(nome);
+  try {
+    const data = await fetch(`/api/codigo/conteudo?arquivo=${encodeURIComponent(nome)}`).then(r => r.json());
+    document.getElementById('editor-fname').textContent = nome;
+    document.getElementById('code-editor').value = data.conteudo;
+    document.getElementById('editor-empty').style.display  = 'none';
+    document.getElementById('editor-active').style.display = 'flex';
+    _atualizarEditorStatus(false);
+  } catch(e) {
+    toast('Erro ao carregar arquivo.', 'err');
+  }
+}
+
+function marcarModificado() {
+  if (!editorModificado) { editorModificado = true; _atualizarEditorStatus(true); }
+}
+
+function _atualizarEditorStatus(mod) {
+  const el = document.getElementById('editor-status');
+  el.className   = mod ? 'editor-status modified' : 'editor-status saved';
+  el.textContent = mod ? 'Modificado'             : 'Salvo';
+}
+
+async function salvarArquivo() {
+  if (!editorArquivoAtual) return;
+  const conteudo = document.getElementById('code-editor').value;
+  try {
+    const r = await fetch('/api/codigo/salvar', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ arquivo: editorArquivoAtual, conteudo }),
+    });
+    if (r.ok) {
+      editorModificado = false;
+      _atualizarEditorStatus(false);
+      toast('Arquivo salvo! Reinicie o serviço para as alterações entrarem em vigor.');
+    } else {
+      const d = await r.json().catch(() => ({}));
+      toast('Erro ao salvar: ' + (d.detail || 'falha desconhecida'), 'err');
+    }
+  } catch(e) { toast('Erro ao salvar arquivo.', 'err'); }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { fecharModalReset(); fecharDetalhe(); }
+  if (e.ctrlKey && e.key === 's' && editorArquivoAtual) { e.preventDefault(); salvarArquivo(); }
+});
+
+document.addEventListener('click', () => {
+  if (_empresaDropdownAberto) {
+    _empresaDropdownAberto = false;
+    const btn = document.getElementById('empresa-btn');
+    const dd  = document.getElementById('empresa-dropdown');
+    if (btn) btn.style.borderColor = '';
+    if (dd)  dd.style.display = 'none';
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────
+// Carrega empresas primeiro (popula _empNomes) e depois cria a grade de logs
+carregarEmpresas().then(() => _recarregarLogs());
+
+// ── Sidebar retráctil ──────────────────────────────────────────────────────
+const SIDEBAR_PIN_KEY = 'iac_agente_sidebar_pinned';
+
+function _applySidebarPin(pinned) {
+  const sb  = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-pin-btn');
+  if (!sb) return;
+  sb.classList.toggle('pinned', pinned);
+  document.querySelector('.layout').classList.toggle('sidebar-pinned', pinned);
+  if (btn) {
+    btn.textContent = pinned ? '◀' : '▶';
+    btn.title = pinned ? 'Recolher menu' : 'Fixar menu';
+  }
+}
+
+function toggleSidebarPin(e) {
+  e.stopPropagation();
+  const pinned = !document.getElementById('sidebar').classList.contains('pinned');
+  _applySidebarPin(pinned);
+  localStorage.setItem(SIDEBAR_PIN_KEY, pinned ? '1' : '0');
+}
+
+_applySidebarPin(localStorage.getItem(SIDEBAR_PIN_KEY) === '1');
+</script>
+</body>
+</html>

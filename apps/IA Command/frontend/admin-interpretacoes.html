@@ -18,25 +18,21 @@
     .topbar-title { flex:1; min-width:0; font-weight:700; }
 
     .page-kicker   { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
-    .page-title    { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
-    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
-    .page-head     { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
 
-    .quick-panel  { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
-    .quick-row    { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
-    .filter-area  { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
-    .filter-status{ font-size:12px;color:var(--text-lo);flex:1; }
-    .quick-row .form-control { height:36px;font-size:13px; }
-    .quick-row input.form-control { flex:1;min-width:190px; }
-    .quick-row select.form-control { width:auto;min-width:150px; }
+    .ctrl-bar       { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
+    .ctrl-bar-left  { min-width:0; }
+    .ctrl-bar-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.25;display:flex;align-items:baseline;gap:8px; }
+    .ctrl-count     { font-size:12px;color:var(--text-lo);font-weight:400; }
+    .ctrl-bar-right { display:flex;gap:8px;align-items:center;flex-shrink:0; }
 
-    .gp-wrap      { margin-top:10px; }
+    .filter-bar     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm); }
+    .filter-bar-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px; }
+    .filter-bar-row .form-control { height:34px;font-size:13px; }
+    .filter-bar-row input.form-control { flex:1;min-width:180px; }
+    .filter-bar-row select.form-control { width:auto;min-width:150px; }
+
     .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
     .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
-
-    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
-    .grid-title   { font-size:13px;font-weight:600;color:var(--text-hi); }
-    .grid-meta    { font-size:12px;color:var(--text-lo);margin-top:1px; }
 
     .badge { display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap; }
     .badge-local { background:#dcfce7;color:#15803d; }
@@ -44,29 +40,100 @@
     .badge-fallback { background:#fef3c7;color:#92400e; }
     .badge-neutro { background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
     .badge-negativo { background:#fee2e2;color:#b91c1c; }
+    .badge-chat    { background:#f3e8ff;color:#7c3aed; }
+    .badge-reuso   { background:#dbeafe;color:#1d4ed8; }
+    .badge-classico{ background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .sql-erro-box  { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:10px;white-space:pre-wrap;word-break:break-word; }
     .grid-text-preview { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;line-height:1.35;word-break:break-word; }
     .grid-text-preview.question { color:var(--text-hi);font-weight:700; }
     .grid-text-preview.answer { color:var(--text-md); }
 
     .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--text-md);transition:background .15s,color .15s; }
     .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
+
+    /* ── Detalhe / Abas ─────────────────────────────────────────────────────── */
+    .detail-tab-bar {
+      display:flex; gap:2px; border-bottom:1px solid var(--border);
+      background:var(--bg-card); padding:0 20px;
+    }
+    .detail-tab {
+      padding:10px 18px; font-size:13px; font-weight:600; color:var(--text-lo);
+      border:none; background:none; cursor:pointer; border-bottom:2px solid transparent;
+      margin-bottom:-1px; transition:color var(--transition),border-color var(--transition);
+      white-space:nowrap;
+    }
+    .detail-tab:hover { color:var(--text-hi); }
+    .detail-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+    .detail-tab-panel { display:none; padding:20px; }
+    .detail-tab-panel.active { display:block; }
+
+    /* Aba 1 — Dados gerais */
+    .meta-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fill, minmax(180px, 1fr));
+      gap:10px; margin-bottom:18px;
+    }
+    .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
+    .meta-item span { color:var(--text-lo);font-size:11px;display:block;margin-bottom:4px; }
+    .meta-item strong { color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .pergunta-box { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px; }
+    .pergunta-box .lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px; }
+    .pergunta-box pre { font-family:inherit;font-size:14px;font-weight:600;color:var(--text-hi);white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.55; }
+
+    /* Aba 2 — Query (splitter) */
+    .split-wrap {
+      display:flex; gap:0; height:calc(100vh - 260px); min-height:300px;
+      border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden;
+      resize:vertical;
+    }
+    .split-pane {
+      display:flex; flex-direction:column; overflow:auto; min-width:120px;
+    }
+    .split-pane-left  { flex:1; border-right:1px solid var(--border); }
+    .split-pane-right { flex:1; }
+    .split-handle {
+      width:6px; background:var(--bg-base); cursor:col-resize; flex-shrink:0;
+      border-left:1px solid var(--border); border-right:1px solid var(--border);
+      transition:background var(--transition);
+    }
+    .split-handle:hover, .split-handle.dragging { background:var(--accent-glow); }
+    .split-pane-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 14px; border-bottom:1px solid var(--border);
+      background:var(--bg-card); flex-shrink:0;
+    }
+    .split-pane-title { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo); }
+    .split-pane-body {
+      min-height:120px; height:calc(100% - 45px); box-sizing:border-box;
+      overflow:auto; padding:14px; resize:vertical;
+      font-family:ui-monospace,monospace; font-size:12.5px;
+      white-space:pre-wrap; word-break:break-word; line-height:1.55;
+      color:var(--text-md); background:var(--bg-base);
+    }
+    .split-pane-body.resposta { font-family:inherit; font-size:13.5px; color:var(--text-hi); }
+
+    /* Aba 3 — Diálogo */
+    .dialogo-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .dialogo-sec { display:flex; flex-direction:column; gap:6px; }
+    .dialogo-lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em; }
+    .dialogo-pre {
+      background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);
+      padding:12px;font-family:ui-monospace,monospace;font-size:12px;
+      white-space:pre-wrap;word-break:break-word;
+      flex:1; overflow-y:auto; color:var(--text-md);
+      max-height:calc(100vh - 340px);
+    }
+    .caminho-sec { margin-bottom:18px; }
+
+    /* Cleanup modal */
     .detail-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:none;align-items:center;justify-content:center; }
     .detail-overlay.show { display:flex; }
-    .detail-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(940px,96vw);max-height:88vh;overflow-y:auto;padding:24px; }
+    .detail-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(540px,96vw);max-height:88vh;overflow-y:auto;padding:24px; }
     .detail-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:14px; }
     .detail-title  { font-size:15px;font-weight:700;color:var(--text-hi); }
     .detail-close  { background:none;border:none;color:var(--text-lo);font-size:22px;cursor:pointer;line-height:1; }
     .detail-close:hover { color:var(--text-hi); }
-    .detail-meta  { display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border); }
-    .detail-meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
-    .detail-meta-item span { color:var(--text-lo);font-size:11px;display:block;margin-bottom:4px; }
-    .detail-meta-item strong { color:var(--text-hi);font-size:13px;word-break:break-word; }
-    .detail-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
-    .detail-lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px; }
-    .detail-pre { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;color:var(--text-md); }
-    .detail-sec { margin-bottom:14px; }
-    .feedback-row { display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px; }
-    .feedback-row textarea { min-height:72px;resize:vertical;flex:1;min-width:280px; }
     .cleanup-options { display:grid;gap:10px;margin:12px 0 14px; }
     .cleanup-option { display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--text-md); }
     .cleanup-period { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px; }
@@ -101,8 +168,12 @@
     .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
 
     @media (max-width: 860px) {
-      .detail-meta { grid-template-columns:1fr 1fr; }
-      .detail-grid { grid-template-columns:1fr; }
+      .meta-grid { grid-template-columns:1fr 1fr; }
+      .dialogo-grid { grid-template-columns:1fr; }
+      .split-wrap { flex-direction:column; height:auto; }
+      .split-handle { display:none; }
+      .split-pane-left { border-right:none; border-bottom:1px solid var(--border); }
+      .split-pane-body { max-height:280px; }
     }
   </style>
 </head>
@@ -131,63 +202,40 @@
 
     <div class="page-content">
       <div id="sec-lista">
-      <div class="page-head">
-        <div>
-          <div class="page-kicker">Administracao</div>
-          <div class="page-title">Interpretacoes</div>
-          <div class="page-subtitle">Auditoria da pergunta recebida, resposta entregue e decisao tomada antes da execucao.</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Ajuda
-          </button>
-          <button class="btn btn-ghost" onclick="abrirLimpeza()">Limpar log</button>
-          <button class="btn btn-ghost" onclick="carregar()">↻ Atualizar</button>
-        </div>
-      </div>
-
-      <div class="quick-panel">
-        <div class="quick-row">
-          <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
-          <span class="filter-status" id="filter-status">Sem filtros ou agrupamentos ativos</span>
-        </div>
-        <div class="filter-area" id="filter-area" style="display:none">
-          <div class="quick-row" style="margin-bottom:10px">
-            <input id="f-busca" type="text" class="form-control" placeholder="Filtrar texto, intencao, dataset ou resposta..." oninput="filtrar()">
-            <select id="f-motor" class="form-control" onchange="filtrar()">
-              <option value="">Todos os motores</option>
-              <option value="local">IA interna</option>
-              <option value="externa">IA externa</option>
-            </select>
-            <select id="f-feedback" class="form-control" onchange="filtrar()">
-              <option value="">Todos os feedbacks</option>
-              <option value="positivo">Positivo</option>
-              <option value="negativo">Negativo</option>
-              <option value="corrigido">Corrigido</option>
-              <option value="ignorar">Ignorar</option>
-              <option value="sem_feedback">Sem feedback</option>
-            </select>
-            <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+        <div class="ctrl-bar">
+          <div class="ctrl-bar-left">
+            <div class="page-kicker">Administracao</div>
+            <div class="ctrl-bar-title">
+              Interpretacoes
+              <span id="count" class="ctrl-count">—</span>
+            </div>
           </div>
-          <div class="gp-wrap">
+          <div class="ctrl-bar-right">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-ghost" id="btn-limpar-log" onclick="limparLogClick()" style="font-weight:700;color:#1e3a8a;padding:5px 14px">Limpar log</button>
+            <button class="btn btn-ghost" id="btn-atualizar" onclick="atualizarClick()" style="font-weight:700;color:#1e3a8a;padding:5px 14px">↻ Atualizar</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-ghost" id="btn-grupo" onclick="toggleGrupo()">+ Mostrar agrupamento</button>
+            <span style="font-size:12px;color:var(--text-lo)" id="grupo-status">Sem agrupamento ativo</span>
+          </div>
+          <div id="grupo-area" style="display:none;padding-top:12px;border-top:1px solid var(--border);margin-top:12px">
             <div class="gp-chips-row" id="gp-chips-row">
               <span class="gp-label">Agrupar por:</span>
             </div>
             <div id="dz"></div>
           </div>
         </div>
-      </div>
 
-      <div class="card" style="padding:0;overflow:hidden">
-        <div class="grid-toolbar">
-          <div>
-            <div class="grid-title">Interpretacoes registradas</div>
-            <div id="count" class="grid-meta">Ultimas 200 entradas</div>
-          </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <div id="tabela"></div>
         </div>
-        <div id="tabela"></div>
-      </div>
       </div><!-- /sec-lista -->
 
       <div id="sec-detalhe" style="display:none">
@@ -199,58 +247,106 @@
             </div>
             <div class="editor-actions">
               <button class="btn btn-ghost" onclick="fecharDetalhe()">← Voltar à lista</button>
-              <button class="btn btn-primary" onclick="salvarFeedback()">Salvar feedback</button>
             </div>
           </div>
-          <div style="margin-top:16px">
-            <div class="detail-meta">
-              <div class="detail-meta-item"><span>Data/Hora</span><strong id="d-data">-</strong></div>
-              <div class="detail-meta-item"><span>Celular</span><strong id="d-celular">-</strong></div>
-              <div class="detail-meta-item"><span>Motor</span><strong id="d-motor">-</strong></div>
-              <div class="detail-meta-item"><span>Confiança</span><strong id="d-confianca">-</strong></div>
-              <div class="detail-meta-item"><span>Resultado</span><strong id="d-resultado">-</strong></div>
-              <div class="detail-meta-item"><span>Intenção</span><strong id="d-intencao">-</strong></div>
-              <div class="detail-meta-item"><span>Dataset</span><strong id="d-dataset">-</strong></div>
-              <div class="detail-meta-item"><span>Grupo</span><strong id="d-grupo">-</strong></div>
-              <div class="detail-meta-item"><span>Linhas</span><strong id="d-linhas">-</strong></div>
-              <div class="detail-meta-item"><span>Origem</span><strong id="d-origem">-</strong></div>
-              <div class="detail-meta-item"><span>Contexto</span><strong id="d-contexto">-</strong></div>
-              <div class="detail-meta-item"><span>Métricas</span><strong id="d-metricas">-</strong></div>
+
+          <!-- Abas -->
+          <div class="detail-tab-bar" style="margin-top:16px">
+            <button class="detail-tab active" onclick="ativarAba('aba-geral',this)">Dados gerais</button>
+            <button class="detail-tab" onclick="ativarAba('aba-query',this)">Query</button>
+            <button class="detail-tab" onclick="ativarAba('aba-prompt',this)">Prompt IA</button>
+            <button class="detail-tab" onclick="ativarAba('aba-dialogo',this)">Diálogo</button>
+          </div>
+
+          <!-- Aba 1 — Dados gerais -->
+          <div id="aba-geral" class="detail-tab-panel active">
+            <div class="meta-grid">
+              <div class="meta-item"><span>Data/Hora</span><strong id="d-data">-</strong></div>
+              <div class="meta-item"><span>Celular</span><strong id="d-celular">-</strong></div>
+              <div class="meta-item"><span>Motor</span><strong id="d-motor">-</strong></div>
+              <div class="meta-item"><span>Pipeline</span><strong id="d-pipeline">-</strong></div>
+              <div class="meta-item"><span>Turno chat</span><strong id="d-turno">-</strong></div>
+              <div class="meta-item"><span>Duração</span><strong id="d-duracao">-</strong></div>
+              <div class="meta-item"><span>Confiança</span><strong id="d-confianca">-</strong></div>
+              <div class="meta-item"><span>Resultado</span><strong id="d-resultado">-</strong></div>
+              <div class="meta-item"><span>Intenção</span><strong id="d-intencao">-</strong></div>
+              <div class="meta-item"><span>Dataset</span><strong id="d-dataset">-</strong></div>
+              <div class="meta-item"><span>Grupo</span><strong id="d-grupo">-</strong></div>
+              <div class="meta-item"><span>Linhas</span><strong id="d-linhas">-</strong></div>
+              <div class="meta-item"><span>Origem</span><strong id="d-origem">-</strong></div>
+              <div class="meta-item"><span>Execução via</span><strong id="d-escopo">-</strong></div>
+              <div class="meta-item"><span>Contexto</span><strong id="d-contexto">-</strong></div>
+              <div class="meta-item"><span>Métricas</span><strong id="d-metricas">-</strong></div>
             </div>
-            <div class="detail-sec">
-              <div class="detail-lbl">Pergunta original</div>
-              <pre class="detail-pre" id="d-texto"></pre>
+            <div class="pergunta-box">
+              <div class="lbl">Pergunta original</div>
+              <pre id="d-texto"></pre>
             </div>
-            <div class="detail-grid">
-              <div class="detail-sec">
-                <div class="detail-lbl">Decisão estruturada</div>
-                <pre class="detail-pre" id="d-intent-json"></pre>
-              </div>
-              <div class="detail-sec">
-                <div class="detail-lbl">Sinônimos e campos inferidos</div>
-                <pre class="detail-pre" id="d-sinais"></pre>
-              </div>
+          </div>
+
+          <!-- Aba 2 — Query -->
+          <div id="aba-query" class="detail-tab-panel">
+            <div id="d-sql-erro-wrap" style="display:none">
+              <div class="sql-erro-box" id="d-sql-erro"></div>
             </div>
-            <div class="detail-grid">
-              <div class="detail-sec">
-                <div class="detail-lbl">Resposta entregue</div>
-                <pre class="detail-pre" id="d-resposta"></pre>
-              </div>
-              <div class="detail-sec">
-                <div class="detail-lbl">Feedback</div>
-                <div id="d-feedback-atual" style="font-size:13px;color:var(--text-md);margin-bottom:8px"></div>
-                <select id="feedback-tipo" class="form-control">
-                  <option value="positivo">Interpretação correta</option>
-                  <option value="negativo">Interpretação incorreta</option>
-                  <option value="corrigido">Corrigido manualmente</option>
-                  <option value="ignorar">Ignorar para aprendizado</option>
-                </select>
-                <div class="feedback-row" style="margin-top:8px">
-                  <textarea id="feedback-observacao" class="form-control" placeholder="Observação curta para orientar ajuste de equivalências, intenções ou testes regressivos."></textarea>
+            <div class="split-wrap" id="split-wrap">
+              <div class="split-pane split-pane-left" id="pane-sql">
+                <div class="split-pane-header">
+                  <span class="split-pane-title">Auditoria SQL</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarSql()">Copiar</button>
                 </div>
+                <div class="split-pane-body" id="d-sql-gerado"></div>
+              </div>
+              <div class="split-handle" id="split-handle" title="Arraste para redimensionar"></div>
+              <div class="split-pane split-pane-right" id="pane-resposta">
+                <div class="split-pane-header">
+                  <span class="split-pane-title">Resposta entregue</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarResposta()">Copiar</button>
+                </div>
+                <div class="split-pane-body resposta" id="d-resposta"></div>
               </div>
             </div>
           </div>
+
+          <!-- Aba 3 — Prompt IA -->
+          <div id="aba-prompt" class="detail-tab-panel">
+            <div class="split-wrap" id="split-wrap-prompt">
+              <div class="split-pane split-pane-left" id="pane-prompt-system">
+                <div class="split-pane-header">
+                  <span class="split-pane-title">System Prompt</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarEl('d-prompt-system')">Copiar</button>
+                </div>
+                <pre class="split-pane-body" id="d-prompt-system"></pre>
+              </div>
+              <div class="split-handle" id="split-handle-prompt" title="Arraste para redimensionar"></div>
+              <div class="split-pane split-pane-right" id="pane-prompt-user">
+                <div class="split-pane-header">
+                  <span class="split-pane-title">User Prompt (com contexto)</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarEl('d-prompt-user')">Copiar</button>
+                </div>
+                <pre class="split-pane-body" id="d-prompt-user"></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Aba 4 — Diálogo -->
+          <div id="aba-dialogo" class="detail-tab-panel">
+            <div class="caminho-sec">
+              <div class="dialogo-lbl" style="margin-bottom:8px">Caminho percorrido</div>
+              <pre class="dialogo-pre" id="d-trace-json" style="max-height:220px"></pre>
+            </div>
+            <div class="dialogo-grid">
+              <div class="dialogo-sec">
+                <div class="dialogo-lbl">Decisão estruturada</div>
+                <pre class="dialogo-pre" id="d-intent-json"></pre>
+              </div>
+              <div class="dialogo-sec">
+                <div class="dialogo-lbl">Sinônimos e campos inferidos</div>
+                <pre class="dialogo-pre" id="d-sinais"></pre>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div><!-- /sec-detalhe -->
     </div>
@@ -304,8 +400,7 @@
   let table, gp;
   let _dados = [];
   let _rowAtual = null;
-  let _filtrosVisiveis = false;
-  let _quickFilterFn = null;
+  let _grupoVisivel = false;
 
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -343,6 +438,7 @@
   function motor(row) {
     const provedor = String(row.provedor || '').toLowerCase();
     if (provedor === 'deterministico' || row.cache_hit) return 'IA interna';
+    if (provedor === 'escopo_dinamico') return 'IA interna (escopo_dinamico)';
     if (!provedor) return 'Sem IA';
     return `IA externa (${row.provedor})`;
   }
@@ -350,7 +446,22 @@
   function motorTipo(row) {
     const provedor = String(row.provedor || '').toLowerCase();
     if (provedor === 'deterministico' || row.cache_hit) return 'local';
+    if (provedor === 'escopo_dinamico') return 'local';
     return provedor ? 'externa' : 'sem';
+  }
+
+  function pipelineLabel(p) {
+    if (p === 'chat')           return 'Chat-first';
+    if (p === 'canonico_reuso') return 'Reuso canônico';
+    if (p === 'classico')       return 'Clássico';
+    return p || '—';
+  }
+
+  function pipelineBadgeHtml(p) {
+    if (p === 'chat')           return '<span class="badge badge-chat">Chat-first</span>';
+    if (p === 'canonico_reuso') return '<span class="badge badge-reuso">Reuso</span>';
+    if (p === 'classico')       return '<span class="badge badge-classico">Clássico</span>';
+    return p ? `<span class="badge badge-neutro">${esc(p)}</span>` : '<span class="badge badge-neutro">—</span>';
   }
 
   function conf(row) {
@@ -369,7 +480,16 @@
     if (intent._contextoAplicado) return 'Contexto da conversa';
     if (provedor === 'deterministico' || intent._resolvidoLocalmente || row?.cache_hit) return 'Motor local';
     if (!provedor || provedor === 'nenhum') return 'Nao reconhecida';
-    return 'IA externa';
+    if (provedor === 'escopo_dinamico') return 'Motor local';
+    return `IA externa (${provedor})`;
+  }
+
+  function escopoExecucaoBadge(escopo) {
+    if (!escopo) return '<span style="color:var(--text-lo)">—</span>';
+    if (escopo === 'agente_local')   return '<span style="background:rgba(124,58,237,.1);color:#7c3aed;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">⚡ Agente Local</span>';
+    if (escopo === 'conexao_direta') return '<span style="background:rgba(37,99,235,.1);color:#1d4ed8;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">🔗 Conexão Direta</span>';
+    if (escopo === 'mock')           return '<span style="background:rgba(217,119,6,.1);color:#d97706;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">🧪 Mock</span>';
+    return `<span style="color:var(--text-lo)">${escopo}</span>`;
   }
 
   function contextoIntent(row) {
@@ -396,55 +516,91 @@
       : '-';
   }
 
-  function toggleFiltros() {
-    _filtrosVisiveis = !_filtrosVisiveis;
-    document.getElementById('filter-area').style.display = _filtrosVisiveis ? '' : 'none';
-    document.getElementById('btn-filtros').textContent = _filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
-    if (_filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+  function moduloIntent(row) {
+    const intent = intentObj(row);
+    const trace = parseJson(row?.trace_json, []) || [];
+    const conhecidos = ['compras', 'financeiro', 'faturamento', 'comissao'];
+    const candidatos = [
+      intent._moduloDinamico,
+      row?.dataset_nome,
+      ...(Array.isArray(trace) ? trace.map(t => t && t.modulo) : []),
+      String(row?.intencao || '').replace(/_dinamico$/i, ''),
+    ].filter(Boolean).map(v => String(v).toLowerCase());
+    return candidatos.find(v => conhecidos.includes(v)) || '-';
   }
 
-  function filtrar() {
-    if (!table) return;
-    if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
-    const busca = document.getElementById('f-busca').value.trim().toLowerCase();
-    const motorFiltro = document.getElementById('f-motor').value;
-    const feedback = document.getElementById('f-feedback').value;
-    if (busca || motorFiltro || feedback) {
-      _quickFilterFn = row => {
-        if (motorFiltro && motorTipo(row) !== motorFiltro) return false;
-        if (feedback === 'sem_feedback' && row.feedback) return false;
-        if (feedback && feedback !== 'sem_feedback' && row.feedback !== feedback) return false;
-        if (busca) {
-          const texto = [
-            row.texto_original, row.intencao, row.dataset_nome, row.resultado_tipo,
-            row.resposta_entregue, row.feedback_observacao,
-          ].join(' ').toLowerCase();
-          if (!texto.includes(busca)) return false;
-        }
-        return true;
-      };
-      table.addFilter(_quickFilterFn);
-    }
-    const ativos = [busca, motorFiltro, feedback].filter(Boolean).length;
-    document.getElementById('filter-status').textContent =
-      ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+  // ── Abas ──────────────────────────────────────────────────────────────────
+  function ativarAba(id, btn) {
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  // ── Splitter genérico ────────────────────────────────────────────────────
+  function initSplitter(handleId, leftId, rightId, wrapId) {
+    let dragging = false, startX = 0, startLeftW = 0;
+    document.addEventListener('mousedown', e => {
+      const h = document.getElementById(handleId);
+      if (!h || !h.contains(e.target)) return;
+      dragging = true;
+      startX = e.clientX;
+      startLeftW = document.getElementById(leftId).getBoundingClientRect().width;
+      h.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const wrap = document.getElementById(wrapId);
+      if (!wrap) return;
+      const wrapW = wrap.getBoundingClientRect().width - 6;
+      const newLeftW = Math.max(120, Math.min(wrapW - 120, startLeftW + (e.clientX - startX)));
+      document.getElementById(leftId).style.flex  = `0 0 ${newLeftW}px`;
+      document.getElementById(rightId).style.flex = `0 0 ${wrapW - newLeftW}px`;
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      const h = document.getElementById(handleId);
+      if (h) h.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    });
+  }
+
+  initSplitter('split-handle',        'pane-sql',           'pane-resposta',   'split-wrap');
+  initSplitter('split-handle-prompt', 'pane-prompt-system', 'pane-prompt-user','split-wrap-prompt');
+
+  // ── Agrupamento ───────────────────────────────────────────────────────────
+  function toggleGrupo() {
+    _grupoVisivel = !_grupoVisivel;
+    document.getElementById('grupo-area').style.display = _grupoVisivel ? '' : 'none';
+    document.getElementById('btn-grupo').textContent = _grupoVisivel ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+    if (table) table.setHeight(_grupoVisivel ? 'calc(100vh - 240px)' : 'calc(100vh - 172px)');
+    if (_grupoVisivel && gp) setTimeout(() => gp.refresh(), 50);
   }
 
   function limparFiltros() {
     document.getElementById('f-busca').value = '';
     document.getElementById('f-motor').value = '';
-    document.getElementById('f-feedback').value = '';
     filtrar();
   }
 
+  // ── Detalhe ───────────────────────────────────────────────────────────────
   function verDetalhe(row) {
     _rowAtual = row;
     const idCurto = String(row.id || '').slice(0,8) || '-';
     document.getElementById('d-title-header').textContent = `Interpretação #${idCurto}`;
     document.getElementById('d-subtitle-header').textContent = fmtData(row.criado_em);
+
+    // Aba 1
     document.getElementById('d-data').textContent = fmtData(row.criado_em);
     document.getElementById('d-celular').textContent = fmtFone(row.numero_wa);
     document.getElementById('d-motor').textContent = motor(row);
+    document.getElementById('d-pipeline').innerHTML = pipelineBadgeHtml(row.pipeline_origem);
+    document.getElementById('d-turno').textContent = row.chat_turno != null ? `Turno ${row.chat_turno}` : '—';
+    document.getElementById('d-duracao').textContent = row.duracao_ms != null ? `${row.duracao_ms} ms` : '—';
     document.getElementById('d-confianca').textContent = conf(row);
     document.getElementById('d-resultado').textContent = row.resultado_tipo || '-';
     document.getElementById('d-intencao').textContent = row.intencao || '-';
@@ -452,27 +608,138 @@
     document.getElementById('d-grupo').textContent = row.agrupar_por || '-';
     document.getElementById('d-linhas').textContent = row.rows_count ?? '-';
     document.getElementById('d-origem').textContent = origemIntent(row);
+    document.getElementById('d-escopo').innerHTML = escopoExecucaoBadge(row.escopo_execucao);
     document.getElementById('d-contexto').textContent = contextoIntent(row);
     document.getElementById('d-metricas').textContent = metricasIntent(row);
     document.getElementById('d-texto').textContent = row.texto_original || '(sem texto)';
-    document.getElementById('d-intent-json').textContent = pretty(row.intent_json);
+
+    // Aba 3 — Prompt IA
+    const aud = parseJson(row.sql_auditoria_json, {}) || {};
+    document.getElementById('d-prompt-system').textContent = aud.prompt_system || '(não registrado — requer versão atualizada do handler)';
+    document.getElementById('d-prompt-user').textContent   = aud.prompt_user   || '(não registrado — requer versão atualizada do handler)';
+
+    // Aba 2
+    const erroWrap = document.getElementById('d-sql-erro-wrap');
+    const erroBox  = document.getElementById('d-sql-erro');
+    if (row.sql_validacao_erro) {
+      erroBox.textContent = `Erro de validação SQL: ${row.sql_validacao_erro}`;
+      erroWrap.style.display = '';
+    } else {
+      erroWrap.style.display = 'none';
+    }
+    document.getElementById('d-sql-gerado').textContent = sqlAuditoriaTexto(row);
     document.getElementById('d-resposta').textContent = row.resposta_entregue || '(sem resposta registrada)';
+
+    // Aba 3
+    document.getElementById('d-intent-json').textContent = pretty(row.intent_json);
+    document.getElementById('d-trace-json').textContent = pretty(row.trace_json);
     document.getElementById('d-sinais').textContent = JSON.stringify({
       periodo: parseJson(row.periodo_json, {}),
       filtros: parseJson(row.filtros_json, {}),
       sinonimos_aplicados: parseJson(row.sinonimos_aplicados, []),
       campos_inferidos_ia: parseJson(row.campos_inferidos_ia, []),
+      modulo_dinamico: moduloIntent(row),
+      escopo_execucao: row.escopo_execucao || null,
+      sql_canonico_origem: row.sql_canonico_origem || null,
+      sql_canonico_empresa_origem: row.sql_canonico_empresa_origem || null,
+      sql_canonico_empresa_atual: row.sql_canonico_empresa_atual || row.empresa_id || null,
+      sql_canonico_parametrizado: !!row.sql_canonico_parametrizado,
+      sql_canonico_parametros: parseJson(row.sql_canonico_parametros_json, []),
+      sql_canonico_reuso_permitido: row.sql_canonico_reuso_permitido,
+      sql_canonico_reuso_motivo: row.sql_canonico_reuso_motivo || null,
+      sql_canonico_adaptado: row.sql_canonico_adaptado || null,
+      sql_canonico_original: row.sql_canonico_original || null,
+      sql_ia_bruto: row.sql_ia_bruto || null,
+      sql_final_executado: row.sql_final_executado || null,
+      sql_auditoria: parseJson(row.sql_auditoria_json, null),
       fallback_usado: !!row.fallback_usado,
       cache_hit: !!row.cache_hit,
       precisa_confirmacao: !!row.precisa_confirmacao,
+      pipeline_origem: row.pipeline_origem || null,
+      chat_turno: row.chat_turno ?? null,
+      sql_validacao_erro: row.sql_validacao_erro || null,
     }, null, 2);
-    document.getElementById('d-feedback-atual').textContent = row.feedback
-      ? `Feedback atual: ${row.feedback}${row.feedback_observacao ? ' — ' + row.feedback_observacao : ''}`
-      : 'Sem feedback registrado.';
-    document.getElementById('feedback-tipo').value = row.feedback || 'positivo';
-    document.getElementById('feedback-observacao').value = row.feedback_observacao || '';
+
+    // Ir para Aba 1 ao abrir
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('aba-geral').classList.add('active');
+    document.querySelectorAll('.detail-tab')[0].classList.add('active');
+
     document.getElementById('sec-lista').style.display = 'none';
     document.getElementById('sec-detalhe').style.display = '';
+  }
+
+  function sqlAuditoriaTexto(row) {
+    const aud = parseJson(row.sql_auditoria_json, null) || {};
+    const linhas = [];
+
+    // Cabeçalho de handler e Fase 1 (comissao-v2 e similares)
+    if (aud.handler) {
+      linhas.push(`-- Handler: ${aud.handler}  |  Origem: ${aud.origem || '?'}  |  Contexto IA anterior: ${aud.contexto_ia_anterior_usado ? 'sim' : 'não'}`);
+    }
+    if (aud.fase1) {
+      const f = aud.fase1;
+      const periodo = f.periodo
+        ? `${f.periodo.dataInicio || f.periodo.inicio || '?'} → ${f.periodo.dataFim || f.periodo.fim || '?'} (${f.periodo.tipo || f.periodo.descricao || ''})`
+        : 'não informado';
+      const agrup = Array.isArray(f.agrupamentos) ? f.agrupamentos.join(', ') || 'nenhum' : 'nenhum';
+      const entidades = Array.isArray(f.entidades_nomeadas) && f.entidades_nomeadas.length
+        ? f.entidades_nomeadas.map(e => `${e.texto || e.nome || '?'}(${e.tipo_sugerido || e.tipo || '?'})`).join(', ')
+        : 'nenhuma';
+      linhas.push(`-- Fase 1 · Período: ${periodo}`);
+      linhas.push(`-- Fase 1 · Agrupamentos: ${agrup}  |  Entidades: ${entidades}  |  Carteira: ${f.carteira || 'todos'}`);
+    }
+    if (linhas.length) linhas.push('');
+
+    const blocos = [
+      ['SQL final executado', row.sql_final_executado || row.sql_gerado || aud.sql_final_executado],
+      ['SQL canônico adaptado da empresa', row.sql_canonico_adaptado || aud.sql_apos_contrato || aud.sql_apos_parametros],
+      ['SQL canônico original/reaproveitado', row.sql_canonico_original || aud.sql_canonico_recebido],
+      ['SQL bruto da IA ou recebido para reuso', row.sql_ia_bruto || aud.sql_ia_bruto],
+      ['Após normalização SX3', aud.sql_apos_sx3],
+      ['Após adaptação SX2', aud.sql_apos_sx2],
+      ['Após parâmetros de entidade', aud.sql_apos_parametros],
+    ].filter(([, valor]) => valor);
+
+    // Formato consolidado whatsapp_all: exibe SQL de cada empresa separadamente
+    const empresasConsolidadas = [
+      ...(Array.isArray(aud.empresas) ? aud.empresas : []),
+      ...(Array.isArray(aud.empresas_sem_dados) ? aud.empresas_sem_dados : []),
+    ];
+    if (empresasConsolidadas.length || (Array.isArray(aud.empresas_com_erro) && aud.empresas_com_erro.length)) {
+      if (aud.sql_canonico_original) {
+        linhas.push('-- SQL canônico original (template)\n' + aud.sql_canonico_original);
+        linhas.push('');
+      }
+      if (Array.isArray(aud.empresas_tentadas) && aud.empresas_tentadas.length) {
+        linhas.push(`-- Empresas tentadas: ${aud.empresas_tentadas.join(', ')}`);
+        linhas.push('');
+      }
+      for (const emp of empresasConsolidadas) {
+        const titulo = `-- ═══ ${emp.empresa_nome || `Empresa #${emp.empresa_id}`} (${emp.rows_count ?? '?'} linhas) ═══`;
+        const sqls = [
+          emp.sql_final_executado && `-- SQL final executado\n${emp.sql_final_executado}`,
+          emp.sql_canonico_adaptado && emp.sql_canonico_adaptado !== emp.sql_final_executado && `-- SQL canônico adaptado\n${emp.sql_canonico_adaptado}`,
+          emp.sql_ia_bruto && emp.sql_ia_bruto !== emp.sql_final_executado && `-- SQL bruto da IA\n${emp.sql_ia_bruto}`,
+          emp.motivo && `-- Motivo\n${emp.motivo}`,
+        ].filter(Boolean);
+        linhas.push(titulo);
+        linhas.push(sqls.join('\n\n') || emp.sql_gerado || '(sem SQL registrado)');
+        linhas.push('');
+      }
+      if (Array.isArray(aud.empresas_com_erro) && aud.empresas_com_erro.length) {
+        linhas.push('-- Empresas com erro');
+        linhas.push(aud.empresas_com_erro.map(erro => `-- ${erro}`).join('\n'));
+        linhas.push('');
+      }
+      return linhas.join('\n');
+    }
+
+    if (!linhas.length && !blocos.length) return '(SQL não registrado)';
+    const cabecalho = linhas.join('\n');
+    const corpo = blocos.map(([titulo, valor]) => `-- ${titulo}\n${valor}`).join('\n\n');
+    return cabecalho + corpo;
   }
 
   function fecharDetalhe() {
@@ -481,6 +748,33 @@
     _rowAtual = null;
   }
 
+  function _copiarTexto(texto, btn) {
+    const orig = btn.textContent;
+    const ok = () => { btn.textContent = 'Copiado!'; setTimeout(() => { btn.textContent = orig; }, 1500); };
+    const err = () => { btn.textContent = 'Erro!';   setTimeout(() => { btn.textContent = orig; }, 1500); };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).then(ok).catch(() => _clipboardFallback(texto, ok, err));
+    } else {
+      _clipboardFallback(texto, ok, err);
+    }
+  }
+
+  function _clipboardFallback(texto, ok, err) {
+    const ta = document.createElement('textarea');
+    ta.value = texto;
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy') ? ok() : err(); } catch { err(); }
+    document.body.removeChild(ta);
+  }
+
+  function copiarEl(id)     { _copiarTexto(document.getElementById(id)?.textContent || '', event.target.closest('button')); }
+  function copiarSql()      { _copiarTexto(document.getElementById('d-sql-gerado')?.textContent || '', event.target.closest('button')); }
+  function copiarResposta() { _copiarTexto(document.getElementById('d-resposta')?.textContent || '', event.target.closest('button')); }
+
+  // ── Limpeza ───────────────────────────────────────────────────────────────
   function abrirLimpeza() {
     const hoje = new Date().toISOString().slice(0, 10);
     document.querySelector('input[name="cleanup-modo"][value="periodo"]').checked = true;
@@ -544,28 +838,10 @@
     }
   }
 
-  async function salvarFeedback() {
-    if (!_rowAtual?.id) return;
-    const feedback = document.getElementById('feedback-tipo').value;
-    const observacao = document.getElementById('feedback-observacao').value.trim();
-    const res = await fetch(`/api/ia-command/admin/interpretacoes/${_rowAtual.id}/feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feedback, observacao }),
-    });
-    if (!res.ok) {
-      alert('Nao foi possivel salvar o feedback.');
-      return;
-    }
-    _rowAtual.feedback = feedback;
-    _rowAtual.feedback_observacao = observacao;
-    table.updateData([_rowAtual]);
-    verDetalhe(_rowAtual);
-  }
-
+  // ── Grid ──────────────────────────────────────────────────────────────────
   async function carregar() {
     _dados = await fetch('/api/ia-command/admin/interpretacoes?limit=200').then(r => r.json()).catch(() => []);
-    document.getElementById('count').textContent = `${_dados.length} interpretacao(oes) carregada(s)`;
+    document.getElementById('count').textContent = `• ${_dados.length} registro(s)`;
     if (table) {
       table.replaceData(_dados);
       filtrar();
@@ -579,13 +855,18 @@
       chipsRowId: 'gp-chips-row', dropZoneId: 'dz',
       storageKey: 'iac_admin_interpretacoes_group',
       getTable: () => table,
+      onChange: (fields) => {
+        const el = document.getElementById('grupo-status');
+        if (el) el.textContent = fields.length ? `${fields.length} campo(s) agrupado(s)` : 'Sem agrupamento ativo';
+      },
     });
 
     table = new Tabulator('#tabela', {
       data, index: 'id', layout: 'fitColumns', movableColumns: true,
-      height: 'calc(100vh - 330px)',
+      height: 'calc(100vh - 172px)',
       groupBy: gp.getActiveFields(), groupStartOpen: true,
       placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma interpretacao registrada.</div>',
+      tableBuilt: () => { gp.refresh(); gp.applyToTable(); },
       columns: [
         { title: '', field: 'id', width: 46, hozAlign: 'center', groupable: false,
           formatter: () => `<button class="btn-icon" title="Visualizar" style="pointer-events:none">
@@ -603,19 +884,26 @@
           formatter: c => `<div class="grid-text-preview answer" title="${esc(c.getValue() || '')}">${esc(c.getValue() || '(sem resposta registrada)')}</div>` },
         { title: 'Intencao', field: 'intencao', minWidth: 160, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
+        { title: 'Modulo', field: 'trace_json', width: 125, groupable: false,
+          formatter: c => esc(moduloIntent(c.getRow().getData())) },
+        { title: 'Pipeline', field: 'pipeline_origem', width: 125,
+          headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', chat: 'Chat-first', classico: 'Clássico', canonico_reuso: 'Reuso' } },
+          formatter: c => pipelineBadgeHtml(c.getValue()) },
         { title: 'Dataset', field: 'dataset_nome', minWidth: 140, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
         { title: 'Origem', field: 'intent_json', width: 145, groupable: false,
           formatter: c => {
             const row = c.getRow().getData();
             const origem = origemIntent(row);
-            const cls = origem === 'Motor local' ? 'badge-local' : origem === 'IA externa' ? 'badge-externo' : origem === 'Contexto da conversa' ? 'badge-fallback' : 'badge-neutro';
+            const cls = origem === 'Motor local' ? 'badge-local' : origem.startsWith('IA externa') ? 'badge-externo' : origem === 'Contexto da conversa' ? 'badge-fallback' : 'badge-neutro';
             return `<span class="badge ${cls}">${esc(origem)}</span>`;
           } },
         { title: 'Contexto', field: 'intent_json', minWidth: 190, groupable: false,
           formatter: c => esc(contextoIntent(c.getRow().getData())) },
         { title: 'Metricas', field: 'intent_json', minWidth: 120, groupable: false,
           formatter: c => esc(metricasIntent(c.getRow().getData())) },
+        { title: 'SQL canonico', field: 'sql_canonico_origem', width: 135, headerFilter: true,
+          formatter: c => esc(resumoSqlCanonico(c.getRow().getData())) },
         { title: 'Motor', field: 'provedor', width: 145,
           formatter: c => {
             const row = c.getRow().getData();
@@ -627,24 +915,56 @@
           formatter: c => `<strong>${esc(conf(c.getRow().getData()))}</strong>` },
         { title: 'Fallback', field: 'fallback_usado', width: 90,
           formatter: c => c.getValue() ? '<span class="badge badge-fallback">Sim</span>' : '<span class="badge badge-neutro">Nao</span>' },
+        { title: 'Execução via', field: 'escopo_execucao', width: 140,
+          headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', agente_local: 'Agente Local', conexao_direta: 'Conexão Direta' } },
+          formatter: c => escopoExecucaoBadge(c.getValue()) },
         { title: 'Resultado', field: 'resultado_tipo', width: 115, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
-        { title: 'Feedback', field: 'feedback', width: 115,
-          formatter: c => {
-            const v = c.getValue();
-            if (!v) return '<span class="badge badge-neutro">Pendente</span>';
-            const cls = v === 'positivo' ? 'badge-local' : v === 'negativo' ? 'badge-negativo' : 'badge-fallback';
-            return `<span class="badge ${cls}">${esc(v)}</span>`;
-          } },
       ],
       rowClick: (e, row) => verDetalhe(row.getData()),
     });
 
-    gp.refresh();
-    gp.applyToTable();
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
+
+  async function atualizarClick() {
+    const btn = document.getElementById('btn-atualizar');
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    btn.textContent = '↻ Atualizando...';
+    const reset = () => {
+      btn.textContent = '↻ Atualizar';
+      btn.style.color = '#1e3a8a';
+      btn.style.opacity = '';
+      btn.disabled = false;
+    };
+    try {
+      await carregar();
+      btn.textContent = '✓ Atualizado!';
+      btn.style.color = '#15803d';
+      setTimeout(reset, 1500);
+    } catch {
+      reset();
+    }
+  }
+
+  function limparLogClick() {
+    const btn = document.getElementById('btn-limpar-log');
+    if (btn) {
+      btn.style.background = 'rgba(30,58,138,.08)';
+      setTimeout(() => { btn.style.background = ''; }, 300);
+    }
+    abrirLimpeza();
+  }
+
+  function resumoSqlCanonico(row) {
+    const origem = row.sql_canonico_origem || '';
+    if (!origem) return '-';
+    const label = origem === 'whatsapp_all_reuso' ? 'Reuso WhatsApp' : 'IA original';
+    const emp = row.sql_canonico_empresa_origem ? ` #${row.sql_canonico_empresa_origem}` : '';
+    return `${label}${emp}`;
+  }
 </script>
 
 <div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
@@ -661,6 +981,39 @@
     </div>
 
     <div class="help-section">
+      <div class="help-section-title">Coluna Pipeline</div>
+      <div class="help-item">
+        <div class="help-item-label">Chat-first (roxo)</div>
+        <div class="help-item-desc">A pergunta foi enviada ao modelo de IA no formato de conversa (chat multi-turn). O SQL foi gerado e validado pelo chat-service antes de ser executado.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Clássico (cinza)</div>
+        <div class="help-item-desc">Usou o pipeline de 3 fases legado (Fase 1 classificação → Fase 2 entidades → Fase 3 SQL). Indica que o chat-service falhou ou não estava disponível.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Reuso (azul)</div>
+        <div class="help-item-desc">SQL canônico gerado pela primeira empresa foi reutilizado para esta consulta. Nenhuma nova chamada à IA foi feita — apenas os sufixos de tabela foram adaptados.</div>
+      </div>
+      <div class="help-tip">O campo <strong>Turno chat</strong> indica em qual turno de conversa o SQL foi gerado. "Turno 1" é a primeira pergunta da sessão.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Abas do detalhe</div>
+      <div class="help-item">
+        <div class="help-item-label">Dados gerais</div>
+        <div class="help-item-desc">Resumo dos metadados: quando, quem perguntou, qual motor e pipeline foram usados, turno, duração, confiança, intenção detectada, dataset e contexto herdado. Inclui a pergunta original completa.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Query</div>
+        <div class="help-item-desc">Exibe lado a lado o SQL gerado/executado e a resposta completa entregue ao usuário. Se houve erro de validação SQL, aparece um aviso em vermelho antes do painel. Arraste a divisória para redimensionar.</div>
+      </div>
+      <div class="help-item">
+        <div class="help-item-label">Diálogo</div>
+        <div class="help-item-desc">Detalhes do raciocínio interno: trace do caminho percorrido, decisão estruturada em JSON e sinais técnicos (sinônimos, pipeline_origem, chat_turno, sql_validacao_erro).</div>
+      </div>
+    </div>
+
+    <div class="help-section">
       <div class="help-section-title">Quando usar</div>
       <div class="help-item">
         <div class="help-item-label">Um cliente recebeu uma resposta errada ou estranha</div>
@@ -668,63 +1021,12 @@
       </div>
       <div class="help-item">
         <div class="help-item-label">O sistema está consumindo muitos tokens de IA externa</div>
-        <div class="help-item-desc">Filtre por Motor = "IA externa" e veja quais perguntas estão passando para fora. Se os termos usados ainda não têm equivalências cadastradas, adicione-as na tela de Equivalências para que o motor local resolva sem custo.</div>
+        <div class="help-item-desc">Filtre por Motor = "IA externa" e veja quais perguntas estão passando para fora. Se os termos usados ainda não têm equivalências cadastradas, adicione-as na tela de Equivalências.</div>
       </div>
       <div class="help-item">
         <div class="help-item-label">Validar após cadastrar uma nova equivalência ou intenção</div>
-        <div class="help-item-desc">Faça uma pergunta real pelo WhatsApp, volte aqui e confirme se o Motor agora aparece como "IA interna" e a Confiança está alta. É a forma mais confiável de testar sem alterar código.</div>
+        <div class="help-item-desc">Faça uma pergunta real pelo WhatsApp, volte aqui e confirme se o Motor agora aparece como "IA interna" e a Confiança está alta.</div>
       </div>
-    </div>
-
-    <div class="help-section">
-      <div class="help-section-title">Colunas principais</div>
-      <div class="help-item">
-        <div class="help-item-label">Pergunta / Resposta</div>
-        <div class="help-item-desc">O texto exato enviado pelo cliente e o que o sistema respondeu. Clique na linha para ver os dois completos.</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Motor</div>
-        <div class="help-item-desc"><strong>IA interna</strong> = sistema resolveu sozinho com equivalências e intenções cadastradas — sem custo de tokens. <strong>IA externa (Groq, Gemini…)</strong> = sistema precisou de ajuda para interpretar a frase. <strong>Contexto</strong> = resposta herdada da conversa anterior.</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Confiança</div>
-        <div class="help-item-desc">Percentual de certeza na classificação. Acima de 70 % é considerado bom. Valores baixos indicam que a frase estava ambígua ou faltam equivalências.</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Intenção / Dataset</div>
-        <div class="help-item-desc">Qual consulta o sistema decidiu executar e em qual conjunto de dados do ERP. Se estiver errado, provavelmente falta uma equivalência ou a intenção está mal configurada.</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Contexto</div>
-        <div class="help-item-desc">Indica se a resposta aproveitou informações da conversa anterior (período herdado, intenção herdada etc.). Útil para entender respostas de perguntas curtas como "e o mês passado?".</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Fallback</div>
-        <div class="help-item-desc">Quando "Sim", o sistema precisou tentar um segundo provedor porque o primeiro falhou. Muitos fallbacks consecutivos indicam instabilidade em um provedor.</div>
-      </div>
-    </div>
-
-    <div class="help-section">
-      <div class="help-section-title">Detalhe e Feedback</div>
-      <div class="help-item-desc">Clique em qualquer linha para abrir o detalhe completo: pergunta, decisão estruturada (JSON de intenção), sinônimos aplicados, campos inferidos pela IA e resposta entregue.</div>
-      <div class="help-item-desc" style="margin-top:10px">No detalhe, registre um <strong>feedback</strong>:</div>
-      <div class="help-item">
-        <div class="help-item-label">Interpretação correta</div>
-        <div class="help-item-desc">Sistema acertou — confirma que o cadastro está bom.</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Interpretação incorreta</div>
-        <div class="help-item-desc">Sistema errou. Use a observação para registrar o que deveria ter sido respondido e o que falta corrigir (equivalência, intenção ou dataset).</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Corrigido manualmente</div>
-        <div class="help-item-desc">O erro já foi corrigido em outro cadastro. Marque para fechar o ciclo.</div>
-      </div>
-      <div class="help-item">
-        <div class="help-item-label">Ignorar para aprendizado</div>
-        <div class="help-item-desc">Mensagem irrelevante (teste, spam). Não serve como base para melhorias.</div>
-      </div>
-      <div class="help-tip">O feedback não altera nada no sistema automaticamente — ele cria rastreabilidade para que você saiba o que ajustar em Equivalências, Intenções ou Datasets.</div>
     </div>
 
     <div class="help-section">

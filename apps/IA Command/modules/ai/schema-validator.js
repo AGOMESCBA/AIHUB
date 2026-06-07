@@ -1,9 +1,34 @@
 const { PERIOD_TYPES, normalizarIntent } = require('./local-intent-resolver');
 
-const FILTROS_PERMITIDOS = new Set(['cliente', 'vendedor', 'fornecedor', 'produto', 'filial', 'unidade', 'status']);
-const AGRUPAMENTOS_PERMITIDOS = new Set(['cliente', 'produto', 'vendedor', 'fornecedor', 'empresa', 'filial', 'unidade', 'mes', 'ano', 'dia']);
+const FILTROS_PERMITIDOS = new Set(['cliente', 'vendedor', 'fornecedor', 'produto', 'filial', 'unidade', 'status', 'natureza', 'grupo_produto', 'centro_custo', 'tes', 'banco', 'conta']);
+const AGRUPAMENTOS_PERMITIDOS = new Set(['cliente', 'produto', 'vendedor', 'fornecedor', 'documento', 'empresa', 'filial', 'unidade', 'mes', 'ano', 'dia', 'natureza', 'grupo_produto', 'centro_custo', 'tes', 'banco', 'conta']);
 const OPERACOES_PERMITIDAS = new Set(['soma', 'media']);
 const GRANULARIDADES_PERMITIDAS = new Set(['dia', 'mes', 'ano']);
+
+function _normalizarIntencaoDinamica(nome, nomesPermitidos = []) {
+  const valor = String(nome || '').trim().toLowerCase();
+  if (!valor || nomesPermitidos.includes(nome)) return nome;
+  const mapa = [
+    {
+      alvo: 'financeiro_dinamico',
+      re: /^(financeiro|contas?_?a?_?pagar|contas?_?pagar|pagar|pagamentos?|contas?_?a?_?receber|contas?_?receber|receber|recebimentos?|fluxo_?caixa|fluxo_?caixa_?realizado|fluxo_?caixa_?projetado|caixa|saldo|saldo_?bancario|saldos?_?bancarios?|bancos?|titulos?|duplicatas?)$/,
+    },
+    {
+      alvo: 'compras_dinamico',
+      re: /^(compras?|pedido_?compra|ordem_?compra|nf_?entrada|nota_?entrada|fornecedores?)$/,
+    },
+    {
+      alvo: 'faturamento_dinamico',
+      re: /^(faturamento|vendas?|receita|notas?_?saida|nf_?saida|nfe?)$/,
+    },
+    {
+      alvo: 'comissao_dinamico',
+      re: /^(comissao|comissoes|comissões|vendedores?)$/,
+    },
+  ];
+  const achado = mapa.find(item => item.re.test(valor));
+  return achado && nomesPermitidos.includes(achado.alvo) ? achado.alvo : nome;
+}
 
 // Valida e normaliza o JSON retornado pela IA de classificacao.
 // nomesPermitidos: array de nomes validos, carregado do banco + "desconhecido".
@@ -15,6 +40,7 @@ function validar(intent, nomesPermitidos) {
   }
 
   intent.intencao = typeof intent.intencao === 'string' ? intent.intencao.trim() : '';
+  intent.intencao = _normalizarIntencaoDinamica(intent.intencao, nomesPermitidos);
   if (!nomesPermitidos.includes(intent.intencao)) {
     erros.push(`Intencao invalida: "${intent.intencao}". Esperado: ${nomesPermitidos.join(', ')}`);
   }
