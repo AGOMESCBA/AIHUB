@@ -125,8 +125,20 @@ function sucessoRetryJ2A(iteracao) {
       assert.strictEqual(chamadas[2].intent._sqlCanonicoEmpresaOrigem, 2, 'origem do canonico deve ser a C3I');
       assert(resposta.includes('C3I ok') && resposta.includes('J2A retry ok'), 'resposta final deve incluir sucesso original e retry');
       assert(!resposta.includes('Nao consegui consultar'), 'erro inicial da J2A deve ser removido apos retry bem-sucedido');
+      assert(
+        interpretacoes.some(p => p.empresaId === 1 && p.resultado?._diagnostico_tecnico?.retry_pendente),
+        'erro inicial da J2A deve registrar diagnostico tecnico com retry pendente',
+      );
       assert(interpretacoes.some(p => p.empresaId === 1 && p.resultado?._retry_canonico), 'deve auditar retry canonico da J2A');
+      assert(
+        interpretacoes.some(p => p.empresaId === 1 && p.resultado?._diagnostico_tecnico?.retry_sucesso),
+        'retry da J2A deve registrar diagnostico tecnico de recuperacao',
+      );
       assert(interpretacoes.some(p => p.resultado?._sql_auditoria?.empresas?.some(e => e.retry_canonico)), 'auditoria consolidada deve marcar retry');
+      assert(
+        interpretacoes.some(p => p.resultado?._sql_auditoria?.empresas?.some(e => e.diagnostico_tecnico?.retry_sucesso)),
+        'auditoria consolidada deve carregar o diagnostico tecnico do retry',
+      );
     }
 
     console.log('whatsapp-all-retry-canonico.test.js: ok');

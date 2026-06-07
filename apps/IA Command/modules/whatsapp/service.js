@@ -1695,6 +1695,15 @@ class IACWhatsAppService extends EventEmitter {
         detalhe: `origem=${resultado._sql_canonico_origem}; empresa_origem=${resultado._sql_canonico_empresa_origem || 'n/a'}; escopo=${intent._escopoExecucao || 'single'}; parametros=${Array.isArray(resultado._sql_canonico_parametros) ? resultado._sql_canonico_parametros.length : 0}`,
       });
     }
+    if (resultado?._diagnostico_tecnico) {
+      const diag = resultado._diagnostico_tecnico;
+      trace.push({
+        etapa: 'diagnostico',
+        acao: diag.codigo || resultado.subtipo || resultado.tipo || 'falha',
+        modulo: this._moduloMonitorIntent(intent, resultado) || null,
+        detalhe: [diag.titulo, diag.descricao, diag.acao_sistema].filter(Boolean).join(' | '),
+      });
+    }
     trace.push({
       etapa: 'finalizacao',
       acao: 'resposta',
@@ -2884,6 +2893,47 @@ class IACWhatsAppService extends EventEmitter {
         'sql_parametro_entidade_pendente',
         'sql_nao_extraido',
       ]);
+      const diagnosticoErroEmpresa = ({ emp, resultado, respostaUsuario, retryPendente = false, retryExecutado = false, retrySucesso = false, canonicoOrigem = null }) => {
+        const subtipo = resultado?.subtipo || resultado?.tipo || 'erro';
+        const nomeEmpresa = emp?.nome || `Empresa #${emp?.empresa_id || 'n/a'}`;
+        const sqlErro = resultado?._sql_validacao_erro
+          || resultado?._sql_auditoria?.erro
+          || resultado?.mensagem
+          || resultado?.resposta_direta
+          || null;
+        const tituloPorSubtipo = {
+          contrato_entidade_invalido: 'SQL gerado nao aplicou a entidade resolvida',
+          contrato_ia_owner_invalido: 'SQL gerado nao passou no contrato IA-OWNER',
+          contrato_sx3_invalido: 'SQL gerado usa campo incompatível com SX3 da empresa',
+          contrato_entidade_sql_invalido: 'SQL gerado possui filtro de entidade incompatível',
+          sql_parametro_entidade_pendente: 'SQL canonico ficou com parametro de entidade pendente',
+          sql_nao_extraido: 'IA nao retornou um SQL executavel',
+          entidade_nao_encontrada_tenant: 'Entidade nao encontrada no cadastro da empresa',
+          entidade_ambigua_tenant: 'Entidade ambigua no cadastro da empresa',
+        };
+        const acaoSistema = retrySucesso
+          ? `Empresa recuperada com retry canonico usando SQL base da empresa #${canonicoOrigem || 'n/a'}.`
+          : retryExecutado
+            ? `Retry canonico executado usando SQL base da empresa #${canonicoOrigem || 'n/a'}, mas a empresa ainda retornou erro.`
+            : retryPendente
+              ? 'Empresa aguardara retry quando outra empresa gerar um SQL canonico reutilizavel.'
+              : 'Erro registrado sem retry canonico automatico para preservar a seguranca da consulta.';
+        return {
+          codigo: subtipo,
+          empresa_id: emp?.empresa_id || null,
+          empresa_nome: nomeEmpresa,
+          titulo: tituloPorSubtipo[subtipo] || 'Falha tecnica ao processar a empresa',
+          descricao: respostaUsuario || resultado?.resposta_direta || resultado?.mensagem || 'A consulta nao foi concluida para esta empresa.',
+          detalhe: sqlErro,
+          sql_gerado: resultado?.sql_gerado || null,
+          sql_final_executado: resultado?._sql_auditoria?.sql_final_executado || null,
+          retry_pendente: !!retryPendente,
+          retry_executado: !!retryExecutado,
+          retry_sucesso: !!retrySucesso,
+          canonico_empresa_origem: canonicoOrigem || null,
+          acao_sistema: acaoSistema,
+        };
+      };
       const registrarSucessoDinamico = (emp, intentExecucao, resultado, respostaAiSql, nomeEmpresa, rows, registrado = true) => {
         const intentExecucaoContextual = this._intentComContextoDoResultado(intentExecucao, resultado, emp.empresa_id);
         sucessosDinamicos.push({
@@ -2933,6 +2983,14 @@ class IACWhatsAppService extends EventEmitter {
             ultimoResultadoDinamico = { empresaId: empRetry.empresa_id, resultado: resultadoRetry };
             if (resultadoRetry.tipo === 'sucesso_ai_sql') {
               errosDinamicos = errosDinamicos.filter(e => e !== pendente.erroMsg);
+              const diagnosticoRetry = diagnosticoErroEmpresa({
+                emp: empRetry,
+                resultado: pendente.resultado,
+                respostaUsuario: pendente.respostaUsuario,
+                retryExecutado: true,
+                retrySucesso: true,
+                canonicoOrigem: intentRetry._sqlCanonicoEmpresaOrigem,
+              });
               this.emit('iac-intent', {
                 empresaId:      empRetry.empresa_id,
                 ...this._metaMonitorIntent(intentRetry, resultadoRetry),
@@ -2959,6 +3017,7 @@ class IACWhatsAppService extends EventEmitter {
                 ...resultadoRetry,
                 _retry_canonico: true,
                 _retry_canonico_motivo: pendente.subtipoErro || pendente.resultado?.subtipo || null,
+                _diagnostico_tecnico: diagnosticoRetry,
               };
               this._registrarInterpretacao({
                 empresaId: empRetry.empresa_id,
@@ -2974,12 +3033,20 @@ class IACWhatsAppService extends EventEmitter {
               });
               registrarSucessoDinamico(empRetry, intentRetry, resultadoRetryRegistrado, respostaRetry, nomeEmpresaRetry, resultadoRetry.rows || [], true);
             } else if (resultadoRetry.tipo === 'erro' && resultadoRetry.resposta_direta) {
+              const diagnosticoRetryErro = diagnosticoErroEmpresa({
+                emp: empRetry,
+                resultado: resultadoRetry,
+                respostaUsuario: resultadoRetry.resposta_direta,
+                retryExecutado: true,
+                retrySucesso: false,
+                canonicoOrigem: intentRetry._sqlCanonicoEmpresaOrigem,
+              });
               this._registrarInterpretacao({
                 empresaId: empRetry.empresa_id,
                 sender: senderAll,
                 texto,
                 intent: intentRetry,
-                resultado: { ...resultadoRetry, _retry_canonico: true },
+                resultado: { ...resultadoRetry, _retry_canonico: true, _diagnostico_tecnico: diagnosticoRetryErro },
                 resposta: resultadoRetry.resposta_direta,
                 duracaoMs: resultadoRetry.duracao_ms ?? (Date.now() - _t0),
               });
@@ -3139,23 +3206,33 @@ class IACWhatsAppService extends EventEmitter {
             const subtipoErro = resultado.subtipo || resultado.tipo;
             const inconsistenciaInterna = SUBTIPOS_INCONSISTENCIA_INTERNA.has(subtipoErro);
             const respostaUsuario = inconsistenciaInterna ? RESPOSTA_INCONSISTENCIA_DINAMICA : resultado.resposta_direta;
+            const retryElegivel = !sqlCanonicoDinamico && subtiposRetryCanonico.has(subtipoErro);
+            const resultadoComDiagnostico = {
+              ...resultado,
+              _diagnostico_tecnico: diagnosticoErroEmpresa({
+                emp,
+                resultado,
+                respostaUsuario,
+                retryPendente: retryElegivel,
+              }),
+            };
             this._registrarInterpretacao({
               empresaId: emp.empresa_id,
               sender: senderAll,
               texto,
               intent: intentExecucao,
-              resultado,
+              resultado: resultadoComDiagnostico,
               resposta: respostaUsuario,
               duracaoMs: resultado.duracao_ms ?? (Date.now() - _t0),
             });
             if (SUBTIPOS_DOMINIO_DIRETO.has(subtipoErro)) {
               // Erro de domínio — resposta_direta é significativa para o usuário
-              errosSemDados.push({ nomeEmpresa: emp.nome || `Empresa #${emp.empresa_id}`, resposta: respostaUsuario, resultado, emp, _registrado: true });
+              errosSemDados.push({ nomeEmpresa: emp.nome || `Empresa #${emp.empresa_id}`, resposta: respostaUsuario, resultado: resultadoComDiagnostico, emp, _registrado: true });
             } else if (inconsistenciaInterna) {
               const erroMsg = `${emp.nome || `Empresa #${emp.empresa_id}`}: ${respostaUsuario}`;
               errosDinamicos.push(erroMsg);
-              if (!sqlCanonicoDinamico && subtiposRetryCanonico.has(subtipoErro)) {
-                pendentesRetryCanonico.push({ emp, intentExecucao, resultado, respostaUsuario, subtipoErro, erroMsg });
+              if (retryElegivel) {
+                pendentesRetryCanonico.push({ emp, intentExecucao, resultado: resultadoComDiagnostico, respostaUsuario, subtipoErro, erroMsg });
                 this.log(`[All] Empresa #${emp.empresa_id} aguardara retry com SQL canonico: ${subtipoErro}.`, 'info');
               }
             } else {
@@ -3222,6 +3299,7 @@ class IACWhatsAppService extends EventEmitter {
             sql_canonico_adaptado: s.resultado._sql_canonico || null,
             retry_canonico:        !!s.resultado._retry_canonico,
             retry_canonico_motivo: s.resultado._retry_canonico_motivo || null,
+            diagnostico_tecnico:   s.resultado._diagnostico_tecnico || null,
             rows_count:            (s.rows || []).length,
           })),
           empresas_sem_dados: errosSemDados.map(sd => ({
@@ -3231,6 +3309,7 @@ class IACWhatsAppService extends EventEmitter {
             sql_gerado:          sd.resultado.sql_gerado || null,
             sql_final_executado: sd.resultado._sql_auditoria?.sql_final_executado || null,
             sql_canonico_adaptado: sd.resultado._sql_canonico || sd.resultado._sql_auditoria?.sql_apos_sx2 || null,
+            diagnostico_tecnico: sd.resultado._diagnostico_tecnico || null,
             motivo:              sd.resultado.resposta_direta || null,
           })),
           empresas_com_erro: errosDinamicos,
@@ -3289,6 +3368,7 @@ class IACWhatsAppService extends EventEmitter {
             sql_final_executado: sd.resultado._sql_auditoria?.sql_final_executado || null,
             sql_ia_bruto:        sd.resultado._sql_auditoria?.sql_ia_bruto || null,
             sql_canonico_adaptado: sd.resultado._sql_canonico || sd.resultado._sql_auditoria?.sql_apos_sx2 || null,
+            diagnostico_tecnico: sd.resultado._diagnostico_tecnico || null,
             motivo:              sd.resultado.resposta_direta || null,
           })),
         };
