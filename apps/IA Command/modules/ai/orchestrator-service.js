@@ -174,6 +174,34 @@ function _normalizarLista(valor) {
   return out.length ? [...new Set(out)] : null;
 }
 
+// Campos de filtro que devem conter apenas nomes próprios de entidades cadastrais
+const _CAMPOS_ENTIDADE = new Set(['cliente', 'fornecedor', 'vendedor', 'produto', 'grupo_produto', 'grupo']);
+
+// Padrões inequivocamente operacionais — compostos ou muito específicos para não conflitar com nomes de empresa
+const _RE_OPERACIONAL = /\b(agrupando\s+por|em\s+ordem(?:\s+decrescente|\s+crescente)?|todos\s+os\s+anos|todos\s+os\s+meses|por\s+m[eê]s(?:\s|$)|por\s+dia(?:\s|$)|por\s+ano(?:\s|$)|ordenado\s+por|ordenando\s+por|ordenar\s+por)\b/i;
+
+// Remove ruído operacional de valores de filtros de entidade (ex: "Softexpert de todos os anos agrupando por mes...")
+function _sanitizarFiltrosEntidade(filtros = {}) {
+  if (!filtros || typeof filtros !== 'object') return filtros;
+  const resultado = { ...filtros };
+  for (const campo of Object.keys(resultado)) {
+    if (!_CAMPOS_ENTIDADE.has(campo)) continue;
+    const valor = resultado[campo];
+    if (typeof valor !== 'string') continue;
+    const m = _RE_OPERACIONAL.exec(valor);
+    if (!m) continue;
+    // Tenta extrair o nome próprio antes do ruído operacional (remove preposições finais)
+    const antes = valor.slice(0, m.index).replace(/\s+(de|da|do|dos|das|e|em|para|por|com)\s*$/i, '').trim();
+    if (antes.length >= 3) { resultado[campo] = antes; continue; }
+    // Nome pode estar após o ruído (ex: "...decrescente da Softexpert")
+    const depois = valor.slice(m.index + m[0].length).trim();
+    const matchFinal = /(?:da?\s+|de\s+|do\s+)([A-Za-zÀ-ÿ0-9][\w\sÀ-ÿ.-]{1,40})$/i.exec(depois);
+    if (matchFinal) { resultado[campo] = matchFinal[1].trim(); continue; }
+    if (depois.length >= 3) resultado[campo] = depois;
+  }
+  return resultado;
+}
+
 function _temTermoDominioExplicito(texto = '', dominio = '') {
   const t = _normalizarTexto(texto);
   if (dominio === 'compras') return /\b(compras?|pedido de compra|ordem de compra|nota fiscal de entrada|nf entrada)\b/.test(t);
@@ -445,7 +473,9 @@ function normalizarContrato(raw, { intencoes = [], mensagem = '', hoje = new Dat
   const periodoAtualSemAno = (periodoContextual || temAgrupamentoTemporal) ? null : _periodoAtualPorTextoSemAno({ mensagem, hoje });
   const periodoFinal = periodoContextual || periodoAtualSemAno || periodoAgrupamento.periodo;
   const agrupamentos = periodoAgrupamento.agrupamentos.length ? periodoAgrupamento.agrupamentos : null;
-  const filtros = obj.filtros && typeof obj.filtros === 'object' && !Array.isArray(obj.filtros) ? obj.filtros : {};
+  const filtros = _sanitizarFiltrosEntidade(
+    obj.filtros && typeof obj.filtros === 'object' && !Array.isArray(obj.filtros) ? obj.filtros : {}
+  );
 
   return {
     ok: true,
