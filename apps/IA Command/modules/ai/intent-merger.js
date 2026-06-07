@@ -8,6 +8,10 @@ const CONECTORES_CONTINUACAO = [
   'quebra ', 'quebre ', 'filtra ', 'filtre ', 'mostra ', 'mostre ',
   'e por ', 'e do ', 'e da ', 'e de ', 'e no ', 'e na ',
   'só por ', 'so por ', 'só de ', 'so de ',
+  // Variantes com pronome de cortesia no início ("me detalhe", "me mostre")
+  'me detalhe ', 'me detalha ', 'me detalhes ',
+  'me mostre ', 'me mostra ', 'me liste ',
+  'me quebre ', 'me quebra ', 'me filtre ', 'me filtra ',
 ];
 
 // Tipos de período que em contexto de continuação indicam REFINAMENTO (agrupamento

@@ -472,7 +472,8 @@ class IACWhatsAppService extends EventEmitter {
 
     const temAgrupamento = /\bpor\s+(dia|dias|mes|meses|ano|anos|cliente|clientes|produto|produtos|vendedor|vendedores|fornecedor|fornecedores|documento|documentos|titulo|titulos|duplicata|duplicatas|empresa|empresas|filial|filiais|loja|lojas|unidade|unidades)\b/.test(normalizado)
       || /\b(dia|mes|ano)\s+a\s+\1\b/.test(normalizado);
-    const temAcaoContinuacao = /^(detalhe|detalha|detalhar|detalhes|quebra|quebre|abrir|abra|mostra|mostre|liste|listar|e\s+|agora\s+|tambem\s+|so\s+|somente\s+|apenas\s+)/.test(normalizado);
+    const temAcaoContinuacao = /^(?:me\s+|por\s+favor[\s,]+)?(detalhe|detalha|detalhar|detalhes|quebra|quebre|abrir|abra|mostra|mostre|liste|listar)/.test(normalizado)
+      || /^(e\s+|agora\s+|tambem\s+|so\s+|somente\s+|apenas\s+)/.test(normalizado);
     const curtoSomenteAgrupamento = /^por\s+(dia|dias|mes|meses|ano|anos|cliente|clientes|produto|produtos|vendedor|vendedores|fornecedor|fornecedores|documento|documentos|titulo|titulos|duplicata|duplicatas|empresa|empresas|filial|filiais|loja|lojas|unidade|unidades)\b/.test(normalizado);
     const temComparativo = /\b(crescimento|cresceu|cresceram|comparativo|comparar|compare|comparacao|evolucao|variacao|aumento|queda)\b/.test(normalizado)
       && /\b(faturamento|vendas?|receita|mes|meses|ano|anos|periodo)\b/.test(normalizado);
