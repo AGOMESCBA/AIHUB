@@ -135,6 +135,10 @@ const _SINAIS_CONTINUIDADE = [
   /\bagora\s+(ordenar?|classific|filtrar?)\b/i,
   /\bmudar\s+(a\s+)?ordem\b/i,
   /\bexibir\s+(s[oe]mente|apenas)\b/i,
+  // Refinamentos de agrupamento/detalhamento (ex: "me detalhe por mes", "quebre por cliente")
+  /\bdetalh(e|a|ar|es)\b/i,
+  /\bpor\s+(m[eê]s|meses|dia|dias|ano|anos|cliente|clientes|produto|produtos|vendedor|vendedores|fornecedor|fornecedores|empresa|filial)\b/i,
+  /\bquebre?\b|\bquebra\b/i,
 ];
 function _ehSinalContinuidade(texto) {
   return _SINAIS_CONTINUIDADE.some(p => p.test(String(texto || '')));
@@ -2376,7 +2380,7 @@ class IACWhatsAppService extends EventEmitter {
             && this._ehIntentDinamica(ctxAtivo.lastIntent)
             && ctxAtivo.lastIntentTs
             && (Date.now() - ctxAtivo.lastIntentTs) < 30 * 60 * 1000;
-          if (_ehSinalContinuidade(textoExecucao) && temContextoDinamicoAtivo) {
+          if ((_ehSinalContinuidade(textoExecucao) || this._isPedidoContinuacaoAnalitica(textoExecucao)) && temContextoDinamicoAtivo) {
             this.log(`🔄 [Hook1] Fallback continuidade conv→data: "${textoExecucao.slice(0, 60)}"`, 'info');
             // Limpa chatHistory como faria um data_request normal
             this._setSenderContext(sender, { _chatHistory: [] });
