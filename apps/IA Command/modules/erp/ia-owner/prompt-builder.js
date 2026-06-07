@@ -95,6 +95,13 @@ function buildSystemPrompt(spec = {}) {
     '- Para media anual real: subquery interna SUM por ano → externa AVG dos totais anuais.',
     '',
 
+    '## Comparacao entre Periodos — Subquery Escalar no HAVING',
+    '- Para consultas do tipo "junho/2026 comparado com junhos anteriores, trazendo os menores": o periodo de REFERENCIA vai na subquery SEM GROUP BY (retorna 1 valor escalar); os periodos COMPARADOS ficam na query principal com GROUP BY.',
+    '- PROIBIDO: subquery com GROUP BY dentro de comparacao escalar (=, <, >, <=, >=). GROUP BY na subquery retorna N linhas → SQL Server erro 512 ("Subquery returned more than 1 value").',
+    '- CORRETO: HAVING SUM(X) < (SELECT SUM(X) FROM ... WHERE periodo_referencia)   -- sem GROUP BY, retorna 1 linha',
+    '- ERRADO:  HAVING SUM(X) < (SELECT SUM(X) FROM ... GROUP BY ano)               -- GROUP BY retorna N linhas → erro 512',
+    '',
+
     '## Formatacao de Campo Dia (Agrupamento ou Detalhe Diario)',
     '- REGRA OBRIGATORIA: quando o usuario solicitar agrupamento ou detalhamento "por dia", "por data" ou "diario", voce esta proibida de retornar a string bruta de 8 caracteres do Protheus (ex: \'20260601\') diretamente no SELECT.',
     '- Na projecao do SELECT, converta para data legivel no formato brasileiro (DD/MM/YYYY) usando:',
