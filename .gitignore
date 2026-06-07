@@ -20,6 +20,8 @@ data/auditoria.log
 .claude/settings.json
 .claude/.gitignore
 .claude/*.md
+!.claude/CLAUDE.md
+!.claude/DESIGN.md
 .claude/.claude-plugin/
 .claude/skills/
 .claude/spec/
