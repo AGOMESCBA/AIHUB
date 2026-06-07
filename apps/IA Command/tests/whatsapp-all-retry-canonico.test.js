@@ -139,6 +139,10 @@ function sucessoRetryJ2A(iteracao) {
         interpretacoes.some(p => p.resultado?._sql_auditoria?.empresas?.some(e => e.diagnostico_tecnico?.retry_sucesso)),
         'auditoria consolidada deve carregar o diagnostico tecnico do retry',
       );
+      assert(
+        interpretacoes.some(p => p.resultado?._pipeline_origem === 'consolidado'),
+        'registro consolidado deve marcar pipeline_origem=consolidado',
+      );
     }
 
     {

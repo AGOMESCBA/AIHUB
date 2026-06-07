@@ -42,6 +42,7 @@
     .badge-negativo { background:#fee2e2;color:#b91c1c; }
     .badge-chat    { background:#f3e8ff;color:#7c3aed; }
     .badge-reuso   { background:#dbeafe;color:#1d4ed8; }
+    .badge-consolidado { background:#ccfbf1;color:#0f766e; }
     .badge-classico{ background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
     .badge-pre-exec { background:#fee2e2;color:#b91c1c; }
     .badge-exec-ok  { background:#dcfce7;color:#15803d; }
@@ -456,6 +457,7 @@
   function pipelineLabel(p) {
     if (p === 'chat')           return 'Chat-first';
     if (p === 'canonico_reuso') return 'Reuso canônico';
+    if (p === 'consolidado')    return 'Consolidado';
     if (p === 'classico')       return 'Clássico';
     return p || '—';
   }
@@ -463,6 +465,7 @@
   function pipelineBadgeHtml(p) {
     if (p === 'chat')           return '<span class="badge badge-chat">Chat-first</span>';
     if (p === 'canonico_reuso') return '<span class="badge badge-reuso">Reuso</span>';
+    if (p === 'consolidado')    return '<span class="badge badge-consolidado">Consolidado</span>';
     if (p === 'classico')       return '<span class="badge badge-classico">Clássico</span>';
     return p ? `<span class="badge badge-neutro">${esc(p)}</span>` : '<span class="badge badge-neutro">—</span>';
   }
@@ -899,7 +902,7 @@
         { title: 'Modulo', field: 'trace_json', width: 125, groupable: false,
           formatter: c => esc(moduloIntent(c.getRow().getData())) },
         { title: 'Pipeline', field: 'pipeline_origem', width: 125,
-          headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', chat: 'Chat-first', classico: 'Clássico', canonico_reuso: 'Reuso' } },
+          headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', chat: 'Chat-first', classico: 'Clássico', canonico_reuso: 'Reuso', consolidado: 'Consolidado' } },
           formatter: c => pipelineBadgeHtml(c.getValue()) },
         { title: 'Fase', field: 'fase_execucao', width: 145,
           headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', pre_execucao_tecnica: 'Tecnico antes', execucao_normal: 'Execucao normal', sem_execucao: 'Sem execucao' } },

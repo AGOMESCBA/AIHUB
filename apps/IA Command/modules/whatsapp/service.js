@@ -3396,7 +3396,7 @@ class IACWhatsAppService extends EventEmitter {
             this._registrarInterpretacao({ empresaId: s.empresaId, sender: senderAll, texto, intent: s.intentExecucao, resultado: { ...s.resultado, duracao_ms: s.resultado.duracao_ms ?? (Date.now() - _t0) }, resposta: s.resposta, duracaoMs: s.resultado.duracao_ms ?? (Date.now() - _t0) });
           }
           // Segundo registro: auditoria consolidada com SQL de todas as empresas do canal
-          this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: s.rows, sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada }, resposta: s.resposta, duracaoMs: Date.now() - _t0 });
+          this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: s.rows, sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada, _pipeline_origem: 'consolidado' }, resposta: s.resposta, duracaoMs: Date.now() - _t0 });
           return (_prefixoResetAll || '') + s.resposta;
         }
         const consolidado = this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
@@ -3410,7 +3410,7 @@ class IACWhatsAppService extends EventEmitter {
           ? `\n\n⚠️ _Nao consegui consultar: ${errosDinamicos.map(e => e.split(':')[0]).join(', ')}._`
           : '';
         const respostaFinalConsolidada = (_prefixoResetAll || '') + [respostaConsolidada, respostaSemDados, consolidado].filter(Boolean).join('\n\n') + avisos;
-        this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: sucessosDinamicos.flatMap(s => s.rows), sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada }, resposta: respostaFinalConsolidada, duracaoMs: Date.now() - _t0 });
+        this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: sucessosDinamicos.flatMap(s => s.rows), sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada, _pipeline_origem: 'consolidado' }, resposta: respostaFinalConsolidada, duracaoMs: Date.now() - _t0 });
         return respostaFinalConsolidada;
       }
 
@@ -3450,7 +3450,7 @@ class IACWhatsAppService extends EventEmitter {
         const sqlFalha = errosSemDados.find(sd => sd.resultado.sql_gerado)?.resultado.sql_gerado || null;
         this._registrarInterpretacao({
           empresaId: empresaLogId, sender: senderAll, texto, intent,
-          resultado: { tipo: 'sem_dados', sql_gerado: sqlFalha, _sql_auditoria: sqlAuditoriaFalha },
+          resultado: { tipo: 'sem_dados', sql_gerado: sqlFalha, _sql_auditoria: sqlAuditoriaFalha, _pipeline_origem: 'consolidado' },
           resposta: respostaDominio, duracaoMs: Date.now() - _t0,
         });
         return respostaDominio;
