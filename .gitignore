@@ -17,9 +17,11 @@ data/empresa_*.json
 data/empresas.json
 data/auditoria.log
 .claude/settings.local.json
+.claude/settings.json
 .claude/.gitignore
 .claude/*.md
 .claude/.claude-plugin/
 .claude/skills/
 .claude/spec/
 .claude/template/
+*.rar
