@@ -845,7 +845,7 @@ function _fmtValorCol(col, v) {
  * Crescimento calculado programaticamente por divisão.
  * Retorna null se não detectar o caso 3D.
  */
-function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [] } = {}) {
+function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoConsulta = null, nomeModulo = null, anoFirst = false } = {}) {
   const { dados, subtotais, totalGeral } = prepararDadosComTotais(rows);
   if (!dados || !dados.length || !subtotais) return null;
 
@@ -893,61 +893,111 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [] } = {}) {
   }
 
   const linhas = [];
+  const _hdrParts = [nomeModulo, contextoConsulta].filter(Boolean);
+  if (_hdrParts.length) linhas.push(`💰 ${_hdrParts.join(' — ')}`);
   let primeiro = true;
 
-  for (const [mesKey, porAno] of [...porMes.entries()].sort(([a],[b]) => parseInt(a,10)-parseInt(b,10))) {
-    if (!primeiro) linhas.push('');
-    primeiro = false;
+  if (anoFirst) {
+    // Ano → Mês → Entidades
+    // Reconstrói porMes → porAno: Map<anoKey, Map<mesKey, Map<ent, vals>>>
+    const porAnoMap = new Map();
+    for (const [mesKey, porAno] of porMes) {
+      for (const [anoKey, porEnt] of porAno) {
+        if (!porAnoMap.has(anoKey)) porAnoMap.set(anoKey, new Map());
+        porAnoMap.get(anoKey).set(mesKey, porEnt);
+      }
+    }
 
-    const mesNum = parseInt(mesKey, 10);
-    const labelMes = (mesNum >= 1 && mesNum <= 12) ? MESES[mesNum-1] : mesKey;
-    linhas.push(`🗓 *${labelMes}*`);
+    for (const [anoKey, mesesDoAno] of [...porAnoMap.entries()].sort(([a],[b]) => parseInt(a)-parseInt(b))) {
+      if (!primeiro) linhas.push('');
+      primeiro = false;
+      linhas.push(`🗓 *${anoKey}*`);
 
-    const anosOrdenados = [...porAno.entries()].sort(([a],[b]) => parseInt(a)-parseInt(b));
+      const mesesOrd = [...mesesDoAno.entries()].sort(([a],[b]) => parseInt(a)-parseInt(b));
+      mesesOrd.forEach(([mesKey, porEnt]) => {
+        const mesNum   = parseInt(mesKey, 10);
+        const labelMes = (mesNum >= 1 && mesNum <= 12) ? MESES[mesNum-1] : mesKey;
 
-    anosOrdenados.forEach(([anoKey, porEnt], anoIdx) => {
-      const prevPorEnt = anoIdx > 0 ? anosOrdenados[anoIdx-1][1] : null;
+        const subMes = {}; for (const c of colsValor) subMes[c] = 0;
+        for (const vals of porEnt.values()) {
+          for (const c of colsValor) subMes[c] = _arredondar2(subMes[c] + (vals[c] || 0));
+        }
+        const subValStr = colsValor.map(c => _fmtValorCol(c, subMes[c])).join(' | ');
+        linhas.push(`  *${labelMes}*: ${subValStr}`);
+
+        const entradas = [...porEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
+        const visiveis = entradas.slice(0, 20);
+        const ocultos  = entradas.length - visiveis.length;
+        visiveis.forEach(([ent, vals], i) => {
+          const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          linhas.push(`    ${i+1}. *${ent}*: ${valStr}`);
+        });
+        if (ocultos > 0) linhas.push(`    ... e mais ${ocultos}`);
+      });
 
       // Subtotal do ano
-      const subAno = {}; for (const c of colsValor) subAno[c] = 0;
-      for (const vals of porEnt.values()) {
-        for (const c of colsValor) subAno[c] = _arredondar2(subAno[c] + (vals[c] || 0));
-      }
-
-      // Linha de cabeçalho do ano
-      const subValStr = colsValor.map(c => _fmtValorCol(c, subAno[c])).join(' | ');
-      let anoHeaderSuffix = '';
-      if (prevPorEnt) {
-        const subPrev = {}; for (const c of colsValor) subPrev[c] = 0;
-        for (const vals of prevPorEnt.values()) {
-          for (const c of colsValor) subPrev[c] = _arredondar2(subPrev[c] + (vals[c] || 0));
+      const subAnoTotal = {}; for (const c of colsValor) subAnoTotal[c] = 0;
+      for (const porEnt of mesesDoAno.values()) {
+        for (const vals of porEnt.values()) {
+          for (const c of colsValor) subAnoTotal[c] = _arredondar2(subAnoTotal[c] + (vals[c] || 0));
         }
-        const p = _pct(subAno[primaryCol] || 0, subPrev[primaryCol] || 0);
-        anoHeaderSuffix = ` | Crescimento: ${p ?? 'N/A'}`;
       }
-      linhas.push(`  *Ano ${anoKey}*: ${subValStr}${anoHeaderSuffix}`);
+      const subStr = colsValor.map(c => _fmtValorCol(c, subAnoTotal[c])).join(' | ');
+      linhas.push(`🧾 *Subtotal ${anoKey}*: ${subStr}`);
+    }
+  } else {
+    // Mês → Ano → Entidades (comportamento padrão)
+    for (const [mesKey, porAno] of [...porMes.entries()].sort(([a],[b]) => parseInt(a,10)-parseInt(b,10))) {
+      if (!primeiro) linhas.push('');
+      primeiro = false;
 
-      // Itens ordenados por primaryCol desc, máximo 20
-      const entradas = [...porEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
-      const visiveis = entradas.slice(0, 20);
-      const ocultos = entradas.length - visiveis.length;
+      const mesNum = parseInt(mesKey, 10);
+      const labelMes = (mesNum >= 1 && mesNum <= 12) ? MESES[mesNum-1] : mesKey;
+      linhas.push(`🗓 *${labelMes}*`);
 
-      visiveis.forEach(([ent, vals], i) => {
-        const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join(' | ');
-        let crescStr = '';
+      const anosOrdenados = [...porAno.entries()].sort(([a],[b]) => parseInt(a)-parseInt(b));
+
+      anosOrdenados.forEach(([anoKey, porEnt], anoIdx) => {
+        const prevPorEnt = anoIdx > 0 ? anosOrdenados[anoIdx-1][1] : null;
+
+        const subAno = {}; for (const c of colsValor) subAno[c] = 0;
+        for (const vals of porEnt.values()) {
+          for (const c of colsValor) subAno[c] = _arredondar2(subAno[c] + (vals[c] || 0));
+        }
+
+        const subValStr = colsValor.map(c => _fmtValorCol(c, subAno[c])).join(' | ');
+        let anoHeaderSuffix = '';
         if (prevPorEnt) {
-          const prev = prevPorEnt.get(ent);
-          if (prev) {
-            const p = _pct(vals[primaryCol] || 0, prev[primaryCol] || 0);
-            crescStr = ` | Crescimento: ${p ?? 'N/A'}`;
-          } else {
-            crescStr = ' | Crescimento: N/A';
+          const subPrev = {}; for (const c of colsValor) subPrev[c] = 0;
+          for (const vals of prevPorEnt.values()) {
+            for (const c of colsValor) subPrev[c] = _arredondar2(subPrev[c] + (vals[c] || 0));
           }
+          const p = _pct(subAno[primaryCol] || 0, subPrev[primaryCol] || 0);
+          anoHeaderSuffix = ` | Crescimento: ${p ?? 'N/A'}`;
         }
-        linhas.push(`    ${i+1}. *${ent}*: ${valStr}${crescStr}`);
+        linhas.push(`  *Ano ${anoKey}*: ${subValStr}${anoHeaderSuffix}`);
+
+        const entradas = [...porEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
+        const visiveis = entradas.slice(0, 20);
+        const ocultos  = entradas.length - visiveis.length;
+
+        visiveis.forEach(([ent, vals], i) => {
+          const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          let crescStr = '';
+          if (prevPorEnt) {
+            const prev = prevPorEnt.get(ent);
+            if (prev) {
+              const p = _pct(vals[primaryCol] || 0, prev[primaryCol] || 0);
+              crescStr = ` | Crescimento: ${p ?? 'N/A'}`;
+            } else {
+              crescStr = ' | Crescimento: N/A';
+            }
+          }
+          linhas.push(`    ${i+1}. *${ent}*: ${valStr}${crescStr}`);
+        });
+        if (ocultos > 0) linhas.push(`    ... e mais ${ocultos}`);
       });
-      if (ocultos > 0) linhas.push(`    ... e mais ${ocultos}`);
-    });
+    }
   }
 
   if (totalGeral && colsValor.length) {
@@ -1078,6 +1128,183 @@ function buildFormatAnoMesDireto(rows, { contextoConsulta = null, nomeModulo = n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FORMATTER PROGRAMÁTICO — lista temporal simples (sem entidade)
+// Cobre dois sub-casos:
+//   1. Ano único → lista plana numerada  (ex: Jan/2026, Fev/2026 ...)
+//   2. Multi-ano → agrupa por mês, anos como itens  (ex: 🗓 Janeiro → 2014, 2015 ...)
+// Detecta coluna auxiliar de ano (YEAR() separado de MONTH()) e constrói chaves AAAAMM,
+// garantindo ordenação cronológica e label correto independente do nome da coluna.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo = null, anoFirst = false } = {}) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+
+  const first = rows[0];
+  const keys  = Object.keys(first);
+  const { colTemporal, colEntidade, numCols } = _detectarColunas(rows);
+
+  // Só age: temporal presente, SEM entidade, pelo menos uma métrica
+  if (!colTemporal || colEntidade || !numCols.length) return null;
+
+  // Coluna de ano auxiliar (YEAR() separado, ex: 'ano'/'year') para enriquecer chave AAAAMM
+  const anoCol = keys.find(k =>
+    /^(ano|year)$/i.test(k) &&
+    k !== colTemporal &&
+    /^\d{4}$/.test(String(first[k] || ''))
+  ) || null;
+
+  // Constrói subtotais keyed por AAAAMM (ou chave normalizada)
+  const subtotais   = {};
+  const totalGlobal = {};
+  for (const c of numCols) totalGlobal[c] = 0;
+
+  for (const row of rows) {
+    let chave;
+    const rawMes = row[colTemporal];
+    const anoVal = anoCol ? String(row[anoCol] || '') : null;
+
+    if (anoVal && /^\d{4}$/.test(anoVal)) {
+      const mesNum = typeof rawMes === 'number' ? rawMes : parseInt(String(rawMes || ''), 10);
+      chave = (mesNum >= 1 && mesNum <= 12)
+        ? `${anoVal}${String(mesNum).padStart(2, '0')}`
+        : (_normalizarDataChave(rawMes) || String(rawMes || '').trim());
+    } else {
+      chave = _normalizarDataChave(rawMes) || String(rawMes || '').trim();
+    }
+    if (!chave) continue;
+
+    if (!subtotais[chave]) {
+      subtotais[chave] = {};
+      for (const c of numCols) subtotais[chave][c] = 0;
+    }
+    for (const c of numCols) {
+      const v = parseFloat(row[c]) || 0;
+      subtotais[chave][c]  = _arredondar2(subtotais[chave][c] + v);
+      totalGlobal[c]       = _arredondar2(totalGlobal[c] + v);
+    }
+  }
+  _recalcularRatios(totalGlobal, numCols);
+
+  const todasChaves = Object.keys(subtotais);
+  if (!todasChaves.length) return null;
+
+  // Detecta se são todas AAAAMM (6 dígitos) e se abrangem múltiplos anos
+  const isAaaamm  = todasChaves.every(v => /^\d{6}$/.test(v));
+  const anos      = isAaaamm ? [...new Set(todasChaves.map(v => v.slice(0, 4)))] : [];
+  const isMultiAno = anos.length > 1;
+
+  const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  const linhas = [];
+  const headerParts = [nomeModulo, contextoConsulta].filter(Boolean);
+  if (headerParts.length) linhas.push(`💰 ${headerParts.join(' — ')}`);
+
+  if (isMultiAno && isAaaamm) {
+    if (anoFirst) {
+      // Sub-caso 2a — ano-primeiro: 🗓 Ano → meses como itens numerados
+      const porAno = new Map();
+      for (const chave of todasChaves.sort()) {
+        const anoKey = chave.slice(0, 4);
+        const mesKey = chave.slice(4, 6);
+        if (!porAno.has(anoKey)) porAno.set(anoKey, new Map());
+        porAno.get(anoKey).set(mesKey, subtotais[chave]);
+      }
+
+      let primeiro = true;
+      for (const [anoKey, porMes] of [...porAno.entries()].sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10))) {
+        if (!primeiro) linhas.push('');
+        primeiro = false;
+
+        linhas.push(`🗓 *${anoKey}*`);
+
+        const mesesOrd = [...porMes.entries()].sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10));
+        const visiveis = mesesOrd.slice(0, 12);
+        const ocultos  = mesesOrd.length - visiveis.length;
+
+        visiveis.forEach(([mesKey, vals], i) => {
+          const mesNum   = parseInt(mesKey, 10);
+          const labelMes = (mesNum >= 1 && mesNum <= 12) ? MESES_FULL[mesNum - 1] : mesKey;
+          const valStr   = numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          linhas.push(`  ${i + 1}. *${labelMes}*: ${valStr}`);
+        });
+        if (ocultos > 0) linhas.push(`  ... e mais ${ocultos}`);
+
+        const subAno = {};
+        for (const c of numCols) subAno[c] = 0;
+        for (const vals of porMes.values()) {
+          for (const c of numCols) subAno[c] = _arredondar2(subAno[c] + (vals[c] || 0));
+        }
+        const subStr = numCols.map(c => _fmtValorCol(c, subAno[c])).join(' | ');
+        linhas.push(`🧾 *Subtotal*: ${subStr}`);
+      }
+    } else {
+      // Sub-caso 2b — mês-primeiro (padrão): 🗓 Mês → anos como itens numerados
+      const porMes = new Map();
+      for (const chave of todasChaves.sort()) {
+        const mesKey = chave.slice(4, 6);
+        const anoKey = chave.slice(0, 4);
+        if (!porMes.has(mesKey)) porMes.set(mesKey, new Map());
+        porMes.get(mesKey).set(anoKey, subtotais[chave]);
+      }
+
+      let primeiro = true;
+      for (const [mesKey, porAno] of [...porMes.entries()].sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10))) {
+        if (!primeiro) linhas.push('');
+        primeiro = false;
+
+        const mesNum   = parseInt(mesKey, 10);
+        const labelMes = (mesNum >= 1 && mesNum <= 12) ? MESES_FULL[mesNum - 1] : mesKey;
+        linhas.push(`🗓 *${labelMes}*`);
+
+        const anosOrd = [...porAno.entries()].sort(([a], [b]) => parseInt(a, 10) - parseInt(b, 10));
+        const visiveis = anosOrd.slice(0, 20);
+        const ocultos  = anosOrd.length - visiveis.length;
+
+        visiveis.forEach(([anoKey, vals], i) => {
+          const valStr = numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          linhas.push(`  ${i + 1}. *${anoKey}*: ${valStr}`);
+        });
+        if (ocultos > 0) linhas.push(`  ... e mais ${ocultos}`);
+
+        const subMes = {};
+        for (const c of numCols) subMes[c] = 0;
+        for (const vals of porAno.values()) {
+          for (const c of numCols) subMes[c] = _arredondar2(subMes[c] + (vals[c] || 0));
+        }
+        const subStr = numCols.map(c => _fmtValorCol(c, subMes[c])).join(' | ');
+        linhas.push(`🧾 *Subtotal*: ${subStr}`);
+      }
+    }
+  } else {
+    // Sub-caso 1 — ano único (ou não AAAAMM): lista plana numerada
+    const entradas = isAaaamm
+      ? todasChaves.sort()
+      : todasChaves.sort((a, b) => {
+          // Ordena meses inteiros (1-12) numericamente
+          const na = parseInt(a, 10), nb = parseInt(b, 10);
+          if (!isNaN(na) && !isNaN(nb) && na >= 1 && na <= 12 && nb >= 1 && nb <= 12) return na - nb;
+          return a < b ? -1 : a > b ? 1 : 0;
+        });
+
+    entradas.forEach((chave, i) => {
+      const label  = _formatarLabelGrupo(chave);
+      const valStr = numCols.map(c => _fmtValorCol(c, subtotais[chave][c])).join(' | ');
+      linhas.push(`  ${i + 1}. ${label}: ${valStr}`);
+    });
+
+    const subStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ');
+    linhas.push(`🧾 *Subtotal*: ${subStr}`);
+  }
+
+  linhas.push('');
+  const totStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ');
+  linhas.push(`*Total Geral*: ${totStr}`);
+
+  return linhas.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function buildFormatSystemPrompt() {
   return WHATSAPP_FORMAT_SYSTEM_PROMPT;
@@ -1088,6 +1315,7 @@ module.exports = {
   buildFormatUserPrompt,
   buildFormatDirect,
   buildFormatAnoMesDireto,
+  buildFormatSimplesTemporal,
   prepararDadosComTotais,
   WHATSAPP_FORMAT_SYSTEM_PROMPT,
 };

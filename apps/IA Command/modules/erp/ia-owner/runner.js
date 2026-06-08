@@ -861,9 +861,20 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
   const _NOME_DISPLAY = { faturamento: 'Faturamento', compras: 'Compras', financeiro: 'Financeiro', comissao: 'Comissão' };
   const nomeModulo = _NOME_DISPLAY[(spec.nome || '').replace('_dinamico', '')] || null;
 
+  // Detecta se o usuário pediu agrupamento ano-primeiro (ex: "por ano e mês", agrupamentos=['ano','mes'])
+  const _grps = Array.isArray(intent.group_by) ? intent.group_by
+    : (intent.agrupar_por ? [intent.agrupar_por] : []);
+  const _iAno = _grps.indexOf('ano'), _iMes = _grps.findIndex(g => g === 'mes' || g === 'month');
+  const anoFirst = (
+    (_iAno >= 0 && _iMes >= 0 && _iAno < _iMes) ||           // agrupamentos=['ano','mes']
+    (_iAno >= 0 && _iMes < 0) ||                              // só 'ano' nos agrupamentos
+    /\bpor\s+ano\s+e\s+m[eê]s\b|\banual.*m[eê]s|\bano\s+e\s+m[eê]s\b/i.test(mensagem || '')
+  );
+
   // Tenta formatters programáticos antes de chamar IA (sem limite de tokens, sem truncamento)
-  const direto = whatsappFormat.buildFormatDirect(mensagem, rows)
-    || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta, nomeModulo });
+  const direto = whatsappFormat.buildFormatDirect(mensagem, rows, { contextoConsulta, nomeModulo, anoFirst })
+    || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta, nomeModulo })
+    || whatsappFormat.buildFormatSimplesTemporal(rows, { contextoConsulta, nomeModulo, anoFirst });
   if (direto) return direto;
 
   try {
