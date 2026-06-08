@@ -1170,7 +1170,7 @@ async function executar(spec, intent, empresaId) {
     };
   }
 
-  if (!plano.sql) {
+  if (!plano.sql || String(plano.sql).trim() === 'null') {
     return { tipo: 'erro', subtipo: 'sql_nao_extraido', resposta_direta: mensagemErro(spec, 'sql_invalido'), sql_gerado: JSON.stringify(plano.obj, null, 2), _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
   }
 
@@ -1246,6 +1246,10 @@ async function executar(spec, intent, empresaId) {
 
 async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
   const t0 = Date.now();
+  const _sqlTrim = String(sqlCanonico || '').trim();
+  if (!_sqlTrim || _sqlTrim === 'null') {
+    return { tipo: 'erro', subtipo: 'sql_nao_extraido', resposta_direta: mensagemErro(spec, 'sql_invalido'), sql_gerado: null, _sql_auditoria: { origem: 'ia_owner_reuso', sql_final_executado: null }, duracao_ms: Date.now() - t0 };
+  }
   const protheus = configProtheus(empresaId);
   const sx2 = completarSX2Permitidas(modosSX2(spec.tabelas, protheus.conexaoId, empresaId), spec.tabelas, protheus.sufixoTabela);
   const sx3 = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
