@@ -823,7 +823,15 @@ function _buildContextoConsulta(intent, periodoResolvido = null) {
 
   const entidades = Array.isArray(intent._entidadesResolvidas) ? intent._entidadesResolvidas : [];
   const _labelTipo = t => ({ cliente: 'Cliente', fornecedor: 'Fornecedor', vendedor: 'Vendedor', produto: 'Produto', grupo_produto: 'Grupo', centro_custo: 'C.Custo' }[t] || t);
-  const filtroEnt = entidades.filter(e => e && e.nome && e.tipo).map(e => `${_labelTipo(e.tipo)}: ${e.nome}`).join(', ');
+  let filtroEnt = entidades.filter(e => e && e.nome && e.tipo).map(e => `${_labelTipo(e.tipo)}: ${e.nome}`).join(', ');
+  // Fallback: entidade não resolvida mas presente nos filtros do orquestrador/intent
+  if (!filtroEnt) {
+    const ff = intent._orquestradorContrato?.filtros || intent.filtros || {};
+    filtroEnt = ['cliente', 'fornecedor', 'vendedor', 'produto']
+      .filter(c => ff[c] && typeof ff[c] === 'string' && ff[c].trim())
+      .map(c => `${_labelTipo(c)}: ${ff[c].trim()}`)
+      .join(', ');
+  }
 
   // Usa o período resolvido pela IA-OWNER (plano.obj.periodo) com fallback para intent.periodo.
   // Isso evita que o formatter alucine anos (ex: 2023) quando o SQL retorna apenas
