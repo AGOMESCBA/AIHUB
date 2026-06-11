@@ -1,6 +1,6 @@
 'use strict';
 
-console.log('[IA Command] SX2SqlNormalizer v20260604a — add: sqlParaCanonico strips physical suffixes before multiempresa reuse');
+console.log('[IA Command] SX2SqlNormalizer v20260611b — fix: [ \t]+ no alias para nao consumir JOIN/WHERE de linha seguinte; fix CTE nao substituida');
 
 // Palavras reservadas SQL que o regex FROM/JOIN nao deve capturar como alias de tabela.
 // Sem este conjunto, "FROM SF2\nWHERE" captura WHERE como alias, fazendo
@@ -55,7 +55,7 @@ function modoTabelaSX2(sx2 = {}, tabelaOuBase) {
 
 function aliasTabelaSql(sql) {
   const aliases = {};
-  const re = /\b(?:FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/gi;
+  const re = /\b(?:FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(?:[ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))?/gi;
   let m;
   while ((m = re.exec(String(sql || ''))) !== null) {
     const tabela = String(m[1] || '').toUpperCase();
@@ -134,11 +134,13 @@ function sanitizarFiltrosFilialSX2(sql, sx2 = {}, opts = {}) {
 function normalizarTabelasPorAliasSX2(sql, sx2 = {}, opts = {}) {
   let alterou = false;
   const avisos = [];
-  const texto = String(sql || '').replace(/\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))\b/gi, (match, clausula, tabela, aliasParte, alias) => {
+  const texto = String(sql || '').replace(/\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)([ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))\b/gi, (match, clausula, tabela, aliasParte, alias) => {
     const aliasNorm = String(alias || '').toUpperCase();
     if (!aliasNorm || SQL_KEYWORDS.has(aliasNorm) || !ALIASES_PROTHEUS.has(aliasNorm)) return match;
 
     const baseAtual = baseTabelaSX2(tabela);
+    // Se o nome da tabela não é uma tabela Protheus conhecida, é um CTE — não alterar.
+    if (!ALIASES_PROTHEUS.has(baseAtual)) return match;
     if (baseAtual === aliasNorm) return match;
 
     const candidatas = tabelaFisicaSX2(sx2, aliasNorm);
@@ -163,7 +165,7 @@ function adaptarSqlCanonicoPorSX2(sql, sx2 = {}, opts = {}) {
   // qualificadores de coluna (SF2.F2_EMISSAO → SF2020.F2_EMISSAO) na etapa seguinte.
   const baseToPhysical = {};
 
-  let texto = String(sql || '').replace(/\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/gi, (match, clausula, tabela, aliasParte, alias) => {
+  let texto = String(sql || '').replace(/\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)([ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))?/gi, (match, clausula, tabela, aliasParte, alias) => {
     // Ignora palavras reservadas SQL capturadas erroneamente como alias.
     // Ex.: "FROM SF2\nWHERE" captura alias='WHERE' → sem este guard, ALIASES_PROTHEUS.has('WHERE')
     // retorna false e o sufixo não é aplicado.
@@ -172,6 +174,9 @@ function adaptarSqlCanonicoPorSX2(sql, sx2 = {}, opts = {}) {
     if (!ALIASES_PROTHEUS.has(aliasNorm)) return match;
 
     const base = baseTabelaSX2(tabela);
+    // Se o nome da tabela não é uma tabela Protheus conhecida (ex: é um CTE como "saldo_recente"),
+    // não substituir — o normalizer não deve trocar CTEs por tabelas físicas.
+    if (!ALIASES_PROTHEUS.has(base)) return match;
     const candidatas = tabelaFisicaSX2(sx2, aliasNorm);
     if (candidatas.length !== 1) {
       // Sem SX2 cadastrado: aplica sufixo de fallback quando disponível.
@@ -222,7 +227,7 @@ function adaptarSqlCanonicoPorSX2(sql, sx2 = {}, opts = {}) {
 // Tables without a recognized Protheus alias are left untouched.
 function sqlParaCanonico(sql) {
   return String(sql || '').replace(
-    /\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/gi,
+    /\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)([ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))?/gi,
     (match, clausula, tabela, aliasParte, alias) => {
       const aliasNorm = String(alias || '').toUpperCase();
       if (!aliasNorm || !ALIASES_PROTHEUS.has(aliasNorm)) return match;

@@ -9,8 +9,10 @@ function _brl(v) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-const _RE_CAMPO_SOMAVEL = /valor|total|saldo|juros|multa|desconto|vlr|vl_|brut|liquido|comiss|qtd|quantidade|qt_|fatura|receita|fat_|fat$|compra|pedido|nf_/i;
-const _RE_CAMPO_MEDIA   = /media|medio|medio|ticket|avg|average|pct|percent|percentual|taxa|indice|proporcao/i;
+const _RE_CAMPO_SOMAVEL    = /valor|total|saldo|juros|multa|desconto|vlr|vl_|brut|liquido|comiss|fatura|receita|fat_|fat$|compra|pedido|nf_|receber|pagar|capital|giro/i;
+const _RE_CAMPO_QUANTIDADE = /^qtd|^qt_|quantidade|^volume/i;
+const _RE_CAMPO_MEDIA      = /media|medio|ticket|avg|average|pct|percent|percentual|taxa|indice|proporcao/i;
+const _RE_CAMPO_PERCENTUAL = /crescimento|variacao|pct|percent|percentual|margem/i;
 
 function _calcularTotais(rows) {
   if (!rows || !rows.length) return {};
@@ -35,8 +37,14 @@ function _formatarFallback(rows, mensagemOriginal) {
     const partes = Object.entries(row)
       .filter(([, v]) => v !== null && v !== undefined && v !== '')
       .map(([k, v]) => {
-        const isValor = /valor|total|saldo|juros|multa|desconto|vlr|vl_|brut|liquido|comiss/i.test(k);
-        return `${k}: ${isValor ? `*${_brl(v)}*` : v}`;
+        const isMonetario = _RE_CAMPO_SOMAVEL.test(k) && !_RE_CAMPO_MEDIA.test(k) && !_RE_CAMPO_QUANTIDADE.test(k);
+        const isPercentual = _RE_CAMPO_PERCENTUAL.test(k);
+        if (isMonetario) return `${k}: *${_brl(v)}*`;
+        if (isPercentual) {
+          const n = parseFloat(v);
+          if (!isNaN(n)) return `${k}: ${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+        }
+        return `${k}: ${v}`;
       });
     return `${i + 1}. ${partes.join(' | ')}`;
   });

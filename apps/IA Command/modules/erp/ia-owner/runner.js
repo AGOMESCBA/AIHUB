@@ -54,7 +54,12 @@ function mensagemTemPeriodoRelativo(mensagem) {
     .toLowerCase();
   // "do dia" / "no dia" seguidos de número são datas absolutas (ex: "do dia 10"), não relativas.
   const textoSemDiaAbsoluto = texto.replace(/\b(do|no)\s+dia\s+\d/g, '');
-  return new RegExp(`\\b(hoje|ontem|do dia|no dia|dia atual|dia anterior|mes atual|deste mes|este mes|no mes|do mes|mes passado|ano atual|deste ano|este ano|do ano|no ano|ano passado|semana passada|ultima semana|ultimo mes|ultimo ano|${MESES_CRONOLOGICOS})\\b`).test(textoSemDiaAbsoluto);
+  // "maio de 2026", "janeiro de 2025" etc. são datas absolutas — remove antes de testar período relativo.
+  const textoSemMesAbsoluto = textoSemDiaAbsoluto.replace(
+    /\b(?:janeiro|jan|fevereiro|fev|marco|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez)\s+de\s+\d{4}\b/g,
+    ''
+  );
+  return new RegExp(`\\b(hoje|ontem|do dia|no dia|dia atual|dia anterior|mes atual|deste mes|este mes|no mes|do mes|mes passado|ano atual|deste ano|este ano|do ano|no ano|ano passado|semana passada|ultima semana|ultimo mes|ultimo ano|${MESES_CRONOLOGICOS})\\b`).test(textoSemMesAbsoluto);
 }
 
 function limparPeriodosNaoAutoritativos(estadoAnterior = {}, mensagem = '') {
@@ -693,6 +698,24 @@ function extrairExpressoesWindow(conteudoOver = '') {
   return partes.flatMap(parte => dividirExpressoesSql(parte).map(expr => expr.replace(/\s+(ASC|DESC)\s*$/i, '').trim()).filter(Boolean));
 }
 
+// Remove conteúdo dentro de parênteses (preserva literais de string).
+// Usado para checar aliases no nível externo sem falsos positivos vindos
+// de subqueries escalares dentro de COALESCE((...)) ou SUM(...).
+function _stripParenContent(text) {
+  let out = '';
+  let nivel = 0;
+  let aspas = false;
+  for (let k = 0; k < text.length; k++) {
+    const c = text[k];
+    if (c === "'") aspas = !aspas;
+    if (aspas) { if (nivel === 0) out += c; continue; }
+    if (c === '(') { nivel++; continue; }
+    if (c === ')') { nivel--; continue; }
+    if (nivel === 0) out += c;
+  }
+  return out;
+}
+
 function validarEscopoSubqueryExterno(sql = '') {
   const texto = String(sql || '').trim();
   // Só verifica quando a query tem FROM subquery (tabela derivada): FROM (SELECT...)
@@ -702,13 +725,38 @@ function validarEscopoSubqueryExterno(sql = '') {
   while (i < texto.length && /\s/.test(texto[i])) i++;
   if (texto[i] !== '(') return { ok: true, erros: [] };
 
+  // Encontrar o ')' de fechamento da tabela derivada para isolar os JOINs externos
+  let nivel = 0;
+  let posClose = -1;
+  for (let j = i; j < texto.length; j++) {
+    if (texto[j] === '(') nivel++;
+    else if (texto[j] === ')') { nivel--; if (nivel === 0) { posClose = j; break; } }
+  }
+
+  // Coletar aliases definidos nos JOINs EXTERNOS (após o fechamento da subquery).
+  // Ex: FROM (...) BASE JOIN SA1020 SA1 ON ... → SA1 é válido no SELECT/GROUP BY externo.
+  const aliasesExternos = new Set();
+  if (posClose >= 0) {
+    const textoDepoisSubquery = texto.slice(posClose + 1);
+    const reJoinExterno = /\bJOIN\s+[A-Z_][A-Z0-9_]*\s+([A-Z_][A-Z0-9_]*)\b/gi;
+    let jm;
+    while ((jm = reJoinExterno.exec(textoDepoisSubquery)) !== null) {
+      aliasesExternos.add(jm[1].toUpperCase());
+    }
+  }
+
   const { select, group } = extrairSelectEGroupByNivelZero(texto);
   if (!select) return { ok: true, erros: [] };
-  const parteExterna = (select || '') + ' ' + (group || '');
+
+  // Strip parênteses para não flagear aliases DENTRO de subqueries escalares
+  // no SELECT externo (ex: COALESCE((SELECT SUM(SF2.F2_VALBRUT) ...), 0)).
+  const parteExterna = _stripParenContent((select || '') + ' ' + (group || ''));
 
   const aliases = ['SF2','SD2','SF1','SD1','SA1','SA2','SA3','SB1','SBM','SF4','CTT',
                    'SE1','SE2','SE3','SE5','SE8','SED','SA6','SC7','SE3'];
   for (const alias of aliases) {
+    // Pular aliases que são definidos nos JOINs externos — esses são legítimos no SELECT externo
+    if (aliasesExternos.has(alias)) continue;
     const re = new RegExp(`\\b${alias}\\s*\\.\\s*[A-Z][A-Z0-9_]*`, 'i');
     const m = parteExterna.match(re);
     if (m) {
@@ -832,6 +880,66 @@ function validarAliasesDerivadosExternos(sql) {
   return { ok: erros.length === 0, erros };
 }
 
+// Extrai os corpos de cada CTE de um bloco WITH...AS(...), ...
+function _extrairCorposCTE(sql) {
+  const texto = String(sql || '').trim();
+  const resultado = [];
+  const posWith = localizarKeywordNivelZero(texto, 'WITH');
+  if (posWith < 0) return resultado;
+  let pos = posWith + 4;
+  while (pos < texto.length) {
+    while (pos < texto.length && /\s/.test(texto[pos])) pos++;
+    const trecho = texto.slice(pos);
+    const nomeMatch = trecho.match(/^([A-Z_][A-Z0-9_]*)\s+AS\s*\(/i);
+    if (!nomeMatch) break;
+    const nome = nomeMatch[1];
+    const offsetParens = nomeMatch[0].lastIndexOf('(');
+    pos += offsetParens;
+    let nivel = 0, aspas = false, fim = -1;
+    for (let i = pos; i < texto.length; i++) {
+      const c = texto[i];
+      if (c === "'") aspas = !aspas;
+      if (aspas) continue;
+      if (c === '(') nivel++;
+      if (c === ')') { nivel--; if (nivel === 0) { fim = i; break; } }
+    }
+    if (fim < 0) break;
+    resultado.push({ nome, corpo: texto.slice(pos + 1, fim) });
+    pos = fim + 1;
+    while (pos < texto.length && /\s/.test(texto[pos])) pos++;
+    if (pos < texto.length && texto[pos] === ',') { pos++; } else { break; }
+  }
+  return resultado;
+}
+
+// Detecta CTEs com função de agregação E expressão não-agregada sem GROUP BY.
+// Esse padrão causa Msg 8120 no SQL Server em modo estrito e gera resultado errado
+// em modos permissivos (coluna arbitrária ao invés de grouped).
+function validarCTEsAgregadosSemGroupBy(sql = '') {
+  const corpos = _extrairCorposCTE(sql);
+  const erros = [];
+  for (const { nome, corpo } of corpos) {
+    const { select, group } = extrairSelectEGroupByNivelZero(corpo);
+    if (!select || group) continue;
+    if (!/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(select)) continue;
+    for (const itemBruto of dividirExpressoesSql(select)) {
+      const item = itemBruto
+        .replace(/^\s*DISTINCT\s+/i, '')
+        .replace(/\s+AS\s+[A-Z_][A-Z0-9_]*\s*$/i, '')
+        .trim();
+      if (!item) continue;
+      if (/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(item)) continue;
+      if (/^['"\d]/.test(item)) continue;
+      erros.push(
+        `CTE "${nome}": expressao nao-agregada "${item.slice(0, 80)}" no SELECT sem GROUP BY. ` +
+        `Isso gera erro Msg 8120 no SQL Server. ` +
+        `Adicione GROUP BY se quiser agrupar por periodo/entidade, ou remova o campo se a CTE for escalar.`
+      );
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
@@ -849,7 +957,12 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   }
   for (const regra of spec.sqlPatternsProibidos || []) {
     const regex = regra?.regex instanceof RegExp ? regra.regex : null;
-    if (regex && regex.test(texto)) erros.push(regra.mensagem || 'SQL rejeitado por regra tecnica do modulo.');
+    if (regex && regex.test(texto)) {
+      erros.push(regra.mensagem || 'SQL rejeitado por regra tecnica do modulo.');
+    } else if (typeof regra?.validar === 'function') {
+      const msg = regra.validar(texto);
+      if (msg) erros.push(msg);
+    }
   }
   if (/\b[A-Z]{2,4}\d{3,4}\s*\./i.test(texto)) {
     erros.push('Use alias base para qualificar campos (SD1.D1_TOTAL), nunca tabela fisica como qualificador (SD1990.D1_TOTAL).');
@@ -861,6 +974,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
     erros.push(...validarSelectContraGroupBy(texto).erros);
     erros.push(...validarAliasesDerivadosExternos(texto).erros);
   }
+  erros.push(...validarCTEsAgregadosSemGroupBy(texto).erros);
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
   const keywords = new Set(['ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'JOIN', 'CROSS']);
@@ -1570,6 +1684,8 @@ module.exports = {
     validarSqlIaOwnerBasico,
     validarSelectContraGroupBy,
     validarAliasesDerivadosExternos,
+    validarCTEsAgregadosSemGroupBy,
+    _extrairCorposCTE,
     sx3EssencialParaPrompt,
     completarSX2Permitidas,
     diagnosticoResolucaoEntidade,

@@ -294,6 +294,48 @@ const sqlPatternsProibidos = [
     regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\bE8_AGENCIA\s*=\s*SA6\.A6_AGENCIA\b)/i,
     mensagem: 'JOIN SE8→SA6 incompleto: falta E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON na condicao ON. Sem esses campos, o banco retorna zero linhas ou duplicidade por agencia.',
   },
+  {
+    validar(sql) {
+      const usaSE8 = /\b(?:FROM|JOIN)\s+SE8/i.test(sql);
+      const temRowNumber = /\bROW_NUMBER\s*\(/i.test(sql);
+      if (usaSE8 && !temRowNumber) {
+        return (
+          'Consulta SE8 sem ROW_NUMBER(): obrigatorio usar CTE com ' +
+          'ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn ' +
+          'e filtrar WHERE SE8.rn = 1 na query externa. ' +
+          'PROIBIDO retornar todas as linhas de SE8 sem rn = 1 — gera duplicidade de saldo por conta.'
+        );
+      }
+      // CTE com ROW_NUMBER definido, mas a query externa ainda aponta para a tabela física SE8
+      // em vez do CTE — o campo rn não existe na tabela física, causando erro no SX3.
+      if (temRowNumber) {
+        const cteMatch = sql.match(/\bWITH\s+(\w+)\s+AS\s*\(/i);
+        if (cteMatch) {
+          const cteNome = cteMatch[1];
+          const posWithInicio = sql.search(/\bWITH\s+\w+\s+AS\s*\(/i);
+          const parenInicio = sql.indexOf('(', posWithInicio);
+          let nivel = 0;
+          let parenFim = -1;
+          for (let i = parenInicio; i < sql.length; i++) {
+            if (sql[i] === '(') nivel++;
+            else if (sql[i] === ')') { nivel--; if (nivel === 0) { parenFim = i; break; } }
+          }
+          if (parenFim >= 0) {
+            const outerSql = sql.slice(parenFim + 1);
+            if (/\bFROM\s+SE8\d*\s+SE8\b/i.test(outerSql)) {
+              return (
+                `CTE "${cteNome}" calcula ROW_NUMBER() AS rn, mas a query externa usa "FROM SE8... SE8" ` +
+                `em vez de "FROM ${cteNome} SE8". ` +
+                `Corrija: substitua "FROM SE8... SE8" por "FROM ${cteNome} SE8" na query externa. ` +
+                `A tabela fisica SE8 nao possui o campo rn — ele existe apenas no CTE.`
+              );
+            }
+          }
+        }
+      }
+      return null;
+    },
+  },
 ];
 
 module.exports = {

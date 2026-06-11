@@ -797,11 +797,9 @@ function buildFormatUserPrompt(mensagem, rows, { avisoNaoEncontradas = [], conte
     const resumo  = dados.length > 50 ? `\n(Exibindo 50 de ${dados.length} registros)` : '';
     dadosSection  = `Dados retornados pelo sistema:${resumo}\n${JSON.stringify(amostra, null, 2)}`;
 
-    // Omite "Total Geral" quando há apenas 1 linha — seria igual aos próprios dados e
-    // induziria a IA a somar métricas independentes (ex: total_faturamento + total_compras).
-    if (totalGeral && dados.length > 1) {
-      dadosSection += `\n\nTotal Geral — calculado pelo sistema, use EXATAMENTE este valor:\n${JSON.stringify(totalGeral, null, 2)}`;
-    }
+    // Não injeta totalGeral neste path: o valor pré-calculado soma TODAS as linhas brutas
+    // (ex: todas as contas/agências de todos os bancos) e diverge do total que a IA exibe
+    // após agrupar os dados. A IA deve derivar o Total Geral a partir dos próprios agrupamentos.
   }
 
   const avisoStr = avisoNaoEncontradas.length

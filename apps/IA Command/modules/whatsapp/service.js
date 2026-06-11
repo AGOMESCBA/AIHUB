@@ -918,7 +918,7 @@ class IACWhatsAppService extends EventEmitter {
   _formatarConsolidadoDinamicoAll(intent, sucessos = [], empresaLogId = null) {
     if (!sucessos || !sucessos.length) return '';
 
-    const _RE_SOMAVEL     = /valor|total|saldo|juros|multa|desconto|vlr|vl_|brut|liquido|comiss|qtd|quantidade|qt_|fatura|receita|fat_|compra|pedido/i;
+    const _RE_SOMAVEL     = /valor|total|saldo|salatua|juros|multa|desconto|vlr|vl_|brut|liquido|comiss|qtd|quantidade|qt_|fatura|receita|fat_|compra|pedido/i;
     const _RE_QUANTIDADE  = /qtd|quantidade|qt_/i;
     const _RE_MEDIA       = /media|medio|ticket|avg|pct|percent|taxa/i;
     // Inclui ano_mes (AAAAMM do Protheus), aaaa_mm, competencia, referencia, além dos genéricos
@@ -1497,6 +1497,33 @@ class IACWhatsAppService extends EventEmitter {
           linhas.push(`\u{1F3E2} ${empresa} — ${periodos.join(' | ')}`);
         }
       }
+    } else if (colsSomaveis.length > 0) {
+      // Tem colunas somáveis mas sem dimensão temporal/categórica reconhecida:
+      // exibe total por empresa + total geral em valores monetários
+      const totGeral = {};
+      for (const col of colsSomaveis) totGeral[col] = 0;
+
+      linhas.push('\u{1F4CA} *Consolidado — Todas as Empresas*');
+      linhas.push('');
+      for (const s of sucessos) {
+        const totEmpresa = {};
+        for (const col of colsSomaveis) totEmpresa[col] = 0;
+        for (const row of (s.rows || [])) {
+          for (const col of colsSomaveis) {
+            const v = parseFloat(row[col]);
+            if (!isNaN(v)) {
+              totEmpresa[col] = (totEmpresa[col] || 0) + v;
+              totGeral[col]   = (totGeral[col]   || 0) + v;
+            }
+          }
+        }
+        const totStr = colsSomaveis.map(col => `*${_fmt(col, totEmpresa[col] || 0)}*`).join(' | ');
+        linhas.push(`\u{1F3E2} ${s.nomeEmpresa}: ${totStr}`);
+      }
+
+      linhas.push('');
+      const totGeralStr = colsSomaveis.map(col => `*${_fmt(col, totGeral[col] || 0)}*`).join(' | ');
+      linhas.push(`*Total Geral: ${totGeralStr}*`);
     } else {
       // Sem colunas numéricas: apenas contagem
       let totalRegistros = 0;
@@ -1592,13 +1619,17 @@ class IACWhatsAppService extends EventEmitter {
     return [...(empresas || [])].sort((a, b) => {
       const aId = Number(a?.empresa_id || 0);
       const bId = Number(b?.empresa_id || 0);
+      // 1. padrao do canal: designação intencional de empresa primária (tem precedência total)
+      const padraoDiff = Number(b?.padrao || 0) - Number(a?.padrao || 0);
+      if (padraoDiff) return padraoDiff;
+      // 2. empresa_id crescente (ordem natural cadastrada no canal)
+      if (aId !== bId) return aId - bId;
+      // 3. principalId (empresa que iniciou o serviço) somente como último desempate
       if (principalId) {
         if (aId === principalId && bId !== principalId) return -1;
         if (bId === principalId && aId !== principalId) return 1;
       }
-      const padraoDiff = Number(b?.padrao || 0) - Number(a?.padrao || 0);
-      if (padraoDiff) return padraoDiff;
-      return aId - bId;
+      return 0;
     });
   }
 
