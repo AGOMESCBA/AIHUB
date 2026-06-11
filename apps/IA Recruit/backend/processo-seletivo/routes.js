@@ -8,6 +8,8 @@ const crud        = require('../crud');
 const analisadorDb = require('../analisador-curriculos/database');
 const whatsappDb   = require('../whatsapp-curriculo/database');
 const emailSvcMgr  = require('./email-service-manager');
+const EmailImapService = require('./email-imap');
+const emailImap = new EmailImapService();
 const ia           = require('../ia');
 const LOG_DIR      = path.join(__dirname, '..', '..', '..', '..', 'logs');
 
@@ -157,13 +159,55 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     const senha = db.getSenhaGeralReal(eid);
     if (!cfg.email) return res.status(400).json({ error: 'Configure o e-mail primeiro.' });
     if (!senha)     return res.status(400).json({ error: 'Configure a senha primeiro.' });
+
+    const host = cfg.imap_host;
+    const port = Number(cfg.imap_port) || 993;
+
+    // 1. Teste de resolução DNS
+    const dns = require('dns').promises;
+    let ip;
     try {
-      await emailImap.testarConexao({ ...cfg, imap_host: cfg.imap_host, imap_port: cfg.imap_port, imap_secure: cfg.imap_secure }, senha);
-      res.json({ ok: true });
-    } catch (err) {
-      log(`[Email Geral] Falha no teste IMAP: ${err.message}`, 'error');
-      res.status(500).json({ error: err.message });
+      const addrs = await dns.lookup(host);
+      ip = addrs.address;
+      log(`[Email Geral IMAP] DNS OK — ${host} → ${ip}`, 'info');
+    } catch (dnsErr) {
+      const msg = `Falha DNS: não foi possível resolver "${host}". Verifique se o servidor tem acesso à internet ou se o host está correto. (${dnsErr.message})`;
+      log(`[Email Geral IMAP] ${msg}`, 'error');
+      return res.status(500).json({ error: msg });
     }
+
+    // 2. Teste de conectividade TCP
+    await new Promise(resolve => {
+      const net = require('net');
+      const sock = new net.Socket();
+      sock.setTimeout(8000);
+      sock.connect(port, ip, () => { sock.destroy(); resolve(true); });
+      sock.on('error', err => {
+        sock.destroy();
+        resolve({ tcpErr: `Falha TCP: porta ${port} bloqueada ou recusada em ${host} (${ip}). Verifique firewall do Windows Server. (${err.message})` });
+      });
+      sock.on('timeout', () => {
+        sock.destroy();
+        resolve({ tcpErr: `Timeout TCP: porta ${port} não respondeu em ${host} (${ip}). Porta provavelmente bloqueada no firewall. (timeout 8s)` });
+      });
+    }).then(async tcpResult => {
+      if (tcpResult?.tcpErr) {
+        log(`[Email Geral IMAP] ${tcpResult.tcpErr}`, 'error');
+        return res.status(500).json({ error: tcpResult.tcpErr });
+      }
+      log(`[Email Geral IMAP] TCP OK — ${host}:${port}`, 'info');
+
+      // 3. Teste de autenticação IMAP
+      try {
+        await emailImap.testarConexao({ ...cfg }, senha);
+        log(`[Email Geral IMAP] Autenticação IMAP OK`, 'success');
+        res.json({ ok: true });
+      } catch (err) {
+        const msg = `Falha na autenticação IMAP: ${err.message}. Verifique usuário e senha.`;
+        log(`[Email Geral IMAP] ${msg}`, 'error');
+        res.status(500).json({ error: msg });
+      }
+    });
   });
 
   app.post('/api/email-geral/test', requireAuth, requireEmpresa, async (req, res) => {
@@ -175,6 +219,35 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
     if (!senha)     return res.status(400).json({ error: 'Configure a senha primeiro.' });
     const servidor = cfg.tipo === 'gmail' ? `Gmail (${cfg.email})` : `SMTP ${cfg.smtp_host}:${cfg.smtp_port}`;
     log(`[Email Geral] Iniciando teste de conexão — ${servidor}`, 'info');
+
+    // Diagnóstico DNS + TCP antes de tentar autenticar
+    if (cfg.tipo !== 'gmail') {
+      const dns2 = require('dns').promises;
+      let ip2;
+      try {
+        const addrs = await dns2.lookup(cfg.smtp_host);
+        ip2 = addrs.address;
+        log(`[Email Geral SMTP] DNS OK — ${cfg.smtp_host} → ${ip2}`, 'info');
+      } catch (dnsErr) {
+        const msg = `Falha DNS: não foi possível resolver "${cfg.smtp_host}". Verifique se o servidor tem acesso à internet. (${dnsErr.message})`;
+        log(`[Email Geral SMTP] ${msg}`, 'error');
+        return res.status(500).json({ error: msg });
+      }
+      const tcpOk = await new Promise(resolve => {
+        const net = require('net');
+        const sock = new net.Socket();
+        sock.setTimeout(8000);
+        sock.connect(Number(cfg.smtp_port) || 465, ip2, () => { sock.destroy(); resolve(null); });
+        sock.on('error', err => { sock.destroy(); resolve(`Falha TCP: porta ${cfg.smtp_port} bloqueada em ${cfg.smtp_host}. Verifique firewall. (${err.message})`); });
+        sock.on('timeout', () => { sock.destroy(); resolve(`Timeout TCP: porta ${cfg.smtp_port} não respondeu em ${cfg.smtp_host}. Porta bloqueada no firewall. (timeout 8s)`); });
+      });
+      if (tcpOk) {
+        log(`[Email Geral SMTP] ${tcpOk}`, 'error');
+        return res.status(500).json({ error: tcpOk });
+      }
+      log(`[Email Geral SMTP] TCP OK — ${cfg.smtp_host}:${cfg.smtp_port}`, 'info');
+    }
+
     try {
       const t = criarTransporter({ ...cfg, senha });
       await t.verify();
@@ -189,8 +262,19 @@ module.exports = function registerRoutes(app, { requireAuth, requireEmpresa, reg
       log(`[Email Geral] E-mail de teste enviado com sucesso → ${cfg.email}`, 'success');
       res.json({ ok: true });
     } catch (err) {
-      log(`[Email Geral] Falha no teste de conexão (${servidor}): ${err.message}`, 'error');
-      res.status(500).json({ error: err.message });
+      const raw = err.message || '';
+      let msg = raw;
+      if (raw.includes('ETIMEOUT') || raw.includes('ECONNREFUSED') || raw.includes('ENOTFOUND') || raw.includes('queryA')) {
+        msg = `Porta ${cfg.smtp_port} bloqueada ou sem rota até ${cfg.smtp_host}. `
+            + `Solicite ao provedor do servidor a liberação da porta ${cfg.smtp_port} (SMTP) de saída. `
+            + `(detalhe técnico: ${raw})`;
+      } else if (raw.includes('535') || raw.includes('authentication') || raw.toLowerCase().includes('invalid login') || raw.includes('credentials')) {
+        msg = `Autenticação rejeitada pelo servidor SMTP. Verifique usuário e senha. (detalhe: ${raw})`;
+      } else if (raw.includes('ECONNRESET')) {
+        msg = `Conexão derrubada pelo servidor SMTP — possível bloqueio por IP ou configuração SSL incorreta. (detalhe: ${raw})`;
+      }
+      log(`[Email Geral] Falha no teste de conexão (${servidor}): ${raw}`, 'error');
+      res.status(500).json({ error: msg });
     }
   });
 

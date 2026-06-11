@@ -92,6 +92,21 @@ const regrasTecnicas = `
 - SF4: TES.
 - CTT: centro de custo.
 
+## Codigo Fiscal (CF/CFOP) e TES — Faturamento
+- Sinonimos para nota fiscal de saida/faturamento: nota de saida, nota fiscal de saida, NF de saida, faturamento, venda.
+- CF, CFOP, codigo fiscal e codigo fiscal de operacao sao sinonimos — referem-se ao campo SD2.D2_CF.
+- Por padrao, em consultas de receita de vendas ou faturamento financeiro, excluir remessas e transferencias:
+  SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '69%'
+  Razao: CFs iniciados com 59 ou 69 sao remessas/transferencias — nao representam receita de venda.
+- Em consultas de volume fisico, quantidade ou movimentacao de estoque: incluir CF 59/69 — a nota pode ter gerado movimentacao fisica.
+- Excecao (incluir CF 59/69 em qualquer contexto): quando o usuario pedir explicitamente remessas, transferencias, ou citar CF/CFOP/codigo fiscal com os valores 59 ou 69.
+- TES pode ser chamado de TES ou Tipos de Saida. Refere-se ao campo SD2.D2_TES / tabela SF4 (F4_CODIGO, F4_TEXTO).
+- SF4.F4_ESTOQUE: 'S' = TES gera movimentacao de estoque; 'N' = nao gera.
+  Quando o usuario perguntar sobre notas que geraram estoque ou movimentaram estoque, filtre SF4.F4_ESTOQUE = 'S' via JOIN SD2 -> SF4.
+- SF4.F4_DUPLIC: 'S' = TES gera lancamento financeiro (duplicata/receber); 'N' = nao gera financeiro.
+  Quando o usuario perguntar sobre notas que geraram financeiro, contas a receber ou duplicatas, filtre SF4.F4_DUPLIC = 'S' via JOIN SD2 -> SF4.
+  Este filtro e mais preciso que filtrar por CF para identificar notas de receita real.
+
 ## Joins padrao
 - SD2 -> SF2:
   SD2.D2_FILIAL = SF2.F2_FILIAL
@@ -159,7 +174,13 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
-- Media mensal por ano (subquery 2 camadas): interna SUM por (ano, mes) → externa AVG por ano. Camada externa usa SOMENTE h.ano e h.faturamento_mes — nunca SF2.*.
+- Media mensal por ano (subquery 2 camadas, agrupado por ano):
+  Subquery interna OBRIGATORIAMENTE exporta DOIS aliases de data: SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano E SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia. Nunca exporte so competencia — sem alias ano, a query externa nao consegue GROUP BY h.ano.
+  Query externa: SELECT h.ano, AVG(h.faturamento_mes) AS media_mensal FROM (...) AS h GROUP BY h.ano.
+  Camada externa usa SOMENTE h.ano e h.faturamento_mes — NUNCA SF2.*.
+- Media mensal escalar (1 ano, sem agrupamento por ano):
+  Subquery interna SUM por mes (SUBSTRING campo,1,6 AS competencia). HAVING SUM > 0 se usuario pedir so meses com faturamento.
+  Query externa: SELECT AVG(h.faturamento_mes) AS media_mensal FROM (...) AS h. Sem GROUP BY.
 - Media anual escalar: interna SUM por ano → externa AVG dos totais. Camada externa usa SOMENTE h.faturamento_ano — nunca SF2.*. Retorna 1 linha.
 - Resposta planejada com devolucoes: "Faturamento Bruto: {total_faturamento} | Devolucoes: {total_devolucoes} | Liquido: {faturamento_liquido}"
 `.trim();

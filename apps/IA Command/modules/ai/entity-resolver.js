@@ -22,6 +22,7 @@ const TERMOS_AGRUPAMENTO_OU_METRICA = new Set([
   'produto', 'produtos', 'item', 'itens',
   'vendedor', 'vendedores', 'filial', 'filiais',
   'empresa', 'empresas', 'unidade', 'unidades', 'medida', 'medidas',
+  'banco', 'bancos', 'conta', 'contas', 'agencia', 'agencias',
   'documento', 'documentos', 'titulo', 'titulos',
   'duplicata', 'duplicatas', 'natureza', 'naturezas',
   'valor', 'faturamento', 'receita', 'quantidade', 'qtd', 'qtde',
@@ -98,6 +99,7 @@ function buildExtractionSystemPrompt() {
     'Tipos permitidos: fornecedor, cliente, produto, grupo_produto, marca, centro_custo, vendedor, transportadora, natureza, tes, desconhecido.',
     'Nao inclua periodos, datas, meses, anos, filiais, metricas ou palavras genericas como total, compras, vendas.',
     'PA e RA sao tipos de titulo do Protheus (E2_TIPO/E1_TIPO), nao sao nomes de fornecedor ou cliente. Nunca extraia PA ou RA como entidade.',
+    'Banco (ex: "banco DAF", "excluindo o banco Bradesco") e um codigo/nome do campo SE8.E8_BANCO — filtro tecnico, nao entidade cadastral. Nunca extraia nomes ou codigos de banco como entidade.',
     'Se o usuario indicar explicitamente o tipo, use esse tipo.',
     'Se houver termo solto que pareca cadastro, retorne tipo_sugerido desconhecido ou uma hipotese com baixa confianca.',
   ].join('\n');

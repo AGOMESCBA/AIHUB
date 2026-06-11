@@ -52,7 +52,9 @@ function mensagemTemPeriodoRelativo(mensagem) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
-  return new RegExp(`\\b(hoje|ontem|do dia|no dia|dia atual|dia anterior|mes atual|deste mes|este mes|no mes|do mes|mes passado|ano atual|deste ano|este ano|do ano|no ano|ano passado|semana passada|ultima semana|ultimo mes|ultimo ano|${MESES_CRONOLOGICOS})\\b`).test(texto);
+  // "do dia" / "no dia" seguidos de número são datas absolutas (ex: "do dia 10"), não relativas.
+  const textoSemDiaAbsoluto = texto.replace(/\b(do|no)\s+dia\s+\d/g, '');
+  return new RegExp(`\\b(hoje|ontem|do dia|no dia|dia atual|dia anterior|mes atual|deste mes|este mes|no mes|do mes|mes passado|ano atual|deste ano|este ano|do ano|no ano|ano passado|semana passada|ultima semana|ultimo mes|ultimo ano|${MESES_CRONOLOGICOS})\\b`).test(textoSemDiaAbsoluto);
 }
 
 function limparPeriodosNaoAutoritativos(estadoAnterior = {}, mensagem = '') {
@@ -143,10 +145,13 @@ function modosSX2(tabelas, conexaoId, empresaId) {
   if (!conexaoId) return null;
   try {
     const { getDB } = require('../../database');
-    const rows = getDB().prepare('SELECT chave, arquivo, modo FROM protheus_sx2 WHERE connection_id = ? AND empresa_id = ?').all(conexaoId, empresaId);
+    // Busca entradas da empresa + entradas globais da conexão (empresa_id NULL).
+    // Entradas específicas da empresa têm prioridade sobre as globais.
+    const rowsGlobal = getDB().prepare('SELECT chave, arquivo, modo FROM protheus_sx2 WHERE connection_id = ? AND (empresa_id IS NULL OR empresa_id = 0)').all(conexaoId);
+    const rowsEmpresa = getDB().prepare('SELECT chave, arquivo, modo FROM protheus_sx2 WHERE connection_id = ? AND empresa_id = ?').all(conexaoId, empresaId);
     const bases = new Set(tabelas || []);
     const mapa = {};
-    for (const row of rows) {
+    for (const row of [...rowsGlobal, ...rowsEmpresa]) {
       const arquivo = String(row.arquivo || row.chave || '').trim().toUpperCase();
       if (arquivo && bases.has(baseTabelaSX2(arquivo))) mapa[arquivo] = row.modo;
     }
@@ -291,12 +296,12 @@ function diagnosticoResolucaoEntidade(resolucao = {}) {
 function pedidosEntidadesParaResolverNoTenant(entidades = []) {
   return (Array.isArray(entidades) ? entidades : [])
     .filter(entidade => entidade?._resolverNoTenantAtual)
-    .map(entidade => ({
-      texto: entidade.termoBusca || entidade.texto || entidade.nome,
-      tipo: entidade.tipo,
-      tipo_sugerido: entidade.tipo,
-      origem: 'filtro_estruturado',
-    }))
+    .map(entidade => {
+      const textoRaw = entidade.termoBusca || entidade.texto || entidade.nome;
+      // Remove sufixos parentéticos como "(todos)" antes de buscar no cadastro
+      const texto = _normalizarNomeEntidadeBase(textoRaw) || textoRaw;
+      return { texto, tipo: entidade.tipo, tipo_sugerido: entidade.tipo, origem: 'filtro_estruturado' };
+    })
     .filter(pedido => pedido.texto && pedido.tipo);
 }
 
@@ -323,15 +328,27 @@ function termoEhEmpresaIAHub(termo, intent = {}) {
   return termosEmpresasIAHub(intent).some(empresa => texto === empresa || texto.includes(empresa) || empresa.includes(texto));
 }
 
+function _normalizarNomeEntidadeBase(valor) {
+  // Remove sufixos parentéticos adicionados pelo sistema: "(todos)", "(todos os registros)", etc.
+  return normalizarTextoEntidade(String(valor || '').replace(/\s*\([^)]*\)\s*$/, '').trim());
+}
+
 function entidadeResolvidaCompativel(termo, entidades = []) {
   const texto = normalizarTextoEntidade(termo?.texto);
   const tipo = String(termo?.tipo_sugerido || termo?.tipo || '').trim().toLowerCase();
   if (!texto) return false;
   return (entidades || []).some(entidade => {
     const tipoEntidade = String(entidade?.tipo || '').trim().toLowerCase();
-    if (tipo && tipo !== 'desconhecido' && tipo !== tipoEntidade) return false;
+    const nomeBase = _normalizarNomeEntidadeBase(entidade?.nome || entidade?.texto || entidade?.descricao);
     const nome = normalizarTextoEntidade(entidade?.nome || entidade?.texto || entidade?.descricao);
-    return nome && (nome.includes(texto) || texto.includes(nome));
+    const nomeMatch = (nomeBase && (nomeBase.includes(texto) || texto.includes(nomeBase)))
+        || (nome && (nome.includes(texto) || texto.includes(nome)));
+    if (!nomeMatch) return false;
+    // Usuário escolheu "_todos" para esta entidade: resolvida independente do tipo extraído
+    // (extração prévia pode classificar "empresa Aster" como tipo "empresa" em vez de "cliente")
+    if (entidade?._todos) return true;
+    if (tipo && tipo !== 'desconhecido' && tipo !== tipoEntidade) return false;
+    return true;
   });
 }
 
@@ -346,14 +363,6 @@ function mensagemIniciaConsultaExplicitaDeModulo(mensagem) {
   return /\b(faturamento|vendas|compras|comissao|financeiro|contas a pagar|contas a receber)\b/.test(texto);
 }
 
-function mensagemDeclaraEmpresaExplicitamente(mensagem, valor) {
-  const texto = normalizarTextoEntidade(mensagem);
-  const alvo = normalizarTextoEntidade(valor);
-  if (!texto || !alvo) return false;
-  const posEmpresa = texto.search(/\bempresas?\b/);
-  const posAlvo = texto.indexOf(alvo);
-  return posEmpresa >= 0 && posAlvo > posEmpresa;
-}
 
 function tipoEntidadePadraoParaFiltroEmpresa(spec, intent = {}) {
   if (spec.nome === 'financeiro') {
@@ -374,7 +383,7 @@ function normalizarFiltroEmpresaComoEntidade(spec, intent = {}, mensagem = '') {
   );
   // Se o orquestrador declarou que herdou contexto, filtros.empresa é escopo de tenant preservado
   // de um turno anterior onde foi validado — não reclassificar como entidade cadastral.
-  if (!valor || temTenantValidado || mensagemDeclaraEmpresaExplicitamente(mensagem, valor) || intent._herdouContextoOrquestrador) return intent;
+  if (!valor || temTenantValidado || intent._herdouContextoOrquestrador) return intent;
 
   const tipoPadrao = tipoEntidadePadraoParaFiltroEmpresa(spec, intent);
   if (!tipoPadrao || !spec.entityCatalog?.DEFINICOES?.[tipoPadrao]) return intent;
@@ -528,7 +537,6 @@ function buildEstadoAnterior(intent = {}) {
     aviso: 'Evidencia nao autoritativa. A IA-OWNER deve confirmar pela mensagem atual e historico antes de herdar qualquer campo.',
     intent: intent.intencao || null,
     modulo: intent._moduloDinamico || intent._orquestradorContrato?.modulo || null,
-    periodo: intent.periodo || null,
     filtros: (() => {
       const f = _removerFiltrosTemporaisOrquestrador(intent.filtros || {});
       if (!temEmpresasIAHub) return f;
@@ -553,7 +561,8 @@ function buildEstadoAnterior(intent = {}) {
       const coAg = Array.isArray(co.agrupamentos)
         ? (temEmpresasIAHub ? co.agrupamentos.filter(a => String(a || '').toLowerCase() !== 'empresa') : co.agrupamentos)
         : co.agrupamentos;
-      return { ...co, filtros: filtrosLimpos, agrupamentos: coAg };
+      const { periodo: _p, justificativa: _j, ...coSemPeriodo } = co;
+      return { ...coSemPeriodo, filtros: filtrosLimpos, agrupamentos: coAg };
     })(),
     contexto_ia_anterior: intent._contextoIAAnterior || null,
     ultimo_sql: intent._sqlCanonicoOriginal || intent._sql_canonico || null,
@@ -747,11 +756,87 @@ function validarSelectContraGroupBy(sql = '') {
   return { ok: erros.length === 0, erros };
 }
 
+function _extrairDerivedTableInfo(sql) {
+  const texto = String(sql || '').trim();
+  const posFrom = localizarKeywordNivelZero(texto, 'FROM');
+  if (posFrom < 0) return null;
+  let i = posFrom + 4;
+  while (i < texto.length && /\s/.test(texto[i])) i++;
+  if (texto[i] !== '(') return null;
+
+  let nivel = 0;
+  let aspas = false;
+  let fim = -1;
+  for (let j = i; j < texto.length; j++) {
+    const c = texto[j];
+    if (c === "'") aspas = !aspas;
+    if (aspas) continue;
+    if (c === '(') nivel++;
+    if (c === ')') { nivel--; if (nivel === 0) { fim = j; break; } }
+  }
+  if (fim < 0) return null;
+
+  const conteudoSubquery = texto.slice(i + 1, fim);
+  let pos = fim + 1;
+  while (pos < texto.length && /\s/.test(texto[pos])) pos++;
+  if (texto.slice(pos, pos + 2).toUpperCase() === 'AS') {
+    pos += 2;
+    while (pos < texto.length && /\s/.test(texto[pos])) pos++;
+  }
+  const aliasMatch = texto.slice(pos).match(/^([A-Z_][A-Z0-9_]*)/i);
+  if (!aliasMatch) return null;
+  return { conteudoSubquery, alias: aliasMatch[1].toUpperCase() };
+}
+
+function _aliasesExportadosPorSubquery(subquerySql) {
+  const { select } = extrairSelectEGroupByNivelZero(subquerySql);
+  if (!select || /^\s*\*\s*$/.test(select.trim())) return null;
+  const aliases = new Set();
+  for (const itemBruto of dividirExpressoesSql(select)) {
+    const item = itemBruto.replace(/^\s*DISTINCT\s+/i, '').trim();
+    const asMatch = item.match(/\bAS\s+([A-Z_][A-Z0-9_]*)\s*$/i);
+    if (asMatch) { aliases.add(asMatch[1].toUpperCase()); continue; }
+    const dotMatch = item.match(/[A-Z_][A-Z0-9_]*\s*\.\s*([A-Z_][A-Z0-9_]*)\s*$/i);
+    if (dotMatch) { aliases.add(dotMatch[1].toUpperCase()); continue; }
+    const simpleMatch = item.match(/^([A-Z_][A-Z0-9_]*)\s*$/i);
+    if (simpleMatch) aliases.add(simpleMatch[1].toUpperCase());
+  }
+  return aliases.size ? aliases : null;
+}
+
+function validarAliasesDerivadosExternos(sql) {
+  const info = _extrairDerivedTableInfo(sql);
+  if (!info) return { ok: true, erros: [] };
+  const { conteudoSubquery, alias } = info;
+  const exportados = _aliasesExportadosPorSubquery(conteudoSubquery);
+  if (!exportados) return { ok: true, erros: [] };
+
+  const { select, group } = extrairSelectEGroupByNivelZero(sql);
+  const parteExterna = (select || '') + ' ' + (group || '');
+  const re = new RegExp(`\\b${alias}\\s*\\.\\s*([A-Z_][A-Z0-9_]*)`, 'gi');
+  const erros = [];
+  const vistos = new Set();
+  let m;
+  while ((m = re.exec(parteExterna)) !== null) {
+    const coluna = m[1].toUpperCase();
+    if (coluna === '*' || vistos.has(coluna)) continue;
+    vistos.add(coluna);
+    if (!exportados.has(coluna)) {
+      erros.push(
+        `Coluna "${alias}.${coluna.toLowerCase()}" referenciada na query externa mas nao exportada pela subquery. ` +
+        `Aliases exportados: [${[...exportados].map(a => a.toLowerCase()).join(', ')}]. ` +
+        `Adicione ao SELECT da subquery — ex: SUBSTRING(campo, 1, 4) AS ${coluna.toLowerCase()}.`
+      );
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
-  if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*SELECT\b/i.test(texto)) {
-    erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ...');
+  if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*(?:WITH\b|SELECT\b)/i.test(texto)) {
+    erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
   }
   if (/\bSELECT\s+TOP\s+\d+/i.test(texto)) {
     erros.push('Nao use SELECT TOP; use apenas SET ROWCOUNT como limite global.');
@@ -774,6 +859,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
     erros.push(...escopoCheck.erros);
   } else {
     erros.push(...validarSelectContraGroupBy(texto).erros);
+    erros.push(...validarAliasesDerivadosExternos(texto).erros);
   }
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
@@ -818,7 +904,52 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   return { ok: erros.length === 0, erros };
 }
 
-function _buildContextoConsulta(intent, periodoResolvido = null) {
+function _extrairLabelIntencao(mensagem) {
+  if (!mensagem) return null;
+  const t = String(mensagem)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+
+  const temMaior = /\b(maior|mais alto|mais elevado|melhor)\b/.test(t);
+  const temMenor = /\b(menor|mais baixo|pior)\b/.test(t);
+  const topMatch = t.match(/\btop\s*(\d+)\b/);
+  const temQuem  = /\b(quem|qual)\b.{0,40}\b(mais|menos|maior|menor|melhor|pior)\b/.test(t);
+
+  if (topMatch) return `Top ${topMatch[1]}`;
+
+  if (temMaior && temMenor) return 'Maior e menor';
+
+  if (temMaior || temMenor || temQuem) {
+    const ref = temMaior ? 'Maior' : 'Menor';
+    if (/\b(cliente|comprador)\b/.test(t))        return `${ref} cliente`;
+    if (/\bvendedor\b/.test(t))                   return `${ref} vendedor`;
+    if (/\bfornecedor\b/.test(t))                 return `${ref} fornecedor`;
+    if (/\b(produto|item|mercadoria)\b/.test(t))  return `${ref} produto`;
+    if (/\b(mes|month)\b/.test(t))               return temMaior ? 'Melhor mês' : 'Pior mês';
+    if (/\bano\b/.test(t))                       return temMaior ? 'Melhor ano' : 'Pior ano';
+    return `${ref} valor`;
+  }
+
+  if (/\b(comparar?|comparativo|versus|vs\.?)\b/.test(t) ||
+      /\b\d{4}\b.{0,10}\b(e|vs|x|versus)\b.{0,10}\b\d{4}\b/.test(t)) return 'Comparativo';
+
+  if (/\b(evolucao|historico|tendencia|ao longo|crescimento|variacao)\b/.test(t)) return 'Evolução';
+
+  if (/\bpor (mes|month)\b|\bmensal(mente)?\b/.test(t)) return 'Mensal';
+  if (/\bpor ano\b|\banual(mente)?\b/.test(t))          return 'Anual';
+
+  if (/\b(media|ticket medio|preco medio|valor medio)\b/.test(t)) return 'Média';
+
+  if (/\btotal geral\b|\bquanto (faturamos|compramos|pagamos|recebemos)\b/.test(t)) return 'Total';
+
+  if (/\b(listar?|detalhar?|mostrar?|exibir?|quais (sao|foram|estao|tem))\b/.test(t)) return 'Listagem';
+
+  return null;
+}
+
+function _buildContextoConsulta(intent, periodoResolvido = null, mensagem = null) {
   if (!intent) return null;
 
   const entidades = Array.isArray(intent._entidadesResolvidas) ? intent._entidadesResolvidas : [];
@@ -856,7 +987,8 @@ function _buildContextoConsulta(intent, periodoResolvido = null) {
     }
   }
 
-  const partes = [filtroPeriodo, filtroEnt].filter(Boolean);
+  const labelIntencao = _extrairLabelIntencao(mensagem);
+  const partes = [labelIntencao, filtroPeriodo, filtroEnt].filter(Boolean);
   return partes.length ? partes.join(' | ') : null;
 }
 
@@ -864,7 +996,7 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
   if (typeof spec.formatarResposta === 'function') return spec.formatarResposta({ mensagem, rows, keys, cfg });
   if (!rows || !rows.length) return mensagemErro(spec, 'sem_resultado');
   const whatsappFormat = require('../whatsapp-format-prompt');
-  const contextoConsulta = _buildContextoConsulta(intent, periodoResolvido);
+  const contextoConsulta = _buildContextoConsulta(intent, periodoResolvido, mensagem);
 
   const _NOME_DISPLAY = { faturamento: 'Faturamento', compras: 'Compras', financeiro: 'Financeiro', comissao: 'Comissão' };
   const nomeModulo = _NOME_DISPLAY[(spec.nome || '').replace('_dinamico', '')] || null;
@@ -882,7 +1014,9 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
   // Tenta formatters programáticos antes de chamar IA (sem limite de tokens, sem truncamento)
   const direto = whatsappFormat.buildFormatDirect(mensagem, rows, { contextoConsulta, nomeModulo, anoFirst })
     || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta, nomeModulo })
-    || whatsappFormat.buildFormatSimplesTemporal(rows, { contextoConsulta, nomeModulo, anoFirst });
+    || whatsappFormat.buildFormatCompetenciaEntidade(rows, { contextoConsulta, nomeModulo, anoFirst })
+    || whatsappFormat.buildFormatSimplesTemporal(rows, { contextoConsulta, nomeModulo, anoFirst })
+    || whatsappFormat.buildFormatComparativoSimples(rows, { contextoConsulta });
   if (direto) return direto;
 
   try {
@@ -983,7 +1117,23 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
     throw Object.assign(new Error(`SQL nao aplicou entidades resolvidas: ${validacaoEntidades.erros.join(' | ')}`), { _tipo: 'contrato_entidade_invalido', _sql: out });
   }
   const sx3Validacao = sx3SqlValidator.validarCamposSqlContraSX3(out, sx3);
-  if (!sx3Validacao.ok) throw Object.assign(new Error(`SQL rejeitado por SX3: ${sx3Validacao.erros.join(' | ')}`), { _tipo: 'contrato_sx3_invalido', _sql: out });
+  if (!sx3Validacao.ok) {
+    const errosSx3 = sx3Validacao.erros.map(err => {
+      // Enriquece o erro quando o campo rejeitado é alias calculado de um CTE.
+      // Sem este contexto, a IA não sabe que precisa trocar FROM tabela_fisica por FROM cte_nome.
+      const mCampo = err.match(/Campo \w+\.(\w+) nao consta no SX3/i);
+      if (mCampo && /\bWITH\b/i.test(out)) {
+        const campo = mCampo[1].toUpperCase();
+        if (new RegExp(`\\bAS\\s+${campo}\\b`, 'i').test(out)) {
+          const cteMatch = out.match(/\bWITH\s+(\w+)\s+AS\s*\(/i);
+          const cteNome = cteMatch ? cteMatch[1] : 'o_cte';
+          return `${err} O campo "${campo}" e alias calculado no CTE "${cteNome}". Na query externa, substitua "FROM <tabela_fisica> <alias>" por "FROM ${cteNome} <alias>".`;
+        }
+      }
+      return err;
+    });
+    throw Object.assign(new Error(`SQL rejeitado por SX3: ${errosSx3.join(' | ')}`), { _tipo: 'contrato_sx3_invalido', _sql: out });
+  }
   if (spec.sanitizarFiltrosFilialSX2 !== false) {
     out = sx2SqlNormalizer.sanitizarFiltrosFilialSX2(out, sx2, { filialSolicitada: filial && filial !== 'TODAS', logPrefix: spec.logPrefix });
   }
@@ -1043,7 +1193,19 @@ async function executar(spec, intent, empresaId) {
       helpers,
     });
     const diagnostico = diagnosticoResolucaoEntidade(resolucaoPrevia);
-    if (diagnostico) diagnosticosEntidades.push(diagnostico);
+    if (diagnostico) {
+      if (diagnostico.status === 'ambigua' && typeof spec.formatarPerguntaAmbiguidade === 'function') {
+        return {
+          tipo: 'pergunta_entidade',
+          _intentPendente: intentEfetivo,
+          _opcoesEntidade: diagnostico.candidatos,
+          resposta_direta: spec.formatarPerguntaAmbiguidade(diagnostico.texto, diagnostico.candidatos),
+          sql_gerado: `-- Aguardando escolha de entidade: ${diagnostico.texto}`,
+          duracao_ms: Date.now() - t0,
+        };
+      }
+      diagnosticosEntidades.push(diagnostico);
+    }
     entidadesResolvidas = deduplicarEntidadesResolvidas([...entidadesResolvidas, ...(resolucaoPrevia.entidades || [])]);
   }
   if (diagnosticosEntidades.length) {
@@ -1097,6 +1259,17 @@ async function executar(spec, intent, empresaId) {
     const resolucao = await resolverEntidadesSeNecessario(spec, pedidoEntidades, { empresaId, sx2, periodo: plano.obj.periodo, filial, helpers });
     const diagnostico = diagnosticoResolucaoEntidade(resolucao);
     if (diagnostico) {
+      if (diagnostico.status === 'ambigua' && typeof spec.formatarPerguntaAmbiguidade === 'function') {
+        return {
+          tipo: 'pergunta_entidade',
+          _intentPendente: intentEfetivo,
+          _opcoesEntidade: diagnostico.candidatos,
+          resposta_direta: spec.formatarPerguntaAmbiguidade(diagnostico.texto, diagnostico.candidatos),
+          sql_gerado: `-- Aguardando escolha de entidade: ${diagnostico.texto}`,
+          _sql_auditoria: auditoriaBase,
+          duracao_ms: Date.now() - t0,
+        };
+      }
       contextoTecnico.entidades_nao_resolvidas_pelo_sistema = [
         ...(contextoTecnico.entidades_nao_resolvidas_pelo_sistema || []),
         diagnostico,
@@ -1194,7 +1367,14 @@ async function executar(spec, intent, empresaId) {
       const resposta = rows && rows.length
         ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent, plano.obj.periodo || null)
         : mensagemErro(spec, 'sem_resultado');
-      const respostaDireta = interpolarRespostaPlanejada(plano.obj.resposta_planejada, rows) || resposta;
+      // Formatter programático tem prioridade sobre template planejado pela IA (evita Total Geral errado em comparativos)
+      const _wf = require('../whatsapp-format-prompt');
+      const _comparativo = rows?.length
+        ? _wf.buildFormatComparativoSimples(rows, {
+            contextoConsulta: _buildContextoConsulta(intent, plano.obj.periodo || null, mensagem),
+          })
+        : null;
+      const respostaDireta = _comparativo || interpolarRespostaPlanejada(plano.obj.resposta_planejada, rows) || resposta;
       return {
         tipo: 'sucesso_ai_sql',
         resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
@@ -1228,7 +1408,7 @@ async function executar(spec, intent, empresaId) {
         estadoAnterior,
         contextoTecnico,
         entidadesResolvidas,
-        tentativa: 'O SQL anterior falhou/rejeitado. Corrija o SQL preservando a decisao semantica da sua resposta anterior. Obrigatorio: comece com SET ROWCOUNT 50000; SELECT, use tabelas fisicas SX2 em FROM/JOIN com alias base, qualifique campos pelo alias base, remova subqueries cadastrais vazias e nao use SELECT TOP.',
+        tentativa: 'O SQL anterior continha um erro estrutural. Gere o SQL novamente do zero a partir da mensagem original, usando o erro abaixo apenas como referencia do que evitar. Nao tente corrigir o SQL anterior linha a linha — recomece o raciocinio completo.',
         erroSql: e.message,
         sqlComErro: preparado?.sqlFinal || e._sql || plano.sql,
       });
@@ -1327,9 +1507,16 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
     const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
     const template = intent._respostaPlanejadaCanonica || intent._iaOwnerRespostaPlanejada || null;
     const resposta = rows && rows.length
-      ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent)
+      ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null)
       : mensagemErro(spec, 'sem_resultado');
-    const respostaDireta = interpolarRespostaPlanejada(template, rows) || resposta;
+    // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
+    const _wfD = require('../whatsapp-format-prompt');
+    const _comparativoD = rows?.length
+      ? _wfD.buildFormatComparativoSimples(rows, {
+          contextoConsulta: _buildContextoConsulta(intent, intent._periodoCanonicoResolvido || null, intent._mensagemOriginal || 'consulta'),
+        })
+      : null;
+    const respostaDireta = _comparativoD || interpolarRespostaPlanejada(template, rows) || resposta;
     return {
       tipo: 'sucesso_ai_sql',
       resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
@@ -1382,16 +1569,18 @@ module.exports = {
     interpolarRespostaPlanejada,
     validarSqlIaOwnerBasico,
     validarSelectContraGroupBy,
+    validarAliasesDerivadosExternos,
     sx3EssencialParaPrompt,
     completarSX2Permitidas,
     diagnosticoResolucaoEntidade,
     termoEhEmpresaIAHub,
     mensagemMencionaValorEntidade,
-    mensagemDeclaraEmpresaExplicitamente,
     tipoEntidadePadraoParaFiltroEmpresa,
     normalizarFiltroEmpresaComoEntidade,
     limparFiltrosEntidadeHerdadosDaConsultaAtual,
     deduplicarTermosEntidade,
     extrairTermosEntidadesAntesIa,
+    _buildContextoConsulta,
+    _extrairLabelIntencao,
   },
 };

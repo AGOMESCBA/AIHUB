@@ -175,6 +175,17 @@ Antes de tocar em qualquer prompt, faça as perguntas na ordem:
 | Aliases de exibição (A1_NOME AS cliente) | Validação de SQL (runner.js, sx3-validator) |
 | Lógica de negócio Protheus (D_E_L_E_T_, devoluções, carteira) | Loop de retry com erro devolvido à IA |
 | Restrições matemáticas genuínas (ex: extremo duplo) | Roteamento de módulos e contexto técnico |
+| **Interpretação semântica de domínio** que o LLM não infere sozinho (ex: "faturamento médio" = média de totais mensais, não AVG sobre NFs) | **Injeção de templates SQL no user prompt** — PROIBIDO mesmo que pareça "contexto técnico". O user prompt é a pergunta do usuário, não um guia de estrutura SQL. |
+
+### Regra de ouro: se a IA já recebeu a regra e ainda assim errou
+
+Se a regra existe no prompt e o LLM ignorou, as causas possíveis em ordem de investigação são:
+
+1. **A regra está correta mas a semântica está ambígua** — o LLM interpretou a palavra de forma diferente da esperada. Adicione uma linha de clarificação semântica no `prompt-builder.js` (ex: "faturamento médio = média de totais de período, não ticket por NF").
+2. **O retry não devolveu o erro corretamente à IA** — verifique o loop de retry em `runner.js`.
+3. **O validador não capturou o SQL errado** — verifique as regexes em `validarSqlIaOwnerBasico` e `validarEscopoSubqueryExterno`.
+
+**Nunca injete templates SQL ou estruturas de query no user prompt** — isso viola o princípio IA-first: a IA decide a estrutura do SQL, o sistema fornece apenas as regras do domínio.
 
 ### Estrutura dos prompts após auditoria (junho/2026)
 

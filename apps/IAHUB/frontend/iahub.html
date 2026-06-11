@@ -226,10 +226,16 @@
     }
 
     async function selecionarSistema(systemCode) {
+      const companyId = window._iahubEmpresa?.id;
+      if (!companyId) {
+        sessionStorage.setItem('_iahub_aviso', 'Por favor, selecione uma empresa primeiro.');
+        location.reload();
+        return;
+      }
       const res = await fetch('/api/sistemas/selecionar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system_code: systemCode }),
+        body: JSON.stringify({ system_code: systemCode, empresa_id: companyId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {

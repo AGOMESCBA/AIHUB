@@ -99,6 +99,27 @@
     .toast { position:fixed;bottom:24px;right:24px;background:#10b981;color:#fff;padding:11px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;transform:translateY(80px);opacity:0;transition:var(--transition);z-index:999; }
     .toast.show { transform:translateY(0);opacity:1; }
 
+    /* Fallback Presets */
+    .fallback-presets { display:flex;flex-direction:column;gap:8px; }
+    .fallback-card {
+      border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;cursor:pointer;
+      transition:var(--transition);background:var(--bg-base);
+    }
+    .fallback-card:hover { border-color:var(--accent);background:var(--bg-hover); }
+    .fallback-card-selected { border-color:var(--accent);background:rgba(124,58,237,.06); }
+    .fallback-card-header { margin-bottom:4px; }
+    .fallback-card-badge { font-size:.7rem;padding:2px 7px;border-radius:999px;font-weight:600;display:inline-block; }
+    .fallback-card-title { font-weight:600;font-size:.9rem;margin-bottom:6px; }
+    .fallback-card-seq { display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:6px; }
+    .fallback-card-desc { font-size:.78rem;color:var(--text-lo);line-height:1.4; }
+    .provider-chip { font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:999px; }
+    .chip-groq     { background:rgba(249,115,22,.12);color:#ea580c; }
+    .chip-deepseek { background:rgba(20,184,166,.12);color:#0f766e; }
+    .chip-gemini   { background:rgba(59,130,246,.12);color:#2563eb; }
+    .chip-claude   { background:rgba(168,85,247,.12);color:#7e22ce; }
+    .chip-openai   { background:rgba(16,163,127,.12);color:#047857; }
+    .chain-arrow   { color:var(--text-lo);font-size:.75rem; }
+
     /* Help drawer */
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
     .help-overlay.open{opacity:1;pointer-events:all;}
@@ -195,6 +216,16 @@
                     </div>
                     <div class="test-result" id="test-groq" style="display:none"></div>
                   </div>
+                  <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <select id="groq-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile — ⭐ Recomendado (rápido)</option>
+                      <option value="llama-3.1-8b-instant">llama-3.1-8b-instant — ⚡ Ultra-rápido, menor custo</option>
+                      <option value="llama-3.1-70b-versatile">llama-3.1-70b-versatile — 🔄 Alternativo, contexto amplo</option>
+                      <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 — 📚 Contexto longo (32k)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando Groq for acionado (principal ou fallback).</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -224,6 +255,15 @@
                       <button class="btn btn-ghost" onclick="testarProvedor('openai')">Testar conexão</button>
                     </div>
                     <div class="test-result" id="test-openai" style="display:none"></div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <select id="openai-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="gpt-4o-mini">gpt-4o-mini — ⭐ Recomendado (~$0.15/1M tokens)</option>
+                      <option value="gpt-4o">gpt-4o — 🏆 Alta qualidade (~$5/1M tokens)</option>
+                      <option value="gpt-4-turbo">gpt-4-turbo — 💡 Raciocínio avançado (~$10/1M tokens)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando OpenAI for acionado (principal ou fallback).</div>
                   </div>
                 </div>
               </div>
@@ -255,6 +295,15 @@
                     </div>
                     <div class="test-result" id="test-gemini" style="display:none"></div>
                   </div>
+                  <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <select id="gemini-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="gemini-2.0-flash">gemini-2.0-flash — ⭐ Recomendado (rápido, multimodal)</option>
+                      <option value="gemini-1.5-flash">gemini-1.5-flash — ⚡ Econômico (1M tokens)</option>
+                      <option value="gemini-1.5-pro">gemini-1.5-pro — 🏆 Máxima qualidade (2M tokens)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando Gemini for acionado (principal ou fallback).</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -285,6 +334,14 @@
                     </div>
                     <div class="test-result" id="test-deepseek" style="display:none"></div>
                   </div>
+                  <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <select id="deepseek-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="deepseek-chat">deepseek-chat — ⭐ Recomendado (ótimo custo-benefício)</option>
+                      <option value="deepseek-reasoner">deepseek-reasoner — 🧠 Raciocínio avançado (mais lento)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando DeepSeek for acionado (principal ou fallback).</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -314,6 +371,15 @@
                       <button class="btn btn-ghost" onclick="testarProvedor('claude')">Testar conexão</button>
                     </div>
                     <div class="test-result" id="test-claude" style="display:none"></div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Modelo</label>
+                    <select id="claude-modelo" class="form-control" onchange="atualizarResumo()">
+                      <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001 — ⭐ Recomendado (rápido, econômico)</option>
+                      <option value="claude-sonnet-4-6">claude-sonnet-4-6 — 🎯 Balanceado (qualidade + velocidade)</option>
+                      <option value="claude-opus-4-8">claude-opus-4-8 — 🏆 Elite (máxima capacidade, custo elevado)</option>
+                    </select>
+                    <div class="form-hint">Modelo usado quando Claude for acionado (principal ou fallback).</div>
                   </div>
                 </div>
               </div>
@@ -392,19 +458,75 @@
                   <div class="form-group">
                     <label class="form-label">Provedor primário</label>
                     <select id="provedor-primario" class="form-control" onchange="atualizarResumo()">
-                      <option value="groq">Groq</option>
-                      <option value="openai">OpenAI / GPT</option>
-                      <option value="gemini">Gemini</option>
-                      <option value="deepseek">DeepSeek</option>
-                      <option value="claude">Claude</option>
+                      <option value="groq">Groq — ⭐ Recomendado (mais rápido, menor custo)</option>
+                      <option value="deepseek">DeepSeek — Boa performance, custo baixo</option>
+                      <option value="gemini">Gemini — Google, contexto amplo</option>
+                      <option value="openai">OpenAI / GPT — Alta qualidade, custo elevado</option>
+                      <option value="claude">Claude — Anthropic, raciocínio complexo</option>
                     </select>
-                    <div class="form-hint">O provedor primário será tentado primeiro; depois entra a ordem de fallback abaixo.</div>
+                    <div class="form-hint">⭐ Groq é recomendado: latência &lt;500ms, custo ~60% menor que OpenAI. O provedor primário será tentado primeiro; depois entra a ordem de fallback abaixo.</div>
                   </div>
 
                   <div class="form-group">
                     <label class="form-label">Ordem de fallback</label>
-                    <input id="fallback-ordem" class="form-control" value="groq,openai,gemini,deepseek,claude" oninput="atualizarResumo()">
-                    <div class="form-hint">Separe por vírgula. Valores válidos: groq, openai, gemini, deepseek, claude.</div>
+                    <input type="hidden" id="fallback-ordem" value="groq,deepseek,gemini,claude,openai">
+
+                    <div class="fallback-presets">
+
+                      <!-- Card 1 — Recomendado -->
+                      <div class="fallback-card fallback-card-selected" data-ordem="groq,deepseek,gemini,claude,openai" onclick="selecionarPreset(this)">
+                        <div class="fallback-card-header">
+                          <span class="fallback-card-badge badge-groq">⭐ Recomendado</span>
+                        </div>
+                        <div class="fallback-card-title">Econômico & Rápido</div>
+                        <div class="fallback-card-seq">
+                          <span class="provider-chip chip-groq">Groq</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-deepseek">DeepSeek</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-gemini">Gemini</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-claude">Claude</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-openai">OpenAI</span>
+                        </div>
+                        <div class="fallback-card-desc">Groq como principal (gratuito, rápido), DeepSeek como fallback econômico. OpenAI entra por último por ter custo elevado.</div>
+                      </div>
+
+                      <!-- Card 2 — Máxima Qualidade -->
+                      <div class="fallback-card" data-ordem="groq,openai,gemini,deepseek,claude" onclick="selecionarPreset(this)">
+                        <div class="fallback-card-header">
+                          <span class="fallback-card-badge badge-openai">🏆 Alta Qualidade</span>
+                        </div>
+                        <div class="fallback-card-title">Máxima Qualidade</div>
+                        <div class="fallback-card-seq">
+                          <span class="provider-chip chip-groq">Groq</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-openai">OpenAI</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-gemini">Gemini</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-deepseek">DeepSeek</span>
+                          <span class="chain-arrow">→</span>
+                          <span class="provider-chip chip-claude">Claude</span>
+                        </div>
+                        <div class="fallback-card-desc">Groq principal, OpenAI como fallback de alta qualidade. Ideal quando precisão é prioritária sobre custo.</div>
+                      </div>
+
+                      <!-- Card 3 — Personalizado -->
+                      <div class="fallback-card fallback-card-custom" data-ordem="" onclick="selecionarPreset(this)">
+                        <div class="fallback-card-header">
+                          <span class="fallback-card-badge" style="background:var(--bg-hover);color:var(--text-lo)">⚙️ Personalizado</span>
+                        </div>
+                        <div class="fallback-card-title">Customizado</div>
+                        <div class="fallback-card-desc">Defina manualmente a ordem digitando os provedores separados por vírgula.</div>
+                        <input id="fallback-custom-input" class="form-control" style="margin-top:8px;display:none" placeholder="groq,deepseek,gemini,claude,openai" oninput="onCustomFallbackInput(this.value)">
+                        <div class="form-hint" style="margin-top:4px;display:none" id="fallback-custom-hint">
+                          Valores válidos: groq, openai, gemini, deepseek, claude
+                        </div>
+                      </div>
+
+                    </div>
                   </div>
 
                   <div class="form-group">
@@ -414,9 +536,9 @@
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label">Turnos de histórico conversacional</label>
+                    <label class="form-label">Janela de histórico enviada à IA</label>
                     <input type="number" id="historico-turnos" class="form-control" min="1" max="10" step="1" value="5" style="max-width:120px" oninput="atualizarResumo()">
-                    <div class="form-hint">Quantas consultas anteriores são enviadas à IA de SQL como contexto. Mín. 1 · Máx. 10 · Padrão 5.</div>
+                    <div class="form-hint">Quantas consultas anteriores são incluídas no prompt da IA para ela raciocinar sobre continuidade. A IA decide sozinha o que herdar — este valor controla custo e tamanho do prompt, não resets de contexto. Recomendado: 3 a 5. Máx. 10.</div>
                   </div>
 
                   <div class="form-group">
@@ -554,6 +676,28 @@
     }
   }
 
+  function selecionarPreset(card) {
+    document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
+    card.classList.add('fallback-card-selected');
+    const isCustom = card.classList.contains('fallback-card-custom');
+    const customInput = document.getElementById('fallback-custom-input');
+    const customHint  = document.getElementById('fallback-custom-hint');
+    customInput.style.display = isCustom ? '' : 'none';
+    customHint.style.display  = isCustom ? '' : 'none';
+    if (!isCustom) {
+      document.getElementById('fallback-ordem').value = card.dataset.ordem;
+      atualizarResumo();
+    } else {
+      customInput.value = '';
+      customInput.focus();
+    }
+  }
+
+  function onCustomFallbackInput(val) {
+    document.getElementById('fallback-ordem').value = val.trim();
+    atualizarResumo();
+  }
+
   function atualizarResumo() {
     const labels  = { groq: 'Groq', openai: 'OpenAI / GPT', gemini: 'Gemini', deepseek: 'DeepSeek', claude: 'Claude' };
     const idiomas = { pt: 'Português', en: 'Inglês', es: 'Espanhol' };
@@ -602,10 +746,35 @@
         document.getElementById('provedor-primario').value = cfg.provedor_primario;
         _atualizarBadgesProvedores(cfg.provedor_primario);
       }
-      if (cfg.fallback_ordem) document.getElementById('fallback-ordem').value = cfg.fallback_ordem;
+
+      // Carregar fallback_ordem e selecionar o preset correspondente
+      if (cfg.fallback_ordem) {
+        document.getElementById('fallback-ordem').value = cfg.fallback_ordem;
+        // Tentar encontrar card com dados-ordem matching
+        const cardMatch = document.querySelector(`.fallback-card[data-ordem="${cfg.fallback_ordem}"]`);
+        if (cardMatch) {
+          selecionarPreset(cardMatch);
+        } else {
+          // Se não bater nenhum preset, ativar modo personalizado
+          const cardCustom = document.querySelector('.fallback-card-custom');
+          document.querySelectorAll('.fallback-card').forEach(c => c.classList.remove('fallback-card-selected'));
+          cardCustom.classList.add('fallback-card-selected');
+          document.getElementById('fallback-custom-input').style.display = '';
+          document.getElementById('fallback-custom-hint').style.display = '';
+          document.getElementById('fallback-custom-input').value = cfg.fallback_ordem;
+        }
+      }
+
       if (cfg.confianca_minima != null) document.getElementById('confianca-min').value = cfg.confianca_minima;
       if (cfg.historico_turnos != null) document.getElementById('historico-turnos').value = cfg.historico_turnos;
       if (cfg.audio_idioma) document.getElementById('audio-idioma').value = cfg.audio_idioma;
+
+      // Carregar modelos de cada provider
+      if (cfg.groq_modelo) document.getElementById('groq-modelo').value = cfg.groq_modelo;
+      if (cfg.openai_modelo) document.getElementById('openai-modelo').value = cfg.openai_modelo;
+      if (cfg.gemini_modelo) document.getElementById('gemini-modelo').value = cfg.gemini_modelo;
+      if (cfg.deepseek_modelo) document.getElementById('deepseek-modelo').value = cfg.deepseek_modelo;
+      if (cfg.claude_modelo) document.getElementById('claude-modelo').value = cfg.claude_modelo;
 
       PROVIDERS.forEach(p => {
         const el = document.getElementById(`${p}-key`);
@@ -631,6 +800,11 @@
       confianca_minima:  parseFloat(document.getElementById('confianca-min').value),
       historico_turnos:  parseInt(document.getElementById('historico-turnos').value, 10) || 5,
       audio_idioma:      document.getElementById('audio-idioma').value,
+      groq_modelo:       document.getElementById('groq-modelo').value,
+      openai_modelo:     document.getElementById('openai-modelo').value,
+      gemini_modelo:     document.getElementById('gemini-modelo').value,
+      deepseek_modelo:   document.getElementById('deepseek-modelo').value,
+      claude_modelo:     document.getElementById('claude-modelo').value,
     };
     PROVIDERS.forEach(p => {
       const val = document.getElementById(`${p}-key`).value.trim();
@@ -903,7 +1077,7 @@
       <div class="help-item"><div class="help-item-label">Provedor primário</div><div class="help-item-desc">Provedor tentado primeiro para cada consulta. Se falhar, o sistema usa a ordem de fallback.</div></div>
       <div class="help-item"><div class="help-item-label">Ordem de fallback</div><div class="help-item-desc">Lista separada por vírgula com a sequência de provedores a tentar quando o primário falha. Provedores sem chave são pulados automaticamente.</div></div>
       <div class="help-item"><div class="help-item-label">Confiança mínima</div><div class="help-item-desc">Limiar para executar uma consulta automaticamente. Abaixo desse valor o sistema pede confirmação ao usuário antes de executar.</div></div>
-      <div class="help-item"><div class="help-item-label">Turnos de histórico conversacional</div><div class="help-item-desc">Número de consultas anteriores enviadas à IA de SQL como contexto. Valores maiores dão mais contexto mas aumentam levemente o tempo de resposta. Recomendado: 3 a 5. Máximo 10.</div></div>
+      <div class="help-item"><div class="help-item-label">Janela de histórico enviada à IA</div><div class="help-item-desc">Controla quantas consultas anteriores são incluídas no prompt da IA. A IA avalia o histórico e decide sozinha o que é continuidade ou nova consulta — este parâmetro não reseta contexto, apenas limita o tamanho do prompt por razões de custo e latência. Recomendado: 3 a 5. Máximo 10.</div></div>
     </div>
   </div>
 </div>

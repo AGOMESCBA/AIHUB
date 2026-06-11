@@ -96,7 +96,10 @@ async function main() {
     { filtros: { empresa: 'ASTER' } },
     'Faturamento do ano da empresa ASTER',
   );
-  assert.deepStrictEqual(intentEmpresaExplicita.filtros, { empresa: 'ASTER' }, 'palavra empresa explicita nunca deve virar cliente silenciosamente');
+  // Comportamento esperado: sem tenant validado, "empresa ASTER" vira filtros.cliente
+  // (fallback para entidade cadastral quando o nome não existe no tenant IAHub)
+  assert.deepStrictEqual(intentEmpresaExplicita.filtros, { cliente: 'ASTER' }, 'empresa nao encontrada no tenant deve virar cliente no modulo faturamento');
+  assert.strictEqual(intentEmpresaExplicita._filtroEmpresaReclassificadoComoEntidade?.tipo, 'cliente', 'reclassificacao deve ser registrada');
 
   const intentTenantValidado = runner._test.normalizarFiltroEmpresaComoEntidade(
     faturamentoSpec,

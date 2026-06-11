@@ -211,7 +211,7 @@ function _mostrarOverlaySemAcesso(rotinaNome = 'esta rotina') {
   }
 
   // ── Detectar modo MDI: empresa vem da URL em vez da sessão ───────────────────
-  const _empresaUrlId = Number(new URLSearchParams(location.search).get('_empresa')) || null;
+  const _empresaUrlId = Number(new URLSearchParams(location.search).get('empresa_id')) || null;
 
   // Quando em aba MDI, injeta empresa_id em todas as chamadas /api/ automaticamente.
   // Páginas existentes não precisam ser alteradas — o patch é transparente.

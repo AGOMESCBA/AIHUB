@@ -108,6 +108,11 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       deepseek_api_key: row.deepseek_api_key ? '***' : null,
       claude_api_key:   row.claude_api_key   ? '***' : null,
       openai_api_key:   row.openai_api_key   ? '***' : null,
+      groq_modelo:      row.groq_modelo      || 'llama-3.3-70b-versatile',
+      openai_modelo:    row.openai_modelo    || 'gpt-4o-mini',
+      gemini_modelo:    row.gemini_modelo    || 'gemini-2.0-flash',
+      deepseek_modelo:  row.deepseek_modelo  || 'deepseek-chat',
+      claude_modelo:    row.claude_modelo    || 'claude-haiku-4-5-20251001',
     });
   });
 
@@ -115,6 +120,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
   app.post('/api/ia-command/ai-config', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const {
       groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, openai_api_key,
+      groq_modelo, openai_modelo, gemini_modelo, deepseek_modelo, claude_modelo,
       provedor_primario, fallback_ordem, confianca_minima,
       whisper_model, audio_idioma, historico_turnos,
     } = req.body;
@@ -124,7 +130,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     const turnosVal = parseInt(historico_turnos, 10);
     const dados = {
       provedor_primario: provedor_primario || 'groq',
-      fallback_ordem:    fallback_ordem    || 'groq,openai,gemini,deepseek,claude',
+      fallback_ordem:    fallback_ordem    || 'groq,deepseek,gemini,claude,openai',
       confianca_minima:  parseFloat(confianca_minima) || 0.6,
       whisper_model:     whisper_model     || 'whisper-large-v3',
       audio_idioma:      audio_idioma      || 'pt',
@@ -137,6 +143,13 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     if (deepseek_api_key && deepseek_api_key !== '***') dados.deepseek_api_key = deepseek_api_key;
     if (claude_api_key   && claude_api_key   !== '***') dados.claude_api_key   = claude_api_key;
     if (openai_api_key   && openai_api_key   !== '***') dados.openai_api_key   = openai_api_key;
+
+    // Update modelos if provided (não são secrets)
+    if (groq_modelo)     dados.groq_modelo     = groq_modelo;
+    if (openai_modelo)   dados.openai_modelo   = openai_modelo;
+    if (gemini_modelo)   dados.gemini_modelo   = gemini_modelo;
+    if (deepseek_modelo) dados.deepseek_modelo = deepseek_modelo;
+    if (claude_modelo)   dados.claude_modelo   = claude_modelo;
 
     let row;
     if (existing) {
@@ -153,6 +166,11 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       deepseek_api_key: row.deepseek_api_key ? '***' : null,
       claude_api_key:   row.claude_api_key   ? '***' : null,
       openai_api_key:   row.openai_api_key   ? '***' : null,
+      groq_modelo:      row.groq_modelo      || 'llama-3.3-70b-versatile',
+      openai_modelo:    row.openai_modelo    || 'gpt-4o-mini',
+      gemini_modelo:    row.gemini_modelo    || 'gemini-2.0-flash',
+      deepseek_modelo:  row.deepseek_modelo  || 'deepseek-chat',
+      claude_modelo:    row.claude_modelo    || 'claude-haiku-4-5-20251001',
     });
   });
 

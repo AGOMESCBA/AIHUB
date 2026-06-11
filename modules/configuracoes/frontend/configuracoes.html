@@ -1541,7 +1541,8 @@ async function testarImap() {
   span.style.color = 'var(--text-lo)';
   try {
     await salvarEmail();
-    const r = await fetch('/api/ps/imap-test', { method: 'POST' });
+    const _eid = new URLSearchParams(location.search).get('empresa_id');
+    const r = await fetch('/api/ps/imap-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empresa_id: _eid }) });
     const data = await r.json();
     if (r.ok) {
       span.textContent = `✓ IMAP OK — ${data.naoLidos} e-mail(s) não lido(s) na caixa de entrada`;
@@ -1665,7 +1666,8 @@ async function testarEmailGeral() {
   span.style.color = 'var(--text-lo)';
   try {
     await salvarEmailGeral();
-    const r = await fetch('/api/email-geral/test', { method: 'POST' });
+    const _eid = new URLSearchParams(location.search).get('empresa_id');
+    const r = await fetch('/api/email-geral/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empresa_id: _eid }) });
     const data = await r.json();
     if (r.ok) {
       span.textContent = '✓ E-mail de teste enviado com sucesso!';
@@ -1686,7 +1688,8 @@ async function testarImapGeral() {
   span.style.color = 'var(--text-lo)';
   try {
     await salvarEmailGeral();
-    const r = await fetch('/api/email-geral/imap-test', { method: 'POST' });
+    const _eid = new URLSearchParams(location.search).get('empresa_id');
+    const r = await fetch('/api/email-geral/imap-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ empresa_id: _eid }) });
     const data = await r.json();
     if (r.ok) {
       span.textContent = '✓ IMAP conectado com sucesso!';

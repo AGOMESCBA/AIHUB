@@ -54,7 +54,7 @@
     const empresaId   = (empresaIdOverride != null) ? empresaIdOverride : (window._iahubEmpresa?.id ?? null);
     const empresaNome = empresaNomeOverride ?? window._iahubEmpresa?.nome ?? '';
     // Chave inclui empresa para permitir o mesmo URL aberto para empresas diferentes
-    const tabKey = empresaId ? `${url}?_empresa=${empresaId}` : url;
+    const tabKey = empresaId ? `${url}?empresa_id=${empresaId}` : url;
 
     if (_tabs.has(tabKey)) { _activateTab(tabKey); return; }
 
@@ -86,7 +86,7 @@
     const frame = document.createElement('iframe');
     frame.className   = 'mdi-iframe';
     frame.dataset.url = tabKey;
-    frame.src         = empresaId ? `${url}?_empresa=${empresaId}` : url;
+    frame.src         = empresaId ? `${url}?empresa_id=${empresaId}` : url;
     frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(frame.dataset.url)));
     content.appendChild(frame);
 
@@ -224,7 +224,7 @@
   }
 
   function _tabKey(tab, empresaId) {
-    return empresaId ? `${tab.url}?_empresa=${empresaId}` : tab.url;
+    return empresaId ? `${tab.url}?empresa_id=${empresaId}` : tab.url;
   }
 
   function _aplicarEmpresaNaTab(oldKey, tab, emp) {
@@ -233,7 +233,7 @@
     tab.empresaNome = emp.razao_social || emp.nome || '';
     tab.chip.dataset.url  = newKey;
     tab.frame.dataset.url = newKey;
-    tab.frame.src         = `${tab.url}?_empresa=${emp.id}`;
+    tab.frame.src         = `${tab.url}?empresa_id=${emp.id}`;
     if (_active === oldKey) _active = newKey;
     return newKey;
   }

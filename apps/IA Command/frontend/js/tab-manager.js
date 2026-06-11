@@ -52,7 +52,7 @@
       const [path, qs] = url.split('?');
       if (!qs) return url;
       const params = new URLSearchParams(qs);
-      params.delete('_empresa');
+      params.delete('empresa_id');
       const cleaned = params.toString();
       return cleaned ? `${path}?${cleaned}` : path;
     } catch (_) { return url; }
@@ -62,7 +62,7 @@
     const baseUrl   = _stripEmpresaParam(url);
     const empresaId   = (empresaIdOverride != null) ? empresaIdOverride : (window._iahubEmpresa?.id ?? null);
     const empresaNome = empresaNomeOverride ?? window._iahubEmpresa?.nome ?? '';
-    const tabKey = empresaId ? `${baseUrl}?_empresa=${empresaId}` : baseUrl;
+    const tabKey = empresaId ? `${baseUrl}?empresa_id=${empresaId}` : baseUrl;
 
     if (_tabs.has(tabKey)) { _activateTab(tabKey); return; }
 
@@ -99,7 +99,7 @@
     const frame = document.createElement('iframe');
     frame.className   = 'mdi-iframe';
     frame.dataset.url = tabKey;
-    frame.src         = empresaId ? `${baseUrl}?_empresa=${empresaId}&_v=${Date.now()}` : `${baseUrl}?_v=${Date.now()}`;
+    frame.src         = empresaId ? `${baseUrl}?empresa_id=${empresaId}&_v=${Date.now()}` : `${baseUrl}?_v=${Date.now()}`;
     frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(frame.dataset.url)));
     content.appendChild(frame);
 
@@ -222,7 +222,7 @@
   }
 
   function _tabKey(tab, empresaId) {
-    return empresaId ? `${tab.url}?_empresa=${empresaId}` : tab.url;
+    return empresaId ? `${tab.url}?empresa_id=${empresaId}` : tab.url;
   }
 
   function _aplicarEmpresaNaTab(oldKey, tab, emp) {
@@ -231,7 +231,7 @@
     tab.empresaNome = emp.razao_social || emp.nome || '';
     tab.chip.dataset.url  = newKey;
     tab.frame.dataset.url = newKey;
-    tab.frame.src         = `${tab.url}?_empresa=${emp.id}`;
+    tab.frame.src         = `${tab.url}?empresa_id=${emp.id}`;
     if (_active === oldKey) _active = newKey;
     return newKey;
   }

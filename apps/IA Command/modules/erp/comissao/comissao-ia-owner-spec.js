@@ -173,7 +173,10 @@ Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP B
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por mes": SUBSTRING(SE3.E3_VENCTO, 1, 6) AS competencia no SELECT e GROUP BY.
-- Media anual: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_comissao.
+- Media mensal por ano (subquery 2 camadas, agrupado por ano):
+  Subquery interna exporta DOIS aliases: SUBSTRING(SE3.E3_VENCTO,1,4) AS ano E SUBSTRING(SE3.E3_VENCTO,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.valor_comissao) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.valor_comissao — NUNCA SE3.*.
+- Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.valor_comissao) sem GROUP BY.
+- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_comissao.
 `.trim();
 
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {

@@ -26,13 +26,20 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
     if not sql:
         return _erro("SQL vazio.", sql, 0)
 
-    # Remove prefixo SET ROWCOUNT N; adicionado pelo middleware do IA Command
+    # Remove quaisquer instruções SET iniciais (SET ROWCOUNT, SET NOCOUNT, SET TRANSACTION ISOLATION LEVEL, etc.)
     import re as _re
-    sql = _re.sub(r'^SET\s+ROWCOUNT\s+\d+\s*;\s*', '', sql, flags=_re.IGNORECASE).strip()
+    sql = _re.sub(r'^(SET\s+[^;]+;\s*)+', '', sql, flags=_re.IGNORECASE).strip()
 
     upper = sql.upper()
 
-    if not upper.lstrip().startswith("SELECT"):
+    # Aceita CTEs (WITH ... AS (...) SELECT ...) além de SELECT direto
+    stripped = upper.lstrip()
+    is_select = stripped.startswith("SELECT")
+    is_cte    = stripped.startswith("WITH")
+    if not is_select and not is_cte:
+        return _erro("Apenas comandos SELECT são permitidos.", sql, 0)
+    # CTE deve conter SELECT para ser leitura — rejeita WITH sem SELECT
+    if is_cte and "SELECT" not in upper:
         return _erro("Apenas comandos SELECT são permitidos.", sql, 0)
 
     for kw in _BLOCKED_KEYWORDS:
@@ -62,12 +69,12 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
 def _injetar_top(sql: str, upper: str, limit: int) -> str:
     if "TOP " in upper or "ROWCOUNT" in upper or "OFFSET" in upper:
         return sql
-    # Injeta TOP após SELECT (ignora DISTINCT)
-    for variant in ("SELECT DISTINCT ", "SELECT\t", "SELECT\n", "SELECT "):
-        if upper.startswith(variant.upper()) or upper.replace("\t", " ").replace("\n", " ").startswith("SELECT "):
-            idx = sql.upper().find("SELECT") + len("SELECT")
-            return sql[:idx] + f" TOP {limit}" + sql[idx:]
-    return sql
+    # CTEs já controlam volume internamente (ROW_NUMBER, GROUP BY, etc.) — não injetar TOP
+    if upper.lstrip().startswith("WITH"):
+        return sql
+    # Injeta TOP logo após SELECT (ignora DISTINCT)
+    idx = sql.upper().find("SELECT") + len("SELECT")
+    return sql[:idx] + f" TOP {limit}" + sql[idx:]
 
 
 def _get_pyodbc_conn():

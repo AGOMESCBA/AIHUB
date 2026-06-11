@@ -21,6 +21,7 @@ module.exports = function registerSistemasRoutes(app, { requireAuth, requireAdmi
     if (!companyId) return res.status(400).json({ error: 'empresa_id e obrigatorio' });
 
     const system = db.getSystem(systemCode);
+    console.log(`[DEBUG] Selecionando sistema: ${systemCode}`, { systemFound: !!system, systemCode: system?.code, systemUrl: system?.url });
     if (!system?.active) return res.status(404).json({ error: 'Sistema nao encontrado ou inativo' });
     if (!db.hasCompanySystem(companyId, systemCode)) return res.status(403).json({ error: 'Empresa sem acesso ao sistema' });
     if (!db.hasUserSystem(req.session.user_id, companyId, systemCode)) return res.status(403).json({ error: 'Usuario sem acesso ao sistema' });

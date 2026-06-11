@@ -217,7 +217,17 @@ const regrasTecnicas = `
 ## Saldo bancario e fluxo de caixa
 - Saldo bancario, fluxo de caixa projetado e fluxo de caixa realizado sao operacoes proprias. Nao trate como simples contas a pagar/receber.
 - Saldo bancario puro usa SOMENTE SE8 e SA6. Nao inclua SE1/SE2/SE5/FK em saldo bancario puro.
-- Saldo bancario atual usa a ultima posicao por banco/agencia/conta: MAX(SE8.E8_DTSALAT) por E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA, limitada a data base quando houver.
+- Saldo bancario sempre filtra pela posicao mais recente por conta, usando ROW_NUMBER():
+  data_referencia = data pedida pelo usuario (se informada) OU data_atual (se nao informada).
+  Padrao obrigatorio:
+    WITH saldo_recente AS (
+      SELECT E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA, E8_SALATUA, E8_DTSALAT,
+             ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn
+      FROM SE8xxx SE8
+      WHERE SE8.D_E_L_E_T_ = ' ' AND SE8.E8_DTSALAT <= 'data_referencia_YYYYMMDD'
+    )
+    SELECT ... FROM saldo_recente SE8 JOIN SA6xxx SA6 ... WHERE SE8.rn = 1
+  PROIBIDO: retornar todas as linhas de SE8 sem filtrar rn = 1 — gera duplicidade por conta.
 - Para saldo por banco, agrupe por SA6.A6_COD, SA6.A6_NOME e some apenas a ultima posicao de cada conta.
 - Fluxo de caixa projetado = saldo_bancario_base + saldo_a_receber_projetado - saldo_a_pagar_projetado.
 - Fluxo projetado usa titulos em aberto: SE1.E1_SALDO > 0 e SE2.E2_SALDO > 0, por vencimento futuro/periodo solicitado.
@@ -273,8 +283,18 @@ Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP B
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por natureza": agrupe por SED.ED_CODIGO, SED.ED_DESCRIC.
 - "por mes": SUBSTRING(campo_data, 1, 6) AS competencia no SELECT e GROUP BY.
-- Media anual: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS saldo.
+- Media mensal por ano (subquery 2 camadas, agrupado por ano):
+  Subquery interna exporta DOIS aliases: SUBSTRING(campo_data,1,4) AS ano E SUBSTRING(campo_data,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.saldo) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.saldo — NUNCA SE1.* ou SE2.*.
+- Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.saldo) sem GROUP BY.
+- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS saldo.
 `.trim();
+
+const sqlPatternsProibidos = [
+  {
+    regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\bE8_AGENCIA\s*=\s*SA6\.A6_AGENCIA\b)/i,
+    mensagem: 'JOIN SE8→SA6 incompleto: falta E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON na condicao ON. Sem esses campos, o banco retorna zero linhas ou duplicidade por agencia.',
+  },
+];
 
 module.exports = {
   nome: 'financeiro',
@@ -282,6 +302,7 @@ module.exports = {
   logPrefix: 'FinanceiroIAOwner',
   defaultMessage: 'consulta financeira',
   tabelas: TABELAS,
+  sqlPatternsProibidos,
   entityCatalog,
   resolverEntidadesAntesDaIa: true,
   camposSx3Essenciais: CAMPOS_SX3_ESSENCIAIS,

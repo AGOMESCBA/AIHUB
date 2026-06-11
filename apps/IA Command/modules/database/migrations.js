@@ -319,7 +319,7 @@ const MIGRATIONS = [
     version: 18,
     descricao: 'Fallback configuravel de provedores de IA',
     sql: `
-      ALTER TABLE ai_config ADD COLUMN fallback_ordem TEXT DEFAULT 'groq,openai,gemini,deepseek,claude';
+      ALTER TABLE ai_config ADD COLUMN fallback_ordem TEXT DEFAULT 'groq,deepseek,gemini,claude,openai';
     `,
   },
   {
@@ -642,6 +642,17 @@ const MIGRATIONS = [
 
       CREATE INDEX IF NOT EXISTS idx_iac_interpretation_fase_execucao
         ON interpretation_log (empresa_id, fase_execucao, criado_em);
+    `,
+  },
+  {
+    version: 39,
+    descricao: 'Seleção configurável de modelo por provider em ai_config',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN groq_modelo     TEXT DEFAULT 'llama-3.3-70b-versatile';
+      ALTER TABLE ai_config ADD COLUMN openai_modelo   TEXT DEFAULT 'gpt-4o-mini';
+      ALTER TABLE ai_config ADD COLUMN gemini_modelo   TEXT DEFAULT 'gemini-2.0-flash';
+      ALTER TABLE ai_config ADD COLUMN deepseek_modelo TEXT DEFAULT 'deepseek-chat';
+      ALTER TABLE ai_config ADD COLUMN claude_modelo   TEXT DEFAULT 'claude-haiku-4-5-20251001';
     `,
   },
 ];

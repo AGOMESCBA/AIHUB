@@ -92,6 +92,21 @@ const regrasTecnicas = `
 - SED: natureza.
 - SF4: TES.
 
+## Codigo Fiscal (CF/CFOP) e TES — Compras
+- Sinonimos para nota fiscal de entrada/compras: nota de entrada, nota fiscal de entrada, NF de entrada, compra, aquisicao.
+- CF, CFOP, codigo fiscal e codigo fiscal de operacao sao sinonimos — referem-se ao campo SD1.D1_CF.
+- Por padrao, em consultas de valor financeiro ou despesas (contas a pagar), excluir remessas e transferencias:
+  SD1.D1_CF NOT LIKE '19%'
+  Razao: CFs iniciados com 19 sao remessas/transferencias — nao geram obrigacao financeira (contas a pagar).
+- Em consultas de volume fisico, quantidade ou movimentacao de estoque: incluir CF 19 — a nota pode ter gerado movimentacao fisica.
+- Excecao (incluir CF 19 em qualquer contexto): quando o usuario pedir explicitamente remessas, transferencias, ou citar CF/CFOP/codigo fiscal com o valor 19.
+- TES pode ser chamado de TES, Tipos de Entrada ou tipo de entrada. Refere-se ao campo SD1.D1_TES / tabela SF4 (F4_CODIGO, F4_TEXTO).
+- SF4.F4_ESTOQUE: 'S' = TES gera movimentacao de estoque; 'N' = nao gera.
+  Quando o usuario perguntar sobre notas que geraram estoque ou movimentaram estoque, filtre SF4.F4_ESTOQUE = 'S' via JOIN SD1 -> SF4.
+- SF4.F4_DUPLIC: 'S' = TES gera lancamento financeiro (duplicata/pagar); 'N' = nao gera financeiro.
+  Quando o usuario perguntar sobre notas que geraram financeiro, contas a pagar ou duplicatas, filtre SF4.F4_DUPLIC = 'S' via JOIN SD1 -> SF4.
+  Este filtro e mais preciso que filtrar por CF para identificar compras que geraram obrigacao financeira real.
+
 ## Joins padrao
 - SD1 -> SF1:
   SD1.D1_FILIAL = SF1.F1_FILIAL
@@ -145,7 +160,10 @@ Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, n
 - "por mes": SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia no SELECT e GROUP BY.
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
-- Media anual: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_compra.
+- Media mensal por ano (subquery 2 camadas, agrupado por ano):
+  Subquery interna exporta DOIS aliases: SUBSTRING(SD1.D1_DTDIGIT,1,4) AS ano E SUBSTRING(SD1.D1_DTDIGIT,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.valor_compra) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.valor_compra — NUNCA SD1.* ou SF1.*.
+- Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.valor_compra) sem GROUP BY.
+- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_compra.
 - Resposta planejada com devolucoes: template com {total_compras}, {total_devolucoes}, {total_liquido}.
 `.trim();
 
@@ -270,6 +288,10 @@ module.exports = {
     {
       regex: /\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b[\s\S]{0,4000}\bJOIN\s+\w+\s+SD1\b|\bJOIN\s+\w+\s+SD1\b[\s\S]{0,4000}\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b/i,
       mensagem: 'JOIN com SD1 invalido quando a metrica e SUM(SF1.F1_VALBRUT). SD1 e tabela de itens: cada NF tem N linhas em SD1, o que multiplica F1_VALBRUT por N ao somar. Quando SD1 estiver no FROM/JOIN, use SUM(SD1.D1_TOTAL) como metrica de valor e SUM(SD1.D1_QUANT) para quantidade.',
+    },
+    {
+      regex: /\bSD1\b(?=[\s\S]*?\bJOIN\s+\w+\s+SF1\b)(?![\s\S]*?\bD1_FORNECE\b)/i,
+      mensagem: 'JOIN SD1→SF1 incompleto: falta D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA na condicao ON. Sem esses campos, notas com mesmo numero/serie de fornecedores diferentes causam duplicidade no SUM.',
     },
   ],
   mensagensErro: {

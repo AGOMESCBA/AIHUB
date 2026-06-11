@@ -167,7 +167,12 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, opts = {}) {
   for (const provedor of ordem) {
     if (!keys?.[provedor]) continue;
     try {
-      return await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, opts);
+      // Ler modelo específico do provider salvo no banco de dados (cfg vem do intent-service._resolveKeys)
+      const modeloSalvo = cfg?.[`${provedor}_modelo`];
+      const optsComModelo = modeloSalvo
+        ? { ...opts, model: modeloSalvo }  // modeloSalvo tem precedência
+        : opts;
+      return await chamarProvedor(provedor, keys[provedor], systemPrompt, userPrompt, optsComModelo);
     } catch (e) {
       const msg = e?.message || String(e);
       erros.push({ provedor, msg });

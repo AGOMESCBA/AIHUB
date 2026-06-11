@@ -145,7 +145,7 @@ Colunas cujo nome indica um codigo ou identificador interno (cod_cliente, loja_c
 const _RE_TEMPORAL = /^(ano_mes|competencia|competência|aaaa_mm|aaaamm|referencia|referência|periodo|período|mes|month|dia|data|vencimento|vencto|vencto_real|dt_venc|data_venc|data_vencimento|dt_vencimento|emissao|emissão|data_emissao|data_emissão|dt_emissao|data_entrada|dt_entrada)$/i;
 // Nomes ambíguos que precisam de validação pelo valor para confirmar que são datas
 const _RE_TEMPORAL_VALIDATE = /^(mes|month|dia|data|vencimento|vencto|vencto_real|emissao|emissão|data_entrada|dt_entrada)$/i;
-const _RE_ENTIDADE = /^(fornecedor|nm_forn|ds_forn|nome_forn|nome_fornecedor|razao_social|razao|cliente|nm_cli|ds_cli|nome_cli|nome_cliente|vendedor|nm_vend|ds_vend|nome_vend|nome_vendedor|representante|estado|uf|regiao|região|filial|grupo|grupo_produto|grupo_de_produto|categoria|produto|descricao|descrição|descricao_produto|nome_produto|almoxarifado|banco|natureza)$/i;
+const _RE_ENTIDADE = /^(fornecedor|nm_forn|ds_forn|nome_forn|nome_fornecedor|razao_social|razao|cliente|nm_cli|ds_cli|nome_cli|nome_cliente|vendedor|nm_vend|ds_vend|nome_vend|nome_vendedor|representante|estado|uf|regiao|região|filial|grupo|grupo_produto|grupo_de_produto|categoria|produto|descricao|descrição|descricao_produto|nome_produto|almoxarifado|banco|natureza|empresa|nome_empresa|ds_empresa|nm_empresa)$/i;
 // Colunas companheiras da entidade principal (ex: unidade de medida junto ao produto)
 // Exibidas junto ao valor como "1.127,23 H" em vez de genérico "un"
 const _RE_COMPANION = /^(unidade|unid|um|medida|un_medida|un_med|unidade_de_medida|un_de_medida|und_medida|unidade_medida|unit|ume)$/i;
@@ -797,7 +797,9 @@ function buildFormatUserPrompt(mensagem, rows, { avisoNaoEncontradas = [], conte
     const resumo  = dados.length > 50 ? `\n(Exibindo 50 de ${dados.length} registros)` : '';
     dadosSection  = `Dados retornados pelo sistema:${resumo}\n${JSON.stringify(amostra, null, 2)}`;
 
-    if (totalGeral) {
+    // Omite "Total Geral" quando há apenas 1 linha — seria igual aos próprios dados e
+    // induziria a IA a somar métricas independentes (ex: total_faturamento + total_compras).
+    if (totalGeral && dados.length > 1) {
       dadosSection += `\n\nTotal Geral — calculado pelo sistema, use EXATAMENTE este valor:\n${JSON.stringify(totalGeral, null, 2)}`;
     }
   }
@@ -829,7 +831,7 @@ const _BRL = v => (parseFloat(v) || 0).toLocaleString('pt-BR', { style: 'currenc
 
 function _fmtValorCol(col, v) {
   const n = String(col || '').toLowerCase();
-  if (/valor|comissao|comissão|faturamento|receita|custo|saldo|base|venda/.test(n)) return _BRL(v);
+  if (/valor|comissao|comissão|faturamento|receita|custo|saldo|base|venda|compras/.test(n)) return _BRL(v);
   if (/percentual|percent|taxa/.test(n)) {
     return (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
   }
@@ -1128,6 +1130,120 @@ function buildFormatAnoMesDireto(rows, { contextoConsulta = null, nomeModulo = n
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FORMATTER PROGRAMÁTICO — competencia AAAAMM (ano único) + entidade + métricas
+// Cobre o caso multiempresa: rows consolidadas com coluna 'empresa' e coluna
+// temporal no formato AAAAMM (ano único). buildFormatDirect só cobre multi-ano;
+// buildFormatAnoMesDireto requer colunas 'ano'+'mes' explícitas.
+// Este formatter preenche o gap: competencia AAAAMM de qualquer ano count + entidade.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildFormatCompetenciaEntidade(rows, { contextoConsulta = null, nomeModulo = null, anoFirst = false } = {}) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const first = rows[0];
+  const keys  = Object.keys(first);
+
+  const { colTemporal, colEntidade, numCols } = _detectarColunas(rows);
+  if (!colTemporal || !colEntidade || !numCols.length) return null;
+
+  // Só age quando a coluna temporal for AAAAMM — outros formatos são cobertos por outros formatters.
+  const amostraTemporal = rows.slice(0, 5).map(r => String(r[colTemporal] || '').trim());
+  if (!amostraTemporal.every(v => /^\d{6}$/.test(v))) return null;
+
+  // Agrupa: AAAAMM → entidade → { col: total }
+  const byPeriodo = new Map();
+  for (const row of rows) {
+    const key = String(row[colTemporal] || '').trim();
+    if (!/^\d{6}$/.test(key)) continue;
+    const ent = String(row[colEntidade] || '').trim();
+    if (!ent) continue;
+    if (!byPeriodo.has(key)) byPeriodo.set(key, new Map());
+    const byEnt = byPeriodo.get(key);
+    if (!byEnt.has(ent)) { const b = {}; for (const c of numCols) b[c] = 0; byEnt.set(ent, b); }
+    const acc = byEnt.get(ent);
+    for (const c of numCols) acc[c] = _arredondar2(acc[c] + (parseFloat(row[c]) || 0));
+  }
+  if (!byPeriodo.size) return null;
+
+  const sortedKeys = [...byPeriodo.keys()].sort();
+  const primaryCol = numCols[0];
+  const totalGlobal = {};
+  for (const c of numCols) totalGlobal[c] = 0;
+
+  // Deriva label de período para cabeçalho
+  const firstK = sortedKeys[0], lastK = sortedKeys[sortedKeys.length - 1];
+  const fAno = firstK.slice(0, 4), fMes = parseInt(firstK.slice(4, 6), 10);
+  const lAno = lastK.slice(0, 4),  lMes = parseInt(lastK.slice(4, 6), 10);
+  const _ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  let periodoStr;
+  if (firstK === lastK) {
+    periodoStr = `${_MESES[fMes - 1]}/${fAno}`;
+  } else if (fAno === lAno) {
+    periodoStr = `${_ABR[fMes - 1]} a ${_ABR[lMes - 1]}/${lAno}`;
+  } else {
+    periodoStr = `${_ABR[fMes - 1]}/${fAno} a ${_ABR[lMes - 1]}/${lAno}`;
+  }
+
+  const linhas = [];
+  const headerParts = [nomeModulo, contextoConsulta || periodoStr].filter(Boolean);
+  if (headerParts.length) linhas.push(`💰 ${headerParts.join(' — ')}`);
+
+  const anos = [...new Set(sortedKeys.map(k => k.slice(0, 4)))];
+  const isMultiAno = anos.length > 1;
+
+  let primeiro = true;
+
+  if (isMultiAno && anoFirst) {
+    // Agrupa por ano → meses → entidades
+    const porAno = new Map();
+    for (const key of sortedKeys) {
+      const anoKey = key.slice(0, 4), mesKey = key.slice(4, 6);
+      if (!porAno.has(anoKey)) porAno.set(anoKey, new Map());
+      porAno.get(anoKey).set(mesKey, byPeriodo.get(key));
+    }
+    for (const [anoKey, meses] of [...porAno.entries()].sort()) {
+      if (!primeiro) linhas.push('');
+      primeiro = false;
+      linhas.push(`🗓 *${anoKey}*`);
+      const subAno = {}; for (const c of numCols) subAno[c] = 0;
+      for (const [mesKey, byEnt] of [...meses.entries()].sort()) {
+        const mesNum = parseInt(mesKey, 10);
+        const labelMes = (mesNum >= 1 && mesNum <= 12) ? _MESES[mesNum - 1] : mesKey;
+        const subMes = {}; for (const c of numCols) subMes[c] = 0;
+        for (const vals of byEnt.values()) {
+          for (const c of numCols) { subMes[c] = _arredondar2(subMes[c] + vals[c]); subAno[c] = _arredondar2(subAno[c] + vals[c]); totalGlobal[c] = _arredondar2(totalGlobal[c] + vals[c]); }
+        }
+        linhas.push(`  *${labelMes}*: ${numCols.map(c => _fmtValorCol(c, subMes[c])).join(' | ')}`);
+        const entradas = [...byEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
+        entradas.slice(0, 20).forEach(([ent, vals], i) => linhas.push(`    ${i+1}. *${ent}*: ${numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ')}`));
+        if (entradas.length > 20) linhas.push(`    ... e mais ${entradas.length - 20}`);
+      }
+      linhas.push(`🧾 *Subtotal ${anoKey}*: ${numCols.map(c => _fmtValorCol(c, subAno[c])).join(' | ')}`);
+    }
+  } else {
+    // Agrupa por período (mês/ano) → entidades
+    for (const key of sortedKeys) {
+      if (!primeiro) linhas.push('');
+      primeiro = false;
+      const label = _formatarLabelGrupo(key);
+      linhas.push(`🗓 *${label}*`);
+      const byEnt = byPeriodo.get(key);
+      const subBloco = {}; for (const c of numCols) subBloco[c] = 0;
+      for (const vals of byEnt.values()) {
+        for (const c of numCols) { subBloco[c] = _arredondar2(subBloco[c] + vals[c]); totalGlobal[c] = _arredondar2(totalGlobal[c] + vals[c]); }
+      }
+      const entradas = [...byEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
+      entradas.slice(0, 20).forEach(([ent, vals], i) => linhas.push(`  ${i+1}. *${ent}*: ${numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ')}`));
+      if (entradas.length > 20) linhas.push(`  ... e mais ${entradas.length - 20}`);
+      linhas.push(`🧾 *Subtotal*: ${numCols.map(c => _fmtValorCol(c, subBloco[c])).join(' | ')}`);
+    }
+  }
+
+  linhas.push('');
+  linhas.push(`*Total Geral*: ${numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ')}`);
+  return linhas.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // FORMATTER PROGRAMÁTICO — lista temporal simples (sem entidade)
 // Cobre dois sub-casos:
 //   1. Ano único → lista plana numerada  (ex: Jan/2026, Fev/2026 ...)
@@ -1197,7 +1313,32 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
                       'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
   const linhas = [];
-  const headerParts = [nomeModulo, contextoConsulta].filter(Boolean);
+  // Para multi-ano com chaves AAAAMM, deriva o rótulo de período dos dados reais.
+  // intent.periodo pode não refletir filtros SUBSTRING IN (ex: "março de 2024 e 2025"),
+  // e pode ter dataFim errado quando "do dia N" dispara o aviso de período relativo.
+  let contextoFinal = contextoConsulta;
+  if (isMultiAno && isAaaamm) {
+    const _ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const _abr = mm => { const n = parseInt(mm, 10); return n >= 1 && n <= 12 ? _ABR[n - 1] : mm; };
+    const _sorted = [...todasChaves].sort();
+    const priMes = _sorted[0].slice(4, 6);
+    const ultMes = _sorted[_sorted.length - 1].slice(4, 6);
+    const anosSorted = [...anos].sort();
+    const mesLabel = priMes === ultMes ? _abr(priMes) : `${_abr(priMes)} a ${_abr(ultMes)}`;
+    const anoLabel = anosSorted.length === 2
+      ? `${anosSorted[0]} e ${anosSorted[1]}`
+      : anosSorted.length <= 4 ? anosSorted.join(', ')
+      : `${anosSorted[0]} a ${anosSorted[anosSorted.length - 1]}`;
+    const periodoStrDados = `${mesLabel}/${anoLabel}`;
+    // Preserva info de entidade (após " | ") caso exista em contextoConsulta
+    if (contextoConsulta && contextoConsulta.includes(' | ')) {
+      const pipeIdx = contextoConsulta.indexOf(' | ');
+      contextoFinal = periodoStrDados + contextoConsulta.slice(pipeIdx);
+    } else {
+      contextoFinal = periodoStrDados;
+    }
+  }
+  const headerParts = [nomeModulo, contextoFinal].filter(Boolean);
   if (headerParts.length) linhas.push(`💰 ${headerParts.join(' — ')}`);
 
   if (isMultiAno && isAaaamm) {
@@ -1305,6 +1446,65 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// FORMATTER COMPARATIVO — resultado de 1 linha com múltiplas métricas distintas
+// (ex: total_faturamento + total_compras) sem dimensão temporal ou de entidade.
+// Evita que a IA some métricas incomparáveis no "Total Geral".
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildFormatComparativoSimples(rows, { contextoConsulta = null } = {}) {
+  if (!Array.isArray(rows) || rows.length !== 1) return null;
+
+  const { colTemporal, colEntidade, numCols } = _detectarColunas(rows);
+  if (colTemporal || colEntidade) return null;
+  if (!numCols || numCols.length < 2) return null;
+
+  const _RE_FAT  = /faturamento|receita/i;
+  const _RE_COMP = /compra/i;
+
+  const hasFat  = numCols.some(k => _RE_FAT.test(k));
+  const hasComp = numCols.some(k => _RE_COMP.test(k));
+  if (!hasFat || !hasComp) return null;
+
+  const row = rows[0];
+
+  const _LABELS = {
+    total_faturamento: 'Faturamento', faturamento: 'Faturamento', receita: 'Receita',
+    total_compras: 'Compras', compras: 'Compras',
+  };
+  const _labelMetrica = (k) =>
+    _LABELS[k.toLowerCase()] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+  const _emojiMetrica = (k) => {
+    if (_RE_FAT.test(k))  return '💰';
+    if (_RE_COMP.test(k)) return '🛒';
+    return '📊';
+  };
+
+  const tituloMetricas = numCols.map(k => _labelMetrica(k)).join(' e ');
+  const hdrParts = [tituloMetricas, contextoConsulta].filter(Boolean);
+
+  const linhas = [];
+  linhas.push(`📊 ${hdrParts.join(' — ')}`);
+  linhas.push('');
+
+  let fatVal = null, compVal = null;
+  for (const col of numCols) {
+    const val = parseFloat(row[col]) || 0;
+    linhas.push(`${_emojiMetrica(col)} *${_labelMetrica(col)}*: ${_fmtValorCol(col, val)}`);
+    if (_RE_FAT.test(col) && fatVal === null)   fatVal  = val;
+    if (_RE_COMP.test(col) && compVal === null) compVal = val;
+  }
+
+  if (fatVal !== null && compVal !== null) {
+    const resultado = _arredondar2(fatVal - compVal);
+    linhas.push('');
+    linhas.push(`${resultado >= 0 ? '📈' : '📉'} *Resultado (Fat − Compras)*: ${_BRL(resultado)}`);
+  }
+
+  return linhas.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function buildFormatSystemPrompt() {
   return WHATSAPP_FORMAT_SYSTEM_PROMPT;
@@ -1315,7 +1515,9 @@ module.exports = {
   buildFormatUserPrompt,
   buildFormatDirect,
   buildFormatAnoMesDireto,
+  buildFormatCompetenciaEntidade,
   buildFormatSimplesTemporal,
+  buildFormatComparativoSimples,
   prepararDadosComTotais,
   WHATSAPP_FORMAT_SYSTEM_PROMPT,
 };

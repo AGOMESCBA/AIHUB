@@ -2,12 +2,23 @@
 
 const DatasetEngine = require('./dataset-query-engine');
 const crud = require('../database/crud');
+const crossModuleDetector = require('./cross-module-detector');
+const crossModuleSpecCombiner = require('./cross-module-spec-combiner');
+const iaOwnerRunner = require('./ia-owner/runner');
 
 const AI_SQL_HANDLERS = {
   compras: './compras/ai-sql-handler-v2',
   financeiro: './financeiro/ai-sql-handler-v2',
   faturamento: './faturamento/ai-sql-handler-v2',
   comissao: './comissao/ai-sql-handler-v2',
+};
+
+// Loaders lazy dos specs — usados pelo combinador cross-module
+const SPEC_LOADERS = {
+  faturamento: () => require('./faturamento/faturamento-ia-owner-spec'),
+  compras:     () => require('./compras/compras-ia-owner-spec'),
+  financeiro:  () => require('./financeiro/financeiro-ia-owner-spec'),
+  comissao:    () => require('./comissao/comissao-ia-owner-spec'),
 };
 
 const LOG_PREFIX_MODULO = {
@@ -223,19 +234,44 @@ async function rotear(intent, empresaId) {
     let resultado;
     const _resultadoFallback = (origem) => ({ tipo: 'erro', subtipo: 'erro_erp', resposta_direta: 'Ocorreu um erro interno ao processar sua consulta. Tente novamente.', _pipeline_origem: origem });
 
+    // Cross-module: detecta query comparativa multi-modulo e combina specs dinamicamente.
+    // Quando ativado, substitui o caminho single-module sem alterar nenhuma outra logica.
+    const _mensagemCross = intent._mensagemOriginal || '';
+    const _crossInfo = crossModuleDetector.ehCrossModule(_mensagemCross);
+    const _usarCrossModule = _crossInfo.ehCross
+      && _crossInfo.modulos.length >= 2
+      && _crossInfo.modulos.every(m => SPEC_LOADERS[m]);
+
+    // SQL canônico tem prioridade absoluta: gerado uma vez pela primeira empresa,
+    // reutilizado por todas as demais com substituição de sufixo — sem nova chamada à IA.
+    // Para cross-module, usa o spec combinado (mesmas tabelas usadas na geração) para que
+    // modosSX2 resolva SD1/SF1 corretamente em vez de depender do sufixo fallback.
     if (sqlCanonicoHerdado) {
-      console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Reutilizando SQL canonico multi-empresa pelo motor systemprompt.`);
-      resultado = await AiSqlHandler.executarSqlDireto(sqlCanonicoHerdado, intent, empresaId);
+      const _executarSqlDireto = _usarCrossModule
+        ? () => iaOwnerRunner.executarSqlDireto(crossModuleSpecCombiner.combinarSpecs(_crossInfo.modulos.map(m => SPEC_LOADERS[m]())), sqlCanonicoHerdado, intent, empresaId)
+        : () => AiSqlHandler.executarSqlDireto(sqlCanonicoHerdado, intent, empresaId);
+      console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Reutilizando SQL canonico multi-empresa pelo motor systemprompt${_usarCrossModule ? ' (cross-module spec)' : ''}.`);
+      resultado = await _executarSqlDireto();
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('canonico_reuso');
       else resultado._pipeline_origem = 'canonico_reuso';
       // Fallback: se o reuso do SQL canônico falhar por razão recuperável, re-executa via IA-OWNER.
       // Garante que a empresa não seja descartada por incompatibilidade de SQL entre tenants.
       if (_deveFallbackAposFalhaCanonico(intent, resultado, SUBTIPOS_TERMINAIS)) {
         console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Fallback para execucao completa apos falha no reuso canonico (subtipo=${resultado.subtipo || 'n/a'}).`);
-        resultado = await AiSqlHandler.executar(intent, empresaId);
+        const _fallbackHandler = _usarCrossModule
+          ? () => iaOwnerRunner.executar(crossModuleSpecCombiner.combinarSpecs(_crossInfo.modulos.map(m => SPEC_LOADERS[m]())), intent, empresaId)
+          : () => AiSqlHandler.executar(intent, empresaId);
+        resultado = await _fallbackHandler();
         if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('systemprompt_fallback');
         else resultado._pipeline_origem = 'systemprompt_fallback';
       }
+    } else if (_usarCrossModule) {
+      const _specs = _crossInfo.modulos.map(m => SPEC_LOADERS[m]());
+      const _specCombinado = crossModuleSpecCombiner.combinarSpecs(_specs);
+      console.log(`[CrossModule] Query cross-module: ${_crossInfo.modulos.join(' + ')} | empresa=${empresaId}`);
+      resultado = await iaOwnerRunner.executar(_specCombinado, intent, empresaId);
+      if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('cross_module');
+      else resultado._pipeline_origem = 'cross_module';
     } else {
       console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Executando pelo motor systemprompt.`);
       resultado = await AiSqlHandler.executar(intent, empresaId);
