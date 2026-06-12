@@ -940,6 +940,40 @@ function validarCTEsAgregadosSemGroupBy(sql = '') {
   return { ok: erros.length === 0, erros };
 }
 
+// Detecta CTEs definidas com WITH ... AS (...) que nunca são referenciadas em FROM/JOIN.
+// Padrão clássico de bug: IA cria CTE com ROW_NUMBER, mas a query externa continua
+// usando FROM tabela_fisica em vez de FROM nome_cte. O campo computado (rn, rnk, etc.)
+// não existe na tabela física → Msg 8120 ou rejeição SX3.
+// Esta validação captura o erro mais cedo e gera mensagem precisa para o retry da IA.
+function validarCTEsDefinidaUsada(sql = '') {
+  const texto = String(sql || '').trim();
+  if (!/\bWITH\b/i.test(texto)) return { ok: true, erros: [] };
+
+  // Extrair nomes: WITH nome AS ( e ), nome AS (
+  const nomes = new Set();
+  let m;
+  const reInicio = /\bWITH\s+(\w+)\s+AS\s*\(/gi;
+  const reCont   = /\)\s*,\s*(\w+)\s+AS\s*\(/gi;
+  while ((m = reInicio.exec(texto)) !== null) nomes.add(m[1].toUpperCase());
+  while ((m = reCont.exec(texto)) !== null)   nomes.add(m[1].toUpperCase());
+  if (!nomes.size) return { ok: true, erros: [] };
+
+  const erros = [];
+  for (const nome of nomes) {
+    // Válido se aparece em FROM nome ou JOIN nome em qualquer ponto do SQL
+    // (inclui referência dentro de outro CTE — ex: WITH A AS (...), B AS (... FROM A ...))
+    if (!new RegExp(`\\b(?:FROM|JOIN)\\s+${nome}\\b`, 'i').test(texto)) {
+      erros.push(
+        `CTE "${nome}" foi definida mas nao e usada em FROM/JOIN. ` +
+        `A query principal deve usar "FROM ${nome} <alias>" em vez de referenciar a tabela fisica diretamente. ` +
+        `Corrija: na query externa, substitua o bloco "FROM <tabela_fisica> <alias>" por "FROM ${nome} <alias>" ` +
+        `e remova o JOIN desnecessario com a tabela fisica.`
+      );
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
@@ -975,6 +1009,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
     erros.push(...validarAliasesDerivadosExternos(texto).erros);
   }
   erros.push(...validarCTEsAgregadosSemGroupBy(texto).erros);
+  erros.push(...validarCTEsDefinidaUsada(texto).erros);
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
   const keywords = new Set(['ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'JOIN', 'CROSS']);
@@ -1685,6 +1720,7 @@ module.exports = {
     validarSelectContraGroupBy,
     validarAliasesDerivadosExternos,
     validarCTEsAgregadosSemGroupBy,
+    validarCTEsDefinidaUsada,
     _extrairCorposCTE,
     sx3EssencialParaPrompt,
     completarSX2Permitidas,

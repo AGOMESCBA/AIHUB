@@ -198,6 +198,125 @@ assert(
 );
 
 // ─────────────────────────────────────────────────────────────
+// CENÁRIO 3: validarCTEsDefinidaUsada — Bug 6
+// CTE saldo_recente definida mas query externa usa FROM SE8020 diretamente
+// Padrão real reportado: saldos bancários por banco/agência/conta/dia
+// ─────────────────────────────────────────────────────────────
+titulo('CENÁRIO 3 — CTE definida mas query externa usa tabela física (Bug 6 fix)');
+
+const { validarCTEsDefinidaUsada } = runner._test;
+
+// SQL exato que gerou o bug no ambiente de produção
+const sqlSaldosBugado = `SET ROWCOUNT 50000;
+WITH saldo_recente AS (
+  SELECT E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA, E8_SALATUA, E8_DTSALAT,
+         ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn
+  FROM SE8020 SE8
+  WHERE SE8.D_E_L_E_T_ = ' '
+)
+SELECT SA6.A6_NOME AS banco, SE8.E8_AGENCIA, SE8.E8_CONTA,
+       CONVERT(VARCHAR(10), CAST(SE8.E8_DTSALAT AS DATE), 103) AS dia,
+       SUM(SE8.E8_SALATUA) AS saldo
+FROM SE8020 SE8
+JOIN SA6020 SA6 ON SE8.E8_BANCO = SA6.A6_COD AND SA6.D_E_L_E_T_ = ' '
+WHERE SE8.rn = 1 AND SE8.E8_SALATUA > 0 AND SA6.A6_COD <> 'CX1'
+GROUP BY SA6.A6_NOME, SE8.E8_AGENCIA, SE8.E8_CONTA, SE8.E8_DTSALAT
+ORDER BY dia`;
+
+const valCTEBugada = validarCTEsDefinidaUsada(sqlSaldosBugado);
+console.log('\n[validarCTEsDefinidaUsada — SQL bugado]', JSON.stringify(valCTEBugada));
+
+assert(!valCTEBugada.ok,
+  'CTE saldo_recente nunca usada em FROM/JOIN deve ser rejeitada (Bug 6 fix)',
+  `ok=${valCTEBugada.ok}`);
+assert((valCTEBugada.erros || []).some(e => /saldo_recente/i.test(e)),
+  'Erro menciona o nome da CTE não utilizada',
+  `erros: ${valCTEBugada.erros?.join('; ')}`);
+assert((valCTEBugada.erros || []).some(e => /FROM saldo_recente/i.test(e)),
+  'Mensagem de erro orienta a usar FROM saldo_recente',
+  `erros: ${valCTEBugada.erros?.join('; ')}`);
+
+// SQL correto: query externa usa FROM saldo_recente SR
+const sqlSaldosCorreto = `SET ROWCOUNT 50000;
+WITH saldo_recente AS (
+  SELECT SE8.E8_BANCO, SE8.E8_AGENCIA, SE8.E8_CONTA,
+         SE8.E8_DTSALAT, SE8.E8_SALATUA,
+         ROW_NUMBER() OVER (PARTITION BY SE8.E8_BANCO, SE8.E8_AGENCIA, SE8.E8_CONTA
+                            ORDER BY SE8.E8_DTSALAT DESC) AS rn
+  FROM SE8020 SE8
+  WHERE SE8.D_E_L_E_T_ = ' '
+)
+SELECT SR.E8_BANCO AS banco, SA6.A6_NOME AS banco_nome,
+       SR.E8_AGENCIA AS agencia, SR.E8_CONTA AS conta,
+       CONVERT(VARCHAR(10), SR.E8_DTSALAT, 103) AS dia,
+       SR.E8_SALATUA AS saldo
+FROM saldo_recente SR
+JOIN SA6020 SA6 ON SR.E8_BANCO = SA6.A6_COD AND SA6.D_E_L_E_T_ = ' '
+WHERE SR.rn = 1 AND SR.E8_SALATUA > 0 AND SA6.A6_COD <> 'CX1'
+ORDER BY SR.E8_BANCO, SR.E8_AGENCIA, SR.E8_CONTA, SR.E8_DTSALAT`;
+
+const valCTECorreta = validarCTEsDefinidaUsada(sqlSaldosCorreto);
+console.log('\n[validarCTEsDefinidaUsada — SQL correto]', JSON.stringify(valCTECorreta));
+
+assert(valCTECorreta.ok,
+  'SQL com FROM saldo_recente SR deve ser aprovado',
+  `erros: ${valCTECorreta.erros?.join('; ')}`);
+
+// Múltiplas CTEs: todas devem ser usadas
+const sqlMultiCTEBugada = `SET ROWCOUNT 50000;
+WITH fat_mensal AS (
+  SELECT SF2.F2_EMISSAO, SUM(SF2.F2_VALBRUT) AS total
+  FROM SF2020 SF2
+  WHERE SF2.D_E_L_E_T_ = ' '
+  GROUP BY SF2.F2_EMISSAO
+),
+cmp_mensal AS (
+  SELECT SC7.C7_EMISSAO, SUM(SC7.C7_TOTAL) AS total
+  FROM SC7020 SC7
+  WHERE SC7.D_E_L_E_T_ = ' '
+  GROUP BY SC7.C7_EMISSAO
+)
+SELECT f.F2_EMISSAO, f.total AS fat
+FROM fat_mensal f`;
+
+const valMulti = validarCTEsDefinidaUsada(sqlMultiCTEBugada);
+console.log('\n[validarCTEsDefinidaUsada — multi-CTE, cmp_mensal nunca usada]', JSON.stringify(valMulti));
+
+assert(!valMulti.ok,
+  'cmp_mensal definida mas nunca referenciada deve ser rejeitada',
+  `ok=${valMulti.ok}`);
+assert((valMulti.erros || []).some(e => /cmp_mensal/i.test(e)),
+  'Erro menciona cmp_mensal como CTE não utilizada');
+
+// CTE usada dentro de outra CTE — deve ser OK
+const sqlCTECadeada = `SET ROWCOUNT 50000;
+WITH base_fat AS (
+  SELECT SF2.F2_EMISSAO, SUM(SF2.F2_VALBRUT) AS total
+  FROM SF2020 SF2
+  WHERE SF2.D_E_L_E_T_ = ' '
+  GROUP BY SF2.F2_EMISSAO
+),
+fat_filtrada AS (
+  SELECT * FROM base_fat WHERE total > 0
+)
+SELECT * FROM fat_filtrada`;
+
+const valCadeada = validarCTEsDefinidaUsada(sqlCTECadeada);
+console.log('\n[validarCTEsDefinidaUsada — CTE encadeada]', JSON.stringify(valCadeada));
+
+assert(valCadeada.ok,
+  'CTE usada dentro de outra CTE (encadeamento) deve ser aprovada',
+  `erros: ${valCadeada.erros?.join('; ')}`);
+
+// validarSqlIaOwnerBasico deve rejeitar o SQL bugado antes do SX3
+const valBasicaBugada = validarSqlIaOwnerBasico(sqlSaldosBugado);
+console.log('\n[validarSqlIaOwnerBasico — SQL saldos bugado]', JSON.stringify({ ok: valBasicaBugada.ok, erros: valBasicaBugada.erros?.slice(0, 2) }));
+
+assert(!valBasicaBugada.ok,
+  'validarSqlIaOwnerBasico deve rejeitar SQL com CTE não utilizada (antes do SX3)',
+  `ok=${valBasicaBugada.ok}`);
+
+// ─────────────────────────────────────────────────────────────
 // Resultado final
 // ─────────────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(60)}`);
