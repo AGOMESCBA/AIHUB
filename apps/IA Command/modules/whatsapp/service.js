@@ -3667,12 +3667,39 @@ class IACWhatsAppService extends EventEmitter {
       const respostaErro = errosDinamicos.length
         ? RESPOSTA_INCONSISTENCIA_DINAMICA
         : 'Nao consegui executar a consulta dinamica nas empresas disponiveis. Verifique se a intencao dinamica, conexao ERP e chaves de IA estao configuradas.';
+
+      // Consolidar auditoria de prompts + SQL do último resultado por empresa.
+      // Espelha o padrão do caminho de sucesso (linha ~3569) e sem_dados (linha ~3638).
+      // Sem isso, o registro consolidado fica com sql_auditoria_json = null — prompts
+      // e sql_ia_bruto invisíveis na auditoria mesmo quando a FASE 3b rodou.
+      const _audUltimo = ultimoResultadoDinamico?.resultado?._sql_auditoria || {};
+      const _auditoriaErroConsolidada = {
+        handler: 'whatsapp_all',
+        origem: 'consolidado_multiempresa_erro_total',
+        prompt_system: _audUltimo.prompt_system || null,
+        prompt_user:   _audUltimo.prompt_user   || null,
+        sql_ia_bruto:  _audUltimo.sql_ia_bruto  || null,
+        sql_apos_sx3:  _audUltimo.sql_apos_sx3  || null,
+        empresas_tentadas: empresas.map(e => e.nome || `Empresa #${e.empresa_id}`),
+        empresas_com_erro: errosDinamicos,
+        // Detalhe por empresa (disponível quando o subtipo era retry-elegível)
+        empresas_detalhes: pendentesRetryCanonico.map(p => ({
+          empresa_id:   p.emp.empresa_id,
+          empresa_nome: p.emp.nome || `Empresa #${p.emp.empresa_id}`,
+          subtipo:      p.subtipoErro,
+          sql_gerado:   p.resultado.sql_gerado || null,
+          sql_ia_bruto: p.resultado._sql_auditoria?.sql_ia_bruto || null,
+          prompt_user:  p.resultado._sql_auditoria?.prompt_user  || null,
+        })),
+      };
+
       const resultadoErro = {
         tipo: 'erro',
         subtipo: 'ai_sql_sem_empresa_apta',
         mensagem: respostaErro,
         detalhes: errosDinamicos,
         sql_gerado: ultimoResultadoDinamico?.resultado?.sql_gerado || null,
+        _sql_auditoria: _auditoriaErroConsolidada,
       };
       this.emit('iac-intent', {
         empresaId:      empresaLogId,
