@@ -255,7 +255,8 @@
               <div class="meta-item"><span>Remetente</span><strong id="d-remetente">-</strong></div>
               <div class="meta-item"><span>Intenção</span><strong id="d-intencao">-</strong></div>
               <div class="meta-item"><span>Status</span><strong id="d-status">-</strong></div>
-              <div class="meta-item"><span>Duração</span><strong id="d-duracao">-</strong></div>
+              <div class="meta-item"><span>Proc.</span><strong id="d-duracao">-</strong></div>
+              <div class="meta-item"><span>Entregue</span><strong id="d-entregue-ms">-</strong></div>
               <div class="meta-item"><span>Tipo</span><strong id="d-tipo">-</strong></div>
               <div class="meta-item"><span>Módulo</span><strong id="d-modulo">-</strong></div>
               <div class="meta-item"><span>Linhas retornadas</span><strong id="d-rows">-</strong></div>
@@ -358,6 +359,11 @@
     if (isNaN(d)) return iso;
     const p = n => String(n).padStart(2,'0');
     return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  function formatMs(ms) {
+    if (ms == null) return '—';
+    return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
   }
 
   function fmtFone(num) {
@@ -463,7 +469,8 @@
     document.getElementById('d-remetente').textContent = fmtFone(row.numero_wa) || row.usuario || '-';
     document.getElementById('d-intencao').textContent  = row.intencao || '-';
     document.getElementById('d-status').innerHTML      = statusBadgeHtml(row.status);
-    document.getElementById('d-duracao').textContent   = row.duracao_ms != null ? `${row.duracao_ms} ms` : '-';
+    document.getElementById('d-duracao').textContent     = formatMs(row.duracao_ms);
+    document.getElementById('d-entregue-ms').textContent = formatMs(row.entregue_ms);
     document.getElementById('d-tipo').textContent      = row.tipo_mensagem || '-';
     document.getElementById('d-modulo').textContent    = det.modulo || '-';
     document.getElementById('d-rows').textContent      = det.rows_count != null ? String(det.rows_count) : '-';
@@ -568,12 +575,20 @@
           headerFilterParams: { values: { '':'Todos', 'sucesso':'Sucesso', 'erro':'Erro', 'sem_dados':'Sem dados', 'dialogo':'Diálogo', 'desconhecido':'Desconhecido' } },
           formatter: c => statusBadgeHtml(c.getValue()),
         },
-        { title: 'Duração (ms)', field: 'duracao_ms', width: 120,
+        { title: 'Proc.', field: 'duracao_ms', width: 85,
           formatter: c => {
             const v = c.getValue();
             if (v == null) return '—';
             const color = v > 3000 ? '#b91c1c' : v > 1000 ? '#92400e' : '#15803d';
-            return `<span style="color:${color};font-weight:600">${v}</span>`;
+            return `<span style="color:${color};font-weight:600">${formatMs(v)}</span>`;
+          },
+        },
+        { title: 'Entregue', field: 'entregue_ms', width: 85,
+          formatter: c => {
+            const v = c.getValue();
+            if (v == null) return '—';
+            const color = v > 5000 ? '#b91c1c' : v > 2000 ? '#92400e' : '#15803d';
+            return `<span style="color:${color};font-weight:600">${formatMs(v)}</span>`;
           },
         },
         { title: 'Tipo', field: 'tipo_mensagem', width: 90,

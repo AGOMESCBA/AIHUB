@@ -5,6 +5,10 @@ const { requireRotina }  = require('../../permissions');
 const { getEmpresaId }   = require('../../empresa-context');
 const connectionFactory  = require('../providers/connection-factory');
 
+function _invalidarMetaSX3(empresaId) {
+  try { require('../ia-owner/runner').invalidarMetaCache(empresaId); } catch (_) {}
+}
+
 module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
   const canSX3 = requireRotina('iac-admin-protheus-sx3');
   const eid    = req => getEmpresaId(req);
@@ -70,6 +74,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
       }
 
       const total = _salvarRegistros(conexao_id, eid(req), (rows || []).map(_normalizarRegistroSX3), limpar !== false);
+      _invalidarMetaSX3(eid(req));
       res.json({ importados: total });
     }
   );
@@ -86,6 +91,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         if (!conn) return res.status(404).json({ error: 'Conexao nao encontrada.' });
 
         const total = _salvarRegistros(conexao_id, eid(req), registros, limpar !== false);
+        _invalidarMetaSX3(eid(req));
         res.json({ importados: total });
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -113,6 +119,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
             (connection_id, empresa_id, tabela, campo, tipo, tamanho, decimal, titulo, descricao, usado, ordem, criado_em, atualizado_em)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
         `).run(conexao_id, eid(req), rec.tabela, rec.campo, rec.tipo, rec.tamanho, rec.decimal, rec.titulo, rec.descricao, rec.usado, rec.ordem, agora, agora);
+        _invalidarMetaSX3(eid(req));
         res.status(201).json(db.prepare('SELECT * FROM protheus_sx3 WHERE id = ?').get(info.lastInsertRowid));
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -134,6 +141,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
           SET tabela=?, campo=?, tipo=?, tamanho=?, decimal=?, titulo=?, descricao=?, usado=?, ordem=?, atualizado_em=?
           WHERE id=?
         `).run(rec.tabela, rec.campo, rec.tipo, rec.tamanho, rec.decimal, rec.titulo, rec.descricao, rec.usado, rec.ordem, agora, row.id);
+        _invalidarMetaSX3(eid(req));
         res.json(db.prepare('SELECT * FROM protheus_sx3 WHERE id = ?').get(row.id));
       } catch (e) {
         res.status(500).json({ error: e.message });

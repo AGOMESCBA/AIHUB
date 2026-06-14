@@ -307,7 +307,6 @@
             <div class="editor-tabs">
               <button class="editor-tab-btn active" onclick="showTab('dados')">Dados Principais</button>
               <button class="editor-tab-btn" onclick="showTab('acessos')">Acessos</button>
-              <button class="editor-tab-btn" onclick="showTab('erp')">ERP</button>
             </div>
 
             <div class="tab-panel active" id="tabp-dados">
@@ -428,45 +427,6 @@
             </section>
             </div><!-- /tabp-acessos -->
 
-            <div class="tab-panel" id="tabp-erp">
-            <section class="form-section">
-              <div class="form-section-header">
-                <div>
-                  <div class="form-section-title">Integração ERP</div>
-                  <div class="form-section-subtitle">Identifica o usuário no ERP Protheus para consultas via WhatsApp.</div>
-                </div>
-              </div>
-              <div class="form-section-body">
-                <div class="form-row" style="margin-bottom:16px">
-                  <div class="form-group">
-                    <label class="form-label">Telefone WhatsApp</label>
-                    <input id="f-erp-telefone" type="text" class="form-control" placeholder="5565999990000">
-                    <div class="hint">Número com código do país e DDD, sem espaços ou símbolos (ex: 5565999990000). Usado para identificar o usuário pela mensagem recebida.</div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">CPF / CNPJ</label>
-                    <input id="f-erp-cpf-cnpj" type="text" class="form-control" placeholder="000.000.000-00 ou 00.000.000/0001-00">
-                  </div>
-                </div>
-                <div class="form-row" style="margin-bottom:16px">
-                  <div class="form-group">
-                    <label class="form-label">ID ERP (código do vendedor)</label>
-                    <input id="f-erp-id" type="text" class="form-control" placeholder="000001" maxlength="6" style="text-transform:uppercase">
-                    <div class="hint">Código de até 6 caracteres — equivale ao A3_COD no cadastro de vendedores do Protheus (SA3).</div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Tipo no ERP</label>
-                    <select id="f-erp-tipo" class="form-control">
-                      <option value="">— não configurado —</option>
-                      <option value="vendedor">Vendedor</option>
-                      <option value="gestor">Gestor</option>
-                    </select>
-                    <div class="hint">Vendedor vê apenas as próprias comissões. Gestor pode consultar qualquer vendedor.</div>
-                  </div>
-                </div>
-              </div>
-            </section>
-            </div><!-- /tabp-erp -->
 
           </main>
 
@@ -841,11 +801,6 @@ async function abrirModal(usuario = null) {
   document.getElementById('f-role').value    = usuario?.role    ?? 'usuario';
   document.getElementById('f-ativo').checked = usuario?.ativo   ?? true;
 
-  document.getElementById('f-erp-telefone').value  = usuario?.erp_telefone  ?? '';
-  document.getElementById('f-erp-cpf-cnpj').value  = usuario?.erp_cpf_cnpj  ?? '';
-  document.getElementById('f-erp-id').value         = usuario?.erp_id         ?? '';
-  document.getElementById('f-erp-tipo').value       = usuario?.erp_tipo       ?? '';
-
   showTab('dados');
 
   document.getElementById('grp-ativo').style.display      = isEdit ? 'block' : 'none';
@@ -1155,10 +1110,6 @@ async function salvar() {
     role:         document.getElementById('f-role').value,
     empresas:     getEmpresasSelecionadas(),
     ativo:        document.getElementById('f-ativo').checked,
-    erp_telefone: document.getElementById('f-erp-telefone').value.trim(),
-    erp_cpf_cnpj: document.getElementById('f-erp-cpf-cnpj').value.trim(),
-    erp_id:       document.getElementById('f-erp-id').value.trim().toUpperCase(),
-    erp_tipo:     document.getElementById('f-erp-tipo').value,
   };
   if (senha) dados.senha = senha;
 

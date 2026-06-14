@@ -5,6 +5,8 @@ const crud = require('../database/crud');
 const crossModuleDetector = require('./cross-module-detector');
 const crossModuleSpecCombiner = require('./cross-module-spec-combiner');
 const iaOwnerRunner = require('./ia-owner/runner');
+const { getDB } = require('../database');
+const channelStore = require('../whatsapp/channel-store');
 
 const AI_SQL_HANDLERS = {
   compras: './compras/ai-sql-handler-v2',
@@ -12,6 +14,58 @@ const AI_SQL_HANDLERS = {
   faturamento: './faturamento/ai-sql-handler-v2',
   comissao: './comissao/ai-sql-handler-v2',
 };
+
+const NOMES_MODULOS = {
+  compras:     'Compras',
+  financeiro:  'Financeiro',
+  faturamento: 'Faturamento',
+  comissao:    'Comissão',
+};
+
+function _verificarAutorizacaoModulo(intent, empresaId, modulo) {
+  const coluna = `modulo_${modulo}`;
+  const remetente = intent._remetente;
+  if (!remetente || !modulo || !NOMES_MODULOS[modulo]) return null; // sem restrição para intents sem remetente
+
+  try {
+    const db = getDB();
+
+    // Resolve empresa_id efetivo (canal pode ter empresa diferente)
+    let eid = empresaId;
+    if (intent._channelId) {
+      const empresas = channelStore.listarEmpresasDoCanal(intent._channelId);
+      if (empresas.length > 0) eid = empresas[0].empresa_id;
+    }
+
+    // Verifica se há números autorizados cadastrados — se não houver, não aplica restrição
+    const total = db.prepare(
+      `SELECT COUNT(*) AS total FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND ativo = 1`
+    ).get(eid)?.total || 0;
+    if (!total) return null;
+
+    // Busca o registro deste remetente
+    const variantes = channelStore.variantesNumeroBrasil(remetente);
+    const lid = channelStore.extrairLid(remetente);
+    const placeholders = variantes.map(() => '?').join(',');
+    const row = db.prepare(
+      `SELECT ${coluna} FROM whatsapp_allowed_numbers
+        WHERE empresa_id = ? AND ativo = 1
+          AND (numero IN (${placeholders}) OR wa_lid = ?)
+        LIMIT 1`
+    ).get(eid, ...variantes, lid);
+
+    if (!row) return null; // número não está na lista — _isSenderAuthorized já teria bloqueado antes
+    if (row[coluna]) return null; // módulo habilitado — libera
+
+    return {
+      tipo: 'erro',
+      subtipo: 'modulo_nao_autorizado',
+      resposta_direta: `Ainda não consigo consultar o módulo *${NOMES_MODULOS[modulo]}* para o seu número. Peça ao gestor do IA Command para liberar esse módulo no seu cadastro de WhatsApp e tente novamente.`,
+    };
+  } catch (e) {
+    return null; // falha silenciosa: não bloqueia por erro técnico
+  }
+}
 
 // Loaders lazy dos specs — usados pelo combinador cross-module
 const SPEC_LOADERS = {
@@ -211,6 +265,9 @@ async function rotear(intent, empresaId) {
         mensagem: `Handler systemprompt nao configurado para modulo "${modulo}".`,
       };
     }
+
+    const erroAutorizacao = _verificarAutorizacaoModulo(intent, empresaId, modulo);
+    if (erroAutorizacao) return erroAutorizacao;
 
     intent = _appendTrace(intent, {
       acao: 'acionar_modulo_dinamico',

@@ -45,6 +45,12 @@ function ok(descricao, fn) {
   }
 }
 
+// Helper: resolve regrasTecnicas seja string ou função (módulos com FK condicional)
+function resolverRegrasTecnicas(spec) {
+  if (typeof spec.regrasTecnicas === 'function') return spec.regrasTecnicas();
+  return spec.regrasTecnicas || '';
+}
+
 // ─── 1. Specs carregam sem erro e exportam regrasTecnicas ────────────────────
 console.log('\n[1] Specs carregam corretamente');
 
@@ -53,9 +59,11 @@ for (const [nome, spec] of Object.entries(SPECS)) {
     assert.ok(spec, 'spec deve existir');
   });
 
-  ok(`${nome}: regrasTecnicas é string não vazia`, () => {
-    assert.strictEqual(typeof spec.regrasTecnicas, 'string', 'deve ser string');
-    assert.ok(spec.regrasTecnicas.length > 100, 'deve ter conteúdo substancial');
+  ok(`${nome}: regrasTecnicas é string ou função não vazia`, () => {
+    const tipo = typeof spec.regrasTecnicas;
+    assert.ok(tipo === 'string' || tipo === 'function', 'deve ser string ou function');
+    const texto = resolverRegrasTecnicas(spec);
+    assert.ok(texto.length > 100, 'deve ter conteúdo substancial');
   });
 }
 
@@ -64,12 +72,13 @@ console.log('\n[2] Regra: subquery interna exporta ano E competencia');
 
 for (const [nome, spec] of Object.entries(SPECS)) {
   ok(`${nome}: menciona exportação de dois aliases (ano E competencia)`, () => {
-    const r = spec.regrasTecnicas.toLowerCase();
+    const rt = resolverRegrasTecnicas(spec);
+    const r = rt.toLowerCase();
     const temDoisAliases =
       (r.includes('dois aliases') || r.includes('dois alias') || r.includes('dois aliases')) &&
       r.includes('ano') &&
       r.includes('competencia');
-    assert.ok(temDoisAliases, `${nome}.regrasTecnicas deve mencionar exportar dois aliases (ano e competencia). Conteúdo atual: ${spec.regrasTecnicas.slice(spec.regrasTecnicas.toLowerCase().indexOf('media'), spec.regrasTecnicas.toLowerCase().indexOf('media') + 400)}`);
+    assert.ok(temDoisAliases, `${nome}.regrasTecnicas deve mencionar exportar dois aliases (ano e competencia). Conteúdo atual: ${rt.slice(rt.toLowerCase().indexOf('media'), rt.toLowerCase().indexOf('media') + 400)}`);
   });
 }
 
@@ -78,14 +87,15 @@ console.log('\n[3] Regra: camada externa usa apenas aliases exportados pela subq
 
 for (const [nome, spec] of Object.entries(SPECS)) {
   ok(`${nome}: menciona que camada externa usa h.ano`, () => {
+    const rt = resolverRegrasTecnicas(spec);
     assert.ok(
-      spec.regrasTecnicas.includes('h.ano'),
+      rt.includes('h.ano'),
       `${nome}.regrasTecnicas deve mencionar h.ano na camada externa`
     );
   });
 
   ok(`${nome}: proíbe referência à tabela fato na camada externa`, () => {
-    const r = spec.regrasTecnicas;
+    const r = resolverRegrasTecnicas(spec);
     const temProibicao = r.includes('NUNCA') && (
       r.includes('SF2.*') || r.includes('SD1.*') || r.includes('SE1.*') ||
       r.includes('SE2.*') || r.includes('SE3.*') || r.includes('SD1.* ou SF1.*')
@@ -99,7 +109,7 @@ console.log('\n[4] Regra: média mensal escalar (1 ano específico)');
 
 for (const [nome, spec] of Object.entries(SPECS)) {
   ok(`${nome}: menciona média mensal escalar sem GROUP BY`, () => {
-    const r = spec.regrasTecnicas.toLowerCase();
+    const r = resolverRegrasTecnicas(spec).toLowerCase();
     const temEscalar = (r.includes('mensal escalar') || r.includes('1 ano')) && r.includes('sem group by');
     assert.ok(temEscalar, `${nome}.regrasTecnicas deve cobrir média mensal escalar (1 ano) sem GROUP BY`);
   });
@@ -110,7 +120,7 @@ console.log('\n[5] Regra: média anual escalar preservada em todos os módulos')
 
 for (const [nome, spec] of Object.entries(SPECS)) {
   ok(`${nome}: média anual escalar (SUM por ano → AVG externo) presente`, () => {
-    const r = spec.regrasTecnicas.toLowerCase();
+    const r = resolverRegrasTecnicas(spec).toLowerCase();
     const temAnual = r.includes('media anual escalar') || (r.includes('anual') && r.includes('externa avg'));
     assert.ok(temAnual, `${nome}.regrasTecnicas deve cobrir média anual escalar`);
   });

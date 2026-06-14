@@ -121,6 +121,11 @@ function registrar(payload = {}) {
     pipeline_origem: resultado._pipeline_origem || payload.pipeline_origem || null,
     chat_turno: resultado._chat_turno ?? payload.chat_turno ?? null,
     sql_validacao_erro: resultado._sql_validacao_erro || payload.sql_validacao_erro || null,
+    timing_json: json(payload.timing_json || null),
+    formatacao_caminho: payload.formatacao_caminho || null,
+    recebido_em: payload.recebido_em || null,
+    pipeline_ms: payload.pipeline_ms ?? null,
+    entregue_ms: payload.entregue_ms ?? null,
     feedback: payload.feedback || null,
     feedback_observacao: payload.feedback_observacao || null,
     criado_em: now,
@@ -164,6 +169,16 @@ function registrarFeedback(id, empresaId, feedback, observacao = null) {
   return info.changes > 0;
 }
 
+function atualizarEntregue(id, entregueMs) {
+  if (!id || entregueMs == null) return false;
+  const info = getDB().prepare(`
+    UPDATE interpretation_log
+       SET entregue_ms = ?, atualizado_em = ?
+     WHERE id = ?
+  `).run(entregueMs, agora(), id);
+  return info.changes > 0;
+}
+
 function limpar(empresaId, opts = {}) {
   const db = getDB();
   const params = [empresaId];
@@ -183,4 +198,4 @@ function limpar(empresaId, opts = {}) {
   return info.changes || 0;
 }
 
-module.exports = { registrar, listar, registrarFeedback, limpar, camposInferidos, moduloDinamico, faseExecucao };
+module.exports = { registrar, listar, registrarFeedback, atualizarEntregue, limpar, camposInferidos, moduloDinamico, faseExecucao };

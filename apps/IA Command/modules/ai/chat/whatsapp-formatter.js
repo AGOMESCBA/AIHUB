@@ -18,8 +18,8 @@ function _calcularTotais(rows) {
   if (!rows || !rows.length) return {};
   const totais = {};
   for (const campo of Object.keys(rows[0])) {
-    if (!_RE_CAMPO_SOMAVEL.test(campo)) continue;
     if (_RE_CAMPO_MEDIA.test(campo)) continue;
+    if (!_RE_CAMPO_SOMAVEL.test(campo) && !_RE_CAMPO_QUANTIDADE.test(campo)) continue;
     const soma = rows.reduce((acc, row) => {
       const v = parseFloat(row[campo]);
       return acc + (isNaN(v) ? 0 : v);
@@ -29,8 +29,90 @@ function _calcularTotais(rows) {
   return totais;
 }
 
+function _num(v) {
+  const n = parseFloat(v);
+  if (isNaN(n)) return String(v || '');
+  return n.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+}
+
+function _normalizarCampo(nome) {
+  return String(nome || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function _findCol(keys, pred) {
+  return keys.find(k => pred(_normalizarCampo(k))) || null;
+}
+
+function _formatarDetalhamentoClienteDocumento(rows, mensagemOriginal) {
+  if (!rows || !rows.length) return null;
+
+  const keys = Object.keys(rows[0] || {});
+  const clienteKey = _findCol(keys, k => ['cliente', 'nome_cliente', 'nm_cli', 'razao_social'].includes(k));
+  const documentoKey = _findCol(keys, k =>
+    ['documento', 'doc', 'nota', 'nota_fiscal', 'nf', 'nfe', 'titulo', 'duplicata'].includes(k)
+    || /^f2_doc$|^d2_doc$|^e1_num$|^e2_num$/.test(k)
+  );
+  if (!clienteKey || !documentoKey) return null;
+
+  const valorKey = keys.find(k => {
+    if (k === clienteKey || k === documentoKey) return false;
+    const nk = _normalizarCampo(k);
+    if (/^(id|cod|codigo|num|seq|ano|mes|dia|data|serie|loja|filial)/.test(nk)) return false;
+    if (!_RE_CAMPO_SOMAVEL.test(k) || _RE_CAMPO_MEDIA.test(k) || _RE_CAMPO_QUANTIDADE.test(k)) return false;
+    return rows.some(r => {
+      const v = r[k];
+      return typeof v === 'number' || (typeof v === 'string' && v !== '' && !isNaN(parseFloat(v)));
+    });
+  });
+  if (!valorKey) return null;
+
+  const porCliente = new Map();
+  let totalGeral = 0;
+
+  for (const row of rows) {
+    const cliente = String(row[clienteKey] || '').trim() || '(sem cliente)';
+    const doc = String(row[documentoKey] || '').trim() || '(sem documento)';
+    const valor = parseFloat(row[valorKey]) || 0;
+    totalGeral += valor;
+
+    if (!porCliente.has(cliente)) porCliente.set(cliente, { total: 0, docs: new Map() });
+    const grupo = porCliente.get(cliente);
+    grupo.total += valor;
+    grupo.docs.set(doc, (grupo.docs.get(doc) || 0) + valor);
+  }
+
+  const titulo = /nota|nf|nfe/i.test(documentoKey) || /\bnota\s+fiscal\b/i.test(mensagemOriginal || '')
+    ? 'Detalhamento por cliente e nota fiscal'
+    : 'Detalhamento por cliente e documento';
+
+  const linhas = [`*${titulo}*`];
+  let idxCliente = 1;
+  for (const [cliente, grupo] of porCliente.entries()) {
+    linhas.push('');
+    linhas.push(`${idxCliente}. *${cliente}*: ${_brl(grupo.total)}`);
+    let idxDoc = 1;
+    for (const [doc, valor] of grupo.docs.entries()) {
+      linhas.push(`   ${idxDoc}. Doc. ${doc}: ${_brl(valor)}`);
+      idxDoc++;
+    }
+    idxCliente++;
+  }
+
+  linhas.push('');
+  linhas.push(`*Total Geral*: ${_brl(totalGeral)}`);
+  return linhas.join('\n');
+}
+
 function _formatarFallback(rows, mensagemOriginal) {
   if (!rows || !rows.length) return 'Nenhum registro encontrado para essa consulta.';
+
+  const detalhamento = _formatarDetalhamentoClienteDocumento(rows, mensagemOriginal);
+  if (detalhamento) return detalhamento;
 
   const totais = _calcularTotais(rows);
   const linhas = rows.slice(0, 30).map((row, i) => {
@@ -51,7 +133,10 @@ function _formatarFallback(rows, mensagemOriginal) {
 
   if (rows.length > 30) linhas.push(`_...e mais ${rows.length - 30} registros._`);
 
-  const linhasTotais = Object.entries(totais).map(([k, v]) => `*${k}: ${_brl(v)}*`);
+  const linhasTotais = Object.entries(totais).map(([k, v]) => {
+    const valor = _RE_CAMPO_QUANTIDADE.test(k) ? _num(v) : _brl(v);
+    return `*${k}: ${valor}*`;
+  });
   linhasTotais.push(`*Total: ${rows.length} registros*`);
 
   return [...linhas, '', ...linhasTotais].join('\n');
@@ -64,6 +149,9 @@ function _formatarFallback(rows, mensagemOriginal) {
  */
 async function formatar(rows, mensagemOriginal, keys, cfg) {
   if (!rows || !rows.length) return 'Nenhum registro encontrado para essa consulta.';
+
+  const detalhamento = _formatarDetalhamentoClienteDocumento(rows, mensagemOriginal);
+  if (detalhamento) return detalhamento;
 
   try {
     const systemPrompt = whatsappFormatPrompt.buildFormatSystemPrompt();
@@ -82,4 +170,4 @@ async function formatar(rows, mensagemOriginal, keys, cfg) {
   }
 }
 
-module.exports = { formatar, _formatarFallback };
+module.exports = { formatar, _formatarFallback, _formatarDetalhamentoClienteDocumento };

@@ -330,8 +330,8 @@ assert.deepStrictEqual(
     { empresa_id: 2, nome: 'C3I', padrao: 1 },
     { empresa_id: 1, nome: 'J2A', padrao: 0 },
   ]).map(e => e.empresa_id),
-  [1, 2],
-  'empresa que iniciou o servico deve gerar primeiro o canonico do whatsapp_all',
+  [2, 1],
+  'empresa que iniciou o servico (padrao=1) deve gerar primeiro o canonico do whatsapp_all',
 );
 assert.strictEqual(
   svc._empresaConsolidadoId(

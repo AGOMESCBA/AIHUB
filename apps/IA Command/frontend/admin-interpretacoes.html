@@ -269,7 +269,9 @@
               <div class="meta-item"><span>Motor</span><strong id="d-motor">-</strong></div>
               <div class="meta-item"><span>Pipeline</span><strong id="d-pipeline">-</strong></div>
               <div class="meta-item"><span>Turno chat</span><strong id="d-turno">-</strong></div>
-              <div class="meta-item"><span>Duração</span><strong id="d-duracao">-</strong></div>
+              <div class="meta-item"><span>Proc.</span><strong id="d-duracao">-</strong></div>
+              <div class="meta-item"><span>Pipeline</span><strong id="d-pipeline-ms">-</strong></div>
+              <div class="meta-item"><span>Entregue</span><strong id="d-entregue-ms">-</strong></div>
               <div class="meta-item"><span>Confiança</span><strong id="d-confianca">-</strong></div>
               <div class="meta-item"><span>Resultado</span><strong id="d-resultado">-</strong></div>
               <div class="meta-item"><span>Fase</span><strong id="d-fase-execucao">-</strong></div>
@@ -408,6 +410,11 @@
 
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function formatMs(ms) {
+    if (ms == null) return '—';
+    return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
   }
 
   function fmtData(iso) {
@@ -613,7 +620,9 @@
     document.getElementById('d-motor').textContent = motor(row);
     document.getElementById('d-pipeline').innerHTML = pipelineBadgeHtml(row.pipeline_origem);
     document.getElementById('d-turno').textContent = row.chat_turno != null ? `Turno ${row.chat_turno}` : '—';
-    document.getElementById('d-duracao').textContent = row.duracao_ms != null ? `${row.duracao_ms} ms` : '—';
+    document.getElementById('d-duracao').textContent     = formatMs(row.duracao_ms);
+    document.getElementById('d-pipeline-ms').textContent = formatMs(row.pipeline_ms);
+    document.getElementById('d-entregue-ms').textContent = formatMs(row.entregue_ms);;
     document.getElementById('d-confianca').textContent = conf(row);
     document.getElementById('d-resultado').textContent = row.resultado_tipo || '-';
     document.getElementById('d-fase-execucao').innerHTML = faseExecucaoBadge(row.fase_execucao);

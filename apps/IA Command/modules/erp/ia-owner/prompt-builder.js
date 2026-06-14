@@ -4,7 +4,7 @@ function json(value) {
   return JSON.stringify(value == null ? null : value, null, 2);
 }
 
-function buildSystemPrompt(spec = {}) {
+function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar } = {}) {
   return [
     `Voce e o IA-OWNER do modulo ${spec.nome || 'ERP'}.`,
     'Voce e dono da decisao semantica: contexto, heranca, periodo, filtros, agrupamentos e SQL.',
@@ -30,6 +30,19 @@ function buildSystemPrompt(spec = {}) {
     'REGRA CRITICA — entidades_necessarias SOMENTE para nomes proprios cadastrais: PROIBIDO declarar em entidades_necessarias qualquer texto que seja condicao de filtro, criterio operacional ou frase descritiva (ex: "possuem faturamento todos os meses", "maior volume", "todos os clientes ativos"). entidades_necessarias e exclusivamente para nomes proprios de entidades cadastrais (nome de cliente, fornecedor, produto, vendedor). Se a pergunta nao citar nome proprio, deixe entidades_necessarias vazio ([]).',
     'REGRA WHATSAPP — exibicao de entidades: NUNCA retorne apenas codigos internos (A1_COD, A3_COD, B1_COD, etc.) como informacao principal ao usuario. Sempre inclua nome/descricao: SA1.A1_NOME AS cliente, SA3.A3_NOME AS vendedor, SB1.B1_DESC AS produto, SA2.A2_NOME AS fornecedor.',
     'Nunca gere DML/DDL. Gere apenas SELECT com SET ROWCOUNT.',
+    '',
+
+    spec.contratosTecnicosPrioritarios ? [
+      '## Contratos Relacionais do Schema Protheus',
+      'As relacoes abaixo definem a chave relacional completa entre tabelas de cabecalho e itens do ERP.',
+      'Use estes contratos como templates de escrita de JOIN para cabecalho/itens.',
+      'Nao escreva JOIN livre entre essas tabelas quando houver contrato abaixo.',
+      'Ao fazer JOIN entre essas tabelas, copie a estrutura completa do template correspondente.',
+      'Nao use apenas filial, documento e serie quando o contrato tambem incluir fornecedor/cliente e loja.',
+      'Numero e serie podem repetir entre fornecedores, clientes ou lojas; omitir esses campos pode duplicar valores em agregacoes.',
+      'Um JOIN de cabecalho/itens que use somente DOC/SERIE e tecnicamente incompleto para esses contratos.',
+      spec.contratosTecnicosPrioritarios,
+    ].join('\n') : '',
     '',
 
     '## Escopo IAHub vs Entidades Cadastrais',
@@ -86,10 +99,11 @@ function buildSystemPrompt(spec = {}) {
     '- Conversao: CAST(x AS tipo) — nunca CONVERT para conversoes basicas.',
     '- WITH (NOLOCK): PROIBIDO.',
     '- FORMAT() / TRY_CONVERT(): PROIBIDO.',
+    '- ORDER BY com alias: REGRA ABSOLUTA — so use um nome simples no ORDER BY (ex: banco, dia, competencia) se esse nome foi declarado com AS no SELECT (ex: SA6.A6_NOME AS banco). Se a coluna nao tiver alias explicito, referencie-a qualificada (ex: ORDER BY SE8.E8_AGENCIA) ou por posicao numerica. NUNCA invente um alias no ORDER BY sem defini-lo com AS no SELECT — o SQL Server rejeitara com "Invalid column name".',
     '',
 
     '## Formato de Data Protheus',
-    '- Datas sao CHAR(8) YYYYMMDD. Compare sempre com BETWEEN em texto: BETWEEN \'20260101\' AND \'20261231\'.',
+    '- Datas sao CHAR(8) YYYYMMDD. Para periodos continuos reais, compare com BETWEEN em texto: BETWEEN \'20260101\' AND \'20261231\'.',
     '- O campo "data_atual" no contexto tecnico e a ancora para calcular "hoje", "este mes", "este ano", "mes passado" etc.',
     '- REGRA CRITICA — PERIODO: O sistema nao fornece datas pre-calculadas. Voce calcula o periodo EXCLUSIVAMENTE a partir da mensagem atual, do historico de turnos e de "data_atual". Em continuidade, confirme o periodo lendo a mensagem original no historico e o ultimo_sql antes de herdar.',
     '',
@@ -141,11 +155,27 @@ function buildSystemPrompt(spec = {}) {
     '- Estrutura sugerida para consulta escalar com entidade: "Aqui esta o resumo do [Modulo] de *[Nome da Entidade]* para o periodo [Data_Inicio_Extenso] a [Data_Fim_Extenso]:\\n\\n📊 *[Metrica Principal]:* {valor}".',
     '',
 
-    spec.regrasTecnicas || '',
+    '## Intervalo Mensal Recorrente entre Anos',
+    '- Quando o usuario pedir um intervalo de meses aplicado a varios anos (ex: "janeiro a junho de 2024 a 2026", "jan a jun dos anos de 2024 a 2026"), isso NAO e um intervalo continuo de data.',
+    '- Isso tambem vale quando a pergunta usar "faturamento acumulado", "analitico" ou "comparativo" junto com meses e anos (ex: "faturamento acumulado de janeiro a junho de 2024 a 2026").',
+    '- Nesse caso, filtre anos e meses separadamente: SUBSTRING(campo,1,4) IN (\'2024\',\'2025\',\'2026\') AND SUBSTRING(campo,5,2) BETWEEN \'01\' AND \'06\'.',
+    '- PROIBIDO usar apenas BETWEEN \'20240101\' AND \'20260630\' para intervalo mensal recorrente entre anos, pois inclui julho a dezembro dos anos intermediarios.',
+    '- Use BETWEEN de data somente quando a intencao for periodo continuo real (ex: "de janeiro de 2024 ate junho de 2026").',
+    '',
+
+    typeof spec.regrasTecnicas === 'function'
+      ? spec.regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar })
+      : (spec.regrasTecnicas || ''),
   ].filter(Boolean).join('\n');
 }
 
 function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico, entidadesResolvidas, tentativa, erroSql, sqlComErro } = {}) {
+  const queryPlanTexto = contextoTecnico?.query_plan_texto || null;
+  // Serializa contextoTecnico sem query_plan_texto — já será exibido em destaque abaixo
+  const contextoSemPlano = contextoTecnico
+    ? Object.fromEntries(Object.entries(contextoTecnico).filter(([k]) => k !== 'query_plan_texto'))
+    : {};
+
   return [
     `Mensagem atual do usuario:\n${mensagem || ''}`,
     '',
@@ -157,10 +187,11 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
     json(estadoAnterior || null),
     '',
     'Contexto tecnico de execucao:',
-    json(contextoTecnico || {}),
+    json(contextoSemPlano),
     '',
     'Entidades ja resolvidas pelo sistema:',
     json(entidadesResolvidas || []),
+    queryPlanTexto ? `\n## CONTRATO OBRIGATORIO DE SQL (leia antes de gerar qualquer SQL)\n${queryPlanTexto}\nO SQL gerado DEVE obedecer integralmente este contrato. Nao gere SQL que contradiga carteira, estado, dataPadrao ou estrutura acima.` : '',
     tentativa ? `\nTentativa/correcao solicitada: ${tentativa}` : '',
     erroSql ? `\nErro retornado pelo banco/validador:\n${erroSql}` : '',
     sqlComErro ? `\nSQL com erro:\n${sqlComErro}` : '',

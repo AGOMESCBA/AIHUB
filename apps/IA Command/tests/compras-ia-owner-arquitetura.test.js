@@ -18,9 +18,11 @@ assert(systemPrompt.includes('mes passado'), 'prompt deve conter regra cronologi
 assert(systemPrompt.includes('resposta_planejada'), 'prompt deve orientar resposta planejada WhatsApp');
 assert(systemPrompt.includes("Nunca use SF1.F1_TIPO = '1'"), 'prompt deve proibir F1_TIPO = 1 em compras');
 assert(systemPrompt.includes('escopo de tenant IAHub'), 'prompt deve separar empresa IAHub de entidade cadastral');
-assert(systemPrompt.includes('Sempre retorne nome/descricao para o usuario'), 'entidades devem retornar nome/descricao');
-assert(systemPrompt.includes('Se o usuario disser "ano" sem ano explicito, use o ano atual completo'), 'ano sem ano explicito deve ser ano atual');
-assert(systemPrompt.includes('FROM SD1990 SD1'), 'prompt deve ensinar tabela fisica com alias base');
+assert(systemPrompt.includes('SA2.A2_NOME AS fornecedor'), 'entidades devem retornar descricao de fornecedor');
+assert(systemPrompt.includes('SB1.B1_DESC AS produto'), 'entidades devem retornar descricao de produto');
+assert(systemPrompt.includes('Se uma entidade estiver no GROUP BY'), 'entidades agrupadas devem expor descricao ao usuario');
+assert(systemPrompt.includes('data_atual') && systemPrompt.includes('Voce calcula o periodo EXCLUSIVAMENTE'), 'periodos relativos devem ser calculados pela IA a partir de data_atual e contexto');
+assert(systemPrompt.includes('mapa fornecido') && systemPrompt.includes('Use aliases explicitos iguais a base da tabela'), 'prompt deve orientar tabela fisica via SX2 com alias base');
 
 const userPrompt = promptBuilder.buildUserPrompt({
   mensagem: 'agora por fornecedor',

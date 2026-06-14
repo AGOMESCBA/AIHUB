@@ -1,6 +1,6 @@
 'use strict';
 
-console.log('[IA Command] SX2SqlNormalizer v20260611b — fix: [ \t]+ no alias para nao consumir JOIN/WHERE de linha seguinte; fix CTE nao substituida');
+console.log('[IA Command] SX2SqlNormalizer v20260614b — fix: segunda passagem normaliza JOIN TabelaBase ON (alias=keyword SQL consumido pelo regex)');
 
 // Palavras reservadas SQL que o regex FROM/JOIN nao deve capturar como alias de tabela.
 // Sem este conjunto, "FROM SF2\nWHERE" captura WHERE como alias, fazendo
@@ -29,7 +29,12 @@ const ALIASES_PROTHEUS = new Set([
 function baseTabelaSX2(nome) {
   const valor = String(nome || '').trim().toUpperCase();
   const bases = [...ALIASES_PROTHEUS].sort((a, b) => b.length - a.length);
-  const baseConhecida = bases.find(base => valor === base || new RegExp(`^${base}\\d{3,4}$`).test(valor));
+  // Reconhece sufixo numérico (SE5990) e sufixo placeholder xxx gerado pelo LLM (SE5xxx, SF2xxx)
+  const baseConhecida = bases.find(base =>
+    valor === base
+    || new RegExp(`^${base}\\d{3,4}$`).test(valor)
+    || new RegExp(`^${base}[Xx]{3}$`).test(valor),
+  );
   if (baseConhecida) return baseConhecida;
   const m = valor.match(/^([A-Z]{2,4})(\d{3,4})$/);
   return m ? m[1] : valor;
@@ -165,7 +170,41 @@ function adaptarSqlCanonicoPorSX2(sql, sx2 = {}, opts = {}) {
   // qualificadores de coluna (SF2.F2_EMISSAO → SF2020.F2_EMISSAO) na etapa seguinte.
   const baseToPhysical = {};
 
-  let texto = String(sql || '').replace(/\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)([ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))?/gi, (match, clausula, tabela, aliasParte, alias) => {
+  // Pré-processamento: corrige `JOIN TabelaBase ON` onde a tabela Protheus aparece sem sufixo e sem alias,
+  // seguida imediatamente de ON. O regex principal não cobre esse caso porque captura `ON` como alias de
+  // uma tabela anterior (ex: `FROM SE1990 JOIN` → alias=JOIN → cursor avança além de `SE5 ON`).
+  // Este regex é não-ambíguo: captura apenas `(FROM|JOIN) TABELABASE ON` sem grupo de alias opcional.
+  let texto = String(sql || '').replace(
+    /\b(FROM|JOIN)\s+([A-Z][A-Z0-9]{1,3}(?:[Xx]{3})?)\s+(ON\b)/gi,
+    (match, clausula, tabela, on) => {
+      const base = baseTabelaSX2(tabela);
+      if (!ALIASES_PROTHEUS.has(base)) return match;
+      // Só atua quando o nome é exatamente a base (sem sufixo) ou um placeholder xxx
+      const tabelaUp = String(tabela).toUpperCase();
+      const ehBaseOuPlaceholder = tabelaUp === base || new RegExp(`^${base}[Xx]{3}$`).test(tabelaUp);
+      if (!ehBaseOuPlaceholder) return match;
+      const candidatas = tabelaFisicaSX2(sx2, base);
+      if (candidatas.length === 1) {
+        if (tabelaUp === candidatas[0]) return match;
+        alterou = true;
+        avisos.push(`${tabela} -> ${candidatas[0]} (pre-proc)`);
+        baseToPhysical[base] = candidatas[0];
+        return `${clausula} ${candidatas[0]} ${on}`;
+      }
+      if (sufixoFallback) {
+        const novaTabela = `${base}${sufixoFallback}`;
+        if (tabelaUp !== novaTabela) {
+          alterou = true;
+          avisos.push(`${tabela} -> ${novaTabela} (pre-proc+fallback)`);
+          baseToPhysical[base] = novaTabela;
+          return `${clausula} ${novaTabela} ${on}`;
+        }
+      }
+      return match;
+    }
+  );
+
+  texto = texto.replace(/\b(FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)([ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))?/gi, (match, clausula, tabela, aliasParte, alias) => {
     // Ignora palavras reservadas SQL capturadas erroneamente como alias.
     // Ex.: "FROM SF2\nWHERE" captura alias='WHERE' → sem este guard, ALIASES_PROTHEUS.has('WHERE')
     // retorna false e o sufixo não é aplicado.

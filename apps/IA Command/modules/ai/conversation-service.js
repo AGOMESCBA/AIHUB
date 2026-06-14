@@ -357,7 +357,60 @@ async function _requestGeminiChat(cfg, apiKey, systemPrompt, messages) {
 
 const _MAX_HISTORICO = 20;
 
+// ── Cache do roteador conversacional ────────────────────────────────────────
+const _cacheRoteamento = new Map();
+const _ROTEAR_TTL_MS   = 2 * 60 * 1000;  // 2 minutos
+const _MAX_ROTEAR      = 200;
+
+function _rotearCacheKey(empresaId, mensagem) {
+  return `${empresaId}:${mensagem.trim().toLowerCase()}`;
+}
+
+function _rotearCacheGet(key) {
+  const item = _cacheRoteamento.get(key);
+  if (!item || item.expiraEm < Date.now()) {
+    if (item) _cacheRoteamento.delete(key);
+    return null;
+  }
+  return item.valor;
+}
+
+function _rotearCacheSet(key, valor) {
+  _cacheRoteamento.set(key, { valor, expiraEm: Date.now() + _ROTEAR_TTL_MS });
+  if (_cacheRoteamento.size > _MAX_ROTEAR) {
+    const firstKey = _cacheRoteamento.keys().next().value;
+    if (firstKey) _cacheRoteamento.delete(firstKey);
+  }
+  return valor;
+}
+
+// ── Bypass determinístico: padrões ERP claros → pula chamada de IA ──────────
+const _PADROES_ERP = [
+  /\b(faturamento|vendas?|receita)\b/i,
+  /\b(compras?|fornecedor|pedido)\b/i,
+  /\b(financeiro|contas?\s+a\s+pagar|contas?\s+a\s+receber|t[ií]tulos?|baixas?)\b/i,
+  /\b(comiss[ãa]o|comissoes|vendedor)\b/i,
+  /\b(ontem|hoje|essa\s+semana|esse\s+m[eê]s|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i,
+  /\b(quanto|total|valor|saldo|resumo|relat[oó]rio)\b/i,
+];
+
+function _ehPadraoErp(mensagem) {
+  return _PADROES_ERP.some(p => p.test(mensagem));
+}
+
 async function rotear(mensagem, empresaId, historico = []) {
+  const cacheKey = _rotearCacheKey(empresaId, mensagem);
+
+  const cached = _rotearCacheGet(cacheKey);
+  if (cached) return cached;
+
+  // Bypass: mensagem com padrão ERP inequívoco → pula chamada de IA
+  if (historico.length === 0 && _ehPadraoErp(mensagem)) {
+    const resultado = { tipo: 'data_request', consulta: mensagem, provedor: 'bypass_local' };
+    _rotearCacheSet(cacheKey, resultado);
+    return resultado;
+  }
+
   const { keys, cfg } = await intentService._resolveKeys(empresaId);
   const ordem = intentService._normalizarOrdem(cfg);
   const systemPrompt = _buildRouterSystem();
@@ -380,7 +433,9 @@ async function rotear(mensagem, empresaId, historico = []) {
         const semFence = texto.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
         const parsed = JSON.parse(semFence);
         if (parsed?.tipo === 'data_request' && parsed?.consulta) {
-          return { tipo: 'data_request', consulta: String(parsed.consulta), provedor };
+          const resultado = { tipo: 'data_request', consulta: String(parsed.consulta), provedor };
+          _rotearCacheSet(cacheKey, resultado);
+          return resultado;
         }
       } catch (_) {}
 
@@ -390,11 +445,14 @@ async function rotear(mensagem, empresaId, historico = []) {
         try {
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed?.tipo === 'data_request' && parsed?.consulta) {
-            return { tipo: 'data_request', consulta: String(parsed.consulta), provedor };
+            const resultado = { tipo: 'data_request', consulta: String(parsed.consulta), provedor };
+            _rotearCacheSet(cacheKey, resultado);
+            return resultado;
           }
         } catch (_) {}
       }
 
+      // Respostas conversacionais não são cacheadas: variam com histórico e hora do dia
       return { tipo: 'conversacional', resposta: texto, provedor };
     } catch (e) {
       console.warn(`[ConversationRouter] ${provedor} falhou: ${e.message}`);

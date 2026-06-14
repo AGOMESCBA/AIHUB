@@ -64,6 +64,33 @@
     .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
     .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
     .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+
+    /* Abas do formulário */
+    .form-tabs { display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px; }
+    .form-tab { padding:9px 18px;font-size:13px;font-weight:600;color:var(--text-lo);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s; }
+    .form-tab:hover { color:var(--text-hi); }
+    .form-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+
+    /* Toggle Sim/Não */
+    .toggle-row { display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border); }
+    .toggle-row:last-child { border-bottom:none; }
+    .toggle-info { flex:1; }
+    .toggle-label { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .toggle-desc { font-size:12px;color:var(--text-lo);margin-top:2px; }
+    .toggle-switch { position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:16px; }
+    .toggle-switch input { opacity:0;width:0;height:0; }
+    .toggle-slider { position:absolute;cursor:pointer;inset:0;background:var(--bg-hover);border:1px solid var(--border);border-radius:99px;transition:.2s; }
+    .toggle-slider:before { position:absolute;content:'';height:16px;width:16px;left:3px;bottom:3px;background:var(--text-lo);border-radius:50%;transition:.2s; }
+    .toggle-switch input:checked + .toggle-slider { background:var(--accent);border-color:var(--accent); }
+    .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px);background:#fff; }
+    .toggle-block { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px; }
+
+    /* Alerta de perfil ERP */
+    .erp-id-wrap { display:none; }
+    .erp-id-wrap.visible { display:block; }
+    .info-box { background:var(--accent-glow);border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-top:12px; }
   </style>
 </head>
 <body>
@@ -151,37 +178,141 @@
 
           <div class="editor-grid editor-grid-wide" style="margin-top:20px">
             <main class="editor-main">
-              <section class="form-section">
-                <div class="form-section-header">
-                  <div class="form-section-title">Identificacao</div>
-                  <div class="form-section-subtitle">Nome do contato e numero usado no WhatsApp.</div>
-                </div>
-                <div class="form-section-body">
-                  <div class="form-group">
-                    <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
-                    <input type="text" id="f-nome" class="form-control" placeholder="ex: Joao Financeiro">
-                    <div class="form-hint">Use um nome que facilite identificar quem esta autorizado a consultar dados.</div>
-                  </div>
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">Numero WhatsApp <span style="color:#dc2626">*</span></label>
-                    <input type="tel" id="f-numero" class="form-control" placeholder="ex: 5592999999999" oninput="mascararNumero(this)">
-                    <div class="form-hint">Informe com DDI e DDD. O sistema salva apenas os digitos.</div>
-                  </div>
-                </div>
-              </section>
 
-              <section class="form-section">
-                <div class="form-section-header">
-                  <div class="form-section-title">Observacoes</div>
-                  <div class="form-section-subtitle">Informacoes internas para auditoria e operacao.</div>
-                </div>
-                <div class="form-section-body">
-                  <div class="form-group" style="margin-bottom:0">
-                    <label class="form-label">Observacoes</label>
-                    <textarea id="f-observacoes" class="form-control" rows="4" placeholder="ex: Diretor financeiro, liberado para consultas de faturamento."></textarea>
+              <!-- Abas -->
+              <div class="form-tabs">
+                <button class="form-tab active" onclick="mudarAba('geral',this)">Geral</button>
+                <button class="form-tab" onclick="mudarAba('autorizacoes',this)">Autorizações</button>
+                <button class="form-tab" onclick="mudarAba('vendas',this)">Gestão de Vendas</button>
+              </div>
+
+              <!-- ABA: GERAL -->
+              <div class="tab-pane active" id="tab-geral">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Identificacao</div>
+                    <div class="form-section-subtitle">Nome do contato e numero usado no WhatsApp.</div>
                   </div>
-                </div>
-              </section>
+                  <div class="form-section-body">
+                    <div class="form-group">
+                      <label class="form-label">Nome <span style="color:#dc2626">*</span></label>
+                      <input type="text" id="f-nome" class="form-control" placeholder="ex: Joao Financeiro">
+                      <div class="form-hint">Use um nome que facilite identificar quem esta autorizado a consultar dados.</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Numero WhatsApp <span style="color:#dc2626">*</span></label>
+                      <input type="tel" id="f-numero" class="form-control" placeholder="ex: 5592999999999" oninput="mascararNumero(this)">
+                      <div class="form-hint">Informe com DDI e DDD. O sistema salva apenas os digitos.</div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Observacoes</div>
+                    <div class="form-section-subtitle">Informacoes internas para auditoria e operacao.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Observacoes</label>
+                      <textarea id="f-observacoes" class="form-control" rows="4" placeholder="ex: Diretor financeiro, liberado para consultas de faturamento."></textarea>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- ABA: AUTORIZAÇÕES -->
+              <div class="tab-pane" id="tab-autorizacoes">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Módulos Permitidos</div>
+                    <div class="form-section-subtitle">Defina quais módulos do IA Command este número pode consultar. Módulos desativados retornarão uma mensagem amigável solicitando que o usuário peça acesso ao gestor.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="toggle-block">
+                      <div class="toggle-row">
+                        <div class="toggle-info">
+                          <div class="toggle-label">Financeiro</div>
+                          <div class="toggle-desc">Consultas de contas a pagar, receber, fluxo de caixa e saldos.</div>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="f-mod-financeiro">
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                      <div class="toggle-row">
+                        <div class="toggle-info">
+                          <div class="toggle-label">Compras</div>
+                          <div class="toggle-desc">Consultas de pedidos de compra, fornecedores e estoques.</div>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="f-mod-compras">
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                      <div class="toggle-row">
+                        <div class="toggle-info">
+                          <div class="toggle-label">Faturamento</div>
+                          <div class="toggle-desc">Consultas de pedidos de venda, notas fiscais e clientes.</div>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="f-mod-faturamento">
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                      <div class="toggle-row">
+                        <div class="toggle-info">
+                          <div class="toggle-label">Comissão</div>
+                          <div class="toggle-desc">Consultas de comissões de vendedores. Requer configuração de perfil ERP na aba Gestão de Vendas.</div>
+                        </div>
+                        <label class="toggle-switch">
+                          <input type="checkbox" id="f-mod-comissao">
+                          <span class="toggle-slider"></span>
+                        </label>
+                      </div>
+                    </div>
+                    <div class="info-box" style="margin-top:16px">
+                      Quando um módulo está desativado, o usuário recebe a mensagem: <em>"Ainda não consigo consultar o módulo [X] para o seu número. Peça ao gestor do IA Command para liberar esse módulo no seu cadastro de WhatsApp e tente novamente."</em>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- ABA: GESTÃO DE VENDAS -->
+              <div class="tab-pane" id="tab-vendas">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Perfil ERP</div>
+                    <div class="form-section-subtitle">Configure o tipo de acesso a dados de comissão deste número no sistema ERP. Necessário apenas para quem tiver o módulo Comissão habilitado.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="form-group">
+                      <label class="form-label">Perfil ERP</label>
+                      <select id="f-erp-tipo" class="form-control" onchange="onErpTipoChange()">
+                        <option value="">Nenhum</option>
+                        <option value="vendedor">Vendedor</option>
+                        <option value="gestor">Gestor</option>
+                      </select>
+                      <div class="form-hint">
+                        <strong>Vendedor</strong> — vê apenas as próprias comissões (filtro automático por código ERP).<br>
+                        <strong>Gestor</strong> — vê comissões de todos os vendedores sem restrição.
+                      </div>
+                    </div>
+
+                    <div class="erp-id-wrap" id="erp-id-wrap">
+                      <div class="form-group" style="margin-bottom:0">
+                        <label class="form-label">Código ERP do Vendedor <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="f-erp-id" class="form-control" placeholder="ex: V001" style="text-transform:uppercase">
+                        <div class="form-hint">Código do vendedor no Protheus (campo E3_VEND). Obrigatório quando o perfil é Vendedor.</div>
+                      </div>
+                      <div class="info-box">
+                        O sistema aplicará automaticamente o filtro <code>WHERE SE3.E3_VEND = '${codigo}'</code> em todas as consultas de comissão deste número.
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
             </main>
 
             <aside class="editor-side">
@@ -250,6 +381,19 @@
     return n ? `+${n}` : '';
   }
 
+  function mudarAba(aba, btn) {
+    document.querySelectorAll('.form-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${aba}`).classList.add('active');
+  }
+
+  function onErpTipoChange() {
+    const tipo = document.getElementById('f-erp-tipo').value;
+    const wrap = document.getElementById('erp-id-wrap');
+    wrap.classList.toggle('visible', tipo === 'vendedor');
+  }
+
   function abrirFormulario(id) {
     editId = id || null;
     resetForm();
@@ -257,6 +401,8 @@
     document.getElementById('form-subtitle').textContent = id ? 'Revise os campos e salve.' : 'Preencha os campos e salve.';
     document.getElementById('sec-lista').style.display = 'none';
     document.getElementById('sec-form').style.display = '';
+    // Sempre abre na aba Geral
+    document.querySelectorAll('.form-tab')[0].click();
     if (id) carregarForm(id);
     else preencherEmpresa();
   }
@@ -281,6 +427,14 @@
     document.getElementById('f-numero').value = '';
     document.getElementById('f-observacoes').value = '';
     document.getElementById('f-ativo').value = '1';
+    // Autorizações
+    ['financeiro','compras','faturamento','comissao'].forEach(m => {
+      document.getElementById(`f-mod-${m}`).checked = false;
+    });
+    // Gestão de Vendas
+    document.getElementById('f-erp-tipo').value = '';
+    document.getElementById('f-erp-id').value = '';
+    document.getElementById('erp-id-wrap').classList.remove('visible');
     feedback('', true);
   }
 
@@ -296,6 +450,14 @@
     document.getElementById('f-ativo').value = String(row.ativo ?? 1);
     document.getElementById('form-title').textContent = row.nome || 'Editar Numero';
     document.getElementById('form-subtitle').textContent = `ID ${String(row.id).slice(0,8)}...`;
+    // Autorizações
+    ['financeiro','compras','faturamento','comissao'].forEach(m => {
+      document.getElementById(`f-mod-${m}`).checked = !!row[`modulo_${m}`];
+    });
+    // Gestão de Vendas
+    document.getElementById('f-erp-tipo').value = row.erp_tipo || '';
+    document.getElementById('f-erp-id').value = row.erp_id || '';
+    onErpTipoChange();
   }
 
   async function salvar() {
@@ -305,11 +467,26 @@
     if (!numero) return feedback('Campo Numero WhatsApp e obrigatorio.', false);
     if (numero.length < 10 || numero.length > 15) return feedback('Informe o numero com DDI e DDD.', false);
 
+    const erpTipo = document.getElementById('f-erp-tipo').value;
+    const erpId = document.getElementById('f-erp-id').value.trim().toUpperCase();
+    if (erpTipo === 'vendedor' && !erpId) {
+      // Avisa mas não bloqueia — gestor pode preencher depois
+      if (!confirm('O perfil Vendedor exige um Código ERP. Deseja salvar mesmo assim (o acesso à comissão ficará bloqueado até configurar o código)?')) {
+        return;
+      }
+    }
+
     const body = {
       nome,
       numero,
       observacoes: document.getElementById('f-observacoes').value.trim() || null,
       ativo: parseInt(document.getElementById('f-ativo').value),
+      modulo_financeiro:  document.getElementById('f-mod-financeiro').checked  ? 1 : 0,
+      modulo_compras:     document.getElementById('f-mod-compras').checked     ? 1 : 0,
+      modulo_faturamento: document.getElementById('f-mod-faturamento').checked ? 1 : 0,
+      modulo_comissao:    document.getElementById('f-mod-comissao').checked    ? 1 : 0,
+      erp_tipo: erpTipo || null,
+      erp_id:   erpId   || null,
     };
 
     const url = editId ? `/api/ia-command/admin/numeros-whatsapp/${editId}` : '/api/ia-command/admin/numeros-whatsapp';
@@ -387,7 +564,21 @@
         { title:'#', field:'id', width:200, headerFilter:false, groupable:false, formatter:c=>`<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${esc(String(c.getValue() || '').slice(0,8))}...</span>` },
         { title:'Nome', field:'nome', minWidth:170, headerFilter:true, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
         { title:'Numero', field:'numero', minWidth:150, headerFilter:true, formatter:c=>`<span style="font-family:monospace;color:var(--text-md)">${esc(formatarNumero(c.getValue()))}</span>` },
-        { title:'Observacoes', field:'observacoes', minWidth:220, headerFilter:true, formatter:c=>`<span style="color:var(--text-lo)">${esc(c.getValue() || '-')}</span>` },
+        { title:'Módulos', field:'modulo_financeiro', minWidth:160, headerFilter:false, groupable:false, formatter:c=>{
+          const row = c.getRow().getData();
+          const tags = [];
+          if (row.modulo_financeiro)  tags.push('<span style="background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">Fin</span>');
+          if (row.modulo_compras)     tags.push('<span style="background:#fef9c3;color:#854d0e;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">Cmp</span>');
+          if (row.modulo_faturamento) tags.push('<span style="background:#f0fdf4;color:#166534;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">Fat</span>');
+          if (row.modulo_comissao)    tags.push('<span style="background:#faf5ff;color:#6b21a8;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">Com</span>');
+          return tags.length ? tags.join(' ') : '<span style="color:var(--text-lo);font-size:11px">Nenhum</span>';
+        }},
+        { title:'Perfil ERP', field:'erp_tipo', width:110, headerFilter:false, formatter:c=>{
+          const v = c.getValue();
+          if (v === 'vendedor') return '<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:600">Vendedor</span>';
+          if (v === 'gestor')   return '<span style="background:#e0e7ff;color:#3730a3;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:600">Gestor</span>';
+          return '<span style="color:var(--text-lo);font-size:11px">-</span>';
+        }},
         { title:'Status', field:'ativo', width:105, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}}, formatter:c=>c.getValue()?'<span class="badge-ativo">● Ativo</span>':'<span class="badge-inativo">○ Inativo</span>' },
         { title:'Criado em', field:'criado_em', width:150, formatter:c=>c.getValue()?.slice(0,16).replace('T',' ') || '' },
         { title:'Acoes', field:'id', width:90, headerFilter:false, groupable:false, hozAlign:'right', formatter:cell=>{
@@ -424,10 +615,19 @@
       <div class="help-item-desc">Cadastre aqui os numeros que podem conversar com o IA Command nesta empresa. Quando existir ao menos um numero ativo, mensagens de numeros nao cadastrados serao ignoradas.</div>
     </div>
     <div class="help-section">
-      <div class="help-section-title">Campos</div>
+      <div class="help-section-title">Aba: Geral</div>
       <div class="help-item"><div class="help-item-label">Nome</div><div class="help-item-desc">Identificacao interna do contato autorizado.</div></div>
       <div class="help-item"><div class="help-item-label">Numero</div><div class="help-item-desc">Use DDI e DDD, por exemplo <em>5592999999999</em>. A comparacao usa apenas digitos.</div></div>
       <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Numeros inativos ficam registrados, mas nao autorizam novas interacoes.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Aba: Autorizações</div>
+      <div class="help-item-desc">Controle quais módulos do IA Command este número pode acessar. Se um módulo estiver desativado, o usuário receberá uma mensagem amigável orientando a solicitar acesso ao gestor.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Aba: Gestão de Vendas</div>
+      <div class="help-item"><div class="help-item-label">Vendedor</div><div class="help-item-desc">Vê apenas as próprias comissões. O sistema aplica automaticamente o filtro pelo Código ERP informado.</div></div>
+      <div class="help-item"><div class="help-item-label">Gestor</div><div class="help-item-desc">Acesso irrestrito às comissões de todos os vendedores da empresa.</div></div>
     </div>
     <div class="help-tip">Se nenhum numero ativo estiver cadastrado, o comportamento atual e mantido para evitar bloqueio acidental do atendimento.</div>
   </div>

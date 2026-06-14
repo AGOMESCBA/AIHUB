@@ -5,6 +5,10 @@ const { requireRotina }  = require('../../permissions');
 const { getEmpresaId }   = require('../../empresa-context');
 const connectionFactory  = require('../providers/connection-factory');
 
+function _invalidarMetaSX2(empresaId) {
+  try { require('../ia-owner/runner').invalidarMetaCache(empresaId); } catch (_) {}
+}
+
 module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
   const canSX2 = requireRotina('iac-admin-protheus-sx2');
   const eid    = req => getEmpresaId(req);
@@ -78,6 +82,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         descricao:(r.X2_NOME    || r.x2_nome    || r.X2_DESCRI || r.x2_descri || '').toString().trim(),
       })), limpar !== false);
 
+      _invalidarMetaSX2(eid(req));
       res.json({ importados: total });
     }
   );
@@ -95,6 +100,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         if (!conn) return res.status(404).json({ error: 'Conexão não encontrada.' });
 
         const total = _salvarRegistros(conexao_id, eid(req), registros, limpar !== false);
+        _invalidarMetaSX2(eid(req));
         res.json({ importados: total });
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -126,6 +132,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
           'INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)'
         ).run(conexao_id, eid(req), chaveFmt, arquivoFmt, (modo || 'E').trim(), descricao || '', agora, agora);
 
+        _invalidarMetaSX2(eid(req));
         res.status(201).json(db.prepare('SELECT * FROM protheus_sx2 WHERE id = ?').get(info.lastInsertRowid));
       } catch (e) {
         res.status(500).json({ error: e.message });
@@ -152,6 +159,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
           descricao !== undefined ? descricao : row.descricao,
           agora, row.id
         );
+        _invalidarMetaSX2(eid(req));
         res.json(db.prepare('SELECT * FROM protheus_sx2 WHERE id = ?').get(row.id));
       } catch (e) {
         res.status(500).json({ error: e.message });

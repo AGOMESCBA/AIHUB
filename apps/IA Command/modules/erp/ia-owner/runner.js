@@ -6,8 +6,34 @@ const sx2SqlNormalizer = require('../sx2-sql-normalizer');
 const sx3SqlValidator = require('../sx3-sql-validator');
 const entitySqlGuard = require('../entity-sql-guard');
 const responseFormatter = require('../response-formatter');
+const queryPlan = require('../query-plan');
 const promptBuilder = require('./prompt-builder');
 const entityResolver = require('../../ai/entity-resolver');
+
+// ── Cache de metadados ERP (configProtheus / SX2 / SX3) ────────────────────
+const _metaCache = new Map();
+const _META_TTL_MS = 5 * 60 * 1000;  // 5 minutos
+
+function _metaCacheGet(key) {
+  const item = _metaCache.get(key);
+  if (!item || item.expiraEm < Date.now()) {
+    if (item) _metaCache.delete(key);
+    return null;
+  }
+  return item.valor;
+}
+
+function _metaCacheSet(key, valor) {
+  _metaCache.set(key, { valor, expiraEm: Date.now() + _META_TTL_MS });
+  return valor;
+}
+
+function invalidarMetaCache(empresaId) {
+  const prefix = `:${empresaId}:`;
+  for (const key of _metaCache.keys()) {
+    if (key.includes(prefix)) _metaCache.delete(key);
+  }
+}
 
 function baseTabelaSX2(nome) {
   return sx2SqlNormalizer.baseTabelaSX2(nome);
@@ -106,6 +132,130 @@ function mensagemErro(spec, tipo) {
   return msgs[tipo] || fallback[tipo] || fallback.erro_erp;
 }
 
+function maxTentativasPrepararSql(entidadesResolvidas = []) {
+  return 3;
+}
+
+function _linhasEntidadesRetry(entidadesResolvidas = []) {
+  const entidades = Array.isArray(entidadesResolvidas) ? entidadesResolvidas : [];
+  if (!entidades.length) return [];
+  return [
+    'Entidades obrigatorias ja resolvidas:',
+    ...entidades
+      .filter(entidade => entidade?.codigo)
+      .map(entidade => {
+        const tipo = String(entidade.tipo || 'entidade');
+        const codigo = String(entidade.codigo || '');
+        const loja = entidade._todos
+          ? 'todas (_todos=true; nao filtre loja fixa)'
+          : entidade.loja ? String(entidade.loja) : 'nao informada';
+        const nome = entidade.nome ? ` | nome: ${entidade.nome}` : '';
+        return `- ${tipo}: codigo ${codigo}; loja ${loja}${nome}`;
+      }),
+    '',
+  ];
+}
+
+function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
+  const subtipo = String(erro?._tipo || '').trim();
+  const mensagem = String(erro?.message || erro || '').trim();
+  const linhasEntidades = _linhasEntidadesRetry(entidadesResolvidas);
+  const base = [
+    'RETRY TECNICO IA-OWNER',
+    '',
+    `Motivo da rejeicao: ${mensagem || subtipo || 'erro nao classificado'}`,
+    '',
+  ];
+
+  let bloco;
+  if (subtipo === 'contrato_entidade_invalido' || /entidades resolvidas|filtro de codigo|filtro da loja|por nome\/descricao/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, metrica, tabelas e escopo tecnico.',
+      '- Aplique as entidades resolvidas usando codigo interno.',
+      '- Se _todos=true, filtre somente o codigo da entidade; nao filtre loja fixa.',
+      '',
+      'Nao fazer:',
+      '- Nao filtrar por nome, descricao ou LIKE.',
+      '- Nao remover periodo, metrica ou demais filtros ja corretos.',
+    ];
+  } else if (/D_E_L_E_T_|deletad/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- Toda tabela no FROM/JOIN precisa de D_E_L_E_T_ = ' '.",
+      "- Tabela principal: filtro no WHERE.",
+      "- Tabelas em JOIN: filtro dentro do ON.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, metrica, entidades resolvidas e filtros cadastrais.',
+      '- Corrija TODOS os problemas listados no motivo da rejeicao em um unico SQL — nao apenas D_E_L_E_T_.',
+      '- Antes de retornar: verifique D_E_L_E_T_ em todas as tabelas E releia o CONTRATO OBRIGATORIO DE SQL no contexto tecnico.',
+    ];
+  } else if (subtipo === 'contrato_query_plan_invalido' || /plano estruturado|campo_data_semantico|baixa\/movimento|baixa_movimento/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- O SQL deve respeitar o query_plan enviado em contextoTecnico.',
+      '- Quando query_plan.campo_data_semantico = baixa_movimento, filtre o periodo por baixa/movimento real, nao por emissao ou vencimento.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original e do query_plan atual.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos solicitados.',
+    ];
+  } else if (subtipo === 'periodo_sql_inconsistente' || /periodo|temporal|data/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- O periodo declarado no plano deve aparecer no SQL em campo temporal valido do modulo.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL aplicando explicitamente o periodo no WHERE/subquery correta.',
+      '- Preserve metrica, entidades resolvidas e agrupamentos solicitados.',
+    ];
+  } else if (subtipo === 'contrato_sx3_invalido' || /SX3|Campo .* nao consta/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- Use somente campos existentes no SX3/contexto tecnico atual.',
+      '- Alias calculado em CTE/subquery deve ser referenciado pelo alias exportado, nao pela tabela original.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL substituindo campos invalidos por campos permitidos.',
+      '- Preserve periodo, metrica e entidades resolvidas.',
+    ];
+  } else if (subtipo === 'sql_parametro_entidade_pendente' || /placeholder|parametro/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- Nao deixe placeholders de entidade pendentes no SQL final.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL usando os codigos internos das entidades resolvidas.',
+      '- Preserve periodo, metrica e escopo tecnico.',
+    ];
+  } else {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- O SQL deve respeitar o erro tecnico informado e o contexto tecnico atual.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL do zero a partir da pergunta original.',
+      '- Preserve periodo, metrica, entidades resolvidas, agrupamentos e tabelas corretas.',
+      '- Corrija especificamente a violacao apontada no motivo da rejeicao.',
+      '',
+      'Nao fazer:',
+      '- Nao copiar o SQL anterior sem revisar todos os contratos.',
+    ];
+  }
+
+  return [
+    ...base,
+    ...bloco,
+    '',
+    'Retorne somente o JSON obrigatorio.',
+  ].join('\n');
+}
+
 function subtipoEhInconsistenciaConsulta(subtipo) {
   return /^(?:contrato_|sql_|periodo_sql_|funcao_data_|filtro_|ia_indisponivel|sem_chave|cota_esgotada)/i.test(String(subtipo || ''));
 }
@@ -131,6 +281,9 @@ function extrairSQL(raw) {
 }
 
 function configProtheus(empresaId) {
+  const cacheKey = `cfg::${empresaId}::`;
+  const cached = _metaCacheGet(cacheKey);
+  if (cached) return cached;
   try {
     const { getDB } = require('../../database');
     const db = getDB();
@@ -140,7 +293,7 @@ function configProtheus(empresaId) {
       if (sx2Row?.connection_id) row = db.prepare('SELECT id, configuracoes FROM connections WHERE id = ? AND ativo = 1').get(sx2Row.connection_id);
     }
     const cfg = row?.configuracoes ? JSON.parse(row.configuracoes) : {};
-    return { conexaoId: row?.id || null, sufixoTabela: cfg.sufixo_tabela || '010', filialPadrao: cfg.filial_padrao || null };
+    return _metaCacheSet(cacheKey, { conexaoId: row?.id || null, sufixoTabela: cfg.sufixo_tabela || '010', filialPadrao: cfg.filial_padrao || null });
   } catch (_) {
     return { conexaoId: null, sufixoTabela: '010', filialPadrao: null };
   }
@@ -148,6 +301,9 @@ function configProtheus(empresaId) {
 
 function modosSX2(tabelas, conexaoId, empresaId) {
   if (!conexaoId) return null;
+  const cacheKey = `sx2::${empresaId}::${conexaoId}::${(tabelas || []).slice().sort().join(',')}`;
+  const cached = _metaCacheGet(cacheKey);
+  if (cached !== null) return cached;
   try {
     const { getDB } = require('../../database');
     // Busca entradas da empresa + entradas globais da conexão (empresa_id NULL).
@@ -160,7 +316,9 @@ function modosSX2(tabelas, conexaoId, empresaId) {
       const arquivo = String(row.arquivo || row.chave || '').trim().toUpperCase();
       if (arquivo && bases.has(baseTabelaSX2(arquivo))) mapa[arquivo] = row.modo;
     }
-    return Object.keys(mapa).length ? mapa : null;
+    const resultado = Object.keys(mapa).length ? mapa : null;
+    _metaCacheSet(cacheKey, resultado);
+    return resultado;
   } catch (_) {
     return null;
   }
@@ -192,6 +350,9 @@ function camposSX3(tabelas, conexaoId, empresaId, limite = 80, essenciais = {}) 
     return Object.keys(out).length ? out : null;
   };
   if (!conexaoId) return null;
+  const cacheKey = `sx3::${empresaId}::${conexaoId}::${(tabelas || []).slice().sort().join(',')}`;
+  const cached = _metaCacheGet(cacheKey);
+  if (cached !== null) return cached;
   try {
     const { getDB } = require('../../database');
     const rows = getDB().prepare(`
@@ -231,7 +392,9 @@ function camposSX3(tabelas, conexaoId, empresaId, limite = 80, essenciais = {}) 
         }
       }
     }
-    return Object.keys(mapa).length ? mapa : montarEssenciais();
+    const resultado = Object.keys(mapa).length ? mapa : montarEssenciais();
+    _metaCacheSet(cacheKey, resultado);
+    return resultado;
   } catch (_) {
     return montarEssenciais();
   }
@@ -252,7 +415,10 @@ function sx3EssencialParaPrompt(essenciais = {}) {
 }
 
 async function chamarIaOwner(spec, keys, cfg, userPrompt, opts = {}) {
-  const systemPrompt = promptBuilder.buildSystemPrompt(spec);
+  const systemPrompt = promptBuilder.buildSystemPrompt(spec, {
+    modeloBaixasReceber: opts.modeloBaixasReceber,
+    modeloBaixasPagar: opts.modeloBaixasPagar,
+  });
   const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
     json: true,
     maxTokens: spec.maxTokens || 3500,
@@ -267,6 +433,11 @@ async function chamarIaOwner(spec, keys, cfg, userPrompt, opts = {}) {
   return { raw, obj, sql: obj.sql ? String(obj.sql).trim() : extrairSQL(raw), systemPrompt, userPrompt };
 }
 
+const _TIPOS_ENTIDADE_CADASTRAL = new Set([
+  'cliente', 'fornecedor', 'vendedor', 'produto', 'grupo_produto',
+  'marca', 'centro_custo', 'tes', 'transportadora', 'natureza', 'desconhecido',
+]);
+
 function normalizarEntidadesNecessarias(obj = {}) {
   return (Array.isArray(obj.entidades_necessarias) ? obj.entidades_necessarias : [])
     .map(e => ({
@@ -275,7 +446,9 @@ function normalizarEntidadesNecessarias(obj = {}) {
       texto: String(e?.texto || '').trim(),
       origem: e?.origem || 'ia_owner',
     }))
-    .filter(e => e.tipo && e.texto);
+    // Só tipos cadastrais são válidos — descarta condições operacionais como
+    // "contas_pagas", "carteira", "contas_recebidas" que a IA pode declarar incorretamente.
+    .filter(e => e.tipo && e.texto && _TIPOS_ENTIDADE_CADASTRAL.has(e.tipo));
 }
 
 function confirmacaoPodeEncerrarPlano(obj = {}) {
@@ -303,8 +476,8 @@ function pedidosEntidadesParaResolverNoTenant(entidades = []) {
     .filter(entidade => entidade?._resolverNoTenantAtual)
     .map(entidade => {
       const textoRaw = entidade.termoBusca || entidade.texto || entidade.nome;
-      // Remove sufixos parentéticos como "(todos)" antes de buscar no cadastro
-      const texto = _normalizarNomeEntidadeBase(textoRaw) || textoRaw;
+      // Remove sufixos parentéticos preservando case original (busca cadastral pode ser case-sensitive)
+      const texto = String(textoRaw || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || textoRaw;
       return { texto, tipo: entidade.tipo, tipo_sugerido: entidade.tipo, origem: 'filtro_estruturado' };
     })
     .filter(pedido => pedido.texto && pedido.tipo);
@@ -495,20 +668,29 @@ async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, 
     ))
     .map(([campo, valor]) => ({ texto: valor.trim(), tipo_sugerido: campo, tipo: campo, confianca: 1, origem: 'filtro_estruturado' }));
   const explicitos = entityResolver.extrairExplicitos(mensagem);
+  const termosAteAgora = [...termosFiltros, ...explicitos];
+
+  // Chama IA apenas quando os termos determinísticos são insuficientes ou há ambiguidade.
+  // Se filtros estruturados + explícitos já identificaram entidades, IA não acrescenta.
+  const _AMBIGUO = /\b(cliente|fornecedor|produto|vendedor|transportadora)\s+\w/i;
+  const precisaIaEntidades = termosAteAgora.length === 0 || _AMBIGUO.test(mensagem);
+
   let termosIa = [];
-  try {
-    const raw = await aiProviderClient.chamarIA(
-      keys,
-      cfg,
-      entityResolver.buildExtractionSystemPrompt(),
-      entityResolver.buildExtractionUserPrompt(mensagem, spec.nome || 'erp'),
-      { json: true, maxTokens: 500, temperature: 0, logPrefix: `${spec.logPrefix || 'IAOwner'}-entidades` }
-    );
-    termosIa = entityResolver.normalizarEntidadesIA(raw);
-  } catch (e) {
-    console.warn(`[${spec.logPrefix || 'IAOwner'}] Extracao previa de entidades falhou; usando termos deterministicas:`, e.message);
+  if (precisaIaEntidades) {
+    try {
+      const raw = await aiProviderClient.chamarIA(
+        keys,
+        cfg,
+        entityResolver.buildExtractionSystemPrompt(),
+        entityResolver.buildExtractionUserPrompt(mensagem, spec.nome || 'erp'),
+        { json: true, maxTokens: 500, temperature: 0, logPrefix: `${spec.logPrefix || 'IAOwner'}-entidades` }
+      );
+      termosIa = entityResolver.normalizarEntidadesIA(raw);
+    } catch (e) {
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Extracao previa de entidades falhou; usando termos deterministicas:`, e.message);
+    }
   }
-  return deduplicarTermosEntidade([...termosFiltros, ...explicitos, ...termosIa], intent, entidadesResolvidas)
+  return deduplicarTermosEntidade([...termosAteAgora, ...termosIa], intent, entidadesResolvidas)
     .map(termo => ({
       ...termo,
       tipo: String(termo.tipo || termo.tipo_sugerido || 'desconhecido').trim().toLowerCase(),
@@ -575,19 +757,57 @@ function buildEstadoAnterior(intent = {}) {
   };
 }
 
-function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx3Prompt, middlewareCfg, filial }) {
+// Bases FK que só devem aparecer no sx2 enviado à IA se realmente existirem no SX2 do tenant.
+const FK_BASES_CONDICIONAIS = new Set(['FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB']);
+
+function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prompt, middlewareCfg, filial }) {
+  // sx2Puro = mapa direto do SX2 do IAHub (null quando nada cadastrado).
+  // Se null → tenant sem SX2 cadastrado → FK não existe → modelo SE5.
+  const temFK1 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK1');
+  const temFK2 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK2');
+
+  // Remove do sx2 exposto à IA as tabelas FK injetadas por completarSX2Permitidas
+  // quando elas não estão no sx2Puro. Evita que a IA use FK1/FK2 por ver FK1010 no mapa.
+  const basesPuro = new Set(Object.keys(sx2Puro || {}).map(baseTabelaSX2));
+  const sx2Exposto = Object.fromEntries(
+    Object.entries(sx2 || {}).filter(([nome]) => {
+      const base = baseTabelaSX2(nome);
+      return !FK_BASES_CONDICIONAIS.has(base) || basesPuro.has(base);
+    })
+  );
+
+  // Filtra tabelas_permitidas e sx3 pelo mesmo critério: FK condicionais só se existirem no SX2 puro.
+  const tabelasPermitidas = (spec.tabelas || []).filter(t => {
+    const base = String(t || '').trim().toUpperCase();
+    return !FK_BASES_CONDICIONAIS.has(base) || basesPuro.has(base);
+  });
+  const sx3Exposto = sx3Prompt && typeof sx3Prompt === 'object'
+    ? Object.fromEntries(
+        Object.entries(sx3Prompt).filter(([t]) => {
+          const base = baseTabelaSX2(t);
+          return !FK_BASES_CONDICIONAIS.has(base) || basesPuro.has(base);
+        })
+      )
+    : sx3Prompt;
+
   return {
     empresaId,
     data_atual: dataAtualServidor(),
-    tabelas_permitidas: spec.tabelas || [],
-    sx2,
+    tabelas_permitidas: tabelasPermitidas,
+    sx2: sx2Exposto,
     sufixoTabela: inferirSufixoSX2(sx2, protheus.sufixoTabela),
-    sufixosPorTabela: sufixosPorTabelaSX2(sx2),
-    sx3: sx3Prompt,
+    sufixosPorTabela: Object.fromEntries(
+      Object.entries(sufixosPorTabelaSX2(sx2)).filter(([base]) => {
+        return !FK_BASES_CONDICIONAIS.has(base.toUpperCase()) || basesPuro.has(base.toUpperCase());
+      })
+    ),
+    sx3: sx3Exposto,
     filial: filial || protheus.filialPadrao || 'TODAS',
     filialPadrao: protheus.filialPadrao || null,
     modeloDados: middlewareCfg.modelo_dados || 'TRADICIONAL',
     campoFilial: middlewareCfg.campo_filial || null,
+    modelo_baixas_receber: temFK1 ? 'FK1' : 'SE5',
+    modelo_baixas_pagar: temFK2 ? 'FK2' : 'SE5',
   };
 }
 
@@ -962,7 +1182,9 @@ function validarCTEsDefinidaUsada(sql = '') {
   for (const nome of nomes) {
     // Válido se aparece em FROM nome ou JOIN nome em qualquer ponto do SQL
     // (inclui referência dentro de outro CTE — ex: WITH A AS (...), B AS (... FROM A ...))
-    if (!new RegExp(`\\b(?:FROM|JOIN)\\s+${nome}\\b`, 'i').test(texto)) {
+    const usadoEmFromJoin = new RegExp(`\\b(?:FROM|JOIN)\\s+${nome}\\b`, 'i').test(texto);
+    const usadoEmListaFrom = new RegExp(`,\\s*${nome}\\b(?!\\s+AS\\s*\\()`, 'i').test(texto);
+    if (!usadoEmFromJoin && !usadoEmListaFrom) {
       erros.push(
         `CTE "${nome}" foi definida mas nao e usada em FROM/JOIN. ` +
         `A query principal deve usar "FROM ${nome} <alias>" em vez de referenciar a tabela fisica diretamente. ` +
@@ -972,6 +1194,148 @@ function validarCTEsDefinidaUsada(sql = '') {
     }
   }
   return { ok: erros.length === 0, erros };
+}
+
+function validarJoinSD1SF1Completo(sql = '') {
+  const texto = String(sql || '');
+  const erros = [];
+  const reJoin = /\bJOIN\s+[A-Z_][A-Z0-9_]*\s+(SD1|SF1)\b\s+ON\s+/gi;
+  let match;
+  while ((match = reJoin.exec(texto)) !== null) {
+    const aliasJoin = String(match[1] || '').toUpperCase();
+    const inicioOn = reJoin.lastIndex;
+    const fins = ['JOIN', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'UNION']
+      .map(k => localizarKeywordNivelZero(texto, k, inicioOn))
+      .filter(pos => pos >= 0);
+    const fimOn = fins.length ? Math.min(...fins) : texto.length;
+    const on = texto.slice(inicioOn, fimOn);
+    if (aliasJoin === 'SF1' && !/\bSD1\s*\.\s*D1_/i.test(on)) continue;
+    if (aliasJoin === 'SD1' && !/\bSF1\s*\.\s*F1_/i.test(on)) continue;
+
+    const temFornecedor = /\bSD1\s*\.\s*D1_FORNECE\s*=\s*SF1\s*\.\s*F1_FORNECE\b|\bSF1\s*\.\s*F1_FORNECE\s*=\s*SD1\s*\.\s*D1_FORNECE\b/i.test(on);
+    const temLoja = /\bSD1\s*\.\s*D1_LOJA\s*=\s*SF1\s*\.\s*F1_LOJA\b|\bSF1\s*\.\s*F1_LOJA\s*=\s*SD1\s*\.\s*D1_LOJA\b/i.test(on);
+    if (!temFornecedor || !temLoja) {
+      erros.push('JOIN SD1->SF1 incompleto: a condicao ON deve incluir SD1.D1_FORNECE = SF1.F1_FORNECE e SD1.D1_LOJA = SF1.F1_LOJA para evitar duplicidade no SUM.');
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
+function validarJoinSD2SF2Completo(sql = '') {
+  const texto = String(sql || '');
+  const erros = [];
+  const reJoin = /\bJOIN\s+[A-Z_][A-Z0-9_]*\s+(SD2|SF2)\b\s+ON\s+/gi;
+  let match;
+  while ((match = reJoin.exec(texto)) !== null) {
+    const aliasJoin = String(match[1] || '').toUpperCase();
+    const inicioOn = reJoin.lastIndex;
+    const fins = ['JOIN', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'UNION']
+      .map(k => localizarKeywordNivelZero(texto, k, inicioOn))
+      .filter(pos => pos >= 0);
+    const fimOn = fins.length ? Math.min(...fins) : texto.length;
+    const on = texto.slice(inicioOn, fimOn);
+    if (aliasJoin === 'SF2' && !/\bSD2\s*\.\s*D2_/i.test(on)) continue;
+    if (aliasJoin === 'SD2' && !/\bSF2\s*\.\s*F2_/i.test(on)) continue;
+
+    const temCliente = /\bSD2\s*\.\s*D2_CLIENTE\s*=\s*SF2\s*\.\s*F2_CLIENTE\b|\bSF2\s*\.\s*F2_CLIENTE\s*=\s*SD2\s*\.\s*D2_CLIENTE\b/i.test(on);
+    const temLoja = /\bSD2\s*\.\s*D2_LOJA\s*=\s*SF2\s*\.\s*F2_LOJA\b|\bSF2\s*\.\s*F2_LOJA\s*=\s*SD2\s*\.\s*D2_LOJA\b/i.test(on);
+    if (!temCliente || !temLoja) {
+      erros.push('JOIN SD2->SF2 incompleto: a condicao ON deve incluir SD2.D2_CLIENTE = SF2.F2_CLIENTE e SD2.D2_LOJA = SF2.F2_LOJA para evitar duplicidade no SUM.');
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
+function escaparRegexLiteral(valor = '') {
+  return String(valor || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function condicaoIgualSql(trecho = '', aliasA, campoA, aliasB, campoB) {
+  const a = escaparRegexLiteral(aliasA);
+  const b = escaparRegexLiteral(aliasB);
+  const ca = escaparRegexLiteral(campoA);
+  const cb = escaparRegexLiteral(campoB);
+  return new RegExp(
+    `\\b${a}\\s*\\.\\s*${ca}\\s*=\\s*${b}\\s*\\.\\s*${cb}\\b|` +
+    `\\b${b}\\s*\\.\\s*${cb}\\s*=\\s*${a}\\s*\\.\\s*${ca}\\b`,
+    'i'
+  ).test(String(trecho || ''));
+}
+
+function localizarFimOnRelativo(sql = '', inicio = 0) {
+  const texto = String(sql || '');
+  let nivel = 0;
+  let aspas = false;
+  const keywords = ['JOIN', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'UNION'];
+  for (let i = Math.max(0, inicio); i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') aspas = !aspas;
+    if (aspas) continue;
+    if (c === '(') {
+      nivel++;
+      continue;
+    }
+    if (c === ')') {
+      if (nivel === 0) return i;
+      nivel--;
+      continue;
+    }
+    if (nivel !== 0) continue;
+    for (const keyword of keywords) {
+      if (texto.slice(i, i + keyword.length).toUpperCase() !== keyword) continue;
+      const antes = i > 0 ? texto[i - 1] : ' ';
+      const depois = texto[i + keyword.length] || ' ';
+      if (!/[A-Z0-9_]/i.test(antes) && !/[A-Z0-9_]/i.test(depois)) return i;
+    }
+  }
+  return texto.length;
+}
+
+function completarContratoRelacionalSD1SF1(sql = '') {
+  let texto = String(sql || '');
+  const contratosAplicados = [];
+  const reJoin = /\bJOIN\s+[A-Z_][A-Z0-9_]*\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*)\b\s+ON\s+/gi;
+  let match;
+
+  while ((match = reJoin.exec(texto)) !== null) {
+    const aliasJoin = String(match[1] || '').toUpperCase();
+    if (!/^S[DF]1(?:_[A-Z0-9_]+)?$/.test(aliasJoin)) continue;
+
+    const inicioOn = reJoin.lastIndex;
+    const fimOn = localizarFimOnRelativo(texto, inicioOn);
+    const on = texto.slice(inicioOn, fimOn);
+    const aliasSD1 = (on.match(/\b(SD1(?:_[A-Z0-9_]+)?)\s*\.\s*D1_/i) || [])[1];
+    const aliasSF1 = (on.match(/\b(SF1(?:_[A-Z0-9_]+)?)\s*\.\s*F1_/i) || [])[1];
+    if (!aliasSD1 || !aliasSF1) continue;
+
+    const temChaveBase =
+      condicaoIgualSql(on, aliasSD1, 'D1_FILIAL', aliasSF1, 'F1_FILIAL') &&
+      condicaoIgualSql(on, aliasSD1, 'D1_DOC', aliasSF1, 'F1_DOC') &&
+      condicaoIgualSql(on, aliasSD1, 'D1_SERIE', aliasSF1, 'F1_SERIE');
+    if (!temChaveBase) continue;
+
+    const adicionais = [];
+    if (!condicaoIgualSql(on, aliasSD1, 'D1_FORNECE', aliasSF1, 'F1_FORNECE')) {
+      adicionais.push(`${aliasSD1}.D1_FORNECE = ${aliasSF1}.F1_FORNECE`);
+    }
+    if (!condicaoIgualSql(on, aliasSD1, 'D1_LOJA', aliasSF1, 'F1_LOJA')) {
+      adicionais.push(`${aliasSD1}.D1_LOJA = ${aliasSF1}.F1_LOJA`);
+    }
+    if (!adicionais.length) continue;
+
+    const antes = texto.slice(0, fimOn).replace(/\s*$/, '');
+    const depois = texto.slice(fimOn);
+    const complemento = adicionais.map(cond => `\n    AND ${cond}`).join('');
+    texto = `${antes}${complemento}${depois}`;
+    contratosAplicados.push('SD1_SF1_FORNECE_LOJA');
+    reJoin.lastIndex = antes.length + complemento.length;
+  }
+
+  return {
+    sql: texto,
+    alterou: texto !== String(sql || ''),
+    contratosAplicados: [...new Set(contratosAplicados)],
+  };
 }
 
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
@@ -1053,6 +1417,69 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   return { ok: erros.length === 0, erros };
 }
 
+function normalizarAliasesBaseAusentes(sql, spec = {}) {
+  let out = String(sql || '');
+  const bases = (spec.tabelas || []).map(t => String(t || '').trim().toUpperCase()).filter(Boolean);
+  const proximos = 'ON|WHERE|GROUP|ORDER|HAVING|INNER|LEFT|RIGHT|FULL|CROSS|JOIN|UNION';
+  for (const base of bases) {
+    const re = new RegExp(`\\b(FROM|JOIN)\\s+(${_escapeRegexLiteral(base)}\\d*)\\s*(?=\\b(?:${proximos})\\b|$)`, 'gi');
+    out = out.replace(re, (_match, clausula, tabela) => `${clausula} ${tabela} ${base} `);
+  }
+  return out;
+}
+
+function _escapeRegexLiteral(valor) {
+  return String(valor || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _camposPeriodoObrigatorios(spec = {}) {
+  const campos = spec.camposPeriodoObrigatorios || spec.camposDataPeriodo || [];
+  return Array.isArray(campos)
+    ? campos.map(c => String(c || '').trim().toUpperCase()).filter(Boolean)
+    : [];
+}
+
+function sqlTemFiltroPeriodoEmCampo(sql, campo) {
+  const texto = String(sql || '');
+  const campoRe = `(?:[A-Z][A-Z0-9_]*\\.)?${_escapeRegexLiteral(campo)}`;
+  const padroes = [
+    new RegExp(`\\b${campoRe}\\s+BETWEEN\\s*'\\d{8}'\\s+AND\\s*'\\d{8}'`, 'i'),
+    new RegExp(`\\b${campoRe}\\s*(?:=|>=|<=|>|<)\\s*'\\d{4,8}'`, 'i'),
+    new RegExp(`\\b${campoRe}\\s+IN\\s*\\(`, 'i'),
+    new RegExp(`\\b${campoRe}\\s+LIKE\\s*'\\d{4,8}%?'`, 'i'),
+    new RegExp(`\\b(?:SUBSTRING|LEFT|RIGHT)\\s*\\(\\s*${campoRe}[\\s\\S]{0,120}\\)\\s*(?:=|IN\\s*\\(|BETWEEN|>=|<=|>|<)`, 'i'),
+  ];
+  return padroes.some(re => re.test(texto));
+}
+
+function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null) {
+  const dataInicio = String(periodo?.dataInicio || '').trim();
+  const dataFim = String(periodo?.dataFim || '').trim();
+  const campos = _camposPeriodoObrigatorios(spec);
+  if (!/^\d{8}$/.test(dataInicio) || !/^\d{8}$/.test(dataFim) || !campos.length) {
+    return { ok: true, erros: [] };
+  }
+  const temFiltroPeriodo = campos.some(campo => sqlTemFiltroPeriodoEmCampo(sql, campo));
+  if (temFiltroPeriodo) return { ok: true, erros: [] };
+  return {
+    ok: false,
+    erros: [
+      `O plano declarou periodo ${dataInicio} a ${dataFim}, mas o SQL nao aplicou filtro temporal em nenhum campo de data do modulo (${campos.join(', ')}). Gere novamente incluindo o filtro de periodo no WHERE/subquery correta.`,
+    ],
+  };
+}
+
+function construirQueryPlanTecnico({ spec, mensagem, periodo, filtros, entidades } = {}) {
+  const planoBase = queryPlan.buildQueryPlan({
+    modulo: spec?.nome || 'dinamico',
+    mensagem,
+    periodo: periodo || { tipo: 'nenhum' },
+    filtros: filtros || {},
+    entidades: entidades || [],
+  });
+  return queryPlan.reconciliarPlanoComMensagem(planoBase, mensagem);
+}
+
 function _extrairLabelIntencao(mensagem) {
   if (!mensagem) return null;
   const t = String(mensagem)
@@ -1086,12 +1513,20 @@ function _extrairLabelIntencao(mensagem) {
 
   if (/\b(evolucao|historico|tendencia|ao longo|crescimento|variacao)\b/.test(t)) return 'Evolução';
 
+  // Carteiras financeiras — checadas antes de Total/Mensal para evitar conflito com "pagamos/recebemos"
+  const temRecebido = /\b(recebidas?|recebido|recebimentos?|recebemos)\b/.test(t);
+  const temPago     = /\b(pagas?|pago|pagamentos?|pagamos)\b/.test(t);
+  if (temRecebido && temPago) return 'Contas recebidas e pagas';
+  if (temRecebido && !temPago) return 'Contas recebidas';
+  if (temPago && !temRecebido) return 'Contas pagas';
+
+  // Média antes de Mensal: "faturamento médio mensal" deve retornar Média, não Mensal
+  if (/\b(media|medio|ticket medio|preco medio|valor medio)\b/.test(t)) return 'Média';
+
   if (/\bpor (mes|month)\b|\bmensal(mente)?\b/.test(t)) return 'Mensal';
   if (/\bpor ano\b|\banual(mente)?\b/.test(t))          return 'Anual';
 
-  if (/\b(media|ticket medio|preco medio|valor medio)\b/.test(t)) return 'Média';
-
-  if (/\btotal geral\b|\bquanto (faturamos|compramos|pagamos|recebemos)\b/.test(t)) return 'Total';
+  if (/\btotal geral\b|\bquanto (faturamos|compramos)\b/.test(t)) return 'Total';
 
   if (/\b(listar?|detalhar?|mostrar?|exibir?|quais (sao|foram|estao|tem))\b/.test(t)) return 'Listagem';
 
@@ -1166,8 +1601,12 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
     || whatsappFormat.buildFormatCompetenciaEntidade(rows, { contextoConsulta, nomeModulo, anoFirst })
     || whatsappFormat.buildFormatSimplesTemporal(rows, { contextoConsulta, nomeModulo, anoFirst })
     || whatsappFormat.buildFormatComparativoSimples(rows, { contextoConsulta });
-  if (direto) return direto;
+  if (direto) {
+    if (intent) intent._formatacaoCaminho = 'direto';
+    return direto;
+  }
 
+  if (intent) intent._formatacaoCaminho = 'ia';
   try {
     return await aiProviderClient.chamarIA(
       keys,
@@ -1234,12 +1673,29 @@ function interpolarRespostaPlanejada(template, rows = []) {
   return /\{[a-zA-Z0-9_]+\}/.test(saida) ? null : saida;
 }
 
-async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial }) {
-  const validacaoBasica = validarSqlIaOwnerBasico(sql, spec, sx2);
+async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta }) {
+  const sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
+  const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2);
   if (!validacaoBasica.ok) {
-    throw Object.assign(new Error(`SQL rejeitado por contrato IA-OWNER: ${validacaoBasica.erros.join(' | ')}`), { _tipo: 'contrato_ia_owner_invalido', _sql: sql });
+    // Acumula também erros do query_plan para que o retry receba todos os problemas de uma vez,
+    // evitando ciclos onde a IA corrige só o D_E_L_E_T_ mas mantém UNION ALL ou estrutura errada.
+    const errosCombinados = [...validacaoBasica.erros];
+    if (planoConsulta) {
+      const validacaoPlanoAntecipada = queryPlan.validarSqlContraPlano(sqlEntradaNormalizado, planoConsulta);
+      for (const e of validacaoPlanoAntecipada.erros) {
+        if (!errosCombinados.includes(e)) errosCombinados.push(e);
+      }
+    }
+    throw Object.assign(new Error(`SQL rejeitado por contrato IA-OWNER: ${errosCombinados.join(' | ')}`), { _tipo: 'contrato_ia_owner_invalido', _sql: sqlEntradaNormalizado });
   }
-  let out = sx3SqlValidator.normalizarReferenciasAliasSql(sql);
+  const validacaoPeriodo = validarPeriodoDeclaradoNoSql(sqlEntradaNormalizado, spec, periodo);
+  if (!validacaoPeriodo.ok) {
+    throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodo.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
+  }
+  let out = sx3SqlValidator.normalizarReferenciasAliasSql(sqlEntradaNormalizado);
+  const contratosRelacionais = completarContratoRelacionalSD1SF1(out);
+  out = contratosRelacionais.sql;
+  const sqlAposContratosRelacionais = out;
   out = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(out, sx2, { logPrefix: spec.logPrefix, sufixoFallback: inferirSufixoSX2(sx2, protheus.sufixoTabela) });
   out = entitySqlGuard.removerHintsNoLock(out);
   if (Array.isArray(spec.dimensionLeftJoinBases) && spec.dimensionLeftJoinBases.length) {
@@ -1286,9 +1742,19 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
   if (spec.sanitizarFiltrosFilialSX2 !== false) {
     out = sx2SqlNormalizer.sanitizarFiltrosFilialSX2(out, sx2, { filialSolicitada: filial && filial !== 'TODAS', logPrefix: spec.logPrefix });
   }
+  const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);
+  if (!validacaoPlano.ok) {
+    throw Object.assign(new Error(`SQL rejeitado pelo query_plan: ${validacaoPlano.erros.join(' | ')}`), { _tipo: 'contrato_query_plan_invalido', _sql: out });
+  }
   const mw = spec.sqlMiddleware.processar(out, middlewareCfg);
   if (mw.bloqueado) throw Object.assign(new Error(mw.motivo_bloqueio || 'SQL bloqueado pelo middleware.'), { _tipo: 'sql_bloqueado' });
-  return { sqlCanonico: out, sqlFinal: mw.sql_processado, parametros: params.aplicados || [] };
+  return {
+    sqlCanonico: out,
+    sqlFinal: mw.sql_processado,
+    parametros: params.aplicados || [],
+    sqlAposContratosRelacionais,
+    contratosRelacionaisAplicados: contratosRelacionais.contratosAplicados || [],
+  };
 }
 
 async function executar(spec, intent, empresaId) {
@@ -1317,14 +1783,18 @@ async function executar(spec, intent, empresaId) {
   intentEfetivo = limparFiltrosEntidadeHerdadosDaConsultaAtual(spec, intentEfetivo, mensagem);
 
   const protheus = configProtheus(empresaId);
-  const sx2 = completarSX2Permitidas(modosSX2(spec.tabelas, protheus.conexaoId, empresaId), spec.tabelas, protheus.sufixoTabela);
+  // sx2Puro = apenas o que está cadastrado no SX2 do IAHub (sem injeção de completarSX2Permitidas).
+  // Usado para detectar se FK1/FK2 realmente existem no tenant — completarSX2Permitidas injeta FK
+  // mesmo quando não está cadastrado no SX2, o que causaria o modelo errado.
+  const sx2Puro = modosSX2(spec.tabelas, protheus.conexaoId, empresaId);
+  const sx2 = completarSX2Permitidas(sx2Puro, spec.tabelas, protheus.sufixoTabela);
   const sx3 = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
   const sx3Prompt = sx3EssencialParaPrompt(spec.camposSx3Essenciais || {}) || sx3;
   const middlewareCfg = spec.sqlMiddleware.carregarConfig(empresaId);
   const filial = intentEfetivo.filtros?.filial || protheus.filialPadrao || 'TODAS';
   const historico = Array.isArray(intentEfetivo._historicoResumido) ? intentEfetivo._historicoResumido : [];
   const estadoAnterior = limparPeriodosNaoAutoritativos(buildEstadoAnterior(intentEfetivo), mensagem);
-  const contextoTecnico = { ...buildContextoTecnico({ spec, empresaId, protheus, sx2, sx3Prompt, middlewareCfg, filial }), ...contextoTecnicoExtra };
+  const contextoTecnico = { ...buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prompt, middlewareCfg, filial }), ...contextoTecnicoExtra };
   const tabelaFisica = (sx2Arg, base) => tabelaFisicaSX2(sx2Arg, base) || `${String(base || '').trim().toUpperCase()}${inferirSufixoSX2(sx2Arg, protheus.sufixoTabela)}`;
   const helpers = { connectionFactory, tabelaFisicaSX2: tabelaFisica, escapeSqlLiteral, baseTabelaSX2 };
 
@@ -1361,26 +1831,33 @@ async function executar(spec, intent, empresaId) {
     contextoTecnico.entidades_nao_resolvidas_pelo_sistema = diagnosticosEntidades;
   }
   entidadesResolvidas = deduplicarEntidadesResolvidas(entidadesResolvidas);
+  const modeloOpts = {
+    modeloBaixasReceber: contextoTecnico.modelo_baixas_receber,
+    modeloBaixasPagar: contextoTecnico.modelo_baixas_pagar,
+  };
   let plano;
   let userPrompt = promptBuilder.buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico, entidadesResolvidas });
   const auditoriaBase = {
     handler: spec.handlerName || spec.nome || 'ia-owner',
     origem: 'ia_owner',
     empresa_id: empresaId,
-    prompt_system: promptBuilder.buildSystemPrompt(spec),
+    prompt_system: promptBuilder.buildSystemPrompt(spec, modeloOpts),
     prompt_user: userPrompt,
     sql_ia_bruto: null,
     sql_apos_sx3: null,
+    sql_apos_contratos_relacionais: null,
+    contratos_relacionais_aplicados: [],
     sql_apos_sx2: null,
     sql_apos_parametros: null,
     sql_apos_contrato: null,
     sql_final_executado: null,
     plano_ia_owner: null,
+    query_plan: null,
     resposta_ia_bruta: null,
   };
 
   try {
-    plano = await chamarIaOwner(spec, keys, cfg, userPrompt);
+    plano = await chamarIaOwner(spec, keys, cfg, userPrompt, modeloOpts);
     auditoriaBase.prompt_system = plano.systemPrompt || auditoriaBase.prompt_system;
     auditoriaBase.prompt_user = plano.userPrompt || userPrompt;
     auditoriaBase.sql_ia_bruto = plano.sql || null;
@@ -1389,6 +1866,21 @@ async function executar(spec, intent, empresaId) {
   } catch (e) {
     return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- IA-OWNER falhou: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
   }
+
+  let planoConsulta = construirQueryPlanTecnico({
+    spec,
+    mensagem,
+    periodo: plano.obj?.periodo,
+    filtros: plano.obj?.filtros || intentEfetivo.filtros || {},
+    entidades: entidadesResolvidas,
+  });
+  // Propaga o modelo de baixas detectado para o plano, para que formatQueryPlanForPrompt
+  // gere a instrução com o modelo correto para este tenant (FK1/FK2 ou SE5).
+  planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
+  planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
+  contextoTecnico.query_plan = planoConsulta;
+  contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
+  auditoriaBase.query_plan = planoConsulta;
 
   if (confirmacaoPodeEncerrarPlano(plano.obj)) {
     return {
@@ -1432,7 +1924,7 @@ async function executar(spec, intent, empresaId) {
         tentativa: 'ULTIMO RECURSO: o sistema nao conseguiu resolver inequivocamente a entidade solicitada. Resolva pela IA e gere o SQL final a partir da pergunta original, sem inventar codigos fixos e usando somente tabelas/sufixos do contexto tecnico atual.',
       });
       try {
-        plano = await chamarIaOwner(spec, keys, cfg, userPrompt);
+        plano = await chamarIaOwner(spec, keys, cfg, userPrompt, modeloOpts);
         auditoriaBase.prompt_user = plano.userPrompt || userPrompt;
         auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
         auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
@@ -1451,7 +1943,7 @@ async function executar(spec, intent, empresaId) {
         tentativa: 'Entidades cadastrais foram resolvidas. Gere SQL final usando codigos internos e exibindo nomes/descricoes.',
       });
       try {
-        plano = await chamarIaOwner(spec, keys, cfg, userPrompt);
+        plano = await chamarIaOwner(spec, keys, cfg, userPrompt, modeloOpts);
         auditoriaBase.prompt_user = plano.userPrompt || userPrompt;
         auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
         auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
@@ -1470,7 +1962,7 @@ async function executar(spec, intent, empresaId) {
       tentativa: 'A entidade solicitada ja foi resolvida pelo sistema. Nao solicite confirmacao generica; gere o SQL final usando os codigos internos fornecidos.',
     });
     try {
-      plano = await chamarIaOwner(spec, keys, cfg, userPrompt);
+      plano = await chamarIaOwner(spec, keys, cfg, userPrompt, modeloOpts);
       auditoriaBase.prompt_user = plano.userPrompt || userPrompt;
       auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
       auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
@@ -1498,10 +1990,13 @@ async function executar(spec, intent, empresaId) {
 
   let preparado;
   let sqlOriginalIa = plano.sql;
-  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+  const maxTentativas = maxTentativasPrepararSql(entidadesResolvidas);
+  for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
     try {
-      preparado = await prepararSql({ spec, sql: plano.sql, sx2, sx3, protheus, middlewareCfg, entidades: entidadesResolvidas, filial });
+      preparado = await prepararSql({ spec, sql: plano.sql, sx2, sx3, protheus, middlewareCfg, entidades: entidadesResolvidas, filial, periodo: plano.obj.periodo, planoConsulta });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(plano.sql);
+      auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
+      auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
       auditoriaBase.sql_apos_sx2 = preparado.sqlCanonico;
       auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
       auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
@@ -1546,7 +2041,7 @@ async function executar(spec, intent, empresaId) {
       if (semConexao) {
         return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(spec, 'sem_conexao'), sql_gerado: preparado?.sqlFinal || plano.sql, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
       }
-      if (tentativa >= 2) {
+      if (tentativa >= maxTentativas) {
         const sqlErro = preparado?.sqlFinal || e._sql || plano.sql;
         const subtipo = e._tipo || 'erro_erp';
         return { tipo: 'erro', subtipo, resposta_direta: mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'), sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
@@ -1557,7 +2052,7 @@ async function executar(spec, intent, empresaId) {
         estadoAnterior,
         contextoTecnico,
         entidadesResolvidas,
-        tentativa: 'O SQL anterior continha um erro estrutural. Gere o SQL novamente do zero a partir da mensagem original, usando o erro abaixo apenas como referencia do que evitar. Nao tente corrigir o SQL anterior linha a linha — recomece o raciocinio completo.',
+        tentativa: buildRetryTecnicoIaOwner({ erro: e, entidadesResolvidas }),
         erroSql: e.message,
         sqlComErro: preparado?.sqlFinal || e._sql || plano.sql,
       });
@@ -1566,6 +2061,18 @@ async function executar(spec, intent, empresaId) {
       auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
       auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
       auditoriaBase.resposta_ia_bruta = plano.raw || auditoriaBase.resposta_ia_bruta;
+      planoConsulta = construirQueryPlanTecnico({
+        spec,
+        mensagem,
+        periodo: plano.obj?.periodo,
+        filtros: plano.obj?.filtros || intentEfetivo.filtros || {},
+        entidades: entidadesResolvidas,
+      });
+      planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
+      planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
+      contextoTecnico.query_plan = planoConsulta;
+      contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
+      auditoriaBase.query_plan = planoConsulta;
       if (plano.sql) sqlOriginalIa = plano.sql;
     }
   }
@@ -1600,11 +2107,14 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
     sx2,
     sufixoTabela: inferirSufixoSX2(sx2, protheus.sufixoTabela),
     sql_apos_sx3: sqlCanonicoNormalizado,
+    sql_apos_contratos_relacionais: null,
+    contratos_relacionais_aplicados: [],
     sql_apos_sx2: sqlCanonicoAdaptadoTemplate,
     sql_apos_parametros: null,
     sql_apos_contrato: null,
     sql_final_executado: null,
     plano_ia_owner: null,
+    query_plan: null,
     resposta_ia_bruta: null,
   };
   let entidades = Array.isArray(intent._entidadesResolvidas) ? intent._entidadesResolvidas : [];
@@ -1640,8 +2150,18 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
   }
   let preparado = null;
   try {
-    preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS' });
+    const planoConsulta = construirQueryPlanTecnico({
+      spec,
+      mensagem: intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta',
+      periodo: intent._periodoCanonicoResolvido || intent.periodo,
+      filtros: intent.filtros || {},
+      entidades,
+    });
+    auditoriaBase.query_plan = planoConsulta;
+    preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta });
     auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
+    auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
+    auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
     auditoriaBase.sql_apos_sx2 = preparado.sqlCanonico;
     auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
     auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
@@ -1682,6 +2202,8 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
     };
   } catch (e) {
     if (preparado) {
+      auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
+      auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
       auditoriaBase.sql_apos_sx2 = preparado.sqlCanonico;
       auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
       auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
@@ -1704,6 +2226,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
 module.exports = {
   executar,
   executarSqlDireto,
+  invalidarMetaCache,
   _test: {
     extrairJson,
     extrairSQL,
@@ -1717,10 +2240,15 @@ module.exports = {
     formatarValorRespostaPlanejada,
     interpolarRespostaPlanejada,
     validarSqlIaOwnerBasico,
+    normalizarAliasesBaseAusentes,
+    validarPeriodoDeclaradoNoSql,
+    sqlTemFiltroPeriodoEmCampo,
+    construirQueryPlanTecnico,
     validarSelectContraGroupBy,
     validarAliasesDerivadosExternos,
     validarCTEsAgregadosSemGroupBy,
     validarCTEsDefinidaUsada,
+    completarContratoRelacionalSD1SF1,
     _extrairCorposCTE,
     sx3EssencialParaPrompt,
     completarSX2Permitidas,
@@ -1730,9 +2258,23 @@ module.exports = {
     tipoEntidadePadraoParaFiltroEmpresa,
     normalizarFiltroEmpresaComoEntidade,
     limparFiltrosEntidadeHerdadosDaConsultaAtual,
+    maxTentativasPrepararSql,
+    buildRetryTecnicoIaOwner,
     deduplicarTermosEntidade,
     extrairTermosEntidadesAntesIa,
+    normalizarEntidadesNecessarias,
     _buildContextoConsulta,
     _extrairLabelIntencao,
+    // Expõe buildContextoTecnico para testes sem depender de banco/protheus
+    buildContextoTecnicoTest: ({ spec, sx2 = {}, sx2Puro, sx3Prompt } = {}) => buildContextoTecnico({
+      spec: spec || {},
+      empresaId: 0,
+      protheus: { sufixoTabela: null },
+      sx2,
+      sx2Puro,
+      sx3Prompt: sx3Prompt || null,
+      middlewareCfg: {},
+      filial: null,
+    }),
   },
 };

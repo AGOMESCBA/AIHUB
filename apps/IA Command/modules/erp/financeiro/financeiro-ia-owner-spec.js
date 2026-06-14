@@ -8,17 +8,17 @@ const { removerFiltrosEmpresaComoEntidade } = require('../empresa-scope-sql-guar
 const TABELAS = ['SE1', 'SE2', 'SE5', 'SE8', 'SA1', 'SA2', 'SA3', 'SA6', 'SED', 'FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
-  SE1: ['E1_FILIAL', 'E1_PREFIXO', 'E1_NUM', 'E1_PARCELA', 'E1_TIPO', 'E1_CLIENTE', 'E1_LOJA', 'E1_EMISSAO', 'E1_VENCTO', 'E1_VENCREA', 'E1_VALOR', 'E1_SALDO', 'E1_BAIXA', 'E1_NATUREZ', 'E1_VEND1', 'E1_VALCOM1', 'D_E_L_E_T_'],
-  SE2: ['E2_FILIAL', 'E2_PREFIXO', 'E2_NUM', 'E2_PARCELA', 'E2_TIPO', 'E2_FORNECE', 'E2_LOJA', 'E2_EMISSAO', 'E2_VENCTO', 'E2_VENCREA', 'E2_VALOR', 'E2_SALDO', 'E2_BAIXA', 'E2_NATUREZ', 'D_E_L_E_T_'],
-  SE5: ['E5_FILIAL', 'E5_DATA', 'E5_NUMERO', 'E5_PARCELA', 'E5_TIPO', 'E5_CLIFOR', 'E5_LOJA', 'E5_PREFIXO', 'E5_VALOR', 'E5_RECPAG', 'E5_NATUREZ', 'D_E_L_E_T_'],
+  SE1: ['E1_FILIAL', 'E1_PREFIXO', 'E1_NUM', 'E1_PARCELA', 'E1_TIPO', 'E1_CLIENTE', 'E1_LOJA', 'E1_EMISSAO', 'E1_VENCTO', 'E1_VENCREA', 'E1_VALOR', 'E1_SALDO', 'E1_NATUREZ', 'E1_SITUACAO', 'E1_VEND1', 'E1_VALCOM1', 'D_E_L_E_T_'],
+  SE2: ['E2_FILIAL', 'E2_PREFIXO', 'E2_NUM', 'E2_PARCELA', 'E2_TIPO', 'E2_FORNECE', 'E2_LOJA', 'E2_EMISSAO', 'E2_VENCTO', 'E2_VENCREA', 'E2_VALOR', 'E2_SALDO', 'E2_NATUREZ', 'E2_SITUACAO', 'D_E_L_E_T_'],
+  SE5: ['E5_FILIAL', 'E5_PREFIXO', 'E5_NUM', 'E5_PARCELA', 'E5_TIPO', 'E5_DATA', 'E5_VALOR', 'E5_CLIFOR', 'E5_LOJA', 'E5_SITUACAO', 'E5_TIPODOC', 'E5_NATUREZ', 'D_E_L_E_T_'],
   SE8: ['E8_FILIAL', 'E8_BANCO', 'E8_AGENCIA', 'E8_CONTA', 'E8_DTSALAT', 'E8_SALATUA', 'D_E_L_E_T_'],
   SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'D_E_L_E_T_'],
   SA2: ['A2_FILIAL', 'A2_COD', 'A2_LOJA', 'A2_NOME', 'A2_NREDUZ', 'A2_CGC', 'D_E_L_E_T_'],
   SA3: ['A3_FILIAL', 'A3_COD', 'A3_NOME', 'D_E_L_E_T_'],
   SA6: ['A6_FILIAL', 'A6_COD', 'A6_AGENCIA', 'A6_NUMCON', 'A6_NOME', 'A6_NREDUZ', 'D_E_L_E_T_'],
   SED: ['ED_FILIAL', 'ED_CODIGO', 'ED_DESCRIC', 'D_E_L_E_T_'],
-  FK1: ['FK1_FILIAL', 'FK1_IDDOC', 'FK1_DATA', 'FK1_VALOR', 'D_E_L_E_T_'],
-  FK2: ['FK2_FILIAL', 'FK2_IDDOC', 'FK2_DATA', 'FK2_VALOR', 'D_E_L_E_T_'],
+  FK1: ['FK1_FILIAL', 'FK1_PREFIXO', 'FK1_NUM', 'FK1_PARCELA', 'FK1_TIPO', 'FK1_DATA', 'FK1_VALOR', 'D_E_L_E_T_'],
+  FK2: ['FK2_FILIAL', 'FK2_PREFIXO', 'FK2_NUM', 'FK2_PARCELA', 'FK2_TIPO', 'FK2_DATA', 'FK2_VALOR', 'D_E_L_E_T_'],
   FK5: ['FK5_FILIAL', 'FK5_DATA', 'FK5_VALOR', 'D_E_L_E_T_'],
   FK6: ['FK6_FILIAL', 'FK6_DATA', 'FK6_VALOR', 'D_E_L_E_T_'],
   FK7: ['FK7_FILIAL', 'FK7_IDDOC', 'D_E_L_E_T_'],
@@ -184,25 +184,29 @@ async function validarCorrigirSqlGerado({ sql, contexto }) {
   return { sql: limpo, respostaSql: JSON.stringify({ sql: limpo, origem: 'guardrails_financeiro_ia_owner' }), sqlIaBruto: sql };
 }
 
-const regrasTecnicas = `
+function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar } = {}) {
+  const usaFK1 = modeloBaixasReceber === 'FK1';
+  const usaFK2 = modeloBaixasPagar === 'FK2';
+  return `
 ## Campos de data padrao
 - Vencimento a pagar: SE2.E2_VENCREA (ou SE2.E2_VENCTO se VENCREA nao existir).
 - Vencimento a receber: SE1.E1_VENCREA (ou SE1.E1_VENCTO se VENCREA nao existir).
-- Baixa/pagamento real: SE2.E2_BAIXA ou SE5.E5_DATA ou FK2 conforme disponivel.
-- Baixa/recebimento real: SE1.E1_BAIXA ou SE5.E5_DATA ou FK1 conforme disponivel.
+- Baixa/recebimento real: use o JOIN definido em "Joins padrao" (SE1->${usaFK1 ? 'FK1' : 'SE5'}), modelo deste tenant: ${modeloBaixasReceber || 'SE5'}. NUNCA use SE1.E1_BAIXA.
+- Baixa/pagamento real: use o JOIN definido em "Joins padrao" (SE2->${usaFK2 ? 'FK2' : 'SE5'}), modelo deste tenant: ${modeloBaixasPagar || 'SE5'}. NUNCA use SE2.E2_BAIXA.
 - Em aberto sem periodo explicito: consulte toda a carteira em aberto (sem BETWEEN).
 
 ## Carteiras
 - Contas a pagar usa SE2 e fornecedor SA2.
 - Contas a receber usa SE1 e cliente SA1.
-- Se o usuario pedir ambas/fluxo de caixa, use as duas carteiras em subqueries separadas com UNION ALL quando necessario.
+- Se o usuario pedir ambas em posicao/em_aberto: use UNION ALL com dois SELECTs (SE1 e SE2 separados).
+- Se o usuario pedir ambas realizadas (recebidas e pagas): gere UM UNICO SELECT com duas subqueries escalares — valor_recebido via SE1+SE5/${usaFK1 ? 'FK1' : 'SE5'} e valor_pago via SE2+SE5/${usaFK2 ? 'FK2' : 'SE5'}. PROIBIDO UNION ALL para realizados. Siga o plano estruturado query_plan_texto.
 - Nao misture SA1 como fornecedor nem SA2 como cliente.
 
 ## Metricas principais
 - Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Data padrao de vencimento: SE2.E2_VENCREA ou SE2.E2_VENCTO se VENCREA nao existir.
-- Valor pago/liquidado/baixado: preferir data de baixa SE2.E2_BAIXA ou movimentos SE5.E5_DATA/FK2 quando a pergunta exigir pagamento real. Valor pago acumulado em SE2 pode ser SE2.E2_VALOR - SE2.E2_SALDO.
+- Valor pago/liquidado/baixado: use JOIN de "Joins padrao" (SE2->FK2 ou SE2->SE5) conforme modelo_baixas_pagar. NUNCA filtre por E2_BAIXA, E2_EMISSAO, E2_VENCREA ou E2_VENCTO.
 - Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Data padrao de vencimento: SE1.E1_VENCREA ou SE1.E1_VENCTO se VENCREA nao existir.
-- Valor recebido/liquidado/baixado: preferir data de baixa SE1.E1_BAIXA ou movimentos SE5.E5_DATA/FK1 quando a pergunta exigir recebimento real. Valor recebido acumulado em SE1 pode ser SE1.E1_VALOR - SE1.E1_SALDO.
+- Valor recebido/liquidado/baixado: use JOIN de "Joins padrao" (SE1->FK1 ou SE1->SE5) conforme modelo_baixas_receber. NUNCA filtre por E1_BAIXA, E1_EMISSAO, E1_VENCREA ou E1_VENCTO. NAO filtre SE1.E1_SITUACAO.
 - Natureza financeira: SE1.E1_NATUREZ ou SE2.E2_NATUREZ -> SED.ED_CODIGO.
 
 ## Antecipacoes PA/RA
@@ -233,7 +237,7 @@ const regrasTecnicas = `
 - Fluxo projetado usa titulos em aberto: SE1.E1_SALDO > 0 e SE2.E2_SALDO > 0, por vencimento futuro/periodo solicitado.
 - Se o periodo projetado comecar antes da data atual, considere titulos a partir da data atual.
 - Fluxo de caixa realizado = saldo_bancario_base + valor_recebido - valor_pago no periodo.
-- Fluxo realizado usa baixas/movimentos reais: prefira FK1/FK2 quando disponiveis; use SE5 como fallback; use SE1.E1_BAIXA/SE2.E2_BAIXA ou E1_VALOR-E1_SALDO/E2_VALOR-E2_SALDO apenas se nao houver tabela de movimento melhor.
+- Fluxo realizado usa baixas/movimentos reais: use os JOINs definidos em "Joins padrao" (SE1->FK1/SE5 para recebimentos, SE2->FK2/SE5 para pagamentos), conforme modelo_baixas_receber e modelo_baixas_pagar do contextoTecnico.
 - Para fluxo realizado, saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual ao inicio do periodo.
 - Para fluxo projetado, saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual a data atual ou data inicial projetada, conforme a pergunta.
 - SQL de fluxo deve retornar aliases claros: saldo_bancario_base, total_a_receber ou valor_recebido, total_a_pagar ou valor_pago, fluxo_liquido.
@@ -242,14 +246,13 @@ const regrasTecnicas = `
 ## Tabelas padrao do modulo Financeiro
 - SE1: contas a receber.
 - SE2: contas a pagar.
-- SE5: movimentos/baixas financeiras, fallback para pago/recebido.
+- SE5: movimentos/baixas financeiras (modelo_baixas deste tenant).${usaFK1 || usaFK2 ? '\n- FK1/FK2: familia moderna de baixas/movimentos deste tenant.' : ''}
 - SE8: saldos bancarios.
 - SA1: clientes.
 - SA2: fornecedores.
 - SA3: vendedores.
 - SA6: bancos/contas.
 - SED: natureza financeira.
-- FK1/FK2/FK5/FK6/FK7/FKA/FKB: familia moderna de baixas/movimentos, use quando existir e a pergunta exigir baixa/movimento real.
 
 ## Joins padrao
 - SE1 -> SA1: SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA.
@@ -257,11 +260,11 @@ const regrasTecnicas = `
 - SE1 -> SED: SE1.E1_NATUREZ = SED.ED_CODIGO.
 - SE2 -> SED: SE2.E2_NATUREZ = SED.ED_CODIGO.
 - SE1 -> SA3: SE1.E1_VEND1 = SA3.A3_COD quando a pergunta pedir vendedor.
-- SE8 -> SA6: SE8.E8_BANCO = SA6.A6_COD AND SE8.E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON.
+- SE8 -> SA6: SE8.E8_BANCO = SA6.A6_COD AND SE8.E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON.${usaFK1 ? '\n- SE1 -> FK1 (recebimentos realizados, modelo FK moderno): JOIN FK1xxx FK1 ON FK1.FK1_FILIAL = SE1.E1_FILIAL AND FK1.FK1_PREFIXO = SE1.E1_PREFIXO AND FK1.FK1_NUM = SE1.E1_NUM AND FK1.FK1_PARCELA = SE1.E1_PARCELA AND FK1.FK1_TIPO = SE1.E1_TIPO AND FK1.D_E_L_E_T_ = \' \'; filtre FK1.FK1_DATA no periodo; some FK1.FK1_VALOR. OBRIGATORIO: WHERE da subquery deve incluir SE1.D_E_L_E_T_ = \' \'.' : '\n- SE1 -> SE5 (recebimentos realizados): JOIN SE5xxx SE5 ON SE5.E5_FILIAL = SE1.E1_FILIAL AND SE5.E5_PREFIXO = SE1.E1_PREFIXO AND SE5.E5_NUMERO = SE1.E1_NUM AND SE5.E5_PARCELA = SE1.E1_PARCELA AND SE5.E5_TIPO = SE1.E1_TIPO AND SE5.E5_CLIFOR = SE1.E1_CLIENTE AND SE5.E5_LOJA = SE1.E1_LOJA AND SE5.E5_RECPAG = \'R\' AND SE5.E5_SITUACAO <> \'C\' AND SE5.E5_TIPO NOT IN (\'EST\', \'ED\') AND SE5.D_E_L_E_T_ = \' \'; filtre SE5.E5_DATA no periodo; some SE5.E5_VALOR. NAO filtre SE1.E1_SITUACAO (titulo pode ter baixa parcial). OBRIGATORIO: WHERE da subquery deve incluir SE1.D_E_L_E_T_ = \' \'.'}${usaFK2 ? '\n- SE2 -> FK2 (pagamentos realizados, modelo FK moderno): JOIN FK2xxx FK2 ON FK2.FK2_FILIAL = SE2.E2_FILIAL AND FK2.FK2_PREFIXO = SE2.E2_PREFIXO AND FK2.FK2_NUM = SE2.E2_NUM AND FK2.FK2_PARCELA = SE2.E2_PARCELA AND FK2.FK2_TIPO = SE2.E2_TIPO AND FK2.D_E_L_E_T_ = \' \'; filtre FK2.FK2_DATA no periodo; some FK2.FK2_VALOR. OBRIGATORIO: WHERE da subquery deve incluir SE2.D_E_L_E_T_ = \' \'.' : '\n- SE2 -> SE5 (pagamentos realizados): JOIN SE5xxx SE5 ON SE5.E5_FILIAL = SE2.E2_FILIAL AND SE5.E5_PREFIXO = SE2.E2_PREFIXO AND SE5.E5_NUMERO = SE2.E2_NUM AND SE5.E5_PARCELA = SE2.E2_PARCELA AND SE5.E5_TIPO = SE2.E2_TIPO AND SE5.E5_CLIFOR = SE2.E2_FORNECE AND SE5.E5_LOJA = SE2.E2_LOJA AND SE5.E5_RECPAG = \'P\' AND SE5.E5_SITUACAO <> \'C\' AND SE5.E5_TIPO NOT IN (\'EST\', \'ED\') AND SE5.D_E_L_E_T_ = \' \'; filtre SE5.E5_DATA no periodo; some SE5.E5_VALOR. NAO filtre SE2.E2_SITUACAO (titulo pode ter baixa parcial). OBRIGATORIO: WHERE da subquery deve incluir SE2.D_E_L_E_T_ = \' \'.'}
 
 ## Regras obrigatorias de SQL
 - Inicie sempre com SET ROWCOUNT 50000.
-- Use aliases explicitos iguais a base da tabela: SE1, SE2, SE5, SE8, SA1, SA2, SA3, SA6, SED, FK1, FK2, FK5, FK6, FK7, FKA, FKB.
+- Use aliases explicitos iguais a base da tabela: SE1, SE2, SE5, SE8, SA1, SA2, SA3, SA6, SED${usaFK1 || usaFK2 ? ', FK1, FK2' : ''}.
 - Qualifique campos sempre pelo alias base (SE2.E2_SALDO, nunca SE2990.E2_SALDO).
 - Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
@@ -277,8 +280,8 @@ Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP B
 ## Metrica por agrupamento
 - saldo_a_pagar: COALESCE(SUM(SE2.E2_SALDO),0) AS saldo_a_pagar.
 - saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
-- valor_pago: COALESCE(SUM(SE2.E2_VALOR - SE2.E2_SALDO),0) AS valor_pago (ou SUM(SE5.E5_VALOR) via baixa).
-- valor_recebido: COALESCE(SUM(SE1.E1_VALOR - SE1.E1_SALDO),0) AS valor_recebido (ou SUM(SE5.E5_VALOR) via baixa).
+- valor_pago: COALESCE(SUM(${usaFK2 ? 'FK2.FK2_VALOR' : 'SE5.E5_VALOR'}),0) AS valor_pago via JOIN "${usaFK2 ? 'SE2 -> FK2' : 'SE2 -> SE5'}" de "Joins padrao".
+- valor_recebido: COALESCE(SUM(${usaFK1 ? 'FK1.FK1_VALOR' : 'SE5.E5_VALOR'}),0) AS valor_recebido via JOIN "${usaFK1 ? 'SE1 -> FK1' : 'SE1 -> SE5'}" de "Joins padrao".
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por natureza": agrupe por SED.ED_CODIGO, SED.ED_DESCRIC.
@@ -288,6 +291,7 @@ Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP B
 - Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.saldo) sem GROUP BY.
 - Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS saldo.
 `.trim();
+}
 
 const sqlPatternsProibidos = [
   {

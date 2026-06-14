@@ -178,6 +178,9 @@ const _DETECTORES = {
   // Protheus: A2_COD, A2_NOME — aliases: fornecedor
   fornecedor:  k => /^fornecedor$/i.test(k) || /^nm_forn/i.test(k) || /^ds_forn/i.test(k) || /^nome_forn/i.test(k) || /^razao/i.test(k)
                || /^a2_cod$/i.test(k) || /^a2_nome$/i.test(k) || /^[a-z]\d_fornece$/i.test(k),
+  documento:       k => /^documento$/i.test(k) || /^doc$/i.test(k) || /^nota$/i.test(k) || /^nota_fiscal$/i.test(k)
+               || /^nf$/i.test(k) || /^nfe$/i.test(k) || /^titulo$/i.test(k) || /^duplicata$/i.test(k)
+               || /^f2_doc$/i.test(k) || /^d2_doc$/i.test(k) || /^e1_num$/i.test(k) || /^e2_num$/i.test(k),
   empresa:          k => /^empresa$/i.test(k),
   // Protheus: F2_FILIAL, D2_FILIAL, E2_FILIAL, etc.
   filial:           k => /^filial$/i.test(k) || /^loja$/i.test(k) || /^[a-z]\d_filial$/i.test(k),
@@ -962,7 +965,7 @@ function formatar(resultado, intent, opts = {}) {
       const total = rows.reduce((s, r) => s + _col(r, 'quantidade_total', 'quantidade', 'qtd_total', 'qtd', 'volume', 'unidades'), 0);
       return (
         `📦 *Quantidade*${periodoStr}${filtrosStr}\n\n` +
-        `🔢 Total: *${NUM(total)} unidades*`
+        `🔢 Total: *${NUM(total)}*`
       );
     }
 
@@ -1090,12 +1093,12 @@ function formatarAiSqlLocal(rows, intent) {
 /**
  * Detecta a primeira dimensão categórica reconhecível em uma linha de resultado SQL.
  * Usado pelo Consolidado para saber como agrupar quando o SQL não tem coluna temporal.
- * Ordem de prioridade: vendedor > fornecedor > cliente > produto > grupo > filial > unidade.
+ * Ordem de prioridade: vendedor > fornecedor > cliente > documento > produto > grupo > filial > unidade.
  */
 function detectarDimensaoCategorica(firstRow) {
   if (!firstRow) return null;
   const keys = Object.keys(firstRow);
-  const PRIORIDADE = ['vendedor', 'fornecedor', 'cliente', 'produto', 'grupo', 'filial', 'unidade'];
+  const PRIORIDADE = ['vendedor', 'fornecedor', 'cliente', 'documento', 'produto', 'grupo', 'filial', 'unidade'];
   for (const dim of PRIORIDADE) {
     const detector = _DETECTORES[dim];
     if (detector && keys.find(detector)) return dim;

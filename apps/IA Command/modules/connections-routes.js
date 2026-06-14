@@ -4,6 +4,10 @@ const erpRegistry = require('./erp/erp-registry');
 const { requireRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 
+function _invalidarMetaConexao(empresaId) {
+  try { require('./erp/ia-owner/runner').invalidarMetaCache(empresaId); } catch (_) {}
+}
+
 module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCommand }) {
 
   function eid(req) { return getEmpresaId(req); }
@@ -80,6 +84,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
       }
 
       const row = crud.atualizar('connections', req.params.id, campos);
+      _invalidarMetaConexao(eid(req));
       res.json({ ...row, password: undefined });
     } catch (err) {
       res.status(500).json({ error: err.message || 'Erro interno ao salvar.' });
@@ -120,6 +125,7 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
     // Deactivate all, then activate this one
     db.prepare('UPDATE connections SET ativo = 0 WHERE empresa_id = ?').run(eid(req));
     db.prepare('UPDATE connections SET ativo = 1 WHERE id = ?').run(row.id);
+    _invalidarMetaConexao(eid(req));
     res.json({ ok: true });
   });
 };

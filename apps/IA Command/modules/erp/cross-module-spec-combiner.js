@@ -53,6 +53,18 @@ function combinarSpecs(specs = []) {
     }).filter(Boolean),
   ].join('\n\n');
 
+  // --- contratosTecnicosPrioritarios ---
+  // Relacionamentos fisicos do ERP que devem aparecer cedo no prompt.
+  // Sao contexto tecnico para a IA-OWNER, nao correcoes automaticas de SQL.
+  const contratosTecnicosPrioritarios = [
+    ...new Map(
+      specs
+        .map(s => String(s.contratosTecnicosPrioritarios || '').trim())
+        .filter(Boolean)
+        .map(bloco => [bloco.replace(/\s+/g, ' '), bloco])
+    ).values(),
+  ].join('\n\n');
+
   // --- sqlPatternsProibidos ---
   const sqlPatternsProibidos = specs.flatMap(s => s.sqlPatternsProibidos || []);
 
@@ -120,6 +132,7 @@ function combinarSpecs(specs = []) {
     resolverEntidadesAntesDaIa: specs.some(s => s.resolverEntidadesAntesDaIa),
     camposSx3Essenciais,
     sqlMiddleware,
+    contratosTecnicosPrioritarios,
     regrasTecnicas,
     sqlPatternsProibidos,
     dimensionLeftJoinBases,

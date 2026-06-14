@@ -11,6 +11,7 @@ const sx2Normalizer = require(path.join(ROOT, 'modules/erp/sx2-sql-normalizer'))
 const sx3Validator = require(path.join(ROOT, 'modules/erp/sx3-sql-validator'));
 const faturamentoSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
 const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
+const entityResolver = require(path.join(ROOT, 'modules/ai/entity-resolver'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
@@ -22,8 +23,28 @@ assert(systemPrompt.includes('APENAS o mapa fornecido no no "sx2"'), 'prompt dev
 assert(systemPrompt.includes('mes passado'), 'prompt deve conter regra cronologica para mes passado');
 assert(systemPrompt.includes('resposta_planejada'), 'prompt deve orientar resposta planejada WhatsApp');
 assert(systemPrompt.includes('REGRA DE VERACIDADE DE ENTIDADES'), 'prompt deve proibir afirmar entidade encontrada sem codigo resolvido');
-assert(systemPrompt.includes('Comparativos entre Anos e Crescimento por Periodo'), 'prompt base deve orientar comparativos multi-ano');
-assert(systemPrompt.includes('Excecao YoY/crescimento contra anos anteriores'), 'prompt deve orientar YoY mensal com ano/mes e subquery');
+assert(systemPrompt.includes('Media mensal por ano'), 'prompt deve orientar comparativos/media por ano por contrato tecnico vivo');
+assert(systemPrompt.includes('Subquery interna OBRIGATORIAMENTE exporta DOIS aliases de data'), 'prompt deve orientar subquery temporal com ano e competencia');
+assert(systemPrompt.includes('Media mensal por produto'), 'prompt deve orientar faturamento medio por produto em duas camadas');
+assert(systemPrompt.includes('NUNCA use AVG(SD2.D2_TOTAL)'), 'prompt deve proibir media direta das linhas de item');
+assert(systemPrompt.includes('a SQL da IA ja deve calcular a media correta'), 'prompt deve deixar claro que o SQL da IA nasce com a media correta');
+assert(systemPrompt.includes('o backend nao recalcula nem corrige a metrica'), 'prompt nao deve depender de ajuste posterior do backend');
+assert(systemPrompt.includes('query externa agrupada somente por h.cod_produto, h.produto'), 'prompt deve orientar agrupamento externo correto por produto');
+assert.deepStrictEqual(
+  entityResolver.extrairExplicitos('faturamento medio por produto de janeiro a junho de 2026'),
+  [],
+  'periodo apos "por produto" nao deve virar entidade produto pendente',
+);
+assert.strictEqual(
+  runner._test.maxTentativasPrepararSql([]),
+  3,
+  'sem entidade resolvida o runner deve ter 3 tentativas de SQL (necessario para erros combinados D_E_L_E_T_+estrutura)',
+);
+assert.strictEqual(
+  runner._test.maxTentativasPrepararSql([{ tipo: 'cliente', codigo: '000048', _todos: true }]),
+  3,
+  'com entidade resolvida o runner deve ter 3 tentativas de SQL',
+);
 const sqlGroupByInvalido = `
 SET ROWCOUNT 50000;
 SELECT
@@ -150,9 +171,9 @@ assert(
 );
 assert(systemPrompt.includes('escopo de tenant IAHub'), 'prompt deve separar empresa IAHub de entidade cadastral');
 assert(systemPrompt.includes("Nunca use SF2.F2_TIPO = '1'"), 'prompt deve proibir F2_TIPO = 1 em faturamento');
-assert(systemPrompt.includes('Sempre retorne nome/descricao para o usuario'), 'entidades devem retornar nome/descricao');
-assert(systemPrompt.includes('Se o usuario disser "ano" sem ano explicito, use o ano atual completo'), 'ano sem ano explicito deve ser ano atual');
-assert(systemPrompt.includes('FROM SD2990 SD2'), 'prompt deve ensinar tabela fisica com alias base');
+assert(systemPrompt.includes('SA1.A1_NOME AS cliente') && systemPrompt.includes('SB1.B1_DESC AS produto'), 'entidades devem retornar descricoes ao usuario');
+assert(systemPrompt.includes('data_atual') && systemPrompt.includes('Voce calcula o periodo EXCLUSIVAMENTE'), 'periodos relativos devem ser calculados pela IA a partir de data_atual e contexto');
+assert(systemPrompt.includes('mapa fornecido') && systemPrompt.includes('Use aliases explicitos iguais a base da tabela'), 'prompt deve orientar tabela fisica via SX2 com alias base');
 
 const sx3Prompt = runner._test.sx3EssencialParaPrompt(faturamentoSpec.camposSx3Essenciais);
 assert(sx3Prompt.SF1.some(c => c.campo === 'F1_TIPO'), 'SX3 essencial deve incluir F1_TIPO');
@@ -202,6 +223,77 @@ FROM (
 `;
 const validacaoBoa = runner._test.validarSqlIaOwnerBasico(sqlBom, faturamentoSpec, sx2);
 assert.strictEqual(validacaoBoa.ok, true, `SQL bom nao deveria ser rejeitado: ${validacaoBoa.erros.join(' | ')}`);
+
+const sqlMediaProdutoErradoLinha = `
+SET ROWCOUNT 50000;
+SELECT SB1.B1_DESC AS produto, AVG(SD2.D2_TOTAL) AS faturamento_medio
+FROM SD2990 SD2
+INNER JOIN SF2990 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '
+INNER JOIN SB1990 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '20260101' AND '20260630'
+GROUP BY SB1.B1_DESC;
+`;
+const validacaoMediaProdutoErrada = runner._test.validarSqlIaOwnerBasico(sqlMediaProdutoErradoLinha, faturamentoSpec, {
+  SD2990: 'E',
+  SF2990: 'E',
+  SB1990: 'E',
+});
+assert.strictEqual(validacaoMediaProdutoErrada.ok, false, 'AVG direto de SD2.D2_TOTAL deve ser rejeitado para faturamento medio');
+assert(validacaoMediaProdutoErrada.erros.some(e => e.includes('media por item/linha')), 'erro deve orientar media mensal em duas camadas');
+
+const sqlMediaProdutoSemCompetencia = `
+SET ROWCOUNT 50000;
+SELECT SB1.B1_DESC AS produto, AVG(h.faturamento_mes) AS faturamento_medio
+FROM (
+    SELECT SD2.D2_COD, SUM(SD2.D2_TOTAL) AS faturamento_mes
+    FROM SD2
+    JOIN SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE
+    WHERE SF2.F2_TIPO = 'N'
+    AND SF2.D_E_L_E_T_ = ' '
+    AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) = '2026'
+    AND SUBSTRING(SF2.F2_EMISSAO, 5, 2) IN ('01', '02', '03', '04', '05', '06')
+    GROUP BY SD2.D2_COD
+) AS h
+JOIN SB1 ON h.D2_COD = SB1.B1_COD
+GROUP BY SB1.B1_DESC;
+`;
+const sqlMediaProdutoSemCompetenciaNormalizado = runner._test.normalizarAliasesBaseAusentes(sqlMediaProdutoSemCompetencia, faturamentoSpec);
+assert(sqlMediaProdutoSemCompetenciaNormalizado.includes('FROM SD2 SD2'), 'normalizador deve adicionar alias SD2 ausente');
+assert(sqlMediaProdutoSemCompetenciaNormalizado.includes('JOIN SF2 SF2 ON'), 'normalizador deve adicionar alias SF2 ausente');
+assert(sqlMediaProdutoSemCompetenciaNormalizado.includes('JOIN SB1 SB1 ON'), 'normalizador deve adicionar alias SB1 ausente');
+const validacaoMediaProdutoSemCompetencia = runner._test.validarSqlIaOwnerBasico(sqlMediaProdutoSemCompetenciaNormalizado, faturamentoSpec, {
+  SD2990: 'E',
+  SF2990: 'E',
+  SB1990: 'E',
+});
+assert.strictEqual(validacaoMediaProdutoSemCompetencia.ok, false, 'media por produto sem competencia interna deve ser rejeitada');
+assert(validacaoMediaProdutoSemCompetencia.erros.some(e => e.includes('media dos totais mensais')), 'erro deve exigir competencia mensal na subquery');
+
+const sqlMediaProdutoCorreto = `
+SET ROWCOUNT 50000;
+SELECT h.cod_produto, h.produto, COALESCE(AVG(h.faturamento_mes), 0) AS faturamento_medio
+FROM (
+  SELECT SB1.B1_COD AS cod_produto,
+         SB1.B1_DESC AS produto,
+         SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia,
+         COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento_mes
+  FROM SD2990 SD2
+  INNER JOIN SF2990 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '
+  INNER JOIN SB1990 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+  WHERE SD2.D_E_L_E_T_ = ' '
+    AND SF2.F2_TIPO = 'N'
+    AND SF2.F2_EMISSAO BETWEEN '20260101' AND '20260630'
+  GROUP BY SB1.B1_COD, SB1.B1_DESC, SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+) AS h
+GROUP BY h.cod_produto, h.produto
+ORDER BY faturamento_medio DESC;
+`;
+const validacaoMediaProdutoCorreta = runner._test.validarSqlIaOwnerBasico(sqlMediaProdutoCorreto, faturamentoSpec, {
+  SD2990: 'E',
+  SF2990: 'E',
+  SB1990: 'E',
+});
+assert.strictEqual(validacaoMediaProdutoCorreta.ok, true, `media mensal por produto em duas camadas deve ser aceita: ${validacaoMediaProdutoCorreta.erros.join(' | ')}`);
 
 const sqlEmpresaComoClienteETipoUm = `
 SET ROWCOUNT 50000;

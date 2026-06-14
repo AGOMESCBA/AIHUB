@@ -175,7 +175,13 @@ function _garantirColunasCompatibilidade() {
   };
 
   const whatsappAllowedNumbers = {
-    wa_lid: 'TEXT',
+    wa_lid:             'TEXT',
+    modulo_financeiro:  'INTEGER DEFAULT 0',
+    modulo_compras:     'INTEGER DEFAULT 0',
+    modulo_faturamento: 'INTEGER DEFAULT 0',
+    modulo_comissao:    'INTEGER DEFAULT 0',
+    erp_tipo:           'TEXT DEFAULT NULL',
+    erp_id:             'TEXT DEFAULT NULL',
   };
 
   for (const [coluna, definicao] of Object.entries(connections)) {
@@ -221,6 +227,41 @@ function _garantirColunasCompatibilidade() {
 
   for (const [coluna, definicao] of Object.entries(whatsappAllowedNumbers)) {
     _adicionarColunaSeFaltar('whatsapp_allowed_numbers', coluna, definicao);
+  }
+
+  _migrarErpDeUsuariosJson();
+}
+
+// Migração única: copia erp_tipo/erp_id de usuarios.json para whatsapp_allowed_numbers
+// Roda apenas para registros que ainda não têm erp_tipo preenchido.
+function _migrarErpDeUsuariosJson() {
+  try {
+    const usuariosPath = path.join(__dirname, '..', '..', '..', 'IAHUB', 'data', 'usuarios.json');
+    if (!fs.existsSync(usuariosPath)) return;
+
+    const usuarios = JSON.parse(fs.readFileSync(usuariosPath, 'utf8'));
+    const comErp = usuarios.filter(u => u.erp_tipo && u.erp_telefone);
+    if (!comErp.length) return;
+
+    const update = _db.prepare(`
+      UPDATE whatsapp_allowed_numbers
+         SET erp_tipo = ?, erp_id = ?
+       WHERE numero = ? AND (erp_tipo IS NULL OR erp_tipo = '')
+    `);
+
+    let migrados = 0;
+    for (const u of comErp) {
+      const numero = String(u.erp_telefone || '').replace(/\D/g, '');
+      if (!numero) continue;
+      const info = update.run(u.erp_tipo, String(u.erp_id || '').trim().toUpperCase() || null, numero);
+      if (info.changes > 0) migrados++;
+    }
+
+    if (migrados > 0) {
+      console.log(`[IA Command] Migração ERP: ${migrados} número(s) atualizados com perfil de usuarios.json`);
+    }
+  } catch (e) {
+    console.warn('[IA Command] Migração ERP de usuarios.json ignorada:', e.message);
   }
 }
 

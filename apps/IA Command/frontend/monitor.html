@@ -206,7 +206,9 @@
             <div class="mon-intent-row"><span>IA usada</span><strong id="intent-provedor">—</strong></div>
             <div class="mon-intent-row"><span>Confiança</span><strong id="intent-confianca">—</strong></div>
             <div class="mon-intent-row" id="intent-turno-row" style="display:none"><span>Turno chat</span><strong id="intent-turno">—</strong></div>
-            <div class="mon-intent-row" id="intent-duracao-row" style="display:none"><span>Duração</span><strong id="intent-duracao">—</strong></div>
+            <div class="mon-intent-row" id="intent-duracao-row" style="display:none"><span>Proc.</span><strong id="intent-duracao">—</strong></div>
+            <div class="mon-intent-row" id="intent-pipeline-row" style="display:none"><span>Pipeline</span><strong id="intent-pipeline">—</strong></div>
+            <div class="mon-intent-row" id="intent-entregue-row" style="display:none"><span>Entregue</span><strong id="intent-entregue">—</strong></div>
             <div class="mon-intent-row" id="intent-rows-row" style="display:none"><span>Registros</span><strong id="intent-rows">—</strong></div>
             <div class="mon-intent-row" id="intent-periodo-row" style="display:none"><span>Período</span><strong id="intent-periodo">—</strong></div>
             <div class="mon-intent-row" id="intent-dataset-row" style="display:none"><span>Dataset</span><strong id="intent-dataset">—</strong></div>
@@ -577,8 +579,10 @@
       d.chat_turno != null ? `Turno ${d.chat_turno} da conversa` : null);
 
     // Duração
-    setIntentRow('intent-duracao-row', 'intent-duracao',
-      d.duracao_ms != null ? `${d.duracao_ms} ms` : null);
+    function fmtMs(ms) { return ms == null ? null : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`; }
+    setIntentRow('intent-duracao-row', 'intent-duracao', fmtMs(d.duracao_ms));
+    setIntentRow('intent-pipeline-row', 'intent-pipeline', fmtMs(d.pipeline_ms));
+    setIntentRow('intent-entregue-row', 'intent-entregue', fmtMs(d.entregue_ms));
 
     // Registros
     setIntentRow('intent-rows-row', 'intent-rows',

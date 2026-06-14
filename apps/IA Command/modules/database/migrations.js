@@ -655,6 +655,35 @@ const MIGRATIONS = [
       ALTER TABLE ai_config ADD COLUMN claude_modelo   TEXT DEFAULT 'claude-haiku-4-5-20251001';
     `,
   },
+  {
+    version: 40,
+    descricao: 'Autorizações por módulo e perfil ERP de vendas em whatsapp_allowed_numbers',
+    sql: `
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN modulo_financeiro  INTEGER DEFAULT 0;
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN modulo_compras     INTEGER DEFAULT 0;
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN modulo_faturamento INTEGER DEFAULT 0;
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN modulo_comissao    INTEGER DEFAULT 0;
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN erp_tipo           TEXT    DEFAULT NULL;
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN erp_id             TEXT    DEFAULT NULL;
+    `,
+  },
+  {
+    version: 41,
+    descricao: 'IA Command - telemetria de performance por etapa do pipeline',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN timing_json       TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN formatacao_caminho TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 42,
+    descricao: 'IA Command - tempo ponta a ponta: recebido_em, pipeline_ms e entregue_ms',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN recebido_em  TEXT    DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN pipeline_ms  INTEGER DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN entregue_ms  INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

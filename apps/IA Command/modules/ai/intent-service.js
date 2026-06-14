@@ -184,7 +184,10 @@ const TERMOS_ESCOPO_DINAMICO = {
     'faturamento', 'faturado', 'vendas', 'venda', 'receita',
     'movimento', 'notas', 'nf', 'nfe', 'nf-e', 'nota fiscal',
     'saida', 'saidas', 'emissao', 'fat', 'resultado vendas',
-    'vendas realizadas', 'pedidos faturados',
+    'vendas realizadas', 'pedidos faturados', 'carregada', 'carregado',
+    'carga', 'entrega futura', 'nota mae', 'nota mãe', 'venda futura',
+    'movimentacao total', 'movimentação total', 'todas as saidas',
+    'todas as saídas', 'sem filtro fiscal',
   ],
   compras: [
     'compra', 'compras', 'comprado', 'comprei', 'fornecedor', 'fornecedores',
@@ -266,6 +269,9 @@ const INTENCOES_DINAMICAS_PADRAO = [
       'top vendedores',
       'notas de saida',
       'receita por filial',
+      'quantidade carregada no dia',
+      'quantidade de nota mae para entrega futura',
+      'movimentacao total de saida',
     ].join('\n'),
   },
   {
@@ -382,7 +388,7 @@ function _ranquearIntencoesAiSql(mensagem, intencoes = [], sinonimos = [], norma
   const BONUS_DOMINIO_PRIMARIO = 10;
   const KEYWORDS_PRIMARIAS = {
     compras: ['compras', 'compra', 'pedido compra', 'pedidos compra', 'nota entrada', 'notas entrada', 'ordem compra'],
-    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf'],
+    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
     financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
     comissao: ['comissao', 'comissoes', 'comissionamento'],
   };
@@ -415,7 +421,7 @@ function _intencaoAiSqlPreferencial(mensagem, intencoes = [], sinonimos = [], no
   const BONUS_DOMINIO_PRIMARIO = 10;
   const KEYWORDS_PRIMARIAS = {
     compras: ['compras', 'compra', 'pedido compra', 'pedidos compra', 'nota entrada', 'notas entrada', 'ordem compra'],
-    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf'],
+    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
     financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
     comissao: ['comissao', 'comissoes', 'comissionamento'],
   };
@@ -610,6 +616,18 @@ const _SINONIMOS_SISTEMA = [
   { termo: 'resultado vendas',       camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'vendas realizadas',      camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   { termo: 'pedidos faturados',      camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'carregada',              camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'carregado',              camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'carga',                  camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'entrega futura',         camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'nota mae',               camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'nota mãe',               camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'venda futura',           camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'movimentacao total',     camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'movimentação total',     camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'todas as saidas',        camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'todas as saídas',        camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
+  { termo: 'sem filtro fiscal',      camada: 'intencao', equivalencia: 'faturamento',    origem: 'sistema' },
   // ── INTENÇÃO: Compras ─────────────────────────────────────────────────────
   { termo: 'compras',                camada: 'intencao', equivalencia: 'compras',        origem: 'sistema' },
   { termo: 'fornecedores',           camada: 'intencao', equivalencia: 'compras',        origem: 'sistema' },

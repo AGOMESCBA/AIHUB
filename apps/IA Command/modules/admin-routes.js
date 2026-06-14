@@ -125,8 +125,28 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json(row);
   });
 
+  function _extrairCamposNumeroWa(body) {
+    const campos = {};
+    if (body.observacoes !== undefined) campos.observacoes = body.observacoes || null;
+    if (body.ativo !== undefined) campos.ativo = body.ativo !== false && Number(body.ativo) !== 0 ? 1 : 0;
+    // Autorizações por módulo
+    for (const m of ['financeiro', 'compras', 'faturamento', 'comissao']) {
+      const chave = `modulo_${m}`;
+      if (body[chave] !== undefined) campos[chave] = body[chave] ? 1 : 0;
+    }
+    // Gestão de Vendas
+    if (body.erp_tipo !== undefined) {
+      const tipo = String(body.erp_tipo || '').trim().toLowerCase();
+      campos.erp_tipo = ['vendedor', 'gestor'].includes(tipo) ? tipo : null;
+    }
+    if (body.erp_id !== undefined) {
+      campos.erp_id = String(body.erp_id || '').trim().toUpperCase() || null;
+    }
+    return campos;
+  }
+
   app.post('/api/ia-command/admin/numeros-whatsapp', requireAuth, requireIaCommand, canNumeros, (req, res) => {
-    const { nome, numero, observacoes, ativo } = req.body;
+    const { nome, numero } = req.body;
     const numeroNormalizado = normalizarNumero(numero);
     if (!nome) return res.status(400).json({ error: 'Campo obrigatorio: nome.' });
     if (!numeroNormalizado) return res.status(400).json({ error: 'Campo obrigatorio: numero.' });
@@ -134,13 +154,15 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       return res.status(400).json({ error: 'Informe o numero com DDI e DDD, contendo entre 10 e 15 digitos.' });
     }
 
+    const camposExtras = _extrairCamposNumeroWa(req.body);
+
     try {
       const row = crud.criar('whatsapp_allowed_numbers', {
-        empresa_id:  eid(req),
-        nome:        nome.trim(),
-        numero:      numeroNormalizado,
-        observacoes: observacoes || null,
-        ativo:       ativo !== false && Number(ativo) !== 0 ? 1 : 0,
+        empresa_id: eid(req),
+        nome:       nome.trim(),
+        numero:     numeroNormalizado,
+        ativo:      camposExtras.ativo !== undefined ? camposExtras.ativo : 1,
+        ...camposExtras,
       });
       _audit(req, 'criar_numero_whatsapp', { id: row.id, nome: row.nome, numero: row.numero });
       res.status(201).json(row);
@@ -169,8 +191,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       }
       campos.numero = numeroNormalizado;
     }
-    if (req.body.observacoes !== undefined) campos.observacoes = req.body.observacoes || null;
-    if (req.body.ativo !== undefined) campos.ativo = req.body.ativo !== false && Number(req.body.ativo) !== 0 ? 1 : 0;
+    Object.assign(campos, _extrairCamposNumeroWa(req.body));
 
     try {
       const row = crud.atualizar('whatsapp_allowed_numbers', req.params.id, campos);
@@ -937,7 +958,8 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
+             recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -976,7 +998,8 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
+             recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -1015,7 +1038,8 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
+             recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -1054,7 +1078,8 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
+             recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC
@@ -1216,7 +1241,8 @@ Responda SOMENTE com JSON válido, sem markdown:
              trace_json, intencao, usuario, numero_wa,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
              sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
-             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
+             recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
       WHERE ${wheres.join(' AND ')}
       ORDER BY criado_em DESC

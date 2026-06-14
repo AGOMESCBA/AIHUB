@@ -16,7 +16,7 @@ assert(faturamento.regrasTecnicas.includes('Quando precisar filtrar cliente, ven
 assert.strictEqual(typeof comissao.resolverEntidades, 'function', 'comissao IA-OWNER deve resolver entidades por spec tecnica');
 assert.strictEqual(comissao.resolverEntidadesAntesDaIa, true, 'comissao deve resolver entidades antes da IA-OWNER');
 assert.deepStrictEqual(comissao.entityCatalog.TIPOS_POR_CONTEXTO, ['vendedor', 'cliente'], 'comissao deve priorizar vendedor antes de cliente');
-assert(comissao.regrasTecnicas.includes('Quando precisar filtrar vendedor ou cliente'), 'comissao IA-OWNER deve pedir vendedor/cliente explicitamente');
+assert(comissao.regrasTecnicas.includes('SA3.A3_NOME AS vendedor') && comissao.regrasTecnicas.includes('SA1.A1_NOME AS cliente'), 'comissao IA-OWNER deve expor descricoes de vendedor/cliente');
 
 assert.strictEqual(typeof compras.resolverEntidades, 'function', 'compras IA-OWNER deve resolver entidades por spec tecnica');
 assert.strictEqual(compras.resolverEntidadesAntesDaIa, true, 'compras deve resolver entidades antes da IA-OWNER');

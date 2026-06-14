@@ -101,7 +101,7 @@ Exemplos obrigatorios:
   - "Qual foi o mes com maior faturamento?" → "O mes com maior faturamento foi *Agosto/2025* com R$ 709.709,49."
   - "Qual cliente comprou mais?" → "O cliente que mais comprou foi *ACME LTDA* com R$ 150.000,00."
   - "Qual vendedor teve maior comissao?" → "O vendedor com maior comissao foi *JOAO SILVA* com R$ 5.200,00."
-  - "Qual produto mais vendido?" → "O produto mais vendido foi *PARAFUSO M8* com 1.250 un."
+  - "Qual produto mais vendido?" → "O produto mais vendido foi *PARAFUSO M8* com 1.250."
   - "Qual o mes com menor faturamento?" → "O mes com menor faturamento foi *Fevereiro/2025* com R$ 42.300,00."
   - "Qual o mes com MAIOR e MENOR faturamento?" → "O mes com maior faturamento foi *Agosto/2025* com R$ 709.709,49. O mes com menor faturamento foi *Fevereiro/2026* com R$ 45.230,00." (identifique ambos os extremos a partir do conjunto completo de dados recebidos — NUNCA diga "nao foi informado" se os dados estiverem presentes)
 
@@ -117,21 +117,21 @@ exiba TODAS as metricas na saida. NUNCA omita nenhuma coluna fornecida nos dados
 
 Rotulos amigaveis para cada metrica — use sempre pt-BR:
   - faturamento / total / receita → R$ X.XXX,XX (valor principal, sem rotulo ou rotulo "Fat.")
-  - quantidade / quant / qtd → N un (sem decimal quando inteiro; ex: "75 un")
+  - quantidade / quant / qtd → N (sem unidade/sufixo; ex: "75")
   - valor_medio / ticket_medio / preco_medio / media_venda → R$ X,XX/un (preco unitario medio)
   - saldo → R$ X.XXX,XX (pode ser negativo — nunca remova o sinal de menos)
   - percentual / pct / perc → X,X%
   - crescimento / variacao / variação / cresc → label "Crescimento:" + X,X% (se valor for ZERO: exiba "N/A" — indica ausencia de periodo anterior para comparar; NUNCA exiba "0,00%" para crescimento)
 
 Exemplo de linha com tres metricas (faturamento + quantidade + preco medio):
-  1. *ACME LTDA*: R$ 15.000,00 | 75 un | R$ 200,00/un
+  1. *ACME LTDA*: R$ 15.000,00 | 75 | R$ 200,00/un
 
 Linha de subtotal/total com tres metricas:
-  🧾 *Subtotal*: R$ 15.000,00 | 75 un | R$ 200,00/un
+  🧾 *Subtotal*: R$ 15.000,00 | 75 | R$ 200,00/un
 
 Para resultados sem agrupamento (resposta de linha unica), liste cada metrica em linha propria:
   💰 *Faturamento*: R$ 500.000,00
-  📦 *Quantidade*: 2.500 un
+  📦 *Quantidade*: 2.500
   🏷 *Preco medio*: R$ 200,00/un
 
 ### 9. Identificadores Internos — NUNCA Exibir
@@ -582,7 +582,7 @@ function _buildBlocosTexto(dados, subtotais, totalGeral, colTemporal, colEntidad
       const itemUnit  = colCompanion ? String(item[colCompanion] || '').trim() : '';
       const valoresStr = numCols.map(col => {
         const val = item[col];
-        return (itemUnit && _RE_QTD_COL.test(col)) ? `${col}: ${val} ${itemUnit}` : `${col}: ${val}`;
+        return `${col}: ${val}`;
       }).join(' | ');
       linhas.push(`  ${i + 1}. ${labelItem} — ${valoresStr}`);
     });
@@ -769,7 +769,7 @@ function buildFormatUserPrompt(mensagem, rows, { avisoNaoEncontradas = [], conte
         ? 'REGRA CRITICA: cada BLOCO = uma data/dia unico — use 🗓 e o label EXATO do bloco (ex: "01/06/2026"). PROIBIDO reinterpretar como mes.'
         : 'REGRA CRITICA de emoji: cada BLOCO e um periodo de tempo — use OBRIGATORIAMENTE 🗓 nos cabecalhos de Nivel 2.';
       const regraCompanion = colCompanion
-        ? 'REGRA UNIDADE: quando o item trouxer uma unidade apos o valor (ex: "quantidade_faturada: 1127.23 H"), use ESSA unidade — NUNCA "un" generico. Formato: "1.127,23 H".\n'
+        ? 'REGRA QUANTIDADE: nao exiba unidade de medida em metricas de quantidade, mesmo quando o item trouxer coluna de unidade/UM. Exiba somente o numero.\n'
         : '';
 
       dadosSection =
@@ -834,7 +834,7 @@ function _fmtValorCol(col, v) {
     return (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
   }
   if (/quantidade|quant|qtd/.test(n)) {
-    return (parseFloat(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' un';
+    return (parseFloat(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
   }
   return (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

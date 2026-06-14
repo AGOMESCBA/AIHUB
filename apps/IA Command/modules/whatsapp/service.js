@@ -960,6 +960,7 @@ class IACWhatsAppService extends EventEmitter {
 
     // Colunas auxiliares de cálculo (ex: faturamento_ano_anterior) — excluídas do output
     const _RE_SKIP_CALC  = /_anterior$/i;
+    const _RE_DOCUMENTO  = /^(documento|doc|nota|nota_fiscal|nf|nfe|titulo|duplicata|f2_doc|d2_doc|e1_num|e2_num)$/i;
     // Colunas de entidade categórica (vendedor, cliente, produto, etc.) — usadas como dimensão de agrupamento
     const _RE_ENTIDADE   = /^(vendedor|fornecedor|cliente|produto|servico|serviço|funcionario|funcionário|unidade|empresa|depto|departamento|cc|centro|nome|descri)/i;
     // Deriva label legível da coluna de entidade para o título do ranking
@@ -968,6 +969,7 @@ class IACWhatsAppService extends EventEmitter {
       if (/^vendedor/.test(k))    return 'Vendedor';
       if (/^fornecedor/.test(k))  return 'Fornecedor';
       if (/^cliente/.test(k))     return 'Cliente';
+      if (_RE_DOCUMENTO.test(k))  return 'Documento';
       if (/^produto/.test(k))     return 'Produto';
       if (/^servi/.test(k))       return 'Serviço';
       if (/^funciona/.test(k))    return 'Funcionário';
@@ -992,7 +994,7 @@ class IACWhatsAppService extends EventEmitter {
     const colsCrescimento = cols.filter(k => _RE_CRESCIMENTO.test(k) && !colsDimensao.includes(k) && !colsSomaveis.includes(k));
     // Colunas de entidade: não numéricas, não dimensão temporal, não skip
     const colsEntidade   = cols.filter(k =>
-      _RE_ENTIDADE.test(k)
+      (_RE_ENTIDADE.test(k) || _RE_DOCUMENTO.test(k))
       && !_RE_SOMAVEL.test(k)
       && !_RE_SKIP_CALC.test(k)
       && !colsDimensao.includes(k)
@@ -1013,7 +1015,7 @@ class IACWhatsAppService extends EventEmitter {
       && !colsSomaveis.includes(k)
       && (colsEntidade.length === 0 || !colsEntidade.slice(0, 1).includes(k))
     ) || cols.find(k =>
-      !_RE_DIMENSAO.test(k) && !_RE_ENTIDADE.test(k) && !colsSomaveis.includes(k) && !colsDimensao.includes(k) && _isCompVal(k)
+      !_RE_DIMENSAO.test(k) && !_RE_ENTIDADE.test(k) && !_RE_DOCUMENTO.test(k) && !colsSomaveis.includes(k) && !colsDimensao.includes(k) && _isCompVal(k)
     ) || null;
     // Helper: monta rótulo com companion quando presente
     const _entLabel = (row, eKey) => {
@@ -1037,7 +1039,123 @@ class IACWhatsAppService extends EventEmitter {
     const _mesOrd    = v => { const s = String(v||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim(); const idx = MESES_ORD.indexOf(s); if (idx>=0) return idx+1; const n=parseInt(s,10); return (n>=1&&n<=12)?n:99; };
     const _labelMes  = v => { const n=parseInt(String(v||'').trim(),10); return (n>=1&&n<=12) ? MESES_FULL[n-1] : (String(v||'').trim().charAt(0).toUpperCase()+String(v||'').trim().slice(1).toLowerCase()); };
 
-    if (_dimMesKey && _dimAnoKey && colsSomaveis.length > 0) {
+    const _isMediaPeriodo = /\b(media|medio|m[eÃ©]dia|m[eÃ©]dio)\b/i.test(String(intent?._mensagemOriginal || ''))
+      || String(intent?.operacao || '').toLowerCase() === 'media'
+      || String(intent?.operacao_analitica?.operacao || '').toLowerCase() === 'media';
+    const _periodKeyMedia = row => {
+      if (_dimMesKey && _dimAnoKey) {
+        const ano = String(row[_dimAnoKey] ?? '').trim();
+        const mes = String(parseInt(String(row[_dimMesKey] ?? '').trim(), 10)).padStart(2, '0');
+        if (/^\d{4}$/.test(ano) && /^\d{2}$/.test(mes)) return `${ano}${mes}`;
+      }
+      const temporalKey = colsDimensao.find(k => _RE_TEMPORAL.test(k));
+      return temporalKey ? String(row[temporalKey] ?? '').trim() : '';
+    };
+    const _parseMoedaPtBr = valor => {
+      const s = String(valor || '').replace(/\s/g, '').replace(/[^\d,.-]/g, '');
+      if (!s) return 0;
+      return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+    };
+    const _extrairItensRespostaEmpresa = resposta => {
+      const itens = [];
+      for (const linha of String(resposta || '').split(/\r?\n/)) {
+        const limpa = linha.trim();
+        if (!/^\d+\./.test(limpa)) continue;
+        if (/subtotal|total\s+geral/i.test(limpa)) continue;
+        const m = limpa.match(/^\d+\.\s+\*?(.+?)\*?\s*[:—-]\s*(?:\*?R\$\s*([\d.\s\u00a0]+,\d{2})\*?)/i);
+        if (!m) continue;
+        const rotulo = String(m[1] || '').replace(/\*/g, '').trim();
+        if (!rotulo || /^geral$/i.test(rotulo)) continue;
+        itens.push({ rotulo, valor: _parseMoedaPtBr(m[2]) });
+      }
+      return itens;
+    };
+    const _formatarConsolidadoPorItensResposta = () => {
+      const porProduto = new Map();
+      for (const s of sucessos) {
+        for (const item of _extrairItensRespostaEmpresa(s.resposta)) {
+          if (!porProduto.has(item.rotulo)) porProduto.set(item.rotulo, { total: 0, empresas: new Map() });
+          const grupo = porProduto.get(item.rotulo);
+          grupo.total += item.valor;
+          grupo.empresas.set(s.nomeEmpresa, (grupo.empresas.get(s.nomeEmpresa) || 0) + item.valor);
+        }
+      }
+      if (!porProduto.size) return null;
+
+      const entradas = [...porProduto.entries()].sort(([, a], [, b]) => b.total - a.total);
+      const out = [];
+      entradas.slice(0, 50).forEach(([produto, grupo], idx) => {
+        out.push(`${idx + 1}. *${produto}*: *${_brl(grupo.total)}*`);
+        for (const [empresa, valor] of grupo.empresas) {
+          out.push(`   \u{1F3E2} ${empresa}: *${_brl(valor)}*`);
+        }
+      });
+      if (entradas.length > 50) out.push(`... e mais ${entradas.length - 50}`);
+      const total = entradas.reduce((acc, [, grupo]) => acc + grupo.total, 0);
+      out.push('');
+      out.push(`\u{1F9FE} *Total Geral*: *${_brl(total)}*`);
+      return out.join('\n');
+    };
+
+    if (_isMediaPeriodo && colsEntidade.length > 0 && colsSomaveis.length > 0 && sucessos.some(s => (s.rows || []).some(r => _periodKeyMedia(r)))) {
+      // Media consolidada correta: soma empresas por periodo e so depois calcula a media por entidade.
+      const entKey = colsEntidade.find(k => /^produto/i.test(k)) || colsEntidade[0];
+      const periodos = new Set();
+      const porEnt = new Map();
+      const totalPorPeriodo = new Map();
+
+      for (const s of sucessos) {
+        for (const row of (s.rows || [])) {
+          const ent = _entLabel(row, entKey) || '(outros)';
+          const periodo = _periodKeyMedia(row);
+          if (!periodo) continue;
+          periodos.add(periodo);
+          if (!porEnt.has(ent)) porEnt.set(ent, new Map());
+          const porPeriodo = porEnt.get(ent);
+          if (!porPeriodo.has(periodo)) porPeriodo.set(periodo, {});
+          if (!totalPorPeriodo.has(periodo)) totalPorPeriodo.set(periodo, {});
+          const grupo = porPeriodo.get(periodo);
+          const totalPeriodo = totalPorPeriodo.get(periodo);
+          for (const col of colsSomaveis) {
+            const v = parseFloat(row[col]);
+            if (!isNaN(v)) {
+              grupo[col] = (grupo[col] || 0) + v;
+              totalPeriodo[col] = (totalPeriodo[col] || 0) + v;
+            }
+          }
+        }
+      }
+
+      const periodosOrdenados = [...periodos].sort();
+      const divisor = periodosOrdenados.length || 1;
+      const primaryCol = colsSomaveis[0];
+      const entradas = [...porEnt.entries()].map(([ent, porPeriodo]) => {
+        const medias = {};
+        for (const col of colsSomaveis) {
+          const somaPeriodos = periodosOrdenados.reduce((acc, periodo) => acc + (porPeriodo.get(periodo)?.[col] || 0), 0);
+          medias[col] = somaPeriodos / divisor;
+        }
+        return [ent, medias];
+      }).sort(([, a], [, b]) => (b[primaryCol] || 0) - (a[primaryCol] || 0));
+
+      linhas.push(`*Media consolidada por ${_labelEntidade(entKey)}*`);
+      entradas.slice(0, 50).forEach(([ent, medias], i) => {
+        const vals = colsSomaveis.map(col => `*${_fmt(col, medias[col] || 0)}*`).join(' | ');
+        linhas.push(`  ${i + 1}. ${ent}: ${vals}`);
+      });
+      if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+
+      const mediaGeral = {};
+      for (const col of colsSomaveis) {
+        const somaPeriodos = periodosOrdenados.reduce((acc, periodo) => acc + (totalPorPeriodo.get(periodo)?.[col] || 0), 0);
+        mediaGeral[col] = somaPeriodos / divisor;
+      }
+      const geralStr = colsSomaveis.map(col => `*${_fmt(col, mediaGeral[col] || 0)}*`).join(' | ');
+      linhas.push('');
+      linhas.push(`Media Geral Consolidada: ${geralStr}`);
+      linhas.push(`_Base: ${divisor} periodo(s), somando todas as empresas antes da media._`);
+
+    } else if (_dimMesKey && _dimAnoKey && colsSomaveis.length > 0) {
       // Consolida somando faturamento por (mes, ano) em todas as empresas
       const primaryCol = colsSomaveis[0];
       const porMes = new Map();   // mes → Map<ano, {col: total}>
@@ -1404,6 +1522,54 @@ class IACWhatsAppService extends EventEmitter {
         }
       }
 
+    } else if (colsEntidade.length > 1 && colsSomaveis.length > 0 && colsEntidade.some(k => _RE_DOCUMENTO.test(k))) {
+      // Modo detalhado: preserva entidade + documento/NF (ex: cliente -> nota fiscal)
+      const docKey = colsEntidade.find(k => _RE_DOCUMENTO.test(k));
+      const entKey = colsEntidade.find(k => k !== docKey && /^(cliente|fornecedor|vendedor|produto|servico|empresa|nome|descri)/i.test(k))
+        || colsEntidade.find(k => k !== docKey);
+      const agrupado = new Map();
+
+      for (const s of sucessos) {
+        for (const row of (s.rows || [])) {
+          const ent = _entLabel(row, entKey) || '(outros)';
+          const doc = String(row[docKey] ?? '').trim() || '(sem documento)';
+          if (!agrupado.has(ent)) agrupado.set(ent, { total: {}, documentos: new Map() });
+          const grupo = agrupado.get(ent);
+          if (!grupo.documentos.has(doc)) grupo.documentos.set(doc, {});
+          const docGrupo = grupo.documentos.get(doc);
+          for (const col of colsSomaveis) {
+            const v = parseFloat(row[col]);
+            if (!isNaN(v)) {
+              grupo.total[col] = (grupo.total[col] || 0) + v;
+              docGrupo[col] = (docGrupo[col] || 0) + v;
+            }
+          }
+        }
+      }
+
+      const primaryCol = colsSomaveis[0];
+      const entradas = [...agrupado.entries()].sort(([, a], [, b]) => (b.total[primaryCol] || 0) - (a.total[primaryCol] || 0));
+
+      entradas.slice(0, 50).forEach(([ent, grupo], i) => {
+        const valsEnt = colsSomaveis.map(col => `*${_fmt(col, grupo.total[col] || 0)}*`).join(' | ');
+        linhas.push(`  ${i + 1}. *${ent}*: ${valsEnt}`);
+        const docs = [...grupo.documentos.entries()].sort(([a], [b]) => String(a).localeCompare(String(b)));
+        docs.slice(0, 50).forEach(([doc, docGrupo], idx) => {
+          const valsDoc = colsSomaveis.map(col => `*${_fmt(col, docGrupo[col] || 0)}*`).join(' | ');
+          linhas.push(`     ${idx + 1}. Doc. ${doc}: ${valsDoc}`);
+        });
+        if (docs.length > 50) linhas.push(`     ... e mais ${docs.length - 50} documento(s)`);
+      });
+      if (entradas.length > 50) linhas.push(`... e mais ${entradas.length - 50}`);
+
+      linhas.push('');
+      const totalGeral = {};
+      for (const [, grupo] of entradas) {
+        for (const col of colsSomaveis) totalGeral[col] = (totalGeral[col] || 0) + (grupo.total[col] || 0);
+      }
+      const totStr = colsSomaveis.map(col => `*${_fmt(col, totalGeral[col] || 0)}*`).join(' | ');
+      linhas.push(`ðŸ§¾ *Total Geral*: ${totStr}`);
+
     } else if (colsEntidade.length > 0 && colsSomaveis.length > 0) {
       // Modo entidade: agrupa por vendedor/cliente/produto consolidando todas as empresas
       const entKey    = colsEntidade[0];
@@ -1439,6 +1605,12 @@ class IACWhatsAppService extends EventEmitter {
 
     } else if (colsSomaveis.length > 0) {
       // Modo simples: subtotal por empresa + total geral
+      const _ROTULOS_CAMPO = {
+        valor_recebido: 'Recebido', valor_pago: 'Pago',
+        saldo_a_receber: 'A receber', saldo_a_pagar: 'A pagar',
+        valor_recebido_total: 'Recebido', valor_pago_total: 'Pago',
+      };
+      const _rotuloCol = col => _ROTULOS_CAMPO[col] || col;
       let totalRegistros = 0;
       const totalGeral = {};
       for (const s of sucessos) {
@@ -1449,41 +1621,63 @@ class IACWhatsAppService extends EventEmitter {
         }
         const c = (s.rows || []).length;
         totalRegistros += c;
-        const vals = colsSomaveis.map(col => `${col}: *${_fmt(col, totais[col])}*`).join(' | ');
+        const vals = colsSomaveis.map(col => `${_rotuloCol(col)}: *${_fmt(col, totais[col])}*`).join(' | ');
         linhas.push(`\u{1F3E2} ${s.nomeEmpresa}: ${vals} (${c} reg.)`);
       }
       linhas.push('');
-      const totStr = colsSomaveis.map(col => `${col}: *${_fmt(col, totalGeral[col])}*`).join(' | ');
+      const totStr = colsSomaveis.map(col => `${_rotuloCol(col)}: *${_fmt(col, totalGeral[col])}*`).join(' | ');
       linhas.push(`*Total geral: ${totStr}*`);
       linhas.push(`_${totalRegistros} registros no total_`);
 
     } else if (colsMediaDisp.length > 0) {
       // Colunas de média (media_mensal, ticket_medio, etc.) — não somáveis; exibe por dimensão e por empresa
-      const dimKey = colsDimensao.length > 0 ? colsDimensao[0] : null;
+      const entKeyMedia = colsEntidade.find(k => /^produto/i.test(k)) || colsEntidade[0] || null;
+      const dimKey = colsDimensao.length > 0 ? colsDimensao[0] : entKeyMedia;
+      if (!entKeyMedia && !dimKey) {
+        const porItensResposta = _formatarConsolidadoPorItensResposta();
+        if (porItensResposta) {
+          linhas.push(porItensResposta);
+          return linhas.join('\n');
+        }
+      }
       const porDim = new Map();
       for (const s of sucessos) {
         for (const row of (s.rows || [])) {
-          const chave = dimKey ? String(row[dimKey] ?? '').trim() : '_geral_';
+          const chave = entKeyMedia ? _entLabel(row, entKeyMedia) : (dimKey ? String(row[dimKey] ?? '').trim() : '_geral_');
           if (!chave) continue;
           if (!porDim.has(chave)) porDim.set(chave, []);
           porDim.get(chave).push({ empresa: s.nomeEmpresa, row });
         }
       }
-      const ehTemporal = dimKey ? _RE_TEMPORAL.test(dimKey) : false;
-      const entradas = [...porDim.entries()].sort(([a], [b]) => String(a).localeCompare(String(b)));
+      const ehTemporal = dimKey && !entKeyMedia ? _RE_TEMPORAL.test(dimKey) : false;
+      const primaryMediaCol = colsMediaDisp[0];
+      const entradas = [...porDim.entries()].sort(([, a], [, b]) => {
+        if (entKeyMedia) {
+          const ta = a.reduce((acc, item) => acc + (parseFloat(item.row[primaryMediaCol]) || 0), 0);
+          const tb = b.reduce((acc, item) => acc + (parseFloat(item.row[primaryMediaCol]) || 0), 0);
+          return tb - ta;
+        }
+        return String(a).localeCompare(String(b));
+      });
       entradas.forEach(([dimVal, itens], i) => {
-        const label = dimKey ? _formatLabel(dimVal, ehTemporal) : 'Geral';
-        linhas.push(`${i + 1}. *${label}*`);
-        for (const { empresa, row } of itens) {
+        const label = dimKey || entKeyMedia ? _formatLabel(dimVal, ehTemporal) : 'Geral';
+        const totais = {};
+        for (const { row } of itens) {
+          for (const col of colsMediaDisp) totais[col] = (totais[col] || 0) + (parseFloat(row[col]) || 0);
+        }
+        const valsTotais = colsMediaDisp.map(col => `*${_fmt(col, totais[col] || 0)}*`).join(' | ');
+        linhas.push(`${i + 1}. *${label}*: ${valsTotais}`);
+        for (const { empresa, row } of itens.slice(0, 10)) {
           const valsStr = colsMediaDisp.map(col => `*${_fmt(col, parseFloat(row[col]) || 0)}*`).join(' | ');
           linhas.push(`   \u{1F3E2} ${empresa}: ${valsStr}`);
         }
+        if (itens.length > 10) linhas.push(`   ... e mais ${itens.length - 10}`);
       });
 
       // Resumo por empresa: todos os valores de dimensão em uma linha por empresa
       const porEmpresa = new Map();
       for (const [dimVal, itens] of porDim) {
-        const label = dimKey ? _formatLabel(dimVal, ehTemporal) : 'Geral';
+        const label = dimKey || entKeyMedia ? _formatLabel(dimVal, ehTemporal) : 'Geral';
         for (const { empresa, row } of itens) {
           if (!porEmpresa.has(empresa)) porEmpresa.set(empresa, []);
           const valsStr = colsMediaDisp.map(col => `*${_fmt(col, parseFloat(row[col]) || 0)}*`).join(' | ');
@@ -1894,10 +2088,11 @@ class IACWhatsAppService extends EventEmitter {
     };
   }
 
-  _registrarInterpretacao({ empresaId, sender, texto, intent, resultado, resposta, duracaoMs }) {
+  _registrarInterpretacao({ empresaId, sender, texto, intent, resultado, resposta, duracaoMs, timingJson = null, formatacaoCaminho = null, recebidoEm = null, pipelineMs = null, entregueMs = null }) {
+    let logId = null;
     try {
       const trace = this._traceInterpretacao({ intent, resultado });
-      interpretationLog.registrar({
+      const row = interpretationLog.registrar({
         empresa_id: empresaId,
         usuario: sender,
         numero_wa: this._normalizarNumeroWa(sender),
@@ -1917,9 +2112,15 @@ class IACWhatsAppService extends EventEmitter {
         sql_canonico_parametrizado: !!resultado?._sql_canonico_parametrizado,
         sql_canonico_reuso_motivo: resultado?._sql_canonico_reuso_motivo || null,
         sql_canonico_reuso_permitido: resultado?._sql_canonico_reuso_permitido,
+        timing_json: timingJson,
+        formatacao_caminho: formatacaoCaminho || intent?._formatacaoCaminho || null,
         duracao_ms: duracaoMs ?? null,
+        recebido_em: recebidoEm ?? null,
+        pipeline_ms: pipelineMs ?? null,
+        entregue_ms: entregueMs ?? null,
         trace,
       });
+      logId = row?.id || null;
     } catch (err) {
       this.log(`Falha ao registrar interpretacao: ${err.message}`, 'warning');
     }
@@ -1958,6 +2159,7 @@ class IACWhatsAppService extends EventEmitter {
     } catch (err) {
       this.log(`Falha ao registrar execucao: ${err.message}`, 'warning');
     }
+    return logId;
   }
 
   async _responderDialogoComIA({ empresaId, sender, texto, dialogo, t0 }) {
@@ -2148,7 +2350,13 @@ class IACWhatsAppService extends EventEmitter {
             this._saveLastIntent(sender, intentEmpresa, emp.empresa_id);
           }
           if (resEmp.tipo !== 'erro' && resEmp.tipo !== 'pergunta_entidade' && resEmp.resposta_direta) {
-            respostasEmpresa.push({ nome: emp.nome || `Empresa #${emp.empresa_id}`, resposta: resEmp.resposta_direta });
+            respostasEmpresa.push({
+              empresaId: emp.empresa_id,
+              nome: emp.nome || `Empresa #${emp.empresa_id}`,
+              resposta: resEmp.resposta_direta,
+              resultado: resEmp,
+              rows: resEmp.rows || [],
+            });
           }
         } catch (err) {
           this.log(`[_responderEntidadePendente] Empresa #${emp.empresa_id} falhou: ${err.message}`, 'warning');
@@ -2169,8 +2377,47 @@ class IACWhatsAppService extends EventEmitter {
         this._saveLastIntent(sender, intentAll, '__all__');
       }
       if (!respostasEmpresa.length) return 'Não encontrei dados para essa consulta.';
-      if (respostasEmpresa.length === 1) return respostasEmpresa[0].resposta;
-      return respostasEmpresa.map(r => `*${r.nome}*\n${r.resposta}`).join('\n\n');
+      const respostaFinal = respostasEmpresa.map(r => `*${r.nome}*\n${r.resposta}`).join('\n\n');
+      const empresaLogId = this._empresaConsolidadoId(empresasAll, empresasAll);
+      const sqlConsolidado = respostasEmpresa
+        .filter(r => r.resultado?.sql_gerado)
+        .map(r => `-- ${r.nome}\n${r.resultado.sql_gerado}`)
+        .join('\n\n') || null;
+      const audPrimeiro = respostasEmpresa[0]?.resultado?._sql_auditoria || {};
+      this._registrarInterpretacao({
+        empresaId: empresaLogId,
+        sender,
+        texto: intentPendente._mensagemOriginal || texto,
+        intent: {
+          ...intentPendente,
+          _escopoExecucao: 'whatsapp_all',
+        },
+        resultado: {
+          tipo: 'sucesso_ai_sql',
+          rows: respostasEmpresa.flatMap(r => r.rows || []),
+          sql_gerado: sqlConsolidado,
+          _sql_auditoria: {
+            handler: 'whatsapp_all',
+            origem: 'consolidado_multiempresa_entidade_pendente',
+            prompt_system: audPrimeiro.prompt_system || null,
+            prompt_user: audPrimeiro.prompt_user || null,
+            empresas_tentadas: empresasAll.map(e => e.nome || `Empresa #${e.empresa_id}`),
+            empresas: respostasEmpresa.map(r => ({
+              empresa_id: r.empresaId,
+              empresa_nome: r.nome,
+              sql_gerado: r.resultado?.sql_gerado || null,
+              sql_ia_bruto: r.resultado?._sql_auditoria?.sql_ia_bruto || null,
+              sql_final_executado: r.resultado?._sql_auditoria?.sql_final_executado || r.resultado?.sql_gerado || null,
+              sql_canonico_adaptado: r.resultado?._sql_canonico || null,
+              rows_count: (r.rows || []).length,
+            })),
+          },
+          _pipeline_origem: 'consolidado_entidade_pendente',
+        },
+        resposta: respostaFinal,
+        duracaoMs: Date.now() - t0,
+      });
+      return respostaFinal;
     }
 
     const resultado = await intentRouter.rotear(intentPendente, empresaPendente);
@@ -2278,6 +2525,7 @@ class IACWhatsAppService extends EventEmitter {
     this.log(`⏳ Acuse de recebimento enviado — iniciando pipeline...`, 'info');
 
     const t0 = Date.now();
+    const _timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
     try {
       const timeoutMs = 180000;
       let timeoutId = null;
@@ -2288,7 +2536,7 @@ class IACWhatsAppService extends EventEmitter {
         );
       });
       const resposta = await Promise.race([
-        this._pipeline(texto, sender, { _pipelineTs: t0 }),
+        this._pipeline(texto, sender, { _pipelineTs: t0, _recebidoEm: t0, _timingCtx }),
         timeoutPipeline,
       ]).finally(() => clearTimeout(timeoutId));
       if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > t0) {
@@ -2296,7 +2544,11 @@ class IACWhatsAppService extends EventEmitter {
         return;
       }
       await chat.sendMessage(resposta);
-      this.log(`✅ Resposta enviada para ${sender} (${Date.now() - t0}ms)`, 'success');
+      const entregueMs = Date.now() - t0;
+      this.log(`✅ Resposta enviada para ${sender} (${entregueMs}ms)`, 'success');
+      if (_timingCtx.logId) {
+        try { interpretationLog.atualizarEntregue(_timingCtx.logId, entregueMs); } catch (_) {}
+      }
     } catch (err) {
       this.log(`❌ Pipeline falhou (${Date.now() - t0}ms): ${err.message}`, 'error');
       await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_processamento', { erro: err.message }));
@@ -2338,8 +2590,9 @@ class IACWhatsAppService extends EventEmitter {
       }
 
       const _audioT0 = Date.now();
+      const _audioTimingCtx = { logId: null, recebidoEm: new Date(_audioT0).toISOString() };
       try {
-        const resposta = await this._pipeline(transcricao, sender, { _pipelineTs: _audioT0 });
+        const resposta = await this._pipeline(transcricao, sender, { _pipelineTs: _audioT0, _recebidoEm: _audioT0, _timingCtx: _audioTimingCtx });
         if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > _audioT0) {
           this.log(`🚫 Resposta de áudio descartada — conversa foi resetada durante o processamento (${sender})`, 'info');
           return;
@@ -2348,7 +2601,11 @@ class IACWhatsAppService extends EventEmitter {
           transcricao: `${transcricao.slice(0, 120)}${transcricao.length > 120 ? '...' : ''}`,
           resposta,
         }));
-        this.log(`Resposta de áudio enviada para ${sender}`, 'success');
+        const _audioEntregueMs = Date.now() - _audioT0;
+        this.log(`Resposta de áudio enviada para ${sender} (${_audioEntregueMs}ms)`, 'success');
+        if (_audioTimingCtx.logId) {
+          try { interpretationLog.atualizarEntregue(_audioTimingCtx.logId, _audioEntregueMs); } catch (_) {}
+        }
       } catch (err) {
         this.log(`Pipeline (áudio) falhou: ${err.message}`, 'error');
         await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_processamento', { erro: err.message }));
@@ -2366,6 +2623,10 @@ class IACWhatsAppService extends EventEmitter {
 
   async _pipeline(texto, sender, opts = {}) {
     const _t0 = Date.now();
+    const _timings = { inicio: _t0 };
+    // _timingCtx é um objeto mutável compartilhado com o handler para registrar entregue_ms após sendMessage
+    const _timingCtx = opts._timingCtx || null;
+    const _recebidoEm = opts._recebidoEm ? new Date(opts._recebidoEm).toISOString() : null;
     let empresaId = this._empresaId;
     let empresaResolvida = null;
     let textoExecucao = texto;
@@ -2457,7 +2718,8 @@ class IACWhatsAppService extends EventEmitter {
         // Retorna texto (conversacional) ou JSON {tipo:"data_request",consulta:"..."}.
         const chatHistory = ctx?._chatHistory || [];
         const roteamento = await conversationService.rotear(textoExecucao, this._empresaId, chatHistory);
-        this.log(`🔍 ConversationRouter: ${roteamento.tipo} (${roteamento.provedor || 'fallback'}) hist=${chatHistory.length / 2} turnos`, 'info');
+        _timings.roteador = Date.now();
+        this.log(`🔍 ConversationRouter: ${roteamento.tipo} (${roteamento.provedor || 'fallback'}) hist=${chatHistory.length / 2} turnos | ${_timings.roteador - _t0}ms`, 'info');
         if (roteamento.tipo === 'conversacional') {
           // Hook 1 — Fallback de continuidade: mensagem classificada como conversacional
           // mas com sinais explícitos de refinamento (ordenar, filtrar, top-N, etc.)
@@ -2515,7 +2777,7 @@ class IACWhatsAppService extends EventEmitter {
           this._saveLastIntent(sender, ctx.lastIntent, '__all__');
         }
         this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
-        return await this._pipelineAll(textoExecucao, empresasDoSender, sender);
+        return await this._pipelineAll(textoExecucao, empresasDoSender, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
       }
       const empresasQualificadas = this._resolverEmpresasQualificadasNoTexto(textoExecucao, empresasDoSender);
       if (empresasQualificadas && empresasQualificadas.termos.length >= 2) {
@@ -2531,6 +2793,7 @@ class IACWhatsAppService extends EventEmitter {
           return await this._pipelineAll(textoExecucao, empresasQualificadas.empresas, sender, {
             empresasMencionadasTextos: empresasQualificadas.termos,
             empresasMencionadasIds: empresasQualificadas.resolvidas.map(e => e.empresaId),
+            _recebidoEm: opts._recebidoEm, _timingCtx,
           });
         }
       }
@@ -2542,7 +2805,7 @@ class IACWhatsAppService extends EventEmitter {
         this.log(`[resolverEmpresa] empresa explicita nao encontrada no canal (${empresaQualificada.termo}), preservando sessao atual e seguindo fluxo de entidade`, 'info');
         // Contexto já era __all__: segue diretamente para _pipelineAll sem perguntar de novo
         if (ctx?.empresaId === '__all__') {
-          return await this._pipelineAll(textoExecucao, empresasDoSender, sender);
+          return await this._pipelineAll(textoExecucao, empresasDoSender, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
         }
         const sessaoAtual = ctx?.empresaId ? ctx.empresaId : null;
         const empresaPadrao = sessaoAtual
@@ -2597,7 +2860,7 @@ class IACWhatsAppService extends EventEmitter {
         this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
         if (wasReset) return `✅ Agora consultando *todas as empresas*.\nPode fazer sua pergunta.`;
         if (ctx?.pendingText) textoExecucao = ctx.pendingText;
-        return await this._pipelineAll(textoExecucao, resolucao.empresas, sender);
+        return await this._pipelineAll(textoExecucao, resolucao.empresas, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
       }
 
       if (this._isPedidoPorEmpresa(textoExecucao) && empresasDoSender.length > 1) {
@@ -2605,7 +2868,7 @@ class IACWhatsAppService extends EventEmitter {
           this._saveLastIntent(sender, ctx.lastIntent, '__all__');
         }
         this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
-        return await this._pipelineAll(textoExecucao, empresasDoSender, sender);
+        return await this._pipelineAll(textoExecucao, empresasDoSender, sender, { _recebidoEm: opts._recebidoEm, _timingCtx });
       }
 
       empresaId = resolucao.empresaId;
@@ -2732,6 +2995,7 @@ class IACWhatsAppService extends EventEmitter {
       contextoAnterior,
       historicoResumido: this._buildHistoricoResumido(sender, empresaId, this._historicoTurnosConfig(empresaId)),
     });
+    _timings.intent = Date.now();
     intent._mensagemOriginal = textoExecucao;
     if (empresaQualificadaIntent && Number(empresaQualificadaIntent.empresaId) === Number(empresaId)) {
       intent._empresaMencionadaTexto = empresaQualificadaIntent.termo;
@@ -2818,6 +3082,7 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
     let resultado = await intentRouter.rotear(intent, empresaId);
+    _timings.router = Date.now();
     if (!resultado || typeof resultado !== 'object') {
       this.log(`Roteador retornou resultado inválido (${typeof resultado}) para empresa #${empresaId}. Abortando pipeline.`, 'error');
       return '⚠️ Ocorreu um erro interno ao processar sua consulta. Tente novamente.';
@@ -2917,6 +3182,17 @@ class IACWhatsAppService extends EventEmitter {
       this._saveLastIntent(sender, intentComPeriodoResolvido, empresaId);
     }
 
+    const _now = Date.now();
+    const _timingLog = {
+      roteador_ms: _timings.roteador ? _timings.roteador - _timings.inicio : null,
+      intent_ms:   _timings.intent   ? _timings.intent   - (_timings.roteador || _timings.inicio) : null,
+      router_ms:   _timings.router   ? _timings.router   - (_timings.intent   || _timings.roteador || _timings.inicio) : null,
+      total_ms:    _now - _timings.inicio,
+    };
+    const _formatacaoCaminho = intent?._formatacaoCaminho || resultado?._formatacaoCaminho || null;
+    // pipeline_ms = do recebimento da mensagem até aqui (inclui tempo de fila antes do _pipeline)
+    const _pipelineMs = _recebidoEm ? (_now - new Date(_recebidoEm).getTime()) : (_now - _t0);
+
     if (this._channelId && channelStore.listarEmpresasDoCanal(this._channelId).length > 1 && empresaResolvida?.nome) {
       const respostaFinal = (_prefixoReset || '') + messageTemplates.render(empresaId, 'resposta_empresa_prefixo', {
         empresa_nome: empresaResolvida.nome,
@@ -2925,19 +3201,23 @@ class IACWhatsAppService extends EventEmitter {
         canal_nome: this._channelName || '',
       });
       this.log(`Registrando interpretacao: escopo=single | empresa=${empresaId} | chars=${String(respostaFinal || '').length}`, 'info');
-      this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: Date.now() - _t0 });
+      const _lid = this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: _now - _t0, timingJson: _timingLog, formatacaoCaminho: _formatacaoCaminho, recebidoEm: _recebidoEm, pipelineMs: _pipelineMs });
+      if (_timingCtx) { _timingCtx.logId = _lid; _timingCtx.recebidoEm = _recebidoEm; }
       this.log(`Interpretacao registrada: escopo=single | empresa=${empresaId}`, 'info');
       return respostaFinal;
     }
     const respostaFinal = (_prefixoReset || '') + resposta;
     this.log(`Registrando interpretacao: escopo=single | empresa=${empresaId} | chars=${String(respostaFinal || '').length}`, 'info');
-    this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: Date.now() - _t0 });
+    const _lid = this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: _now - _t0, timingJson: _timingLog, formatacaoCaminho: _formatacaoCaminho, recebidoEm: _recebidoEm, pipelineMs: _pipelineMs });
+    if (_timingCtx) { _timingCtx.logId = _lid; _timingCtx.recebidoEm = _recebidoEm; }
     this.log(`Interpretacao registrada: escopo=single | empresa=${empresaId}`, 'info');
     return respostaFinal;
   }
 
   async _pipelineAll(texto, empresas, sender = null, opts = {}) {
     const _t0 = Date.now();
+    const _recebidoEmAll  = opts._recebidoEm ? new Date(opts._recebidoEm).toISOString() : null;
+    const _timingCtxAll   = opts._timingCtx || null;
     const empresasOrdenadas = this._ordenarEmpresasPipelineAll(empresas);
     // Garante intenções dinâmicas padrão para TODAS as empresas antes do filtro,
     // evitando que empresas recém-cadastradas sejam descartadas por não terem intenções ainda.
@@ -3064,16 +3344,36 @@ class IACWhatsAppService extends EventEmitter {
 
     // Subtipos cujo resposta_direta é significativa para o usuário (domínio ou IA)
     // — devem ser exibidos diretamente em vez da mensagem genérica de sistema.
-    const RESPOSTA_INCONSISTENCIA_DINAMICA = 'Tivemos uma inconsistencia ao interpretar ou executar sua consulta. Por favor, reformule a pergunta e tente novamente.';
+    const mensagemInconsistenciaPorSubtipo = (subtipo) => {
+      if (/ia_indisponivel|sem_chave|cota_esgotada/.test(subtipo || '')) {
+        return 'O servico de IA esta com instabilidade no momento. Aguarde alguns instantes e tente novamente.';
+      }
+      if (/sem_conexao/.test(subtipo || '')) {
+        return 'Esta empresa nao possui conexao com o ERP configurada. Solicite ao administrador do sistema.';
+      }
+      if (/contrato_query_plan_invalido|contrato_ia_owner_invalido|sql_invalido|contrato_entidade_sql_invalido/.test(subtipo || '')) {
+        return 'Nao consegui montar a consulta para essa combinacao de filtros. Tente dividir em duas perguntas separadas ou reformule com mais especificidade.';
+      }
+      if (/contrato_sx3_invalido|funcao_data_protheus_invalida/.test(subtipo || '')) {
+        return 'Encontrei uma inconsistencia tecnica ao gerar a consulta. Tente reformular a pergunta com um periodo ou filtro diferente.';
+      }
+      if (/periodo_sql_inconsistente|periodo_sql_invalido/.test(subtipo || '')) {
+        return 'Nao consegui identificar o periodo corretamente. Tente informar a data de forma explicita, como "junho de 2026" ou "01/06/2026 a 30/06/2026".';
+      }
+      if (/sql_nao_extraido|sql_bloqueado|sql_parametro_entidade_pendente/.test(subtipo || '')) {
+        return 'Nao consegui completar a interpretacao da sua consulta. Reformule a pergunta e tente novamente.';
+      }
+      return 'Tivemos uma inconsistencia ao interpretar ou executar sua consulta. Por favor, reformule a pergunta e tente novamente.';
+    };
     const SUBTIPOS_DOMINIO_DIRETO = new Set([
       'entidade_nao_encontrada', 'entidade_ia_nao_encontrada',
       'entidade_nao_encontrada_tenant', 'entidade_ambigua_tenant', 'sem_resultado',
-      'nao_cadastrado', 'erp_id_nao_configurado',
+      'nao_cadastrado', 'erp_id_nao_configurado', 'modulo_nao_autorizado',
     ]);
     const SUBTIPOS_INCONSISTENCIA_INTERNA = new Set([
       'sql_invalido', 'periodo_sql_invalido', 'funcao_data_protheus_invalida',
       'contrato_query_plan_invalido', 'contrato_sx3_invalido', 'contrato_entidade_sql_invalido', 'filtro_vendedor_ausente',
-      'contrato_ia_owner_invalido', 'contrato_entidade_invalido', 'sql_bloqueado', 'sql_nao_extraido',
+      'contrato_ia_owner_invalido', 'contrato_entidade_invalido', 'periodo_sql_inconsistente', 'sql_bloqueado', 'sql_nao_extraido',
       'sql_parametro_entidade_pendente',
       'ia_indisponivel', 'sem_chave', 'cota_esgotada',
       'sem_conexao',
@@ -3475,7 +3775,7 @@ class IACWhatsAppService extends EventEmitter {
             this.log(`[All] Empresa #${emp.empresa_id} dinamica erro: ${resultado.subtipo || resultado.tipo}`, 'info');
             const subtipoErro = resultado.subtipo || resultado.tipo;
             const inconsistenciaInterna = SUBTIPOS_INCONSISTENCIA_INTERNA.has(subtipoErro);
-            const respostaUsuario = inconsistenciaInterna ? RESPOSTA_INCONSISTENCIA_DINAMICA : resultado.resposta_direta;
+            const respostaUsuario = inconsistenciaInterna ? mensagemInconsistenciaPorSubtipo(subtipoErro) : resultado.resposta_direta;
             const retryElegivel = !sqlCanonicoDinamico && subtiposRetryCanonico.has(subtipoErro);
             const resultadoComDiagnostico = {
               ...resultado,
@@ -3604,7 +3904,10 @@ class IACWhatsAppService extends EventEmitter {
             this._registrarInterpretacao({ empresaId: s.empresaId, sender: senderAll, texto, intent: s.intentExecucao, resultado: { ...s.resultado, duracao_ms: s.resultado.duracao_ms ?? (Date.now() - _t0) }, resposta: s.resposta, duracaoMs: s.resultado.duracao_ms ?? (Date.now() - _t0) });
           }
           // Segundo registro: auditoria consolidada com SQL de todas as empresas do canal
-          this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: s.rows, sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada, _pipeline_origem: 'consolidado' }, resposta: s.resposta, duracaoMs: Date.now() - _t0 });
+          const _now1 = Date.now();
+          const _pm1 = _recebidoEmAll ? (_now1 - new Date(_recebidoEmAll).getTime()) : (_now1 - _t0);
+          const _lid1 = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: s.rows, sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada, _pipeline_origem: 'consolidado' }, resposta: s.resposta, duracaoMs: _now1 - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm1 });
+          if (_timingCtxAll) { _timingCtxAll.logId = _lid1; _timingCtxAll.recebidoEm = _recebidoEmAll; }
           return (_prefixoResetAll || '') + s.resposta;
         }
         const consolidado = this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
@@ -3618,15 +3921,20 @@ class IACWhatsAppService extends EventEmitter {
           ? `\n\n⚠️ _Nao consegui consultar: ${errosDinamicos.map(e => e.split(':')[0]).join(', ')}._`
           : '';
         const respostaFinalConsolidada = (_prefixoResetAll || '') + [respostaConsolidada, respostaSemDados, consolidado].filter(Boolean).join('\n\n') + avisos;
-        this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: sucessosDinamicos.flatMap(s => s.rows), sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada, _pipeline_origem: 'consolidado' }, resposta: respostaFinalConsolidada, duracaoMs: Date.now() - _t0 });
+        const _now2 = Date.now();
+        const _pm2 = _recebidoEmAll ? (_now2 - new Date(_recebidoEmAll).getTime()) : (_now2 - _t0);
+        const _lid2 = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: { tipo: 'sucesso_ai_sql', rows: sucessosDinamicos.flatMap(s => s.rows), sql_gerado: sqlConsolidado, _sql_auditoria: sqlAuditoriaConsolidada, _pipeline_origem: 'consolidado' }, resposta: respostaFinalConsolidada, duracaoMs: _now2 - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm2 });
+        if (_timingCtxAll) { _timingCtxAll.logId = _lid2; _timingCtxAll.recebidoEm = _recebidoEmAll; }
         return respostaFinalConsolidada;
       }
 
       // Sem sucessos mas com erros de domínio (entidade sem dados no período) — responde diretamente
       if (errosSemDados.length && !errosDinamicos.length) {
-        const respostaDominio = errosSemDados.length === 1
+        let respostaDominio = errosSemDados.length === 1
           ? errosSemDados[0].resposta
           : errosSemDados.map(e => `🏢 *${e.nomeEmpresa}*\n${e.resposta}`).join('\n\n');
+        const respostasUnicasDominio = [...new Set(errosSemDados.map(e => String(e.resposta || '').trim()).filter(Boolean))];
+        if (respostasUnicasDominio.length === 1) respostaDominio = respostasUnicasDominio[0];
         for (const sd of errosSemDados) {
           if (sd._registrado) continue;
           this._registrarInterpretacao({
@@ -3656,16 +3964,22 @@ class IACWhatsAppService extends EventEmitter {
           })),
         };
         const sqlFalha = errosSemDados.find(sd => sd.resultado.sql_gerado)?.resultado.sql_gerado || null;
-        this._registrarInterpretacao({
+        const _now3 = Date.now();
+        const _pm3 = _recebidoEmAll ? (_now3 - new Date(_recebidoEmAll).getTime()) : (_now3 - _t0);
+        const _lid3 = this._registrarInterpretacao({
           empresaId: empresaLogId, sender: senderAll, texto, intent,
           resultado: { tipo: 'sem_dados', sql_gerado: sqlFalha, _sql_auditoria: sqlAuditoriaFalha, _pipeline_origem: 'consolidado' },
-          resposta: respostaDominio, duracaoMs: Date.now() - _t0,
+          resposta: respostaDominio, duracaoMs: _now3 - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm3,
         });
+        if (_timingCtxAll) { _timingCtxAll.logId = _lid3; _timingCtxAll.recebidoEm = _recebidoEmAll; }
         return respostaDominio;
       }
 
+      const _subtipoDominante = resultadosErroAuditaveis.length
+        ? (resultadosErroAuditaveis[0].subtipoErro || resultadosErroAuditaveis[0].resultado?.subtipo || null)
+        : (ultimoResultadoDinamico?.resultado?.subtipo || null);
       const respostaErro = errosDinamicos.length
-        ? RESPOSTA_INCONSISTENCIA_DINAMICA
+        ? mensagemInconsistenciaPorSubtipo(_subtipoDominante)
         : 'Nao consegui executar a consulta dinamica nas empresas disponiveis. Verifique se a intencao dinamica, conexao ERP e chaves de IA estao configuradas.';
 
       // Consolidar auditoria de prompts + SQL do último resultado por empresa.
@@ -3673,20 +3987,42 @@ class IACWhatsAppService extends EventEmitter {
       // Sem isso, o registro consolidado fica com sql_auditoria_json = null — prompts
       // e sql_ia_bruto invisíveis na auditoria mesmo quando a FASE 3b rodou.
       const _audUltimo = ultimoResultadoDinamico?.resultado?._sql_auditoria || {};
+      const resultadosErroAuditaveis = [...pendentesRetryCanonico];
+      if (
+        ultimoResultadoDinamico?.resultado
+        && !resultadosErroAuditaveis.some(p => p.emp?.empresa_id === ultimoResultadoDinamico.empresaId)
+      ) {
+        const empUltima = empresas.find(e => e.empresa_id === ultimoResultadoDinamico.empresaId)
+          || { empresa_id: ultimoResultadoDinamico.empresaId, nome: `Empresa #${ultimoResultadoDinamico.empresaId}` };
+        resultadosErroAuditaveis.push({
+          emp: empUltima,
+          resultado: ultimoResultadoDinamico.resultado,
+          respostaUsuario: ultimoResultadoDinamico.resultado?.resposta_direta || ultimoResultadoDinamico.resultado?.mensagem || null,
+        });
+      }
+      const sqlErroConsolidado = resultadosErroAuditaveis
+        .filter(p => p.resultado?.sql_gerado || p.resultado?._sql_auditoria?.sql_ia_bruto)
+        .map(p => {
+          const nome = p.emp?.nome || `Empresa #${p.emp?.empresa_id || 'n/a'}`;
+          const sql = p.resultado.sql_gerado || p.resultado._sql_auditoria?.sql_ia_bruto;
+          return `-- ${nome}\n${sql}`;
+        })
+        .join('\n\n') || ultimoResultadoDinamico?.resultado?.sql_gerado || _audUltimo.sql_ia_bruto || null;
       const _auditoriaErroConsolidada = {
         handler: 'whatsapp_all',
         origem: 'consolidado_multiempresa_erro_total',
         prompt_system: _audUltimo.prompt_system || null,
         prompt_user:   _audUltimo.prompt_user   || null,
         sql_ia_bruto:  _audUltimo.sql_ia_bruto  || null,
+        sql_gerado:    sqlErroConsolidado,
         sql_apos_sx3:  _audUltimo.sql_apos_sx3  || null,
         empresas_tentadas: empresas.map(e => e.nome || `Empresa #${e.empresa_id}`),
         empresas_com_erro: errosDinamicos,
         // Detalhe por empresa (disponível quando o subtipo era retry-elegível)
-        empresas_detalhes: pendentesRetryCanonico.map(p => ({
+        empresas_detalhes: resultadosErroAuditaveis.map(p => ({
           empresa_id:   p.emp.empresa_id,
           empresa_nome: p.emp.nome || `Empresa #${p.emp.empresa_id}`,
-          subtipo:      p.subtipoErro,
+          subtipo:      p.subtipoErro || p.resultado?.subtipo || null,
           sql_gerado:   p.resultado.sql_gerado || null,
           sql_ia_bruto: p.resultado._sql_auditoria?.sql_ia_bruto || null,
           prompt_user:  p.resultado._sql_auditoria?.prompt_user  || null,
@@ -3698,7 +4034,7 @@ class IACWhatsAppService extends EventEmitter {
         subtipo: 'ai_sql_sem_empresa_apta',
         mensagem: respostaErro,
         detalhes: errosDinamicos,
-        sql_gerado: ultimoResultadoDinamico?.resultado?.sql_gerado || null,
+        sql_gerado: sqlErroConsolidado,
         _sql_auditoria: _auditoriaErroConsolidada,
       };
       this.emit('iac-intent', {
@@ -3721,7 +4057,7 @@ class IACWhatsAppService extends EventEmitter {
         rows_count:     null,
         sql_gerado:     resultadoErro.sql_gerado || null,
       });
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoErro, resposta: respostaErro, duracaoMs: Date.now() - _t0 });
+      { const _n = Date.now(), _pm = _recebidoEmAll ? (_n - new Date(_recebidoEmAll).getTime()) : (_n - _t0); const _l = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoErro, resposta: respostaErro, duracaoMs: _n - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm }); if (_timingCtxAll) { _timingCtxAll.logId = _l; _timingCtxAll.recebidoEm = _recebidoEmAll; } }
       return respostaErro;
     }
 
@@ -3752,7 +4088,7 @@ class IACWhatsAppService extends EventEmitter {
         intent,
         { empresaId: empresaLogId, messageTemplates }
       );
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoErro, resposta: respostaErro, duracaoMs: Date.now() - _t0 });
+      { const _n = Date.now(), _pm = _recebidoEmAll ? (_n - new Date(_recebidoEmAll).getTime()) : (_n - _t0); const _l = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoErro, resposta: respostaErro, duracaoMs: _n - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm }); if (_timingCtxAll) { _timingCtxAll.logId = _l; _timingCtxAll.recebidoEm = _recebidoEmAll; } }
       return respostaErro;
     }
 
@@ -3912,7 +4248,7 @@ class IACWhatsAppService extends EventEmitter {
       }
 
       const respostaEmpresas = (_prefixoResetAll || '') + resposta;
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoEmpresas, resposta: respostaEmpresas, duracaoMs: Date.now() - _t0 });
+      { const _n = Date.now(), _pm = _recebidoEmAll ? (_n - new Date(_recebidoEmAll).getTime()) : (_n - _t0); const _l = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoEmpresas, resposta: respostaEmpresas, duracaoMs: _n - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm }); if (_timingCtxAll) { _timingCtxAll.logId = _l; _timingCtxAll.recebidoEm = _recebidoEmAll; } }
       return respostaEmpresas;
     }
 
@@ -3948,7 +4284,7 @@ class IACWhatsAppService extends EventEmitter {
         resultado_msg:  `Nenhum dado encontrado${detalhe}`,
         rows_count:     0,
       });
-      this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoSemDados, resposta: respostaSemDados, duracaoMs: Date.now() - _t0 });
+      { const _n = Date.now(), _pm = _recebidoEmAll ? (_n - new Date(_recebidoEmAll).getTime()) : (_n - _t0); const _l = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoSemDados, resposta: respostaSemDados, duracaoMs: _n - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm }); if (_timingCtxAll) { _timingCtxAll.logId = _l; _timingCtxAll.recebidoEm = _recebidoEmAll; } }
       return respostaSemDados;
     }
 
@@ -4009,7 +4345,7 @@ class IACWhatsAppService extends EventEmitter {
       this._saveLastIntent(sender, intent, '__all__');
     }
 
-    this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoCombinado, resposta: respostaFinal, duracaoMs: Date.now() - _t0 });
+    { const _n = Date.now(), _pm = _recebidoEmAll ? (_n - new Date(_recebidoEmAll).getTime()) : (_n - _t0); const _l = this._registrarInterpretacao({ empresaId: empresaLogId, sender: senderAll, texto, intent, resultado: resultadoCombinado, resposta: respostaFinal, duracaoMs: _n - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm }); if (_timingCtxAll) { _timingCtxAll.logId = _l; _timingCtxAll.recebidoEm = _recebidoEmAll; } }
     return respostaFinal;
   }
 }

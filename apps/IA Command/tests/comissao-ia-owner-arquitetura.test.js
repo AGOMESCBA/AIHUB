@@ -10,14 +10,14 @@ const comissaoSpec = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-o
 
 const systemPrompt = promptBuilder.buildSystemPrompt(comissaoSpec);
 assert(systemPrompt.includes('Voce e o IA-OWNER do modulo comissao'), 'prompt deve declarar IA-OWNER de comissao');
-assert(systemPrompt.includes('Voce decide se a pergunta atual e uma nova consulta'), 'IA deve decidir contexto/heranca');
-assert(systemPrompt.includes('Para "em aberto", "a receber" ou "pendente" sem periodo explicito, nao assuma mes atual'), 'em aberto nao deve herdar mes atual automaticamente');
+assert(systemPrompt.includes('Voce e dono da decisao semantica'), 'IA deve decidir contexto/heranca');
+assert(systemPrompt.includes('Em aberto/pendente sem periodo explicito'), 'em aberto nao deve herdar mes atual automaticamente');
 assert(systemPrompt.includes('vendedorFixo'), 'prompt deve conter regra de vendedor fixo');
 assert(systemPrompt.includes('SE3.E3_COMIS'), 'prompt deve conter metrica principal');
 assert(systemPrompt.includes('SE3.E3_BASE'), 'prompt deve conter base de comissao');
 assert(systemPrompt.includes('SE3.E3_STATUS nao significa pagamento realizado'), 'prompt deve prevenir uso indevido de E3_STATUS');
-assert(systemPrompt.includes('FROM SE3990 SE3'), 'prompt deve ensinar tabela fisica com alias base');
-assert(systemPrompt.includes('Quando precisar filtrar vendedor ou cliente'), 'prompt deve resolver entidades antes de filtrar por nome');
+assert(systemPrompt.includes('mapa fornecido') && systemPrompt.includes('Use aliases explicitos iguais a base da tabela'), 'prompt deve orientar tabela fisica via SX2 com alias base');
+assert(systemPrompt.includes('SA3.A3_NOME AS vendedor') && systemPrompt.includes('SA1.A1_NOME AS cliente'), 'prompt deve expor descricoes de vendedor/cliente');
 
 const sx3Prompt = runner._test.sx3EssencialParaPrompt(comissaoSpec.camposSx3Essenciais);
 assert(sx3Prompt.SE3.some(c => c.campo === 'E3_COMIS'), 'SX3 essencial deve incluir E3_COMIS');

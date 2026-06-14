@@ -510,17 +510,28 @@ function formatQueryPlanForPrompt(plano = {}) {
   }
   if (plano.modulo === 'financeiro' && plano.carteira === 'receber') {
     linhas.push('  financeiro_receber: use SE1 + SA1; nao use SA2/fornecedor em contas a receber.');
+    if (plano.estado === 'recebido') {
+      linhas.push(`  financeiro_receber_recebido: modelo_baixas_receber=${plano.modelo_baixas_receber || 'SE5'}. SE modelo=FK1: JOIN FK1 por FK1.FK1_FILIAL=SE1.E1_FILIAL AND FK1.FK1_PREFIXO=SE1.E1_PREFIXO AND FK1.FK1_NUM=SE1.E1_NUM AND FK1.FK1_PARCELA=SE1.E1_PARCELA AND FK1.FK1_TIPO=SE1.E1_TIPO AND FK1.D_E_L_E_T_=' ', filtro FK1.FK1_DATA, some FK1.FK1_VALOR. SE modelo=SE5: JOIN SE5 por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG='R' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' ', filtro SE5.E5_DATA, some SE5.E5_VALOR. Use SOMENTE o modelo indicado.`);
+      linhas.push('  financeiro_receber_recebido: PROIBIDO usar SE1.E1_BAIXA, E1_EMISSAO, E1_VENCREA, E1_VENCTO. NAO filtre SE1.E1_SITUACAO (titulo pode ter baixa parcial).');
+    }
   }
   if (plano.modulo === 'financeiro' && plano.carteira === 'pagar') {
     linhas.push('  financeiro_pagar: use SE2 + SA2; nao use SA1/cliente em contas a pagar.');
     if (plano.estado === 'pago') {
       linhas.push('  financeiro_pagar_pago: use somente SE2 + SA2; nao use SE1/SA1, recebimentos nem UNION ALL.');
-      linhas.push('  financeiro_pagar_pago: filtre o periodo por SE2.E2_BAIXA e nao por E2_VENCREA/E2_VENCTO/E2_EMISSAO.');
+      linhas.push(`  financeiro_pagar_pago: modelo_baixas_pagar=${plano.modelo_baixas_pagar || 'SE5'}. SE modelo=FK2: JOIN FK2 por FK2.FK2_FILIAL=SE2.E2_FILIAL AND FK2.FK2_PREFIXO=SE2.E2_PREFIXO AND FK2.FK2_NUM=SE2.E2_NUM AND FK2.FK2_PARCELA=SE2.E2_PARCELA AND FK2.FK2_TIPO=SE2.E2_TIPO AND FK2.D_E_L_E_T_=' ', filtro FK2.FK2_DATA, some FK2.FK2_VALOR. SE modelo=SE5: JOIN SE5 por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG='P' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' ', filtro SE5.E5_DATA, some SE5.E5_VALOR. Use SOMENTE o modelo indicado.`);
+      linhas.push('  financeiro_pagar_pago: PROIBIDO usar SE2.E2_BAIXA, E2_EMISSAO, E2_VENCREA, E2_VENCTO, SE2.E2_SITUACAO, SE2.E2_VALOR ou SE2.E2_SALDO como base de pagamento realizado.');
     }
   }
   if (plano.modulo === 'financeiro' && plano.carteira === 'ambas') {
-    linhas.push('  financeiro_ambas: use UNION ALL de agregados; receber usa SE1 + SA1, pagar usa SE2 + SA2.');
-    linhas.push('  financeiro_ambas: nao faca JOIN direto entre SE1 e SE2.');
+    const estadoAmbas = plano.estado;
+    if (estadoAmbas === 'recebido' || estadoAmbas === 'pago' || estadoAmbas === 'realizado') {
+      linhas.push('  financeiro_ambas_realizado: gere UM UNICO SELECT com duas colunas: valor_recebido e valor_pago. Use duas subqueries escalares no SELECT — uma para SE1+SE5/FK1 e outra para SE2+SE5/FK2. PROIBIDO gerar dois SELECTs separados ou UNION ALL.');
+      linhas.push(`  financeiro_ambas_realizado: modelo_baixas_receber=${plano.modelo_baixas_receber || 'SE5'}, modelo_baixas_pagar=${plano.modelo_baixas_pagar || 'SE5'}. Use os modelos indicados para cada subquery.`);
+      linhas.push("  financeiro_ambas_realizado: estrutura obrigatoria: SELECT (SELECT COALESCE(SUM(...),0) FROM SE1 JOIN SE5/FK1 ON ... AND SE5.D_E_L_E_T_ = ' ' WHERE SE1.D_E_L_E_T_ = ' ' AND SE5.E5_TIPO NOT IN ('EST','ED') AND SE5.E5_DATA BETWEEN ...) AS valor_recebido, (SELECT COALESCE(SUM(...),0) FROM SE2 JOIN SE5/FK2 ON ... AND SE5.D_E_L_E_T_ = ' ' WHERE SE2.D_E_L_E_T_ = ' ' AND SE5.E5_TIPO NOT IN ('EST','ED') AND SE5.E5_DATA BETWEEN ...) AS valor_pago. OBRIGATORIO: SE1.D_E_L_E_T_ = ' ' no WHERE da subquery de receber; SE2.D_E_L_E_T_ = ' ' no WHERE da subquery de pagar.");
+    } else {
+      linhas.push('  financeiro_ambas: receber usa SE1 + SA1, pagar usa SE2 + SA2; nao faca JOIN direto entre SE1 e SE2.');
+    }
   }
   if (plano.modulo === 'financeiro' && plano.operacao === 'fluxo_caixa' && plano.fluxoTipo === 'projetado') {
     linhas.push('  fluxo_caixa_projetado: formula obrigatoria = saldo_bancario_hoje + contas_a_receber_em_aberto - contas_a_pagar_em_aberto.');
@@ -553,11 +564,20 @@ function validarSqlContraPlano(sql, plano = {}) {
   if (!plano || !plano.versao) return { ok: true, erros: [] };
 
   const erros = [];
+  const campoTemFiltro = campo => {
+    const c = String(campo || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const campoRe = `(?:[A-Z][A-Z0-9_]*\\.)?${c}`;
+    return [
+      new RegExp(`\\b${campoRe}\\s*(?:BETWEEN|>=|<=|=|>|<)`, 'i'),
+      new RegExp(`\\b${campoRe}\\s+IN\\s*\\(`, 'i'),
+      new RegExp(`\\b(?:SUBSTRING|LEFT|RIGHT)\\s*\\(\\s*${campoRe}[\\s\\S]{0,120}\\)\\s*(?:BETWEEN|>=|<=|=|>|<|IN\\s*\\()`, 'i'),
+    ].some(re => re.test(texto));
+  };
+
   if (plano.proibirFiltroData) {
     const campos = _camposDataPorPlano(plano);
     if (campos.length) {
-      const reFiltroData = new RegExp(`\\b(?:${campos.join('|')})\\b\\s*(?:BETWEEN|>=|<=|=|>|<)`, 'i');
-      if (reFiltroData.test(texto)) {
+      if (campos.some(campoTemFiltro)) {
         erros.push('SQL aplicou filtro de data apesar de o plano indicar periodo=nenhum.');
       }
     }
@@ -573,18 +593,44 @@ function validarSqlContraPlano(sql, plano = {}) {
   }
 
   if (plano.modulo === 'financeiro' && plano.dataPadrao === 'baixa_movimento') {
-    if (plano.carteira === 'pagar' && /\b(?:FROM|JOIN)\s+SE2\d{0,3}\b/i.test(texto)) {
-      const usaDataErrada = /\bE2_(?:VENCREA|VENCTO|EMISSAO)\b\s*(?:BETWEEN|>=|<=|=|>|<)/i.test(texto);
-      const usaBaixa = /\bE2_BAIXA\b\s*(?:BETWEEN|>=|<=|=|>|<)/i.test(texto);
-      if (usaDataErrada && !usaBaixa) {
-        erros.push('SQL filtrou pagamento realizado por vencimento/emissao; use E2_BAIXA para contas a pagar pagas.');
+    // Reconhece SE5990, SE5010, SE5 e o placeholder SE5xxx gerado pelo LLM
+    const temSe5 = /\b(?:FROM|JOIN)\s+SE5(?:\d{3,4}|[Xx]{3})?\b/i.test(texto);
+    const temFiltroEstorno = /E5_TIPO\s+NOT\s+IN\s*\(\s*'EST'\s*,\s*'ED'\s*\)/i.test(texto)
+      || /E5_TIPO\s+NOT\s+IN\s*\(\s*'ED'\s*,\s*'EST'\s*\)/i.test(texto);
+    if (temSe5 && !temFiltroEstorno) {
+      erros.push("SQL usa SE5 mas nao filtrou estornos: adicione AND SE5.E5_TIPO NOT IN ('EST','ED') no JOIN de SE5. Estornos devem ser excluidos do valor realizado.");
+    }
+
+    if (plano.carteira === 'ambas') {
+      const temSe5OuFk = /\b(?:FROM|JOIN)\s+(?:SE5|FK1|FK2)(?:\d{3,4}|[Xx]{3})?\b/i.test(texto);
+      if (!temSe5OuFk) {
+        erros.push('SQL de contas recebidas e pagas (realizadas) nao usou SE5, FK1 nem FK2; use subqueries escalares com SE1+SE5/FK1 para valor_recebido e SE2+SE5/FK2 para valor_pago. PROIBIDO FULL OUTER JOIN entre SE1 e SE2 com E1_VALOR/E2_VALOR.');
+      }
+      if (/\bFULL\s+(?:OUTER\s+)?JOIN\b/i.test(texto)) {
+        erros.push('SQL usou FULL OUTER JOIN para contas realizadas (ambas); use UM UNICO SELECT com duas subqueries escalares: (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE1 JOIN SE5 ...) AS valor_recebido, (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE2 JOIN SE5 ...) AS valor_pago.');
+      }
+      if (/\bUNION\s+ALL\b/i.test(texto)) {
+        erros.push("SQL usou UNION ALL para contas realizadas (carteira=ambas); PROIBIDO. Gere UM UNICO SELECT com duas subqueries escalares: SELECT (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE1 JOIN SE5 WHERE ... AND SE5.E5_TIPO NOT IN ('EST','ED')) AS valor_recebido, (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE2 JOIN SE5 WHERE ... AND SE5.E5_TIPO NOT IN ('EST','ED')) AS valor_pago.");
       }
     }
-    if (plano.carteira === 'receber' && /\b(?:FROM|JOIN)\s+SE1\d{0,3}\b/i.test(texto)) {
-      const usaDataErrada = /\bE1_(?:VENCREA|VENCTO|EMISSAO)\b\s*(?:BETWEEN|>=|<=|=|>|<)/i.test(texto);
-      const usaBaixa = /\bE1_BAIXA\b\s*(?:BETWEEN|>=|<=|=|>|<)/i.test(texto);
-      if (usaDataErrada && !usaBaixa) {
-        erros.push('SQL filtrou recebimento realizado por vencimento/emissao; use E1_BAIXA para contas a receber recebidas.');
+    if (plano.carteira === 'pagar') {
+      const usaDataErrada = ['E2_VENCREA', 'E2_VENCTO', 'E2_EMISSAO', 'E2_BAIXA'].some(campoTemFiltro);
+      if (usaDataErrada) {
+        erros.push('SQL filtrou pagamento realizado por vencimento/emissao/E2_BAIXA; use modelo_baixas_pagar do contextoTecnico: FK2 (JOIN por FILIAL+PREFIXO+NUM+PARCELA+TIPO, filtro FK2.FK2_DATA) ou SE5 (JOIN por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG=\'P\' AND E5_SITUACAO<>\'C\', filtro SE5.E5_DATA).');
+      }
+      const temFk2OuSe5 = /\b(?:FROM|JOIN)\s+FK2\d{0,3}\b/i.test(texto) || /\b(?:FROM|JOIN)\s+SE5\d{0,3}\b/i.test(texto);
+      if (!temFk2OuSe5) {
+        erros.push('SQL de pagamento realizado nao usou FK2 nem SE5; verifique modelo_baixas_pagar no contextoTecnico e gere JOIN com FK2 (se disponivel) ou SE5 para obter a data e o valor real de pagamento.');
+      }
+    }
+    if (plano.carteira === 'receber') {
+      const usaDataErrada = ['E1_VENCREA', 'E1_VENCTO', 'E1_EMISSAO', 'E1_BAIXA'].some(campoTemFiltro);
+      if (usaDataErrada) {
+        erros.push('SQL filtrou recebimento realizado por vencimento/emissao/E1_BAIXA; use modelo_baixas_receber do contextoTecnico: FK1 (JOIN por FILIAL+PREFIXO+NUM+PARCELA+TIPO, filtro FK1.FK1_DATA) ou SE5 (JOIN por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG=\'R\' AND E5_SITUACAO<>\'C\', filtro SE5.E5_DATA). NAO filtre SE1.E1_SITUACAO.');
+      }
+      const temFk1OuSe5 = /\b(?:FROM|JOIN)\s+FK1\d{0,3}\b/i.test(texto) || /\b(?:FROM|JOIN)\s+SE5\d{0,3}\b/i.test(texto);
+      if (!temFk1OuSe5) {
+        erros.push('SQL de recebimento realizado nao usou FK1 nem SE5; verifique modelo_baixas_receber no contextoTecnico e gere JOIN com FK1 (se disponivel) ou SE5 para obter a data e o valor real de recebimento.');
       }
     }
   }

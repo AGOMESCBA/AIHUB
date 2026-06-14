@@ -24,8 +24,9 @@ assert(systemPrompt.includes('SE3.E3_COMIS'), 'prompt deve definir metrica princ
 assert(systemPrompt.includes('SE3.E3_VENCTO'), 'prompt deve definir data padrao de comissao');
 assert(systemPrompt.includes('SE5.E5_DATA'), 'prompt deve definir data de baixa quando financeiro for usado');
 assert(systemPrompt.includes('SE3.E3_STATUS nao significa pagamento realizado'), 'prompt deve bloquear uso indevido de E3_STATUS');
-assert(systemPrompt.includes('Sempre retorne nome/descricao para o usuario'), 'entidades devem retornar nome/descricao');
-assert(systemPrompt.includes('Quando precisar filtrar vendedor ou cliente'), 'prompt deve pedir entidades cadastrais explicitamente');
+assert(systemPrompt.includes('SA3.A3_NOME AS vendedor'), 'entidades devem retornar descricao de vendedor');
+assert(systemPrompt.includes('SA1.A1_NOME AS cliente'), 'entidades devem retornar descricao de cliente');
+assert(systemPrompt.includes('entidades_necessarias'), 'prompt deve manter contrato de entidades cadastrais');
 
 const sx3Prompt = runner._test.sx3EssencialParaPrompt(comissaoSpec.camposSx3Essenciais);
 assert(sx3Prompt.SE3.some(c => c.campo === 'E3_COMIS'), 'SX3 essencial deve incluir E3_COMIS');

@@ -198,8 +198,16 @@
                   <div class="detail-val" id="d-rows">—</div>
                 </div>
                 <div class="reg-field">
-                  <div class="reg-label">Tempo de execução</div>
+                  <div class="reg-label">Processamento</div>
                   <div class="detail-val" id="d-tempo">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Pipeline (receb.→proc.)</div>
+                  <div class="detail-val" id="d-pipeline-ms">—</div>
+                </div>
+                <div class="reg-field">
+                  <div class="reg-label">Entregue (receb.→WhatsApp)</div>
+                  <div class="detail-val" id="d-entregue-ms">—</div>
                 </div>
               </div>
             </section>
@@ -280,6 +288,11 @@
     financeiro:  { label: 'Financeiro',  icon: '🏦', badge: 'badge-ok' },
     comissao:    { label: 'Comissão',    icon: '💰', badge: 'badge-purple' },
   };
+
+  function formatMs(ms) {
+    if (ms == null) return '—';
+    return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+  }
 
   const fmtData = (iso) => {
     if (!iso) return '—';
@@ -383,8 +396,20 @@
           formatter: c => c.getValue() || '—',
         },
         {
-          title: 'Tempo (ms)', field: 'duracao_ms', width: 110, sorter: 'number', hozAlign: 'right',
-          formatter: c => c.getValue() != null ? c.getValue().toLocaleString('pt-BR') + ' ms' : '—',
+          title: 'Proc.', field: 'duracao_ms', width: 80, sorter: 'number', hozAlign: 'right',
+          formatter: c => formatMs(c.getValue()),
+          headerFilter: false,
+          groupable: false,
+        },
+        {
+          title: 'Pipeline', field: 'pipeline_ms', width: 85, sorter: 'number', hozAlign: 'right',
+          formatter: c => formatMs(c.getValue()),
+          headerFilter: false,
+          groupable: false,
+        },
+        {
+          title: 'Entregue', field: 'entregue_ms', width: 85, sorter: 'number', hozAlign: 'right',
+          formatter: c => formatMs(c.getValue()),
           headerFilter: false,
           groupable: false,
         },
@@ -417,7 +442,9 @@
     document.getElementById('d-provider').textContent = row.provedor || '—';
     document.getElementById('d-usuario').textContent  = [row.usuario, row.numero_wa].filter(Boolean).join(' · ') || '—';
     document.getElementById('d-rows').textContent     = row.rows_count != null ? row.rows_count.toLocaleString('pt-BR') + ' linha(s)' : '—';
-    document.getElementById('d-tempo').textContent    = row.duracao_ms != null ? row.duracao_ms.toLocaleString('pt-BR') + ' ms' : '—';
+    document.getElementById('d-tempo').textContent        = formatMs(row.duracao_ms);
+    document.getElementById('d-pipeline-ms').textContent  = formatMs(row.pipeline_ms);
+    document.getElementById('d-entregue-ms').textContent  = formatMs(row.entregue_ms);
     document.getElementById('d-status').innerHTML     = badgeStatus(row.resultado_tipo);
     document.getElementById('copy-btn').textContent   = '📋 Copiar SQL';
     document.getElementById('sec-lista').style.display   = 'none';

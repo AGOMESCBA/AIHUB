@@ -203,6 +203,26 @@ async function main() {
   );
   assert.strictEqual(comCodigo.ok, true, `SQL com codigo/loja resolvidos deve ser aceito: ${comCodigo.erros.join(' | ')}`);
 
+  const retryEntidade = runner._test.buildRetryTecnicoIaOwner({
+    erro: Object.assign(new Error('SQL nao aplicou entidades resolvidas: SQL nao aplicou filtro de codigo do cliente 000048.'), {
+      _tipo: 'contrato_entidade_invalido',
+    }),
+    entidadesResolvidas: [{ tipo: 'cliente', codigo: '000048', nome: 'ASTER', _todos: true }],
+  });
+  assert(retryEntidade.includes('RETRY TECNICO IA-OWNER'), 'retry deve ter cabecalho tecnico explicito');
+  assert(retryEntidade.includes('cliente: codigo 000048'), 'retry de entidade deve explicitar codigo resolvido');
+  assert(retryEntidade.includes('nao filtre loja fixa'), 'retry de _todos deve proibir filtro fixo de loja');
+  assert(retryEntidade.includes('Nao filtrar por nome'), 'retry de entidade deve proibir nome/LIKE');
+
+  const retryDelete = runner._test.buildRetryTecnicoIaOwner({
+    erro: Object.assign(new Error("JOIN SA1990 SA1 deve filtrar SA1.D_E_L_E_T_ = ' ' na condicao ON do JOIN."), {
+      _tipo: 'contrato_ia_owner_invalido',
+    }),
+    entidadesResolvidas: [{ tipo: 'cliente', codigo: '000048', _todos: true }],
+  });
+  assert(retryDelete.includes("Tabelas em JOIN: filtro dentro do ON"), 'retry de D_E_L_E_T_ deve orientar filtro no ON');
+  assert(retryDelete.includes('Preserve periodo, metrica, entidades resolvidas'), 'retry de D_E_L_E_T_ deve preservar entidades');
+
   console.log('faturamento-entidades-sequencia.test.js: ok');
 }
 

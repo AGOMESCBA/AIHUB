@@ -1,7 +1,5 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
 const crud = require('../../database/crud');
 const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
@@ -44,31 +42,28 @@ function garantirIntencao(empresaId) {
   }
 }
 
-function normalizarTelefone(tel) {
-  return String(tel || '').replace(/\D/g, '');
-}
-
-function variantesTelefone(tel) {
-  const t = normalizarTelefone(tel);
-  const variantes = new Set([t]);
-  if (t.length === 13 && t.startsWith('55')) variantes.add(t.slice(0, 4) + t.slice(5));
-  if (t.length === 12 && t.startsWith('55')) variantes.add(t.slice(0, 4) + '9' + t.slice(4));
-  return variantes;
-}
-
-function resolverIdentidadeVendedor(remetente) {
+function resolverIdentidadeVendedor(remetente, empresaId) {
   try {
-    const usuariosPath = path.resolve(__dirname, '../../../../IAHUB/data/usuarios.json');
-    if (!fs.existsSync(usuariosPath)) return null;
-    const usuarios = JSON.parse(fs.readFileSync(usuariosPath, 'utf8'));
-    const variantesRemetente = variantesTelefone(remetente);
-    const usuario = usuarios.find(u => variantesRemetente.has(normalizarTelefone(u.erp_telefone)));
-    if (!usuario) return null;
+    const { getDB } = require('../../database');
+    const channelStore = require('../../whatsapp/channel-store');
+    const db = getDB();
+
+    const variantes = channelStore.variantesNumeroBrasil(remetente);
+    const lid = channelStore.extrairLid(remetente);
+    const placeholders = variantes.map(() => '?').join(',');
+
+    const row = db.prepare(
+      `SELECT nome, erp_tipo, erp_id FROM whatsapp_allowed_numbers
+        WHERE empresa_id = ? AND ativo = 1
+          AND (numero IN (${placeholders}) OR wa_lid = ?)
+        LIMIT 1`
+    ).get(empresaId, ...variantes, lid);
+
+    if (!row) return null;
     return {
-      usuario_id: usuario.id,
-      nome: usuario.nome,
-      erp_id: String(usuario.erp_id || '').trim().toUpperCase(),
-      erp_tipo: usuario.erp_tipo || '',
+      nome:     row.nome,
+      erp_tipo: String(row.erp_tipo || '').trim().toLowerCase(),
+      erp_id:   String(row.erp_id  || '').trim().toUpperCase(),
     };
   } catch (e) {
     console.warn('[ComissaoIAOwner] Falha ao resolver identidade do vendedor:', e.message);
@@ -76,15 +71,16 @@ function resolverIdentidadeVendedor(remetente) {
   }
 }
 
-function prepararIntent({ intent, mensagem }) {
+function prepararIntent({ intent, empresaId, mensagem }) {
   const remetente = intent._remetente || null;
-  const identidade = remetente ? resolverIdentidadeVendedor(remetente) : null;
+  const identidade = remetente ? resolverIdentidadeVendedor(remetente, empresaId) : null;
+
   if (identidade && identidade.erp_tipo === 'vendedor' && !identidade.erp_id) {
     return {
       retorno: {
         tipo: 'erro',
         subtipo: 'erp_id_nao_configurado',
-        resposta_direta: 'Seu cadastro nao possui um codigo de vendedor ERP configurado. Solicite ao administrador que preencha o campo "ID ERP" no seu perfil.',
+        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código ERP* nas suas configurações de acesso.',
         sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
       },
     };
@@ -94,8 +90,8 @@ function prepararIntent({ intent, mensagem }) {
       retorno: {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu numero nao esta cadastrado no sistema. Solicite ao administrador que configure seu acesso ERP.',
-        sql_gerado: `-- erro: numero ${remetente} nao encontrado em usuarios.json`,
+        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de comissão, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers`,
       },
     };
   }

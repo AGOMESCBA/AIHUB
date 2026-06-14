@@ -38,6 +38,9 @@ function garantirIntencao(empresaId) {
         'faturamento por produto',
         'faturamento por vendedor',
         'notas fiscais de saida',
+        'quantidade carregada no dia',
+        'quantidade de nota mae para entrega futura',
+        'movimentacao total de saida',
         'faturamento considerando devolucoes',
       ].join('\n'),
       ativo: 1,
@@ -92,14 +95,17 @@ const regrasTecnicas = `
 - SF4: TES.
 - CTT: centro de custo.
 
-## Codigo Fiscal (CF/CFOP) e TES — Faturamento
+## Codigo Fiscal (CF/CFOP), TES e modos fiscais de quantidade — Faturamento
 - Sinonimos para nota fiscal de saida/faturamento: nota de saida, nota fiscal de saida, NF de saida, faturamento, venda.
 - CF, CFOP, codigo fiscal e codigo fiscal de operacao sao sinonimos — referem-se ao campo SD2.D2_CF.
-- Por padrao, em consultas de receita de vendas ou faturamento financeiro, excluir remessas e transferencias:
-  SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '69%'
-  Razao: CFs iniciados com 59 ou 69 sao remessas/transferencias — nao representam receita de venda.
-- Em consultas de volume fisico, quantidade ou movimentacao de estoque: incluir CF 59/69 — a nota pode ter gerado movimentacao fisica.
-- Excecao (incluir CF 59/69 em qualquer contexto): quando o usuario pedir explicitamente remessas, transferencias, ou citar CF/CFOP/codigo fiscal com os valores 59 ou 69.
+- Por padrao, em consultas de receita de vendas, faturamento financeiro ou quantidade faturada, excluir simples remessa e transferencia:
+  SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '60%'
+  Razao: CFs iniciados com 59 ou 60 sao simples remessa/transferencia — nao representam venda que gerou financeiro.
+- Modos fiscais de quantidade:
+  - Quantidade faturada: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '60%'.
+  - Quantidade carregada: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF <> '5117'.
+  - Entrega futura, venda para entrega futura ou nota mae: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF = '5117'.
+  - Movimentacao total, todas as saidas, volume total, sem filtro fiscal ou incluindo remessa/transferencia: SUM(SD2.D2_QUANT) sem filtro em SD2.D2_CF.
 - TES pode ser chamado de TES ou Tipos de Saida. Refere-se ao campo SD2.D2_TES / tabela SF4 (F4_CODIGO, F4_TEXTO).
 - SF4.F4_ESTOQUE: 'S' = TES gera movimentacao de estoque; 'N' = nao gera.
   Quando o usuario perguntar sobre notas que geraram estoque ou movimentaram estoque, filtre SF4.F4_ESTOQUE = 'S' via JOIN SD2 -> SF4.
@@ -128,6 +134,7 @@ const regrasTecnicas = `
   AND SD1.D1_SERIE = SF1.F1_SERIE
   AND SD1.D1_FORNECE = SF1.F1_FORNECE
   AND SD1.D1_LOJA = SF1.F1_LOJA
+- Regra tecnica: sempre que SD1 e SF1 forem usados juntos para somar SD1.D1_TOTAL, o JOIN deve conter D1_FORNECE/F1_FORNECE e D1_LOJA/F1_LOJA para evitar duplicidade de notas com mesmo numero e serie.
 - SF1 -> SA1 para devolucao de venda:
   SF1.F1_FORNECE = SA1.A1_COD
   AND SF1.F1_LOJA = SA1.A1_LOJA
@@ -181,9 +188,48 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - Media mensal escalar (1 ano, sem agrupamento por ano):
   Subquery interna SUM por mes (SUBSTRING campo,1,6 AS competencia). HAVING SUM > 0 se usuario pedir so meses com faturamento.
   Query externa: SELECT AVG(h.faturamento_mes) AS media_mensal FROM (...) AS h. Sem GROUP BY.
+- Media mensal por produto:
+  Quando o usuario pedir "faturamento medio por produto" ou equivalente, a SQL da IA ja deve calcular a media correta; o backend nao recalcula nem corrige a metrica.
+  Use obrigatoriamente duas camadas: (1) subquery interna agrupada por SB1.B1_COD, SB1.B1_DESC e competencia, com SUM(SD2.D2_TOTAL) AS faturamento_mes; (2) query externa agrupada somente por h.cod_produto, h.produto, com AVG(h.faturamento_mes) AS faturamento_medio.
+  Aplique periodo, F2_TIPO e D_E_L_E_T_ dentro da subquery interna, nos aliases reais SD2/SF2/SB1.
+  NUNCA use AVG(SD2.D2_TOTAL), AVG(SD2.D2_VALBRUT) ou AVG(SF2.F2_VALBRUT): isso calcula media de linha/item/nota, nao media mensal de faturamento por produto.
+  A query externa deve referenciar apenas aliases exportados por h (h.cod_produto, h.produto, h.faturamento_mes); nunca referencie SD2, SF2 ou SB1 fora da subquery.
 - Media anual escalar: interna SUM por ano → externa AVG dos totais. Camada externa usa SOMENTE h.faturamento_ano — nunca SF2.*. Retorna 1 linha.
 - Resposta planejada com devolucoes: "Faturamento Bruto: {total_faturamento} | Devolucoes: {total_devolucoes} | Liquido: {faturamento_liquido}"
 `.trim();
+
+const contratosTecnicosPrioritarios = `
+- SD1 -> SF1:
+  SD1.D1_FILIAL = SF1.F1_FILIAL
+  AND SD1.D1_DOC = SF1.F1_DOC
+  AND SD1.D1_SERIE = SF1.F1_SERIE
+  AND SD1.D1_FORNECE = SF1.F1_FORNECE
+  AND SD1.D1_LOJA = SF1.F1_LOJA
+- SD2 -> SF2:
+  SD2.D2_FILIAL = SF2.F2_FILIAL
+  AND SD2.D2_DOC = SF2.F2_DOC
+  AND SD2.D2_SERIE = SF2.F2_SERIE
+  AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
+  AND SD2.D2_LOJA = SF2.F2_LOJA
+`.trim();
+
+function validarMediaMensalProduto(sql = '') {
+  const texto = String(sql || '');
+  if (!/\bAVG\s*\(\s*h\s*\.\s*faturamento_mes\s*\)/i.test(texto)) return null;
+  const pareceProduto = /\bproduto\b|\bcod_produto\b|\bD2_COD\b|\bB1_DESC\b/i.test(texto);
+  if (!pareceProduto) return null;
+  const exportaCompetencia = /\bSUBSTRING\s*\(\s*SF2\s*\.\s*F2_EMISSAO\s*,\s*1\s*,\s*6\s*\)\s+AS\s+competencia\b/i.test(texto);
+  const agrupaCompetencia = /\bGROUP\s+BY\b[\s\S]*\bSUBSTRING\s*\(\s*SF2\s*\.\s*F2_EMISSAO\s*,\s*1\s*,\s*6\s*\)/i.test(texto);
+  const exportaProduto = /\bB1_COD\s+AS\s+cod_produto\b/i.test(texto) && /\bB1_DESC\s+AS\s+produto\b/i.test(texto);
+  const externoUsaAliases = /\bSELECT\b[\s\S]*\bh\s*\.\s*cod_produto\b[\s\S]*\bh\s*\.\s*produto\b/i.test(texto)
+    && /\bGROUP\s+BY\b[\s\S]*\bh\s*\.\s*cod_produto\b[\s\S]*\bh\s*\.\s*produto\b/i.test(texto);
+  if (exportaCompetencia && agrupaCompetencia && exportaProduto && externoUsaAliases) return null;
+  return [
+    'Faturamento medio por produto exige media dos totais mensais.',
+    'Refaca usando este template estrutural: SELECT h.cod_produto, h.produto, COALESCE(AVG(h.faturamento_mes),0) AS faturamento_medio FROM (SELECT SB1.B1_COD AS cod_produto, SB1.B1_DESC AS produto, SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia, COALESCE(SUM(SD2.D2_TOTAL),0) AS faturamento_mes FROM SD2 SD2 INNER JOIN SF2 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = \' \' INNER JOIN SB1 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = \' \' WHERE SD2.D_E_L_E_T_ = \' \' AND SF2.F2_TIPO = \'N\' AND <filtro_periodo_em_SF2.F2_EMISSAO> GROUP BY SB1.B1_COD, SB1.B1_DESC, SUBSTRING(SF2.F2_EMISSAO,1,6)) AS h GROUP BY h.cod_produto, h.produto.',
+    'Nunca use SB1.* na query externa; use somente h.cod_produto, h.produto e h.faturamento_mes.',
+  ].join(' ');
+}
 
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {
   const linhas = candidatos.map((c, i) => `${i + 1}. *${c.nome}* (${c.rotuloTipo || c.tipo}: ${c.codigo}${c.loja ? `/${c.loja}` : ''})`);
@@ -297,7 +343,9 @@ module.exports = {
   resolverEntidadesAntesDaIa: true,
   camposSx3Essenciais: CAMPOS_SX3_ESSENCIAIS,
   sqlMiddleware,
+  contratosTecnicosPrioritarios,
   regrasTecnicas,
+  camposPeriodoObrigatorios: ['F2_EMISSAO', 'F1_DTDIGIT', 'F1_EMISSAO'],
   sx3PromptLimit: 90,
   maxTokens: 4600,
   dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM', 'SA3'],
@@ -334,6 +382,13 @@ module.exports = {
     {
       regex: /\bAVG\s*\(\s*SF2\s*\.\s*F2_VALBRUT\s*\)/i,
       mensagem: 'AVG(SF2.F2_VALBRUT) calcula ticket medio por nota fiscal, nao faturamento medio anual. Use subquery de 2 camadas: interna SUM por ano (faturamento_ano), externa AVG dos totais — SELECT COALESCE(AVG(h.faturamento_ano),0) AS faturamento FROM (SELECT SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano, SUM(SF2.F2_VALBRUT) AS faturamento_ano FROM SF2... GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,4)) AS h.',
+    },
+    {
+      regex: /\bAVG\s*\(\s*SD2\s*\.\s*D2_(?:TOTAL|VALBRUT)\s*\)/i,
+      mensagem: 'AVG(SD2.D2_TOTAL) calcula media por item/linha, nao faturamento medio por produto. Para faturamento medio por produto, use subquery de 2 camadas: interna SUM(SD2.D2_TOTAL) por produto e competencia; externa AVG(h.faturamento_mes) agrupada por h.cod_produto, h.produto.',
+    },
+    {
+      validar: validarMediaMensalProduto,
     },
   ],
   mensagensErro: {

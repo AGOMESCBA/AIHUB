@@ -18,6 +18,9 @@ const TIPOS_EXPLICITOS = [
 
 const TERMOS_AGRUPAMENTO_OU_METRICA = new Set([
   'dia', 'dias', 'mes', 'meses', 'ano', 'anos',
+  'janeiro', 'jan', 'fevereiro', 'fev', 'marco', 'mar', 'abril', 'abr',
+  'maio', 'mai', 'junho', 'jun', 'julho', 'jul', 'agosto', 'ago',
+  'setembro', 'set', 'outubro', 'out', 'novembro', 'nov', 'dezembro', 'dez',
   'cliente', 'clientes', 'fornecedor', 'fornecedores',
   'produto', 'produtos', 'item', 'itens',
   'vendedor', 'vendedores', 'filial', 'filiais',
@@ -31,6 +34,12 @@ const TERMOS_AGRUPAMENTO_OU_METRICA = new Set([
   'detalhe', 'detalhes', 'detalhar', 'detalhado', 'detalhada', 'detalhando',
   'agrupando', 'considerando',
   'refinamento', 'refinar', 'quebra', 'quebrar',
+  // condições operacionais do financeiro — nunca são entidades cadastrais
+  'recebido', 'recebidos', 'recebida', 'recebidas', 'recebimento', 'recebimentos',
+  'pago', 'pagos', 'paga', 'pagas', 'pagamento', 'pagamentos',
+  'carteira', 'posicao', 'vencido', 'vencidos', 'vencida', 'vencidas',
+  'liquidado', 'liquidados', 'liquidada', 'liquidadas',
+  'baixado', 'baixados', 'baixada', 'baixadas',
 ]);
 
 function _normalizarToken(valor) {
@@ -57,10 +66,13 @@ function _deveIgnorarTermo(termo) {
 }
 
 function _limparTermo(raw) {
+  const meses = 'janeiro|jan|fevereiro|fev|marco|mar\\u00e7o|mar|abril|abr|maio|mai|junho|jun|julho|jul|agosto|ago|setembro|set|outubro|out|novembro|nov|dezembro|dez';
   return String(raw || '')
     .replace(/^(?:e\s+)?(?:agrupad[oa]s?\s+)?por\s+(?:dia|dias|mes|meses|ano|anos|cliente|clientes|fornecedor|fornecedores|produto|produtos|vendedor|vendedores|filial|filiais|natureza)\b.*$/i, '')
     .replace(/^(?:em|no|na|de|do|da|dos|das)\s+(?:\d{4}|ano|anos|mes|meses|periodo|periodos|semana|semanas)\b.*$/i, '')
+    .replace(new RegExp(`^(?:em|no|na|de|do|da|dos|das)?\\s*(?:${meses})\\b(?:\\s+a\\s+(?:${meses})\\b)?(?:\\s+(?:de|do)\\s+\\d{4})?.*$`, 'i'), '')
     .replace(/\s+(?:e\s+)?(?:agrupad[oa]s?\s+)?por\s+(?:dia|dias|mes|meses|ano|anos|cliente|clientes|fornecedor|fornecedores|produto|produtos|vendedor|vendedores|filial|filiais|natureza)\b.*$/i, '')
+    .replace(new RegExp(`\\s+(?:em|no|na|de|do|da|dos|das)\\s+(?:${meses})\\b(?:\\s+a\\s+(?:${meses})\\b)?(?:\\s+(?:de|do)\\s+\\d{4})?.*$`, 'i'), '')
     .replace(/^(?:agrupando|agrupad[oa]s?|detalhando|considerando)\b.*$/i, '')
     .replace(/\s+(?:agrupando|agrupad[oa]s?|detalhando|considerando)\b.*$/i, '')
     .replace(/\s+(?:do|da|de|dos|das)\s+(?:ano|anos|mes|meses|periodo|periodos|semana|semanas)\b.*$/i, '')
@@ -98,6 +110,7 @@ function buildExtractionSystemPrompt() {
     'Retorne apenas JSON no formato {"entidades":[{"texto":"...","tipo_sugerido":"...","confianca":0.0}]}',
     'Tipos permitidos: fornecedor, cliente, produto, grupo_produto, marca, centro_custo, vendedor, transportadora, natureza, tes, desconhecido.',
     'Nao inclua periodos, datas, meses, anos, filiais, metricas ou palavras genericas como total, compras, vendas.',
+    'Condicoes operacionais do financeiro (contas pagas, contas recebidas, contas a pagar, contas a receber, carteira pagar, carteira receber, recebimentos, pagamentos) NAO sao entidades cadastrais — nunca as extraia.',
     'PA e RA sao tipos de titulo do Protheus (E2_TIPO/E1_TIPO), nao sao nomes de fornecedor ou cliente. Nunca extraia PA ou RA como entidade.',
     'Banco (ex: "banco DAF", "excluindo o banco Bradesco") e um codigo/nome do campo SE8.E8_BANCO — filtro tecnico, nao entidade cadastral. Nunca extraia nomes ou codigos de banco como entidade.',
     'Se o usuario indicar explicitamente o tipo, use esse tipo.',

@@ -114,6 +114,7 @@ const regrasTecnicas = `
   AND SD1.D1_SERIE = SF1.F1_SERIE
   AND SD1.D1_FORNECE = SF1.F1_FORNECE
   AND SD1.D1_LOJA = SF1.F1_LOJA
+- Regra tecnica: sempre que SD1 e SF1 forem usados juntos para somar SD1.D1_TOTAL, o JOIN deve conter D1_FORNECE/F1_FORNECE e D1_LOJA/F1_LOJA para evitar duplicidade de notas com mesmo numero e serie.
 - SF1 -> SA2:
   SF1.F1_FORNECE = SA2.A2_COD
   AND SF1.F1_LOJA = SA2.A2_LOJA
@@ -165,6 +166,21 @@ Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, n
 - Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.valor_compra) sem GROUP BY.
 - Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_compra.
 - Resposta planejada com devolucoes: template com {total_compras}, {total_devolucoes}, {total_liquido}.
+`.trim();
+
+const contratosTecnicosPrioritarios = `
+- SD1 -> SF1:
+  SD1.D1_FILIAL = SF1.F1_FILIAL
+  AND SD1.D1_DOC = SF1.F1_DOC
+  AND SD1.D1_SERIE = SF1.F1_SERIE
+  AND SD1.D1_FORNECE = SF1.F1_FORNECE
+  AND SD1.D1_LOJA = SF1.F1_LOJA
+- SD2 -> SF2:
+  SD2.D2_FILIAL = SF2.F2_FILIAL
+  AND SD2.D2_DOC = SF2.F2_DOC
+  AND SD2.D2_SERIE = SF2.F2_SERIE
+  AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
+  AND SD2.D2_LOJA = SF2.F2_LOJA
 `.trim();
 
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {
@@ -267,6 +283,7 @@ module.exports = {
   resolverEntidadesAntesDaIa: true,
   camposSx3Essenciais: CAMPOS_SX3_ESSENCIAIS,
   sqlMiddleware,
+  contratosTecnicosPrioritarios,
   regrasTecnicas,
   sx3PromptLimit: 90,
   maxTokens: 4200,
@@ -288,10 +305,6 @@ module.exports = {
     {
       regex: /\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b[\s\S]{0,4000}\bJOIN\s+\w+\s+SD1\b|\bJOIN\s+\w+\s+SD1\b[\s\S]{0,4000}\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b/i,
       mensagem: 'JOIN com SD1 invalido quando a metrica e SUM(SF1.F1_VALBRUT). SD1 e tabela de itens: cada NF tem N linhas em SD1, o que multiplica F1_VALBRUT por N ao somar. Quando SD1 estiver no FROM/JOIN, use SUM(SD1.D1_TOTAL) como metrica de valor e SUM(SD1.D1_QUANT) para quantidade.',
-    },
-    {
-      regex: /\bSD1\b(?=[\s\S]*?\bJOIN\s+\w+\s+SF1\b)(?![\s\S]*?\bD1_FORNECE\b)/i,
-      mensagem: 'JOIN SD1→SF1 incompleto: falta D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA na condicao ON. Sem esses campos, notas com mesmo numero/serie de fornecedores diferentes causam duplicidade no SUM.',
     },
   ],
   mensagensErro: {
