@@ -3388,6 +3388,10 @@ class IACWhatsAppService extends EventEmitter {
       let entidadesCanonicoDinamico = [];
       let respostaPlanejadaCanonicaDinamico = null;
       let periodoCanonicoDinamico = null;
+      // Variável de interrupção: quando uma empresa retorna pergunta_filial/pergunta_entidade,
+      // o _pipelineAll deve encerrar imediatamente. Usada para propagar a interrupção
+      // do interior de _processarEmpresa (que não é mais o return direto do _pipelineAll).
+      let _respostaInterrupcao = null;
       const sucessosDinamicos = [];
       const pendentesRetryCanonico = [];
       const subtiposRetryCanonico = new Set([
@@ -3611,7 +3615,16 @@ class IACWhatsAppService extends EventEmitter {
         }
       };
       for (const emp of empresasLoop) intentService._garantirIntencoesDinamicasPadrao(emp.empresa_id);
-      for (const emp of empresasLoop) {
+
+      // ── Paralelismo com SQL Canônico ─────────────────────────────────────────
+      // Fase A: empresa líder (índice 0) roda sequencialmente para gerar o SQL
+      //         canônico via IA. Isso garante que retry da líder seja resolvido
+      //         antes de iniciar as seguidoras, evitando retry duplicado em paralelo.
+      // Fase B: empresas seguidoras rodam em Promise.all usando o SQL canônico
+      //         já validado — sem chamada de IA, apenas adaptação de sufixo SX2.
+      //         Se uma seguidora falhar, entra em pendentesRetryCanonico e o retry
+      //         usa o canônico existente (nunca chama IA de novo).
+      const _processarEmpresa = async (emp) => {
         try {
           if (bloqueioReusoCanonicoDinamico) {
             const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
@@ -3624,7 +3637,7 @@ class IACWhatsAppService extends EventEmitter {
               mensagem: resposta,
               detalhe: bloqueioReusoCanonicoDinamico,
             });
-            continue;
+            return; // dentro de _processarEmpresa — equivale a continue no loop original
           }
           const _historicoEmp = this._buildHistoricoResumido(sender, emp.empresa_id, this._historicoTurnosConfig(emp.empresa_id));
           const _entidadesEmpFinal = this._entidadesParaExecucaoAll(
@@ -3663,7 +3676,7 @@ class IACWhatsAppService extends EventEmitter {
               mensagem: 'Roteador retornou resultado invalido no processamento multiempresa.',
               detalhe: `typeof=${typeof resultado}`,
             });
-            continue;
+            return; // dentro de _processarEmpresa — equivale a continue no loop original
           }
           this._logResultadoIntent({ intent: intentExecucao, resultado, escopo: 'all' });
           ultimoResultadoDinamico = { empresaId: emp.empresa_id, resultado };
@@ -3735,8 +3748,10 @@ class IACWhatsAppService extends EventEmitter {
               duracaoMs: resultado.duracao_ms ?? (Date.now() - _t0),
             });
             registrarSucessoDinamico(emp, intentExecucao, resultado, respostaAiSql, nomeEmpresa, resultado.rows || [], true);
-            await tentarRetryCanonicoPendentes();
-            continue;
+            // Retry canônico pendente: só invoca aqui no caminho sequencial (líder).
+            // No caminho paralelo (seguidoras), o retry é consolidado após Promise.all.
+            if (!sqlCanonicoDinamico) await tentarRetryCanonicoPendentes();
+            return; // dentro de _processarEmpresa — equivale a continue no loop original
           }
 
           if (resultado.tipo === 'pergunta_filial') {
@@ -3751,7 +3766,8 @@ class IACWhatsAppService extends EventEmitter {
               resultado: { ...resultado, mensagem: perguntaFilial },
               resposta: perguntaFilial, duracaoMs: Date.now() - _t0,
             });
-            return perguntaFilial;
+            _respostaInterrupcao = perguntaFilial;
+            return; // sinaliza interrupção; _pipelineAll verifica _respostaInterrupcao
           }
 
           if (resultado.tipo === 'pergunta_entidade') {
@@ -3768,7 +3784,8 @@ class IACWhatsAppService extends EventEmitter {
               resultado: { ...resultado, mensagem: perguntaEntidade },
               resposta: perguntaEntidade, duracaoMs: Date.now() - _t0,
             });
-            return perguntaEntidade;
+            _respostaInterrupcao = perguntaEntidade;
+            return; // sinaliza interrupção; _pipelineAll verifica _respostaInterrupcao
           }
 
           if (resultado.tipo === 'erro' && resultado.resposta_direta) {
@@ -3808,7 +3825,7 @@ class IACWhatsAppService extends EventEmitter {
             } else {
               errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${respostaUsuario}`);
             }
-            continue;
+            return; // dentro de _processarEmpresa — equivale a continue no loop original
           }
 
           errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${resultado.mensagem || resultado.subtipo || resultado.tipo}`);
@@ -3829,6 +3846,37 @@ class IACWhatsAppService extends EventEmitter {
             mensagem: 'Empresa falhou por excecao inesperada no pipeline multiempresa.',
             detalhe: err.message,
           });
+        }
+      }; // fim _processarEmpresa
+
+      // ── Fase A: empresa líder (sempre sequencial) ────────────────────────────
+      // Gera o SQL canônico via IA. Retry da líder é resolvido aqui antes de
+      // iniciar as seguidoras, garantindo que elas nunca precisem chamar a IA.
+      if (empresasLoop.length > 0) {
+        await _processarEmpresa(empresasLoop[0]);
+        if (_respostaInterrupcao) return _respostaInterrupcao; // pergunta_filial/entidade
+      }
+
+      // ── Fase B: empresas seguidoras em paralelo ──────────────────────────────
+      // Só paraleliza se a líder gerou um SQL canônico reutilizável.
+      // Sem canônico (líder falhou ou bloqueou reuso), segue sequencial como antes.
+      const empresasSeguidoras = empresasLoop.slice(1);
+      if (empresasSeguidoras.length > 0) {
+        if (sqlCanonicoDinamico && !bloqueioReusoCanonicoDinamico) {
+          this.log(`[All] SQL canonico disponivel — processando ${empresasSeguidoras.length} empresa(s) seguidora(s) em paralelo.`, 'info');
+          await Promise.all(empresasSeguidoras.map(emp => _processarEmpresa(emp)));
+          // Após o paralelo, tenta retry canônico para quaisquer pendentes
+          // (seguidoras que falharam mas são elegíveis para retry com o canônico)
+          await tentarRetryCanonicoPendentes();
+        } else {
+          this.log(`[All] Sem SQL canonico reutilizavel — processando ${empresasSeguidoras.length} empresa(s) seguidora(s) sequencialmente.`, 'info');
+          for (const emp of empresasSeguidoras) {
+            await _processarEmpresa(emp);
+            if (_respostaInterrupcao) return _respostaInterrupcao;
+          }
+          // Após o loop sequencial, tenta retry para pendentes que se tornaram elegíveis
+          // porque uma seguidora gerou o SQL canônico durante a execução.
+          await tentarRetryCanonicoPendentes();
         }
       }
 
