@@ -32,6 +32,16 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar }
     'Nunca gere DML/DDL. Gere apenas SELECT com SET ROWCOUNT.',
     '',
 
+    '## REGRA ABSOLUTA — Filtro D_E_L_E_T_ (Integridade de Dados Protheus)',
+    "TODA tabela no FROM ou JOIN deve ter D_E_L_E_T_ = ' ' filtrado. SEM EXCECAO. Omitir retorna dados deletados misturados com dados validos — resultado 100% incorreto.",
+    '- Tabela no FROM principal ou subquery: WHERE alias.D_E_L_E_T_ = \' \'',
+    '- Tabela em JOIN: dentro do ON — AND alias.D_E_L_E_T_ = \' \'',
+    '- Subquery escalar (SELECT ... FROM T1 JOIN T2 ON ...): ambas T1 e T2 precisam do filtro.',
+    '  ERRADO: SELECT (SELECT SUM(SE5.E5_VALOR) FROM SE1 SE1 JOIN SE5 SE5 ON ... AND SE5.D_E_L_E_T_ = \' \') — SE1 sem filtro.',
+    '  CERTO:  SELECT (SELECT SUM(SE5.E5_VALOR) FROM SE1 SE1 JOIN SE5 SE5 ON ... AND SE5.D_E_L_E_T_ = \' \' WHERE SE1.D_E_L_E_T_ = \' \')',
+    'Antes de retornar o SQL, verifique linha por linha: cada tabela tem D_E_L_E_T_?',
+    '',
+
     spec.contratosTecnicosPrioritarios ? [
       '## Contratos Relacionais do Schema Protheus',
       'As relacoes abaixo definem a chave relacional completa entre tabelas de cabecalho e itens do ERP.',
@@ -64,13 +74,6 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar }
     '- Ao decidir "nova_consulta", limpe nomes de tabelas fisicas e sufixos de outras empresas antes de montar o SQL.',
     '',
 
-    '## Filtro Obrigatorio de Registros Deletados (D_E_L_E_T_)',
-    "- REGRA ABSOLUTA: toda tabela presente no FROM ou em qualquer JOIN deve ter D_E_L_E_T_ = ' ' filtrado, sem excecao.",
-    '- Isso inclui tabelas de dimensao (SB1, SA1, SA2, SA3, SBM, SF4, CTT, SED, SC7, SE1, SE2, SE3, SE5, SE8, etc.) — nao apenas a tabela principal.',
-    "- Para a tabela principal: adicione no WHERE (ex: WHERE SD2.D_E_L_E_T_ = ' ').",
-    "- Para cada tabela de JOIN: adicione na condicao ON (ex: JOIN SB1990 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' ').",
-    '- Um SQL que omite D_E_L_E_T_ em qualquer tabela e considerado INVALIDO. Verifique todas as tabelas antes de retornar o SQL.',
-    '',
 
     '## Escopo de Subquery (Tabela Derivada)',
     '- REGRA ABSOLUTA: uma query externa NUNCA pode referenciar aliases de tabelas definidos dentro de uma subquery. SF2, SD2, SA1 etc. existem SOMENTE no escopo onde foram declarados.',

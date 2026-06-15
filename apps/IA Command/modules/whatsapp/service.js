@@ -12,6 +12,7 @@ const transcriptionService = require('../ai/transcription-service');
 const intentRouter        = require('../erp/intent-router');
 const responseFormatter   = require('../erp/response-formatter');
 const { _extrairMes, _extrairAno, detectarDimensaoCategorica } = responseFormatter;
+const canonicalWhatsappFormat = require('../erp/canonical-whatsapp-format');
 const interpretationLog   = require('../ai/interpretation-log');
 const channelStore        = require('./channel-store');
 const messageTemplates    = require('./message-templates');
@@ -3958,7 +3959,9 @@ class IACWhatsAppService extends EventEmitter {
           if (_timingCtxAll) { _timingCtxAll.logId = _lid1; _timingCtxAll.recebidoEm = _recebidoEmAll; }
           return (_prefixoResetAll || '') + s.resposta;
         }
-        const consolidado = this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
+        const consolidado = canonicalWhatsappFormat.renderAll(sucessosDinamicos, {
+          mensagem: String(texto || '').trim(),
+        }) || this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
         const respostaConsolidada = sucessosDinamicos
           .map(s => `🏢 *${s.nomeEmpresa}*\n${s.resposta}`)
           .join('\n\n');

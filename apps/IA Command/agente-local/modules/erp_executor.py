@@ -1,4 +1,5 @@
 import time
+import threading
 from config import get_config
 
 _BLOCKED_KEYWORDS = [
@@ -6,6 +7,40 @@ _BLOCKED_KEYWORDS = [
     "CREATE ", "EXEC ", "EXECUTE ", "SP_", "XP_", "OPENROWSET",
 ]
 MAX_ROWS_HARD = 50_000
+
+# Pool de conexão singleton: uma conexão ODBC reutilizada entre requests.
+# Evita o custo de handshake ODBC (~15s) a cada query.
+_pool_lock = threading.Lock()
+_pool_conn = None
+
+
+def _get_pool_conn():
+    global _pool_conn
+    with _pool_lock:
+        if _pool_conn is not None:
+            try:
+                _pool_conn.execute("SELECT 1")
+                return _pool_conn
+            except Exception:
+                # Conexão morta — descarta e abre nova
+                try:
+                    _pool_conn.close()
+                except Exception:
+                    pass
+                _pool_conn = None
+        _pool_conn = _get_pyodbc_conn()
+        return _pool_conn
+
+
+def _invalidar_pool():
+    global _pool_conn
+    with _pool_lock:
+        if _pool_conn is not None:
+            try:
+                _pool_conn.close()
+            except Exception:
+                pass
+            _pool_conn = None
 
 
 async def testar_conexao() -> dict:
@@ -26,19 +61,16 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
     if not sql:
         return _erro("SQL vazio.", sql, 0)
 
-    # Remove quaisquer instruções SET iniciais (SET ROWCOUNT, SET NOCOUNT, SET TRANSACTION ISOLATION LEVEL, etc.)
     import re as _re
     sql = _re.sub(r'^(SET\s+[^;]+;\s*)+', '', sql, flags=_re.IGNORECASE).strip()
 
     upper = sql.upper()
 
-    # Aceita CTEs (WITH ... AS (...) SELECT ...) além de SELECT direto
     stripped = upper.lstrip()
     is_select = stripped.startswith("SELECT")
     is_cte    = stripped.startswith("WITH")
     if not is_select and not is_cte:
         return _erro("Apenas comandos SELECT são permitidos.", sql, 0)
-    # CTE deve conter SELECT para ser leitura — rejeita WITH sem SELECT
     if is_cte and "SELECT" not in upper:
         return _erro("Apenas comandos SELECT são permitidos.", sql, 0)
 
@@ -52,27 +84,27 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
     t0 = time.perf_counter()
     try:
         import pyodbc
-        conn   = _get_pyodbc_conn()
+        conn   = _get_pool_conn()
         cursor = conn.cursor()
         cursor.execute(sql_final)
         cols = [d[0] for d in cursor.description]
         rows = [dict(zip(cols, row)) for row in cursor.fetchmany(limit_eff)]
-        conn.close()
+        cursor.close()
         duracao = _ms(t0)
         return {"rows": rows, "status": "ok", "duracao_ms": duracao, "sql_executado": sql_final}
     except ImportError:
         return _erro("pyodbc não instalado. Execute: pip install pyodbc", sql_final, _ms(t0))
     except Exception as e:
+        # Conexão pode ter caído — invalida o pool para forçar reconexão na próxima chamada
+        _invalidar_pool()
         return _erro(str(e), sql_final, _ms(t0))
 
 
 def _injetar_top(sql: str, upper: str, limit: int) -> str:
     if "TOP " in upper or "ROWCOUNT" in upper or "OFFSET" in upper:
         return sql
-    # CTEs já controlam volume internamente (ROW_NUMBER, GROUP BY, etc.) — não injetar TOP
     if upper.lstrip().startswith("WITH"):
         return sql
-    # Injeta TOP logo após SELECT (ignora DISTINCT)
     idx = sql.upper().find("SELECT") + len("SELECT")
     return sql[:idx] + f" TOP {limit}" + sql[idx:]
 

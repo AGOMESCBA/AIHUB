@@ -7,6 +7,7 @@ const sx3SqlValidator = require('../sx3-sql-validator');
 const entitySqlGuard = require('../entity-sql-guard');
 const responseFormatter = require('../response-formatter');
 const queryPlan = require('../query-plan');
+const canonicalWhatsappFormat = require('../canonical-whatsapp-format');
 const promptBuilder = require('./prompt-builder');
 const entityResolver = require('../../ai/entity-resolver');
 
@@ -349,7 +350,7 @@ function camposSX3(tabelas, conexaoId, empresaId, limite = 80, essenciais = {}) 
     }
     return Object.keys(out).length ? out : null;
   };
-  if (!conexaoId) return null;
+  if (!conexaoId) return { completo: null, validacao: null };
   const cacheKey = `sx3::${empresaId}::${conexaoId}::${(tabelas || []).slice().sort().join(',')}`;
   const cached = _metaCacheGet(cacheKey);
   if (cached !== null) return cached;
@@ -363,23 +364,30 @@ function camposSX3(tabelas, conexaoId, empresaId, limite = 80, essenciais = {}) 
     `).all(conexaoId, empresaId);
     const bases = new Set(tabelas || []);
     const mapa = {};
+    // mapaValidacao contém apenas campos confirmados pelo banco real — sem injeção de essenciais.
+    // Usado exclusivamente pelo sx3SqlValidator para evitar aceitar campos que não existem no tenant.
+    const mapaValidacao = {};
     for (const row of rows) {
       const tabela = String(row.tabela || '').toUpperCase().trim();
       if (!bases.has(baseTabelaSX2(tabela))) continue;
-      if (!mapa[tabela]) mapa[tabela] = [];
+      if (!mapa[tabela]) { mapa[tabela] = []; mapaValidacao[tabela] = []; }
       const base = baseTabelaSX2(tabela);
       const essencial = new Set((essenciais[base] || []).map(c => String(c || '').toUpperCase()));
       const campoNorm = String(row.campo || '').toUpperCase();
       if (mapa[tabela].length >= limite && !essencial.has(campoNorm)) continue;
       if (mapa[tabela].some(c => String(c.campo || '').toUpperCase() === campoNorm)) continue;
-      mapa[tabela].push({
+      const entrada = {
         campo: row.campo,
         tipo: row.tipo,
         tamanho: row.tamanho,
         decimal: row.decimal,
         descricao: row.titulo || row.descricao || '',
-      });
+      };
+      mapa[tabela].push(entrada);
+      mapaValidacao[tabela].push(entrada);
     }
+    // Injeta campos essenciais do spec apenas no mapa completo (prompt).
+    // O mapaValidacao permanece intacto com apenas o que o banco real possui.
     for (const [base, campos] of Object.entries(essenciais || {})) {
       const tabelasFisicas = Object.keys(mapa).filter(t => baseTabelaSX2(t) === String(base).toUpperCase());
       const alvos = tabelasFisicas.length ? tabelasFisicas : [String(base).toUpperCase()];
@@ -392,11 +400,18 @@ function camposSX3(tabelas, conexaoId, empresaId, limite = 80, essenciais = {}) 
         }
       }
     }
-    const resultado = Object.keys(mapa).length ? mapa : montarEssenciais();
+    const essenciaisFallback = montarEssenciais();
+    const resultado = {
+      completo: Object.keys(mapa).length ? mapa : essenciaisFallback,
+      // Se não há dados reais do banco, não há como validar — usa null para desabilitar validação SX3.
+      // Isso preserva o comportamento anterior para tenants sem SX3 cadastrado.
+      validacao: Object.keys(mapaValidacao).length ? mapaValidacao : null,
+    };
     _metaCacheSet(cacheKey, resultado);
     return resultado;
   } catch (_) {
-    return montarEssenciais();
+    const essenciaisFallback = montarEssenciais();
+    return { completo: essenciaisFallback, validacao: null };
   }
 }
 
@@ -1596,6 +1611,12 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
   );
 
   // Tenta formatters programáticos antes de chamar IA (sem limite de tokens, sem truncamento)
+  const canonico = canonicalWhatsappFormat.renderSingle(rows, { contextoConsulta, nomeModulo });
+  if (canonico) {
+    if (intent) intent._formatacaoCaminho = 'canonico';
+    return canonico;
+  }
+
   const direto = whatsappFormat.buildFormatDirect(mensagem, rows, { contextoConsulta, nomeModulo, anoFirst })
     || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta, nomeModulo })
     || whatsappFormat.buildFormatCompetenciaEntidade(rows, { contextoConsulta, nomeModulo, anoFirst })
@@ -1788,7 +1809,7 @@ async function executar(spec, intent, empresaId) {
   // mesmo quando não está cadastrado no SX2, o que causaria o modelo errado.
   const sx2Puro = modosSX2(spec.tabelas, protheus.conexaoId, empresaId);
   const sx2 = completarSX2Permitidas(sx2Puro, spec.tabelas, protheus.sufixoTabela);
-  const sx3 = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
+  const { completo: sx3, validacao: sx3Validacao } = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
   const sx3Prompt = sx3EssencialParaPrompt(spec.camposSx3Essenciais || {}) || sx3;
   const middlewareCfg = spec.sqlMiddleware.carregarConfig(empresaId);
   const filial = intentEfetivo.filtros?.filial || protheus.filialPadrao || 'TODAS';
@@ -1993,7 +2014,7 @@ async function executar(spec, intent, empresaId) {
   const maxTentativas = maxTentativasPrepararSql(entidadesResolvidas);
   for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
     try {
-      preparado = await prepararSql({ spec, sql: plano.sql, sx2, sx3, protheus, middlewareCfg, entidades: entidadesResolvidas, filial, periodo: plano.obj.periodo, planoConsulta });
+      preparado = await prepararSql({ spec, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades: entidadesResolvidas, filial, periodo: plano.obj.periodo, planoConsulta });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(plano.sql);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
       auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
@@ -2018,7 +2039,8 @@ async function executar(spec, intent, empresaId) {
             contextoConsulta: _buildContextoConsulta(intent, plano.obj.periodo || null, mensagem),
           })
         : null;
-      const respostaDireta = _comparativo || interpolarRespostaPlanejada(plano.obj.resposta_planejada, rows) || resposta;
+      const respostaCanonica = intent?._formatacaoCaminho === 'canonico' ? resposta : null;
+      const respostaDireta = _comparativo || respostaCanonica || interpolarRespostaPlanejada(plano.obj.resposta_planejada, rows) || resposta;
       return {
         tipo: 'sucesso_ai_sql',
         resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
@@ -2088,7 +2110,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
   }
   const protheus = configProtheus(empresaId);
   const sx2 = completarSX2Permitidas(modosSX2(spec.tabelas, protheus.conexaoId, empresaId), spec.tabelas, protheus.sufixoTabela);
-  const sx3 = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
+  const { validacao: sx3Validacao } = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
   const middlewareCfg = spec.sqlMiddleware.carregarConfig(empresaId);
   const sqlCanonicoNormalizado = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
   const sqlCanonicoAdaptadoTemplate = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(
@@ -2158,7 +2180,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       entidades,
     });
     auditoriaBase.query_plan = planoConsulta;
-    preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta });
+    preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta });
     auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
     auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
     auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
@@ -2185,7 +2207,8 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
           contextoConsulta: _buildContextoConsulta(intent, intent._periodoCanonicoResolvido || null, intent._mensagemOriginal || 'consulta'),
         })
       : null;
-    const respostaDireta = _comparativoD || interpolarRespostaPlanejada(template, rows) || resposta;
+    const respostaCanonicaD = intent?._formatacaoCaminho === 'canonico' ? resposta : null;
+    const respostaDireta = _comparativoD || respostaCanonicaD || interpolarRespostaPlanejada(template, rows) || resposta;
     return {
       tipo: 'sucesso_ai_sql',
       resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
