@@ -154,14 +154,19 @@ function fluxoCaixaProjetado() {
 - REGRA ABSOLUTA — calcule cada componente em CTE/subquery ESCALAR SEPARADA, sem JOIN entre elas: uma CTE/subquery para saldo_bancario_base (SE8+SA6), outra para saldo_a_receber_projetado (SUM de SE1.E1_SALDO agrupado por data de vencimento, se detalhado por periodo), outra para saldo_a_pagar_projetado (SUM de SE2.E2_SALDO agrupado por data de vencimento). PROIBIDO fazer JOIN entre SE8 e SE1/SE2 — nao existe chave relacional entre saldo bancario (numero de conta) e titulos (data de vencimento). Combine os componentes apenas no SELECT final, por data quando detalhado por dia/mes, ou em uma unica linha quando sintetico.
 - Datas SEMPRE no formato Protheus CHAR(8) YYYYMMDD (ex: '20260622'). PROIBIDO usar formato 'YYYY-MM-DD' ou CONVERT/CAST para DATE em comparacoes — os campos de data do Protheus sao strings YYYYMMDD, comparacao deve ser feita como string.
 - O periodo (dia, mes, ano, ou intervalo arbitrario) e definido pela pergunta do usuario e deve ser aplicado de forma CONSISTENTE as fontes envolvidas — nunca calcule saldo bancario em uma data e receber/pagar em outra data diferente.
-- saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual a data atual ou data inicial projetada, conforme a pergunta.
+- REGRA ABSOLUTA — saldo_bancario_base e SEMPRE a ultima posicao SE8 menor ou igual a data_atual (hoje), independente do periodo de projecao pedido. O fluxo e PROJETADO a partir de hoje: o ponto de partida nunca pode ser uma data futura do periodo solicitado (ex: "proximos 90 dias" usa data_atual como referencia de SE8, NUNCA a data final do periodo de 90 dias). Filtre SE8.E8_DTSALAT <= 'data_atual_YYYYMMDD', nunca <= data final do periodo projetado.
 - SQL de fluxo deve retornar aliases claros: saldo_bancario_base, total_a_receber, total_a_pagar, fluxo_liquido.
 - Se SE8/SA6 nao estiverem disponiveis, retorne os componentes disponiveis e use saldo_bancario_base = 0 apenas deixando claro pelo alias que faltou saldo bancario.
-- Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por dia/mes = GROUP BY data de vencimento (de SE1/SE2, nunca de SE8) com saldo acumulado quando fizer sentido (SUM() OVER (ORDER BY data)); por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica (nao duplicada por entidade); por titulo = lista linha a linha sem agregacao.
+- Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica (nao duplicada por entidade); por titulo = lista linha a linha sem agregacao.
+- REGRA OBRIGATORIA — projecao por dia/mes (multiplas linhas): o saldo bancario projetado e CUMULATIVO ao longo do periodo, NUNCA o mesmo valor fixo repetido em todas as linhas. O fluxo_liquido de cada linha deve se somar ao saldo acumulado das linhas anteriores, nao sempre ao saldo_bancario_base original. Use SUM(total_a_receber - total_a_pagar) OVER (ORDER BY data_ref) para calcular o delta acumulado, e some saldo_bancario_base a esse acumulado: saldo_projetado_na_data = saldo_bancario_base + SUM(total_a_receber - total_a_pagar) OVER (ORDER BY data_ref ROWS UNBOUNDED PRECEDING). PROIBIDO fazer CROSS JOIN do saldo_bancario_base fixo em cada linha sem acumular o delta das linhas anteriores — isso faz cada mes/dia parecer uma projecao isolada do saldo de hoje, em vez de uma projecao progressiva.
+- REGRA ABSOLUTA — nomenclatura do alias de data/competencia no SELECT final: quando detalhado por dia, use AS dia (valor YYYYMMDD). Quando detalhado por mes, use AS competencia (valor YYYYMM, formato SUBSTRING(campo,1,6)) — NUNCA use o alias "mes" sozinho. O formatador de WhatsApp identifica a coluna "mes" apenas quando o valor e um numero de 1 a 12 (mes do calendario); um valor YYYYMM com alias "mes" e mal interpretado e quebra a quebra por linha da resposta.
 - PROIBIDO usar SE5/FK no fluxo de caixa projetado.
 - PROIBIDO usar FULL OUTER JOIN em qualquer hipotese (nao suportado neste ambiente). Para combinar datas de receber e pagar que podem nao coincidir (ex: detalhado por dia/mes), use uma CTE "datas" com UNION das datas distintas de cada lado, e LEFT JOIN dessa CTE para receber e pagar — nunca JOIN direto entre as duas subqueries de receber/pagar.
 
 ### EXEMPLO CORRETO — fluxo de caixa projetado por dia, excluindo bancos
+### (data_atual = '20260622'; periodo projetado pedido = proximos 30 dias, '20260622' a '20260722')
+### Observe: SE8 usa data_atual ('20260622'), NUNCA a data final do periodo ('20260722').
+### Observe: saldo_acumulado usa SUM() OVER para acumular o delta de cada linha anterior — NUNCA repete saldo_bancario_base fixo.
 WITH saldo_recente AS (
   SELECT E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA, E8_SALATUA, E8_DTSALAT,
          ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn
@@ -187,17 +192,72 @@ pagar AS (
   FROM SE2xxx SE2
   WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '20260622' AND '20260722'
   GROUP BY SE2.E2_VENCREA
+),
+fluxo AS (
+  SELECT datas.data_ref AS dia,
+         COALESCE(r.total_a_receber, 0) AS total_a_receber,
+         COALESCE(p.total_a_pagar, 0) AS total_a_pagar,
+         (COALESCE(r.total_a_receber, 0) - COALESCE(p.total_a_pagar, 0)) AS delta_dia
+  FROM datas
+  LEFT JOIN receber r ON r.data_ref = datas.data_ref
+  LEFT JOIN pagar p ON p.data_ref = datas.data_ref
 )
-SELECT datas.data_ref AS dia,
+SELECT fluxo.dia,
        saldo_base.saldo_bancario_base,
-       COALESCE(r.total_a_receber, 0) AS total_a_receber,
-       COALESCE(p.total_a_pagar, 0) AS total_a_pagar,
-       (saldo_base.saldo_bancario_base + COALESCE(r.total_a_receber, 0) - COALESCE(p.total_a_pagar, 0)) AS fluxo_liquido
-FROM datas
-LEFT JOIN receber r ON r.data_ref = datas.data_ref
-LEFT JOIN pagar p ON p.data_ref = datas.data_ref
+       fluxo.total_a_receber,
+       fluxo.total_a_pagar,
+       (saldo_base.saldo_bancario_base + SUM(fluxo.delta_dia) OVER (ORDER BY fluxo.dia ROWS UNBOUNDED PRECEDING)) AS fluxo_liquido
+FROM fluxo
 CROSS JOIN saldo_base
-ORDER BY dia;
+ORDER BY fluxo.dia;
+
+### EXEMPLO CORRETO — fluxo de caixa projetado por MES (mesma estrutura, granularidade diferente)
+### REGRA CRITICA: a CTE "datas" e as CTEs "receber"/"pagar" devem usar a MESMA expressao de truncamento de data.
+### Se a granularidade e mensal, TODAS usam SUBSTRING(campo,1,6) — nunca deixe "datas" com a data completa
+### enquanto "receber"/"pagar" truncam para competencia; o LEFT JOIN nao vai casar e os valores ficam zerados.
+WITH saldo_recente AS (
+  SELECT E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA, E8_SALATUA, E8_DTSALAT,
+         ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn
+  FROM SE8xxx SE8
+  WHERE SE8.D_E_L_E_T_ = ' ' AND SE8.E8_DTSALAT <= '20260622' AND SE8.E8_BANCO NOT IN ('CX1', 'CX2')
+),
+saldo_base AS (
+  SELECT COALESCE(SUM(E8_SALATUA), 0) AS saldo_bancario_base FROM saldo_recente WHERE rn = 1
+),
+datas AS (
+  SELECT DISTINCT SUBSTRING(E1_VENCREA, 1, 6) AS competencia FROM SE1xxx WHERE D_E_L_E_T_ = ' ' AND E1_SALDO > 0 AND E1_VENCREA BETWEEN '20260622' AND '20260920'
+  UNION
+  SELECT DISTINCT SUBSTRING(E2_VENCREA, 1, 6) FROM SE2xxx WHERE D_E_L_E_T_ = ' ' AND E2_SALDO > 0 AND E2_VENCREA BETWEEN '20260622' AND '20260920'
+),
+receber AS (
+  SELECT SUBSTRING(SE1.E1_VENCREA, 1, 6) AS competencia, COALESCE(SUM(SE1.E1_SALDO), 0) AS total_a_receber
+  FROM SE1xxx SE1
+  WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_VENCREA BETWEEN '20260622' AND '20260920'
+  GROUP BY SUBSTRING(SE1.E1_VENCREA, 1, 6)
+),
+pagar AS (
+  SELECT SUBSTRING(SE2.E2_VENCREA, 1, 6) AS competencia, COALESCE(SUM(SE2.E2_SALDO), 0) AS total_a_pagar
+  FROM SE2xxx SE2
+  WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '20260622' AND '20260920'
+  GROUP BY SUBSTRING(SE2.E2_VENCREA, 1, 6)
+),
+fluxo AS (
+  SELECT datas.competencia,
+         COALESCE(r.total_a_receber, 0) AS total_a_receber,
+         COALESCE(p.total_a_pagar, 0) AS total_a_pagar,
+         (COALESCE(r.total_a_receber, 0) - COALESCE(p.total_a_pagar, 0)) AS delta_mes
+  FROM datas
+  LEFT JOIN receber r ON r.competencia = datas.competencia
+  LEFT JOIN pagar p ON p.competencia = datas.competencia
+)
+SELECT fluxo.competencia,
+       saldo_base.saldo_bancario_base,
+       fluxo.total_a_receber,
+       fluxo.total_a_pagar,
+       (saldo_base.saldo_bancario_base + SUM(fluxo.delta_mes) OVER (ORDER BY fluxo.competencia ROWS UNBOUNDED PRECEDING)) AS fluxo_liquido
+FROM fluxo
+CROSS JOIN saldo_base
+ORDER BY fluxo.competencia;
 `;
 }
 
@@ -221,7 +281,9 @@ function fluxoCaixaRealizado({ usaFK1, usaFK2 } = {}) {
 - saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual ao inicio do periodo.
 - SQL de fluxo deve retornar aliases claros: saldo_bancario_base, total_a_receber ou valor_recebido, total_a_pagar ou valor_pago, fluxo_liquido.
 - Se SE8/SA6 nao estiverem disponiveis, retorne os componentes disponiveis e use saldo_bancario_base = 0 apenas deixando claro pelo alias que faltou saldo bancario.
-- Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por dia/mes = GROUP BY data da baixa (de ${tabReceber}/${tabPagar}, nunca de SE8) com saldo acumulado quando fizer sentido (SUM() OVER (ORDER BY data)); por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica (nao duplicada por entidade); por titulo = lista linha a linha sem agregacao.
+- Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica (nao duplicada por entidade); por titulo = lista linha a linha sem agregacao.
+- REGRA OBRIGATORIA — por dia/mes (multiplas linhas): o saldo bancario e CUMULATIVO ao longo do periodo, NUNCA o mesmo valor fixo repetido em todas as linhas. Use SUM(valor_recebido - valor_pago) OVER (ORDER BY data_ref ROWS UNBOUNDED PRECEDING) somado ao saldo_bancario_base do inicio do periodo para calcular o fluxo_liquido de cada linha. PROIBIDO fazer CROSS JOIN do saldo_bancario_base fixo em cada linha sem acumular o delta das linhas anteriores.
+- REGRA ABSOLUTA — nomenclatura do alias de data/competencia no SELECT final: quando detalhado por dia, use AS dia (valor YYYYMMDD). Quando detalhado por mes, use AS competencia (valor YYYYMM, formato SUBSTRING(campo,1,6)) — NUNCA use o alias "mes" sozinho. O formatador de WhatsApp identifica a coluna "mes" apenas quando o valor e um numero de 1 a 12 (mes do calendario); um valor YYYYMM com alias "mes" e mal interpretado e quebra a quebra por linha da resposta.
 - PROIBIDO usar FULL OUTER JOIN em qualquer hipotese (nao suportado neste ambiente). Para combinar datas de receber e pagar que podem nao coincidir, use uma CTE "datas" com UNION das datas distintas de cada lado, e LEFT JOIN dessa CTE para receber e pagar — nunca JOIN direto entre as duas subqueries de receber/pagar.
 
 ### EXEMPLO CORRETO — fluxo de caixa realizado por dia (modelo deste tenant: receber=${tabReceber}, pagar=${tabPagar})
@@ -250,17 +312,24 @@ pagar AS (
   FROM ${tabPagar}xxx ${tabPagar}
   WHERE ${tabPagar}.D_E_L_E_T_ = ' '${filtroRecpagPagar} AND ${campoDataPagar} BETWEEN '20260622' AND '20260722'
   GROUP BY ${campoDataPagar}
+),
+fluxo AS (
+  SELECT datas.data_ref AS dia,
+         COALESCE(r.valor_recebido, 0) AS valor_recebido,
+         COALESCE(p.valor_pago, 0) AS valor_pago,
+         (COALESCE(r.valor_recebido, 0) - COALESCE(p.valor_pago, 0)) AS delta_dia
+  FROM datas
+  LEFT JOIN receber r ON r.data_ref = datas.data_ref
+  LEFT JOIN pagar p ON p.data_ref = datas.data_ref
 )
-SELECT datas.data_ref AS dia,
+SELECT fluxo.dia,
        saldo_base.saldo_bancario_base,
-       COALESCE(r.valor_recebido, 0) AS valor_recebido,
-       COALESCE(p.valor_pago, 0) AS valor_pago,
-       (saldo_base.saldo_bancario_base + COALESCE(r.valor_recebido, 0) - COALESCE(p.valor_pago, 0)) AS fluxo_liquido
-FROM datas
-LEFT JOIN receber r ON r.data_ref = datas.data_ref
-LEFT JOIN pagar p ON p.data_ref = datas.data_ref
+       fluxo.valor_recebido,
+       fluxo.valor_pago,
+       (saldo_base.saldo_bancario_base + SUM(fluxo.delta_dia) OVER (ORDER BY fluxo.dia ROWS UNBOUNDED PRECEDING)) AS fluxo_liquido
+FROM fluxo
 CROSS JOIN saldo_base
-ORDER BY dia;
+ORDER BY fluxo.dia;
 `;
 }
 
