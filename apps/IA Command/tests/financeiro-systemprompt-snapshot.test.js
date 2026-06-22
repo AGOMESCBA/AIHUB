@@ -41,18 +41,23 @@ function resolverRegrasTecnicas(spec, opts) {
 
 const SECOES_ESPERADAS = [
   '## Campos de data padrao',
-  '## Carteiras',
-  '## Metricas principais',
-  '## Antecipacoes PA/RA',
-  '## Saldo bancario e fluxo de caixa',
-  '## Dicionario SE8 (saldos bancarios)',
-  '## Regras tecnicas obrigatorias — SE8',
   '## Tabelas padrao do modulo Financeiro',
   '## Joins padrao',
   '## Regras obrigatorias de SQL',
   '## Exibicao de entidades',
-  '## Metrica por agrupamento',
+  '## Contas a receber — posicao/em aberto',
+  '## Contas a receber — realizado',
+  '## Contas a pagar — posicao/em aberto',
+  '## Contas a pagar — realizado',
+  '## Comparacao/combinacao pagar x receber',
+  '## Saldo bancario',
+  '## Dicionario SE8 (saldos bancarios)',
+  '## Regras tecnicas obrigatorias — SE8',
+  '## Fluxo de caixa projetado',
+  '## Fluxo de caixa realizado',
+  '## Antecipacoes PA/RA',
   '## Titulos especiais — NDF, NCC',
+  '## Media por periodo (agrupamento temporal)',
 ];
 
 console.log('\n[1] Todas as secoes esperadas presentes (modelo SE5, padrao)');

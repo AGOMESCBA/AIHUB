@@ -6,6 +6,7 @@ const sx2SqlNormalizer = require('../sx2-sql-normalizer');
 const sx3SqlValidator = require('../sx3-sql-validator');
 const entitySqlGuard = require('../entity-sql-guard');
 const responseFormatter = require('../response-formatter');
+const channelStore = require('../../whatsapp/channel-store');
 const queryPlan = require('../query-plan');
 const canonicalWhatsappFormat = require('../canonical-whatsapp-format');
 const promptBuilder = require('./prompt-builder');
@@ -664,6 +665,26 @@ function deduplicarEntidadesResolvidas(entidades = []) {
     vistos.add(chave);
     return true;
   });
+}
+
+// Remove termos que são aliases de tenants IAHub do canal.
+// Razão: "J2A" ou "C3I" na mensagem é escopo de execução multiempresa, não entidade cadastral.
+// Só descarta se o termo bater exatamente (case-insensitive) com um alias de tenant do canal.
+// Se não bater com nenhum tenant, o termo segue para resolução cadastral normalmente.
+function _filtrarTermosTenant(termos, channelId) {
+  if (!channelId || !termos.length) return termos;
+  try {
+    const empresas = channelStore.listarEmpresasDoCanal(channelId);
+    const aliasesTenant = new Set(
+      empresas
+        .flatMap(e => String(e.aliases || '').split(',').map(a => a.trim().toLowerCase()))
+        .filter(Boolean)
+    );
+    if (!aliasesTenant.size) return termos;
+    return termos.filter(t => !aliasesTenant.has(String(t.texto || '').toLowerCase().trim()));
+  } catch (_) {
+    return termos;
+  }
 }
 
 async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, entidadesResolvidas = []) {
@@ -1353,6 +1374,116 @@ function completarContratoRelacionalSD1SF1(sql = '') {
   };
 }
 
+// Extrai os corpos de todas as subqueries escalares do SQL (parênteses que contêm SELECT).
+// Retorna array de strings com o conteúdo interno de cada (SELECT ...).
+function _extrairSubqueriesEscalares(sql) {
+  const texto = String(sql || '');
+  const resultado = [];
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'") { aspas = !aspas; continue; }
+    if (aspas) continue;
+    if (c !== '(') continue;
+    // Verifica se o que vem após o '(' é SELECT (ignorando espaços)
+    let j = i + 1;
+    while (j < texto.length && /\s/.test(texto[j])) j++;
+    if (texto.slice(j, j + 6).toUpperCase() !== 'SELECT') continue;
+    // Coleta o conteúdo até o ')' balanceado
+    let nivel = 1;
+    let k = i + 1;
+    let aspasDentro = false;
+    while (k < texto.length && nivel > 0) {
+      const d = texto[k];
+      if (d === "'") { aspasDentro = !aspasDentro; k++; continue; }
+      if (aspasDentro) { k++; continue; }
+      if (d === '(') nivel++;
+      else if (d === ')') nivel--;
+      k++;
+    }
+    resultado.push(texto.slice(i + 1, k - 1));
+  }
+  return resultado;
+}
+
+// Valida que dentro de cada subquery escalar os qualificadores de campo batem com o alias
+// declarado no FROM. Detecta o surto clássico onde a IA declara FROM SE1020 SE1 mas usa
+// E1.E1_SALDO como qualificador — o SQL Server rejeita com "could not be bound".
+// Genérico: usa spec.tabelas de qualquer módulo (financeiro, faturamento, compras, comissão).
+function validarAliasesSubqueriesEscalares(sql, spec = {}) {
+  const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
+  if (!basesPermitidas.size) return { ok: true, erros: [] };
+
+  const _SQL_KEYWORDS = new Set([
+    'ON','WHERE','AND','OR','NOT','IN','IS','NULL','BETWEEN','LIKE','EXISTS',
+    'SELECT','FROM','JOIN','GROUP','ORDER','HAVING','CASE','WHEN','THEN','ELSE','END',
+    'INNER','LEFT','RIGHT','FULL','CROSS','UNION','ALL','DISTINCT','AS','SET','WITH',
+    'ROW_NUMBER','OVER','PARTITION','BY','DESC','ASC','SUBSTRING','ISNULL','COALESCE',
+    'CONVERT','CAST','DATEADD','DATEDIFF','GETDATE','LEN','TRIM','UPPER','LOWER',
+    'MAX','MIN','SUM','COUNT','AVG','TOP','ROWCOUNT',
+  ]);
+
+  const subqueries = _extrairSubqueriesEscalares(sql);
+  const erros = [];
+
+  for (const corpo of subqueries) {
+    // Mapeia alias declarado → base canônica para todas as tabelas do módulo dentro desta subquery
+    const aliasParaBase = new Map(); // aliasDeclarado → base
+    const reFrom = /\b(?:FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/gi;
+    let m;
+    while ((m = reFrom.exec(corpo)) !== null) {
+      const tabelaFisica = String(m[1] || '').toUpperCase();
+      const aliasDeclarado = String(m[2] || '').toUpperCase();
+      const base = baseTabelaSX2(tabelaFisica);
+      if (!basesPermitidas.has(base)) continue;
+      const aliasEfetivo = aliasDeclarado && !_SQL_KEYWORDS.has(aliasDeclarado) ? aliasDeclarado : base;
+      aliasParaBase.set(aliasEfetivo, { base, tabelaFisica });
+    }
+    if (!aliasParaBase.size) continue;
+
+    // Coleta todos os qualificadores PREFIX.campo usados no corpo
+    const reCampos = /\b([A-Z][A-Z0-9_]*)\s*\.\s*[A-Z][A-Z0-9_]*/gi;
+    let mc;
+    const qualificadoresVistos = new Set();
+    while ((mc = reCampos.exec(corpo)) !== null) {
+      const qual = String(mc[1] || '').toUpperCase();
+      if (_SQL_KEYWORDS.has(qual)) continue;
+      if (aliasParaBase.has(qual)) continue; // qualificador é um alias declarado → ok
+      if (qualificadoresVistos.has(qual)) continue;
+      qualificadoresVistos.add(qual);
+
+      // Verifica se este qualificador é a base canônica de uma tabela cujo alias é diferente
+      // Ex: tabela SE1020 declarada com alias SE1, mas campos qualificados como E1.E1_SALDO
+      // (E1 não é alias, nem base — é o prefixo natural do campo sem o S inicial)
+      // Para capturar: procura se existe algum alias cujo base bate com esse qualificador
+      // ou se o qualificador poderia ser a base real sem o alias correto.
+      for (const [aliasDeclarado, { base, tabelaFisica }] of aliasParaBase) {
+        // Caso 1: qualificador é a própria base (SE1, SE2) mas alias declarado é diferente
+        if (qual === base && aliasDeclarado !== base) {
+          erros.push(
+            `Subquery escalar: campo qualificado como "${qual}." mas o alias declarado e "${aliasDeclarado}" ` +
+            `(FROM ${tabelaFisica} ${aliasDeclarado}). ` +
+            `Substitua "${qual}." por "${aliasDeclarado}." dentro desta subquery.`
+          );
+          break;
+        }
+        // Caso 2: qualificador é o prefixo do campo sem 'S' inicial (E1, E2, F2, D1, etc.)
+        // e a base correspondente seria S+qual (SE1, SE2, SF2, SD1...)
+        if (`S${qual}` === base || `S${qual}` === aliasDeclarado) {
+          erros.push(
+            `Subquery escalar: campo qualificado como "${qual}." mas o alias declarado e "${aliasDeclarado}" ` +
+            `(FROM ${tabelaFisica} ${aliasDeclarado}). ` +
+            `Substitua "${qual}." por "${aliasDeclarado}." dentro desta subquery.`
+          );
+          break;
+        }
+      }
+    }
+  }
+
+  return { ok: erros.length === 0, erros };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
@@ -1389,6 +1520,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}) {
   }
   erros.push(...validarCTEsAgregadosSemGroupBy(texto).erros);
   erros.push(...validarCTEsDefinidaUsada(texto).erros);
+  erros.push(...validarAliasesSubqueriesEscalares(texto, spec).erros);
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
   const keywords = new Set(['ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'JOIN', 'CROSS']);
@@ -1591,6 +1723,12 @@ function _buildContextoConsulta(intent, periodoResolvido = null, mensagem = null
   return partes.length ? partes.join(' | ') : null;
 }
 
+function _buildContextoFormatacao(mensagem = '', contextoConsulta = null) {
+  const texto = String(mensagem || '').trim();
+  if (!texto) return contextoConsulta;
+  return texto;
+}
+
 async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodoResolvido = null) {
   if (typeof spec.formatarResposta === 'function') return spec.formatarResposta({ mensagem, rows, keys, cfg });
   if (!rows || !rows.length) return mensagemErro(spec, 'sem_resultado');
@@ -1611,17 +1749,18 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
   );
 
   // Tenta formatters programáticos antes de chamar IA (sem limite de tokens, sem truncamento)
-  const canonico = canonicalWhatsappFormat.renderSingle(rows, { contextoConsulta, nomeModulo });
+  const contextoFormatacao = _buildContextoFormatacao(mensagem, contextoConsulta);
+  const canonico = canonicalWhatsappFormat.renderSingle(rows, { contextoConsulta: contextoFormatacao, nomeModulo });
   if (canonico) {
     if (intent) intent._formatacaoCaminho = 'canonico';
     return canonico;
   }
 
-  const direto = whatsappFormat.buildFormatDirect(mensagem, rows, { contextoConsulta, nomeModulo, anoFirst })
-    || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta, nomeModulo })
-    || whatsappFormat.buildFormatCompetenciaEntidade(rows, { contextoConsulta, nomeModulo, anoFirst })
-    || whatsappFormat.buildFormatSimplesTemporal(rows, { contextoConsulta, nomeModulo, anoFirst })
-    || whatsappFormat.buildFormatComparativoSimples(rows, { contextoConsulta });
+  const direto = whatsappFormat.buildFormatDirect(mensagem, rows, { contextoConsulta: contextoFormatacao, nomeModulo, anoFirst })
+    || whatsappFormat.buildFormatAnoMesDireto(rows, { contextoConsulta: contextoFormatacao, nomeModulo })
+    || whatsappFormat.buildFormatCompetenciaEntidade(rows, { contextoConsulta: contextoFormatacao, nomeModulo, anoFirst })
+    || whatsappFormat.buildFormatSimplesTemporal(rows, { contextoConsulta: contextoFormatacao, nomeModulo, anoFirst })
+    || whatsappFormat.buildFormatComparativoSimples(rows, { contextoConsulta: contextoFormatacao });
   if (direto) {
     if (intent) intent._formatacaoCaminho = 'direto';
     return direto;
@@ -1633,7 +1772,7 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
       keys,
       cfg,
       whatsappFormat.buildFormatSystemPrompt(),
-      whatsappFormat.buildFormatUserPrompt(mensagem, rows, { contextoConsulta }),
+      whatsappFormat.buildFormatUserPrompt(mensagem, rows, { contextoConsulta: contextoFormatacao }),
       { json: false, maxTokens: 6000, temperature: 0.1, logPrefix: `${spec.logPrefix || 'IAOwner'}-format` }
     );
   } catch (e) {
@@ -1794,11 +1933,13 @@ async function executar(spec, intent, empresaId) {
 
   let intentEfetivo = intent;
   let contextoTecnicoExtra = {};
+  let entidadeSeguranca = null;
   if (typeof spec.prepararIntent === 'function') {
     const prep = spec.prepararIntent({ intent, empresaId, mensagem });
     if (prep?.retorno) return { ...prep.retorno, duracao_ms: prep.retorno.duracao_ms || (Date.now() - t0) };
     if (prep?.intent) intentEfetivo = prep.intent;
     if (prep?.contextoTecnicoExtra) contextoTecnicoExtra = prep.contextoTecnicoExtra;
+    if (prep?.entidadeSeguranca) entidadeSeguranca = prep.entidadeSeguranca;
   }
   intentEfetivo = normalizarFiltroEmpresaComoEntidade(spec, intentEfetivo, mensagem);
   intentEfetivo = limparFiltrosEntidadeHerdadosDaConsultaAtual(spec, intentEfetivo, mensagem);
@@ -1821,8 +1962,17 @@ async function executar(spec, intent, empresaId) {
 
   let entidadesResolvidas = (Array.isArray(intentEfetivo._entidadesResolvidas) ? intentEfetivo._entidadesResolvidas : [])
     .filter(entidade => !termoEhEmpresaIAHub({ texto: entidade?.nome || entidade?.texto || entidade?.descricao }, intentEfetivo));
+  // Entidade de segurança (vendedor_fixo_seguranca) precede as entidades de negócio:
+  // ela é injetada pelo sistema, não pelo usuário, e deve ser parametrizada no SQL canônico
+  // para que cada empresa seguidora use o código ERP correto sem nova chamada à IA.
+  if (entidadeSeguranca) {
+    entidadesResolvidas = [entidadeSeguranca, ...entidadesResolvidas.filter(e => e?.tipo !== 'vendedor_fixo_seguranca')];
+  }
   const diagnosticosEntidades = [];
-  const termosEntidadesPrevias = await extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intentEfetivo, entidadesResolvidas);
+  const termosEntidadesPrevias = _filtrarTermosTenant(
+    await extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intentEfetivo, entidadesResolvidas),
+    intentEfetivo._channelId
+  );
   if (termosEntidadesPrevias.length) {
     const resolucaoPrevia = await resolverEntidadesSeNecessario(spec, termosEntidadesPrevias, {
       empresaId,
@@ -1855,6 +2005,7 @@ async function executar(spec, intent, empresaId) {
   const modeloOpts = {
     modeloBaixasReceber: contextoTecnico.modelo_baixas_receber,
     modeloBaixasPagar: contextoTecnico.modelo_baixas_pagar,
+    mensagem,
   };
   let plano;
   let userPrompt = promptBuilder.buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico, entidadesResolvidas });
@@ -2170,80 +2321,96 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       ...resolucaoLocal.entidades,
     ];
   }
+  const _erroAgenteTemporal = (msg) => /socket hang up|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timeout ao chamar/i.test(msg || '');
+  const MAX_TENTATIVAS_DIRETO = 2;
   let preparado = null;
-  try {
-    const planoConsulta = construirQueryPlanTecnico({
-      spec,
-      mensagem: intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta',
-      periodo: intent._periodoCanonicoResolvido || intent.periodo,
-      filtros: intent.filtros || {},
-      entidades,
-    });
-    auditoriaBase.query_plan = planoConsulta;
-    preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta });
-    auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
-    auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
-    auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
-    auditoriaBase.sql_apos_sx2 = preparado.sqlCanonico;
-    auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
-    auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
-    auditoriaBase.sql_final_executado = preparado.sqlFinal;
-    const conn = connectionFactory.carregarConexao(empresaId);
-    conn._pergunta   = intent._mensagemOriginal || '';
-    conn._sender     = intent._remetente        || '';
-    conn._modulo     = spec.nome                || '';
-    conn._operacao   = intent.intencao          || '';
-    conn._empresa_id = empresaId                || '';
-    const rows = await connectionFactory.executar(conn, preparado.sqlFinal, {});
-    const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
-    const template = intent._respostaPlanejadaCanonica || intent._iaOwnerRespostaPlanejada || null;
-    const resposta = rows && rows.length
-      ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null)
-      : mensagemErro(spec, 'sem_resultado');
-    // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
-    const _wfD = require('../whatsapp-format-prompt');
-    const _comparativoD = rows?.length
-      ? _wfD.buildFormatComparativoSimples(rows, {
-          contextoConsulta: _buildContextoConsulta(intent, intent._periodoCanonicoResolvido || null, intent._mensagemOriginal || 'consulta'),
-        })
-      : null;
-    const respostaCanonicaD = intent?._formatacaoCaminho === 'canonico' ? resposta : null;
-    const respostaDireta = _comparativoD || respostaCanonicaD || interpolarRespostaPlanejada(template, rows) || resposta;
-    return {
-      tipo: 'sucesso_ai_sql',
-      resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
-      rows: rows || [],
-      sql_gerado: preparado.sqlFinal,
-      _sql_canonico: preparado.sqlCanonico,
-      _sql_canonico_origem: 'ia_owner_reuso',
-      _sql_canonico_original: sqlCanonico,
-      _sql_canonico_empresa_origem: empresaId,
-      _sql_canonico_parametros: preparado.parametros,
-      _sql_auditoria: auditoriaBase,
-      _entidadesResolvidas: entidades,
-      duracao_ms: Date.now() - t0,
-    };
-  } catch (e) {
-    if (preparado) {
+  for (let tentativaDireto = 1; tentativaDireto <= MAX_TENTATIVAS_DIRETO; tentativaDireto++) {
+    try {
+      if (tentativaDireto > 1) {
+        await new Promise(r => setTimeout(r, 2000));
+        console.warn(`[${spec.logPrefix || 'IAOwner'}] executarSqlDireto retry ${tentativaDireto}/${MAX_TENTATIVAS_DIRETO} para empresa #${empresaId} após erro de agente.`);
+      }
+      const planoConsulta = construirQueryPlanTecnico({
+        spec,
+        mensagem: intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta',
+        periodo: intent._periodoCanonicoResolvido || intent.periodo,
+        filtros: intent.filtros || {},
+        entidades,
+      });
+      auditoriaBase.query_plan = planoConsulta;
+      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta });
+      auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
       auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
       auditoriaBase.sql_apos_sx2 = preparado.sqlCanonico;
       auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
       auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
       auditoriaBase.sql_final_executado = preparado.sqlFinal;
+      const conn = connectionFactory.carregarConexao(empresaId);
+      conn._pergunta   = intent._mensagemOriginal || '';
+      conn._sender     = intent._remetente        || '';
+      conn._modulo     = spec.nome                || '';
+      conn._operacao   = intent.intencao          || '';
+      conn._empresa_id = empresaId                || '';
+      const rows = await connectionFactory.executar(conn, preparado.sqlFinal, {});
+      const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
+      const template = intent._respostaPlanejadaCanonica || intent._iaOwnerRespostaPlanejada || null;
+      const resposta = rows && rows.length
+        ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null)
+        : mensagemErro(spec, 'sem_resultado');
+      // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
+      const _wfD = require('../whatsapp-format-prompt');
+      const _comparativoD = rows?.length
+        ? _wfD.buildFormatComparativoSimples(rows, {
+            contextoConsulta: _buildContextoConsulta(intent, intent._periodoCanonicoResolvido || null, intent._mensagemOriginal || 'consulta'),
+          })
+        : null;
+      const respostaCanonicaD = intent?._formatacaoCaminho === 'canonico' ? resposta : null;
+      const respostaDireta = _comparativoD || respostaCanonicaD || interpolarRespostaPlanejada(template, rows) || resposta;
+      return {
+        tipo: 'sucesso_ai_sql',
+        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
+        rows: rows || [],
+        sql_gerado: preparado.sqlFinal,
+        _sql_canonico: preparado.sqlCanonico,
+        _sql_canonico_origem: 'ia_owner_reuso',
+        _sql_canonico_original: sqlCanonico,
+        _sql_canonico_empresa_origem: empresaId,
+        _sql_canonico_parametros: preparado.parametros,
+        _sql_auditoria: auditoriaBase,
+        _entidadesResolvidas: entidades,
+        duracao_ms: Date.now() - t0,
+      };
+    } catch (e) {
+      if (preparado) {
+        auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
+        auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;
+        auditoriaBase.sql_apos_sx2 = preparado.sqlCanonico;
+        auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
+        auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
+        auditoriaBase.sql_final_executado = preparado.sqlFinal;
+      }
+      // Erro de agente temporário (pool ODBC ocupado, socket reset): tenta novamente
+      if (tentativaDireto < MAX_TENTATIVAS_DIRETO && _erroAgenteTemporal(e.message)) {
+        console.warn(`[${spec.logPrefix || 'IAOwner'}] executarSqlDireto empresa #${empresaId}: erro de agente temporário (${limitarTexto(e.message, 100)}). Aguardando retry...`);
+        continue;
+      }
+      const sqlErro = preparado?.sqlFinal || e._sql || sqlCanonico;
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] executarSqlDireto falhou para empresa #${empresaId}: subtipo=${e._tipo || 'erro_erp'} | erro=${limitarTexto(e.message, 300)}`);
+      const subtipo = e._tipo || 'erro_erp';
+      return {
+        tipo: 'erro',
+        subtipo,
+        resposta_direta: mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'),
+        sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
+        _sql_auditoria: auditoriaBase,
+        duracao_ms: Date.now() - t0,
+      };
     }
-    const sqlErro = preparado?.sqlFinal || e._sql || sqlCanonico;
-    console.warn(`[${spec.logPrefix || 'IAOwner'}] executarSqlDireto falhou para empresa #${empresaId}: subtipo=${e._tipo || 'erro_erp'} | erro=${limitarTexto(e.message, 300)}`);
-    const subtipo = e._tipo || 'erro_erp';
-    return {
-      tipo: 'erro',
-      subtipo,
-      resposta_direta: mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'),
-      sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
-      _sql_auditoria: auditoriaBase,
-      duracao_ms: Date.now() - t0,
-    };
   }
+  // Nunca alcançado — satisfaz o analisador de fluxo
+  const subtipo = 'erro_erp';
+  return { tipo: 'erro', subtipo, resposta_direta: mensagemErro(spec, 'erro_erp'), sql_gerado: sqlCanonico, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
 }
 
 module.exports = {
@@ -2267,10 +2434,13 @@ module.exports = {
     validarPeriodoDeclaradoNoSql,
     sqlTemFiltroPeriodoEmCampo,
     construirQueryPlanTecnico,
+    _buildContextoFormatacao,
     validarSelectContraGroupBy,
     validarAliasesDerivadosExternos,
     validarCTEsAgregadosSemGroupBy,
     validarCTEsDefinidaUsada,
+    validarAliasesSubqueriesEscalares,
+    _extrairSubqueriesEscalares,
     completarContratoRelacionalSD1SF1,
     _extrairCorposCTE,
     sx3EssencialParaPrompt,
