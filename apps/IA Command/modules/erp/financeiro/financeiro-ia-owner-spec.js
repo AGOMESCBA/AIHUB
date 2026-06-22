@@ -15,7 +15,7 @@ const CAMPOS_SX3_ESSENCIAIS = {
   SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'D_E_L_E_T_'],
   SA2: ['A2_FILIAL', 'A2_COD', 'A2_LOJA', 'A2_NOME', 'A2_NREDUZ', 'A2_CGC', 'D_E_L_E_T_'],
   SA3: ['A3_FILIAL', 'A3_COD', 'A3_NOME', 'D_E_L_E_T_'],
-  SA6: ['A6_FILIAL', 'A6_COD', 'A6_AGENCIA', 'A6_NUMCON', 'A6_NOME', 'A6_NREDUZ', 'D_E_L_E_T_'],
+  SA6: ['A6_FILIAL', 'A6_COD', 'A6_AGENCIA', 'A6_NUMCON', 'A6_NOME', 'A6_NREDUZ', 'A6_BLOCKED', 'D_E_L_E_T_'],
   SED: ['ED_FILIAL', 'ED_CODIGO', 'ED_DESCRIC', 'D_E_L_E_T_'],
   FK1: ['FK1_FILIAL', 'FK1_PREFIXO', 'FK1_NUM', 'FK1_PARCELA', 'FK1_TIPO', 'FK1_DATA', 'FK1_VALOR', 'D_E_L_E_T_'],
   FK2: ['FK2_FILIAL', 'FK2_PREFIXO', 'FK2_NUM', 'FK2_PARCELA', 'FK2_TIPO', 'FK2_DATA', 'FK2_VALOR', 'D_E_L_E_T_'],
@@ -198,14 +198,16 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar } = {}) {
 ## Carteiras
 - Contas a pagar usa SE2 e fornecedor SA2.
 - Contas a receber usa SE1 e cliente SA1.
-- Se o usuario pedir ambas em posicao/em_aberto: use UNION ALL com dois SELECTs (SE1 e SE2 separados).
+- REGRA ABSOLUTA — SE1 e SE2 sao carteiras independentes, nunca relacionadas entre si: PROIBIDO fazer JOIN (INNER, LEFT, RIGHT, CROSS ou qualquer tipo) entre SE1 e SE2, mesmo que as chaves parecam existir. Nao existe titulo a pagar que "corresponda" a um titulo a receber — qualquer JOIN entre elas produz produto cartesiano multiplicando os valores e gerando resultado incorreto.
+- EXEMPLO ERRADO — nunca faca isso: SELECT SUM(SE2.E2_SALDO), SUM(SE1.E1_SALDO) FROM SE2xxx SE2 LEFT JOIN SE1xxx SE1 ON SE1.D_E_L_E_T_ = ' ' — mesmo com condicao no ON, o JOIN cruza todas as linhas de SE2 com todas as de SE1, inflando os valores.
+- EXEMPLO CORRETO para total de ambas em posicao/em_aberto: use UNION ALL com dois SELECTs independentes — SELECT 'pagar' AS carteira, COALESCE(SUM(SE2.E2_SALDO),0) AS saldo FROM SE2xxx SE2 WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 UNION ALL SELECT 'receber', COALESCE(SUM(SE1.E1_SALDO),0) FROM SE1xxx SE1 WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0.
 - Se o usuario pedir ambas realizadas (recebidas e pagas): gere UM UNICO SELECT com duas subqueries escalares — valor_recebido via SE1+SE5/${usaFK1 ? 'FK1' : 'SE5'} e valor_pago via SE2+SE5/${usaFK2 ? 'FK2' : 'SE5'}. PROIBIDO UNION ALL para realizados. Siga o plano estruturado query_plan_texto.
 - Nao misture SA1 como fornecedor nem SA2 como cliente.
 
 ## Metricas principais
-- Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Data padrao de vencimento: SE2.E2_VENCREA ou SE2.E2_VENCTO se VENCREA nao existir.
+- Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Titulos com E2_SALDO = 0 ja foram pagos — nunca os inclua em consultas de aberto. Data padrao de vencimento: SE2.E2_VENCREA ou SE2.E2_VENCTO se VENCREA nao existir.
 - Valor pago/liquidado/baixado: use JOIN de "Joins padrao" (SE2->FK2 ou SE2->SE5) conforme modelo_baixas_pagar. NUNCA filtre por E2_BAIXA, E2_EMISSAO, E2_VENCREA ou E2_VENCTO.
-- Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Data padrao de vencimento: SE1.E1_VENCREA ou SE1.E1_VENCTO se VENCREA nao existir.
+- Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Data padrao de vencimento: SE1.E1_VENCREA ou SE1.E1_VENCTO se VENCREA nao existir.
 - Valor recebido/liquidado/baixado: use JOIN de "Joins padrao" (SE1->FK1 ou SE1->SE5) conforme modelo_baixas_receber. NUNCA filtre por E1_BAIXA, E1_EMISSAO, E1_VENCREA ou E1_VENCTO. NAO filtre SE1.E1_SITUACAO.
 - Natureza financeira: SE1.E1_NATUREZ ou SE2.E2_NATUREZ -> SED.ED_CODIGO.
 
@@ -221,7 +223,23 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar } = {}) {
 ## Saldo bancario e fluxo de caixa
 - Saldo bancario, fluxo de caixa projetado e fluxo de caixa realizado sao operacoes proprias. Nao trate como simples contas a pagar/receber.
 - Saldo bancario puro usa SOMENTE SE8 e SA6. Nao inclua SE1/SE2/SE5/FK em saldo bancario puro.
-- Saldo bancario sempre filtra pela posicao mais recente por conta, usando ROW_NUMBER():
+- Fluxo de caixa projetado = saldo_bancario_base + saldo_a_receber_projetado - saldo_a_pagar_projetado. Fluxo projetado usa titulos em aberto: SE1.E1_SALDO > 0 e SE2.E2_SALDO > 0, por vencimento futuro/periodo solicitado. NUNCA use SE5/FK no fluxo projetado — SE5/FK sao baixas ja realizadas, nao projecao. Se o periodo projetado comecar antes da data atual, considere titulos a partir da data atual.
+- Fluxo de caixa realizado = saldo_bancario_base + valor_recebido - valor_pago no periodo. Fluxo realizado usa baixas/movimentos reais: use os JOINs definidos em "Joins padrao" (SE1->FK1/SE5 para recebimentos, SE2->FK2/SE5 para pagamentos), conforme modelo_baixas_receber e modelo_baixas_pagar do contextoTecnico.
+- O periodo (dia, mes, ano, ou intervalo arbitrario) e definido pela pergunta do usuario e deve ser aplicado de forma CONSISTENTE as fontes envolvidas — nunca calcule saldo bancario em uma data e receber/pagar em outra data diferente.
+- Para fluxo realizado, saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual ao inicio do periodo. Para fluxo projetado, saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual a data atual ou data inicial projetada, conforme a pergunta.
+- SQL de fluxo deve retornar aliases claros: saldo_bancario_base, total_a_receber ou valor_recebido, total_a_pagar ou valor_pago, fluxo_liquido.
+- Se SE8/SA6 nao estiverem disponiveis, retorne os componentes disponiveis e use saldo_bancario_base = 0 apenas deixando claro pelo alias que faltou saldo bancario.
+- Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por dia/mes = GROUP BY data de vencimento/baixa com saldo acumulado quando fizer sentido (SUM() OVER (ORDER BY data)); por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica; por titulo = lista linha a linha sem agregacao.
+
+## Dicionario SE8 (saldos bancarios)
+- E8_BANCO: codigo do banco (equivalente a SA6.A6_COD).
+- E8_AGENCIA: agencia bancaria.
+- E8_CONTA: numero da conta.
+- E8_SALATUA: saldo atual da conta naquela data de posicao.
+- E8_DTSALAT: data da posicao do saldo (formato YYYYMMDD). Cada conta pode ter multiplas linhas — uma por data de atualizacao.
+
+## Regras tecnicas obrigatorias — SE8
+- REGRA ABSOLUTA — posicao mais recente por conta: SE8 registra o saldo de cada conta por data — pode haver multiplas linhas por conta. E OBRIGATORIO filtrar sempre pela posicao mais recente usando ROW_NUMBER():
   data_referencia = data pedida pelo usuario (se informada) OU data_atual (se nao informada).
   Padrao obrigatorio:
     WITH saldo_recente AS (
@@ -231,17 +249,11 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar } = {}) {
       WHERE SE8.D_E_L_E_T_ = ' ' AND SE8.E8_DTSALAT <= 'data_referencia_YYYYMMDD'
     )
     SELECT ... FROM saldo_recente SE8 JOIN SA6xxx SA6 ... WHERE SE8.rn = 1
-  PROIBIDO: retornar todas as linhas de SE8 sem filtrar rn = 1 — gera duplicidade por conta.
-- Para saldo por banco, agrupe por SA6.A6_COD, SA6.A6_NOME e some apenas a ultima posicao de cada conta.
-- Fluxo de caixa projetado = saldo_bancario_base + saldo_a_receber_projetado - saldo_a_pagar_projetado.
-- Fluxo projetado usa titulos em aberto: SE1.E1_SALDO > 0 e SE2.E2_SALDO > 0, por vencimento futuro/periodo solicitado.
-- Se o periodo projetado comecar antes da data atual, considere titulos a partir da data atual.
-- Fluxo de caixa realizado = saldo_bancario_base + valor_recebido - valor_pago no periodo.
-- Fluxo realizado usa baixas/movimentos reais: use os JOINs definidos em "Joins padrao" (SE1->FK1/SE5 para recebimentos, SE2->FK2/SE5 para pagamentos), conforme modelo_baixas_receber e modelo_baixas_pagar do contextoTecnico.
-- Para fluxo realizado, saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual ao inicio do periodo.
-- Para fluxo projetado, saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual a data atual ou data inicial projetada, conforme a pergunta.
-- SQL de fluxo deve retornar aliases claros: saldo_bancario_base, total_a_receber ou valor_recebido, total_a_pagar ou valor_pago, fluxo_liquido.
-- Se SE8/SA6 nao estiverem disponiveis, retorne os componentes disponiveis e use saldo_bancario_base = 0 apenas deixando claro pelo alias que faltou saldo bancario.
+  Tambem e aceito subquery com MAX(E8_DTSALAT) GROUP BY (E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA).
+  PROIBIDO retornar todas as linhas de SE8 sem esse filtro — gera saldo inflado por duplicidade de datas.
+- REGRA CRITICA — filtro de banco: codigos de banco informados pelo usuario sao valores de SE8.E8_BANCO (e de SA6.A6_COD). NUNCA filtre por SA6.A6_NOME — o nome e descricao para exibicao, nao identificador. Aplique inclusao/exclusao sempre por codigo: SE8.E8_BANCO NOT IN (...).
+- REGRA ABSOLUTA — bancos bloqueados: SEMPRE inclua AND SA6.A6_BLOCKED <> '1' no JOIN ou WHERE da SA6. Bancos bloqueados NUNCA devem aparecer em nenhuma consulta, independente do que o usuario pedir.
+- PROIBIDO usar SE5/FK em saldo bancario puro ou fluxo de caixa projetado.
 
 ## Tabelas padrao do modulo Financeiro
 - SE1: contas a receber.
@@ -264,7 +276,7 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar } = {}) {
 
 ## Regras obrigatorias de SQL
 - Inicie sempre com SET ROWCOUNT 50000.
-- Use aliases explicitos iguais a base da tabela: SE1, SE2, SE5, SE8, SA1, SA2, SA3, SA6, SED${usaFK1 || usaFK2 ? ', FK1, FK2' : ''}.
+- Use aliases explicitos iguais a base da tabela: SE1, SE2, SE5, SE8, SA1, SA2, SA3, SA6, SED${usaFK1 || usaFK2 ? ', FK1, FK2' : ''}. Vale em toda query, inclusive dentro de subqueries escalares — o alias no FROM e o qualificador dos campos devem ser identicos.
 - Qualifique campos sempre pelo alias base (SE2.E2_SALDO, nunca SE2990.E2_SALDO).
 - Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
@@ -284,12 +296,17 @@ Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP B
 - valor_recebido: COALESCE(SUM(${usaFK1 ? 'FK1.FK1_VALOR' : 'SE5.E5_VALOR'}),0) AS valor_recebido via JOIN "${usaFK1 ? 'SE1 -> FK1' : 'SE1 -> SE5'}" de "Joins padrao".
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
+- "por cliente E fornecedor" simultaneamente (ex: "detalhe por cliente e fornecedor", "por entidade"): PROIBIDO combinar SE1 e SE2 em uma unica query. Gere UNION ALL com dois blocos independentes — bloco 1: SE1 agrupado por SA1.A1_NOME (carteira receber); bloco 2: SE2 agrupado por SA2.A2_NOME (carteira pagar). Inclua coluna carteira para distinguir os blocos. Herde o periodo do contexto anterior.
 - "por natureza": agrupe por SED.ED_CODIGO, SED.ED_DESCRIC.
 - "por mes": SUBSTRING(campo_data, 1, 6) AS competencia no SELECT e GROUP BY.
 - Media mensal por ano (subquery 2 camadas, agrupado por ano):
   Subquery interna exporta DOIS aliases: SUBSTRING(campo_data,1,4) AS ano E SUBSTRING(campo_data,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.saldo) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.saldo — NUNCA SE1.* ou SE2.*.
 - Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.saldo) sem GROUP BY.
 - Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS saldo.
+
+## Titulos especiais — NDF, NCC
+- NDF = nota de debito fornecedor em SE2.E2_TIPO. NCC = nota de credito cliente em SE1.E1_TIPO.
+- Sao movimentos de compensacao, nao obrigacoes reais futuras. Seguem a mesma regra de opt-in de "## Antecipacoes PA/RA": so considere/apresente quando o usuario pedir explicitamente NDF ou NCC.
 `.trim();
 }
 
@@ -301,13 +318,29 @@ const sqlPatternsProibidos = [
   {
     validar(sql) {
       const usaSE8 = /\b(?:FROM|JOIN)\s+SE8/i.test(sql);
-      const temRowNumber = /\bROW_NUMBER\s*\(/i.test(sql);
-      if (usaSE8 && !temRowNumber) {
+      const usaSE5 = /\b(?:FROM|JOIN)\s+SE5/i.test(sql);
+      const usaSE1ouSE2 = /\b(?:FROM|JOIN)\s+SE[12]/i.test(sql);
+      if (usaSE8 && usaSE5 && !usaSE1ouSE2) {
         return (
-          'Consulta SE8 sem ROW_NUMBER(): obrigatorio usar CTE com ' +
-          'ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn ' +
-          'e filtrar WHERE SE8.rn = 1 na query externa. ' +
-          'PROIBIDO retornar todas as linhas de SE8 sem rn = 1 — gera duplicidade de saldo por conta.'
+          'Saldo bancario puro (SE8) nao pode incluir SE5. ' +
+          'SE5 e tabela de baixas/movimentos — so deve ser usada com SE1 (receber) ou SE2 (pagar). ' +
+          'Para saldo bancario use SOMENTE SE8 e SA6. Remova o JOIN SE5.'
+        );
+      }
+      return null;
+    },
+  },
+  {
+    validar(sql) {
+      const usaSE8 = /\b(?:FROM|JOIN)\s+SE8/i.test(sql);
+      const temRowNumber = /\bROW_NUMBER\s*\(/i.test(sql);
+      // MAX(E8_DTSALAT) em subquery com GROUP BY é padrão igualmente correto para posição mais recente
+      const temMaxDtsalat = /MAX\s*\(\s*E8_DTSALAT\s*\)/i.test(sql);
+      if (usaSE8 && !temRowNumber && !temMaxDtsalat) {
+        return (
+          'Consulta SE8 sem filtro de posicao mais recente por conta. Use ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn ' +
+          'ou subquery com MAX(E8_DTSALAT) GROUP BY (E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA). ' +
+          'PROIBIDO retornar todas as linhas de SE8 sem esse filtro — gera saldo inflado por duplicidade de datas por conta.'
         );
       }
       // CTE com ROW_NUMBER definido, mas a query externa ainda aponta para a tabela física SE8
