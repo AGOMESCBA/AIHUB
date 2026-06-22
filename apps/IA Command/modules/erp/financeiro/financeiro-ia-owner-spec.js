@@ -206,6 +206,10 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar, mensagem } = {
 
 const sqlPatternsProibidos = [
   {
+    regex: /\bFULL\s+(?:OUTER\s+)?JOIN\b/i,
+    mensagem: 'FULL OUTER JOIN nao e suportado neste ambiente. Para combinar datas de receber e pagar que podem nao coincidir, use uma CTE "datas" com UNION das datas distintas de cada lado, e LEFT JOIN dessa CTE para as subqueries de receber e pagar — nunca JOIN direto entre as duas subqueries.',
+  },
+  {
     regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\bE8_AGENCIA\s*=\s*SA6\.A6_AGENCIA\b)/i,
     mensagem: 'JOIN SE8→SA6 incompleto: falta E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON na condicao ON. Sem esses campos, o banco retorna zero linhas ou duplicidade por agencia.',
   },
