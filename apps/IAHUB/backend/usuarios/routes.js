@@ -108,6 +108,31 @@ module.exports = function registerRoutes(app, { requireAuth }) {
     }
   });
 
+  // ── Trocar própria senha (usuário logado) ─────────────────────────────────
+  app.post('/api/usuarios/minha-senha', requireAuth, async (req, res) => {
+    const { senha_atual, nova_senha } = req.body || {};
+    if (!senha_atual) return res.status(400).json({ error: 'Informe a senha atual.' });
+    if (!nova_senha || nova_senha.length < 8)
+      return res.status(400).json({ error: 'A nova senha deve ter no mínimo 8 caracteres.' });
+    if (!validarSenha(nova_senha))
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 8 caracteres, incluindo maiúscula, minúscula e número.' });
+
+    const bcrypt = require('bcryptjs');
+    const { getUsuarioPorLogin } = require('../auth/database');
+    const user = getUsuarioPorLogin(req.session.user);
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado.' });
+
+    const ok = await bcrypt.compare(senha_atual, user.senha_hash);
+    if (!ok) return res.status(400).json({ error: 'Senha atual incorreta.' });
+
+    try {
+      await db.atualizar(user.id, { senha: nova_senha });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Excluir ────────────────────────────────────────────────────────────────
   app.delete('/api/usuarios/:id', requireAuth, (req, res) => {
     // Protege o usuário da sessão atual

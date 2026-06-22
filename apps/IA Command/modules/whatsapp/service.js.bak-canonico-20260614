@@ -12,7 +12,6 @@ const transcriptionService = require('../ai/transcription-service');
 const intentRouter        = require('../erp/intent-router');
 const responseFormatter   = require('../erp/response-formatter');
 const { _extrairMes, _extrairAno, detectarDimensaoCategorica } = responseFormatter;
-const canonicalWhatsappFormat = require('../erp/canonical-whatsapp-format');
 const interpretationLog   = require('../ai/interpretation-log');
 const channelStore        = require('./channel-store');
 const messageTemplates    = require('./message-templates');
@@ -25,7 +24,6 @@ const financeiroEntityCatalog  = require('../erp/financeiro/entity-catalog');
 const comprasEntityCatalog     = require('../erp/compras/entity-catalog');
 const faturamentoEntityCatalog = require('../erp/faturamento/entity-catalog');
 const comissaoEntityCatalog    = require('../erp/comissao/entity-catalog');
-const comissaoIAOwnerSpec      = require('../erp/comissao/comissao-ia-owner-spec');
 
 const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
@@ -38,16 +36,6 @@ const PUPPETEER_ARGS = [
   '--disable-default-apps', '--disable-sync', '--mute-audio',
   '--hide-scrollbars', '--metrics-recording-only',
   '--remote-debugging-port=0',  // porta aleatória — evita conflito entre instâncias
-  // Redução de footprint de memória — Chrome pode ser encerrado pelo SO (OOM) durante queries longas
-  '--disable-hang-monitor',
-  '--disable-crash-reporter',
-  '--disable-in-process-stack-traces',
-  '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-  '--js-flags=--max-old-space-size=512',  // limita heap V8 a 512MB
-  '--renderer-process-limit=1',
-  '--aggressive-cache-discard',
-  '--disable-cache',
-  '--disk-cache-size=1',
 ];
 
 function resolveChromePath() {
@@ -287,16 +275,13 @@ class IACWhatsAppService extends EventEmitter {
       this.log('Falha de autenticação. Delete a pasta .wwebjs_auth e tente novamente.', 'error');
     });
 
-    this.client.on('disconnected', (reason) => {
+    this.client.on('disconnected', () => {
       clearTimers();
       this.setStatus('stopped');
-      // reason pode ser: NAVIGATION, CONFLICT, UNLAUNCHED, UNPAIRED, LOGOUT, etc.
-      this.log(`WhatsApp desconectado. Motivo: ${reason || 'desconhecido'}`, 'warning');
+      this.log('WhatsApp desconectado.', 'warning');
     });
 
-    this.client.on('message', (msg) => this._handleMessage(msg).catch(err => {
-      this.log(`Erro não capturado em _handleMessage: ${err.message}`, 'error');
-    }));
+    this.client.on('message', (msg) => this._handleMessage(msg));
 
     this.client.initialize().catch(async (err) => {
       clearTimers();
@@ -2530,37 +2515,17 @@ class IACWhatsAppService extends EventEmitter {
   async _handleText(msg, sender = msg.from) {
     const texto = (msg.body || '').trim();
     this._tipoMensagemAtual = 'texto';
-    this.log(`📩 Texto recebido: "${texto}"`, 'received');
+    this.log(`📩 Texto recebido: "${texto.slice(0, 100)}"`, 'received');
 
-    let chat;
-    try {
-      chat = await msg.getChat();
-      await chat.sendMessage(messageTemplates.render(this._empresaId, 'processando', {
-        canal_nome: this._channelName || '',
-        numero: this._normalizarNumeroWa(sender),
-      }));
-      this.log(`⏳ Acuse de recebimento enviado — iniciando pipeline...`, 'info');
-    } catch (chatErr) {
-      this.log(`Falha ao obter chat ou enviar acuse: ${chatErr.message}`, 'error');
-      return;
-    }
+    const chat = await msg.getChat();
+    await chat.sendMessage(messageTemplates.render(this._empresaId, 'processando', {
+      canal_nome: this._channelName || '',
+      numero: this._normalizarNumeroWa(sender),
+    }));
+    this.log(`⏳ Acuse de recebimento enviado — iniciando pipeline...`, 'info');
 
     const t0 = Date.now();
     const _timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
-
-    // Heartbeat: envia mensagem de progresso a cada 50s para consultas longas
-    const HEARTBEAT_INTERVAL_MS = 50000;
-    let heartbeatCount = 0;
-    const heartbeatId = setInterval(async () => {
-      heartbeatCount++;
-      try {
-        await chat.sendMessage(messageTemplates.render(this._empresaId, 'aguardando_processamento', {}));
-        this.log(`⏳ Heartbeat #${heartbeatCount} enviado para ${sender} (${Math.round((Date.now() - t0) / 1000)}s)`, 'info');
-      } catch (hbErr) {
-        this.log(`Falha ao enviar heartbeat: ${hbErr.message}`, 'error');
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-
     try {
       const timeoutMs = 180000;
       let timeoutId = null;
@@ -2573,31 +2538,20 @@ class IACWhatsAppService extends EventEmitter {
       const resposta = await Promise.race([
         this._pipeline(texto, sender, { _pipelineTs: t0, _recebidoEm: t0, _timingCtx }),
         timeoutPipeline,
-      ]).finally(() => { clearTimeout(timeoutId); clearInterval(heartbeatId); });
+      ]).finally(() => clearTimeout(timeoutId));
       if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > t0) {
         this.log(`🚫 Resposta descartada — conversa foi resetada durante o processamento (${sender})`, 'info');
         return;
       }
-      try {
-        await chat.sendMessage(resposta);
-        const entregueMs = Date.now() - t0;
-        this.log(`✅ Resposta enviada para ${sender} (${entregueMs}ms)`, 'success');
-        if (_timingCtx.logId) {
-          try { interpretationLog.atualizarEntregue(_timingCtx.logId, entregueMs); } catch (_) {}
-        }
-      } catch (sendErr) {
-        this.log(`❌ Falha ao enviar resposta para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
+      await chat.sendMessage(resposta);
+      const entregueMs = Date.now() - t0;
+      this.log(`✅ Resposta enviada para ${sender} (${entregueMs}ms)`, 'success');
+      if (_timingCtx.logId) {
+        try { interpretationLog.atualizarEntregue(_timingCtx.logId, entregueMs); } catch (_) {}
       }
     } catch (err) {
-      clearInterval(heartbeatId);
       this.log(`❌ Pipeline falhou (${Date.now() - t0}ms): ${err.message}`, 'error');
-      const isTimeout = /timeout ao chamar o agente|tempo limite de processamento excedido/i.test(err.message);
-      const templateChave = isTimeout ? 'timeout_agente' : 'erro_processamento';
-      try {
-        await chat.sendMessage(messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
-      } catch (sendErr) {
-        this.log(`❌ Falha ao enviar mensagem de erro para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
-      }
+      await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_processamento', { erro: err.message }));
     }
   }
 
@@ -2631,9 +2585,7 @@ class IACWhatsAppService extends EventEmitter {
         this.log(`Transcrição: "${transcricao.slice(0, 100)}"`, 'info');
       } catch (transcErr) {
         this.log(`Transcrição falhou: ${transcErr.message}`, 'error');
-        try {
-          await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_transcricao', { erro: transcErr.message }));
-        } catch (_) {}
+        await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_transcricao', { erro: transcErr.message }));
         return;
       }
 
@@ -2645,26 +2597,18 @@ class IACWhatsAppService extends EventEmitter {
           this.log(`🚫 Resposta de áudio descartada — conversa foi resetada durante o processamento (${sender})`, 'info');
           return;
         }
-        try {
-          await chat.sendMessage(messageTemplates.render(this._empresaId, 'audio_resposta_prefixo', {
-            transcricao: `${transcricao.slice(0, 120)}${transcricao.length > 120 ? '...' : ''}`,
-            resposta,
-          }));
-          const _audioEntregueMs = Date.now() - _audioT0;
-          this.log(`Resposta de áudio enviada para ${sender} (${_audioEntregueMs}ms)`, 'success');
-          if (_audioTimingCtx.logId) {
-            try { interpretationLog.atualizarEntregue(_audioTimingCtx.logId, _audioEntregueMs); } catch (_) {}
-          }
-        } catch (sendErr) {
-          this.log(`❌ Falha ao enviar resposta de áudio para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
+        await chat.sendMessage(messageTemplates.render(this._empresaId, 'audio_resposta_prefixo', {
+          transcricao: `${transcricao.slice(0, 120)}${transcricao.length > 120 ? '...' : ''}`,
+          resposta,
+        }));
+        const _audioEntregueMs = Date.now() - _audioT0;
+        this.log(`Resposta de áudio enviada para ${sender} (${_audioEntregueMs}ms)`, 'success');
+        if (_audioTimingCtx.logId) {
+          try { interpretationLog.atualizarEntregue(_audioTimingCtx.logId, _audioEntregueMs); } catch (_) {}
         }
       } catch (err) {
         this.log(`Pipeline (áudio) falhou: ${err.message}`, 'error');
-        try {
-          await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_processamento', { erro: err.message }));
-        } catch (sendErr) {
-          this.log(`❌ Falha ao enviar erro de áudio para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
-        }
+        await chat.sendMessage(messageTemplates.render(this._empresaId, 'erro_processamento', { erro: err.message }));
       }
 
     } finally {
@@ -3166,38 +3110,6 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
 
-    // Hook 3 — Chat livre: intent ainda desconhecido após todos os fallbacks →
-    // passa direto para a IA conversacional sem estrutura de ERP.
-    if (resultado.tipo === 'desconhecido') {
-      this.log(`💬 [Hook3] Chat livre: "${textoExecucao.slice(0, 60)}"`, 'info');
-      try {
-        const ai = await conversationService.responder(textoExecucao, empresaId);
-        if (ai.ok && ai.resposta) {
-          const intentChat = {
-            intencao: 'dialogo_conversacional',
-            periodo: { tipo: 'nenhum' },
-            filtros: {},
-            confianca: 1,
-            _provedor: ai.provedor || 'ia_chat',
-            _mensagemOriginal: textoExecucao,
-          };
-          this._registrarInterpretacao({
-            empresaId, sender, texto: textoExecucao,
-            intent: intentChat,
-            resultado: { tipo: 'dialogo', resposta_direta: ai.resposta },
-            resposta: ai.resposta,
-            duracaoMs: Date.now() - _t0,
-          });
-          // Salva no histórico para que o próximo turno possa herdar a mensagem
-          // e a IA-OWNER entender que houve uma troca conversacional antes da consulta
-          this._saveLastIntent(sender, intentChat, empresaId);
-          return ai.resposta;
-        }
-      } catch (err) {
-        this.log(`[Hook3] Chat livre falhou: ${err.message}`, 'warning');
-      }
-    }
-
     this._logResultadoIntent({ intent, resultado, escopo: 'single' });
 
     // Compras perguntou qual filial — armazena intent pendente e devolve pergunta
@@ -3476,10 +3388,6 @@ class IACWhatsAppService extends EventEmitter {
       let entidadesCanonicoDinamico = [];
       let respostaPlanejadaCanonicaDinamico = null;
       let periodoCanonicoDinamico = null;
-      // Variável de interrupção: quando uma empresa retorna pergunta_filial/pergunta_entidade,
-      // o _pipelineAll deve encerrar imediatamente. Usada para propagar a interrupção
-      // do interior de _processarEmpresa (que não é mais o return direto do _pipelineAll).
-      let _respostaInterrupcao = null;
       const sucessosDinamicos = [];
       const pendentesRetryCanonico = [];
       const subtiposRetryCanonico = new Set([
@@ -3703,16 +3611,7 @@ class IACWhatsAppService extends EventEmitter {
         }
       };
       for (const emp of empresasLoop) intentService._garantirIntencoesDinamicasPadrao(emp.empresa_id);
-
-      // ── Paralelismo com SQL Canônico ─────────────────────────────────────────
-      // Fase A: empresa líder (índice 0) roda sequencialmente para gerar o SQL
-      //         canônico via IA. Isso garante que retry da líder seja resolvido
-      //         antes de iniciar as seguidoras, evitando retry duplicado em paralelo.
-      // Fase B: empresas seguidoras rodam em Promise.all usando o SQL canônico
-      //         já validado — sem chamada de IA, apenas adaptação de sufixo SX2.
-      //         Se uma seguidora falhar, entra em pendentesRetryCanonico e o retry
-      //         usa o canônico existente (nunca chama IA de novo).
-      const _processarEmpresa = async (emp) => {
+      for (const emp of empresasLoop) {
         try {
           if (bloqueioReusoCanonicoDinamico) {
             const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
@@ -3725,51 +3624,16 @@ class IACWhatsAppService extends EventEmitter {
               mensagem: resposta,
               detalhe: bloqueioReusoCanonicoDinamico,
             });
-            return; // dentro de _processarEmpresa — equivale a continue no loop original
+            continue;
           }
           const _historicoEmp = this._buildHistoricoResumido(sender, emp.empresa_id, this._historicoTurnosConfig(emp.empresa_id));
-          let _entidadesEmpFinal = this._entidadesParaExecucaoAll(
+          const _entidadesEmpFinal = this._entidadesParaExecucaoAll(
             intent,
             emp.empresa_id,
             _historicoEmp,
             sqlCanonicoDinamico,
             entidadesCanonicoDinamico
           );
-
-          // Segurança multiempresa: se o SQL canônico contém placeholder vendedor_fixo_seguranca,
-          // resolver o código ERP do remetente para ESTA empresa antes de executar.
-          // Cada empresa usa seu próprio cadastro — nunca o código da empresa líder.
-          if (sqlCanonicoDinamico && sender && _entidadesEmpFinal.some(e => e?.tipo === 'vendedor_fixo_seguranca')) {
-            const resolucao = comissaoIAOwnerSpec.resolverVendedorFixoPorEmpresa(sender, emp.empresa_id);
-            if (resolucao.estado === 'nao_cadastrado') {
-              // Número não autorizado nesta empresa: bloquear sem expor dados
-              const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
-              this.log(`[All] Segurança: ${sender} não cadastrado na empresa #${emp.empresa_id} para comissão. Execução bloqueada.`, 'warning');
-              errosDinamicos.push(`${nomeEmpresa}: número não autorizado para consulta de comissão.`);
-              return;
-            }
-            if (resolucao.estado === 'vendedor_sem_codigo') {
-              const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
-              this.log(`[All] Segurança: ${sender} é vendedor na empresa #${emp.empresa_id} mas sem erp_id. Execução bloqueada.`, 'warning');
-              errosDinamicos.push(`${nomeEmpresa}: código ERP do vendedor não configurado.`);
-              return;
-            }
-            if (resolucao.estado === 'gestor') {
-              // Gestor: remove o placeholder de segurança — SQL sem filtro de vendedor
-              _entidadesEmpFinal = _entidadesEmpFinal.filter(e => e?.tipo !== 'vendedor_fixo_seguranca');
-              this.log(`[All] Segurança: ${sender} é gestor na empresa #${emp.empresa_id} — sem filtro de vendedor.`, 'info');
-            } else if (resolucao.estado === 'vendedor') {
-              // Vendedor: substituir pela entidade com o código correto desta empresa
-              _entidadesEmpFinal = _entidadesEmpFinal.map(e =>
-                e?.tipo === 'vendedor_fixo_seguranca'
-                  ? { ...e, codigo: resolucao.codigo, nome: resolucao.nome }
-                  : e
-              );
-              this.log(`[All] Segurança: ${sender} é vendedor na empresa #${emp.empresa_id} — filtro E3_VEND='${resolucao.codigo}'.`, 'info');
-            }
-            // sem_restricao / sem_remetente: mantém entidades sem alteração
-          }
-
           const intentExecucao = {
             ...intent,
             ...(_entidadesEmpFinal.length ? { _entidadesResolvidas: _entidadesEmpFinal } : {}),
@@ -3799,7 +3663,7 @@ class IACWhatsAppService extends EventEmitter {
               mensagem: 'Roteador retornou resultado invalido no processamento multiempresa.',
               detalhe: `typeof=${typeof resultado}`,
             });
-            return; // dentro de _processarEmpresa — equivale a continue no loop original
+            continue;
           }
           this._logResultadoIntent({ intent: intentExecucao, resultado, escopo: 'all' });
           ultimoResultadoDinamico = { empresaId: emp.empresa_id, resultado };
@@ -3871,10 +3735,8 @@ class IACWhatsAppService extends EventEmitter {
               duracaoMs: resultado.duracao_ms ?? (Date.now() - _t0),
             });
             registrarSucessoDinamico(emp, intentExecucao, resultado, respostaAiSql, nomeEmpresa, resultado.rows || [], true);
-            // Retry canônico pendente: só invoca aqui no caminho sequencial (líder).
-            // No caminho paralelo (seguidoras), o retry é consolidado após Promise.all.
-            if (!sqlCanonicoDinamico) await tentarRetryCanonicoPendentes();
-            return; // dentro de _processarEmpresa — equivale a continue no loop original
+            await tentarRetryCanonicoPendentes();
+            continue;
           }
 
           if (resultado.tipo === 'pergunta_filial') {
@@ -3889,8 +3751,7 @@ class IACWhatsAppService extends EventEmitter {
               resultado: { ...resultado, mensagem: perguntaFilial },
               resposta: perguntaFilial, duracaoMs: Date.now() - _t0,
             });
-            _respostaInterrupcao = perguntaFilial;
-            return; // sinaliza interrupção; _pipelineAll verifica _respostaInterrupcao
+            return perguntaFilial;
           }
 
           if (resultado.tipo === 'pergunta_entidade') {
@@ -3907,8 +3768,7 @@ class IACWhatsAppService extends EventEmitter {
               resultado: { ...resultado, mensagem: perguntaEntidade },
               resposta: perguntaEntidade, duracaoMs: Date.now() - _t0,
             });
-            _respostaInterrupcao = perguntaEntidade;
-            return; // sinaliza interrupção; _pipelineAll verifica _respostaInterrupcao
+            return perguntaEntidade;
           }
 
           if (resultado.tipo === 'erro' && resultado.resposta_direta) {
@@ -3948,7 +3808,7 @@ class IACWhatsAppService extends EventEmitter {
             } else {
               errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${respostaUsuario}`);
             }
-            return; // dentro de _processarEmpresa — equivale a continue no loop original
+            continue;
           }
 
           errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${resultado.mensagem || resultado.subtipo || resultado.tipo}`);
@@ -3970,37 +3830,6 @@ class IACWhatsAppService extends EventEmitter {
             detalhe: err.message,
           });
         }
-      }; // fim _processarEmpresa
-
-      // ── Fase A: empresa líder (sempre sequencial) ────────────────────────────
-      // Gera o SQL canônico via IA. Retry da líder é resolvido aqui antes de
-      // iniciar as seguidoras, garantindo que elas nunca precisem chamar a IA.
-      if (empresasLoop.length > 0) {
-        await _processarEmpresa(empresasLoop[0]);
-        if (_respostaInterrupcao) return _respostaInterrupcao; // pergunta_filial/entidade
-      }
-
-      // ── Fase B: empresas seguidoras em paralelo ──────────────────────────────
-      // Só paraleliza se a líder gerou um SQL canônico reutilizável.
-      // Sem canônico (líder falhou ou bloqueou reuso), segue sequencial como antes.
-      const empresasSeguidoras = empresasLoop.slice(1);
-      if (empresasSeguidoras.length > 0) {
-        if (sqlCanonicoDinamico && !bloqueioReusoCanonicoDinamico) {
-          this.log(`[All] SQL canonico disponivel — processando ${empresasSeguidoras.length} empresa(s) seguidora(s) em paralelo.`, 'info');
-          await Promise.all(empresasSeguidoras.map(emp => _processarEmpresa(emp)));
-          // Após o paralelo, tenta retry canônico para quaisquer pendentes
-          // (seguidoras que falharam mas são elegíveis para retry com o canônico)
-          await tentarRetryCanonicoPendentes();
-        } else {
-          this.log(`[All] Sem SQL canonico reutilizavel — processando ${empresasSeguidoras.length} empresa(s) seguidora(s) sequencialmente.`, 'info');
-          for (const emp of empresasSeguidoras) {
-            await _processarEmpresa(emp);
-            if (_respostaInterrupcao) return _respostaInterrupcao;
-          }
-          // Após o loop sequencial, tenta retry para pendentes que se tornaram elegíveis
-          // porque uma seguidora gerou o SQL canônico durante a execução.
-          await tentarRetryCanonicoPendentes();
-        }
       }
 
       // Consolida respostas de todas as empresas que tiveram sucesso
@@ -4015,13 +3844,10 @@ class IACWhatsAppService extends EventEmitter {
           }
           return acc;
         }, {});
-        // Propaga _contextoIAAnterior e _sqlCanonicoOriginal do primeiro sucesso —
-        // todos processaram a mesma pergunta, portanto o contexto acumulado é equivalente entre empresas.
+        // Propaga _contextoIAAnterior do primeiro sucesso — todos processaram a mesma pergunta,
+        // portanto o contexto acumulado é equivalente entre empresas.
         const contextoIAAnteriorDinamico = sucessosDinamicos
           .map(s => s.intentExecucao?._contextoIAAnterior || s.resultado?._contextoIAAnterior)
-          .find(Boolean) || null;
-        const sqlCanonicoOriginalDinamico = sucessosDinamicos
-          .map(s => s.intentExecucao?._sqlCanonicoOriginal || s.resultado?._sql_canonico_original || s.resultado?._sql_canonico)
           .find(Boolean) || null;
         const intentDinamicoContextual = {
           ...intentDinamicoResolvido,
@@ -4030,7 +3856,6 @@ class IACWhatsAppService extends EventEmitter {
             ...(sucessosDinamicos.length === 1 ? { _entidadesResolvidas: Object.values(entidadesPorEmpresa)[0] } : {}),
           } : {}),
           ...(contextoIAAnteriorDinamico ? { _contextoIAAnterior: contextoIAAnteriorDinamico } : {}),
-          ...(sqlCanonicoOriginalDinamico ? { _sqlCanonicoOriginal: sqlCanonicoOriginalDinamico } : {}),
         };
         if (sender && intent.intencao !== 'desconhecido') {
           this._saveLastIntent(sender, intentDinamicoContextual, '__all__');
@@ -4085,9 +3910,7 @@ class IACWhatsAppService extends EventEmitter {
           if (_timingCtxAll) { _timingCtxAll.logId = _lid1; _timingCtxAll.recebidoEm = _recebidoEmAll; }
           return (_prefixoResetAll || '') + s.resposta;
         }
-        const consolidado = canonicalWhatsappFormat.renderAll(sucessosDinamicos, {
-          mensagem: String(texto || '').trim(),
-        }) || this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
+        const consolidado = this._formatarConsolidadoDinamicoAll(intentDinamicoResolvido, sucessosDinamicos, empresaLogId);
         const respostaConsolidada = sucessosDinamicos
           .map(s => `🏢 *${s.nomeEmpresa}*\n${s.resposta}`)
           .join('\n\n');
@@ -4095,7 +3918,7 @@ class IACWhatsAppService extends EventEmitter {
           ? errosSemDados.map(e => `*${e.nomeEmpresa}*\n${e.resposta}`).join('\n\n')
           : '';
         const avisos = errosDinamicos.length
-          ? `\n\n⚠️ *Nao consegui consultar:*\n${errosDinamicos.map(e => `- ${String(e || '').trim()}`).join('\n')}`
+          ? `\n\n⚠️ _Nao consegui consultar: ${errosDinamicos.map(e => e.split(':')[0]).join(', ')}._`
           : '';
         const respostaFinalConsolidada = (_prefixoResetAll || '') + [respostaConsolidada, respostaSemDados, consolidado].filter(Boolean).join('\n\n') + avisos;
         const _now2 = Date.now();
@@ -4152,19 +3975,19 @@ class IACWhatsAppService extends EventEmitter {
         return respostaDominio;
       }
 
-      // Consolidar auditoria de prompts + SQL do último resultado por empresa.
-      // Espelha o padrão do caminho de sucesso (linha ~3569) e sem_dados (linha ~3638).
-      // Sem isso, o registro consolidado fica com sql_auditoria_json = null — prompts
-      // e sql_ia_bruto invisíveis na auditoria mesmo quando a FASE 3b rodou.
-      const _audUltimo = ultimoResultadoDinamico?.resultado?._sql_auditoria || {};
-      const resultadosErroAuditaveis = [...pendentesRetryCanonico];
-
       const _subtipoDominante = resultadosErroAuditaveis.length
         ? (resultadosErroAuditaveis[0].subtipoErro || resultadosErroAuditaveis[0].resultado?.subtipo || null)
         : (ultimoResultadoDinamico?.resultado?.subtipo || null);
       const respostaErro = errosDinamicos.length
         ? mensagemInconsistenciaPorSubtipo(_subtipoDominante)
         : 'Nao consegui executar a consulta dinamica nas empresas disponiveis. Verifique se a intencao dinamica, conexao ERP e chaves de IA estao configuradas.';
+
+      // Consolidar auditoria de prompts + SQL do último resultado por empresa.
+      // Espelha o padrão do caminho de sucesso (linha ~3569) e sem_dados (linha ~3638).
+      // Sem isso, o registro consolidado fica com sql_auditoria_json = null — prompts
+      // e sql_ia_bruto invisíveis na auditoria mesmo quando a FASE 3b rodou.
+      const _audUltimo = ultimoResultadoDinamico?.resultado?._sql_auditoria || {};
+      const resultadosErroAuditaveis = [...pendentesRetryCanonico];
       if (
         ultimoResultadoDinamico?.resultado
         && !resultadosErroAuditaveis.some(p => p.emp?.empresa_id === ultimoResultadoDinamico.empresaId)

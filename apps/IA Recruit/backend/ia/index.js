@@ -173,10 +173,10 @@ Use esta estrutura:
   try {
     logFn('Tentativa 2/3: Groq (modelo rápido)…', 'info');
     const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 5000,
+      model: 'llama-3.1-8b-instant', temperature: 0.1, max_tokens: 2500,
       messages: [
         { role: 'system', content: SYSTEM_SIMPLES },
-        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 12000)}` },
+        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 9000)}` },
       ],
     });
     usageDb.recordUsage(empresaId, {
@@ -226,10 +226,10 @@ Use esta estrutura:
   try {
     logFn('Tentativa 4/4: extração JSON mínima (campos-chave)…', 'warning');
     const res = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant', temperature: 0.3, max_tokens: 3000,
+      model: 'llama-3.1-8b-instant', temperature: 0.3, max_tokens: 2200,
       messages: [
         { role: 'system', content: `Extraia os dados do currículo abaixo. O texto pode estar desorganizado (PDF multi-coluna). Identifique e preencha cada campo.\nResponda SOMENTE com JSON válido, sem markdown:\n{"nome":null,"telefone":null,"email":null,"endereco":null,"linkedin":null,"descricao":null,"experiencias":[{"empresa":"","cargo":"","periodo":"","descricao":"","atividades":[]}],"formacao":[{"curso":"","instituicao":"","periodo":""}],"capacitacoes":[],"habilidades":[]}` },
-        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 12000)}` },
+        { role: 'user',   content: `Currículo:\n\n${texto.slice(0, 8000)}` },
       ],
     });
     usageDb.recordUsage(empresaId, {

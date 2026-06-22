@@ -31,6 +31,108 @@
 function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defaultVisible, getTable, onChange }) {
 
   const IS_AUTO = !Array.isArray(allFields) || allFields.length === 0;
+  const STORAGE_VERSION_KEY = '_iahub_grid_group_panel_state_version';
+  const STORAGE_VERSION = '20260617-grid-state-v2';
+
+  function installGridGuard(table) {
+    if (!table || table.__iahubGridGuardInstalled) return;
+    table.__iahubGridGuardInstalled = true;
+
+    const markUserTouched = el => {
+      if (!el.__iahubGridGuardTouched) {
+        el.__iahubGridGuardTouched = true;
+        el.addEventListener('pointerdown', () => { el.dataset.iahubUserTouched = '1'; });
+        el.addEventListener('keydown', () => { el.dataset.iahubUserTouched = '1'; });
+      }
+    };
+
+    const protectHeaderFilters = () => {
+      const root = table.element || table.rowManager?.element || document;
+      const controls = root.querySelectorAll('.tabulator-header-filter input, .tabulator-header-filter select');
+      controls.forEach((el, idx) => {
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('name', `iahub_grid_filter_${idx}_${Date.now()}`);
+        if (el.tagName === 'INPUT') {
+          el.setAttribute('spellcheck', 'false');
+          el.setAttribute('autocapitalize', 'off');
+          if (!el.dataset.iahubReadonlyGuarded) {
+            el.dataset.iahubReadonlyGuarded = '1';
+            el.setAttribute('readonly', 'readonly');
+            el.addEventListener('focus', () => el.removeAttribute('readonly'), { once: true });
+          }
+        }
+        markUserTouched(el);
+      });
+    };
+
+    const clearAutofillHeaderFilters = () => {
+      const root = table.element || table.rowManager?.element || document;
+      const controls = [...root.querySelectorAll('.tabulator-header-filter input, .tabulator-header-filter select')];
+      const hasTouchedValue = controls.some(el => el.dataset.iahubUserTouched && String(el.value || '').trim());
+      const hasUntouchedValue = controls.some(el => !el.dataset.iahubUserTouched && String(el.value || '').trim());
+      if (!hasUntouchedValue || hasTouchedValue) return;
+      controls.forEach(el => {
+        if (!el.dataset.iahubUserTouched) el.value = '';
+      });
+      if (typeof table.clearHeaderFilter === 'function') {
+        try { table.clearHeaderFilter(); } catch (_) {}
+      }
+    };
+    table.__iahubClearAutofillHeaderFilters = clearAutofillHeaderFilters;
+
+    const protectSoon = () => {
+      setTimeout(() => {
+        protectHeaderFilters();
+        clearAutofillHeaderFilters();
+      }, 0);
+      setTimeout(() => {
+        protectHeaderFilters();
+        clearAutofillHeaderFilters();
+      }, 250);
+    };
+
+    ['tableBuilt', 'dataLoaded', 'dataProcessed', 'renderComplete'].forEach(evt => {
+      if (typeof table.on === 'function') table.on(evt, protectSoon);
+    });
+
+    ['replaceData', 'setData'].forEach(method => {
+      if (typeof table[method] !== 'function' || table[`__iahubGuarded_${method}`]) return;
+      const original = table[method].bind(table);
+      table[`__iahubGuarded_${method}`] = true;
+      table[method] = (...args) => {
+        const result = original(...args);
+        Promise.resolve(result).then(protectSoon, protectSoon);
+        return result;
+      };
+    });
+
+    protectSoon();
+  }
+
+  function migrateStoredGridState() {
+    try {
+      if (localStorage.getItem(STORAGE_VERSION_KEY) === STORAGE_VERSION) return;
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (/^iac_.*_group(_active)?$/.test(key || '')) keys.push(key);
+      }
+      keys.forEach(key => localStorage.removeItem(key));
+      localStorage.setItem(STORAGE_VERSION_KEY, STORAGE_VERSION);
+    } catch (_) {}
+  }
+
+  migrateStoredGridState();
+
+  function readArray(key, fallback = []) {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      return Array.isArray(parsed) ? parsed : fallback;
+    } catch (_) {
+      localStorage.removeItem(key);
+      return fallback;
+    }
+  }
 
   // ── CSS (injetado uma única vez em toda a sessão) ─────────────
   if (!document.getElementById('_ggp_style')) {
@@ -129,15 +231,39 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
 
   // ── Estado — visibleFields (apenas no modo manual) ────────────
   const _defaultVis = IS_AUTO ? null : (defaultVisible ?? (allFields || []).map(f => f.field));
-  let visibleFields = IS_AUTO ? null : new Set(
-    JSON.parse(localStorage.getItem(KEY_VISIBLE) || 'null') ?? _defaultVis
-  );
+  let visibleFields = IS_AUTO ? null : new Set(readArray(KEY_VISIBLE, _defaultVis));
 
   // ── Estado — grupos ativos ────────────────────────────────────
   // No modo auto valida contra os campos resolvidos em tempo de execução;
   // no modo manual valida contra allFields.
-  let activeGroups = (JSON.parse(localStorage.getItem(KEY_ACTIVE) || '[]'))
+  let activeGroups = readArray(KEY_ACTIVE)
+    .filter(g => g && typeof g.field === 'string' && typeof g.label === 'string')
     .filter(g => IS_AUTO || (allFields || []).some(f => f.field === g.field));
+
+  function validateActiveGroups() {
+    const t = getTable?.();
+    installGridGuard(t);
+    if (t && typeof t.getColumn === 'function') {
+      const next = activeGroups.filter(g => {
+        try { return !!t.getColumn(g.field); } catch (_) { return false; }
+      });
+      if (next.length !== activeGroups.length) {
+        activeGroups = next;
+        saveActive();
+      }
+      return activeGroups;
+    }
+
+    const fields = resolveFields();
+    if (!fields.length) return activeGroups;
+    const valid = new Set(fields.map(f => f.field));
+    const next = activeGroups.filter(g => valid.has(g.field));
+    if (next.length !== activeGroups.length) {
+      activeGroups = next;
+      saveActive();
+    }
+    return activeGroups;
+  }
 
   // ── Botão + popover de configuração (somente modo manual) ─────
   if (!IS_AUTO) {
@@ -203,8 +329,17 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
 
   // ── Chips disponíveis ─────────────────────────────────────────
   function renderChips() {
+    validateActiveGroups();
     chipsRow.querySelectorAll('.ggp-chip-avail').forEach(el => el.remove());
     const fields = resolveFields();
+    if (fields.length) {
+      const valid = new Set(fields.map(f => f.field));
+      const next = activeGroups.filter(g => valid.has(g.field));
+      if (next.length !== activeGroups.length) {
+        activeGroups = next;
+        saveActive();
+      }
+    }
     const visible = IS_AUTO
       ? fields                                                        // auto: todos
       : fields.filter(f => visibleFields.has(f.field));              // manual: só os habilitados
@@ -251,6 +386,7 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
   }
 
   function renderDropZone() {
+    validateActiveGroups();
     if (!activeGroups.length) {
       dz.innerHTML = '<span class="ggp-dz-hint">Clique ou arraste um campo acima para agrupar os dados</span>';
       return;
@@ -292,15 +428,30 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
   function applyGrouping() {
     const t = getTable?.();
     if (!t) return;
-    const fields = activeGroups.map(g => g.field);
-    // Tabulator 6 requer string para 1 campo e false para limpar (array de 1 elemento não funciona)
-    if (!fields.length) {
-      t.setGroupBy(false);
-    } else if (fields.length === 1) {
-      t.setGroupBy(fields[0]);
-    } else {
-      t.setGroupBy(fields);
+    installGridGuard(t);
+    if (typeof t.__iahubClearAutofillHeaderFilters === 'function') t.__iahubClearAutofillHeaderFilters();
+    const run = () => {
+      const fields = validateActiveGroups().map(g => g.field);
+      // Tabulator 6 requer string para 1 campo e false para limpar.
+      if (!fields.length) {
+        t.setGroupBy(false);
+      } else if (fields.length === 1) {
+        t.setGroupBy(fields[0]);
+      } else {
+        t.setGroupBy(fields);
+      }
+    };
+    if (t.initialized === false && typeof t.on === 'function') {
+      if (!t.__ggpApplyOnBuilt) {
+        t.__ggpApplyOnBuilt = true;
+        t.on('tableBuilt', () => {
+          t.__ggpApplyOnBuilt = false;
+          run();
+        });
+      }
+      return;
     }
+    run();
   }
 
   // ── Inicialização ─────────────────────────────────────────────
@@ -310,9 +461,12 @@ function createGroupPanel({ chipsRowId, dropZoneId, storageKey, allFields, defau
 
   // ── API pública ───────────────────────────────────────────────
   return {
-    getActiveFields: () => activeGroups.map(g => g.field),
+    getActiveFields: () => {
+      if (IS_AUTO && !getTable?.()) return [];
+      return validateActiveGroups().map(g => g.field);
+    },
     applyToTable:    () => applyGrouping(),
     // Chame após o Tabulator ser inicializado no modo auto para re-renderizar os chips
-    refresh:         () => renderChips(),
+    refresh:         () => { installGridGuard(getTable?.()); validateActiveGroups(); renderChips(); renderDropZone(); },
   };
 }

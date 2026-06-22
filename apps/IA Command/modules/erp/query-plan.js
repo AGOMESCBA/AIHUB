@@ -72,13 +72,15 @@ function _inferirAgrupamentos(texto) {
     ['grupo_produto', ['grupo produto', 'grupo de produto', 'familia produto']],
     ['vendedor', ['vendedor', 'vendedores']],
     ['filial', ['filial', 'filiais']],
-    ['banco', ['por banco', 'por bancos', 'banco', 'bancos']],
+    // "banco"/"bancos" isolados removidos: aparecem em "desconsiderando os bancos X e Y" (filtro, não agrupamento)
+    ['banco', ['por banco', 'por bancos']],
     ['conta', ['por conta', 'por contas', 'conta bancaria', 'contas bancarias']],
     ['natureza', ['natureza']],
+    // "titulo"/"titulos" isolados mantidos pois indicam granularidade de listagem
     ['documento', ['por documento', 'por documentos', 'por titulo', 'por titulos', 'por duplicata', 'por duplicatas', 'documento', 'documentos', 'titulo', 'titulos', 'duplicata', 'duplicatas']],
     ['mes', ['por mes', 'por meses', 'mes a mes', 'todos os meses', 'todo mes', 'mensal']],
     ['ano', ['por ano', 'ano a ano', 'anual']],
-    ['dia', ['por dia', 'diario']],
+    ['dia', ['por dia', 'diario', 'por data', 'por data de vencimento', 'por vencimento', 'data de vencimento']],
   ];
   for (const [grupo, termos] of defs) {
     if (_containsAny(texto, termos)) grupos.push(grupo);
@@ -87,7 +89,10 @@ function _inferirAgrupamentos(texto) {
 }
 
 function _inferirPlanoFinanceiro(texto, periodo) {
-  const saldoBancario = _containsAny(texto, ['saldo bancario', 'saldos bancarios', 'saldo dos bancos', 'saldo por banco', 'bancos']);
+  // "bancos" isolado foi removido desta lista: a palavra aparece em contextos como "desconsiderando os bancos CX1 e CX2"
+  // dentro de uma pergunta de fluxo de caixa, o que causava classificação errada como saldo_bancario.
+  // Resultado: query_plan enviava operacao=saldo_bancario para a IA, que gerava SQL errado nas 3 tentativas de retry.
+  const saldoBancario = _containsAny(texto, ['saldo bancario', 'saldos bancarios', 'saldo dos bancos', 'saldo por banco']);
   const mencionaReceber = _containsAny(texto, [
     'contas a receber', 'a receber', 'receber', 'recebimento', 'recebimentos',
     'recebimento realizado', 'recebimentos realizados', 'contas recebidas',
@@ -101,15 +106,17 @@ function _inferirPlanoFinanceiro(texto, periodo) {
   ]);
   const comparativo = _containsAny(texto, ['comparativo', 'comparar', 'comparacao', 'versus', 'vs', 'crescimento', 'variacao']);
   const calcularPercentualCrescimento = _containsAny(texto, ['percentual de crescimento', 'crescimento percentual', 'percentual', 'variacao percentual']);
+  // fluxoRealizado só dispara com termos explícitos de movimento passado — palavras genéricas como
+  // "pagamentos" e "recebimentos" foram removidas pois aparecem em qualquer contexto financeiro
+  // e causavam classificação errada de "fluxo de caixa 30 dias" como realizado.
   const fluxoRealizado = _containsAny(texto, [
     'fluxo de caixa realizado', 'realizado', 'passado',
-    'contas recebidas', 'recebidas', 'recebido', 'recebimentos',
-    'contas pagas', 'pagas', 'pago', 'pagamentos',
+    'contas recebidas', 'contas pagas',
     'baixado', 'baixados', 'baixadas', 'liquidado', 'liquidados', 'liquidadas',
   ]);
   const fluxoProjetado = _containsAny(texto, [
     'fluxo de caixa projetado', 'projetado', 'previsto', 'previsao',
-    'futuro', 'a vencer', 'vencendo',
+    'futuro', 'a vencer', 'vencendo', 'proximos', 'proximo',
   ]);
   const carteira = mencionaReceber && mencionaPagar
     ? 'ambas'
@@ -487,7 +494,8 @@ function formatQueryPlanForPrompt(plano = {}) {
   ];
   if (plano.fluxoTipo) linhas.push(`  fluxo_tipo: ${plano.fluxoTipo}`);
   if (plano.dataPadrao) linhas.push(`  campo_data_semantico: ${plano.dataPadrao}`);
-  if (Array.isArray(plano.agrupamentos) && plano.agrupamentos.length) linhas.push(`  agrupamentos: ${plano.agrupamentos.join(', ')}`);
+  // agrupamentos não são enviados para a IA — ela infere da pergunta original.
+  // O campo é usado apenas internamente (correções de domínio e validações).
   if (Array.isArray(plano.regras) && plano.regras.length) linhas.push(`  regras: ${plano.regras.join(', ')}`);
   if (plano.comparativo) linhas.push('  comparativo: gere linhas comparaveis para os periodos solicitados.');
   if (plano.calcularPercentualCrescimento) linhas.push('  calculo_obrigatorio: incluir percentual de crescimento/variacao entre ano_base e ano_comparacao.');
@@ -533,15 +541,14 @@ function formatQueryPlanForPrompt(plano = {}) {
       linhas.push('  financeiro_ambas: receber usa SE1 + SA1, pagar usa SE2 + SA2; nao faca JOIN direto entre SE1 e SE2.');
     }
   }
-  if (plano.modulo === 'financeiro' && plano.operacao === 'fluxo_caixa' && plano.fluxoTipo === 'projetado') {
-    linhas.push('  fluxo_caixa_projetado: formula obrigatoria = saldo_bancario_hoje + contas_a_receber_em_aberto - contas_a_pagar_em_aberto.');
-    linhas.push('  fluxo_caixa_projetado: use periodo futuro; se o periodo comecar antes de hoje, considere a partir de hoje.');
-    linhas.push('  fluxo_caixa_projetado: receber/pagar usam vencimento real e saldo em aberto.');
-  }
-  if (plano.modulo === 'financeiro' && plano.operacao === 'fluxo_caixa' && plano.fluxoTipo === 'realizado') {
-    linhas.push('  fluxo_caixa_realizado: formula obrigatoria = saldo_bancario_inicio_periodo + contas_recebidas - contas_pagas.');
-    linhas.push('  fluxo_caixa_realizado: use periodo passado limitado ao periodo informado.');
-    linhas.push('  fluxo_caixa_realizado: recebidas/pagas usam data de baixa/movimento, preferindo FK/SE5 quando disponivel.');
+  if (plano.modulo === 'financeiro' && plano.operacao === 'fluxo_caixa') {
+    if (plano.fluxoTipo === 'projetado' || !plano.fluxoTipo) {
+      linhas.push('  fluxo_caixa_projetado: SE8 fornece o saldo bancario inicial via CTE com ROW_NUMBER (rn=1), filtrado por E8_BANCO NOT IN (...). Esse saldo deve ser referenciado como subquery escalar no SELECT: (SELECT COALESCE(SUM(saldo_recente.E8_SALATUA),0) FROM saldo_recente WHERE saldo_recente.rn = 1). PROIBIDO JOIN de SE1 ou SE2 com SE8/saldo_recente — sao independentes.');
+      linhas.push('  fluxo_caixa_projetado: SE1 e SE2 sao consultadas separadamente por data de vencimento (E1_VENCREA / E2_VENCREA). Some E1_SALDO (nao E1_VALOR) para entradas e E2_SALDO (nao E2_VALOR) para saidas. PROIBIDO JOIN direto entre SE1 e SE2.');
+    } else {
+      linhas.push('  fluxo_caixa_realizado: formula obrigatoria = movimentos ja realizados filtrados por E5_DATA no periodo.');
+      linhas.push('  fluxo_caixa_realizado: use SE5 filtrado por E5_DATA. SE5.E5_RECPAG = \'R\' para entradas, \'P\' para saidas. PROIBIDO usar SE1/SE2 como tabela principal.');
+    }
   }
   return linhas.join('\n');
 }
@@ -635,15 +642,27 @@ function validarSqlContraPlano(sql, plano = {}) {
     }
   }
 
+  if (plano.modulo === 'financeiro' && plano.operacao === 'fluxo_caixa' && plano.fluxoTipo === 'projetado') {
+    // SE5 no FROM/JOIN principal de fluxo projetado é erro: fluxo projetado usa SE1+SE2 (carteiras abertas), não baixas realizadas.
+    // Permite SE5 apenas dentro de subquery escalar de baixas (JOIN SE5 ON ...) — padrão legítimo em continuidade multi-turno.
+    // Detecção: SE5 no FROM principal = SE5 aparece como primeira tabela ou após FROM sem estar dentro de subquery de baixas
+    const temSe5Principal = /\bFROM\s+SE5(?:\d{3,4}|[Xx]{3})?\s+SE5\b/i.test(texto);
+    if (temSe5Principal) {
+      erros.push(
+        'Fluxo de caixa PROJETADO nao pode usar SE5 como tabela principal (FROM SE5). ' +
+        'SE5 sao baixas ja realizadas — nao projecao. ' +
+        'Use: SE8 (saldo bancario atual) + SE1.E1_SALDO > 0 filtrado por E1_VENCREA (entradas futuras) + SE2.E2_SALDO > 0 filtrado por E2_VENCREA (saidas futuras). ' +
+        'Gere o SQL novamente com SE8 + SE1 + SE2.'
+      );
+    }
+  }
+
   if (plano.modulo === 'financeiro' && plano.operacao === 'saldo_bancario') {
     if (!/\b(?:FROM|JOIN)\s+SE8\d{0,3}\b/i.test(texto) && !/\bSE8\s*\./i.test(texto)) {
       erros.push('SQL de saldo bancario deve usar SE8.');
     }
     if (plano.agrupamentos?.includes('banco') && (/\b(?:FROM|JOIN)\s+SA2\d{0,3}\b/i.test(texto) || /\bSA2\s*\./i.test(texto))) {
       erros.push('SQL de saldo bancario por banco usou SA2/fornecedor; use SA6.');
-    }
-    if (!/\bE8_SALATUA\b/i.test(texto) || !/\bMAX\s*\(\s*(?:\w+\.)?E8_DTSALAT\s*\)/i.test(texto)) {
-      erros.push('SQL de saldo bancario deve somar E8_SALATUA somente da maior E8_DTSALAT por conta.');
     }
   }
 

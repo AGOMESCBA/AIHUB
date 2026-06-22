@@ -289,7 +289,7 @@
       _msgCount++;
       document.getElementById('msg-count').textContent = _msgCount;
       document.getElementById('info-msgs').textContent = _msgCount;
-      addLog(`📩 [${tipo}] de ${sender}: ${body ? '"' + body.slice(0, 60) + '"' : '(mídia)'}`, 'received');
+      addLog(`📩 [${tipo}] de ${sender}: ${body ? '"' + body + '"' : '(mídia)'}`, 'received');
     });
 
     carregarCanais().then(carregarStatus);

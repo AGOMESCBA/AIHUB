@@ -52,6 +52,7 @@ function _write(empresaId, data) {
 }
 
 function _tokensFromUsage(usage = {}) {
+  usage = usage || {};
   const input =
     Number(usage.prompt_tokens) ||
     Number(usage.promptTokenCount) ||

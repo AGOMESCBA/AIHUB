@@ -1,5 +1,5 @@
 import time
-import threading
+import asyncio
 from config import get_config
 
 _BLOCKED_KEYWORDS = [
@@ -8,47 +8,37 @@ _BLOCKED_KEYWORDS = [
 ]
 MAX_ROWS_HARD = 50_000
 
-# Pool de conexão singleton: uma conexão ODBC reutilizada entre requests.
-# Evita o custo de handshake ODBC (~15s) a cada query.
-_pool_lock = threading.Lock()
-_pool_conn = None
 
-
-def _get_pool_conn():
-    global _pool_conn
-    with _pool_lock:
-        if _pool_conn is not None:
-            try:
-                _pool_conn.execute("SELECT 1")
-                return _pool_conn
-            except Exception:
-                # Conexão morta — descarta e abre nova
-                try:
-                    _pool_conn.close()
-                except Exception:
-                    pass
-                _pool_conn = None
-        _pool_conn = _get_pyodbc_conn()
-        return _pool_conn
-
-
-def _invalidar_pool():
-    global _pool_conn
-    with _pool_lock:
-        if _pool_conn is not None:
-            try:
-                _pool_conn.close()
-            except Exception:
-                pass
-            _pool_conn = None
+def _get_pyodbc_conn():
+    import pyodbc
+    cfg    = get_config()
+    driver = cfg.get("DB_DRIVER") or "ODBC Driver 17 for SQL Server"
+    host   = cfg.get("DB_HOST",  "")
+    port   = cfg.get("DB_PORT",  "1433")
+    db     = cfg.get("DB_NAME",  "")
+    user   = cfg.get("DB_USER",  "")
+    passwd = cfg.get("DB_PASS",  "")
+    conn_str = (
+        f"DRIVER={{{driver}}};"
+        f"SERVER={host},{port};"
+        f"DATABASE={db};"
+        f"UID={user};"
+        f"PWD={passwd};"
+        f"TrustServerCertificate=yes;"
+        f"Connection Timeout=15;"
+    )
+    return pyodbc.connect(conn_str, timeout=30)
 
 
 async def testar_conexao() -> dict:
-    try:
+    def _test():
         import pyodbc
         conn = _get_pyodbc_conn()
         conn.execute("SELECT 1")
         conn.close()
+
+    try:
+        await asyncio.to_thread(_test)
         return {"ok": True, "mensagem": "Conexão com o banco ERP estabelecida com sucesso."}
     except ImportError:
         return {"ok": False, "erro": "pyodbc não instalado. Execute: pip install pyodbc"}
@@ -82,21 +72,27 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
     sql_final = _injetar_top(sql, upper, limit_eff)
 
     t0 = time.perf_counter()
-    try:
+
+    def _run_query():
         import pyodbc
-        conn   = _get_pool_conn()
-        cursor = conn.cursor()
-        cursor.execute(sql_final)
-        cols = [d[0] for d in cursor.description]
-        rows = [dict(zip(cols, row)) for row in cursor.fetchmany(limit_eff)]
-        cursor.close()
+        conn   = _get_pyodbc_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql_final)
+            cols = [d[0] for d in cursor.description]
+            rows = [dict(zip(cols, row)) for row in cursor.fetchmany(limit_eff)]
+            cursor.close()
+            return rows
+        finally:
+            conn.close()
+
+    try:
+        rows = await asyncio.to_thread(_run_query)
         duracao = _ms(t0)
         return {"rows": rows, "status": "ok", "duracao_ms": duracao, "sql_executado": sql_final}
     except ImportError:
         return _erro("pyodbc não instalado. Execute: pip install pyodbc", sql_final, _ms(t0))
     except Exception as e:
-        # Conexão pode ter caído — invalida o pool para forçar reconexão na próxima chamada
-        _invalidar_pool()
         return _erro(str(e), sql_final, _ms(t0))
 
 
@@ -107,27 +103,6 @@ def _injetar_top(sql: str, upper: str, limit: int) -> str:
         return sql
     idx = sql.upper().find("SELECT") + len("SELECT")
     return sql[:idx] + f" TOP {limit}" + sql[idx:]
-
-
-def _get_pyodbc_conn():
-    import pyodbc
-    cfg    = get_config()
-    driver = cfg.get("DB_DRIVER") or "ODBC Driver 17 for SQL Server"
-    host   = cfg.get("DB_HOST",  "")
-    port   = cfg.get("DB_PORT",  "1433")
-    db     = cfg.get("DB_NAME",  "")
-    user   = cfg.get("DB_USER",  "")
-    passwd = cfg.get("DB_PASS",  "")
-    conn_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={host},{port};"
-        f"DATABASE={db};"
-        f"UID={user};"
-        f"PWD={passwd};"
-        f"TrustServerCertificate=yes;"
-        f"Connection Timeout=15;"
-    )
-    return pyodbc.connect(conn_str, timeout=30)
 
 
 def _ms(t0: float) -> int:

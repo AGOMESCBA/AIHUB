@@ -131,7 +131,7 @@
         </div>
         <span id="con-count" class="con-count">0 linhas</span>
         <div class="busca-wrap">
-          <input type="text" id="busca" placeholder="Filtrar mensagens..." oninput="filtrarBusca()" />
+          <input type="text" id="busca" placeholder="Filtrar mensagens..." autocomplete="off" spellcheck="false" autocapitalize="off" oninput="filtrarBusca()" />
         </div>
         <div class="con-filter" style="margin-left:auto">
           <label><input type="checkbox" id="chk-info" checked onchange="aplicarFiltros()"> INFO</label>
@@ -172,9 +172,36 @@
   const badgeEl      = document.getElementById('con-badge');
   const badgeTxtEl   = document.getElementById('con-badge-txt');
   const dotEl        = document.getElementById('con-dot');
+  const buscaEl      = document.getElementById('busca');
 
   let _todas = [];
   let _buscaAtiva = '';
+
+  function protegerBusca() {
+    buscaEl.setAttribute('autocomplete', 'off');
+    buscaEl.setAttribute('spellcheck', 'false');
+    buscaEl.setAttribute('autocapitalize', 'off');
+    buscaEl.setAttribute('name', `iac_console_search_${Date.now()}`);
+    buscaEl.setAttribute('readonly', 'readonly');
+    buscaEl.addEventListener('focus', () => {
+      buscaEl.removeAttribute('readonly');
+      limparBuscaFantasma();
+    }, { once: true });
+    buscaEl.addEventListener('keydown', () => {
+      buscaEl.dataset.userTouched = '1';
+    });
+    setTimeout(limparBuscaFantasma, 0);
+    setTimeout(limparBuscaFantasma, 250);
+  }
+
+  function limparBuscaFantasma() {
+    if (buscaEl.dataset.userTouched === '1') return false;
+    if (!String(buscaEl.value || '').trim()) return false;
+    buscaEl.value = '';
+    _buscaAtiva = '';
+    renderizarTudo();
+    return true;
+  }
 
   function fmtTs(iso) {
     if (!iso) return '';
@@ -256,7 +283,11 @@
   }
 
   function aplicarFiltros() { renderizarTudo(); }
-  function filtrarBusca()   { _buscaAtiva = document.getElementById('busca').value.toLowerCase().trim(); renderizarTudo(); }
+  function filtrarBusca()   {
+    if (limparBuscaFantasma()) return;
+    _buscaAtiva = buscaEl.value.toLowerCase().trim();
+    renderizarTudo();
+  }
   function limparConsole()  { _todas = []; renderizarTudo(); }
 
   function copiarTudo() {
@@ -304,6 +335,8 @@
   window._iahubAuthReady?.then(() => {
     if (socket.connected) socket.emit('join-iac-console');
   });
+
+  protegerBusca();
 </script>
 </body>
 </html>

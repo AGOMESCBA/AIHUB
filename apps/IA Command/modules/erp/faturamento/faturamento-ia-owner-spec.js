@@ -78,6 +78,7 @@ const regrasTecnicas = `
   1. Consultas por VALOR Financeiro Total (sem produto/item):
      Quando o usuario pedir "Total de faturamento", "Faturamento do ano", "Faturamento do mes" ou "Faturamento de um periodo" — metricas puramente monetarias, sem especificar produto, grupo de produto ou QUANTIDADE de itens — use OBRIGATORIAMENTE APENAS a tabela de cabecalho SF2.
      Metrica escalar obrigatoria: COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento.
+     Agrupamentos por cliente, vendedor ou natureza sao compativeis com SF2 sozinha: faca JOIN com SA1 (via Joins padrao SF2->SA1), SA3 ou SED conforme o agrupamento pedido. SD2 nao entra neste caminho.
      EXPRESSAMENTE PROIBIDO fazer JOIN com SD2 nesses casos de valor total: o relacionamento 1-para-muitos multiplica F2_VALBRUT pela quantidade de itens da nota, gerando valores duplicados errados.
   2. Consultas por QUANTIDADE ou filtros de Produto/Item:
      Quando o usuario pedir "Quantidade faturada", "Volume de vendas", "Total de pecas vendidas" (mesmo que seja total escalar de uma unica linha), ou quando citar produtos e grupos de produtos, use OBRIGATORIAMENTE a tabela de itens SD2 fazendo JOIN com SF2 (para validar periodo de emissao e F2_TIPO = 'N').

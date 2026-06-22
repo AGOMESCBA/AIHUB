@@ -76,7 +76,6 @@ const regrasTecnicas = `
   Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FROM/JOIN. O uso incorreto gera duplicidade matematica ou metricas zeradas.
   1. Consultas por VALOR Financeiro Total (sem produto/item):
      Quando o usuario pedir "Total de compras", "Compras do ano", "Compras do mes" ou "Compras de um periodo" — metricas puramente monetarias, sem especificar produto, grupo de produto ou QUANTIDADE — use FROM SD1 JOIN SF1 com metrica COALESCE(SUM(SD1.D1_TOTAL), 0) AS valor_compra.
-     Agrupamentos por fornecedor sao compativeis com SD1 JOIN SF1: faca JOIN com SA2 (via Joins padrao SF1->SA2). SD1 continua como origem da metrica.
      Se usar SF1 sozinha (sem SD1) a metrica pode ser COALESCE(SUM(SF1.F1_VALBRUT), 0) AS valor_compra. Porem EXPRESSAMENTE PROIBIDO usar SUM(SF1.F1_VALBRUT) quando SD1 estiver no FROM/JOIN: o relacionamento 1-para-muitos entre SF1 e SD1 multiplica F1_VALBRUT pela quantidade de itens da nota, gerando valores duplicados errados.
   2. Consultas por QUANTIDADE ou filtros de Produto/Item:
      Quando o usuario pedir "Quantidade comprada", "Volume de compras", "Total de pecas compradas" (mesmo total escalar de uma unica linha), ou quando citar produtos e grupos de produtos, use OBRIGATORIAMENTE FROM SD1 JOIN SF1.
@@ -158,10 +157,15 @@ Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, n
 - REGRA CRITICA — palavra "empresa" como escopo de tenant: Quando a mensagem usa "empresa(s) [NOME1] e/ou [NOME2]" e esses nomes estao em empresas_iahub_mencionadas, a palavra "empresa" indica APENAS o escopo de execucao multiempresa. Ela NAO e um agrupamento SQL nem um filtro cadastral. Nao adicione GROUP BY, nao agrupe por empresa, nao filtre por fornecedor/filial baseado nesses nomes.
 - REGRA CRITICA — agrupamentos: ["empresa"] no estado anterior: Quando contrato_orquestrador ou estado anterior trouxer agrupamentos: ["empresa"], isso e metadata do backend (agrupamento multiempresa para exibicao), NAO e instrucao para GROUP BY SQL. Ignore-o na geracao do SQL. So adicione GROUP BY SQL quando o usuario pedir explicitamente agrupamento por mes, fornecedor, produto, etc.
 
-## Media — estrutura obrigatoria de subquery
-- Media mensal por ano (agrupado por ano): subquery interna exporta DOIS aliases — SUBSTRING(SD1.D1_DTDIGIT,1,4) AS ano E SUBSTRING(SD1.D1_DTDIGIT,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.valor_compra) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.valor_compra — NUNCA SD1.* ou SF1.*.
+## Metrica por agrupamento
+- "por mes": SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia no SELECT e GROUP BY.
+- "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
+- "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
+- Media mensal por ano (subquery 2 camadas, agrupado por ano):
+  Subquery interna exporta DOIS aliases: SUBSTRING(SD1.D1_DTDIGIT,1,4) AS ano E SUBSTRING(SD1.D1_DTDIGIT,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.valor_compra) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.valor_compra — NUNCA SD1.* ou SF1.*.
 - Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.valor_compra) sem GROUP BY.
-- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais.
+- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_compra.
+- Resposta planejada com devolucoes: template com {total_compras}, {total_devolucoes}, {total_liquido}.
 `.trim();
 
 const contratosTecnicosPrioritarios = `

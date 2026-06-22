@@ -999,10 +999,29 @@ const SVG_EYE_OFF  = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11
 function toggleSenha(inputId, btn) {
   const input = document.getElementById(inputId);
   const svg   = btn.querySelector('svg');
+  if (!input.value && input.dataset.passwordSaved === '1') {
+    input.focus();
+    btn.title = 'Senha ja gravada. Digite uma nova senha para visualizar.';
+    return;
+  }
   const show  = input.type === 'password';
   input.type  = show ? 'text' : 'password';
   svg.innerHTML = show ? SVG_EYE_OFF : SVG_EYE;
   btn.title   = show ? 'Ocultar' : 'Mostrar';
+}
+
+function resetPasswordField(inputId, saved) {
+  const input = document.getElementById(inputId);
+  input.value = '';
+  input.type = 'password';
+  input.dataset.passwordSaved = saved ? '1' : '0';
+  input.placeholder = saved ? '(senha salva - digite para alterar)' : 'Nova senha...';
+  input.oninput = () => { input.dataset.passwordSaved = '0'; };
+  const eyeBtn = input.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
+  if (eyeBtn) {
+    eyeBtn.querySelector('svg').innerHTML = SVG_EYE;
+    eyeBtn.title = saved ? 'Senha ja gravada. Digite uma nova senha para visualizar.' : 'Mostrar/ocultar senha';
+  }
 }
 
 const ABAS = ['sistema', 'whatsapp', 'analisador', 'apikeys', 'equivalencias', 'integracoes', 'email', 'templates', 'linkpublico'];
@@ -1484,13 +1503,7 @@ async function carregarEmail() {
   const cfg = await fetch('/api/ps/email-config').then(r => r.json());
   document.getElementById('email-tipo').value         = cfg.tipo        || 'gmail';
   document.getElementById('email-email').value        = cfg.email       || '';
-  const senhaEl = document.getElementById('email-senha');
-  const senhaSalva = cfg.senha && cfg.senha !== '••••••••';
-  senhaEl.value       = senhaSalva ? cfg.senha : '';
-  senhaEl.type        = 'password';
-  senhaEl.placeholder = cfg.senha ? '(senha salva — digite para alterar)' : 'Nova senha...';
-  const eyeBtn = senhaEl.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
-  if (eyeBtn) { eyeBtn.querySelector('svg').innerHTML = SVG_EYE; eyeBtn.title = 'Mostrar/ocultar senha'; }
+  resetPasswordField('email-senha', !!cfg.senha);
   document.getElementById('email-smtp-host').value    = cfg.smtp_host   || '';
   document.getElementById('email-smtp-port').value    = cfg.smtp_port   || '';
   document.getElementById('email-smtp-secure').value  = cfg.smtp_secure ? 'true' : '';
@@ -1612,13 +1625,7 @@ async function carregarEmailGeral() {
   const cfg = await fetch('/api/email-geral/config').then(r => r.json());
   document.getElementById('egeral-tipo').value         = cfg.tipo        || 'gmail';
   document.getElementById('egeral-email').value        = cfg.email       || '';
-  const senhaEl = document.getElementById('egeral-senha');
-  const senhaSalvaGeral = cfg.senha && cfg.senha !== '••••••••';
-  senhaEl.value       = senhaSalvaGeral ? cfg.senha : '';
-  senhaEl.type        = 'password';
-  senhaEl.placeholder = cfg.senha ? '(senha salva — digite para alterar)' : 'Nova senha...';
-  const eyeBtn = senhaEl.closest('.pass-wrap')?.querySelector('.btn-pass-toggle');
-  if (eyeBtn) { eyeBtn.querySelector('svg').innerHTML = SVG_EYE; eyeBtn.title = 'Mostrar/ocultar senha'; }
+  resetPasswordField('egeral-senha', !!cfg.senha);
   document.getElementById('egeral-smtp-host').value    = cfg.smtp_host   || '';
   document.getElementById('egeral-smtp-port').value    = cfg.smtp_port   || '';
   document.getElementById('egeral-smtp-secure').value  = cfg.smtp_secure ? 'true' : '';

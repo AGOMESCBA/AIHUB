@@ -158,6 +158,53 @@ function listar(empresaId, opts = {}) {
   `).all(...params);
 }
 
+function listarResumo(empresaId, opts = {}) {
+  const limit = Math.min(parseInt(opts.limit, 10) || 200, 1000);
+  const fase = String(opts.fase_execucao || '').trim();
+  const params = [empresaId];
+  const where = ['empresa_id = ?'];
+  if (fase) {
+    where.push('fase_execucao = ?');
+    params.push(fase);
+  }
+  params.push(limit);
+  return getDB().prepare(`
+    SELECT
+      id,
+      criado_em,
+      numero_wa,
+      substr(texto_original, 1, 240) AS texto_original,
+      substr(resposta_entregue, 1, 360) AS resposta_entregue,
+      intencao,
+      dataset_nome,
+      trace_json,
+      intent_json,
+      pipeline_origem,
+      fase_execucao,
+      sql_canonico_origem,
+      provedor,
+      confianca,
+      fallback_usado,
+      escopo_execucao,
+      resultado_tipo,
+      cache_hit
+    FROM interpretation_log
+    WHERE ${where.join(' AND ')}
+    ORDER BY criado_em DESC
+    LIMIT ?
+  `).all(...params);
+}
+
+function obterPorId(id, empresaId) {
+  if (!id || !empresaId) return null;
+  return getDB().prepare(`
+    SELECT *
+    FROM interpretation_log
+    WHERE id = ? AND empresa_id = ?
+    LIMIT 1
+  `).get(id, empresaId) || null;
+}
+
 function registrarFeedback(id, empresaId, feedback, observacao = null) {
   const permitido = new Set(['positivo', 'negativo', 'corrigido', 'ignorar']);
   const fb = permitido.has(String(feedback)) ? String(feedback) : 'corrigido';
@@ -198,4 +245,14 @@ function limpar(empresaId, opts = {}) {
   return info.changes || 0;
 }
 
-module.exports = { registrar, listar, registrarFeedback, atualizarEntregue, limpar, camposInferidos, moduloDinamico, faseExecucao };
+function excluirPorIds(empresaId, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const db = getDB();
+  const placeholders = ids.map(() => '?').join(',');
+  const info = db.prepare(
+    `DELETE FROM interpretation_log WHERE empresa_id = ? AND id IN (${placeholders})`
+  ).run([empresaId, ...ids]);
+  return info.changes || 0;
+}
+
+module.exports = { registrar, listar, listarResumo, obterPorId, registrarFeedback, atualizarEntregue, limpar, excluirPorIds, camposInferidos, moduloDinamico, faseExecucao };

@@ -85,13 +85,15 @@ app.use('/api/login', rateLimit({
 
 app.use(express.json({ limit: '50mb' }));
 const sessionMiddleware = session({
-  store:             new FileSessionStore({ clearOnStart: true }),
+  store:             new FileSessionStore(),
   secret:            process.env.SESSION_SECRET || 'iahub-secret',
   resave:            false,
   saveUninitialized: false,
+  rolling:           true,
   cookie: {
     httpOnly: true,
     sameSite: 'strict',
+    maxAge:   30 * 24 * 60 * 60 * 1000, // 30 dias — monitores precisam sobreviver a restart do browser
   },
 });
 app.use(sessionMiddleware);

@@ -9,6 +9,23 @@ window._iahubRotinasReady = new Promise(r => { _rotinasResolve = r; });
 
 const _IAHUB_BROWSER_SESSION_KEY = 'iahub_browser_session_active';
 
+// Páginas de monitor que ficam abertas continuamente (TVs, painéis) — usam localStorage
+// para persistir a flag de sessão entre reinicializações do browser.
+const _PAGINAS_MONITOR_PERSISTENTE = [
+  '/app/ia-command/monitor.html',
+  '/monitor.html',
+  '/monitor-email.html',
+  '/monitores.html',
+];
+function _paginaMonitorPersistente() {
+  return _PAGINAS_MONITOR_PERSISTENTE.some(
+    p => location.pathname === p || location.pathname.endsWith(p)
+  );
+}
+function _sessionStorage() {
+  return _paginaMonitorPersistente() ? localStorage : sessionStorage;
+}
+
 // Páginas que não exigem empresa selecionada nem verificação de rotina
 const _PAGINAS_LIVRES = [
   '/login.html', '/selecionar-empresa.html',
@@ -38,7 +55,8 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/migrar-dados.html':         'iac-migrar-dados',
   '/app/ia-command/admin-execucoes.html':      'iac-admin-execucoes',
   '/app/ia-command/admin-auditoria.html':      'iac-admin-auditoria',
-  '/app/ia-command/admin-interpretacoes.html': 'iac-admin-auditoria',
+  '/app/ia-command/admin-interpretacoes.html':    'iac-admin-auditoria',
+  '/app/ia-command/admin-interpretacoes-v2.html': 'iac-admin-auditoria',
   '/app/ia-command/console-servidor.html':     'iac-admin-auditoria',
   '/app/ia-command/admin-sinonimos.html':      'iac-admin-sinonimos',
   '/app/ia-command/admin-normalizacao.html':   'iac-admin-normalizacao',
@@ -204,7 +222,7 @@ function _mostrarOverlaySemAcesso(rotinaNome = 'esta rotina') {
 }
 
 (async function () {
-  if (sessionStorage.getItem(_IAHUB_BROWSER_SESSION_KEY) !== '1') {
+  if (_sessionStorage().getItem(_IAHUB_BROWSER_SESSION_KEY) !== '1') {
     await fetch('/api/logout', { method: 'POST' }).catch(() => null);
     if (!location.pathname.endsWith('/login.html')) location.href = '/login.html';
     return;
@@ -378,6 +396,10 @@ function _atualizarSidebarUsuario(me) {
       <div class="user-info-text">
         <div class="user-name">${me.user || '—'}</div>
         <div class="user-role">${roleLabel}</div>
+        <button class="user-change-pass" onclick="window._abrirTrocarSenha?.()" title="Alterar senha">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Alterar senha
+        </button>
       </div>`;
     nav.parentNode.insertBefore(div, nav);
   }
@@ -480,11 +502,12 @@ async function _injetarEmpresaTopbar() {
       box-shadow:0 8px 32px rgba(0,0,0,.35);min-width:220px;padding:6px;
     "></div>`;
 
-  // Botão Guia de Uso — pertence ao IA Recruit; o Admin/Shell principal não recebe o guia genérico.
-  const isAdminApp = location.pathname.includes('/app/ia-administracao/')
+  // Botão Guia de Uso — injetado apenas em páginas sem #_guia-btn próprio.
+  const isAdminApp    = location.pathname.includes('/app/ia-administracao/')
     || location.pathname === '/administracao.html'
     || location.pathname.endsWith('/administracao.html');
-  if (!isAdminApp && !topbar.querySelector('#_guia-btn')) {
+  const isIaCommand   = location.pathname.includes('/app/ia-command/');
+  if (!isAdminApp && !isIaCommand && !topbar.querySelector('#_guia-btn')) {
     const guiaBtn = document.createElement('a');
     guiaBtn.id        = '_guia-btn';
     guiaBtn.href      = '/guia/';
@@ -574,12 +597,130 @@ window.addEventListener('storage', (e) => {
     location.reload();
 });
 
+// ── Modal: Trocar senha ───────────────────────────────────────────────────────
+(function () {
+  function _injetarModalSenha() {
+    if (document.getElementById('_modal-trocar-senha')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = '_modal-trocar-senha-overlay';
+    overlay.onclick = fechar;
+    overlay.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998';
+
+    const modal = document.createElement('div');
+    modal.id = '_modal-trocar-senha';
+    modal.style.cssText = 'display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px 32px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.2);font-family:inherit';
+    modal.innerHTML = `
+      <div style="font-size:16px;font-weight:700;color:var(--text-hi);margin-bottom:4px">Alterar senha</div>
+      <div style="font-size:13px;color:var(--text-lo);margin-bottom:20px">Defina uma nova senha para sua conta.</div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);display:block;margin-bottom:5px">Senha atual</label>
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="_ts-atual" type="password" placeholder="••••••••" style="width:100%;padding:8px 38px 8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-body);color:var(--text-hi);font-size:13px;outline:none;box-sizing:border-box">
+          <button type="button" onclick="_tsToggle('_ts-atual')" style="position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-lo);padding:0;display:flex">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);display:block;margin-bottom:5px">Nova senha</label>
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="_ts-nova" type="password" placeholder="Mínimo 8 caracteres" style="width:100%;padding:8px 38px 8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-body);color:var(--text-hi);font-size:13px;outline:none;box-sizing:border-box">
+          <button type="button" onclick="_tsToggle('_ts-nova')" style="position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-lo);padding:0;display:flex">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style="margin-bottom:18px">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);display:block;margin-bottom:5px">Confirmar nova senha</label>
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="_ts-conf" type="password" placeholder="Repita a nova senha" style="width:100%;padding:8px 38px 8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-body);color:var(--text-hi);font-size:13px;outline:none;box-sizing:border-box">
+          <button type="button" onclick="_tsToggle('_ts-conf')" style="position:absolute;right:8px;background:none;border:none;cursor:pointer;color:var(--text-lo);padding:0;display:flex">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="_ts-alert" style="display:none;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:14px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="_tsFechar()" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:none;color:var(--text-md);font-size:13px;cursor:pointer">Cancelar</button>
+        <button onclick="_tsSalvar()" style="padding:8px 18px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Salvar</button>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(modal);
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') fechar(); });
+
+    function fechar() {
+      overlay.style.display = 'none';
+      modal.style.display   = 'none';
+    }
+    window._tsFechar = fechar;
+  }
+
+  window._tsToggle = function (id) {
+    const el = document.getElementById(id);
+    if (el) el.type = el.type === 'password' ? 'text' : 'password';
+  };
+
+  window._tsSalvar = async function () {
+    const atual = document.getElementById('_ts-atual').value;
+    const nova  = document.getElementById('_ts-nova').value;
+    const conf  = document.getElementById('_ts-conf').value;
+    const alert = document.getElementById('_ts-alert');
+
+    function erro(msg) {
+      alert.textContent = msg;
+      alert.style.cssText = 'display:block;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:14px;color:#dc2626;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2)';
+    }
+    function ok(msg) {
+      alert.textContent = msg;
+      alert.style.cssText = 'display:block;font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:14px;color:#059669;background:rgba(5,150,105,.08);border:1px solid rgba(5,150,105,.2)';
+    }
+
+    if (!atual)        return erro('Informe a senha atual.');
+    if (nova.length < 8) return erro('A nova senha deve ter no mínimo 8 caracteres.');
+    if (nova !== conf) return erro('As senhas não coincidem.');
+
+    try {
+      const r    = await fetch('/api/usuarios/minha-senha', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ senha_atual: atual, nova_senha: nova }),
+      });
+      const data = await r.json();
+      if (r.ok && data.ok) {
+        ok('✓ Senha alterada com sucesso!');
+        setTimeout(window._tsFechar, 1800);
+      } else {
+        erro(data.error || data.detail || 'Erro ao alterar a senha.');
+      }
+    } catch (e) {
+      erro('Erro de comunicação: ' + e.message);
+    }
+  };
+
+  window._abrirTrocarSenha = function () {
+    _injetarModalSenha();
+    document.getElementById('_ts-atual').value = '';
+    document.getElementById('_ts-nova').value  = '';
+    document.getElementById('_ts-conf').value  = '';
+    document.getElementById('_ts-alert').style.display = 'none';
+    document.getElementById('_modal-trocar-senha-overlay').style.display = 'block';
+    document.getElementById('_modal-trocar-senha').style.display = 'block';
+    document.getElementById('_ts-atual').focus();
+  };
+
+  document.addEventListener('DOMContentLoaded', _injetarModalSenha);
+})();
+
 // ── Logout ────────────────────────────────────────────────────────────────────
 function logout() {
   fetch('/api/logout', { method: 'POST' }).finally(() => {
     try { sessionStorage.removeItem('iahub_mdi_state'); } catch(_) {}
     try { sessionStorage.removeItem('iac_mdi_state');   } catch(_) {}
-    try { sessionStorage.removeItem(_IAHUB_BROWSER_SESSION_KEY); } catch(_) {}
+    try { _sessionStorage().removeItem(_IAHUB_BROWSER_SESSION_KEY); } catch(_) {}
+    try { localStorage.removeItem(_IAHUB_BROWSER_SESSION_KEY); } catch(_) {}
     location.href = '/login.html';
   });
 }

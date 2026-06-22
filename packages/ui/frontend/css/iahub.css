@@ -284,8 +284,20 @@ a { text-decoration: none; color: inherit; }
   transition: opacity var(--transition);
   overflow: hidden;
 }
-.sidebar-userinfo .user-name { font-size: 13px; font-weight: 600; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-userinfo .user-name { font-size: 15px; font-weight: 700; color: var(--text-hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sidebar-userinfo .user-role { font-size: 11px; color: var(--text-lo); white-space: nowrap; }
+.sidebar-userinfo .user-change-pass {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 6px; padding: 3px 8px;
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  background: rgba(124,58,237,.08); border: 1px solid rgba(124,58,237,.18);
+  border-radius: 99px; cursor: pointer; white-space: nowrap;
+  transition: background .15s, border-color .15s, color .15s;
+  letter-spacing: .02em;
+}
+.sidebar-userinfo .user-change-pass:hover {
+  background: rgba(124,58,237,.16); border-color: rgba(124,58,237,.4); color: var(--accent);
+}
 
 .sidebar:hover .sidebar-userinfo .user-info-text,
 .sidebar.pinned .sidebar-userinfo .user-info-text { opacity: 1; }

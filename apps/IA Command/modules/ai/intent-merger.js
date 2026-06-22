@@ -378,11 +378,22 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
     && _moduloDinamicoDoIntent(ultimoIntent)
     && _moduloDinamicoDoIntent(novoIntent) !== _moduloDinamicoDoIntent(ultimoIntent);
 
+  // Exceção crítica: novo intent classifica como o módulo base de um intent dinâmico anterior
+  // (ex: 'financeiro' após 'financeiro_dinamico'). Tratar como refinamento do mesmo domínio:
+  // o usuário está continuando a consulta, não iniciando uma nova.
+  // Sem isso, "Mas desconsidere os bancos X" após saldo bancário perde todo o contexto SQL.
+  const mesmoModuloDinamico = _moduloDinamicoDoIntent(novoIntent)
+    && _moduloDinamicoDoIntent(ultimoIntent)
+    && _moduloDinamicoDoIntent(novoIntent) === _moduloDinamicoDoIntent(ultimoIntent)
+    && ultimoIntent.intencao !== novoIntent.intencao
+    && (ultimoIntent._dynamicAiScope || String(ultimoIntent.intencao || '').endsWith('_dinamico'));
+
   if (
     !_eVazio(novoIntent.intencao) &&
     novoIntent.intencao !== ultimoIntent.intencao &&
     novoIntent.confianca >= 0.85 &&
-    !refinamentoSemDominioNovo
+    !refinamentoSemDominioNovo &&
+    !mesmoModuloDinamico
   ) {
     if (_eVazio(novoIntent.periodo?.tipo) && !_eVazio(ultimoIntent.periodo?.tipo)) {
       novoIntent.periodo = _clonar(ultimoIntent.periodo);
@@ -403,6 +414,18 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
     merged.acao = ultimoIntent.acao || merged.acao;
     merged._dynamicAiScope = ultimoIntent._dynamicAiScope || merged._dynamicAiScope;
     merged._dominioPreservadoPorRefinamento = true;
+  }
+  // Promove para dinâmico quando o contexto anterior era dinâmico do mesmo módulo.
+  // Sem isso, "desconsidere os bancos X" após saldo bancário perde _sqlCanonicoOriginal
+  // e _dynamicAiScope, fazendo o roteador tratar como intent estático e perder o SQL.
+  if (mesmoModuloDinamico) {
+    merged.intencao = ultimoIntent.intencao;
+    merged._moduloDinamico = ultimoIntent._moduloDinamico || _moduloDinamicoDoIntent(ultimoIntent);
+    merged.acao = ultimoIntent.acao || merged.acao;
+    merged._dynamicAiScope = ultimoIntent._dynamicAiScope || true;
+    merged._sqlCanonicoOriginal = ultimoIntent._sqlCanonicoOriginal || merged._sqlCanonicoOriginal;
+    merged._contextoIAAnterior = ultimoIntent._contextoIAAnterior || merged._contextoIAAnterior;
+    merged._continuacaoMesmoModulo = true;
   }
 
   // 1. Herança de intenção

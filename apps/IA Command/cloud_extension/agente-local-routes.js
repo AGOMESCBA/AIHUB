@@ -176,6 +176,31 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
     res.json({ token: row?.agente_local_token || null });
   });
 
+  // ── POST reset-senha — redefine a senha do painel local via Bearer Token ─────
+  app.post('/api/ia-command/agente-local/reset-senha', requireAuth, requireIaCommand, canConfig, async (req, res) => {
+    const row   = crud.buscarPor('ai_config', 'empresa_id', eid(req));
+    const url   = req.body.url   || row?.agente_local_url;
+    const token = (req.body.token && req.body.token !== '***')
+      ? req.body.token
+      : row?.agente_local_token;
+
+    if (!url)         return res.status(400).json({ ok: false, erro: 'URL do agente não configurada.' });
+    if (!token)       return res.status(400).json({ ok: false, erro: 'Token do agente não configurado.' });
+
+    const { nova_senha } = req.body;
+    if (!nova_senha || nova_senha.length < 6) {
+      return res.status(400).json({ ok: false, erro: 'A nova senha deve ter no mínimo 6 caracteres.' });
+    }
+
+    try {
+      const resultado = await _requestAgente(url, '/api/senha/reset', 'POST', { nova_senha }, token, 10000);
+      res.json({ ok: true, ...resultado });
+    } catch (err) {
+      const status = err.statusCode || 500;
+      res.status(status).json({ ok: false, detail: err.message || 'Erro ao comunicar com o agente.' });
+    }
+  });
+
   // ── GET cargas/empresas — lista empresas do usuário + status de sync no agente ──
   app.get('/api/ia-command/agente-local/cargas/empresas', requireAuth, requireIaCommand, canConfig, async (req, res) => {
     const row   = crud.buscarPor('ai_config', 'empresa_id', eid(req));

@@ -50,21 +50,6 @@
     .grid-text-preview { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;line-height:1.35;word-break:break-word; }
     .grid-text-preview.question { color:var(--text-hi);font-weight:700; }
     .grid-text-preview.answer { color:var(--text-md); }
-    .loading-panel {
-      display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px;
-      min-height:220px; color:var(--text-md); background:var(--bg-card);
-      border:1px solid var(--border); border-radius:var(--radius);
-      box-shadow:var(--shadow-sm); margin-bottom:10px;
-    }
-    .loading-panel.show { display:flex; }
-    .loading-spinner {
-      width:28px; height:28px; border-radius:50%;
-      border:3px solid rgba(124,58,237,.18); border-top-color:var(--accent);
-      animation: spin .8s linear infinite;
-    }
-    .loading-copy { font-size:14px; font-weight:600; color:var(--text-hi); }
-    .loading-hint { font-size:12px; color:var(--text-lo); }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
     .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--text-md);transition:background .15s,color .15s; }
     .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
@@ -165,37 +150,9 @@
     .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
     .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
     .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
-    .tabulator .tabulator-row.row-selecionada { background:var(--accent-glow) !important; }
     .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
     .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
     .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
-
-    /* Toolbar de seleção */
-    .sel-toolbar {
-      display:none; align-items:center; gap:12px;
-      background:var(--accent); color:#fff;
-      border-radius:var(--radius); padding:10px 16px;
-      margin-bottom:10px; box-shadow:0 4px 16px rgba(124,58,237,.35);
-      animation: sel-in .18s ease;
-    }
-    .sel-toolbar.show { display:flex; }
-    @keyframes sel-in { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
-    .sel-toolbar-count { font-size:13px; font-weight:700; flex:1; }
-    .sel-toolbar-btn {
-      background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.3);
-      color:#fff; border-radius:6px; padding:5px 14px; font-size:13px;
-      font-weight:600; cursor:pointer; transition:background .15s;
-    }
-    .sel-toolbar-btn:hover { background:rgba(255,255,255,.28); }
-    .sel-toolbar-btn.danger { background:rgba(239,68,68,.25); border-color:rgba(239,68,68,.4); }
-    .sel-toolbar-btn.danger:hover { background:rgba(239,68,68,.4); }
-    .sel-toolbar-close {
-      background:none; border:none; color:rgba(255,255,255,.7); cursor:pointer;
-      font-size:18px; line-height:1; padding:2px 6px; border-radius:4px;
-    }
-    .sel-toolbar-close:hover { color:#fff; background:rgba(255,255,255,.15); }
-
-    input.row-checkbox { width:15px; height:15px; cursor:pointer; accent-color:var(--accent); }
 
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
     .help-overlay.open{opacity:1;pointer-events:all;}
@@ -277,19 +234,6 @@
             </div>
             <div id="dz"></div>
           </div>
-        </div>
-
-        <div class="sel-toolbar" id="sel-toolbar">
-          <span class="sel-toolbar-count" id="sel-count-label">0 selecionados</span>
-          <button class="sel-toolbar-btn" onclick="selecionarTodos()">Selecionar todos</button>
-          <button class="sel-toolbar-btn danger" onclick="excluirSelecionados()">Excluir selecionados</button>
-          <button class="sel-toolbar-close" onclick="limparSelecao()" title="Cancelar seleção">×</button>
-        </div>
-
-        <div id="loading-panel" class="loading-panel" aria-live="polite" aria-busy="false">
-          <div class="loading-spinner"></div>
-          <div class="loading-copy">Carregando dados...</div>
-          <div class="loading-hint">Buscando o histórico de interpretações.</div>
         </div>
 
         <div class="card" style="padding:0;overflow:hidden">
@@ -456,96 +400,13 @@
 
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
-<script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
+<script src="/js/grid-group-panel.js?v=20260617-grid-state"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
   let table, gp;
   let _dados = [];
   let _rowAtual = null;
   let _grupoVisivel = false;
-  let _carregando = false;
-  let _selecionados = new Set();
-
-  function _atualizarToolbarSelecao() {
-    const toolbar = document.getElementById('sel-toolbar');
-    const label = document.getElementById('sel-count-label');
-    const n = _selecionados.size;
-    if (n > 0) {
-      toolbar.classList.add('show');
-      label.textContent = `${n} selecionado${n !== 1 ? 's' : ''}`;
-    } else {
-      toolbar.classList.remove('show');
-    }
-  }
-
-  function _toggleSelecao(id, checked) {
-    if (checked) {
-      _selecionados.add(id);
-    } else {
-      _selecionados.delete(id);
-    }
-    if (table) {
-      const row = table.getRow(id);
-      if (row) {
-        const el = row.getElement();
-        el.classList.toggle('row-selecionada', checked);
-      }
-    }
-    _atualizarToolbarSelecao();
-  }
-
-  function selecionarTodos() {
-    if (!table) return;
-    table.getRows('active').forEach(row => {
-      const data = row.getData();
-      _selecionados.add(data.id);
-      row.getElement().classList.add('row-selecionada');
-      const cb = row.getElement().querySelector('input.row-checkbox');
-      if (cb) cb.checked = true;
-    });
-    _atualizarToolbarSelecao();
-  }
-
-  function limparSelecao() {
-    _selecionados.clear();
-    if (table) {
-      table.getRows().forEach(row => {
-        row.getElement().classList.remove('row-selecionada');
-        const cb = row.getElement().querySelector('input.row-checkbox');
-        if (cb) cb.checked = false;
-      });
-    }
-    _atualizarToolbarSelecao();
-  }
-
-  async function excluirSelecionados() {
-    const ids = [..._selecionados];
-    if (ids.length === 0) return;
-    if (!confirm(`Excluir ${ids.length} registro${ids.length !== 1 ? 's' : ''} selecionado${ids.length !== 1 ? 's' : ''}? Esta ação não pode ser desfeita.`)) return;
-
-    const btn = document.querySelector('.sel-toolbar-btn.danger');
-    const orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Excluindo...';
-
-    try {
-      const res = await fetch('/api/ia-command/admin/interpretacoes/excluir-selecionados', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Não foi possível excluir os registros.');
-      limparSelecao();
-      await carregar();
-      alert(`${data.removidos || 0} registro(s) excluído(s).`);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
-  }
 
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -583,20 +444,6 @@
     if (v == null || v === '') return '-';
     const parsed = typeof v === 'string' ? parseJson(v, v) : v;
     return typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2);
-  }
-
-  function setLoading(carregando, texto = 'Carregando dados...') {
-    _carregando = carregando;
-    const panel = document.getElementById('loading-panel');
-    const tabela = document.getElementById('tabela');
-    const count = document.getElementById('count');
-    if (!panel || !tabela || !count) return;
-    panel.classList.toggle('show', carregando);
-    panel.setAttribute('aria-busy', carregando ? 'true' : 'false');
-    const copy = panel.querySelector('.loading-copy');
-    if (copy) copy.textContent = texto;
-    tabela.style.display = carregando && !table ? 'none' : '';
-    if (carregando) count.textContent = '• carregando dados...';
   }
 
   function motor(row) {
@@ -755,29 +602,11 @@
   }
 
   function limparFiltros() {
-    document.getElementById('f-busca').value = '';
-    document.getElementById('f-motor').value = '';
-    filtrar();
+    if (table) table.clearHeaderFilter();
   }
 
   // ── Detalhe ───────────────────────────────────────────────────────────────
-  async function verDetalhe(row) {
-    if (!row) return;
-    if (!row._detalheCarregado) {
-      setLoading(true, 'Carregando dados da interpretação...');
-      try {
-        const res = await fetch(`/api/ia-command/admin/interpretacoes/${encodeURIComponent(row.id)}`);
-        const detalhado = await res.json().catch(() => null);
-        if (!res.ok || !detalhado) throw new Error((detalhado && detalhado.error) || 'Nao foi possivel carregar o detalhe.');
-        Object.assign(row, detalhado, { _detalheCarregado: true });
-      } catch (err) {
-        setLoading(false);
-        alert(err.message || 'Nao foi possivel carregar o detalhe.');
-        return;
-      }
-      setLoading(false);
-    }
-
+  function verDetalhe(row) {
     _rowAtual = row;
     const idCurto = String(row.id || '').slice(0,8) || '-';
     document.getElementById('d-title-header').textContent = `Interpretação #${idCurto}`;
@@ -1032,6 +861,16 @@
   }
 
   // ── Grid ──────────────────────────────────────────────────────────────────
+  async function carregar() {
+    _dados = await fetch('/api/ia-command/admin/interpretacoes?limit=200').then(r => r.json()).catch(() => []);
+    document.getElementById('count').textContent = `• ${_dados.length} registro(s)`;
+    if (table) {
+      table.replaceData(_dados);
+      return;
+    }
+    _criarTabela(_dados);
+  }
+
   function _criarTabela(data) {
     gp = createGroupPanel({
       chipsRowId: 'gp-chips-row', dropZoneId: 'dz',
@@ -1050,39 +889,24 @@
       placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma interpretacao registrada.</div>',
       tableBuilt: () => { gp.refresh(); gp.applyToTable(); },
       columns: [
-        { title: '', field: '_sel', width: 38, hozAlign: 'center', groupable: false, resizable: false, headerSort: false,
-          formatter: (cell) => {
-            const id = cell.getRow().getData().id;
-            const checked = _selecionados.has(id) ? 'checked' : '';
-            return `<input type="checkbox" class="row-checkbox" ${checked} onclick="event.stopPropagation()">`;
-          },
-          cellClick: (e, cell) => {
-            e.stopPropagation();
-            const id = cell.getRow().getData().id;
-            const cb = cell.getElement().querySelector('input.row-checkbox');
-            if (!cb) return;
-            cb.checked = !cb.checked;
-            _toggleSelecao(id, cb.checked);
-          },
-        },
         { title: '', field: 'id', width: 46, hozAlign: 'center', groupable: false,
           formatter: () => `<button class="btn-icon" title="Visualizar" style="pointer-events:none">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           </button>`,
           cellClick: (e, cell) => { e.stopPropagation(); verDetalhe(cell.getRow().getData()); },
         },
-        { title: 'Data/Hora', field: 'criado_em', width: 155, sorter: 'string', groupable: false,
+        { title: 'Data/Hora', field: 'criado_em', width: 155, sorter: 'string',
           formatter: c => fmtData(c.getValue()) },
-        { title: 'Celular', field: '_celular', width: 150, headerFilter: true,
-          formatter: c => esc(c.getValue()) },
-        { title: 'Pergunta', field: 'texto_original', minWidth: 220, headerFilter: true, groupable: false,
+        { title: 'Celular', field: 'numero_wa', width: 150, headerFilter: true,
+          formatter: c => esc(fmtFone(c.getValue())) },
+        { title: 'Pergunta', field: 'texto_original', minWidth: 220, headerFilter: true,
           formatter: c => `<div class="grid-text-preview question" title="${esc(c.getValue() || '')}">${esc(c.getValue() || '-')}</div>` },
-        { title: 'Resposta', field: 'resposta_entregue', minWidth: 280, headerFilter: true, groupable: false,
+        { title: 'Resposta', field: 'resposta_entregue', minWidth: 280, headerFilter: true,
           formatter: c => `<div class="grid-text-preview answer" title="${esc(c.getValue() || '')}">${esc(c.getValue() || '(sem resposta registrada)')}</div>` },
         { title: 'Intencao', field: 'intencao', minWidth: 160, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
-        { title: 'Modulo', field: '_modulo', width: 125,
-          formatter: c => esc(c.getValue() || '-') },
+        { title: 'Modulo', field: 'trace_json', width: 125, groupable: false,
+          formatter: c => esc(moduloIntent(c.getRow().getData())) },
         { title: 'Pipeline', field: 'pipeline_origem', width: 125,
           headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', chat: 'Chat-first', classico: 'Clássico', canonico_reuso: 'Reuso', consolidado: 'Consolidado' } },
           formatter: c => pipelineBadgeHtml(c.getValue()) },
@@ -1091,9 +915,10 @@
           formatter: c => faseExecucaoBadge(c.getValue()) },
         { title: 'Dataset', field: 'dataset_nome', minWidth: 140, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
-        { title: 'Origem', field: '_origem', width: 145,
+        { title: 'Origem', field: 'intent_json', width: 145, groupable: false,
           formatter: c => {
-            const origem = c.getValue() || '';
+            const row = c.getRow().getData();
+            const origem = origemIntent(row);
             const cls = origem === 'Motor local' ? 'badge-local' : origem.startsWith('IA externa') ? 'badge-externo' : origem === 'Contexto da conversa' ? 'badge-fallback' : 'badge-neutro';
             return `<span class="badge ${cls}">${esc(origem)}</span>`;
           } },
@@ -1103,14 +928,14 @@
           formatter: c => esc(metricasIntent(c.getRow().getData())) },
         { title: 'SQL canonico', field: 'sql_canonico_origem', width: 135, headerFilter: true,
           formatter: c => esc(resumoSqlCanonico(c.getRow().getData())) },
-        { title: 'Motor', field: '_motor', width: 145,
+        { title: 'Motor', field: 'provedor', width: 145,
           formatter: c => {
             const row = c.getRow().getData();
             const tipo = motorTipo(row);
             const cls = tipo === 'local' ? 'badge-local' : tipo === 'externa' ? 'badge-externo' : 'badge-neutro';
-            return `<span class="badge ${cls}">${esc(c.getValue() || '')}</span>`;
+            return `<span class="badge ${cls}">${esc(motor(row))}</span>`;
           } },
-        { title: 'Conf.', field: 'confianca', width: 80, groupable: false,
+        { title: 'Conf.', field: 'confianca', width: 80,
           formatter: c => `<strong>${esc(conf(c.getRow().getData()))}</strong>` },
         { title: 'Fallback', field: 'fallback_usado', width: 90,
           formatter: c => c.getValue() ? '<span class="badge badge-fallback">Sim</span>' : '<span class="badge badge-neutro">Nao</span>' },
@@ -1120,45 +945,9 @@
         { title: 'Resultado', field: 'resultado_tipo', width: 115, headerFilter: true,
           formatter: c => esc(c.getValue() || '-') },
       ],
-      rowClick: (e, row) => {
-        if (e.target.classList.contains('row-checkbox')) return;
-        verDetalhe(row.getData());
-      },
+      rowClick: (e, row) => verDetalhe(row.getData()),
     });
 
-  }
-
-  function _enriquecerDados(rows) {
-    return rows.map(r => ({
-      ...r,
-      _modulo:  moduloIntent(r),
-      _motor:   motor(r),
-      _origem:  origemIntent(r),
-      _celular: fmtFone(r.numero_wa),
-    }));
-  }
-
-  async function carregar() {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/ia-command/admin/interpretacoes?limit=200');
-      if (!res.ok) throw new Error(`Erro ${res.status}`);
-      _dados = _enriquecerDados(await res.json());
-      document.getElementById('count').textContent = `• ${_dados.length} registro(s)`;
-      _selecionados.clear();
-      _atualizarToolbarSelecao();
-      if (table) {
-        await table.replaceData(_dados);
-      } else {
-        _criarTabela(_dados);
-      }
-    } catch (err) {
-      _dados = [];
-      document.getElementById('count').textContent = '• erro ao carregar';
-      if (table) await table.replaceData([]);
-    } finally {
-      setLoading(false);
-    }
   }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();

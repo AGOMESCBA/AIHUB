@@ -12,6 +12,10 @@ const CAMPOS_CODIGO_EQUIVALENTES = {
   cliente: ['A1_COD', 'E1_CLIENTE', 'F2_CLIENTE', 'D2_CLIENTE', 'E3_CLIENT'],
   fornecedor: ['A2_COD', 'E2_FORNECE', 'F1_FORNECE', 'D1_FORNECE'],
   vendedor: ['A3_COD', 'E3_VEND', 'E3_VENDED', 'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5'],
+  // Tipo exclusivo de segurança: código ERP do remetente por empresa, resolvido pelo sistema
+  // (não pelo usuário). Usa os mesmos campos do vendedor para parametrização do SQL canônico.
+  // Nunca deve ser confundido com entidade de negócio pedida pelo usuário.
+  vendedor_fixo_seguranca: ['E3_VEND', 'E3_VENDED'],
   produto: ['B1_COD', 'D1_COD', 'D2_COD'],
   grupo_produto: ['BM_GRUPO', 'B1_GRUPO'],
   centro_custo: ['CTT_CUSTO', 'D1_CC', 'D2_CCUSTO'],

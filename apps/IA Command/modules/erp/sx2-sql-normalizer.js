@@ -108,6 +108,23 @@ function _removerPredicadoLiteral(sql, alias, campo) {
   return out;
 }
 
+// Remove condição de igualdade entre campos de filial em cláusula JOIN quando
+// a tabela com o alias indicado é compartilhada/global (X2_MODO C ou G).
+// Padrão alvo: AND aliasA.campoFilialA = aliasB.campoFilialB (qualquer ordem)
+// Isso ocorre quando a IA une tabela exclusiva com cadastro compartilhado pelo campo filial,
+// o que exclui registros válidos — cadastros compartilhados não têm filial significativa.
+function _removerPredicadoFilialJoin(sql, aliasCompartilhado, campoCompartilhado) {
+  const a = aliasCompartilhado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const c = campoCompartilhado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = String(sql || '');
+  // Captura AND qualquerAlias.qualquerCampo = aliasComp.campoComp (ou ordem inversa)
+  const qualquer = '[A-Z_][A-Z0-9_]*\\s*\\.\\s*[A-Z_][A-Z0-9_]*';
+  const lado = `${a}\\s*\\.\\s*${c}`;
+  out = out.replace(new RegExp(`\\s+AND\\s+${qualquer}\\s*=\\s*${lado}`, 'gi'), '');
+  out = out.replace(new RegExp(`\\s+AND\\s+${lado}\\s*=\\s*${qualquer}`, 'gi'), '');
+  return out;
+}
+
 function sanitizarFiltrosFilialSX2(sql, sx2 = {}, opts = {}) {
   let texto = String(sql || '');
   const avisos = [];
@@ -121,6 +138,7 @@ function sanitizarFiltrosFilialSX2(sql, sx2 = {}, opts = {}) {
     const antes = texto;
     if (modo === 'C' || modo === 'G') {
       texto = _removerPredicadoLiteral(texto, alias, campo);
+      texto = _removerPredicadoFilialJoin(texto, alias, campo);
       if (texto !== antes) avisos.push(`${alias}.${campo} removido: tabela ${base} compartilhada/global no SX2`);
       continue;
     }

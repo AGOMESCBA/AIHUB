@@ -18,8 +18,17 @@ function _buildUrl(conn, path) {
   return `${base}${endpoint}${path}`;
 }
 
+const REQUEST_TIMEOUT_MS = 120000; // 120s — queries SQL longas (financeiro multi-empresa podem chegar a 60s+)
+
 function _request(url, method, body, apiKey) {
   return new Promise((resolve, reject) => {
+    // Flag para garantir que resolve/reject seja chamado apenas uma vez.
+    // req.destroy() no timeout emite 'error' no socket, causando double-reject
+    // que vira UnhandledPromiseRejection e derruba o processo Node.
+    let settled = false;
+    const _resolve = (val) => { if (!settled) { settled = true; resolve(val); } };
+    const _reject  = (err) => { if (!settled) { settled = true; reject(err);  } };
+
     const parsed  = new URL(url);
     const isHttps = parsed.protocol === 'https:';
     const payload = body ? JSON.stringify(body) : null;
@@ -44,20 +53,23 @@ function _request(url, method, body, apiKey) {
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
         if (res.statusCode === 401) {
-          return reject(new Error('API Key inválida ou não autorizada (HTTP 401).'));
+          return _reject(new Error('API Key inválida ou não autorizada (HTTP 401).'));
         }
         if (res.statusCode < 200 || res.statusCode >= 300) {
           let msg = `Agente retornou HTTP ${res.statusCode}`;
           try { msg = JSON.parse(data)?.error || msg; } catch (_) {}
-          return reject(new Error(msg));
+          return _reject(new Error(msg));
         }
-        try { resolve(JSON.parse(data)); }
-        catch (_) { reject(new Error('Resposta do agente não é JSON válido.')); }
+        try { _resolve(JSON.parse(data)); }
+        catch (_) { _reject(new Error('Resposta do agente não é JSON válido.')); }
       });
     });
 
-    req.on('error', (err) => reject(new Error(`Falha ao conectar ao agente: ${err.message}`)));
-    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout ao chamar o agente (30s).')); });
+    req.on('error', (err) => _reject(new Error(`Falha ao conectar ao agente: ${err.message}`)));
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy();
+      _reject(new Error(`Timeout ao chamar o agente (${REQUEST_TIMEOUT_MS / 1000}s).`));
+    });
 
     if (payload) req.write(payload);
     req.end();

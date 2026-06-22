@@ -223,11 +223,40 @@ function _temFiltroEntidadeDinamica(intent = {}) {
     });
 }
 
+const _PALAVRAS_ERP = /\b(saldo|valor|total|vencimento|vencendo|vencer|fornecedor|fornecedores|cliente|clientes|nota|notas|pedido|pedidos|titulo|titulos|duplicata|duplicatas|fatura|faturas|pagamento|pagamentos|recebimento|recebimentos|compra|compras|venda|vendas|estoque|produto|produtos|financeiro|comissao|comissoes|carteira|banco|bancos|conta|contas|fluxo|caixa|emissao|parcela|parcelas|nf|nfe|xml)\b/i;
+
+function _parecePerguntaErp(mensagem) {
+  return _PALAVRAS_ERP.test(String(mensagem || '').normalize('NFD').replace(/[̀-ͯ]/g, ''));
+}
+
 async function rotear(intent, empresaId) {
   intent = _corrigirIntentDinamicoPorTexto(intent, empresaId);
   const t0 = Date.now();
 
   if (intent.intencao === 'desconhecido') {
+    const mensagem = intent._mensagemOriginal || intent.intencao || '';
+    if (_parecePerguntaErp(mensagem)) {
+      const _todosModulos = Object.keys(SPEC_LOADERS);
+      const _specs = _todosModulos.map(m => SPEC_LOADERS[m]());
+      const _specCombinado = crossModuleSpecCombiner.combinarSpecs(_specs);
+      const _intentLimpo = {
+        _mensagemOriginal: mensagem,
+        _remetente: intent._remetente || null,
+        _channelId: intent._channelId || null,
+        intencao: 'erp_generico',
+        periodo: { tipo: 'nenhum' },
+        filtros: {},
+        _dynamicAiScope: true,
+      };
+      console.log(`[IACommandAI] Desconhecido com sinal ERP — roteando para spec combinado (todos os modulos) | empresa=${empresaId}`);
+      const resultado = await iaOwnerRunner.executar(_specCombinado, _intentLimpo, empresaId);
+      const traceResultado = [
+        ...(Array.isArray(intent._trace) ? intent._trace : []),
+        ...(Array.isArray(resultado?.trace) ? resultado.trace : []),
+        { etapa: 'router', acao: 'fallback_erp_generico', modulo: 'todos', intencao: 'desconhecido', detalhe: `tipo=${resultado?.tipo || 'n/a'}; duracao_ms=${Date.now() - t0}` },
+      ];
+      return { dataset_id: null, dataset_nome: 'erp_generico', ...(resultado || {}), trace: traceResultado };
+    }
     return { tipo: 'desconhecido', mensagem: intent._erro || 'Fiquei em duvida sobre qual indicador, periodo ou detalhe voce quer consultar.' };
   }
 

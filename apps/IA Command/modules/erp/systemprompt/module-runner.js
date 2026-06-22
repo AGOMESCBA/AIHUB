@@ -481,6 +481,27 @@ function extrairSQL(resposta) {
   return m ? m[0].trim() : null;
 }
 
+function _extrairDecisaoContexto(respostaSql) {
+  if (!respostaSql) return null;
+  try {
+    const obj = typeof respostaSql === 'object' ? respostaSql : JSON.parse(String(respostaSql));
+    return obj?.decisao_contexto || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function _zerarContextoIAAnterior(fase1) {
+  return {
+    ...fase1,
+    periodo: null,
+    periodo_mantido: false,
+    agrupamentos_mantidos: false,
+    agrupamentos: [],
+    entidades_nomeadas: [],
+  };
+}
+
 async function chamarIA(contract, keys, cfg, systemPrompt, userPrompt, opts = {}) {
   return aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
     logPrefix: contract.logPrefix || contract.nome || 'SystemPrompt',
@@ -881,6 +902,7 @@ async function executar(contract, intent, empresaId) {
   };
 
   let sql = null, userSql = null, respostaSql = null;
+  let contextoIAProximo = fase1;
   if (sqlCanonicoWhatsappAll) {
     sql = sqlCanonicoWhatsappAll;
     respostaSql = JSON.stringify({ sql: sqlCanonicoWhatsappAll, origem: 'sql_canonico_whatsapp_all' });
@@ -893,6 +915,11 @@ async function executar(contract, intent, empresaId) {
     if (!geracaoSql.ok) {
       const tipo = geracaoSql.subtipo === 'sql_nao_extraido' ? 'sql_invalido' : geracaoSql.subtipo === 'sem_chave' ? 'ia_indisponivel' : geracaoSql.subtipo;
       return { tipo: 'erro', subtipo: geracaoSql.subtipo, resposta_direta: mensagemErro(contract, tipo), sql_gerado: sqlDiagnostico(contract, { mensagem, userSql, respostaSql, erro: geracaoSql.erro?.message, subtipo: geracaoSql.subtipo }), duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+    }
+    const decisao = _extrairDecisaoContexto(respostaSql);
+    if (decisao === 'nova_consulta' || decisao === 'troca_assunto') {
+      console.log(`[${contract.logPrefix}] decisao_contexto='${decisao}' — contexto anterior zerado para proximo turno.`);
+      contextoIAProximo = _zerarContextoIAAnterior(fase1);
     }
   }
 
@@ -917,7 +944,7 @@ async function executar(contract, intent, empresaId) {
       },
     });
     if (guard?.erro) {
-      return { ...guard.erro, duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+      return { ...guard.erro, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
     }
     if (guard?.sql) sql = guard.sql;
     if (guard?.respostaSql) respostaSql = guard.respostaSql;
@@ -946,7 +973,7 @@ async function executar(contract, intent, empresaId) {
     sqlAuditoria.parametros_entidade_aplicados = parametros.aplicados || [];
     sqlAuditoria.parametros_entidade_pendentes = parametros.pendentes || [];
     if (!parametros.ok) {
-      return { tipo: 'erro', subtipo: 'sql_parametro_entidade_pendente', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sqlDiagnostico(contract, { mensagem, userSql, respostaSql, erro: `Parametros de entidade pendentes: ${parametros.pendentes.map(p => p.placeholder).join(', ')}`, subtipo: 'sql_parametro_entidade_pendente' }), duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+      return { tipo: 'erro', subtipo: 'sql_parametro_entidade_pendente', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sqlDiagnostico(contract, { mensagem, userSql, respostaSql, erro: `Parametros de entidade pendentes: ${parametros.pendentes.map(p => p.placeholder).join(', ')}`, subtipo: 'sql_parametro_entidade_pendente' }), duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
     }
     sql = parametros.sql;
     sqlAuditoria.sql_apos_parametros = sql;
@@ -959,7 +986,7 @@ async function executar(contract, intent, empresaId) {
   const validacaoSX3 = sx3SqlValidator.validarCamposSqlContraSX3(sql, contexto.sx3Validacao || contexto.sx3);
   if (!validacaoSX3.ok) {
     console.warn(`[${contract.logPrefix}] SQL rejeitado por SX3:`, validacaoSX3.erros.join(' | '));
-    return { tipo: 'erro', subtipo: 'contrato_sx3_invalido', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sqlDiagnostico(contract, { mensagem, userSql, respostaSql, erro: `SQL rejeitado por SX3: ${validacaoSX3.erros.join(' | ')}`, subtipo: 'contrato_sx3_invalido' }), duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+    return { tipo: 'erro', subtipo: 'contrato_sx3_invalido', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sqlDiagnostico(contract, { mensagem, userSql, respostaSql, erro: `SQL rejeitado por SX3: ${validacaoSX3.erros.join(' | ')}`, subtipo: 'contrato_sx3_invalido' }), duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
   }
 
   sql = entitySqlGuard.removerHintsNoLock(sql);
@@ -968,7 +995,7 @@ async function executar(contract, intent, empresaId) {
   }
   const mw = sqlMW.processar(sql, middlewareCfg);
   if (mw.alertas?.length) console.warn(`[${contract.logPrefix}] Middleware alertas (empresa #${empresaId}):`, mw.alertas.join(' | '));
-  if (mw.bloqueado) return { tipo: 'erro', subtipo: 'sql_bloqueado', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sql, duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+  if (mw.bloqueado) return { tipo: 'erro', subtipo: 'sql_bloqueado', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sql, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
 
   const sqlFinal = mw.sql_processado;
   sqlAuditoria.sql_final_executado = sqlFinal;
@@ -994,12 +1021,12 @@ async function executar(contract, intent, empresaId) {
     } catch (e) {
       const semConexao = /nenhuma conex|no connection|connect/i.test(e.message);
       if (semConexao) {
-        return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(contract, 'sem_conexao'), sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+        return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(contract, 'sem_conexao'), sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
       }
       console.warn(`[${contract.logPrefix}] Erro SQL no ERP; tentando auto-correcao pela IA: ${e.message.slice(0, 300)}`);
       const sqlCorrigido = await tentarCorrigirSqlComIA(contract, keys, cfg, sqlFinal, e.message, mensagem, middlewareCfg, sqlMW.processar);
       if (!sqlCorrigido) {
-        return { tipo: 'erro', subtipo: 'erro_erp', resposta_direta: mensagemErro(contract, 'erro_erp'), sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+        return { tipo: 'erro', subtipo: 'erro_erp', resposta_direta: mensagemErro(contract, 'erro_erp'), sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
       }
       sqlExecutado = sqlCorrigido;
       sqlAuditoria.sql_final_executado = sqlCorrigido;
@@ -1013,7 +1040,7 @@ async function executar(contract, intent, empresaId) {
         escopoExecucao = conn2.tipo === 'api_proxy' ? 'agente_local' : 'conexao_direta';
         rows = await connectionFactory.executar(conn2, sqlCorrigido, {});
       } catch (e2) {
-        return { tipo: 'erro', subtipo: 'erro_erp', resposta_direta: mensagemErro(contract, 'erro_erp'), sql_gerado: `${sqlCorrigido}\n\n-- ERRO (apos correcao IA): ${limitarTexto(e2.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: fase1 };
+        return { tipo: 'erro', subtipo: 'erro_erp', resposta_direta: mensagemErro(contract, 'erro_erp'), sql_gerado: `${sqlCorrigido}\n\n-- ERRO (apos correcao IA): ${limitarTexto(e2.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
       }
     }
   }
@@ -1026,7 +1053,7 @@ async function executar(contract, intent, empresaId) {
     _sql_canonico_empresa_origem: intentEntidades._sqlCanonicoEmpresaOrigem || empresaId,
     _sql_auditoria: sqlAuditoria,
     _entidadesResolvidas: entidadesResolvidas,
-    _contextoIAAnterior: fase1,
+    _contextoIAAnterior: contextoIAProximo,
   };
 
   if (!rows || !rows.length) {
@@ -1099,24 +1126,30 @@ async function executarSqlDireto(contract, sqlCanonico, intent, empresaId) {
   }
   const sqlFinal = mw.sql_processado;
 
+  const _erroAgenteTemporal = (msg) => /socket hang up|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timeout ao chamar/i.test(msg || '');
   let rows;
-  try {
-    const conn = connectionFactory.carregarConexao(empresaId);
-    conn._pergunta   = mensagem;
-    conn._sender     = intent._remetente || '';
-    conn._modulo     = contract.nome     || '';
-    conn._operacao   = intent.intencao   || '';
-    conn._empresa_id = empresaId         || '';
-    rows = await connectionFactory.executar(conn, sqlFinal, {});
-  } catch (e) {
-    const semConexao = /nenhuma conex|no connection|connect/i.test(e.message);
-    return {
-      tipo: 'erro',
-      subtipo: semConexao ? 'sem_conexao' : 'erro_erp',
-      resposta_direta: mensagemErro(contract, semConexao ? 'sem_conexao' : 'erro_erp'),
-      sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 500)}`,
-      duracao_ms: Date.now() - t0,
-    };
+  for (let _tentativa = 1; _tentativa <= 2; _tentativa++) {
+    try {
+      if (_tentativa > 1) await new Promise(r => setTimeout(r, 2000));
+      const conn = connectionFactory.carregarConexao(empresaId);
+      conn._pergunta   = mensagem;
+      conn._sender     = intent._remetente || '';
+      conn._modulo     = contract.nome     || '';
+      conn._operacao   = intent.intencao   || '';
+      conn._empresa_id = empresaId         || '';
+      rows = await connectionFactory.executar(conn, sqlFinal, {});
+      break;
+    } catch (e) {
+      if (_tentativa < 2 && _erroAgenteTemporal(e.message)) continue;
+      const semConexao = /nenhuma conex|no connection|connect/i.test(e.message);
+      return {
+        tipo: 'erro',
+        subtipo: semConexao ? 'sem_conexao' : 'erro_erp',
+        resposta_direta: mensagemErro(contract, semConexao ? 'sem_conexao' : 'erro_erp'),
+        sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 500)}`,
+        duracao_ms: Date.now() - t0,
+      };
+    }
   }
 
   if (!rows || !rows.length) {

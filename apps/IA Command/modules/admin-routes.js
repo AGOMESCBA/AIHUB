@@ -921,10 +921,18 @@ Responda SOMENTE com JSON válido, sem markdown:
 
   app.get('/api/ia-command/admin/interpretacoes', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
     const interpretationLog = require('./ai/interpretation-log');
-    res.json(interpretationLog.listar(eid(req), {
+    res.json(interpretationLog.listarResumo(eid(req), {
       limit: req.query.limit,
       fase_execucao: req.query.fase_execucao,
     }));
+  });
+
+  app.get('/api/ia-command/admin/interpretacoes/:id', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const interpretationLog = require('./ai/interpretation-log');
+    const empresaId = eid(req);
+    const row = interpretationLog.obterPorId(req.params.id, empresaId);
+    if (!row) return res.status(404).json({ error: `Interpretacao nao encontrada (empresa_id=${empresaId}).` });
+    res.json(row);
   });
 
   // ── COMPRAS — Consultas Text-to-SQL ─────────────────────────────────────────
@@ -1086,6 +1094,20 @@ Responda SOMENTE com JSON válido, sem markdown:
       LIMIT ?
     `).all(...params);
     res.json(rows);
+  });
+
+  app.post('/api/ia-command/admin/interpretacoes/excluir-selecionados', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const interpretationLog = require('./ai/interpretation-log');
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Informe ao menos um ID para excluir.' });
+    }
+    if (ids.length > 200) {
+      return res.status(400).json({ error: 'Máximo de 200 registros por operação.' });
+    }
+    const removidos = interpretationLog.excluirPorIds(eid(req), ids);
+    _audit(req, 'excluir_interpretacoes_selecionadas', { ids, removidos });
+    res.json({ ok: true, removidos });
   });
 
   app.post('/api/ia-command/admin/interpretacoes/limpar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {

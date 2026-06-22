@@ -221,4 +221,33 @@ Nunca nova consulta
 ---
 
 ## 🧠 Regra de Ouro
-Velocidade < Segurança  
+Velocidade < Segurança
+
+---
+
+## 🚫 IA Command — Spec vs Inteligência da IA (OBRIGATÓRIO)
+
+### Princípio
+O spec do IA-OWNER existe para corrigir **erros estruturais de domínio** (tabelas erradas, campos proibidos, padrões Protheus), não para prescrever agrupamentos, granularidade ou estrutura SQL de perguntas livres.
+
+### Regra de Ouro do Spec
+**Menos é mais.** Cada linha adicionada ao spec é uma restrição ao raciocínio da IA. Antes de adicionar qualquer regra, pergunte: "Isso corrige um erro de domínio ou estou tentando controlar o que a IA já sabe fazer?"
+
+### O que NÃO resolver com spec
+- Agrupamentos livres: "por títulos", "por data de vencimento", "por fornecedor e data" → a IA interpreta da pergunta
+- Granularidade de listagem → decisão da IA com base na pergunta do usuário
+- Combinações de dimensões analíticas → comportamento inerente de LLM em perguntas abertas
+- Erros ocasionais de agrupamento em perguntas complexas → o usuário reformula, não se adiciona regra
+
+### O que SIM resolver com spec
+- Tabelas proibidas em determinadas operações (ex: SE5 em fluxo de caixa projetado)
+- Campos obrigatórios de integridade (D_E_L_E_T_, E1_SALDO > 0)
+- Padrões únicos do Protheus que a IA não conhece (ROW_NUMBER em SE8, sufixos SX2)
+- Erros de domínio recorrentes confirmados em produção
+
+### Diagnóstico antes de tocar no spec
+Quando a IA gerar SQL errado, verificar nesta ordem:
+1. O `query_plan` classificou a operação corretamente? (ex: `fluxo_caixa` vs `saldo_bancario`)
+2. Alguma palavra da pergunta disparou classificação errada no código?
+3. O spec tem exemplo ou regra que contamina o raciocínio da IA?
+4. Só após confirmar os três acima → considerar mudança no spec

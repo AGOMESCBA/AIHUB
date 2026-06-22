@@ -36,6 +36,12 @@ svc._channelName = 'WhatsApp J2A Consultoria';
 // Bypassa verificação de autorização (teste local — número já está no banco)
 svc._isSenderAuthorized = () => true;
 
+// Bypassa verificação de módulo (banco local tem modulo_* = 0; em prod estão habilitados)
+const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
+  intentRouter._verificarAutorizacaoModulo = () => null;
+}
+
 // Silencia envio real de WhatsApp (não há client conectado)
 svc._enviarResposta = async (sender, texto) => {
   console.log(`\n📤 RESPOSTA PARA ${sender}:\n${'─'.repeat(60)}\n${texto}\n${'─'.repeat(60)}`);
@@ -44,19 +50,20 @@ svc._enviarResposta = async (sender, texto) => {
 // ── Casos de teste ────────────────────────────────────────────────────────────
 const CASOS = [
   {
-    desc  : 'Bypass ERP (sem IA de roteamento)',
-    texto : 'faturamento de hoje',
-    checks: (log) => log.provedor === 'bypass_local' || true, // verifica no console
+    desc  : 'Faturamento cliente COABRA em 2026',
+    texto : 'faturamento feito para o cliente COABRA no ano de 2026',
   },
   {
-    desc  : 'Cache de roteamento (segunda chamada idêntica)',
-    texto : 'faturamento de hoje',
-    checks: () => true, // deve ser mais rápida que a primeira
+    desc  : 'Cliente com maior faturamento em maio',
+    texto : 'Qual cliente com maior faturamento no mês de maio?',
   },
   {
-    desc  : 'Consulta ERP completa — compras do mês',
-    texto : 'compras do mês passado',
-    checks: () => true,
+    desc  : 'Contas a pagar dos próximos 10 dias',
+    texto : 'Contas a pagar dos próximos 10 dias?',
+  },
+  {
+    desc  : 'Contas a receber do ano por mês',
+    texto : 'Quais as nossas Contas a receber do ano por mes?',
   },
 ];
 
@@ -74,7 +81,8 @@ const CASOS = [
 
     const t0 = Date.now();
     try {
-      const resposta = await svc._pipeline(texto, SENDER, {});
+      // Chama _pipelineAll diretamente com empresa_id=1 para pular seleção multiempresa
+      const resposta = await svc._pipelineAll(texto, [{ empresa_id: EMPRESA_ID, nome: 'J2A Consultoria' }], SENDER, {});
       const ms = Date.now() - t0;
       console.log(`    ✅ Concluído em ${ms}ms`);
       if (resposta) {

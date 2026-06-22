@@ -42,6 +42,11 @@ function garantirIntencao(empresaId) {
   }
 }
 
+// Retorna o registro completo do número na empresa, ou null se não cadastrado/inativo.
+// Três estados possíveis:
+//   null                          → não cadastrado nesta empresa → bloquear
+//   { erp_tipo: 'gestor', ... }  → acesso total, sem filtro de vendedor
+//   { erp_tipo: 'vendedor', erp_id: 'XXXXXX', ... } → acesso restrito ao próprio código
 function resolverIdentidadeVendedor(remetente, empresaId) {
   try {
     const { getDB } = require('../../database');
@@ -71,11 +76,46 @@ function resolverIdentidadeVendedor(remetente, empresaId) {
   }
 }
 
+// Resolve o vendedorFixo de segurança para uma empresa específica dado o remetente.
+// Retorna um dos três estados de segurança:
+//   { estado: 'nao_cadastrado' }                        → bloquear execução
+//   { estado: 'gestor' }                                → executar sem filtro
+//   { estado: 'vendedor', codigo, nome }                → executar com filtro do código
+//   { estado: 'vendedor_sem_codigo' }                   → bloquear — config incompleta
+// Exportada para uso no pipeline canônico multiempresa (service.js).
+function resolverVendedorFixoPorEmpresa(remetente, empresaId) {
+  if (!remetente) return { estado: 'sem_remetente' };
+  const identidade = resolverIdentidadeVendedor(remetente, empresaId);
+  if (!identidade) return { estado: 'nao_cadastrado' };
+  if (identidade.erp_tipo === 'gestor') return { estado: 'gestor', nome: identidade.nome };
+  if (identidade.erp_tipo === 'vendedor' && identidade.erp_id) {
+    return { estado: 'vendedor', codigo: identidade.erp_id, nome: identidade.nome };
+  }
+  if (identidade.erp_tipo === 'vendedor' && !identidade.erp_id) {
+    return { estado: 'vendedor_sem_codigo', nome: identidade.nome };
+  }
+  // erp_tipo vazio ou desconhecido: sem restrição (número cadastrado mas sem perfil ERP)
+  return { estado: 'sem_restricao' };
+}
+
 function prepararIntent({ intent, empresaId, mensagem }) {
   const remetente = intent._remetente || null;
-  const identidade = remetente ? resolverIdentidadeVendedor(remetente, empresaId) : null;
+  if (!remetente) return {};
 
-  if (identidade && identidade.erp_tipo === 'vendedor' && !identidade.erp_id) {
+  const resolucao = resolverVendedorFixoPorEmpresa(remetente, empresaId);
+
+  if (resolucao.estado === 'nao_cadastrado') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'nao_cadastrado',
+        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de comissão, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
+      },
+    };
+  }
+
+  if (resolucao.estado === 'vendedor_sem_codigo') {
     return {
       retorno: {
         tipo: 'erro',
@@ -85,24 +125,24 @@ function prepararIntent({ intent, empresaId, mensagem }) {
       },
     };
   }
-  if (remetente && !identidade) {
-    return {
-      retorno: {
-        tipo: 'erro',
-        subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de comissão, solicite ao gestor do IA Command que configure seu perfil ERP.',
-        sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers`,
-      },
-    };
-  }
-  if (identidade?.erp_tipo === 'vendedor' && identidade.erp_id) {
+
+  if (resolucao.estado === 'vendedor') {
+    // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de segurança
+    // (para parametrização do SQL canônico — substituída por empresa no reuso multiempresa).
     return {
       contextoTecnicoExtra: {
-        vendedorFixo: { codigo: identidade.erp_id, nome: identidade.nome },
+        vendedorFixo: { codigo: resolucao.codigo, nome: resolucao.nome },
         regraVendedorFixo: 'Aplique obrigatoriamente filtro do vendedorFixo em SE3.E3_VEND ou SE3.E3_VENDED quando existir. Nao retorne dados de outros vendedores.',
+      },
+      entidadeSeguranca: {
+        tipo: 'vendedor_fixo_seguranca',
+        codigo: resolucao.codigo,
+        nome: resolucao.nome,
       },
     };
   }
+
+  // gestor ou sem_restricao: acesso total, sem filtro
   return {};
 }
 
@@ -258,10 +298,12 @@ module.exports = {
   },
   garantirIntencao,
   prepararIntent,
+  resolverVendedorFixoPorEmpresa,
   resolverEntidades,
   formatarPerguntaAmbiguidade,
   _test: {
     resolverIdentidadeVendedor,
+    resolverVendedorFixoPorEmpresa,
     buscarEntidade,
     resolverEntidades,
   },

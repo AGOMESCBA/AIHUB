@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historico de Interpretacoes - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);display:flex;align-items:baseline;gap:8px;line-height:1.2; }
+    .head-count { font-size:12px;color:var(--text-lo);font-weight:500; }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+
+    .group-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:12px; }
+    .group-panel-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+    .group-panel-status { font-size:12px;color:var(--text-lo); }
+    .group-panel-options { display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
+    .group-panel.open .group-panel-options { display:flex; }
+    .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
+    .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-dropzone { flex:1;min-width:260px;min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px; }
+    .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
+    .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px; }
+    .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
+    .status-text { display:none;font-size:12px;color:var(--text-lo); }
+
+    .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .table-wrap { height:calc(100vh - 235px);min-height:360px;overflow:auto;background:var(--bg-card); }
+    .history-table { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .history-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
+    .history-table thead th.sortable { cursor:pointer;user-select:none; }
+    .history-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
+    .history-table thead .filter-cell th { top:34px;padding:6px 10px;background:var(--bg-card); }
+    .history-table thead input, .history-table thead select { width:100%;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:11px;padding:3px 6px;box-sizing:border-box; }
+    .history-table tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:10px;vertical-align:top;background:var(--bg-card); }
+    .history-table tbody tr.data-row { cursor:pointer; }
+    .history-table tbody tr.data-row:hover td { background:var(--bg-hover); }
+    .history-table tbody tr.group-row td { background:var(--bg-base);color:var(--text-hi);font-weight:800;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--border); }
+    .history-table tbody tr.group-row.level-1 td { padding-left:28px; }
+    .history-table tbody tr.group-row.level-2 td { padding-left:46px; }
+    .history-table tbody tr.group-row.level-3 td { padding-left:64px; }
+    .col-check { width:38px;text-align:center; }
+    .col-action { width:42px;text-align:center; }
+    .col-date { width:155px; }
+    .col-phone { width:150px; }
+    .col-question { width:260px; }
+    .col-answer { width:320px; }
+    .col-intent { width:170px; }
+    .col-module { width:130px; }
+    .col-pipeline { width:130px; }
+    .col-phase { width:150px; }
+    input.row-cb { width:15px;height:15px;cursor:pointer;accent-color:var(--accent); }
+    .history-table tbody tr.data-row.selected td { background:rgba(124,58,237,.07); }
+
+    .text-preview { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;word-break:break-word; }
+    .question { color:var(--text-hi);font-weight:800; }
+    .empty-state { height:320px;display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:22px;font-weight:800; }
+
+    .badge { display:inline-flex;align-items:center;justify-content:center;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-warn { background:#fef3c7;color:#92400e; }
+    .badge-blue { background:#dbeafe;color:#1d4ed8; }
+    .badge-purple { background:#ede9fe;color:#6d28d9; }
+    .badge-teal { background:#ccfbf1;color:#0f766e; }
+    .badge-muted { background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .icon-btn { width:28px;height:28px;border:none;background:transparent;border-radius:6px;color:var(--text-md);cursor:pointer;display:inline-flex;align-items:center;justify-content:center; }
+    .icon-btn:hover { background:var(--bg-hover);color:var(--accent); }
+
+    .detail-shell { display:none; }
+    .detail-shell.open { display:block; }
+    .editor-bar { display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow-sm); }
+    .editor-title strong { display:block;color:var(--text-hi);font-size:16px; }
+    .editor-title span { color:var(--text-lo);font-size:12px; }
+    .tabs { display:flex;gap:2px;border-bottom:1px solid var(--border);background:var(--bg-card);padding:0 16px; }
+    .tab-btn { padding:10px 16px;border:none;background:transparent;color:var(--text-lo);font-size:13px;font-weight:800;border-bottom:2px solid transparent;cursor:pointer;margin-bottom:-1px; }
+    .tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .detail-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .tab-panel { display:none;padding:18px; }
+    .tab-panel.active { display:block; }
+    .meta-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px; }
+    .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
+    .meta-item span { display:block;font-size:11px;color:var(--text-lo);margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.04em; }
+    .meta-item strong { display:block;color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .text-box { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px; }
+    .text-box label { display:block;font-size:11px;font-weight:800;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px; }
+    .text-box pre { margin:0;white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:14px;color:var(--text-hi);line-height:1.55; }
+    .split { display:grid;grid-template-columns:1fr 1fr;gap:12px;min-height:360px; }
+    .pane { border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg-base);display:flex;flex-direction:column; }
+    .pane-head { display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .pane-title { font-size:11px;font-weight:800;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em; }
+    .pane-body { margin:0;padding:12px;min-height:310px;max-height:calc(100vh - 335px);overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.55;color:var(--text-md); }
+    .pane-body.text { font-family:inherit;font-size:13.5px;color:var(--text-hi); }
+    .dialog-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .error-box { display:none;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px;font-size:13px;white-space:pre-wrap;word-break:break-word; }
+
+    .modal-backdrop { position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.48);z-index:500;padding:18px; }
+    .modal-backdrop.open { display:flex; }
+    .modal { width:min(540px,96vw);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:22px; }
+    .modal-head { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px; }
+    .modal-title { color:var(--text-hi);font-size:16px;font-weight:800; }
+    .modal-close { border:none;background:transparent;color:var(--text-lo);font-size:22px;line-height:1;cursor:pointer; }
+    .modal-actions { display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--border);padding-top:14px;margin-top:16px; }
+    .danger-note { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.5;margin-top:12px; }
+    .date-row { display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px; }
+    .help-drawer { position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:510;transform:translateX(100%);transition:transform .24s;display:flex;flex-direction:column; }
+    .help-drawer.open { transform:translateX(0); }
+    .help-head { display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border); }
+    .help-body { padding:20px;overflow:auto;color:var(--text-md);font-size:13px;line-height:1.65; }
+    .help-body h3 { color:var(--accent);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin:0 0 10px; }
+
+    @media (max-width: 900px) {
+      .head-row, .editor-bar { align-items:flex-start;flex-direction:column; }
+      .head-actions { width:100%; }
+      .split, .dialog-grid { grid-template-columns:1fr; }
+      .table-wrap { height:calc(100vh - 300px); }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &rsaquo;</span> Hist&oacute;rico de Interpreta&ccedil;&otilde;es</span>
+    </div>
+
+    <div class="page-content">
+      <section id="list-view">
+        <div class="head-row">
+          <div>
+            <div class="page-kicker">Administracao</div>
+            <div class="head-title">Hist&oacute;rico de Interpreta&ccedil;&otilde;es <span class="head-count" id="count">carregando...</span></div>
+          </div>
+          <div class="head-actions">
+            <button class="btn btn-ghost" id="help-btn" type="button">Ajuda</button>
+            <button class="btn btn-ghost" id="sel-del-btn" type="button" style="display:none;font-weight:700;color:#fff;background:#7c3aed;padding:5px 14px;border-radius:6px">Excluir selecionados</button>
+            <button class="btn btn-ghost" id="clear-btn" type="button" style="font-weight:800;color:#1e3a8a">Limpar log</button>
+            <button class="btn btn-ghost" id="refresh-btn" type="button" style="font-weight:700;color:#1e3a8a;padding:5px 14px">↻ Atualizar</button>
+          </div>
+        </div>
+
+        <div class="group-panel" id="group-panel">
+          <div class="group-panel-row">
+            <button class="btn btn-ghost" id="group-toggle" type="button">+ Mostrar agrupamento</button>
+            <span class="group-panel-status" id="group-status">Sem agrupamento ativo</span>
+            <span class="status-text" id="filter-status">Sem filtros ativos</span>
+          </div>
+          <div class="group-panel-options" id="group-options">
+            <span class="group-panel-status">Arraste para agrupar:</span>
+            <button class="group-chip" type="button" draggable="true" data-group-field="intencao">Intencao</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="modulo">Modulo</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="pipeline_origem">Pipeline</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="fase_execucao">Fase</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="resultado_tipo">Resultado</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="motor">Motor</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="numero_wa">Celular</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="dataset_nome">Dataset</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="origem">Origem</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="escopo_execucao">Execucao via</button>
+            <div class="group-dropzone" id="group-dropzone">Solte um campo aqui para agrupar</div>
+            <button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-wrap">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th class="col-check"><input type="checkbox" class="row-cb" id="cb-all" title="Selecionar todos"></th>
+                  <th class="col-action"></th>
+                  <th class="col-date sortable" data-sort="criado_em">Data/Hora</th>
+                  <th class="col-phone sortable" draggable="true" data-group-field="numero_wa" data-sort="numero_wa">Celular</th>
+                  <th class="col-question sortable" data-sort="texto_original">Pergunta</th>
+                  <th class="col-answer sortable" data-sort="resposta_entregue">Resposta</th>
+                  <th class="col-intent sortable" draggable="true" data-group-field="intencao" data-sort="intencao">Intencao</th>
+                  <th class="col-module sortable" draggable="true" data-group-field="modulo" data-sort="modulo">Modulo</th>
+                  <th class="col-pipeline sortable" draggable="true" data-group-field="pipeline_origem" data-sort="pipeline_origem">Pipeline</th>
+                  <th class="col-phase sortable" draggable="true" data-group-field="fase_execucao" data-sort="fase_execucao">Fase</th>
+                </tr>
+                <tr class="filter-cell">
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th><input data-filter="numero_wa" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="texto_original" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="resposta_entregue" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="intencao" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="modulo" autocomplete="off" spellcheck="false"></th>
+                  <th><select data-filter="pipeline_origem" autocomplete="off"><option value="">Todos</option><option value="chat">Chat</option><option value="canonico_reuso">Reuso</option><option value="consolidado">Consolidado</option><option value="classico">Classico</option></select></th>
+                  <th><select data-filter="fase_execucao" autocomplete="off"><option value="">Todas</option><option value="execucao_normal">Normal</option><option value="pre_execucao_tecnica">Tecnico antes</option><option value="sem_execucao">Sem execucao</option></select></th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state" style="display:none">Nenhuma interpretacao</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="detail-view" class="detail-shell">
+        <div class="editor-bar">
+          <div class="editor-title">
+            <strong id="detail-title">Interpretacao</strong>
+            <span id="detail-subtitle">-</span>
+          </div>
+          <button class="btn btn-ghost" id="back-btn" type="button">Voltar a lista</button>
+        </div>
+
+        <div class="detail-card">
+          <div class="tabs">
+            <button class="tab-btn active" data-tab="general-tab" type="button">Dados gerais</button>
+            <button class="tab-btn" data-tab="query-tab" type="button">Query</button>
+            <button class="tab-btn" data-tab="prompt-tab" type="button">Prompt IA</button>
+            <button class="tab-btn" data-tab="dialog-tab" type="button">Dialogo</button>
+          </div>
+
+          <div id="general-tab" class="tab-panel active">
+            <div class="meta-grid" id="meta-grid"></div>
+            <div class="text-box">
+              <label>Pergunta original</label>
+              <pre id="detail-question"></pre>
+            </div>
+          </div>
+
+          <div id="query-tab" class="tab-panel">
+            <div class="error-box" id="sql-error"></div>
+            <div class="split">
+              <div class="pane">
+                <div class="pane-head"><span class="pane-title">Auditoria SQL</span><button class="btn btn-ghost copy-btn" data-copy="detail-sql" type="button">Copiar</button></div>
+                <pre class="pane-body" id="detail-sql"></pre>
+              </div>
+              <div class="pane">
+                <div class="pane-head"><span class="pane-title">Resposta entregue</span><button class="btn btn-ghost copy-btn" data-copy="detail-answer" type="button">Copiar</button></div>
+                <pre class="pane-body text" id="detail-answer"></pre>
+              </div>
+            </div>
+          </div>
+
+          <div id="prompt-tab" class="tab-panel">
+            <div class="split">
+              <div class="pane">
+                <div class="pane-head"><span class="pane-title">System prompt</span><button class="btn btn-ghost copy-btn" data-copy="prompt-system" type="button">Copiar</button></div>
+                <pre class="pane-body" id="prompt-system"></pre>
+              </div>
+              <div class="pane">
+                <div class="pane-head"><span class="pane-title">User prompt</span><button class="btn btn-ghost copy-btn" data-copy="prompt-user" type="button">Copiar</button></div>
+                <pre class="pane-body" id="prompt-user"></pre>
+              </div>
+            </div>
+          </div>
+
+          <div id="dialog-tab" class="tab-panel">
+            <div class="dialog-grid">
+              <div class="pane">
+                <div class="pane-head"><span class="pane-title">Caminho percorrido</span></div>
+                <pre class="pane-body" id="trace-json"></pre>
+              </div>
+              <div class="pane">
+                <div class="pane-head"><span class="pane-title">Decisao estruturada</span></div>
+                <pre class="pane-body" id="intent-json"></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="clear-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Limpar log de interpretacoes</div>
+      <button class="modal-close" id="close-clear" type="button">&times;</button>
+    </div>
+    <label style="display:block;margin-bottom:8px"><input type="radio" name="clear-mode" value="periodo" checked> Limpar somente um periodo</label>
+    <label style="display:block"><input type="radio" name="clear-mode" value="total"> Limpar todo o historico desta empresa</label>
+    <div class="date-row" id="clear-dates">
+      <div class="form-group"><label class="form-label">De</label><input class="form-control" id="clear-start" type="date"></div>
+      <div class="form-group"><label class="form-label">Ate</label><input class="form-control" id="clear-end" type="date"></div>
+    </div>
+    <div class="danger-note">Esta acao remove definitivamente os registros da tela de interpretacoes.</div>
+    <div class="login-error" id="clear-error" style="display:none;margin-top:12px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="cancel-clear" type="button">Cancelar</button>
+      <button class="btn btn-primary" id="confirm-clear" type="button">Limpar</button>
+    </div>
+  </div>
+</div>
+
+<aside class="help-drawer" id="help-drawer">
+  <div class="help-head">
+    <strong>Ajuda - Interpretacoes</strong>
+    <button class="modal-close" id="close-help" type="button">&times;</button>
+  </div>
+  <div class="help-body">
+    <h3>O que e esta tela</h3>
+    <p>E o diario de bordo do IA Command: cada mensagem recebida via WhatsApp gera um registro aqui com a pergunta original, a decisao tomada e a resposta enviada ao cliente. Use esta tela para entender por que uma resposta saiu errada, confirmar se o sistema esta aprendendo e guiar melhorias de forma segura.</p>
+    <h3>Coluna Pipeline</h3>
+    <p><strong>Chat-first:</strong> a pergunta foi enviada ao modelo de IA no formato de conversa. <strong>Classico:</strong> usou o pipeline legado. <strong>Reuso:</strong> SQL canonico reutilizado sem nova chamada a IA. <strong>Consolidado:</strong> resposta montada a partir do pipeline dinamico consolidado.</p>
+    <h3>Abas do detalhe</h3>
+    <p><strong>Dados gerais:</strong> metadados, motor, pipeline, duracao, confianca, intencao e pergunta original. <strong>Query:</strong> SQL gerado/executado e resposta completa entregue ao usuario. <strong>Prompt IA:</strong> prompts registrados para auditoria. <strong>Dialogo:</strong> trace do caminho percorrido e decisao estruturada em JSON.</p>
+    <h3>Quando usar</h3>
+    <p>Localize uma mensagem pelo celular ou texto, abra o detalhe e veja exatamente o que o sistema entendeu. Para validar equivalencias ou intencoes novas, faca uma pergunta real pelo WhatsApp e confira aqui se o motor, a intencao e o dataset foram escolhidos corretamente.</p>
+    <h3>Limpar log</h3>
+    <p>Use o botao Limpar log para remover registros antigos por periodo ou apagar tudo da empresa. A acao e irreversivel, mas fica registrada na auditoria do sistema.</p>
+  </div>
+</aside>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+(function () {
+  const state = {
+    rows: [],
+    view: [],
+    sortField: 'criado_em',
+    sortDir: 'desc',
+    filters: {},
+    groupFields: [],
+    detail: null,
+    selected: new Set(),
+  };
+
+  const $ = id => document.getElementById(id);
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+
+  function parseJson(value, fallback) {
+    if (!value) return fallback;
+    if (typeof value !== 'string') return value;
+    try { return JSON.parse(value); } catch (_) { return fallback; }
+  }
+
+  function pretty(value) {
+    if (value == null || value === '') return '-';
+    const parsed = typeof value === 'string' ? parseJson(value, value) : value;
+    return typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2);
+  }
+
+  function fmtDate(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  function fmtPhone(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    const local = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
+    if (local.length === 11) return `(${local.slice(0,2)}) ${local.slice(2,7)}-${local.slice(7)}`;
+    if (local.length === 10) return `(${local.slice(0,2)}) ${local.slice(2,6)}-${local.slice(6)}`;
+    return digits || '-';
+  }
+
+  function formatMs(value) {
+    if (value == null || value === '') return '-';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '-';
+    return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(1)}s`;
+  }
+
+  function modulo(row) {
+    const intent = parseJson(row.intent_json, {}) || {};
+    const trace = parseJson(row.trace_json, []) || [];
+    const known = ['compras', 'financeiro', 'faturamento', 'comissao'];
+    const candidates = [
+      intent._moduloDinamico,
+      row.dataset_nome,
+      ...(Array.isArray(trace) ? trace.map(item => item && item.modulo) : []),
+      String(row.intencao || '').replace(/_dinamico$/i, ''),
+    ].filter(Boolean).map(v => String(v).toLowerCase());
+    return candidates.find(v => known.includes(v)) || '-';
+  }
+
+  function pipelineLabel(value) {
+    return {
+      chat: 'Chat-first',
+      canonico_reuso: 'Reuso',
+      consolidado: 'Consolidado',
+      classico: 'Classico',
+    }[value] || value || '-';
+  }
+
+  function phaseLabel(value) {
+    return {
+      execucao_normal: 'Normal',
+      pre_execucao_tecnica: 'Tecnico antes',
+      sem_execucao: 'Sem execucao',
+    }[value] || value || '-';
+  }
+
+  function badge(value, type) {
+    const cls = type || 'badge-muted';
+    return `<span class="badge ${cls}">${esc(value || '-')}</span>`;
+  }
+
+  function pipelineBadge(value) {
+    if (value === 'chat') return badge('Chat-first', 'badge-purple');
+    if (value === 'canonico_reuso') return badge('Reuso', 'badge-blue');
+    if (value === 'consolidado') return badge('Consolidado', 'badge-teal');
+    if (value === 'classico') return badge('Classico', 'badge-muted');
+    return badge(value || '-', 'badge-muted');
+  }
+
+  function phaseBadge(value) {
+    if (value === 'execucao_normal') return badge('Normal', 'badge-ok');
+    if (value === 'pre_execucao_tecnica') return badge('Tecnico antes', 'badge-warn');
+    if (value === 'sem_execucao') return badge('Sem execucao', 'badge-muted');
+    return badge(value || '-', 'badge-muted');
+  }
+
+  function rowValue(row, field) {
+    if (field === 'modulo') return modulo(row);
+    if (field === 'pipeline_origem') return pipelineLabel(row.pipeline_origem);
+    if (field === 'fase_execucao') return phaseLabel(row.fase_execucao);
+    if (field === 'motor') return motor(row);
+    if (field === 'origem') return origin(row, parseJson(row.intent_json, {}) || {});
+    if (field === 'numero_wa') return fmtPhone(row.numero_wa);
+    return row[field] ?? '';
+  }
+
+  function applyFilters() {
+    const filters = state.filters;
+    state.view = state.rows.filter(row => {
+      for (const [field, raw] of Object.entries(filters)) {
+        const needle = String(raw || '').trim().toLowerCase();
+        if (!needle) continue;
+        const value = String(rowValue(row, field) || '').toLowerCase();
+        if (!value.includes(needle)) return false;
+      }
+      return true;
+    });
+    sortRows();
+    renderTable();
+  }
+
+  function sortRows() {
+    const field = state.sortField;
+    const dir = state.sortDir === 'asc' ? 1 : -1;
+    state.view.sort((a, b) => {
+      const av = String(rowValue(a, field) || '').toLowerCase();
+      const bv = String(rowValue(b, field) || '').toLowerCase();
+      return av.localeCompare(bv, 'pt-BR') * dir;
+    });
+  }
+
+  function renderDataRow(row) {
+    const sel = state.selected.has(row.id);
+    return `
+      <tr class="data-row${sel ? ' selected' : ''}" data-id="${esc(row.id)}">
+        <td class="col-check" data-cb-cell><input type="checkbox" class="row-cb" data-id="${esc(row.id)}"${sel ? ' checked' : ''}></td>
+        <td class="col-action"><button class="icon-btn" type="button" title="Visualizar" data-id="${esc(row.id)}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button></td>
+        <td>${esc(fmtDate(row.criado_em))}</td>
+        <td>${esc(fmtPhone(row.numero_wa))}</td>
+        <td><div class="text-preview question" title="${esc(row.texto_original || '')}">${esc(row.texto_original || '-')}</div></td>
+        <td><div class="text-preview" title="${esc(row.resposta_entregue || '')}">${esc(row.resposta_entregue || '(sem resposta)')}</div></td>
+        <td>${esc(row.intencao || '-')}</td>
+        <td>${esc(modulo(row))}</td>
+        <td>${pipelineBadge(row.pipeline_origem)}</td>
+        <td>${phaseBadge(row.fase_execucao)}</td>
+      </tr>`;
+  }
+
+  function renderTable() {
+    const tbody = $('tbody');
+    const groups = state.groupFields;
+    const rows = state.view;
+    $('empty-state').style.display = rows.length ? 'none' : 'flex';
+    $('count').textContent = `${rows.length} de ${state.rows.length} registro(s)`;
+    $('filter-status').textContent = hasFilters() ? 'Filtros ativos' : 'Sem filtros ativos';
+    renderGroupState();
+
+    if (!rows.length) {
+      tbody.innerHTML = '';
+      updateSelBar();
+      return;
+    }
+
+    if (!groups.length) {
+      tbody.innerHTML = rows.map(renderDataRow).join('');
+    } else {
+      const parts = [];
+      renderGroupedRows(parts, rows, groups, 0);
+      tbody.innerHTML = parts.join('');
+    }
+    updateSelBar();
+  }
+
+  function renderGroupedRows(parts, rows, groups, level) {
+    const field = groups[level];
+    const buckets = new Map();
+    rows.forEach(row => {
+      const label = rowValue(row, field) || '-';
+      if (!buckets.has(label)) buckets.set(label, []);
+      buckets.get(label).push(row);
+    });
+    [...buckets.entries()].forEach(([label, items]) => {
+      const title = `${groupName(field)}: ${label}`;
+      parts.push(`<tr class="group-row level-${Math.min(level, 3)}"><td colspan="10">${esc(title)} (${items.length})</td></tr>`);
+      if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1);
+      else items.forEach(row => parts.push(renderDataRow(row)));
+    });
+  }
+
+  function hasFilters() {
+    return Object.values(state.filters).some(Boolean);
+  }
+
+  function groupName(field) {
+    return {
+      numero_wa: 'Celular',
+      intencao: 'Intencao',
+      modulo: 'Modulo',
+      pipeline_origem: 'Pipeline',
+      fase_execucao: 'Fase',
+      resultado_tipo: 'Resultado',
+      motor: 'Motor',
+      dataset_nome: 'Dataset',
+      origem: 'Origem',
+      escopo_execucao: 'Execucao via',
+    }[field] || '';
+  }
+
+  function renderGroupState() {
+    const activeNames = state.groupFields.map(groupName).filter(Boolean);
+    $('group-status').textContent = activeNames.length ? `Agrupamento ativo: ${activeNames.join(' > ')}` : 'Sem agrupamento ativo';
+    $('group-dropzone').innerHTML = activeNames.length
+      ? state.groupFields.map(field => `<span class="active-group-chip">${esc(groupName(field))}<button class="active-group-remove" type="button" data-remove-group="${esc(field)}" title="Remover agrupamento">×</button></span>`).join('')
+      : 'Solte um campo aqui para agrupar';
+    document.querySelectorAll('[data-group-field]').forEach(btn => {
+      btn.classList.toggle('active', state.groupFields.includes(btn.dataset.groupField));
+    });
+  }
+
+  function clearColumnFilters() {
+    document.querySelectorAll('[data-filter]').forEach(el => { el.value = ''; });
+    state.filters = {};
+  }
+
+  function addGroupField(field) {
+    if (!groupName(field) || state.groupFields.includes(field)) return;
+    clearColumnFilters();
+    state.groupFields.push(field);
+    applyFilters();
+  }
+
+  function removeGroupField(field) {
+    state.groupFields = state.groupFields.filter(item => item !== field);
+    clearColumnFilters();
+    applyFilters();
+  }
+
+  function clearGridState() {
+    clearColumnFilters();
+    state.groupFields = [];
+    state.sortField = 'criado_em';
+    state.sortDir = 'desc';
+    renderGroupState();
+  }
+
+  async function loadRows(options = {}) {
+    if (options.clearState) clearGridState();
+    $('count').textContent = 'carregando...';
+    const res = await fetch('/api/ia-command/admin/interpretacoes?limit=200');
+    if (res.status === 401) { location.href = '/login.html'; return; }
+    if (!res.ok) throw new Error(`Erro ${res.status} ao carregar interpretacoes.`);
+    state.rows = await res.json();
+    state.selected.clear();
+    updateSelBar();
+    applyFilters();
+  }
+
+  function updateSelBar() {
+    const n = state.selected.size;
+    const btn = $('sel-del-btn');
+    btn.style.display = n > 0 ? '' : 'none';
+    btn.textContent = n > 0 ? `Excluir ${n} selecionado${n !== 1 ? 's' : ''}` : 'Excluir selecionados';
+    const cbAll = $('cb-all');
+    if (cbAll) {
+      const viewIds = state.view.map(r => r.id);
+      cbAll.checked = viewIds.length > 0 && viewIds.every(id => state.selected.has(id));
+      cbAll.indeterminate = !cbAll.checked && viewIds.some(id => state.selected.has(id));
+    }
+  }
+
+  function toggleRow(id, checked) {
+    if (checked) state.selected.add(id); else state.selected.delete(id);
+    const tr = document.querySelector(`tr.data-row[data-id="${id}"]`);
+    if (tr) tr.classList.toggle('selected', checked);
+    updateSelBar();
+  }
+
+  function selectAllVisible() {
+    state.view.forEach(r => state.selected.add(r.id));
+    document.querySelectorAll('tr.data-row').forEach(tr => {
+      tr.classList.add('selected');
+      const cb = tr.querySelector('input.row-cb');
+      if (cb) cb.checked = true;
+    });
+    updateSelBar();
+  }
+
+  function clearSelection() {
+    state.selected.clear();
+    document.querySelectorAll('tr.data-row').forEach(tr => {
+      tr.classList.remove('selected');
+      const cb = tr.querySelector('input.row-cb');
+      if (cb) cb.checked = false;
+    });
+    updateSelBar();
+  }
+
+  async function deleteSelected() {
+    const ids = [...state.selected];
+    if (!ids.length) return;
+    if (!confirm(`Excluir ${ids.length} registro${ids.length !== 1 ? 's' : ''} selecionado${ids.length !== 1 ? 's' : ''}? Esta ação não pode ser desfeita.`)) return;
+    const btn = $('sel-del-btn');
+    btn.disabled = true;
+    btn.textContent = 'Excluindo...';
+    try {
+      const res = await fetch('/api/ia-command/admin/interpretacoes/excluir-selecionados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Nao foi possivel excluir os registros.');
+      await loadRows();
+      alert(`${data.removidos || 0} registro(s) excluido(s).`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Excluir selecionados';
+    }
+  }
+
+  async function openDetail(id) {
+    const localRow = state.rows.find(row => String(row.id) === String(id));
+    $('detail-title').textContent = `Interpretacao #${String(id).slice(0, 8)}`;
+    $('detail-subtitle').textContent = localRow ? fmtDate(localRow.criado_em) : '-';
+    const res = await fetch(`/api/ia-command/admin/interpretacoes/${encodeURIComponent(id)}`);
+    if (res.status === 401) { location.href = '/login.html'; return; }
+    const row = res.ok ? await res.json() : localRow;
+    if (!row) return alert('Nao foi possivel carregar o detalhe.');
+    state.detail = row;
+    fillDetail(row);
+    $('list-view').style.display = 'none';
+    $('detail-view').classList.add('open');
+  }
+
+  function fillDetail(row) {
+    const intent = parseJson(row.intent_json, {}) || {};
+    const aud = parseJson(row.sql_auditoria_json, {}) || {};
+    const meta = [
+      ['Data/Hora', fmtDate(row.criado_em)],
+      ['Celular', fmtPhone(row.numero_wa)],
+      ['Motor', motor(row)],
+      ['Pipeline', pipelineLabel(row.pipeline_origem)],
+      ['Turno chat', row.chat_turno != null ? `Turno ${row.chat_turno}` : '-'],
+      ['Proc.', formatMs(row.duracao_ms)],
+      ['Pipeline ms', formatMs(row.pipeline_ms)],
+      ['Entregue ms', formatMs(row.entregue_ms)],
+      ['Confianca', confidence(row)],
+      ['Resultado', row.resultado_tipo || '-'],
+      ['Fase', phaseLabel(row.fase_execucao)],
+      ['Intencao', row.intencao || '-'],
+      ['Dataset', row.dataset_nome || row.dataset_id || '-'],
+      ['Modulo', modulo(row)],
+      ['Linhas', row.rows_count ?? '-'],
+      ['Origem', origin(row, intent)],
+      ['Execucao via', row.escopo_execucao || '-'],
+    ];
+    $('meta-grid').innerHTML = meta.map(([label, value]) => `<div class="meta-item"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('');
+    $('detail-question').textContent = row.texto_original || '(sem texto)';
+    $('detail-answer').textContent = row.resposta_entregue || '(sem resposta registrada)';
+    $('detail-sql').textContent = sqlText(row, aud);
+    $('prompt-system').textContent = aud.prompt_system || '(nao registrado)';
+    $('prompt-user').textContent = aud.prompt_user || '(nao registrado)';
+    $('trace-json').textContent = pretty(row.trace_json);
+    $('intent-json').textContent = pretty(row.intent_json);
+    const sqlError = $('sql-error');
+    if (row.sql_validacao_erro) {
+      sqlError.textContent = `Erro de validacao SQL: ${row.sql_validacao_erro}`;
+      sqlError.style.display = 'block';
+    } else {
+      sqlError.style.display = 'none';
+    }
+    activateTab('general-tab');
+  }
+
+  function motor(row) {
+    const provedor = String(row.provedor || '').toLowerCase();
+    if (provedor === 'deterministico' || row.cache_hit) return 'IA interna';
+    if (provedor === 'escopo_dinamico') return 'IA interna (escopo dinamico)';
+    if (!provedor) return 'Sem IA';
+    return `IA externa (${row.provedor})`;
+  }
+
+  function confidence(row) {
+    const n = Number(row.confianca);
+    if (!Number.isFinite(n)) return '-';
+    return `${Math.round(n <= 1 ? n * 100 : n)}%`;
+  }
+
+  function origin(row, intent) {
+    const provedor = String(row.provedor || intent._provedor || '').toLowerCase();
+    if (intent._contextoAplicado) return 'Contexto da conversa';
+    if (provedor === 'deterministico' || intent._resolvidoLocalmente || row.cache_hit) return 'Motor local';
+    if (!provedor || provedor === 'nenhum') return 'Nao reconhecida';
+    if (provedor === 'escopo_dinamico') return 'Motor local';
+    return `IA externa (${provedor})`;
+  }
+
+  function sqlText(row, aud) {
+    const blocks = [
+      ['SQL final executado', row.sql_final_executado || row.sql_gerado || aud.sql_final_executado],
+      ['SQL canonico adaptado', row.sql_canonico_adaptado || aud.sql_apos_contrato || aud.sql_apos_parametros],
+      ['SQL canonico original', row.sql_canonico_original || aud.sql_canonico_recebido],
+      ['SQL bruto IA', row.sql_ia_bruto || aud.sql_ia_bruto],
+      ['Apos normalizacao SX3', aud.sql_apos_sx3],
+      ['Apos adaptacao SX2', aud.sql_apos_sx2],
+      ['Apos parametros', aud.sql_apos_parametros],
+    ].filter(([, value]) => value);
+    if (!blocks.length) return '(SQL nao registrado)';
+    return blocks.map(([title, value]) => `-- ${title}\n${value}`).join('\n\n');
+  }
+
+  function activateTab(id) {
+    document.querySelectorAll('.tab-panel').forEach(el => el.classList.toggle('active', el.id === id));
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === id));
+  }
+
+  function resetFilters() {
+    clearGridState();
+    applyFilters();
+  }
+
+  async function refreshRows() {
+    const btn = $('refresh-btn');
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Atualizando...';
+    try {
+      clearColumnFilters();
+      await loadRows();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+
+  function initFilterInputs() {
+    document.querySelectorAll('[data-filter]').forEach(el => {
+      el.setAttribute('autocomplete', 'off');
+      el.setAttribute('name', `iac_filter_${el.dataset.filter}_${Date.now()}`);
+      if (el.tagName === 'INPUT') {
+        el.setAttribute('spellcheck', 'false');
+        el.setAttribute('autocapitalize', 'off');
+        el.setAttribute('readonly', 'readonly');
+        el.addEventListener('focus', () => el.removeAttribute('readonly'), { once: true });
+      }
+      el.value = '';
+    });
+    state.filters = {};
+  }
+
+  function openClearModal() {
+    const today = new Date().toISOString().slice(0, 10);
+    document.querySelector('input[name="clear-mode"][value="periodo"]').checked = true;
+    $('clear-start').value = today;
+    $('clear-end').value = today;
+    $('clear-error').style.display = 'none';
+    $('clear-dates').style.display = 'grid';
+    $('clear-modal').classList.add('open');
+  }
+
+  async function confirmClear() {
+    const mode = document.querySelector('input[name="clear-mode"]:checked')?.value || 'periodo';
+    const payload = { modo: mode };
+    if (mode !== 'total') {
+      payload.data_inicio = $('clear-start').value;
+      payload.data_fim = $('clear-end').value;
+    }
+    const res = await fetch('/api/ia-command/admin/interpretacoes/limpar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      $('clear-error').textContent = data.error || 'Erro ao limpar log.';
+      $('clear-error').style.display = 'block';
+      return;
+    }
+    $('clear-modal').classList.remove('open');
+    await loadRows();
+    alert(`${data.removidos || 0} registro(s) removido(s).`);
+  }
+
+  function copyText(id, btn) {
+    const text = $(id)?.textContent || '';
+    const original = btn.textContent;
+    const done = label => { btn.textContent = label; setTimeout(() => { btn.textContent = original; }, 1200); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => done('Copiado')).catch(() => done('Erro'));
+      return;
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy') ? done('Copiado') : done('Erro'); } catch (_) { done('Erro'); }
+    document.body.removeChild(ta);
+  }
+
+  function bindEvents() {
+    $('refresh-btn').addEventListener('click', () => refreshRows().catch(err => alert(err.message)));
+    $('clear-btn').addEventListener('click', openClearModal);
+    $('group-toggle').addEventListener('click', () => {
+      $('group-panel').classList.toggle('open');
+      $('group-toggle').textContent = $('group-panel').classList.contains('open') ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+    });
+    $('group-clear').addEventListener('click', () => {
+      state.groupFields = [];
+      clearColumnFilters();
+      applyFilters();
+    });
+    document.querySelectorAll('[data-group-field]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        addGroupField(btn.dataset.groupField);
+      });
+      btn.addEventListener('dragstart', event => {
+        event.dataTransfer.setData('text/plain', btn.dataset.groupField);
+        event.dataTransfer.effectAllowed = 'copy';
+      });
+    });
+    $('group-dropzone').addEventListener('dragover', event => {
+      event.preventDefault();
+      $('group-dropzone').classList.add('drag-over');
+    });
+    $('group-dropzone').addEventListener('dragleave', () => $('group-dropzone').classList.remove('drag-over'));
+    $('group-dropzone').addEventListener('drop', event => {
+      event.preventDefault();
+      $('group-dropzone').classList.remove('drag-over');
+      const field = event.dataTransfer.getData('text/plain');
+      addGroupField(field);
+    });
+    $('group-dropzone').addEventListener('click', event => {
+      const btn = event.target.closest('[data-remove-group]');
+      if (btn) removeGroupField(btn.dataset.removeGroup);
+    });
+    $('help-btn').addEventListener('click', () => $('help-drawer').classList.add('open'));
+    $('close-help').addEventListener('click', () => $('help-drawer').classList.remove('open'));
+    $('back-btn').addEventListener('click', () => {
+      $('detail-view').classList.remove('open');
+      $('list-view').style.display = '';
+      state.detail = null;
+    });
+    $('close-clear').addEventListener('click', () => $('clear-modal').classList.remove('open'));
+    $('cancel-clear').addEventListener('click', () => $('clear-modal').classList.remove('open'));
+    $('confirm-clear').addEventListener('click', () => confirmClear().catch(err => alert(err.message)));
+    document.querySelectorAll('input[name="clear-mode"]').forEach(el => el.addEventListener('change', () => {
+      $('clear-dates').style.display = el.value === 'total' && el.checked ? 'none' : 'grid';
+    }));
+    document.querySelectorAll('[data-filter]').forEach(el => {
+      el.addEventListener('input', () => { state.filters[el.dataset.filter] = el.value; applyFilters(); });
+      el.addEventListener('change', () => { state.filters[el.dataset.filter] = el.value; applyFilters(); });
+    });
+    document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      if (state.sortField === field) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortField = field; state.sortDir = 'asc'; }
+      applyFilters();
+    }));
+    document.querySelectorAll('th[data-group-field]').forEach(th => {
+      th.addEventListener('dragstart', event => {
+        event.dataTransfer.setData('text/plain', th.dataset.groupField);
+        event.dataTransfer.effectAllowed = 'copy';
+      });
+    });
+    $('cb-all').addEventListener('change', e => {
+      if (e.target.checked) selectAllVisible(); else clearSelection();
+    });
+    $('sel-del-btn').addEventListener('click', () => deleteSelected().catch(err => alert(err.message)));
+
+    $('tbody').addEventListener('click', event => {
+      const cb = event.target.closest('input.row-cb');
+      if (cb) { toggleRow(cb.dataset.id, cb.checked); return; }
+      if (event.target.closest('[data-cb-cell]')) return;
+      const tr = event.target.closest('tr.data-row');
+      if (tr) openDetail(tr.dataset.id).catch(err => alert(err.message));
+    });
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => activateTab(btn.dataset.tab)));
+    document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => copyText(btn.dataset.copy, btn)));
+  }
+
+  initFilterInputs();
+  bindEvents();
+  window._iahubAuthReady?.then(() => loadRows().catch(err => alert(err.message))) ?? loadRows().catch(err => alert(err.message));
+})();
+</script>
+</body>
+</html>

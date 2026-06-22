@@ -11,7 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from config import get_config, set_config
 import shutil
 from database import init_db, registrar_execucao, listar_execucoes, limpar_historico, get_stats, sincronizar_empresas, listar_empresas, listar_empresas_public, remover_empresa, get_execucao
-from auth import verificar_token_api, verificar_sessao_web, autenticar_admin, alterar_senha
+from auth import verificar_token_api, verificar_sessao_web, autenticar_admin, alterar_senha, salvar_hash
 from modules.erp_executor import executar_sql, testar_conexao
 from modules.factory_reset import resetar_fabrica
 
@@ -223,6 +223,20 @@ async def api_alterar_senha(request: Request):
     verificar_sessao_web(request)
     body = await request.json()
     alterar_senha(body.get("senha_atual", ""), body.get("nova_senha", ""))
+    return {"ok": True}
+
+
+# ── API: reset de senha via Bearer Token (sem sessão web) ────────────────────
+@app.post("/api/senha/reset")
+async def api_reset_senha(request: Request, authorization: str = Header(default=None)):
+    raw_token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verificar_token_api(raw_token):
+        raise HTTPException(status_code=401, detail="Token inválido.")
+    body = await request.json()
+    nova_senha = body.get("nova_senha", "")
+    if len(nova_senha) < 6:
+        raise HTTPException(status_code=400, detail="A nova senha deve ter no mínimo 6 caracteres.")
+    salvar_hash(nova_senha)
     return {"ok": True}
 
 

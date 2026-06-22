@@ -17,6 +17,14 @@ const DEFAULT_TEMPLATES = {
     titulo: 'Erro na transcricao',
     template: 'Nao consegui transcrever o audio agora. Tente enviar novamente em instantes.',
   },
+  timeout_agente: {
+    titulo: 'Timeout no agente ERP',
+    template: '⏱️ Sua consulta demorou mais que o esperado e não pôde ser concluída.\n\nIsso pode acontecer em consultas complexas ou com grande volume de dados. Tente novamente com um período menor ou filtros mais específicos.',
+  },
+  aguardando_processamento: {
+    titulo: 'Aguardando processamento longo',
+    template: '⏳ Ainda estamos pesquisando sua informação, aguarde um instante...',
+  },
   intencao_desconhecida: {
     titulo: 'Intencao desconhecida',
     template: 'Nao consegui entender exatamente qual consulta voce quer fazer.\n\n{{mensagem}}\n\nTente escrever de forma mais especifica, por exemplo:\n* "Qual o faturamento do ano passado?"\n* "Detalhe o faturamento mes a mes"\n* "Mostre o faturamento por empresa"\n* "Quero a quantidade por produto em abril"\n* "Traga valor e quantidade por cliente"',

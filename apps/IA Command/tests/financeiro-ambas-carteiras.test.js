@@ -18,7 +18,7 @@ const queryPlan = require(path.join(ROOT, 'modules/erp/query-plan'));
 const runner    = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 const financeiroSpec = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
 
-const { _extrairLabelIntencao, _buildContextoConsulta, construirQueryPlanTecnico } = runner._test;
+const { _extrairLabelIntencao, _buildContextoConsulta, _buildContextoFormatacao, construirQueryPlanTecnico } = runner._test;
 
 let passou = 0;
 let falhou = 0;
@@ -190,6 +190,17 @@ ok('contextoConsulta para pagar isolado inclui "Contas pagas"', () => {
 // ─── Resultado ────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(60)}`);
+ok('contextoFormatacao usa sempre a pergunta original quando informada', () => {
+  const pergunta = 'Contas a pagar dos proximos 10 dias';
+  const ctx = _buildContextoFormatacao(pergunta, 'Jun a Jun/2026');
+  assert.strictEqual(ctx, pergunta);
+});
+
+ok('contextoFormatacao preserva fallback quando pergunta nao existe', () => {
+  const ctx = _buildContextoFormatacao('', 'Jun a Jun/2026');
+  assert.strictEqual(ctx, 'Jun a Jun/2026');
+});
+
 if (falhou === 0) {
   console.log(`financeiro-ambas-carteiras.test.js: ${passou} testes passaram ✓`);
 } else {

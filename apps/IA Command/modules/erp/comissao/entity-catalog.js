@@ -1,6 +1,17 @@
 'use strict';
 
 const DEFINICOES = {
+  // Tipo de segurança: código ERP do remetente resolvido por empresa pelo sistema.
+  // Campos intencionalmente restritos a E3_VEND/E3_VENDED — nunca A3_COD (cadastro).
+  // Isso garante que apenas o filtro da tabela fato (SE3) seja parametrizado,
+  // sem risco de substituição indevida em JOINs com SA3.
+  vendedor_fixo_seguranca: {
+    tipo: 'vendedor_fixo_seguranca',
+    rotuloTipo: 'vendedor_fixo_seguranca',
+    tabelaBase: 'SE3',
+    codigoCampo: 'E3_VEND',
+    nomeCampos: [],
+  },
   vendedor: {
     tipo: 'vendedor',
     rotuloTipo: 'vendedor',

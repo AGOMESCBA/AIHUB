@@ -3,6 +3,8 @@ const crud         = require('../crud');
 const nodemailer   = require('nodemailer');
 const pdfParse     = require('pdf-parse/lib/pdf-parse.js');
 const fs           = require('fs');
+const dns          = require('dns').promises;
+const net          = require('net');
 const ia           = require('../ia');
 
 // Tenta carregar TNEF (winmail.dat do Outlook) — opcional
@@ -30,11 +32,107 @@ function getImapOpts(cfg, senha) {
   };
 }
 
-function getSmtpTransporter(cfg, senha) {
+function getSmtpTransporter(cfg, senha, resolvedIp = null) {
   const opts = cfg.tipo === 'gmail'
     ? { service: 'gmail', auth: { user: cfg.email, pass: senha }, family: Number(cfg.family) || 4, tls: { rejectUnauthorized: false } }
-    : { host: cfg.smtp_host, port: Number(cfg.smtp_port) || 587, secure: !!cfg.smtp_secure, auth: { user: cfg.email, pass: senha }, family: Number(cfg.family) || 4, tls: { rejectUnauthorized: false } };
+    : {
+        host: resolvedIp || cfg.smtp_host,
+        port: Number(cfg.smtp_port) || 587,
+        secure: !!cfg.smtp_secure,
+        auth: { user: cfg.email, pass: senha },
+        family: Number(cfg.family) || 4,
+        tls: { rejectUnauthorized: false, servername: cfg.smtp_host },
+      };
   return nodemailer.createTransport(opts);
+}
+
+function getSmtpEndpoint(cfg) {
+  if (cfg.tipo === 'gmail') {
+    return { host: 'smtp.gmail.com', port: 465, secure: true, label: `Gmail (${cfg.email})` };
+  }
+  const port = Number(cfg.smtp_port) || 587;
+  return {
+    host: cfg.smtp_host,
+    port,
+    secure: !!cfg.smtp_secure,
+    label: `SMTP ${cfg.smtp_host}:${port}`,
+  };
+}
+
+function smtpErrorHint(err, endpoint) {
+  const raw = err?.message || String(err || '');
+  const lower = raw.toLowerCase();
+  if (raw.includes('queryA') || raw.includes('ENOTFOUND')) {
+    return `Falha de DNS ao resolver ${endpoint.host}. A porta SMTP ainda nem foi testada pelo Nodemailer. Verifique DNS do servidor, saida UDP/TCP 53 e resolvedor configurado. Detalhe: ${raw}`;
+  }
+  if (raw.includes('ETIMEOUT') || raw.includes('ECONNREFUSED')) {
+    return `Sem rota/conexao ate ${endpoint.host}:${endpoint.port}. Verifique DNS, firewall de saida e liberacao SMTP no provedor. Detalhe: ${raw}`;
+  }
+  if (raw.includes('535') || lower.includes('authentication') || lower.includes('invalid login') || lower.includes('credentials')) {
+    return `Autenticacao rejeitada pelo SMTP. Verifique usuario e senha/app password. Detalhe: ${raw}`;
+  }
+  if (raw.includes('ECONNRESET')) {
+    return `Conexao derrubada pelo SMTP. Possivel bloqueio por IP, TLS incorreto ou politica do provedor. Detalhe: ${raw}`;
+  }
+  return raw;
+}
+
+async function testTcp(host, port, ip) {
+  return new Promise(resolve => {
+    const sock = new net.Socket();
+    sock.setTimeout(8000);
+    sock.connect(port, ip || host, () => { sock.destroy(); resolve(null); });
+    sock.on('error', err => { sock.destroy(); resolve(err); });
+    sock.on('timeout', () => { sock.destroy(); resolve(new Error('timeout 8s')); });
+  });
+}
+
+async function sendMailWithDiagnostics(cfg, senha, mail, logFn, contextLabel) {
+  const log = typeof logFn === 'function' ? logFn : () => {};
+  const endpoint = getSmtpEndpoint(cfg);
+  const target = mail.to || '(sem destino)';
+  log(`[SMTP] ${contextLabel}: preparando envio -> ${target} | ${endpoint.label} | TLS ${endpoint.secure ? 'SSL/TLS' : 'STARTTLS/auto'}`, 'info');
+
+  let ip = null;
+  try {
+    log(`[SMTP] ${contextLabel}: resolvendo DNS de ${endpoint.host}...`, 'info');
+    const result = await dns.lookup(endpoint.host, { family: Number(cfg.family) || 4 });
+    ip = result.address;
+    log(`[SMTP] ${contextLabel}: DNS OK -> ${endpoint.host} = ${ip}`, 'info');
+  } catch (err) {
+    log(`[SMTP] ${contextLabel}: falha DNS em ${endpoint.host} -> ${err.message}`, 'error');
+    throw err;
+  }
+
+  const tcpErr = await testTcp(endpoint.host, endpoint.port, ip);
+  if (tcpErr) {
+    const msg = `TCP falhou em ${endpoint.host}:${endpoint.port} (${ip || 'sem IP'}): ${tcpErr.message}`;
+    log(`[SMTP] ${contextLabel}: ${msg}`, 'error');
+    throw new Error(msg);
+  }
+  log(`[SMTP] ${contextLabel}: TCP OK -> ${endpoint.host}:${endpoint.port}`, 'info');
+
+  const t = getSmtpTransporter(cfg, senha, cfg.tipo === 'gmail' ? null : ip);
+  try {
+    log(`[SMTP] ${contextLabel}: verificando TLS/autenticacao...`, 'info');
+    await t.verify();
+    log(`[SMTP] ${contextLabel}: autenticacao SMTP OK`, 'success');
+  } catch (err) {
+    const hint = smtpErrorHint(err, endpoint);
+    log(`[SMTP] ${contextLabel}: falha na verificacao SMTP -> ${hint}`, 'error');
+    throw err;
+  }
+
+  try {
+    log(`[SMTP] ${contextLabel}: enviando mensagem...`, 'info');
+    const info = await t.sendMail(mail);
+    log(`[SMTP] ${contextLabel}: mensagem aceita pelo servidor -> ${info.messageId || 'sem messageId'}`, 'success');
+    return info;
+  } catch (err) {
+    const hint = smtpErrorHint(err, endpoint);
+    log(`[SMTP] ${contextLabel}: falha no envio -> ${hint}`, 'error');
+    throw err;
+  }
 }
 
 // ── Helpers de estrutura MIME ─────────────────────────────────────────────────
@@ -166,7 +264,7 @@ const TPL_CONF_LIVRE_HTML_PADRAO    = `<!DOCTYPE html><html lang="pt-BR"><head><
 const TPL_REJ_LIVRE_ASSUNTO_PADRAO = '{{NOMEEMPRESA}} — Não foi possível processar seu arquivo';
 const TPL_REJ_LIVRE_HTML_PADRAO    = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08)"><tr><td style="background:linear-gradient(135deg,#dc2626,#f87171);padding:32px 36px;text-align:center"><h1 style="color:#fff;margin:0;font-size:22px;font-weight:700">⚠️ Arquivo não processado</h1></td></tr><tr><td style="padding:36px 36px 24px"><p style="font-size:16px;color:#374151;margin:0 0 16px">Olá, <strong>{{NOME}}</strong>!</p><p style="font-size:15px;color:#6b7280;line-height:1.75;margin:0 0 16px">Recebemos seu e-mail, mas não foi possível processar o arquivo em anexo.</p><p style="font-size:14px;color:#991b1b;background:#fef2f2;border-radius:8px;padding:14px 18px;margin:0 0 20px"><strong>Motivo:</strong> {{MOTIVO}}</p><p style="font-size:13px;color:#9ca3af">Por favor reenvie seu currículo em formato <strong>PDF</strong>.</p></td></tr><tr><td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:18px 36px;text-align:center"><p style="font-size:12px;color:#9ca3af;margin:0">Enviado automaticamente pelo <strong>IAHub</strong></p></td></tr></table></td></tr></table></body></html>`;
 
-async function enviarConfirmacaoLivre(cfg, senha, toEmail, nomeCandidato, db, empresaId) {
+async function enviarConfirmacaoLivre(cfg, senha, toEmail, nomeCandidato, db, empresaId, logFn) {
   if (!toEmail) return;
   const empresa     = crud.buscarPorId('empresas', empresaId);
   const nomeEmpresa = empresa?.razao_social || 'IAHub';
@@ -174,11 +272,10 @@ async function enviarConfirmacaoLivre(cfg, senha, toEmail, nomeCandidato, db, em
   const vars    = { nome: nomeCandidato, nomeEmpresa };
   const assunto = renderTpl(tpls.conf_livre_assunto || TPL_CONF_LIVRE_ASSUNTO_PADRAO, vars);
   const html    = renderTpl(tpls.conf_livre_html    || TPL_CONF_LIVRE_HTML_PADRAO,    vars);
-  const t = getSmtpTransporter(cfg, senha);
-  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+  await sendMailWithDiagnostics(cfg, senha, { from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html }, logFn, 'confirmacao avulsa');
 }
 
-async function enviarRejeicaoLivre(cfg, senha, toEmail, nomeCandidato, motivo, db, empresaId) {
+async function enviarRejeicaoLivre(cfg, senha, toEmail, nomeCandidato, motivo, db, empresaId, logFn) {
   if (!toEmail) return;
   const motivoTexto = motivo === 'pdf_ilegivel'
     ? 'O PDF enviado está ilegível, protegido por senha ou não contém texto selecionável.'
@@ -189,11 +286,10 @@ async function enviarRejeicaoLivre(cfg, senha, toEmail, nomeCandidato, motivo, d
   const vars    = { nome: nomeCandidato, motivo: motivoTexto, nomeEmpresa };
   const assunto = renderTpl(tpls.rej_livre_assunto || TPL_REJ_LIVRE_ASSUNTO_PADRAO, vars);
   const html    = renderTpl(tpls.rej_livre_html    || TPL_REJ_LIVRE_HTML_PADRAO,    vars);
-  const t = getSmtpTransporter(cfg, senha);
-  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+  await sendMailWithDiagnostics(cfg, senha, { from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html }, logFn, 'rejeicao avulsa');
 }
 
-async function enviarConfirmacao(cfg, senha, toEmail, nomeCandidato, nomeVaga, db, empresaId) {
+async function enviarConfirmacao(cfg, senha, toEmail, nomeCandidato, nomeVaga, db, empresaId, logFn) {
   if (!toEmail) return;
   const empresa    = crud.buscarPorId('empresas', empresaId);
   const nomeEmpresa = empresa?.razao_social || 'IAHub';
@@ -201,11 +297,10 @@ async function enviarConfirmacao(cfg, senha, toEmail, nomeCandidato, nomeVaga, d
   const vars   = { nome: nomeCandidato, vaga: nomeVaga, nomeEmpresa };
   const assunto = renderTpl(tpls.conf_assunto || TPL_CONF_ASSUNTO_PADRAO, vars);
   const html    = renderTpl(tpls.conf_html    || TPL_CONF_HTML_PADRAO,    vars);
-  const t = getSmtpTransporter(cfg, senha);
-  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+  await sendMailWithDiagnostics(cfg, senha, { from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html }, logFn, 'confirmacao vaga');
 }
 
-async function enviarRejeicao(cfg, senha, toEmail, nomeCandidato, nomeVaga, motivo, db, empresaId) {
+async function enviarRejeicao(cfg, senha, toEmail, nomeCandidato, nomeVaga, motivo, db, empresaId, logFn) {
   if (!toEmail) return;
   const motivoTexto = motivo === 'sem_pdf'
     ? 'Seu e-mail não continha um arquivo PDF em anexo.'
@@ -218,8 +313,7 @@ async function enviarRejeicao(cfg, senha, toEmail, nomeCandidato, nomeVaga, moti
   const vars   = { nome: nomeCandidato, vaga: nomeVaga, motivo: motivoTexto, nomeEmpresa };
   const assunto = renderTpl(tpls.rej_assunto || TPL_REJ_ASSUNTO_PADRAO, vars);
   const html    = renderTpl(tpls.rej_html    || TPL_REJ_HTML_PADRAO,    vars);
-  const t = getSmtpTransporter(cfg, senha);
-  await t.sendMail({ from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html });
+  await sendMailWithDiagnostics(cfg, senha, { from: `"${nomeEmpresa} Recrutamento" <${cfg.email}>`, to: toEmail, subject: assunto, html }, logFn, 'rejeicao vaga');
 }
 
 // ── Processamento de e-mail avulso (PDF sem assunto formatado) ────────────────
@@ -323,7 +417,7 @@ class EmailImapService {
     if (!texto) {
       this._emitLog(`[IMAP] PDF ilegível — enviando rejeição para ${fromEmail}`, 'warning');
       await marcarLido();
-      enviarRejeicaoLivre(cfg, senha, fromEmail, fromName, 'pdf_ilegivel', db, empresaId)
+      enviarRejeicaoLivre(cfg, senha, fromEmail, fromName, 'pdf_ilegivel', db, empresaId, (m,t) => this._emitLog(m,t))
         .then(() => this._emitLog(`[IMAP] Rejeição (avulso) enviada → ${fromEmail}`, 'info'))
         .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição (avulso): ${e.message}`, 'error'));
       return;
@@ -334,7 +428,7 @@ class EmailImapService {
     if (!ehCurriculo) {
       this._emitLog(`[IMAP] PDF não reconhecido como currículo — enviando rejeição para ${fromEmail}`, 'warning');
       await marcarLido();
-      enviarRejeicaoLivre(cfg, senha, fromEmail, fromName, 'nao_curriculo', db, empresaId)
+      enviarRejeicaoLivre(cfg, senha, fromEmail, fromName, 'nao_curriculo', db, empresaId, (m,t) => this._emitLog(m,t))
         .then(() => this._emitLog(`[IMAP] Rejeição (avulso) enviada → ${fromEmail}`, 'info'))
         .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição (avulso): ${e.message}`, 'error'));
       return;
@@ -378,7 +472,7 @@ class EmailImapService {
     await marcarLido();
     this._emitLog(`[IMAP] E-mail avulso de "${dados.nome}" marcado como lido`, 'received');
 
-    enviarConfirmacaoLivre(cfg, senha, dados.email || fromEmail, dados.nome || fromName, db, empresaId)
+    enviarConfirmacaoLivre(cfg, senha, dados.email || fromEmail, dados.nome || fromName, db, empresaId, (m,t) => this._emitLog(m,t))
       .then(() => this._emitLog(`[IMAP] Confirmação (avulso) enviada → ${dados.email || fromEmail}`, 'success'))
       .catch(e => this._emitLog(`[IMAP] Falha ao enviar confirmação (avulso): ${e.message}`, 'error'));
 
@@ -420,7 +514,7 @@ class EmailImapService {
   if (!parts.length) {
     this._emitLog(`[IMAP] Estrutura MIME: ${JSON.stringify(msg.bodyStructure).slice(0, 400)}`, 'info');
     this._emitLog(`[IMAP] Sem PDF no e-mail de "${nomeCandidato}" — enviando rejeição`, 'warning');
-    enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db, empresaId)
+      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db, empresaId, (m,t) => this._emitLog(m,t))
       .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
       .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
     return;
@@ -460,7 +554,7 @@ class EmailImapService {
 
   if (!pdfBuffer) {
     this._emitLog(`[IMAP] PDF não encontrado no e-mail de "${nomeCandidato}" — enviando rejeição`, 'warning');
-    enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db, empresaId)
+      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'sem_pdf', db, empresaId, (m,t) => this._emitLog(m,t))
       .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
       .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
     return;
@@ -472,7 +566,7 @@ class EmailImapService {
     const texto   = pdfData.text.trim();
     if (!texto) {
       this._emitLog(`[IMAP] PDF de "${nomeCandidato}" ilegível ou protegido — enviando rejeição`, 'warning');
-      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'pdf_ilegivel', db, empresaId)
+        enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'pdf_ilegivel', db, empresaId, (m,t) => this._emitLog(m,t))
         .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
         .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
       return;
@@ -482,7 +576,7 @@ class EmailImapService {
     const ehCurriculo = await ia.verificarSeCurriculo(texto, (m,t) => this._emitLog(m,t), empresaId);
     if (!ehCurriculo) {
       this._emitLog(`[IMAP] Documento de "${nomeCandidato}" não reconhecido como currículo pela IA — enviando rejeição`, 'warning');
-      enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'nao_curriculo', db, empresaId)
+        enviarRejeicao(cfg, senha, fromEmail, nomeCandidato, nomeVaga, 'nao_curriculo', db, empresaId, (m,t) => this._emitLog(m,t))
         .then(() => this._emitLog(`[IMAP] E-mail de rejeição enviado → ${fromEmail}`, 'info'))
         .catch(e => this._emitLog(`[IMAP] Falha ao enviar rejeição: ${e.message}`, 'error'));
       return;
@@ -542,7 +636,7 @@ class EmailImapService {
     this._emitLog(`[IMAP] E-mail de "${nomeCandidato}" gravado e marcado como lido`, 'received');
 
     this._emitLog(`[IMAP] Enviando e-mail de confirmação → ${dados.email || fromEmail}…`, 'info');
-    enviarConfirmacao(cfg, senha, dados.email || fromEmail, dados.nome || nomeCandidato, nomeVaga, db, empresaId)
+    enviarConfirmacao(cfg, senha, dados.email || fromEmail, dados.nome || nomeCandidato, nomeVaga, db, empresaId, (m,t) => this._emitLog(m,t))
       .then(() => this._emitLog(`[IMAP] Confirmação enviada com sucesso → ${dados.email || fromEmail}`, 'success'))
       .catch(e => this._emitLog(`[IMAP] Falha ao enviar confirmação: ${e.message}`, 'error'));
 

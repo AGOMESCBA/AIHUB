@@ -208,34 +208,8 @@
 </div>
 
 <script src="/js/auth.js"></script>
-<script src="./js/sidebar.js?v=20260617-historico-v2f"></script>
-<script>
-  (function resetLocalUiStateOnce() {
-    const versionKey = '_iac_shell_ui_state_version';
-    const version = '20260617-localhost-state-v1';
-    try {
-      if (localStorage.getItem(versionKey) === version) return;
-
-      sessionStorage.removeItem('iac_mdi_state');
-      sessionStorage.removeItem('iahub_mdi_state');
-
-      const localKeys = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i) || '';
-        if (
-          /^iac_.*_group(_active)?$/.test(key) ||
-          key === '_iahub_grid_group_panel_state_version' ||
-          key === '_iahub_empresa_switch'
-        ) {
-          localKeys.push(key);
-        }
-      }
-      localKeys.forEach(key => localStorage.removeItem(key));
-      localStorage.setItem(versionKey, version);
-    } catch (_) {}
-  })();
-</script>
-<script src="./js/tab-manager.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script src="/app/ia-command/js/tab-manager.js"></script>
 <script>
   document.addEventListener('click', (e) => {
     const link = e.target.closest('#sidebar a.nav-item');

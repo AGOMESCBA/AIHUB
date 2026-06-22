@@ -161,6 +161,7 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar }
     '## Intervalo Mensal Recorrente entre Anos',
     '- Quando o usuario pedir um intervalo de meses aplicado a varios anos (ex: "janeiro a junho de 2024 a 2026", "jan a jun dos anos de 2024 a 2026"), isso NAO e um intervalo continuo de data.',
     '- Isso tambem vale quando a pergunta usar "faturamento acumulado", "analitico" ou "comparativo" junto com meses e anos (ex: "faturamento acumulado de janeiro a junho de 2024 a 2026").',
+    '- CASO CRITICO — MES UNICO EM VARIOS ANOS: Quando o usuario pedir um MES ESPECIFICO nos "anos de X a Y" (ex: "faturamento de junho nos anos de 2024 a 2026", "junho de 2024 a 2026", "junho nos ultimos 3 anos"), isso NAO e uma consulta de um unico mes. Filtre o mes fixo e os varios anos separadamente: SUBSTRING(campo,5,2) = \'06\' AND SUBSTRING(campo,1,4) IN (\'2024\',\'2025\',\'2026\'). PROIBIDO gerar BETWEEN \'20240601\' AND \'20240630\' — isso retorna apenas 2024, ignorando 2025 e 2026.',
     '- Nesse caso, filtre anos e meses separadamente: SUBSTRING(campo,1,4) IN (\'2024\',\'2025\',\'2026\') AND SUBSTRING(campo,5,2) BETWEEN \'01\' AND \'06\'.',
     '- PROIBIDO usar apenas BETWEEN \'20240101\' AND \'20260630\' para intervalo mensal recorrente entre anos, pois inclui julho a dezembro dos anos intermediarios.',
     '- Use BETWEEN de data somente quando a intencao for periodo continuo real (ex: "de janeiro de 2024 ate junho de 2026").',

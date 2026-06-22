@@ -39,6 +39,9 @@ def alterar_senha(senha_atual: str, nova_senha: str):
     _salvar_hash(nova_senha)
 
 
-def _salvar_hash(senha: str):
+def salvar_hash(senha: str):
     h = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
     set_config("ADMIN_HASH", h)
+
+# alias privado mantido para compatibilidade interna
+_salvar_hash = salvar_hash

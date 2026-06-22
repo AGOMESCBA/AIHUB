@@ -456,6 +456,7 @@
 
         const data = await res.json();
         sessionStorage.setItem(BROWSER_SESSION_KEY, '1');
+        localStorage.setItem(BROWSER_SESSION_KEY, '1');
         _role   = data.role;
         _logado = true;
         await carregarEmpresas();
