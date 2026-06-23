@@ -3,6 +3,8 @@
 const crud = require('../../database/crud');
 const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
+const fragmentosSpec = require('./compras-fragmentos-spec');
+const { classificarFragmentos } = require('./compras-spec-classifier');
 
 const TABELAS = ['SF1', 'SD1', 'SF2', 'SD2', 'SB1', 'SBM', 'SA2', 'SC7', 'CTT', 'SED', 'SF4'];
 
@@ -49,120 +51,17 @@ function garantirIntencao(empresaId) {
   }
 }
 
-const regrasTecnicas = `
-## Campos de data padrao
-- Notas de entrada (compras): SD1.D1_DTDIGIT (CHAR(8) YYYYMMDD).
-- Pedidos de compra: SC7.C7_EMISSAO.
+function regrasTecnicas({ mensagem } = {}) {
+  const chavesAcionadas = classificarFragmentos(mensagem);
+  const chaves = chavesAcionadas || fragmentosSpec.ORDEM_FALLBACK;
 
-## Devolucoes
-- Nao inclua devolucoes nas metricas de compras por padrao.
-- Somente considere devolucoes quando o usuario pedir explicitamente: devolucao, devolucoes, retorno, estorno, abatendo devolucoes, considerar devolucoes.
-- "considerando devolucao", "com devolucao", "abatendo devolucao" ou "liquido de devolucao" significa compras liquidas: compras normais positivas menos devolucoes/retornos quando for possivel identificar ambos.
-- So retorne apenas devolucoes quando o usuario disser claramente "somente devolucoes", "apenas devolucoes", "total de devolucoes" ou equivalente.
-- No Protheus, devolucao de compra e nota de saida do SIGAFAT: use obrigatoriamente SF2/SD2, com SF2.F2_TIPO = 'D'. Nao use SF4/TES nem CASE em SD1 para identificar devolucao de compra.
-- Quando o usuario pedir para considerar devolucoes, compras liquidas ou abatendo devolucoes, monte obrigatoriamente uma consulta externa sobre subqueries unificadas por UNION ALL:
-  1. Subquery de compras: origem SD1/SF1. Projete SD1.D1_TOTAL AS valor_compra e 0 AS valor_devolucao.
-  2. Subquery de devolucoes: origem SD2/SF2. Filtre SF2.F2_TIPO = 'D'. Projete 0 AS valor_compra e SD2.D2_TOTAL AS valor_devolucao.
-- A query externa deve selecionar SUM(valor_compra) AS total_compras, SUM(valor_devolucao) AS total_devolucoes e (SUM(valor_compra) - SUM(valor_devolucao)) AS total_liquido.
-- Aplique o mesmo periodo e os mesmos filtros cadastrais nas duas subqueries quando fizer sentido. Para compras use SD1.D1_DTDIGIT ou SF1.F1_DTDIGIT. Para devolucoes use SF2.F2_EMISSAO ou SD2.D2_EMISSAO conforme campos disponiveis.
-- Nota Protheus: na devolucao de compras (SF2 tipo D), o codigo do fornecedor e gravado em F2_CLIENTE/SD2.D2_CLIENTE e loja em F2_LOJA/SD2.D2_LOJA. Se houver filtro de fornecedor resolvido, filtre compras por SF1.F1_FORNECE/F1_LOJA e devolucoes por SF2.F2_CLIENTE/F2_LOJA.
-- Quando houver necessidade de associar devolucao a uma nota de compra original, use os campos de origem da SD2, como D2_NFORI e D2_SERIORI, junto da nota/serie da compra quando esses campos estiverem disponiveis.
-
-## Tabelas padrao do modulo Compras
-- SF1: cabecalho de NF de entrada. F1_VALBRUT e o valor bruto total da nota (nivel cabecalho).
-- SD1: itens de NF de entrada. Metrica principal: SD1.D1_TOTAL. Quantidade: SD1.D1_QUANT.
-- Para compras normais por nota fiscal de entrada, quando filtrar tipo, use SF1.F1_TIPO = 'N'. Nunca use SF1.F1_TIPO = '1'.
-- DIRETRIZ DE SELECAO DE TABELAS: Cabecalho (SF1) vs Itens (SD1)
-  Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FROM/JOIN. O uso incorreto gera duplicidade matematica ou metricas zeradas.
-  1. Consultas por VALOR Financeiro Total (sem produto/item):
-     Quando o usuario pedir "Total de compras", "Compras do ano", "Compras do mes" ou "Compras de um periodo" — metricas puramente monetarias, sem especificar produto, grupo de produto ou QUANTIDADE — use FROM SD1 JOIN SF1 com metrica COALESCE(SUM(SD1.D1_TOTAL), 0) AS valor_compra.
-     Agrupamentos por fornecedor sao compativeis com SD1 JOIN SF1: faca JOIN com SA2 (via Joins padrao SF1->SA2). SD1 continua como origem da metrica.
-     Se usar SF1 sozinha (sem SD1) a metrica pode ser COALESCE(SUM(SF1.F1_VALBRUT), 0) AS valor_compra. Porem EXPRESSAMENTE PROIBIDO usar SUM(SF1.F1_VALBRUT) quando SD1 estiver no FROM/JOIN: o relacionamento 1-para-muitos entre SF1 e SD1 multiplica F1_VALBRUT pela quantidade de itens da nota, gerando valores duplicados errados.
-  2. Consultas por QUANTIDADE ou filtros de Produto/Item:
-     Quando o usuario pedir "Quantidade comprada", "Volume de compras", "Total de pecas compradas" (mesmo total escalar de uma unica linha), ou quando citar produtos e grupos de produtos, use OBRIGATORIAMENTE FROM SD1 JOIN SF1.
-     Metrica de quantidade escalar obrigatoria: COALESCE(SUM(SD1.D1_QUANT), 0) AS quantidade_comprada.
-     NUNCA use SF1 sozinha quando a pergunta contiver "Quantidade": o cabecalho nao armazena volume de itens.
-     Quando o usuario pedir SIMULTANEAMENTE "por valor" e "por quantidade" com agrupamento por produto/grupo: ambas as metricas devem vir de SD1. Exemplo: SELECT ..., COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_compra, COALESCE(SUM(SD1.D1_QUANT),0) AS quantidade_comprada FROM SD1... JOIN SF1...
-- SF2: cabecalho de NF de saida do faturamento; para devolucao de compra use SF2.F2_TIPO = 'D'.
-- SD2: itens de NF de saida do faturamento; para valor de devolucao use SD2.D2_TOTAL.
-- SA2: fornecedores.
-- SB1: produtos.
-- SBM: grupo de produtos.
-- SC7: pedidos de compra.
-- CTT: centro de custo.
-- SED: natureza.
-- SF4: TES.
-
-## Codigo Fiscal (CF/CFOP) e TES — Compras
-- Sinonimos para nota fiscal de entrada/compras: nota de entrada, nota fiscal de entrada, NF de entrada, compra, aquisicao.
-- CF, CFOP, codigo fiscal e codigo fiscal de operacao sao sinonimos — referem-se ao campo SD1.D1_CF.
-- Por padrao, em consultas de valor financeiro ou despesas (contas a pagar), excluir remessas e transferencias:
-  SD1.D1_CF NOT LIKE '19%'
-  Razao: CFs iniciados com 19 sao remessas/transferencias — nao geram obrigacao financeira (contas a pagar).
-- Em consultas de volume fisico, quantidade ou movimentacao de estoque: incluir CF 19 — a nota pode ter gerado movimentacao fisica.
-- Excecao (incluir CF 19 em qualquer contexto): quando o usuario pedir explicitamente remessas, transferencias, ou citar CF/CFOP/codigo fiscal com o valor 19.
-- TES pode ser chamado de TES, Tipos de Entrada ou tipo de entrada. Refere-se ao campo SD1.D1_TES / tabela SF4 (F4_CODIGO, F4_TEXTO).
-- SF4.F4_ESTOQUE: 'S' = TES gera movimentacao de estoque; 'N' = nao gera.
-  Quando o usuario perguntar sobre notas que geraram estoque ou movimentaram estoque, filtre SF4.F4_ESTOQUE = 'S' via JOIN SD1 -> SF4.
-- SF4.F4_DUPLIC: 'S' = TES gera lancamento financeiro (duplicata/pagar); 'N' = nao gera financeiro.
-  Quando o usuario perguntar sobre notas que geraram financeiro, contas a pagar ou duplicatas, filtre SF4.F4_DUPLIC = 'S' via JOIN SD1 -> SF4.
-  Este filtro e mais preciso que filtrar por CF para identificar compras que geraram obrigacao financeira real.
-
-## Joins padrao
-- SD1 -> SF1:
-  SD1.D1_FILIAL = SF1.F1_FILIAL
-  AND SD1.D1_DOC = SF1.F1_DOC
-  AND SD1.D1_SERIE = SF1.F1_SERIE
-  AND SD1.D1_FORNECE = SF1.F1_FORNECE
-  AND SD1.D1_LOJA = SF1.F1_LOJA
-- Regra tecnica: sempre que SD1 e SF1 forem usados juntos para somar SD1.D1_TOTAL, o JOIN deve conter D1_FORNECE/F1_FORNECE e D1_LOJA/F1_LOJA para evitar duplicidade de notas com mesmo numero e serie.
-- SF1 -> SA2:
-  SF1.F1_FORNECE = SA2.A2_COD
-  AND SF1.F1_LOJA = SA2.A2_LOJA
-- SD1 -> SB1: SD1.D1_COD = SB1.B1_COD
-- SB1 -> SBM: SB1.B1_GRUPO = SBM.BM_GRUPO
-- SD1 -> SC7: SD1.D1_PEDIDO = SC7.C7_NUM AND SD1.D1_ITEMPC = SC7.C7_ITEM
-- SD1 -> CTT: SD1.D1_CC = CTT.CTT_CUSTO
-- SD1 -> SED: SD1.D1_NATUREZ = SED.ED_CODIGO
-- SD1 -> SF4: SD1.D1_TES = SF4.F4_CODIGO
-- SD2 -> SF2:
-  SD2.D2_FILIAL = SF2.F2_FILIAL
-  AND SD2.D2_DOC = SF2.F2_DOC
-  AND SD2.D2_SERIE = SF2.F2_SERIE
-  AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
-  AND SD2.D2_LOJA = SF2.F2_LOJA
-- SF2 -> SA2 para devolucao de compra:
-  SF2.F2_CLIENTE = SA2.A2_COD
-  AND SF2.F2_LOJA = SA2.A2_LOJA
-
-## Regras obrigatorias de SQL
-- Inicie sempre com SET ROWCOUNT 50000.
-- Use aliases explicitos iguais a base da tabela: SD1, SF1, SA2, SB1, SBM, SC7, CTT, SED, SF4.
-- Qualifique campos sempre pelo alias base (SD1.D1_TOTAL, nunca SD1990.D1_TOTAL).
-- Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
-- Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
-
-## Exibicao de entidades
-- fornecedor: SA2.A2_NOME AS fornecedor. Codigo/loja como cod_fornecedor e loja_fornecedor.
-- produto: SB1.B1_DESC AS produto. Codigo como cod_produto.
-- grupo_produto: SBM.BM_DESC AS grupo_produto.
-- centro_custo: CTT.CTT_DESC01 AS centro_custo.
-- natureza: SED.ED_DESCRIC AS natureza.
-- tes: SF4.F4_TEXTO AS tes.
-Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP BY.
-
-## Entidades cadastrais
-Quando precisar filtrar fornecedor, produto, grupo_produto, centro_custo, natureza ou TES por nome citado pelo usuario, retorne em entidades_necessarias.
-Depois que o sistema devolver entidades_resolvidas, filtre por codigo interno, nao por LIKE de nome.
-- Se a mensagem mencionar "empresa(s) J2A/C3I/todas as empresas" ou o estado tecnico trouxer empresas_iahub_mencionadas, trate esses nomes como escopo de tenant IAHub, nunca como fornecedor. Nao gere filtro em SA2.A2_NOME, SA2.A2_FILIAL ou subquery em SA2 por esses termos.
-- REGRA CRITICA — palavra "empresa" como escopo de tenant: Quando a mensagem usa "empresa(s) [NOME1] e/ou [NOME2]" e esses nomes estao em empresas_iahub_mencionadas, a palavra "empresa" indica APENAS o escopo de execucao multiempresa. Ela NAO e um agrupamento SQL nem um filtro cadastral. Nao adicione GROUP BY, nao agrupe por empresa, nao filtre por fornecedor/filial baseado nesses nomes.
-- REGRA CRITICA — agrupamentos: ["empresa"] no estado anterior: Quando contrato_orquestrador ou estado anterior trouxer agrupamentos: ["empresa"], isso e metadata do backend (agrupamento multiempresa para exibicao), NAO e instrucao para GROUP BY SQL. Ignore-o na geracao do SQL. So adicione GROUP BY SQL quando o usuario pedir explicitamente agrupamento por mes, fornecedor, produto, etc.
-
-## Media — estrutura obrigatoria de subquery
-- Media mensal por ano (agrupado por ano): subquery interna exporta DOIS aliases — SUBSTRING(SD1.D1_DTDIGIT,1,4) AS ano E SUBSTRING(SD1.D1_DTDIGIT,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.valor_compra) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.valor_compra — NUNCA SD1.* ou SF1.*.
-- Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.valor_compra) sem GROUP BY.
-- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais.
-`.trim();
+  const partes = [fragmentosSpec.base()];
+  for (const chave of chaves) {
+    const fragmento = fragmentosSpec.FRAGMENTOS[chave];
+    if (fragmento) partes.push(fragmento.texto());
+  }
+  return partes.join('\n').trim();
+}
 
 const contratosTecnicosPrioritarios = `
 - SD1 -> SF1:
@@ -301,6 +200,54 @@ module.exports = {
     {
       regex: /\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b[\s\S]{0,4000}\bJOIN\s+\w+\s+SD1\b|\bJOIN\s+\w+\s+SD1\b[\s\S]{0,4000}\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b/i,
       mensagem: 'JOIN com SD1 invalido quando a metrica e SUM(SF1.F1_VALBRUT). SD1 e tabela de itens: cada NF tem N linhas em SD1, o que multiplica F1_VALBRUT por N ao somar. Quando SD1 estiver no FROM/JOIN, use SUM(SD1.D1_TOTAL) como metrica de valor e SUM(SD1.D1_QUANT) para quantidade.',
+    },
+    {
+      validar(sql, mensagem) {
+        const usaSF4 = /\bJOIN\s+\w+\s+SF4\b/i.test(sql);
+        if (!usaSF4) return null;
+        const temEstoque = /\bSF4\s*\.\s*F4_ESTOQUE\s*=/i.test(sql);
+        const temDuplic = /\bSF4\s*\.\s*F4_DUPLIC\s*=/i.test(sql);
+        if (temEstoque || temDuplic) return null;
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeEstoque = /estoque/.test(texto);
+        const pedeFinanceiro = /financeiro|duplicata|contas?\s+a\s+pagar/.test(texto);
+        if (!pedeEstoque && !pedeFinanceiro) return null;
+        if (pedeEstoque) {
+          return (
+            'A pergunta menciona estoque/movimentacao de estoque, mas o JOIN com SF4 (TES) nao tem o filtro AND SF4.F4_ESTOQUE = \'S\' no WHERE. ' +
+            'O JOIN sozinho apenas associa o TES, sem filtrar nada — sem esse filtro a query soma TODAS as compras com qualquer TES vinculado, nao apenas as que geraram estoque. Adicione o filtro.'
+          );
+        }
+        return (
+          'A pergunta menciona financeiro/duplicata/contas a pagar, mas o JOIN com SF4 (TES) nao tem o filtro AND SF4.F4_DUPLIC = \'S\' no WHERE. ' +
+          'O JOIN sozinho apenas associa o TES, sem filtrar nada — sem esse filtro a query soma TODAS as compras com qualquer TES vinculado, nao apenas as que geraram obrigacao financeira. Adicione o filtro.'
+        );
+      },
+    },
+    {
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeMedia = /\bm[eé]di[ao]\b/.test(texto);
+        if (!pedeMedia) return null;
+        const temAvg = /\bAVG\s*\(/i.test(sql);
+        if (temAvg) return null;
+        return (
+          'A pergunta pede uma media, mas o SQL nao contem nenhuma funcao AVG() — isso retorna o total POR periodo (uma listagem), nao a media entre os periodos. ' +
+          'Monte a estrutura de duas camadas: subquery interna agrupada por periodo com SUM(), e query externa com SELECT AVG(h.<coluna_soma>) FROM (<subquery interna>) AS h.'
+        );
+      },
+    },
+    {
+      validar(sql) {
+        const temAvgDireto = /\bAVG\s*\(\s*SD1\s*\.\s*D1_TOTAL\s*\)|\bAVG\s*\(\s*SF1\s*\.\s*F1_VALBRUT\s*\)/i.test(sql);
+        if (!temAvgDireto) return null;
+        const temGroupBy = /\bGROUP\s+BY\b/i.test(sql);
+        if (!temGroupBy) return null;
+        return (
+          'AVG(SD1.D1_TOTAL) ou AVG(SF1.F1_VALBRUT) com GROUP BY na mesma camada calcula o ticket medio por nota dentro de cada periodo, NAO a media do total comprado entre os periodos. ' +
+          'Monte a estrutura de duas camadas: subquery interna agrupada por periodo com SUM() (nao AVG), e query externa com AVG(h.<coluna_soma>) sobre os totais da subquery.'
+        );
+      },
     },
   ],
   mensagensErro: {

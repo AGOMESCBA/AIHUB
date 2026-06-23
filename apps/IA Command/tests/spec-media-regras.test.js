@@ -185,9 +185,9 @@ ok('faturamento: usa SF2.F2_EMISSAO nas regras de média', () => {
 });
 
 ok('compras: usa SD1.D1_DTDIGIT nas regras de média', () => {
+  const rt = resolverRegrasTecnicas(SPECS.compras);
   assert.ok(
-    SPECS.compras.regrasTecnicas.includes('SD1.D1_DTDIGIT') ||
-    SPECS.compras.regrasTecnicas.includes('D1_DTDIGIT'),
+    rt.includes('SD1.D1_DTDIGIT') || rt.includes('D1_DTDIGIT'),
     'compras deve referenciar D1_DTDIGIT'
   );
 });
