@@ -177,9 +177,9 @@ ok('prompt-builder menciona proibição de AVG direto sobre tabela fato', () => 
 console.log('\n[8] Campo de data de referência correto por módulo');
 
 ok('faturamento: usa SF2.F2_EMISSAO nas regras de média', () => {
+  const rt = resolverRegrasTecnicas(SPECS.faturamento);
   assert.ok(
-    SPECS.faturamento.regrasTecnicas.includes('SF2.F2_EMISSAO') ||
-    SPECS.faturamento.regrasTecnicas.includes('F2_EMISSAO'),
+    rt.includes('SF2.F2_EMISSAO') || rt.includes('F2_EMISSAO'),
     'faturamento deve referenciar F2_EMISSAO'
   );
 });

@@ -902,7 +902,7 @@ function extrairSelectEGroupByNivelZero(sql = '') {
   const posGroup = localizarKeywordNivelZero(texto, 'GROUP BY', posFrom + 4);
   if (posGroup < 0) return { select: texto.slice(posSelect + 6, posFrom) };
 
-  const fins = ['HAVING', 'ORDER BY']
+  const fins = ['HAVING', 'ORDER BY', 'UNION']
     .map(k => localizarKeywordNivelZero(texto, k, posGroup + 8))
     .filter(pos => pos >= 0);
   const posPontoVirgula = texto.indexOf(';', posGroup + 8);
