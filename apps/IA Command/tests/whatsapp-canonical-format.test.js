@@ -287,5 +287,49 @@ ok('fluxo projetado: consolidado soma por dia periodo e empresa', () => {
   assert.ok(!texto.includes('registro(s)'), texto);
 });
 
+ok('fluxo projetado mensal: totais usam saldo inicial e fluxo final', () => {
+  const rows = [
+    { competencia: '202606', saldo_bancario_base: 252135.16, total_a_receber: 12185, total_a_pagar: 3459.52, fluxo_liquido: 260860.64 },
+    { competencia: '202607', saldo_bancario_base: 252135.16, total_a_receber: 20667.50, total_a_pagar: 5603.94, fluxo_liquido: 275924.20 },
+    { competencia: '202608', saldo_bancario_base: 252135.16, total_a_receber: 0, total_a_pagar: 3634.42, fluxo_liquido: 272289.78 },
+    { competencia: '202609', saldo_bancario_base: 252135.16, total_a_receber: 0, total_a_pagar: 707.35, fluxo_liquido: 271582.43 },
+  ];
+  const texto = canonical.renderSingle(rows, { nomeModulo: 'Financeiro', contextoConsulta: 'Fluxo projetado por mes' });
+
+  assert.ok(/Junho\/2026: Saldo Bancario Base: \*R\$\s*252\.135,16\*/.test(texto), texto);
+  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*252\.135,16\* \| Total A Receber: \*R\$\s*32\.852,50\* \| Total A Pagar: \*R\$\s*13\.405,23\* \| Fluxo Liquido: \*R\$\s*271\.582,43\*/.test(texto), texto);
+  assert.ok(!/Saldo Bancario Base: \*R\$\s*1\.008\.540,64\*/.test(texto), texto);
+  assert.ok(!/Fluxo Liquido: \*R\$\s*1\.080\.657,05\*/.test(texto), texto);
+});
+
+ok('fluxo projetado mensal: consolidado carrega posicao por empresa', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'C3i Systems',
+      rows: [
+        { competencia: '202606', saldo_bancario_base: 252135.16, total_a_receber: 12185, total_a_pagar: 3459.52, fluxo_liquido: 260860.64 },
+        { competencia: '202607', saldo_bancario_base: 252135.16, total_a_receber: 20667.50, total_a_pagar: 5603.94, fluxo_liquido: 275924.20 },
+        { competencia: '202608', saldo_bancario_base: 252135.16, total_a_receber: 0, total_a_pagar: 3634.42, fluxo_liquido: 272289.78 },
+        { competencia: '202609', saldo_bancario_base: 252135.16, total_a_receber: 0, total_a_pagar: 707.35, fluxo_liquido: 271582.43 },
+      ],
+    },
+    {
+      nomeEmpresa: 'J2A Consultoria',
+      rows: [
+        { competencia: '202606', saldo_bancario_base: 750298.44, total_a_receber: 77334.02, total_a_pagar: 63260.64, fluxo_liquido: 764371.82 },
+        { competencia: '202607', saldo_bancario_base: 750298.44, total_a_receber: 364451.64, total_a_pagar: 53064.67, fluxo_liquido: 1075758.79 },
+        { competencia: '202608', saldo_bancario_base: 750298.44, total_a_receber: 3139.50, total_a_pagar: 4835.53, fluxo_liquido: 1074062.76 },
+      ],
+    },
+  ], { mensagem: 'Preciso do fluxo de caixa projetado dos proximos 90 dias detalhado por mes.' });
+
+  assert.ok(/Setembro\/2026: Saldo Bancario Base: \*R\$\s*1\.002\.433,60\* \| Total A Receber: \*R\$\s*0,00\* \| Total A Pagar: \*R\$\s*707,35\* \| Fluxo Liquido: \*R\$\s*1\.345\.645,19\*/.test(texto), texto);
+  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*1\.002\.433,60\* \| Total A Receber: \*R\$\s*477\.777,66\* \| Total A Pagar: \*R\$\s*134\.566,07\* \| Fluxo Liquido: \*R\$\s*1\.345\.645,19\*/.test(texto), texto);
+  assert.ok(/C3i Systems: Saldo Bancario Base: \*R\$\s*252\.135,16\* \| Total A Receber: \*R\$\s*32\.852,50\* \| Total A Pagar: \*R\$\s*13\.405,23\* \| Fluxo Liquido: \*R\$\s*271\.582,43\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: Saldo Bancario Base: \*R\$\s*750\.298,44\* \| Total A Receber: \*R\$\s*444\.925,16\* \| Total A Pagar: \*R\$\s*121\.160,84\* \| Fluxo Liquido: \*R\$\s*1\.074\.062,76\*/.test(texto), texto);
+  assert.ok(!/Saldo Bancario Base: \*R\$\s*3\.259\.435,96\*/.test(texto), texto);
+  assert.ok(!/Fluxo Liquido: \*R\$\s*3\.994\.850,42\*/.test(texto), texto);
+});
+
 console.log(`\nwhatsapp-canonical-format.test.js: ${passou} passaram, ${falhou} falharam`);
 if (falhou) process.exit(1);

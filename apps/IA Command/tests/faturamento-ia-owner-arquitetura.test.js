@@ -12,6 +12,7 @@ const sx3Validator = require(path.join(ROOT, 'modules/erp/sx3-sql-validator'));
 const faturamentoSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
 const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
 const entityResolver = require(path.join(ROOT, 'modules/ai/entity-resolver'));
+const queryPlan = require(path.join(ROOT, 'modules/erp/query-plan'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
@@ -30,6 +31,21 @@ assert(systemPrompt.includes('NUNCA use AVG(SD2.D2_TOTAL)'), 'prompt deve proibi
 assert(systemPrompt.includes('a SQL da IA ja deve calcular a media correta'), 'prompt deve deixar claro que o SQL da IA nasce com a media correta');
 assert(systemPrompt.includes('o backend nao recalcula nem corrige a metrica'), 'prompt nao deve depender de ajuste posterior do backend');
 assert(systemPrompt.includes('query externa agrupada somente por h.cod_produto, h.produto'), 'prompt deve orientar agrupamento externo correto por produto');
+assert(systemPrompt.includes('Crescimento mensal / variacao mensal / evolucao mes a mes'), 'prompt deve orientar crescimento mensal explicitamente');
+assert(systemPrompt.includes('crescimento_valor e crescimento_percentual'), 'prompt deve exigir valor e percentual quando crescimento mensal for pedido');
+const planoCrescimentoMensal = queryPlan.buildQueryPlan({
+  modulo: 'faturamento',
+  mensagem: 'Faturamento por mes no ano de 2026 demonstrando o crescimento mensal',
+  periodo: { tipo: 'ano', dataInicio: '20260101', dataFim: '20261231' },
+});
+assert.strictEqual(planoCrescimentoMensal.operacao, 'comparativo', 'faturamento com crescimento mensal deve ser comparativo');
+assert.strictEqual(planoCrescimentoMensal.comparativo, true, 'faturamento com crescimento mensal deve sinalizar comparativo');
+assert.strictEqual(planoCrescimentoMensal.calcularPercentualCrescimento, true, 'faturamento com crescimento mensal deve sinalizar calculo de crescimento');
+assert(planoCrescimentoMensal.agrupamentos.includes('mes'), 'faturamento por mes deve preservar agrupamento mensal');
+assert(
+  queryPlan.formatQueryPlanForPrompt(planoCrescimentoMensal).includes('faturamento_crescimento_mensal'),
+  'plano formatado deve orientar LAG mensal para o IA-owner',
+);
 assert.deepStrictEqual(
   entityResolver.extrairExplicitos('faturamento medio por produto de janeiro a junho de 2026'),
   [],
