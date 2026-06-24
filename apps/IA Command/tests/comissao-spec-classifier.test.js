@@ -27,15 +27,19 @@ function contemTodos(arr, esperados) {
 
 console.log('\n[1] identidade_vendedor sempre presente');
 
-ok('pergunta qualquer sempre inclui identidade_vendedor', () => {
+ok('pergunta generica (sem keyword de assunto) usa so a base + identidade_vendedor, nao o fallback total', () => {
   const r1 = classificarFragmentos('qual minha comissao do mes?');
-  const r2 = classificarFragmentos('');
   const r3 = classificarFragmentos('isso eh bom ou mau?');
-  // null = fallback total (que inclui identidade_vendedor via ORDEM_FALLBACK);
-  // array = deve conter identidade_vendedor explicitamente.
-  if (Array.isArray(r1)) assert.ok(r1.includes('identidade_vendedor'), `r1 deve conter identidade_vendedor: ${JSON.stringify(r1)}`);
-  assert.strictEqual(r2, null, 'pergunta vazia deve cair no fallback (null)');
-  assert.strictEqual(r3, null, 'pergunta sem keyword deve cair no fallback (null)');
+  // Mensagem com texto mas sem keyword de assunto: array contendo so os fragmentos
+  // "sempre" (identidade_vendedor) — a base() do spec ja cobre consulta simples,
+  // nao precisa dos 9 fragmentos opcionais (media/crescimento/comparativo/etc).
+  assert.deepStrictEqual(r1, ['identidade_vendedor'], `r1 deveria ser so identidade_vendedor: ${JSON.stringify(r1)}`);
+  assert.deepStrictEqual(r3, ['identidade_vendedor'], `r3 deveria ser so identidade_vendedor: ${JSON.stringify(r3)}`);
+});
+
+ok('mensagem vazia/sem texto cai no fallback total (null) — sistema sem nenhuma pista', () => {
+  const r2 = classificarFragmentos('');
+  assert.strictEqual(r2, null, 'mensagem vazia deve cair no fallback total (null)');
 });
 
 console.log('\n[2] Fragmento unico');
