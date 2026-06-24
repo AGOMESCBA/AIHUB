@@ -416,6 +416,20 @@ function camposSX3(tabelas, conexaoId, empresaId, limite = 80, essenciais = {}) 
   }
 }
 
+// Achata o mapa do SX3 (por tabela fisica) em CAMPO -> titulo cadastrado, para o
+// formatter canonico exibir nomes legiveis (ex: E2_VENCREA -> "Venc Real Tit") sem
+// depender de heuristica regex ou de a IA escolher um alias amigavel no SELECT.
+function labelsSx3ParaFormatacao(sx3Completo) {
+  const out = {};
+  for (const campos of Object.values(sx3Completo || {})) {
+    for (const { campo, descricao } of campos || []) {
+      const c = String(campo || '').toUpperCase();
+      if (c && descricao && !out[c]) out[c] = descricao;
+    }
+  }
+  return out;
+}
+
 function sx3EssencialParaPrompt(essenciais = {}) {
   const out = {};
   for (const [base, campos] of Object.entries(essenciais || {})) {
@@ -1729,11 +1743,18 @@ function _buildContextoFormatacao(mensagem = '', contextoConsulta = null) {
   return texto;
 }
 
-async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodoResolvido = null) {
+async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodoResolvido = null, protheus = null, empresaId = null) {
   if (typeof spec.formatarResposta === 'function') return spec.formatarResposta({ mensagem, rows, keys, cfg });
   if (!rows || !rows.length) return mensagemErro(spec, 'sem_resultado');
   const whatsappFormat = require('../whatsapp-format-prompt');
   const contextoConsulta = _buildContextoConsulta(intent, periodoResolvido, mensagem);
+
+  if (protheus?.conexaoId && empresaId) {
+    const { completo: sx3Completo } = camposSX3(spec.tabelas, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
+    canonicalWhatsappFormat.setLabelsSx3(labelsSx3ParaFormatacao(sx3Completo));
+  } else {
+    canonicalWhatsappFormat.setLabelsSx3(null);
+  }
 
   const _NOME_DISPLAY = { faturamento: 'Faturamento', compras: 'Compras', financeiro: 'Financeiro', comissao: 'Comissão' };
   const nomeModulo = _NOME_DISPLAY[(spec.nome || '').replace('_dinamico', '')] || null;
@@ -2209,7 +2230,7 @@ async function executar(spec, intent, empresaId) {
       conn._empresa_id = empresaId         || '';
       const rows = await connectionFactory.executar(conn, preparado.sqlFinal, {});
       const resposta = rows && rows.length
-        ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent, plano.obj.periodo || null)
+        ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent, plano.obj.periodo || null, protheus, empresaId)
         : mensagemErro(spec, 'sem_resultado');
       // Formatter programático tem prioridade sobre template planejado pela IA (evita Total Geral errado em comparativos)
       const _wf = require('../whatsapp-format-prompt');
@@ -2296,6 +2317,7 @@ async function executar(spec, intent, empresaId) {
 
 async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
   const t0 = Date.now();
+  const mensagem = intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta';
   const _sqlTrim = String(sqlCanonico || '').trim();
   if (!_sqlTrim || _sqlTrim === 'null') {
     return { tipo: 'erro', subtipo: 'sql_nao_extraido', resposta_direta: mensagemErro(spec, 'sql_invalido'), sql_gerado: null, _sql_auditoria: { origem: 'ia_owner_reuso', sql_final_executado: null }, duracao_ms: Date.now() - t0 };
@@ -2373,7 +2395,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       }
       const planoConsulta = construirQueryPlanTecnico({
         spec,
-        mensagem: intent._mensagemOriginal || intent.intencao || spec.defaultMessage || 'consulta',
+        mensagem,
         periodo: intent._periodoCanonicoResolvido || intent.periodo,
         filtros: intent.filtros || {},
         entidades,
@@ -2397,7 +2419,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
       const template = intent._respostaPlanejadaCanonica || intent._iaOwnerRespostaPlanejada || null;
       const resposta = rows && rows.length
-        ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null)
+        ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null, protheus, empresaId)
         : mensagemErro(spec, 'sem_resultado');
       // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
       const _wfD = require('../whatsapp-format-prompt');

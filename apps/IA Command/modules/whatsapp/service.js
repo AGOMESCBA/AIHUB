@@ -1866,13 +1866,14 @@ class IACWhatsAppService extends EventEmitter {
       // 1. padrao do canal: designação intencional de empresa primária (tem precedência total)
       const padraoDiff = Number(b?.padrao || 0) - Number(a?.padrao || 0);
       if (padraoDiff) return padraoDiff;
-      // 2. empresa_id crescente (ordem natural cadastrada no canal)
-      if (aId !== bId) return aId - bId;
-      // 3. principalId (empresa que iniciou o serviço) somente como último desempate
+      // 2. principalId: empresa conectada a este canal de WhatsApp deve liderar o pipeline
+      // (gera o SQL via IA e é a referencia do registro/log consolidado).
       if (principalId) {
         if (aId === principalId && bId !== principalId) return -1;
         if (bId === principalId && aId !== principalId) return 1;
       }
+      // 3. empresa_id crescente apenas como desempate final entre as demais
+      if (aId !== bId) return aId - bId;
       return 0;
     });
   }
