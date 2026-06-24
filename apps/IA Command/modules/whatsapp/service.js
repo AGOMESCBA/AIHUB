@@ -29,6 +29,32 @@ const comissaoIAOwnerSpec      = require('../erp/comissao/comissao-ia-owner-spec
 
 const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
+const WHATSAPP_MAX_MESSAGE_CHARS = 3500;
+
+function _normalizarTextoEnvioWhatsapp(valor) {
+  if (valor === null || valor === undefined) return '';
+  if (typeof valor === 'string') return valor;
+  try { return JSON.stringify(valor); } catch (_) { return String(valor); }
+}
+
+function _quebrarMensagemWhatsapp(valor, limite = WHATSAPP_MAX_MESSAGE_CHARS) {
+  const texto = _normalizarTextoEnvioWhatsapp(valor).trim();
+  if (!texto) return ['Nao consegui montar a resposta dessa consulta. Tente novamente.'];
+  if (texto.length <= limite) return [texto];
+
+  const partes = [];
+  let restante = texto;
+  while (restante.length > limite) {
+    let corte = restante.lastIndexOf('\n\n', limite);
+    if (corte < Math.floor(limite * 0.6)) corte = restante.lastIndexOf('\n', limite);
+    if (corte < Math.floor(limite * 0.6)) corte = restante.lastIndexOf(' ', limite);
+    if (corte < Math.floor(limite * 0.6)) corte = limite;
+    partes.push(restante.slice(0, corte).trim());
+    restante = restante.slice(corte).trim();
+  }
+  if (restante) partes.push(restante);
+  return partes;
+}
 
 const PUPPETEER_ARGS = [
   '--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu',
@@ -376,6 +402,15 @@ class IACWhatsAppService extends EventEmitter {
     const id = await this.client.getNumberId(numero.replace(/\D/g, ''));
     if (!id) throw new Error(`Número ${numero} não encontrado no WhatsApp.`);
     await this.client.sendMessage(id._serialized, texto);
+  }
+
+  async _sendChatMessageSafe(chat, texto) {
+    const partes = _quebrarMensagemWhatsapp(texto);
+    for (let i = 0; i < partes.length; i++) {
+      const prefixo = partes.length > 1 ? `(${i + 1}/${partes.length})\n` : '';
+      await chat.sendMessage(prefixo + partes[i]);
+    }
+    return partes.length;
   }
 
   _normalizarNumeroWa(valor) {
@@ -2579,8 +2614,9 @@ class IACWhatsAppService extends EventEmitter {
         return;
       }
       try {
-        await chat.sendMessage(resposta);
+        const partesEnviadas = await this._sendChatMessageSafe(chat, resposta);
         const entregueMs = Date.now() - t0;
+        if (partesEnviadas > 1) this.log(`Resposta dividida em ${partesEnviadas} partes para ${sender}.`, 'info');
         this.log(`✅ Resposta enviada para ${sender} (${entregueMs}ms)`, 'success');
         if (_timingCtx.logId) {
           try { interpretationLog.atualizarEntregue(_timingCtx.logId, entregueMs); } catch (_) {}
@@ -3457,6 +3493,7 @@ class IACWhatsAppService extends EventEmitter {
       'entidade_nao_encontrada', 'entidade_ia_nao_encontrada',
       'entidade_nao_encontrada_tenant', 'entidade_ambigua_tenant', 'sem_resultado',
       'nao_cadastrado', 'erp_id_nao_configurado', 'modulo_nao_autorizado',
+      'acesso_negado_vendedor',
     ]);
     const SUBTIPOS_INCONSISTENCIA_INTERNA = new Set([
       'sql_invalido', 'periodo_sql_invalido', 'funcao_data_protheus_invalida',
@@ -4163,7 +4200,9 @@ class IACWhatsAppService extends EventEmitter {
         ? (resultadosErroAuditaveis[0].subtipoErro || resultadosErroAuditaveis[0].resultado?.subtipo || null)
         : (ultimoResultadoDinamico?.resultado?.subtipo || null);
       const respostaErro = errosDinamicos.length
-        ? mensagemInconsistenciaPorSubtipo(_subtipoDominante)
+        ? (SUBTIPOS_DOMINIO_DIRETO.has(_subtipoDominante)
+            ? (ultimoResultadoDinamico?.resultado?.resposta_direta || mensagemInconsistenciaPorSubtipo(_subtipoDominante))
+            : mensagemInconsistenciaPorSubtipo(_subtipoDominante))
         : 'Nao consegui executar a consulta dinamica nas empresas disponiveis. Verifique se a intencao dinamica, conexao ERP e chaves de IA estao configuradas.';
       if (
         ultimoResultadoDinamico?.resultado

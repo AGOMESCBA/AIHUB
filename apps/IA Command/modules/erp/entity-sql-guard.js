@@ -237,6 +237,29 @@ function removerFiltrosLojaEntidadesTodas(sql, entidades) {
   return out;
 }
 
+// Garante que, quando ha entidade de seguranca de vendedor (vendedor_fixo_seguranca),
+// NENHUM outro codigo de vendedor apareca nos campos de filtro de SE3 — nem mesmo via
+// OR, subquery ou JOIN adicional que a IA tente usar para contornar o filtro principal.
+// Defesa em profundidade: roda DEPOIS do SQL gerado, mesmo que o bloqueio antecipado
+// (antes da chamada a IA) ja tenha tentado impedir o caso comum.
+function validarExclusividadeVendedorSeguranca(sql, entidadeSeguranca) {
+  if (!entidadeSeguranca?.codigo) return { ok: true, erros: [] };
+  const campos = CAMPOS_CODIGO_EQUIVALENTES.vendedor_fixo_seguranca || [];
+  const codigoEsperado = String(entidadeSeguranca.codigo);
+  const where = _sqlSemComentarios(sql);
+  const erros = [];
+  for (const campo of campos) {
+    const re = new RegExp(`\\b(?:[A-Z0-9_]+\\.)?${_escapeRegexLiteral(campo)}\\s*=\\s*'([^']*)'`, 'gi');
+    let m;
+    while ((m = re.exec(where))) {
+      if (m[1] !== codigoEsperado) {
+        erros.push(`SQL filtra ${campo} pelo codigo '${m[1]}', diferente do vendedor autorizado '${codigoEsperado}'. Acesso negado: nunca filtre comissao de outro vendedor.`);
+      }
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
 module.exports = {
   validarSqlEntidadesResolvidas,
   termosDeFiltrosEstruturados,
@@ -247,4 +270,5 @@ module.exports = {
   parametrizarSqlEntidadesResolvidas,
   aplicarParametrosEntidadesSql,
   removerFiltrosLojaEntidadesTodas,
+  validarExclusividadeVendedorSeguranca,
 };

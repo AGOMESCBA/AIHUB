@@ -273,7 +273,11 @@ const FRAGMENTOS = {
   media_mensal: {
     texto: () => media({ granularidade: 'mensal' }),
     keywords: [/\bm[eé]di[ao]\b/i],
-    excluiSe: [/\bm[eé]di[ao]\b.*\b(di[aá]ri[ao]|anual)\b|\b(di[aá]ri[ao]|anual)\b.*\bm[eé]di[ao]\b/i],
+    excluiSe: [
+      /\bm[eé]di[ao]\b.*\b(di[aá]ri[ao]|anual)\b|\b(di[aá]ri[ao]|anual)\b.*\bm[eé]di[ao]\b/i,
+      /\bm[eé]di[ao]\s+por\s+dia\b/i,
+      /\bm[eé]di[ao]\s+por\s+ano\b/i,
+    ],
   },
   crescimento_diario: {
     texto: () => crescimento({ granularidade: 'diaria' }),

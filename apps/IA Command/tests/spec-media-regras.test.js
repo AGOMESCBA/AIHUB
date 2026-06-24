@@ -193,9 +193,9 @@ ok('compras: usa SD1.D1_DTDIGIT nas regras de média', () => {
 });
 
 ok('comissao: usa SE3.E3_VENCTO nas regras de média', () => {
+  const rt = resolverRegrasTecnicas(SPECS.comissao);
   assert.ok(
-    SPECS.comissao.regrasTecnicas.includes('SE3.E3_VENCTO') ||
-    SPECS.comissao.regrasTecnicas.includes('E3_VENCTO'),
+    rt.includes('SE3.E3_VENCTO') || rt.includes('E3_VENCTO'),
     'comissao deve referenciar E3_VENCTO'
   );
 });

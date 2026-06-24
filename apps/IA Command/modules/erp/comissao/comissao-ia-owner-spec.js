@@ -3,6 +3,8 @@
 const crud = require('../../database/crud');
 const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
+const fragmentosSpec = require('./comissao-fragmentos-spec');
+const { classificarFragmentos } = require('./comissao-spec-classifier');
 
 const TABELAS = ['SE3', 'SA3', 'SA1', 'SE2', 'SE5'];
 
@@ -146,76 +148,24 @@ function prepararIntent({ intent, empresaId, mensagem }) {
   return {};
 }
 
-const regrasTecnicas = `
-## Campos de data padrao
-- Comissao provisionada: SE3.E3_VENCTO (CHAR(8) YYYYMMDD).
-- Comissao paga/preparada: SE3.E3_DATA quando existir no SX3.
-- Baixa/pagamento financeiro real: SE5.E5_DATA quando SE2/SE5 forem usados.
-- Em aberto/pendente sem periodo explicito: consulte toda a carteira em aberto (sem BETWEEN).
+function regrasTecnicas({ mensagem } = {}) {
+  const chavesAcionadas = classificarFragmentos(mensagem);
+  const chaves = chavesAcionadas || fragmentosSpec.ORDEM_FALLBACK;
 
-## Identidade do vendedor
-- Se o contexto tecnico trouxer vendedorFixo, aplique obrigatoriamente filtro desse vendedor em SE3.E3_VEND ou SE3.E3_VENDED conforme campos disponiveis.
-- Nunca retorne dados de outros vendedores quando vendedorFixo estiver presente, mesmo que o usuario nao cite vendedor.
+  const partes = [fragmentosSpec.base()];
+  for (const chave of chaves) {
+    const fragmento = fragmentosSpec.FRAGMENTOS[chave];
+    if (fragmento) partes.push(fragmento.texto());
+  }
+  return partes.join('\n').trim();
+}
 
-## Carteira / status
-- Comissao em aberto/a receber/pendente: filtre LTRIM(RTRIM(SE3.E3_DATA)) = '' quando E3_DATA existir no SX3.
-- Comissao paga/realizada: filtre LTRIM(RTRIM(SE3.E3_DATA)) <> '' quando usar SE3.
-- Quando a pergunta pedir comissao paga/realizada por data de pagamento e SE2/SE5 estiverem disponiveis, use SE3 -> SE2 -> SE5 e filtre SE5.E5_DATA.
-- SE3.E3_STATUS nao significa pagamento realizado; nao use E3_STATUS como pago/em aberto.
-
-## Tabelas padrao do modulo Comissao
-- SE3: comissoes. Metrica principal: SE3.E3_COMIS. Valor base/venda: SE3.E3_BASE.
-- SA3: vendedores.
-- SA1: clientes.
-- SE2: titulos financeiros de provisao de comissao, use apenas quando a pergunta exigir financeiro/pagamento ou quando precisar conectar com SE5.
-- SE5: movimentos/baixas financeiras, use para pagamento/baixa real quando disponivel.
-
-## Joins padrao
-- SE3 -> SA3:
-  SE3.E3_VEND = SA3.A3_COD
-- SE3 -> SA1:
-  SE3.E3_CLIENT = SA1.A1_COD
-  AND SE3.E3_LOJA = SA1.A1_LOJA
-- SE3 -> SE2, apenas quando necessario e campos existirem:
-  SE2.E2_FILIAL = SE3.E3_FILIAL
-  AND SE2.E2_FORNECE = SE3.E3_VENDED ou SE3.E3_VEND conforme campo disponivel
-  AND SE2.E2_NUM = SE3.E3_NUM
-  AND SE2.E2_PARCELA = SE3.E3_PARCELA quando ambos existirem
-  AND SE2.E2_TIPO IN ('COM','TX') quando E2_TIPO existir
-- SE2 -> SE5, apenas quando necessario e campos existirem:
-  SE5.E5_FILIAL = SE2.E2_FILIAL
-  AND SE5.E5_CLIFOR = SE2.E2_FORNECE
-  AND SE5.E5_LOJA = SE2.E2_LOJA
-  AND SE5.E5_NUMERO = SE2.E2_NUM
-  AND SE5.E5_PARCELA = SE2.E2_PARCELA quando ambos existirem
-  AND SE5.E5_TIPO = SE2.E2_TIPO quando ambos existirem
-  AND SE5.E5_PREFIXO = SE2.E2_PREFIXO quando ambos existirem
-
-## Regras obrigatorias de SQL
-- Inicie sempre com SET ROWCOUNT 50000.
-- Use aliases explicitos iguais a base da tabela: SE3, SA3, SA1, SE2, SE5.
-- Qualifique campos sempre pelo alias base (SE3.E3_COMIS, nunca SE3990.E3_COMIS).
-- Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
-- Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
-
-## Exibicao de entidades
-- vendedor: SA3.A3_NOME AS vendedor. Codigo como cod_vendedor.
-- cliente: SA1.A1_NOME AS cliente. Codigo/loja como cod_cliente e loja_cliente.
-Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP BY.
-
-## Metrica por agrupamento
-- Metrica principal: COALESCE(SUM(SE3.E3_COMIS),0) AS valor_comissao.
-- Base/venda: COALESCE(SUM(SE3.E3_BASE),0) AS valor_venda (inclua quando pedido ou para contextualizar).
-- "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
-- "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
-- "por mes": SUBSTRING(SE3.E3_VENCTO, 1, 6) AS competencia no SELECT e GROUP BY.
-- Media mensal por ano (subquery 2 camadas, agrupado por ano):
-  Subquery interna exporta DOIS aliases: SUBSTRING(SE3.E3_VENCTO,1,4) AS ano E SUBSTRING(SE3.E3_VENCTO,1,6) AS competencia. Query externa: SELECT h.ano, AVG(h.valor_comissao) AS media_mensal FROM (...) AS h GROUP BY h.ano. Camada externa usa SOMENTE h.ano e h.valor_comissao — NUNCA SE3.*.
-- Media mensal escalar (1 ano): subquery interna SUM por mes. Query externa AVG(h.valor_comissao) sem GROUP BY.
-- Media anual escalar: subquery interna SUM por ano → externa AVG dos totais. Alias externo: AS valor_comissao.
-`.trim();
-
-function formatarPerguntaAmbiguidade(texto, candidatos = []) {
+function formatarPerguntaAmbiguidade(texto, candidatos = [], contexto = {}) {
+  // Vendedor (nao gestor): nunca revela nomes/codigos de outros vendedores nem oferece
+  // "Todos" — pede apenas para refinar com nome e sobrenome, sem expor o cadastro.
+  if (contexto?.ehVendedorRestrito) {
+    return `Encontrei mais de um registro para *${texto}*. Por favor, informe o nome completo (nome e sobrenome) para eu localizar o registro correto.`;
+  }
   const linhas = candidatos.map((c, i) => `${i + 1}. *${c.nome}* (${c.rotuloTipo || c.tipo}: ${c.codigo}${c.loja ? `/${c.loja}` : ''})`);
   linhas.push(`${candidatos.length + 1}. *Todos*`);
   return `Encontrei mais de um registro para *${texto}*:\n\n${linhas.join('\n')}\n\nQual deles voce quer consultar? Responda com o numero.`;
@@ -289,6 +239,37 @@ module.exports = {
   maxTokens: 4200,
   dimensionLeftJoinBases: ['SA3', 'SA1'],
   sanitizarFiltrosFilialSX2: true,
+  sqlPatternsProibidos: [
+    {
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeMedia = /\bm[eé]di[ao]\b/.test(texto);
+        if (!pedeMedia) return null;
+        const temAvg = /\bAVG\s*\(/i.test(sql);
+        if (temAvg) return null;
+        return (
+          'A pergunta pede uma media, mas o SQL nao contem nenhuma funcao AVG() — isso retorna o total POR periodo (uma listagem), nao a media entre os periodos. ' +
+          'Monte a estrutura de duas camadas: subquery interna agrupada por periodo com SUM(), e query externa com SELECT AVG(h.<coluna_soma>) FROM (<subquery interna>) AS h.'
+        );
+      },
+    },
+    {
+      validar(sql) {
+        const temAvgDireto = /\bAVG\s*\(\s*SE3\s*\.\s*E3_COMIS\s*\)|\bAVG\s*\(\s*SE3\s*\.\s*E3_BASE\s*\)/i.test(sql);
+        if (!temAvgDireto) return null;
+        const temGroupBy = /\bGROUP\s+BY\b/i.test(sql);
+        if (!temGroupBy) return null;
+        return (
+          'AVG(SE3.E3_COMIS) ou AVG(SE3.E3_BASE) com GROUP BY na mesma camada calcula o ticket medio por lancamento dentro de cada periodo, NAO a media do total entre os periodos. ' +
+          'Monte a estrutura de duas camadas: subquery interna agrupada por periodo com SUM() (nao AVG), e query externa com AVG(h.<coluna_soma>) sobre os totais da subquery.'
+        );
+      },
+    },
+    {
+      regex: /\bAVG\s*\(\s*SUM\s*\(/i,
+      mensagem: 'AVG(SUM(...)) na mesma camada e sintaxe invalida no SQL Server. SUM() deve estar na subquery interna; AVG() deve estar na query externa, em FROM (subquery) AS h.',
+    },
+  ],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta de comissoes no momento. Tente novamente em breve.',
     sql_invalido: 'Tivemos uma inconsistencia ao interpretar sua consulta de comissoes. Por favor, reformule a pergunta e tente novamente.',

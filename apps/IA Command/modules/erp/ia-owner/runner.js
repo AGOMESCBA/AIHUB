@@ -1881,6 +1881,16 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
   if (!validacaoEntidades.ok) {
     throw Object.assign(new Error(`SQL nao aplicou entidades resolvidas: ${validacaoEntidades.erros.join(' | ')}`), { _tipo: 'contrato_entidade_invalido', _sql: out });
   }
+  // Guard de seguranca (defesa em profundidade): rejeita qualquer SQL que filtre vendedor
+  // por codigo diferente do vendedor_fixo_seguranca, mesmo que a IA tenha contornado o
+  // bloqueio antecipado via OR/subquery/JOIN adicional.
+  const entidadeSegurancaSql = (entidades || []).find(e => String(e?.tipo || '').toLowerCase() === 'vendedor_fixo_seguranca');
+  if (entidadeSegurancaSql) {
+    const validacaoVendedor = entitySqlGuard.validarExclusividadeVendedorSeguranca(out, entidadeSegurancaSql);
+    if (!validacaoVendedor.ok) {
+      throw Object.assign(new Error(`Violacao de seguranca: ${validacaoVendedor.erros.join(' | ')}`), { _tipo: 'acesso_negado_vendedor', _sql: out });
+    }
+  }
   const sx3Validacao = sx3SqlValidator.validarCamposSqlContraSX3(out, sx3);
   if (!sx3Validacao.ok) {
     const errosSx3 = sx3Validacao.erros.map(err => {
@@ -1989,7 +1999,7 @@ async function executar(spec, intent, empresaId) {
           tipo: 'pergunta_entidade',
           _intentPendente: intentEfetivo,
           _opcoesEntidade: diagnostico.candidatos,
-          resposta_direta: spec.formatarPerguntaAmbiguidade(diagnostico.texto, diagnostico.candidatos),
+          resposta_direta: spec.formatarPerguntaAmbiguidade(diagnostico.texto, diagnostico.candidatos, { ehVendedorRestrito: Boolean(entidadeSeguranca) }),
           sql_gerado: `-- Aguardando escolha de entidade: ${diagnostico.texto}`,
           duracao_ms: Date.now() - t0,
         };
@@ -2002,6 +2012,24 @@ async function executar(spec, intent, empresaId) {
     contextoTecnico.entidades_nao_resolvidas_pelo_sistema = diagnosticosEntidades;
   }
   entidadesResolvidas = deduplicarEntidadesResolvidas(entidadesResolvidas);
+  // Bloqueio antecipado de seguranca: se ha entidade de seguranca de vendedor (vendedorFixo,
+  // injetada pelo sistema a partir do remetente) e o usuario pediu/resolveu um vendedor de
+  // negocio com codigo DIFERENTE, nega o acesso antes de chamar a IA — sem gastar uma chamada
+  // de API e sem dar a IA a chance de tentar conciliar os dois codigos em uma unica consulta.
+  if (entidadeSeguranca) {
+    const outroVendedor = entidadesResolvidas.find(
+      e => String(e?.tipo || '').toLowerCase() === 'vendedor' && String(e.codigo) !== String(entidadeSeguranca.codigo)
+    );
+    if (outroVendedor) {
+      return {
+        tipo: 'erro',
+        subtipo: 'acesso_negado_vendedor',
+        resposta_direta: 'Você só pode consultar suas próprias comissões. Para ver dados de outro vendedor, peça para um gestor consultar.',
+        sql_gerado: `-- bloqueado: vendedor ${entidadeSeguranca.codigo} tentou acessar dados do vendedor ${outroVendedor.codigo}`,
+        duracao_ms: Date.now() - t0,
+      };
+    }
+  }
   const modeloOpts = {
     modeloBaixasReceber: contextoTecnico.modelo_baixas_receber,
     modeloBaixasPagar: contextoTecnico.modelo_baixas_pagar,
@@ -2077,7 +2105,7 @@ async function executar(spec, intent, empresaId) {
           tipo: 'pergunta_entidade',
           _intentPendente: intentEfetivo,
           _opcoesEntidade: diagnostico.candidatos,
-          resposta_direta: spec.formatarPerguntaAmbiguidade(diagnostico.texto, diagnostico.candidatos),
+          resposta_direta: spec.formatarPerguntaAmbiguidade(diagnostico.texto, diagnostico.candidatos, { ehVendedorRestrito: Boolean(entidadeSeguranca) }),
           sql_gerado: `-- Aguardando escolha de entidade: ${diagnostico.texto}`,
           _sql_auditoria: auditoriaBase,
           duracao_ms: Date.now() - t0,
@@ -2213,6 +2241,19 @@ async function executar(spec, intent, empresaId) {
       const semConexao = /nenhuma conex|no connection|connect/i.test(e.message || '');
       if (semConexao) {
         return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(spec, 'sem_conexao'), sql_gerado: preparado?.sqlFinal || plano.sql, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
+      }
+      // Violacao de seguranca (vendedor tentando acessar dados de outro vendedor): falha
+      // direto, sem retry. Dar a IA outra chance de gerar SQL para o mesmo pedido e um risco
+      // de seguranca, nao um erro tecnico corrigivel.
+      if (e._tipo === 'acesso_negado_vendedor') {
+        return {
+          tipo: 'erro',
+          subtipo: 'acesso_negado_vendedor',
+          resposta_direta: 'Você só pode consultar suas próprias comissões. Para ver dados de outro vendedor, peça para um gestor consultar.',
+          sql_gerado: `${e._sql || plano.sql}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
+          _sql_auditoria: auditoriaBase,
+          duracao_ms: Date.now() - t0,
+        };
       }
       if (tentativa >= maxTentativas) {
         const sqlErro = preparado?.sqlFinal || e._sql || plano.sql;
@@ -2401,7 +2442,9 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       return {
         tipo: 'erro',
         subtipo,
-        resposta_direta: mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'),
+        resposta_direta: subtipo === 'acesso_negado_vendedor'
+          ? 'Você só pode consultar suas próprias comissões. Para ver dados de outro vendedor, peça para um gestor consultar.'
+          : mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'),
         sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
         _sql_auditoria: auditoriaBase,
         duracao_ms: Date.now() - t0,
