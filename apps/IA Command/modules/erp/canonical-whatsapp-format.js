@@ -339,6 +339,46 @@ function valsMetricas(totais, metricas) {
   return metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
 }
 
+function tipoMetricaTemporal(col) {
+  const k = keyNorm(col);
+  if (/saldo.*base|base.*saldo|saldo_bancario|bancario_base/.test(k)) return 'primeiro';
+  if (/fluxo.*liquido|liquido.*fluxo|saldo.*final|final.*saldo|saldo_projetado|projetado.*saldo/.test(k)) return 'ultimo';
+  return 'soma';
+}
+
+function temMetricaPosicional(metricas = []) {
+  return metricas.some(col => tipoMetricaTemporal(col) !== 'soma');
+}
+
+function totalTemporalOrdenado(entries, metricas) {
+  const out = totalVazio(metricas);
+  for (const col of metricas) {
+    const tipo = tipoMetricaTemporal(col);
+    if (tipo === 'primeiro') {
+      const first = entries.find(([, totais]) => totais && Object.prototype.hasOwnProperty.call(totais, col));
+      out[col] = first ? toNumber(first[1][col]) : 0;
+    } else if (tipo === 'ultimo') {
+      const last = entries.slice().reverse().find(([, totais]) => totais && Object.prototype.hasOwnProperty.call(totais, col));
+      out[col] = last ? toNumber(last[1][col]) : 0;
+    } else {
+      out[col] = entries.reduce((acc, [, totais]) => acc + toNumber(totais?.[col]), 0);
+    }
+  }
+  return out;
+}
+
+function totalTemporalRows(rows, dim, metricas) {
+  const porDim = new Map();
+  for (const row of rows || []) {
+    const label = String(row[dim] ?? '').trim() || '(sem identificacao)';
+    if (!porDim.has(label)) porDim.set(label, totalVazio(metricas));
+    const totais = porDim.get(label);
+    for (const col of metricas) totais[col] += toNumber(row[col]);
+  }
+  const entries = [...porDim.entries()].sort(([a], [b]) => sortValorDimensao(dim, a).localeCompare(sortValorDimensao(dim, b)));
+  return totalTemporalOrdenado(entries, metricas);
+}
+
 function labelMetricaCategoria(col, categoria) {
   const cat = categoriaSemantica(categoria);
   if (!cat) return labelMetrica(col);
@@ -549,7 +589,9 @@ function renderSingle(rows, opts = {}) {
   });
   if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
 
-  const totais = somarMetricas(rows, shape.metricas);
+  const totais = dimTemporal && temMetricaPosicional(shape.metricas)
+    ? totalTemporalOrdenado(entradas, shape.metricas)
+    : somarMetricas(rows, shape.metricas);
   linhas.push('');
   linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ')}`);
   const resultado = formulaResultado(shape.metricas, totais);
@@ -639,6 +681,70 @@ function renderAll(sucessos, opts = {}) {
 
   const dim = shape.dimensao;
   const dimTemporal = RE_TEMPORAL.test(keyNorm(dim));
+  if (dimTemporal && temMetricaPosicional(shape.metricas)) {
+    const labels = [...new Set(sucessos.flatMap(s => (s.rows || []).map(row => String(row[dim] ?? '').trim() || '(sem identificacao)')))]
+      .sort((a, b) => sortValorDimensao(dim, a).localeCompare(sortValorDimensao(dim, b)));
+    const porEmpresa = sucessos.map(s => {
+      const porPeriodo = new Map();
+      for (const row of s.rows || []) {
+        const label = String(row[dim] ?? '').trim() || '(sem identificacao)';
+        if (!porPeriodo.has(label)) porPeriodo.set(label, totalVazio(shape.metricas));
+        const totais = porPeriodo.get(label);
+        for (const col of shape.metricas) totais[col] += toNumber(row[col]);
+      }
+      return { ...s, porPeriodo, ultimaPosicao: totalVazio(shape.metricas), temUltima: false };
+    });
+
+    const entradas = labels.map(label => {
+      const totais = totalVazio(shape.metricas);
+      for (const empresa of porEmpresa) {
+        const atual = empresa.porPeriodo.get(label);
+        if (atual) {
+          for (const col of shape.metricas) {
+            if (tipoMetricaTemporal(col) === 'soma') totais[col] += toNumber(atual[col]);
+            else {
+              empresa.ultimaPosicao[col] = toNumber(atual[col]);
+              totais[col] += empresa.ultimaPosicao[col];
+            }
+          }
+          empresa.temUltima = true;
+        } else if (empresa.temUltima) {
+          for (const col of shape.metricas) {
+            if (tipoMetricaTemporal(col) !== 'soma') totais[col] += empresa.ultimaPosicao[col] || 0;
+          }
+        }
+      }
+      return [label, totais];
+    });
+
+    const totalGeral = totalVazio(shape.metricas);
+    for (const col of shape.metricas) {
+      const tipo = tipoMetricaTemporal(col);
+      if (tipo === 'soma') {
+        totalGeral[col] = sucessos.reduce((acc, s) => acc + somarMetricas(s.rows, [col])[col], 0);
+      } else {
+        totalGeral[col] = sucessos.reduce((acc, s) => acc + totalTemporalRows(s.rows, dim, [col])[col], 0);
+      }
+    }
+
+    linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
+    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+      const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
+      linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
+    });
+    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+    linhas.push('');
+    linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
+    linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
+    linhas.push('');
+    linhas.push('\u{1F3E2} *Por Empresa*');
+    for (const s of sucessos) {
+      const totaisEmpresa = totalTemporalRows(s.rows, dim, shape.metricas);
+      linhas.push(`  - ${s.nomeEmpresa}: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totaisEmpresa[col] || 0)}*`).join(' | ')}`);
+    }
+    return linhas.join('\n');
+  }
+
   const porDim = new Map();
   const totalGeral = {};
   for (const col of shape.metricas) totalGeral[col] = 0;

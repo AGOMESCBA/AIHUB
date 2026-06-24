@@ -197,10 +197,25 @@ function _inferirPlanoCompras(texto) {
 }
 
 function _inferirPlanoFaturamento(texto) {
+  const comparativo = _containsAny(texto, [
+    'comparativo', 'comparar', 'comparacao', 'versus', 'vs',
+    'crescimento', 'cresceu', 'evolucao', 'variacao', 'aumento', 'queda',
+  ]);
+  const calcularPercentualCrescimento = _containsAny(texto, [
+    'crescimento', 'cresceu', 'crescimento percentual',
+    'variacao', 'variacao percentual', 'percentual',
+    'evolucao', 'aumento', 'queda',
+  ]);
   return {
     carteira: null,
     estado: _containsAny(texto, ['cancelado', 'canceladas']) ? 'cancelado' : null,
-    operacao: _containsAny(texto, ['nota', 'nf', 'nfe', 'documento']) ? 'notas' : 'consulta',
+    operacao: comparativo
+      ? 'comparativo'
+      : _containsAny(texto, ['nota', 'nf', 'nfe', 'documento'])
+        ? 'notas'
+        : 'consulta',
+    comparativo,
+    calcularPercentualCrescimento,
     dataPadrao: 'emissao',
     exigirSaldoAberto: false,
     proibirFiltroData: false,
@@ -498,7 +513,10 @@ function formatQueryPlanForPrompt(plano = {}) {
   // O campo é usado apenas internamente (correções de domínio e validações).
   if (Array.isArray(plano.regras) && plano.regras.length) linhas.push(`  regras: ${plano.regras.join(', ')}`);
   if (plano.comparativo) linhas.push('  comparativo: gere linhas comparaveis para os periodos solicitados.');
-  if (plano.calcularPercentualCrescimento) linhas.push('  calculo_obrigatorio: incluir percentual de crescimento/variacao entre ano_base e ano_comparacao.');
+  if (plano.calcularPercentualCrescimento) linhas.push('  calculo_obrigatorio: incluir crescimento/variacao entre os periodos comparados, com valor anterior e percentual quando houver denominador valido.');
+  if (plano.modulo === 'faturamento' && plano.calcularPercentualCrescimento && Array.isArray(plano.agrupamentos) && plano.agrupamentos.includes('mes')) {
+    linhas.push('  faturamento_crescimento_mensal: primeiro agregue faturamento por competencia; depois, na query externa, use LAG(h.faturamento) OVER (ORDER BY h.competencia) para calcular faturamento_mes_anterior, crescimento_valor e crescimento_percentual.');
+  }
   if (plano.proibirFiltroData) linhas.push('  proibido: adicionar filtro de data quando periodo=nenhum.');
   if (plano.exigirSaldoAberto) linhas.push('  obrigatorio: filtrar saldo em aberto na carteira correspondente.');
   if (plano.modulo === 'financeiro' && plano.ajusteAntecipacao) {
