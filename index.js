@@ -7,6 +7,7 @@ const helmet           = require('helmet');
 const rateLimit        = require('express-rate-limit');
 const path             = require('path');
 const fs               = require('fs');
+const util             = require('util');
 const FileSessionStore = require('./modules/auth/session-store');
 const { requireAuth, requireAdmin } = require('./modules/auth');
 const { inicializarAdmin }          = require('./modules/auth/database');
@@ -51,11 +52,38 @@ const _consoleBuffer = [];
 const _CONSOLE_BUFFER_MAX = 500;
 
 function _consoleEmit(level, args) {
-  const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
-  const entry = { ts: new Date().toISOString(), level, msg };
-  _consoleBuffer.push(entry);
-  if (_consoleBuffer.length > _CONSOLE_BUFFER_MAX) _consoleBuffer.shift();
-  try { io.to('iac-console').emit('iac-console', entry); } catch (_) {}
+  try {
+    const msg = args.map(_consoleArgToString).join(' ');
+    const entry = { ts: new Date().toISOString(), level, msg };
+    _consoleBuffer.push(entry);
+    if (_consoleBuffer.length > _CONSOLE_BUFFER_MAX) _consoleBuffer.shift();
+    try { io.to('iac-console').emit('iac-console', entry); } catch (_) {}
+  } catch (err) {
+    try {
+      const fallback = { ts: new Date().toISOString(), level: 'error', msg: `[console-monitor] falha ao serializar log: ${err.message}` };
+      _consoleBuffer.push(fallback);
+      if (_consoleBuffer.length > _CONSOLE_BUFFER_MAX) _consoleBuffer.shift();
+    } catch (_) {}
+  }
+}
+
+function _consoleArgToString(arg) {
+  if (arg instanceof Error) return arg.stack || arg.message || String(arg);
+  if (typeof arg === 'bigint') return `${arg.toString()}n`;
+  if (typeof arg !== 'object' || arg === null) return String(arg);
+  try {
+    const vistos = new WeakSet();
+    return JSON.stringify(arg, (_k, v) => {
+      if (typeof v === 'bigint') return `${v.toString()}n`;
+      if (typeof v === 'object' && v !== null) {
+        if (vistos.has(v)) return '[Circular]';
+        vistos.add(v);
+      }
+      return v;
+    });
+  } catch (_) {
+    return util.inspect(arg, { depth: 3, breakLength: 120, maxArrayLength: 80 });
+  }
 }
 ['log', 'info', 'warn', 'error'].forEach(level => {
   const orig = console[level].bind(console);

@@ -22,15 +22,33 @@ Write-Host "Projeto: $PROJECT_ROOT"
 Write-Host "Saida:   $OUTPUT_PATH"
 Write-Host ""
 
-# Pastas/arquivos excluidos do pacote (dados locais e secrets)
-$EXCLUDE_DIRS  = @("node_modules", ".git", ".wwebjs_auth", ".wwebjs_cache", "logs", ".claude")
-$EXCLUDE_FILES = @(".env", "*.log", "data.json")
+# Pastas/arquivos excluidos do pacote (dados locais, secrets e artefatos de trabalho)
+$EXCLUDE_DIRS  = @(
+    "node_modules",
+    ".git",
+    ".wwebjs_auth",
+    ".wwebjs_cache",
+    "logs",
+    ".claude",
+    ".agents",
+    ".vscode",
+    "tmp",
+    "_prod_compare",
+    "backups",
+    "data",
+    "uploads",
+    "sessions"
+)
+$EXCLUDE_FILES = @(".env", "*.log", "*.err", "data.json", "*.db", "*.sqlite", "*.sqlite3")
 
-Write-Host "Coletando arquivos..." -ForegroundColor Yellow
+function Test-DeployFile {
+    param(
+        [Parameter(Mandatory=$true)]
+        [System.IO.FileInfo]$File
+    )
 
-$files = Get-ChildItem -Path $PROJECT_ROOT -Recurse -File | Where-Object {
-    $relative = $_.FullName.Substring($PROJECT_ROOT.Length + 1)
-    $parts = $relative.Split([IO.Path]::DirectorySeparatorChar)
+    $relative = $File.FullName.Substring($PROJECT_ROOT.Length + 1)
+    $parts = $relative.Split([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
 
     $skip = $false
 
@@ -40,11 +58,33 @@ $files = Get-ChildItem -Path $PROJECT_ROOT -Recurse -File | Where-Object {
 
     if (!$skip) {
         foreach ($pattern in $EXCLUDE_FILES) {
-            if ($_.Name -like $pattern) { $skip = $true; break }
+            if ($File.Name -like $pattern) { $skip = $true; break }
         }
     }
 
     !$skip
+}
+
+Write-Host "Coletando arquivos versionados..." -ForegroundColor Yellow
+
+$gitDir = Join-Path $PROJECT_ROOT ".git"
+$git = Get-Command git -ErrorAction SilentlyContinue
+
+if ($git -and (Test-Path $gitDir)) {
+    $trackedPaths = & git -C $PROJECT_ROOT ls-files
+    if ($LASTEXITCODE -ne 0) {
+        throw "Nao foi possivel listar arquivos versionados com git ls-files."
+    }
+
+    $files = $trackedPaths | ForEach-Object {
+        $path = Join-Path $PROJECT_ROOT $_
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Get-Item -LiteralPath $path
+        }
+    } | Where-Object { Test-DeployFile $_ }
+} else {
+    Write-Host "  Git nao encontrado; usando varredura por pastas." -ForegroundColor Yellow
+    $files = Get-ChildItem -Path $PROJECT_ROOT -Recurse -File | Where-Object { Test-DeployFile $_ }
 }
 
 Write-Host "  $($files.Count) arquivos coletados." -ForegroundColor Gray
