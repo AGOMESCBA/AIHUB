@@ -49,15 +49,22 @@ function combinarSpecs(specs = []) {
 - REGRA — crescimento/variacao calculado separadamente por modulo em contexto cross-module: se o usuario pedir crescimento ou variacao de cada metrica (ex: "crescimento do faturamento e das compras mes a mes"), aplique LAG() OVER (ORDER BY <dimensao_temporal>) em CADA metrica isoladamente, apos a combinacao por data — nunca calcule o crescimento de uma metrica usando valores da outra como referencia. Aliases de saida devem ser claros e separados por modulo (ex: crescimento_faturamento_valor/percentual, crescimento_compras_valor/percentual).
 - A granularidade (dia/mes/ano) do comparativo cross-module e decidida pela pergunta do usuario, igual a regra de cada modulo individualmente — nao fixe uma granularidade padrao aqui.`;
 
-  const regrasTecnicas = [
-    regraInfraEstrutura,
-    ...specs.map(s => {
-      if (!s.regrasTecnicas) return '';
+  // regrasTecnicas de cada modulo pode ser string fixa ou funcao (specs fragmentados por
+  // sub-operacao usam funcao para classificar fragmentos a partir da mensagem do usuario).
+  // O spec combinado preserva esse contrato: tambem expõe regrasTecnicas como funcao, que
+  // resolve cada modulo na hora da chamada (prompt-builder.buildSystemPrompt repassa mensagem).
+  function regrasTecnicas({ mensagem, modeloBaixasReceber, modeloBaixasPagar } = {}) {
+    const blocos = specs.map(s => {
+      const texto = typeof s.regrasTecnicas === 'function'
+        ? s.regrasTecnicas({ mensagem, modeloBaixasReceber, modeloBaixasPagar })
+        : (s.regrasTecnicas || '');
+      if (!texto) return '';
       const titulo = String(s.nome || 'modulo');
       const cabecalho = `## Contrato Tecnico — Modulo ${titulo.charAt(0).toUpperCase() + titulo.slice(1)}`;
-      return `${cabecalho}\n${s.regrasTecnicas}`;
-    }).filter(Boolean),
-  ].join('\n\n');
+      return `${cabecalho}\n${texto}`;
+    }).filter(Boolean);
+    return [regraInfraEstrutura, ...blocos].join('\n\n');
+  }
 
   // --- contratosTecnicosPrioritarios ---
   // Relacionamentos fisicos do ERP que devem aparecer cedo no prompt.

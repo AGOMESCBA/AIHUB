@@ -448,6 +448,7 @@ async function chamarIaOwner(spec, keys, cfg, userPrompt, opts = {}) {
   const systemPrompt = promptBuilder.buildSystemPrompt(spec, {
     modeloBaixasReceber: opts.modeloBaixasReceber,
     modeloBaixasPagar: opts.modeloBaixasPagar,
+    mensagem: opts.mensagem,
   });
   const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
     json: true,
@@ -2291,7 +2292,7 @@ async function executar(spec, intent, empresaId) {
         erroSql: e.message,
         sqlComErro: preparado?.sqlFinal || e._sql || plano.sql,
       });
-      plano = await chamarIaOwner(spec, keys, cfg, retryPrompt, { maxTokens: spec.maxTokens || 3500 });
+      plano = await chamarIaOwner(spec, keys, cfg, retryPrompt, { ...modeloOpts, maxTokens: spec.maxTokens || 3500 });
       auditoriaBase.prompt_user = plano.userPrompt || retryPrompt;
       auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
       auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
