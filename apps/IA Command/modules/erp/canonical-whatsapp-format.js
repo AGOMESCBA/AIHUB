@@ -89,11 +89,33 @@ function fmt(col, v) {
 
 function labelMetrica(col) {
   const k = keyNorm(col);
-  return LABELS[k] || String(col || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return LABELS[k] || labelSx3(col) || String(col || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Mapa de rotulos vindo do SX3 do tenant (campo fisico Protheus -> titulo cadastrado).
+// Setado por setLabelsSx3() antes de formatar; permite que labelMetrica/labelDimensao
+// resolvam campos fisicos (ex: E2_VENCREA) sem depender de heuristica regex ou hardcode.
+let _labelsSx3 = null;
+
+function setLabelsSx3(mapa) {
+  _labelsSx3 = mapa && typeof mapa === 'object' ? mapa : null;
+}
+
+function labelSx3(col) {
+  if (!_labelsSx3) return null;
+  const k = String(col || '').toUpperCase().trim();
+  const titulo = _labelsSx3[k];
+  if (!titulo) return null;
+  const limpo = String(titulo).trim();
+  return limpo
+    ? limpo.replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    : null;
 }
 
 function labelDimensao(col) {
   const k = keyNorm(col);
+  const doSx3 = labelSx3(col);
+  if (doSx3) return doSx3;
   if (/^vendedor/.test(k)) return 'Vendedor';
   if (/^fornecedor/.test(k)) return 'Fornecedor';
   if (/^cliente/.test(k)) return 'Cliente';
@@ -793,5 +815,6 @@ module.exports = {
   detectarShape,
   renderSingle,
   renderAll,
+  setLabelsSx3,
   _test: { keyNorm, somarMetricas, formulaResultado, toNumber },
 };
