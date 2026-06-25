@@ -126,7 +126,7 @@ function _textoResetExplicito(texto) {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
-  return /^(reset|\/reset|resetar|reiniciar|reinicia|recomecar|\/recomecar|limpar|limpar conversa|limpar tudo|limpar contexto|limpar cache|esquecer tudo|esqueca tudo|esquece tudo|nova conversa|novo inicio|comecar|comecar de novo|comecar novamente|\/novo|\/nova|\/reiniciar)$/.test(t);
+  return /^(reset|\/reset|resetar|reiniciar|reinicia|recomecar|\/recomecar|limpar|limpar conversa|limpar tudo|limpar contexto|limpar cache|esquecer tudo|esqueca tudo|esquece tudo|nova conversa|novo inicio|comecar|comecar de novo|comecar novamente|parar consulta|pare a consulta|pode parar a consulta|cancelar consulta|cancela consulta|abortar consulta|pare|para|parar|\/pare|\/para|\/parar|stop|\/stop|cancelar|cancela|\/cancelar|abortar|\/abortar)$/.test(t);
 }
 
 function _textoPareceNovaConsulta(texto) {
@@ -2623,6 +2623,11 @@ class IACWhatsAppService extends EventEmitter {
     const HEARTBEAT_INTERVAL_MS = 20000;
     let heartbeatCount = 0;
     const heartbeatId = setInterval(async () => {
+      if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > t0) {
+        clearInterval(heartbeatId);
+        this.log(`Heartbeat encerrado — conversa foi resetada durante o processamento (${sender})`, 'info');
+        return;
+      }
       heartbeatCount++;
       try {
         await chat.sendMessage(messageTemplates.render(this._empresaId, 'aguardando_processamento', {}));

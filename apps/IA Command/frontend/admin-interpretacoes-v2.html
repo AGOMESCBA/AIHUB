@@ -25,9 +25,14 @@
     .group-panel.open .group-panel-options { display:flex; }
     .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
     .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-target-row { flex:1 1 100%;display:flex;align-items:center;gap:12px;margin-top:2px; }
+    .group-target-row .btn { flex-shrink:0; }
     .group-dropzone { flex:1;min-width:260px;min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px; }
     .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
     .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px; }
+    .active-group-chip[draggable="true"] { cursor:grab; }
+    .active-group-chip[draggable="true"]:active { cursor:grabbing; }
+    .active-group-chip.drag-target { box-shadow:0 0 0 2px rgba(124,58,237,.25); }
     .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
     .status-text { display:none;font-size:12px;color:var(--text-lo); }
 
@@ -119,6 +124,7 @@
       .head-row, .editor-bar { align-items:flex-start;flex-direction:column; }
       .head-actions { width:100%; }
       .split, .dialog-grid { grid-template-columns:1fr; }
+      .group-target-row { align-items:stretch;flex-direction:column; }
       .table-wrap { height:calc(100vh - 300px); }
     }
   </style>
@@ -179,8 +185,10 @@
             <button class="group-chip" type="button" draggable="true" data-group-field="dataset_nome">Dataset</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="origem">Origem</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="escopo_execucao">Execucao via</button>
-            <div class="group-dropzone" id="group-dropzone">Solte um campo aqui para agrupar</div>
-            <button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>
+            <div class="group-target-row">
+              <button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>
+              <div class="group-dropzone" id="group-dropzone">Solte um campo aqui para agrupar</div>
+            </div>
           </div>
         </div>
 
@@ -565,7 +573,7 @@
     const activeNames = state.groupFields.map(groupName).filter(Boolean);
     $('group-status').textContent = activeNames.length ? `Agrupamento ativo: ${activeNames.join(' > ')}` : 'Sem agrupamento ativo';
     $('group-dropzone').innerHTML = activeNames.length
-      ? state.groupFields.map(field => `<span class="active-group-chip">${esc(groupName(field))}<button class="active-group-remove" type="button" data-remove-group="${esc(field)}" title="Remover agrupamento">×</button></span>`).join('')
+      ? state.groupFields.map(field => `<span class="active-group-chip" draggable="true" data-active-group="${esc(field)}" title="Arraste para reordenar">${esc(groupName(field))}<button class="active-group-remove" type="button" data-remove-group="${esc(field)}" title="Remover agrupamento">×</button></span>`).join('')
       : 'Solte um campo aqui para agrupar';
     document.querySelectorAll('[data-group-field]').forEach(btn => {
       btn.classList.toggle('active', state.groupFields.includes(btn.dataset.groupField));
@@ -586,6 +594,17 @@
 
   function removeGroupField(field) {
     state.groupFields = state.groupFields.filter(item => item !== field);
+    clearColumnFilters();
+    applyFilters();
+  }
+
+  function reorderGroupField(field, beforeField) {
+    if (!state.groupFields.includes(field)) return;
+    const next = state.groupFields.filter(item => item !== field);
+    const index = beforeField ? next.indexOf(beforeField) : -1;
+    if (index >= 0) next.splice(index, 0, field);
+    else next.push(field);
+    state.groupFields = next;
     clearColumnFilters();
     applyFilters();
   }
@@ -879,11 +898,31 @@
     $('group-dropzone').addEventListener('dragover', event => {
       event.preventDefault();
       $('group-dropzone').classList.add('drag-over');
+      document.querySelectorAll('.active-group-chip.drag-target').forEach(el => el.classList.remove('drag-target'));
+      const target = event.target.closest('[data-active-group]');
+      if (target) target.classList.add('drag-target');
     });
-    $('group-dropzone').addEventListener('dragleave', () => $('group-dropzone').classList.remove('drag-over'));
+    $('group-dropzone').addEventListener('dragleave', () => {
+      $('group-dropzone').classList.remove('drag-over');
+      document.querySelectorAll('.active-group-chip.drag-target').forEach(el => el.classList.remove('drag-target'));
+    });
+    $('group-dropzone').addEventListener('dragstart', event => {
+      const chip = event.target.closest('[data-active-group]');
+      if (!chip) return;
+      event.dataTransfer.setData('application/x-active-group', chip.dataset.activeGroup);
+      event.dataTransfer.setData('text/plain', chip.dataset.activeGroup);
+      event.dataTransfer.effectAllowed = 'move';
+    });
     $('group-dropzone').addEventListener('drop', event => {
       event.preventDefault();
       $('group-dropzone').classList.remove('drag-over');
+      document.querySelectorAll('.active-group-chip.drag-target').forEach(el => el.classList.remove('drag-target'));
+      const activeField = event.dataTransfer.getData('application/x-active-group');
+      if (activeField) {
+        const target = event.target.closest('[data-active-group]');
+        reorderGroupField(activeField, target?.dataset.activeGroup);
+        return;
+      }
       const field = event.dataTransfer.getData('text/plain');
       addGroupField(field);
     });
