@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const DatasetEngine = require('./dataset-query-engine');
 const crud = require('../database/crud');
 const crossModuleDetector = require('./cross-module-detector');
@@ -7,6 +9,26 @@ const crossModuleSpecCombiner = require('./cross-module-spec-combiner');
 const iaOwnerRunner = require('./ia-owner/runner');
 const { getDB } = require('../database');
 const channelStore = require('../whatsapp/channel-store');
+
+const PIPELINE_TRACE_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'iac-whatsapp-pipeline.log');
+
+function _tracePipeline(evento, dados = {}) {
+  try {
+    const mem = process.memoryUsage();
+    fs.mkdirSync(path.dirname(PIPELINE_TRACE_FILE), { recursive: true });
+    fs.appendFileSync(
+      PIPELINE_TRACE_FILE,
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        evento,
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+        heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        ...dados,
+      }) + '\n',
+      'utf8',
+    );
+  } catch (_) {}
+}
 
 const AI_SQL_HANDLERS = {
   compras: './compras/ai-sql-handler-v2',
@@ -313,6 +335,14 @@ async function rotear(intent, empresaId) {
       && intent._sqlCanonicoOriginal
       ? String(intent._sqlCanonicoOriginal).trim()
       : null;
+    _tracePipeline('router_dinamico_inicio', {
+      empresa_id: empresaId,
+      modulo,
+      intencao: intent?.intencao || null,
+      handler: handlerPath,
+      escopo: intent?._escopoExecucao || null,
+      reuso_canonico: !!sqlCanonicoHerdado,
+    });
 
     // Subtipos que indicam problema terminal (infra/conexão) — não faz sentido tentar novamente.
     const SUBTIPOS_TERMINAIS = new Set(['sem_conexao', 'erp_id_nao_configurado', 'nao_cadastrado']);
@@ -333,11 +363,19 @@ async function rotear(intent, empresaId) {
     // Para cross-module, usa o spec combinado (mesmas tabelas usadas na geração) para que
     // modosSX2 resolva SD1/SF1 corretamente em vez de depender do sufixo fallback.
     if (sqlCanonicoHerdado) {
+      _tracePipeline('router_dinamico_sql_direto_inicio', { empresa_id: empresaId, modulo, sql_chars: sqlCanonicoHerdado.length });
       const _executarSqlDireto = _usarCrossModule
         ? () => iaOwnerRunner.executarSqlDireto(crossModuleSpecCombiner.combinarSpecs(_crossInfo.modulos.map(m => SPEC_LOADERS[m]())), sqlCanonicoHerdado, intent, empresaId)
         : () => AiSqlHandler.executarSqlDireto(sqlCanonicoHerdado, intent, empresaId);
       console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Reutilizando SQL canonico multi-empresa pelo motor systemprompt${_usarCrossModule ? ' (cross-module spec)' : ''}.`);
       resultado = await _executarSqlDireto();
+      _tracePipeline('router_dinamico_sql_direto_fim', {
+        empresa_id: empresaId,
+        modulo,
+        tipo: resultado?.tipo || null,
+        subtipo: resultado?.subtipo || null,
+        rows: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
+      });
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('canonico_reuso');
       else resultado._pipeline_origem = 'canonico_reuso';
       // Fallback: se o reuso do SQL canônico falhar por razão recuperável, re-executa via IA-OWNER.
@@ -355,12 +393,28 @@ async function rotear(intent, empresaId) {
       const _specs = _crossInfo.modulos.map(m => SPEC_LOADERS[m]());
       const _specCombinado = crossModuleSpecCombiner.combinarSpecs(_specs);
       console.log(`[CrossModule] Query cross-module: ${_crossInfo.modulos.join(' + ')} | empresa=${empresaId}`);
+      _tracePipeline('router_dinamico_cross_inicio', { empresa_id: empresaId, modulos: _crossInfo.modulos });
       resultado = await iaOwnerRunner.executar(_specCombinado, intent, empresaId);
+      _tracePipeline('router_dinamico_cross_fim', {
+        empresa_id: empresaId,
+        tipo: resultado?.tipo || null,
+        subtipo: resultado?.subtipo || null,
+        rows: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
+      });
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('cross_module');
       else resultado._pipeline_origem = 'cross_module';
     } else {
       console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Executando pelo motor systemprompt.`);
+      _tracePipeline('router_dinamico_handler_inicio', { empresa_id: empresaId, modulo });
       resultado = await AiSqlHandler.executar(intent, empresaId);
+      _tracePipeline('router_dinamico_handler_fim', {
+        empresa_id: empresaId,
+        modulo,
+        tipo: resultado?.tipo || null,
+        subtipo: resultado?.subtipo || null,
+        rows: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
+        duracao_ms: resultado?.duracao_ms ?? null,
+      });
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('systemprompt');
       else resultado._pipeline_origem = 'systemprompt';
     }

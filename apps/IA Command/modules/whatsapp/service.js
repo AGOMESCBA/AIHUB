@@ -30,6 +30,7 @@ const comissaoIAOwnerSpec      = require('../erp/comissao/comissao-ia-owner-spec
 const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
 const WHATSAPP_MAX_MESSAGE_CHARS = 3500;
+const PIPELINE_TRACE_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'iac-whatsapp-pipeline.log');
 
 function _normalizarTextoEnvioWhatsapp(valor) {
   if (valor === null || valor === undefined) return '';
@@ -54,6 +55,24 @@ function _quebrarMensagemWhatsapp(valor, limite = WHATSAPP_MAX_MESSAGE_CHARS) {
   }
   if (restante) partes.push(restante);
   return partes;
+}
+
+function _tracePipelineWhatsapp(evento, dados = {}) {
+  try {
+    const mem = process.memoryUsage();
+    fs.mkdirSync(path.dirname(PIPELINE_TRACE_FILE), { recursive: true });
+    fs.appendFileSync(
+      PIPELINE_TRACE_FILE,
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        evento,
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+        heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        ...dados,
+      }) + '\n',
+      'utf8',
+    );
+  } catch (_) {}
 }
 
 const PUPPETEER_ARGS = [
@@ -409,6 +428,22 @@ class IACWhatsAppService extends EventEmitter {
     for (let i = 0; i < partes.length; i++) {
       const prefixo = partes.length > 1 ? `(${i + 1}/${partes.length})\n` : '';
       await chat.sendMessage(prefixo + partes[i]);
+    }
+    return partes.length;
+  }
+
+  async _sendReplyMessageSafe(chat, sender, texto) {
+    const partes = _quebrarMensagemWhatsapp(texto);
+    for (let i = 0; i < partes.length; i++) {
+      const prefixo = partes.length > 1 ? `(${i + 1}/${partes.length})\n` : '';
+      const parte = prefixo + partes[i];
+      try {
+        await chat.sendMessage(parte);
+      } catch (chatErr) {
+        if (!this.client) throw chatErr;
+        this.log(`Envio pelo chat falhou; tentando envio direto para ${sender}: ${chatErr.message}`, 'warning');
+        await this.client.sendMessage(sender, parte);
+      }
     }
     return partes.length;
   }
@@ -2584,8 +2619,8 @@ class IACWhatsAppService extends EventEmitter {
     const t0 = Date.now();
     const _timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
 
-    // Heartbeat: envia mensagem de progresso a cada 50s para consultas longas
-    const HEARTBEAT_INTERVAL_MS = 50000;
+    // Heartbeat: envia mensagem de progresso durante consultas longas para manter o WhatsApp Web ativo.
+    const HEARTBEAT_INTERVAL_MS = 20000;
     let heartbeatCount = 0;
     const heartbeatId = setInterval(async () => {
       heartbeatCount++;
@@ -2615,7 +2650,7 @@ class IACWhatsAppService extends EventEmitter {
         return;
       }
       try {
-        const partesEnviadas = await this._sendChatMessageSafe(chat, resposta);
+        const partesEnviadas = await this._sendReplyMessageSafe(chat, sender, resposta);
         const entregueMs = Date.now() - t0;
         if (partesEnviadas > 1) this.log(`Resposta dividida em ${partesEnviadas} partes para ${sender}.`, 'info');
         this.log(`✅ Resposta enviada para ${sender} (${entregueMs}ms)`, 'success');
@@ -3752,6 +3787,12 @@ class IACWhatsAppService extends EventEmitter {
       //         usa o canônico existente (nunca chama IA de novo).
       const _processarEmpresa = async (emp) => {
         try {
+          _tracePipelineWhatsapp('all_empresa_inicio', {
+            empresa_id: emp?.empresa_id,
+            empresa_nome: emp?.nome || null,
+            intencao: intent?.intencao || null,
+            tem_sql_canonico: !!sqlCanonicoDinamico,
+          });
           if (bloqueioReusoCanonicoDinamico) {
             const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
             const resposta = `O SQL canonico unico nao pode ser adaptado com seguranca para ${nomeEmpresa}: ${bloqueioReusoCanonicoDinamico}.`;
@@ -3825,7 +3866,22 @@ class IACWhatsAppService extends EventEmitter {
                 }
               : {}),
           };
+          _tracePipelineWhatsapp('all_rotear_inicio', {
+            empresa_id: emp?.empresa_id,
+            intencao: intentExecucao?.intencao || null,
+            reuso_canonico: !!intentExecucao?._usarSqlCanonicoWhatsappAll,
+            historico_turnos: Array.isArray(intentExecucao?._historicoResumido) ? intentExecucao._historicoResumido.length : 0,
+          });
           let resultado = await intentRouter.rotear(intentExecucao, emp.empresa_id);
+          _tracePipelineWhatsapp('all_rotear_fim', {
+            empresa_id: emp?.empresa_id,
+            tipo: resultado?.tipo || null,
+            subtipo: resultado?.subtipo || null,
+            rows: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
+            duracao_ms: resultado?.duracao_ms ?? null,
+            tem_sql: !!resultado?.sql_gerado,
+            tem_sql_canonico: !!resultado?._sql_canonico,
+          });
           if (!resultado || typeof resultado !== 'object') {
             this.log(`[All] Empresa #${emp.empresa_id}: resultado inválido do roteador (${typeof resultado}). Ignorando.`, 'error');
             const erroMsg = `${emp.nome || `Empresa #${emp.empresa_id}`}: erro interno no roteador.`;
@@ -3844,6 +3900,11 @@ class IACWhatsAppService extends EventEmitter {
 
           if (resultado.tipo === 'sucesso_ai_sql') {
             if (!sqlCanonicoDinamico && resultado._sql_canonico) {
+              _tracePipelineWhatsapp('all_canonico_inicio', {
+                empresa_id: emp?.empresa_id,
+                sql_canonico_chars: String(resultado._sql_canonico || '').length,
+                entidades: Array.isArray(resultado._entidadesResolvidas) ? resultado._entidadesResolvidas.length : 0,
+              });
               const moduloCanonico = this._moduloMonitorIntent(intentExecucao, resultado);
               const entidadesCanonico = Array.isArray(resultado._entidadesResolvidas) ? resultado._entidadesResolvidas : [];
               const canonico = this._sqlCanonicoParametrizado(resultado, moduloCanonico);
@@ -3853,6 +3914,13 @@ class IACWhatsAppService extends EventEmitter {
               // at execution time, so the stored SQL must be suffix-free to be safely reusable
               // across tenants with different SX2 maps — regardless of SQL origin (ia_owner or not).
               const sqlCanonicoParaReuso = canonico.sql ? sx2SqlNormalizer.sqlParaCanonico(canonico.sql) : canonico.sql;
+              _tracePipelineWhatsapp('all_canonico_fim', {
+                empresa_id: emp?.empresa_id,
+                reuso_ok: !!reusoCanonico?.ok,
+                reuso_motivo: reusoCanonico?.motivo || null,
+                parametrizado: !!canonico?.alterou,
+                sql_reuso_chars: String(sqlCanonicoParaReuso || '').length,
+              });
               const reusoPermitido = reusoCanonico.ok;
               resultado._sql_canonico_reuso_permitido = !!reusoPermitido;
               resultado._sql_canonico_reuso_motivo = reusoCanonico.motivo || null;
@@ -3999,6 +4067,11 @@ class IACWhatsAppService extends EventEmitter {
             detalhe: resultado.mensagem || resultado.subtipo || resultado.tipo || null,
           });
         } catch (err) {
+          _tracePipelineWhatsapp('all_empresa_excecao', {
+            empresa_id: emp?.empresa_id,
+            erro: err?.message || String(err),
+            stack: err?.stack || null,
+          });
           errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${err.message}`);
           this.log(`[All] Empresa #${emp.empresa_id} dinamica falhou: ${err.message}`, 'warning');
           registrarAnomaliaDinamica({
@@ -4082,7 +4155,19 @@ class IACWhatsAppService extends EventEmitter {
         const sqlAuditoriaConsolidada = {
           handler: 'whatsapp_all',
           origem: 'consolidado_multiempresa',
-          sql_canonico_original: sqlCanonicoDinamico || null,
+          // Espelha no nivel raiz os campos de auditoria de SQL da empresa lider (primeira a
+          // gerar o SQL via IA), para a tela de detalhe do consolidado (admin-interpretacoes-v2)
+          // exibir SQL final/canonico/bruto sem precisar descer em "empresas[]". Os registros
+          // individuais de cada empresa (nao-consolidados) ja tem isso no proprio nivel raiz —
+          // aqui e so para o registro que representa o canal como um todo.
+          sql_canonico_original: sqlCanonicoDinamico || _audPrimeiro.sql_canonico_recebido || null,
+          sql_canonico_recebido: _audPrimeiro.sql_canonico_recebido || sqlCanonicoDinamico || null,
+          sql_ia_bruto:          _audPrimeiro.sql_ia_bruto || null,
+          sql_apos_sx3:          _audPrimeiro.sql_apos_sx3 || null,
+          sql_apos_sx2:          _audPrimeiro.sql_apos_sx2 || null,
+          sql_apos_parametros:   _audPrimeiro.sql_apos_parametros || null,
+          sql_apos_contrato:     _audPrimeiro.sql_apos_contrato || null,
+          sql_final_executado:   _audPrimeiro.sql_final_executado || sucessosDinamicos[0]?.resultado?.sql_gerado || null,
           prompt_system: _audPrimeiro.prompt_system || null,
           prompt_user:   _audPrimeiro.prompt_user   || null,
           empresas_tentadas: empresas.map(e => e.nome || `Empresa #${e.empresa_id}`),

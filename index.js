@@ -50,6 +50,36 @@ const io     = new Server(server);
 // ── Console do Servidor — intercepta console.* e emite via Socket.IO ──────────
 const _consoleBuffer = [];
 const _CONSOLE_BUFFER_MAX = 500;
+const _PIPELINE_TRACE_FILE = path.join(__dirname, 'logs', 'iac-whatsapp-pipeline.log');
+
+function _appendProcessTrace(evento, dados = {}) {
+  try {
+    const mem = process.memoryUsage();
+    fs.mkdirSync(path.dirname(_PIPELINE_TRACE_FILE), { recursive: true });
+    fs.appendFileSync(
+      _PIPELINE_TRACE_FILE,
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        evento,
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+        heap_mb: Math.round(mem.heapUsed / 1024 / 1024),
+        ...dados,
+      }) + '\n',
+      'utf8',
+    );
+  } catch (_) {}
+}
+
+process.on('exit', (code) => _appendProcessTrace('process_exit', { code }));
+process.on('beforeExit', (code) => _appendProcessTrace('process_before_exit', { code }));
+process.on('SIGTERM', () => {
+  _appendProcessTrace('process_sigterm');
+  process.exit(143);
+});
+process.on('SIGINT', () => {
+  _appendProcessTrace('process_sigint');
+  process.exit(130);
+});
 
 function _consoleEmit(level, args) {
   try {

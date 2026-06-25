@@ -167,6 +167,8 @@
           </div>
           <div class="group-panel-options" id="group-options">
             <span class="group-panel-status">Arraste para agrupar:</span>
+            <button class="group-chip" type="button" draggable="true" data-group-field="criado_data">Data</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="texto_original">Pergunta</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="intencao">Intencao</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="modulo">Modulo</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="pipeline_origem">Pipeline</button>
@@ -189,9 +191,9 @@
                 <tr>
                   <th class="col-check"><input type="checkbox" class="row-cb" id="cb-all" title="Selecionar todos"></th>
                   <th class="col-action"></th>
-                  <th class="col-date sortable" data-sort="criado_em">Data/Hora</th>
+                  <th class="col-date sortable" draggable="true" data-group-field="criado_data" data-sort="criado_em">Data/Hora</th>
                   <th class="col-phone sortable" draggable="true" data-group-field="numero_wa" data-sort="numero_wa">Celular</th>
-                  <th class="col-question sortable" data-sort="texto_original">Pergunta</th>
+                  <th class="col-question sortable" draggable="true" data-group-field="texto_original" data-sort="texto_original">Pergunta</th>
                   <th class="col-answer sortable" data-sort="resposta_entregue">Resposta</th>
                   <th class="col-intent sortable" draggable="true" data-group-field="intencao" data-sort="intencao">Intencao</th>
                   <th class="col-module sortable" draggable="true" data-group-field="modulo" data-sort="modulo">Modulo</th>
@@ -369,6 +371,14 @@
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
 
+  function fmtDateOnly(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  }
+
   function fmtPhone(value) {
     const digits = String(value || '').replace(/\D/g, '');
     const local = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
@@ -435,6 +445,7 @@
   }
 
   function rowValue(row, field) {
+    if (field === 'criado_data') return fmtDateOnly(row.criado_em);
     if (field === 'modulo') return modulo(row);
     if (field === 'pipeline_origem') return pipelineLabel(row.pipeline_origem);
     if (field === 'fase_execucao') return phaseLabel(row.fase_execucao);
@@ -535,6 +546,8 @@
 
   function groupName(field) {
     return {
+      criado_data: 'Data',
+      texto_original: 'Pergunta',
       numero_wa: 'Celular',
       intencao: 'Intencao',
       modulo: 'Modulo',
