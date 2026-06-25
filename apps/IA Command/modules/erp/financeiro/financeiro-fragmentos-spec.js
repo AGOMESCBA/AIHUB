@@ -21,8 +21,8 @@
 function base({ usaFK1, usaFK2 }) {
   return `
 ## Campos de data padrao
-- Vencimento a pagar: SE2.E2_VENCREA (ou SE2.E2_VENCTO se VENCREA nao existir).
-- Vencimento a receber: SE1.E1_VENCREA (ou SE1.E1_VENCTO se VENCREA nao existir).
+- REGRA ABSOLUTA — vencimento a pagar: use SEMPRE SE2.E2_VENCREA (vencimento real do titulo, que considera sabado/domingo/feriado). PROIBIDO usar SE2.E2_VENCTO em qualquer filtro, GROUP BY ou ORDER BY de contas a pagar — E2_VENCTO e o vencimento nominal/contratual, sem ajuste de dia nao util, e NUNCA deve ser usado como vencimento de fato neste ambiente.
+- REGRA ABSOLUTA — vencimento a receber: use SEMPRE SE1.E1_VENCREA (vencimento real do titulo, que considera sabado/domingo/feriado). PROIBIDO usar SE1.E1_VENCTO em qualquer filtro, GROUP BY ou ORDER BY de contas a receber — E1_VENCTO e o vencimento nominal/contratual, sem ajuste de dia nao util, e NUNCA deve ser usado como vencimento de fato neste ambiente.
 - Baixa/recebimento real: use o JOIN definido em "Joins padrao" (SE1->${usaFK1 ? 'FK1' : 'SE5'}), modelo deste tenant: ${usaFK1 ? 'FK1' : 'SE5'}. NUNCA use SE1.E1_BAIXA.
 - Baixa/pagamento real: use o JOIN definido em "Joins padrao" (SE2->${usaFK2 ? 'FK2' : 'SE5'}), modelo deste tenant: ${usaFK2 ? 'FK2' : 'SE5'}. NUNCA use SE2.E2_BAIXA.
 - Em aberto sem periodo explicito: consulte toda a carteira em aberto (sem BETWEEN).
@@ -67,7 +67,7 @@ function receberPosicao() {
   return `
 ## Contas a receber — posicao/em aberto
 - Contas a receber usa SE1 e cliente SA1.
-- Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Data padrao de vencimento: SE1.E1_VENCREA ou SE1.E1_VENCTO se VENCREA nao existir. NAO filtre SE1.E1_SITUACAO.
+- Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE1.E1_VENCREA — PROIBIDO usar SE1.E1_VENCTO. NAO filtre SE1.E1_SITUACAO.
 - Natureza financeira: SE1.E1_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
@@ -86,7 +86,7 @@ function pagarPosicao() {
   return `
 ## Contas a pagar — posicao/em aberto
 - Contas a pagar usa SE2 e fornecedor SA2.
-- Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Titulos com E2_SALDO = 0 ja foram pagos — nunca os inclua em consultas de aberto. Data padrao de vencimento: SE2.E2_VENCREA ou SE2.E2_VENCTO se VENCREA nao existir.
+- Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Titulos com E2_SALDO = 0 ja foram pagos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE2.E2_VENCREA — PROIBIDO usar SE2.E2_VENCTO.
 - Natureza financeira: SE2.E2_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_pagar: COALESCE(SUM(SE2.E2_SALDO),0) AS saldo_a_pagar.
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
