@@ -221,7 +221,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     res.json(channels.buscarCanalDaEmpresa(channel.id, origemEmpresaId));
   });
 
-  app.post('/api/ia-command/whatsapp/start', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
+  app.post('/api/ia-command/whatsapp/start', requireAuth, requireIaCommand, canMonitorWhatsapp, async (req, res) => {
     const { empresaId, channel, error } = resolveChannel(req);
     if (error) return res.status(404).json({ error });
     if (!channel) return res.status(400).json({ error: 'Nenhum canal WhatsApp vinculado a esta empresa.' });
@@ -230,7 +230,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
 
     const svc = manager.getOrCreate(channel.id);
     wireEvents(svc, channel);
-    svc.start({ empresaId: empresaInicial.empresa_id, channel });
+    await svc.start({ empresaId: empresaInicial.empresa_id, channel });
     res.json({ ok: true, channel });
   });
 

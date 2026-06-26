@@ -3,7 +3,7 @@ const qrcode               = require('qrcode');
 const { EventEmitter }     = require('events');
 const path                 = require('path');
 const fs                   = require('fs');
-const { exec }             = require('child_process');
+const { exec, fork }       = require('child_process');
 
 const intentService       = require('../ai/intent-service');
 const intentMerger        = require('../ai/intent-merger');
@@ -446,6 +446,69 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
     return partes.length;
+  }
+
+  async _rotearIntentSeguro(intentExecucao, empresaId) {
+    if (!intentExecucao?._usarSqlCanonicoWhatsappAll) {
+      return intentRouter.rotear(intentExecucao, empresaId);
+    }
+
+    fs.mkdirSync(TEMP_DIR, { recursive: true });
+    const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const inputPath = path.join(TEMP_DIR, `intent_worker_${id}.in.json`);
+    const outputPath = path.join(TEMP_DIR, `intent_worker_${id}.out.json`);
+    const workerPath = path.join(__dirname, 'intent-router-worker.js');
+
+    fs.writeFileSync(inputPath, JSON.stringify({ empresaId, intent: intentExecucao }), 'utf8');
+    _tracePipelineWhatsapp('router_worker_inicio', {
+      empresa_id: empresaId,
+      intencao: intentExecucao?.intencao || null,
+      sql_chars: String(intentExecucao?._sqlCanonicoOriginal || '').length,
+    });
+
+    const child = fork(workerPath, [inputPath, outputPath], {
+      cwd: path.join(__dirname, '..', '..', '..', '..'),
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    });
+
+    const code = await new Promise(resolve => {
+      const timer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch (_) {}
+        resolve(124);
+      }, 120000);
+      child.on('exit', exitCode => {
+        clearTimeout(timer);
+        resolve(exitCode);
+      });
+      child.on('error', () => {
+        clearTimeout(timer);
+        resolve(1);
+      });
+    });
+
+    let payload = null;
+    try { payload = JSON.parse(fs.readFileSync(outputPath, 'utf8')); } catch (_) {}
+    try { fs.unlinkSync(inputPath); } catch (_) {}
+    try { fs.unlinkSync(outputPath); } catch (_) {}
+
+    _tracePipelineWhatsapp('router_worker_fim', {
+      empresa_id: empresaId,
+      code,
+      ok: !!payload?.ok,
+      tipo: payload?.resultado?.tipo || null,
+      subtipo: payload?.resultado?.subtipo || null,
+      erro: payload?.erro || null,
+    });
+
+    if (payload?.ok) return payload.resultado;
+    return {
+      tipo: 'erro',
+      subtipo: code === 124 ? 'reuso_canonico_timeout' : 'reuso_canonico_worker_falhou',
+      resposta_direta: 'Nao consegui reutilizar o SQL canonico para esta empresa sem seguranca. A consulta das demais empresas foi preservada.',
+      mensagem: payload?.erro || `Worker finalizou com codigo ${code}`,
+      sql_gerado: intentExecucao?._sqlCanonicoOriginal || null,
+      duracao_ms: null,
+    };
   }
 
   _normalizarNumeroWa(valor) {
@@ -3877,7 +3940,7 @@ class IACWhatsAppService extends EventEmitter {
             reuso_canonico: !!intentExecucao?._usarSqlCanonicoWhatsappAll,
             historico_turnos: Array.isArray(intentExecucao?._historicoResumido) ? intentExecucao._historicoResumido.length : 0,
           });
-          let resultado = await intentRouter.rotear(intentExecucao, emp.empresa_id);
+          let resultado = await this._rotearIntentSeguro(intentExecucao, emp.empresa_id);
           _tracePipelineWhatsapp('all_rotear_fim', {
             empresa_id: emp?.empresa_id,
             tipo: resultado?.tipo || null,
