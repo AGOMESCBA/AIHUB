@@ -65,6 +65,60 @@ ok('consolidado soma metricas equivalentes com aliases diferentes', () => {
   assert.ok(!texto.includes('valor_compra'), texto);
 });
 
+ok('consolidado misto: soma detalhe por documento com resumo simples', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'C3i Systems',
+      rows: [
+        { fornecedor: 'ASSOCIACAO MATOGROSSENSE DOS TRANSPORTADORES URBANOS', documento: '5992540', tipo: 'FOL', valor: 227.70 },
+        { fornecedor: 'FOLHA DE PAGAMENTO', documento: '20230244', tipo: 'FOL', valor: 3389.57 },
+      ],
+    },
+    {
+      nomeEmpresa: 'J2A Consultoria',
+      rows: [{ saldo_a_pagar: 376 }],
+    },
+  ], { mensagem: 'Contas a pagar do dia 29/06/2026' });
+
+  assert.ok(texto.includes('*Consolidado - Todas as empresas*'), texto);
+  assert.ok(/C3i Systems: A pagar: \*R\$\s*3\.617,27\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: A pagar: \*R\$\s*376,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: A pagar: \*R\$\s*3\.993,27\*/.test(texto), texto);
+  assert.ok(!/R\$\s*3\.617,27\* \| R\$\s*3\.617,27/.test(texto), texto);
+});
+
+ok('consolidado misto: reduz vencimento e vencimento-fornecedor para vencimento', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'C3i Systems',
+      rows: [
+        { vencimento: '2026-06-29', saldo_a_pagar: 3617.27 },
+        { vencimento: '2026-06-30', saldo_a_pagar: 3550 },
+        { vencimento: '2026-07-01', saldo_a_pagar: 514.88 },
+      ],
+    },
+    {
+      nomeEmpresa: 'J2A Consultoria',
+      rows: [
+        { E2_VENCREA: '2026-06-26', fornecedor: 'SOFTEXPERT SOFTWARE SA', saldo_a_pagar: 5049.05 },
+        { E2_VENCREA: '2026-06-29', fornecedor: 'LUIZ BARROS PJ - LLA CONSULTORIA LTDA', saldo_a_pagar: 376 },
+        { E2_VENCREA: '2026-06-30', fornecedor: 'RECEITA FEDERAL DO BRASIL', saldo_a_pagar: 37285.34 },
+        { E2_VENCREA: '2026-07-01', fornecedor: 'SOFTEXPERT SOFTWARE SA', saldo_a_pagar: 11896.92 },
+        { E2_VENCREA: '2026-07-02', fornecedor: 'BRASOFTWARE INFORMATICA LTDA', saldo_a_pagar: 140 },
+        { E2_VENCREA: '2026-07-06', fornecedor: 'BRADESCO SAUDE', saldo_a_pagar: 5140.08 },
+      ],
+    },
+  ], { mensagem: 'Agora me detalhe por vencimento, por favor.' });
+
+  assert.ok(texto.includes('*Por Vencimento*'), texto);
+  assert.ok(/29\/06\/2026: A pagar: \*R\$\s*3\.993,27\*/.test(texto), texto);
+  assert.ok(/30\/06\/2026: A pagar: \*R\$\s*40\.835,34\*/.test(texto), texto);
+  assert.ok(/01\/07\/2026: A pagar: \*R\$\s*12\.411,80\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: A pagar: \*R\$\s*67\.569,54\*/.test(texto), texto);
+  assert.ok(/C3i Systems: A pagar: \*R\$\s*7\.682,15\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: A pagar: \*R\$\s*59\.887,39\*/.test(texto), texto);
+});
+
 ok('financeiro aberto: separa carteira pagar e receber quando UNION usa alias unico', () => {
   const rows = [
     { carteira: 'pagar', saldo_a_pagar: '478493,69' },

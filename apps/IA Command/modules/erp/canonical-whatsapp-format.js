@@ -17,6 +17,11 @@ const LABELS = {
   valor_pago_total: 'Pago',
   saldo_a_receber: 'A receber',
   saldo_a_pagar: 'A pagar',
+  e1_saldo: 'A receber',
+  e2_saldo: 'A pagar',
+  e1_valor: 'Valor',
+  e2_valor: 'Valor',
+  valor: 'Valor',
   entrada: 'Entradas',
   entradas: 'Entradas',
   valor_entrada: 'Entradas',
@@ -371,10 +376,41 @@ function chaveMetricaCanonica(col) {
   if (/^(total_)?compras?$|^valor_compras?$/.test(k)) return 'compras';
   if (/^valor_recebido(_total)?$|^total_recebido$|^recebido$/.test(k)) return 'recebido';
   if (/^valor_pago(_total)?$|^total_pago$|^pago$/.test(k)) return 'pago';
-  if (/^saldo_a_receber$|^a_receber$|^total_a_receber$|^valor_a_receber$/.test(k)) return 'a_receber';
-  if (/^saldo_a_pagar$|^a_pagar$|^total_a_pagar$|^valor_a_pagar$/.test(k)) return 'a_pagar';
+  if (/^saldo_a_receber$|^a_receber$|^total_a_receber$|^valor_a_receber$|^e1_saldo$/.test(k)) return 'a_receber';
+  if (/^saldo_a_pagar$|^a_pagar$|^total_a_pagar$|^valor_a_pagar$|^e2_saldo$/.test(k)) return 'a_pagar';
+  if (/^(valor|valor_total|total_valor|e1_valor|e2_valor)$/.test(k)) return 'valor';
   if (/^total_comissao$|^valor_comissao$|^comissao$/.test(k)) return 'comissao';
   return keyNorm(labelMetrica(col));
+}
+
+function chaveDimensaoCanonica(col) {
+  const k = keyNorm(col);
+  if (/^(vencimento|vencto|vencrea|data_vencimento|dt_vencimento|e1_vencto|e2_vencto|e1_vencrea|e2_vencrea)$/.test(k)) return 'vencimento';
+  if (/^(emissao|data_emissao|dt_emissao|e1_emissao|e2_emissao)$/.test(k)) return 'emissao';
+  if (/^(baixa|data_baixa|dt_baixa|e1_baixa|e2_baixa)$/.test(k)) return 'baixa';
+  if (/^(documento|doc|titulo|duplicata|nota|nota_fiscal|nf|nfe|e1_num|e2_num)$/.test(k)) return 'documento';
+  if (/^(fornecedor|fornec|nome_fornecedor|e2_fornece|a2_nome)$/.test(k)) return 'fornecedor';
+  if (/^(cliente|nome_cliente|e1_cliente|a1_nome)$/.test(k)) return 'cliente';
+  if (/^(vendedor|nome_vendedor)$/.test(k)) return 'vendedor';
+  if (/^(produto|nome_produto|descricao_produto)$/.test(k)) return 'produto';
+  if (/^(competencia|ano_mes|aaaamm|aaaa_mm|referencia|periodo)$/.test(k)) return 'competencia';
+  return keyNorm(labelDimensao(col));
+}
+
+function chaveMetricaCanonicaContextual(col, opts = {}) {
+  const canon = chaveMetricaCanonica(col);
+  const msg = norm(opts.mensagem || opts.contextoConsulta || '');
+  if (canon === 'valor' && /\b(contas?\s+a\s+pagar|a\s+pagar|pagar)\b/.test(msg)) return 'a_pagar';
+  if (canon === 'valor' && /\b(contas?\s+a\s+receber|a\s+receber|receber)\b/.test(msg)) return 'a_receber';
+  return canon;
+}
+
+function labelDimensaoCanonica(canon, col) {
+  if (canon === 'vencimento') return 'Vencimento';
+  if (canon === 'emissao') return 'Emissao';
+  if (canon === 'baixa') return 'Baixa';
+  if (canon === 'competencia') return 'Competencia';
+  return labelDimensao(col || canon);
 }
 
 function alinharMetricasSucessos(sucessos, shapes) {
@@ -410,6 +446,151 @@ function alinharMetricasSucessos(sucessos, shapes) {
     sucessos: alinhados,
     shapes: shapes.map(shape => ({ ...shape, metricas: metricasBase.slice() })),
   };
+}
+
+function metricasCanonicasPorShape(shape, opts = {}) {
+  const out = new Map();
+  for (const col of shape?.metricas || []) {
+    const canon = chaveMetricaCanonicaContextual(col, opts);
+    if (!out.has(canon)) out.set(canon, { canon, col });
+  }
+  return out;
+}
+
+function dimensoesCanonicasPorShape(shape) {
+  const out = new Map();
+  for (const col of shape?.dimensoes || []) {
+    const canon = chaveDimensaoCanonica(col);
+    if (!out.has(canon)) out.set(canon, { canon, col });
+  }
+  return out;
+}
+
+function valorCanonicoRow(row, cols) {
+  const vals = [...new Set(cols || [])]
+    .filter(col => Object.prototype.hasOwnProperty.call(row || {}, col))
+    .map(col => toNumber(row[col]))
+    .filter(v => Number.isFinite(v));
+  if (!vals.length) return 0;
+  const nonZero = vals.find(v => v !== 0);
+  return nonZero ?? vals[0];
+}
+
+function somarMetricasCanonicas(rows, metricasCanonicas, shape) {
+  const porCanon = new Map();
+  for (const col of shape?.metricas || []) {
+    const canon = chaveMetricaCanonicaContextual(col, shape?._opts || {});
+    if (!porCanon.has(canon)) porCanon.set(canon, []);
+    porCanon.get(canon).push(col);
+  }
+
+  const out = {};
+  for (const met of metricasCanonicas) out[met.canon] = 0;
+  for (const row of rows || []) {
+    for (const met of metricasCanonicas) {
+      out[met.canon] += valorCanonicoRow(row, porCanon.get(met.canon) || [met.col]);
+    }
+  }
+  return out;
+}
+
+function valsMetricasCanonicas(totais, metricasCanonicas, opts = {}) {
+  return metricasCanonicas
+    .map(met => {
+      const label = labelMetricaContextual(met.col, opts, met.canon);
+      return `${label}: *${fmt(met.col, totais[met.canon] || 0)}*`;
+    })
+    .join(' | ');
+}
+
+function labelMetricaContextual(col, opts = {}, canon = null) {
+  const msg = norm(opts.mensagem || opts.contextoConsulta || '');
+  if (canon === 'a_pagar') return 'A pagar';
+  if (canon === 'a_receber') return 'A receber';
+  if (canon === 'valor' && /\b(contas?\s+a\s+pagar|a\s+pagar|pagar)\b/.test(msg)) return 'A pagar';
+  if (canon === 'valor' && /\b(contas?\s+a\s+receber|a\s+receber|receber)\b/.test(msg)) return 'A receber';
+  return labelMetrica(col);
+}
+
+function renderAllShapesMistos(sucessos, shapes, opts = {}) {
+  if (!shapes.length || shapes.some(s => !s)) return null;
+  shapes = shapes.map(shape => ({ ...shape, _opts: opts }));
+
+  const metricasCanon = [];
+  const metricasSeen = new Set();
+  for (const shape of shapes) {
+    for (const met of metricasCanonicasPorShape(shape, opts).values()) {
+      if (!metricasSeen.has(met.canon)) {
+        metricasSeen.add(met.canon);
+        metricasCanon.push(met);
+      }
+    }
+  }
+  if (!metricasCanon.length) return null;
+
+  const dimsPorShape = shapes.map(dimensoesCanonicasPorShape);
+  const comuns = [...dimsPorShape[0].keys()].filter(canon => dimsPorShape.every(mapa => mapa.has(canon)));
+  const dimCanon = comuns.find(canon => canon === 'vencimento' || canon === 'competencia' || canon === 'emissao' || canon === 'baixa') || comuns[0] || null;
+
+  const linhas = ['*Consolidado - Todas as empresas*'];
+  if (opts.contextoConsulta || opts.mensagem) linhas.push(`_${opts.contextoConsulta || opts.mensagem}_`);
+  linhas.push('');
+
+  const totalGeral = {};
+  for (const met of metricasCanon) totalGeral[met.canon] = 0;
+
+  if (dimCanon) {
+    const grupos = new Map();
+    const dimBase = dimsPorShape[0].get(dimCanon)?.col || dimCanon;
+    for (let i = 0; i < sucessos.length; i++) {
+      const s = sucessos[i];
+      const shape = shapes[i];
+      const dimCol = dimsPorShape[i].get(dimCanon)?.col;
+      if (!dimCol) continue;
+      for (const row of s.rows || []) {
+        const label = String(row[dimCol] ?? '').trim() || '(sem identificacao)';
+        if (!grupos.has(label)) {
+          const init = {};
+          for (const met of metricasCanon) init[met.canon] = 0;
+          grupos.set(label, init);
+        }
+        const grupo = grupos.get(label);
+        const totaisRow = somarMetricasCanonicas([row], metricasCanon, shape);
+        for (const met of metricasCanon) {
+          grupo[met.canon] += totaisRow[met.canon] || 0;
+          totalGeral[met.canon] += totaisRow[met.canon] || 0;
+        }
+      }
+    }
+
+    linhas.push(`\u{1F4CB} *Por ${labelDimensaoCanonica(dimCanon, dimBase)}*`);
+    const entradas = [...grupos.entries()].sort(([a], [b]) => sortValorDimensao(dimBase, a).localeCompare(sortValorDimensao(dimBase, b)));
+    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+      linhas.push(`  ${idx + 1}. ${labelValorDimensao(dimBase, label)}: ${valsMetricasCanonicas(totais, metricasCanon, opts)}`);
+    });
+    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+  }
+
+  if (!dimCanon) linhas.push('\u{1F4CA} *Resumo*');
+  const porEmpresa = [];
+  for (let i = 0; i < sucessos.length; i++) {
+    const s = sucessos[i];
+    const totais = somarMetricasCanonicas(s.rows, metricasCanon, shapes[i]);
+    porEmpresa.push([s.nomeEmpresa, totais, (s.rows || []).length]);
+    if (!dimCanon) {
+      for (const met of metricasCanon) totalGeral[met.canon] += totais[met.canon] || 0;
+    }
+  }
+
+  linhas.push('');
+  linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricasCanonicas(totalGeral, metricasCanon, opts)}`);
+  linhas.push(`*Total Geral*: ${valsMetricasCanonicas(totalGeral, metricasCanon, opts)}`);
+  linhas.push('');
+  linhas.push('\u{1F3E2} *Por Empresa*');
+  for (const [nome, totais, count] of porEmpresa) {
+    linhas.push(`  - ${nome}: ${valsMetricasCanonicas(totais, metricasCanon, opts)} (${count} reg.)`);
+  }
+  return linhas.join('\n');
 }
 
 function tipoMetricaTemporal(col) {
@@ -694,7 +875,7 @@ function renderAll(sucessos, opts = {}) {
   const alinhado = alinharMetricasSucessos(sucessos, shapes);
   sucessos = alinhado.sucessos;
   shapes = alinhado.shapes;
-  if (!shapesCompativeis(shapes)) return null;
+  if (!shapesCompativeis(shapes)) return renderAllShapesMistos(sucessos, shapes, opts);
 
   const shape = shapes[0];
   const linhas = ['*Consolidado - Todas as empresas*'];
