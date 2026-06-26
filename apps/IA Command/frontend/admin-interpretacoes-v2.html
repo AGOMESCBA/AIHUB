@@ -174,6 +174,7 @@
           <div class="group-panel-options" id="group-options">
             <span class="group-panel-status">Arraste para agrupar:</span>
             <button class="group-chip" type="button" draggable="true" data-group-field="criado_data">Data</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="criado_hora">Hora</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="texto_original">Pergunta</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="intencao">Intencao</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="modulo">Modulo</button>
@@ -387,6 +388,14 @@
     return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
 
+  function fmtTimeOnly(value) {
+    if (!value) return '-';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const p = n => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
   function fmtPhone(value) {
     const digits = String(value || '').replace(/\D/g, '');
     const local = digits.startsWith('55') && digits.length >= 12 ? digits.slice(2) : digits;
@@ -454,6 +463,7 @@
 
   function rowValue(row, field) {
     if (field === 'criado_data') return fmtDateOnly(row.criado_em);
+    if (field === 'criado_hora') return fmtTimeOnly(row.criado_em);
     if (field === 'modulo') return modulo(row);
     if (field === 'pipeline_origem') return pipelineLabel(row.pipeline_origem);
     if (field === 'fase_execucao') return phaseLabel(row.fase_execucao);
@@ -555,6 +565,7 @@
   function groupName(field) {
     return {
       criado_data: 'Data',
+      criado_hora: 'Hora',
       texto_original: 'Pergunta',
       numero_wa: 'Celular',
       intencao: 'Intencao',
@@ -771,6 +782,18 @@
     return `IA externa (${provedor})`;
   }
 
+  // Mapeia cada titulo de bloco para o campo equivalente dentro de aud.empresas[i],
+  // para decompor por empresa quando o registro for consolidado (multiempresa).
+  const SQL_BLOCK_EMPRESA_FIELD = {
+    'SQL final executado':     'sql_final_executado',
+    'SQL canonico adaptado':   'sql_canonico_adaptado',
+    'SQL canonico original':   'sql_canonico_recebido',
+    'SQL bruto IA':            'sql_ia_bruto',
+    'Apos normalizacao SX3':   'sql_apos_sx3',
+    'Apos adaptacao SX2':      'sql_apos_sx2',
+    'Apos parametros':         'sql_apos_parametros',
+  };
+
   function sqlText(row, aud) {
     const blocks = [
       ['SQL final executado', row.sql_final_executado || row.sql_gerado || aud.sql_final_executado],
@@ -782,7 +805,21 @@
       ['Apos parametros', aud.sql_apos_parametros],
     ].filter(([, value]) => value);
     if (!blocks.length) return '(SQL nao registrado)';
-    return blocks.map(([title, value]) => `-- ${title}\n${value}`).join('\n\n');
+    const empresas = Array.isArray(aud.empresas) ? aud.empresas : [];
+    const textoBlocos = blocks.map(([title, value]) => {
+      let texto = `-- ${title}\n${value}`;
+      if (empresas.length > 1) {
+        const campo = SQL_BLOCK_EMPRESA_FIELD[title];
+        const porEmpresa = empresas
+          .map(emp => [emp.empresa_nome || `Empresa #${emp.empresa_id}`, campo ? emp[campo] : null])
+          .filter(([, v]) => v);
+        if (porEmpresa.length) {
+          texto += '\n\n' + porEmpresa.map(([nome, v]) => `## ${nome}\n${v}`).join('\n\n');
+        }
+      }
+      return texto;
+    });
+    return textoBlocos.join('\n\n');
   }
 
   function activateTab(id) {

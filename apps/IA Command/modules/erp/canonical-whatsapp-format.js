@@ -36,6 +36,10 @@ const LABELS = {
   total_faturamento: 'Faturamento',
   faturamento: 'Faturamento',
   receita: 'Receita',
+  compra: 'Compras',
+  valor_compra: 'Compras',
+  valor_compras: 'Compras',
+  total_compra: 'Compras',
   total_compras: 'Compras',
   compras: 'Compras',
   total_comissao: 'Comissao',
@@ -361,6 +365,53 @@ function valsMetricas(totais, metricas) {
   return metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
 }
 
+function chaveMetricaCanonica(col) {
+  const k = keyNorm(col);
+  if (/^(total_)?faturamento$|^valor_faturamento$|^receita$|^valor_receita$|^total_receita$/.test(k)) return 'faturamento';
+  if (/^(total_)?compras?$|^valor_compras?$/.test(k)) return 'compras';
+  if (/^valor_recebido(_total)?$|^total_recebido$|^recebido$/.test(k)) return 'recebido';
+  if (/^valor_pago(_total)?$|^total_pago$|^pago$/.test(k)) return 'pago';
+  if (/^saldo_a_receber$|^a_receber$|^total_a_receber$|^valor_a_receber$/.test(k)) return 'a_receber';
+  if (/^saldo_a_pagar$|^a_pagar$|^total_a_pagar$|^valor_a_pagar$/.test(k)) return 'a_pagar';
+  if (/^total_comissao$|^valor_comissao$|^comissao$/.test(k)) return 'comissao';
+  return keyNorm(labelMetrica(col));
+}
+
+function alinharMetricasSucessos(sucessos, shapes) {
+  const metricasBase = shapes[0]?.metricas || [];
+  const canonBase = metricasBase.map(chaveMetricaCanonica);
+  const mapaBase = new Map(canonBase.map((canon, idx) => [canon, metricasBase[idx]]));
+
+  if (!shapes.every(shape => {
+    const atuais = new Set((shape?.metricas || []).map(chaveMetricaCanonica));
+    return atuais.size === canonBase.length && canonBase.every(canon => atuais.has(canon));
+  })) {
+    return { sucessos, shapes };
+  }
+
+  const alinhados = sucessos.map((s, idx) => {
+    const shape = shapes[idx];
+    const mapaAtual = new Map((shape.metricas || []).map(col => [chaveMetricaCanonica(col), col]));
+    const rows = (s.rows || []).map(row => {
+      const out = { ...row };
+      for (const canon of canonBase) {
+        const colBase = mapaBase.get(canon);
+        const colAtual = mapaAtual.get(canon);
+        if (colBase && colAtual && colBase !== colAtual && Object.prototype.hasOwnProperty.call(row, colAtual)) {
+          out[colBase] = toNumber(out[colBase]) + toNumber(row[colAtual]);
+        }
+      }
+      return out;
+    });
+    return { ...s, rows };
+  });
+
+  return {
+    sucessos: alinhados,
+    shapes: shapes.map(shape => ({ ...shape, metricas: metricasBase.slice() })),
+  };
+}
+
 function tipoMetricaTemporal(col) {
   const k = keyNorm(col);
   if (/saldo.*base|base.*saldo|saldo_bancario|bancario_base/.test(k)) return 'primeiro';
@@ -639,7 +690,10 @@ function shapesCompativeis(shapes) {
 function renderAll(sucessos, opts = {}) {
   if (!Array.isArray(sucessos) || !sucessos.length) return null;
   if (sucessos.some(s => !Array.isArray(s.rows) || !s.rows.length)) return null;
-  const shapes = sucessos.map(s => detectarShape(s.rows));
+  let shapes = sucessos.map(s => detectarShape(s.rows));
+  const alinhado = alinharMetricasSucessos(sucessos, shapes);
+  sucessos = alinhado.sucessos;
+  shapes = alinhado.shapes;
   if (!shapesCompativeis(shapes)) return null;
 
   const shape = shapes[0];

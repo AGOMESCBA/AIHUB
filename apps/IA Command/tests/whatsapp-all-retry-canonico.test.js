@@ -20,19 +20,13 @@ const empresas = [
   { empresa_id: 2, nome: 'C3I' },
 ];
 
-const sqlC3I = `SET ROWCOUNT 50000;
-SELECT COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento
-FROM SF2020 SF2
-JOIN SA1990 SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '
-WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_CLIENTE = '000057' AND SF2.F2_LOJA = '01'`;
+const perguntaCrashFinanceiro = 'Contas a pagar do período de 16/06/2026 a 20/06/2026';
 
-const entidadeSoftexpert = {
-  tipo: 'cliente',
-  codigo: '000057',
-  loja: '01',
-  nome: 'SOFTEXPERT SOFTWARE S.A.',
-  termoBusca: 'SOFTEXPERT',
-};
+const sqlC3I = `SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SE2.E2_SALDO), 0) AS contas_a_pagar
+FROM SE2020 SE2
+WHERE SE2.D_E_L_E_T_ = ' '
+  AND SE2.E2_VENCREA BETWEEN '20260616' AND '20260620'`;
 
 function sucessoC3I(iteracao) {
   return {
@@ -42,7 +36,7 @@ function sucessoC3I(iteracao) {
     sql_gerado: sqlC3I,
     _sql_canonico: sqlC3I,
     _sql_canonico_origem: 'ia_owner',
-    _entidadesResolvidas: [entidadeSoftexpert],
+    _entidadesResolvidas: [],
     _sql_auditoria: {
       sql_ia_bruto: sqlC3I,
       sql_final_executado: sqlC3I,
@@ -51,33 +45,15 @@ function sucessoC3I(iteracao) {
   };
 }
 
-function sucessoRetryJ2A(iteracao) {
-  const sqlJ2A = sqlC3I.replace(/SF2020/g, 'SF2010').replace(/SA1990/g, 'SA1010');
-  return {
-    tipo: 'sucesso_ai_sql',
-    resposta_direta: `J2A retry ok ${iteracao}`,
-    rows: [{ faturamento: 100 + iteracao }],
-    sql_gerado: sqlJ2A,
-    _sql_canonico: sqlJ2A,
-    _sql_canonico_origem: 'ia_owner_reuso',
-    _entidadesResolvidas: [{ ...entidadeSoftexpert, _resolverNoTenantAtual: true }],
-    _sql_auditoria: {
-      sql_ia_bruto: sqlC3I,
-      sql_final_executado: sqlJ2A,
-    },
-    duracao_ms: 3,
-  };
-}
-
 (async () => {
   try {
     intentService._garantirIntencoesDinamicasPadrao = () => {};
     intentService.temConfiguracaoMinima = () => true;
     intentService.classificar = async () => ({
-      intencao: 'faturamento_dinamico',
-      modulo: 'faturamento',
-      filtros: { cliente: 'SOFTEXPERT' },
-      periodo: { tipo: 'nenhum' },
+      intencao: 'financeiro_dinamico',
+      modulo: 'financeiro',
+      filtros: {},
+      periodo: { tipo: 'intervalo', dataInicio: '20260616', dataFim: '20260620' },
       _provedor: 'mock',
       confianca: 1,
     });
@@ -89,7 +65,7 @@ function sucessoRetryJ2A(iteracao) {
       svc._historicoTurnosConfig = () => 5;
       svc._formatarConsolidadoDinamicoAll = () => '';
       svc._saveLastIntent = () => {};
-      svc._moduloMonitorIntent = () => 'faturamento';
+      svc._moduloMonitorIntent = () => 'financeiro';
 
       const interpretacoes = [];
       svc._registrarInterpretacao = payload => interpretacoes.push(payload);
@@ -101,43 +77,39 @@ function sucessoRetryJ2A(iteracao) {
           return {
             tipo: 'erro',
             subtipo: 'contrato_entidade_invalido',
-            resposta_direta: 'SQL nao aplicou entidades resolvidas.',
+            resposta_direta: 'Falha simulada na primeira empresa.',
             sql_gerado: 'SELECT sem filtro',
             duracao_ms: 2,
           };
         }
         if (empresaId === 2 && !intent._usarSqlCanonicoWhatsappAll) return sucessoC3I(iteracao);
-        if (empresaId === 1 && intent._usarSqlCanonicoWhatsappAll) return sucessoRetryJ2A(iteracao);
         throw new Error(`chamada inesperada empresa=${empresaId} canonico=${!!intent._usarSqlCanonicoWhatsappAll}`);
       };
 
-      const resposta = await svc._pipelineAll('faturamento da SOFTEXPERT em todas as empresas', empresas, null);
+      const resposta = await svc._pipelineAll(perguntaCrashFinanceiro, empresas, null);
 
-      assert.strictEqual(chamadas.length, 3, 'deve tentar J2A, gerar canonico na C3I e retentar J2A');
+      assert.strictEqual(chamadas.length, 2, 'deve tentar J2A e C3I sem retry canonico cross-tenant');
       assert.strictEqual(chamadas[0].empresaId, 1, 'primeira tentativa deve ser J2A');
       assert.strictEqual(chamadas[0].intent._usarSqlCanonicoWhatsappAll, undefined, 'primeira tentativa nao tem canonico');
       assert.strictEqual(chamadas[1].empresaId, 2, 'segunda tentativa deve gerar canonico na C3I');
       assert.strictEqual(chamadas[1].intent._usarSqlCanonicoWhatsappAll, undefined, 'C3I gera SQL pela IA');
-      assert.strictEqual(chamadas[2].empresaId, 1, 'terceira chamada deve voltar para J2A');
-      assert.strictEqual(chamadas[2].intent._usarSqlCanonicoWhatsappAll, true, 'retry da J2A deve usar canonico');
-      assert(chamadas[2].intent._sqlCanonicoOriginal.includes('{{iac:cliente:codigo}}'), 'canonico do retry deve estar parametrizado');
-      assert(chamadas[2].intent._sqlCanonicoOriginal.includes('FROM SF2 SF2'), 'canonico do retry deve estar sem sufixo fisico');
-      assert.strictEqual(chamadas[2].intent._sqlCanonicoEmpresaOrigem, 2, 'origem do canonico deve ser a C3I');
-      assert(resposta.includes('C3I ok') && resposta.includes('J2A retry ok'), 'resposta final deve incluir sucesso original e retry');
-      assert(!resposta.includes('Nao consegui consultar'), 'erro inicial da J2A deve ser removido apos retry bem-sucedido');
+      assert(resposta.includes('C3I ok'), 'resposta final deve incluir sucesso da empresa que executou');
+      assert(resposta.includes('Nao consegui consultar') || resposta.includes('não consegui consultar'), 'erro inicial da J2A deve permanecer visivel sem retry cross-tenant');
       assert(
         interpretacoes.some(p => p.empresaId === 1 && p.resultado?._diagnostico_tecnico?.retry_pendente),
-        'erro inicial da J2A deve registrar diagnostico tecnico com retry pendente',
+        'erro inicial da J2A deve registrar diagnostico tecnico com retry pendente historico',
       );
-      assert(interpretacoes.some(p => p.empresaId === 1 && p.resultado?._retry_canonico), 'deve auditar retry canonico da J2A');
       assert(
-        interpretacoes.some(p => p.empresaId === 1 && p.resultado?._diagnostico_tecnico?.retry_sucesso),
-        'retry da J2A deve registrar diagnostico tecnico de recuperacao',
+        !interpretacoes.some(p => p.empresaId === 1 && p.resultado?._retry_canonico),
+        'nao deve executar retry canonico cross-tenant no WhatsApp_all',
       );
-      assert(interpretacoes.some(p => p.resultado?._sql_auditoria?.empresas?.some(e => e.retry_canonico)), 'auditoria consolidada deve marcar retry');
       assert(
-        interpretacoes.some(p => p.resultado?._sql_auditoria?.empresas?.some(e => e.diagnostico_tecnico?.retry_sucesso)),
-        'auditoria consolidada deve carregar o diagnostico tecnico do retry',
+        interpretacoes.some(p => p.empresaId === 2 && p.resultado?._sql_canonico_reuso_permitido === false),
+        'SQL canonico deve ser auditado com reuso cross-tenant desativado',
+      );
+      assert(
+        interpretacoes.some(p => p.empresaId === 2 && p.resultado?._sql_canonico_reuso_tecnico_permitido === true),
+        'auditoria deve manter a viabilidade tecnica do canonico separada da politica de execucao',
       );
       assert(
         interpretacoes.some(p => p.resultado?._pipeline_origem === 'consolidado'),
@@ -152,7 +124,7 @@ function sucessoRetryJ2A(iteracao) {
       svc._historicoTurnosConfig = () => 5;
       svc._formatarConsolidadoDinamicoAll = () => '';
       svc._saveLastIntent = () => {};
-      svc._moduloMonitorIntent = () => 'faturamento';
+      svc._moduloMonitorIntent = () => 'financeiro';
 
       const interpretacoes = [];
       svc._registrarInterpretacao = payload => interpretacoes.push(payload);
@@ -162,7 +134,7 @@ function sucessoRetryJ2A(iteracao) {
         return sucessoC3I(900);
       };
 
-      await svc._pipelineAll('faturamento da SOFTEXPERT em todas as empresas', empresas, null);
+      await svc._pipelineAll(perguntaCrashFinanceiro, empresas, null);
 
       assert(
         interpretacoes.some(p => (
@@ -180,7 +152,7 @@ function sucessoRetryJ2A(iteracao) {
       svc._historicoTurnosConfig = () => 5;
       svc._formatarConsolidadoDinamicoAll = () => '';
       svc._saveLastIntent = () => {};
-      svc._moduloMonitorIntent = () => 'faturamento';
+      svc._moduloMonitorIntent = () => 'financeiro';
 
       const interpretacoes = [];
       svc._registrarInterpretacao = payload => interpretacoes.push(payload);
@@ -190,7 +162,7 @@ function sucessoRetryJ2A(iteracao) {
         return sucessoC3I(901);
       };
 
-      await svc._pipelineAll('faturamento da SOFTEXPERT em todas as empresas', empresas, null);
+      await svc._pipelineAll(perguntaCrashFinanceiro, empresas, null);
 
       assert(
         interpretacoes.some(p => (

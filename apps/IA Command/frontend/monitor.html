@@ -270,9 +270,11 @@
   let _msgCount = 0;
   let _channels = [];
   let _channelId = null;
+  let _startInFlight = false;
   const _monitorEmpresaId = Number(new URLSearchParams(location.search).get('_empresa')) || null;
 
   window._iahubAuthReady?.then(() => {
+    if (_socket) return;
     _socket = io({ transports: ['websocket', 'polling'] });
 
     _socket.on('connect', () => {
@@ -284,6 +286,7 @@
     _socket.on('iac-log',    (entry) => addLog(entry.message, entry.type));
     _socket.on('iac-status', ({ status }) => aplicarStatus(status));
     _socket.on('iac-qr',     (url) => mostrarQR(url));
+    _socket.on('clear-monitor', () => limparTerminalLocal());
     _socket.on('iac-intent', (data) => renderIntent(data));
     _socket.on('iac-msg',    ({ sender, tipo, body }) => {
       _msgCount++;
@@ -401,17 +404,23 @@
   }
 
   async function iniciar() {
+    if (_startInFlight || _status !== 'stopped') return;
+    _startInFlight = true;
     document.getElementById('btn-start').disabled = true;
-    const r = await fetch('/api/ia-command/whatsapp/start', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: channelBody(),
-    });
-    if (!r.ok) {
-      let msg = 'Erro ao iniciar.';
-      try { const d = await r.json(); if (d?.error) msg = `Erro ao iniciar: ${d.error}`; } catch(_) {}
-      addLog(msg, 'error');
-      document.getElementById('btn-start').disabled = false;
+    try {
+      const r = await fetch('/api/ia-command/whatsapp/start', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: channelBody(),
+      });
+      if (!r.ok) {
+        let msg = 'Erro ao iniciar.';
+        try { const d = await r.json(); if (d?.error) msg = `Erro ao iniciar: ${d.error}`; } catch(_) {}
+        addLog(msg, 'error');
+        document.getElementById('btn-start').disabled = false;
+      }
+    } finally {
+      _startInFlight = false;
     }
   }
 
@@ -472,6 +481,11 @@
     });
     document.getElementById('terminal').innerHTML =
       '<div class="log-line"><span class="log-ts">--:--:--</span><span class="log-msg info">Logs limpos.</span></div>';
+  }
+
+  function limparTerminalLocal() {
+    document.getElementById('terminal').innerHTML =
+      '<div class="log-line"><span class="log-ts">--:--:--</span><span class="log-msg info">Aguardando inicialização...</span></div>';
   }
 
   function addLog(msg, type = 'info') {

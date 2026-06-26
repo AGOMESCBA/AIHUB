@@ -50,6 +50,21 @@ ok('etapa 1: consolidado soma mesmas metricas em todas as empresas', () => {
   assert.ok(!texto.includes('valor_recebido'), texto);
 });
 
+ok('consolidado soma metricas equivalentes com aliases diferentes', () => {
+  const texto = canonical.renderAll([
+    { nomeEmpresa: 'C3i Systems', rows: [{ total_compras: 29743.83 }] },
+    { nomeEmpresa: 'J2A Consultoria', rows: [{ valor_compra: 307249.04 }] },
+  ], { mensagem: 'notas de entradas no mes de janeiro' });
+
+  assert.ok(texto.includes('*Consolidado - Todas as empresas*'), texto);
+  assert.ok(/C3i Systems: Compras: \*R\$\s*29\.743,83\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: Compras: \*R\$\s*307\.249,04\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Compras: \*R\$\s*336\.992,87\*/.test(texto), texto);
+  assert.ok(!/J2A Consultoria: .*R\$\s*0,00/.test(texto), texto);
+  assert.ok(!texto.includes('total_compras'), texto);
+  assert.ok(!texto.includes('valor_compra'), texto);
+});
+
 ok('financeiro aberto: separa carteira pagar e receber quando UNION usa alias unico', () => {
   const rows = [
     { carteira: 'pagar', saldo_a_pagar: '478493,69' },
