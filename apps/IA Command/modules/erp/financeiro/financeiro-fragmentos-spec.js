@@ -68,6 +68,7 @@ function receberPosicao() {
 ## Contas a receber — posicao/em aberto
 - Contas a receber usa SE1 e cliente SA1.
 - Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE1.E1_VENCREA — PROIBIDO usar SE1.E1_VENCTO. NAO filtre SE1.E1_SITUACAO.
+- REGRA ABSOLUTA — periodo/data especifica em posicao/em aberto: filtre DIRETAMENTE SE1.E1_VENCREA (ex: SE1.E1_VENCREA = '20260629' ou BETWEEN). PROIBIDO fazer JOIN com a tabela de baixas/movimentos (SE5 ou equivalente) para aplicar filtro de data nesta operacao — baixas/movimentos sao da operacao "Contas a receber — realizado" (outro fragmento, dados JA PAGOS/RECEBIDOS), sem relacao com vencimento em aberto. Misturar E1_SALDO > 0 (saldo aberto) com filtro pela data de baixa produz resultado sem sentido de negocio.
 - Natureza financeira: SE1.E1_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
@@ -87,6 +88,7 @@ function pagarPosicao() {
 ## Contas a pagar — posicao/em aberto
 - Contas a pagar usa SE2 e fornecedor SA2.
 - Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Titulos com E2_SALDO = 0 ja foram pagos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE2.E2_VENCREA — PROIBIDO usar SE2.E2_VENCTO.
+- REGRA ABSOLUTA — periodo/data especifica em posicao/em aberto: filtre DIRETAMENTE SE2.E2_VENCREA (ex: SE2.E2_VENCREA = '20260629' ou BETWEEN). PROIBIDO fazer JOIN com a tabela de baixas/movimentos (SE5 ou equivalente) para aplicar filtro de data nesta operacao — baixas/movimentos sao da operacao "Contas a pagar — realizado" (outro fragmento, dados JA PAGOS), sem relacao com vencimento em aberto. Misturar E2_SALDO > 0 (saldo aberto) com filtro pela data de baixa produz resultado sem sentido de negocio — "tem conta a pagar em [data]" e sobre vencimento, nao sobre quando foi pago.
 - Natureza financeira: SE2.E2_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_pagar: COALESCE(SUM(SE2.E2_SALDO),0) AS saldo_a_pagar.
 - "por fornecedor": agrupe por SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME.
