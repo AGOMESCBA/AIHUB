@@ -1,6 +1,8 @@
 'use strict';
 
-const RE_METRICA = /valor|total|saldo|salatua|juros|multa|desconto|vlr|vl_|brut|liquido|comiss|qtd|quantidade|qt_|fatura|receita|fat_|compra|pedido|custo|preco|venda|entrada|saida|receb|pag|previst|projet|fluxo/i;
+const presentation = require('./presentation-contract');
+
+const RE_METRICA = /valor|total|saldo|salatua|juros|multa|desconto|vlr|vl_|brut|liquido|comiss|qtd|quantidade|qt_|fatura|receita|fat_|compra|pedido|custo|preco|venda|entrada|saida|receb|pag|previst|projet|fluxo|crescimento|variacao|varia[cç][aã]o/i;
 const RE_MEDIA = /media|medio|ticket|avg|pct|percent|taxa|indice|proporcao/i;
 const RE_SKIP = /percentual|percent|crescimento|variacao|taxa|indice|id$|^id_|codigo|cod_/i;
 const RE_QTD = /qtd|quantidade|qt_|volume/i;
@@ -17,10 +19,12 @@ const LABELS = {
   valor_pago_total: 'Pago',
   saldo_a_receber: 'A receber',
   saldo_a_pagar: 'A pagar',
+  total_a_receber: 'Total A Receber',
+  total_a_pagar: 'Total A Pagar',
   e1_saldo: 'A receber',
   e2_saldo: 'A pagar',
-  e1_valor: 'Valor',
-  e2_valor: 'Valor',
+  e1_valor: 'A receber',
+  e2_valor: 'A pagar',
   valor: 'Valor',
   entrada: 'Entradas',
   entradas: 'Entradas',
@@ -40,6 +44,13 @@ const LABELS = {
   projetado_pagar: 'A pagar',
   total_faturamento: 'Faturamento',
   faturamento: 'Faturamento',
+  faturamento_anterior: 'Faturamento Anterior',
+  crescimento_valor: 'Crescimento Valor',
+  crescimento_percentual: 'Crescimento %',
+  crescimento_pct: 'Crescimento %',
+  variacao_valor: 'Crescimento Valor',
+  variacao_percentual: 'Crescimento %',
+  variacao_pct: 'Crescimento %',
   receita: 'Receita',
   compra: 'Compras',
   valor_compra: 'Compras',
@@ -92,13 +103,38 @@ function num(v) {
   return toNumber(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 }
 
+function isPercentual(col) {
+  const k = keyNorm(col);
+  if (presentation.metricType(col) === 'percent') return true;
+  return /percentual|percent|pct|taxa|indice|proporcao/.test(k);
+}
+
+function isMetricaCrescimento(col) {
+  const k = keyNorm(col);
+  return /crescimento|variacao|varia[cç][aã]o/.test(k);
+}
+
+function isCrescimentoValor(col) {
+  const k = keyNorm(col);
+  return isMetricaCrescimento(col) && /valor|vlr|total/.test(k) && !isPercentual(col);
+}
+
+function pct(v) {
+  const n = parseNumber(v);
+  if (n === null) return 'N/A';
+  const abs = Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n > 0 ? `+${abs}%` : n < 0 ? `-${abs}%` : '0,00%';
+}
+
 function fmt(col, v) {
-  return RE_QTD.test(col) ? num(v) : brl(v);
+  if (isPercentual(col)) return pct(v);
+  if (isMetricaCrescimento(col) && parseNumber(v) === null) return 'N/A';
+  return presentation.metricType(col) === 'quantity' || RE_QTD.test(col) ? num(v) : brl(v);
 }
 
 function labelMetrica(col) {
   const k = keyNorm(col);
-  return LABELS[k] || labelSx3(col) || String(col || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return LABELS[k] || presentation.labelMetric(col) || labelSx3(col) || String(col || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // Mapa de rotulos vindo do SX3 do tenant (campo fisico Protheus -> titulo cadastrado).
@@ -125,6 +161,8 @@ function labelDimensao(col) {
   const k = keyNorm(col);
   const doSx3 = labelSx3(col);
   if (doSx3) return doSx3;
+  const doContrato = presentation.labelDimension(col);
+  if (doContrato) return doContrato;
   if (/^vendedor/.test(k)) return 'Vendedor';
   if (/^fornecedor/.test(k)) return 'Fornecedor';
   if (/^cliente/.test(k)) return 'Cliente';
@@ -244,6 +282,7 @@ function sampleRows(rows) {
 
 function devePularMetrica(col, keys) {
   const nk = keyNorm(col);
+  if (isMetricaCrescimento(nk)) return false;
   if (RE_SKIP.test(nk)) return true;
   if (/_anterior$/.test(nk)) {
     const atual = nk.replace(/_anterior$/, '_atual');
@@ -252,13 +291,17 @@ function devePularMetrica(col, keys) {
   return false;
 }
 
-function detectarShape(rows) {
+function detectarShape(rows, opts = {}) {
   if (!Array.isArray(rows) || !rows.length) return null;
   const keys = Object.keys(rows[0] || {});
   const amostra = sampleRows(rows);
   const metricas = keys.filter(k => {
     const nk = keyNorm(k);
+    if (presentation.dimension(k)) return false;
+    const metric = presentation.metric(k, opts);
+    if (metric) return amostra.some(r => isNumericValue(r[k]) || (metric.type === 'percent' && parseNumber(r[k]) === null));
     if (RE_TEMPORAL.test(nk) || RE_ENTIDADE.test(nk) || RE_DOCUMENTO.test(nk) || RE_BANCARIO.test(nk) || RE_CATEGORIA_SEMANTICA.test(nk)) return false;
+    if (isMetricaCrescimento(nk)) return amostra.some(r => isNumericValue(r[k]) || parseNumber(r[k]) === null);
     if (RE_MEDIA.test(nk) || devePularMetrica(k, keys)) return false;
     if (!RE_METRICA.test(nk)) return false;
     return amostra.some(r => isNumericValue(r[k]));
@@ -268,6 +311,7 @@ function detectarShape(rows) {
   const dimensoes = keys.filter(k => {
     const nk = keyNorm(k);
     if (metricas.includes(k)) return false;
+    if (presentation.dimension(k)) return amostra.some(r => String(r[k] ?? '').trim() !== '');
     if (!RE_TEMPORAL.test(nk) && !RE_ENTIDADE.test(nk) && !RE_DOCUMENTO.test(nk) && !RE_BANCARIO.test(nk) && !RE_CATEGORIA_SEMANTICA.test(nk)) return false;
     if (RE_TEMPORAL.test(nk)) return amostra.some(r => isTemporalDimensionValue(k, r[k]));
     if (RE_CATEGORIA_SEMANTICA.test(nk)) return amostra.some(r => categoriaSemantica(r[k]));
@@ -324,9 +368,18 @@ function ordenarMultiplasDimensoes(dimensoes) {
 
 function somarMetricas(rows, metricas) {
   const out = {};
+  const vistos = {};
   for (const col of metricas) out[col] = 0;
   for (const row of rows || []) {
-    for (const col of metricas) out[col] += toNumber(row[col]);
+    for (const col of metricas) {
+      const n = parseNumber(row[col]);
+      if (n === null) continue;
+      vistos[col] = true;
+      out[col] += n;
+    }
+  }
+  for (const col of metricas) {
+    if (isMetricaCrescimento(col) && !vistos[col]) out[col] = null;
   }
   return out;
 }
@@ -353,7 +406,7 @@ function header({ contextoConsulta, nomeModulo, titulo = null }) {
 }
 
 function renderMetricas(totais, metricas, indent = '  ') {
-  return metricas.map((col, idx) => `${indent}${idx + 1}. ${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`);
+  return metricas.map((col, idx) => `${indent}${idx + 1}. ${labelMetrica(col)}: *${fmt(col, totais[col])}*`);
 }
 
 function addTotais(dest, src, metricas) {
@@ -366,12 +419,46 @@ function totalVazio(metricas) {
   return out;
 }
 
+function metricasTotalizaveis(metricas = []) {
+  return metricas.filter(col => presentation.totalRule(col) !== 'ignore' && !isMetricaCrescimento(col) && !/_anterior$/i.test(keyNorm(col)));
+}
+
 function valsMetricas(totais, metricas) {
-  return metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
+  return metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
+}
+
+function colBaseCrescimento(metricas = []) {
+  const prioridade = ['faturamento', 'total_faturamento', 'receita', 'valor_faturamento', 'total_receita'];
+  const byNorm = new Map(metricas.map(col => [keyNorm(col), col]));
+  return prioridade.map(k => byNorm.get(k)).find(Boolean)
+    || metricas.find(col => /fatur|receita|venda/.test(keyNorm(col)) && !isMetricaCrescimento(col) && !/_anterior$/i.test(keyNorm(col)))
+    || metricas.find(col => !isMetricaCrescimento(col) && !/_anterior$/i.test(keyNorm(col)));
+}
+
+function recalcularCrescimentoTemporal(entradas, metricas) {
+  const crescimentoValor = metricas.filter(isCrescimentoValor);
+  const crescimentoPct = metricas.filter(col => isMetricaCrescimento(col) && isPercentual(col));
+  if (!entradas.length || (!crescimentoValor.length && !crescimentoPct.length)) return entradas;
+  const base = colBaseCrescimento(metricas);
+  if (!base) return entradas;
+
+  let anterior = null;
+  for (const [, totais] of entradas) {
+    const atual = parseNumber(totais?.[base]);
+    const temAtual = atual !== null;
+    const temAnterior = anterior !== null;
+    const diff = temAtual && temAnterior ? atual - anterior : null;
+    for (const col of crescimentoValor) totais[col] = diff;
+    for (const col of crescimentoPct) totais[col] = diff !== null && anterior !== 0 ? (diff / anterior) * 100 : null;
+    if (temAtual) anterior = atual;
+  }
+  return entradas;
 }
 
 function chaveMetricaCanonica(col) {
   const k = keyNorm(col);
+  const doContrato = presentation.canonicalMetric(col);
+  if (doContrato) return doContrato;
   if (/^(total_)?faturamento$|^valor_faturamento$|^receita$|^valor_receita$|^total_receita$/.test(k)) return 'faturamento';
   if (/^(total_)?compras?$|^valor_compras?$/.test(k)) return 'compras';
   if (/^valor_recebido(_total)?$|^total_recebido$|^recebido$/.test(k)) return 'recebido';
@@ -385,6 +472,8 @@ function chaveMetricaCanonica(col) {
 
 function chaveDimensaoCanonica(col) {
   const k = keyNorm(col);
+  const doContrato = presentation.canonicalDimension(col);
+  if (doContrato) return doContrato;
   if (/^(vencimento|vencto|vencrea|data_vencimento|dt_vencimento|e1_vencto|e2_vencto|e1_vencrea|e2_vencrea)$/.test(k)) return 'vencimento';
   if (/^(emissao|data_emissao|dt_emissao|e1_emissao|e2_emissao)$/.test(k)) return 'emissao';
   if (/^(baixa|data_baixa|dt_baixa|e1_baixa|e2_baixa)$/.test(k)) return 'baixa';
@@ -406,6 +495,8 @@ function chaveMetricaCanonicaContextual(col, opts = {}) {
 }
 
 function labelDimensaoCanonica(canon, col) {
+  const doContrato = presentation.labelDimension(col || canon);
+  if (doContrato) return doContrato;
   if (canon === 'vencimento') return 'Vencimento';
   if (canon === 'emissao') return 'Emissao';
   if (canon === 'baixa') return 'Baixa';
@@ -413,13 +504,13 @@ function labelDimensaoCanonica(canon, col) {
   return labelDimensao(col || canon);
 }
 
-function alinharMetricasSucessos(sucessos, shapes) {
+function alinharMetricasSucessos(sucessos, shapes, opts = {}) {
   const metricasBase = shapes[0]?.metricas || [];
-  const canonBase = metricasBase.map(chaveMetricaCanonica);
+  const canonBase = metricasBase.map(col => chaveMetricaCanonicaContextual(col, opts));
   const mapaBase = new Map(canonBase.map((canon, idx) => [canon, metricasBase[idx]]));
 
   if (!shapes.every(shape => {
-    const atuais = new Set((shape?.metricas || []).map(chaveMetricaCanonica));
+    const atuais = new Set((shape?.metricas || []).map(col => chaveMetricaCanonicaContextual(col, opts)));
     return atuais.size === canonBase.length && canonBase.every(canon => atuais.has(canon));
   })) {
     return { sucessos, shapes };
@@ -427,7 +518,7 @@ function alinharMetricasSucessos(sucessos, shapes) {
 
   const alinhados = sucessos.map((s, idx) => {
     const shape = shapes[idx];
-    const mapaAtual = new Map((shape.metricas || []).map(col => [chaveMetricaCanonica(col), col]));
+    const mapaAtual = new Map((shape.metricas || []).map(col => [chaveMetricaCanonicaContextual(col, opts), col]));
     const rows = (s.rows || []).map(row => {
       const out = { ...row };
       for (const canon of canonBase) {
@@ -505,6 +596,8 @@ function valsMetricasCanonicas(totais, metricasCanonicas, opts = {}) {
 
 function labelMetricaContextual(col, opts = {}, canon = null) {
   const msg = norm(opts.mensagem || opts.contextoConsulta || '');
+  const doContrato = presentation.labelMetric(col, opts);
+  if (doContrato && (!canon || canon === presentation.canonicalMetric(col, opts))) return doContrato;
   if (canon === 'a_pagar') return 'A pagar';
   if (canon === 'a_receber') return 'A receber';
   if (canon === 'valor' && /\b(contas?\s+a\s+pagar|a\s+pagar|pagar)\b/.test(msg)) return 'A pagar';
@@ -595,6 +688,9 @@ function renderAllShapesMistos(sucessos, shapes, opts = {}) {
 
 function tipoMetricaTemporal(col) {
   const k = keyNorm(col);
+  const regra = presentation.totalRule(col);
+  if (regra === 'first') return 'primeiro';
+  if (regra === 'last') return 'ultimo';
   if (/saldo.*base|base.*saldo|saldo_bancario|bancario_base/.test(k)) return 'primeiro';
   if (/fluxo.*liquido|liquido.*fluxo|saldo.*final|final.*saldo|saldo_projetado|projetado.*saldo/.test(k)) return 'ultimo';
   return 'soma';
@@ -783,7 +879,7 @@ function renderMultiplasDimensoes(rows, shape, linhas) {
 }
 
 function renderSingle(rows, opts = {}) {
-  const shape = detectarShape(rows);
+  const shape = detectarShape(rows, opts);
   if (!shape) return null;
 
   const linhas = [];
@@ -795,6 +891,7 @@ function renderSingle(rows, opts = {}) {
 
   if (shape.tipo === 'metricas_simples') {
     const totais = somarMetricas(rows, shape.metricas);
+    const metricasTotal = metricasTotalizaveis(shape.metricas);
     linhas.push('\u{1F4CA} *Resumo*');
     linhas.push(...renderMetricas(totais, shape.metricas));
     const resultado = formulaResultado(shape.metricas, totais);
@@ -802,7 +899,7 @@ function renderSingle(rows, opts = {}) {
     linhas.push('');
     const totalStr = resultado
       ? brl(resultado.valor)
-      : shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
+      : metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
     linhas.push(`*Total Geral*: ${totalStr}`);
     return linhas.join('\n');
   }
@@ -831,26 +928,28 @@ function renderSingle(rows, opts = {}) {
     porDim.get(label).push(row);
   }
   const primary = shape.metricas[0];
-  const entradas = [...porDim.entries()].map(([label, rowsDim]) => [label, somarMetricas(rowsDim, shape.metricas)])
+  let entradas = [...porDim.entries()].map(([label, rowsDim]) => [label, somarMetricas(rowsDim, shape.metricas)])
     .sort(([labelA, a], [labelB, b]) => dimTemporal
       ? sortValorDimensao(dim, labelA).localeCompare(sortValorDimensao(dim, labelB))
       : (b[primary] || 0) - (a[primary] || 0));
+  if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
 
   linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
   entradas.slice(0, 50).forEach(([label, totais], idx) => {
-    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
+    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
     linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
   });
   if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
 
+  const metricasTotal = metricasTotalizaveis(shape.metricas);
   const totais = dimTemporal && temMetricaPosicional(shape.metricas)
-    ? totalTemporalOrdenado(entradas, shape.metricas)
-    : somarMetricas(rows, shape.metricas);
+    ? totalTemporalOrdenado(entradas, metricasTotal)
+    : somarMetricas(rows, metricasTotal);
   linhas.push('');
-  linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ')}`);
-  const resultado = formulaResultado(shape.metricas, totais);
+  linhas.push(`\u{1F9FE} *Subtotal*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ')}`);
+  const resultado = formulaResultado(metricasTotal, totais);
   if (resultado) linhas.push(`*Total Geral*: ${brl(resultado.valor)}`);
-  else linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ')}`);
+  else linhas.push(`*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ')}`);
   return linhas.join('\n');
 }
 
@@ -871,8 +970,8 @@ function shapesCompativeis(shapes) {
 function renderAll(sucessos, opts = {}) {
   if (!Array.isArray(sucessos) || !sucessos.length) return null;
   if (sucessos.some(s => !Array.isArray(s.rows) || !s.rows.length)) return null;
-  let shapes = sucessos.map(s => detectarShape(s.rows));
-  const alinhado = alinharMetricasSucessos(sucessos, shapes);
+  let shapes = sucessos.map(s => detectarShape(s.rows, opts));
+  const alinhado = alinharMetricasSucessos(sucessos, shapes, opts);
   sucessos = alinhado.sucessos;
   shapes = alinhado.shapes;
   if (!shapesCompativeis(shapes)) return renderAllShapesMistos(sucessos, shapes, opts);
@@ -884,23 +983,24 @@ function renderAll(sucessos, opts = {}) {
 
   if (shape.tipo === 'metricas_simples') {
     const totalGeral = {};
-    for (const col of shape.metricas) totalGeral[col] = 0;
+    const metricasTotal = metricasTotalizaveis(shape.metricas);
+    for (const col of shape.metricas) totalGeral[col] = isMetricaCrescimento(col) ? null : 0;
 
     linhas.push('\u{1F4CA} *Resumo*');
     for (const s of sucessos) {
       const totais = somarMetricas(s.rows, shape.metricas);
-      for (const col of shape.metricas) totalGeral[col] += totais[col] || 0;
-      const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
+      for (const col of metricasTotal) totalGeral[col] += totais[col] || 0;
+      const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
       const resultado = formulaResultado(shape.metricas, totais);
       linhas.push(`\u{1F3E2} ${s.nomeEmpresa}: ${vals}${resultado ? ` | Resultado: *${brl(resultado.valor)}*` : ''}`);
     }
     linhas.push('');
-    linhas.push(...renderMetricas(totalGeral, shape.metricas));
-    const resultado = formulaResultado(shape.metricas, totalGeral);
+    linhas.push(...renderMetricas(totalGeral, metricasTotal));
+    const resultado = formulaResultado(metricasTotal, totalGeral);
     if (resultado) linhas.push(`\u{1F9FE} *Resultado*: *${brl(resultado.valor)}*`);
     const totalStr = resultado
       ? brl(resultado.valor)
-      : shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ');
+      : metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col])}*`).join(' | ');
     linhas.push(`*Total Geral*: ${totalStr}`);
     return linhas.join('\n');
   }
@@ -1020,27 +1120,31 @@ function renderAll(sucessos, opts = {}) {
   }
 
   const primary = shape.metricas[0];
-  const entradas = [...porDim.entries()].sort(([labelA, a], [labelB, b]) => dimTemporal
+  let entradas = [...porDim.entries()].sort(([labelA, a], [labelB, b]) => dimTemporal
     ? sortValorDimensao(dim, labelA).localeCompare(sortValorDimensao(dim, labelB))
     : (b[primary] || 0) - (a[primary] || 0));
+  if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
   linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
   entradas.slice(0, 50).forEach(([label, totais], idx) => {
-    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
+    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
     linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
   });
   if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
   linhas.push('');
-  linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
-  const resultado = formulaResultado(shape.metricas, totalGeral);
+  const metricasTotal = metricasTotalizaveis(shape.metricas);
+  const totalGeralExibicao = {};
+  for (const col of metricasTotal) totalGeralExibicao[col] = totalGeral[col] || 0;
+  linhas.push(`\u{1F9FE} *Subtotal*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`);
+  const resultado = formulaResultado(metricasTotal, totalGeralExibicao);
   if (resultado) linhas.push(`*Total Geral*: ${brl(resultado.valor)}`);
-  else linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
+  else linhas.push(`*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`);
 
   if (dimTemporal) {
     linhas.push('');
     linhas.push('\u{1F3E2} *Por Empresa*');
     for (const s of sucessos) {
-      const totaisEmpresa = somarMetricas(s.rows, shape.metricas);
-      linhas.push(`  - ${s.nomeEmpresa}: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totaisEmpresa[col] || 0)}*`).join(' | ')}`);
+      const totaisEmpresa = somarMetricas(s.rows, metricasTotal);
+      linhas.push(`  - ${s.nomeEmpresa}: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totaisEmpresa[col])}*`).join(' | ')}`);
     }
   }
   return linhas.join('\n');

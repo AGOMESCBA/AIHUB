@@ -119,6 +119,36 @@ ok('consolidado misto: reduz vencimento e vencimento-fornecedor para vencimento'
   assert.ok(/J2A Consultoria: A pagar: \*R\$\s*59\.887,39\*/.test(texto), texto);
 });
 
+ok('contrato de apresentacao: troca campos fisicos de contas a pagar por nomes amigaveis', () => {
+  const rows = [
+    { E2_VENCREA: '20260624', E2_NUM: '24/06/2026', fornecedor: 'BANCO INTER', E2_VALOR: 69.95 },
+    { E2_VENCREA: '20260629', E2_NUM: '44/02/2023', fornecedor: 'FOLHA DE PAGAMENTO', E2_VALOR: 3389.57 },
+  ];
+  const shape = canonical.detectarShape(rows, { mensagem: 'Contas a pagar dos proximos 10 dias' });
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Contas a pagar dos proximos 10 dias',
+  });
+
+  assert.strictEqual(shape.tipo, 'multiplas_dimensoes');
+  assert.ok(texto.includes('*Por Vencimento, Documento, Fornecedor*'), texto);
+  assert.ok(/Vencimento 24\/06\/2026 \| Documento 24\/06\/2026 \| Fornecedor BANCO INTER: A pagar: \*R\$\s*69,95\*/.test(texto), texto);
+  assert.ok(!texto.includes('E2 VENCREA'), texto);
+  assert.ok(!texto.includes('E2 VALOR'), texto);
+});
+
+ok('contrato de apresentacao: compras fisico Protheus consolida com alias semantico', () => {
+  const texto = canonical.renderAll([
+    { nomeEmpresa: 'C3i Systems', rows: [{ F1_VALBRUT: 29743.83 }] },
+    { nomeEmpresa: 'J2A Consultoria', rows: [{ valor_compra: 307249.04 }] },
+  ], { mensagem: 'notas de entradas no mes de janeiro' });
+
+  assert.ok(/C3i Systems: Compras: \*R\$\s*29\.743,83\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: Compras: \*R\$\s*307\.249,04\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Compras: \*R\$\s*336\.992,87\*/.test(texto), texto);
+  assert.ok(!texto.includes('F1 VALBRUT'), texto);
+});
+
 ok('financeiro aberto: separa carteira pagar e receber quando UNION usa alias unico', () => {
   const rows = [
     { carteira: 'pagar', saldo_a_pagar: '478493,69' },
@@ -244,6 +274,52 @@ ok('etapa 3/4: formata comparativo mes e ano', () => {
   assert.ok(texto.includes('2026: Faturamento: *R$'), texto);
 });
 
+ok('crescimento mensal: exibe valor e percentual retornados pelo SQL', () => {
+  const texto = canonical.renderSingle([
+    { competencia: '202601', faturamento: 74731.49, faturamento_anterior: null, crescimento_valor: null, crescimento_percentual: null },
+    { competencia: '202602', faturamento: 79810.32, faturamento_anterior: 74731.49, crescimento_valor: 5078.83, crescimento_percentual: 6.79610429284899 },
+    { competencia: '202603', faturamento: 119926.80, faturamento_anterior: 79810.32, crescimento_valor: 40116.48, crescimento_percentual: 50.2647777881357 },
+  ], { nomeModulo: 'Faturamento', contextoConsulta: 'Preciso do percentual e valor do crescimento do faturamento do ano por mes' });
+
+  assert.ok(/Janeiro\/2026: Faturamento: \*R\$\s*74\.731,49\* .*Crescimento Valor: \*N\/A\* .*Crescimento %: \*N\/A\*/.test(texto), texto);
+  assert.ok(/Fevereiro\/2026: Faturamento: \*R\$\s*79\.810,32\* .*Crescimento Valor: \*R\$\s*5\.078,83\* .*Crescimento %: \*\+6,80%\*/.test(texto), texto);
+  assert.ok(/\*Subtotal\*: Faturamento: \*R\$\s*274\.468,61\*/.test(texto), texto);
+  assert.ok(!/\*Subtotal\*: .*Crescimento %/.test(texto), texto);
+});
+
+ok('crescimento mensal: consolidado recalcula valor e percentual sobre total das empresas', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'C3i Systems',
+      rows: [
+        { competencia: '202601', faturamento: 74731.49, crescimento_valor: null, crescimento_percentual: null },
+        { competencia: '202602', faturamento: 79810.32, crescimento_valor: 5078.83, crescimento_percentual: 6.79610429284899 },
+        { competencia: '202603', faturamento: 119926.80, crescimento_valor: 40116.48, crescimento_percentual: 50.2647777881357 },
+        { competencia: '202604', faturamento: 48730.17, crescimento_valor: -71196.63, crescimento_percentual: -59.3667387106135 },
+        { competencia: '202605', faturamento: 169896.50, crescimento_valor: 121166.33, crescimento_percentual: 248.647460084789 },
+        { competencia: '202606', faturamento: 180553.69, crescimento_valor: 10657.19, crescimento_percentual: 6.27275429452637 },
+      ],
+    },
+    {
+      nomeEmpresa: 'J2A Consultoria',
+      rows: [
+        { competencia: '202601', faturamento: 445426.20, crescimento_valor: null, crescimento_percentual: null },
+        { competencia: '202602', faturamento: 397287.79, crescimento_valor: -48138.41, crescimento_percentual: -10.807276 },
+        { competencia: '202603', faturamento: 387310.71, crescimento_valor: -9977.08, crescimento_percentual: -2.511299 },
+        { competencia: '202604', faturamento: 603902.39, crescimento_valor: 216591.68, crescimento_percentual: 55.917 },
+        { competencia: '202605', faturamento: 596095.12, crescimento_valor: -7807.27, crescimento_percentual: -1.293 },
+        { competencia: '202606', faturamento: 672935.20, crescimento_valor: 76840.08, crescimento_percentual: 12.89 },
+      ],
+    },
+  ], { mensagem: 'Preciso do percentual e valor do crescimento do faturamento do ano por mês' });
+
+  assert.ok(/Janeiro\/2026: Faturamento: \*R\$\s*520\.157,69\* .*Crescimento Valor: \*N\/A\* .*Crescimento %: \*N\/A\*/.test(texto), texto);
+  assert.ok(/Fevereiro\/2026: Faturamento: \*R\$\s*477\.098,11\* .*Crescimento Valor: \*-R\$\s*43\.059,58\* .*Crescimento %: \*-8,28%\*/.test(texto), texto);
+  assert.ok(/Junho\/2026: Faturamento: \*R\$\s*853\.488,89\* .*Crescimento Valor: \*R\$\s*87\.497,27\* .*Crescimento %: \*\+11,42%\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Faturamento: \*R\$\s*3\.776\.606,38\*/.test(texto), texto);
+  assert.ok(!/\*Total Geral\*: .*Crescimento Percentual/.test(texto), texto);
+});
+
 ok('etapa 4: preserva metricas atual e anterior em comparativo', () => {
   const texto = canonical.renderSingle([
     { mes: 1, faturamento_atual: 1500, faturamento_anterior: 1000, crescimento_pct: 50 },
@@ -252,6 +328,7 @@ ok('etapa 4: preserva metricas atual e anterior em comparativo', () => {
 
   assert.ok(texto.includes('Faturamento Atual: *R$'), texto);
   assert.ok(texto.includes('Faturamento Anterior: *R$'), texto);
+  assert.ok(texto.includes('Crescimento %: *'), texto);
   assert.ok(!texto.includes('crescimento_pct'), texto);
 });
 
