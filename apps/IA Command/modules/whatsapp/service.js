@@ -2412,10 +2412,11 @@ class IACWhatsAppService extends EventEmitter {
   _textoPareceReporteDeErro(texto) {
     const t = String(texto || '')
       .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-    return /\b(esta|veio|ficou|deu)\s+errad[oa]\b|\bnao\s+esta\s+corret[oa]\b|\berro\s+n[ao]\s+(valor|calculo|sql)\b|\bdeveria\s+(ser|considerar|filtrar|trazer)\b|\bacho\s+que\s+(esta|tem)\s+errad[oa]\b/.test(t);
+    return /\b(esta|veio|ficou|deu|parece|ta|tah)\s+errad[oa]\b|\bnao\s+esta\s+corret[oa]\b|\berro\s+n[ao]\s+(valor|calculo|sql)\b|\bdeveria\s+(ser|considerar|filtrar|trazer)\b|\bacho\s+que\s+(esta|tem|ta)\s+errad[oa]\b|\bvalor\s+(esta|ta)\s+(diferente|estranho)\b|\bnao\s+confere\b|\bnao\s+bate\b|\bisso\s+(esta|ta)\s+errado\b/.test(t);
   }
 
   async _iniciarDialogoFeedback(sender, texto) {
+    const JANELA_ANCORAGEM_MS = 30 * 60 * 1000; // so ancora em consulta dos ultimos 30 minutos
     const interpretationLog = require('../ai/interpretation-log');
     const numeroWa = this._normalizarNumeroWa(sender);
     const ctxAtual = this._getSenderContext(sender) || {};
@@ -2430,6 +2431,13 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
     if (!registro) return null; // sem consulta recente para ancorar — segue fluxo normal
+    // criado_em pode vir sem timezone explicito (ex: edicao manual/migracao) — forca UTC quando
+    // o formato nao tiver "Z"/offset, para nao calcular idade negativa e ancorar indevidamente.
+    const criadoEmIso = /[zZ]|[+-]\d{2}:?\d{2}$/.test(String(registro.criado_em || ''))
+      ? registro.criado_em
+      : `${String(registro.criado_em || '').replace(' ', 'T')}Z`;
+    const idadeMs = Date.now() - new Date(criadoEmIso).getTime();
+    if (!Number.isFinite(idadeMs) || idadeMs < 0 || idadeMs > JANELA_ANCORAGEM_MS) return null; // consulta velha/invalida — nao ancora, segue fluxo normal
 
     const specFeedbackDialog = require('../erp/spec-feedback-dialog');
     const sql = registro.sql_final_executado || registro.sql_gerado || '';
