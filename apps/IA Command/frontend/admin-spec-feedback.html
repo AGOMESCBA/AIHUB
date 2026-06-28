@@ -190,7 +190,7 @@
                   <th><input data-filter="diagnostico_ia" autocomplete="off" spellcheck="false"></th>
                   <th><input data-filter="modulo" autocomplete="off" spellcheck="false"></th>
                   <th><input data-filter="fragmento_afetado" autocomplete="off" spellcheck="false"></th>
-                  <th><select data-filter="status" autocomplete="off"><option value="">Todos</option><option value="pendente">Pendente</option><option value="aprovado">Aprovado</option><option value="rejeitado">Rejeitado</option></select></th>
+                  <th><select data-filter="status" autocomplete="off"><option value="">Todos</option><option value="pendente">Pendente</option><option value="aprovado">Aprovado</option><option value="aplicado">Aplicado</option><option value="rejeitado">Rejeitado</option></select></th>
                 </tr>
               </thead>
               <tbody id="tbody"></tbody>
@@ -209,6 +209,7 @@
           <div class="editor-actions">
             <button class="btn btn-ghost" id="btn-rejeitar" type="button" style="color:#b91c1c">Rejeitar</button>
             <button class="btn btn-ghost" id="btn-aprovar" type="button" style="color:#15803d">Aprovar</button>
+            <button class="btn btn-ghost" id="btn-aplicar" type="button" style="color:#7c3aed">Aplicar ao spec</button>
             <button class="btn btn-ghost" id="back-btn" type="button">Voltar &agrave; lista</button>
           </div>
         </div>
@@ -258,6 +259,12 @@
         </div>
       </section>
     </div>
+  </div>
+</div>
+
+<div id="apply-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--bg-card);border-radius:var(--radius);max-width:760px;width:100%;max-height:88vh;overflow:auto;padding:20px;box-shadow:var(--shadow-sm);">
+    <div id="apply-modal-body"></div>
   </div>
 </div>
 
@@ -312,12 +319,13 @@
   }
 
   function statusLabel(value) {
-    return { pendente: 'Pendente', aprovado: 'Aprovado', rejeitado: 'Rejeitado' }[value] || value || '-';
+    return { pendente: 'Pendente', aprovado: 'Aprovado', aplicado: 'Aplicado no spec', rejeitado: 'Rejeitado' }[value] || value || '-';
   }
 
   function statusBadge(value) {
-    if (value === 'aprovado') return badge('Aprovado', 'badge-ok');
-    if (value === 'pendente') return badge('Pendente', 'badge-warn');
+    if (value === 'aplicado') return badge('Aplicado no spec', 'badge-ok');
+    if (value === 'aprovado') return badge('Aprovado', 'badge-warn');
+    if (value === 'pendente') return badge('Pendente', 'badge-muted');
     if (value === 'rejeitado') return badge('Rejeitado', 'badge-red');
     return badge(value || '-', 'badge-muted');
   }
@@ -593,6 +601,7 @@
     const podeRevisar = row.status === 'pendente';
     $('btn-aprovar').style.display = podeRevisar ? '' : 'none';
     $('btn-rejeitar').style.display = podeRevisar ? '' : 'none';
+    $('btn-aplicar').style.display = row.status === 'aprovado' ? '' : 'none';
 
     activateTab('general-tab');
   }
@@ -613,6 +622,74 @@
     $('list-view').style.display = '';
     state.detail = null;
     await loadRows();
+  }
+
+  function closeApplyModal() {
+    $('apply-modal').style.display = 'none';
+    $('apply-modal-body').innerHTML = '';
+  }
+
+  async function abrirModalAplicacao() {
+    if (!state.detail) return;
+    const id = state.detail.id;
+    const res = await fetch(`/api/ia-command/admin/spec-feedback/${encodeURIComponent(id)}/preview-aplicacao`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return alert(data.error || 'Erro ao gerar pre-visualizacao.');
+
+    const body = $('apply-modal-body');
+    if (!data.aplicavel) {
+      body.innerHTML = `
+        <h3 style="margin:0 0 10px;color:var(--text-hi);font-size:16px;">Não é possível aplicar automaticamente</h3>
+        <p style="color:var(--text-md);font-size:13.5px;line-height:1.5;">${esc(data.motivo || 'Motivo não informado.')}</p>
+        ${data.arquivo ? `<p style="color:var(--text-lo);font-size:12px;margin-top:8px;">Arquivo do spec: <code>${esc(data.arquivo)}</code></p>` : ''}
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+          <button class="btn btn-ghost" id="apply-modal-close" type="button">Entendi</button>
+        </div>`;
+      $('apply-modal-close').addEventListener('click', closeApplyModal);
+    } else {
+      body.innerHTML = `
+        <h3 style="margin:0 0 4px;color:var(--text-hi);font-size:16px;">Confirmar aplicação no spec</h3>
+        <p style="color:var(--text-lo);font-size:12px;margin:0 0 14px;">Arquivo: <code>${esc(data.arquivo)}</code> — função <code>${esc(data.nomeFuncao)}()</code></p>
+        <div class="split" style="min-height:160px;">
+          <div class="pane diff-atual">
+            <div class="pane-head"><span class="pane-title">Texto atual no arquivo</span></div>
+            <pre class="pane-body">${esc(data.textoAtualArquivo || '')}</pre>
+          </div>
+          <div class="pane diff-proposto">
+            <div class="pane-head"><span class="pane-title">Texto que será gravado</span></div>
+            <pre class="pane-body">${esc(data.textoProposto || '')}</pre>
+          </div>
+        </div>
+        <p style="color:var(--text-lo);font-size:12px;margin-top:10px;">Após confirmar, reinicie o serviço manualmente para a IA passar a usar o novo texto.</p>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+          <button class="btn btn-ghost" id="apply-modal-cancel" type="button">Cancelar</button>
+          <button class="btn btn-ghost" id="apply-modal-confirm" type="button" style="font-weight:700;color:#fff;background:#7c3aed;padding:6px 16px;border-radius:6px;">Confirmar e gravar no arquivo</button>
+        </div>`;
+      $('apply-modal-cancel').addEventListener('click', closeApplyModal);
+      $('apply-modal-confirm').addEventListener('click', () => confirmarAplicacao(id));
+    }
+    $('apply-modal').style.display = 'flex';
+  }
+
+  async function confirmarAplicacao(id) {
+    const btn = $('apply-modal-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Gravando...';
+    try {
+      const res = await fetch(`/api/ia-command/admin/spec-feedback/${encodeURIComponent(id)}/aplicar`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao aplicar a proposta.');
+      closeApplyModal();
+      alert('Spec atualizado com sucesso. Reinicie o serviço para a mudança valer.');
+      $('detail-view').classList.remove('open');
+      $('list-view').style.display = '';
+      state.detail = null;
+      await loadRows();
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Confirmar e gravar no arquivo';
+    }
   }
 
   function activateTab(id) {
@@ -726,6 +803,7 @@
     });
     $('btn-aprovar').addEventListener('click', () => definirStatus('aprovado').catch(err => alert(err.message)));
     $('btn-rejeitar').addEventListener('click', () => definirStatus('rejeitado').catch(err => alert(err.message)));
+    $('btn-aplicar').addEventListener('click', () => abrirModalAplicacao().catch(err => alert(err.message)));
     document.querySelectorAll('[data-filter]').forEach(el => {
       el.addEventListener('input', () => { state.filters[el.dataset.filter] = el.value; applyFilters(); });
       el.addEventListener('change', () => { state.filters[el.dataset.filter] = el.value; applyFilters(); });

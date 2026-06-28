@@ -712,6 +712,14 @@ const MIGRATIONS = [
         ON spec_feedback_propostas (empresa_id, status, criado_em);
     `,
   },
+  {
+    version: 44,
+    descricao: 'IA Command - aplicacao automatica de propostas de spec no arquivo de fragmentos',
+    sql: `
+      ALTER TABLE spec_feedback_propostas ADD COLUMN spec_aplicado_em      TEXT DEFAULT NULL;
+      ALTER TABLE spec_feedback_propostas ADD COLUMN spec_aplicado_arquivo TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

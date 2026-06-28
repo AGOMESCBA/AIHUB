@@ -82,6 +82,15 @@ function atualizarStatus(id, empresaId, status, revisadoPor = null) {
   return info.changes > 0;
 }
 
+function marcarAplicado(id, empresaId, arquivo) {
+  const info = getDB().prepare(`
+    UPDATE spec_feedback_propostas
+       SET status = 'aplicado', spec_aplicado_em = ?, spec_aplicado_arquivo = ?, atualizado_em = ?
+     WHERE id = ? AND empresa_id = ? AND status = 'aprovado'
+  `).run(agora(), arquivo, agora(), id, empresaId);
+  return info.changes > 0;
+}
+
 function excluirPorIds(empresaId, ids) {
   if (!Array.isArray(ids) || ids.length === 0) return 0;
   const db = getDB();
@@ -92,4 +101,4 @@ function excluirPorIds(empresaId, ids) {
   return info.changes || 0;
 }
 
-module.exports = { criarProposta, listar, obterPorId, atualizarStatus, excluirPorIds };
+module.exports = { criarProposta, listar, obterPorId, atualizarStatus, marcarAplicado, excluirPorIds };

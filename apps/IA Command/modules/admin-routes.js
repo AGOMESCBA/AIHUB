@@ -965,6 +965,39 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json({ ok: true });
   });
 
+  app.get('/api/ia-command/admin/spec-feedback/:id/preview-aplicacao', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const specFeedbackStore = require('./ai/spec-feedback-store');
+    const specFragmentApplier = require('./ai/spec-fragment-applier');
+    const empresaId = eid(req);
+    const row = specFeedbackStore.obterPorId(req.params.id, empresaId);
+    if (!row) return res.status(404).json({ error: `Proposta nao encontrada (empresa_id=${empresaId}).` });
+    if (row.status !== 'aprovado') {
+      return res.status(400).json({ error: 'Somente propostas com status "aprovado" podem ser pre-visualizadas para aplicacao.' });
+    }
+    const avaliacao = specFragmentApplier.avaliar({ modulo: row.modulo, fragmentoAfetado: row.fragmento_afetado });
+    res.json({ ...avaliacao, textoProposto: row.texto_proposto || null });
+  });
+
+  app.post('/api/ia-command/admin/spec-feedback/:id/aplicar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const specFeedbackStore = require('./ai/spec-feedback-store');
+    const specFragmentApplier = require('./ai/spec-fragment-applier');
+    const empresaId = eid(req);
+    const row = specFeedbackStore.obterPorId(req.params.id, empresaId);
+    if (!row) return res.status(404).json({ error: `Proposta nao encontrada (empresa_id=${empresaId}).` });
+    if (row.status !== 'aprovado') {
+      return res.status(400).json({ error: 'Somente propostas com status "aprovado" podem ser aplicadas.' });
+    }
+    const resultado = specFragmentApplier.aplicar({
+      modulo: row.modulo,
+      fragmentoAfetado: row.fragmento_afetado,
+      textoProposto: row.texto_proposto,
+    });
+    if (!resultado.ok) return res.status(400).json({ error: resultado.motivo || 'Nao foi possivel aplicar a proposta.' });
+    specFeedbackStore.marcarAplicado(req.params.id, empresaId, resultado.arquivo);
+    _audit(req, 'spec_feedback_aplicado', { id: req.params.id, modulo: row.modulo, fragmento: row.fragmento_afetado, arquivo: resultado.arquivo });
+    res.json({ ok: true, arquivo: resultado.arquivo, nomeFuncao: resultado.nomeFuncao });
+  });
+
   app.post('/api/ia-command/admin/spec-feedback/excluir-selecionados', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     const ids = req.body?.ids;
