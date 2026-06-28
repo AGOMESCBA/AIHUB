@@ -271,6 +271,33 @@ const sqlPatternsProibidos = [
       return null;
     },
   },
+  {
+    // Bug real confirmado em producao: a IA por vezes esquece o filtro de exclusao de banco
+    // mesmo com a regra textual no spec (mais provavel em continuidade de conversa). Extrai
+    // os codigos de banco que o usuario pediu para excluir/desconsiderar e exige que apareçam
+    // no NOT IN do SQL final — forca retry em vez de devolver resultado incompleto ao usuario.
+    validar(sql, mensagem) {
+      const texto = String(mensagem || '');
+      const usaSE8 = /\b(?:FROM|JOIN)\s+SE8/i.test(sql);
+      if (!usaSE8) return null;
+      const m = texto.match(/\b(?:desconsiderando|desconsidere|exclu(?:indo|a|ir)|removendo|remova|remover|tirando|tire|sem)\s+(?:os?\s+)?bancos?\s+([A-Za-z0-9, ]+?)(?:\s+e\s+([A-Za-z0-9]+))?\b/i);
+      if (!m) return null;
+      const codigos = [m[1], m[2]]
+        .filter(Boolean)
+        .flatMap(grupo => grupo.split(/[,e]+/i))
+        .map(c => c.trim().toUpperCase())
+        .filter(c => c && /^[A-Z0-9]+$/.test(c));
+      if (!codigos.length) return null;
+      const faltando = codigos.filter(cod => !new RegExp(`['"]${cod}['"]`, 'i').test(sql));
+      if (faltando.length) {
+        return (
+          `A pergunta pede para desconsiderar o(s) banco(s) ${faltando.join(', ')}, mas o SQL nao contem filtro de exclusao para ele(s). ` +
+          `Adicione (ou complete) a clausula SE8.E8_BANCO NOT IN (${codigos.map(c => `'${c}'`).join(', ')}) no WHERE/subquery de SE8.`
+        );
+      }
+      return null;
+    },
+  },
 ];
 
 module.exports = {
