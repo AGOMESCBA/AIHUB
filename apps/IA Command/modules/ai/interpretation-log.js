@@ -205,6 +205,21 @@ function obterPorId(id, empresaId) {
   `).get(id, empresaId) || null;
 }
 
+// Busca a ultima interpretacao de sucesso (com SQL gerado) deste remetente, usada pelos
+// comandos de WhatsApp "mostre o SQL usado" e pelo fluxo de reporte de erro do usuario.
+// numeroWa deve vir ja normalizado (mesmo formato gravado em numero_wa no registro).
+function obterUltimaComSqlPorSender(empresaId, numeroWa) {
+  if (!empresaId || !numeroWa) return null;
+  return getDB().prepare(`
+    SELECT *
+    FROM interpretation_log
+    WHERE empresa_id = ? AND numero_wa = ?
+      AND (sql_final_executado IS NOT NULL OR sql_gerado IS NOT NULL)
+    ORDER BY criado_em DESC
+    LIMIT 1
+  `).get(empresaId, numeroWa) || null;
+}
+
 function registrarFeedback(id, empresaId, feedback, observacao = null) {
   const permitido = new Set(['positivo', 'negativo', 'corrigido', 'ignorar']);
   const fb = permitido.has(String(feedback)) ? String(feedback) : 'corrigido';
@@ -255,4 +270,4 @@ function excluirPorIds(empresaId, ids) {
   return info.changes || 0;
 }
 
-module.exports = { registrar, listar, listarResumo, obterPorId, registrarFeedback, atualizarEntregue, limpar, excluirPorIds, camposInferidos, moduloDinamico, faseExecucao };
+module.exports = { registrar, listar, listarResumo, obterPorId, obterUltimaComSqlPorSender, registrarFeedback, atualizarEntregue, limpar, excluirPorIds, camposInferidos, moduloDinamico, faseExecucao };

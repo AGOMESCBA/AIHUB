@@ -129,6 +129,18 @@ function _textoResetExplicito(texto) {
   return /^(reset|\/reset|resetar|reiniciar|reinicia|recomecar|\/recomecar|limpar|limpar conversa|limpar tudo|limpar contexto|limpar cache|esquecer tudo|esqueca tudo|esquece tudo|nova conversa|novo inicio|comecar|comecar de novo|comecar novamente|parar consulta|pare a consulta|pode parar a consulta|cancelar consulta|cancela consulta|abortar consulta|pare|para|parar|\/pare|\/para|\/parar|stop|\/stop|cancelar|cancela|\/cancelar|abortar|\/abortar)$/.test(t);
 }
 
+// Reconhece pedido explicito para ver o SQL/consulta tecnica usada na ultima resposta.
+// Frase curta e isolada (igual ao padrao de RESET) — evita falso positivo em perguntas
+// de negocio que mencionem "sql" ou "consulta" de outro jeito.
+function _textoPedeSqlUsado(texto) {
+  const t = String(texto || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+  return /^(mostre? o sql( usado)?|mostrar o sql( usado)?|ver o sql( usado)?|qual( foi)? o sql( usado)?|qual( foi)? a consulta( usada)?|me mostr[ae] o sql|me mostr[ae] a consulta|mostre? a consulta( usada)?|\/sql)$/.test(t);
+}
+
 function _textoPareceNovaConsulta(texto) {
   const t = String(texto || '')
     .normalize('NFD')
@@ -2370,6 +2382,30 @@ class IACWhatsAppService extends EventEmitter {
     return respostaFilialFinal;
   }
 
+  // Responde ao pedido "mostre o SQL usado" buscando a ultima interpretacao com SQL
+  // gerado entre as empresas autorizadas para este sender neste canal. Memoriza o id
+  // do registro no contexto do sender para servir de ancora ao fluxo de reporte de erro
+  // (usuario pode, na sequencia, dizer o que estava errado naquele SQL especifico).
+  _responderSqlUsado(sender) {
+    const interpretationLog = require('../ai/interpretation-log');
+    const numeroWa = this._normalizarNumeroWa(sender);
+    const empresasDoSender = this._channelId
+      ? channelStore.listarEmpresasDoCanal(this._channelId).filter(e => channelStore.senderAutorizadoEmpresa(e.empresa_id, sender))
+      : [{ empresa_id: this._empresaId }];
+    let registro = null;
+    for (const emp of empresasDoSender) {
+      const candidato = interpretationLog.obterUltimaComSqlPorSender(emp.empresa_id, numeroWa);
+      if (candidato && (!registro || candidato.criado_em > registro.criado_em)) registro = candidato;
+    }
+    if (!registro) {
+      return 'Não encontrei nenhuma consulta recente sua com SQL registrado.';
+    }
+    this._setSenderContext(sender, { _ultimoSqlLogId: registro.id, _ultimoSqlEmpresaId: registro.empresa_id });
+    const sql = registro.sql_final_executado || registro.sql_gerado || '(SQL não registrado)';
+    const sqlTrim = sql.length > 3000 ? `${sql.slice(0, 3000)}\n... (truncado)` : sql;
+    return `📋 *SQL usado na sua última consulta:*\n\n_"${registro.texto_original}"_\n\n\`\`\`${sqlTrim}\`\`\`\n\nSe identificar algo errado, me diga o que deveria ser diferente e eu registro para análise técnica.`;
+  }
+
   async _responderEntidadePendente(sender, texto, empresaIdPadrao, t0) {
     const ctx = this._getSenderContext(sender);
     if (!ctx?._perguntaEntidadePendente || !ctx?._intentPendente || !Array.isArray(ctx._opcoesEntidade)) return null;
@@ -2801,6 +2837,10 @@ class IACWhatsAppService extends EventEmitter {
       this._senderContext.delete(this._sessionKey(sender));
       this.log(`🔄 Conversa resetada para ${sender}`, 'info');
       return '🔄 *Conversa reiniciada!*\n\nTodo o histórico foi apagado. Pode começar uma nova consulta.';
+    }
+
+    if (_textoPedeSqlUsado(textoExecucao)) {
+      return this._responderSqlUsado(sender);
     }
 
     const respostaEntidadePendente = await this._responderEntidadePendente(sender, textoExecucao, empresaId, _t0);
