@@ -684,6 +684,34 @@ const MIGRATIONS = [
       ALTER TABLE interpretation_log ADD COLUMN entregue_ms  INTEGER DEFAULT NULL;
     `,
   },
+  {
+    version: 43,
+    descricao: 'IA Command - propostas de correcao de spec a partir de feedback do usuario via WhatsApp',
+    sql: `
+      CREATE TABLE IF NOT EXISTS spec_feedback_propostas (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            INTEGER NOT NULL,
+        numero_wa             TEXT,
+        interpretation_log_id TEXT,
+        modulo                TEXT,
+        fragmento_afetado     TEXT,
+        pergunta_original     TEXT,
+        sql_gerado            TEXT,
+        observacao_usuario    TEXT,
+        diagnostico_ia        TEXT,
+        texto_atual           TEXT,
+        texto_proposto        TEXT,
+        historico_dialogo_json TEXT,
+        status                TEXT NOT NULL DEFAULT 'pendente',
+        revisado_por          TEXT,
+        revisado_em           TEXT,
+        criado_em             TEXT NOT NULL,
+        atualizado_em         TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_spec_feedback_empresa_status
+        ON spec_feedback_propostas (empresa_id, status, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

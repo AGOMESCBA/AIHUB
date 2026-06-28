@@ -2406,6 +2406,115 @@ class IACWhatsAppService extends EventEmitter {
     return `📋 *SQL usado na sua última consulta:*\n\n_"${registro.texto_original}"_\n\n\`\`\`${sqlTrim}\`\`\`\n\nSe identificar algo errado, me diga o que deveria ser diferente e eu registro para análise técnica.`;
   }
 
+  // Heuristica curta para detectar que o usuario esta contestando o resultado da
+  // ultima consulta (nao pedindo uma nova). So dispara se houver uma interpretacao
+  // recente com SQL para ancorar o dialogo — senao segue o fluxo normal.
+  _textoPareceReporteDeErro(texto) {
+    const t = String(texto || '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+    return /\b(esta|veio|ficou|deu)\s+errad[oa]\b|\bnao\s+esta\s+corret[oa]\b|\berro\s+n[ao]\s+(valor|calculo|sql)\b|\bdeveria\s+(ser|considerar|filtrar|trazer)\b|\bacho\s+que\s+(esta|tem)\s+errad[oa]\b/.test(t);
+  }
+
+  async _iniciarDialogoFeedback(sender, texto) {
+    const interpretationLog = require('../ai/interpretation-log');
+    const numeroWa = this._normalizarNumeroWa(sender);
+    const ctxAtual = this._getSenderContext(sender) || {};
+    let registro = ctxAtual._ultimoSqlLogId ? interpretationLog.obterPorId(ctxAtual._ultimoSqlLogId, ctxAtual._ultimoSqlEmpresaId) : null;
+    if (!registro) {
+      const empresasDoSender = this._channelId
+        ? channelStore.listarEmpresasDoCanal(this._channelId).filter(e => channelStore.senderAutorizadoEmpresa(e.empresa_id, sender))
+        : [{ empresa_id: this._empresaId }];
+      for (const emp of empresasDoSender) {
+        const candidato = interpretationLog.obterUltimaComSqlPorSender(emp.empresa_id, numeroWa);
+        if (candidato && (!registro || candidato.criado_em > registro.criado_em)) registro = candidato;
+      }
+    }
+    if (!registro) return null; // sem consulta recente para ancorar — segue fluxo normal
+
+    const specFeedbackDialog = require('../erp/spec-feedback-dialog');
+    const sql = registro.sql_final_executado || registro.sql_gerado || '';
+    const historico = [{ papel: 'usuario', texto }];
+    let resultado;
+    try {
+      resultado = await specFeedbackDialog.processarTurno({
+        empresaId: registro.empresa_id,
+        perguntaOriginal: registro.texto_original,
+        sqlGerado: sql,
+        modulo: registro.modulo || registro.intencao,
+        historico,
+      });
+    } catch (e) {
+      this.log(`[FeedbackDialog] Falha ao iniciar dialogo: ${e.message}`, 'error');
+      return null;
+    }
+    historico.push({ papel: 'ia', texto: resultado.mensagem });
+    if (resultado.tipo === 'fechamento') {
+      specFeedbackDialog.registrarProposta({
+        empresaId: registro.empresa_id,
+        numeroWa,
+        interpretationLogId: registro.id,
+        perguntaOriginal: registro.texto_original,
+        sqlGerado: sql,
+        observacaoUsuario: texto,
+        fragmento: resultado.fragmento,
+        diagnostico: resultado.diagnostico,
+        textoProposto: resultado.texto_proposto,
+        historico,
+      });
+      return resultado.mensagem;
+    }
+    this._setSenderContext(sender, {
+      _feedbackSession: {
+        interpretationLogId: registro.id,
+        empresaId: registro.empresa_id,
+        numeroWa,
+        perguntaOriginal: registro.texto_original,
+        sqlGerado: sql,
+        modulo: registro.modulo || registro.intencao,
+        historico,
+      },
+    });
+    return resultado.mensagem;
+  }
+
+  async _conduzirDialogoFeedback(sender, texto, sessao) {
+    const specFeedbackDialog = require('../erp/spec-feedback-dialog');
+    const historico = [...sessao.historico, { papel: 'usuario', texto }];
+    let resultado;
+    try {
+      resultado = await specFeedbackDialog.processarTurno({
+        empresaId: sessao.empresaId,
+        perguntaOriginal: sessao.perguntaOriginal,
+        sqlGerado: sessao.sqlGerado,
+        modulo: sessao.modulo,
+        historico,
+      });
+    } catch (e) {
+      this.log(`[FeedbackDialog] Falha ao continuar dialogo: ${e.message}`, 'error');
+      this._setSenderContext(sender, { _feedbackSession: null });
+      return 'Tive um problema para continuar essa análise. Pode repetir o que estava errado?';
+    }
+    historico.push({ papel: 'ia', texto: resultado.mensagem });
+    if (resultado.tipo === 'fechamento') {
+      specFeedbackDialog.registrarProposta({
+        empresaId: sessao.empresaId,
+        numeroWa: sessao.numeroWa,
+        interpretationLogId: sessao.interpretationLogId,
+        perguntaOriginal: sessao.perguntaOriginal,
+        sqlGerado: sessao.sqlGerado,
+        observacaoUsuario: historico.filter(h => h.papel === 'usuario').map(h => h.texto).join(' | '),
+        fragmento: resultado.fragmento,
+        diagnostico: resultado.diagnostico,
+        textoProposto: resultado.texto_proposto,
+        historico,
+      });
+      this._setSenderContext(sender, { _feedbackSession: null });
+      return resultado.mensagem;
+    }
+    this._setSenderContext(sender, { _feedbackSession: { ...sessao, historico } });
+    return resultado.mensagem;
+  }
+
   async _responderEntidadePendente(sender, texto, empresaIdPadrao, t0) {
     const ctx = this._getSenderContext(sender);
     if (!ctx?._perguntaEntidadePendente || !ctx?._intentPendente || !Array.isArray(ctx._opcoesEntidade)) return null;
@@ -2839,8 +2948,18 @@ class IACWhatsAppService extends EventEmitter {
       return '🔄 *Conversa reiniciada!*\n\nTodo o histórico foi apagado. Pode começar uma nova consulta.';
     }
 
+    const ctxFeedback = this._getSenderContext(sender);
+    if (ctxFeedback?._feedbackSession) {
+      return await this._conduzirDialogoFeedback(sender, textoExecucao, ctxFeedback._feedbackSession);
+    }
+
     if (_textoPedeSqlUsado(textoExecucao)) {
       return this._responderSqlUsado(sender);
+    }
+
+    if (this._textoPareceReporteDeErro(textoExecucao)) {
+      const iniciado = await this._iniciarDialogoFeedback(sender, textoExecucao);
+      if (iniciado) return iniciado;
     }
 
     const respostaEntidadePendente = await this._responderEntidadePendente(sender, textoExecucao, empresaId, _t0);
