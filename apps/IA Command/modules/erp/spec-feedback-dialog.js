@@ -55,7 +55,7 @@ function buildSystemPrompt({ perguntaOriginal, sqlGerado, fragmento }) {
     'Nao se desculpe excessivamente, nao repita a pergunta do usuario, nao use linguagem robotica como "Por favor, informe" ou "Selecione uma opcao".',
     'CRITERIO DE FECHAMENTO — feche (tipo="fechamento") assim que voce conseguir articular, em UMA frase, qual regra de negocio do SQL esta errada e qual seria a regra correta. Voce JA TEM o SQL e o spec tecnico nesta mensagem — nao pergunte ao usuario coisas que voce mesmo pode verificar lendo o SQL (ex: "o SQL filtra X?" — olhe o SQL e responda voce mesmo). So pergunte ao usuario o que SOMENTE ele sabe: a intencao de negocio, o resultado esperado, qual exemplo concreto esta errado.',
     'Quando o usuario confirmar ou reformular sua hipotese ("isso mesmo", "exatamente", "e isso"), isso normalmente JA E sinal suficiente para fechar — nao faca mais uma pergunta de confirmacao depois disso.',
-    'Se o usuario claramente nao quer continuar ou mudou de assunto, feche mesmo sem diagnostico completo, marcando incerteza no diagnostico.',
+    'IMPORTANTE — mudanca de assunto: se a mensagem mais recente do usuario for claramente uma NOVA pergunta de negocio (ex: pedir outro relatorio, outro periodo, outro modulo) e nao uma continuacao do reporte de erro, isso significa que ele abandonou o reporte. Nesse caso use tipo="abandono" — nao invente diagnostico, nao gere texto_proposto.',
     '',
     `Pergunta original do usuario que gerou o SQL: "${perguntaOriginal}"`,
     '',
@@ -67,14 +67,14 @@ function buildSystemPrompt({ perguntaOriginal, sqlGerado, fragmento }) {
     '',
     'Retorne SOMENTE JSON valido, sem markdown, no formato:',
     '{',
-    '  "tipo": "pergunta" | "fechamento",',
+    '  "tipo": "pergunta" | "fechamento" | "abandono",',
     '  "mensagem": string,',
     '  "diagnostico": string | null,',
     '  "texto_proposto": string | null',
     '}',
-    '- "mensagem": o que voce diria ao usuario agora (sempre em portugues, tom natural de conversa).',
-    '- Quando tipo="fechamento": "diagnostico" resume o problema real identificado, e "texto_proposto" e o texto candidato de correcao da regra do spec (mesmo estilo do trecho de spec mostrado acima — direto, tecnico, sem floreio). Se nao houver certeza suficiente, "texto_proposto" pode ser null e o diagnostico deve dizer isso.',
-    '- Quando tipo="pergunta": "diagnostico" e "texto_proposto" devem ser null.',
+    '- "mensagem": o que voce diria ao usuario agora (sempre em portugues, tom natural de conversa). Quando tipo="abandono", deixe "mensagem" vazia ("") — o sistema vai processar a nova pergunta normalmente, sem precisar de uma resposta sua aqui.',
+    '- Quando tipo="fechamento": "diagnostico" resume o problema real identificado, e "texto_proposto" e o texto candidato de correcao da regra do spec (mesmo estilo do trecho de spec mostrado acima — direto, tecnico, sem floreio). Se nao houver certeza suficiente mas o usuario quis mesmo assim encerrar o reporte, "texto_proposto" pode ser null e o diagnostico deve dizer isso.',
+    '- Quando tipo="pergunta" ou "abandono": "diagnostico" e "texto_proposto" devem ser null.',
   ].filter(Boolean).join('\n');
 }
 
@@ -104,9 +104,10 @@ async function processarTurno({ empresaId, perguntaOriginal, sqlGerado, modulo, 
   } catch (_) {
     obj = { tipo: 'pergunta', mensagem: 'Pode reformular o que percebeu de errado? Não consegui entender bem.', diagnostico: null, texto_proposto: null };
   }
+  const tipo = ['fechamento', 'abandono'].includes(obj.tipo) ? obj.tipo : 'pergunta';
   return {
-    tipo: obj.tipo === 'fechamento' ? 'fechamento' : 'pergunta',
-    mensagem: String(obj.mensagem || '').trim() || 'Pode me dar mais detalhes sobre o que está errado?',
+    tipo,
+    mensagem: tipo === 'abandono' ? '' : (String(obj.mensagem || '').trim() || 'Pode me dar mais detalhes sobre o que está errado?'),
     diagnostico: obj.diagnostico || null,
     texto_proposto: obj.texto_proposto || null,
     fragmento,

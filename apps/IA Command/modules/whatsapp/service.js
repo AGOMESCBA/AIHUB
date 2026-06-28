@@ -2494,6 +2494,12 @@ class IACWhatsAppService extends EventEmitter {
       this._setSenderContext(sender, { _feedbackSession: null });
       return 'Tive um problema para continuar essa análise. Pode repetir o que estava errado?';
     }
+    if (resultado.tipo === 'abandono') {
+      // Usuario mudou de assunto: encerra a sessao de feedback silenciosamente e
+      // reprocessa a mensagem atual pelo pipeline normal de consulta.
+      this._setSenderContext(sender, { _feedbackSession: null });
+      return await this._pipeline(texto, sender, {});
+    }
     historico.push({ papel: 'ia', texto: resultado.mensagem });
     if (resultado.tipo === 'fechamento') {
       specFeedbackDialog.registrarProposta({

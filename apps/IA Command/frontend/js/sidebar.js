@@ -8,6 +8,7 @@
         { id: 'iac-dashboard',        label: 'Dashboard',        href: '/app/ia-command/dashboard.html',             icon: '⊞' },
         { id: 'iac-monitor-whatsapp', label: 'Monitor',          href: '/app/ia-command/monitor.html',               icon: '💬' },
         { id: 'iac-admin-auditoria',  label: 'Histórico',        href: '/app/ia-command/admin-interpretacoes-v2.html',  icon: '🧭' },
+        { id: 'iac-admin-spec-feedback', label: 'Propostas de Correção', href: '/app/ia-command/admin-spec-feedback.html', icon: '🛠️' },
       ],
     },
     {
@@ -61,6 +62,7 @@
       items: [
         { id: 'iac-admin-execucoes',          label: 'Log Execuções',            href: '/app/ia-command/admin-execucoes.html',          icon: '📋' },
         { id: 'iac-admin-auditoria',          label: 'Interpretações',           href: '/app/ia-command/admin-interpretacoes-v2.html',     icon: '🧭' },
+        { id: 'iac-admin-spec-feedback',      label: 'Propostas de Correção',    href: '/app/ia-command/admin-spec-feedback.html',       icon: '🛠️' },
         { id: 'iac-admin-auditoria',          label: 'Auditoria',                href: '/app/ia-command/admin-auditoria.html',           icon: '🔍' },
         { id: 'iac-admin-dialogos',           label: 'Diálogos Conversacionais', href: '/app/ia-command/admin-dialogos.html',            icon: '💬' },
         { id: 'iac-console-servidor',         label: 'Console do Servidor',      href: '/app/ia-command/console-servidor.html',          icon: '🖥' },

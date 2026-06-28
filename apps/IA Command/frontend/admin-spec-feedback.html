@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Propostas de Correção de Spec - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px;flex-wrap:wrap; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi); }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    select.status-filter { height:34px;border:1px solid var(--border);border-radius:7px;background:var(--bg-card);color:var(--text-hi);padding:0 10px;font-size:13px; }
+
+    .proposta-list { display:flex;flex-direction:column;gap:10px; }
+    .proposta-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:14px 16px;cursor:pointer; }
+    .proposta-card:hover { border-color:var(--accent); }
+    .proposta-card .row1 { display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px; }
+    .proposta-card .pergunta { font-weight:700;color:var(--text-hi);font-size:14px; }
+    .proposta-card .meta { font-size:11px;color:var(--text-lo);display:flex;gap:8px;flex-wrap:wrap;margin-top:4px; }
+    .badge { display:inline-flex;align-items:center;justify-content:center;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-warn { background:#fef3c7;color:#92400e; }
+    .badge-red { background:#fee2e2;color:#b91c1c; }
+    .diagnostico { font-size:13px;color:var(--text-md);margin-top:6px;line-height:1.4; }
+    .empty { text-align:center;color:var(--text-lo);padding:60px 20px;font-size:14px; }
+
+    .modal-overlay { display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:20px; }
+    .modal-overlay.open { display:flex; }
+    .modal-box { background:var(--bg-card);border-radius:var(--radius);max-width:760px;width:100%;max-height:88vh;overflow:auto;padding:22px; }
+    .modal-box h2 { margin:0 0 14px;font-size:17px;color:var(--text-hi); }
+    .modal-section { margin-bottom:16px; }
+    .modal-section h3 { font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-lo);margin:0 0 6px; }
+    .modal-section pre { background:var(--bg-base);border:1px solid var(--border);border-radius:7px;padding:10px;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:240px;overflow:auto; }
+    .diff-block { display:flex;flex-direction:column;gap:8px; }
+    .diff-atual { border-left:3px solid #dc2626; }
+    .diff-proposto { border-left:3px solid #16a34a; }
+    .modal-actions { display:flex;gap:10px;justify-content:flex-end;margin-top:18px; }
+    .btn { height:36px;border-radius:7px;border:1px solid var(--border);background:var(--bg-base);color:var(--text-hi);font-size:13px;font-weight:700;padding:0 16px;cursor:pointer; }
+    .btn-primary { background:var(--accent);border-color:var(--accent);color:#fff; }
+    .btn-danger { background:#dc2626;border-color:#dc2626;color:#fff; }
+    .btn-ghost { background:transparent; }
+    .modal-close { position:absolute;top:14px;right:16px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-lo); }
+  </style>
+</head>
+<body>
+  <div id="sidebar-root"></div>
+  <div class="app-main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" id="menu-toggle">☰</button>
+      <div class="topbar-title">Propostas de Correção de Spec</div>
+    </div>
+    <div class="page-content">
+      <div class="page-kicker">IA Command · Feedback Técnico</div>
+      <div class="head-row">
+        <div class="head-title">Propostas de Correção de Spec</div>
+        <div class="head-actions">
+          <select class="status-filter" id="status-filter">
+            <option value="pendente">Pendentes</option>
+            <option value="aprovado">Aprovadas</option>
+            <option value="rejeitado">Rejeitadas</option>
+            <option value="">Todas</option>
+          </select>
+          <button class="btn" id="refresh-btn">Atualizar</button>
+        </div>
+      </div>
+      <div class="proposta-list" id="proposta-list"></div>
+      <div class="empty" id="empty-state" style="display:none;">Nenhuma proposta encontrada para este filtro.</div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" id="modal-close">×</button>
+      <h2 id="modal-pergunta"></h2>
+      <div class="modal-section">
+        <h3>Diagnóstico da IA</h3>
+        <div id="modal-diagnostico" style="font-size:13px;color:var(--text-md);"></div>
+      </div>
+      <div class="modal-section">
+        <h3>SQL gerado</h3>
+        <pre id="modal-sql"></pre>
+      </div>
+      <div class="modal-section diff-block">
+        <div>
+          <h3>Texto atual do spec (fragmento: <span id="modal-fragmento"></span>)</h3>
+          <pre class="diff-atual" id="modal-texto-atual"></pre>
+        </div>
+        <div>
+          <h3>Texto proposto pela IA</h3>
+          <pre class="diff-proposto" id="modal-texto-proposto"></pre>
+        </div>
+      </div>
+      <div class="modal-section">
+        <h3>Conversa com o usuário</h3>
+        <pre id="modal-historico"></pre>
+      </div>
+      <div class="modal-actions" id="modal-actions">
+        <button class="btn btn-ghost" id="btn-fechar">Fechar</button>
+        <button class="btn btn-danger" id="btn-rejeitar">Rejeitar</button>
+        <button class="btn btn-primary" id="btn-aprovar">Aprovar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/sidebar.js"></script>
+  <script>
+    let propostaAtualId = null;
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function fmtData(iso) {
+      if (!iso) return '-';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      const p = n => String(n).padStart(2, '0');
+      return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    function badgeStatus(status) {
+      const cls = { pendente: 'badge-warn', aprovado: 'badge-ok', rejeitado: 'badge-red' }[status] || 'badge-warn';
+      const label = { pendente: 'Pendente', aprovado: 'Aprovado', rejeitado: 'Rejeitado' }[status] || status;
+      return `<span class="badge ${cls}">${esc(label)}</span>`;
+    }
+
+    function renderHistorico(historicoJson) {
+      let historico = [];
+      try { historico = JSON.parse(historicoJson || '[]'); } catch (_) {}
+      return historico.map(h => `${h.papel === 'usuario' ? 'Usuário' : 'IA'}: ${h.texto}`).join('\n');
+    }
+
+    async function loadPropostas() {
+      const status = document.getElementById('status-filter').value;
+      const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+      const res = await fetch(`/api/ia-command/admin/spec-feedback${qs}`);
+      const rows = await res.json();
+      const list = document.getElementById('proposta-list');
+      const empty = document.getElementById('empty-state');
+      if (!Array.isArray(rows) || !rows.length) {
+        list.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+      empty.style.display = 'none';
+      list.innerHTML = rows.map(r => `
+        <div class="proposta-card" data-id="${esc(r.id)}">
+          <div class="row1">
+            <div class="pergunta">${esc(r.pergunta_original || '(sem pergunta registrada)')}</div>
+            ${badgeStatus(r.status)}
+          </div>
+          <div class="diagnostico">${esc(r.diagnostico_ia || '(sem diagnóstico)')}</div>
+          <div class="meta">
+            <span>${esc(r.modulo || '-')} ${r.fragmento_afetado ? '· ' + esc(r.fragmento_afetado) : ''}</span>
+            <span>${esc(r.numero_wa || '-')}</span>
+            <span>${fmtData(r.criado_em)}</span>
+          </div>
+        </div>
+      `).join('');
+      list.querySelectorAll('.proposta-card').forEach(card => {
+        card.addEventListener('click', () => abrirModal(card.dataset.id));
+      });
+    }
+
+    async function abrirModal(id) {
+      const res = await fetch(`/api/ia-command/admin/spec-feedback/${encodeURIComponent(id)}`);
+      if (!res.ok) return;
+      const r = await res.json();
+      propostaAtualId = r.id;
+      document.getElementById('modal-pergunta').textContent = r.pergunta_original || '(sem pergunta)';
+      document.getElementById('modal-diagnostico').textContent = r.diagnostico_ia || '(sem diagnóstico)';
+      document.getElementById('modal-sql').textContent = r.sql_gerado || '(sem SQL registrado)';
+      document.getElementById('modal-fragmento').textContent = r.fragmento_afetado || '-';
+      document.getElementById('modal-texto-atual').textContent = r.texto_atual || '(fragmento não identificado)';
+      document.getElementById('modal-texto-proposto').textContent = r.texto_proposto || '(sem proposta de texto)';
+      document.getElementById('modal-historico').textContent = renderHistorico(r.historico_dialogo_json) || '(sem histórico)';
+      const actions = document.getElementById('modal-actions');
+      const podeRevisar = r.status === 'pendente';
+      document.getElementById('btn-aprovar').style.display = podeRevisar ? '' : 'none';
+      document.getElementById('btn-rejeitar').style.display = podeRevisar ? '' : 'none';
+      document.getElementById('modal-overlay').classList.add('open');
+    }
+
+    function fecharModal() {
+      document.getElementById('modal-overlay').classList.remove('open');
+      propostaAtualId = null;
+    }
+
+    async function definirStatus(status) {
+      if (!propostaAtualId) return;
+      await fetch(`/api/ia-command/admin/spec-feedback/${encodeURIComponent(propostaAtualId)}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      fecharModal();
+      loadPropostas();
+    }
+
+    document.getElementById('status-filter').addEventListener('change', loadPropostas);
+    document.getElementById('refresh-btn').addEventListener('click', loadPropostas);
+    document.getElementById('modal-close').addEventListener('click', fecharModal);
+    document.getElementById('btn-fechar').addEventListener('click', fecharModal);
+    document.getElementById('btn-aprovar').addEventListener('click', () => definirStatus('aprovado'));
+    document.getElementById('btn-rejeitar').addEventListener('click', () => definirStatus('rejeitado'));
+    document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target.id === 'modal-overlay') fecharModal(); });
+
+    loadPropostas();
+  </script>
+</body>
+</html>

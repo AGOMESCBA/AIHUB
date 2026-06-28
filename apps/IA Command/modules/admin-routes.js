@@ -935,6 +935,36 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json(row);
   });
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // PROPOSTAS DE CORRECAO DE SPEC (feedback tecnico via WhatsApp)
+  // ────────────────────────────────────────────────────────────────────────────
+
+  app.get('/api/ia-command/admin/spec-feedback', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const specFeedbackStore = require('./ai/spec-feedback-store');
+    res.json(specFeedbackStore.listar(eid(req), {
+      status: req.query.status,
+      limit: req.query.limit,
+    }));
+  });
+
+  app.get('/api/ia-command/admin/spec-feedback/:id', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const specFeedbackStore = require('./ai/spec-feedback-store');
+    const empresaId = eid(req);
+    const row = specFeedbackStore.obterPorId(req.params.id, empresaId);
+    if (!row) return res.status(404).json({ error: `Proposta nao encontrada (empresa_id=${empresaId}).` });
+    res.json(row);
+  });
+
+  app.post('/api/ia-command/admin/spec-feedback/:id/status', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const specFeedbackStore = require('./ai/spec-feedback-store');
+    const empresaId = eid(req);
+    const status = String(req.body.status || '').trim();
+    const ok = specFeedbackStore.atualizarStatus(req.params.id, empresaId, status, req.session?.username || req.session?.user || null);
+    if (!ok) return res.status(404).json({ error: 'Proposta nao encontrada ou status invalido.' });
+    _audit(req, 'spec_feedback_status', { id: req.params.id, status });
+    res.json({ ok: true });
+  });
+
   // ── COMPRAS — Consultas Text-to-SQL ─────────────────────────────────────────
   const canCompras = requireRotina('iac-admin-compras');
 
