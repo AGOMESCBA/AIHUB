@@ -841,6 +841,23 @@ class IACWhatsAppService extends EventEmitter {
     };
   }
 
+  // Reconhece a empresa pelo ALIAS curto cadastrado (ex: "J2A", "C3I") como palavra isolada
+  // no texto, sem exigir a palavra "empresa" antes (ex: "o valor da J2A veio errado").
+  // Restrito a alias (nao ao nome completo) para evitar falso positivo com palavras comuns
+  // que poderiam aparecer em nomes completos de empresa.
+  _resolverEmpresaPorAliasIsolado(texto, empresas = []) {
+    const normalizado = _normalizarBuscaEmpresa(texto);
+    if (!normalizado) return null;
+    const tokens = new Set(normalizado.split(/\s+/).filter(Boolean));
+    const candidatos = (empresas || []).filter(empresa => {
+      const aliases = String(empresa?.aliases || '').split(',').map(a => _normalizarBuscaEmpresa(a)).filter(Boolean);
+      return aliases.some(alias => tokens.has(alias));
+    });
+    if (!candidatos.length) return null;
+    if (candidatos.length > 1) return { status: 'ambiguous', termo: candidatos.map(e => e.nome || e.empresa_id).join('/'), empresas: candidatos };
+    return { status: 'resolved', empresa: candidatos[0], empresaId: candidatos[0].empresa_id, origem: 'alias_isolado' };
+  }
+
   _resolverEmpresasQualificadasNoTexto(texto, empresas = []) {
     const original = String(texto || '');
     const normalizado = _normalizarBuscaEmpresa(original);
@@ -2945,7 +2962,8 @@ class IACWhatsAppService extends EventEmitter {
           });
         }
       }
-      const empresaQualificada = this._resolverEmpresaQualificadaNoTexto(textoExecucao, empresasDoSender);
+      const empresaQualificada = this._resolverEmpresaQualificadaNoTexto(textoExecucao, empresasDoSender)
+        || this._resolverEmpresaPorAliasIsolado(textoExecucao, empresasDoSender);
       if (empresaQualificada?.status === 'not_found') {
         // "empresa X" mencionado mas X não é um tenant do canal → X é uma entidade cadastral
         // (cliente, fornecedor etc.). Preserva a empresa da sessão atual para não re-rotear
