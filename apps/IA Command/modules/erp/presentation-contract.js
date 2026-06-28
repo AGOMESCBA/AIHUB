@@ -39,7 +39,7 @@ const METRICS = [
   { canon: 'comissao', label: 'Comissao', type: 'money', totalRule: 'sum', aliases: ['comissao', 'total_comissao', 'valor_comissao', 'e3_comis'] },
   { canon: 'entradas', label: 'Entradas', type: 'money', totalRule: 'sum', aliases: ['entrada', 'entradas', 'valor_entrada', 'total_entrada', 'valor_receber', 'total_receber'] },
   { canon: 'saidas', label: 'Saidas', type: 'money', totalRule: 'sum', aliases: ['saida', 'saidas', 'valor_saida', 'total_saida', 'valor_pagar', 'total_pagar'] },
-  { canon: 'saldo', label: 'Saldo', type: 'money', totalRule: 'sum', aliases: ['saldo', 'saldo_atual', 'salatua'] },
+  { canon: 'saldo', label: 'Saldo', type: 'money', totalRule: 'sum', aliases: ['saldo', 'saldo_atual', 'salatua', 'e8_salatua'] },
   { canon: 'saldo_bancario_base', label: 'Saldo Bancario Base', type: 'money', totalRule: 'first', aliases: ['saldo_bancario_base', 'saldo_base', 'base_saldo_bancario'] },
   { canon: 'fluxo_liquido', label: 'Fluxo Liquido', type: 'money', totalRule: 'last', aliases: ['fluxo_liquido', 'saldo_projetado', 'saldo_final', 'saldo_final_projetado'] },
   { canon: 'crescimento_valor', label: 'Crescimento Valor', type: 'money', totalRule: 'ignore', aliases: ['crescimento_valor', 'variacao_valor', 'valor_crescimento', 'valor_variacao'] },

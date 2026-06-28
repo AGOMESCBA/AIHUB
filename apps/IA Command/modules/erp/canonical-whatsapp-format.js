@@ -236,6 +236,8 @@ function isCategoriaSemantica(col) {
 }
 
 const CATEGORIAS_SEMANTICAS = [
+  { match: /^(faturamento)$/i, label: 'Faturamento', ordem: 5 },
+  { match: /^(compra|compras)$/i, label: 'Compras', ordem: 6 },
   { match: /^(pagar|pagamento|pago|contas?_?a?_?pagar)$/i, aberto: 'A pagar', realizado: 'Pago', ordem: 10 },
   { match: /^(receber|recebimento|recebido|contas?_?a?_?receber)$/i, aberto: 'A receber', realizado: 'Recebido', ordem: 20 },
   { match: /^(entrada|entradas|in|credito|creditos|cr[eé]dito)$/i, label: 'Entrada', ordem: 30 },
@@ -427,6 +429,26 @@ function valsMetricas(totais, metricas) {
   return metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
 }
 
+function valsMetricasPorCategoria(totais, metricas, categoria) {
+  return metricas.map(col => `${labelMetricaCategoria(col, categoria)}: *${fmt(col, totais[col])}*`).join(' | ');
+}
+
+function totaisPorCategoria(grupos, metricas) {
+  const out = new Map();
+  for (const [categoria, grupo] of grupos.entries()) {
+    for (const col of metricas) {
+      const label = labelMetricaCategoria(col, categoria);
+      out.set(label, (out.get(label) || 0) + toNumber(grupo.total?.[col]));
+    }
+  }
+  return [...out.entries()]
+    .sort(([a], [b]) => ordemCategoriaLabel(a) - ordemCategoriaLabel(b) || a.localeCompare(b));
+}
+
+function valsTotaisPorCategoria(entradas) {
+  return entradas.map(([label, valor]) => `${label}: *${brl(valor)}*`).join(' | ');
+}
+
 function colBaseCrescimento(metricas = []) {
   const prioridade = ['faturamento', 'total_faturamento', 'receita', 'valor_faturamento', 'total_receita'];
   const byNorm = new Map(metricas.map(col => [keyNorm(col), col]));
@@ -497,28 +519,6 @@ function observacaoCrescimentoPorEmpresa() {
   return '_Obs.: no Por Empresa, o Crescimento Valor e o Crescimento % comparam a primeira e a ultima competencia exibidas para cada empresa; percentuais nao sao somados._';
 }
 
-function textoConsulta(opts = {}) {
-  return norm(`${opts.mensagem || ''} ${opts.contextoConsulta || ''}`);
-}
-
-function pediuDetalheDiario(opts = {}) {
-  const msg = textoConsulta(opts);
-  return /\b(por|detalh\w*|abr\w*|dia\s+a\s+dia)\s+(dia|diario|diaria|dias)\b/.test(msg)
-    || /\b(dia|diario|diaria|dias)\s+(a\s+dia|detalh\w*)\b/.test(msg);
-}
-
-function isDimensaoDiaria(dim) {
-  const k = keyNorm(dim);
-  return /^(dia|data|data_.*|dt_.*|.*_data)$/.test(k);
-}
-
-function deveResumirTemporalLongo(dim, metricas, quantidade, opts = {}) {
-  if (!isDimensaoDiaria(dim)) return false;
-  if (!temMetricaPosicional(metricas)) return false;
-  if (pediuDetalheDiario(opts)) return false;
-  return quantidade > 10;
-}
-
 function chaveMetricaCanonica(col) {
   const k = keyNorm(col);
   const doContrato = presentation.canonicalMetric(col);
@@ -569,6 +569,7 @@ function labelDimensaoCanonica(canon, col) {
 }
 
 function alinharMetricasSucessos(sucessos, shapes, opts = {}) {
+  if (!Array.isArray(shapes) || shapes.some(shape => !shape)) return { sucessos, shapes };
   const metricasBase = shapes[0]?.metricas || [];
   const canonBase = metricasBase.map(col => chaveMetricaCanonicaContextual(col, opts));
   const mapaBase = new Map(canonBase.map((canon, idx) => [canon, metricasBase[idx]]));
@@ -820,12 +821,13 @@ function renderAllShapesMistos(sucessos, shapes, opts = {}) {
 
   linhas.push('');
   linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricasCanonicas(totalGeral, metricasCanonTotal, opts)}`);
-  linhas.push(`*Total Geral*: ${valsMetricasCanonicas(totalGeral, metricasCanonTotal, opts)}`);
   linhas.push('');
   linhas.push('\u{1F3E2} *Por Empresa*');
   for (const [nome, totais, count] of porEmpresa) {
     linhas.push(`  - ${nome}: ${valsMetricasCanonicas(totais, metricasCanonTotal, opts)} (${count} reg.)`);
   }
+  linhas.push('');
+  linhas.push(`*Total Geral*: ${valsMetricasCanonicas(totalGeral, metricasCanonTotal, opts)}`);
   return linhas.join('\n');
 }
 
@@ -951,6 +953,7 @@ function renderDuasDimensoes(rows, shape, linhas) {
   const { outerDim, innerDim, grupos, totalGeral } = montarDuasDimensoes(rows, shape);
   const primary = shape.metricas[0];
   const detalheDoc = shape.tipo === 'detalhe_documento';
+  const outerEhCategoria = isCategoriaSemantica(outerDim);
   const titulo = detalheDoc
     ? `Detalhamento por ${labelDimensao(outerDim)} e Documento`
     : `Por ${labelDimensao(outerDim)} e ${labelDimensao(innerDim)}`;
@@ -958,21 +961,26 @@ function renderDuasDimensoes(rows, shape, linhas) {
   linhas.push(`\u{1F4CB} *${titulo}*`);
   const gruposOrdenados = ordenarEntradasDimensao([...grupos.entries()], outerDim, primary);
   gruposOrdenados.slice(0, 50).forEach(([outer, grupo], idxGrupo) => {
+    const valsGrupo = outerEhCategoria ? valsMetricasPorCategoria(grupo.total, shape.metricas, outer) : valsMetricas(grupo.total, shape.metricas);
     linhas.push('');
-    linhas.push(`${idxGrupo + 1}. *${labelValorDimensao(outerDim, outer)}*: ${valsMetricas(grupo.total, shape.metricas)}`);
+    linhas.push(`${idxGrupo + 1}. *${labelValorDimensao(outerDim, outer)}*: ${valsGrupo}`);
 
     const itensOrdenados = ordenarEntradasDimensao([...grupo.itens.entries()], innerDim, primary);
     itensOrdenados.slice(0, 50).forEach(([inner, totais], idxItem) => {
       const label = detalheDoc ? labelDocumento(inner) : labelValorDimensao(innerDim, inner);
-      linhas.push(`   ${idxItem + 1}. ${label}: ${valsMetricas(totais, shape.metricas)}`);
+      const valsItem = outerEhCategoria ? valsMetricasPorCategoria(totais, shape.metricas, outer) : valsMetricas(totais, shape.metricas);
+      linhas.push(`   ${idxItem + 1}. ${label}: ${valsItem}`);
     });
     if (itensOrdenados.length > 50) linhas.push(`   ... e mais ${itensOrdenados.length - 50}`);
-    linhas.push(`   \u{1F9FE} Subtotal: ${valsMetricas(grupo.total, shape.metricas)}`);
+    linhas.push(`   \u{1F9FE} Subtotal: ${valsGrupo}`);
   });
   if (gruposOrdenados.length > 50) linhas.push(`... e mais ${gruposOrdenados.length - 50}`);
 
   linhas.push('');
-  linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
+  const totalStr = outerEhCategoria
+    ? valsTotaisPorCategoria(totaisPorCategoria(grupos, shape.metricas))
+    : valsMetricas(totalGeral, shape.metricas);
+  linhas.push(`*Total Geral*: ${totalStr}`);
 }
 
 function montarMultiplasDimensoes(rows, shape) {
@@ -1078,16 +1086,6 @@ function renderSingle(rows, opts = {}) {
   if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
 
   const metricasTotal = metricasTotalizaveis(shape.metricas);
-  if (dimTemporal && deveResumirTemporalLongo(dim, shape.metricas, entradas.length, opts)) {
-    const totaisResumo = totalTemporalOrdenado(entradas, metricasTotal);
-    linhas.push('\u{1F4CA} *Resumo*');
-    linhas.push(...renderMetricas(totaisResumo, metricasTotal));
-    linhas.push('');
-    linhas.push(`\u{1F9FE} *Subtotal*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totaisResumo[col])}*`).join(' | ')}`);
-    linhas.push(`*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totaisResumo[col])}*`).join(' | ')}`);
-    return linhas.join('\n');
-  }
-
   linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
   entradas.slice(0, 50).forEach(([label, totais], idx) => {
     const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
@@ -1237,21 +1235,6 @@ function renderAll(sucessos, opts = {}) {
       }
     }
 
-    if (deveResumirTemporalLongo(dim, shape.metricas, entradas.length, opts)) {
-      linhas.push('\u{1F4CA} *Resumo*');
-      linhas.push(...renderMetricas(totalGeral, shape.metricas));
-      linhas.push('');
-      linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
-      linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
-      linhas.push('');
-      linhas.push('\u{1F3E2} *Por Empresa*');
-      for (const s of sucessos) {
-        const totaisEmpresa = totalTemporalRows(s.rows, dim, shape.metricas);
-        linhas.push(`  - ${s.nomeEmpresa}: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totaisEmpresa[col] || 0)}*`).join(' | ')}`);
-      }
-      return linhas.join('\n');
-    }
-
     linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
     entradas.slice(0, 50).forEach(([label, totais], idx) => {
       const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col] || 0)}*`).join(' | ');
@@ -1260,13 +1243,14 @@ function renderAll(sucessos, opts = {}) {
     if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
     linhas.push('');
     linhas.push(`\u{1F9FE} *Subtotal*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
-    linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
     linhas.push('');
     linhas.push('\u{1F3E2} *Por Empresa*');
     for (const s of sucessos) {
       const totaisEmpresa = totalTemporalRows(s.rows, dim, shape.metricas);
       linhas.push(`  - ${s.nomeEmpresa}: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totaisEmpresa[col] || 0)}*`).join(' | ')}`);
     }
+    linhas.push('');
+    linhas.push(`*Total Geral*: ${shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeral[col] || 0)}*`).join(' | ')}`);
     return linhas.join('\n');
   }
 
@@ -1304,8 +1288,9 @@ function renderAll(sucessos, opts = {}) {
   for (const col of metricasTotal) totalGeralExibicao[col] = totalGeral[col] || 0;
   linhas.push(`\u{1F9FE} *Subtotal*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`);
   const resultado = formulaResultado(metricasTotal, totalGeralExibicao);
-  if (resultado) linhas.push(`*Total Geral*: ${brl(resultado.valor)}`);
-  else linhas.push(`*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`);
+  const totalGeralLinha = resultado
+    ? `*Total Geral*: ${brl(resultado.valor)}`
+    : `*Total Geral*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`;
 
   if (dimTemporal) {
     linhas.push('');
@@ -1318,6 +1303,10 @@ function renderAll(sucessos, opts = {}) {
       linhas.push('');
       linhas.push(observacaoCrescimentoPorEmpresa());
     }
+    linhas.push('');
+    linhas.push(totalGeralLinha);
+  } else {
+    linhas.push(totalGeralLinha);
   }
   return linhas.join('\n');
 }
@@ -1327,5 +1316,6 @@ module.exports = {
   renderSingle,
   renderAll,
   setLabelsSx3,
+  labelMetrica,
   _test: { keyNorm, somarMetricas, formulaResultado, toNumber },
 };
