@@ -82,4 +82,14 @@ function atualizarStatus(id, empresaId, status, revisadoPor = null) {
   return info.changes > 0;
 }
 
-module.exports = { criarProposta, listar, obterPorId, atualizarStatus };
+function excluirPorIds(empresaId, ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const db = getDB();
+  const placeholders = ids.map(() => '?').join(',');
+  const info = db.prepare(
+    `DELETE FROM spec_feedback_propostas WHERE empresa_id = ? AND id IN (${placeholders})`
+  ).run(empresaId, ...ids);
+  return info.changes || 0;
+}
+
+module.exports = { criarProposta, listar, obterPorId, atualizarStatus, excluirPorIds };

@@ -51,6 +51,7 @@
     .history-table tbody tr.group-row.level-1 td { padding-left:28px; }
     .history-table tbody tr.group-row.level-2 td { padding-left:46px; }
     .history-table tbody tr.group-row.level-3 td { padding-left:64px; }
+    .col-check { width:38px;text-align:center; }
     .col-action { width:42px;text-align:center; }
     .col-date { width:150px; }
     .col-phone { width:150px; }
@@ -59,6 +60,8 @@
     .col-modulo { width:120px; }
     .col-fragmento { width:150px; }
     .col-status { width:120px; }
+    input.row-cb { width:15px;height:15px;cursor:pointer;accent-color:var(--accent); }
+    .history-table tbody tr.data-row.selected td { background:rgba(124,58,237,.07); }
 
     .text-preview { display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;word-break:break-word; }
     .question { color:var(--text-hi);font-weight:800; }
@@ -138,6 +141,7 @@
             <div class="head-title">Propostas de Corre&ccedil;&atilde;o de Spec <span class="head-count" id="count">carregando...</span></div>
           </div>
           <div class="head-actions">
+            <button class="btn btn-ghost" id="sel-del-btn" type="button" style="display:none;font-weight:700;color:#fff;background:#7c3aed;padding:5px 14px;border-radius:6px">Excluir selecionados</button>
             <button class="btn btn-ghost" id="refresh-btn" type="button" style="font-weight:700;color:#1e3a8a;padding:5px 14px">↻ Atualizar</button>
           </div>
         </div>
@@ -167,6 +171,7 @@
             <table class="history-table">
               <thead>
                 <tr>
+                  <th class="col-check"><input type="checkbox" class="row-cb" id="cb-all" title="Selecionar todos"></th>
                   <th class="col-action"></th>
                   <th class="col-date sortable" draggable="true" data-group-field="criado_data" data-sort="criado_em">Data/Hora</th>
                   <th class="col-phone sortable" draggable="true" data-group-field="numero_wa" data-sort="numero_wa">Celular</th>
@@ -177,6 +182,7 @@
                   <th class="col-status sortable" draggable="true" data-group-field="status" data-sort="status">Status</th>
                 </tr>
                 <tr class="filter-cell">
+                  <th></th>
                   <th></th>
                   <th></th>
                   <th><input data-filter="numero_wa" autocomplete="off" spellcheck="false"></th>
@@ -267,6 +273,7 @@
     filters: {},
     groupFields: [],
     detail: null,
+    selected: new Set(),
   };
 
   const $ = id => document.getElementById(id);
@@ -347,8 +354,10 @@
   }
 
   function renderDataRow(row) {
+    const sel = state.selected.has(row.id);
     return `
-      <tr class="data-row" data-id="${esc(row.id)}">
+      <tr class="data-row${sel ? ' selected' : ''}" data-id="${esc(row.id)}">
+        <td class="col-check" data-cb-cell><input type="checkbox" class="row-cb" data-id="${esc(row.id)}"${sel ? ' checked' : ''}></td>
         <td class="col-action"><button class="icon-btn" type="button" title="Visualizar" data-id="${esc(row.id)}">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         </button></td>
@@ -373,6 +382,7 @@
 
     if (!rows.length) {
       tbody.innerHTML = '';
+      updateSelBar();
       return;
     }
 
@@ -383,6 +393,7 @@
       renderGroupedRows(parts, rows, groups, 0);
       tbody.innerHTML = parts.join('');
     }
+    updateSelBar();
   }
 
   function renderGroupedRows(parts, rows, groups, level) {
@@ -395,7 +406,7 @@
     });
     [...buckets.entries()].forEach(([label, items]) => {
       const title = `${groupName(field)}: ${label}`;
-      parts.push(`<tr class="group-row level-${Math.min(level, 3)}"><td colspan="8">${esc(title)} (${items.length})</td></tr>`);
+      parts.push(`<tr class="group-row level-${Math.min(level, 3)}"><td colspan="9">${esc(title)} (${items.length})</td></tr>`);
       if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1);
       else items.forEach(row => parts.push(renderDataRow(row)));
     });
@@ -470,7 +481,74 @@
     if (res.status === 401) { location.href = '/login.html'; return; }
     if (!res.ok) throw new Error(`Erro ${res.status} ao carregar propostas.`);
     state.rows = await res.json();
+    state.selected.clear();
+    updateSelBar();
     applyFilters();
+  }
+
+  function updateSelBar() {
+    const n = state.selected.size;
+    const btn = $('sel-del-btn');
+    btn.style.display = n > 0 ? '' : 'none';
+    btn.textContent = n > 0 ? `Excluir ${n} selecionado${n !== 1 ? 's' : ''}` : 'Excluir selecionados';
+    const cbAll = $('cb-all');
+    if (cbAll) {
+      const viewIds = state.view.map(r => r.id);
+      cbAll.checked = viewIds.length > 0 && viewIds.every(id => state.selected.has(id));
+      cbAll.indeterminate = !cbAll.checked && viewIds.some(id => state.selected.has(id));
+    }
+  }
+
+  function toggleRow(id, checked) {
+    if (checked) state.selected.add(id); else state.selected.delete(id);
+    const tr = document.querySelector(`tr.data-row[data-id="${id}"]`);
+    if (tr) tr.classList.toggle('selected', checked);
+    updateSelBar();
+  }
+
+  function selectAllVisible() {
+    state.view.forEach(r => state.selected.add(r.id));
+    document.querySelectorAll('tr.data-row').forEach(tr => {
+      tr.classList.add('selected');
+      const cb = tr.querySelector('input.row-cb');
+      if (cb) cb.checked = true;
+    });
+    updateSelBar();
+  }
+
+  function clearSelection() {
+    state.selected.clear();
+    document.querySelectorAll('tr.data-row').forEach(tr => {
+      tr.classList.remove('selected');
+      const cb = tr.querySelector('input.row-cb');
+      if (cb) cb.checked = false;
+    });
+    updateSelBar();
+  }
+
+  async function deleteSelected() {
+    const ids = [...state.selected];
+    if (!ids.length) return;
+    if (!confirm(`Excluir ${ids.length} registro${ids.length !== 1 ? 's' : ''} selecionado${ids.length !== 1 ? 's' : ''}? Esta ação não pode ser desfeita.`)) return;
+    const btn = $('sel-del-btn');
+    btn.disabled = true;
+    btn.textContent = 'Excluindo...';
+    try {
+      const res = await fetch('/api/ia-command/admin/spec-feedback/excluir-selecionados', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Nao foi possivel excluir os registros.');
+      await loadRows();
+      alert(`${data.removidos || 0} registro(s) excluido(s).`);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Excluir selecionados';
+    }
   }
 
   async function openDetail(id) {
@@ -664,7 +742,14 @@
         event.dataTransfer.effectAllowed = 'copy';
       });
     });
+    $('cb-all').addEventListener('change', e => {
+      if (e.target.checked) selectAllVisible(); else clearSelection();
+    });
+    $('sel-del-btn').addEventListener('click', () => deleteSelected().catch(err => alert(err.message)));
     $('tbody').addEventListener('click', event => {
+      const cb = event.target.closest('input.row-cb');
+      if (cb) { toggleRow(cb.dataset.id, cb.checked); return; }
+      if (event.target.closest('[data-cb-cell]')) return;
       const tr = event.target.closest('tr.data-row');
       if (tr) openDetail(tr.dataset.id).catch(err => alert(err.message));
     });

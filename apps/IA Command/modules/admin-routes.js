@@ -965,6 +965,20 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json({ ok: true });
   });
 
+  app.post('/api/ia-command/admin/spec-feedback/excluir-selecionados', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const specFeedbackStore = require('./ai/spec-feedback-store');
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Informe ao menos um ID para excluir.' });
+    }
+    if (ids.length > 200) {
+      return res.status(400).json({ error: 'Máximo de 200 registros por operação.' });
+    }
+    const removidos = specFeedbackStore.excluirPorIds(eid(req), ids);
+    _audit(req, 'excluir_spec_feedback_selecionados', { ids, removidos });
+    res.json({ ok: true, removidos });
+  });
+
   // ── COMPRAS — Consultas Text-to-SQL ─────────────────────────────────────────
   const canCompras = requireRotina('iac-admin-compras');
 
