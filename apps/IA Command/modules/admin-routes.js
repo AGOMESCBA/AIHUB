@@ -974,7 +974,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     if (row.status !== 'aprovado') {
       return res.status(400).json({ error: 'Somente propostas com status "aprovado" podem ser pre-visualizadas para aplicacao.' });
     }
-    const avaliacao = specFragmentApplier.avaliar({ modulo: row.modulo, fragmentoAfetado: row.fragmento_afetado });
+    const avaliacao = specFragmentApplier.avaliar({ modulo: row.modulo, fragmentoAfetado: row.fragmento_afetado, textoProposto: row.texto_proposto });
     res.json({ ...avaliacao, textoProposto: row.texto_proposto || null });
   });
 

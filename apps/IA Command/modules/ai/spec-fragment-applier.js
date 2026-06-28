@@ -92,13 +92,24 @@ function localizarTemplateDaFuncao(source, nomeFuncao) {
   return { textoTemplate, inicioAbsoluto, fimAbsoluto, nomeFuncao };
 }
 
+// O texto proposto e gravado entre crases de um template literal (`...`) no arquivo
+// de spec. Uma crase literal no texto fecharia o template prematuramente e corromperia
+// a sintaxe JS do arquivo inteiro (derrubando o modulo no proximo require). Por isso
+// textoProposto nunca pode conter crase — diagnostico/correcao tecnica nao precisa dela.
+function textoPropostoEhSeguro(textoProposto) {
+  return !String(textoProposto || '').includes('`');
+}
+
 // Retorna { aplicavel, motivo?, arquivo, nomeFuncao?, textoAtualArquivo?, previewSource? }
-function avaliar({ modulo, fragmentoAfetado }) {
+function avaliar({ modulo, fragmentoAfetado, textoProposto }) {
   const chaveModulo = normalizarModulo(modulo);
   const arquivo = ARQUIVOS_POR_MODULO[chaveModulo];
   if (!arquivo) return { aplicavel: false, motivo: `Modulo "${modulo}" nao possui arquivo de fragmentos mapeado.` };
   if (!fragmentoAfetado) return { aplicavel: false, motivo: 'Proposta nao possui fragmento identificado — nao ha onde aplicar automaticamente.', arquivo };
   if (!fs.existsSync(arquivo)) return { aplicavel: false, motivo: `Arquivo nao encontrado: ${arquivo}`, arquivo };
+  if (textoProposto !== undefined && !textoPropostoEhSeguro(textoProposto)) {
+    return { aplicavel: false, motivo: 'O texto proposto contem uma crase (`) — isso corromperia o template literal do arquivo de spec. Remova a crase (ex: troque `campo` por "campo") e tente novamente.', arquivo };
+  }
 
   const source = fs.readFileSync(arquivo, 'utf8');
   const refFuncao = extrairNomeFuncaoDoFragmento(source, fragmentoAfetado);
@@ -120,6 +131,9 @@ function avaliar({ modulo, fragmentoAfetado }) {
 function aplicar({ modulo, fragmentoAfetado, textoProposto }) {
   if (!String(textoProposto || '').trim()) {
     return { ok: false, motivo: 'Texto proposto vazio — nada para aplicar.' };
+  }
+  if (!textoPropostoEhSeguro(textoProposto)) {
+    return { ok: false, motivo: 'O texto proposto contem uma crase (`) — isso corromperia o template literal do arquivo de spec. Remova a crase (ex: troque `campo` por "campo") e tente novamente.' };
   }
   const chaveModulo = normalizarModulo(modulo);
   const arquivo = ARQUIVOS_POR_MODULO[chaveModulo];
