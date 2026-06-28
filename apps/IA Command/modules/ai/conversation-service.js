@@ -218,14 +218,19 @@ async function responder(mensagem, empresaId) {
   return { ok: false, resposta: null, provedor: null, erros };
 }
 
-function _buildRouterSystem() {
+// contextoTecnico (opcional): { modulo, mensagem, minutosAtras } — resumo da ultima consulta
+// de dados ativa nesta conversa (ver service.js, ctx.lastIntent). Quando presente, orienta o
+// roteador a reconhecer refinamentos/exclusoes/correcoes curtas como continuidade tecnica, em
+// vez de depender so de uma lista de palavras-chave (verbo de exclusao, ordenacao, etc.) — a IA
+// decide com o mesmo contexto que um humano teria, ao inves de classificar a frase no vacuo.
+function _buildRouterSystem(contextoTecnico = null) {
   const agora = new Date();
   const hora = agora.getHours();
   const periodo = hora < 12 ? 'manha' : hora < 18 ? 'tarde' : 'noite';
   const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
   const dataStr = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 
-  return [
+  const linhas = [
     `Voce e o IA Command — assistente que consulta dados do ERP via WhatsApp em linguagem natural.`,
     `Data e hora: ${dataStr}, ${horaStr} (periodo: ${periodo}).`,
     '',
@@ -238,10 +243,29 @@ function _buildRouterSystem() {
     '- Nao invente dados do ERP.',
     '- Respostas curtas e adequadas para WhatsApp.',
     '',
+  ];
+
+  if (contextoTecnico) {
+    linhas.push(
+      'CONTEXTO TECNICO ATIVO — ha uma consulta de dados em andamento nesta conversa:',
+      `- Modulo: ${contextoTecnico.modulo}`,
+      `- Ultima pergunta tecnica: "${contextoTecnico.mensagem}"`,
+      `- Ha ${contextoTecnico.minutosAtras} minuto(s).`,
+      'SE a mensagem atual do usuario for um AJUSTE, REFINAMENTO, EXCLUSAO ou CORRECAO relacionado a essa consulta',
+      '(ex: "desconsiderando X", "sem o Y", "agora por Z", "isso esta errado", "tira esse item"),',
+      'classifique como data_request, MESMO que a frase seja curta e sem verbo de consulta explicito.',
+      'O usuario esta continuando o MESMO assunto tecnico, nao iniciando papo.',
+      '',
+    );
+  }
+
+  linhas.push(
     'QUANDO DETECTAR PEDIDO DE DADOS DO ERP (vendas, faturamento, compras, financeiro, estoque, titulos, comissoes, etc.):',
     'Responda SOMENTE com este JSON, sem mais nada:',
     '{"tipo":"data_request","consulta":"[a consulta em linguagem natural, limpa e clara]"}',
-  ].join('\n');
+  );
+
+  return linhas.join('\n');
 }
 
 function _toGeminiRole(role) {
@@ -362,8 +386,11 @@ const _cacheRoteamento = new Map();
 const _ROTEAR_TTL_MS   = 2 * 60 * 1000;  // 2 minutos
 const _MAX_ROTEAR      = 200;
 
-function _rotearCacheKey(empresaId, mensagem) {
-  return `${empresaId}:${mensagem.trim().toLowerCase()}`;
+// Inclui o contexto tecnico na chave — a mesma frase pode ser conversa OU continuidade
+// dependendo de haver ou nao uma consulta tecnica ativa, entao nao pode compartilhar cache.
+function _rotearCacheKey(empresaId, mensagem, contextoTecnico) {
+  const ctxKey = contextoTecnico ? `${contextoTecnico.modulo}:${contextoTecnico.mensagem}` : 'sem_ctx';
+  return `${empresaId}:${mensagem.trim().toLowerCase()}:${ctxKey}`;
 }
 
 function _rotearCacheGet(key) {
@@ -398,14 +425,16 @@ function _ehPadraoErp(mensagem) {
   return _PADROES_ERP.some(p => p.test(mensagem));
 }
 
-async function rotear(mensagem, empresaId, historico = []) {
-  const cacheKey = _rotearCacheKey(empresaId, mensagem);
+async function rotear(mensagem, empresaId, historico = [], contextoTecnico = null) {
+  const cacheKey = _rotearCacheKey(empresaId, mensagem, contextoTecnico);
 
   const cached = _rotearCacheGet(cacheKey);
   if (cached) return cached;
 
-  // Bypass: mensagem com padrão ERP inequívoco → pula chamada de IA
-  if (historico.length === 0 && _ehPadraoErp(mensagem)) {
+  // Bypass: mensagem com padrão ERP inequívoco → pula chamada de IA.
+  // Só aplica sem contexto tecnico ativo — com contexto, a decisao exige nuance
+  // (pode ser continuidade tecnica mesmo sem palavra de ERP explicita) e vai para a IA.
+  if (historico.length === 0 && !contextoTecnico && _ehPadraoErp(mensagem)) {
     const resultado = { tipo: 'data_request', consulta: mensagem, provedor: 'bypass_local' };
     _rotearCacheSet(cacheKey, resultado);
     return resultado;
@@ -413,7 +442,7 @@ async function rotear(mensagem, empresaId, historico = []) {
 
   const { keys, cfg } = await intentService._resolveKeys(empresaId);
   const ordem = intentService._normalizarOrdem(cfg);
-  const systemPrompt = _buildRouterSystem();
+  const systemPrompt = _buildRouterSystem(contextoTecnico);
   const messages = [...historico.slice(-_MAX_HISTORICO), { role: 'user', content: mensagem }];
 
   for (const provedor of ordem) {

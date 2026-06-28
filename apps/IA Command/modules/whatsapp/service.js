@@ -208,6 +208,13 @@ const _SINAIS_CONTINUIDADE = [
   /\bdetalh(e|a|ar|es)\b/i,
   /\bpor\s+(m[eê]s|meses|dia|dias|ano|anos|cliente|clientes|produto|produtos|vendedor|vendedores|fornecedor|fornecedores|empresa|filial)\b/i,
   /\bquebre?\b|\bquebra\b/i,
+  // Refinamentos de exclusao/negacao (ex: "desconsiderando o banco X", "sem o cliente Y", "tirando Z")
+  /\bdesconsiderando\b|\bdesconsidere?\b/i,
+  /\bexcluindo\b|\bexclua\b|\bexcluir\b/i,
+  /\bremovendo\b|\bremova\b|\bremover\b/i,
+  /\btirando\b|\btire?\b/i,
+  /\bsem\s+(o|a|os|as)\b/i,
+  /\bignorando\b|\bignore?\b/i,
 ];
 function _ehSinalContinuidade(texto) {
   return _SINAIS_CONTINUIDADE.some(p => p.test(String(texto || '')));
@@ -1738,8 +1745,14 @@ class IACWhatsAppService extends EventEmitter {
         valor_recebido: 'Recebido', valor_pago: 'Pago',
         saldo_a_receber: 'A receber', saldo_a_pagar: 'A pagar',
         valor_recebido_total: 'Recebido', valor_pago_total: 'Pago',
+        saldo: 'Saldo', saldo_atual: 'Saldo', salatua: 'Saldo', e8_salatua: 'Saldo',
       };
-      const _rotuloCol = col => _ROTULOS_CAMPO[col] || col;
+      const _rotuloCol = col => {
+        const k = String(col || '').toLowerCase();
+        return _ROTULOS_CAMPO[k]
+          || (typeof canonicalWhatsappFormat.labelMetrica === 'function' ? canonicalWhatsappFormat.labelMetrica(col) : null)
+          || col;
+      };
       let totalRegistros = 0;
       const totalGeral = {};
       for (const s of sucessos) {
@@ -3055,13 +3068,29 @@ class IACWhatsAppService extends EventEmitter {
         // A IA conduz a conversa com histórico completo (chat multi-turn).
         // Retorna texto (conversacional) ou JSON {tipo:"data_request",consulta:"..."}.
         const chatHistory = ctx?._chatHistory || [];
-        const roteamento = await conversationService.rotear(textoExecucao, this._empresaId, chatHistory);
+        // Informa ao roteador se há uma consulta técnica ativa e recente, para a IA decidir
+        // com contexto real se a mensagem é continuidade tecnica (refinamento/exclusao/correcao)
+        // em vez de depender so de uma lista de palavras-chave (ver Hook 1 abaixo, mantido como
+        // rede de seguranca residual para quando a IA do roteador ainda assim classificar errado).
+        const ctxParaRoteador = this._getSenderContext(sender);
+        const _temCtxTecnicoAtivo = ctxParaRoteador?.lastIntent
+          && this._ehIntentDinamica(ctxParaRoteador.lastIntent)
+          && ctxParaRoteador.lastIntentTs
+          && (Date.now() - ctxParaRoteador.lastIntentTs) < 30 * 60 * 1000;
+        const contextoTecnicoRoteador = _temCtxTecnicoAtivo ? {
+          modulo: String(ctxParaRoteador.lastIntent._moduloDinamico || ctxParaRoteador.lastIntent.intencao || '').replace('_dinamico', ''),
+          mensagem: ctxParaRoteador.lastIntent._mensagemOriginal || ctxParaRoteador.lastIntent.intencao || '',
+          minutosAtras: Math.max(1, Math.round((Date.now() - ctxParaRoteador.lastIntentTs) / 60000)),
+        } : null;
+        const roteamento = await conversationService.rotear(textoExecucao, this._empresaId, chatHistory, contextoTecnicoRoteador);
         _timings.roteador = Date.now();
         this.log(`🔍 ConversationRouter: ${roteamento.tipo} (${roteamento.provedor || 'fallback'}) hist=${chatHistory.length / 2} turnos | ${_timings.roteador - _t0}ms`, 'info');
         if (roteamento.tipo === 'conversacional') {
           // Hook 1 — Fallback de continuidade: mensagem classificada como conversacional
           // mas com sinais explícitos de refinamento (ordenar, filtrar, top-N, etc.)
           // e contexto dinâmico ativo → tratar como data_request e continuar o pipeline.
+          // Rede de seguranca residual — a primeira linha de defesa agora e o contexto
+          // tecnico passado ao roteador acima.
           const ctxAtivo = this._getSenderContext(sender);
           const temContextoDinamicoAtivo = ctxAtivo?.lastIntent
             && this._ehIntentDinamica(ctxAtivo.lastIntent)
