@@ -137,6 +137,115 @@ function labelMetrica(col) {
   return LABELS[k] || presentation.labelMetric(col) || labelSx3(col) || String(col || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function infoComparativoAno(col) {
+  const raw = String(col || '');
+  const m = raw.match(/^(.*?)[_\s-]+(20\d{2})$/);
+  if (!m) return null;
+  return { base: m[1], ano: m[2] };
+}
+
+function anoPeriodoAtual(opts = {}) {
+  const texto = String(opts.contextoConsulta || opts.mensagem || '');
+  const anos = [...texto.matchAll(/\b(20\d{2})\b/g)].map(m => m[1]);
+  return anos.length ? anos[0] : null;
+}
+
+function mesPeriodoAtual(opts = {}) {
+  const texto = norm(opts.contextoConsulta || opts.mensagem || '');
+  const meses = [
+    ['janeiro', 1], ['jan', 1],
+    ['fevereiro', 2], ['fev', 2],
+    ['marco', 3], ['mar', 3],
+    ['abril', 4], ['abr', 4],
+    ['maio', 5], ['mai', 5],
+    ['junho', 6], ['jun', 6],
+    ['julho', 7], ['jul', 7],
+    ['agosto', 8], ['ago', 8],
+    ['setembro', 9], ['set', 9],
+    ['outubro', 10], ['out', 10],
+    ['novembro', 11], ['nov', 11],
+    ['dezembro', 12], ['dez', 12],
+  ];
+  const found = meses.find(([nome]) => new RegExp(`\\b${nome}\\b`).test(texto));
+  return found ? found[1] : null;
+}
+
+function labelPeriodoAno(ano, opts = {}) {
+  const mes = mesPeriodoAtual(opts);
+  if (mes >= 1 && mes <= 12) return `${MESES[mes - 1]}/${ano}`;
+  return String(ano || 'Periodo');
+}
+
+function comparativoAnoMetricas(metricas = [], opts = {}) {
+  const atualAno = anoPeriodoAtual(opts);
+  const grupos = new Map();
+  for (const col of metricas || []) {
+    const info = infoComparativoAno(col);
+    const base = info ? info.base : col;
+    const k = keyNorm(base);
+    if (!grupos.has(k)) grupos.set(k, { base, atual: null, anos: new Map() });
+    const grupo = grupos.get(k);
+    if (info) grupo.anos.set(info.ano, col);
+    else grupo.atual = col;
+  }
+  const itens = [...grupos.values()].filter(g => g.atual && g.anos.size);
+  if (!itens.length || !atualAno) return null;
+  const anosComparados = [...new Set(itens.flatMap(g => [...g.anos.keys()]))].sort((a, b) => Number(b) - Number(a));
+  if (!anosComparados.length) return null;
+  return { atualAno, anosComparados, itens };
+}
+
+function valorItemComparativo(totais, item, anoAtual, ano) {
+  const col = String(ano) === String(anoAtual) ? item.atual : item.anos.get(String(ano));
+  return col ? toNumber(totais[col]) : 0;
+}
+
+function resultadoComparativoPeriodo(totais, itens, anoAtual, ano) {
+  const cols = itens.map(item => item.base);
+  const parcial = {};
+  for (const item of itens) parcial[item.base] = valorItemComparativo(totais, item, anoAtual, ano);
+  return formulaResultado(cols, parcial);
+}
+
+function renderComparativoAnoMetricas(linhas, totais, metricas, opts = {}) {
+  const comp = comparativoAnoMetricas(metricas, opts);
+  if (!comp) return false;
+
+  linhas.push('\u{1F4CA} *Comparativo*');
+  const anos = [comp.atualAno, ...comp.anosComparados.filter(ano => ano !== comp.atualAno)];
+  for (const ano of anos) {
+    linhas.push(`\u{1F4C5} *${labelPeriodoAno(ano, opts)}*`);
+    comp.itens.forEach((item, idx) => {
+      linhas.push(`  ${idx + 1}. ${labelMetrica(item.base)}: *${brl(valorItemComparativo(totais, item, comp.atualAno, ano))}*`);
+    });
+    const resultado = resultadoComparativoPeriodo(totais, comp.itens, comp.atualAno, ano);
+    if (resultado) linhas.push(`  \u{1F9FE} *${resultado.label}*: *${brl(resultado.valor)}*`);
+    linhas.push('');
+  }
+
+  const anoBase = comp.anosComparados.find(ano => ano !== comp.atualAno) || comp.anosComparados[0];
+  if (anoBase) {
+    linhas.push(`\u{1F4C8} *Variacao ${comp.atualAno} x ${anoBase}*`);
+    comp.itens.forEach((item, idx) => {
+      const atual = valorItemComparativo(totais, item, comp.atualAno, comp.atualAno);
+      const anterior = valorItemComparativo(totais, item, comp.atualAno, anoBase);
+      const diff = atual - anterior;
+      const percentual = anterior !== 0 ? (diff / anterior) * 100 : null;
+      linhas.push(`  ${idx + 1}. ${labelMetrica(item.base)}: *${brl(diff)}* | *${pct(percentual)}*`);
+    });
+    linhas.push('');
+  }
+
+  const totaisPeriodos = anos
+    .map(ano => {
+      const resultado = resultadoComparativoPeriodo(totais, comp.itens, comp.atualAno, ano);
+      return resultado ? `${labelPeriodoAno(ano, opts)}: *${brl(resultado.valor)}*` : null;
+    })
+    .filter(Boolean);
+  if (totaisPeriodos.length) linhas.push(`*Total Geral*: ${totaisPeriodos.join(' | ')}`);
+  return true;
+}
+
 // Mapa de rotulos vindo do SX3 do tenant (campo fisico Protheus -> titulo cadastrado).
 // Setado por setLabelsSx3() antes de formatar; permite que labelMetrica/labelDimensao
 // resolvam campos fisicos (ex: E2_VENCREA) sem depender de heuristica regex ou hardcode.
@@ -1079,6 +1188,7 @@ function renderSingle(rows, opts = {}) {
 
   if (shape.tipo === 'metricas_simples') {
     const totais = somarMetricas(rows, shape.metricas);
+    if (renderComparativoAnoMetricas(linhas, totais, shape.metricas, opts)) return linhas.join('\n');
     const metricasTotal = metricasTotalizaveis(shape.metricas);
     linhas.push('\u{1F4CA} *Resumo*');
     linhas.push(...renderMetricas(totais, shape.metricas));
@@ -1174,6 +1284,24 @@ function renderAll(sucessos, opts = {}) {
     const totalGeral = {};
     const metricasTotal = metricasTotalizaveis(shape.metricas);
     for (const col of shape.metricas) totalGeral[col] = isMetricaCrescimento(col) ? null : 0;
+
+    const comp = comparativoAnoMetricas(shape.metricas, opts);
+    if (comp) {
+      linhas.push('\u{1F4CA} *Resumo por Empresa*');
+      for (const s of sucessos) {
+        const totais = somarMetricas(s.rows, shape.metricas);
+        for (const col of metricasTotal) totalGeral[col] += totais[col] || 0;
+        const anos = [comp.atualAno, ...comp.anosComparados.filter(ano => ano !== comp.atualAno)];
+        const partes = anos.map(ano => {
+          const vals = comp.itens.map(item => `${labelMetrica(item.base)}: *${brl(valorItemComparativo(totais, item, comp.atualAno, ano))}*`).join(' | ');
+          return `${labelPeriodoAno(ano, opts)}: ${vals}`;
+        });
+        linhas.push(`\u{1F3E2} ${s.nomeEmpresa}: ${partes.join(' || ')}`);
+      }
+      linhas.push('');
+      renderComparativoAnoMetricas(linhas, totalGeral, shape.metricas, opts);
+      return linhas.join('\n');
+    }
 
     linhas.push('\u{1F4CA} *Resumo*');
     for (const s of sucessos) {

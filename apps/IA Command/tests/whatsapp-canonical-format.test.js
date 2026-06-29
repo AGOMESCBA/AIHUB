@@ -429,6 +429,49 @@ ok('etapa 4: preserva metricas atual e anterior em comparativo', () => {
   assert.ok(!texto.includes('crescimento_pct'), texto);
 });
 
+ok('comparativo anual simples: agrupa metricas por periodo atual e ano comparado', () => {
+  const rows = [
+    { total_compras: 386471.41, total_faturamento: 672935.20, total_compras_2025: 356805.06, total_faturamento_2025: 561602.44 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Compras e Faturamento',
+    contextoConsulta: 'total das compras e do faturamento do mes de junho de 2026 comparando com junho de 2025',
+  });
+
+  assert.ok(texto.includes('*Junho/2026*'), texto);
+  assert.ok(texto.includes('*Junho/2025*'), texto);
+  assert.ok(/Junho\/2026[\s\S]*Compras: \*R\$\s*386\.471,41\*[\s\S]*Faturamento: \*R\$\s*672\.935,20\*/.test(texto), texto);
+  assert.ok(/Junho\/2025[\s\S]*Compras: \*R\$\s*356\.805,06\*[\s\S]*Faturamento: \*R\$\s*561\.602,44\*/.test(texto), texto);
+  assert.ok(texto.includes('*Variacao 2026 x 2025*'), texto);
+  assert.ok(/Compras: \*R\$\s*29\.666,35\* \| \*\+8,31%\*/.test(texto), texto);
+  assert.ok(/Faturamento: \*R\$\s*111\.332,76\* \| \*\+19,82%\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Junho\/2026: \*R\$\s*286\.463,79\* \| Junho\/2025: \*R\$\s*204\.797,38\*/.test(texto), texto);
+  assert.ok(!texto.includes('Total Compras 2025'), texto);
+});
+
+ok('comparativo anual simples: consolidado agrupa por periodo antes do total geral', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'C3i Systems',
+      rows: [{ total_compras: 10437.69, total_faturamento: 180553.69, total_compras_2025: 37787.81, total_faturamento_2025: 23306.28 }],
+    },
+    {
+      nomeEmpresa: 'J2A Consultoria',
+      rows: [{ total_compras: 386471.41, total_faturamento: 672935.20, total_compras_2025: 356805.06, total_faturamento_2025: 561602.44 }],
+    },
+  ], { mensagem: 'Preciso do total das compras e do faturamento do mes de junho de 2026 comparando com o mes de junho de 2025.' });
+
+  assert.ok(texto.includes('*Resumo por Empresa*'), texto);
+  assert.ok(texto.includes('C3i Systems: Junho/2026:'), texto);
+  assert.ok(texto.includes('J2A Consultoria: Junho/2026:'), texto);
+  assert.ok(texto.includes('*Junho/2026*'), texto);
+  assert.ok(texto.includes('*Junho/2025*'), texto);
+  assert.ok(/Junho\/2026[\s\S]*Compras: \*R\$\s*396\.909,10\*[\s\S]*Faturamento: \*R\$\s*853\.488,89\*/.test(texto), texto);
+  assert.ok(/Junho\/2025[\s\S]*Compras: \*R\$\s*394\.592,87\*[\s\S]*Faturamento: \*R\$\s*584\.908,72\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Junho\/2026: \*R\$\s*456\.579,79\* \| Junho\/2025: \*R\$\s*190\.315,85\*/.test(texto), texto);
+  assert.ok(!texto.includes('Total Compras 2025'), texto);
+});
+
 ok('etapa 4: formata detalhe por cliente e documento', () => {
   const texto = canonical.renderSingle([
     { cliente: 'BIPAR', documento: '004750', valor_total: 4906.62 },
