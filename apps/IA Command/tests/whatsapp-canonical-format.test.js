@@ -568,9 +568,9 @@ ok('fluxo projetado mensal: totais usam saldo inicial e fluxo final', () => {
   const texto = canonical.renderSingle(rows, { nomeModulo: 'Financeiro', contextoConsulta: 'Fluxo projetado por mes' });
 
   assert.ok(/Junho\/2026: Saldo Bancario Base: \*R\$\s*252\.135,16\*/.test(texto), texto);
-  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*252\.135,16\* \| Total A Receber: \*R\$\s*32\.852,50\* \| Total A Pagar: \*R\$\s*13\.405,23\* \| Fluxo Liquido: \*R\$\s*271\.582,43\*/.test(texto), texto);
+  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*252\.135,16\* \| Total A Receber: \*R\$\s*32\.852,50\* \| Total A Pagar: \*R\$\s*13\.405,23\* \| Saldo Bancario Final: \*R\$\s*271\.582,43\*/.test(texto), texto);
   assert.ok(!/Saldo Bancario Base: \*R\$\s*1\.008\.540,64\*/.test(texto), texto);
-  assert.ok(!/Fluxo Liquido: \*R\$\s*1\.080\.657,05\*/.test(texto), texto);
+  assert.ok(!/Saldo Bancario Final: \*R\$\s*1\.080\.657,05\*/.test(texto), texto);
 });
 
 ok('fluxo mensal: imprime competencia quando SQL retorna competencia', () => {
@@ -584,7 +584,7 @@ ok('fluxo mensal: imprime competencia quando SQL retorna competencia', () => {
 
   assert.ok(texto.includes('*Por Competencia*'), texto);
   assert.ok(texto.includes('Junho/2026'), texto);
-  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*251\.087,80\* \| Total A Receber: \*R\$\s*12\.185,00\* \| Total A Pagar: \*R\$\s*7\.667,27\* \| Fluxo Liquido: \*R\$\s*255\.605,53\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*251\.087,80\* \| Total A Receber: \*R\$\s*12\.185,00\* \| Total A Pagar: \*R\$\s*7\.667,27\* \| Saldo Bancario Final: \*R\$\s*255\.605,53\*/.test(texto), texto);
 });
 
 ok('fluxo diario longo: imprime por dia quando SQL retorna dia', () => {
@@ -605,7 +605,20 @@ ok('fluxo diario longo: imprime por dia quando SQL retorna dia', () => {
 
   assert.ok(texto.includes('*Por Dia*'), texto);
   assert.ok(texto.includes('12/06/2026'), texto);
-  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*1\.000,00\* \| Total A Receber: \*R\$\s*120,00\* \| Total A Pagar: \*R\$\s*50,00\* \| Fluxo Liquido: \*R\$\s*1\.070,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*1\.000,00\* \| Total A Receber: \*R\$\s*120,00\* \| Total A Pagar: \*R\$\s*50,00\* \| Saldo Bancario Final: \*R\$\s*1\.070,00\*/.test(texto), texto);
+});
+
+ok('fluxo diario: saldo inicial do dia seguinte usa saldo final anterior', () => {
+  const texto = canonical.renderSingle([
+    { dia: '20260629', saldo_bancario_base: 251087.80, total_a_receber: 3100, total_a_pagar: 3617.27, fluxo_liquido: 250570.53 },
+    { dia: '20260630', saldo_bancario_base: 251087.80, total_a_receber: 9085, total_a_pagar: 3550, fluxo_liquido: 256105.53 },
+  ], {
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Fluxo de Caixa dos proximos dois dias',
+  });
+
+  assert.ok(/29\/06\/2026: Saldo Bancario Base: \*R\$\s*251\.087,80\* .* Saldo Bancario Final: \*R\$\s*250\.570,53\*/.test(texto), texto);
+  assert.ok(/30\/06\/2026: Saldo Bancario Base: \*R\$\s*250\.570,53\* .* Saldo Bancario Final: \*R\$\s*256\.105,53\*/.test(texto), texto);
 });
 
 ok('fluxo projetado mensal: consolidado carrega posicao por empresa', () => {
@@ -629,13 +642,37 @@ ok('fluxo projetado mensal: consolidado carrega posicao por empresa', () => {
     },
   ], { mensagem: 'Preciso do fluxo de caixa projetado dos proximos 90 dias detalhado por mes.' });
 
-  assert.ok(/Setembro\/2026: Saldo Bancario Base: \*R\$\s*1\.002\.433,60\* \| Total A Receber: \*R\$\s*0,00\* \| Total A Pagar: \*R\$\s*707,35\* \| Fluxo Liquido: \*R\$\s*1\.345\.645,19\*/.test(texto), texto);
-  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*1\.002\.433,60\* \| Total A Receber: \*R\$\s*477\.777,66\* \| Total A Pagar: \*R\$\s*134\.566,07\* \| Fluxo Liquido: \*R\$\s*1\.345\.645,19\*/.test(texto), texto);
-  assert.ok(/C3i Systems: Saldo Bancario Base: \*R\$\s*252\.135,16\* \| Total A Receber: \*R\$\s*32\.852,50\* \| Total A Pagar: \*R\$\s*13\.405,23\* \| Fluxo Liquido: \*R\$\s*271\.582,43\*/.test(texto), texto);
-  assert.ok(/J2A Consultoria: Saldo Bancario Base: \*R\$\s*750\.298,44\* \| Total A Receber: \*R\$\s*444\.925,16\* \| Total A Pagar: \*R\$\s*121\.160,84\* \| Fluxo Liquido: \*R\$\s*1\.074\.062,76\*/.test(texto), texto);
+  assert.ok(/Setembro\/2026: Saldo Bancario Base: \*R\$\s*1\.002\.433,60\* \| Total A Receber: \*R\$\s*0,00\* \| Total A Pagar: \*R\$\s*707,35\* \| Saldo Bancario Final: \*R\$\s*1\.345\.645,19\*/.test(texto), texto);
+  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*1\.002\.433,60\* \| Total A Receber: \*R\$\s*477\.777,66\* \| Total A Pagar: \*R\$\s*134\.566,07\* \| Saldo Bancario Final: \*R\$\s*1\.345\.645,19\*/.test(texto), texto);
+  assert.ok(/C3i Systems: Saldo Bancario Base: \*R\$\s*252\.135,16\* \| Total A Receber: \*R\$\s*32\.852,50\* \| Total A Pagar: \*R\$\s*13\.405,23\* \| Saldo Bancario Final: \*R\$\s*271\.582,43\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: Saldo Bancario Base: \*R\$\s*750\.298,44\* \| Total A Receber: \*R\$\s*444\.925,16\* \| Total A Pagar: \*R\$\s*121\.160,84\* \| Saldo Bancario Final: \*R\$\s*1\.074\.062,76\*/.test(texto), texto);
   assert.ok(texto.lastIndexOf('*Total Geral*:') > texto.indexOf('*Por Empresa*'), texto);
   assert.ok(!/Saldo Bancario Base: \*R\$\s*3\.259\.435,96\*/.test(texto), texto);
-  assert.ok(!/Fluxo Liquido: \*R\$\s*3\.994\.850,42\*/.test(texto), texto);
+  assert.ok(!/Saldo Bancario Final: \*R\$\s*3\.994\.850,42\*/.test(texto), texto);
+});
+
+ok('fluxo diario: consolidado inclui saldo base de empresa sem movimento no dia', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'C3i Systems',
+      rows: [
+        { dia: '20260624', saldo_bancario_base: 251087.80, total_a_receber: 0, total_a_pagar: 500, fluxo_liquido: 250587.80 },
+        { dia: '20260630', saldo_bancario_base: 251087.80, total_a_receber: 9085, total_a_pagar: 3550, fluxo_liquido: 255605.53 },
+      ],
+    },
+    {
+      nomeEmpresa: 'J2A Consultoria',
+      rows: [
+        { dia: '20260601', saldo_bancario_base: 800223.21, total_a_receber: 15735.72, total_a_pagar: 55205.99, fluxo_liquido: 760752.94 },
+        { dia: '20260624', saldo_bancario_base: 800223.21, total_a_receber: 53664.27, total_a_pagar: 7916.56, fluxo_liquido: 1197182.74 },
+        { dia: '20260630', saldo_bancario_base: 800223.21, total_a_receber: 9867.62, total_a_pagar: 46285.34, fluxo_liquido: 1013288.24 },
+      ],
+    },
+  ], { mensagem: 'Fluxo de Caixa do mes de Junho desconsiderando os Bancos CX1 e CX2' });
+
+  assert.ok(/01\/06\/2026: Saldo Bancario Base: \*R\$\s*1\.051\.311,01\* \| Total A Receber: \*R\$\s*15\.735,72\* \| Total A Pagar: \*R\$\s*55\.205,99\* \| Saldo Bancario Final: \*R\$\s*1\.011\.840,74\*/.test(texto), texto);
+  assert.ok(/24\/06\/2026: Saldo Bancario Base: \*R\$\s*1\.011\.840,74\* \| Total A Receber: \*R\$\s*53\.664,27\* \| Total A Pagar: \*R\$\s*8\.416,56\* \| Saldo Bancario Final: \*R\$\s*1\.447\.770,54\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*1\.051\.311,01\* \| Total A Receber: \*R\$\s*88\.352,61\* \| Total A Pagar: \*R\$\s*113\.457,89\* \| Saldo Bancario Final: \*R\$\s*1\.268\.893,77\*/.test(texto), texto);
 });
 
 ok('fluxo mensal misto: consolidado nao soma saldo base nem fluxo diario repetido', () => {
@@ -659,13 +696,14 @@ ok('fluxo mensal misto: consolidado nao soma saldo base nem fluxo diario repetid
     },
   ], { mensagem: 'Fluxo de Caixa do mes de Junho desconsiderando os Bancos CX1 e CX2' });
 
-  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*1\.051\.311,01\* \| A receber: \*R\$\s*53\.090,17\* \| A pagar: \*R\$\s*51\.260,08\* \| Fluxo Liquido: \*R\$\s*1\.046\.601,02\*/.test(texto), texto);
-  assert.ok(/C3i Systems: Saldo Bancario Base: \*R\$\s*251\.087,80\* \| A receber: \*R\$\s*12\.185,00\* \| A pagar: \*R\$\s*7\.667,27\* \| Fluxo Liquido: \*R\$\s*255\.605,53\*/.test(texto), texto);
-  assert.ok(/J2A Consultoria: Saldo Bancario Base: \*R\$\s*800\.223,21\* \| A receber: \*R\$\s*40\.905,17\* \| A pagar: \*R\$\s*43\.592,81\* \| Fluxo Liquido: \*R\$\s*790\.995,49\*/.test(texto), texto);
+  assert.ok(/\*Subtotal\*: Saldo Bancario Base: \*R\$\s*1\.051\.311,01\* \| A receber: \*R\$\s*53\.090,17\* \| A pagar: \*R\$\s*51\.260,08\* \| Saldo Bancario Final: \*R\$\s*1\.046\.601,02\*/.test(texto), texto);
+  assert.ok(/C3i Systems: Saldo Bancario Base: \*R\$\s*251\.087,80\* \| A receber: \*R\$\s*12\.185,00\* \| A pagar: \*R\$\s*7\.667,27\* \| Saldo Bancario Final: \*R\$\s*255\.605,53\*/.test(texto), texto);
+  assert.ok(/J2A Consultoria: Saldo Bancario Base: \*R\$\s*800\.223,21\* \| A receber: \*R\$\s*40\.905,17\* \| A pagar: \*R\$\s*43\.592,81\* \| Saldo Bancario Final: \*R\$\s*790\.995,49\*/.test(texto), texto);
   assert.ok(texto.lastIndexOf('*Total Geral*:') > texto.indexOf('*Por Empresa*'), texto);
-  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*1\.051\.311,01\* \| A receber: \*R\$\s*53\.090,17\* \| A pagar: \*R\$\s*51\.260,08\* \| Fluxo Liquido: \*R\$\s*1\.046\.601,02\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Saldo Bancario Base: \*R\$\s*1\.051\.311,01\* \| A receber: \*R\$\s*53\.090,17\* \| A pagar: \*R\$\s*51\.260,08\* \| Saldo Bancario Final: \*R\$\s*1\.046\.601,02\*/.test(texto), texto);
   assert.ok(!/Saldo Bancario Base: \*R\$\s*4\.801\.339,26\*/.test(texto), texto);
 });
 
 console.log(`\nwhatsapp-canonical-format.test.js: ${passou} passaram, ${falhou} falharam`);
 if (falhou) process.exit(1);
+

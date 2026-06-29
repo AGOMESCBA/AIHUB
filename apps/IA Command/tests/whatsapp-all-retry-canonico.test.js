@@ -45,6 +45,24 @@ function sucessoC3I(iteracao) {
   };
 }
 
+function sucessoRetryJ2A(iteracao) {
+  const sqlJ2A = sqlC3I.replace(/SE2020/g, 'SE2010');
+  return {
+    tipo: 'sucesso_ai_sql',
+    resposta_direta: `J2A retry ok ${iteracao}`,
+    rows: [{ faturamento: 100 + iteracao }],
+    sql_gerado: sqlJ2A,
+    _sql_canonico: sqlJ2A,
+    _sql_canonico_origem: 'ia_owner_reuso',
+    _entidadesResolvidas: [],
+    _sql_auditoria: {
+      sql_ia_bruto: sqlC3I,
+      sql_final_executado: sqlJ2A,
+    },
+    duracao_ms: 3,
+  };
+}
+
 (async () => {
   try {
     intentService._garantirIntencoesDinamicasPadrao = () => {};
@@ -83,33 +101,37 @@ function sucessoC3I(iteracao) {
           };
         }
         if (empresaId === 2 && !intent._usarSqlCanonicoWhatsappAll) return sucessoC3I(iteracao);
+        if (empresaId === 1 && intent._usarSqlCanonicoWhatsappAll) return sucessoRetryJ2A(iteracao);
         throw new Error(`chamada inesperada empresa=${empresaId} canonico=${!!intent._usarSqlCanonicoWhatsappAll}`);
       };
 
       const resposta = await svc._pipelineAll(perguntaCrashFinanceiro, empresas, null);
 
-      assert.strictEqual(chamadas.length, 2, 'deve tentar J2A e C3I sem retry canonico cross-tenant');
+      assert.strictEqual(chamadas.length, 3, 'deve tentar J2A, gerar canonico na C3I e retentar J2A com o canonico');
       assert.strictEqual(chamadas[0].empresaId, 1, 'primeira tentativa deve ser J2A');
       assert.strictEqual(chamadas[0].intent._usarSqlCanonicoWhatsappAll, undefined, 'primeira tentativa nao tem canonico');
       assert.strictEqual(chamadas[1].empresaId, 2, 'segunda tentativa deve gerar canonico na C3I');
       assert.strictEqual(chamadas[1].intent._usarSqlCanonicoWhatsappAll, undefined, 'C3I gera SQL pela IA');
-      assert(resposta.includes('C3I ok'), 'resposta final deve incluir sucesso da empresa que executou');
-      assert(resposta.includes('Nao consegui consultar') || resposta.includes('não consegui consultar'), 'erro inicial da J2A deve permanecer visivel sem retry cross-tenant');
+      assert.strictEqual(chamadas[2].empresaId, 1, 'terceira chamada deve voltar para J2A');
+      assert.strictEqual(chamadas[2].intent._usarSqlCanonicoWhatsappAll, true, 'retry da J2A deve reusar o canonico, sem nova chamada de IA');
+      assert.strictEqual(chamadas[2].intent._sqlCanonicoEmpresaOrigem, 2, 'origem do canonico deve ser a C3I');
+      assert(resposta.includes('C3I ok') && resposta.includes('J2A retry ok'), 'resposta final deve incluir sucesso original e o retry via canonico');
+      assert(!resposta.includes('Nao consegui consultar') && !resposta.includes('não consegui consultar'), 'erro inicial da J2A deve ser removido apos retry bem-sucedido com o canonico');
       assert(
-        interpretacoes.some(p => p.empresaId === 1 && p.resultado?._diagnostico_tecnico?.retry_pendente),
-        'erro inicial da J2A deve registrar diagnostico tecnico com retry pendente historico',
+        interpretacoes.some(p => p.empresaId === 1 && p.resultado?._diagnostico_tecnico?.retry_sucesso === true),
+        'registro do retry deve marcar retry_sucesso=true para J2A',
       );
       assert(
-        !interpretacoes.some(p => p.empresaId === 1 && p.resultado?._retry_canonico),
-        'nao deve executar retry canonico cross-tenant no WhatsApp_all',
+        interpretacoes.some(p => p.empresaId === 1 && p.resultado?._retry_canonico),
+        'deve registrar que J2A foi resolvida via retry canonico cross-tenant',
       );
       assert(
-        interpretacoes.some(p => p.empresaId === 2 && p.resultado?._sql_canonico_reuso_permitido === false),
-        'SQL canonico deve ser auditado com reuso cross-tenant desativado',
+        interpretacoes.some(p => p.empresaId === 2 && p.resultado?._sql_canonico_reuso_permitido === true),
+        'SQL canonico da C3I deve ser auditado com reuso cross-tenant permitido',
       );
       assert(
         interpretacoes.some(p => p.empresaId === 2 && p.resultado?._sql_canonico_reuso_tecnico_permitido === true),
-        'auditoria deve manter a viabilidade tecnica do canonico separada da politica de execucao',
+        'auditoria deve manter a viabilidade tecnica do canonico',
       );
       assert(
         interpretacoes.some(p => p.resultado?._pipeline_origem === 'consolidado'),

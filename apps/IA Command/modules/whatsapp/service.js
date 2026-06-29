@@ -1159,6 +1159,29 @@ class IACWhatsAppService extends EventEmitter {
       const rawComp = companionKey ? String(row[companionKey] ?? '').trim() : '';
       return (rawComp && rawComp !== rawEnt) ? `${rawEnt} (${rawComp})` : rawEnt;
     };
+    const _metricCanon = col => {
+      const k = String(col || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      if (/^(saldo|saldo_atual|salatua|e8_salatua)$/.test(k)) return 'saldo';
+      if (/^(saldo_a_pagar|a_pagar|total_a_pagar|valor_a_pagar|e2_saldo)$/.test(k)) return 'a_pagar';
+      if (/^(saldo_a_receber|a_receber|total_a_receber|valor_a_receber|e1_saldo)$/.test(k)) return 'a_receber';
+      if (/^(valor_pago|valor_pago_total|total_pago|pago)$/.test(k)) return 'pago';
+      if (/^(valor_recebido|valor_recebido_total|total_recebido|recebido)$/.test(k)) return 'recebido';
+      if (/^(compra|compras|valor_compra|valor_compras|total_compra|total_compras|d1_total|f1_valbrut)$/.test(k)) return 'compras';
+      if (/^(faturamento|total_faturamento|valor_faturamento|receita|valor_receita|total_receita)$/.test(k)) return 'faturamento';
+      return k;
+    };
+    const _valorMetrica = (row, col) => {
+      if (!row) return 0;
+      const direto = parseFloat(row[col]);
+      if (!isNaN(direto)) return direto;
+      const canon = _metricCanon(col);
+      for (const [k, v] of Object.entries(row)) {
+        if (_metricCanon(k) !== canon) continue;
+        const n = parseFloat(v);
+        if (!isNaN(n)) return n;
+      }
+      return 0;
+    };
 
     const _subtituloConsolidado = (() => {
       const msg = String(intent._mensagemOriginal || '').trim();
@@ -1758,7 +1781,7 @@ class IACWhatsAppService extends EventEmitter {
       for (const s of sucessos) {
         const totais = {};
         for (const col of colsSomaveis) {
-          totais[col] = (s.rows || []).reduce((acc, r) => acc + (parseFloat(r[col]) || 0), 0);
+          totais[col] = (s.rows || []).reduce((acc, r) => acc + _valorMetrica(r, col), 0);
           totalGeral[col] = (totalGeral[col] || 0) + totais[col];
         }
         const c = (s.rows || []).length;
@@ -3794,6 +3817,8 @@ class IACWhatsAppService extends EventEmitter {
       // do interior de _processarEmpresa (que não é mais o return direto do _pipelineAll).
       let _respostaInterrupcao = null;
       const sucessosDinamicos = [];
+      let contratoSaidaDinamico = null;
+      let contratoSaidaEmpresaOrigem = null;
       const pendentesRetryCanonico = [];
       const subtiposRetryCanonico = new Set([
         'contrato_entidade_invalido',
@@ -3823,6 +3848,7 @@ class IACWhatsAppService extends EventEmitter {
           resultado_invalido_roteador: 'Roteador retornou resultado invalido',
           resultado_invalido_retry_canonico: 'Retry canonico retornou resultado invalido',
           sql_canonico_reuso_bloqueado: 'Reuso do SQL canonico foi bloqueado',
+          contrato_saida_multiempresa_invalido: 'Retorno da empresa nao segue o contrato de saida multiempresa',
           resultado_dinamico_nao_tratado: 'Resultado dinamico nao foi tratado pelo pipeline',
           excecao_pipeline_multiempresa: 'Excecao inesperada no pipeline multiempresa',
           excecao_retry_canonico: 'Excecao inesperada no retry canonico',
@@ -3876,7 +3902,51 @@ class IACWhatsAppService extends EventEmitter {
         });
         return resultadoAnomalia;
       };
+      const colunasContratoSaida = rows => {
+        if (!Array.isArray(rows) || !rows.length || !rows[0] || typeof rows[0] !== 'object') return [];
+        return Object.keys(rows[0]);
+      };
+      const contratosSaidaIguais = (esperado, recebido) =>
+        Array.isArray(esperado)
+        && Array.isArray(recebido)
+        && esperado.length === recebido.length
+        && esperado.every((col, idx) => col === recebido[idx]);
+      const erroContratoSaida = (emp, intentExecucao, colunasAtuais, retryExecutado = false, canonicoOrigem = null) => {
+        const nomeEmpresaErro = emp?.nome || `Empresa #${emp?.empresa_id || 'n/a'}`;
+        const mensagem = `${nomeEmpresaErro}: retorno com colunas diferentes do contrato multiempresa; consolidacao bloqueada para evitar total incorreto.`;
+        const detalhe = JSON.stringify({
+          empresa_origem: contratoSaidaEmpresaOrigem,
+          colunas_esperadas: contratoSaidaDinamico || [],
+          colunas_recebidas: colunasAtuais || [],
+        });
+        if (!errosDinamicos.includes(mensagem)) errosDinamicos.push(mensagem);
+        registrarAnomaliaDinamica({
+          emp,
+          intentExecucao,
+          subtipo: 'contrato_saida_multiempresa_invalido',
+          mensagem,
+          detalhe,
+          retryExecutado,
+          canonicoOrigem,
+        });
+      };
       const registrarSucessoDinamico = (emp, intentExecucao, resultado, respostaAiSql, nomeEmpresa, rows, registrado = true) => {
+        const colunasAtuais = colunasContratoSaida(rows);
+        if (colunasAtuais.length) {
+          if (!contratoSaidaDinamico) {
+            contratoSaidaDinamico = colunasAtuais;
+            contratoSaidaEmpresaOrigem = emp?.empresa_id || null;
+          } else if (!contratosSaidaIguais(contratoSaidaDinamico, colunasAtuais)) {
+            erroContratoSaida(
+              emp,
+              intentExecucao,
+              colunasAtuais,
+              !!(resultado?._retry_canonico || intentExecucao?._usarSqlCanonicoWhatsappAll),
+              resultado?._sqlCanonicoEmpresaOrigem || intentExecucao?._sqlCanonicoEmpresaOrigem || null
+            );
+            return false;
+          }
+        }
         const intentExecucaoContextual = this._intentComContextoDoResultado(intentExecucao, resultado, emp.empresa_id);
         sucessosDinamicos.push({
           empresaId: emp.empresa_id,
@@ -3887,6 +3957,7 @@ class IACWhatsAppService extends EventEmitter {
           rows: rows || [],
           _registrado: registrado,
         });
+        return true;
       };
       const tentarRetryCanonicoPendentes = async () => {
         if (!sqlCanonicoDinamico || bloqueioReusoCanonicoDinamico || !pendentesRetryCanonico.length) return;
@@ -4163,8 +4234,8 @@ class IACWhatsAppService extends EventEmitter {
               });
               const reusoPermitido = reusoCanonico.ok;
               resultado._sql_canonico_reuso_tecnico_permitido = !!reusoPermitido;
-              resultado._sql_canonico_reuso_permitido = false;
-              resultado._sql_canonico_reuso_motivo = reusoCanonico.motivo || 'whatsapp_all_cross_tenant_reuso_desativado';
+              resultado._sql_canonico_reuso_permitido = !!reusoPermitido;
+              resultado._sql_canonico_reuso_motivo = reusoCanonico.motivo || null;
               const sqlCanonicoAuditavel = sqlCanonicoParaReuso || resultado._sql_canonico_original || resultado._sql_canonico;
               resultado._sql_canonico_original = reusoCanonico.ok
                 ? sqlCanonicoAuditavel
@@ -4172,10 +4243,15 @@ class IACWhatsAppService extends EventEmitter {
               resultado._sql_canonico_parametros = canonico.parametros || [];
               resultado._sql_canonico_parametrizado = !!canonico.alterou;
               if (reusoPermitido) {
+                sqlCanonicoDinamico = sqlCanonicoAuditavel;
+                entidadesCanonicoDinamico = entidadesCanonico;
+                respostaPlanejadaCanonicaDinamico = resultado._ia_owner_plano?.resposta_planejada || resultado._resposta_planejada || null;
+                periodoCanonicoDinamico = resultado._ia_owner_plano?.periodo || resultado.periodo_resolvido || null;
                 const veioDaIaOwner = resultado._sql_canonico_origem === 'ia_owner' || !!resultado._ia_owner_plano;
-                this.log(`[All] SQL canonico registrado pela empresa #${emp.empresa_id}${veioDaIaOwner ? ' (ia_owner, sufixos normalizados)' : ''}; execucao direta cross-tenant desativada no WhatsApp_all. Proximas empresas usarao execucao completa.`, 'info');
+                this.log(`[All] SQL canonico definido pela empresa #${emp.empresa_id}${veioDaIaOwner ? ' (ia_owner, sufixos normalizados)' : ''}; proximas empresas serao adaptadas por SX2/SX3${canonico.alterou ? ' com entidades parametrizadas' : ''}.`, 'info');
               } else {
-                this.log(`[All] SQL canonico da empresa #${emp.empresa_id} registrado apenas para auditoria: ${resultado._sql_canonico_reuso_motivo}. Proximas empresas usarao execucao completa.`, 'warning');
+                bloqueioReusoCanonicoDinamico = reusoCanonico.motivo || 'sql_canonico_nao_reutilizavel';
+                this.log(`[All] SQL canonico da empresa #${emp.empresa_id} nao pode ser reutilizado: ${resultado._sql_canonico_reuso_motivo}. Nenhum SQL adicional sera gerado para as proximas empresas.`, 'warning');
               }
             }
             this.emit('iac-intent', {

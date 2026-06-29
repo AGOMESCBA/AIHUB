@@ -874,6 +874,43 @@ function totalTemporalRows(rows, dim, metricas) {
   return totalTemporalOrdenado(entries, metricas);
 }
 
+function isDimensaoDiaria(dim) {
+  const k = keyNorm(dim);
+  return /^(dia|data|data_.*|dt_.*|.*_data)$/.test(k);
+}
+
+function ajustarSaldoBaseDiario(entries, dim, metricas) {
+  if (!isDimensaoDiaria(dim) || !temMetricaPosicional(metricas)) return entries;
+  const baseCol = metricas.find(col => tipoMetricaTemporal(col) === 'primeiro');
+  const finalCol = metricas.find(col => tipoMetricaTemporal(col) === 'ultimo');
+  if (!baseCol || !finalCol) return entries;
+
+  let saldoAnterior = null;
+  return entries.map(([label, totais]) => {
+    const ajustado = { ...totais };
+    if (saldoAnterior !== null) ajustado[baseCol] = saldoAnterior;
+    const finalAtual = parseNumber(ajustado[finalCol]);
+    if (finalAtual !== null) saldoAnterior = finalAtual;
+    return [label, ajustado];
+  });
+}
+
+function posicaoInicialTemporal(porPeriodo, dim, metricas) {
+  const entries = [...porPeriodo.entries()]
+    .sort(([a], [b]) => sortValorDimensao(dim, a).localeCompare(sortValorDimensao(dim, b)));
+  const out = totalVazio(metricas);
+  if (!entries.length) return { totais: out, temPosicao: false };
+
+  const primeira = entries[0][1] || {};
+  const baseCol = metricas.find(col => tipoMetricaTemporal(col) === 'primeiro');
+  for (const col of metricas) {
+    const tipo = tipoMetricaTemporal(col);
+    if (tipo === 'soma') continue;
+    out[col] = tipo === 'ultimo' && baseCol ? toNumber(primeira[baseCol]) : toNumber(primeira[col]);
+  }
+  return { totais: out, temPosicao: true };
+}
+
 function labelMetricaCategoria(col, categoria) {
   const cat = categoriaSemantica(categoria);
   if (!cat) return labelMetrica(col);
@@ -1084,6 +1121,7 @@ function renderSingle(rows, opts = {}) {
       ? sortValorDimensao(dim, labelA).localeCompare(sortValorDimensao(dim, labelB))
       : (b[primary] || 0) - (a[primary] || 0));
   if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
+  entradas = ajustarSaldoBaseDiario(entradas, dim, shape.metricas);
 
   const metricasTotal = metricasTotalizaveis(shape.metricas);
   linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
@@ -1200,10 +1238,11 @@ function renderAll(sucessos, opts = {}) {
         const totais = porPeriodo.get(label);
         for (const col of shape.metricas) totais[col] += toNumber(row[col]);
       }
-      return { ...s, porPeriodo, ultimaPosicao: totalVazio(shape.metricas), temUltima: false };
+      const inicial = posicaoInicialTemporal(porPeriodo, dim, shape.metricas);
+      return { ...s, porPeriodo, ultimaPosicao: inicial.totais, temUltima: inicial.temPosicao };
     });
 
-    const entradas = labels.map(label => {
+    let entradas = labels.map(label => {
       const totais = totalVazio(shape.metricas);
       for (const empresa of porEmpresa) {
         const atual = empresa.porPeriodo.get(label);
@@ -1224,6 +1263,7 @@ function renderAll(sucessos, opts = {}) {
       }
       return [label, totais];
     });
+    entradas = ajustarSaldoBaseDiario(entradas, dim, shape.metricas);
 
     const totalGeral = totalVazio(shape.metricas);
     for (const col of shape.metricas) {
