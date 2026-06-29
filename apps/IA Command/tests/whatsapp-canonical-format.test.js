@@ -5,6 +5,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const canonical = require(path.join(ROOT, 'modules/erp/canonical-whatsapp-format'));
+const whatsappPrompt = require(path.join(ROOT, 'modules/erp/whatsapp-format-prompt'));
 
 let passou = 0;
 let falhou = 0;
@@ -199,6 +200,8 @@ ok('financeiro aberto: consolidado separa carteira pagar e receber com alias uni
   assert.ok(texto.includes('J2A Consultoria: A pagar:'), texto);
   assert.ok(/A pagar: \*R\$\s*756\.648,37\*/.test(texto), texto);
   assert.ok(/A receber: \*R\$\s*505\.299,91\*/.test(texto), texto);
+  assert.ok(/\*Resultado\*: \*-R\$\s*251\.348,46\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: -R\$\s*251\.348,46/.test(texto), texto);
   assert.ok(!/A pagar: \*R\$\s*1\.261\.948,28\*/.test(texto), texto);
 });
 
@@ -218,7 +221,7 @@ ok('financeiro aberto detalhado: rotulo acompanha categoria pagar e receber', ()
   assert.ok(/\*pagar\*: A pagar: \*R\$\s*6\.939,57\*/.test(texto), texto);
   assert.ok(/ALELO: A pagar: \*R\$\s*3\.550,00\*/.test(texto), texto);
   assert.ok(/\*receber\*: A receber: \*R\$\s*9\.085,00\*/.test(texto), texto);
-  assert.ok(/\*Total Geral\*: A pagar: \*R\$\s*6\.939,57\* \| A receber: \*R\$\s*9\.085,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Resultado: \*R\$\s*2\.145,43\*/.test(texto), texto);
   assert.ok(!/pagar[\s\S]{0,160}A receber: \*R\$\s*6\.939,57/.test(texto), texto);
 });
 
@@ -242,7 +245,7 @@ ok('financeiro aberto detalhado: consolidado rotula categoria corretamente', () 
 
   assert.ok(/1\. \*pagar\*: A pagar: \*R\$\s*57\.800,16\*/.test(texto), texto);
   assert.ok(/2\. \*receber\*: A receber: \*R\$\s*53\.090,17\*/.test(texto), texto);
-  assert.ok(/\*Total Geral\*: A pagar: \*R\$\s*57\.800,16\* \| A receber: \*R\$\s*53\.090,17\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Resultado: \*-R\$\s*4\.709,99\*/.test(texto), texto);
   assert.ok(!/pagar[\s\S]{0,160}A receber: \*R\$\s*57\.800,16/.test(texto), texto);
 });
 
@@ -257,6 +260,7 @@ ok('categoria semantica: separa entrada e saida com alias unico', () => {
   assert.strictEqual(shape.tipo, 'categoria_metrica_unica');
   assert.ok(/Entrada: \*R\$\s*1\.500,00\*/.test(texto), texto);
   assert.ok(/Saida: \*R\$\s*700,00\*/.test(texto), texto);
+  assert.ok(/Total Geral\*: Resultado: \*R\$\s*800,00\*/.test(texto), texto);
   assert.ok(!/Valor Total: \*R\$\s*2\.200,00\*/.test(texto), texto);
 });
 
@@ -271,6 +275,7 @@ ok('categoria semantica: separa receita e despesa com alias unico', () => {
   assert.strictEqual(shape.tipo, 'categoria_metrica_unica');
   assert.ok(/Receita: \*R\$\s*8\.000,00\*/.test(texto), texto);
   assert.ok(/Despesa: \*R\$\s*3\.000,00\*/.test(texto), texto);
+  assert.ok(/Total Geral\*: Resultado: \*R\$\s*5\.000,00\*/.test(texto), texto);
   assert.ok(!/Total: \*R\$\s*11\.000,00\*/.test(texto), texto);
 });
 
@@ -286,9 +291,51 @@ ok('categoria semantica: preserva rotulos compras e faturamento', () => {
 
   assert.ok(/\*faturamento\*: Faturamento: \*R\$\s*12\.000,00\*/.test(texto), texto);
   assert.ok(/\*compras\*: Compras: \*R\$\s*4\.500,00\*/.test(texto), texto);
-  assert.ok(/\*Total Geral\*: Faturamento: \*R\$\s*12\.000,00\* \| Compras: \*R\$\s*4\.500,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Resultado: \*R\$\s*7\.500,00\*/.test(texto), texto);
   assert.ok(!/faturamento[\s\S]{0,120}Receita: \*R\$\s*12\.000,00/.test(texto), texto);
   assert.ok(!/compras[\s\S]{0,120}Despesa: \*R\$\s*4\.500,00/.test(texto), texto);
+});
+
+ok('categoria semantica por competencia: subtotal e total usam faturamento menos compras', () => {
+  const rows = [
+    { competencia: '202506', categoria: 'compras', valor: 36018.69 },
+    { competencia: '202506', categoria: 'faturamento', valor: 25142.04 },
+    { competencia: '202606', categoria: 'faturamento', valor: 180553.69 },
+    { competencia: '202606', categoria: 'compras', valor: 10437.69 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Compras e Faturamento',
+    contextoConsulta: 'comparando junho de 2026 com junho de 2025',
+  });
+
+  assert.ok(/Junho\/2025\*: Resultado: \*-R\$\s*10\.876,65\*/.test(texto), texto);
+  assert.ok(/faturamento: Faturamento: \*R\$\s*25\.142,04\*/.test(texto), texto);
+  assert.ok(/compras: Compras: \*R\$\s*36\.018,69\*/.test(texto), texto);
+  assert.ok(/Subtotal: Resultado: \*-R\$\s*10\.876,65\*/.test(texto), texto);
+  assert.ok(/Junho\/2026\*: Resultado: \*R\$\s*170\.116,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Resultado: \*R\$\s*159\.239,35\*/.test(texto), texto);
+  assert.ok(!/Total Geral\*: Compras: \*R\$\s*252\.152,11/.test(texto), texto);
+});
+
+ok('categoria semantica por competencia: subtotal e total usam receber menos pagar', () => {
+  const rows = [
+    { competencia: '202606', categoria: 'receber', saldo: 53090.17 },
+    { competencia: '202606', categoria: 'pagar', saldo: 57800.16 },
+    { competencia: '202607', categoria: 'receber', saldo: 10000 },
+    { competencia: '202607', categoria: 'pagar', saldo: 4000 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Contas a receber e a pagar por competencia',
+  });
+
+  assert.ok(/Junho\/2026\*: Resultado: \*-R\$\s*4\.709,99\*/.test(texto), texto);
+  assert.ok(/receber: A receber: \*R\$\s*53\.090,17\*/.test(texto), texto);
+  assert.ok(/pagar: A pagar: \*R\$\s*57\.800,16\*/.test(texto), texto);
+  assert.ok(/Subtotal: Resultado: \*-R\$\s*4\.709,99\*/.test(texto), texto);
+  assert.ok(/Julho\/2026\*: Resultado: \*R\$\s*6\.000,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Resultado: \*R\$\s*1\.290,01\*/.test(texto), texto);
+  assert.ok(!/Total Geral\*: Saldo: \*R\$\s*124\.890,33/.test(texto), texto);
 });
 
 ok('etapa 2: formata uma dimensao por vendedor', () => {
@@ -449,6 +496,60 @@ ok('comparativo anual simples: agrupa metricas por periodo atual e ano comparado
   assert.ok(!texto.includes('Total Compras 2025'), texto);
 });
 
+ok('comparativo anual fallback direto: resposta individual tambem agrupa por periodo', () => {
+  const rows = [
+    {
+      total_compras: 10437.69,
+      total_faturamento: 180553.69,
+      total_compras_2025: 37787.81,
+      total_faturamento_2025: 23306.28,
+      total_compras_2024: 45477.39,
+      total_faturamento_2024: 24574.06,
+    },
+  ];
+  const texto = whatsappPrompt.buildFormatComparativoSimples(rows, {
+    contextoConsulta: 'Preciso do total das compras e do faturamento do mes de junho de 2026 comparando com o mes de junho de 2025 e 2024.',
+  });
+
+  assert.ok(texto.includes('*Junho/2026*'), texto);
+  assert.ok(texto.includes('*Junho/2025*'), texto);
+  assert.ok(texto.includes('*Junho/2024*'), texto);
+  assert.ok(/Junho\/2026[\s\S]*Compras: R\$\s*10\.437,69[\s\S]*Faturamento: R\$\s*180\.553,69[\s\S]*Resultado.*R\$\s*170\.116,00/.test(texto), texto);
+  assert.ok(/Junho\/2025[\s\S]*Compras: R\$\s*37\.787,81[\s\S]*Faturamento: R\$\s*23\.306,28/.test(texto), texto);
+  assert.ok(!texto.includes('Total Compras 2025'), texto);
+  assert.ok(!texto.includes('Resultado (Fat'), texto);
+});
+
+ok('comparativo anual fallback direto: usa o mesmo formato para recebido menos pago', () => {
+  const rows = [
+    {
+      valor_recebido: 1000,
+      valor_pago: 600,
+      valor_recebido_2025: 800,
+      valor_pago_2025: 500,
+    },
+  ];
+  const texto = whatsappPrompt.buildFormatComparativoSimples(rows, {
+    contextoConsulta: 'Recebido e pago de junho de 2026 comparando com junho de 2025',
+  });
+
+  assert.ok(texto.includes('*Junho/2026*'), texto);
+  assert.ok(texto.includes('*Junho/2025*'), texto);
+  assert.ok(/Junho\/2026[\s\S]*Pago: R\$\s*600,00[\s\S]*Recebido: R\$\s*1\.000,00[\s\S]*Resultado.*R\$\s*400,00/.test(texto), texto);
+  assert.ok(/Junho\/2025[\s\S]*Pago: R\$\s*500,00[\s\S]*Recebido: R\$\s*800,00[\s\S]*Resultado.*R\$\s*300,00/.test(texto), texto);
+});
+
+ok('metricas simples: calcula resultado para entrada menos saida', () => {
+  const texto = canonical.renderSingle([
+    { entrada: 1500, saida: 700 },
+  ], { nomeModulo: 'Financeiro', contextoConsulta: 'Entrada e saida' });
+
+  assert.ok(/Entradas: \*R\$\s*1\.500,00\*/.test(texto), texto);
+  assert.ok(/Saidas: \*R\$\s*700,00\*/.test(texto), texto);
+  assert.ok(/Resultado\*: \*R\$\s*800,00\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: R\$\s*800,00/.test(texto), texto);
+});
+
 ok('comparativo anual simples: consolidado agrupa por periodo antes do total geral', () => {
   const texto = canonical.renderAll([
     {
@@ -470,6 +571,18 @@ ok('comparativo anual simples: consolidado agrupa por periodo antes do total ger
   assert.ok(/Junho\/2025[\s\S]*Compras: \*R\$\s*394\.592,87\*[\s\S]*Faturamento: \*R\$\s*584\.908,72\*/.test(texto), texto);
   assert.ok(/\*Total Geral\*: Junho\/2026: \*R\$\s*456\.579,79\* \| Junho\/2025: \*R\$\s*190\.315,85\*/.test(texto), texto);
   assert.ok(!texto.includes('Total Compras 2025'), texto);
+});
+
+ok('comparativo temporal sem periodo: nao exibe resumo agregado ambiguo', () => {
+  const mensagem = 'Preciso do total das compras e do faturamento do mes de junho de 2026 comparando com o mes de junho de 2025 e 2024.';
+  const texto = canonical.renderSingle([
+    { total_compras: 91933.77, total_faturamento: 230269.79 },
+  ], { nomeModulo: 'Compras e Faturamento', contextoConsulta: mensagem });
+
+  assert.ok(texto.includes('Nao consegui formatar o comparativo por periodo'), texto);
+  assert.ok(texto.includes('sem coluna de competencia/ano'), texto);
+  assert.ok(!texto.includes('*Resumo*'), texto);
+  assert.ok(!texto.includes('Total Geral: R$'), texto);
 });
 
 ok('etapa 4: formata detalhe por cliente e documento', () => {

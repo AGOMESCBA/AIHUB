@@ -1456,6 +1456,83 @@ function buildFormatComparativoSimples(rows, { contextoConsulta = null } = {}) {
   if (colTemporal || colEntidade) return null;
   if (!numCols || numCols.length < 2) return null;
 
+  const paresResultado = [
+    { titulo: 'Compras e Faturamento', aLabel: 'Faturamento', bLabel: 'Compras', aKey: 'faturamento', bKey: 'compras', a: /faturamento|receita/i, b: /compra/i },
+    { titulo: 'Recebido e Pago', aLabel: 'Recebido', bLabel: 'Pago', aKey: 'recebido', bKey: 'pago', a: /recebido|valor_recebido/i, b: /pago|valor_pago/i },
+    { titulo: 'A receber e A pagar', aLabel: 'A receber', bLabel: 'A pagar', aKey: 'a_receber', bKey: 'a_pagar', a: /a_?receber|saldo_a_receber|total_a_receber/i, b: /a_?pagar|saldo_a_pagar|total_a_pagar/i },
+    { titulo: 'Entrada e Saida', aLabel: 'Entrada', bLabel: 'Saida', aKey: 'entrada', bKey: 'saida', a: /entrada/i, b: /saida/i },
+    { titulo: 'Receita e Despesa', aLabel: 'Receita', bLabel: 'Despesa', aKey: 'receita', bKey: 'despesa', a: /receita/i, b: /despesa|custo/i },
+  ];
+  const parResultado = paresResultado.find(par =>
+    numCols.some(k => par.a.test(k)) && numCols.some(k => par.b.test(k))
+  );
+  if (parResultado) {
+    const row = rows[0];
+    const baseAno = (k) => {
+      const m = String(k || '').match(/^(.*?)[_\s-]+(20\d{2})$/);
+      return m ? { base: m[1], ano: m[2] } : null;
+    };
+    const anoAtual = (() => {
+      const anos = [...String(contextoConsulta || '').matchAll(/\b(20\d{2})\b/g)].map(m => m[1]);
+      return anos[0] || null;
+    })();
+    const mesAtual = (() => {
+      const t = String(contextoConsulta || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const meses = [
+        ['janeiro', 1], ['jan', 1], ['fevereiro', 2], ['fev', 2], ['marco', 3], ['mar', 3],
+        ['abril', 4], ['abr', 4], ['maio', 5], ['mai', 5], ['junho', 6], ['jun', 6],
+        ['julho', 7], ['jul', 7], ['agosto', 8], ['ago', 8], ['setembro', 9], ['set', 9],
+        ['outubro', 10], ['out', 10], ['novembro', 11], ['nov', 11], ['dezembro', 12], ['dez', 12],
+      ];
+      const found = meses.find(([nome]) => new RegExp(`\\b${nome}\\b`).test(t));
+      return found ? found[1] : null;
+    })();
+    const mesesNome = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const periodoAno = ano => mesAtual ? `${mesesNome[mesAtual - 1]}/${ano}` : String(ano);
+    const gruposAno = new Map();
+    let valorA = null;
+    let valorB = null;
+    for (const col of numCols) {
+      const info = baseAno(col);
+      const base = info ? info.base : col;
+      const ano = info ? info.ano : anoAtual;
+      const baseKey = String(base || '').toLowerCase();
+      const val = parseFloat(row[col]) || 0;
+      if (parResultado.a.test(baseKey) && valorA === null) valorA = val;
+      if (parResultado.b.test(baseKey) && valorB === null) valorB = val;
+      if (!ano) continue;
+      if (!parResultado.a.test(baseKey) && !parResultado.b.test(baseKey)) continue;
+      if (!gruposAno.has(ano)) gruposAno.set(ano, { [parResultado.aKey]: 0, [parResultado.bKey]: 0 });
+      const grupo = gruposAno.get(ano);
+      if (parResultado.a.test(baseKey)) grupo[parResultado.aKey] += val;
+      if (parResultado.b.test(baseKey)) grupo[parResultado.bKey] += val;
+    }
+    if (anoAtual && gruposAno.size >= 2 && gruposAno.has(anoAtual)) {
+      const anos = [anoAtual, ...[...gruposAno.keys()].filter(ano => ano !== anoAtual).sort((a, b) => Number(b) - Number(a))];
+      const linhas = [`📊 ${[parResultado.titulo, contextoConsulta].filter(Boolean).join(' — ')}`, '', '📊 *Comparativo*'];
+      for (const ano of anos) {
+        const grupo = gruposAno.get(ano) || { [parResultado.aKey]: 0, [parResultado.bKey]: 0 };
+        const resultado = _arredondar2((grupo[parResultado.aKey] || 0) - (grupo[parResultado.bKey] || 0));
+        linhas.push(`📅 *${periodoAno(ano)}*`);
+        linhas.push(`  1. ${parResultado.bLabel}: ${_BRL(grupo[parResultado.bKey] || 0)}`);
+        linhas.push(`  2. ${parResultado.aLabel}: ${_BRL(grupo[parResultado.aKey] || 0)}`);
+        linhas.push(`  🧾 *Resultado*: ${_BRL(resultado)}`);
+        linhas.push('');
+      }
+      return linhas.join('\n').trim();
+    }
+    if (valorA !== null && valorB !== null) {
+      const linhas = [`📊 ${[parResultado.titulo, contextoConsulta].filter(Boolean).join(' — ')}`, ''];
+      linhas.push(`1. ${parResultado.aLabel}: ${_BRL(valorA)}`);
+      linhas.push(`2. ${parResultado.bLabel}: ${_BRL(valorB)}`);
+      linhas.push('');
+      linhas.push(`📈 *Resultado*: ${_BRL(_arredondar2(valorA - valorB))}`);
+      return linhas.join('\n');
+    }
+  }
+
+  return null;
+
   const _RE_FAT  = /faturamento|receita/i;
   const _RE_COMP = /compra/i;
 
@@ -1469,8 +1546,64 @@ function buildFormatComparativoSimples(rows, { contextoConsulta = null } = {}) {
     total_faturamento: 'Faturamento', faturamento: 'Faturamento', receita: 'Receita',
     total_compras: 'Compras', compras: 'Compras',
   };
+  const _baseAno = (k) => {
+    const m = String(k || '').match(/^(.*?)[_\s-]+(20\d{2})$/);
+    return m ? { base: m[1], ano: m[2] } : null;
+  };
   const _labelMetrica = (k) =>
     _LABELS[k.toLowerCase()] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const _anoAtual = (() => {
+    const anos = [...String(contextoConsulta || '').matchAll(/\b(20\d{2})\b/g)].map(m => m[1]);
+    return anos[0] || null;
+  })();
+  const _mesAtual = (() => {
+    const t = String(contextoConsulta || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const meses = [
+      ['janeiro', 1], ['jan', 1], ['fevereiro', 2], ['fev', 2], ['marco', 3], ['mar', 3],
+      ['abril', 4], ['abr', 4], ['maio', 5], ['mai', 5], ['junho', 6], ['jun', 6],
+      ['julho', 7], ['jul', 7], ['agosto', 8], ['ago', 8], ['setembro', 9], ['set', 9],
+      ['outubro', 10], ['out', 10], ['novembro', 11], ['nov', 11], ['dezembro', 12], ['dez', 12],
+    ];
+    const found = meses.find(([nome]) => new RegExp(`\\b${nome}\\b`).test(t));
+    return found ? found[1] : null;
+  })();
+  const _MESES = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const _periodoAno = ano => _mesAtual ? `${_MESES[_mesAtual - 1]}/${ano}` : String(ano);
+
+  const gruposAno = new Map();
+  for (const col of numCols) {
+    const info = _baseAno(col);
+    const base = info ? info.base : col;
+    const ano = info ? info.ano : _anoAtual;
+    if (!ano) continue;
+    const baseKey = base.toLowerCase();
+    if (!_RE_FAT.test(baseKey) && !_RE_COMP.test(baseKey)) continue;
+    if (!gruposAno.has(ano)) gruposAno.set(ano, { compras: 0, faturamento: 0 });
+    const grupo = gruposAno.get(ano);
+    const val = parseFloat(row[col]) || 0;
+    if (_RE_FAT.test(baseKey)) grupo.faturamento += val;
+    if (_RE_COMP.test(baseKey)) grupo.compras += val;
+  }
+
+  if (_anoAtual && gruposAno.size >= 2 && gruposAno.has(_anoAtual)) {
+    const anos = [_anoAtual, ...[...gruposAno.keys()].filter(ano => ano !== _anoAtual).sort((a, b) => Number(b) - Number(a))];
+    const tituloMetricas = 'Compras e Faturamento';
+    const hdrParts = [tituloMetricas, contextoConsulta].filter(Boolean);
+    const linhas = [];
+    linhas.push(`ðŸ“Š ${hdrParts.join(' â€” ')}`);
+    linhas.push('');
+    linhas.push('ðŸ“Š *Comparativo*');
+    for (const ano of anos) {
+      const grupo = gruposAno.get(ano) || { compras: 0, faturamento: 0 };
+      const resultado = _arredondar2((grupo.faturamento || 0) - (grupo.compras || 0));
+      linhas.push(`ðŸ“… *${_periodoAno(ano)}*`);
+      linhas.push(`  1. Compras: ${_BRL(grupo.compras || 0)}`);
+      linhas.push(`  2. Faturamento: ${_BRL(grupo.faturamento || 0)}`);
+      linhas.push(`  ðŸ§¾ *Resultado*: ${_BRL(resultado)}`);
+      linhas.push('');
+    }
+    return linhas.join('\n').trim();
+  }
 
   const _emojiMetrica = (k) => {
     if (_RE_FAT.test(k))  return '💰';

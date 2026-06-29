@@ -246,6 +246,31 @@ function renderComparativoAnoMetricas(linhas, totais, metricas, opts = {}) {
   return true;
 }
 
+function perguntaComparativaTemporal(opts = {}) {
+  const texto = norm(opts.contextoConsulta || opts.mensagem || '');
+  const anos = [...String(opts.contextoConsulta || opts.mensagem || '').matchAll(/\b(20\d{2})\b/g)].map(m => m[1]);
+  return /\b(compar|comparando|comparativo|versus|vs)\b/.test(texto) && new Set(anos).size >= 2;
+}
+
+function metricasPedemResultado(metricas = []) {
+  const ks = new Set((metricas || []).map(keyNorm));
+  const has = (...aliases) => aliases.some(alias => ks.has(alias));
+  return (has('total_faturamento', 'faturamento', 'receita') && has('total_compras', 'compras'))
+    || (has('valor_recebido', 'recebido', 'a_receber', 'saldo_a_receber', 'total_a_receber') && has('valor_pago', 'pago', 'a_pagar', 'saldo_a_pagar', 'total_a_pagar'))
+    || (has('entrada', 'entradas', 'valor_entrada', 'total_entrada') && has('saida', 'saidas', 'valor_saida', 'total_saida'))
+    || (has('receita', 'receitas', 'valor_receita', 'total_receita') && has('despesa', 'despesas', 'valor_despesa', 'total_despesa', 'custo', 'custos', 'total_custo'));
+}
+
+function renderAvisoComparativoSemPeriodo(linhas, opts = {}, metricas = []) {
+  if (!perguntaComparativaTemporal(opts)) return false;
+  if (!metricasPedemResultado(metricas)) return false;
+  if ((metricas || []).some(infoComparativoAno)) return false;
+  linhas.push('\u{26A0}\u{FE0F} *Nao consegui formatar o comparativo por periodo.*');
+  linhas.push('O retorno chegou sem coluna de competencia/ano e sem colunas separadas por ano.');
+  linhas.push('Para comparar periodos, o resultado precisa trazer cada mes/ano separado, por exemplo `competencia` + `categoria`, ou colunas como `total_compras_2025` e `total_faturamento_2025`.');
+  return true;
+}
+
 // Mapa de rotulos vindo do SX3 do tenant (campo fisico Protheus -> titulo cadastrado).
 // Setado por setLabelsSx3() antes de formatar; permite que labelMetrica/labelDimensao
 // resolvam campos fisicos (ex: E2_VENCREA) sem depender de heuristica regex ou hardcode.
@@ -497,10 +522,14 @@ function somarMetricas(rows, metricas) {
 
 function formulaResultado(metricas, totais) {
   const byNorm = new Map(metricas.map(col => [keyNorm(col), col]));
+  const keys = [...byNorm.keys()];
+  if (keys.some(k => /saldo.*base|base.*saldo|saldo_bancario|bancario_base|fluxo.*liquido|liquido.*fluxo|saldo.*final|final.*saldo/.test(k))) return null;
   const pares = [
     { a: ['valor_recebido', 'valor_recebido_total'], b: ['valor_pago', 'valor_pago_total'], label: 'Resultado' },
     { a: ['total_faturamento', 'faturamento', 'receita'], b: ['total_compras', 'compras'], label: 'Resultado' },
-    { a: ['receita'], b: ['custo', 'total_custo'], label: 'Resultado' },
+    { a: ['a_receber', 'saldo_a_receber', 'total_a_receber'], b: ['a_pagar', 'saldo_a_pagar', 'total_a_pagar'], label: 'Resultado' },
+    { a: ['entrada', 'entradas', 'valor_entrada', 'total_entrada'], b: ['saida', 'saidas', 'valor_saida', 'total_saida'], label: 'Resultado' },
+    { a: ['receita', 'receitas', 'valor_receita', 'total_receita'], b: ['despesa', 'despesas', 'valor_despesa', 'total_despesa', 'custo', 'custos', 'total_custo'], label: 'Resultado' },
   ];
   for (const par of pares) {
     const colA = par.a.map(k => byNorm.get(k)).find(Boolean);
@@ -556,6 +585,34 @@ function totaisPorCategoria(grupos, metricas) {
 
 function valsTotaisPorCategoria(entradas) {
   return entradas.map(([label, valor]) => `${label}: *${brl(valor)}*`).join(' | ');
+}
+
+function totaisPorCategoriaItens(itens, metricas) {
+  const out = new Map();
+  for (const [categoria, totais] of itens.entries()) {
+    for (const col of metricas) {
+      const label = labelMetricaCategoria(col, categoria);
+      out.set(label, (out.get(label) || 0) + toNumber(totais?.[col]));
+    }
+  }
+  return [...out.entries()]
+    .sort(([a], [b]) => ordemCategoriaLabel(a) - ordemCategoriaLabel(b) || a.localeCompare(b));
+}
+
+function resultadoCategorias(entradas) {
+  const mapa = new Map((entradas || []).map(([label, valor]) => [keyNorm(label), toNumber(valor)]));
+  const pares = [
+    { a: ['faturamento', 'receita'], b: ['compras'], label: 'Resultado' },
+    { a: ['a_receber', 'recebido'], b: ['a_pagar', 'pago'], label: 'Resultado' },
+    { a: ['receita'], b: ['despesa', 'despesas', 'custo', 'custos'], label: 'Resultado' },
+    { a: ['entrada', 'entradas'], b: ['saida', 'saidas'], label: 'Resultado' },
+  ];
+  for (const par of pares) {
+    const keyA = par.a.find(k => mapa.has(k));
+    const keyB = par.b.find(k => mapa.has(k));
+    if (keyA && keyB) return { label: par.label, valor: mapa.get(keyA) - mapa.get(keyB) };
+  }
+  return null;
 }
 
 function colBaseCrescimento(metricas = []) {
@@ -1057,12 +1114,14 @@ function valsCategoriaMetricaUnica(entradas) {
 
 function renderCategoriaMetricaUnica(rows, shape, linhas) {
   const entradas = montarCategoriaMetricaUnica(rows, shape);
+  const resultado = resultadoCategorias(entradas);
   linhas.push('\u{1F4CA} *Resumo*');
   entradas.forEach(([label, valor], idx) => {
     linhas.push(`  ${idx + 1}. ${label}: *${brl(valor)}*`);
   });
   linhas.push('');
-  linhas.push(`*Total Geral*: ${valsCategoriaMetricaUnica(entradas)}`);
+  if (resultado) linhas.push(`*Total Geral*: ${resultado.label}: *${brl(resultado.valor)}*`);
+  else linhas.push(`*Total Geral*: ${valsCategoriaMetricaUnica(entradas)}`);
 }
 
 function montarDuasDimensoes(rows, shape) {
@@ -1100,6 +1159,7 @@ function renderDuasDimensoes(rows, shape, linhas) {
   const primary = shape.metricas[0];
   const detalheDoc = shape.tipo === 'detalhe_documento';
   const outerEhCategoria = isCategoriaSemantica(outerDim);
+  const innerEhCategoria = isCategoriaSemantica(innerDim);
   const titulo = detalheDoc
     ? `Detalhamento por ${labelDimensao(outerDim)} e Documento`
     : `Por ${labelDimensao(outerDim)} e ${labelDimensao(innerDim)}`;
@@ -1107,14 +1167,19 @@ function renderDuasDimensoes(rows, shape, linhas) {
   linhas.push(`\u{1F4CB} *${titulo}*`);
   const gruposOrdenados = ordenarEntradasDimensao([...grupos.entries()], outerDim, primary);
   gruposOrdenados.slice(0, 50).forEach(([outer, grupo], idxGrupo) => {
-    const valsGrupo = outerEhCategoria ? valsMetricasPorCategoria(grupo.total, shape.metricas, outer) : valsMetricas(grupo.total, shape.metricas);
+    const resultadoGrupo = innerEhCategoria ? resultadoCategorias(totaisPorCategoriaItens(grupo.itens, shape.metricas)) : null;
+    const valsGrupo = resultadoGrupo
+      ? `${resultadoGrupo.label}: *${brl(resultadoGrupo.valor)}*`
+      : outerEhCategoria ? valsMetricasPorCategoria(grupo.total, shape.metricas, outer) : valsMetricas(grupo.total, shape.metricas);
     linhas.push('');
     linhas.push(`${idxGrupo + 1}. *${labelValorDimensao(outerDim, outer)}*: ${valsGrupo}`);
 
     const itensOrdenados = ordenarEntradasDimensao([...grupo.itens.entries()], innerDim, primary);
     itensOrdenados.slice(0, 50).forEach(([inner, totais], idxItem) => {
       const label = detalheDoc ? labelDocumento(inner) : labelValorDimensao(innerDim, inner);
-      const valsItem = outerEhCategoria ? valsMetricasPorCategoria(totais, shape.metricas, outer) : valsMetricas(totais, shape.metricas);
+      const valsItem = outerEhCategoria
+        ? valsMetricasPorCategoria(totais, shape.metricas, outer)
+        : innerEhCategoria ? valsMetricasPorCategoria(totais, shape.metricas, inner) : valsMetricas(totais, shape.metricas);
       linhas.push(`   ${idxItem + 1}. ${label}: ${valsItem}`);
     });
     if (itensOrdenados.length > 50) linhas.push(`   ... e mais ${itensOrdenados.length - 50}`);
@@ -1123,9 +1188,25 @@ function renderDuasDimensoes(rows, shape, linhas) {
   if (gruposOrdenados.length > 50) linhas.push(`... e mais ${gruposOrdenados.length - 50}`);
 
   linhas.push('');
-  const totalStr = outerEhCategoria
-    ? valsTotaisPorCategoria(totaisPorCategoria(grupos, shape.metricas))
-    : valsMetricas(totalGeral, shape.metricas);
+  const totaisCategoria = outerEhCategoria
+    ? totaisPorCategoria(grupos, shape.metricas)
+    : innerEhCategoria
+      ? [...grupos.values()].reduce((acc, grupo) => {
+          for (const [label, valor] of totaisPorCategoriaItens(grupo.itens, shape.metricas)) {
+            acc.set(label, (acc.get(label) || 0) + valor);
+          }
+          return acc;
+        }, new Map())
+      : null;
+  const entradasTotaisCategoria = totaisCategoria
+    ? (Array.isArray(totaisCategoria) ? totaisCategoria : [...totaisCategoria.entries()])
+    : null;
+  const resultadoTotal = entradasTotaisCategoria ? resultadoCategorias(entradasTotaisCategoria) : null;
+  const totalStr = resultadoTotal
+    ? `${resultadoTotal.label}: *${brl(resultadoTotal.valor)}*`
+    : outerEhCategoria
+      ? valsTotaisPorCategoria(entradasTotaisCategoria || [])
+      : valsMetricas(totalGeral, shape.metricas);
   linhas.push(`*Total Geral*: ${totalStr}`);
 }
 
@@ -1189,6 +1270,7 @@ function renderSingle(rows, opts = {}) {
   if (shape.tipo === 'metricas_simples') {
     const totais = somarMetricas(rows, shape.metricas);
     if (renderComparativoAnoMetricas(linhas, totais, shape.metricas, opts)) return linhas.join('\n');
+    if (renderAvisoComparativoSemPeriodo(linhas, opts, shape.metricas)) return linhas.join('\n');
     const metricasTotal = metricasTotalizaveis(shape.metricas);
     linhas.push('\u{1F4CA} *Resumo*');
     linhas.push(...renderMetricas(totais, shape.metricas));
@@ -1302,6 +1384,7 @@ function renderAll(sucessos, opts = {}) {
       renderComparativoAnoMetricas(linhas, totalGeral, shape.metricas, opts);
       return linhas.join('\n');
     }
+    if (renderAvisoComparativoSemPeriodo(linhas, opts, shape.metricas)) return linhas.join('\n');
 
     linhas.push('\u{1F4CA} *Resumo*');
     for (const s of sucessos) {
@@ -1329,7 +1412,8 @@ function renderAll(sucessos, opts = {}) {
     for (const s of sucessos) {
       const entradas = montarCategoriaMetricaUnica(s.rows, shape);
       for (const [label, valor] of entradas) totalGeral.set(label, (totalGeral.get(label) || 0) + valor);
-      linhas.push(`\u{1F3E2} ${s.nomeEmpresa}: ${valsCategoriaMetricaUnica(entradas)}`);
+      const resultado = resultadoCategorias(entradas);
+      linhas.push(`\u{1F3E2} ${s.nomeEmpresa}: ${valsCategoriaMetricaUnica(entradas)}${resultado ? ` | Resultado: *${brl(resultado.valor)}*` : ''}`);
     }
     linhas.push('');
     const entradasTotal = [...totalGeral.entries()]
@@ -1337,7 +1421,9 @@ function renderAll(sucessos, opts = {}) {
     entradasTotal.forEach(([label, valor], idx) => {
       linhas.push(`  ${idx + 1}. ${label}: *${brl(valor)}*`);
     });
-    linhas.push(`*Total Geral*: ${valsCategoriaMetricaUnica(entradasTotal)}`);
+    const resultadoTotal = resultadoCategorias(entradasTotal);
+    if (resultadoTotal) linhas.push(`\u{1F9FE} *Resultado*: *${brl(resultadoTotal.valor)}*`);
+    linhas.push(`*Total Geral*: ${resultadoTotal ? brl(resultadoTotal.valor) : valsCategoriaMetricaUnica(entradasTotal)}`);
     return linhas.join('\n');
   }
 
