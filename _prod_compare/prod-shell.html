@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    /* ── Acento roxo para IA Command ───────────────────────────────── */
+    :root {
+      --accent:       #7c3aed;
+      --accent-light: #a78bfa;
+      --accent-glow:  rgba(124,58,237,.1);
+    }
+
+    /* ── Barra de abas MDI ─────────────────────────────────────────── */
+    .mdi-tabbar {
+      display: flex;
+      align-items: flex-end;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-hi) transparent;
+      scroll-behavior: smooth;
+      flex-shrink: 0;
+      padding: 6px 8px 0;
+      gap: 3px;
+    }
+    .mdi-tabbar::-webkit-scrollbar { height: 6px; }
+    .mdi-tabbar::-webkit-scrollbar-track { background: transparent; }
+    .mdi-tabbar::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 999px; }
+
+    .mdi-tab {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px 8px 13px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-md);
+      background: rgba(255,255,255,.5);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 7px 7px 0 0;
+      cursor: pointer;
+      white-space: nowrap;
+      flex: 0 0 clamp(220px, 15vw, 280px);
+      max-width: 280px;
+      min-width: 0;
+      user-select: none;
+      transition: color var(--transition), background var(--transition), box-shadow var(--transition);
+      margin-bottom: -1px;
+      position: relative;
+    }
+    .mdi-tab:hover  { background: var(--bg-card); color: var(--text-hi); }
+    .mdi-tab.active {
+      background: var(--bg-card);
+      color: #7c3aed;
+      font-weight: 600;
+      border-color: var(--border);
+      border-top: 2px solid #7c3aed;
+      box-shadow: 0 -2px 10px rgba(124,58,237,.1), var(--shadow-sm);
+      z-index: 1;
+    }
+    .mdi-tab.dragging { opacity: .55; cursor: grabbing; box-shadow: var(--shadow-md); }
+
+    .mdi-tab-icon  { font-size: 14px; flex-shrink: 0; }
+    .mdi-tab-label { flex: 1; overflow: hidden; text-overflow: ellipsis; text-align: left; min-width: 0; }
+    .mdi-tab-close {
+      flex-shrink: 0; width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 4px; font-size: 16px; line-height: 1;
+      color: var(--text-lo); transition: background var(--transition), color var(--transition);
+      margin-left: 1px;
+    }
+    .mdi-tab-close:hover               { background: rgba(0,0,0,.08); color: var(--text-hi); }
+    .mdi-tab.active .mdi-tab-close:hover { background: rgba(124,58,237,.12); color: #7c3aed; }
+
+    /* ── Scroll buttons ─────────────────────────────────────────────── */
+    .mdi-tabbar-wrap {
+      display: flex;
+      align-items: stretch;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .mdi-tabbar { flex: 1; min-width: 0; border-bottom: none !important; }
+    .mdi-scroll-btn {
+      display: none;
+      align-items: center; justify-content: center;
+      width: 30px; flex-shrink: 0;
+      background: var(--bg-card); border: none;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; font-size: 12px; color: var(--text-md);
+      transition: color var(--transition), background var(--transition); z-index: 1;
+    }
+    .mdi-scroll-btn:hover { color: #7c3aed; background: var(--bg-hover); }
+
+    /* ── Área de conteúdo ────────────────────────────────────────────── */
+    .mdi-content { flex: 1; position: relative; overflow: hidden; background: var(--bg-card); }
+    .mdi-iframe  { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: var(--bg-card); }
+    .mdi-iframe.active { display: block; }
+
+    /* ── Estado vazio ────────────────────────────────────────────────── */
+    .mdi-empty {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; pointer-events: none; user-select: none;
+    }
+    .mdi-empty-icon  { font-size: 56px; opacity: .15; }
+    .mdi-empty-title { font-size: 15px; font-weight: 600; color: var(--text-md); }
+    .mdi-empty-sub   { font-size: 13px; color: var(--text-lo); }
+
+    /* ── Topbar ──────────────────────────────────────────────────────── */
+    .iac-topbar { padding: 0 16px; gap: 8px; }
+    .topbar-menu-btn {
+      flex-shrink: 0;
+      background: none; border: none; cursor: pointer;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 7px; color: var(--text-md);
+      transition: background var(--transition), color var(--transition);
+    }
+    .topbar-menu-btn:hover { background: var(--bg-hover); color: var(--text-hi); }
+    .iac-topbar .topbar-title { font-weight: 800; flex: 1; min-width: 0; }
+    .iac-actions { display: flex; align-items: center; gap: 8px; }
+    .shell-nav-btn {
+      height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 0 12px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-card); color: var(--text-hi); font-size: 13px; font-weight: 800;
+      text-decoration: none; transition: border-color .15s, background .15s, color .15s, transform .15s;
+      white-space: nowrap;
+    }
+    .shell-nav-btn:hover { border-color: #7c3aed; background: rgba(124,58,237,.08); color: #7c3aed; transform: translateY(-1px); }
+    .shell-nav-btn.primary {
+      background: #7c3aed; border-color: #7c3aed; color: #fff;
+      box-shadow: 0 8px 18px rgba(124,58,237,.25);
+    }
+    .shell-nav-btn.primary:hover { background: #6d28d9; color: #fff; }
+    @media (max-width: 760px) { .shell-nav-btn span { display: none; } }
+
+    /* Sidebar logo accent override */
+    .sidebar-logo .logo-icon { background: #7c3aed !important; }
+    .nav-item.active, .nav-section-hdr.open { color: #7c3aed !important; }
+    .nav-item.active { border-left-color: #7c3aed !important; }
+  </style>
+</head>
+<body>
+<div class="layout" id="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer">
+      <span style="font-size:11px;color:var(--text-lo)">Seu ERP conversando com você.</span>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <div class="topbar iac-topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title" id="shell-title">IA Command</span>
+      <div class="iac-actions">
+        <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
+          </svg>
+          <span>IAHub</span>
+        </a>
+        <a class="shell-nav-btn primary" id="_guia-btn" href="/app/ia-command/guia/index.html" target="_blank" title="Guia de uso">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/>
+          </svg>
+          <span>Guia</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="mdi-tabbar-wrap">
+      <button class="mdi-scroll-btn" id="mdi-scroll-left"  title="Rolar para esquerda" onclick="scrollMdiTabs(-1)">◀</button>
+      <div class="mdi-tabbar" id="mdi-tabbar"></div>
+      <button class="mdi-scroll-btn" id="mdi-scroll-right" title="Rolar para direita"  onclick="scrollMdiTabs(1)">▶</button>
+    </div>
+
+    <div class="mdi-content" id="mdi-content">
+      <div class="mdi-empty" id="mdi-empty">
+        <div class="mdi-empty-icon">⚡</div>
+        <div class="mdi-empty-title">Nenhuma rotina aberta</div>
+        <div class="mdi-empty-sub">Selecione uma opção no menu lateral para começar</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="./js/sidebar.js"></script>
+<script src="./js/tab-manager.js"></script>
+<script>
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('#sidebar a.nav-item');
+    if (!link) return;
+    e.preventDefault();
+    const url   = new URL(link.href, location.origin).pathname;
+    const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
+    const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
+    window.openTab(url, label, icon);
+  });
+
+  // No shell MDI, trocar empresa atualiza variáveis e badge sem recarregar a página.
+  // auth.js define _trocarEmpresa com location.reload() — sobrescrevemos aqui.
+  window._iahubAuthReady?.then(() => {
+    let empresaSwitchQueue = Promise.resolve();
+
+    window._trocarEmpresa = async function (empresa_id) {
+      empresaSwitchQueue = empresaSwitchQueue
+        .catch(() => null)
+        .then(async () => {
+          const res = await fetch('/api/empresas/selecionar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ empresa_id, system_code: 'ia-command' }),
+          });
+          if (!res.ok) return;
+
+          const lista = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+          const emp = lista.find(e => Number(e.id) === Number(empresa_id));
+          if (emp) {
+            const empresaNome = emp.razao_social || emp.nome || '';
+            window._iahubEmpresa = { id: emp.id, nome: empresaNome };
+            window._iahubAtualizarEmpresaBadge?.({ id: emp.id, nome: empresaNome });
+            await window.trocarEmpresaTodasAbas?.(emp.id, empresaNome);
+          }
+
+          // Fecha o dropdown da empresa
+          const drop = document.getElementById('_empresa-dropdown');
+          if (drop) drop.style.display = 'none';
+        });
+      return empresaSwitchQueue;
+    };
+  });
+</script>
+</body>
+</html>

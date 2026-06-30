@@ -34,7 +34,14 @@ function localizarFragmento(modulo, perguntaOriginal) {
   try {
     const { classificarFragmentos } = carregarClassificador();
     const fragmentosSpec = carregarFragmentos();
-    const chaves = classificarFragmentos(perguntaOriginal) || fragmentosSpec.ORDEM_FALLBACK || [];
+    // classificarFragmentos() retorna null quando nenhuma keyword bateu de verdade
+    // (ex: pergunta cross-modulo, ou fora do vocabulario do classificador). Nesse caso
+    // NAO usamos ORDEM_FALLBACK para "adivinhar" um fragmento — ORDEM_FALLBACK existe
+    // para a geracao real de SQL (injetar todos os fragmentos como contexto completo),
+    // nao para apontar culpado no dialogo de feedback. Apontar o primeiro item da lista
+    // como se fosse o fragmento responsavel gera falso-positivo sistematico.
+    const chaves = classificarFragmentos(perguntaOriginal);
+    if (!chaves) return null;
     const chavePrincipal = chaves.find(c => !fragmentosSpec.FRAGMENTOS[c]?.sempre) || chaves[0];
     if (!chavePrincipal || !fragmentosSpec.FRAGMENTOS[chavePrincipal]) return null;
     return {
