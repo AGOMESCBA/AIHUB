@@ -237,6 +237,9 @@ class IACWhatsAppService extends EventEmitter {
     this._msgCount   = 0;
     this._senderContext = new Map();
     this._senderCancelledAt = new Map();
+    this._acceptMessagesAfterTs = 0;
+    this._processedMessageIds = new Set();
+    this._processedMessageOrder = [];
   }
 
   getStatus()    { return this.status; }
@@ -350,6 +353,11 @@ class IACWhatsAppService extends EventEmitter {
     this.client.on('ready', () => {
       clearTimers();
       this.lastQrUrl = null;
+      // WhatsApp Web can emit old synced messages after a session reconnects.
+      // Accept only fresh messages so dev/prod session swaps do not replay history.
+      this._acceptMessagesAfterTs = Math.floor(Date.now() / 1000) - 30;
+      this._processedMessageIds.clear();
+      this._processedMessageOrder = [];
       this.setStatus('connected');
       const seg = ((Date.now() - this._startTime) / 1000).toFixed(1);
       this.log(`Conectado! Número: ${this.client.info.wid.user} — ${seg}s`, 'success');
@@ -2786,6 +2794,33 @@ class IACWhatsAppService extends EventEmitter {
   // ── Recebimento de mensagens ─────────────────────────────────────────────────
 
   async _handleMessage(msg) {
+    if (msg.fromMe) {
+      this.log('Mensagem propria ignorada.', 'info');
+      return;
+    }
+
+    const msgId = msg.id?._serialized || msg.id?.id || '';
+    if (msgId && this._processedMessageIds.has(msgId)) {
+      this.log(`Mensagem duplicada ignorada: ${msgId}`, 'info');
+      return;
+    }
+
+    const msgTs = Number(msg.timestamp || 0);
+    if (msgTs && this._acceptMessagesAfterTs && msgTs < this._acceptMessagesAfterTs) {
+      const idadeSeg = Math.max(0, Math.floor(Date.now() / 1000) - msgTs);
+      this.log(`Mensagem antiga ignorada apos sincronizacao (${idadeSeg}s): ${msgId || 'sem-id'}`, 'warning');
+      return;
+    }
+
+    if (msgId) {
+      this._processedMessageIds.add(msgId);
+      this._processedMessageOrder.push(msgId);
+      while (this._processedMessageOrder.length > 1000) {
+        const antigo = this._processedMessageOrder.shift();
+        this._processedMessageIds.delete(antigo);
+      }
+    }
+
     const senderRaw = msg.from;
     const sender = await this._resolverSender(msg);
     const tipo   = msg.type;

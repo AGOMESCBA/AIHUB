@@ -48,9 +48,14 @@
     .history-table tbody tr.data-row { cursor:pointer; }
     .history-table tbody tr.data-row:hover td { background:var(--bg-hover); }
     .history-table tbody tr.group-row td { background:var(--bg-base);color:var(--text-hi);font-weight:800;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--border); }
+    .history-table tbody tr.group-row { cursor:pointer; }
+    .history-table tbody tr.group-row:hover td { background:var(--bg-hover); }
     .history-table tbody tr.group-row.level-1 td { padding-left:28px; }
     .history-table tbody tr.group-row.level-2 td { padding-left:46px; }
     .history-table tbody tr.group-row.level-3 td { padding-left:64px; }
+    .group-toggle-btn { width:22px;height:22px;border:1px solid var(--border);border-radius:5px;background:var(--bg-card);color:var(--text-hi);font-size:14px;font-weight:900;line-height:1;cursor:pointer;margin-right:8px;vertical-align:middle; }
+    .group-toggle-btn:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-row-label { vertical-align:middle; }
     .col-check { width:38px;text-align:center; }
     .col-action { width:42px;text-align:center; }
     .col-date { width:150px; }
@@ -272,6 +277,8 @@
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
 (function () {
+  const GRID_STATE_KEY = 'iac_admin_spec_feedback_grid_state';
+
   const state = {
     rows: [],
     view: [],
@@ -279,11 +286,43 @@
     sortDir: 'desc',
     filters: {},
     groupFields: [],
+    groupPanelOpen: false,
+    collapsedGroups: new Set(),
     detail: null,
     selected: new Set(),
   };
 
   const $ = id => document.getElementById(id);
+
+  function readGridState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GRID_STATE_KEY) || 'null');
+      if (!saved || typeof saved !== 'object') return;
+      if (Array.isArray(saved.groupFields)) {
+        state.groupFields = saved.groupFields.filter(field => !!groupName(field));
+      }
+      state.groupPanelOpen = !!saved.groupPanelOpen;
+      state.collapsedGroups = new Set(Array.isArray(saved.collapsedGroups) ? saved.collapsedGroups.filter(Boolean) : []);
+    } catch (_) {
+      localStorage.removeItem(GRID_STATE_KEY);
+    }
+  }
+
+  function saveGridState() {
+    try {
+      localStorage.setItem(GRID_STATE_KEY, JSON.stringify({
+        version: 1,
+        groupFields: state.groupFields,
+        groupPanelOpen: state.groupPanelOpen,
+        collapsedGroups: [...state.collapsedGroups],
+      }));
+    } catch (_) {}
+  }
+
+  function applyGroupPanelState() {
+    $('group-panel').classList.toggle('open', state.groupPanelOpen);
+    $('group-toggle').textContent = state.groupPanelOpen ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+  }
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
@@ -398,13 +437,13 @@
       tbody.innerHTML = rows.map(renderDataRow).join('');
     } else {
       const parts = [];
-      renderGroupedRows(parts, rows, groups, 0);
+      renderGroupedRows(parts, rows, groups, 0, []);
       tbody.innerHTML = parts.join('');
     }
     updateSelBar();
   }
 
-  function renderGroupedRows(parts, rows, groups, level) {
+  function renderGroupedRows(parts, rows, groups, level, path) {
     const field = groups[level];
     const buckets = new Map();
     rows.forEach(row => {
@@ -414,10 +453,26 @@
     });
     [...buckets.entries()].forEach(([label, items]) => {
       const title = `${groupName(field)}: ${label}`;
-      parts.push(`<tr class="group-row level-${Math.min(level, 3)}"><td colspan="9">${esc(title)} (${items.length})</td></tr>`);
-      if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1);
+      const nextPath = path.concat([[field, label]]);
+      const key = groupKey(nextPath);
+      const collapsed = state.collapsedGroups.has(key);
+      parts.push(`<tr class="group-row level-${Math.min(level, 3)}" data-group-key="${esc(key)}"><td colspan="9"><button class="group-toggle-btn" type="button" data-group-toggle="${esc(key)}" aria-label="${collapsed ? 'Expandir agrupamento' : 'Recolher agrupamento'}">${collapsed ? '+' : '-'}</button><span class="group-row-label">${esc(title)} (${items.length})</span></td></tr>`);
+      if (collapsed) return;
+      if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1, nextPath);
       else items.forEach(row => parts.push(renderDataRow(row)));
     });
+  }
+
+  function groupKey(path) {
+    return path.map(([field, label]) => `${field}:${encodeURIComponent(String(label))}`).join('|');
+  }
+
+  function toggleGroupCollapsed(key) {
+    if (!key) return;
+    if (state.collapsedGroups.has(key)) state.collapsedGroups.delete(key);
+    else state.collapsedGroups.add(key);
+    saveGridState();
+    renderTable();
   }
 
   function hasFilters() {
@@ -454,12 +509,16 @@
     if (!groupName(field) || state.groupFields.includes(field)) return;
     clearColumnFilters();
     state.groupFields.push(field);
+    state.collapsedGroups.clear();
+    saveGridState();
     applyFilters();
   }
 
   function removeGroupField(field) {
     state.groupFields = state.groupFields.filter(item => item !== field);
+    state.collapsedGroups.clear();
     clearColumnFilters();
+    saveGridState();
     applyFilters();
   }
 
@@ -470,15 +529,19 @@
     if (index >= 0) next.splice(index, 0, field);
     else next.push(field);
     state.groupFields = next;
+    state.collapsedGroups.clear();
     clearColumnFilters();
+    saveGridState();
     applyFilters();
   }
 
   function clearGridState() {
     clearColumnFilters();
     state.groupFields = [];
+    state.collapsedGroups.clear();
     state.sortField = 'criado_em';
     state.sortDir = 'desc';
+    saveGridState();
     renderGroupState();
   }
 
@@ -746,12 +809,15 @@
   function bindEvents() {
     $('refresh-btn').addEventListener('click', () => refreshRows().catch(err => alert(err.message)));
     $('group-toggle').addEventListener('click', () => {
-      $('group-panel').classList.toggle('open');
-      $('group-toggle').textContent = $('group-panel').classList.contains('open') ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+      state.groupPanelOpen = !$('group-panel').classList.contains('open');
+      applyGroupPanelState();
+      saveGridState();
     });
     $('group-clear').addEventListener('click', () => {
       state.groupFields = [];
+      state.collapsedGroups.clear();
       clearColumnFilters();
+      saveGridState();
       applyFilters();
     });
     document.querySelectorAll('[data-group-field]').forEach(btn => {
@@ -825,6 +891,10 @@
     });
     $('sel-del-btn').addEventListener('click', () => deleteSelected().catch(err => alert(err.message)));
     $('tbody').addEventListener('click', event => {
+      const groupToggle = event.target.closest('[data-group-toggle]');
+      if (groupToggle) { toggleGroupCollapsed(groupToggle.dataset.groupToggle); return; }
+      const groupRow = event.target.closest('tr.group-row');
+      if (groupRow) { toggleGroupCollapsed(groupRow.dataset.groupKey); return; }
       const cb = event.target.closest('input.row-cb');
       if (cb) { toggleRow(cb.dataset.id, cb.checked); return; }
       if (event.target.closest('[data-cb-cell]')) return;
@@ -835,8 +905,10 @@
     document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => copyText(btn.dataset.copy, btn)));
   }
 
+  readGridState();
   initFilterInputs();
   bindEvents();
+  applyGroupPanelState();
   window._iahubAuthReady?.then(() => loadRows().catch(err => alert(err.message))) ?? loadRows().catch(err => alert(err.message));
 })();
 </script>
