@@ -52,12 +52,7 @@ function _verificarAutorizacaoModulo(intent, empresaId, modulo) {
   try {
     const db = getDB();
 
-    // Resolve empresa_id efetivo (canal pode ter empresa diferente)
-    let eid = empresaId;
-    if (intent._channelId) {
-      const empresas = channelStore.listarEmpresasDoCanal(intent._channelId);
-      if (empresas.length > 0) eid = empresas[0].empresa_id;
-    }
+    const eid = Number(empresaId);
 
     // Verifica se há números autorizados cadastrados — se não houver, não aplica restrição
     const total = db.prepare(
@@ -90,6 +85,41 @@ function _verificarAutorizacaoModulo(intent, empresaId, modulo) {
 }
 
 // Loaders lazy dos specs — usados pelo combinador cross-module
+function _verificarAlgumModuloAutorizado(intent, empresaId, modulos = Object.keys(NOMES_MODULOS)) {
+  const remetente = intent._remetente;
+  if (!remetente) return null;
+  try {
+    const db = getDB();
+    const eid = Number(empresaId);
+    const total = db.prepare(
+      `SELECT COUNT(*) AS total FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND ativo = 1`
+    ).get(eid)?.total || 0;
+    if (!total) return null;
+
+    const modulosValidos = [...new Set((modulos || []).filter(m => NOMES_MODULOS[m]))];
+    if (!modulosValidos.length) return null;
+    const variantes = channelStore.variantesNumeroBrasil(remetente);
+    const lid = channelStore.extrairLid(remetente);
+    const placeholders = variantes.map(() => '?').join(',');
+    const colunas = modulosValidos.map(m => `modulo_${m}`).join(', ');
+    const row = db.prepare(
+      `SELECT ${colunas} FROM whatsapp_allowed_numbers
+        WHERE empresa_id = ? AND ativo = 1
+          AND (numero IN (${placeholders}) OR wa_lid = ?)
+        LIMIT 1`
+    ).get(eid, ...variantes, lid);
+    if (!row) return null;
+    if (modulosValidos.some(m => row[`modulo_${m}`])) return null;
+    return {
+      tipo: 'erro',
+      subtipo: 'modulo_nao_autorizado',
+      resposta_direta: 'Ainda nao consigo consultar informacoes do ERP para o seu numero. Peca ao gestor do IA Command para liberar ao menos um modulo no seu cadastro de WhatsApp e tente novamente.',
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 const SPEC_LOADERS = {
   faturamento: () => require('./faturamento/faturamento-ia-owner-spec'),
   compras:     () => require('./compras/compras-ia-owner-spec'),
@@ -259,6 +289,8 @@ async function rotear(intent, empresaId) {
     const mensagem = intent._mensagemOriginal || intent.intencao || '';
     if (_parecePerguntaErp(mensagem)) {
       const _todosModulos = Object.keys(SPEC_LOADERS);
+      const erroAutorizacao = _verificarAlgumModuloAutorizado(intent, empresaId, _todosModulos);
+      if (erroAutorizacao) return erroAutorizacao;
       const _specs = _todosModulos.map(m => SPEC_LOADERS[m]());
       const _specCombinado = crossModuleSpecCombiner.combinarSpecs(_specs);
       const _intentLimpo = {
@@ -467,6 +499,8 @@ async function rotear(intent, empresaId) {
 module.exports = {
   rotear,
   _normalizarModuloDinamico,
+  _verificarAutorizacaoModulo,
+  _verificarAlgumModuloAutorizado,
   _dominioDinamicoForcadoPorTexto,
   _corrigirIntentDinamicoPorTexto,
   _temFiltroEntidadeDinamica,
