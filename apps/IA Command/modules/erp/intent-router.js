@@ -337,6 +337,9 @@ async function rotear(intent, empresaId) {
     };
   }
 
+  const erroSemModulo = _verificarAlgumModuloAutorizado(intent, empresaId);
+  if (erroSemModulo) return erroSemModulo;
+
   if (registro.acao === 'ai_text_to_sql' || _pareceAiSqlDinamico(registro)) {
     const modulo = _resolverModuloDinamico(intent, registro);
     const handlerPath = AI_SQL_HANDLERS[modulo];
