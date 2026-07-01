@@ -631,6 +631,31 @@ ok('multidimensional: formata saldo bancario por banco agencia e conta', () => {
   assert.ok(texto.includes('*Total Geral*: Saldo: *R$'), texto);
 });
 
+ok('multidimensional: saldo bancario com banco amigavel nao vaza campos fisicos', () => {
+  const rows = [
+    { banco: 'ITAU', E8_BANCO: '341', E8_AGENCIA: '0288', E8_CONTA: '27680', E8_SALATUA: 5918.44 },
+    { banco: 'INTER', E8_BANCO: '077', E8_AGENCIA: '0001', E8_CONTA: '4263046', E8_SALATUA: 107953 },
+    { banco: 'INTER - CDB POS DI LIQ.', E8_BANCO: '077', E8_AGENCIA: '0001', E8_CONTA: 'CDB', E8_SALATUA: 438938.72 },
+  ];
+  const shape = canonical.detectarShape(rows);
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Saldo bancario desconsiderando o banco CX1 e CX2',
+  });
+
+  assert.strictEqual(shape.tipo, 'multiplas_dimensoes');
+  assert.deepStrictEqual(shape.dimensoes, ['banco', 'E8_AGENCIA', 'E8_CONTA']);
+  assert.ok(texto.includes('*Por Banco, Agencia, Conta Corrente*'), texto);
+  assert.ok(/Banco INTER \| Agencia 0001 \| Conta Corrente 4263046: Saldo: \*R\$\s*107\.953,00\*/.test(texto), texto);
+  assert.ok(/Banco INTER - CDB POS DI LIQ\. \| Agencia 0001 \| Conta Corrente CDB: Saldo: \*R\$\s*438\.938,72\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Saldo: \*R\$\s*552\.810,16\*/.test(texto), texto);
+  assert.ok(!texto.includes('E8_BANCO'), texto);
+  assert.ok(!texto.includes('E8_AGENCIA'), texto);
+  assert.ok(!texto.includes('E8_CONTA'), texto);
+  assert.ok(!texto.includes('E8_SALATUA'), texto);
+  assert.ok(!texto.includes('R$ 107953'), texto);
+});
+
 ok('multidimensional: consolidado soma saldo bancario por banco agencia e conta', () => {
   const texto = canonical.renderAll([
     {

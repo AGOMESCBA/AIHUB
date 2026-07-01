@@ -455,24 +455,26 @@ function detectarShape(rows, opts = {}) {
     return amostra.some(r => String(r[k] ?? '').trim() !== '') && !amostra.every(r => isNumericValue(r[k]));
   });
 
-  if (dimensoes.length > 3) return null;
-  if (dimensoes.length === 0) return { tipo: 'metricas_simples', dimensao: null, dimensoes: [], metricas };
-  if (dimensoes.length === 1 && metricas.length === 1 && isCategoriaSemantica(dimensoes[0])) {
-    return { tipo: 'categoria_metrica_unica', dimensao: dimensoes[0], dimensoes, metricas };
+  const dimensoesNormalizadas = compactarDimensoesBancarias(dimensoes);
+
+  if (dimensoesNormalizadas.length > 3) return null;
+  if (dimensoesNormalizadas.length === 0) return { tipo: 'metricas_simples', dimensao: null, dimensoes: [], metricas };
+  if (dimensoesNormalizadas.length === 1 && metricas.length === 1 && isCategoriaSemantica(dimensoesNormalizadas[0])) {
+    return { tipo: 'categoria_metrica_unica', dimensao: dimensoesNormalizadas[0], dimensoes: dimensoesNormalizadas, metricas };
   }
-  if (dimensoes.length === 1) return { tipo: 'uma_dimensao', dimensao: dimensoes[0], dimensoes, metricas };
-  if (dimensoes.length === 3) {
-    const ordenadas = ordenarMultiplasDimensoes(dimensoes);
+  if (dimensoesNormalizadas.length === 1) return { tipo: 'uma_dimensao', dimensao: dimensoesNormalizadas[0], dimensoes: dimensoesNormalizadas, metricas };
+  if (dimensoesNormalizadas.length === 3) {
+    const ordenadas = ordenarMultiplasDimensoes(dimensoesNormalizadas);
     return { tipo: 'multiplas_dimensoes', dimensao: ordenadas[0], dimensoes: ordenadas, metricas };
   }
 
-  const docDim = dimensoes.find(isDocumento);
-  const entDim = docDim ? dimensoes.find(d => d !== docDim) : null;
+  const docDim = dimensoesNormalizadas.find(isDocumento);
+  const entDim = docDim ? dimensoesNormalizadas.find(d => d !== docDim) : null;
   if (docDim && entDim && !isTemporal(entDim)) {
     return { tipo: 'detalhe_documento', dimensao: entDim, dimensoes: [entDim, docDim], documento: docDim, metricas };
   }
 
-  const ordenadas = ordenarDuasDimensoes(dimensoes);
+  const ordenadas = ordenarDuasDimensoes(dimensoesNormalizadas);
   return { tipo: 'duas_dimensoes', dimensao: ordenadas[0], dimensoes: ordenadas, metricas };
 }
 
@@ -491,6 +493,15 @@ function ordemBancoDimensao(dim) {
   if (/^(agencia|e8_agencia|a6_agencia)$/.test(k)) return 2;
   if (/^(conta|conta_corrente|e8_conta|a6_numcon|conta_bancaria)$/.test(k)) return 3;
   return 99;
+}
+
+function compactarDimensoesBancarias(dimensoes) {
+  if (!dimensoes.length || !dimensoes.every(isBancario)) return dimensoes;
+  const temBancoAmigavel = dimensoes.some(dim => /^(banco|bancos|banco_nome)$/.test(keyNorm(dim)));
+  const dims = temBancoAmigavel
+    ? dimensoes.filter(dim => !/^(e8_banco|a6_cod)$/.test(keyNorm(dim)))
+    : dimensoes.slice();
+  return ordenarMultiplasDimensoes(dims).slice(0, 3);
 }
 
 function ordenarMultiplasDimensoes(dimensoes) {
