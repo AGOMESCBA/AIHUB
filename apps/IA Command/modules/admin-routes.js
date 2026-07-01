@@ -154,17 +154,19 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.get('/api/ia-command/admin/numeros-whatsapp/contatos/:numero', requireAuth, requireIaCommand, canNumeros, (req, res) => {
     const numero = normalizarNumero(req.params.numero);
     if (!numero) return res.status(400).json({ error: 'Numero invalido.' });
-    const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
-    const ids = empresas.map(e => e.id);
-    if (!ids.length) return res.json({ numero, empresas: [], acessos: [] });
-    const placeholders = ids.map(() => '?').join(',');
+    const empresaId = eid(req);
+    if (!_empresaPermitida(req, empresaId, 'iac-admin-numeros-whatsapp')) {
+      return res.json({ numero, empresas: [], acessos: [] });
+    }
+    const emp = empresasDb.buscarPorId(empresaId) || {};
+    const empresas = [{ id: empresaId, nome: emp.nome || emp.razao_social || `Empresa #${empresaId}` }];
     const rows = getDB().prepare(`
       SELECT *
         FROM whatsapp_allowed_numbers
        WHERE numero = ?
-         AND empresa_id IN (${placeholders})
+         AND empresa_id = ?
        ORDER BY empresa_id, nome
-    `).all(numero, ...ids);
+    `).all(numero, empresaId);
     const empresasPorId = new Map(empresas.map(e => [Number(e.id), e]));
     res.json({
       numero,
@@ -182,6 +184,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const empresasPayload = Array.isArray(req.body?.empresas) ? req.body.empresas : [];
     if (!numero) return res.status(400).json({ error: 'Numero invalido.' });
     if (!empresasPayload.length) return res.status(400).json({ error: 'Informe ao menos uma empresa.' });
+    if (empresasPayload.some(item => Number(item.empresa_id || item.id || 0) !== eid(req))) {
+      return res.status(403).json({ error: 'Este cadastro permite alterar apenas a empresa atual.' });
+    }
 
     const db = getDB();
     const agora = new Date().toISOString();

@@ -237,7 +237,7 @@
                 <section class="form-section">
                   <div class="form-section-header">
                     <div class="form-section-title">Acessos por Empresa</div>
-                    <div class="form-section-subtitle">Use o mesmo contato em uma ou mais empresas sem alterar a regra atual de seguranca por numero.</div>
+                    <div class="form-section-subtitle">Gerencie o acesso deste contato somente para a empresa atual.</div>
                   </div>
                   <div class="form-section-body">
                     <div class="info-box" id="empresas-info" style="margin-top:0;margin-bottom:14px">Salve ou informe um numero para carregar os acessos deste contato.</div>
@@ -554,7 +554,7 @@
     const empresas = acessosContato.empresas || [];
     if (msg) info.textContent = msg;
     else info.textContent = empresas.length
-      ? `${empresas.length} empresa(s) disponivel(is) para este contato.`
+      ? `${empresas.length} empresa atual disponivel para este contato.`
       : 'Nenhuma empresa disponivel para seu usuario.';
     if (!empresas.length) {
       tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
