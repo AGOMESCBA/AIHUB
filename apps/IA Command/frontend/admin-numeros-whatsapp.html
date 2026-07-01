@@ -101,6 +101,15 @@
     .readonly-note { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.55;margin-bottom:14px; }
     .readonly-area { opacity:.72; }
     .readonly-area input, .readonly-area select, .readonly-area textarea { pointer-events:none; }
+    .global-access-overlay { position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:340;display:none;align-items:center;justify-content:center;padding:22px; }
+    .global-access-overlay.open { display:flex; }
+    .global-access-modal { width:min(1080px,100%);max-height:min(780px,92vh);background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden; }
+    .global-access-header { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid var(--border); }
+    .global-access-title { font-size:16px;font-weight:700;color:var(--text-hi); }
+    .global-access-subtitle { font-size:12px;color:var(--text-md);line-height:1.5;margin-top:4px; }
+    .global-access-body { padding:18px 20px;overflow:auto; }
+    .global-access-footer { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-top:1px solid var(--border);background:var(--bg-base); }
+    .global-access-warning { background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:10px 14px;font-size:12px;line-height:1.55;margin-bottom:14px; }
   </style>
 </head>
 <body>
@@ -259,6 +268,7 @@
                       </table>
                     </div>
                     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px">
+                      <button class="btn btn-ghost" type="button" onclick="abrirGerenciamentoGlobal()">Gerenciar em outras empresas</button>
                       <button class="btn btn-ghost" type="button" onclick="carregarAcessosContato()">Atualizar</button>
                       <button class="btn btn-primary" type="button" onclick="salvarEmpresasContato()">Salvar empresas</button>
                     </div>
@@ -397,6 +407,47 @@
   </div>
 </div>
 
+<div class="global-access-overlay" id="global-access-overlay">
+  <div class="global-access-modal">
+    <div class="global-access-header">
+      <div>
+        <div class="global-access-title">Gerenciar acesso em outras empresas</div>
+        <div class="global-access-subtitle" id="global-access-subtitle">Carregando empresas permitidas para este contato.</div>
+      </div>
+      <button class="help-drawer-close" type="button" onclick="fecharGerenciamentoGlobal()" title="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="global-access-body">
+      <div class="global-access-warning">Atencao: esta tela altera o acesso deste mesmo numero em varias empresas. Revise as linhas antes de salvar.</div>
+      <div style="overflow:auto">
+        <table class="access-table">
+          <thead>
+            <tr>
+              <th style="width:72px">Acesso</th>
+              <th style="min-width:190px">Empresa</th>
+              <th style="min-width:170px">Nome no contato</th>
+              <th style="min-width:220px">Modulos</th>
+              <th style="width:120px">Perfil ERP</th>
+              <th style="width:130px">Cod. ERP</th>
+            </tr>
+          </thead>
+          <tbody id="empresas-global-tbody">
+            <tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="global-access-footer">
+      <span class="save-feedback" id="global-access-feedback"></span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost" type="button" onclick="fecharGerenciamentoGlobal()">Cancelar</button>
+        <button class="btn btn-primary" type="button" onclick="salvarEmpresasGlobais()">Salvar acessos globais</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
 <script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
@@ -405,6 +456,7 @@
   let table, gp;
   let dados = [];
   let acessosContato = { empresas: [], acessos: [] };
+  let acessosGlobaisContato = { empresas: [], acessos: [] };
   let filtrosVisiveis = false;
   let quickFilterFn = null;
   let editId = null;
@@ -619,6 +671,110 @@
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return feedback(data.error || 'Erro ao salvar empresas.', false);
     feedback('Empresas salvas com sucesso!', true);
+    await carregarAcessosContato();
+    await carregar();
+  }
+
+  async function abrirGerenciamentoGlobal() {
+    const numero = soNumeros(document.getElementById('f-numero').value);
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!numero) return feedback('Informe o numero antes de gerenciar outras empresas.', false);
+    document.getElementById('global-access-overlay').classList.add('open');
+    document.getElementById('global-access-feedback').textContent = '';
+    document.getElementById('global-access-subtitle').textContent = `${nome || 'Contato WhatsApp'} - ${formatarNumero(numero)}`;
+    document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Carregando empresas...</td></tr>';
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas-global`);
+    if (!res.ok) {
+      document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nao foi possivel carregar os acessos globais.</td></tr>';
+      return;
+    }
+    acessosGlobaisContato = await res.json();
+    renderEmpresasGlobais();
+  }
+
+  function fecharGerenciamentoGlobal() {
+    document.getElementById('global-access-overlay').classList.remove('open');
+  }
+
+  function acessoGlobalPorEmpresa(empresaId) {
+    return (acessosGlobaisContato.acessos || []).find(a => Number(a.empresa_id) === Number(empresaId)) || null;
+  }
+
+  function renderEmpresasGlobais() {
+    const tbody = document.getElementById('empresas-global-tbody');
+    const empresas = acessosGlobaisContato.empresas || [];
+    if (!empresas.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel para seu usuario.</td></tr>';
+      return;
+    }
+    const nomeFallback = document.getElementById('f-nome').value || '';
+    tbody.innerHTML = empresas.map(emp => {
+      const row = acessoGlobalPorEmpresa(emp.id);
+      const ativo = row ? Number(row.ativo) !== 0 : false;
+      const nome = row?.nome || nomeFallback || '';
+      const mods = m => row ? !!row[`modulo_${m}`] : false;
+      const atual = Number(emp.id) === Number(window._iahubEmpresa?.id || 0)
+        ? '<span style="background:#ecfdf5;color:#047857;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:700;margin-left:6px">Atual</span>'
+        : '';
+      return `
+        <tr data-empresa-id="${emp.id}">
+          <td><input type="checkbox" data-global-access="autorizado" ${ativo ? 'checked' : ''}></td>
+          <td><strong style="color:var(--text-hi)">${esc(emp.nome)}</strong>${atual}<div style="font-size:11px;color:var(--text-lo)">ID ${emp.id}</div></td>
+          <td><input type="text" data-global-access="nome" value="${esc(nome)}"></td>
+          <td>
+            <div class="access-mods">
+              <label><input type="checkbox" data-global-access="modulo_financeiro" ${mods('financeiro') ? 'checked' : ''}> Fin</label>
+              <label><input type="checkbox" data-global-access="modulo_compras" ${mods('compras') ? 'checked' : ''}> Cmp</label>
+              <label><input type="checkbox" data-global-access="modulo_faturamento" ${mods('faturamento') ? 'checked' : ''}> Fat</label>
+              <label><input type="checkbox" data-global-access="modulo_comissao" ${mods('comissao') ? 'checked' : ''}> Com</label>
+            </div>
+          </td>
+          <td>
+            <select data-global-access="erp_tipo">
+              <option value="" ${!row?.erp_tipo ? 'selected' : ''}>Nenhum</option>
+              <option value="vendedor" ${row?.erp_tipo === 'vendedor' ? 'selected' : ''}>Vendedor</option>
+              <option value="gestor" ${row?.erp_tipo === 'gestor' ? 'selected' : ''}>Gestor</option>
+            </select>
+          </td>
+          <td><input type="text" data-global-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase"></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function salvarEmpresasGlobais() {
+    const numero = soNumeros(document.getElementById('f-numero').value);
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!numero) return;
+    if (!confirm('Confirmar alteracao deste numero em varias empresas?')) return;
+    const empresas = [...document.querySelectorAll('#empresas-global-tbody tr[data-empresa-id]')].map(tr => {
+      const get = key => tr.querySelector(`[data-global-access="${key}"]`);
+      return {
+        empresa_id: Number(tr.dataset.empresaId),
+        autorizado: get('autorizado')?.checked ? 1 : 0,
+        nome: get('nome')?.value.trim() || nome || 'Contato WhatsApp',
+        modulo_financeiro: get('modulo_financeiro')?.checked ? 1 : 0,
+        modulo_compras: get('modulo_compras')?.checked ? 1 : 0,
+        modulo_faturamento: get('modulo_faturamento')?.checked ? 1 : 0,
+        modulo_comissao: get('modulo_comissao')?.checked ? 1 : 0,
+        erp_tipo: get('erp_tipo')?.value || null,
+        erp_id: (get('erp_id')?.value || '').trim().toUpperCase() || null,
+      };
+    });
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas-global`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ nome, empresas }),
+    });
+    const data = await res.json().catch(() => ({}));
+    const feedbackGlobal = document.getElementById('global-access-feedback');
+    if (!res.ok) {
+      feedbackGlobal.textContent = data.error || 'Erro ao salvar acessos globais.';
+      feedbackGlobal.className = 'save-feedback fail';
+      return;
+    }
+    feedbackGlobal.textContent = 'Acessos globais salvos com sucesso!';
+    feedbackGlobal.className = 'save-feedback ok';
     await carregarAcessosContato();
     await carregar();
   }
