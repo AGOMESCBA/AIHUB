@@ -95,6 +95,35 @@ const PUPPETEER_ARGS = [
   '--disk-cache-size=1',
 ];
 
+function _sessionDirFor(clientId) {
+  const marker = `session-${String(clientId || '').replace(/['"\\]/g, '')}`;
+  return path.join(AUTH_BASE, marker);
+}
+
+function _sessionExists(clientId) {
+  if (!clientId) return false;
+  return fs.existsSync(_sessionDirFor(clientId));
+}
+
+function _sessionLooksAuthenticated(clientId) {
+  if (!_sessionExists(clientId)) return false;
+  const levelDbDir = path.join(
+    _sessionDirFor(clientId),
+    'Default',
+    'IndexedDB',
+    'https_web.whatsapp.com_0.indexeddb.leveldb'
+  );
+  try {
+    return fs.readdirSync(levelDbDir).some(name => {
+      if (!/\.(?:ldb|log)$/i.test(name)) return false;
+      const stat = fs.statSync(path.join(levelDbDir, name));
+      return stat.size > 100000;
+    });
+  } catch (_) {
+    return false;
+  }
+}
+
 function resolveChromePath() {
   const candidates = [
     process.env.CHROME_PATH,
@@ -301,10 +330,11 @@ class IACWhatsAppService extends EventEmitter {
     this._empresaId = Number(empresaId);
     this._channelId = String(channel.id);
     this._channelName = channel.nome || `Canal ${channel.id}`;
-    this._authClientId = channel.auth_client_id || `iac_ch_${channel.id}`;
+    this._authClientId = this._resolveAuthClientId(channel, empresaId);
     this.setStatus('starting');
     this._startTime = Date.now();
     this.log(`Iniciando IA Command WhatsApp no canal "${this._channelName}"...`, 'info');
+    this.log(`Sessao WhatsApp: ${this._authClientId}`, 'info');
 
     // Mata processos Chrome órfãos da sessão anterior antes de criar um novo cliente.
     // Evita o erro "The browser is already running for <userDataDir>".
@@ -417,6 +447,30 @@ class IACWhatsAppService extends EventEmitter {
     for (const f of lockFiles) {
       try { fs.unlinkSync(f); this.log(`Lock removido: ${path.basename(f)}`, 'info'); } catch (_) {}
     }
+  }
+
+  _resolveAuthClientId(channel, empresaId) {
+    const configured = channel?.auth_client_id || `iac_ch_${channel?.id}`;
+    if (_sessionLooksAuthenticated(configured)) return configured;
+
+    const empresas = Array.isArray(channel?.empresas) ? channel.empresas : [];
+    const candidates = [
+      empresaId,
+      ...empresas.map(empresa => empresa?.empresa_id),
+    ]
+      .map(Number)
+      .filter(Number.isInteger)
+      .filter((id, index, list) => id > 0 && list.indexOf(id) === index)
+      .map(id => `iac_${id}`);
+
+    const legacy = candidates.find(_sessionLooksAuthenticated);
+    if (!legacy) return configured;
+
+    this.log(
+      `Sessao autenticada "${configured}" nao encontrada; usando sessao existente "${legacy}".`,
+      'warning'
+    );
+    return legacy;
   }
 
   async stop() {
