@@ -277,10 +277,13 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json(row);
   });
 
-  function _extrairCamposNumeroWa(body) {
+  function _extrairCamposNumeroWa(body, opts = {}) {
+    const incluirPermissoes = opts.incluirPermissoes !== false;
+    const incluirAtivo = opts.incluirAtivo !== false;
     const campos = {};
     if (body.observacoes !== undefined) campos.observacoes = body.observacoes || null;
-    if (body.ativo !== undefined) campos.ativo = body.ativo !== false && Number(body.ativo) !== 0 ? 1 : 0;
+    if (incluirAtivo && body.ativo !== undefined) campos.ativo = body.ativo !== false && Number(body.ativo) !== 0 ? 1 : 0;
+    if (!incluirPermissoes) return campos;
     // Autorizações por módulo
     for (const m of ['financeiro', 'compras', 'faturamento', 'comissao']) {
       const chave = `modulo_${m}`;
@@ -306,14 +309,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       return res.status(400).json({ error: 'Informe o numero com DDI e DDD, contendo entre 10 e 15 digitos.' });
     }
 
-    const camposExtras = _extrairCamposNumeroWa(req.body);
+    const camposExtras = _extrairCamposNumeroWa(req.body, { incluirPermissoes: false, incluirAtivo: false });
 
     try {
       const row = crud.criar('whatsapp_allowed_numbers', {
         empresa_id: eid(req),
         nome:       nome.trim(),
         numero:     numeroNormalizado,
-        ativo:      camposExtras.ativo !== undefined ? camposExtras.ativo : 1,
+        ativo:      0,
         ...camposExtras,
       });
       _audit(req, 'criar_numero_whatsapp', { id: row.id, nome: row.nome, numero: row.numero });
@@ -343,7 +346,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       }
       campos.numero = numeroNormalizado;
     }
-    Object.assign(campos, _extrairCamposNumeroWa(req.body));
+    Object.assign(campos, _extrairCamposNumeroWa(req.body, { incluirPermissoes: false, incluirAtivo: false }));
 
     try {
       const row = crud.atualizar('whatsapp_allowed_numbers', req.params.id, campos);

@@ -248,7 +248,7 @@ function senderAutorizadoEmpresa(empresaId, sender) {
     'SELECT COUNT(*) AS total FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND ativo = 1'
   ).get(Number(empresaId))?.total || 0;
 
-  if (!total) return true;
+  if (!total) return false;
 
   const placeholders = numeros.map(() => '?').join(',');
   return !!db.prepare(`

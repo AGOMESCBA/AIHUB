@@ -98,6 +98,9 @@
     .access-table input[type="text"], .access-table select { height:32px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-hi);font-size:12px;padding:4px 8px;box-sizing:border-box;width:100%; }
     .access-mods { display:flex;gap:8px;flex-wrap:wrap; }
     .access-mods label { display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-md);white-space:nowrap; }
+    .readonly-note { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.55;margin-bottom:14px; }
+    .readonly-area { opacity:.72; }
+    .readonly-area input, .readonly-area select, .readonly-area textarea { pointer-events:none; }
   </style>
 </head>
 <body>
@@ -270,14 +273,15 @@
                     <div class="form-section-subtitle">Defina quais módulos do IA Command este número pode consultar. Módulos desativados retornarão uma mensagem amigável solicitando que o usuário peça acesso ao gestor.</div>
                   </div>
                   <div class="form-section-body">
-                    <div class="toggle-block">
+                    <div class="readonly-note">As permissoes por modulo sao geridas exclusivamente na aba <strong>Empresas</strong>. Esta aba mostra apenas o estado salvo para a empresa atual.</div>
+                    <div class="toggle-block readonly-area">
                       <div class="toggle-row">
                         <div class="toggle-info">
                           <div class="toggle-label">Financeiro</div>
                           <div class="toggle-desc">Consultas de contas a pagar, receber, fluxo de caixa e saldos.</div>
                         </div>
                         <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-financeiro">
+                          <input type="checkbox" id="f-mod-financeiro" disabled>
                           <span class="toggle-slider"></span>
                         </label>
                       </div>
@@ -287,7 +291,7 @@
                           <div class="toggle-desc">Consultas de pedidos de compra, fornecedores e estoques.</div>
                         </div>
                         <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-compras">
+                          <input type="checkbox" id="f-mod-compras" disabled>
                           <span class="toggle-slider"></span>
                         </label>
                       </div>
@@ -297,7 +301,7 @@
                           <div class="toggle-desc">Consultas de pedidos de venda, notas fiscais e clientes.</div>
                         </div>
                         <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-faturamento">
+                          <input type="checkbox" id="f-mod-faturamento" disabled>
                           <span class="toggle-slider"></span>
                         </label>
                       </div>
@@ -307,7 +311,7 @@
                           <div class="toggle-desc">Consultas de comissões de vendedores. Requer configuração de perfil ERP na aba Gestão de Vendas.</div>
                         </div>
                         <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-comissao">
+                          <input type="checkbox" id="f-mod-comissao" disabled>
                           <span class="toggle-slider"></span>
                         </label>
                       </div>
@@ -327,9 +331,10 @@
                     <div class="form-section-subtitle">Configure o tipo de acesso a dados de comissão deste número no sistema ERP. Necessário apenas para quem tiver o módulo Comissão habilitado.</div>
                   </div>
                   <div class="form-section-body">
+                    <div class="readonly-note">O perfil ERP por empresa tambem e gerido exclusivamente na aba <strong>Empresas</strong>. Esta aba mostra apenas o estado salvo para a empresa atual.</div>
                     <div class="form-group">
                       <label class="form-label">Perfil ERP</label>
-                      <select id="f-erp-tipo" class="form-control" onchange="onErpTipoChange()">
+                      <select id="f-erp-tipo" class="form-control" onchange="onErpTipoChange()" disabled>
                         <option value="">Nenhum</option>
                         <option value="vendedor">Vendedor</option>
                         <option value="gestor">Gestor</option>
@@ -343,7 +348,7 @@
                     <div class="erp-id-wrap" id="erp-id-wrap">
                       <div class="form-group" style="margin-bottom:0">
                         <label class="form-label">Código ERP do Vendedor <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="f-erp-id" class="form-control" placeholder="ex: V001" style="text-transform:uppercase">
+                        <input type="text" id="f-erp-id" class="form-control" placeholder="ex: V001" style="text-transform:uppercase" disabled>
                         <div class="form-hint">Código do vendedor no Protheus (campo E3_VEND). Obrigatório quando o perfil é Vendedor.</div>
                       </div>
                       <div class="info-box">
@@ -376,12 +381,12 @@
                   </div>
                   <div class="reg-field">
                     <div class="reg-label">Status</div>
-                    <select id="f-ativo" class="form-control">
+                    <select id="f-ativo" class="form-control" disabled>
                       <option value="1">Ativo</option>
                       <option value="0">Inativo</option>
                     </select>
                   </div>
-                  <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">Numeros inativos permanecem no historico, mas nao ficam autorizados a interagir.</p>
+                  <p style="font-size:12px;color:var(--text-lo);line-height:1.5;margin-top:14px">O acesso geral tambem e gerido exclusivamente na aba Empresas.</p>
                 </div>
               </section>
             </aside>
@@ -468,7 +473,7 @@
     document.getElementById('f-nome').value = '';
     document.getElementById('f-numero').value = '';
     document.getElementById('f-observacoes').value = '';
-    document.getElementById('f-ativo').value = '1';
+    document.getElementById('f-ativo').value = '0';
     // Autorizações
     ['financeiro','compras','faturamento','comissao'].forEach(m => {
       document.getElementById(`f-mod-${m}`).checked = false;
@@ -526,6 +531,22 @@
     return (acessosContato.acessos || []).find(a => Number(a.empresa_id) === Number(empresaId)) || null;
   }
 
+  function sincronizarResumoEmpresaAtual() {
+    const empresaId = Number(document.getElementById('f-empresa-id').value || window._iahubEmpresa?.id || 0);
+    const row = empresaId ? acessoPorEmpresa(empresaId) : null;
+    const ativo = document.getElementById('f-ativo');
+    if (ativo) ativo.value = row && Number(row.ativo) !== 0 ? '1' : '0';
+    ['financeiro','compras','faturamento','comissao'].forEach(m => {
+      const el = document.getElementById(`f-mod-${m}`);
+      if (el) el.checked = row ? !!row[`modulo_${m}`] : false;
+    });
+    const erpTipo = document.getElementById('f-erp-tipo');
+    const erpId = document.getElementById('f-erp-id');
+    if (erpTipo) erpTipo.value = row?.erp_tipo || '';
+    if (erpId) erpId.value = row?.erp_id || '';
+    onErpTipoChange();
+  }
+
   function renderEmpresasContato(msg) {
     const tbody = document.getElementById('empresas-tbody');
     const info = document.getElementById('empresas-info');
@@ -537,6 +558,7 @@
       : 'Nenhuma empresa disponivel para seu usuario.';
     if (!empresas.length) {
       tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
+      sincronizarResumoEmpresaAtual();
       return;
     }
     tbody.innerHTML = empresas.map(emp => {
@@ -568,6 +590,7 @@
         </tr>
       `;
     }).join('');
+    sincronizarResumoEmpresaAtual();
   }
 
   async function salvarEmpresasContato() {
@@ -607,26 +630,10 @@
     if (!numero) return feedback('Campo Numero WhatsApp e obrigatorio.', false);
     if (numero.length < 10 || numero.length > 15) return feedback('Informe o numero com DDI e DDD.', false);
 
-    const erpTipo = document.getElementById('f-erp-tipo').value;
-    const erpId = document.getElementById('f-erp-id').value.trim().toUpperCase();
-    if (erpTipo === 'vendedor' && !erpId) {
-      // Avisa mas não bloqueia — gestor pode preencher depois
-      if (!confirm('O perfil Vendedor exige um Código ERP. Deseja salvar mesmo assim (o acesso à comissão ficará bloqueado até configurar o código)?')) {
-        return;
-      }
-    }
-
     const body = {
       nome,
       numero,
       observacoes: document.getElementById('f-observacoes').value.trim() || null,
-      ativo: parseInt(document.getElementById('f-ativo').value),
-      modulo_financeiro:  document.getElementById('f-mod-financeiro').checked  ? 1 : 0,
-      modulo_compras:     document.getElementById('f-mod-compras').checked     ? 1 : 0,
-      modulo_faturamento: document.getElementById('f-mod-faturamento').checked ? 1 : 0,
-      modulo_comissao:    document.getElementById('f-mod-comissao').checked    ? 1 : 0,
-      erp_tipo: erpTipo || null,
-      erp_id:   erpId   || null,
     };
 
     const url = editId ? `/api/ia-command/admin/numeros-whatsapp/${editId}` : '/api/ia-command/admin/numeros-whatsapp';
