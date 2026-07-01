@@ -720,6 +720,53 @@ const MIGRATIONS = [
       ALTER TABLE spec_feedback_propostas ADD COLUMN spec_aplicado_arquivo TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 45,
+    descricao: 'IA Command - consumo de tokens e precificacao por empresa',
+    sql: `
+      CREATE TABLE IF NOT EXISTS ia_usage_pricing (
+        id                  TEXT PRIMARY KEY,
+        provider            TEXT NOT NULL,
+        model               TEXT NOT NULL,
+        moeda               TEXT NOT NULL DEFAULT 'USD',
+        preco_input_1m      REAL NOT NULL DEFAULT 0,
+        preco_output_1m     REAL NOT NULL DEFAULT 0,
+        ativo               INTEGER NOT NULL DEFAULT 1,
+        vigente_desde       TEXT NOT NULL,
+        criado_em           TEXT NOT NULL,
+        atualizado_em       TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_usage_pricing_provider_model
+        ON ia_usage_pricing (provider, model, vigente_desde);
+
+      CREATE TABLE IF NOT EXISTS ia_usage_events (
+        id                  TEXT PRIMARY KEY,
+        empresa_id          INTEGER,
+        canal_id            TEXT,
+        numero_wa           TEXT,
+        provider            TEXT NOT NULL,
+        model               TEXT,
+        operacao            TEXT,
+        origem              TEXT,
+        ok                  INTEGER NOT NULL DEFAULT 1,
+        error               TEXT,
+        input_tokens        INTEGER NOT NULL DEFAULT 0,
+        output_tokens       INTEGER NOT NULL DEFAULT 0,
+        total_tokens        INTEGER NOT NULL DEFAULT 0,
+        preco_input_1m      REAL NOT NULL DEFAULT 0,
+        preco_output_1m     REAL NOT NULL DEFAULT 0,
+        moeda               TEXT NOT NULL DEFAULT 'USD',
+        custo_estimado_usd  REAL NOT NULL DEFAULT 0,
+        criado_em           TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_usage_events_empresa_data
+        ON ia_usage_events (empresa_id, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_usage_events_provider_model
+        ON ia_usage_events (provider, model, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

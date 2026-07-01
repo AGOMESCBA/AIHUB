@@ -4,6 +4,10 @@ const { requireRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 const { normalizarTexto } = require('./ai/local-intent-resolver');
 const messageTemplates = require('./whatsapp/message-templates');
+const usageDb = require('./ai/usage-db');
+const empresasDb = require('../../../modules/empresas/database');
+const sistemasDb = require('../../../modules/sistemas/database');
+const permissoesDb = require('../../../modules/permissoes/database');
 
 module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaCommand }) {
 
@@ -54,6 +58,34 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
   function normalizarNumero(numero) {
     return String(numero || '').replace(/\D/g, '');
+  }
+
+  function _empresaPermitida(req, empresaId, rotina) {
+    const id = Number(empresaId);
+    const sess = req.session || {};
+    const temEmpresa = sess.role === 'admin' || sess.empresas === 'all' ||
+      (Array.isArray(sess.empresas) && sess.empresas.includes(id));
+    if (!temEmpresa) return false;
+    if (!sistemasDb.hasCompanySystem(id, 'ia-command')) return false;
+    if (sess.role === 'admin') return true;
+    if (!sistemasDb.hasUserSystem(sess.user_id, id, 'ia-command')) return false;
+    const rotinas = permissoesDb.getRotinas(sess.user_id, id);
+    return Array.isArray(rotinas) && rotinas.includes(rotina);
+  }
+
+  function _empresasPermitidas(req, rotina = 'iac-admin-numeros-whatsapp') {
+    const sess = req.session || {};
+    const idsBase = sess.role === 'admin' || sess.empresas === 'all'
+      ? empresasDb.listar().map(e => Number(e.id))
+      : Array.isArray(sess.empresas) ? sess.empresas.map(Number) : [eid(req)];
+    const vistos = new Set();
+    return idsBase
+      .filter(id => id && !vistos.has(id) && (vistos.add(id), true))
+      .filter(id => _empresaPermitida(req, id, rotina))
+      .map(id => {
+        const emp = empresasDb.buscarPorId(id) || {};
+        return { id, nome: emp.nome || emp.razao_social || `Empresa #${id}` };
+      });
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -117,6 +149,126 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.get('/api/ia-command/admin/numeros-whatsapp', requireAuth, requireIaCommand, canNumeros, (req, res) => {
     const rows = crud.listar('whatsapp_allowed_numbers', { empresa_id: eid(req) });
     res.json(rows);
+  });
+
+  app.get('/api/ia-command/admin/numeros-whatsapp/contatos/:numero', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const numero = normalizarNumero(req.params.numero);
+    if (!numero) return res.status(400).json({ error: 'Numero invalido.' });
+    const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
+    const ids = empresas.map(e => e.id);
+    if (!ids.length) return res.json({ numero, empresas: [], acessos: [] });
+    const placeholders = ids.map(() => '?').join(',');
+    const rows = getDB().prepare(`
+      SELECT *
+        FROM whatsapp_allowed_numbers
+       WHERE numero = ?
+         AND empresa_id IN (${placeholders})
+       ORDER BY empresa_id, nome
+    `).all(numero, ...ids);
+    const empresasPorId = new Map(empresas.map(e => [Number(e.id), e]));
+    res.json({
+      numero,
+      empresas,
+      acessos: rows.map(row => ({
+        ...row,
+        empresa_nome: empresasPorId.get(Number(row.empresa_id))?.nome || `Empresa #${row.empresa_id}`,
+      })),
+    });
+  });
+
+  app.put('/api/ia-command/admin/numeros-whatsapp/contatos/:numero/empresas', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const numero = normalizarNumero(req.params.numero);
+    const nomePadrao = String(req.body?.nome || '').trim() || 'Contato WhatsApp';
+    const empresasPayload = Array.isArray(req.body?.empresas) ? req.body.empresas : [];
+    if (!numero) return res.status(400).json({ error: 'Numero invalido.' });
+    if (!empresasPayload.length) return res.status(400).json({ error: 'Informe ao menos uma empresa.' });
+
+    const db = getDB();
+    const agora = new Date().toISOString();
+    const select = db.prepare('SELECT * FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND numero = ?');
+    const insert = db.prepare(`
+      INSERT INTO whatsapp_allowed_numbers
+        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, erp_tipo, erp_id, criado_em, atualizado_em)
+      VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const update = db.prepare(`
+      UPDATE whatsapp_allowed_numbers
+         SET nome = COALESCE(NULLIF(?, ''), nome),
+             observacoes = ?,
+             ativo = ?,
+             modulo_financeiro = ?,
+             modulo_compras = ?,
+             modulo_faturamento = ?,
+             modulo_comissao = ?,
+             erp_tipo = ?,
+             erp_id = ?,
+             atualizado_em = ?
+       WHERE id = ?
+    `);
+
+    const aplicar = db.transaction(() => {
+      const atualizados = [];
+      for (const item of empresasPayload) {
+        const empresaId = Number(item.empresa_id || item.id || 0);
+        if (!empresaId) continue;
+        if (!_empresaPermitida(req, empresaId, 'iac-admin-numeros-whatsapp')) {
+          throw Object.assign(new Error(`Sem permissao para empresa ${empresaId}.`), { statusCode: 403 });
+        }
+        const existente = select.get(empresaId, numero);
+        const autorizado = item.autorizado !== false && Number(item.autorizado) !== 0;
+        const campos = _extrairCamposNumeroWa(item);
+        const ativo = autorizado ? (campos.ativo !== undefined ? campos.ativo : 1) : 0;
+        const nome = String(item.nome || nomePadrao).trim();
+        const observacoes = item.observacoes !== undefined ? (item.observacoes || null) : (existente?.observacoes || null);
+        const erpTipo = campos.erp_tipo ?? existente?.erp_tipo ?? null;
+        const erpId = campos.erp_id ?? existente?.erp_id ?? null;
+        if (existente) {
+          update.run(
+            nome,
+            observacoes,
+            ativo,
+            campos.modulo_financeiro ?? existente.modulo_financeiro ?? 0,
+            campos.modulo_compras ?? existente.modulo_compras ?? 0,
+            campos.modulo_faturamento ?? existente.modulo_faturamento ?? 0,
+            campos.modulo_comissao ?? existente.modulo_comissao ?? 0,
+            erpTipo,
+            erpId,
+            agora,
+            existente.id
+          );
+          atualizados.push(existente.id);
+        } else if (autorizado) {
+          const id = require('crypto').randomUUID();
+          insert.run(
+            id,
+            empresaId,
+            nome,
+            numero,
+            observacoes,
+            ativo,
+            campos.modulo_financeiro ?? 0,
+            campos.modulo_compras ?? 0,
+            campos.modulo_faturamento ?? 0,
+            campos.modulo_comissao ?? 0,
+            erpTipo,
+            erpId,
+            agora,
+            agora
+          );
+          atualizados.push(id);
+        }
+      }
+      return atualizados;
+    });
+
+    try {
+      const ids = aplicar();
+      _audit(req, 'editar_acessos_numero_whatsapp', { numero, ids, empresas: empresasPayload.map(e => e.empresa_id || e.id) });
+      res.json({ ok: true, atualizados: ids.length });
+    } catch (err) {
+      res.status(err.statusCode || 500).json({ error: err.message });
+    }
   });
 
   app.get('/api/ia-command/admin/numeros-whatsapp/:id', requireAuth, requireIaCommand, canNumeros, (req, res) => {
@@ -468,6 +620,46 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     }
     _audit(req, 'limpar_execucoes', { modo, data_inicio: inicio || null, data_fim: fim || null, removidos: info.changes });
     res.json({ ok: true, removidos: info.changes });
+  });
+
+  app.get('/api/ia-command/admin/consumo-ia/resumo', requireAuth, requireIaCommand, canExecucoes, (req, res) => {
+    const empresaId = req.query.empresa_id && _empresaPermitida(req, Number(req.query.empresa_id), 'iac-admin-execucoes')
+      ? Number(req.query.empresa_id)
+      : eid(req);
+    res.json(usageDb.resumir({
+      empresaId,
+      inicio: req.query.inicio,
+      fim: req.query.fim,
+      provider: req.query.provider,
+      agrupamento: req.query.agrupamento,
+    }));
+  });
+
+  app.get('/api/ia-command/admin/consumo-ia/eventos', requireAuth, requireIaCommand, canExecucoes, (req, res) => {
+    const empresaId = req.query.empresa_id && _empresaPermitida(req, Number(req.query.empresa_id), 'iac-admin-execucoes')
+      ? Number(req.query.empresa_id)
+      : eid(req);
+    res.json(usageDb.listarEventos({
+      empresaId,
+      inicio: req.query.inicio,
+      fim: req.query.fim,
+      provider: req.query.provider,
+      limit: req.query.limit,
+    }));
+  });
+
+  app.get('/api/ia-command/admin/consumo-ia/precos', requireAuth, requireIaCommand, canExecucoes, (_req, res) => {
+    res.json(usageDb.listarPrecos());
+  });
+
+  app.post('/api/ia-command/admin/consumo-ia/precos', requireAuth, requireIaCommand, canExecucoes, (req, res) => {
+    try {
+      const row = usageDb.salvarPreco(req.body || {});
+      _audit(req, 'salvar_preco_consumo_ia', { provider: req.body?.provider, model: req.body?.model });
+      res.json(row);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
   // ────────────────────────────────────────────────────────────────────────────

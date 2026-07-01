@@ -91,6 +91,13 @@
     .erp-id-wrap { display:none; }
     .erp-id-wrap.visible { display:block; }
     .info-box { background:var(--accent-glow);border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-top:12px; }
+    .access-table { width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg-card);font-size:13px; }
+    .access-table th { background:var(--bg-base);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
+    .access-table td { border-bottom:1px solid var(--border);padding:9px 10px;color:var(--text-md);vertical-align:middle; }
+    .access-table tr:last-child td { border-bottom:none; }
+    .access-table input[type="text"], .access-table select { height:32px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-hi);font-size:12px;padding:4px 8px;box-sizing:border-box;width:100%; }
+    .access-mods { display:flex;gap:8px;flex-wrap:wrap; }
+    .access-mods label { display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text-md);white-space:nowrap; }
   </style>
 </head>
 <body>
@@ -182,6 +189,7 @@
               <!-- Abas -->
               <div class="form-tabs">
                 <button class="form-tab active" onclick="mudarAba('geral',this)">Geral</button>
+                <button class="form-tab" onclick="mudarAba('empresas',this)">Empresas</button>
                 <button class="form-tab" onclick="mudarAba('autorizacoes',this)">Autorizações</button>
                 <button class="form-tab" onclick="mudarAba('vendas',this)">Gestão de Vendas</button>
               </div>
@@ -222,6 +230,39 @@
               </div>
 
               <!-- ABA: AUTORIZAÇÕES -->
+              <div class="tab-pane" id="tab-empresas">
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Acessos por Empresa</div>
+                    <div class="form-section-subtitle">Use o mesmo contato em uma ou mais empresas sem alterar a regra atual de seguranca por numero.</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="info-box" id="empresas-info" style="margin-top:0;margin-bottom:14px">Salve ou informe um numero para carregar os acessos deste contato.</div>
+                    <div style="overflow:auto">
+                      <table class="access-table">
+                        <thead>
+                          <tr>
+                            <th style="width:72px">Acesso</th>
+                            <th style="min-width:190px">Empresa</th>
+                            <th style="min-width:170px">Nome no contato</th>
+                            <th style="min-width:220px">Modulos</th>
+                            <th style="width:120px">Perfil ERP</th>
+                            <th style="width:130px">Cod. ERP</th>
+                          </tr>
+                        </thead>
+                        <tbody id="empresas-tbody">
+                          <tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px">
+                      <button class="btn btn-ghost" type="button" onclick="carregarAcessosContato()">Atualizar</button>
+                      <button class="btn btn-primary" type="button" onclick="salvarEmpresasContato()">Salvar empresas</button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
               <div class="tab-pane" id="tab-autorizacoes">
                 <section class="form-section">
                   <div class="form-section-header">
@@ -358,6 +399,7 @@
 <script>
   let table, gp;
   let dados = [];
+  let acessosContato = { empresas: [], acessos: [] };
   let filtrosVisiveis = false;
   let quickFilterFn = null;
   let editId = null;
@@ -435,6 +477,8 @@
     document.getElementById('f-erp-tipo').value = '';
     document.getElementById('f-erp-id').value = '';
     document.getElementById('erp-id-wrap').classList.remove('visible');
+    acessosContato = { empresas: [], acessos: [] };
+    renderEmpresasContato();
     feedback('', true);
   }
 
@@ -458,6 +502,102 @@
     document.getElementById('f-erp-tipo').value = row.erp_tipo || '';
     document.getElementById('f-erp-id').value = row.erp_id || '';
     onErpTipoChange();
+    await carregarAcessosContato();
+  }
+
+  async function carregarAcessosContato() {
+    const numero = soNumeros(document.getElementById('f-numero').value);
+    if (!numero) {
+      acessosContato = { empresas: [], acessos: [] };
+      renderEmpresasContato('Informe um numero para carregar os acessos.');
+      return;
+    }
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}`);
+    if (!res.ok) {
+      acessosContato = { empresas: [], acessos: [] };
+      renderEmpresasContato('Nao foi possivel carregar os acessos.');
+      return;
+    }
+    acessosContato = await res.json();
+    renderEmpresasContato();
+  }
+
+  function acessoPorEmpresa(empresaId) {
+    return (acessosContato.acessos || []).find(a => Number(a.empresa_id) === Number(empresaId)) || null;
+  }
+
+  function renderEmpresasContato(msg) {
+    const tbody = document.getElementById('empresas-tbody');
+    const info = document.getElementById('empresas-info');
+    if (!tbody || !info) return;
+    const empresas = acessosContato.empresas || [];
+    if (msg) info.textContent = msg;
+    else info.textContent = empresas.length
+      ? `${empresas.length} empresa(s) disponivel(is) para este contato.`
+      : 'Nenhuma empresa disponivel para seu usuario.';
+    if (!empresas.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = empresas.map(emp => {
+      const row = acessoPorEmpresa(emp.id);
+      const ativo = row ? Number(row.ativo) !== 0 : false;
+      const nome = row?.nome || document.getElementById('f-nome').value || '';
+      const mods = m => row ? !!row[`modulo_${m}`] : false;
+      return `
+        <tr data-empresa-id="${emp.id}">
+          <td><input type="checkbox" data-access="autorizado" ${ativo ? 'checked' : ''}></td>
+          <td><strong style="color:var(--text-hi)">${esc(emp.nome)}</strong><div style="font-size:11px;color:var(--text-lo)">ID ${emp.id}</div></td>
+          <td><input type="text" data-access="nome" value="${esc(nome)}"></td>
+          <td>
+            <div class="access-mods">
+              <label><input type="checkbox" data-access="modulo_financeiro" ${mods('financeiro') ? 'checked' : ''}> Fin</label>
+              <label><input type="checkbox" data-access="modulo_compras" ${mods('compras') ? 'checked' : ''}> Cmp</label>
+              <label><input type="checkbox" data-access="modulo_faturamento" ${mods('faturamento') ? 'checked' : ''}> Fat</label>
+              <label><input type="checkbox" data-access="modulo_comissao" ${mods('comissao') ? 'checked' : ''}> Com</label>
+            </div>
+          </td>
+          <td>
+            <select data-access="erp_tipo">
+              <option value="" ${!row?.erp_tipo ? 'selected' : ''}>Nenhum</option>
+              <option value="vendedor" ${row?.erp_tipo === 'vendedor' ? 'selected' : ''}>Vendedor</option>
+              <option value="gestor" ${row?.erp_tipo === 'gestor' ? 'selected' : ''}>Gestor</option>
+            </select>
+          </td>
+          <td><input type="text" data-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase"></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  async function salvarEmpresasContato() {
+    const numero = soNumeros(document.getElementById('f-numero').value);
+    const nome = document.getElementById('f-nome').value.trim();
+    if (!numero) return feedback('Informe o numero antes de salvar empresas.', false);
+    const empresas = [...document.querySelectorAll('#empresas-tbody tr[data-empresa-id]')].map(tr => {
+      const get = key => tr.querySelector(`[data-access="${key}"]`);
+      return {
+        empresa_id: Number(tr.dataset.empresaId),
+        autorizado: get('autorizado')?.checked ? 1 : 0,
+        nome: get('nome')?.value.trim() || nome || 'Contato WhatsApp',
+        modulo_financeiro: get('modulo_financeiro')?.checked ? 1 : 0,
+        modulo_compras: get('modulo_compras')?.checked ? 1 : 0,
+        modulo_faturamento: get('modulo_faturamento')?.checked ? 1 : 0,
+        modulo_comissao: get('modulo_comissao')?.checked ? 1 : 0,
+        erp_tipo: get('erp_tipo')?.value || null,
+        erp_id: (get('erp_id')?.value || '').trim().toUpperCase() || null,
+      };
+    });
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ nome, empresas }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao salvar empresas.', false);
+    feedback('Empresas salvas com sucesso!', true);
+    await carregarAcessosContato();
+    await carregar();
   }
 
   async function salvar() {

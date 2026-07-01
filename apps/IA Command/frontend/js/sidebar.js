@@ -76,6 +76,16 @@
     cadastros.items.push({ id: 'iac-admin-normalizacao', label: 'Normalizacao', href: '/app/ia-command/admin-normalizacao.html', icon: '🧹' });
   }
 
+  const administracao = MENU.find(s => s.id === 'administracao');
+  if (administracao && !administracao.items.some(i => i.href === '/app/ia-command/admin-consumo-ia.html')) {
+    administracao.items.splice(1, 0, {
+      id: 'iac-admin-execucoes',
+      label: 'Consumo IA',
+      href: '/app/ia-command/admin-consumo-ia.html',
+      icon: '$',
+    });
+  }
+
   const curPath = location.pathname;
 
   function isActive(href) {

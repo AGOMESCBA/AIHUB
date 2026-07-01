@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Consumo IA - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .head-row { display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px; }
+    .head-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.2; }
+    .head-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .gp-wrap { margin-top:10px;padding-top:10px;border-top:1px solid var(--border); }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .metric-grid { display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px;margin-bottom:12px; }
+    .metric { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px; }
+    .metric span { display:block;font-size:11px;color:var(--text-lo);font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px; }
+    .metric strong { display:block;color:var(--text-hi);font-size:20px;line-height:1.15; }
+    .grid-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:12px; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:800;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    @media (max-width: 900px) {
+      .head-row { flex-direction:column; }
+      .metric-grid { grid-template-columns:1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &rsaquo;</span> Consumo IA</span>
+    </div>
+
+    <div class="page-content">
+      <div class="head-row">
+        <div>
+          <div class="page-kicker">Administracao</div>
+          <div class="head-title">Consumo IA</div>
+          <div class="head-subtitle">Tokens, custo estimado e chamadas registradas por empresa.</div>
+        </div>
+        <div class="head-actions">
+          <button class="btn btn-ghost" type="button" onclick="carregar()">Atualizar</button>
+        </div>
+        <div class="gp-wrap">
+          <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar eventos por:</span></div>
+          <div id="dz"></div>
+        </div>
+      </div>
+
+      <div class="quick-panel">
+        <div class="quick-row">
+          <label class="form-label" style="margin:0">Inicio</label>
+          <input id="f-inicio" type="date" class="form-control">
+          <label class="form-label" style="margin:0">Fim</label>
+          <input id="f-fim" type="date" class="form-control">
+          <select id="f-agrupamento" class="form-control">
+            <option value="dia">Agrupar por dia</option>
+            <option value="mes">Agrupar por mes</option>
+            <option value="ano">Agrupar por ano</option>
+            <option value="provider">Agrupar por provider</option>
+            <option value="numero_wa">Agrupar por numero</option>
+            <option value="operacao">Agrupar por operacao</option>
+          </select>
+          <select id="f-provider" class="form-control">
+            <option value="">Todos providers</option>
+            <option value="groq">Groq</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="claude">Claude</option>
+          </select>
+          <button class="btn btn-primary" type="button" onclick="carregar()">Filtrar</button>
+        </div>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric"><span>Chamadas</span><strong id="m-chamadas">0</strong></div>
+        <div class="metric"><span>Tokens entrada</span><strong id="m-input">0</strong></div>
+        <div class="metric"><span>Tokens saida</span><strong id="m-output">0</strong></div>
+        <div class="metric"><span>Custo estimado USD</span><strong id="m-custo">US$ 0.00</strong></div>
+      </div>
+
+      <div class="grid-card">
+        <div class="grid-toolbar">
+          <div>
+            <div class="grid-title">Resumo para fechamento</div>
+            <div class="grid-meta" id="resumo-meta"></div>
+          </div>
+        </div>
+        <div id="grid-resumo"></div>
+      </div>
+
+      <div class="grid-card">
+        <div class="grid-toolbar">
+          <div>
+            <div class="grid-title">Eventos detalhados</div>
+            <div class="grid-meta" id="eventos-meta"></div>
+          </div>
+        </div>
+        <div id="grid-eventos"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let gridResumo, gridEventos, gpEventos;
+
+  function fmtInt(v) { return (Number(v) || 0).toLocaleString('pt-BR'); }
+  function fmtUsd(v) { return (Number(v) || 0).toLocaleString('en-US', { style:'currency', currency:'USD' }); }
+  function qs() {
+    const p = new URLSearchParams();
+    if (document.getElementById('f-inicio').value) p.set('inicio', document.getElementById('f-inicio').value);
+    if (document.getElementById('f-fim').value) p.set('fim', document.getElementById('f-fim').value);
+    if (document.getElementById('f-provider').value) p.set('provider', document.getElementById('f-provider').value);
+    p.set('agrupamento', document.getElementById('f-agrupamento').value || 'dia');
+    return p.toString();
+  }
+
+  function initDatas() {
+    const hoje = new Date();
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    document.getElementById('f-inicio').value = ini.toISOString().slice(0, 10);
+    document.getElementById('f-fim').value = hoje.toISOString().slice(0, 10);
+  }
+
+  function atualizarMetricas(rows) {
+    const total = rows.reduce((acc, r) => {
+      acc.chamadas += Number(r.chamadas) || 0;
+      acc.input += Number(r.input_tokens) || 0;
+      acc.output += Number(r.output_tokens) || 0;
+      acc.custo += Number(r.custo_estimado_usd) || 0;
+      return acc;
+    }, { chamadas:0, input:0, output:0, custo:0 });
+    document.getElementById('m-chamadas').textContent = fmtInt(total.chamadas);
+    document.getElementById('m-input').textContent = fmtInt(total.input);
+    document.getElementById('m-output').textContent = fmtInt(total.output);
+    document.getElementById('m-custo').textContent = fmtUsd(total.custo);
+  }
+
+  function renderResumo(rows) {
+    if (gridResumo) { gridResumo.replaceData(rows); return; }
+    gridResumo = new Tabulator('#grid-resumo', {
+      data: rows,
+      layout: 'fitColumns',
+      height: '260px',
+      placeholder: '<div style="padding:32px;color:var(--text-lo)">Nenhum consumo no periodo.</div>',
+      columns: [
+        { title:'Grupo', field:'grupo', minWidth:180, headerFilter:true },
+        { title:'Chamadas', field:'chamadas', width:120, hozAlign:'right', formatter:c=>fmtInt(c.getValue()) },
+        { title:'Input tokens', field:'input_tokens', width:140, hozAlign:'right', formatter:c=>fmtInt(c.getValue()) },
+        { title:'Output tokens', field:'output_tokens', width:145, hozAlign:'right', formatter:c=>fmtInt(c.getValue()) },
+        { title:'Total tokens', field:'total_tokens', width:135, hozAlign:'right', formatter:c=>fmtInt(c.getValue()) },
+        { title:'Custo USD', field:'custo_estimado_usd', width:135, hozAlign:'right', formatter:c=>`<strong>${fmtUsd(c.getValue())}</strong>` },
+      ],
+    });
+  }
+
+  function renderEventos(rows) {
+    if (gridEventos) { gridEventos.replaceData(rows); return; }
+    gpEventos = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_consumo_ia_group', getTable:()=>gridEventos });
+    gridEventos = new Tabulator('#grid-eventos', {
+      data: rows,
+      layout: 'fitColumns',
+      height: 'calc(100vh - 620px)',
+      minHeight: 250,
+      groupBy: gpEventos.getActiveFields(),
+      groupStartOpen: true,
+      placeholder: '<div style="padding:32px;color:var(--text-lo)">Nenhum evento registrado.</div>',
+      columns: [
+        { title:'Data/Hora', field:'criado_em', width:165, formatter:c=>String(c.getValue() || '').slice(0, 19).replace('T',' ') },
+        { title:'Provider', field:'provider', width:105, headerFilter:true },
+        { title:'Modelo', field:'model', minWidth:190, headerFilter:true },
+        { title:'Operacao', field:'operacao', minWidth:170, headerFilter:true },
+        { title:'Numero', field:'numero_wa', width:140, headerFilter:true },
+        { title:'Preco in/1M', field:'preco_input_1m', width:115, hozAlign:'right', groupable:false, formatter:c=>fmtUsd(c.getValue()) },
+        { title:'Preco out/1M', field:'preco_output_1m', width:120, hozAlign:'right', groupable:false, formatter:c=>fmtUsd(c.getValue()) },
+        { title:'Tokens', field:'total_tokens', width:105, hozAlign:'right', groupable:false, formatter:c=>fmtInt(c.getValue()) },
+        { title:'Custo USD', field:'custo_estimado_usd', width:120, hozAlign:'right', groupable:false, formatter:c=>fmtUsd(c.getValue()) },
+        { title:'Status', field:'ok', width:90, formatter:c=>c.getValue() ? 'OK' : 'Erro' },
+      ],
+    });
+    gpEventos.refresh();
+    gpEventos.applyToTable();
+  }
+
+  async function carregar() {
+    const query = qs();
+    const [resumo, eventos] = await Promise.all([
+      fetch(`/api/ia-command/admin/consumo-ia/resumo?${query}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/ia-command/admin/consumo-ia/eventos?${query}&limit=500`).then(r => r.json()).catch(() => []),
+    ]);
+    atualizarMetricas(Array.isArray(resumo) ? resumo : []);
+    renderResumo(Array.isArray(resumo) ? resumo : []);
+    renderEventos(Array.isArray(eventos) ? eventos : []);
+    document.getElementById('resumo-meta').textContent = `${resumo.length || 0} grupo(s)`;
+    document.getElementById('eventos-meta').textContent = `${eventos.length || 0} evento(s)`;
+  }
+
+  initDatas();
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

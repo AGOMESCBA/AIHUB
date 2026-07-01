@@ -511,7 +511,7 @@ async function chamarIA(contract, keys, cfg, systemPrompt, userPrompt, opts = {}
   });
 }
 
-async function fase1ClassificarPergunta(contract, keys, cfg, mensagem, historicoResumido, contextoIAAnterior) {
+async function fase1ClassificarPergunta(contract, keys, cfg, mensagem, historicoResumido, contextoIAAnterior, usageContext = {}) {
   const fallback = contract.phase1Fallback || {
     periodo: { tipo: 'mes_atual' },
     periodo_mantido: false,
@@ -541,7 +541,15 @@ async function fase1ClassificarPergunta(contract, keys, cfg, mensagem, historico
   }
 
   try {
-    const rawText = await chamarIA(contract, keys, cfg, contract.phase1SystemPrompt, partes.join('\n\n'), { json: true, maxTokens: 400 });
+    const rawText = await chamarIA(contract, keys, cfg, contract.phase1SystemPrompt, partes.join('\n\n'), {
+      json: true,
+      maxTokens: 400,
+      empresaId: usageContext.empresaId || null,
+      numeroWa: usageContext.numeroWa || null,
+      canalId: usageContext.canalId || null,
+      usageOrigem: 'systemprompt',
+      usageOperacao: `${contract.nome || 'erp'}_fase1`,
+    });
     let raw = null;
     if (rawText && typeof rawText === 'object') raw = rawText;
     else if (typeof rawText === 'string') {
@@ -606,7 +614,14 @@ async function gerarSQL(contract, keys, cfg, mensagemIA, contexto) {
   const geracaoSql = await aiSqlGeneration.gerarSqlComIaPrimaria({
     keys,
     cfg,
-    chamarIA: (k, c, systemPrompt, userPrompt, opts) => chamarIA(contract, k, c, systemPrompt, userPrompt, opts),
+    chamarIA: (k, c, systemPrompt, userPrompt, opts) => chamarIA(contract, k, c, systemPrompt, userPrompt, {
+      ...opts,
+      empresaId: contexto.empresaId,
+      numeroWa: contexto.numeroWa || null,
+      canalId: contexto.canalId || null,
+      usageOrigem: 'systemprompt',
+      usageOperacao: `${contract.nome || 'erp'}_sql`,
+    }),
     systemPrompt: contract.schema.buildSqlSystemPrompt(),
     userPrompt: avisoSuperlativo + userSql,
     extrairSQL,
@@ -680,7 +695,12 @@ async function executar(contract, intent, empresaId) {
   const historicoResumido = Array.isArray(intent._historicoResumido) && intent._historicoResumido.length ? intent._historicoResumido : null;
   const contextoIAAnterior = intent._contextoIAAnterior || null;
 
-  let fase1 = await fase1ClassificarPergunta(contract, keys, cfg, mensagemIA, historicoResumido, contextoIAAnterior);
+  const usageContext = {
+    empresaId,
+    numeroWa: intent._remetente || null,
+    canalId: intent._channelId || intent._canalId || null,
+  };
+  let fase1 = await fase1ClassificarPergunta(contract, keys, cfg, mensagemIA, historicoResumido, contextoIAAnterior, usageContext);
   console.log(`[${contract.logPrefix}] Fase1: periodo=${fase1.periodo?.tipo} agrupamentos_mantidos=${fase1.agrupamentos_mantidos} agrupamentos=${JSON.stringify(fase1.agrupamentos)}`);
   if (contextoIAAnterior?.periodo && fase1.periodo_mantido) {
     console.log(`[${contract.logPrefix}] IA declarou periodo_mantido=true; usando periodo anterior: ${JSON.stringify(contextoIAAnterior.periodo)}`);
@@ -850,6 +870,8 @@ async function executar(contract, intent, empresaId) {
     empresasMencionadasTextos: Array.isArray(intent._empresasMencionadasTextos) ? intent._empresasMencionadasTextos : [],
     empresaMencionadaId: intent._empresaMencionadaId || null,
     empresasMencionadasIds: Array.isArray(intent._empresasMencionadasIds) ? intent._empresasMencionadasIds : [],
+    numeroWa: intent._remetente || null,
+    canalId: intent._channelId || intent._canalId || null,
     historicoResumido,
     contextoIA: {
       periodo: periodoAutonomoMensagemAtual ? null : periodoResolvido,
@@ -937,7 +959,14 @@ async function executar(contract, intent, empresaId) {
       helpers: {
         ...runnerHelpers,
         extrairSQL,
-        chamarIA: (systemPrompt, userPrompt, opts) => chamarIA(contract, keys, cfg, systemPrompt, userPrompt, opts),
+        chamarIA: (systemPrompt, userPrompt, opts) => chamarIA(contract, keys, cfg, systemPrompt, userPrompt, {
+          ...opts,
+          empresaId,
+          numeroWa: intent._remetente || null,
+          canalId: intent._channelId || intent._canalId || null,
+          usageOrigem: 'systemprompt',
+          usageOperacao: `${contract.nome || 'erp'}_validacao`,
+        }),
         gerarSqlComIaPrimaria: aiSqlGeneration.gerarSqlComIaPrimaria,
         sqlDiagnostico: args => sqlDiagnostico(contract, args),
         mensagemErro: tipo => mensagemErro(contract, tipo),
@@ -1068,7 +1097,15 @@ async function executar(contract, intent, empresaId) {
     if (textoDireto) {
       resposta = textoDireto;
     } else {
-      resposta = await chamarIA(contract, keys, cfg, contract.schema.buildFormatSystemPrompt(), contract.schema.buildFormatUserPrompt(mensagem, rows, []), { json: false, maxTokens: 3000 });
+      resposta = await chamarIA(contract, keys, cfg, contract.schema.buildFormatSystemPrompt(), contract.schema.buildFormatUserPrompt(mensagem, rows, []), {
+        json: false,
+        maxTokens: 3000,
+        empresaId,
+        numeroWa: intent._remetente || null,
+        canalId: intent._channelId || intent._canalId || null,
+        usageOrigem: 'systemprompt',
+        usageOperacao: `${contract.nome || 'erp'}_formatacao`,
+      });
     }
   } catch (e) {
     console.warn(`[${contract.logPrefix}] IA de formatacao falhou, usando fallback:`, e.message);

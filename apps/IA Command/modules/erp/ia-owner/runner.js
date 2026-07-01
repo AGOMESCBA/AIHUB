@@ -734,7 +734,7 @@ function _filtrarTermosTenant(termos, channelId) {
   }
 }
 
-async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, entidadesResolvidas = []) {
+async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, entidadesResolvidas = [], empresaId = null) {
   if (!spec.resolverEntidadesAntesDaIa || typeof spec.resolverEntidades !== 'function') return [];
   const definicoes = spec.entityCatalog?.DEFINICOES || {};
   const explicitosMensagem = intent._filtroEntidadeExplicitaMensagem || {};
@@ -766,7 +766,17 @@ async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, 
         cfg,
         entityResolver.buildExtractionSystemPrompt(),
         entityResolver.buildExtractionUserPrompt(mensagem, spec.nome || 'erp'),
-        { json: true, maxTokens: 500, temperature: 0, logPrefix: `${spec.logPrefix || 'IAOwner'}-entidades` }
+        {
+          json: true,
+          maxTokens: 500,
+          temperature: 0,
+          logPrefix: `${spec.logPrefix || 'IAOwner'}-entidades`,
+          empresaId,
+          numeroWa: intent._remetente || null,
+          canalId: intent._channelId || intent._canalId || null,
+          usageOrigem: 'ia-owner',
+          usageOperacao: `${spec.nome || 'erp'}_entidades`,
+        }
       );
       termosIa = entityResolver.normalizarEntidadesIA(raw);
     } catch (e) {
@@ -1847,7 +1857,17 @@ async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodo
       cfg,
       whatsappFormat.buildFormatSystemPrompt(),
       whatsappFormat.buildFormatUserPrompt(mensagem, rows, { contextoConsulta: contextoFormatacao }),
-      { json: false, maxTokens: 6000, temperature: 0.1, logPrefix: `${spec.logPrefix || 'IAOwner'}-format` }
+      {
+        json: false,
+        maxTokens: 6000,
+        temperature: 0.1,
+        logPrefix: `${spec.logPrefix || 'IAOwner'}-format`,
+        empresaId,
+        numeroWa: intent?._remetente || null,
+        canalId: intent?._channelId || intent?._canalId || null,
+        usageOrigem: 'ia-owner',
+        usageOperacao: `${spec.nome || 'erp'}_formatacao`,
+      }
     );
   } catch (e) {
     const brl = v => (parseFloat(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -2095,7 +2115,7 @@ async function executar(spec, intent, empresaId) {
   const diagnosticosEntidades = [];
   _traceIaOwner('ia_owner_entidades_pre_inicio', { empresa_id: empresaId });
   const termosEntidadesPrevias = _filtrarTermosTenant(
-    await extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intentEfetivo, entidadesResolvidas),
+    await extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intentEfetivo, entidadesResolvidas, empresaId),
     intentEfetivo._channelId
   );
   _traceIaOwner('ia_owner_entidades_pre_fim', {
@@ -2153,6 +2173,11 @@ async function executar(spec, intent, empresaId) {
     modeloBaixasReceber: contextoTecnico.modelo_baixas_receber,
     modeloBaixasPagar: contextoTecnico.modelo_baixas_pagar,
     mensagem,
+    empresaId,
+    numeroWa: intentEfetivo._remetente || null,
+    canalId: intentEfetivo._channelId || intentEfetivo._canalId || null,
+    usageOrigem: 'ia-owner',
+    usageOperacao: spec.nome || spec.handlerName || 'sql',
   };
   let plano;
   let userPrompt = promptBuilder.buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico, entidadesResolvidas });
