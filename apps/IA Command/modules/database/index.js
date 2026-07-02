@@ -23,6 +23,7 @@ function inicializarDB() {
   _criarTabelaMigracoes();
   _executarMigracoes();
   _garantirColunasCompatibilidade();
+  _sincronizarSinonimosDoSistema();
 
   console.log('[IA Command] Banco SQLite inicializado:', DB_PATH);
   return _db;
@@ -304,6 +305,45 @@ function _migrarErpDeUsuariosJson() {
     }
   } catch (e) {
     console.warn('[IA Command] Migração ERP de usuarios.json ignorada:', e.message);
+  }
+}
+
+function _sincronizarSinonimosDoSistema() {
+  // Insere apenas os termos do sistema que estejam faltando em empresas já semeadas.
+  // Nunca apaga nem sobrescreve — preserva customizações do usuário.
+  try {
+    const { _SINONIMOS_SISTEMA } = require('../ai/intent-service');
+    if (!Array.isArray(_SINONIMOS_SISTEMA) || !_SINONIMOS_SISTEMA.length) return;
+
+    const agora = new Date().toISOString();
+    const empresasComSeed = _db
+      .prepare("SELECT DISTINCT empresa_id FROM synonyms WHERE origem = 'sistema'")
+      .all()
+      .map(r => r.empresa_id);
+
+    const checkExiste = _db.prepare(
+      "SELECT id FROM synonyms WHERE empresa_id = ? AND termo = ? AND camada = ?"
+    );
+    const inserir = _db.prepare(`
+      INSERT INTO synonyms (id, empresa_id, termo, camada, equivalencia, contexto, ativo, origem, criado_em, atualizado_em)
+      VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, NULL, 1, 'sistema', ?, ?)
+    `);
+
+    let totalInseridos = 0;
+    for (const empresaId of empresasComSeed) {
+      for (const s of _SINONIMOS_SISTEMA) {
+        if (!checkExiste.get(empresaId, s.termo, s.camada)) {
+          inserir.run(empresaId, s.termo, s.camada, s.equivalencia, agora, agora);
+          totalInseridos++;
+        }
+      }
+    }
+
+    if (totalInseridos > 0) {
+      console.log(`[IA Command] Sinônimos do sistema sincronizados: ${totalInseridos} termo(s) inserido(s) em ${empresasComSeed.length} empresa(s)`);
+    }
+  } catch (e) {
+    console.warn('[IA Command] Sincronização de sinônimos do sistema ignorada:', e.message);
   }
 }
 

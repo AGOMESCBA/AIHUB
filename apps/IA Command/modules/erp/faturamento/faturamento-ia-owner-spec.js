@@ -100,6 +100,15 @@ function validarMediaMensalProduto(sql = '') {
   ].join(' ');
 }
 
+function validarFiltroTipoSF2(sql = '') {
+  const texto = String(sql || '');
+  // Detecta SF2 como alias declarado: "FROM SF2<qualquer> SF2" ou "JOIN SF2<qualquer> SF2"
+  if (!/\b(?:FROM|JOIN)\s+SF2\w*\s+SF2\b/i.test(texto)) return null;
+  // Verifica se há filtro em F2_TIPO (qualquer valor)
+  if (/\bSF2\s*\.\s*F2_TIPO\b/i.test(texto)) return null;
+  return "SF2 usada sem filtro SF2.F2_TIPO. REGRA OBRIGATORIA: toda query de faturamento que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Adicione AND SF2.F2_TIPO = 'N' ao WHERE.";
+}
+
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {
   const linhas = candidatos.map((c, i) => `${i + 1}. *${c.nome}* (${c.rotuloTipo || c.tipo}: ${c.codigo}${c.loja ? `/${c.loja}` : ''})`);
   linhas.push(`${candidatos.length + 1}. *Todos*`);
@@ -258,6 +267,9 @@ module.exports = {
     },
     {
       validar: validarMediaMensalProduto,
+    },
+    {
+      validar: validarFiltroTipoSF2,
     },
   ],
   mensagensErro: {

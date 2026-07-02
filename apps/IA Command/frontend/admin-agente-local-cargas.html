@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cargas — Agente Local — IA Command</title>
+  <title>Cargas - Agente Local - IA Command</title>
   <link rel="stylesheet" href="/css/iahub.css">
-  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
     :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
     .sidebar-logo .logo-icon { background:#7c3aed !important; }
@@ -19,38 +18,46 @@
     .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
     .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
     .quick-row .form-control { height:36px;font-size:13px;flex:1;min-width:220px; }
-    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
-    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
-    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
-    .badge-ok { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
-    .badge-pending { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#854d0e; }
-    .badge-none { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
-    .badge-sel { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--accent-glow);color:var(--accent); }
-    .tabulator { border:none !important;background:transparent !important; }
-    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
-    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
-    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
-    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
-    .tabulator .tabulator-row.tabulator-selected { background:var(--accent-glow) !important; }
-    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
-    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
-    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
-    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:700 !important;color:var(--text-lo) !important; }
-    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
     .filter-area { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
     .filter-status { font-size:12px;color:var(--text-lo);flex:1; }
     .gp-wrap { margin-top:10px; }
     .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
     .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
-    .sync-bar { display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg-base);border-top:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius); }
-    .sync-info { font-size:13px;color:var(--text-md);flex:1; }
-    .agente-alert { display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fef9c3;border:1px solid #fde047;border-radius:var(--radius);margin-bottom:16px;font-size:13px;color:#854d0e; }
+    .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
+    .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-dropzone { min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px;margin-top:8px; }
+    .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
+    .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px; }
+    .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
     .form-tabs { display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:20px; }
     .form-tab-btn { border:0;background:transparent;color:var(--text-md);font-size:13px;font-weight:700;padding:10px 12px;border-bottom:2px solid transparent;cursor:pointer; }
-    .form-tab-btn:hover { color:var(--text-hi); }
     .form-tab-btn.active { color:var(--accent);border-bottom-color:var(--accent); }
     .tab-panel { display:none; }
     .tab-panel.active { display:block; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .cargas-wrap { height:calc(100vh - 360px);min-height:320px;overflow:auto;background:var(--bg-card); }
+    .cargas-table { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .cargas-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;white-space:nowrap; }
+    .cargas-table thead th.sortable { cursor:pointer;user-select:none; }
+    .cargas-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
+    .cargas-table thead .filter-row th { top:33px;padding:6px 10px;background:var(--bg-card); }
+    .cargas-table thead input,
+    .cargas-table thead select { width:100%;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:11px;padding:3px 6px;box-sizing:border-box; }
+    .cargas-table tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:10px;vertical-align:middle;background:var(--bg-card); }
+    .cargas-table tbody tr.data-row { cursor:pointer; }
+    .cargas-table tbody tr.data-row:hover td { background:var(--bg-hover); }
+    .cargas-table tbody tr.selected td { background:var(--accent-glow); }
+    .cargas-table tbody tr.group-row td { background:var(--bg-base);color:var(--text-hi);font-weight:700;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--border); }
+    .cargas-table tbody tr.group-row.level-1 td { padding-left:28px; }
+    .cargas-table tbody tr.group-row.level-2 td { padding-left:46px; }
+    .cargas-empty { height:280px;display:none;align-items:center;justify-content:center;color:var(--text-lo);font-size:22px;font-weight:800; }
+    .badge-ok { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
+    .badge-none { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-hover);color:var(--text-lo); }
+    .sync-bar { display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg-base);border-top:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius); }
+    .sync-info { font-size:13px;color:var(--text-md);flex:1; }
+    .agente-alert { display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fef9c3;border:1px solid #fde047;border-radius:var(--radius);margin-bottom:16px;font-size:13px;color:#854d0e; }
     .result-box { margin-top:12px;padding:12px 16px;border-radius:var(--radius);border:1px solid var(--border);font-size:13px; }
     .result-box.ok { background:#dcfce7;border-color:#86efac;color:#15803d; }
     .result-box.fail { background:#fee2e2;border-color:#fca5a5;color:#b91c1c; }
@@ -60,7 +67,7 @@
 <div class="layout">
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-logo" onclick="toggleSidebar()">
-      <div class="logo-icon">⚡</div>
+      <div class="logo-icon">IA</div>
       <span class="logo-text">IA Command</span>
     </div>
     <div class="sidebar-nav"></div>
@@ -72,7 +79,7 @@
       <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command › Agente Local ›</span> Cargas</span>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &gt; Agente Local &gt;</span> Cargas</span>
     </div>
 
     <div class="page-content">
@@ -82,15 +89,15 @@
           <div class="page-title">Cargas</div>
           <div class="page-subtitle">Envie empresas para o agente local para que ele possa operar em contexto multi-empresa.</div>
         </div>
-        <button class="btn btn-ghost" onclick="carregar()" title="Recarregar">↺ Recarregar</button>
+        <button class="btn btn-ghost" onclick="carregar()" title="Recarregar">↻ Recarregar</button>
       </div>
 
       <div id="alerta-agente" class="agente-alert" style="display:none">
-        ⚠️ Agente local não configurado ou inacessível. Configure a URL e o token em <a href="/app/ia-command/config-ia.html" style="color:inherit;font-weight:700">Configuração de IA</a> antes de sincronizar.
+        Agente local nao configurado ou inacessivel. Configure a URL e o token em <a href="/app/ia-command/config-ia.html" style="color:inherit;font-weight:700">Configuracao de IA</a> antes de sincronizar.
       </div>
 
       <div class="form-tabs">
-        <button class="form-tab-btn active" onclick="setAba('empresas')">🏢 Empresas</button>
+        <button class="form-tab-btn active" onclick="setAba('empresas')">Empresas</button>
       </div>
 
       <div class="tab-panel active" id="tab-empresas">
@@ -101,17 +108,17 @@
           </div>
           <div class="filter-area" id="filter-area" style="display:none">
             <div class="quick-row" style="margin-bottom:10px">
-              <input id="q-busca" class="form-control" placeholder="Buscar por nome ou CNPJ..." oninput="filtrar()">
+              <input id="q-busca" class="form-control" placeholder="Buscar por nome ou CNPJ..." autocomplete="off" spellcheck="false" oninput="filtrar()">
               <select id="q-sync" class="form-control" onchange="filtrar()">
                 <option value="">Todos os status</option>
                 <option value="sim">Sincronizada</option>
-                <option value="nao">Não sincronizada</option>
+                <option value="nao">Nao sincronizada</option>
               </select>
               <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
             </div>
             <div class="gp-wrap">
               <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
-              <div id="dz"></div>
+              <div id="dz" class="group-dropzone"></div>
             </div>
           </div>
         </div>
@@ -119,15 +126,36 @@
         <div class="card" style="padding:0;overflow:hidden">
           <div class="grid-toolbar">
             <div>
-              <div class="grid-title">Empresas acessíveis ao seu usuário</div>
+              <div class="grid-title">Empresas acessiveis ao seu usuario</div>
               <div id="count" class="grid-meta"></div>
             </div>
             <div style="display:flex;gap:8px;align-items:center">
               <span id="sel-info" style="font-size:12px;color:var(--text-lo)"></span>
-              <button class="btn btn-primary" id="btn-sync" onclick="sincronizar()" disabled>📤 Sincronizar selecionadas</button>
+              <button class="btn btn-primary" id="btn-sync" onclick="sincronizar()" disabled>Sincronizar selecionadas</button>
             </div>
           </div>
-          <div id="tabela"></div>
+          <div class="cargas-wrap">
+            <table class="cargas-table">
+              <thead>
+                <tr>
+                  <th style="width:46px;text-align:center"><input type="checkbox" id="chk-all" onclick="toggleTodos()" style="cursor:pointer;width:15px;height:15px"></th>
+                  <th class="sortable" data-sort="nome">Empresa</th>
+                  <th class="sortable" data-sort="cnpj" style="width:170px">CNPJ</th>
+                  <th class="sortable" data-sort="sincronizada" style="width:160px">Status</th>
+                  <th class="sortable" data-sort="sincronizado_em" style="width:190px">Ultima sincronizacao</th>
+                </tr>
+                <tr class="filter-row">
+                  <th></th>
+                  <th><input data-filter="nome" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="cnpj" autocomplete="off" spellcheck="false"></th>
+                  <th><select data-filter="sincronizada" autocomplete="off"><option value="">Todos</option><option value="true">Sincronizada</option><option value="false">Nao sincronizada</option></select></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="cargas-body"></tbody>
+            </table>
+            <div class="cargas-empty" id="cargas-empty">Nenhuma empresa disponivel.</div>
+          </div>
           <div class="sync-bar">
             <span class="sync-info" id="sync-hint">Selecione uma ou mais empresas e clique em Sincronizar.</span>
           </div>
@@ -139,59 +167,97 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
-<script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
-  let table, gp;
   let dados = [];
+  let visiveis = [];
   let syncMap = {};
   let agenteOk = true;
   let filtrosVisiveis = false;
-  let quickFilterFn = null;
+  const selecionados = new Set();
+  const gridState = { sortField: 'nome', sortDir: 'asc', columnFilters: {}, groupFields: [] };
 
-  // ── Seleção manual (não usa o sistema de seleção do Tabulator) ──────────────
-  const selecionados = new Set(); // armazena IDs selecionados
-
-  function toggleSel(id) {
-    if (selecionados.has(id)) selecionados.delete(id);
-    else selecionados.add(id);
-    atualizarBotaoSync();
-    if (table) table.getRows().forEach(r => r.reformat());
-  }
-
-  function toggleTodos() {
-    const visiveis = table ? table.getRows('active').map(r => r.getData().id) : [];
-    const todosSel = visiveis.every(id => selecionados.has(id));
-    visiveis.forEach(id => todosSel ? selecionados.delete(id) : selecionados.add(id));
-    atualizarBotaoSync();
-    if (table) table.getRows().forEach(r => r.reformat());
-  }
-
-  function atualizarBotaoSync() {
-    const n = selecionados.size;
-    document.getElementById('btn-sync').disabled    = n === 0;
-    document.getElementById('sel-info').textContent = n > 0 ? `${n} selecionada${n > 1 ? 's' : ''}` : '';
-    document.getElementById('sync-hint').textContent = n > 0
-      ? `${n} empresa${n > 1 ? 's' : ''} selecionada${n > 1 ? 's' : ''} — clique em Sincronizar para enviar ao agente.`
-      : 'Selecione uma ou mais empresas e clique em Sincronizar.';
-  }
-
-  // ──────────────────────────────────────────────────────────────────────────
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
   function fmtData(iso) {
-    if (!iso) return '—';
-    try {
-      return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
-    } catch(_) { return iso; }
+    if (!iso) return '-';
+    try { return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' }); }
+    catch (_) { return iso; }
   }
-
   function syncStatus(id) {
     const s = syncMap[String(id)];
-    if (!s) return { label: 'Não sincronizada', cls: 'badge-none', em: null };
+    if (!s) return { label: 'Nao sincronizada', cls: 'badge-none', em: null };
     return { label: 'Sincronizada', cls: 'badge-ok', em: s.sincronizado_em || null };
+  }
+  function statusLabel(row) { return row.sincronizada ? 'Sincronizada' : 'Nao sincronizada'; }
+  function rowValue(row, field) {
+    if (field === 'sincronizada') return statusLabel(row);
+    if (field === 'sincronizado_em') return row.sincronizado_em || '';
+    return row[field] ?? '';
+  }
+  function groupName(field) {
+    return { nome:'Empresa', cnpj:'CNPJ', sincronizada:'Status', sincronizado_em:'Ultima sincronizacao' }[field] || '';
+  }
+
+  function protegerInput(el) {
+    el.setAttribute('autocomplete', 'off');
+    el.setAttribute('name', `iac_cargas_${el.id || el.dataset.filter || 'filter'}_${Date.now()}`);
+    if (el.tagName === 'INPUT') {
+      el.setAttribute('spellcheck', 'false');
+      el.setAttribute('autocapitalize', 'off');
+      el.setAttribute('readonly', 'readonly');
+      el.addEventListener('focus', () => { el.removeAttribute('readonly'); limparFiltroFantasma(el); }, { once: true });
+      el.addEventListener('keydown', () => { el.dataset.userTouched = '1'; });
+    }
+  }
+  function limparFiltroFantasma(el) {
+    if (!el || el.dataset.userTouched === '1') return false;
+    if (!String(el.value || '').trim()) return false;
+    el.value = '';
+    if (el.dataset.filter) delete gridState.columnFilters[el.dataset.filter];
+    return true;
+  }
+  function limparFiltrosFantasma() {
+    let mudou = false;
+    document.querySelectorAll('#q-busca, [data-filter]').forEach(el => { mudou = limparFiltroFantasma(el) || mudou; });
+    if (mudou) {
+      document.getElementById('q-sync').value = '';
+      gridState.columnFilters = {};
+    }
+    return mudou;
+  }
+
+  function renderGroupControls() {
+    const row = document.getElementById('gp-chips-row');
+    row.querySelectorAll('.group-chip').forEach(el => el.remove());
+    [['nome','Empresa'], ['cnpj','CNPJ'], ['sincronizada','Status'], ['sincronizado_em','Ultima sincronizacao']].forEach(([field, label]) => {
+      const btn = document.createElement('button');
+      btn.className = 'group-chip' + (gridState.groupFields.includes(field) ? ' active' : '');
+      btn.type = 'button';
+      btn.draggable = true;
+      btn.dataset.groupField = field;
+      btn.textContent = label;
+      btn.addEventListener('click', () => addGroupField(field));
+      btn.addEventListener('dragstart', event => {
+        event.dataTransfer.setData('text/plain', field);
+        event.dataTransfer.effectAllowed = 'copy';
+      });
+      row.appendChild(btn);
+    });
+    const dz = document.getElementById('dz');
+    dz.innerHTML = gridState.groupFields.length
+      ? gridState.groupFields.map(field => `<span class="active-group-chip">${esc(groupName(field))}<button class="active-group-remove" type="button" data-remove-group="${esc(field)}" title="Remover agrupamento">x</button></span>`).join('')
+      : 'Solte um campo aqui para agrupar';
+  }
+  function addGroupField(field) {
+    if (!groupName(field) || gridState.groupFields.includes(field)) return;
+    limparFiltrosFantasma();
+    gridState.groupFields.push(field);
+    aplicarFiltros();
+  }
+  function removeGroupField(field) {
+    gridState.groupFields = gridState.groupFields.filter(item => item !== field);
+    aplicarFiltros();
   }
 
   function setAba(aba) {
@@ -201,117 +267,137 @@
     document.getElementById('tab-' + aba)?.classList.add('active');
   }
 
+  function atualizarBotaoSync() {
+    const n = selecionados.size;
+    document.getElementById('btn-sync').disabled = n === 0;
+    document.getElementById('sel-info').textContent = n > 0 ? `${n} selecionada${n > 1 ? 's' : ''}` : '';
+    document.getElementById('sync-hint').textContent = n > 0
+      ? `${n} empresa${n > 1 ? 's' : ''} selecionada${n > 1 ? 's' : ''} - clique em Sincronizar para enviar ao agente.`
+      : 'Selecione uma ou mais empresas e clique em Sincronizar.';
+  }
+  function toggleSel(id) {
+    if (selecionados.has(id)) selecionados.delete(id);
+    else selecionados.add(id);
+    atualizarBotaoSync();
+    renderTabela();
+  }
+  function toggleTodos() {
+    const ids = visiveis.map(row => row.id);
+    const todosSel = ids.length > 0 && ids.every(id => selecionados.has(id));
+    ids.forEach(id => todosSel ? selecionados.delete(id) : selecionados.add(id));
+    atualizarBotaoSync();
+    renderTabela();
+  }
+
   async function carregar() {
     const [empresasResp, cargasResp] = await Promise.all([
       fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []),
       fetch('/api/ia-command/agente-local/cargas/empresas').then(r => r.json()).catch(() => ({ syncMap: {}, agenteOk: false })),
     ]);
-
-    syncMap  = cargasResp.syncMap  || {};
+    syncMap = cargasResp.syncMap || {};
     agenteOk = cargasResp.agenteOk ?? true;
-
     document.getElementById('alerta-agente').style.display = agenteOk ? 'none' : '';
-
     dados = (Array.isArray(empresasResp) ? empresasResp : []).map(e => ({
-      id:           e.id,
-      nome:         e.razao_social || e.nome || `Empresa #${e.id}`,
-      cnpj:         e.cnpj || null,
+      id: e.id,
+      nome: e.razao_social || e.nome || `Empresa #${e.id}`,
+      cnpj: e.cnpj || null,
       sincronizada: !!syncMap[String(e.id)],
       sincronizado_em: syncMap[String(e.id)]?.sincronizado_em || null,
     }));
-
     selecionados.clear();
     atualizarBotaoSync();
-
-    if (table) {
-      table.replaceData(dados);
-      return;
-    }
-
-    gp = createGroupPanel({
-      chipsRowId: 'gp-chips-row',
-      dropZoneId: 'dz',
-      storageKey: 'iac_agente_cargas_group',
-      getTable:   () => table,
-    });
-
-    table = new Tabulator('#tabela', {
-      data:           dados,
-      index:          'id',
-      layout:         'fitColumns',
-      height:         'calc(100vh - 360px)',
-      movableColumns: true,
-      groupBy:        gp.getActiveFields(),
-      groupStartOpen: true,
-      placeholder:    '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma empresa disponível.</div>',
-      columns: [
-        { title: '', field: 'id', width: 46, hozAlign: 'center', headerSort: false, groupable: false,
-          titleFormatter: () => `<input type="checkbox" id="chk-all" onclick="toggleTodos()" style="cursor:pointer;width:15px;height:15px">`,
-          formatter: cell => {
-            const id  = cell.getData().id;
-            const chk = selecionados.has(id) ? 'checked' : '';
-            return `<input type="checkbox" ${chk} onclick="event.stopPropagation();toggleSel(${id})" style="cursor:pointer;width:15px;height:15px">`;
-          },
-        },
-        { title: 'Empresa', field: 'nome', minWidth: 220, headerFilter: true,
-          formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
-        { title: 'CNPJ', field: 'cnpj', width: 160, headerFilter: true,
-          formatter: c => `<span style="font-family:monospace;font-size:12px">${esc(c.getValue() || '—')}</span>` },
-        { title: 'Status', field: 'sincronizada', width: 150,
-          headerFilter: 'select',
-          headerFilterParams: { values: { '': 'Todos', 'true': 'Sincronizada', 'false': 'Não sincronizada' } },
-          headerFilterFunc: (hv, rv) => hv === '' || String(rv) === hv,
-          formatter: c => {
-            const st = syncStatus(c.getRow().getData().id);
-            return `<span class="${st.cls}">${esc(st.label)}</span>`;
-          },
-        },
-        { title: 'Última sincronização', field: 'sincronizado_em', width: 180,
-          formatter: c => `<span style="font-size:12px;color:var(--text-lo)">${fmtData(c.getValue())}</span>` },
-      ],
-      rowClick: (_e, row) => {
-        // Clique na linha (fora do checkbox) também seleciona
-        toggleSel(row.getData().id);
-      },
-      dataFiltered: (_f, rows) => {
-        document.getElementById('count').textContent = `${rows.length} empresa${rows.length !== 1 ? 's' : ''}`;
-      },
-    });
-
-    gp.refresh();
-    gp.applyToTable();
-    document.getElementById('count').textContent = `${dados.length} empresa${dados.length !== 1 ? 's' : ''}`;
+    aplicarFiltros();
   }
 
   function toggleFiltros() {
     filtrosVisiveis = !filtrosVisiveis;
     document.getElementById('filter-area').style.display = filtrosVisiveis ? '' : 'none';
     document.getElementById('btn-filtros').textContent = filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
-    if (filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+    if (filtrosVisiveis) renderGroupControls();
   }
-
   function filtrar() {
-    if (!table) return;
-    if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
-    const busca = document.getElementById('q-busca').value.trim().toLowerCase();
-    const sync  = document.getElementById('q-sync').value;
-    if (busca || sync) {
-      quickFilterFn = row => {
-        if (sync === 'sim' && !row.sincronizada) return false;
-        if (sync === 'nao' && row.sincronizada)  return false;
-        if (busca && !`${row.nome} ${row.cnpj || ''}`.toLowerCase().includes(busca)) return false;
-        return true;
-      };
-      table.addFilter(quickFilterFn);
-    }
-    const qtd = [busca, sync].filter(Boolean).length;
-    document.getElementById('filter-status').textContent = qtd ? `${qtd} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+    const busca = document.getElementById('q-busca');
+    if (document.activeElement === busca) busca.dataset.userTouched = '1';
+    aplicarFiltros();
   }
-
+  function aplicarFiltros() {
+    limparFiltrosFantasma();
+    const busca = document.getElementById('q-busca').value.trim().toLowerCase();
+    const sync = document.getElementById('q-sync').value;
+    visiveis = dados.filter(row => {
+      if (sync === 'sim' && !row.sincronizada) return false;
+      if (sync === 'nao' && row.sincronizada) return false;
+      if (busca && !`${row.nome} ${row.cnpj || ''}`.toLowerCase().includes(busca)) return false;
+      for (const [field, raw] of Object.entries(gridState.columnFilters)) {
+        const needle = String(raw || '').trim().toLowerCase();
+        if (!needle) continue;
+        if (!String(rowValue(row, field) || '').toLowerCase().includes(needle)) return false;
+      }
+      return true;
+    });
+    ordenarVisiveis();
+    const qtd = [busca, sync, ...Object.values(gridState.columnFilters)].filter(Boolean).length;
+    document.getElementById('filter-status').textContent = qtd ? `${qtd} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+    renderTabela();
+  }
   function limparFiltros() {
     document.getElementById('q-busca').value = '';
     document.getElementById('q-sync').value = '';
-    filtrar();
+    document.querySelectorAll('[data-filter]').forEach(el => { el.value = ''; });
+    gridState.columnFilters = {};
+    aplicarFiltros();
+  }
+  function ordenarVisiveis() {
+    const dir = gridState.sortDir === 'asc' ? 1 : -1;
+    const field = gridState.sortField;
+    visiveis.sort((a, b) => String(rowValue(a, field) || '').localeCompare(String(rowValue(b, field) || ''), 'pt-BR') * dir);
+  }
+  function renderDataRow(row) {
+    const st = syncStatus(row.id);
+    const checked = selecionados.has(row.id) ? 'checked' : '';
+    const selected = selecionados.has(row.id) ? ' selected' : '';
+    return `<tr class="data-row${selected}" data-id="${Number(row.id)}">
+      <td style="text-align:center"><input type="checkbox" ${checked} data-row-check="${Number(row.id)}" style="cursor:pointer;width:15px;height:15px"></td>
+      <td><strong style="color:var(--text-hi)">${esc(row.nome)}</strong></td>
+      <td><span style="font-family:monospace;font-size:12px">${esc(row.cnpj || '-')}</span></td>
+      <td><span class="${st.cls}">${esc(st.label)}</span></td>
+      <td><span style="font-size:12px;color:var(--text-lo)">${fmtData(row.sincronizado_em)}</span></td>
+    </tr>`;
+  }
+  function renderGroupedRows(parts, rows, groups, level) {
+    const field = groups[level];
+    const buckets = new Map();
+    rows.forEach(row => {
+      const label = rowValue(row, field) || '-';
+      if (!buckets.has(label)) buckets.set(label, []);
+      buckets.get(label).push(row);
+    });
+    [...buckets.entries()].forEach(([label, items]) => {
+      parts.push(`<tr class="group-row level-${Math.min(level, 2)}"><td colspan="5">${esc(groupName(field))}: ${esc(label)} (${items.length})</td></tr>`);
+      if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1);
+      else items.forEach(row => parts.push(renderDataRow(row)));
+    });
+  }
+  function renderTabela() {
+    renderGroupControls();
+    const tbody = document.getElementById('cargas-body');
+    const empty = document.getElementById('cargas-empty');
+    document.getElementById('count').textContent = `${visiveis.length} empresa${visiveis.length !== 1 ? 's' : ''}`;
+    const chkAll = document.getElementById('chk-all');
+    if (chkAll) {
+      chkAll.checked = visiveis.length > 0 && visiveis.every(row => selecionados.has(row.id));
+      chkAll.indeterminate = visiveis.some(row => selecionados.has(row.id)) && !chkAll.checked;
+    }
+    if (!visiveis.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+    const parts = [];
+    if (gridState.groupFields.length) renderGroupedRows(parts, visiveis, gridState.groupFields, 0);
+    else visiveis.forEach(row => parts.push(renderDataRow(row)));
+    tbody.innerHTML = parts.join('');
   }
 
   async function urlParaBase64(url) {
@@ -319,80 +405,113 @@
     try {
       const resp = await fetch(url);
       if (!resp.ok) return { data: null, mime: null };
-      const blob   = await resp.blob();
+      const blob = await resp.blob();
       const buffer = await blob.arrayBuffer();
-      const bytes  = new Uint8Array(buffer);
+      const bytes = new Uint8Array(buffer);
       let bin = '';
       for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
       return { data: btoa(bin), mime: blob.type || 'image/png' };
     } catch (_) { return { data: null, mime: null }; }
   }
-
   async function sincronizar() {
-    if (!table || selecionados.size === 0) return;
-
+    if (selecionados.size === 0) return;
     const btn = document.getElementById('btn-sync');
     btn.disabled = true;
-    btn.textContent = '⏳ Preparando imagens...';
+    btn.textContent = 'Preparando imagens...';
     document.getElementById('resultado').style.display = 'none';
-
-    // Filtra os dados usando o Set manual de IDs selecionados
     const selecionadas = dados.filter(e => selecionados.has(e.id));
-
-    // Busca dados completos das empresas (incluindo logo_url, etc.)
     const todasEmpresas = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
-    const mapaEmpresas  = new Map(todasEmpresas.map(e => [e.id, e]));
-
-    const payload = await Promise.all(selecionadas.map(async (e) => {
+    const mapaEmpresas = new Map(todasEmpresas.map(e => [e.id, e]));
+    const payload = await Promise.all(selecionadas.map(async e => {
       const full = mapaEmpresas.get(e.id) || {};
-      const [logo, bg] = await Promise.all([
-        urlParaBase64(full.login_logo_url),
-        urlParaBase64(full.login_background_url),
-      ]);
+      const [logo, bg] = await Promise.all([urlParaBase64(full.login_logo_url), urlParaBase64(full.login_background_url)]);
       return {
-        id:        e.id,
-        nome:      e.nome,
-        cnpj:      e.cnpj || null,
-        slogan:    full.login_slogan || null,
+        id: e.id,
+        nome: e.nome,
+        cnpj: e.cnpj || null,
+        slogan: full.login_slogan || null,
         logo_data: logo.data,
         logo_mime: logo.mime,
-        bg_data:   bg.data,
-        bg_mime:   bg.mime,
+        bg_data: bg.data,
+        bg_mime: bg.mime,
       };
     }));
-
-    btn.textContent = '📤 Sincronizando...';
-
+    btn.textContent = 'Sincronizando...';
     try {
-      const res  = await fetch('/api/ia-command/agente-local/cargas/sincronizar', {
+      const res = await fetch('/api/ia-command/agente-local/cargas/sincronizar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ empresas: payload }),
       });
       const data = await res.json().catch(() => ({}));
-
       const el = document.getElementById('resultado');
       el.style.display = '';
       if (data.ok) {
         el.className = 'result-box ok';
-        el.textContent = `✅ ${data.sincronizadas} empresa${data.sincronizadas !== 1 ? 's' : ''} sincronizada${data.sincronizadas !== 1 ? 's' : ''} com sucesso no agente local (logos incluídas).`;
+        el.textContent = `${data.sincronizadas} empresa${data.sincronizadas !== 1 ? 's' : ''} sincronizada${data.sincronizadas !== 1 ? 's' : ''} com sucesso no agente local.`;
         selecionados.clear();
         await carregar();
       } else {
         el.className = 'result-box fail';
-        el.textContent = `❌ ${data.erro || 'Erro ao sincronizar.'}`;
+        el.textContent = data.erro || 'Erro ao sincronizar.';
       }
     } catch (err) {
       const el = document.getElementById('resultado');
       el.style.display = '';
       el.className = 'result-box fail';
-      el.textContent = `❌ ${err.message || 'Erro de conexão.'}`;
+      el.textContent = err.message || 'Erro de conexao.';
     } finally {
-      btn.textContent = '📤 Sincronizar selecionadas';
+      btn.textContent = 'Sincronizar selecionadas';
       btn.disabled = selecionados.size === 0;
     }
   }
 
+  function bindGridEvents() {
+    document.querySelectorAll('#q-busca, [data-filter]').forEach(protegerInput);
+    document.querySelectorAll('[data-filter]').forEach(el => {
+      el.addEventListener('input', () => {
+        el.dataset.userTouched = '1';
+        gridState.columnFilters[el.dataset.filter] = el.value;
+        aplicarFiltros();
+      });
+      el.addEventListener('change', () => {
+        gridState.columnFilters[el.dataset.filter] = el.value;
+        aplicarFiltros();
+      });
+    });
+    document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => {
+      const field = th.dataset.sort;
+      if (gridState.sortField === field) gridState.sortDir = gridState.sortDir === 'asc' ? 'desc' : 'asc';
+      else { gridState.sortField = field; gridState.sortDir = 'asc'; }
+      aplicarFiltros();
+    }));
+    document.getElementById('cargas-body').addEventListener('click', event => {
+      const chk = event.target.closest('[data-row-check]');
+      if (chk) {
+        event.stopPropagation();
+        toggleSel(Number(chk.dataset.rowCheck));
+        return;
+      }
+      const tr = event.target.closest('tr.data-row');
+      if (tr) toggleSel(Number(tr.dataset.id));
+    });
+    const dz = document.getElementById('dz');
+    dz.addEventListener('dragover', event => { event.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', event => {
+      event.preventDefault();
+      dz.classList.remove('drag-over');
+      addGroupField(event.dataTransfer.getData('text/plain'));
+    });
+    dz.addEventListener('click', event => {
+      const btn = event.target.closest('[data-remove-group]');
+      if (btn) removeGroupField(btn.dataset.removeGroup);
+    });
+    setTimeout(() => { limparFiltrosFantasma(); aplicarFiltros(); }, 250);
+  }
+
+  bindGridEvents();
+  renderGroupControls();
   window._iahubAuthReady?.then(() => carregar()) ?? carregar();
 </script>
 </body>

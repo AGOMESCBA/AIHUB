@@ -79,6 +79,45 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
     }
   );
 
+  // ── IMPORTAR DE ARQUIVO SDB (SQLite exportado pelo Protheus) ─────────────
+  app.post('/api/ia-command/protheus/sx3/import-sdb',
+    requireAuth, requireIaCommand, canSX3,
+    (req, res) => {
+      const fs   = require('fs');
+      const path = require('path');
+      const os   = require('os');
+      const { pipeline } = require('stream/promises');
+
+      const conexaoId = req.query.conexao_id;
+      const limpar    = req.query.limpar !== 'false';
+      const tmp       = path.join(os.tmpdir(), `sx3_import_${Date.now()}.sdb`);
+
+      if (!conexaoId) return res.status(400).json({ error: 'Informe conexao_id.' });
+      const conn = _verificarConexao(conexaoId, eid(req));
+      if (!conn) return res.status(404).json({ error: 'Conexao nao encontrada.' });
+
+      const out = fs.createWriteStream(tmp);
+      pipeline(req, out)
+        .then(() => {
+          const sdb = new (require('better-sqlite3'))(tmp, { readonly: true });
+          let rows;
+          try {
+            rows = sdb.prepare("SELECT * FROM localfile WHERE D_E_L_E_T_ != '*'").all();
+          } finally {
+            sdb.close();
+          }
+          if (!rows || rows.length === 0) {
+            return res.json({ importados: 0, aviso: 'O arquivo SDB não contém registros na tabela localfile.' });
+          }
+          const total = _salvarRegistros(conexaoId, eid(req), rows.map(_normalizarRegistroSX3), limpar);
+          _invalidarMetaSX3(eid(req));
+          res.json({ importados: total });
+        })
+        .catch(e => res.status(500).json({ error: e.message }))
+        .finally(() => { try { fs.unlinkSync(tmp); } catch (_) {} });
+    }
+  );
+
   app.post('/api/ia-command/protheus/sx3/import',
     requireAuth, requireIaCommand, canSX3,
     (req, res) => {
@@ -199,7 +238,7 @@ function _salvarRegistros(conexaoId, empresaId, registros, limpar = true) {
   const agora = new Date().toISOString();
   const del = db.prepare('DELETE FROM protheus_sx3 WHERE connection_id = ?');
   const ins = limpar
-    ? db.prepare(`INSERT INTO protheus_sx3
+    ? db.prepare(`INSERT OR IGNORE INTO protheus_sx3
         (connection_id, empresa_id, tabela, campo, tipo, tamanho, decimal, titulo, descricao, usado, ordem, criado_em, atualizado_em)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     : db.prepare(`INSERT INTO protheus_sx3

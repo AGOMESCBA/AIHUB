@@ -87,6 +87,51 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
     }
   );
 
+  // ── IMPORTAR DE ARQUIVO SDB (SQLite exportado pelo Protheus) ─────────────
+  app.post('/api/ia-command/protheus/sx2/import-sdb',
+    requireAuth, requireIaCommand, canSX2,
+    (req, res) => {
+      const fs   = require('fs');
+      const path = require('path');
+      const os   = require('os');
+      const { pipeline } = require('stream/promises');
+
+      const conexaoId = req.query.conexao_id;
+      const limpar    = req.query.limpar !== 'false';
+      const tmp       = path.join(os.tmpdir(), `sx2_import_${Date.now()}.sdb`);
+
+      if (!conexaoId) return res.status(400).json({ error: 'Informe conexao_id.' });
+      const conn = _verificarConexao(conexaoId, eid(req));
+      if (!conn) return res.status(404).json({ error: 'Conexão não encontrada.' });
+
+      const out = fs.createWriteStream(tmp);
+      pipeline(req, out)
+        .then(() => {
+          const sdb = new (require('better-sqlite3'))(tmp, { readonly: true });
+          let rows;
+          try {
+            rows = sdb.prepare("SELECT * FROM localfile WHERE D_E_L_E_T_ != '*'").all();
+          } finally {
+            sdb.close();
+          }
+          if (!rows || rows.length === 0) {
+            return res.json({ importados: 0, aviso: 'O arquivo SDB não contém registros na tabela localfile.' });
+          }
+          const registros = rows.map(r => ({
+            chave:    (r.X2_CHAVE   || '').toString().trim(),
+            arquivo:  (r.X2_ARQUIVO || r.X2_CHAVE || '').toString().trim(),
+            modo:     (r.X2_MODO    || 'E').toString().trim() || 'E',
+            descricao:(r.X2_NOME    || '').toString().trim(),
+          }));
+          const total = _salvarRegistros(conexaoId, eid(req), registros, limpar);
+          _invalidarMetaSX2(eid(req));
+          res.json({ importados: total });
+        })
+        .catch(e => res.status(500).json({ error: e.message }))
+        .finally(() => { try { fs.unlinkSync(tmp); } catch (_) {} });
+    }
+  );
+
   // ── IMPORTAR DO CLIENTE (DBF parseado no browser) ─────────────────────────
   app.post('/api/ia-command/protheus/sx2/import',
     requireAuth, requireIaCommand, canSX2,
@@ -206,7 +251,7 @@ function _salvarRegistros(conexaoId, empresaId, registros, limpar = true) {
   const agora = new Date().toISOString();
   const del   = db.prepare('DELETE FROM protheus_sx2 WHERE connection_id = ?');
   const ins   = limpar
-    ? db.prepare('INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)')
+    ? db.prepare('INSERT OR IGNORE INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)')
     : db.prepare(`INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)
         ON CONFLICT(connection_id, chave) DO UPDATE SET
           arquivo=excluded.arquivo, modo=excluded.modo, descricao=excluded.descricao, atualizado_em=excluded.atualizado_em`);

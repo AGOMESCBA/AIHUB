@@ -271,6 +271,7 @@
     <div class="modal-tabs">
       <div class="modal-tab active" onclick="modalTab(this,'tab-banco')">Do banco de dados</div>
       <div class="modal-tab" onclick="modalTab(this,'tab-dbf')">De arquivo DBF</div>
+      <div class="modal-tab" onclick="modalTab(this,'tab-sdb')">De arquivo SDB</div>
     </div>
 
     <!-- Seletor de modo de importação -->
@@ -322,6 +323,24 @@
       <div class="modal-panel-body"></div>
     </div>
 
+    <!-- TAB: Arquivo SDB -->
+    <div id="tab-sdb" class="modal-panel">
+      <div class="modal-panel-head">
+        <div class="info-box">Selecione o arquivo <strong>.SDB</strong> exportado pelo Protheus (opção "SQLite Local"). O arquivo é lido localmente — nada é enviado ao servidor além dos registros processados.</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="imp-conexao-sdb" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Arquivo SDB</label>
+          <input type="file" id="imp-arquivo-sdb" class="form-control" accept=".sdb" onchange="lerArquivoSDB(this)">
+        </div>
+        <div id="sdb-preview" style="font-size:13px;color:var(--text-md);margin-top:8px"></div>
+        <div class="import-status" id="status-sdb"></div>
+      </div>
+      <div class="modal-panel-body"></div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharImportar()">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-import" onclick="confirmarImportacao()" disabled>Importar</button>
@@ -338,7 +357,7 @@
 let table, gp;
 let dados = [], conexoes = [], editId = null;
 let filtrosVisiveis = false, quickFilterFn = null;
-let tabelaBancoSelecionada = null, dbfRegistros = null, abaImportAtiva = 'banco';
+let tabelaBancoSelecionada = null, dbfRegistros = null, sdbRegistros = null, abaImportAtiva = 'banco';
 let modoImport = 'apagar';
 
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -373,7 +392,7 @@ async function carregar() {
 
 function popularSelectConexoes() {
   const proteusConns = conexoes.filter(c => (c.erp || '').toLowerCase() === 'protheus');
-  const selects = ['f-conexao-lista', 'f-conexao-form', 'imp-conexao-banco', 'imp-conexao-dbf'];
+  const selects = ['f-conexao-lista', 'f-conexao-form', 'imp-conexao-banco', 'imp-conexao-dbf', 'imp-conexao-sdb'];
   selects.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -541,6 +560,7 @@ function feedback(msg, ok) {
 function abrirImportar() {
   tabelaBancoSelecionada = null;
   dbfRegistros = null;
+  sdbRegistros = null;
   modoImport = 'apagar';
   document.querySelectorAll('input[name="import-mode-sx3"]').forEach(r => { r.checked = r.value === 'apagar'; });
   document.getElementById('lista-tabelas-banco').innerHTML = '';
@@ -548,6 +568,9 @@ function abrirImportar() {
   document.getElementById('status-dbf').textContent = '';
   document.getElementById('dbf-preview').textContent = '';
   document.getElementById('imp-arquivo-dbf').value = '';
+  document.getElementById('status-sdb').textContent = '';
+  document.getElementById('sdb-preview').textContent = '';
+  document.getElementById('imp-arquivo-sdb').value = '';
   document.getElementById('btn-confirmar-import').disabled = true;
   document.getElementById('modal-importar').classList.add('open');
 }
@@ -561,7 +584,7 @@ function modalTab(el, id) {
   el.closest('.modal-box').querySelectorAll('.modal-panel').forEach(p => p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById(id).classList.add('active');
-  abaImportAtiva = id === 'tab-banco' ? 'banco' : 'dbf';
+  abaImportAtiva = id === 'tab-banco' ? 'banco' : id === 'tab-dbf' ? 'dbf' : 'sdb';
   document.getElementById('btn-confirmar-import').disabled = true;
 }
 
@@ -671,6 +694,19 @@ function parsearDBF(buffer) {
   })).filter(r => r.tabela && r.campo);
 }
 
+// Tab SDB ─────────────────────────────────────────────────────────────────────
+
+function lerArquivoSDB(input) {
+  sdbRegistros = null;
+  document.getElementById('sdb-preview').textContent = '';
+  document.getElementById('btn-confirmar-import').disabled = true;
+  const file = input.files?.[0];
+  if (!file) return;
+  sdbRegistros = file;
+  document.getElementById('sdb-preview').textContent = `✔ Arquivo selecionado (${(file.size / 1024 / 1024).toFixed(1)} MB). Clique em Importar para processar.`;
+  document.getElementById('btn-confirmar-import').disabled = !document.getElementById('imp-conexao-sdb').value;
+}
+
 // Confirmação ─────────────────────────────────────────────────────────────────
 
 async function confirmarImportacao() {
@@ -678,7 +714,8 @@ async function confirmarImportacao() {
   btn.disabled = true; btn.textContent = 'Importando...';
   try {
     if (abaImportAtiva === 'banco') await importarDoBanco();
-    else await importarDoDBF();
+    else if (abaImportAtiva === 'dbf') await importarDoDBF();
+    else await importarDoSDB();
   } finally {
     btn.disabled = false; btn.textContent = 'Importar';
   }
@@ -722,10 +759,38 @@ async function importarDoDBF() {
   }
 }
 
+async function importarDoSDB() {
+  const conexaoId = document.getElementById('imp-conexao-sdb').value;
+  const statusEl  = document.getElementById('status-sdb');
+  if (!conexaoId || !sdbRegistros) return;
+  statusEl.textContent = 'Enviando arquivo... (pode levar alguns minutos para arquivos grandes)';
+  statusEl.className = 'import-status';
+  try {
+    const empresaId = empresaIdAtiva();
+    const params = new URLSearchParams({ conexao_id: conexaoId, limpar: modoImport === 'apagar' ? 'true' : 'false' });
+    if (empresaId) params.set('empresa_id', empresaId);
+    const res  = await fetch(`/api/ia-command/protheus/sx3/import-sdb?${params}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/octet-stream'},
+      body: sdbRegistros,
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro na importação.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = `✔ ${body.importados} campo(s) importados com sucesso.`;
+    statusEl.className = 'import-status ok';
+    setTimeout(() => { fecharImportar(); carregar(); }, 1200);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
 // Eventos ─────────────────────────────────────────────────────────────────────
 
 document.getElementById('imp-conexao-dbf')?.addEventListener('change', () => {
   document.getElementById('btn-confirmar-import').disabled = !dbfRegistros || !document.getElementById('imp-conexao-dbf').value;
+});
+document.getElementById('imp-conexao-sdb')?.addEventListener('change', () => {
+  document.getElementById('btn-confirmar-import').disabled = !sdbRegistros || !document.getElementById('imp-conexao-sdb').value;
 });
 document.getElementById('modal-importar')?.addEventListener('click', e => {
   if (e.target === document.getElementById('modal-importar')) fecharImportar();

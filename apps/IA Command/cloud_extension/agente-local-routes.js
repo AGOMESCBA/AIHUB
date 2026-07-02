@@ -5,6 +5,16 @@ const { URL }  = require('url');
 const http     = require('http');
 const https    = require('https');
 const crypto   = require('crypto');
+const fs       = require('fs');
+const path     = require('path');
+
+const _LOG_FILE = path.join(__dirname, '..', '..', '..', 'logs', 'agente-local.log');
+
+function _logAgente(nivel, msg, dados = {}) {
+  const linha = JSON.stringify({ ts: new Date().toISOString(), nivel, msg, ...dados }) + '\n';
+  try { fs.appendFileSync(_LOG_FILE, linha, 'utf8'); } catch (_) {}
+  console.log(`[agente-local] [${nivel}] ${msg}`, dados);
+}
 
 // ── Requisição HTTP para o agente local ──────────────────────────────────────
 function _requestAgente(baseUrl, path, method, body, token, timeoutMs = 10000) {
@@ -53,10 +63,16 @@ function _healthCheck(endpointUrl, token, timeoutMs = 8000) {
     try { parsed = new URL('/apicommand', endpointUrl); }
     catch (e) { return reject(new Error('URL inválida. Use o formato http://ip:8765')); }
 
+    const host     = parsed.hostname;
+    const port     = parsed.port || (parsed.protocol === 'https:' ? 443 : 80);
+    const fullUrl  = `${parsed.protocol}//${host}:${port}${parsed.pathname}`;
+
+    _logAgente('INFO', 'health_check_iniciado', { url: fullUrl, host, port, timeout_ms: timeoutMs });
+
     const mod = parsed.protocol === 'https:' ? https : http;
     const req = mod.request({
-      hostname:          parsed.hostname,
-      port:              parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+      hostname:          host,
+      port,
       path:              parsed.pathname,
       method:            'GET',
       headers:           { Authorization: `Bearer ${token}` },
@@ -67,11 +83,19 @@ function _healthCheck(endpointUrl, token, timeoutMs = 8000) {
       res.on('end', () => {
         let body = null;
         try { body = JSON.parse(raw); } catch (_) { body = raw; }
+        _logAgente('INFO', 'health_check_resposta', { url: fullUrl, http_status: res.statusCode, body_resumo: typeof body === 'object' ? body : String(body).slice(0, 200) });
         resolve({ statusCode: res.statusCode, body });
       });
     });
-    req.setTimeout(timeoutMs, () => req.destroy(new Error(`Timeout de ${timeoutMs / 1000}s ao conectar ao agente.`)));
-    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => {
+      const err = new Error(`Timeout de ${timeoutMs / 1000}s ao conectar ao agente.`);
+      _logAgente('ERRO', 'health_check_timeout', { url: fullUrl, host, port, timeout_ms: timeoutMs });
+      req.destroy(err);
+    });
+    req.on('error', (err) => {
+      _logAgente('ERRO', 'health_check_erro_rede', { url: fullUrl, host, port, erro: err.message, codigo: err.code });
+      reject(err);
+    });
     req.end();
   });
 }
@@ -134,6 +158,13 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
     if (!url)   return res.status(400).json({ ok: false, erro: 'URL do agente não configurada.' });
     if (!token) return res.status(400).json({ ok: false, erro: 'Token do agente não configurado.' });
 
+    _logAgente('INFO', 'teste_conexao_solicitado', {
+      empresa_id:  eid(req),
+      usuario:     req.session?.usuario || 'desconhecido',
+      ip_cliente:  req.headers['x-forwarded-for'] || req.socket?.remoteAddress,
+      url_agente:  url,
+    });
+
     const t0 = Date.now();
     try {
       const { statusCode, body } = await _healthCheck(url, token);
@@ -146,12 +177,15 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
         agente_local_teste_ok:    ok ? 1 : 0,
       });
 
+      _logAgente(ok ? 'INFO' : 'WARN', 'teste_conexao_resultado', { ok, latencia_ms: latencia, http_status: statusCode, empresa_id: eid(req) });
+
       if (ok) return res.json({ ok: true, latencia_ms: latencia, versao: body?.versao || null, status: body?.status || 'ok', ultimo_teste: agora });
       return res.json({ ok: false, erro: `Agente respondeu HTTP ${statusCode}`, latencia_ms: latencia, ultimo_teste: agora });
 
     } catch (err) {
       const agora = new Date().toISOString();
       if (row) crud.atualizar('ai_config', row.id, { agente_local_ultimo_teste: agora, agente_local_teste_ok: 0 });
+      _logAgente('ERRO', 'teste_conexao_falha', { empresa_id: eid(req), url_agente: url, erro: err.message, codigo: err.code });
       res.json({ ok: false, erro: err.message || 'Erro de conexão com o agente.', ultimo_teste: agora });
     }
   });

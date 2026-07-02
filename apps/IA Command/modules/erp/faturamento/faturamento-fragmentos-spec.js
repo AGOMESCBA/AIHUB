@@ -24,7 +24,8 @@ function base() {
 ## Tabelas padrao do modulo Faturamento
 - SF2: cabecalho de NF de saida. Metrica geral preferencial: SF2.F2_VALBRUT quando nao precisar de item.
 - SD2: itens de NF de saida. Use para produto, grupo, quantidade, valor medio, TES, centro de custo e faturamento liquido com devolucoes. Metrica de item: SD2.D2_TOTAL. Quantidade: SD2.D2_QUANT.
-- Para faturamento bruto/normal de nota fiscal de saida, quando filtrar tipo, use SF2.F2_TIPO = 'N'. Nunca use SF2.F2_TIPO = '1'.
+- Tipos de nota fiscal de saida no Protheus (SF2.F2_TIPO): N=Normal (venda real), D=Devolucao de cliente, B=Beneficiamento (envio para conserto/industrializacao por terceiro), I=Complementar de impostos (correcao de ICMS/IPI), P=Complementar alternativo. Apenas tipo 'N' representa receita de venda de produtos.
+- REGRA OBRIGATORIA — SF2.F2_TIPO = 'N': toda consulta de faturamento/receita que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE, sem excecao. Notas tipo 'D' (devolucao), 'B' (beneficiamento), 'I'/'P' (complementar) nao representam receita real de venda e distorceriam o resultado. Nunca use SF2.F2_TIPO = '1'.
 - SF1: cabecalho de NF de entrada; para devolucao de venda use SF1.F1_TIPO = 'D'.
 - SD1: itens de NF de entrada; para valor de devolucao use SD1.D1_TOTAL.
 - SA1: clientes.
@@ -141,6 +142,7 @@ Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FR
 ### Consultas por VALOR Financeiro Total (sem produto/item)
 - Quando o usuario pedir "Total de faturamento", "Faturamento do ano", "Faturamento do mes" ou "Faturamento de um periodo" — metricas puramente monetarias, sem especificar produto, grupo de produto ou QUANTIDADE de itens — use OBRIGATORIAMENTE APENAS a tabela de cabecalho SF2.
 - Metrica escalar obrigatoria: COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento.
+- FILTRO OBRIGATORIO: inclua SEMPRE SF2.F2_TIPO = 'N' no WHERE junto com D_E_L_E_T_ = ' '. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Exemplo: WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '...' AND '...'.
 - Agrupamentos por cliente, vendedor ou natureza sao compativeis com SF2 sozinha: faca JOIN com SA1 (via Joins padrao SF2->SA1), SA3 ou SED conforme o agrupamento pedido. SD2 nao entra neste caminho.
 - EXPRESSAMENTE PROIBIDO fazer JOIN com SD2 nesses casos de valor total: o relacionamento 1-para-muitos multiplica F2_VALBRUT pela quantidade de itens da nota, gerando valores duplicados errados.
 `;
