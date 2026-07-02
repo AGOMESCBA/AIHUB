@@ -19,6 +19,7 @@ const messageTemplates    = require('./message-templates');
 const dialogResolver      = require('../ai/dialog-resolver');
 const conversationService = require('../ai/conversation-service');
 const crud                = require('../database/crud');
+const { getDB }           = require('../database');
 const entitySqlGuard      = require('../erp/entity-sql-guard');
 const sx2SqlNormalizer    = require('../erp/sx2-sql-normalizer');
 const financeiroEntityCatalog  = require('../erp/financeiro/entity-catalog');
@@ -31,6 +32,12 @@ const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
 const WHATSAPP_MAX_MESSAGE_CHARS = 3500;
 const PIPELINE_TRACE_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'iac-whatsapp-pipeline.log');
+const NOMES_MODULOS_WHATSAPP = {
+  compras:     'Compras',
+  financeiro:  'Financeiro',
+  faturamento: 'Faturamento',
+  comissao:    'Comissao',
+};
 
 function _normalizarTextoEnvioWhatsapp(valor) {
   if (valor === null || valor === undefined) return '';
@@ -2153,6 +2160,34 @@ class IACWhatsAppService extends EventEmitter {
     return candidatos.find(v => conhecidos.has(v)) || null;
   }
 
+  _verificarAcessoModuloWhatsapp({ empresaId, sender, modulo }) {
+    if (!sender || !modulo || !NOMES_MODULOS_WHATSAPP[modulo]) return null;
+    try {
+      const eid = Number(empresaId);
+      const variantes = channelStore.variantesNumeroBrasil(sender);
+      const lid = channelStore.extrairLid(sender);
+      if (!eid || !variantes.length) return null;
+      const placeholders = variantes.map(() => '?').join(',');
+      const row = getDB().prepare(`
+        SELECT modulo_${modulo} AS permitido
+          FROM whatsapp_allowed_numbers
+         WHERE empresa_id = ?
+           AND ativo = 1
+           AND (numero IN (${placeholders}) OR wa_lid = ?)
+         LIMIT 1
+      `).get(eid, ...variantes, lid);
+      if (row && row.permitido) return null;
+      return {
+        tipo: 'erro',
+        subtipo: 'modulo_nao_autorizado',
+        resposta_direta: `Ainda nao consigo consultar o modulo *${NOMES_MODULOS_WHATSAPP[modulo]}* para o seu numero. Peca ao gestor do IA Command para liberar esse modulo no seu cadastro de WhatsApp e tente novamente.`,
+      };
+    } catch (err) {
+      this.log(`Falha ao validar modulo WhatsApp (${modulo}) na empresa #${empresaId}: ${err.message}`, 'warning');
+      return null;
+    }
+  }
+
   _logCaminhoIntent({ intent = {}, contextoAnterior = null, escopo = 'single' } = {}) {
     const partes = [
       `escopo=${escopo}`,
@@ -3560,6 +3595,21 @@ class IACWhatsAppService extends EventEmitter {
           intent._entidadesRecuperadasDoHistorico = true;
         }
       }
+      const moduloAutorizacao = this._moduloMonitorIntent(intent);
+      const bloqueioModulo = this._verificarAcessoModuloWhatsapp({ empresaId, sender, modulo: moduloAutorizacao });
+      if (bloqueioModulo) {
+        this.log(`Bloqueio antecipado por modulo: empresa=${empresaId} modulo=${moduloAutorizacao}`, 'info');
+        this._registrarInterpretacao({
+          empresaId,
+          sender,
+          texto: textoExecucao,
+          intent,
+          resultado: bloqueioModulo,
+          resposta: bloqueioModulo.resposta_direta,
+          duracaoMs: Date.now() - _t0,
+        });
+        return bloqueioModulo.resposta_direta;
+      }
     }
     let resultado = await intentRouter.rotear(intent, empresaId);
     _timings.router = Date.now();
@@ -3917,6 +3967,60 @@ class IACWhatsAppService extends EventEmitter {
         'sql_parametro_entidade_pendente',
         'sql_nao_extraido',
       ]);
+      const moduloAutorizacaoAll = this._moduloMonitorIntent(intent);
+      const empresasBloqueadasPorModulo = [];
+      let empresasProcessamento = empresasLoop;
+      if (moduloAutorizacaoAll) {
+        empresasBloqueadasPorModulo.push(
+          ...empresasLoop
+            .map(emp => ({ emp, bloqueio: this._verificarAcessoModuloWhatsapp({ empresaId: emp.empresa_id, sender, modulo: moduloAutorizacaoAll }) }))
+            .filter(x => x.bloqueio)
+        );
+        empresasProcessamento = empresasLoop.filter(emp =>
+          !empresasBloqueadasPorModulo.some(b => Number(b.emp.empresa_id) === Number(emp.empresa_id))
+        );
+        for (const { emp, bloqueio } of empresasBloqueadasPorModulo) {
+          const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
+          this.log(`[All] Bloqueio antecipado por modulo: empresa=${emp.empresa_id} modulo=${moduloAutorizacaoAll}`, 'info');
+          this._registrarInterpretacao({
+            empresaId: emp.empresa_id,
+            sender: senderAll,
+            texto,
+            intent: { ...intent, _escopoExecucao: 'whatsapp_all' },
+            resultado: bloqueio,
+            resposta: bloqueio.resposta_direta,
+            duracaoMs: Date.now() - _t0,
+          });
+          errosSemDados.push({ nomeEmpresa, resposta: bloqueio.resposta_direta, resultado: bloqueio, emp, _registrado: true });
+        }
+        if (!empresasProcessamento.length) {
+          const respostasUnicas = [...new Set(empresasBloqueadasPorModulo.map(b => String(b.bloqueio.resposta_direta || '').trim()).filter(Boolean))];
+          const resposta = respostasUnicas.length === 1
+            ? respostasUnicas[0]
+            : empresasBloqueadasPorModulo.map(({ emp, bloqueio }) => `*${emp.nome || `Empresa #${emp.empresa_id}`}*\n${bloqueio.resposta_direta}`).join('\n\n');
+          const resultadoBloqueio = {
+            tipo: 'erro',
+            subtipo: 'modulo_nao_autorizado',
+            resposta_direta: resposta,
+            empresas_bloqueadas: empresasBloqueadasPorModulo.map(b => b.emp.empresa_id),
+          };
+          const _nowBloq = Date.now();
+          const _pmBloq = _recebidoEmAll ? (_nowBloq - new Date(_recebidoEmAll).getTime()) : (_nowBloq - _t0);
+          const _lidBloq = this._registrarInterpretacao({
+            empresaId: empresaLogId,
+            sender: senderAll,
+            texto,
+            intent,
+            resultado: resultadoBloqueio,
+            resposta,
+            duracaoMs: _nowBloq - _t0,
+            recebidoEm: _recebidoEmAll,
+            pipelineMs: _pmBloq,
+          });
+          if (_timingCtxAll) { _timingCtxAll.logId = _lidBloq; _timingCtxAll.recebidoEm = _recebidoEmAll; }
+          return resposta;
+        }
+      }
       const diagnosticoErroEmpresa = ({ emp, resultado, respostaUsuario, retryPendente = false, retryExecutado = false, retrySucesso = false, canonicoOrigem = null }) => {
         const subtipo = resultado?.subtipo || resultado?.tipo || 'erro';
         const nomeEmpresa = emp?.nome || `Empresa #${emp?.empresa_id || 'n/a'}`;
@@ -4175,7 +4279,7 @@ class IACWhatsAppService extends EventEmitter {
           }
         }
       };
-      for (const emp of empresasLoop) intentService._garantirIntencoesDinamicasPadrao(emp.empresa_id);
+      for (const emp of empresasProcessamento) intentService._garantirIntencoesDinamicasPadrao(emp.empresa_id);
 
       // ── Paralelismo com SQL Canônico ─────────────────────────────────────────
       // Fase A: empresa líder (índice 0) roda sequencialmente para gerar o SQL
@@ -4405,7 +4509,7 @@ class IACWhatsAppService extends EventEmitter {
               _opcoesEntidade:           resultado._opcoesEntidade || [],
               _intentPendente:           resultado._intentPendente || intent,
               _intentPendenteEmpresaId:  emp.empresa_id,
-              _intentPendenteEmpresasAll: empresasLoop,
+              _intentPendenteEmpresasAll: empresasProcessamento,
             });
             this._registrarInterpretacao({
               empresaId: emp.empresa_id, sender: senderAll, texto, intent: intentExecucao,
@@ -4485,15 +4589,15 @@ class IACWhatsAppService extends EventEmitter {
       // ── Fase A: empresa líder (sempre sequencial) ────────────────────────────
       // Gera o SQL canônico via IA. Retry da líder é resolvido aqui antes de
       // iniciar as seguidoras, garantindo que elas nunca precisem chamar a IA.
-      if (empresasLoop.length > 0) {
-        await _processarEmpresa(empresasLoop[0]);
+      if (empresasProcessamento.length > 0) {
+        await _processarEmpresa(empresasProcessamento[0]);
         if (_respostaInterrupcao) return _respostaInterrupcao; // pergunta_filial/entidade
       }
 
       // ── Fase B: empresas seguidoras em paralelo ──────────────────────────────
       // Só paraleliza se a líder gerou um SQL canônico reutilizável.
       // Sem canônico (líder falhou ou bloqueou reuso), segue sequencial como antes.
-      const empresasSeguidoras = empresasLoop.slice(1);
+      const empresasSeguidoras = empresasProcessamento.slice(1);
       if (empresasSeguidoras.length > 0) {
         if (sqlCanonicoDinamico && !bloqueioReusoCanonicoDinamico) {
           this.log(`[All] SQL canonico disponivel — processando ${empresasSeguidoras.length} empresa(s) seguidora(s) em paralelo.`, 'info');
