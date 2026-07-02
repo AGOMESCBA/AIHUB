@@ -20,7 +20,8 @@ function base() {
 ## Tabelas padrao do modulo Compras
 - SF1: cabecalho de NF de entrada. F1_VALBRUT e o valor bruto total da nota (nivel cabecalho).
 - SD1: itens de NF de entrada. Metrica principal: SD1.D1_TOTAL. Quantidade: SD1.D1_QUANT.
-- Para compras normais por nota fiscal de entrada, quando filtrar tipo, use SF1.F1_TIPO = 'N'. Nunca use SF1.F1_TIPO = '1'.
+- Tipos de nota fiscal de entrada no Protheus (SF1.F1_TIPO): N=Normal (compra de mercadoria/insumo/servico), D=Devolucao para fornecedor, C=Complementar (correcao de valor, frete ou impostos como ICMS/IPI), B=Beneficiamento (envio/recebimento para industrializacao, guarda ou reparo por terceiro). Apenas tipo 'N' representa compra real.
+- REGRA OBRIGATORIA — SF1.F1_TIPO = 'N': toda consulta de compras/custo que use SF1 deve filtrar SF1.F1_TIPO = 'N' no WHERE, sem excecao. Nunca use SF1.F1_TIPO = '1'. Devolucoes ('D'), complementos ('C') e beneficiamentos ('B') nao representam custo real de compra e distorceriam o resultado.
 - SF2: cabecalho de NF de saida do faturamento; para devolucao de compra use SF2.F2_TIPO = 'D'.
 - SD2: itens de NF de saida do faturamento; para valor de devolucao use SD2.D2_TOTAL.
 - SA2: fornecedores.

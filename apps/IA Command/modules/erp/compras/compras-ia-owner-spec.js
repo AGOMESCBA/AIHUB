@@ -190,6 +190,14 @@ module.exports = {
       mensagem: "Compras normais de NF de entrada nao usam SF1.F1_TIPO = '1'; quando precisar filtrar tipo, use SF1.F1_TIPO = 'N'.",
     },
     {
+      validar(sql) {
+        const texto = String(sql || '');
+        if (!/\b(?:FROM|JOIN)\s+SF1\w*\s+SF1\b/i.test(texto)) return null;
+        if (/\bSF1\s*\.\s*F1_TIPO\b/i.test(texto)) return null;
+        return "SF1 usada sem filtro SF1.F1_TIPO. REGRA OBRIGATORIA: toda query de compras que use SF1 deve filtrar SF1.F1_TIPO = 'N' no WHERE. Isso exclui devolucoes ('D'), complementos ('C') e beneficiamentos ('B') que nao representam custo real de compra. Adicione AND SF1.F1_TIPO = 'N' ao WHERE.";
+      },
+    },
+    {
       regex: /\bA2_NOME\s+(?:IN\s*\(|=|LIKE\b)/i,
       mensagem: 'Nao filtre fornecedor por SA2.A2_NOME no SQL final. Para fornecedor real, solicite entidade e filtre por codigo/loja; para nomes de empresas IAHub, nao crie filtro cadastral.',
     },
