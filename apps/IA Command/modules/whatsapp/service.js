@@ -3332,6 +3332,20 @@ class IACWhatsAppService extends EventEmitter {
       }
       const empresaQualificada = this._resolverEmpresaQualificadaNoTexto(textoExecucao, empresasDoSender)
         || this._resolverEmpresaPorAliasIsolado(textoExecucao, empresasDoSender);
+      // Múltiplos aliases isolados reconhecidos (ex: "J2A e C3I") → multi-tenant direto,
+      // não é ambiguidade real: o usuário mencionou explicitamente as duas empresas.
+      if (empresaQualificada?.status === 'ambiguous' && Array.isArray(empresaQualificada.empresas) && empresaQualificada.empresas.length >= 2) {
+        if (ctx?.lastIntent && String(ctx.lastIntentChannelId || '') === String(this._channelId || '')) {
+          this._saveLastIntent(sender, ctx.lastIntent, '__all__');
+        }
+        this._setSenderContext(sender, { empresaId: '__all__', pendingText: null });
+        this.log(`[resolverEmpresa] multi-alias resolvido: ${empresaQualificada.empresas.map(e => e.nome || e.empresa_id).join(', ')}`, 'info');
+        return await this._pipelineAll(textoExecucao, empresaQualificada.empresas, sender, {
+          empresasMencionadasTextos: empresaQualificada.empresas.map(e => e.nome || e.alias || String(e.empresa_id)),
+          empresasMencionadasIds: empresaQualificada.empresas.map(e => e.empresa_id),
+          _recebidoEm: opts._recebidoEm, _timingCtx,
+        });
+      }
       if (empresaQualificada?.status === 'not_found') {
         // "empresa X" mencionado mas X não é um tenant do canal → X é uma entidade cadastral
         // (cliente, fornecedor etc.). Preserva a empresa da sessão atual para não re-rotear
