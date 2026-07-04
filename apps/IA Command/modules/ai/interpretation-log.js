@@ -1,5 +1,20 @@
 const { getDB } = require('../database');
 
+function _agenteUrl(empresaId) {
+  if (!empresaId) return null;
+  try {
+    const row = getDB().prepare(
+      'SELECT agente_local_ativo, agente_local_url FROM ai_config WHERE empresa_id = ? LIMIT 1'
+    ).get(empresaId);
+    if (!row?.agente_local_ativo || !row?.agente_local_url) return null;
+    const url = row.agente_local_url.trim();
+    try {
+      const u = new URL(url);
+      return `${u.protocol}//${u.host}`;
+    } catch (_) { return url; }
+  } catch (_) { return null; }
+}
+
 function uuid() {
   return require('crypto').randomUUID
     ? require('crypto').randomUUID()
@@ -116,6 +131,7 @@ function registrar(payload = {}) {
       : ((resultado._sql_canonico_reuso_permitido ?? payload.sql_canonico_reuso_permitido) ? 1 : 0),
     sql_canonico_empresa_atual: payload.empresa_id ?? resultado._sql_auditoria?.empresa_id ?? null,
     fase_execucao: fase,
+    agente_url: payload.agente_url || resultado._agente_url || _agenteUrl(payload.empresa_id) || null,
     duracao_ms: payload.duracao_ms ?? resultado.duracao_ms ?? null,
     trace_json: json(payload.trace || intent._trace || resultado.trace || []),
     pipeline_origem: resultado._pipeline_origem || payload.pipeline_origem || null,

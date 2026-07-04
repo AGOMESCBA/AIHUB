@@ -803,6 +803,7 @@
       ['Linhas', row.rows_count ?? '-'],
       ['Origem', origin(row, intent)],
       ['Execucao via', row.escopo_execucao || '-'],
+      ['Agente URL', row.agente_url || '-'],
     ];
     $('meta-grid').innerHTML = meta.map(([label, value]) => `<div class="meta-item"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`).join('');
     $('detail-question').textContent = row.texto_original || '(sem texto)';

@@ -172,6 +172,15 @@
       </button>
       <span class="topbar-title" id="shell-title">IA Command</span>
       <div class="iac-actions">
+        <button class="shell-nav-btn" id="_ajuda-btn" style="display:none" title="Ajuda da página atual" onclick="abrirAjudaAtiva()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <span>Ajuda</span>
+        </button>
         <a class="shell-nav-btn" href="/iahub.html" title="Voltar ao IAHub">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -237,6 +246,18 @@
 </script>
 <script src="./js/tab-manager.js"></script>
 <script>
+  // ── Botão Ajuda dinâmico — ativado por páginas filhas via postMessage ──
+  let _ajudaAtiva = false;
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin) return;
+    if (e.data?.type === 'shell:show-ajuda')  { document.getElementById('_ajuda-btn').style.display = ''; _ajudaAtiva = true; }
+    if (e.data?.type === 'shell:hide-ajuda')  { document.getElementById('_ajuda-btn').style.display = 'none'; _ajudaAtiva = false; }
+  });
+  function abrirAjudaAtiva() {
+    const iframes = document.querySelectorAll('#mdi-content iframe');
+    iframes.forEach(f => { try { f.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin); } catch(_){} });
+  }
+
   document.addEventListener('click', (e) => {
     const link = e.target.closest('#sidebar a.nav-item');
     if (!link) return;

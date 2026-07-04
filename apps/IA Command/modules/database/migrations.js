@@ -767,6 +767,13 @@ const MIGRATIONS = [
         ON ia_usage_events (provider, model, criado_em);
     `,
   },
+  {
+    version: 46,
+    descricao: 'IA Command - registrar URL do agente local usado em cada interpretacao',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN agente_url TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

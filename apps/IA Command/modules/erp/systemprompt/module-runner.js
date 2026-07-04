@@ -700,7 +700,12 @@ async function executar(contract, intent, empresaId) {
     numeroWa: intent._remetente || null,
     canalId: intent._channelId || intent._canalId || null,
   };
-  let fase1 = await fase1ClassificarPergunta(contract, keys, cfg, mensagemIA, historicoResumido, contextoIAAnterior, usageContext);
+  // Se a empresa já foi resolvida como tenant antes da IA, informa explicitamente na mensagem
+  // para que a Fase 1 não classifique o nome do tenant como entidade cadastral (cliente/fornecedor).
+  const mensagemIAComTenant = intent._empresaMencionadaTexto
+    ? `[Contexto: "${intent._empresaMencionadaTexto}" e o nome de uma empresa-tenant do sistema IAHub, nao e um cliente ou fornecedor cadastral — nao inclua como filtro de entidade]\n${mensagemIA}`
+    : mensagemIA;
+  let fase1 = await fase1ClassificarPergunta(contract, keys, cfg, mensagemIAComTenant, historicoResumido, contextoIAAnterior, usageContext);
   console.log(`[${contract.logPrefix}] Fase1: periodo=${fase1.periodo?.tipo} agrupamentos_mantidos=${fase1.agrupamentos_mantidos} agrupamentos=${JSON.stringify(fase1.agrupamentos)}`);
   if (contextoIAAnterior?.periodo && fase1.periodo_mantido) {
     console.log(`[${contract.logPrefix}] IA declarou periodo_mantido=true; usando periodo anterior: ${JSON.stringify(contextoIAAnterior.periodo)}`);
@@ -1163,7 +1168,9 @@ async function executarSqlDireto(contract, sqlCanonico, intent, empresaId) {
   }
   const sqlFinal = mw.sql_processado;
 
-  const _erroAgenteTemporal = (msg) => /socket hang up|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timeout ao chamar/i.test(msg || '');
+  // Apenas erros de socket transitórios justificam retry. Timeout e falha de conexão ao agente
+  // são problemas de rede/infra — não adianta tentar de novo e travar por mais 240s.
+  const _erroAgenteTemporal = (msg) => /socket hang up|ECONNRESET/i.test(msg || '');
   let rows;
   for (let _tentativa = 1; _tentativa <= 2; _tentativa++) {
     try {

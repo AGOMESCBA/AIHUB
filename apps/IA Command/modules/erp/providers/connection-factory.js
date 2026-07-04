@@ -47,10 +47,11 @@ function carregarConexao(empresaId) {
       baseUrl = `${u.protocol}//${u.host}`;
     } catch (_) { /* mantém como está */ }
     return {
-      tipo:     'api_proxy',
-      host:     baseUrl,
-      database: '/',
-      password: aiCfg.agente_local_token,
+      tipo:       'api_proxy',
+      host:       baseUrl,
+      database:   '/',
+      password:   aiCfg.agente_local_token,
+      _agente_url: baseUrl,
     };
   }
 

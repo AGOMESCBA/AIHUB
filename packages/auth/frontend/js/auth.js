@@ -42,6 +42,7 @@ function _paginaEstrutural() {
 const _PAGINA_ROTINA = {
   // ── IA Command (entradas completas antes dos curtos para evitar endsWith falso-positivo)
   '/app/ia-command/dashboard.html':       'iac-dashboard',
+  '/app/ia-command/whatsapp-services.html': 'iac-whatsapp-services',
   '/app/ia-command/monitor.html':          'iac-monitor-whatsapp',
   '/app/ia-command/config-conexoes.html':       'iac-config-conexoes',
   '/app/ia-command/config-conexao-form.html':  'iac-config-conexoes',
@@ -100,6 +101,7 @@ const _ROTINA_ALIASES = {
 const _ROTINA_LABELS = {
   // ── IA Command
   'iac-dashboard':           'IA Command - Dashboard',
+  'iac-whatsapp-services':   'IA Command - WhatsApp Services',
   'iac-monitor-whatsapp':    'IA Command - Monitor WhatsApp',
   'iac-config-conexoes':     'IA Command - Conexões ERP',
   'iac-config-ia':           'IA Command - Configurar IA',

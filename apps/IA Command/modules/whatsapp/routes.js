@@ -242,6 +242,15 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     res.json({ ok: true });
   });
 
+  app.post('/api/ia-command/whatsapp/stop-all', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
+    const all = manager.getAll();
+    let parados = 0;
+    for (const svc of all.values()) {
+      if (svc.getStatus() !== 'stopped') { svc.stop(); parados++; }
+    }
+    res.json({ ok: true, parados });
+  });
+
   app.post('/api/ia-command/whatsapp/disconnect', requireAuth, requireIaCommand, canMonitorWhatsapp, async (req, res) => {
     const { channel, error } = resolveChannel(req, { createDefault: false });
     if (error) return res.status(404).json({ error });

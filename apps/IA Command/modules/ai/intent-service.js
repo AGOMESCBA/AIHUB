@@ -831,6 +831,7 @@ async function classificar(mensagem, empresaId, opts = {}) {
       intencoes,
       historicoResumido: opts.historicoResumido || [],
       contextoAnterior,
+      tenantAliases: opts.tenantAliases || [],
     });
     if (orq.ok) {
       let intent = _appendTrace(

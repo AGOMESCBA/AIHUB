@@ -22,7 +22,7 @@ async function executar(intent, dataset, empresaId) {
   const { sql, params } = _buildWrapper(intent, dataset);
   const rows = await factory.executar(conn, sql, params);
 
-  return { intencao: intent.intencao, acao: intent.acao, periodo: intent.periodo, rows };
+  return { intencao: intent.intencao, acao: intent.acao, periodo: intent.periodo, rows, _agente_url: conn._agente_url || null };
 }
 
 function _buildWrapper(intent, dataset) {

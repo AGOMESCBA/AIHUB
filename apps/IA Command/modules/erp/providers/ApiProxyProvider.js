@@ -11,6 +11,15 @@
 const https  = require('https');
 const http   = require('http');
 const crypto = require('crypto');
+const fs     = require('fs');
+const path   = require('path');
+
+const _LOG_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'agente-local.log');
+function _logProxy(nivel, msg, dados = {}) {
+  const linha = JSON.stringify({ ts: new Date().toISOString(), nivel, msg, origem: 'ApiProxyProvider', ...dados }) + '\n';
+  try { fs.appendFileSync(_LOG_FILE, linha, 'utf8'); } catch (_) {}
+  console.log(`[ApiProxy] [${nivel}] ${msg}`, dados);
+}
 
 function _buildUrl(conn, path) {
   const base     = (conn.host || '').replace(/\/$/, '');
@@ -18,7 +27,7 @@ function _buildUrl(conn, path) {
   return `${base}${endpoint}${path}`;
 }
 
-const REQUEST_TIMEOUT_MS = 120000; // 120s — queries SQL longas (financeiro multi-empresa podem chegar a 60s+)
+const REQUEST_TIMEOUT_MS = 240000; // 240s — queries SQL pesadas (faturamento com muitos clientes pode ultrapassar 2min)
 
 function _request(url, method, body, apiKey) {
   return new Promise((resolve, reject) => {
@@ -31,11 +40,24 @@ function _request(url, method, body, apiKey) {
 
     const parsed  = new URL(url);
     const isHttps = parsed.protocol === 'https:';
+    const host    = parsed.hostname;
+    const port    = parsed.port || (isHttps ? 443 : 80);
     const payload = body ? JSON.stringify(body) : null;
 
+    _logProxy('INFO', 'requisicao_iniciada', {
+      method,
+      url,
+      host,
+      port,
+      path:        parsed.pathname,
+      sender:      body?.sender      || null,
+      modulo:      body?.modulo      || null,
+      empresa_id:  body?.empresa_id  || null,
+    });
+
     const options = {
-      hostname: parsed.hostname,
-      port:     parsed.port || (isHttps ? 443 : 80),
+      hostname: host,
+      port,
       path:     parsed.pathname + parsed.search,
       method,
       headers: {
@@ -52,6 +74,7 @@ function _request(url, method, body, apiKey) {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
+        _logProxy(res.statusCode < 300 ? 'INFO' : 'WARN', 'requisicao_resposta', { url, http_status: res.statusCode });
         if (res.statusCode === 401) {
           return _reject(new Error('API Key inválida ou não autorizada (HTTP 401).'));
         }
@@ -65,8 +88,12 @@ function _request(url, method, body, apiKey) {
       });
     });
 
-    req.on('error', (err) => _reject(new Error(`Falha ao conectar ao agente: ${err.message}`)));
+    req.on('error', (err) => {
+      _logProxy('ERRO', 'requisicao_erro_rede', { url, host, port, erro: err.message, codigo: err.code });
+      _reject(new Error(`Falha ao conectar ao agente: ${err.message}`));
+    });
     req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      _logProxy('ERRO', 'requisicao_timeout', { url, host, port, timeout_ms: REQUEST_TIMEOUT_MS });
       req.destroy();
       _reject(new Error(`Timeout ao chamar o agente (${REQUEST_TIMEOUT_MS / 1000}s).`));
     });

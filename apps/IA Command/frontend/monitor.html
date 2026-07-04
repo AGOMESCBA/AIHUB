@@ -173,6 +173,7 @@
               <button class="btn btn-primary" id="btn-start" onclick="iniciar()">▶ Iniciar</button>
               <button class="btn btn-ghost"   id="btn-stop"  onclick="parar()" disabled>■ Parar</button>
             </div>
+            <button class="btn btn-ghost" id="btn-stop-all" onclick="pararTodos()" style="width:100%;font-size:12px;color:#ef4444;border-color:#fecaca" title="Para todos os canais WhatsApp ativos">⏹ Parar Todos os Canais</button>
             <div class="mon-qr-controls-btns">
               <button class="btn btn-ghost" onclick="limparLogs()" style="font-size:12px">🗑 Limpar Log</button>
               <button class="btn btn-ghost" onclick="salvarLog()"  style="font-size:12px">💾 Salvar Log</button>
@@ -431,6 +432,24 @@
       headers:{'Content-Type':'application/json'},
       body: channelBody(),
     });
+  }
+
+  async function pararTodos() {
+    const btn = document.getElementById('btn-stop-all');
+    btn.disabled = true;
+    btn.textContent = '⏹ Parando...';
+    try {
+      const r = await fetch('/api/ia-command/whatsapp/stop-all', { method:'POST', headers:{'Content-Type':'application/json'} });
+      const data = await r.json();
+      btn.textContent = data.parados > 0 ? `✓ ${data.parados} canal(is) parado(s)` : '⏹ Nenhum ativo';
+    } catch (_) {
+      btn.textContent = '⏹ Parar Todos os Canais';
+    } finally {
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = '⏹ Parar Todos os Canais';
+      }, 3000);
+    }
   }
 
   async function desconectarSessao() {

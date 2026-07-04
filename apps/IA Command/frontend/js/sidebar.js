@@ -5,8 +5,9 @@
     {
       id: 'operacao', label: 'Monitor', icon: '⚡', defaultOpen: true,
       items: [
-        { id: 'iac-dashboard',        label: 'Dashboard',        href: '/app/ia-command/dashboard.html',             icon: '⊞' },
-        { id: 'iac-monitor-whatsapp', label: 'Monitor',          href: '/app/ia-command/monitor.html',               icon: '💬' },
+        { id: 'iac-dashboard',           label: 'Dashboard',            href: '/app/ia-command/dashboard.html',          icon: '⊞' },
+        { id: 'iac-whatsapp-services',   label: 'WhatsApp Services',    href: '/app/ia-command/whatsapp-services.html',  icon: '📡' },
+        { id: 'iac-monitor-whatsapp',    label: 'Monitor',              href: '/app/ia-command/monitor.html',            icon: '💬' },
         { id: 'iac-admin-auditoria',  label: 'Histórico',        href: '/app/ia-command/admin-interpretacoes-v2.html',  icon: '🧭' },
         { id: 'iac-admin-spec-feedback', label: 'Propostas de Correção', href: '/app/ia-command/admin-spec-feedback.html', icon: '🛠️' },
       ],

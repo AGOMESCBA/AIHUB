@@ -64,11 +64,11 @@
     const empresaNome = empresaNomeOverride ?? window._iahubEmpresa?.nome ?? '';
     const tabKey = empresaId ? `${baseUrl}?empresa_id=${empresaId}` : baseUrl;
 
-    if (_tabs.has(tabKey)) { _activateTab(tabKey); return; }
+    if (_tabs.has(tabKey)) { _activateTab(tabKey); _reloadTab(tabKey); return; }
 
     // Fallback: aba com mesma URL base já aberta (ex.: empresa mudou mas página é a mesma)
     for (const [key, tab] of _tabs) {
-      if (tab.url === baseUrl) { _activateTab(key); return; }
+      if (tab.url === baseUrl) { _activateTab(key); _reloadTab(key); return; }
     }
 
     const bar     = document.getElementById('mdi-tabbar');
@@ -99,7 +99,7 @@
     const frame = document.createElement('iframe');
     frame.className   = 'mdi-iframe';
     frame.dataset.url = tabKey;
-    frame.src         = empresaId ? `${baseUrl}?empresa_id=${empresaId}&_v=${Date.now()}` : `${baseUrl}?_v=${Date.now()}`;
+    frame.src         = _tabSrc(baseUrl, empresaId);
     frame.addEventListener('load', () => _prepareFrame(frame, _tabs.get(frame.dataset.url)));
     content.appendChild(frame);
 
@@ -130,6 +130,16 @@
     }
     _saveState();
     setTimeout(_updateScrollBtns, 60);
+  }
+
+  function _tabSrc(baseUrl, empresaId) {
+    return empresaId ? `${baseUrl}?empresa_id=${empresaId}&_v=${Date.now()}` : `${baseUrl}?_v=${Date.now()}`;
+  }
+
+  function _reloadTab(tabKey) {
+    const tab = _tabs.get(tabKey);
+    if (!tab?.frame) return;
+    tab.frame.src = _tabSrc(tab.url, tab.empresaId);
   }
 
   function _activateTab(url) {
@@ -231,7 +241,7 @@
     tab.empresaNome = emp.razao_social || emp.nome || '';
     tab.chip.dataset.url  = newKey;
     tab.frame.dataset.url = newKey;
-    tab.frame.src         = `${tab.url}?empresa_id=${emp.id}`;
+    tab.frame.src         = _tabSrc(tab.url, emp.id);
     if (_active === oldKey) _active = newKey;
     return newKey;
   }
@@ -407,6 +417,16 @@
         }
         #_mdi-emp-btn ._mdi-emp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         #_mdi-emp-btn ._mdi-emp-caret { font-size: 10px; opacity: .7; flex-shrink: 0; }
+        #_mdi-help-btn {
+          margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+          height: 26px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px;
+          background: transparent; color: var(--text-lo, #64748b);
+          font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        #_mdi-help-btn:hover {
+          color: #7c3aed; background: var(--bg-hover, #f1f5f9);
+          border-color: var(--border, #e2e8f0);
+        }
       `;
       doc.head.appendChild(s);
 
@@ -428,6 +448,24 @@
           _abrirSeletorEmpresa(frame.dataset.url, btn, frame);
         });
         bar.appendChild(btn);
+        if (doc.getElementById('help-drawer')) {
+          const helpBtn = doc.createElement('button');
+          helpBtn.type = 'button';
+          helpBtn.id = '_mdi-help-btn';
+          helpBtn.title = 'Ajuda da pagina';
+          helpBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>Ajuda</span>`;
+          helpBtn.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            try { frame.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin); } catch(_) {}
+          });
+          bar.appendChild(helpBtn);
+        }
         const main = doc.querySelector('.main') || doc.body;
         main.insertBefore(bar, main.firstChild);
       }

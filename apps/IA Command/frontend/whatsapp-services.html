@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WhatsApp Services — IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent: #7c3aed; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.1); --ws-controls-w: 126px; --ws-control-btn-w: 104px; }
+    .sidebar-logo .logo-icon { background: #7c3aed !important; }
+    .topbar-menu-btn {
+      flex-shrink:0; background:none; border:none; cursor:pointer;
+      width:32px; height:32px; display:flex; align-items:center; justify-content:center;
+      border-radius:7px; color:var(--text-md); transition:background var(--transition),color var(--transition);
+    }
+    .topbar-menu-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .topbar-title { flex:1; min-width:0; font-weight:700; }
+
+    /* ── Page layout ── */
+    .page-content { padding-top:0 !important; padding-bottom:0 !important; display:flex; flex-direction:column; height:calc(100vh - 48px); overflow:hidden; }
+
+    /* ── Abas internas ── */
+    .ws-tabs { display:flex; align-items:center; gap:0; border-bottom:2px solid var(--border); flex-shrink:0; padding:0 16px; overflow:hidden; }
+
+    /* ── Sidebar direita de controles ── */
+    .ws-controls { width:var(--ws-controls-w); flex-shrink:0; border-left:1px solid var(--border); background:var(--bg-card); display:flex; flex-direction:column; align-items:center; padding:14px 10px; gap:6px; overflow-y:auto; overflow-x:hidden; scrollbar-width:none; box-sizing:border-box; }
+    .ws-ctrl-sep { width:100%; height:1px; background:var(--border); margin:10px 0; flex-shrink:0; }
+    .ws-ctrl-btn { width:var(--ws-control-btn-w); min-height:48px; border-radius:8px; border:1px solid transparent; background:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--text-lo); transition:background .15s, border-color .15s, color .15s; flex-shrink:0; padding:6px 8px; box-sizing:border-box; }
+    .ws-ctrl-btn:hover { background:var(--bg-hover); border-color:var(--border); color:var(--text-hi); }
+    .ws-ctrl-btn:disabled { opacity:.35; cursor:default; pointer-events:none; }
+    .ws-ctrl-btn.primary { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+    .ws-ctrl-btn.primary:hover { background:#6d28d9; }
+    .ws-ctrl-btn.warning { border-color:#fde68a; color:#92400e; }
+    .ws-ctrl-btn.warning:hover { background:#fef9c3; border-color:#f59e0b; }
+    .ws-ctrl-btn.danger  { border-color:transparent; color:#b91c1c; }
+    .ws-ctrl-btn.danger:hover  { background:#fee2e2; border-color:#fca5a5; }
+    .ws-ctrl-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; line-height:1.12; text-align:center; max-width:100%; }
+    .ws-ctrl-group-label { width:var(--ws-control-btn-w); font-size:9px; font-weight:800; line-height:1.25; text-align:center; text-transform:uppercase; letter-spacing:.05em; color:var(--text-lo); }
+    .ws-ctrl-group-label.selected { color:#7c3aed; }
+    .ws-tab { padding:9px 16px; font-size:13px; font-weight:600; color:var(--text-lo); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .15s, border-color .15s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+    .ws-tab:hover { color:var(--text-hi); }
+    .ws-tab.active { color:#7c3aed; border-bottom-color:#7c3aed; }
+    .ws-tab-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:99px; font-size:10px; font-weight:800; background:var(--bg-hover); color:var(--text-lo); }
+    .ws-tab.active .ws-tab-badge { background:rgba(124,58,237,.15); color:#7c3aed; }
+
+    /* ── Corpo principal (split) ── */
+    .ws-body { display:flex; flex:1; overflow:hidden; gap:0; }
+
+    /* ── Painel esquerdo — lista de canais ── */
+    .ws-sidebar { width:320px; min-width:280px; max-width:380px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+    .ws-sidebar-toolbar { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+    .ws-search { flex:1; height:32px; padding:0 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-base); color:var(--text-hi); font-size:13px; outline:none; transition:border-color .15s; }
+    .ws-search:focus { border-color:#7c3aed; }
+    .ws-search::placeholder { color:var(--text-lo); }
+
+    .ws-channel-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.2) transparent; }
+
+    /* ── Card de canal ── */
+    .ws-channel-card { border:1px solid var(--border); border-radius:var(--radius); padding:12px 13px; cursor:pointer; transition:border-color .15s, background .15s, box-shadow .15s; position:relative; background:var(--bg-card); }
+    .ws-channel-card:hover  { border-color:#a78bfa; background:rgba(124,58,237,.02); }
+    .ws-channel-card.active { border-color:#7c3aed; background:rgba(124,58,237,.04); box-shadow:0 0 0 3px rgba(124,58,237,.1); }
+    .ws-channel-card.state-connected { border-left:3px solid #22c55e; }
+    .ws-channel-card.state-starting  { border-left:3px solid #f59e0b; }
+    .ws-channel-card.state-stopped   { border-left:3px solid var(--border); }
+    .ws-channel-card.state-error     { border-left:3px solid #ef4444; }
+    .ws-channel-card.state-noservice { border-left:3px solid #f59e0b; }
+
+    .ws-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:6px; }
+    .ws-card-name { font-size:14px; font-weight:700; color:var(--text-hi); line-height:1.3; }
+    .ws-card-num  { font-size:12px; color:var(--text-lo); margin-top:2px; }
+    .ws-card-badge { display:inline-flex; align-items:center; gap:5px; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; white-space:nowrap; flex-shrink:0; }
+    .badge-connected { background:#dcfce7; color:#15803d; }
+    .badge-starting  { background:#fef9c3; color:#92400e; }
+    .badge-stopped   { background:var(--bg-hover); color:var(--text-lo); }
+    .badge-error     { background:#fee2e2; color:#b91c1c; }
+    .badge-noservice { background:#fef3c7; color:#92400e; }
+
+    /* ── Indicador de empresas + popover ── */
+    .ws-card-emp-btn { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:6px; border:1px solid var(--border); background:var(--bg-base); color:var(--text-md); font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; margin-bottom:8px; }
+    .ws-card-emp-btn:hover { border-color:#7c3aed; color:#7c3aed; background:rgba(124,58,237,.05); }
+    .ws-emp-count { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:99px; background:#7c3aed; color:#fff; font-size:10px; font-weight:800; }
+
+    .ws-popover { position:fixed; z-index:200; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 8px 24px rgba(0,0,0,.15); min-width:220px; max-width:300px; padding:0; overflow:hidden; animation:popIn .15s ease; }
+    @keyframes popIn { from{opacity:0;transform:scale(.96) translateY(-4px)} to{opacity:1;transform:scale(1) translateY(0)} }
+    .ws-popover-header { padding:10px 14px; border-bottom:1px solid var(--border); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-lo); }
+    .ws-popover-item { display:flex; align-items:center; gap:8px; padding:8px 14px; font-size:13px; color:var(--text-md); border-bottom:1px solid var(--border); }
+    .ws-popover-item:last-child { border-bottom:none; }
+    .ws-popover-item strong { color:var(--text-hi); flex:1; }
+    .ws-popover-tag { display:inline-flex; align-items:center; padding:1px 7px; border-radius:99px; font-size:10px; font-weight:700; background:rgba(124,58,237,.1); color:#7c3aed; }
+
+    .ws-card-stats { display:flex; gap:16px; }
+    .ws-card-stat  { display:flex; flex-direction:column; gap:1px; }
+    .ws-card-stat-val  { font-size:15px; font-weight:800; color:var(--text-hi); line-height:1; }
+    .ws-card-stat-lbl  { font-size:10px; color:var(--text-lo); text-transform:uppercase; letter-spacing:.04em; }
+    .ws-btn { display:inline-flex; align-items:center; gap:5px; padding:5px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-base); color:var(--text-md); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .ws-btn:hover { border-color:#7c3aed; color:#7c3aed; }
+    .ws-btn:disabled { opacity:.45; cursor:default; pointer-events:none; }
+    .ws-btn.primary  { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+    .ws-btn.primary:hover { background:#6d28d9; }
+    .ws-btn.danger   { border-color:#fca5a5; color:#b91c1c; }
+    .ws-btn.danger:hover { background:#fee2e2; border-color:#ef4444; }
+    .ws-btn.warning  { border-color:#fde68a; color:#92400e; }
+    .ws-btn.warning:hover { background:#fef9c3; }
+
+    /* ── Painel direito — log ── */
+    .ws-main { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+
+    .ws-main-status { display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:3px 8px; border-radius:99px; font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; box-sizing:border-box; }
+    .ws-main-status.badge-noservice { font-size:9.5px; letter-spacing:-.01em; }
+
+    /* QR inline no painel direito */
+    .ws-qr-banner { display:flex; align-items:center; gap:16px; padding:12px 16px; background:#fef9c3; border-bottom:1px solid #fde68a; flex-shrink:0; }
+    .ws-qr-img { width:80px; height:80px; border:2px solid #fde68a; border-radius:8px; background:#fff; object-fit:contain; }
+    .ws-qr-info { flex:1; }
+    .ws-qr-info strong { font-size:13px; color:#92400e; display:block; margin-bottom:3px; }
+    .ws-qr-info span { font-size:12px; color:#a16207; line-height:1.5; }
+
+    /* Terminal */
+    .ws-terminal { flex:1; overflow-y:auto; padding:10px 16px; font-family:ui-monospace,'Cascadia Code',Consolas,monospace; font-size:12px; line-height:1.75; background:var(--bg-base); scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.25) transparent; }
+    .log-line { display:flex; gap:10px; padding:1px 0; }
+    .log-ts   { color:var(--text-lo); flex-shrink:0; user-select:none; font-size:11px; padding-top:1px; }
+    .log-icon { flex-shrink:0; font-size:12px; }
+    .log-msg.info     { color:var(--text-md); }
+    .log-msg.success  { color:#22c55e; }
+    .log-msg.error    { color:#ef4444; }
+    .log-msg.warning  { color:#f59e0b; }
+    .log-msg.received { color:#a78bfa; }
+    .log-msg.system   { color:#60a5fa; }
+
+    .ws-empty-state { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--text-lo); }
+    .ws-empty-icon  { font-size:40px; opacity:.4; }
+    .ws-empty-title { font-size:15px; font-weight:700; color:var(--text-md); }
+    .ws-empty-desc  { font-size:13px; text-align:center; max-width:300px; line-height:1.6; }
+
+    /* ── Aba Configuração ── */
+    .ws-config-body { flex:1; overflow-y:auto; padding:24px 20px; }
+    .setup-grid   { display:grid; grid-template-columns:1fr 220px; gap:24px; align-items:start; max-width:860px; }
+    @media(max-width:720px){ .setup-grid { grid-template-columns:1fr; } }
+    .setup-steps  { display:flex; flex-direction:column; }
+    .setup-step   { display:grid; grid-template-columns:36px 1fr; gap:0 14px; }
+    .step-left    { display:flex; flex-direction:column; align-items:center; }
+    .step-circle  { width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0; }
+    .step-circle.done    { background:#dcfce7;color:#15803d;border:2px solid #86efac; }
+    .step-circle.current { background:#7c3aed;color:#fff;border:2px solid #7c3aed;box-shadow:0 0 0 4px rgba(124,58,237,.15); }
+    .step-circle.pending { background:var(--bg-base);color:var(--text-lo);border:2px solid var(--border); }
+    .step-line    { width:2px;flex:1;min-height:14px;margin:4px 0;border-radius:1px;background:var(--border); }
+    .step-line.done { background:#86efac; }
+    .step-body    { padding-bottom:22px; }
+    .setup-step:last-child .step-body { padding-bottom:0; }
+    .step-title   { font-size:13px;font-weight:700;color:var(--text-hi);line-height:1.3;margin-bottom:3px; }
+    .step-title.pending { color:var(--text-md); }
+    .step-desc    { font-size:12px;color:var(--text-md);line-height:1.5;margin-bottom:6px; }
+    .step-tag     { display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px; }
+    .step-tag.done    { background:#dcfce7;color:#15803d; }
+    .step-tag.current { background:rgba(124,58,237,.1);color:#7c3aed; }
+    .step-tag.pending { background:var(--bg-hover);color:var(--text-lo); }
+    .progress-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:18px;position:sticky;top:0; }
+    .progress-title { font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:12px; }
+    .progress-bar-wrap { background:var(--bg-base);border-radius:99px;height:8px;overflow:hidden;margin-bottom:8px; }
+    .progress-bar { height:100%;border-radius:99px;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .5s ease; }
+    .progress-frac { font-size:24px;font-weight:800;color:var(--text-hi);line-height:1; }
+    .progress-sub  { font-size:12px;color:var(--text-lo);margin-bottom:16px; }
+
+    /* ── Dot animado ── */
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.25} }
+    .dot-pulse { animation:pulse-dot 1.2s ease-in-out infinite; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinning { animation:spin .8s linear infinite; display:inline-block; }
+
+    /* ── Toast ── */
+    #ws-toast { position:fixed;bottom:20px;right:20px;z-index:500;display:flex;flex-direction:column;gap:8px;pointer-events:none; }
+    .toast { display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.2);pointer-events:all;animation:slideIn .2s ease; min-width:280px; }
+    @keyframes slideIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .toast.success { background:#16a34a; }
+    .toast.error   { background:#dc2626; }
+    .toast.info    { background:#7c3aed; }
+    .toast.warning { background:#d97706; }
+
+    /* ── Modal de confirmação ── */
+    .ws-modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:flex;align-items:center;justify-content:center; }
+    .ws-modal { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);width:min(420px,95vw);padding:24px; }
+    .ws-modal-title { font-size:15px;font-weight:700;color:var(--text-hi);margin-bottom:8px; }
+    .ws-modal-body  { font-size:13px;color:var(--text-md);line-height:1.6;margin-bottom:20px; }
+    .ws-modal-footer{ display:flex;justify-content:flex-end;gap:10px; }
+
+    /* ── Help drawer ── */
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">⚡</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6"  x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> WhatsApp Services</span>
+      <span id="topbar-poll" style="font-size:11px;color:var(--text-lo);display:none;margin-left:auto">
+        <span class="spinning" style="display:inline-block;font-size:10px">⟳</span> atualizando…
+      </span>
+      <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Ajuda
+      </button>
+    </div>
+
+    <div class="page-content">
+
+      <!-- Abas internas + ações à direita -->
+      <div class="ws-tabs">
+        <div class="ws-tab active" onclick="mudarAba('canais')" id="tab-canais">
+          📱 Canais
+          <span class="ws-tab-badge" id="tab-badge-canais">3</span>
+        </div>
+        <div class="ws-tab" onclick="mudarAba('config')" id="tab-config">
+          ⚙ Configuração do sistema
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- ABA: Canais -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="ws-body" id="pane-canais" style="position:relative;">
+
+        <!-- Sidebar esquerda: lista de canais -->
+        <div class="ws-sidebar">
+          <div class="ws-sidebar-toolbar">
+            <input class="ws-search" type="search" placeholder="Buscar canal ou empresa…" id="search-canais" name="ws-channel-search" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" readonly onfocus="this.removeAttribute('readonly')" oninput="filtrarCanais()" />
+            <button class="ws-btn" onclick="atualizarTodos()" title="Atualizar status">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+          </div>
+          <div class="ws-channel-list" id="channel-list">
+            <!-- preenchido pelo JS -->
+          </div>
+        </div>
+
+        <!-- Painel direito: log ao vivo -->
+        <div class="ws-main" id="ws-main-panel">
+
+          <!-- Estado inicial: nenhum canal selecionado -->
+          <div class="ws-empty-state" id="main-empty">
+            <div class="ws-empty-icon">📱</div>
+            <div class="ws-empty-title">Nenhum canal selecionado</div>
+            <div class="ws-empty-desc">Clique em um canal na lista para ver os logs em tempo real e controlar o serviço.</div>
+          </div>
+
+          <!-- Painel de canal selecionado (oculto inicialmente) -->
+          <div id="main-channel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+
+            <!-- Banner QR (oculto por padrão) -->
+            <div class="ws-qr-banner" id="qr-banner" style="display:none">
+              <img class="ws-qr-img" id="qr-img" src="" alt="QR Code">
+              <div class="ws-qr-info">
+                <strong>Aguardando leitura do QR Code</strong>
+                <span>Abra o WhatsApp → Aparelhos conectados → Conectar aparelho → Escaneie o código ao lado.</span>
+              </div>
+            </div>
+
+            <!-- Terminal -->
+            <div class="ws-terminal" id="ws-terminal"></div>
+
+          </div>
+        </div><!-- /#ws-main-panel -->
+
+        <!-- ── Sidebar direita de controles ── -->
+        <div class="ws-controls">
+
+          <!-- Canal selecionado — info + ações individuais -->
+          <div id="ctrl-canal-info" style="display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:0 8px;box-sizing:border-box;">
+            <div class="ws-ctrl-group-label selected">Tenant selecionado</div>
+            <div id="ctrl-canal-badge" class="ws-main-status badge-stopped" style="width:100%;justify-content:center;font-size:11px;">Selecione</div>
+            <div id="ctrl-canal-nome" style="font-size:10px;font-weight:700;color:var(--text-hi);text-align:center;line-height:1.3;word-break:break-word;">Nenhum tenant</div>
+            <div id="ctrl-canal-num"  style="font-size:10px;color:var(--text-lo);text-align:center;">Clique em um card</div>
+            <div id="ctrl-canal-actions" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
+              <button class="ws-ctrl-btn primary" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="ws-ctrl-lbl">Iniciar</span>
+              </button>
+              <button class="ws-ctrl-btn warning" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                <span class="ws-ctrl-lbl">Parar</span>
+              </button>
+            </div>
+            <button class="ws-ctrl-btn" id="btn-refresh-selected" onclick="atualizarCanalSelecionado()" title="Atualizar status do tenant selecionado" disabled>
+              <svg id="refresh-selected-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span class="ws-ctrl-lbl">Atualizar</span>
+            </button>
+            <button class="ws-ctrl-btn" id="btn-clear-selected" onclick="limparLog()" title="Limpar log do tenant selecionado" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              <span class="ws-ctrl-lbl">Limpar</span>
+            </button>
+            <button class="ws-ctrl-btn" id="btn-save-selected" onclick="salvarLog()" title="Salvar log do tenant selecionado" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              <span class="ws-ctrl-lbl">Salvar</span>
+            </button>
+          </div>
+          <div id="ctrl-canal-sep" class="ws-ctrl-sep"></div>
+
+          <!-- Grupo: canais (todos) -->
+          <div class="ws-ctrl-group-label selected">Todos os tenants</div>
+          <button class="ws-ctrl-btn primary" onclick="iniciarTodos()" title="Iniciar todos os canais">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span class="ws-ctrl-lbl">Iniciar todos</span>
+          </button>
+          <button class="ws-ctrl-btn warning" onclick="confirmarPararTodos()" title="Parar todos os canais conectados">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+            <span class="ws-ctrl-lbl">Parar todos</span>
+          </button>
+          <button class="ws-ctrl-btn" onclick="atualizarTodos()" title="Atualizar status de todos os canais">
+            <svg id="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <span class="ws-ctrl-lbl">Atualizar</span>
+          </button>
+
+          <div class="ws-ctrl-sep"></div>
+
+          <!-- Contador de logs -->
+          <div style="font-size:11px;font-weight:800;color:var(--text-lo);text-align:center;line-height:1.4;padding:0 4px;" id="log-count-side">0<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span></div>
+
+        </div><!-- /.ws-controls -->
+
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- ABA: Configuração (stepper movido do dashboard) -->
+      <!-- ═══════════════════════════════════════════════════ -->
+      <div class="ws-config-body" id="pane-config" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-hi);">Como configurar o sistema</div>
+            <div style="font-size:12px;color:var(--text-lo);margin-top:2px;">Siga esta ordem para colocar o IA Command em operação.</div>
+          </div>
+          <span id="setup-pill" style="font-size:11px;font-weight:700;padding:4px 12px;border-radius:99px;background:var(--bg-hover);color:var(--text-lo);">carregando…</span>
+        </div>
+        <div class="setup-grid">
+          <div class="setup-steps" id="setup-steps"></div>
+          <div class="progress-card">
+            <div class="progress-title">Progresso</div>
+            <div class="progress-frac"><span id="prog-done">0</span><span style="font-size:14px;font-weight:400;color:var(--text-lo)"> / <span id="prog-total">10</span></span></div>
+            <div class="progress-sub">etapas concluídas</div>
+            <div class="progress-bar-wrap"><div class="progress-bar" id="prog-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.page-content -->
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="ws-toast"></div>
+
+<!-- Modal de confirmação -->
+<div class="ws-modal-overlay" id="confirm-modal" style="display:none">
+  <div class="ws-modal">
+    <div class="ws-modal-title" id="confirm-title">Confirmar ação</div>
+    <div class="ws-modal-body" id="confirm-body"></div>
+    <div class="ws-modal-footer">
+      <button class="ws-btn" onclick="fecharModal()">Cancelar</button>
+      <button class="ws-btn danger" id="confirm-ok" onclick="">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help Drawer -->
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — WhatsApp Services</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">Conceito</div>
+      <div class="help-item">
+        <div class="help-item-label">O que são WhatsApp Services?</div>
+        <div class="help-item-desc">Cada canal WhatsApp é registrado como um serviço Windows (via NSSM). Isso garante que os canais continuem funcionando mesmo que o navegador ou o sistema IAHub seja fechado — o Windows reinicia automaticamente o serviço em caso de falha.</div>
+      </div>
+      <div class="help-tip">Serviços instalados persistem entre reinicializações do servidor. Não é preciso iniciar manualmente após um restart do Windows.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Estados dos canais</div>
+      <div class="help-item"><div class="help-item-label">● Conectado</div><div class="help-item-desc">Serviço ativo e WhatsApp autenticado. Mensagens estão sendo recebidas normalmente.</div></div>
+      <div class="help-item"><div class="help-item-label">◌ Aguardando QR</div><div class="help-item-desc">Serviço iniciado, aguardando leitura do QR Code no celular para autenticar a sessão.</div></div>
+      <div class="help-item"><div class="help-item-label">⏹ Parado</div><div class="help-item-desc">Serviço instalado mas parado. Clique em Iniciar para reativar sem precisar reinstalar.</div></div>
+      <div class="help-item"><div class="help-item-label">⚠ Sem serviço</div><div class="help-item-desc">Canal cadastrado mas serviço Windows ainda não instalado. Use "Instalar e Iniciar".</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Ações disponíveis</div>
+      <div class="help-item"><div class="help-item-label">Instalar e Iniciar</div><div class="help-item-desc">Registra o canal no Windows Services via NSSM e inicia imediatamente. Exigido na primeira vez.</div></div>
+      <div class="help-item"><div class="help-item-label">Iniciar</div><div class="help-item-desc">Inicia um serviço já instalado que estava parado.</div></div>
+      <div class="help-item"><div class="help-item-label">Parar</div><div class="help-item-desc">Para o serviço sem desinstalá-lo. Pode ser reiniciado a qualquer momento.</div></div>
+      <div class="help-item"><div class="help-item-label">Remover serviço</div><div class="help-item-desc">Desinstala o serviço do Windows. O canal continua cadastrado, mas precisará ser reinstalado para operar novamente.</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DADOS MOCK — substituir por chamadas à API real quando o
+// backend de Windows Services estiver implementado
+// ═══════════════════════════════════════════════════════════════
+const MOCK_CANAIS = [
+  {
+    id: 'ch_001',
+    nome: 'Empresa ABC',
+    numero: '+55 65 99999-0001',
+    icone: '🏢',
+    estado: 'connected',   // connected | starting | stopped | error | noservice
+    servico: 'IACommand-empresa-abc',
+    servicoInstalado: true,
+    msgs: 128,
+    empresas: ['J2A Consultoria (padrão)', 'Filial São Paulo', 'Distribuidora Norte S/A'],
+    uptime: '3d 14h 22min',
+    pid: 14872,
+  },
+  {
+    id: 'ch_002',
+    nome: 'Suporte 24h',
+    numero: '+55 65 99999-0002',
+    icone: '🎧',
+    estado: 'stopped',
+    servico: 'IACommand-suporte-24h',
+    servicoInstalado: true,
+    msgs: 0,
+    empresas: ['Empresa ABC Ltda'],
+    uptime: null,
+    pid: null,
+  },
+  {
+    id: 'ch_003',
+    nome: 'Vendas Norte',
+    numero: '+55 65 99999-0003',
+    icone: '📦',
+    estado: 'noservice',
+    servico: 'IACommand-vendas-norte',
+    servicoInstalado: false,
+    msgs: 0,
+    empresas: ['Distribuidora Norte S/A'],
+    uptime: null,
+    pid: null,
+  },
+];
+
+// Logs mock por canal
+const MOCK_LOGS = {
+  ch_001: [
+    { ts: '10:32:14', tipo: 'success', icon: '✅', msg: 'WhatsApp conectado — +55 65 99999-0001' },
+    { ts: '10:32:10', tipo: 'info',    icon: '⚙',  msg: 'Iniciando sessão cliente iac_ch_001' },
+    { ts: '10:31:55', tipo: 'info',    icon: '⚙',  msg: 'Carregando dados de autenticação salva' },
+    { ts: '10:31:52', tipo: 'system',  icon: '🖥',  msg: 'Serviço IACommand-empresa-abc iniciado pelo Windows Services' },
+    { ts: '09:47:33', tipo: 'received',icon: '📨',  msg: 'Mensagem recebida de 5565988880001: "qual o saldo do mês?"' },
+    { ts: '09:47:35', tipo: 'success', icon: '✅',  msg: 'Pipeline executado — módulo: financeiro | confiança: 0.94' },
+    { ts: '09:47:35', tipo: 'info',    icon: '📤',  msg: 'Resposta enviada (847 chars)' },
+    { ts: '09:12:01', tipo: 'received',icon: '📨',  msg: 'Mensagem recebida de 5565977770002: "faturamento de junho"' },
+    { ts: '09:12:03', tipo: 'success', icon: '✅',  msg: 'Pipeline executado — módulo: faturamento | confiança: 0.91' },
+    { ts: '09:12:03', tipo: 'info',    icon: '📤',  msg: 'Resposta enviada (1243 chars)' },
+    { ts: '08:00:00', tipo: 'system',  icon: '🖥',  msg: 'Servidor reiniciado — serviço restaurado automaticamente pelo Windows' },
+  ],
+  ch_002: [
+    { ts: '07:15:30', tipo: 'warning', icon: '⏹',  msg: 'Serviço parado manualmente pelo operador' },
+    { ts: '07:15:28', tipo: 'info',    icon: '⚙',  msg: 'Encerrando conexão WhatsApp…' },
+    { ts: '07:15:25', tipo: 'info',    icon: '⚙',  msg: 'Finalizando processos Chrome (PID 13904)' },
+    { ts: '06:00:01', tipo: 'system',  icon: '🖥',  msg: 'Serviço IACommand-suporte-24h reiniciado pelo Windows Services' },
+    { ts: '06:00:05', tipo: 'success', icon: '✅',  msg: 'WhatsApp reconectado com sessão salva' },
+  ],
+  ch_003: [],
+};
+
+// Estado local (simulado)
+let canais = JSON.parse(JSON.stringify(MOCK_CANAIS));
+let canalSelecionadoId = null;
+let logsPorCanal = JSON.parse(JSON.stringify(MOCK_LOGS));
+let pollingTimer = null;
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════════
+function openTab(url, label, icon) {
+  if (window.parent !== window)
+    window.parent.postMessage({ type: 'mdi:open-tab', url, label, icon }, location.origin);
+  else location.href = url;
+}
+
+function mudarAba(aba) {
+  document.querySelectorAll('.ws-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + aba).classList.add('active');
+  document.getElementById('pane-canais').style.display = aba === 'canais' ? 'flex' : 'none';
+  document.getElementById('pane-config').style.display = aba === 'config'  ? 'flex' : 'none';
+  if (aba === 'config') renderStepper();
+}
+
+function badgeHtml(estado) {
+  const map = {
+    connected: '<span class="ws-card-badge badge-connected"><span class="dot-pulse">●</span> Conectado</span>',
+    starting:  '<span class="ws-card-badge badge-starting"><span class="dot-pulse">◌</span> Aguardando QR</span>',
+    stopped:   '<span class="ws-card-badge badge-stopped">⏹ Parado</span>',
+    error:     '<span class="ws-card-badge badge-error">⚠ Erro</span>',
+    noservice: '<span class="ws-card-badge badge-noservice">— Sem serviço</span>',
+  };
+  return map[estado] || map.stopped;
+}
+
+function botoesCard(canal) {
+  const { id, estado, servicoInstalado } = canal;
+  if (!servicoInstalado || estado === 'noservice') {
+    return `<button class="ws-btn primary" onclick="event.stopPropagation();acao('instalar',${JSON.stringify(id)})">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
+      Instalar e Iniciar</button>`;
+  }
+  if (estado === 'stopped' || estado === 'error') {
+    return `<button class="ws-btn primary" onclick="event.stopPropagation();acao('iniciar',${JSON.stringify(id)})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Iniciar</button>
+      <button class="ws-btn danger" onclick="event.stopPropagation();confirmar('remover',${JSON.stringify(id)})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        Remover</button>`;
+  }
+  if (estado === 'starting') {
+    return `<button class="ws-btn" disabled>
+        <span class="spinning">⟳</span> Iniciando…</button>`;
+  }
+  if (estado === 'connected') {
+    return `<button class="ws-btn warning" onclick="event.stopPropagation();confirmar('parar',${JSON.stringify(id)})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        Parar</button>
+      <button class="ws-btn danger" onclick="event.stopPropagation();confirmar('remover',${JSON.stringify(id)})">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        Remover</button>`;
+  }
+  return '';
+}
+
+function renderCardCanal(canal) {
+  const { id, nome, icone, numero, estado, msgs, empresas, uptime, pid } = canal;
+  const isActive = id === canalSelecionadoId;
+
+  // Indicador de empresas — sempre compacto, clicável
+  const empLabel = empresas.length === 1
+    ? `🏢 ${escHtml(empresas[0])}`
+    : `🏢 <span class="ws-emp-count">${empresas.length}</span> empresas`;
+  const empBtn = `<button class="ws-card-emp-btn" onclick="event.stopPropagation();abrirPopoverEmpresas(event,'${id}')" title="Ver empresas neste canal">${empLabel}</button>`;
+
+  const statsHtml = estado === 'connected' ? `
+    <div class="ws-card-stats">
+      <div class="ws-card-stat"><div class="ws-card-stat-val">${msgs}</div><div class="ws-card-stat-lbl">msgs recebidas</div></div>
+      ${uptime ? `<div class="ws-card-stat"><div class="ws-card-stat-val" style="font-size:12px;padding-top:2px">${uptime}</div><div class="ws-card-stat-lbl">uptime</div></div>` : ''}
+      ${pid ? `<div class="ws-card-stat"><div class="ws-card-stat-val" style="font-size:12px;padding-top:2px">PID ${pid}</div><div class="ws-card-stat-lbl">processo</div></div>` : ''}
+    </div>` : '';
+
+  return `<div class="ws-channel-card state-${estado}${isActive ? ' active' : ''}" onclick="selecionarCanal('${id}')" id="card-${id}">
+    <div class="ws-card-head">
+      <div>
+        <div class="ws-card-name">${icone} ${nome}</div>
+        <div class="ws-card-num">${numero}</div>
+      </div>
+      ${badgeHtml(estado)}
+    </div>
+    ${empBtn}
+    ${statsHtml}
+  </div>`;
+}
+
+function renderListaCanais() {
+  const q = (document.getElementById('search-canais')?.value || '').toLowerCase();
+  const filtrados = canais.filter(c =>
+    !q || c.nome.toLowerCase().includes(q) || c.empresas.some(e => e.toLowerCase().includes(q)) || c.numero.includes(q)
+  );
+  const el = document.getElementById('channel-list');
+  if (!filtrados.length) {
+    el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-lo);font-size:13px;">Nenhum canal encontrado</div>`;
+    return;
+  }
+  el.innerHTML = filtrados.map(c => renderCardCanal(c)).join('');
+}
+
+function atualizarResumo() {
+  const total     = canais.length;
+  document.getElementById('tab-badge-canais').textContent = total;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SELEÇÃO DE CANAL
+// ═══════════════════════════════════════════════════════════════
+function selecionarCanal(id) {
+  canalSelecionadoId = id;
+  renderListaCanais();
+
+  const canal = canais.find(c => c.id === id);
+  if (!canal) return;
+
+  // Mostra painel de log
+  document.getElementById('main-empty').style.display = 'none';
+  document.getElementById('main-channel').style.display = 'flex';
+
+  // QR banner
+  document.getElementById('qr-banner').style.display = canal.estado === 'starting' ? '' : 'none';
+
+  document.getElementById('ctrl-canal-nome').textContent = `${canal.icone} ${canal.nome}`;
+  document.getElementById('ctrl-canal-num').textContent  = canal.numero;
+
+  const badgeMap = {
+    connected: { cls: 'badge-connected', txt: '<span class="dot-pulse">●</span> Conectado' },
+    starting:  { cls: 'badge-starting',  txt: '<span class="dot-pulse">◌</span> Aguard. QR' },
+    stopped:   { cls: 'badge-stopped',   txt: '⏹ Parado' },
+    error:     { cls: 'badge-error',     txt: '⚠ Erro' },
+    noservice: { cls: 'badge-noservice', txt: '— Sem serviço' },
+  };
+  const b = badgeMap[canal.estado] || badgeMap.stopped;
+  const badgeEl = document.getElementById('ctrl-canal-badge');
+  badgeEl.className = `ws-main-status ${b.cls}`;
+  badgeEl.innerHTML = b.txt;
+
+  // Botões de ação individuais no estilo ctrl
+  document.getElementById('ctrl-canal-actions').innerHTML = botoesCtrlCanal(canal);
+  setBotoesTenantSelecionado(true);
+
+  renderLog(id);
+}
+
+function setBotoesTenantSelecionado(enabled) {
+  ['btn-refresh-selected', 'btn-clear-selected', 'btn-save-selected'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.disabled = !enabled;
+  });
+}
+
+function botoesCtrlCanal(canal) {
+  const { id, estado, servicoInstalado } = canal;
+  if (!servicoInstalado || estado === 'noservice') {
+    return `<button class="ws-ctrl-btn primary" onclick="acao('instalar','${id}')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      <span class="ws-ctrl-lbl">Iniciar</span>
+    </button>`;
+  }
+  if (estado === 'stopped' || estado === 'error') {
+    return `<button class="ws-ctrl-btn primary" onclick="acao('iniciar','${id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span class="ws-ctrl-lbl">Iniciar</span>
+      </button>
+      <button class="ws-ctrl-btn danger" onclick="confirmar('remover','${id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        <span class="ws-ctrl-lbl">Remover</span>
+      </button>`;
+  }
+  if (estado === 'starting') {
+    return `<button class="ws-ctrl-btn" disabled>
+      <span class="spinning" style="font-size:14px">⟳</span>
+      <span class="ws-ctrl-lbl">Iniciando…</span>
+    </button>`;
+  }
+  if (estado === 'connected') {
+    return `<button class="ws-ctrl-btn warning" onclick="confirmar('parar','${id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+        <span class="ws-ctrl-lbl">Parar</span>
+      </button>
+      <button class="ws-ctrl-btn danger" onclick="confirmar('remover','${id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        <span class="ws-ctrl-lbl">Remover</span>
+      </button>`;
+  }
+  return '';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOG
+// ═══════════════════════════════════════════════════════════════
+const tipoIcon = { info:'ℹ', success:'✅', error:'❌', warning:'⚠️', received:'📨', system:'🖥' };
+let autoScrollAtivo = true;
+
+function toggleAutoScroll() {
+  autoScrollAtivo = !autoScrollAtivo;
+  const btn = document.getElementById('btn-autoscroll');
+  if (autoScrollAtivo) {
+    btn.classList.remove('danger');
+    btn.title = 'Auto-scroll ligado';
+    btn.style.color = '';
+  } else {
+    btn.style.color = '#b91c1c';
+    btn.title = 'Auto-scroll desligado';
+  }
+}
+
+function renderLog(canalId) {
+  const terminal = document.getElementById('ws-terminal');
+  const logs = logsPorCanal[canalId] || [];
+
+  if (!logs.length) {
+    terminal.innerHTML = `<div style="color:var(--text-lo);font-size:12px;padding:12px 0;">Nenhuma entrada de log para este canal ainda. Inicie o serviço para ver os logs.</div>`;
+    document.getElementById('log-count-side').innerHTML = '0<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span>';
+    return;
+  }
+
+  terminal.innerHTML = logs.map(l => `
+    <div class="log-line">
+      <span class="log-ts">${l.ts}</span>
+      <span class="log-icon">${l.icon || tipoIcon[l.tipo] || 'ℹ'}</span>
+      <span class="log-msg ${l.tipo}">${escHtml(l.msg)}</span>
+    </div>`).join('');
+
+  document.getElementById('log-count-side').innerHTML = `${logs.length}<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span>`;
+  if (autoScrollAtivo) terminal.scrollTop = terminal.scrollHeight;
+}
+
+function adicionarLog(canalId, tipo, icon, msg) {
+  if (!logsPorCanal[canalId]) logsPorCanal[canalId] = [];
+  const ts = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  logsPorCanal[canalId].unshift({ ts, tipo, icon, msg });
+  if (logsPorCanal[canalId].length > 500) logsPorCanal[canalId].pop();
+  if (canalSelecionadoId === canalId) renderLog(canalId);
+}
+
+function limparLog() {
+  if (!canalSelecionadoId) return;
+  logsPorCanal[canalSelecionadoId] = [];
+  renderLog(canalSelecionadoId);
+  document.getElementById('log-count-side').innerHTML = '0<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span>';
+}
+
+function salvarLog() {
+  if (!canalSelecionadoId) return;
+  const canal = canais.find(c => c.id === canalSelecionadoId);
+  const logs  = logsPorCanal[canalSelecionadoId] || [];
+  const txt   = logs.map(l => `[${l.ts}] ${l.msg}`).join('\n');
+  const blob  = new Blob([txt], { type: 'text/plain' });
+  const a     = document.createElement('a');
+  a.href      = URL.createObjectURL(blob);
+  a.download  = `log-${canal?.nome || canalSelecionadoId}-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AÇÕES (mock — integrar com API real)
+// ═══════════════════════════════════════════════════════════════
+async function acao(tipo, canalId) {
+  const canal = canais.find(c => c.id === canalId);
+  if (!canal) return;
+
+  const labels = {
+    instalar: 'Instalando e iniciando serviço…',
+    iniciar:  'Iniciando serviço…',
+    parar:    'Parando serviço…',
+    remover:  'Removendo serviço…',
+  };
+
+  toast('info', labels[tipo] || 'Executando…');
+  adicionarLog(canalId, 'system', '🖥', `Operação solicitada: ${tipo.toUpperCase()} — IACommand-${slugify(canal.nome)}`);
+
+  // Simula delay de operação
+  await sleep(1800);
+
+  if (tipo === 'instalar') {
+    canal.servicoInstalado = true;
+    canal.estado = 'starting';
+    adicionarLog(canalId, 'system', '🖥', `Serviço ${canal.servico} instalado via NSSM`);
+    adicionarLog(canalId, 'info',   '⚙',  `Iniciando processo Node.js — whatsapp-worker.js --channel=${canalId}`);
+    adicionarLog(canalId, 'info',   '⚙',  `Aguardando leitura do QR Code…`);
+    toast('success', `Serviço instalado e iniciado — ${canal.nome}`);
+
+    await sleep(3000);
+    canal.estado = 'connected';
+    canal.uptime = '0min';
+    canal.pid    = Math.floor(Math.random() * 20000) + 10000;
+    adicionarLog(canalId, 'success', '✅', `WhatsApp conectado — ${canal.numero}`);
+    toast('success', `Canal conectado — ${canal.nome}`);
+  }
+  else if (tipo === 'iniciar') {
+    canal.estado = 'starting';
+    adicionarLog(canalId, 'system', '🖥', `Iniciando serviço ${canal.servico} via NSSM`);
+    adicionarLog(canalId, 'info',   '⚙',  `Restaurando sessão salva…`);
+    toast('success', `Serviço iniciado — ${canal.nome}`);
+
+    await sleep(2500);
+    canal.estado = 'connected';
+    canal.pid    = Math.floor(Math.random() * 20000) + 10000;
+    adicionarLog(canalId, 'success', '✅', `WhatsApp reconectado com sessão salva`);
+  }
+  else if (tipo === 'parar') {
+    canal.estado = 'stopped';
+    canal.uptime = null;
+    canal.pid    = null;
+    adicionarLog(canalId, 'warning', '⏹', `Serviço ${canal.servico} parado via NSSM`);
+    toast('warning', `Serviço parado — ${canal.nome}`);
+  }
+  else if (tipo === 'remover') {
+    canal.estado = 'noservice';
+    canal.servicoInstalado = false;
+    canal.uptime = null;
+    canal.pid    = null;
+    adicionarLog(canalId, 'warning', '🗑', `Serviço ${canal.servico} removido do Windows Services`);
+    toast('warning', `Serviço removido — ${canal.nome}`);
+  }
+
+  renderListaCanais();
+  atualizarResumo();
+  if (canalSelecionadoId === canalId) selecionarCanal(canalId);
+}
+
+function iniciarTodos() {
+  const paraIniciar = canais.filter(c => c.estado !== 'connected' && c.estado !== 'starting');
+  if (!paraIniciar.length) { toast('info', 'Todos os canais já estão conectados.'); return; }
+  paraIniciar.forEach(c => {
+    const tipo = (!c.servicoInstalado || c.estado === 'noservice') ? 'instalar' : 'iniciar';
+    acao(tipo, c.id);
+  });
+}
+
+function confirmarPararTodos() {
+  const ativos = canais.filter(c => c.estado === 'connected' || c.estado === 'starting');
+  if (!ativos.length) { toast('info', 'Nenhum canal ativo para parar.'); return; }
+  document.getElementById('confirm-title').textContent = `Parar todos os canais (${ativos.length})`;
+  document.getElementById('confirm-body').innerHTML =
+    `Isso irá parar <strong>${ativos.length} canal(is)</strong> ativos:<br><br>` +
+    ativos.map(c => `• ${c.icone} ${c.nome}`).join('<br>') +
+    `<br><br>As mensagens do WhatsApp não serão recebidas até que os serviços sejam reiniciados.`;
+  document.getElementById('confirm-ok').onclick = () => {
+    fecharModal();
+    ativos.forEach(c => acao('parar', c.id));
+  };
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+function atualizarTodos() {
+  const icon = document.getElementById('refresh-icon');
+  icon.style.animation = 'spin .8s linear infinite';
+  setTimeout(() => { icon.style.animation = ''; }, 1200);
+  atualizarResumo();
+  renderListaCanais();
+  toast('info', 'Status atualizado.');
+}
+
+function atualizarCanalSelecionado() {
+  if (!canalSelecionadoId) {
+    toast('info', 'Selecione um tenant para atualizar.');
+    return;
+  }
+  const icon = document.getElementById('refresh-selected-icon');
+  if (icon) {
+    icon.style.animation = 'spin .8s linear infinite';
+    setTimeout(() => { icon.style.animation = ''; }, 900);
+  }
+  renderListaCanais();
+  selecionarCanal(canalSelecionadoId);
+  const canal = canais.find(c => c.id === canalSelecionadoId);
+  toast('info', `Status atualizado — ${canal?.nome || 'tenant selecionado'}.`);
+}
+
+function filtrarCanais() { renderListaCanais(); }
+
+// ═══════════════════════════════════════════════════════════════
+// MODAL DE CONFIRMAÇÃO
+// ═══════════════════════════════════════════════════════════════
+function confirmar(tipo, canalId) {
+  const canal = canais.find(c => c.id === canalId);
+  if (!canal) return;
+  const msgs = {
+    parar:  { title: `Parar serviço — ${canal.nome}`, body: `O serviço <strong>${canal.servico}</strong> será parado. As mensagens do WhatsApp não serão recebidas até que o serviço seja reiniciado. Continuar?` },
+    remover:{ title: `Remover serviço — ${canal.nome}`, body: `O serviço <strong>${canal.servico}</strong> será <strong>desinstalado</strong> do Windows Services. O canal continuará cadastrado, mas precisará ser reinstalado para operar. Continuar?` },
+  };
+  const cfg = msgs[tipo];
+  if (!cfg) return;
+  document.getElementById('confirm-title').textContent = cfg.title;
+  document.getElementById('confirm-body').innerHTML    = cfg.body;
+  document.getElementById('confirm-ok').onclick = () => { fecharModal(); acao(tipo, canalId); };
+  document.getElementById('confirm-modal').style.display = 'flex';
+}
+
+function fecharModal() { document.getElementById('confirm-modal').style.display = 'none'; }
+
+// ═══════════════════════════════════════════════════════════════
+// STEPPER (Configuração)
+// ═══════════════════════════════════════════════════════════════
+const STEPS = [
+  { id:'ia',        icon:'🤖', title:'Configurar Inteligência Artificial',  desc:'Informe a chave de API do Groq (principal) e/ou Gemini (fallback).', url:'/app/ia-command/config-ia.html', label:'Configurar IA' },
+  { id:'conexao',   icon:'🔌', title:'Cadastrar Conexão com o ERP',         desc:'Cadastre a integração ERP — conexão direta ou via REST/API Proxy.', url:'/app/ia-command/config-conexoes.html', label:'Conexões ERP' },
+  { id:'testar',    icon:'✅', title:'Ativar e Testar a Conexão',            desc:'Ative a conexão como padrão e clique em "Testar" para confirmar.', url:'/app/ia-command/config-conexoes.html', label:'Conexões ERP' },
+  { id:'canais',    icon:'📡', title:'Cadastrar Canais WhatsApp',            desc:'Crie o canal e vincule as empresas autorizadas a operar por ele.', url:'/app/ia-command/admin-canais-whatsapp.html', label:'Canais WhatsApp' },
+  { id:'numeros',   icon:'📱', title:'Cadastrar Números Autorizados',        desc:'Informe quais números podem interagir com o IA Command.', url:'/app/ia-command/admin-numeros-whatsapp.html', label:'Números Autorizados' },
+  { id:'mensagens', icon:'✉️', title:'Configurar Mensagens WhatsApp',        desc:'Revise os templates de resposta, clarificação e bloqueio.', url:'/app/ia-command/admin-mensagens-whatsapp.html', label:'Mensagens WhatsApp' },
+  { id:'modulos',   icon:'📂', title:'Cadastrar Módulos',                    desc:'Organize as rotinas que agrupam datasets e intenções.', url:'/app/ia-command/admin-modulos.html', label:'Módulos' },
+  { id:'datasets',  icon:'📊', title:'Cadastrar Datasets ERP',               desc:'Crie os datasets com as consultas que a IA poderá executar.', url:'/app/ia-command/admin-datasets.html', label:'Datasets ERP' },
+  { id:'intencoes', icon:'🧠', title:'Cadastrar Intenções',                  desc:'Vincule frases e intenções aos datasets corretos.', url:'/app/ia-command/admin-intencoes.html', label:'Intenções' },
+  { id:'whatsapp',  icon:'💬', title:'Instalar e Conectar Canais WhatsApp',  desc:'Na aba Canais acima, instale e inicie os serviços Windows de cada canal.', url:null, label:null },
+];
+
+async function renderStepper() {
+  const status = { ia:false, conexao:false, testar:false, canais:false, numeros:false, mensagens:false, modulos:false, datasets:false, intencoes:false, whatsapp:false };
+  const extra  = {};
+
+  try { const r = await fetch('/api/ia-command/ai-config').then(r=>r.json()); if (r.groq_api_key||r.openai_api_key||r.gemini_api_key||r.deepseek_api_key||r.claude_api_key) { status.ia=true; extra.ia=`Primário: ${r.provedor_primario||'groq'}`; } } catch(_){}
+  try { const r = await fetch('/api/ia-command/connections').then(r=>r.json()); if(Array.isArray(r)&&r.length){ status.conexao=true; const a=r.find(c=>c.ativo); if(a){ status.testar=a.teste_ok===1; extra.conexao=a.nome; extra.testar=a.teste_ok===1?'Teste OK':'Aguardando teste'; } } } catch(_){}
+  try { const r = await fetch('/api/ia-command/whatsapp/channels').then(r=>r.json()); if(Array.isArray(r)&&r.length){ status.canais=true; extra.canais=`${r.length} canal(is)`; } } catch(_){}
+  try { const r = await fetch('/api/ia-command/admin/numeros-whatsapp').then(r=>r.json()); const a=(Array.isArray(r)?r:[]).filter(n=>n.ativo!==0); if(a.length){ status.numeros=true; extra.numeros=`${a.length} número(s) autorizado(s)`; } } catch(_){}
+  try { const r = await fetch('/api/ia-command/admin/mensagens-whatsapp').then(r=>r.json()); if(Array.isArray(r)&&r.length){ status.mensagens=true; } } catch(_){}
+  try { const r = await fetch('/api/ia-command/admin/modulos').then(r=>r.json()); const a=(Array.isArray(r)?r:[]).filter(m=>m.ativo!==0); if(a.length){ status.modulos=true; extra.modulos=`${a.length} módulo(s)`; } } catch(_){}
+  try { const r = await fetch('/api/ia-command/admin/datasets').then(r=>r.json()); const a=(Array.isArray(r)?r:[]).filter(d=>d.sql_base?.trim()); if(a.length){ status.datasets=true; extra.datasets=`${a.length} dataset(s) com SQL`; } } catch(_){}
+  try { const r = await fetch('/api/ia-command/admin/intencoes').then(r=>r.json()); const a=(Array.isArray(r)?r:[]).filter(i=>i.ativo!==0); if(a.length){ status.intencoes=true; extra.intencoes=`${a.length} intenção(ões)`; } } catch(_){}
+
+  status.whatsapp = canais.some(c => c.estado === 'connected');
+  if (status.whatsapp) extra.whatsapp = `${canais.filter(c=>c.estado==='connected').length} canal(is) conectado(s)`;
+
+  const total = STEPS.length;
+  const done  = STEPS.filter(s => status[s.id]).length;
+  const firstPending = STEPS.findIndex(s => !status[s.id]);
+
+  document.getElementById('setup-pill').textContent = done === total ? '✓ Sistema configurado' : `${done} de ${total} etapas`;
+  document.getElementById('setup-pill').style.cssText += done === total ? ';background:#dcfce7;color:#15803d' : ';background:var(--bg-hover);color:var(--text-lo)';
+  document.getElementById('prog-done').textContent  = done;
+  document.getElementById('prog-total').textContent = total;
+  document.getElementById('prog-bar').style.width   = `${Math.round(done/total*100)}%`;
+
+  document.getElementById('setup-steps').innerHTML = STEPS.map((s,i) => {
+    const isDone    = status[s.id];
+    const isCurrent = !isDone && i === firstPending;
+    const state     = isDone ? 'done' : isCurrent ? 'current' : 'pending';
+    const isLast    = i === STEPS.length - 1;
+    const extraTxt  = extra[s.id] ? `<span style="font-size:11px;color:var(--text-lo);display:block;margin-top:2px">${extra[s.id]}</span>` : '';
+    const actionBtn = !isDone && s.url
+      ? `<a class="step-link" onclick="openTab('${s.url}','${s.label}','${s.icon}')" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#7c3aed;cursor:pointer;margin-top:6px">→ Ir para configuração</a>`
+      : (!isDone && !s.url ? `<a class="step-link" onclick="mudarAba('canais')" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#7c3aed;cursor:pointer;margin-top:6px">→ Ir para Canais</a>` : '');
+    return `<div class="setup-step">
+      <div class="step-left">
+        <div class="step-circle ${state}">${isDone ? '✓' : i+1}</div>
+        ${!isLast ? `<div class="step-line ${isDone?'done':''}"></div>` : ''}
+      </div>
+      <div class="step-body">
+        <div class="step-title ${state!=='done'&&!isCurrent?'pending':''}">${s.icon} ${s.title}</div>
+        <div class="step-desc">${s.desc}</div>
+        <span class="step-tag ${state}">${isDone ? '✓ Concluído' : isCurrent ? '← Próxima etapa' : 'Aguardando'}</span>
+        ${extraTxt}${actionBtn}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════
+function toast(tipo, msg, ms = 3500) {
+  const el = document.createElement('div');
+  el.className = `toast ${tipo}`;
+  const icons = { success:'✅', error:'❌', info:'ℹ️', warning:'⚠️' };
+  el.innerHTML = `<span>${icons[tipo]||'ℹ️'}</span><span>${escHtml(msg)}</span>`;
+  document.getElementById('ws-toast').appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transform='translateY(8px)'; el.style.transition='all .2s'; setTimeout(()=>el.remove(), 220); }, ms);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POPOVER EMPRESAS
+// ═══════════════════════════════════════════════════════════════
+let _popoverEl = null;
+
+function abrirPopoverEmpresas(event, canalId) {
+  fecharPopover();
+  const canal = canais.find(c => c.id === canalId);
+  if (!canal) return;
+
+  const pop = document.createElement('div');
+  pop.className = 'ws-popover';
+  pop.id = 'ws-popover-emp';
+
+  const itens = canal.empresas.map(e => {
+    const isPadrao = e.includes('padrão');
+    const nome = e.replace(' (padrão)', '').replace('(padrão)', '').trim();
+    return `<div class="ws-popover-item">
+      <span>🏢</span>
+      <strong>${escHtml(nome)}</strong>
+      ${isPadrao ? '<span class="ws-popover-tag">padrão</span>' : ''}
+    </div>`;
+  }).join('');
+
+  pop.innerHTML = `
+    <div class="ws-popover-header">📡 Canal compartilhado — ${canal.empresas.length} empresa${canal.empresas.length > 1 ? 's' : ''}</div>
+    ${itens}`;
+
+  document.body.appendChild(pop);
+  _popoverEl = pop;
+
+  // Posiciona ancorado no botão clicado
+  const rect = event.currentTarget.getBoundingClientRect();
+  const pw = pop.offsetWidth || 240;
+  let left = rect.left;
+  let top  = rect.bottom + 6;
+  if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+  pop.style.left = left + 'px';
+  pop.style.top  = top  + 'px';
+
+  // Fecha ao clicar fora
+  setTimeout(() => document.addEventListener('click', fecharPopover, { once: true }), 0);
+}
+
+function fecharPopover() {
+  if (_popoverEl) { _popoverEl.remove(); _popoverEl = null; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+function escHtml(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function slugify(s) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ═══════════════════════════════════════════════════════════════
+// HELP
+// ═══════════════════════════════════════════════════════════════
+function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharAjuda(); fecharModal(); } });
+
+// Avisa o shell para mostrar o botão Ajuda na topbar
+window.parent.postMessage({ type: 'shell:show-ajuda' }, location.origin);
+// Escuta o comando vindo do shell quando o usuário clica no botão Ajuda da topbar
+window.addEventListener('message', (e) => {
+  if (e.origin !== location.origin) return;
+  if (e.data?.type === 'page:open-ajuda') abrirAjuda();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+(function init() {
+  const search = document.getElementById('search-canais');
+  if (search) {
+    search.value = '';
+    [150, 600, 1400].forEach(delay => setTimeout(() => {
+      if (document.activeElement !== search) {
+        search.value = '';
+        renderListaCanais();
+      }
+    }, delay));
+  }
+  renderListaCanais();
+  atualizarResumo();
+
+  // Polling automático a cada 30s (no mock apenas atualiza resumo)
+  pollingTimer = setInterval(() => {
+    atualizarResumo();
+    renderListaCanais();
+    if (canalSelecionadoId) {
+      const canal = canais.find(c => c.id === canalSelecionadoId);
+      if (canal) selecionarCanal(canalSelecionadoId);
+    }
+  }, 30000);
+})();
+</script>
+
+</body>
+</html>

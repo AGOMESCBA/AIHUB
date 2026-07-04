@@ -416,12 +416,12 @@ function _dataAtualServidor() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes } = {}) {
+function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes, tenantAliases } = {}) {
   const historico = Array.isArray(historicoResumido) ? historicoResumido : [];
   const modulos = (intencoes || [])
     .filter(i => String(i.acao || '').toLowerCase() === 'ai_text_to_sql' || String(i.nome || '').toLowerCase().endsWith('_dinamico'))
     .map(i => ({ nome: i.nome, modulo: i.modulo || _moduloPorIntencao(i.nome), descricao: i.descricao || null }));
-  return JSON.stringify({
+  const payload = {
     mensagem: mensagem || '',
     data_atual: _dataAtualServidor(),
     historico_meta: {
@@ -433,7 +433,12 @@ function buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intenc
     contexto_anterior: contextoAnterior || null,
     modulos_dinamicos_cadastrados: modulos,
     instrucao: 'Interprete a pergunta e retorne o contrato JSON. Nao gere SQL.',
-  });
+  };
+  if (Array.isArray(tenantAliases) && tenantAliases.length) {
+    payload.empresas_canal_iahub = tenantAliases;
+    payload.instrucao_tenant = 'Os nomes em "empresas_canal_iahub" sao escopos de tenant IAHub (empresas do sistema). NUNCA os coloque em filtros.cliente, filtros.fornecedor ou qualquer filtro cadastral. Se o usuario mencionar um desses nomes sem a palavra "empresa", ele esta definindo o escopo de execucao — nao e um filtro de entidade.';
+  }
+  return JSON.stringify(payload);
 }
 
 function normalizarContrato(raw, { intencoes = [], mensagem = '', hoje = new Date(), historicoResumido = [], contextoAnterior = null } = {}) {
@@ -527,7 +532,7 @@ function contratoParaIntent(contrato, mensagem) {
   };
 }
 
-async function orquestrar({ mensagem, empresaId, keys, cfg, ordem = [], intencoes = [], historicoResumido = [], contextoAnterior = null } = {}) {
+async function orquestrar({ mensagem, empresaId, keys, cfg, ordem = [], intencoes = [], historicoResumido = [], contextoAnterior = null, tenantAliases = [] } = {}) {
   const erros = [];
   for (const provedor of ordem) {
     if (!keys?.[provedor]) continue;
@@ -536,7 +541,7 @@ async function orquestrar({ mensagem, empresaId, keys, cfg, ordem = [], intencoe
         provedor,
         keys[provedor],
         buildSystemPrompt(),
-        buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes }),
+        buildUserPrompt({ mensagem, historicoResumido, contextoAnterior, intencoes, tenantAliases }),
         { json: true, maxTokens: 900, timeoutMs: 25000, logPrefix: 'IAOrquestradora' }
       );
       const normalizado = normalizarContrato(raw, { intencoes, mensagem, historicoResumido, contextoAnterior });
