@@ -202,13 +202,23 @@ function normalizarOrdem(cfg = {}) {
   return require('../ai/intent-service')._normalizarOrdem(cfg);
 }
 
+// Provedores bloqueados por "payload too large" nesta sessão de processo.
+// Evita desperdiçar retries num provider que já rejeitou por limite de tokens.
+const _provedoresBloqueadosGrande = new Set();
+
+function _erroPayloadGrande(msg) {
+  return /too large|payload.{0,20}size|token.{0,30}limit|reduce your message/i.test(msg);
+}
+
 async function chamarIA(keys, cfg, systemPrompt, userPrompt, opts = {}) {
   const ordem = normalizarOrdem(cfg);
   const erros = [];
   const logPrefix = opts.logPrefix || 'IACommandAI';
+  const skipProvedores = opts.skipProvedores instanceof Set ? opts.skipProvedores : new Set(Array.isArray(opts.skipProvedores) ? opts.skipProvedores : []);
 
   for (const provedor of ordem) {
     if (!keys?.[provedor]) continue;
+    if (skipProvedores.has(provedor) || _provedoresBloqueadosGrande.has(provedor)) continue;
     try {
       // Ler modelo específico do provider salvo no banco de dados (cfg vem do intent-service._resolveKeys)
       const modeloSalvo = cfg?.[`${provedor}_modelo`];
@@ -220,7 +230,12 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, opts = {}) {
       const msg = e?.message || String(e);
       erros.push({ provedor, msg });
       if (/quota|rate.?limit|free_tier|exceeded|429/i.test(msg)) e._cotaEsgotada = true;
-      console.warn(`[${logPrefix}] ${provedor} falhou:`, msg);
+      if (_erroPayloadGrande(msg)) {
+        _provedoresBloqueadosGrande.add(provedor);
+        console.warn(`[${logPrefix}] ${provedor} bloqueado (payload too large): proxy direto para proximo provider.`);
+      } else {
+        console.warn(`[${logPrefix}] ${provedor} falhou:`, msg);
+      }
     }
   }
 

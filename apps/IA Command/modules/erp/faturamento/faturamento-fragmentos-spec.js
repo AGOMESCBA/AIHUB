@@ -97,6 +97,8 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
+- REGRA CRITICA SQL Server — GROUP BY com SA1: Sempre que SA1 estiver no JOIN e qualquer campo de SA1 aparecer no SELECT ou GROUP BY, inclua SA1.A1_COD e SA1.A1_LOJA obrigatoriamente no GROUP BY. O SQL Server nao aceita referenciar SA1.A1_COD ou SA1.A1_LOJA em subqueries correlacionadas se eles nao estiverem no GROUP BY da query externa (erro 8120).
+- REGRA CRITICA — subquery correlacionada com SA1: NUNCA use SA1.A1_COD ou SA1.A1_LOJA como correlacao em subquery se SA1 esta na query externa com GROUP BY. Use UNION ALL com subqueries escalares conforme o padrao de devolucoes.
 `;
 }
 
@@ -109,28 +111,70 @@ function devolucoes() {
 - So retorne apenas devolucoes quando o usuario disser claramente "somente devolucoes", "apenas devolucoes", "total de devolucoes" ou equivalente.
 - No Protheus, devolucao de venda e nota de entrada do SIGACOM: use obrigatoriamente SF1/SD1, com SF1.F1_TIPO = 'D'. Nao use SF4/TES nem CASE em SD2 para identificar devolucao de venda.
 - Quando o usuario pedir para considerar devolucoes, faturamento liquido ou abatendo devolucoes, monte obrigatoriamente uma consulta externa sobre subqueries unificadas por UNION ALL:
-  1. Subquery de faturamento: origem SD2/SF2. Filtre SF2.F2_TIPO IN ('N','C','I') quando o campo existir no SX3. Projete COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_faturamento e 0 AS valor_devolucao.
-  2. Subquery de devolucoes de vendas: origem SD1/SF1. Filtre SF1.F1_TIPO = 'D'. Projete 0 AS valor_faturamento e COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_devolucao.
-- A query externa deve selecionar SUM(valor_faturamento) AS total_faturamento, SUM(valor_devolucao) AS total_devolucoes e (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido.
-- REGRA ABSOLUTA — cada subquery do UNION ALL deve ser ESCALAR (sem GROUP BY, retornando 1 linha com o total já agregado por SUM). PROIBIDO agrupar a subquery por chave de documento (filial+doc+serie+cliente/loja) — isso gera 1 linha por nota fiscal em vez de 1 linha com o total, tornando o UNION ALL inutilmente grande e fragil (funciona apenas porque o SUM externo soma todas as linhas, mas qualquer alteração futura na query externa quebra o resultado).
-- Aplique o mesmo periodo e os mesmos filtros cadastrais nas duas subqueries quando fizer sentido. Para faturamento use SF2.F2_EMISSAO. Para devolucoes use SF1.F1_DTDIGIT ou SF1.F1_EMISSAO conforme campos disponiveis.
+  1. Subquery de faturamento (SD2/SF2): projete TODAS as metricas pedidas + 0 para as metricas que so existem na outra subquery. Ex com valor+quantidade: COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_faturamento, COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada, 0 AS valor_devolucao.
+  2. Subquery de devolucoes (SD1/SF1): projete 0 para metricas que nao existem em SF1/SD1. Ex: 0 AS valor_faturamento, 0 AS quantidade_faturada, COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_devolucao.
+  3. REGRA CRITICA DE SCHEMA: as duas subqueries do UNION ALL DEVEM ter exatamente as mesmas colunas, na mesma ordem, com os mesmos aliases. Se a pergunta pede valor+quantidade+devolucoes, ambas as subqueries projetam valor_faturamento, quantidade_faturada, valor_devolucao — usando 0 onde a fonte nao tem o dado.
+- A query externa agrega SUM de cada coluna. Exemplos: SUM(valor_faturamento) AS total_faturamento, SUM(quantidade_faturada) AS total_quantidade, SUM(valor_devolucao) AS total_devolucoes, (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido.
+- REGRA ABSOLUTA — GROUP BY nas subqueries do UNION ALL:
+  - Total escalar (sem agrupamento): ambas as subqueries SEM GROUP BY, retornam 1 linha cada.
+  - Com agrupamento por produto, cliente, etc.: ambas as subqueries DEVEM ter o mesmo GROUP BY. A subquery de devolucao deve agrupar pelo mesmo campo (ex: produto) usando o campo equivalente de SD1/SF1. A query externa NAO agrega com SUM() — seleciona os aliases diretamente.
+  - PROIBIDO agrupar por chave de documento (filial+doc+serie+cliente/loja) — isso gera 1 linha por nota.
+- REGRA ABSOLUTA — filtros obrigatorios dentro de cada subquery do UNION ALL:
+  - Subquery de faturamento (SD2/SF2): SEMPRE incluir SF2.F2_TIPO = 'N' (ou IN ('N','C','I')) no WHERE. Este filtro e obrigatorio dentro da subquery, mesmo que seja redundante com contexto externo.
+  - Subquery de devolucoes (SD1/SF1): SEMPRE incluir SF1.F1_TIPO = 'D' no WHERE.
+- PROIBIDO ABSOLUTO — LEFT JOIN SD1/SF1 na query principal: NUNCA use LEFT JOIN SD1 ou LEFT JOIN SF1 na query principal (FROM SD2/SF2). Devolucoes SEMPRE vem de subquery UNION ALL separada.
+- PROIBIDO ABSOLUTO — referenciar SD2/SF2 fora do UNION ALL em total escalar: quando a query externa e um SELECT SUM() sobre o resultado do UNION ALL, nao pode referenciar SD2.D2_TOTAL, SD2.D2_QUANT etc. — esses campos so existem dentro da subquery. Use EXCLUSIVAMENTE os aliases exportados.
+- Aplique o mesmo periodo e os mesmos filtros cadastrais nas duas subqueries. Para faturamento use SF2.F2_EMISSAO. Para devolucoes use SF1.F1_DTDIGIT ou SF1.F1_EMISSAO conforme campos disponiveis.
 - Nota Protheus: na devolucao de vendas (SF1 tipo D), o codigo do cliente e gravado em SF1.F1_FORNECE/SD1.D1_FORNECE e loja em SF1.F1_LOJA/SD1.D1_LOJA. Se houver filtro de cliente resolvido, filtre faturamento por SF2.F2_CLIENTE/F2_LOJA e devolucoes por SF1.F1_FORNECE/F1_LOJA.
-- Resposta planejada com devolucoes: "Faturamento Bruto: {total_faturamento} | Devolucoes: {total_devolucoes} | Liquido: {faturamento_liquido}"
+- Para devolucoes por produto: a subquery de devolucoes agrupa por SD1.D1_COD + SB1.B1_DESC e projeta 0 para as metricas de faturamento. A query externa une os resultados com UNION ALL sem agregar — retorna linha por produto.
 
-### EXEMPLO CORRETO — faturamento liquido (subqueries escalares, sem GROUP BY por documento)
-SELECT SUM(valor_faturamento) AS total_faturamento, SUM(valor_devolucao) AS total_devolucoes,
+### EXEMPLO 1 — total escalar (sem agrupamento): valor + quantidade + devolucoes
+SELECT SUM(valor_faturamento) AS total_faturamento, SUM(quantidade_faturada) AS total_quantidade,
+       SUM(valor_devolucao) AS total_devolucoes,
        (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido
 FROM (
-  SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_faturamento, 0 AS valor_devolucao
+  SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_faturamento,
+         COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada,
+         0                               AS valor_devolucao
   FROM SD2xxx SD2
   JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
   WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260601' AND '20260630' AND SF2.F2_TIPO IN ('N','C','I')
   UNION ALL
-  SELECT 0 AS valor_faturamento, COALESCE(SUM(SD1.D1_TOTAL), 0) AS valor_devolucao
+  SELECT 0                               AS valor_faturamento,
+         0                               AS quantidade_faturada,
+         COALESCE(SUM(SD1.D1_TOTAL), 0)  AS valor_devolucao
   FROM SD1xxx SD1
   JOIN SF1xxx SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
   WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_DTDIGIT BETWEEN '20260601' AND '20260630' AND SF1.F1_TIPO = 'D'
 ) AS subquery;
+
+### EXEMPLO 2 — por produto com devolucoes (GROUP BY dentro de cada subquery, sem wrapper de SUM)
+SELECT produto, SUM(valor_faturamento) AS total_faturamento, SUM(quantidade_faturada) AS total_quantidade,
+       SUM(valor_devolucao) AS total_devolucoes,
+       (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido
+FROM (
+  SELECT SB1.B1_DESC AS produto,
+         COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_faturamento,
+         COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada,
+         0                               AS valor_devolucao
+  FROM SD2xxx SD2
+  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  JOIN SB1xxx SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260601' AND '20260630' AND SF2.F2_TIPO IN ('N','C','I')
+  GROUP BY SB1.B1_DESC
+  UNION ALL
+  SELECT SB1.B1_DESC AS produto,
+         0                               AS valor_faturamento,
+         0                               AS quantidade_faturada,
+         COALESCE(SUM(SD1.D1_TOTAL), 0)  AS valor_devolucao
+  FROM SD1xxx SD1
+  JOIN SF1xxx SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
+  JOIN SB1xxx SB1 ON SD1.D1_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+  WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_DTDIGIT BETWEEN '20260601' AND '20260630' AND SF1.F1_TIPO = 'D'
+  GROUP BY SB1.B1_DESC
+) AS subquery
+GROUP BY produto
+ORDER BY total_faturamento DESC;
 `;
 }
 

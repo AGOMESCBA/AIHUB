@@ -295,6 +295,16 @@ function sqlParaCanonico(sql) {
   );
 }
 
+// Garante que palavras-chave SQL não fiquem coladas a identificadores Protheus (ex: F1_LOJAWHERE → F1_LOJA WHERE).
+// Isso ocorre quando a IA gera SQL com quebra de linha sem espaço antes da palavra-chave,
+// e algum processamento intermediário remove o newline mas não insere espaço.
+// ATENÇÃO: aplica apenas quando precedido por identificador Protheus (letras+dígitos+_),
+// e apenas às keywords que podem colidir — exclui ON (substring de UNION, INNER, etc.).
+const _SQL_KEYWORDS_COLADAS = /([A-Z][A-Z0-9]*_[A-Z0-9_]*)(WHERE|AND\b|GROUP\b|ORDER\b|HAVING\b|FROM\b|JOIN\b|LEFT\b|RIGHT\b|INNER\b|OUTER\b|SELECT\b|SET\b)/gi;
+function sanitizarEspacosKeywords(sql) {
+  return String(sql || '').replace(_SQL_KEYWORDS_COLADAS, '$1 $2');
+}
+
 module.exports = {
   ALIASES_PROTHEUS,
   baseTabelaSX2,
@@ -307,4 +317,5 @@ module.exports = {
   adaptarSqlCanonicoPorSX2,
   sanitizarFiltrosFilialSX2,
   sqlParaCanonico,
+  sanitizarEspacosKeywords,
 };

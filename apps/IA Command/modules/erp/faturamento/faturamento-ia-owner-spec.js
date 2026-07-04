@@ -271,6 +271,34 @@ module.exports = {
     {
       validar: validarFiltroTipoSF2,
     },
+    {
+      // Detecta LEFT JOIN SD1 ou LEFT JOIN SF1 fora de subquery UNION ALL (padrão proibido para devoluções).
+      // A IA deve usar subquery UNION ALL escalar, nunca LEFT JOIN SD1/SF1 na query principal.
+      validar(sql) {
+        const semSubqueries = sql.replace(/\(\s*SELECT[\s\S]*?\)\s*(?:AS\s+\w+)?/gi, '(SUBQ)');
+        if (/\bLEFT\s+JOIN\s+\w*\s*SD1\b|\bLEFT\s+JOIN\s+\w*\s*SF1\b/i.test(semSubqueries)) {
+          return 'PROIBIDO LEFT JOIN SD1 ou SF1 na query principal. Para devolucoes de vendas, use subquery UNION ALL escalar: a query externa agrega SUM(valor_faturamento) e SUM(valor_devolucao) de duas subqueries (SD2/SF2 para faturamento e SD1/SF1 para devolucoes), cada uma sem GROUP BY. Exemplo: SELECT SUM(valor_faturamento) AS total_faturamento, SUM(valor_devolucao) AS total_devolucoes FROM (SELECT COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_faturamento, 0 AS valor_devolucao FROM SD2xxx SD2 JOIN SF2xxx SF2 ON ... WHERE ... AND SF2.F2_TIPO IN (\'N\',\'C\',\'I\') UNION ALL SELECT 0 AS valor_faturamento, COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_devolucao FROM SD1xxx SD1 JOIN SF1xxx SF1 ON ... WHERE ... AND SF1.F1_TIPO = \'D\') AS s;';
+        }
+        return null;
+      },
+    },
+    {
+      // Detecta referência a SD2./SD1./SF2./SF1. na SELECT list da query externa quando há UNION ALL.
+      // Erro clássico: SELECT ..., SUM(SD2.D2_QUANT) AS ..., SUM(valor_faturamento) ... FROM (...UNION ALL...) AS s
+      // SD2 não existe no escopo externo — só existem os aliases exportados pelo UNION ALL.
+      validar(sql) {
+        const sqlUpper = sql.toUpperCase();
+        if (!sqlUpper.includes('UNION ALL')) return null;
+        // Extrai a SELECT list externa (antes do primeiro FROM ... (SELECT...UNION ALL...))
+        const matchOuter = sql.match(/^\s*SELECT\s+([\s\S]+?)\s+FROM\s*\(/i);
+        if (!matchOuter) return null;
+        const selectList = matchOuter[1];
+        if (/\bSD[12]\s*\.\s*D[12]_|\bSF[12]\s*\.\s*F[12]_/i.test(selectList)) {
+          return 'ERRO DE ESCOPO: a SELECT list externa referencia SD2.D2_QUANT ou campos de SD2/SD1/SF2/SF1 que nao existem fora da subquery UNION ALL. A query externa so pode referenciar os aliases definidos dentro do UNION ALL (ex: valor_faturamento, quantidade_faturada, valor_devolucao). Corrija projetando COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada DENTRO da subquery de faturamento e 0 AS quantidade_faturada dentro da subquery de devolucoes. A query externa usa apenas SUM(quantidade_faturada).';
+        }
+        return null;
+      },
+    },
   ],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta de faturamento no momento. Tente novamente em breve.',

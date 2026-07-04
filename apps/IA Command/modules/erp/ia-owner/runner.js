@@ -238,6 +238,30 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Gere novo SQL aplicando explicitamente o periodo no WHERE/subquery correta.',
       '- Preserve metrica, entidades resolvidas e agrupamentos solicitados.',
     ];
+  } else if (/SF2.*F2_TIPO|F2_TIPO.*SF2/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- TODA query que use SF2 deve incluir AND SF2.F2_TIPO = 'N' no WHERE.",
+      "- SF2.F2_TIPO = 'N' filtra apenas notas normais (receita de venda real).",
+      "- Sem esse filtro, devolucoes (D), beneficiamentos (B) e complementos (C/P) distorcem o faturamento.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL com AND SF2.F2_TIPO = \'N\' obrigatoriamente no WHERE.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+      '- Nao remova nenhum filtro existente.',
+    ];
+  } else if (/SF1.*F1_TIPO|F1_TIPO.*SF1/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- TODA query que use SF1 deve incluir AND SF1.F1_TIPO = 'N' no WHERE.",
+      "- SF1.F1_TIPO = 'N' filtra apenas compras normais (custo real de compra).",
+      "- Sem esse filtro, devolucoes (D), complementos (C) e beneficiamentos (B) distorcem o custo.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL com AND SF1.F1_TIPO = \'N\' obrigatoriamente no WHERE.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+      '- Nao remova nenhum filtro existente.',
+    ];
   } else if (subtipo === 'contrato_sx3_invalido' || /SX3|Campo .* nao consta/i.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio:',
@@ -1951,6 +1975,7 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
   out = contratosRelacionais.sql;
   const sqlAposContratosRelacionais = out;
   out = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(out, sx2, { logPrefix: spec.logPrefix, sufixoFallback: inferirSufixoSX2(sx2, protheus.sufixoTabela) });
+  out = sx2SqlNormalizer.sanitizarEspacosKeywords(out);
   out = entitySqlGuard.removerHintsNoLock(out);
   if (Array.isArray(spec.dimensionLeftJoinBases) && spec.dimensionLeftJoinBases.length) {
     out = entitySqlGuard.converterInnerParaLeftJoinDimensionais(out, spec.dimensionLeftJoinBases);
@@ -2409,7 +2434,8 @@ async function executar(spec, intent, empresaId) {
       };
     } catch (e) {
       const semConexao = /nenhuma conex|no connection|connect/i.test(e.message || '');
-      if (semConexao) {
+      const timeoutAgente = /timeout ao chamar o agente|falha ao conectar ao agente/i.test(e.message || '');
+      if (semConexao || timeoutAgente) {
         return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(spec, 'sem_conexao'), sql_gerado: preparado?.sqlFinal || plano.sql, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
       }
       // Violacao de seguranca (vendedor tentando acessar dados de outro vendedor): falha
@@ -2533,7 +2559,9 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       ...resolucaoLocal.entidades,
     ];
   }
-  const _erroAgenteTemporal = (msg) => /socket hang up|ECONNRESET|ECONNREFUSED|ETIMEDOUT|timeout ao chamar/i.test(msg || '');
+  // Apenas erros de socket transitórios justificam retry (pool ODBC, reset de conexão).
+  // Timeout e falha de conexão ao agente são problemas de rede/infra — não adianta tentar de novo e travar por mais 240s.
+  const _erroAgenteTemporal = (msg) => /socket hang up|ECONNRESET/i.test(msg || '');
   const MAX_TENTATIVAS_DIRETO = 2;
   let preparado = null;
   for (let tentativaDireto = 1; tentativaDireto <= MAX_TENTATIVAS_DIRETO; tentativaDireto++) {

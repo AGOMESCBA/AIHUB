@@ -61,6 +61,7 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     '- Em escopo multiempresa, nao crie JOIN/subquery em SA1/SA2 para filtrar A1_NOME/A2_NOME pelos nomes das empresas do IAHub. O backend executara uma consulta separada por tenant com o SX2 correto.',
     '- REGRA DE VERACIDADE DE ENTIDADES: somente afirme que cliente, fornecedor, vendedor, produto ou outra entidade "foi encontrado(a)" quando ela estiver presente em "Entidades ja resolvidas pelo sistema" com codigo interno. Se essa lista estiver vazia, e proibido dizer que a entidade foi encontrada.',
     '- Nao solicite confirmacao generica para continuar quando a entidade ja estiver resolvida com codigo interno. Gere o SQL. Quando nao estiver resolvida, nunca use uma confirmacao como substituto da resolucao cadastral.',
+    '- REGRA ABSOLUTA — precisa_confirmacao: precisa_confirmacao so pode ser true quando entidades_necessarias nao estiver vazio (ha entidade cadastral ambigua pendente de resolucao). Se entidades_necessarias for [] (vazio), OBRIGATORIO retornar precisa_confirmacao: false e gerar o SQL imediatamente. NUNCA retorne precisa_confirmacao: true com entidades_necessarias vazio — isso bloqueia a consulta sem motivo valido.',
     '- REGRA CRITICA — "empresa(s) [NOME]" na mensagem: Quando o usuario escreve "empresa(s) C3I e J2A" ou "para a empresa X", e esses nomes aparecem em empresas_iahub_mencionadas, a palavra "empresa" e APENAS escopo de tenant. NAO adicione GROUP BY, NAO filtre por SA1/SA2, NAO agrupe por empresa. O SQL deve ser identico ao de uma consulta sem menção de empresa — o backend ja executa por tenant.',
     '- REGRA CRITICA — agrupamentos: ["empresa"] no estado anterior: Quando contrato_orquestrador ou estado anterior trouxer agrupamentos contendo "empresa", isso e metadata de exibicao multiempresa do backend, NAO e instrucao para GROUP BY no SQL. Ignore-o completamente na geracao de SQL. So use GROUP BY quando o usuario pedir agrupamento explicito (por mes, por cliente, por produto, etc.).',
     '',
@@ -180,7 +181,15 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
     ? Object.fromEntries(Object.entries(contextoTecnico).filter(([k]) => k !== 'query_plan_texto'))
     : {};
 
+  const _empresasIahubCtx = Array.isArray(contextoTecnico?.empresas_iahub_mencionadas) ? contextoTecnico.empresas_iahub_mencionadas : [];
+  const _empresasIahubEst = Array.isArray(estadoAnterior?.empresas_iahub_mencionadas) ? estadoAnterior.empresas_iahub_mencionadas : [];
+  const empresasIahub = [...new Set([..._empresasIahubCtx, ..._empresasIahubEst])].filter(Boolean);
+  const _empresasIahubStr = empresasIahub.length ? empresasIahub : null;
+
   return [
+    _empresasIahubStr
+      ? `⚠️ INSTRUCAO CRITICA DE ESCOPO — LEIA ANTES DE QUALQUER COISA:\nOs seguintes nomes sao EMPRESAS-TENANT do sistema IAHub (nao sao clientes, fornecedores nem entidades cadastrais do ERP): ${_empresasIahubStr.join(', ')}.\nREGRA ABSOLUTA: NUNCA declare nenhum desses nomes em "entidades_necessarias". NUNCA coloque esses nomes em filtros de SA1.A1_NOME, SA2.A2_NOME ou qualquer campo cadastral. Eles definem APENAS qual banco de dados Protheus sera consultado — o escopo do tenant. A consulta e executada diretamente no banco do tenant sem filtro por nome de empresa.\n`
+      : '',
     `Mensagem atual do usuario:\n${mensagem || ''}`,
     '',
     'Ultimas mensagens/consultas do usuario neste escopo:',

@@ -543,9 +543,16 @@ class IACWhatsAppService extends EventEmitter {
       try {
         await chat.sendMessage(parte);
       } catch (chatErr) {
-        if (!this.client) throw chatErr;
         this.log(`Envio pelo chat falhou; tentando envio direto para ${sender}: ${chatErr.message}`, 'warning');
-        await this.client.sendMessage(sender, parte);
+        if (!this.client) {
+          this.log(`Cliente WhatsApp nulo — mensagem nao entregue para ${sender}`, 'error');
+          continue;
+        }
+        try {
+          await this.client.sendMessage(sender, parte);
+        } catch (directErr) {
+          this.log(`Envio direto tambem falhou para ${sender}: ${directErr.message}`, 'error');
+        }
       }
     }
     return partes.length;
@@ -2971,7 +2978,7 @@ class IACWhatsAppService extends EventEmitter {
     const _timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
 
     // Heartbeat: envia mensagem de progresso durante consultas longas para manter o WhatsApp Web ativo.
-    const HEARTBEAT_INTERVAL_MS = 20000;
+    const HEARTBEAT_INTERVAL_MS = 30000;
     let heartbeatCount = 0;
     const heartbeatId = setInterval(async () => {
       if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > t0) {
@@ -2981,6 +2988,11 @@ class IACWhatsAppService extends EventEmitter {
       }
       heartbeatCount++;
       try {
+        if (!this.client) {
+          this.log(`Heartbeat cancelado — cliente WhatsApp nulo (${sender})`, 'warning');
+          clearInterval(heartbeatId);
+          return;
+        }
         await chat.sendMessage(messageTemplates.render(this._empresaId, 'aguardando_processamento', {}));
         this.log(`⏳ Heartbeat #${heartbeatCount} enviado para ${sender} (${Math.round((Date.now() - t0) / 1000)}s)`, 'info');
       } catch (hbErr) {
@@ -2989,7 +3001,7 @@ class IACWhatsAppService extends EventEmitter {
     }, HEARTBEAT_INTERVAL_MS);
 
     try {
-      const timeoutMs = 180000;
+      const timeoutMs = 300000;
       let timeoutId = null;
       const timeoutPipeline = new Promise((_, reject) => {
         timeoutId = setTimeout(
@@ -3022,9 +3034,16 @@ class IACWhatsAppService extends EventEmitter {
       const isTimeout = /timeout ao chamar o agente|tempo limite de processamento excedido/i.test(err.message);
       const templateChave = isTimeout ? 'timeout_agente' : 'erro_processamento';
       try {
-        await chat.sendMessage(messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
+        if (this.client) {
+          await chat.sendMessage(messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
+        } else {
+          this.log(`Cliente nulo — mensagem de erro nao entregue para ${sender}`, 'error');
+        }
       } catch (sendErr) {
-        this.log(`❌ Falha ao enviar mensagem de erro para ${sender} (WhatsApp desconectado?): ${sendErr.message}`, 'error');
+        this.log(`❌ Falha ao enviar mensagem de erro para ${sender}: ${sendErr.message}`, 'error');
+        try {
+          if (this.client) await this.client.sendMessage(sender, messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
+        } catch (_) {}
       }
     }
   }
@@ -3497,18 +3516,24 @@ class IACWhatsAppService extends EventEmitter {
       this.log(`🔄 Contexto descartado: novo assunto detectado antes da IA para sender ${sender}`, 'info');
     }
 
-    const empresaQualificadaIntent = empresaResolvida && this._channelId
-      ? this._resolverEmpresaQualificadaNoTexto(
-          textoExecucao,
-          channelStore.listarEmpresasDoCanal(this._channelId)
-            .filter(e => !e.ocultar_selecao)
-            .filter(e => channelStore.senderAutorizadoEmpresa(e.empresa_id, sender))
-        )
+    const _empresasParaIntent = empresaResolvida && this._channelId
+      ? channelStore.listarEmpresasDoCanal(this._channelId)
+          .filter(e => !e.ocultar_selecao)
+          .filter(e => channelStore.senderAutorizadoEmpresa(e.empresa_id, sender))
+      : null;
+    const empresaQualificadaIntent = _empresasParaIntent
+      ? (this._resolverEmpresaQualificadaNoTexto(textoExecucao, _empresasParaIntent)
+          || this._resolverEmpresaPorAliasIsolado(textoExecucao, _empresasParaIntent))
       : null;
 
+    const tenantAliases = this._channelId
+      ? channelStore.listarEmpresasDoCanal(this._channelId)
+          .flatMap(e => [e.nome, ...String(e.aliases || '').split(',').map(a => a.trim())].filter(Boolean))
+      : [];
     let intent = await intentService.classificar(textoExecucao, empresaId, {
       contextoAnterior,
       historicoResumido: this._buildHistoricoResumido(sender, empresaId, this._historicoTurnosConfig(empresaId)),
+      tenantAliases,
     });
     _timings.intent = Date.now();
     intent._mensagemOriginal = textoExecucao;
@@ -3528,28 +3553,38 @@ class IACWhatsAppService extends EventEmitter {
         intent._contextoEmpresaOrigem = scopedContexto.empresaIdOrigem || null;
       }
     }
-    // Se filtros.empresa vier do histórico, verifica se é realmente uma empresa do canal antes de proteger
-    // contra resolução cadastral. Sem essa verificação, um cliente como "Softexpert" poderia ser
-    // bloqueado se o orquestrador o colocasse erroneamente em filtros.empresa.
-    if (intent.filtros?.empresa && typeof intent.filtros.empresa === 'string' && !intent._empresaMencionadaTexto && this._channelId) {
+    // Verifica se filtros cadastrais (empresa, cliente, fornecedor) são na verdade tenants do canal.
+    // Varre TODOS os campos — não para no primeiro — para capturar multi-tenant ("J2A e C3I").
+    if (this._channelId) {
       const empresasCanal = channelStore.listarEmpresasDoCanal(this._channelId)
         .filter(e => !e.ocultar_selecao && channelStore.senderAutorizadoEmpresa(e.empresa_id, sender));
-      const verificada = this._resolverEmpresaQualificadaNoTexto(intent.filtros.empresa, empresasCanal);
-      if (verificada?.status === 'resolved') {
-        intent._empresaMencionadaTexto = verificada.termo;
-        intent._empresaMencionadaId   = verificada.empresaId;
-      } else {
-        // Fallback: match direto pelo nome sem exigir a palavra "empresa" no texto.
-        // Necessário para contexto herdado onde o valor (ex: "C3I") já foi validado como tenant
-        // no turno anterior e foi restaurado pelo merger sem a palavra "empresa" no prefixo.
-        const nomeNorm = _normalizarBuscaEmpresa(intent.filtros.empresa);
-        if (nomeNorm) {
-          const matchDireto = empresasCanal.find(e => _scoreEmpresaTexto(nomeNorm, e) >= 0.75);
-          if (matchDireto) {
-            intent._empresaMencionadaTexto = intent.filtros.empresa;
-            intent._empresaMencionadaId   = matchDireto.empresa_id;
+      const tenantTextos = intent._empresasMencionadasTextos ? [...intent._empresasMencionadasTextos] : [];
+      const tenantIds = intent._empresasMencionadasIds ? [...intent._empresasMencionadasIds] : [];
+      for (const campo of ['empresa', 'cliente', 'fornecedor']) {
+        const val = intent.filtros?.[campo];
+        if (!val || typeof val !== 'string') continue;
+        const verificada = this._resolverEmpresaQualificadaNoTexto(val, empresasCanal)
+          || (() => {
+            const nomeNorm = _normalizarBuscaEmpresa(val);
+            const m = nomeNorm && empresasCanal.find(e => _scoreEmpresaTexto(nomeNorm, e) >= 0.75);
+            return m ? { status: 'resolved', termo: val, empresaId: m.empresa_id } : null;
+          })();
+        if (verificada?.status === 'resolved') {
+          if (!tenantTextos.includes(verificada.termo)) tenantTextos.push(verificada.termo);
+          if (!tenantIds.includes(verificada.empresaId)) tenantIds.push(verificada.empresaId);
+          if (campo !== 'empresa') {
+            // Se não há filtro.empresa ainda, promove; se já há, remove o campo cadastral
+            if (!intent.filtros.empresa) intent.filtros.empresa = val;
+            delete intent.filtros[campo];
+            this.log(`⚡ Guard tenant (single): filtros.${campo}="${val}" reconhecido como tenant`, 'info');
           }
         }
+      }
+      if (tenantTextos.length) {
+        intent._empresasMencionadasTextos = tenantTextos;
+        intent._empresasMencionadasIds    = tenantIds;
+        intent._empresaMencionadaTexto    = tenantTextos.join(' | ');
+        intent._empresaMencionadaId       = tenantIds[0];
       }
     }
 
@@ -3866,23 +3901,37 @@ class IACWhatsAppService extends EventEmitter {
     if (intent._contextoAplicado && falhasClassificacao.length) {
       this.log('ℹ️  IA externa indisponivel, mas a engine interna resolveu pelo contexto da conversa.', 'info');
     }
-    // Mesmo guard do fluxo single: verifica canal antes de proteger filtros.empresa
-    if (intent.filtros?.empresa && typeof intent.filtros.empresa === 'string' && !intent._empresaMencionadaTexto && this._channelId) {
+    // Guard tenant (all): varre empresa/cliente/fornecedor sem parar no primeiro match.
+    // Cobre multi-tenant ("J2A e C3I" → empresa="J2A" cliente="C3I") e alias isolado.
+    if (this._channelId) {
       const empresasCanal = channelStore.listarEmpresasDoCanal(this._channelId)
         .filter(e => !e.ocultar_selecao && channelStore.senderAutorizadoEmpresa(e.empresa_id, sender));
-      const verificada = this._resolverEmpresaQualificadaNoTexto(intent.filtros.empresa, empresasCanal);
-      if (verificada?.status === 'resolved') {
-        intent._empresaMencionadaTexto = verificada.termo;
-        intent._empresaMencionadaId   = verificada.empresaId;
-      } else {
-        const nomeNorm = _normalizarBuscaEmpresa(intent.filtros.empresa);
-        if (nomeNorm) {
-          const matchDireto = empresasCanal.find(e => _scoreEmpresaTexto(nomeNorm, e) >= 0.75);
-          if (matchDireto) {
-            intent._empresaMencionadaTexto = intent.filtros.empresa;
-            intent._empresaMencionadaId   = matchDireto.empresa_id;
+      const tenantTextos = intent._empresasMencionadasTextos ? [...intent._empresasMencionadasTextos] : [];
+      const tenantIds = intent._empresasMencionadasIds ? [...intent._empresasMencionadasIds] : [];
+      for (const campo of ['empresa', 'cliente', 'fornecedor']) {
+        const val = intent.filtros?.[campo];
+        if (!val || typeof val !== 'string') continue;
+        const verificada = this._resolverEmpresaQualificadaNoTexto(val, empresasCanal)
+          || (() => {
+            const nomeNorm = _normalizarBuscaEmpresa(val);
+            const m = nomeNorm && empresasCanal.find(e => _scoreEmpresaTexto(nomeNorm, e) >= 0.75);
+            return m ? { status: 'resolved', termo: val, empresaId: m.empresa_id } : null;
+          })();
+        if (verificada?.status === 'resolved') {
+          if (!tenantTextos.includes(verificada.termo)) tenantTextos.push(verificada.termo);
+          if (!tenantIds.includes(verificada.empresaId)) tenantIds.push(verificada.empresaId);
+          if (campo !== 'empresa') {
+            if (!intent.filtros.empresa) intent.filtros.empresa = val;
+            delete intent.filtros[campo];
+            this.log(`⚡ Guard tenant (all): filtros.${campo}="${val}" reconhecido como tenant`, 'info');
           }
         }
+      }
+      if (tenantTextos.length) {
+        intent._empresasMencionadasTextos = tenantTextos;
+        intent._empresasMencionadasIds    = tenantIds;
+        intent._empresaMencionadaTexto    = tenantTextos.join(' | ');
+        intent._empresaMencionadaId       = tenantIds[0];
       }
     }
 
@@ -3901,7 +3950,10 @@ class IACWhatsAppService extends EventEmitter {
       intent.agrupar_por_composto = null;
       intent.limite = null;
     }
-    const empresaLogId = this._empresaConsolidadoId(empresasLoop, empresas);
+    // Com 1 empresa no pipeline, usa o ID dela; com múltiplas, usa o ID consolidador do canal.
+    const empresaLogId = empresasLoop.length === 1
+      ? Number(empresasLoop[0].empresa_id)
+      : this._empresaConsolidadoId(empresasLoop, empresas);
     const senderAll = sender || '__all__';
 
     // Subtipos cujo resposta_direta é significativa para o usuário (domínio ou IA)
@@ -3969,14 +4021,29 @@ class IACWhatsAppService extends EventEmitter {
       ]);
       const moduloAutorizacaoAll = this._moduloMonitorIntent(intent);
       const empresasBloqueadasPorModulo = [];
+      // Herança de escopo: se o contexto anterior restringia empresas específicas
+      // e o turno atual é refinamento (não menciona novas empresas), restringe o loop
+      // às empresas herdadas para que o detalhe responda apenas o escopo anterior.
       let empresasProcessamento = empresasLoop;
+      if (contextoAnteriorAll && intent._contextoAplicado) {
+        const idsHerdados = Array.isArray(intent._empresasMencionadasIds) && intent._empresasMencionadasIds.length
+          ? intent._empresasMencionadasIds.map(Number)
+          : null;
+        if (idsHerdados && idsHerdados.length < empresasLoop.length) {
+          const filtradas = empresasLoop.filter(e => idsHerdados.includes(Number(e.empresa_id)));
+          if (filtradas.length) {
+            empresasProcessamento = filtradas;
+            this.log(`[All] Escopo herdado do contexto anterior: empresas restringidas a [${idsHerdados.join(',')}]`, 'info');
+          }
+        }
+      }
       if (moduloAutorizacaoAll) {
         empresasBloqueadasPorModulo.push(
-          ...empresasLoop
+          ...empresasProcessamento
             .map(emp => ({ emp, bloqueio: this._verificarAcessoModuloWhatsapp({ empresaId: emp.empresa_id, sender, modulo: moduloAutorizacaoAll }) }))
             .filter(x => x.bloqueio)
         );
-        empresasProcessamento = empresasLoop.filter(emp =>
+        empresasProcessamento = empresasProcessamento.filter(emp =>
           !empresasBloqueadasPorModulo.some(b => Number(b.emp.empresa_id) === Number(emp.empresa_id))
         );
         for (const { emp, bloqueio } of empresasBloqueadasPorModulo) {
