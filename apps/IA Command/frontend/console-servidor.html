@@ -139,6 +139,7 @@
           <label><input type="checkbox" id="chk-error" checked onchange="aplicarFiltros()"> ERROR</label>
           <label><input type="checkbox" id="chk-auto-scroll" checked> Auto-scroll</label>
         </div>
+        <button class="btn btn-ghost" onclick="atualizarConsole()" style="font-size:12px">↻ Atualizar</button>
         <button class="btn btn-ghost" onclick="limparConsole()" style="font-size:12px">Limpar</button>
       </div>
 
@@ -289,6 +290,7 @@
     renderizarTudo();
   }
   function limparConsole()  { _todas = []; renderizarTudo(); }
+  function atualizarConsole() { window.location.reload(); }
 
   function copiarTudo() {
     const txt = _todas.map(e => `[${fmtTs(e.ts)}] [${(e.level||'info').toUpperCase()}] ${e.msg}`).join('\n');
