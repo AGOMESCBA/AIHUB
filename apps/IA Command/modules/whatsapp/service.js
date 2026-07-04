@@ -3563,14 +3563,18 @@ class IACWhatsAppService extends EventEmitter {
       for (const campo of ['empresa', 'cliente', 'fornecedor']) {
         const val = intent.filtros?.[campo];
         if (!val || typeof val !== 'string') continue;
-        const verificada = this._resolverEmpresaQualificadaNoTexto(val, empresasCanal)
+        // Tenta reconhecer como tenant: alias isolado (ex: "CAIEIRA"), nome qualificado
+        // (ex: "empresa Caieira do Sul") ou score alto contra o nome completo.
+        const verificada = this._resolverEmpresaPorAliasIsolado(val, empresasCanal)
+          || this._resolverEmpresaQualificadaNoTexto(val, empresasCanal)
           || (() => {
             const nomeNorm = _normalizarBuscaEmpresa(val);
             const m = nomeNorm && empresasCanal.find(e => _scoreEmpresaTexto(nomeNorm, e) >= 0.75);
             return m ? { status: 'resolved', termo: val, empresaId: m.empresa_id } : null;
           })();
         if (verificada?.status === 'resolved') {
-          if (!tenantTextos.includes(verificada.termo)) tenantTextos.push(verificada.termo);
+          const termo = verificada.termo || val;
+          if (!tenantTextos.includes(termo)) tenantTextos.push(termo);
           if (!tenantIds.includes(verificada.empresaId)) tenantIds.push(verificada.empresaId);
           if (campo !== 'empresa') {
             // Se não há filtro.empresa ainda, promove; se já há, remove o campo cadastral
@@ -3911,14 +3915,16 @@ class IACWhatsAppService extends EventEmitter {
       for (const campo of ['empresa', 'cliente', 'fornecedor']) {
         const val = intent.filtros?.[campo];
         if (!val || typeof val !== 'string') continue;
-        const verificada = this._resolverEmpresaQualificadaNoTexto(val, empresasCanal)
+        const verificada = this._resolverEmpresaPorAliasIsolado(val, empresasCanal)
+          || this._resolverEmpresaQualificadaNoTexto(val, empresasCanal)
           || (() => {
             const nomeNorm = _normalizarBuscaEmpresa(val);
             const m = nomeNorm && empresasCanal.find(e => _scoreEmpresaTexto(nomeNorm, e) >= 0.75);
             return m ? { status: 'resolved', termo: val, empresaId: m.empresa_id } : null;
           })();
         if (verificada?.status === 'resolved') {
-          if (!tenantTextos.includes(verificada.termo)) tenantTextos.push(verificada.termo);
+          const termo = verificada.termo || val;
+          if (!tenantTextos.includes(termo)) tenantTextos.push(termo);
           if (!tenantIds.includes(verificada.empresaId)) tenantIds.push(verificada.empresaId);
           if (campo !== 'empresa') {
             if (!intent.filtros.empresa) intent.filtros.empresa = val;
