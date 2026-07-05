@@ -32,6 +32,10 @@ const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
 const WHATSAPP_MAX_MESSAGE_CHARS = 3500;
 const PIPELINE_TRACE_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'iac-whatsapp-pipeline.log');
+const WHATSAPP_INIT_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_INIT_TIMEOUT_MS || 180000));
+const WHATSAPP_POST_CLEANUP_WAIT_MS = Math.max(0, Number(process.env.IAC_WA_POST_CLEANUP_WAIT_MS || 1500));
+const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(30000, Number(process.env.IAC_WA_SILENT_SESSION_RETRY_MS || 45000));
+const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR_AUTH_TIMEOUT_MS || 300000));
 const NOMES_MODULOS_WHATSAPP = {
   compras:     'Compras',
   financeiro:  'Financeiro',
@@ -107,9 +111,33 @@ function _sessionDirFor(clientId) {
   return path.join(AUTH_BASE, marker);
 }
 
+function _safeAuthClientId(valor) {
+  return String(valor || 'iac_ch_default').replace(/[^\w-]/g, '_');
+}
+
+function _channelAuthClientId(channel) {
+  return _safeAuthClientId(`iac_ch_${channel?.id || 'default'}`);
+}
+
+function _legacyEmpresaAuthId(valor) {
+  return String(valor || '').match(/^iac_(\d+)$/i);
+}
+
 function _sessionExists(clientId) {
   if (!clientId) return false;
   return fs.existsSync(_sessionDirFor(clientId));
+}
+
+function _quarantineSession(clientId) {
+  if (!clientId || !_sessionExists(clientId)) return null;
+  const dir = _sessionDirFor(clientId);
+  const destino = `${dir}.quarantine_${new Date().toISOString().replace(/[:.]/g, '-')}`;
+  try {
+    fs.renameSync(dir, destino);
+    return destino;
+  } catch (_) {
+    return null;
+  }
 }
 
 function _sessionLooksAuthenticated(clientId) {
@@ -267,6 +295,7 @@ class IACWhatsAppService extends EventEmitter {
     this._channelId  = null;
     this._channelName = null;
     this._authClientId = null;
+    this._configuredAuthClientId = null;
     this._logBuffer  = [];
     this._wired      = false;
     this._startingPromise = null;
@@ -297,6 +326,11 @@ class IACWhatsAppService extends EventEmitter {
   setStatus(s) {
     this.status = s;
     this.emit('iac-status', { status: s, empresa_id: this._empresaId, channel_id: this._channelId });
+  }
+
+  _bootLog(etapa, inicio = this._startTime, extra = '') {
+    const seg = inicio ? ((Date.now() - inicio) / 1000).toFixed(1) : '0.0';
+    this.log(`[boot] ${etapa} - ${seg}s${extra ? ` | ${extra}` : ''}`, 'info');
   }
 
   async start(config) {
@@ -337,7 +371,8 @@ class IACWhatsAppService extends EventEmitter {
     this._empresaId = Number(empresaId);
     this._channelId = String(channel.id);
     this._channelName = channel.nome || `Canal ${channel.id}`;
-    this._authClientId = this._resolveAuthClientId(channel, empresaId);
+    this._configuredAuthClientId = this._resolveConfiguredAuthClientId(channel, empresaId);
+    this._authClientId = this._configuredAuthClientId;
     this.setStatus('starting');
     this._startTime = Date.now();
     this.log(`Iniciando IA Command WhatsApp no canal "${this._channelName}"...`, 'info');
@@ -345,8 +380,13 @@ class IACWhatsAppService extends EventEmitter {
 
     // Mata processos Chrome órfãos da sessão anterior antes de criar um novo cliente.
     // Evita o erro "The browser is already running for <userDataDir>".
+    this._bootLog('limpeza de sessao iniciada');
     await this._killChromeForSession(this._authClientId);
-    await new Promise(r => setTimeout(r, 6000));
+    this._bootLog('limpeza de sessao concluida');
+    if (WHATSAPP_POST_CLEANUP_WAIT_MS > 0) {
+      await new Promise(r => setTimeout(r, WHATSAPP_POST_CLEANUP_WAIT_MS));
+    }
+    this._bootLog('espera pos-limpeza concluida', this._startTime, `${WHATSAPP_POST_CLEANUP_WAIT_MS}ms`);
 
     const chromePath = resolveChromePath();
     if (chromePath) this.log(`Chrome: ${chromePath}`, 'info');
@@ -359,35 +399,120 @@ class IACWhatsAppService extends EventEmitter {
       authStrategy: new LocalAuth({ clientId: this._authClientId, dataPath: AUTH_BASE }),
       puppeteer: puppeteerCfg,
     });
+    this._bootLog('cliente WhatsApp criado');
 
-    let step = 0;
-    const MSGS = [
-      'Aguardando Chrome iniciar…', 'Chrome iniciado, carregando WhatsApp Web…',
-      'Aguardando QR code ou sessão salva…', 'Primeira execução pode levar até 3 minutos…',
-      'Aguardando autenticação…', 'Quase lá, aguarde…',
-    ];
+    let receivedBootEvent = false;
+    let retryingCleanSession = false;
+    let silentSessionTimer = null;
+    let firstQrAt = null;
+    let qrCount = 0;
+    let qrAuthTimer = null;
+
+    const retryWithCleanSession = async (motivo) => {
+      if (retryingCleanSession || this.status !== 'starting' || cfg.cleanSessionRetry) return false;
+      if (!_sessionExists(this._authClientId)) return false;
+      retryingCleanSession = true;
+      clearTimers();
+      const sessao = this._authClientId;
+      this.log(`${motivo}; colocando sessao "${sessao}" em quarentena e tentando gerar novo QR.`, 'warning');
+      if (this.client) {
+        await this.client.destroy().catch(() => {});
+        this.client = null;
+      }
+      await this._killChromeForSession(sessao);
+      const destino = _quarantineSession(sessao);
+      if (destino) this.log(`Sessao em quarentena: ${path.basename(destino)}`, 'warning');
+      else this.log(`Nao consegui colocar a sessao "${sessao}" em quarentena; tentando reiniciar mesmo assim.`, 'warning');
+      this.lastQrUrl = null;
+      this.setStatus('stopped');
+      setTimeout(() => {
+        this.start({ empresaId, channel, cleanSessionRetry: true }).catch(err => {
+          this.log(`Falha ao reiniciar com sessao limpa: ${err.message}`, 'error');
+        });
+      }, 1000);
+      return true;
+    };
+
     const progressTimer = setInterval(() => {
       if (this.status !== 'starting') { clearInterval(progressTimer); return; }
-      this.log(MSGS[Math.min(step++, MSGS.length - 1)], 'info');
+      this._bootLog('aguardando evento do WhatsApp Web');
     }, 15000);
 
-    const initTimeout = setTimeout(() => {
-      if (this.status !== 'starting') return;
-      clearInterval(progressTimer);
-      this.log('Tempo limite de 180s atingido. Verifique o Chrome e tente novamente.', 'error');
-      this.stop();
-    }, 180000);
+    if (!cfg.cleanSessionRetry && _sessionExists(this._authClientId)) {
+      silentSessionTimer = setTimeout(() => {
+        if (receivedBootEvent || this.status !== 'starting') return;
+        retryWithCleanSession(`Sessao salva nao emitiu QR/autenticacao/ready em ${Math.round(WHATSAPP_SILENT_SESSION_RETRY_MS / 1000)}s`).catch(err => {
+          this.log(`Falha no retry de sessao silenciosa: ${err.message}`, 'error');
+        });
+      }, Math.min(WHATSAPP_SILENT_SESSION_RETRY_MS, WHATSAPP_INIT_TIMEOUT_MS - 1000));
+    }
 
-    const clearTimers = () => { clearInterval(progressTimer); clearTimeout(initTimeout); };
+    const initTimeout = setTimeout(async () => {
+      if (this.status !== 'starting') return;
+      if (firstQrAt) {
+        this.log(`QR exibido; aguardando autenticacao por ate ${Math.round(WHATSAPP_QR_AUTH_TIMEOUT_MS / 1000)}s.`, 'warning');
+        return;
+      }
+      const retried = await retryWithCleanSession(`Sessao "${this._authClientId}" nao autenticou em ${Math.round(WHATSAPP_INIT_TIMEOUT_MS / 1000)}s`);
+      if (retried) return;
+      clearTimers();
+      this.log(`Tempo limite de ${Math.round(WHATSAPP_INIT_TIMEOUT_MS / 1000)}s atingido. Verifique o Chrome e tente novamente.`, 'error');
+      this.stop();
+    }, WHATSAPP_INIT_TIMEOUT_MS);
+
+    const clearTimers = () => {
+      clearInterval(progressTimer);
+      clearTimeout(initTimeout);
+      if (silentSessionTimer) clearTimeout(silentSessionTimer);
+      if (qrAuthTimer) clearTimeout(qrAuthTimer);
+    };
 
     this.client.on('qr', async (qr) => {
-      clearTimers();
+      receivedBootEvent = true;
+      if (silentSessionTimer) {
+        clearTimeout(silentSessionTimer);
+        silentSessionTimer = null;
+      }
+      qrCount++;
+      if (!firstQrAt) {
+        firstQrAt = Date.now();
+        qrAuthTimer = setTimeout(async () => {
+          if (this.status !== 'starting') return;
+          clearTimers();
+          this.log(`QR exibido por ${Math.round(WHATSAPP_QR_AUTH_TIMEOUT_MS / 1000)}s sem autenticacao. Encerrando para evitar loop infinito de QR.`, 'error');
+          this.log('No celular, remova qualquer aparelho IA Command antigo em Aparelhos conectados e inicie novamente para gerar um QR novo.', 'warning');
+          await this.stop();
+        }, WHATSAPP_QR_AUTH_TIMEOUT_MS);
+      }
+      this._bootLog('QR recebido', this._startTime, `tentativa=${qrCount}`);
       this.log('QR Code gerado — escaneie com o WhatsApp.', 'info');
       this.lastQrUrl = await qrcode.toDataURL(qr);
       this.emit('iac-qr', this.lastQrUrl);
     });
 
+    this.client.on('loading_screen', (percent, message) => {
+      receivedBootEvent = true;
+      const p = percent !== undefined && percent !== null ? `${percent}%` : '?';
+      this._bootLog('loading_screen', this._startTime, `${p}${message ? ` - ${message}` : ''}`);
+    });
+
+    this.client.on('authenticated', () => {
+      receivedBootEvent = true;
+      if (qrAuthTimer) {
+        clearTimeout(qrAuthTimer);
+        qrAuthTimer = null;
+      }
+      this._bootLog('authenticated');
+      this.log('WhatsApp autenticado; aguardando estado pronto...', 'info');
+    });
+
+    this.client.on('change_state', (state) => {
+      receivedBootEvent = true;
+      this._bootLog('change_state', this._startTime, String(state || 'desconhecido'));
+    });
+
     this.client.on('ready', () => {
+      receivedBootEvent = true;
       clearTimers();
       this.lastQrUrl = null;
       // WhatsApp Web can emit old synced messages after a session reconnects.
@@ -397,6 +522,7 @@ class IACWhatsAppService extends EventEmitter {
       this._processedMessageOrder = [];
       this.setStatus('connected');
       const seg = ((Date.now() - this._startTime) / 1000).toFixed(1);
+      this._bootLog('ready');
       this.log(`Conectado! Número: ${this.client.info.wid.user} — ${seg}s`, 'success');
       try {
         const { getDB } = require('../database');
@@ -406,13 +532,17 @@ class IACWhatsAppService extends EventEmitter {
     });
 
     this.client.on('auth_failure', () => {
+      receivedBootEvent = true;
       clearTimers();
+      this._bootLog('auth_failure');
       this.setStatus('stopped');
       this.log('Falha de autenticação. Delete a pasta .wwebjs_auth e tente novamente.', 'error');
     });
 
     this.client.on('disconnected', (reason) => {
+      receivedBootEvent = true;
       clearTimers();
+      this._bootLog('disconnected', this._startTime, String(reason || 'desconhecido'));
       this.setStatus('stopped');
       // reason pode ser: NAVIGATION, CONFLICT, UNLAUNCHED, UNPAIRED, LOGOUT, etc.
       this.log(`WhatsApp desconectado. Motivo: ${reason || 'desconhecido'}`, 'warning');
@@ -422,8 +552,10 @@ class IACWhatsAppService extends EventEmitter {
       this.log(`Erro não capturado em _handleMessage: ${err.message}`, 'error');
     }));
 
+    this._bootLog('initialize chamado');
     this.client.initialize().catch(async (err) => {
       clearTimers();
+      this._bootLog('initialize erro', this._startTime, err?.message || String(err));
       this.client = null;
       this.setStatus('stopped');
       this.log(`Falha ao inicializar: ${err.message}`, 'error');
@@ -456,9 +588,8 @@ class IACWhatsAppService extends EventEmitter {
     }
   }
 
-  _resolveAuthClientId(channel, empresaId) {
+  _warnLegacySessions(channel, empresaId) {
     const configured = channel?.auth_client_id || `iac_ch_${channel?.id}`;
-    if (_sessionLooksAuthenticated(configured)) return configured;
 
     const empresas = Array.isArray(channel?.empresas) ? channel.empresas : [];
     const candidates = [
@@ -471,13 +602,19 @@ class IACWhatsAppService extends EventEmitter {
       .map(id => `iac_${id}`);
 
     const legacy = candidates.find(_sessionLooksAuthenticated);
-    if (!legacy) return configured;
+    if (!legacy || legacy === configured) return;
 
     this.log(
-      `Sessao autenticada "${configured}" nao encontrada; usando sessao existente "${legacy}".`,
+      `Sessao legada "${legacy}" encontrada, mas o canal usara a sessao oficial "${configured}".`,
       'warning'
     );
-    return legacy;
+  }
+
+  _resolveConfiguredAuthClientId(channel, empresaId) {
+    const configured = _safeAuthClientId(channel?.auth_client_id || _channelAuthClientId(channel));
+
+    if (!configured && empresaId) return _safeAuthClientId(`iac_${empresaId}`);
+    return configured;
   }
 
   async stop() {

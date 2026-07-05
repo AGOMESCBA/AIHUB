@@ -79,7 +79,6 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
     }
   );
 
-  // ── IMPORTAR DE ARQUIVO SDB (SQLite exportado pelo Protheus) ─────────────
   app.post('/api/ia-command/protheus/sx3/import-sdb',
     requireAuth, requireIaCommand, canSX3,
     (req, res) => {
@@ -90,30 +89,26 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
 
       const conexaoId = req.query.conexao_id;
       const limpar    = req.query.limpar !== 'false';
-      const tmp       = path.join(os.tmpdir(), `sx3_import_${Date.now()}.sdb`);
+      const tmp       = path.join(os.tmpdir(), `sx3_import_${Date.now()}_${Math.random().toString(36).slice(2)}.sdb`);
 
       if (!conexaoId) return res.status(400).json({ error: 'Informe conexao_id.' });
-      const conn = _verificarConexao(conexaoId, eid(req));
+      const empresaId = eid(req);
+      const conn = _verificarConexao(conexaoId, empresaId);
       if (!conn) return res.status(404).json({ error: 'Conexao nao encontrada.' });
 
       const out = fs.createWriteStream(tmp);
       pipeline(req, out)
         .then(() => {
-          const sdb = new (require('better-sqlite3'))(tmp, { readonly: true });
-          let rows;
-          try {
-            rows = sdb.prepare("SELECT * FROM localfile WHERE D_E_L_E_T_ != '*'").all();
-          } finally {
-            sdb.close();
+          const total = _importarSdbLocalfile(tmp, conexaoId, empresaId, limpar);
+          if (!total) {
+            return res.json({ importados: 0, aviso: 'O arquivo SDB nao contem registros validos na tabela localfile.' });
           }
-          if (!rows || rows.length === 0) {
-            return res.json({ importados: 0, aviso: 'O arquivo SDB não contém registros na tabela localfile.' });
-          }
-          const total = _salvarRegistros(conexaoId, eid(req), rows.map(_normalizarRegistroSX3), limpar);
-          _invalidarMetaSX3(eid(req));
+          _invalidarMetaSX3(empresaId);
           res.json({ importados: total });
         })
-        .catch(e => res.status(500).json({ error: e.message }))
+        .catch(e => {
+          if (!res.headersSent) res.status(500).json({ error: e.message });
+        })
         .finally(() => { try { fs.unlinkSync(tmp); } catch (_) {} });
     }
   );
@@ -259,6 +254,64 @@ function _salvarRegistros(conexaoId, empresaId, registros, limpar = true) {
   })(registros);
 
   return db.prepare('SELECT COUNT(*) AS n FROM protheus_sx3 WHERE connection_id = ?').get(conexaoId).n;
+}
+
+function _importarSdbLocalfile(arquivo, conexaoId, empresaId, limpar = true) {
+  const sqlite = new (require('better-sqlite3'))(arquivo, { readonly: true, fileMustExist: true });
+  try {
+    const tabela = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND lower(name) = 'localfile'").get();
+    if (!tabela) return 0;
+
+    const colunas = sqlite.prepare('PRAGMA table_info(localfile)').all().map(c => String(c.name || '').toUpperCase());
+    const temDelete = colunas.includes('D_E_L_E_T_');
+    const sql = temDelete
+      ? "SELECT * FROM localfile WHERE COALESCE(D_E_L_E_T_, '') <> '*'"
+      : 'SELECT * FROM localfile';
+
+    const db = getDB();
+    const agora = new Date().toISOString();
+    const del = db.prepare('DELETE FROM protheus_sx3 WHERE connection_id = ?');
+    const ins = limpar
+      ? db.prepare(`INSERT OR IGNORE INTO protheus_sx3
+          (connection_id, empresa_id, tabela, campo, tipo, tamanho, decimal, titulo, descricao, usado, ordem, criado_em, atualizado_em)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      : db.prepare(`INSERT INTO protheus_sx3
+          (connection_id, empresa_id, tabela, campo, tipo, tamanho, decimal, titulo, descricao, usado, ordem, criado_em, atualizado_em)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+          ON CONFLICT(connection_id, tabela, campo) DO UPDATE SET
+            tipo=excluded.tipo, tamanho=excluded.tamanho, decimal=excluded.decimal,
+            titulo=excluded.titulo, descricao=excluded.descricao, usado=excluded.usado,
+            ordem=excluded.ordem, atualizado_em=excluded.atualizado_em`);
+
+    let total = 0;
+    let lote = [];
+    const inserirLote = db.transaction((recs, apagarAntes) => {
+      if (apagarAntes) del.run(conexaoId);
+      for (const raw of recs) {
+        const r = _normalizarRegistroSX3(raw);
+        if (!r.tabela || !r.campo) continue;
+        ins.run(conexaoId, empresaId, r.tabela, r.campo, r.tipo, r.tamanho, r.decimal, r.titulo, r.descricao, r.usado, r.ordem, agora, agora);
+        total++;
+      }
+    });
+
+    let primeiroLote = true;
+    for (const row of sqlite.prepare(sql).iterate()) {
+      lote.push(row);
+      if (lote.length >= 1000) {
+        inserirLote(lote, limpar && primeiroLote);
+        primeiroLote = false;
+        lote = [];
+      }
+    }
+    if (lote.length || (limpar && primeiroLote)) {
+      inserirLote(lote, limpar && primeiroLote);
+    }
+
+    return total;
+  } finally {
+    sqlite.close();
+  }
 }
 
 module.exports._normalizarRegistroSX3 = _normalizarRegistroSX3;
