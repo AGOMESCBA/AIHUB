@@ -160,6 +160,7 @@
     setTimeout(_updateScrollBtns, 350);
     _syncSidebarActive(url);
     _setTopbarTitle(t);
+    _syncTopbarHelp(t);
     _saveState();
   }
 
@@ -462,14 +463,227 @@
             <span>Ajuda</span>`;
           helpBtn.addEventListener('click', (e) => {
             e.preventDefault(); e.stopPropagation();
-            try { frame.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin); } catch(_) {}
+            try {
+              if (typeof frame.contentWindow.abrirAjuda === 'function') frame.contentWindow.abrirAjuda();
+              else frame.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin);
+            } catch(_) {}
           });
           bar.appendChild(helpBtn);
         }
         const main = doc.querySelector('.main') || doc.body;
         main.insertBefore(bar, main.firstChild);
       }
+      _enhanceHelpDrawer(doc, tab);
+      if (tab && frame.classList.contains('active')) _syncTopbarHelp(tab);
     } catch (_) {}
+  }
+
+  function _enhanceHelpDrawer(doc, tab) {
+    if (!/whatsapp-services\.html(?:$|\?)/.test(tab?.url || '')) return;
+    const drawer = doc.getElementById('help-drawer');
+    if (!drawer || drawer.dataset.mdiHelpEnhanced === '1') return;
+    const body = drawer.querySelector('.help-drawer-body');
+    if (!body) return;
+
+    drawer.dataset.mdiHelpEnhanced = '1';
+    const title = drawer.querySelector('.help-drawer-title')?.textContent || tab?.label || 'Ajuda';
+    const profile = _helpProfile(tab?.url || '', title);
+
+    const style = doc.createElement('style');
+    style.id = '_mdi-help-enhance-style';
+    style.textContent = `
+      .mdi-help-updated { padding: 18px 22px 8px; border-bottom: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #fff); }
+      .mdi-help-kicker { color: var(--accent, #7c3aed); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+      .mdi-help-lead { color: var(--text-hi, #0f172a); font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
+      .mdi-help-visual { border: 1px solid var(--border, #e2e8f0); border-radius: 8px; background: linear-gradient(180deg, rgba(124,58,237,.06), rgba(14,165,233,.04)); margin: 12px 0 14px; overflow: hidden; }
+      .mdi-help-visual svg { display: block; width: 100%; height: auto; }
+      .mdi-help-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--border, #e2e8f0); margin-top: 8px; overflow-x: auto; }
+      .mdi-help-tab { border: 0; background: transparent; color: var(--text-lo, #64748b); cursor: pointer; padding: 9px 8px; font: inherit; font-size: 12px; font-weight: 800; border-bottom: 2px solid transparent; white-space: nowrap; }
+      .mdi-help-tab.active { color: var(--accent, #7c3aed); border-bottom-color: var(--accent, #7c3aed); }
+      .mdi-help-panel { display: none; padding: 14px 0 4px; }
+      .mdi-help-panel.active { display: block; }
+      .mdi-help-grid { display: grid; gap: 10px; }
+      .mdi-help-card { border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 11px 12px; background: var(--bg-base, #f8fafc); }
+      .mdi-help-card b { display: block; color: var(--text-hi, #0f172a); font-size: 13px; margin-bottom: 4px; }
+      .mdi-help-card span { display: block; color: var(--text-md, #475569); font-size: 12.5px; line-height: 1.55; }
+      .mdi-help-old-title { margin: 16px 0 10px; padding-top: 14px; border-top: 1px solid var(--border, #e2e8f0); color: var(--text-lo, #64748b); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    `;
+    doc.head.appendChild(style);
+
+    const wrap = doc.createElement('div');
+    wrap.className = 'mdi-help-updated';
+    wrap.innerHTML = `
+      <div class="mdi-help-kicker">Help atualizado do IA Command</div>
+      <p class="mdi-help-lead">${profile.lead}</p>
+      <div class="mdi-help-visual" aria-hidden="true">${_helpSvg(profile)}</div>
+      <div class="mdi-help-tabs">
+        <button class="mdi-help-tab active" type="button" data-help-panel="visao">Vis&atilde;o</button>
+        <button class="mdi-help-tab" type="button" data-help-panel="fluxo">Fluxo</button>
+        <button class="mdi-help-tab" type="button" data-help-panel="operacao">Opera&ccedil;&atilde;o</button>
+      </div>
+      <div class="mdi-help-panel active" data-help-panel-id="visao">${_helpCards(profile.visao)}</div>
+      <div class="mdi-help-panel" data-help-panel-id="fluxo">${_helpCards(profile.fluxo)}</div>
+      <div class="mdi-help-panel" data-help-panel-id="operacao">${_helpCards(profile.operacao)}</div>
+    `;
+
+    body.insertBefore(wrap, body.firstChild);
+    const oldTitle = doc.createElement('div');
+    oldTitle.className = 'mdi-help-old-title';
+    oldTitle.textContent = 'Detalhes da tela';
+    body.insertBefore(oldTitle, wrap.nextSibling);
+
+    wrap.addEventListener('click', (e) => {
+      const btn = e.target.closest('.mdi-help-tab');
+      if (!btn) return;
+      const id = btn.dataset.helpPanel;
+      wrap.querySelectorAll('.mdi-help-tab').forEach(item => item.classList.toggle('active', item === btn));
+      wrap.querySelectorAll('.mdi-help-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.helpPanelId === id));
+    });
+  }
+
+  function _helpCards(items) {
+    return `<div class="mdi-help-grid">${items.map(item => `
+      <div class="mdi-help-card"><b>${item.t}</b><span>${item.d}</span></div>
+    `).join('')}</div>`;
+  }
+
+  function _helpProfile(url, title) {
+    const key = `${url} ${title}`.toLowerCase();
+    const commonGrid = {
+      t: 'Grid evoluida',
+      d: 'Use busca, filtros por coluna, ordenacao e agrupamento para chegar ao registro certo antes de abrir detalhes ou executar acoes.'
+    };
+
+    if (/interpretacoes|execucoes|auditoria|logs|consumo/.test(key)) return {
+      tone: 'trace',
+      lead: 'Esta tela ajuda a diagnosticar o que a IA fez: entrada recebida, pipeline utilizado, SQL canonico, SQL executado, duracao e alertas de validacao.',
+      visao: [
+        { t: 'Observabilidade', d: 'Use a tela para investigar respostas incorretas, lentidao, quedas para pipeline classico e reaproveitamento canonico entre empresas.' },
+        commonGrid,
+        { t: 'Leitura principal', d: 'Comece por status, periodo, empresa, modulo e badges do pipeline antes de abrir SQL ou payloads detalhados.' }
+      ],
+      fluxo: [
+        { t: 'Mensagem', d: 'A pergunta do usuario entra pelo WhatsApp ou teste interno e recebe contexto de empresa, canal e conversa.' },
+        { t: 'IA e validacao', d: 'O sistema tenta resolver a intencao, gerar consulta segura e validar limites antes de tocar no ERP.' },
+        { t: 'Resposta', d: 'O historico registra resultado, erro, duracao, SQL final e avisos para facilitar correcao fina.' }
+      ],
+      operacao: [
+        { t: 'Quando usar', d: 'Use apos uma resposta estranha, consulta lenta, retorno vazio, erro de middleware ou duvida sobre qual modulo respondeu.' },
+        { t: 'Sinais importantes', d: 'Badges de chat-first, classico, reuso canonico, validacao e fallback costumam explicar a maior parte dos casos.' },
+        { t: 'Proximo passo', d: 'Com o diagnostico em maos, ajuste dataset, equivalencias, sinonimos, SX2/SX3 ou regras do modulo responsavel.' }
+      ]
+    };
+
+    if (/whatsapp|monitor|canai|mensagens|numero|services/.test(key)) return {
+      tone: 'whatsapp',
+      lead: 'Esta tela faz parte da operacao WhatsApp: canais, numeros, sessoes, servicos Windows, mensagens recebidas e saude do bot.',
+      visao: [
+        { t: 'Canal por empresa', d: 'Cada numero deve estar vinculado a empresa, conexao ERP e configuracao de atendimento correta.' },
+        commonGrid,
+        { t: 'Estado operacional', d: 'Conectado, aguardando QR, parado e sem servico indicam pontos diferentes da cadeia WhatsApp.' }
+      ],
+      fluxo: [
+        { t: 'Recepcao', d: 'A mensagem chega no canal, identifica empresa e contato, e segue para a camada de IA.' },
+        { t: 'Consulta', d: 'A IA interpreta a pergunta, consulta o ERP quando necessario e registra rastros para auditoria.' },
+        { t: 'Envio', d: 'A resposta volta pelo canal ativo; falhas aparecem no monitor, mensagens e historico de execucao.' }
+      ],
+      operacao: [
+        { t: 'Primeiro checklist', d: 'Confirme servico iniciado, QR autenticado, empresa correta, conexao ativa e permissoes do usuario.' },
+        { t: 'Falhas comuns', d: 'Sessao expirada, numero sem servico, canal sem empresa, conexao ERP indisponivel ou pergunta fora do escopo.' },
+        { t: 'Boa pratica', d: 'Use numeros dedicados ao bot e acompanhe mensagens recentes antes de reiniciar servicos.' }
+      ]
+    };
+
+    if (/dataset|conex|middleware|protheus|sx2|sx3|dicion/.test(key)) return {
+      tone: 'data',
+      lead: 'Esta area define como a IA entende o Protheus: conexoes, dicionarios, datasets SQL, campos permitidos e protecoes antes de consultar o ERP.',
+      visao: [
+        { t: 'Base tecnica da IA', d: 'Conexao, SX2/SX3, datasets e middleware formam o contrato entre linguagem natural e consulta segura.' },
+        commonGrid,
+        { t: 'Impacto direto', d: 'Uma descricao boa de tabela, campo, periodo e relacionamento melhora a resposta sem precisar alterar codigo.' }
+      ],
+      fluxo: [
+        { t: 'Pergunta', d: 'O usuario pede uma analise em linguagem natural.' },
+        { t: 'Mapeamento', d: 'A IA cruza intencao, datasets, sinonimos, SX2/SX3 e regras de periodo para montar o plano.' },
+        { t: 'Protecao', d: 'O middleware valida SQL, tabelas, colunas e limites antes da execucao.' }
+      ],
+      operacao: [
+        { t: 'Ao cadastrar', d: 'Prefira nomes de negocio, exemplos reais, filtros de periodo claros e campos textuais bem descritos.' },
+        { t: 'Ao depurar', d: 'Compare SQL canonico com SQL executado e veja se a tabela fisica, filial, delete logico e periodo foram aplicados.' },
+        { t: 'Evite', d: 'Datasets duplicados, descricoes genericas e campos criticos sem sinonimos de negocio.' }
+      ]
+    };
+
+    if (/intenc|modulo|sinon|normaliza|dialog/.test(key)) return {
+      tone: 'language',
+      lead: 'Esta tela cuida da camada linguistica: como a IA reconhece assunto, vocabulario do usuario, dialogos sem ERP e variacoes de escrita.',
+      visao: [
+        { t: 'Entendimento de linguagem', d: 'Modulos, intencoes, sinonimos, equivalencias e normalizacao reduzem ambiguidades nas perguntas.' },
+        commonGrid,
+        { t: 'Quando mexer aqui', d: 'Ajuste quando a IA escolhe o modulo errado, nao entende um termo do negocio ou responde consulta para uma saudacao.' }
+      ],
+      fluxo: [
+        { t: 'Texto bruto', d: 'A mensagem passa por normalizacao e pistas de vocabulario.' },
+        { t: 'Classificacao', d: 'A IA combina exemplos, palavras-chave, intencoes e contexto da conversa.' },
+        { t: 'Resposta', d: 'Pode seguir para ERP, pedir esclarecimento ou retornar um dialogo conversacional.' }
+      ],
+      operacao: [
+        { t: 'Bons exemplos', d: 'Use frases reais dos usuarios, com variacoes de nomes, abreviacoes e perguntas incompletas.' },
+        { t: 'Equivalencias', d: 'Cadastre termos de negocio que nao aparecem no Protheus, como apelidos de clientes, produtos ou indicadores.' },
+        { t: 'Cuidado', d: 'Sinonimos amplos demais podem puxar uma pergunta para o modulo errado.' }
+      ]
+    };
+
+    return {
+      tone: 'overview',
+      lead: 'Esta ajuda foi atualizada para refletir o IA Command atual: operacao por abas, troca de empresa por rotina, grids com filtros e rastreabilidade de IA.',
+      visao: [
+        { t: 'Tela dentro do MDI', d: 'Cada rotina abre em uma aba e pode manter empresa propria, filtros e contexto enquanto voce navega.' },
+        commonGrid,
+        { t: 'Ajuda contextual', d: 'O conteudo abaixo combina orientacao nova com os detalhes especificos que a tela ja possuia.' }
+      ],
+      fluxo: [
+        { t: 'Configurar', d: 'Revise empresas, conexoes, dicionarios, datasets, intencoes e canais.' },
+        { t: 'Operar', d: 'Acompanhe WhatsApp, mensagens, execucoes e interpretacoes.' },
+        { t: 'Ajustar', d: 'Use os rastros para melhorar vocabulario, SQL base e regras de seguranca.' }
+      ],
+      operacao: [
+        { t: 'Dica de navegacao', d: 'Use a barra superior da aba para trocar empresa e abrir esta ajuda sem sair da rotina.' },
+        { t: 'Dica de grid', d: 'Agrupamentos ajudam a ver volume por empresa, status, modulo ou periodo sem exportar dados.' },
+        { t: 'Dica de suporte', d: 'Ao reportar problema, envie empresa, horario, pergunta original e registro de interpretacao ou execucao.' }
+      ]
+    };
+  }
+
+  function _helpSvg(profile) {
+    const colors = {
+      trace: ['#7c3aed', '#0ea5e9', '#22c55e'],
+      whatsapp: ['#16a34a', '#0ea5e9', '#7c3aed'],
+      data: ['#0f766e', '#7c3aed', '#f59e0b'],
+      language: ['#7c3aed', '#db2777', '#0ea5e9'],
+      overview: ['#7c3aed', '#0ea5e9', '#22c55e']
+    }[profile.tone] || ['#7c3aed', '#0ea5e9', '#22c55e'];
+    return `
+      <svg viewBox="0 0 520 150" role="img" aria-label="Fluxo visual do help">
+        <defs>
+          <linearGradient id="mdiHelpGrad" x1="0" x2="1">
+            <stop offset="0" stop-color="${colors[0]}" stop-opacity=".16"/>
+            <stop offset="1" stop-color="${colors[1]}" stop-opacity=".12"/>
+          </linearGradient>
+        </defs>
+        <rect width="520" height="150" fill="url(#mdiHelpGrad)"/>
+        <g font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="800" text-anchor="middle">
+          <rect x="28" y="42" width="120" height="54" rx="8" fill="#fff" stroke="${colors[0]}" stroke-opacity=".38"/>
+          <text x="88" y="65" fill="#0f172a">Pergunta</text><text x="88" y="82" fill="#64748b" font-weight="600">usuario + empresa</text>
+          <path d="M156 69 H204" stroke="${colors[1]}" stroke-width="3" stroke-linecap="round"/><path d="M198 62 l10 7 -10 7" fill="none" stroke="${colors[1]}" stroke-width="3"/>
+          <rect x="212" y="42" width="120" height="54" rx="8" fill="#fff" stroke="${colors[1]}" stroke-opacity=".38"/>
+          <text x="272" y="65" fill="#0f172a">IA Command</text><text x="272" y="82" fill="#64748b" font-weight="600">contexto + regras</text>
+          <path d="M340 69 H388" stroke="${colors[2]}" stroke-width="3" stroke-linecap="round"/><path d="M382 62 l10 7 -10 7" fill="none" stroke="${colors[2]}" stroke-width="3"/>
+          <rect x="396" y="42" width="96" height="54" rx="8" fill="#fff" stroke="${colors[2]}" stroke-opacity=".42"/>
+          <text x="444" y="65" fill="#0f172a">Resultado</text><text x="444" y="82" fill="#64748b" font-weight="600">ERP ou dialogo</text>
+        </g>
+        <g fill="${colors[0]}" opacity=".12"><circle cx="54" cy="122" r="10"/><circle cx="470" cy="25" r="14"/><circle cx="260" cy="122" r="8"/></g>
+      </svg>`;
   }
 
   window.addEventListener('message', (e) => {
@@ -500,6 +714,15 @@
     const el = document.getElementById('shell-title');
     if (!el) return;
     el.textContent = tab ? `${tab.icon}  ${tab.label}` : 'IA Command';
+    _syncTopbarHelp(tab);
+  }
+
+  function _syncTopbarHelp(tab) {
+    const btn = document.getElementById('_ajuda-btn');
+    if (!btn) return;
+    let hasHelp = false;
+    try { hasHelp = !!tab?.frame?.contentDocument?.getElementById('help-drawer'); } catch (_) {}
+    btn.style.display = hasHelp ? '' : 'none';
   }
 
   function _updateScrollBtns() {

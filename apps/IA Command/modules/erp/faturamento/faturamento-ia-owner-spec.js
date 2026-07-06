@@ -109,6 +109,22 @@ function validarFiltroTipoSF2(sql = '') {
   return "SF2 usada sem filtro SF2.F2_TIPO. REGRA OBRIGATORIA: toda query de faturamento que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Adicione AND SF2.F2_TIPO = 'N' ao WHERE.";
 }
 
+function validarDeleteFiltros(sql = '') {
+  // Verifica tabelas do FROM/JOIN que estejam sem D_E_L_E_T_ filtrado.
+  // Aplica somente aos aliases padrão do módulo faturamento.
+  const texto = String(sql || '');
+  const aliases = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT'];
+  const faltando = [];
+  for (const alias of aliases) {
+    const reDeclarado = new RegExp(`\\b(?:FROM|JOIN)\\s+\\w+\\s+${alias}\\b`, 'i');
+    if (!reDeclarado.test(texto)) continue;
+    const reDelete = new RegExp(`\\b${alias}\\s*\\.\\s*D_E_L_E_T_\\s*=\\s*'\\s*'`, 'i');
+    if (!reDelete.test(texto)) faltando.push(alias);
+  }
+  if (!faltando.length) return null;
+  return `FROM/JOIN sem filtro D_E_L_E_T_: ${faltando.join(', ')}. REGRA ABSOLUTA: toda tabela no FROM ou JOIN deve ter alias.D_E_L_E_T_ = ' ' — tabela no FROM: WHERE alias.D_E_L_E_T_ = ' '; tabela em JOIN: AND alias.D_E_L_E_T_ = ' ' dentro do ON. Adicione os filtros faltantes.`;
+}
+
 function formatarPerguntaAmbiguidade(texto, candidatos = []) {
   const linhas = candidatos.map((c, i) => `${i + 1}. *${c.nome}* (${c.rotuloTipo || c.tipo}: ${c.codigo}${c.loja ? `/${c.loja}` : ''})`);
   linhas.push(`${candidatos.length + 1}. *Todos*`);
@@ -254,6 +270,10 @@ module.exports = {
       mensagem: 'JOIN com SD2 invalido quando a metrica e SUM(SF2.F2_VALBRUT). SD2 e tabela de itens: cada NF tem N linhas em SD2, o que multiplica F2_VALBRUT por N ao somar. Use apenas FROM SF2 quando a metrica for F2_VALBRUT. Inclua SD2 somente quando o SELECT ou GROUP BY precisar de campo D2_* (produto, quantidade, D2_TOTAL, TES, centro de custo).',
     },
     {
+      regex: /^(?![\s\S]*\bJOIN\s+\w+\s+SA1\b)[\s\S]*\bSA1\s*\.\s*A1_\w+/i,
+      mensagem: 'Campo SA1.A1_* usado sem JOIN SA1 declarado no FROM. Adicione JOIN SA1<sufixo> SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = \' \' antes de usar campos de cliente.',
+    },
+    {
       regex: /^(?![\s\S]*\bJOIN\s+\w+\s+SB1\b)[\s\S]*\bSB1\s*\.\s*B1_\w+/i,
       mensagem: 'Campo SB1.B1_* usado sem JOIN SB1 declarado no FROM. Adicione JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = " " antes de usar campos de produto.',
     },
@@ -270,6 +290,9 @@ module.exports = {
     },
     {
       validar: validarFiltroTipoSF2,
+    },
+    {
+      validar: validarDeleteFiltros,
     },
     {
       // Detecta LEFT JOIN SD1 ou LEFT JOIN SF1 fora de subquery UNION ALL (padrão proibido para devoluções).

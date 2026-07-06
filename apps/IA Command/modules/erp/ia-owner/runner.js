@@ -35,6 +35,26 @@ function _traceIaOwner(evento, dados = {}) {
 }
 
 // ── Cache de metadados ERP (configProtheus / SX2 / SX3) ────────────────────
+function _traceConnResumo(conn) {
+  const tipo = conn?.tipo || null;
+  const host = conn?.host || null;
+  const database = conn?.database || null;
+  let executeUrl = null;
+  if (tipo === 'api_proxy' && host) {
+    const base = String(host || '').replace(/\/$/, '');
+    const endpoint = String(database || '/rest/api/iacommand/v1').replace(/\/$/, '');
+    executeUrl = `${base}${endpoint}/execute`;
+  }
+  return {
+    tipo_conexao: tipo,
+    conexao_id: conn?.id || null,
+    agente_url: conn?._agente_url || null,
+    conn_host: host,
+    conn_database: database,
+    execute_url: executeUrl,
+  };
+}
+
 const _metaCache = new Map();
 const _META_TTL_MS = 5 * 60 * 1000;  // 5 minutos
 
@@ -2389,8 +2409,7 @@ async function executar(spec, intent, empresaId) {
       _traceIaOwner('ia_owner_erp_executar_inicio', {
         empresa_id: empresaId,
         tentativa,
-        tipo_conexao: conn?.tipo || null,
-        conexao_id: conn?.id || null,
+        ..._traceConnResumo(conn),
       });
       conn._pergunta   = mensagem;
       conn._sender     = intent._remetente || '';
@@ -2587,6 +2606,12 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
       auditoriaBase.sql_final_executado = preparado.sqlFinal;
       const conn = connectionFactory.carregarConexao(empresaId);
+      _traceIaOwner('ia_owner_erp_executar_inicio', {
+        empresa_id: empresaId,
+        tentativa: tentativaDireto,
+        origem: 'ia_owner_reuso',
+        ..._traceConnResumo(conn),
+      });
       conn._pergunta   = intent._mensagemOriginal || '';
       conn._sender     = intent._remetente        || '';
       conn._modulo     = spec.nome                || '';

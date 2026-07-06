@@ -53,6 +53,7 @@ function _request(url, method, body, apiKey) {
       sender:      body?.sender      || null,
       modulo:      body?.modulo      || null,
       empresa_id:  body?.empresa_id  || null,
+      token_prefix: apiKey ? apiKey.substring(0, 8) + '...' : '(vazio)',
     });
 
     const options = {
@@ -148,7 +149,7 @@ async function executar(conn, query, params = {}) {
 
 async function testar(conn) {
   const apiKey = conn.password;
-  const url    = _buildUrl(conn, '/ping');
+  const url    = _buildUrl(conn, '/apicommand');
   await _request(url, 'GET', null, apiKey);
   return true;
 }

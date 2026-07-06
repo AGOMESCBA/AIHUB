@@ -34,7 +34,7 @@ const WHATSAPP_MAX_MESSAGE_CHARS = 3500;
 const PIPELINE_TRACE_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'iac-whatsapp-pipeline.log');
 const WHATSAPP_INIT_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_INIT_TIMEOUT_MS || 180000));
 const WHATSAPP_POST_CLEANUP_WAIT_MS = Math.max(0, Number(process.env.IAC_WA_POST_CLEANUP_WAIT_MS || 1500));
-const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(30000, Number(process.env.IAC_WA_SILENT_SESSION_RETRY_MS || 45000));
+const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(60000, Number(process.env.IAC_WA_SILENT_SESSION_RETRY_MS || 90000));
 const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR_AUTH_TIMEOUT_MS || 300000));
 const NOMES_MODULOS_WHATSAPP = {
   compras:     'Compras',
@@ -94,16 +94,12 @@ const PUPPETEER_ARGS = [
   '--disable-default-apps', '--disable-sync', '--mute-audio',
   '--hide-scrollbars', '--metrics-recording-only',
   '--remote-debugging-port=0',  // porta aleatória — evita conflito entre instâncias
-  // Redução de footprint de memória — Chrome pode ser encerrado pelo SO (OOM) durante queries longas
+  // Estabilidade: não interfere com cache HTTP nem com LevelDB do WhatsApp Web
   '--disable-hang-monitor',
   '--disable-crash-reporter',
   '--disable-in-process-stack-traces',
-  '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-  '--js-flags=--max-old-space-size=512',  // limita heap V8 a 512MB
+  '--disable-features=TranslateUI',
   '--renderer-process-limit=1',
-  '--aggressive-cache-discard',
-  '--disable-cache',
-  '--disk-cache-size=1',
 ];
 
 function _sessionDirFor(clientId) {

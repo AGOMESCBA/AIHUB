@@ -71,9 +71,9 @@ $gitDir = Join-Path $PROJECT_ROOT ".git"
 $git = Get-Command git -ErrorAction SilentlyContinue
 
 if ($git -and (Test-Path $gitDir)) {
-    $trackedPaths = & git -C $PROJECT_ROOT ls-files
+    $trackedPaths = & git -C $PROJECT_ROOT ls-files --cached --others --exclude-standard
     if ($LASTEXITCODE -ne 0) {
-        throw "Nao foi possivel listar arquivos versionados com git ls-files."
+        throw "Nao foi possivel listar arquivos do projeto com git ls-files."
     }
 
     $files = $trackedPaths | ForEach-Object {

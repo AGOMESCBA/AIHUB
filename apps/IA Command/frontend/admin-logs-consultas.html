@@ -68,6 +68,21 @@
     .detail-close:hover { color:var(--text-hi); }
     .btn-danger { background:#dc2626;color:#fff;border:none; }
     .btn-danger:hover { background:#b91c1c; }
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(540px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
   </style>
 </head>
 <body>
@@ -216,6 +231,37 @@
       </div>
     </div><!-- /sec-detalhe -->
 
+  </div>
+</div>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda - Log de Consultas</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar">&times;</button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">O que este log mostra</div>
+      <div class="help-item-desc">Registra consultas feitas pela IA contra o ERP: pergunta original, modulo, SQL gerado, resposta entregue, tempos de processamento e trace tecnico. E a principal tela para auditar Text-to-SQL e diagnosticar respostas do WhatsApp.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Como ler a grid</div>
+      <div class="help-item"><div class="help-item-label">Modulo</div><div class="help-item-desc">Mostra a area de negocio que respondeu: compras, faturamento, financeiro, comissao ou outro modulo registrado.</div></div>
+      <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Sucesso indica consulta executada; Erro indica falha; Sem dados indica SQL valido com retorno vazio; Dialogo indica resposta sem consulta ao ERP.</div></div>
+      <div class="help-item"><div class="help-item-label">Tempos</div><div class="help-item-desc">Processamento mede a execucao principal; Pipeline e Entregue ajudam a separar lentidao de IA, ERP e envio pelo WhatsApp.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Detalhe da consulta</div>
+      <div class="help-item"><div class="help-item-label">Pergunta do usuario</div><div class="help-item-desc">Use para comparar o pedido real com a interpretacao da IA.</div></div>
+      <div class="help-item"><div class="help-item-label">SQL gerado</div><div class="help-item-desc">Copie o SQL para revisar tabelas, filtros, periodo, filial e joins. Se necessario, compare com SX2/SX3 e middleware.</div></div>
+      <div class="help-item"><div class="help-item-label">Trace</div><div class="help-item-desc">Mostra o caminho tecnico registrado durante a execucao. Ajuda a descobrir em qual etapa a consulta desviou ou falhou.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Boas praticas</div>
+      <div class="help-item-desc">Use agrupamento por modulo, status ou data para encontrar padroes. Consultas frequentes e estaveis podem virar datasets manuais. Consultas lentas podem indicar falta de indice, join pesado ou filtro de periodo insuficiente.</div>
+      <div class="help-tip">Limpar log remove registros definitivamente. Prefira limpar por periodo e modulo quando estiver fazendo manutencao.</div>
+    </div>
   </div>
 </div>
 
@@ -533,8 +579,12 @@
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if (document.getElementById('cleanup-overlay')?.style.display === 'flex') fecharLimpeza();
+    else if (document.getElementById('help-drawer')?.classList.contains('open')) fecharAjuda();
     else if (document.getElementById('sec-detalhe').style.display !== 'none') fecharDetalhe();
   });
+
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
 
   window._iahubAuthReady?.then(carregar) ?? carregar();
 </script>

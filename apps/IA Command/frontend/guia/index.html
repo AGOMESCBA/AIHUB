@@ -6,43 +6,44 @@
   <title>Guia de Uso - IA Command</title>
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
-    :root { --accent: #7c3aed; --accent-2: #a78bfa; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.10); }
-    body { overflow: hidden; }
+    :root { --accent: #7c3aed; --accent-2: #a78bfa; --accent-light: #a78bfa; --accent-glow: rgba(124,58,237,.10); --shadow-sm: 0 1px 2px rgba(17,12,34,.04), 0 1px 1px rgba(17,12,34,.03); --shadow-md: 0 4px 14px rgba(76,29,149,.08), 0 1px 3px rgba(17,12,34,.04); --shadow-lg: 0 12px 32px rgba(76,29,149,.14), 0 2px 6px rgba(17,12,34,.06); }
+    body { overflow: hidden; -webkit-font-smoothing: antialiased; }
     .guia-layout { display: flex; height: 100vh; overflow: hidden; }
-    .guia-nav { width: 278px; min-width: 278px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-    .guia-nav-header { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .guia-nav { width: 284px; min-width: 284px; background: var(--bg-sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .guia-nav-header { padding: 22px 20px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
     .guia-nav-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-    .logo-icon { width: 30px; height: 30px; min-width: 30px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: #fff; }
-    .guia-nav-logo span { font-size: 15px; font-weight: 800; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-    .guia-nav-subtitle { font-size: 11px; color: var(--text-lo); margin-top: 2px; padding-left: 40px; }
-    .guia-nav-body { overflow-y: auto; flex: 1; padding: 12px 0; }
+    .logo-icon { width: 32px; height: 32px; min-width: 32px; background: linear-gradient(145deg, var(--accent), var(--accent-2)); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: #fff; box-shadow: var(--shadow-md); }
+    .guia-nav-logo span { font-size: 15.5px; font-weight: 800; letter-spacing: -.01em; background: linear-gradient(135deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .guia-nav-subtitle { font-size: 11px; color: var(--text-lo); margin-top: 2px; padding-left: 42px; }
+    .guia-nav-body { overflow-y: auto; flex: 1; padding: 14px 0; }
     .guia-nav-body::-webkit-scrollbar { width: 4px; }
     .guia-nav-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-    .nav-fase-hdr { display: flex; align-items: center; gap: 8px; padding: 10px 16px 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); cursor: pointer; user-select: none; }
+    .nav-fase-hdr { display: flex; align-items: center; gap: 8px; padding: 12px 16px 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--text-lo); cursor: pointer; user-select: none; }
     .nav-fase-hdr:hover { color: var(--text-md); }
     .nav-fase-num { width: 20px; height: 20px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--text-md); flex-shrink: 0; }
-    .nav-etapa { display: flex; align-items: center; gap: 10px; padding: 7px 16px 7px 44px; font-size: 12.5px; color: var(--text-md); cursor: pointer; transition: background var(--transition), color var(--transition); text-decoration: none; }
+    .nav-etapa { display: flex; align-items: center; gap: 10px; padding: 7px 16px 7px 44px; font-size: 12.5px; color: var(--text-md); cursor: pointer; transition: background .15s ease, color .15s ease; text-decoration: none; border-radius: 0 20px 20px 0; margin-right: 8px; }
     .nav-etapa:hover { background: var(--bg-hover); color: var(--text-hi); }
     .nav-etapa.active { background: var(--accent-glow); color: var(--accent); font-weight: 700; }
-    .nav-etapa-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-hi); flex-shrink: 0; }
-    .nav-etapa.active .nav-etapa-dot { background: var(--accent); }
+    .nav-etapa-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-hi); flex-shrink: 0; transition: background .15s ease, transform .15s ease; }
+    .nav-etapa.active .nav-etapa-dot { background: var(--accent); transform: scale(1.3); }
     .guia-nav-footer { padding: 14px 16px; border-top: 1px solid var(--border); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
-    .nav-back-btn, .nav-pdf-btn { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; font-size: 12px; cursor: pointer; transition: background var(--transition), color var(--transition), border-color var(--transition); width: 100%; text-decoration: none; }
+    .nav-back-btn, .nav-pdf-btn { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; font-size: 12px; cursor: pointer; transition: background .15s ease, color .15s ease, border-color .15s ease, transform .1s ease; width: 100%; text-decoration: none; }
     .nav-back-btn { color: var(--text-md); border: none; background: none; }
     .nav-back-btn:hover { background: var(--bg-hover); color: var(--text-hi); }
-    .nav-pdf-btn { font-weight: 800; color: var(--accent); border: 1px solid rgba(124,58,237,.25); background: rgba(124,58,237,.06); }
-    .nav-pdf-btn:hover { background: rgba(124,58,237,.13); border-color: var(--accent); }
-    .guia-content { flex: 1; overflow-y: auto; background: var(--bg-base); padding: 32px 40px; }
+    .nav-pdf-btn { font-weight: 800; color: #fff; border: none; background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: var(--shadow-sm); }
+    .nav-pdf-btn:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+    .guia-content { flex: 1; overflow-y: auto; background: var(--bg-base); padding: 32px 44px 60px; }
     .guia-content::-webkit-scrollbar { width: 6px; }
     .guia-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-    .guia-hero { background: linear-gradient(135deg, #6d28d9 0%, #a78bfa 100%); border-radius: var(--radius); padding: 32px 36px; margin-bottom: 36px; color: #fff; }
-    .guia-hero h1 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
-    .guia-hero p { font-size: 14px; opacity: .90; max-width: 760px; line-height: 1.75; }
-    .guia-hero-meta { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-    .guia-hero-badge { background: rgba(255,255,255,.20); border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 700; }
-    .fase-section { margin-bottom: 48px; scroll-margin-top: 24px; }
-    .fase-header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 2px solid var(--border); }
-    .fase-badge { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; font-size: 14px; font-weight: 900; color: #fff; flex-shrink: 0; }
+    .guia-hero { position: relative; background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 55%, #a78bfa 100%); border-radius: 18px; padding: 36px 40px; margin-bottom: 40px; color: #fff; overflow: hidden; box-shadow: var(--shadow-lg); }
+    .guia-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 88% 12%, rgba(255,255,255,.16) 0%, transparent 45%), radial-gradient(circle at 8% 92%, rgba(255,255,255,.10) 0%, transparent 40%); pointer-events: none; }
+    .guia-hero h1 { position: relative; font-size: 24px; font-weight: 800; letter-spacing: -.01em; margin-bottom: 9px; }
+    .guia-hero p { position: relative; font-size: 14px; opacity: .92; max-width: 760px; line-height: 1.75; }
+    .guia-hero-meta { position: relative; display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+    .guia-hero-badge { background: rgba(255,255,255,.16); backdrop-filter: blur(2px); border: 1px solid rgba(255,255,255,.22); border-radius: 20px; padding: 5px 14px; font-size: 12px; font-weight: 700; }
+    .fase-section { margin-bottom: 52px; scroll-margin-top: 24px; }
+    .fase-header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 2px solid var(--border); }
+    .fase-badge { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 12px; font-size: 14px; font-weight: 900; color: #fff; flex-shrink: 0; box-shadow: var(--shadow-sm); }
     .f1 { background: linear-gradient(135deg, #7c3aed, #a78bfa); }
     .f2 { background: linear-gradient(135deg, #0891b2, #0e7490); }
     .f3 { background: linear-gradient(135deg, #059669, #15803d); }
@@ -50,13 +51,14 @@
     .f5 { background: linear-gradient(135deg, #dc2626, #b91c1c); }
     .f6 { background: linear-gradient(135deg, #0284c7, #0369a1); }
     .f7 { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
-    .fase-titulo h2 { font-size: 17px; font-weight: 800; color: var(--text-hi); margin-bottom: 2px; }
+    .fase-titulo h2 { font-size: 17.5px; font-weight: 800; letter-spacing: -.005em; color: var(--text-hi); margin-bottom: 2px; }
     .fase-titulo p { font-size: 12px; color: var(--text-lo); }
-    .etapa-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; scroll-margin-top: 24px; }
-    .etapa-card-header { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--bg-hover); cursor: pointer; user-select: none; }
-    .etapa-num { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-glow); padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
-    .etapa-titulo { flex: 1; font-size: 14px; font-weight: 800; color: var(--text-hi); }
-    .etapa-arrow { font-size: 12px; color: var(--text-lo); transition: transform var(--transition); }
+    .etapa-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; overflow: hidden; scroll-margin-top: 24px; box-shadow: var(--shadow-sm); transition: box-shadow .2s ease; }
+    .etapa-card.open { box-shadow: var(--shadow-md); }
+    .etapa-card-header { display: flex; align-items: center; gap: 12px; padding: 17px 20px; border-bottom: 1px solid var(--border); background: var(--bg-hover); cursor: pointer; user-select: none; }
+    .etapa-num { font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-glow); padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+    .etapa-titulo { flex: 1; font-size: 14px; font-weight: 800; letter-spacing: -.003em; color: var(--text-hi); }
+    .etapa-arrow { font-size: 12px; color: var(--text-lo); transition: transform .25s ease; }
     .etapa-card.open .etapa-arrow { transform: rotate(180deg); }
     .etapa-body { max-height: 0; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
     .etapa-card.open .etapa-body { max-height: 8000px; }
@@ -64,7 +66,8 @@
     .etapa-desc { font-size: 13.5px; color: var(--text-md); line-height: 1.75; margin-bottom: 16px; }
     .campo-secao { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin: 18px 0 7px; }
     .campo-lista { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
-    .campo-item { border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; background: var(--bg-card); }
+    .campo-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; background: var(--bg-card); transition: border-color .15s ease; }
+    .campo-item:hover { border-color: var(--border-hi); }
     .campo-obrigatorio { border-left: 3px solid var(--accent); }
     .campo-nome { font-size: 13px; font-weight: 800; color: var(--text-hi); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .campo-req { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); background: var(--accent-glow); padding: 1px 7px; border-radius: 10px; }
@@ -74,15 +77,15 @@
     .step-num { width: 24px; height: 24px; min-width: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
     .step-body { font-size: 13px; color: var(--text-md); line-height: 1.65; flex: 1; }
     .step-body strong { color: var(--text-hi); }
-    .callout { display: flex; gap: 12px; border-radius: 8px; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; color: var(--text-md); }
+    .callout { display: flex; gap: 12px; border-radius: 10px; padding: 14px 16px; margin: 14px 0; font-size: 13px; line-height: 1.6; color: var(--text-md); box-shadow: var(--shadow-sm); }
     .callout-icon { font-weight: 900; flex-shrink: 0; margin-top: 1px; }
     .callout.info { background: rgba(124,58,237,.08); border-left: 3px solid var(--accent); }
     .callout.warning { background: rgba(217,119,6,.08); border-left: 3px solid #d97706; }
     .callout.success { background: rgba(5,150,105,.08); border-left: 3px solid #059669; }
     .callout.danger { background: rgba(220,38,38,.08); border-left: 3px solid #dc2626; }
-    .guia-table-wrap { overflow-x: auto; margin: 14px 0; }
+    .guia-table-wrap { overflow-x: auto; margin: 14px 0; border-radius: 12px; box-shadow: var(--shadow-sm); }
     .guia-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .guia-table th { text-align: left; padding: 9px 14px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--text-lo); border-bottom: 2px solid var(--border); background: var(--bg-hover); }
+    .guia-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--text-lo); border-bottom: 2px solid var(--border); background: var(--bg-hover); }
     .guia-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text-md); vertical-align: top; }
     .tag { display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 10px; background: var(--accent-glow); color: var(--accent); }
     .tag-green { background: rgba(5,150,105,.10); color: #059669; }
@@ -90,10 +93,10 @@
     .tag-red { background: rgba(220,38,38,.10); color: #dc2626; }
     .tag-blue { background: rgba(2,132,199,.10); color: #0284c7; }
     .code-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin: 16px 0 6px; }
-    .code-block { background: #1e1e2e; border-radius: 8px; padding: 16px 18px; margin: 12px 0; font-family: Consolas, "Courier New", monospace; font-size: 12.5px; line-height: 1.6; color: #cdd6f4; overflow-x: auto; white-space: pre; }
-    .diagrama-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin: 16px 0; overflow-x: auto; }
+    .code-block { background: #1e1e2e; border-radius: 10px; padding: 16px 18px; margin: 12px 0; font-family: Consolas, "Courier New", monospace; font-size: 12.5px; line-height: 1.6; color: #cdd6f4; overflow-x: auto; white-space: pre; box-shadow: var(--shadow-sm); }
+    .diagrama-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin: 16px 0; overflow-x: auto; box-shadow: var(--shadow-sm); }
     .diagrama-titulo { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--text-lo); margin-bottom: 16px; }
-    .screen-mock { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 14px 0; }
+    .screen-mock { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin: 14px 0; box-shadow: var(--shadow-sm); }
     .screen-mock-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
     .screen-mock-title { font-size: 12px; font-weight: 700; color: var(--text-md); flex: 1; text-align: center; }
     .screen-mock-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -118,10 +121,15 @@
     <div class="guia-nav-body">
       <div class="nav-fase-hdr" onclick="scrollFase('f1')"><div class="nav-fase-num">1</div>Visão Geral</div>
       <a class="nav-etapa" onclick="abrirEtapa('e1-1',event)"><div class="nav-etapa-dot"></div>O que é o IA Command</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-2',event)"><div class="nav-etapa-dot"></div>Arquitetura IA-first</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-3',event)"><div class="nav-etapa-dot"></div>Motor de Classificação</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-4',event)"><div class="nav-etapa-dot"></div>Multi-turn e Contexto</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-2',event)"><div class="nav-etapa-dot"></div>Arquitetura em Nuvem</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-3',event)"><div class="nav-etapa-dot"></div>Agente Local x Conexão Direta</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-4',event)"><div class="nav-etapa-dot"></div>Fluxo da Mensagem</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-5',event)"><div class="nav-etapa-dot"></div>Arquitetura IA-first (SPEC)</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-6',event)"><div class="nav-etapa-dot"></div>Motor de Classificação (SPEC)</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-7',event)"><div class="nav-etapa-dot"></div>Multi-turn e Contexto</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-8',event)"><div class="nav-etapa-dot"></div>Stack Tecnológica</a>
       <div class="nav-fase-hdr" onclick="scrollFase('f2')"><div class="nav-fase-num">2</div>Configuração Inicial</div>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-1a',event)"><div class="nav-etapa-dot"></div>Pré-requisitos no IAHub</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-1',event)"><div class="nav-etapa-dot"></div>Dashboard</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-2',event)"><div class="nav-etapa-dot"></div>Configurar IA</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-3',event)"><div class="nav-etapa-dot"></div>Conexões ERP</a>
@@ -131,6 +139,7 @@
       <a class="nav-etapa" onclick="abrirEtapa('e3-2',event)"><div class="nav-etapa-dot"></div>Canais WhatsApp</a>
       <a class="nav-etapa" onclick="abrirEtapa('e3-3',event)"><div class="nav-etapa-dot"></div>Números Autorizados</a>
       <a class="nav-etapa" onclick="abrirEtapa('e3-4',event)"><div class="nav-etapa-dot"></div>Histórico de Mensagens</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e3-5',event)"><div class="nav-etapa-dot"></div>Mensagens de Voz (STT)</a>
       <div class="nav-fase-hdr" onclick="scrollFase('f4')"><div class="nav-fase-num">4</div>Conhecimento ERP</div>
       <a class="nav-etapa" onclick="abrirEtapa('e4-1',event)"><div class="nav-etapa-dot"></div>Módulos</a>
       <a class="nav-etapa" onclick="abrirEtapa('e4-2',event)"><div class="nav-etapa-dot"></div>Datasets</a>
@@ -143,9 +152,10 @@
       <a class="nav-etapa" onclick="abrirEtapa('e5-2',event)"><div class="nav-etapa-dot"></div>Dicionário SX2 — Tabelas</a>
       <a class="nav-etapa" onclick="abrirEtapa('e5-3',event)"><div class="nav-etapa-dot"></div>Dicionário SX3 — Campos</a>
       <a class="nav-etapa" onclick="abrirEtapa('e5-4',event)"><div class="nav-etapa-dot"></div>Log de Consultas SQL</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e5-5',event)"><div class="nav-etapa-dot"></div>Consultas — Faturamento</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e5-6',event)"><div class="nav-etapa-dot"></div>Consultas — Financeiro</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e5-7',event)"><div class="nav-etapa-dot"></div>Consultas — Comissão</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-5',event)"><div class="nav-etapa-dot"></div>Dicionário de Dados — Compras</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-6',event)"><div class="nav-etapa-dot"></div>Dicionário de Dados — Faturamento</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-7',event)"><div class="nav-etapa-dot"></div>Dicionário de Dados — Financeiro</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e5-8',event)"><div class="nav-etapa-dot"></div>Dicionário de Dados — Comissão</a>
       <div class="nav-fase-hdr" onclick="scrollFase('f6')"><div class="nav-fase-num">6</div>Auditoria</div>
       <a class="nav-etapa" onclick="abrirEtapa('e6-1',event)"><div class="nav-etapa-dot"></div>Execuções</a>
       <a class="nav-etapa" onclick="abrirEtapa('e6-2',event)"><div class="nav-etapa-dot"></div>Interpretações</a>
@@ -200,10 +210,185 @@
 
       <article class="etapa-card open" id="e1-2">
         <div class="etapa-card-header" onclick="toggleEtapa('e1-2')">
-          <span class="etapa-num">1.2</span><span class="etapa-titulo">Arquitetura IA-first — visão em camadas</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">1.2</span><span class="etapa-titulo">Arquitetura em Nuvem — Multi-empresa, Multi-usuário, Multi-canal</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
-          <p class="etapa-desc">A diretriz é <strong>IA-first</strong>: a inteligência artificial externa é o provider principal para qualquer pedido. Guardrails determinísticos corrigem o contrato da IA quando necessário. O motor local resolve apenas como último recurso.</p>
+          <p class="etapa-desc">O IA Command roda <strong>100% na nuvem</strong>. Uma única instalação atende múltiplos clientes (empresas), cada um com seus próprios números de WhatsApp, usuários autorizados, regras de negócio e forma de acesso ao ERP — tudo isolado, sem que um cliente veja ou influencie os dados de outro.</p>
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Infográfico 1 — IA Command na Nuvem, Multi-tenant</div>
+            <svg viewBox="0 0 720 430" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:720px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
+              <rect width="720" height="430" rx="10" fill="#f5f3ff"/>
+              <!-- Nuvem central -->
+              <g>
+                <ellipse cx="360" cy="70" rx="190" ry="52" fill="#7c3aed"/>
+                <ellipse cx="260" cy="55" rx="70" ry="34" fill="#7c3aed"/>
+                <ellipse cx="460" cy="55" rx="70" ry="34" fill="#7c3aed"/>
+                <text x="360" y="65" font-size="15" fill="white" text-anchor="middle" font-weight="900">☁ IA COMMAND — NUVEM</text>
+                <text x="360" y="83" font-size="10" fill="#ede9fe" text-anchor="middle">Orquestrador IA · SPEC · Banco multi-tenant · WhatsApp Gateway</text>
+              </g>
+              <!-- 3 empresas isoladas -->
+              <rect x="30" y="150" width="200" height="130" rx="8" fill="rgba(124,58,237,.08)" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4,3"/>
+              <text x="130" y="170" font-size="11" font-weight="800" fill="#6d28d9" text-anchor="middle">EMPRESA A</text>
+              <text x="130" y="186" font-size="9" fill="#6d28d9" text-anchor="middle">dados, regras e chaves</text>
+              <text x="130" y="198" font-size="9" fill="#6d28d9" text-anchor="middle">isoladas (tenant_id)</text>
+              <rect x="46" y="210" width="70" height="20" rx="10" fill="#25d366"/><text x="81" y="224" font-size="9" fill="white" text-anchor="middle" font-weight="700">📱 Canal 1</text>
+              <rect x="124" y="210" width="70" height="20" rx="10" fill="#25d366"/><text x="159" y="224" font-size="9" fill="white" text-anchor="middle" font-weight="700">📱 Canal 2</text>
+              <text x="130" y="250" font-size="9" fill="#4c1d95" text-anchor="middle">👤 3 usuários autorizados</text>
+              <text x="130" y="264" font-size="9" fill="#4c1d95" text-anchor="middle">🔌 Agente Local (on-premises)</text>
+
+              <rect x="260" y="150" width="200" height="150" rx="8" fill="rgba(8,145,178,.08)" stroke="#0891b2" stroke-width="1.5" stroke-dasharray="4,3"/>
+              <text x="360" y="170" font-size="11" font-weight="800" fill="#0e7490" text-anchor="middle">EMPRESA B1 + B2 (grupo)</text>
+              <text x="360" y="186" font-size="9" fill="#0e7490" text-anchor="middle">dados, regras e chaves</text>
+              <text x="360" y="198" font-size="9" fill="#0e7490" text-anchor="middle">isoladas (tenant_id) por empresa</text>
+              <rect x="300" y="208" width="120" height="22" rx="11" fill="#25d366"/><text x="360" y="223" font-size="9" fill="white" text-anchor="middle" font-weight="700">📱 Canal compartilhado</text>
+              <text x="360" y="240" font-size="8" fill="#0e7490" text-anchor="middle">1 número · aliases por empresa · TENANT decide quem responde</text>
+              <text x="360" y="264" font-size="9" fill="#164e63" text-anchor="middle">👤 B1: 5 usuários · B2: 4 usuários</text>
+              <text x="360" y="278" font-size="9" fill="#164e63" text-anchor="middle">🔗 Conexão Direta (VPN/IP)</text>
+
+              <rect x="490" y="150" width="200" height="130" rx="8" fill="rgba(5,150,105,.08)" stroke="#059669" stroke-width="1.5" stroke-dasharray="4,3"/>
+              <text x="590" y="170" font-size="11" font-weight="800" fill="#065f46" text-anchor="middle">EMPRESA C</text>
+              <text x="590" y="186" font-size="9" fill="#065f46" text-anchor="middle">dados, regras e chaves</text>
+              <text x="590" y="198" font-size="9" fill="#065f46" text-anchor="middle">isoladas (tenant_id)</text>
+              <rect x="521" y="210" width="65" height="20" rx="10" fill="#25d366"/><text x="553" y="224" font-size="9" fill="white" text-anchor="middle" font-weight="700">📱 Financ.</text>
+              <rect x="591" y="210" width="65" height="20" rx="10" fill="#25d366"/><text x="623" y="224" font-size="9" fill="white" text-anchor="middle" font-weight="700">📱 Vendas</text>
+              <text x="590" y="250" font-size="9" fill="#064e3b" text-anchor="middle">👤 8 usuários autorizados</text>
+              <text x="590" y="264" font-size="9" fill="#064e3b" text-anchor="middle">🔌 Agente Local (on-premises)</text>
+
+              <!-- linhas conectando nuvem às empresas -->
+              <line x1="280" y1="105" x2="150" y2="150" stroke="#7c3aed" stroke-width="2"/>
+              <line x1="360" y1="112" x2="360" y2="150" stroke="#0891b2" stroke-width="2"/>
+              <line x1="440" y1="105" x2="570" y2="150" stroke="#059669" stroke-width="2"/>
+
+              <!-- rodapé: isolamento -->
+              <rect x="30" y="308" width="660" height="46" rx="7" fill="rgba(217,119,6,.10)" stroke="#d97706" stroke-width="1"/>
+              <text x="360" y="328" font-size="10.5" font-weight="800" fill="#92400e" text-anchor="middle">ISOLAMENTO TOTAL POR EMPRESA (multi-tenant) — mesmo quando o canal é compartilhado</text>
+              <text x="360" y="343" font-size="9.5" fill="#92400e" text-anchor="middle">Dados, ERP, IA e usuários nunca se cruzam entre empresas; o canal pode ser compartilhado, o tenant_id nunca é.</text>
+
+              <rect x="30" y="366" width="660" height="56" rx="7" fill="rgba(124,58,237,.06)"/>
+              <text x="46" y="386" font-size="9.5" fill="#4c1d95" font-weight="700">☁ 100% Nuvem:</text>
+              <text x="150" y="386" font-size="9.5" fill="#4c1d95">o cliente não instala servidor, banco ou infraestrutura de IA — apenas o Agente Local (opcional e leve).</text>
+              <text x="46" y="404" font-size="9.5" fill="#4c1d95" font-weight="700">📱 Canal N:N:</text>
+              <text x="150" y="404" font-size="9.5" fill="#4c1d95">1 empresa pode ter vários canais, e 1 canal pode atender várias empresas do mesmo grupo — a relação não é 1 para 1.</text>
+            </svg>
+          </div>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Multi-empresas (multi-tenant)</div><div class="campo-desc">Cada cliente é uma empresa isolada por <code>tenant_id</code>/<code>empresa_id</code>. Conexões ERP, chaves de IA, módulos, datasets, intenções, sinônimos, diálogos e histórico de conversas são segregados — nenhuma empresa acessa dado de outra.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Multi-usuários</div><div class="campo-desc">Dentro de cada empresa, o acesso é controlado por número de celular. Só números cadastrados em "Números Autorizados" recebem respostas — permitindo abrir o sistema para diretoria, financeiro ou vendas de forma seletiva.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Multi-canais de WhatsApp</div><div class="campo-desc">Uma mesma empresa pode operar vários números WhatsApp simultaneamente (ex: canal comercial e canal financeiro), cada um com seu próprio grupo de usuários autorizados e comportamento.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Um canal também pode ser compartilhado por várias empresas do mesmo grupo</div><div class="campo-desc">O inverso também é possível: um único número WhatsApp pode atender <strong>mais de uma empresa</strong> (útil para grupos econômicos com um canal central). O vínculo canal↔empresa não é 1 para 1 — é uma relação N:N, com cada empresa tendo seus próprios apelidos ("aliases") dentro do canal. Quando a mensagem chega, o sistema primeiro filtra <strong>quais empresas daquele canal têm aquele número de celular autorizado</strong>; se mais de uma empresa possível restar, resolve pela empresa citada na própria pergunta (por nome ou alias), pela empresa marcada como padrão do canal, ou pergunta ao usuário qual empresa ele quer antes de prosseguir.</div></div>
+            <div class="campo-item"><div class="campo-nome">Nenhuma infraestrutura pesada no cliente</div><div class="campo-desc">Banco de dados, IA, orquestração, histórico e auditoria vivem na nuvem do IA Command. O cliente não precisa provisionar servidores próprios para o sistema conversacional funcionar.</div></div>
+          </div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span><strong>O cadastro de empresas, usuários e permissões não é do IA Command</strong> — é herdado da plataforma <strong>IAHub</strong>, que hospeda o IA Command como um de seus sistemas. Login, seleção de empresa ativa e liberação de acesso por usuário acontecem no IAHub antes de qualquer tela do IA Command carregar. Ver <a href="#" onclick="abrirEtapa('e2-1a',event)">Pré-requisitos de Acesso no IAHub</a>.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card open" id="e1-3">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-3')">
+          <span class="etapa-num">1.3</span><span class="etapa-titulo">Agente Local x Conexão Direta — como a nuvem acessa o ERP do cliente</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Para consultar o banco do Protheus na empresa do cliente, o IA Command suporta <strong>duas formas de acesso</strong>, escolhidas por empresa. A própria nuvem decide automaticamente qual usar, com base na configuração salva em <strong>Configurar IA</strong>.</p>
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Infográfico 2 — Duas formas de acesso ao ERP do cliente</div>
+            <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
+              <rect width="700" height="300" rx="10" fill="#f5f3ff"/>
+              <rect x="250" y="14" width="200" height="40" rx="8" fill="#7c3aed"/>
+              <text x="350" y="34" font-size="11" fill="white" text-anchor="middle" font-weight="800">☁ IA COMMAND (Nuvem)</text>
+              <text x="350" y="47" font-size="9" fill="#ede9fe" text-anchor="middle">carregarConexao(empresa_id)</text>
+              <polygon points="350,58 430,80 350,102 270,80" fill="#fef3c7" stroke="#d97706" stroke-width="1.5"/>
+              <text x="350" y="76" font-size="9.5" fill="#92400e" text-anchor="middle" font-weight="700">agente_local_ativo</text>
+              <text x="350" y="90" font-size="9.5" fill="#92400e" text-anchor="middle" font-weight="700">= true ?</text>
+              <line x1="300" y1="90" x2="180" y2="120" stroke="#059669" stroke-width="2" marker-end="url(#a1)"/><text x="220" y="100" font-size="9.5" fill="#059669" font-weight="700">SIM</text>
+              <line x1="400" y1="90" x2="520" y2="120" stroke="#6b7280" stroke-width="2" marker-end="url(#a2)"/><text x="480" y="100" font-size="9.5" fill="#6b7280" font-weight="700">NÃO</text>
+
+              <!-- Agente Local (esquerda) -->
+              <rect x="40" y="122" width="280" height="150" rx="8" fill="rgba(5,150,105,.08)" stroke="#059669" stroke-width="1.5"/>
+              <text x="180" y="142" font-size="11" font-weight="800" fill="#065f46" text-anchor="middle">🔌 AGENTE LOCAL (recomendado)</text>
+              <text x="60" y="160" font-size="9" fill="#065f46">• API Python instalada no servidor do cliente</text>
+              <text x="60" y="174" font-size="9" fill="#065f46">• Nuvem envia SQL via POST /execute (Bearer token)</text>
+              <text x="60" y="188" font-size="9" fill="#065f46">• Agente executa no banco local e devolve JSON</text>
+              <text x="60" y="202" font-size="9" fill="#065f46">• Só SELECT — bloqueia INSERT/UPDATE/DELETE</text>
+              <text x="60" y="216" font-size="9" fill="#065f46">• Cliente não abre porta de banco para a internet</text>
+              <text x="60" y="230" font-size="9" fill="#065f46">• Roda como serviço Windows (NSSM), 100% on-premises</text>
+              <rect x="60" y="242" width="240" height="20" rx="5" fill="#059669"/><text x="180" y="256" font-size="9" fill="white" text-anchor="middle" font-weight="700">Mais seguro e mais leve para o cliente</text>
+
+              <!-- Conexão Direta (direita) -->
+              <rect x="380" y="122" width="280" height="150" rx="8" fill="rgba(107,114,128,.08)" stroke="#6b7280" stroke-width="1.5"/>
+              <text x="520" y="142" font-size="11" font-weight="800" fill="#374151" text-anchor="middle">🔗 CONEXÃO DIRETA</text>
+              <text x="400" y="160" font-size="9" fill="#374151">• Nuvem conecta direto no SQL Server do cliente</text>
+              <text x="400" y="174" font-size="9" fill="#374151">• Requer host, porta, banco, usuário e senha</text>
+              <text x="400" y="188" font-size="9" fill="#374151">• Exige liberação de rede (VPN, IP público ou túnel)</text>
+              <text x="400" y="202" font-size="9" fill="#374151">• Passa pelo Middleware Protheus antes de executar</text>
+              <text x="400" y="216" font-size="9" fill="#374151">• Indicada quando já existe VPN/rede segura estável</text>
+              <text x="400" y="230" font-size="9" fill="#374151">• Requer usuário de banco somente leitura</text>
+              <rect x="400" y="242" width="240" height="20" rx="5" fill="#6b7280"/><text x="520" y="256" font-size="9" fill="white" text-anchor="middle" font-weight="700">Alternativa quando já há rede segura</text>
+              <defs>
+                <marker id="a1" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#059669"/></marker>
+                <marker id="a2" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#6b7280"/></marker>
+              </defs>
+            </svg>
+          </div>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Roteamento automático por empresa</div><div class="campo-desc">A cada consulta, a nuvem verifica <code>ai_config.agente_local_ativo</code> para a empresa. Se estiver ativo e URL/token configurados, a query é enviada ao Agente Local; caso contrário, usa a conexão ERP direta cadastrada em "Conexões ERP".</div></div>
+            <div class="campo-item"><div class="campo-nome">Contrato do Agente Local</div><div class="campo-desc">A nuvem faz <code>POST {agente_url}/execute</code> com corpo <code>{ sql, limit, uuid, modulo, operacao, empresa_id }</code> e header <code>Authorization: Bearer {token}</code>. O Agente Local responde com <code>{ rows, status, duracao_ms }</code>. Timeout de 240s para consultas pesadas.</div></div>
+            <div class="campo-item"><div class="campo-nome">Segurança do Agente Local</div><div class="campo-desc">Aceita apenas <code>SELECT</code> — qualquer outro comando é bloqueado antes de tocar o banco. Autenticação por Bearer token, painel administrativo protegido por senha, limite de 50.000 linhas por consulta.</div></div>
+            <div class="campo-item"><div class="campo-nome">Quando usar cada uma</div><div class="campo-desc">Use <strong>Agente Local</strong> como padrão: não exige abrir porta de banco para a internet e é mais fácil de auditar. Use <strong>Conexão Direta</strong> quando já existe VPN ou rede segura estabelecida entre a nuvem e o cliente.</div></div>
+          </div>
+          <div class="callout warning"><span class="callout-icon">⚠</span><span>As duas formas <strong>coexistem</strong> no sistema — não é uma substituindo a outra. A escolha é feita por empresa em <strong>Configurar IA → Agente Local</strong>, sem exigir alteração de código.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card open" id="e1-4">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-4')">
+          <span class="etapa-num">1.4</span><span class="etapa-titulo">O Fluxo da Mensagem — do WhatsApp até a resposta</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Toda pergunta enviada pelo WhatsApp percorre o mesmo ciclo de vida, independentemente do módulo ou da forma de acesso ao ERP escolhida pela empresa.</p>
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body">O <strong>usuário</strong>, pelo WhatsApp, envia uma pergunta ou comando em linguagem natural (texto ou áudio).</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">O <strong>IA Command (nuvem)</strong> recebe a mensagem, identifica a empresa/canal e aplica as regras iniciais — diálogos fixos, normalizações e verificação de número autorizado.</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body">O sistema envia o contexto da conversa (histórico, período herdado, filtros anteriores) e o prompt para a <strong>Inteligência Artificial</strong> (Groq, OpenAI, Gemini, DeepSeek ou Claude).</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body">A IA processa a solicitação e devolve um <strong>contrato semântico</strong> (módulo, período, filtros, agrupamentos) que o sistema converte no <strong>SQL correspondente</strong>.</div></div>
+            <div class="step-item"><div class="step-num">5</div><div class="step-body">O <strong>SPEC</strong> (Orquestrador + Guardrails) valida e corrige o SQL contra regras de domínio do Protheus antes de executar.</div></div>
+            <div class="step-item"><div class="step-num">6</div><div class="step-body">O sistema, via API segura, envia o SQL ao <strong>Agente Local</strong> instalado no servidor do cliente (ou, alternativamente, executa via <strong>Conexão Direta</strong>).</div></div>
+            <div class="step-item"><div class="step-num">7</div><div class="step-body">O <strong>Agente Local</strong> executa o SQL no banco de dados do ERP e devolve os dados brutos (JSON) para a nuvem.</div></div>
+            <div class="step-item"><div class="step-num">8</div><div class="step-body">A <strong>nuvem</strong> recebe os dados, formata a resposta em linguagem natural e a devolve ao usuário pelo <strong>WhatsApp</strong>.</div></div>
+          </div>
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Diagrama 0 — Ciclo de vida completo da mensagem</div>
+            <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
+              <rect width="700" height="320" rx="10" fill="#f5f3ff"/>
+              <defs>
+                <marker id="fm" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#7c3aed"/></marker>
+                <marker id="fm2" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#25d366"/></marker>
+              </defs>
+              <rect x="20" y="20" width="110" height="40" rx="7" fill="#25d366"/><text x="75" y="45" font-size="10" fill="white" text-anchor="middle" font-weight="800">📱 Usuário</text>
+              <line x1="130" y1="40" x2="160" y2="40" stroke="#7c3aed" stroke-width="2" marker-end="url(#fm)"/>
+              <rect x="160" y="20" width="130" height="40" rx="7" fill="#7c3aed"/><text x="225" y="45" font-size="10" fill="white" text-anchor="middle" font-weight="800">☁ Nuvem IA Command</text>
+              <line x1="290" y1="40" x2="320" y2="40" stroke="#0891b2" stroke-width="2" marker-end="url(#fm)"/>
+              <rect x="320" y="20" width="120" height="40" rx="7" fill="#0891b2"/><text x="380" y="45" font-size="10" fill="white" text-anchor="middle" font-weight="800">🧠 IA Externa</text>
+              <line x1="380" y1="60" x2="380" y2="90" stroke="#0891b2" stroke-width="2" marker-end="url(#fm)"/>
+              <rect x="300" y="92" width="160" height="40" rx="7" fill="#d97706"/><text x="380" y="117" font-size="10" fill="white" text-anchor="middle" font-weight="800">📐 SPEC (guardrails)</text>
+              <line x1="380" y1="132" x2="380" y2="162" stroke="#d97706" stroke-width="2" marker-end="url(#fm)"/>
+              <rect x="240" y="164" width="130" height="40" rx="7" fill="#059669"/><text x="305" y="184" font-size="9.5" fill="white" text-anchor="middle" font-weight="800">🔌 Agente Local</text><text x="305" y="197" font-size="8.5" fill="#d1fae5" text-anchor="middle">(servidor do cliente)</text>
+              <rect x="390" y="164" width="130" height="40" rx="7" fill="#6b7280"/><text x="455" y="184" font-size="9.5" fill="white" text-anchor="middle" font-weight="800">🔗 Conexão Direta</text><text x="455" y="197" font-size="8.5" fill="#e5e7eb" text-anchor="middle">(banco do cliente)</text>
+              <line x1="305" y1="204" x2="225" y2="230" stroke="#059669" stroke-width="2" marker-end="url(#fm)"/>
+              <line x1="455" y1="204" x2="225" y2="230" stroke="#6b7280" stroke-width="2" marker-end="url(#fm)"/>
+              <rect x="20" y="212" width="410" height="36" rx="7" fill="#4f46e5"/><text x="225" y="234" font-size="10" fill="white" text-anchor="middle" font-weight="800">✉ Nuvem formata a resposta em linguagem natural</text>
+              <rect x="450" y="212" width="230" height="36" rx="7" fill="rgba(124,58,237,.10)" stroke="#7c3aed" stroke-width="1"/><text x="565" y="234" font-size="9" fill="#4c1d95" text-anchor="middle">Dados brutos (JSON) retornam à nuvem</text>
+              <line x1="225" y1="248" x2="225" y2="264" stroke="#25d366" stroke-width="2.5" marker-end="url(#fm2)"/>
+              <rect x="20" y="266" width="410" height="40" rx="7" fill="#25d366"/><text x="225" y="286" font-size="10" fill="white" text-anchor="middle" font-weight="800">📱 Resposta entregue ao Usuário pelo WhatsApp</text><text x="225" y="299" font-size="8.5" fill="#e7fbe9" text-anchor="middle">fecha o ciclo — o mesmo usuário que perguntou recebe a resposta</text>
+            </svg>
+          </div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card open" id="e1-5">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-5')">
+          <span class="etapa-num">1.5</span><span class="etapa-titulo">Arquitetura IA-first (SPEC) — visão em camadas</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">A diretriz é <strong>IA-first</strong>: a inteligência artificial externa é o provider principal para qualquer pedido. O conjunto <strong>Orquestrador IA + Guardrails determinísticos</strong> é chamado neste guia de <strong>SPEC</strong> — é ele quem corrige o contrato da IA quando necessário. O motor local resolve apenas como último recurso.</p>
           <div class="diagrama-wrap">
             <div class="diagrama-titulo">Diagrama 1 — Camadas da Arquitetura IA Command</div>
             <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
@@ -246,9 +431,9 @@
         </div></div>
       </article>
 
-      <article class="etapa-card" id="e1-3">
-        <div class="etapa-card-header" onclick="toggleEtapa('e1-3')">
-          <span class="etapa-num">1.3</span><span class="etapa-titulo">Motor de Classificação — Cascata de decisão</span><span class="etapa-arrow">&#8964;</span>
+      <article class="etapa-card" id="e1-6">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-6')">
+          <span class="etapa-num">1.6</span><span class="etapa-titulo">Motor de Classificação — Cascata de decisão</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">Para cada mensagem recebida, o sistema percorre uma cascata antes de chegar ao ERP. Entender esse fluxo é essencial para diagnosticar comportamentos inesperados.</p>
@@ -306,12 +491,13 @@
             <div class="campo-item"><div class="campo-nome">Guardrails sobrescrevem a IA</div><div class="campo-desc">Regras determinísticas são aplicadas após o contrato IA. Ex: "contas a pagar" → financeiro/pagar; "saldo bancário" → financeiro; período genérico (mes_atual) é substituído pelo período do contexto anterior.</div></div>
             <div class="campo-item"><div class="campo-nome">Fallback de chave global</div><div class="campo-desc">Se a empresa não tem chave própria, o sistema usa qualquer chave de IA disponível no banco de dados. O sistema funciona mesmo sem configuração específica por empresa.</div></div>
           </div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span><strong>O que o SPEC faz quando a pergunta não se encaixa em nenhuma rotina conhecida:</strong> ele nunca bloqueia o usuário. Se a confiança da classificação ficar abaixo de 0,85, o SPEC aciona o fallback local (resposta orientativa, pedindo para o usuário reformular) em vez de travar ou devolver erro técnico. A IA sempre tem prioridade — o SPEC só interfere para corrigir erros de domínio conhecidos (ex: tabela errada), nunca para impedir uma pergunta nova ou fora do padrão.</span></div>
         </div></div>
       </article>
 
-      <article class="etapa-card" id="e1-4">
-        <div class="etapa-card-header" onclick="toggleEtapa('e1-4')">
-          <span class="etapa-num">1.4</span><span class="etapa-titulo">Multi-turn e Contexto Conversacional</span><span class="etapa-arrow">&#8964;</span>
+      <article class="etapa-card" id="e1-7">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-7')">
+          <span class="etapa-num">1.7</span><span class="etapa-titulo">Multi-turn e Contexto Conversacional</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">O sistema mantém contexto de conversa por usuário/empresa com TTL de 10 minutos. Perguntas de refinamento herdam automaticamente módulo, período, filtros e entidades já resolvidas no turno anterior.</p>
@@ -359,6 +545,27 @@
           </div>
         </div></div>
       </article>
+
+      <article class="etapa-card" id="e1-8">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-8')">
+          <span class="etapa-num">1.8</span><span class="etapa-titulo">Stack Tecnológica — o que roda por baixo</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">O IA Command é construído sobre tecnologias maduras de mercado, sem dependência de infraestrutura proprietária pesada. Cada peça tem um papel único na cadeia — da mensagem no celular do usuário até o dado retornado do Protheus.</p>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Node.js + Express</div><div class="campo-desc">Runtime e servidor HTTP da aplicação na nuvem. Todo o orquestrador, SPEC, rotas de API e lógica de negócio rodam em JavaScript sobre Node.js, usando Express para expor as rotas REST do sistema.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">whatsapp-web.js</div><div class="campo-desc">Biblioteca que mantém a sessão do WhatsApp Web ativa por canal, permitindo enviar e receber mensagens sem depender da API oficial paga do WhatsApp Business. É o motor por trás do Monitor e da autenticação por QR Code.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">better-sqlite3</div><div class="campo-desc">Banco de dados local (SQLite) usado pela nuvem do IA Command para armazenar configurações, módulos, intenções, sinônimos, diálogos, histórico de execuções e auditoria. Leve, rápido e sem necessidade de servidor de banco dedicado.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Socket.IO</div><div class="campo-desc">Comunicação em tempo real entre o backend e as telas administrativas — usado para refletir instantaneamente o status de conexão dos canais WhatsApp no Monitor, sem exigir que o usuário atualize a página.</div></div>
+            <div class="campo-item"><div class="campo-nome">mssql / pg (SQL Server e PostgreSQL)</div><div class="campo-desc">Drivers de conexão usados na <strong>Conexão Direta</strong> ao ERP do cliente. O Protheus roda tipicamente sobre SQL Server (driver <code>mssql</code>), mas o sistema também suporta PostgreSQL.</div></div>
+            <div class="campo-item"><div class="campo-nome">Python + FastAPI (Agente Local)</div><div class="campo-desc">O Agente Local instalado no servidor do cliente é uma API escrita em Python com FastAPI, expondo os endpoints <code>/health</code> e <code>/execute</code>. Roda como serviço Windows via NSSM, com driver ODBC (<code>pyodbc</code>) para acessar o SQL Server do Protheus.</div></div>
+            <div class="campo-item"><div class="campo-nome">Provedores de IA — chamadas HTTP diretas</div><div class="campo-desc">O sistema não depende de SDKs oficiais de terceiros: ele faz requisições HTTPS nativas do Node.js para a API de cada provedor. <strong>Groq</strong> e <strong>DeepSeek</strong> usam o formato compatível OpenAI (<code>/v1/chat/completions</code>); <strong>OpenAI</strong> usa o mesmo formato na API oficial; <strong>Claude</strong> (Anthropic) usa a API nativa própria (<code>anthropic-version: 2023-06-01</code>, modelo <code>claude-haiku-4-5-20251001</code>); <strong>Gemini</strong> usa a API própria do Google (modelo <code>gemini-2.0-flash</code>).</div></div>
+            <div class="campo-item"><div class="campo-nome">bcryptjs</div><div class="campo-desc">Hash de senhas para autenticação dos painéis administrativos — tanto na nuvem quanto no painel local do Agente Local.</div></div>
+            <div class="campo-item"><div class="campo-nome">Persistência do cadastro central (IAHub) é em arquivos JSON</div><div class="campo-desc">Empresas, usuários, permissões e sistemas são armazenados em arquivos JSON no IAHub (não em banco relacional) — diferente do IA Command, que usa SQLite. Cada leitura/escrita processa o arquivo inteiro; o ponto de atenção não é volume de leitura (irrelevante nas quantidades atuais de empresas/usuários), e sim duas escritas simultâneas no mesmo arquivo, que podem sobrescrever uma à outra sem aviso. Não é uma falha ativa hoje — é um ponto conhecido a observar se o uso do IAHub crescer.</div></div>
+          </div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>Nenhuma dessas tecnologias exige licenciamento pago obrigatório: Node.js, Express, SQLite, Socket.IO e Python são open source. O único custo variável é o consumo das APIs de IA externas (Groq, OpenAI, Gemini, DeepSeek ou Claude), conforme o volume de perguntas processadas.</span></div>
+        </div></div>
+      </article>
     </section>
 
     <!-- ═══ FASE 2 ══════════════════════════════════════════════════════════ -->
@@ -368,9 +575,45 @@
         <div class="fase-titulo"><h2>Configuração Inicial</h2><p>Execute nesta ordem: IA → Conexão ERP → Middleware</p></div>
       </div>
 
+      <article class="etapa-card open" id="e2-1a">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-1a')">
+          <span class="etapa-num">2.1</span><span class="etapa-titulo">Pré-requisitos de Acesso no IAHub</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Antes de qualquer configuração dentro do IA Command, três coisas precisam existir no <strong>IAHub</strong> — a plataforma que hospeda o IA Command como um de seus sistemas. Sem isso, a tela nem carrega, e o problema não está no IA Command.</p>
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Infográfico 3 — Cadeia de acesso até uma tela do IA Command</div>
+            <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
+              <rect width="700" height="220" rx="10" fill="#f5f3ff"/>
+              <defs><marker id="pr1" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#7c3aed"/></marker></defs>
+              <rect x="10" y="16" width="160" height="46" rx="7" fill="#4f46e5"/><text x="90" y="36" font-size="10.5" fill="white" text-anchor="middle" font-weight="800">1. Login no IAHub</text><text x="90" y="50" font-size="8.5" fill="#e0e7ff" text-anchor="middle">/api/login (sessão)</text>
+              <line x1="170" y1="39" x2="196" y2="39" stroke="#7c3aed" stroke-width="2" marker-end="url(#pr1)"/>
+              <rect x="196" y="16" width="160" height="46" rx="7" fill="#0891b2"/><text x="276" y="36" font-size="10.5" fill="white" text-anchor="middle" font-weight="800">2. Selecionar Empresa</text><text x="276" y="50" font-size="8.5" fill="#e0f2fe" text-anchor="middle">/api/empresas/selecionar</text>
+              <line x1="356" y1="39" x2="382" y2="39" stroke="#7c3aed" stroke-width="2" marker-end="url(#pr1)"/>
+              <rect x="382" y="16" width="160" height="46" rx="7" fill="#d97706"/><text x="462" y="36" font-size="10.5" fill="white" text-anchor="middle" font-weight="800">3. Sistema habilitado</text><text x="462" y="50" font-size="8.5" fill="#fef3c7" text-anchor="middle">empresa + usuário → ia-command</text>
+              <line x1="542" y1="39" x2="568" y2="39" stroke="#7c3aed" stroke-width="2" marker-end="url(#pr1)"/>
+              <rect x="568" y="16" width="122" height="46" rx="7" fill="#059669"/><text x="629" y="36" font-size="10.5" fill="white" text-anchor="middle" font-weight="800">4. Rotina liberada</text><text x="629" y="50" font-size="8.5" fill="#d1fae5" text-anchor="middle">iac-dashboard etc.</text>
+              <line x1="629" y1="62" x2="629" y2="86" stroke="#059669" stroke-width="2" marker-end="url(#pr1)"/>
+              <rect x="480" y="88" width="210" height="34" rx="7" fill="#7c3aed"/><text x="585" y="109" font-size="10" fill="white" text-anchor="middle" font-weight="800">Tela do IA Command abre</text>
+              <rect x="14" y="132" width="672" height="72" rx="7" fill="rgba(220,38,38,.06)" stroke="#dc2626" stroke-width="1"/>
+              <text x="350" y="150" font-size="10" font-weight="800" fill="#991b1b" text-anchor="middle">Se qualquer etapa falhar, a falha é do IAHub — não do IA Command</text>
+              <text x="30" y="168" font-size="9" fill="#7f1d1d">• Sem login → redireciona para tela de login do IAHub</text>
+              <text x="30" y="182" font-size="9" fill="#7f1d1d">• Sistema "ia-command" não habilitado para a empresa/usuário → acesso negado (requireSystemAccess)</text>
+              <text x="30" y="196" font-size="9" fill="#7f1d1d">• Rotina específica (ex: iac-dashboard) não liberada → tela ou menu não aparece para aquele usuário</text>
+            </svg>
+          </div>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Empresa cadastrada no IAHub</div><div class="campo-desc">O cadastro de empresas é feito no IAHub (menu de Empresas), não dentro do IA Command. O <code>empresa_id</code> gerado ali é o mesmo usado em todas as tabelas do IA Command (conexões, módulos, execuções).</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Sistema "IA Command" habilitado para a empresa</div><div class="campo-desc">No cadastro de Sistemas do IAHub, a empresa precisa ter o sistema <code>ia-command</code> ativado. Sem isso, mesmo um usuário administrador não consegue abrir o IA Command para aquela empresa.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Usuário com o sistema e as rotinas liberadas</div><div class="campo-desc">Além da empresa, o usuário individual precisa ter o sistema <code>ia-command</code> liberado, e cada tela administrativa (Dashboard, Módulos, Números, Mensagens, Intenções, Datasets, Execuções, Auditoria) exige uma rotina própria com prefixo <code>iac-</code> (ex: <code>iac-dashboard</code>, <code>iac-execucoes</code>). Um usuário pode ter acesso ao sistema mas não ver todas as telas.</div></div>
+          </div>
+          <div class="callout warning"><span class="callout-icon">⚠</span><span>Se um usuário relatar "não vejo o menu do IA Command" ou "a tela abre em branco", confira primeiro esses 3 pré-requisitos no IAHub antes de investigar dentro do IA Command — a causa mais comum está aqui, não nas configurações internas.</span></div>
+        </div></div>
+      </article>
+
       <article class="etapa-card" id="e2-1">
         <div class="etapa-card-header" onclick="toggleEtapa('e2-1')">
-          <span class="etapa-num">2.1</span><span class="etapa-titulo">Dashboard — Visão geral do sistema</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">2.2</span><span class="etapa-titulo">Dashboard — Visão geral do sistema</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">O Dashboard é a tela inicial do IA Command. Exibe o estado geral do sistema: empresas ativas, canais WhatsApp conectados, execuções recentes e indicadores de saúde da IA e das conexões ERP.</p>
@@ -396,7 +639,7 @@
 
       <article class="etapa-card" id="e2-2">
         <div class="etapa-card-header" onclick="toggleEtapa('e2-2')">
-          <span class="etapa-num">2.2</span><span class="etapa-titulo">Configurar IA — Provedores e chaves de API</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">2.3</span><span class="etapa-titulo">Configurar IA — Provedores e chaves de API</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">Define qual provedor de IA será usado pela empresa, qual chave de API e qual modelo. Esta é a <strong>primeira configuração a fazer</strong> — sem chave de IA, o sistema opera em modo bypass (apenas casos simples).</p>
@@ -435,7 +678,7 @@
 
       <article class="etapa-card" id="e2-3">
         <div class="etapa-card-header" onclick="toggleEtapa('e2-3')">
-          <span class="etapa-num">2.3</span><span class="etapa-titulo">Conexões ERP — Acesso ao Protheus</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">2.4</span><span class="etapa-titulo">Conexões ERP — Acesso ao Protheus</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">Configura como o IA Command acessa o banco de dados do Protheus. Cada empresa pode ter múltiplas conexões — uma por ambiente (produção, homologação) ou por filial. A conexão correta é referenciada em cada dataset e intenção.</p>
@@ -463,7 +706,7 @@
 
       <article class="etapa-card" id="e2-4">
         <div class="etapa-card-header" onclick="toggleEtapa('e2-4')">
-          <span class="etapa-num">2.4</span><span class="etapa-titulo">Middleware Protheus — Segurança e controle SQL</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">2.5</span><span class="etapa-titulo">Middleware Protheus — Segurança e controle SQL</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">O Middleware Protheus é a camada de segurança aplicada sobre todo SQL gerado pela IA (Text-to-SQL dinâmico). Ele bloqueia operações destrutivas, injeta filtros de tenant e limita o número de linhas retornadas.</p>
@@ -588,6 +831,48 @@
             <div class="campo-item"><div class="campo-nome">Expandir mensagem</div><div class="campo-desc">Clique em uma linha para ver a mensagem completa recebida e a resposta enviada, incluindo dados brutos do ERP e a intenção classificada.</div></div>
             <div class="campo-item"><div class="campo-nome">Usabilidade</div><div class="campo-desc">Use para verificar se as respostas estão corretas, identificar perguntas que geram erros e descobrir termos que precisam ser adicionados como sinônimos.</div></div>
           </div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e3-5">
+        <div class="etapa-card-header" onclick="toggleEtapa('e3-5')">
+          <span class="etapa-num">3.5</span><span class="etapa-titulo">Mensagens de Voz — Transcrição automática por IA</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">O usuário não precisa digitar — pode enviar um <strong>áudio de voz</strong> pelo WhatsApp com a mesma pergunta livre. O IA Command transcreve automaticamente e processa a transcrição pelo mesmo pipeline de uma mensagem de texto.</p>
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Diagrama 5 — Ciclo de vida de uma mensagem de voz, com fallback de transcrição</div>
+            <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
+              <rect width="700" height="220" rx="10" fill="#f5f3ff"/>
+              <defs><marker id="au1" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#7c3aed"/></marker></defs>
+              <rect x="10" y="14" width="110" height="42" rx="7" fill="#25d366"/><text x="65" y="32" font-size="9.5" fill="white" text-anchor="middle" font-weight="800">🎙 Áudio (.ogg)</text><text x="65" y="45" font-size="8" fill="#e7fbe9" text-anchor="middle">WhatsApp</text>
+              <line x1="120" y1="35" x2="146" y2="35" stroke="#7c3aed" stroke-width="2" marker-end="url(#au1)"/>
+              <rect x="146" y="14" width="130" height="42" rx="7" fill="#7c3aed"/><text x="211" y="32" font-size="9.5" fill="white" text-anchor="middle" font-weight="800">Download + Buffer</text><text x="211" y="45" font-size="8" fill="#ede9fe" text-anchor="middle">salvo em temp local</text>
+              <line x1="276" y1="35" x2="302" y2="35" stroke="#7c3aed" stroke-width="2" marker-end="url(#au1)"/>
+              <rect x="302" y="14" width="386" height="42" rx="7" fill="#0891b2"/><text x="495" y="32" font-size="9.5" fill="white" text-anchor="middle" font-weight="800">Cadeia de transcrição — tenta na ordem, cai para o próximo em qualquer erro</text><text x="495" y="45" font-size="8" fill="#e0f2fe" text-anchor="middle">Groq Whisper → OpenAI Whisper → Gemini (multimodal)</text>
+              <line x1="495" y1="56" x2="495" y2="72" stroke="#0891b2" stroke-width="2" marker-end="url(#au1)"/>
+              <rect x="315" y="74" width="110" height="30" rx="6" fill="#059669"/><text x="370" y="93" font-size="9" fill="white" text-anchor="middle" font-weight="800">1º Groq</text>
+              <rect x="435" y="74" width="110" height="30" rx="6" fill="#0284c7"/><text x="490" y="93" font-size="9" fill="white" text-anchor="middle" font-weight="800">2º OpenAI</text>
+              <rect x="555" y="74" width="110" height="30" rx="6" fill="#d97706"/><text x="610" y="93" font-size="9" fill="white" text-anchor="middle" font-weight="800">3º Gemini</text>
+              <text x="370" y="118" font-size="7.5" fill="#065f46" text-anchor="middle">ASR dedicado</text>
+              <text x="490" y="118" font-size="7.5" fill="#075985" text-anchor="middle">ASR dedicado</text>
+              <text x="610" y="118" font-size="7.5" fill="#92400e" text-anchor="middle">via prompt (LLM)</text>
+              <line x1="495" y1="104" x2="495" y2="132" stroke="#7c3aed" stroke-width="2" marker-end="url(#au1)"/>
+              <rect x="395" y="134" width="200" height="34" rx="7" fill="#d97706"/><text x="495" y="155" font-size="9.5" fill="white" text-anchor="middle" font-weight="800">Texto transcrito</text>
+              <line x1="495" y1="168" x2="495" y2="184" stroke="#7c3aed" stroke-width="2" marker-end="url(#au1)"/>
+              <rect x="14" y="186" width="672" height="26" rx="7" fill="rgba(124,58,237,.10)" stroke="#7c3aed" stroke-width="1"/>
+              <text x="350" y="203" font-size="9.5" font-weight="800" fill="#4c1d95" text-anchor="middle">A transcrição vira uma mensagem de texto normal — passa pelo mesmo SPEC, IA e SQL de sempre</text>
+            </svg>
+          </div>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Fallback entre 3 providers, na mesma lógica do texto</div><div class="campo-desc">A transcrição tenta <strong>Groq</strong> primeiro; se falhar por qualquer motivo (chave ausente, cota esgotada, erro de rede, timeout), cai automaticamente para <strong>OpenAI</strong>; se essa também falhar, tenta <strong>Gemini</strong> por último. É o mesmo critério já usado no fallback de classificação de texto em <a href="#" onclick="abrirEtapa('e2-3',event)">Configurar IA</a> — qualquer erro avança para o próximo da fila, não só erro de cota.</div></div>
+            <div class="campo-item"><div class="campo-nome">Groq e OpenAI transcrevem, Gemini "interpreta"</div><div class="campo-desc">Groq (Whisper) e OpenAI (Whisper) usam um modelo de reconhecimento de fala dedicado — a transcrição é literal. O Gemini não tem esse tipo de endpoint: o áudio é enviado como anexo dentro de um prompt de texto pedindo a transcrição, processado por um modelo de linguagem generativo. Por isso o Gemini fica por último na ordem — só é usado se os dois primeiros falharem, e pode ocasionalmente resumir ou ajustar o texto em vez de transcrever palavra por palavra.</div></div>
+            <div class="campo-item"><div class="campo-nome">Cada provider usa sua própria chave</div><div class="campo-desc">O fallback só funciona nos providers que tiverem chave cadastrada em Configurar IA (<code>groq_api_key</code>, <code>openai_api_key</code>, <code>gemini_api_key</code>). Se só Groq estiver configurado, o comportamento é o mesmo de antes — sem OpenAI/Gemini como chave, esses passos são pulados silenciosamente.</div></div>
+            <div class="campo-item"><div class="campo-nome">Modelo e idioma configuráveis</div><div class="campo-desc">Campo <code>whisper_model</code> (padrão <code>whisper-large-v3</code> na Groq) e <code>audio_idioma</code> (padrão <code>pt</code>) ficam salvos por empresa em Configurar IA. OpenAI usa o modelo <code>whisper-1</code>; Gemini recebe o idioma como instrução de texto no prompt, não como parâmetro estruturado.</div></div>
+            <div class="campo-item"><div class="campo-nome">Falha de transcrição não trava o sistema</div><div class="campo-desc">Só quando os três providers configurados falharem (ou nenhum tiver chave), o usuário recebe uma mensagem de erro amigável pelo WhatsApp em vez de ficar sem resposta.</div></div>
+            <div class="campo-item"><div class="campo-nome">Aviso de processamento</div><div class="campo-desc">Assim que o áudio chega, o sistema envia uma mensagem confirmando o recebimento antes de transcrever — evita que o usuário ache que a mensagem se perdeu enquanto a transcrição processa.</div></div>
+          </div>
+          <div class="callout info"><span class="callout-icon">ℹ</span><span>Tipos aceitos: notas de voz gravadas no próprio WhatsApp (<code>ptt</code>) e arquivos de áudio enviados como anexo (<code>audio</code>). O formato de origem é sempre convertido antes do envio ao Whisper.</span></div>
         </div></div>
       </article>
     </section>
@@ -925,75 +1210,152 @@
 
       <article class="etapa-card" id="e5-5">
         <div class="etapa-card-header" onclick="toggleEtapa('e5-5')">
-          <span class="etapa-num">5.5</span><span class="etapa-titulo">Consultas Faturamento — Inspeção de queries geradas</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">5.5</span><span class="etapa-titulo">Dicionário de Dados — Compras</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
-          <p class="etapa-desc">Visualiza as consultas SQL do módulo de faturamento com detalhes técnicos: tabelas utilizadas (SF2, SD2, SA1, SA3, SB1, SBM, SF4, CTT), entidades resolvidas, query plan aplicado e resultado. Permite comparar a intenção original com o SQL gerado.</p>
-          <div class="screen-mock">
-            <div class="screen-mock-bar"><div class="screen-mock-title">Log de Consultas — Faturamento</div></div>
-            <div class="screen-mock-row">
-              <div class="screen-mock-field" style="flex:2"><label>Pergunta original</label><span class="val">"Faturamento de abril por cliente — top 10"</span></div>
-            </div>
-            <div class="screen-mock-row">
-              <div class="screen-mock-field"><label>Entidades resolvidas</label><span class="val">Período: 01/04–30/04 · Agrup: SA1 (cliente)</span></div>
-              <div class="screen-mock-field"><label>Resultado</label><span class="val">10 linhas · 0,8s</span></div>
-            </div>
+          <p class="etapa-desc">Tabelas, campos e joins que o spec do módulo Compras conhece e usa para gerar SQL. Cobre notas de entrada, pedidos de compra e devoluções ao fornecedor.</p>
+          <div class="guia-table-wrap">
+            <table class="guia-table">
+              <thead><tr><th>Tabela</th><th>O que é</th><th>Campos principais</th></tr></thead>
+              <tbody>
+                <tr><td><span class="tag tag-blue">SF1</span></td><td>Cabeçalho de NF de entrada. <code>F1_VALBRUT</code> = valor bruto total da nota.</td><td>F1_FILIAL, F1_DOC, F1_SERIE, F1_FORNECE, F1_LOJA, F1_EMISSAO, F1_DTDIGIT, F1_TIPO, F1_VALBRUT, F1_VALMERC, F1_TOTALNF</td></tr>
+                <tr><td><span class="tag tag-blue">SD1</span></td><td>Itens de NF de entrada. Métrica: <code>D1_TOTAL</code>. Quantidade: <code>D1_QUANT</code>.</td><td>D1_FILIAL, D1_DOC, D1_SERIE, D1_FORNECE, D1_LOJA, D1_COD, D1_QUANT, D1_TOTAL, D1_DTDIGIT, D1_TES, D1_NATUREZ, D1_PEDIDO, D1_ITEMPC, D1_CC, D1_CF</td></tr>
+                <tr><td><span class="tag tag-blue">SF2 / SD2</span></td><td>Usadas na devolução ao fornecedor (<code>F2_TIPO='D'</code>).</td><td>F2_CLIENTE, F2_LOJA, F2_TIPO · D2_CLIENTE, D2_TOTAL, D2_NFORI, D2_SERIORI, D2_ITEMORI</td></tr>
+                <tr><td><span class="tag tag-blue">SA2</span></td><td>Fornecedores.</td><td>A2_COD, A2_LOJA, A2_NOME, A2_NREDUZ, A2_CGC</td></tr>
+                <tr><td><span class="tag tag-blue">SB1 / SBM</span></td><td>Produtos e grupos de produto.</td><td>B1_COD, B1_DESC, B1_GRUPO, B1_UM · BM_GRUPO, BM_DESC</td></tr>
+                <tr><td><span class="tag tag-blue">SC7</span></td><td>Pedidos de compra.</td><td>C7_NUM, C7_ITEM, C7_FORNECE, C7_PRODUTO, C7_QUANT, C7_PRECO, C7_TOTAL, C7_EMISSAO, C7_DATPRF</td></tr>
+                <tr><td><span class="tag tag-blue">CTT / SED / SF4</span></td><td>Centro de custo, natureza e TES.</td><td>CTT_CUSTO, CTT_DESC01 · ED_CODIGO, ED_DESCRIC · F4_CODIGO, F4_TEXTO, F4_ESTOQUE, F4_DUPLIC</td></tr>
+              </tbody>
+            </table>
           </div>
+          <div class="campo-secao">Joins padrão</div>
+          <div class="code-block">SD1 → SF1: D1_FILIAL=F1_FILIAL AND D1_DOC=F1_DOC AND D1_SERIE=F1_SERIE AND D1_FORNECE=F1_FORNECE AND D1_LOJA=F1_LOJA
+SF1 → SA2: F1_FORNECE=A2_COD AND F1_LOJA=A2_LOJA
+SD1 → SB1: D1_COD=B1_COD          SB1 → SBM: B1_GRUPO=BM_GRUPO
+SD1 → SC7: D1_PEDIDO=C7_NUM AND D1_ITEMPC=C7_ITEM
+SD1 → CTT: D1_CC=CTT_CUSTO        SD1 → SED: D1_NATUREZ=ED_CODIGO
+SD1 → SF4: D1_TES=F4_CODIGO</div>
           <div class="campo-lista">
-            <div class="campo-item"><div class="campo-nome">Tabelas do módulo Faturamento</div><div class="campo-desc"><strong>SF2</strong> cabeçalho NF saída · <strong>SD2</strong> itens NF · <strong>SA1</strong> clientes · <strong>SA3</strong> vendedores · <strong>SB1</strong> produtos · <strong>SBM</strong> grupos de produto · <strong>SF4</strong> tipos de entrada/saída · <strong>CTT</strong> centro de custo.</div></div>
-            <div class="campo-item"><div class="campo-nome">Entidades suportadas</div><div class="campo-desc">Cliente (SA1), Vendedor (SA3), Produto (SB1), Grupo de produto (SBM), Centro de custo (CTT), TES/tipo entrada-saída (SF4). Busca por nome com tolerância a digitação.</div></div>
-            <div class="campo-item"><div class="campo-nome">Usabilidade</div><div class="campo-desc">Use para validar se a IA está usando as tabelas e joins corretos. Se o resultado não bater com o esperado, o SQL gerado pode estar incluindo NFs de devolução ou cancelamento — verifique os filtros de tipo de operação (D2_TIPO).</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">F1_TIPO = 'N' obrigatório</div><div class="campo-desc">N=Normal (compra real), D=Devolução ao fornecedor, C=Complementar (correção de valor/frete/impostos), B=Beneficiamento. Só o tipo 'N' representa compra efetiva — validado em tempo de execução.</div></div>
+            <div class="campo-item"><div class="campo-nome">Devolução usa SF2/SD2, nunca SF4/TES</div><div class="campo-desc">Para devolução ao fornecedor, o SQL usa SF2/SD2 com F2_TIPO='D' — nunca SF4 ou CASE em SD1. O código do fornecedor fica gravado em F2_CLIENTE/D2_CLIENTE nesse cenário. Devoluções não entram por padrão, só se o usuário pedir explicitamente.</div></div>
+            <div class="campo-item"><div class="campo-nome">Nunca somar SF1.F1_VALBRUT com JOIN em SD1</div><div class="campo-desc">SD1 é tabela de itens — cada nota tem N linhas, o que multiplicaria o valor bruto do cabeçalho por N. Métrica de item usa sempre SD1.D1_TOTAL.</div></div>
+            <div class="campo-item"><div class="campo-nome">F4_ESTOQUE e F4_DUPLIC conforme a pergunta</div><div class="campo-desc">Pergunta sobre estoque exige F4_ESTOQUE='S'; pergunta sobre financeiro/duplicata/contas a pagar exige F4_DUPLIC='S'. Validado em tempo de execução.</div></div>
+            <div class="campo-item"><div class="campo-nome">Índices/chaves</div><div class="campo-desc">O spec não cita nomes de índice físico do Protheus — apenas as chaves compostas de junção acima (Filial+Doc+Série+Fornecedor+Loja para SD1↔SF1).</div></div>
           </div>
         </div></div>
       </article>
 
       <article class="etapa-card" id="e5-6">
         <div class="etapa-card-header" onclick="toggleEtapa('e5-6')">
-          <span class="etapa-num">5.6</span><span class="etapa-titulo">Consultas Financeiro — Inspeção de queries geradas</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">5.6</span><span class="etapa-titulo">Dicionário de Dados — Faturamento</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
-          <p class="etapa-desc">Visualiza as consultas do módulo financeiro (contas a pagar, contas a receber, fluxo de caixa, saldo bancário, carteira de títulos). O módulo cobre as maiores tabelas financeiras do Protheus.</p>
-          <div class="screen-mock">
-            <div class="screen-mock-bar"><div class="screen-mock-title">Log de Consultas — Financeiro</div></div>
-            <div class="screen-mock-row">
-              <div class="screen-mock-field" style="flex:2"><label>Pergunta original</label><span class="val">"Contas a pagar vencidas hoje por fornecedor"</span></div>
-            </div>
-            <div class="screen-mock-row">
-              <div class="screen-mock-field"><label>Operação detectada</label><span class="val">pagar (guardrail aplicado)</span></div>
-              <div class="screen-mock-field"><label>Tabela principal</label><span class="val">SE2 (títulos pagar)</span></div>
-            </div>
+          <p class="etapa-desc">Tabelas, campos e joins que o spec do módulo Faturamento conhece e usa para gerar SQL. Cobre notas de saída, devoluções de venda e faturamento por dimensão (cliente, produto, vendedor).</p>
+          <div class="guia-table-wrap">
+            <table class="guia-table">
+              <thead><tr><th>Tabela</th><th>O que é</th><th>Campos principais</th></tr></thead>
+              <tbody>
+                <tr><td><span class="tag tag-green">SF2</span></td><td>Cabeçalho de NF de saída. Métrica geral: <code>F2_VALBRUT</code> (quando não precisa de item).</td><td>F2_FILIAL, F2_DOC, F2_SERIE, F2_CLIENTE, F2_LOJA, F2_EMISSAO, F2_TIPO, F2_VALBRUT, F2_VALMERC, F2_VALFAT, F2_VEND1</td></tr>
+                <tr><td><span class="tag tag-green">SD2</span></td><td>Itens de NF de saída. Métrica de item: <code>D2_TOTAL</code>. Quantidade: <code>D2_QUANT</code>.</td><td>D2_FILIAL, D2_DOC, D2_SERIE, D2_CLIENTE, D2_LOJA, D2_COD, D2_QUANT, D2_TOTAL, D2_TES, D2_CF, D2_CCUSTO</td></tr>
+                <tr><td><span class="tag tag-green">SF1 / SD1</span></td><td>Usadas na devolução de venda (<code>F1_TIPO='D'</code>). Valor: <code>D1_TOTAL</code>.</td><td>F1_FORNECE, F1_LOJA, F1_DTDIGIT, F1_TIPO · D1_FORNECE, D1_TOTAL</td></tr>
+                <tr><td><span class="tag tag-green">SA1 / SA3</span></td><td>Clientes e vendedores.</td><td>A1_COD, A1_LOJA, A1_NOME, A1_NREDUZ · A3_COD, A3_NOME</td></tr>
+                <tr><td><span class="tag tag-green">SB1 / SBM</span></td><td>Produtos e grupos de produto.</td><td>B1_COD, B1_DESC, B1_GRUPO · BM_GRUPO, BM_DESC</td></tr>
+                <tr><td><span class="tag tag-green">SF4 / CTT</span></td><td>TES (tipo de entrada/saída) e centro de custo.</td><td>F4_CODIGO, F4_TEXTO, F4_ESTOQUE, F4_DUPLIC, F4_CF · CTT_CUSTO, CTT_DESC01</td></tr>
+              </tbody>
+            </table>
           </div>
+          <div class="campo-secao">Joins padrão</div>
+          <div class="code-block">SD2 → SF2: D2_FILIAL=F2_FILIAL AND D2_DOC=F2_DOC AND D2_SERIE=F2_SERIE AND D2_CLIENTE=F2_CLIENTE AND D2_LOJA=F2_LOJA
+SF2 → SA1: F2_CLIENTE=A1_COD AND F2_LOJA=A1_LOJA         SF2 → SA3: F2_VEND1=A3_COD
+SD2 → SB1: D2_COD=B1_COD          SB1 → SBM: B1_GRUPO=BM_GRUPO
+SD2 → SF4: D2_TES=F4_CODIGO       SD2 → CTT: D2_CCUSTO=CTT_CUSTO
+SD1 → SF1 (devolução): D1_FILIAL=F1_FILIAL AND D1_DOC=F1_DOC AND D1_SERIE=F1_SERIE AND D1_FORNECE=F1_FORNECE AND D1_LOJA=F1_LOJA
+SF1 → SA1 (devolução): F1_FORNECE=A1_COD AND F1_LOJA=A1_LOJA  (código do cliente fica em F1_FORNECE)</div>
           <div class="campo-lista">
-            <div class="campo-item"><div class="campo-nome">Tabelas do módulo Financeiro</div><div class="campo-desc"><strong>SE1</strong> contas a receber · <strong>SE2</strong> contas a pagar · <strong>SE5</strong> movimentos bancários · <strong>SE8</strong> cheques · <strong>SA1</strong> clientes · <strong>SA2</strong> fornecedores · <strong>SA6</strong> bancos · <strong>FK1/FK2/FK5/FK6/FK7/FKA/FKB</strong> fluxo de caixa.</div></div>
-            <div class="campo-item"><div class="campo-nome">Guardrails financeiros</div><div class="campo-desc">O sistema aplica guardrails para "contas a pagar" → SE2 e "saldo bancário" → SE5/SE8, independentemente do que a IA classificar. Esses overrides aparecem no log como "guardrail aplicado".</div></div>
-            <div class="campo-item"><div class="campo-nome">Carteira e estado</div><div class="campo-desc">O query plan identifica se o usuário quer títulos abertos, vencidos, liquidados ou em carteira. Esses estados são injetados nos filtros WHERE automaticamente.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">F2_TIPO = 'N' obrigatório</div><div class="campo-desc">N=Normal (venda real), D=Devolução de cliente, B=Beneficiamento, I/P=Complementar de impostos. Só 'N' representa receita de venda — validado em tempo de execução, e "F2_TIPO = '1'" é padrão proibido.</div></div>
+            <div class="campo-item"><div class="campo-nome">Devolução usa SF1/SD1 com UNION ALL, nunca SF4/CASE em SD2</div><div class="campo-desc">Para venda líquida de devoluções, o SQL usa subquery UNION ALL com SF1/SD1 (F1_TIPO='D') — nunca SF4/TES ou CASE em SD2. Devoluções só entram se o usuário pedir explicitamente ("líquido", "abatendo").</div></div>
+            <div class="campo-item"><div class="campo-nome">Nunca somar SF2.F2_VALBRUT com JOIN em SD2</div><div class="campo-desc">SD2 é tabela de itens (N linhas por nota) — multiplicaria o valor bruto do cabeçalho. Quando SD2 está no FROM/JOIN, a métrica correta é SUM(SD2.D2_TOTAL) ou SUM(SD2.D2_QUANT).</div></div>
+            <div class="campo-item"><div class="campo-nome">CFOP (D2_CF) filtra remessas e entrega futura</div><div class="campo-desc">CF 59%/60% = simples remessa/transferência, excluído por padrão da receita. CF = 5117 = entrega futura/nota mãe, tratado separadamente conforme a pergunta.</div></div>
+            <div class="campo-item"><div class="campo-nome">Média exige subquery em duas camadas</div><div class="campo-desc">AVG(SF2.F2_VALBRUT) direto calcula ticket médio por nota, não faturamento médio por período — proibido. O cálculo correto agrupa por período numa subquery e tira a média na camada externa.</div></div>
+            <div class="campo-item"><div class="campo-nome">Índices/chaves</div><div class="campo-desc">Não há índice físico citado no spec — apenas a chave composta de junção (Filial+Doc+Série+Cliente+Loja para SD2↔SF2).</div></div>
           </div>
         </div></div>
       </article>
 
       <article class="etapa-card" id="e5-7">
         <div class="etapa-card-header" onclick="toggleEtapa('e5-7')">
-          <span class="etapa-num">5.7</span><span class="etapa-titulo">Consultas Comissão — Inspeção de queries geradas</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">5.7</span><span class="etapa-titulo">Dicionário de Dados — Financeiro</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
-          <p class="etapa-desc">Visualiza consultas do módulo de comissão: apuração por vendedor, período, cliente e produto. Cobre desde a comissão calculada (SE3) até os títulos de comissão a pagar (SE2/SE5).</p>
-          <div class="screen-mock">
-            <div class="screen-mock-bar"><div class="screen-mock-title">Log de Consultas — Comissão</div></div>
-            <div class="screen-mock-row">
-              <div class="screen-mock-field" style="flex:2"><label>Pergunta original</label><span class="val">"Comissão de João por cliente em abril"</span></div>
-            </div>
-            <div class="screen-mock-row">
-              <div class="screen-mock-field"><label>Vendedor resolvido</label><span class="val">A3_NOME LIKE 'JOAO%' → SA3</span></div>
-              <div class="screen-mock-field"><label>Tabela principal</label><span class="val">SE3</span></div>
-            </div>
+          <p class="etapa-desc">Tabelas, campos e joins do módulo Financeiro: contas a pagar, contas a receber, saldo bancário e fluxo de caixa projetado. O modelo de baixas (FK1/FK2 ou SE5) varia por tenant — veja a nota mais abaixo.</p>
+          <div class="guia-table-wrap">
+            <table class="guia-table">
+              <thead><tr><th>Tabela</th><th>O que é</th><th>Campos principais</th></tr></thead>
+              <tbody>
+                <tr><td><span class="tag tag-orange">SE1</span></td><td>Contas a receber. <code>E1_SALDO=0</code> = título já recebido.</td><td>E1_CLIENTE, E1_LOJA, E1_VENCTO, E1_VENCREA, E1_VALOR, E1_SALDO, E1_NATUREZ, E1_SITUACAO, E1_VEND1</td></tr>
+                <tr><td><span class="tag tag-orange">SE2</span></td><td>Contas a pagar. <code>E2_SALDO=0</code> = título já pago.</td><td>E2_FORNECE, E2_LOJA, E2_VENCTO, E2_VENCREA, E2_VALOR, E2_SALDO, E2_NATUREZ, E2_SITUACAO</td></tr>
+                <tr><td><span class="tag tag-orange">SE5</span></td><td>Movimentos/baixas financeiras (modelo legado). <code>E5_RECPAG</code>: R=recebimento, P=pagamento.</td><td>E5_DATA, E5_VALOR, E5_CLIFOR, E5_LOJA, E5_TIPO, E5_SITUACAO</td></tr>
+                <tr><td><span class="tag tag-orange">FK1 / FK2</span></td><td>Família moderna de baixas (usada no lugar de SE5 conforme configuração do tenant).</td><td>FK1_DATA, FK1_VALOR · FK2_DATA, FK2_VALOR</td></tr>
+                <tr><td><span class="tag tag-orange">SE8</span></td><td>Saldo bancário. <code>E8_SALATUA</code> = saldo na data <code>E8_DTSALAT</code>. Cada conta tem múltiplas linhas, uma por data.</td><td>E8_BANCO, E8_AGENCIA, E8_CONTA, E8_DTSALAT, E8_SALATUA</td></tr>
+                <tr><td><span class="tag tag-orange">SA1 / SA2 / SA6</span></td><td>Clientes, fornecedores e contas bancárias.</td><td>A1_COD/A1_NOME · A2_COD/A2_NOME · A6_COD, A6_AGENCIA, A6_NUMCON, A6_BLOCKED</td></tr>
+                <tr><td><span class="tag tag-orange">SED</span></td><td>Natureza financeira.</td><td>ED_CODIGO, ED_DESCRIC</td></tr>
+              </tbody>
+            </table>
           </div>
+          <div class="campo-secao">Joins padrão</div>
+          <div class="code-block">SE1 → SA1: E1_CLIENTE=A1_COD AND E1_LOJA=A1_LOJA      SE2 → SA2: E2_FORNECE=A2_COD AND E2_LOJA=A2_LOJA
+SE1 → SED: E1_NATUREZ=ED_CODIGO                       SE2 → SED: E2_NATUREZ=ED_CODIGO
+SE8 → SA6: E8_BANCO=A6_COD AND E8_AGENCIA=A6_AGENCIA AND E8_CONTA=A6_NUMCON
+
+Baixa de recebimento — tenant com FK1:
+  FK1_FILIAL=E1_FILIAL AND FK1_PREFIXO=E1_PREFIXO AND FK1_NUM=E1_NUM AND FK1_PARCELA=E1_PARCELA AND FK1_TIPO=E1_TIPO
+Baixa de recebimento — tenant legado (SE5):
+  E5_FILIAL=E1_FILIAL AND E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA
+  AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG='R' AND E5_SITUACAO<>'C'
+(mesmo padrão para SE2/FK2/SE5 com E5_RECPAG='P')</div>
+          <div class="callout warning"><span class="callout-icon">⚠</span><span><strong>SE1 e SE2 nunca são unidas por JOIN direto</strong> — são carteiras independentes (receber x pagar); combinar totais exige UNION ALL, nunca JOIN.</span></div>
           <div class="campo-lista">
-            <div class="campo-item"><div class="campo-nome">Tabelas do módulo Comissão</div><div class="campo-desc"><strong>SE3</strong> comissões calculadas · <strong>SA3</strong> vendedores · <strong>SA1</strong> clientes · <strong>SE2</strong> comissões a pagar · <strong>SE5</strong> pagamentos de comissão.</div></div>
-            <div class="campo-item"><div class="campo-nome">Resolução de vendedor</div><div class="campo-desc">O sistema busca o vendedor pelo nome em SA3. Se o nome tiver ≤1 palavra, usa busca por prefixo de 5 caracteres para tolerar erros de digitação.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Modelo de baixa é condicional por tenant</div><div class="campo-desc">Cada empresa usa FK1/FK2 <strong>ou</strong> SE5 para representar baixas — nunca ambos. O spec escolhe automaticamente com base na configuração salva (<code>modeloBaixasReceber</code>/<code>modeloBaixasPagar</code>). Ver <a href="#" onclick="abrirEtapa('e2-3',event)">Conexões ERP</a>.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Sempre usar E1_VENCREA/E2_VENCREA, nunca VENCTO</div><div class="campo-desc">VENCTO é o vencimento nominal; VENCREA já ajusta sábado/domingo/feriado. Filtros de data de vencimento são proibidos de usar E1_VENCTO/E2_VENCTO.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Saldo bancário puro usa somente SE8 + SA6</div><div class="campo-desc">Nunca inclui SE1/SE2/SE5/FK. Exige filtro de posição mais recente por conta (ROW_NUMBER ou MAX(E8_DTSALAT)) para não somar saldos duplicados de datas diferentes. Bancos com A6_BLOCKED='1' são sempre excluídos.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Fluxo de caixa projetado nunca usa SE5/FK</div><div class="campo-desc">Projeção usa E1_SALDO&gt;0 e E2_SALDO&gt;0 (títulos em aberto), nunca movimentos já baixados. Proibido JOIN entre SE8 e SE1/SE2, e proibido FULL OUTER JOIN (não suportado no ambiente).</div></div>
+            <div class="campo-item"><div class="campo-nome">Tabelas sem uso documentado: FK5, FK6, FK7, FKA, FKB</div><div class="campo-desc">Aparecem na lista de tabelas e campos essenciais do spec, mas não há explicação de uso nos fragmentos analisados — tratadas como reserva para modelos de fluxo de caixa mais avançados.</div></div>
+          </div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card" id="e5-8">
+        <div class="etapa-card-header" onclick="toggleEtapa('e5-8')">
+          <span class="etapa-num">5.8</span><span class="etapa-titulo">Dicionário de Dados — Comissão</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Tabelas, campos e joins do módulo Comissão: apuração por vendedor e cliente, com controle de acesso restrito por número de WhatsApp.</p>
+          <div class="guia-table-wrap">
+            <table class="guia-table">
+              <thead><tr><th>Tabela</th><th>O que é</th><th>Campos principais</th></tr></thead>
+              <tbody>
+                <tr><td><span class="tag tag-red">SE3</span></td><td>Comissões. Métrica: <code>E3_COMIS</code>. Valor base/venda: <code>E3_BASE</code>.</td><td>E3_VEND, E3_VENDED, E3_CLIENT, E3_LOJA, E3_VENCTO, E3_DATA, E3_STATUS, E3_COMIS, E3_BASE, E3_PERCCOM</td></tr>
+                <tr><td><span class="tag tag-red">SA3 / SA1</span></td><td>Vendedores e clientes.</td><td>A3_COD, A3_NOME · A1_COD, A1_LOJA, A1_NOME</td></tr>
+                <tr><td><span class="tag tag-red">SE2 / SE5</span></td><td>Usadas apenas para comissão paga/realizada (provisão e baixa financeira), quando os campos existirem no ambiente.</td><td>E2_NUM, E2_PARCELA, E2_TIPO · E5_DATA, E5_VALOR, E5_CLIFOR</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="campo-secao">Joins padrão</div>
+          <div class="code-block">SE3 → SA3: E3_VEND=A3_COD
+SE3 → SA1: E3_CLIENT=A1_COD AND E3_LOJA=A1_LOJA
+Pagamento real (apenas quando campos existirem):
+  SE3 → SE2: E2_FORNECE=E3_VEND (ou E3_VENDED) AND E2_NUM=E3_NUM AND E2_PARCELA=E3_PARCELA
+  SE2 → SE5: E5_CLIFOR=E2_FORNECE AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA</div>
+          <div class="callout danger"><span class="callout-icon">!</span><span><strong>Controle de identidade obrigatório:</strong> todo número de WhatsApp é resolvido em "Números Autorizados" antes de qualquer SQL. Gestor vê tudo; vendedor só vê a própria comissão (filtro fixo em E3_VEND/E3_VENDED, nunca em SA3.A3_COD); número não cadastrado bloqueia a execução. O sistema nunca revela nome ou código de outro vendedor.</span></div>
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">E3_STATUS não indica pagamento</div><div class="campo-desc">Comissão em aberto/pendente é identificada por <code>E3_DATA</code> vazio; paga/realizada por <code>E3_DATA</code> preenchido. E3_STATUS tem outro propósito e nunca deve ser usado como indicador de pago/aberto.</div></div>
+            <div class="campo-item"><div class="campo-nome">Média exige subquery em duas camadas</div><div class="campo-desc">AVG(E3_COMIS) ou AVG(E3_BASE) direto com GROUP BY calcula o ticket médio por lançamento, não a média entre períodos — mesmo padrão de proibição do Faturamento/Compras. AVG(SUM(...)) na mesma camada é inválido no SQL Server.</div></div>
+            <div class="campo-item"><div class="campo-nome">Índices/chaves</div><div class="campo-desc">Nenhum índice físico citado. Chave composta condicional SE3↔SE2↔SE5 usa Filial+Num+Parcela+Tipo+Prefixo "quando os campos existirem" — o schema de comissão varia mais entre tenants que os demais módulos.</div></div>
           </div>
         </div></div>
       </article>
     </section>
+
     <!-- ═══ FASE 6 ══════════════════════════════════════════════════════════ -->
     <section class="fase-section" id="f6">
       <div class="fase-header">
@@ -1107,6 +1469,7 @@
             <div class="campo-item"><div class="campo-nome">Filtros</div><div class="campo-desc">Por período, usuário, tipo de ação (criar/editar/excluir) e entidade afetada. Use para rastrear quem alterou uma configuração que causou mudança de comportamento.</div></div>
             <div class="campo-item"><div class="campo-nome">Conteúdo alterado</div><div class="campo-desc">Para edições, a auditoria registra o valor anterior e o novo valor de cada campo alterado. Permite reverter uma mudança manualmente se necessário.</div></div>
           </div>
+          <div class="callout warning"><span class="callout-icon">⚠</span><span><strong>Existem dois logs de auditoria separados.</strong> Esta tela mostra apenas a auditoria interna do IA Command (módulos, datasets, intenções, sinônimos, conexões). Ações de <strong>login, logout e troca de empresa/sistema</strong> ficam registradas num log central do IAHub, fora do IA Command — se precisar rastrear "quem trocou de empresa" ou "quem fez login", procure na auditoria do IAHub, não aqui.</span></div>
         </div></div>
       </article>
     </section>

@@ -22,6 +22,20 @@ const CAMPOS_SX3_ESSENCIAIS = {
   SF4: ['F4_FILIAL', 'F4_CODIGO', 'F4_TEXTO', 'F4_TIPO', 'F4_DUPLIC', 'F4_ESTOQUE', 'F4_CF', 'D_E_L_E_T_'],
 };
 
+function validarDeleteFiltros(sql = '') {
+  const texto = String(sql || '');
+  const aliases = ['SF1', 'SD1', 'SF2', 'SD2', 'SA2', 'SB1', 'SBM', 'SC7', 'CTT', 'SED', 'SF4'];
+  const faltando = [];
+  for (const alias of aliases) {
+    const reDeclarado = new RegExp(`\\b(?:FROM|JOIN)\\s+\\w+\\s+${alias}\\b`, 'i');
+    if (!reDeclarado.test(texto)) continue;
+    const reDelete = new RegExp(`\\b${alias}\\s*\\.\\s*D_E_L_E_T_\\s*=\\s*'\\s*'`, 'i');
+    if (!reDelete.test(texto)) faltando.push(alias);
+  }
+  if (!faltando.length) return null;
+  return `FROM/JOIN sem filtro D_E_L_E_T_: ${faltando.join(', ')}. REGRA ABSOLUTA: toda tabela no FROM ou JOIN deve ter alias.D_E_L_E_T_ = ' ' — tabela no FROM: WHERE alias.D_E_L_E_T_ = ' '; tabela em JOIN: AND alias.D_E_L_E_T_ = ' ' dentro do ON. Adicione os filtros faltantes.`;
+}
+
 function garantirIntencao(empresaId) {
   try {
     const { getDB } = require('../../database');
@@ -208,6 +222,17 @@ module.exports = {
     {
       regex: /\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b[\s\S]{0,4000}\bJOIN\s+\w+\s+SD1\b|\bJOIN\s+\w+\s+SD1\b[\s\S]{0,4000}\bSUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\b/i,
       mensagem: 'JOIN com SD1 invalido quando a metrica e SUM(SF1.F1_VALBRUT). SD1 e tabela de itens: cada NF tem N linhas em SD1, o que multiplica F1_VALBRUT por N ao somar. Quando SD1 estiver no FROM/JOIN, use SUM(SD1.D1_TOTAL) como metrica de valor e SUM(SD1.D1_QUANT) para quantidade.',
+    },
+    {
+      regex: /^(?![\s\S]*\bJOIN\s+\w+\s+SA2\b)[\s\S]*\bSA2\s*\.\s*A2_\w+/i,
+      mensagem: 'Campo SA2.A2_* usado sem JOIN SA2 declarado no FROM. Adicione JOIN SA2<sufixo> SA2 ON SF1.F1_FORNECE = SA2.A2_COD AND SF1.F1_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = \' \' antes de usar campos de fornecedor.',
+    },
+    {
+      regex: /^(?![\s\S]*\bJOIN\s+\w+\s+SB1\b)[\s\S]*\bSB1\s*\.\s*B1_\w+/i,
+      mensagem: 'Campo SB1.B1_* usado sem JOIN SB1 declarado no FROM. Adicione JOIN SB1<sufixo> SB1 ON SD1.D1_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = \' \' antes de usar campos de produto.',
+    },
+    {
+      validar: validarDeleteFiltros,
     },
     {
       validar(sql, mensagem) {

@@ -254,8 +254,13 @@
     if (e.data?.type === 'shell:hide-ajuda')  { document.getElementById('_ajuda-btn').style.display = 'none'; _ajudaAtiva = false; }
   });
   function abrirAjudaAtiva() {
-    const iframes = document.querySelectorAll('#mdi-content iframe');
-    iframes.forEach(f => { try { f.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin); } catch(_){} });
+    const iframes = document.querySelectorAll('#mdi-content iframe.active');
+    iframes.forEach(f => {
+      try {
+        if (typeof f.contentWindow.abrirAjuda === 'function') f.contentWindow.abrirAjuda();
+        else f.contentWindow.postMessage({ type: 'page:open-ajuda' }, location.origin);
+      } catch(_) {}
+    });
   }
 
   document.addEventListener('click', (e) => {

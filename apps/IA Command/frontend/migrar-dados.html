@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Migrar Dados - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px;max-width:760px;line-height:1.55; }
+    .migration-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px; }
+    .migration-card { background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:16px;box-shadow:var(--shadow-sm); }
+    .migration-card-title { font-size:13px;font-weight:800;color:var(--text-hi);margin-bottom:6px; }
+    .migration-card-desc { font-size:13px;color:var(--text-md);line-height:1.6; }
+    .flow { background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:18px;box-shadow:var(--shadow-sm); }
+    .flow-title { font-size:14px;font-weight:800;color:var(--text-hi);margin-bottom:12px; }
+    .flow-steps { display:grid;gap:10px; }
+    .flow-step { display:grid;grid-template-columns:32px 1fr;gap:10px;align-items:start; }
+    .flow-num { width:28px;height:28px;border-radius:8px;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px; }
+    .flow-step-title { font-size:13px;font-weight:800;color:var(--text-hi); }
+    .flow-step-desc { font-size:13px;color:var(--text-md);line-height:1.6;margin-top:2px; }
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(540px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+    @media(max-width:900px){ .migration-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &gt; Configuracao &gt;</span> Migrar Dados</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Configuracao</div>
+          <div class="page-title">Migrar Dados</div>
+          <div class="page-subtitle">Roteiro operacional para transferir configuracoes entre empresas, ambientes ou instalacoes do IA Command sem misturar contextos de ERP, WhatsApp e IA.</div>
+        </div>
+      </div>
+
+      <div class="migration-grid">
+        <div class="migration-card">
+          <div class="migration-card-title">1. Inventario</div>
+          <div class="migration-card-desc">Revise conexoes ERP, datasets, intencoes, equivalencias, canais, numeros autorizados e mensagens antes de copiar qualquer configuracao.</div>
+        </div>
+        <div class="migration-card">
+          <div class="migration-card-title">2. Isolamento</div>
+          <div class="migration-card-desc">Confirme empresa de origem e destino. Chaves, canais e conexoes devem permanecer separados quando os ambientes representam clientes diferentes.</div>
+        </div>
+        <div class="migration-card">
+          <div class="migration-card-title">3. Validacao</div>
+          <div class="migration-card-desc">Depois da migracao, teste conexao, consultas principais, WhatsApp Services e logs antes de liberar usuarios finais.</div>
+        </div>
+      </div>
+
+      <div class="flow">
+        <div class="flow-title">Sequencia recomendada</div>
+        <div class="flow-steps">
+          <div class="flow-step"><div class="flow-num">1</div><div><div class="flow-step-title">Migrar base tecnica</div><div class="flow-step-desc">Conexoes ERP, middleware, SX2/SX3 e configuracao de IA.</div></div></div>
+          <div class="flow-step"><div class="flow-num">2</div><div><div class="flow-step-title">Migrar conhecimento</div><div class="flow-step-desc">Modulos, intencoes, datasets, equivalencias, normalizacao e dialogos.</div></div></div>
+          <div class="flow-step"><div class="flow-num">3</div><div><div class="flow-step-title">Migrar operacao WhatsApp</div><div class="flow-step-desc">Canais, numeros autorizados, mensagens e servicos do WhatsApp.</div></div></div>
+          <div class="flow-step"><div class="flow-num">4</div><div><div class="flow-step-title">Testar e auditar</div><div class="flow-step-desc">Faça perguntas controladas, acompanhe Historico, Log de Consultas e Monitor antes de considerar a migracao concluida.</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda - Migrar Dados</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar">&times;</button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">Quando usar</div>
+      <div class="help-item-desc">Use esta rotina como roteiro para migrar configuracoes entre ambientes de homologacao e producao, replicar uma configuracao modelo para uma nova empresa ou revisar uma implantacao antes do go-live.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Ordem segura</div>
+      <div class="help-item"><div class="help-item-label">Base tecnica</div><div class="help-item-desc">Comece por conexoes, middleware, modelo de dados, SX2/SX3 e chave de IA. Sem isso, os demais cadastros podem apontar para destinos errados.</div></div>
+      <div class="help-item"><div class="help-item-label">Conhecimento da IA</div><div class="help-item-desc">Depois migre modulos, intencoes, datasets, sinonimos/equivalencias e dialogos. Valide exemplos de perguntas reais.</div></div>
+      <div class="help-item"><div class="help-item-label">WhatsApp</div><div class="help-item-desc">Por ultimo, revise canais, numeros autorizados e mensagens. Evite ativar numero real antes dos testes de ERP passarem.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Checklist antes de liberar</div>
+      <div class="help-item"><div class="help-item-label">Teste conexao</div><div class="help-item-desc">Confirme acesso ao ERP e tabelas esperadas para a empresa correta.</div></div>
+      <div class="help-item"><div class="help-item-label">Teste consultas</div><div class="help-item-desc">Execute perguntas de faturamento, compras, financeiro ou comissao conforme os modulos habilitados.</div></div>
+      <div class="help-item"><div class="help-item-label">Revise logs</div><div class="help-item-desc">Abra Historico e Log de Consultas para confirmar SQL, status, duracao e resposta entregue.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Cuidados</div>
+      <div class="help-item-desc">Nunca copie tokens, canais ou conexoes sem confirmar se pertencem ao mesmo cliente/ambiente. Migracao mal revisada pode fazer a IA consultar base errada ou responder por um numero indevido.</div>
+      <div class="help-tip">Se estiver em duvida, mantenha o canal WhatsApp inativo ate terminar a validacao tecnica.</div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+</script>
+</body>
+</html>
