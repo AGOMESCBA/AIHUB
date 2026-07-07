@@ -163,6 +163,29 @@ const validacaoAcumuladoJanAJunCorreto = runner._test.validarSqlIaOwnerBasico(sq
 }, perguntaAcumuladoJanAJunVariosAnos);
 assert.strictEqual(validacaoAcumuladoJanAJunCorreto.ok, true, `SQL com mes(range)+anos separados deve passar: ${validacaoAcumuladoJanAJunCorreto.erros.join(' | ')}`);
 
+const perguntaMesesAvulsosVariosAnos = 'Faturamento de Marco e Setembro dos anos de 2024 e 2025';
+const sqlMesesAvulsosErrado = `
+SET ROWCOUNT 30000;
+SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia, COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento
+FROM SF2010 SF2
+WHERE SF2.F2_EMISSAO BETWEEN '20240301' AND '20240930' AND SF2.F2_TIPO = 'N' AND SF2.D_E_L_E_T_ = ' '
+GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+ORDER BY competencia;
+`;
+const validacaoMesesAvulsosErrado = runner._test.validarSqlIaOwnerBasico(sqlMesesAvulsosErrado, faturamentoSpec, {
+  SF2010: 'E',
+}, perguntaMesesAvulsosVariosAnos);
+assert.strictEqual(validacaoMesesAvulsosErrado.ok, false, 'BETWEEN continuo de marco a setembro/2024 deve ser rejeitado: pergunta pede so marco e setembro (nao-contiguos) em 2024 e 2025');
+
+const sqlMesesAvulsosCorreto = sqlMesesAvulsosErrado.replace(
+  "SF2.F2_EMISSAO BETWEEN '20240301' AND '20240930'",
+  "SUBSTRING(SF2.F2_EMISSAO, 5, 2) IN ('03', '09') AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2024', '2025')"
+);
+const validacaoMesesAvulsosCorreto = runner._test.validarSqlIaOwnerBasico(sqlMesesAvulsosCorreto, faturamentoSpec, {
+  SF2010: 'E',
+}, perguntaMesesAvulsosVariosAnos);
+assert.strictEqual(validacaoMesesAvulsosCorreto.ok, true, `SQL com meses avulsos IN + anos IN deve passar: ${validacaoMesesAvulsosCorreto.erros.join(' | ')}`);
+
 const sqlGroupByInvalido = `
 SET ROWCOUNT 50000;
 SELECT

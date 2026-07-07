@@ -1686,21 +1686,27 @@ function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
 
   const rangeMeses = _rangeMesesCitadoNoTexto(mensagem);
   const mesesUnicos = _mesesCitadosNoTexto(mensagem);
-  // Prioriza range explicito ("janeiro a junho"); cai para mes unico se so 1 mes foi citado.
-  const meses = rangeMeses || (mesesUnicos.length === 1 ? mesesUnicos : null);
+  // Prioriza range explicito ("janeiro a junho"); senao usa os meses citados (1 ou mais,
+  // contiguos ou avulsos — ex: "marco e setembro"). meses.length>=2 sem match de range
+  // contiguo indica meses avulsos, que exigem SUBSTRING(mes) IN (...) em vez de BETWEEN.
+  const meses = rangeMeses || (mesesUnicos.length >= 1 ? mesesUnicos : null);
   if (!meses) return { ok: true, erros: [] };
+  const mesesContiguos = !!rangeMeses;
 
-  const mesInicio = String(Math.min(...meses)).padStart(2, '0');
-  const mesFim = String(Math.max(...meses)).padStart(2, '0');
+  const mesesOrdenados = [...meses].sort((a, b) => a - b);
+  const mesInicio = String(mesesOrdenados[0]).padStart(2, '0');
+  const mesFim = String(mesesOrdenados[mesesOrdenados.length - 1]).padStart(2, '0');
   const anosOrdenados = [...anos].sort((a, b) => a - b);
   const primeiroAno = anosOrdenados[0];
   const ultimoAno = anosOrdenados[anosOrdenados.length - 1];
 
   // Dois padroes de intervalo continuo unico que ambos escapam do filtro correto
-  // (mes/range de mes repetido em cada ano pedido, via SUBSTRING mes + SUBSTRING ano):
-  // (a) mesmo ano nos dois literais — perde silenciosamente os demais anos pedidos;
-  // (b) literais indo do primeiro ao ultimo ano — cobre todos os anos, mas vaza para
-  //     meses fora do range pedido nos anos intermediarios/extremos.
+  // (mes/range/conjunto de meses repetido em cada ano pedido, via SUBSTRING mes +
+  // SUBSTRING ano): (a) mesmo ano nos dois literais — perde silenciosamente os demais
+  // anos pedidos; (b) literais indo do primeiro ao ultimo ano — cobre todos os anos, mas
+  // vaza para meses fora do conjunto pedido nos anos intermediarios/extremos. Usa o menor
+  // e o maior mes citado como ancora do padrao mesmo quando os meses sao avulsos
+  // (nao-contiguos), pois BETWEEN do min ao max tambem inclui os meses pulados entre eles.
   const reMesmoAno = new RegExp(
     `'(\\d{4})${mesInicio}01'[^']{0,60}?'(?:\\1)${mesFim}(?:28|29|30|31)'`,
     'i'
@@ -1711,12 +1717,19 @@ function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
   );
   if (!reMesmoAno.test(texto) && !reAnoInicioAoFim.test(texto)) return { ok: true, erros: [] };
 
-  const mesesTexto = meses.length === 1 ? `SUBSTRING(campo, 5, 2) = '${mesInicio}'` : `SUBSTRING(campo, 5, 2) BETWEEN '${mesInicio}' AND '${mesFim}'`;
+  let mesesTexto;
+  if (mesesOrdenados.length === 1) {
+    mesesTexto = `SUBSTRING(campo, 5, 2) = '${mesInicio}'`;
+  } else if (mesesContiguos) {
+    mesesTexto = `SUBSTRING(campo, 5, 2) BETWEEN '${mesInicio}' AND '${mesFim}'`;
+  } else {
+    mesesTexto = `SUBSTRING(campo, 5, 2) IN (${mesesOrdenados.map(m => `'${String(m).padStart(2, '0')}'`).join(', ')})`;
+  }
   return {
     ok: false,
     erros: [
       `Nao use um unico intervalo continuo de datas (BETWEEN ou >=/<=) quando a pergunta pede o(s) mesmo(s) mes(es) repetidos em varios anos (${anosOrdenados.join(', ')}). ` +
-      `Um intervalo continuo entre o primeiro e o ultimo ano inclui meses fora do range pedido nos anos intermediarios/extremos. ` +
+      `Um intervalo continuo entre o primeiro e o ultimo ano inclui meses fora do conjunto pedido nos anos intermediarios/extremos. ` +
       `Filtre mes e ano separadamente: ${mesesTexto} AND SUBSTRING(campo, 1, 4) IN (${anosOrdenados.map(a => `'${a}'`).join(', ')}).`,
     ],
   };
