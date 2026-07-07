@@ -13,6 +13,7 @@ const queryPlan = require('../query-plan');
 const canonicalWhatsappFormat = require('../canonical-whatsapp-format');
 const promptBuilder = require('./prompt-builder');
 const entityResolver = require('../../ai/entity-resolver');
+const periodResolver = require('../../ai/period-resolver');
 
 const PIPELINE_TRACE_FILE = path.join(__dirname, '..', '..', '..', '..', '..', 'logs', 'iac-whatsapp-pipeline.log');
 
@@ -237,7 +238,8 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Gere novo SQL a partir da pergunta original.',
       '- Preserve periodo, metrica, entidades resolvidas e filtros cadastrais.',
       '- Corrija TODOS os problemas listados no motivo da rejeicao em um unico SQL — nao apenas D_E_L_E_T_.',
-      '- Antes de retornar: verifique D_E_L_E_T_ em todas as tabelas E releia o CONTRATO OBRIGATORIO DE SQL no contexto tecnico.',
+      '- Antes de retornar: percorra CADA tabela do FROM e de CADA JOIN, uma por uma, e confirme visualmente que ela tem alias.D_E_L_E_T_ = \' \' — nao confie apenas nas tabelas citadas no motivo da rejeicao, releia o SQL inteiro.',
+      '- Releia o CONTRATO OBRIGATORIO DE SQL no contexto tecnico antes de retornar.',
     ];
   } else if (subtipo === 'contrato_query_plan_invalido' || /plano estruturado|campo_data_semantico|baixa\/movimento|baixa_movimento/i.test(mensagem)) {
     bloco = [
@@ -1638,6 +1640,54 @@ function validarAliasesUsadosDeclarados(sql, spec = {}) {
   return { ok: erros.length === 0, erros };
 }
 
+function _mesesCitadosNoTexto(mensagem) {
+  const texto = periodResolver.normalizarTexto(String(mensagem || ''));
+  const meses = new Set();
+  for (const [nome, numero] of Object.entries(periodResolver.MONTHS)) {
+    const re = new RegExp(`\\b${nome}\\b`, 'i');
+    if (re.test(texto)) meses.add(numero);
+  }
+  return [...meses];
+}
+
+function _anosCitadosNoTexto(mensagem) {
+  const anos = new Set();
+  for (const m of String(mensagem || '').matchAll(/\b(20\d{2}|19\d{2})\b/g)) {
+    anos.add(parseInt(m[1], 10));
+  }
+  return [...anos];
+}
+
+function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
+  // Pergunta do tipo "mes X nos anos de A e B" exige filtrar mes e ano separadamente
+  // (SUBSTRING mes = 'MM' AND SUBSTRING ano IN (...)). Um BETWEEN de um unico mes/ano
+  // (ex: '20250601' AND '20250630') ignora silenciosamente os demais anos pedidos.
+  const texto = String(sql || '');
+  const meses = _mesesCitadosNoTexto(mensagem);
+  const anos = _anosCitadosNoTexto(mensagem);
+  const textoNorm = periodResolver.normalizarTexto(String(mensagem || ''));
+  const citaAnos = /\banos?\b/.test(textoNorm);
+  if (meses.length !== 1 || anos.length < 2 || !citaAnos) return { ok: true, erros: [] };
+
+  const mesStr = String(meses[0]).padStart(2, '0');
+  // Cobre tanto BETWEEN 'A' AND 'B' quanto >= 'A' AND <= 'B' (ou variantes com <, >=, etc.):
+  // qualquer par de literais 'YYYYMM01' ... 'YYYYMM(28-31)' do MESMO ano proximos no SQL
+  // restringe implicitamente a um unico ano, mesmo sem a palavra BETWEEN.
+  const reIntervaloMesUnico = new RegExp(
+    `'(\\d{4})${mesStr}01'[^']{0,40}?'(?:\\1)${mesStr}(?:28|29|30|31)'`,
+    'i'
+  );
+  if (!reIntervaloMesUnico.test(texto)) return { ok: true, erros: [] };
+
+  return {
+    ok: false,
+    erros: [
+      `Nao use um intervalo de datas restrito a um unico mes/ano (BETWEEN ou >=/<=) quando a pergunta pede o mesmo mes em varios anos (${anos.join(', ')}). ` +
+      `Filtre mes e ano separadamente: SUBSTRING(campo, 5, 2) = '${mesStr}' AND SUBSTRING(campo, 1, 4) IN (${anos.map(a => `'${a}'`).join(', ')}).`,
+    ],
+  };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   const texto = String(sql || '').trim();
   const erros = [];
@@ -1676,6 +1726,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   erros.push(...validarCTEsDefinidaUsada(texto).erros);
   erros.push(...validarAliasesSubqueriesEscalares(texto, spec).erros);
   erros.push(...validarAliasesUsadosDeclarados(texto, spec).erros);
+  erros.push(...validarMesesRecorrentesVariosAnosNoSql(texto, spec, mensagem).erros);
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
   const keywords = new Set(['ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'JOIN', 'CROSS']);

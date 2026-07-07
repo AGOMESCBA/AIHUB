@@ -162,7 +162,7 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   const mesTexto = _monthFromText(texto);
 
   if (comparacao) {
-    const anosComparacao = _yearsFromText(texto);
+    const anosComparacao = _yearsFromTextExpandido(texto);
     if (_containsTerm(texto, 'ano') && _containsAny(texto, ['ano anterior', 'ano passado']) && _containsAny(texto, ['ano atual', 'este ano', 'esse ano', 'atual'])) {
       return {
         tipo: 'comparacao_anual',
@@ -178,6 +178,15 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
       };
     }
     if (_containsTerm(texto, 'mes a mes')) return { tipo: 'comparacao_mensal' };
+    if (anosComparacao.length >= 3) {
+      // 3+ anos citados: os tipos de comparacao acumulada/range abaixo so guardam
+      // ano_base/ano_comparacao (2 anos), perderiam os anos intermediarios. Delega para
+      // range explicito (personalizado) cobrindo todos os anos citados; o filtro fino de
+      // mes/ano fica a cargo do SQL (SUBSTRING), a partir da pergunta original.
+      const primeiro = Math.min(...anosComparacao);
+      const ultimo = Math.max(...anosComparacao);
+      return { tipo: 'personalizado', data_inicio: `${primeiro}0101`, data_fim: `${ultimo}1231` };
+    }
     if (_containsAny(texto, ['acumulado', 'ytd', 'ate', 'jan a', 'janeiro a'])) {
       const meses = _monthsFromText(texto);
       const mesFinal = meses.length >= 2 ? Math.max(...meses) : (meses[0] || hoje.getMonth() + 1);
@@ -205,6 +214,9 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
 
   const rangeAnoAteMes = _yearToNamedMonthRange(texto);
   if (rangeAnoAteMes) return { tipo: 'personalizado', data_inicio: rangeAnoAteMes.data_inicio, data_fim: rangeAnoAteMes.data_fim };
+
+  const mesesRecorrentesVariosAnos = _recurringMonthsMultiYearRange(texto);
+  if (mesesRecorrentesVariosAnos) return { tipo: 'personalizado', data_inicio: mesesRecorrentesVariosAnos.data_inicio, data_fim: mesesRecorrentesVariosAnos.data_fim };
 
   const acumulado = _accumulatedRange(texto, hoje);
   if (acumulado) return { tipo: 'personalizado', data_inicio: acumulado.data_inicio, data_fim: acumulado.data_fim };
@@ -335,6 +347,18 @@ function _namedMonthRange(texto, hoje) {
   };
 }
 
+function _recurringMonthsMultiYearRange(texto) {
+  const meses = _monthsFromText(texto);
+  const anos = _yearsFromTextExpandido(texto);
+  if (meses.length < 1 || anos.length < 2 || !_containsAny(texto, ['ano', 'anos'])) return null;
+  const primeiro = Math.min(...anos);
+  const ultimo = Math.max(...anos);
+  return {
+    data_inicio: `${primeiro}0101`,
+    data_fim: `${ultimo}1231`,
+  };
+}
+
 function _yearToNamedMonthRange(texto) {
   const monthPattern = Object.keys(MONTHS)
     .sort((a, b) => b.length - a.length)
@@ -428,6 +452,23 @@ function _yearsFromText(texto) {
     if (!years.includes(ano)) years.push(ano);
   }
   return years;
+}
+
+function _yearsFromTextExpandido(texto) {
+  // "anos de 2024 a 2026" / "de 2024 ate 2026": o ano do meio (2025) e implicito pelo
+  // range, nao aparece como numero literal no texto. _yearsFromText sozinho retornaria
+  // so [2024, 2026], levando o resolvedor a tratar como comparacao de 2 anos e perder 2025.
+  const rangeMatch = texto.match(/\b(20\d{2}|19\d{2})\s+(?:a|ate)\s+(20\d{2}|19\d{2})\b/);
+  if (rangeMatch) {
+    const inicio = parseInt(rangeMatch[1], 10);
+    const fim = parseInt(rangeMatch[2], 10);
+    if (fim >= inicio && fim - inicio <= 20) {
+      const anos = [];
+      for (let a = inicio; a <= fim; a++) anos.push(a);
+      return anos;
+    }
+  }
+  return _yearsFromText(texto);
 }
 
 function _isMonthlyComparison(texto) {

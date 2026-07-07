@@ -12,6 +12,7 @@ const sx3Validator = require(path.join(ROOT, 'modules/erp/sx3-sql-validator'));
 const faturamentoSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
 const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
 const entityResolver = require(path.join(ROOT, 'modules/ai/entity-resolver'));
+const periodResolver = require(path.join(ROOT, 'modules/ai/period-resolver'));
 const queryPlan = require(path.join(ROOT, 'modules/erp/query-plan'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
@@ -61,6 +62,81 @@ assert.strictEqual(
   3,
   'com entidade resolvida o runner deve ter 3 tentativas de SQL',
 );
+
+const perguntaJunhoVariosAnos = 'Faturamento do mes de Junho dos anos de 2025 e 2026 por ANO E grupo de produto';
+const periodoJunhoVariosAnos = periodResolver.identificarPeriodoTexto(perguntaJunhoVariosAnos, {
+  hoje: new Date('2026-07-07T12:00:00'),
+});
+assert.deepStrictEqual(
+  periodoJunhoVariosAnos,
+  { tipo: 'personalizado', data_inicio: '20250101', data_fim: '20261231' },
+  'periodo candidato nao deve reduzir junho dos anos 2025 e 2026 para apenas junho/2025',
+);
+
+const sqlJunhoVariosAnosErrado = `
+SET ROWCOUNT 50000;
+SELECT SBM.BM_DESC AS grupo_produto,
+       COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_total,
+       SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano
+FROM SF2010 SF2
+JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL
+                 AND SD2.D2_DOC = SF2.F2_DOC
+                 AND SD2.D2_SERIE = SF2.F2_SERIE
+                 AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
+                 AND SD2.D2_LOJA = SF2.F2_LOJA
+                 AND SD2.D_E_L_E_T_ = ' '
+JOIN SB1010 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+JOIN SBM010 SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '
+WHERE SF2.D_E_L_E_T_ = ' '
+  AND SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'
+  AND SF2.F2_TIPO = 'N'
+GROUP BY SBM.BM_GRUPO, SBM.BM_DESC, SUBSTRING(SF2.F2_EMISSAO, 1, 4);
+`;
+const validacaoJunhoVariosAnosErrado = runner._test.validarSqlIaOwnerBasico(sqlJunhoVariosAnosErrado, faturamentoSpec, {
+  SF2010: 'E',
+  SD2010: 'E',
+  SB1010: 'E',
+  SBM010: 'E',
+}, perguntaJunhoVariosAnos);
+assert.strictEqual(validacaoJunhoVariosAnosErrado.ok, false, 'SQL com BETWEEN de junho/2025 deve ser rejeitado quando pergunta pede 2025 e 2026');
+assert(validacaoJunhoVariosAnosErrado.erros.some(e => e.includes('Nao use um intervalo de datas restrito a um unico mes/ano')), 'erro deve orientar filtro separado de mes e anos');
+
+const sqlJunhoVariosAnosCorreto = sqlJunhoVariosAnosErrado
+  .replace("SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'", "SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '06'\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')");
+const validacaoJunhoVariosAnosCorreto = runner._test.validarSqlIaOwnerBasico(sqlJunhoVariosAnosCorreto, faturamentoSpec, {
+  SF2010: 'E',
+  SD2010: 'E',
+  SB1010: 'E',
+  SBM010: 'E',
+}, perguntaJunhoVariosAnos);
+assert.strictEqual(validacaoJunhoVariosAnosCorreto.ok, true, `SQL com mes+anos separados deve passar: ${validacaoJunhoVariosAnosCorreto.erros.join(' | ')}`);
+
+const perguntaJunhoDoisAnos = 'Faturamento do mes de Junho dos anos de 2024 e 2025';
+const sqlJunhoDoisAnosGteLte = `
+SET ROWCOUNT 30000;
+SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia, COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento
+FROM SF2010 SF2
+WHERE SF2.F2_EMISSAO >= '20240601' AND SF2.F2_EMISSAO <= '20240630'
+AND SF2.F2_TIPO = 'N'
+AND SF2.D_E_L_E_T_ = ' '
+GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+ORDER BY SUBSTRING(SF2.F2_EMISSAO, 1, 6);
+`;
+const validacaoJunhoDoisAnosGteLte = runner._test.validarSqlIaOwnerBasico(sqlJunhoDoisAnosGteLte, faturamentoSpec, {
+  SF2010: 'E',
+}, perguntaJunhoDoisAnos);
+assert.strictEqual(validacaoJunhoDoisAnosGteLte.ok, false, 'SQL com >=/<= restrito a um unico ano deve ser rejeitado quando pergunta pede 2024 e 2025 (nao so BETWEEN escapa da regra)');
+
+const perguntaComparativoJanAJunVariosAnos = 'O Comparativo do faturamento dos meses de Janeiro a Junho dos anos de 2024 a 2026.';
+const periodoComparativoJanAJunVariosAnos = periodResolver.identificarPeriodoTexto(perguntaComparativoJanAJunVariosAnos, {
+  hoje: new Date('2026-07-07T12:00:00'),
+});
+assert.deepStrictEqual(
+  periodoComparativoJanAJunVariosAnos,
+  { tipo: 'personalizado', data_inicio: '20240101', data_fim: '20261231' },
+  'comparativo de range de meses (jan-jun) com anos "de 2024 a 2026" nao deve perder o ano intermediario (2025) nem colapsar em comparacao_acumulado_mes de 2 anos',
+);
+
 const sqlGroupByInvalido = `
 SET ROWCOUNT 50000;
 SELECT
