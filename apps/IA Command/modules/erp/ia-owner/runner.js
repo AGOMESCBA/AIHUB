@@ -1651,39 +1651,73 @@ function _mesesCitadosNoTexto(mensagem) {
 }
 
 function _anosCitadosNoTexto(mensagem) {
-  const anos = new Set();
-  for (const m of String(mensagem || '').matchAll(/\b(20\d{2}|19\d{2})\b/g)) {
-    anos.add(parseInt(m[1], 10));
-  }
-  return [...anos];
+  return periodResolver._yearsFromTextExpandido(periodResolver.normalizarTexto(String(mensagem || '')));
+}
+
+function _rangeMesesCitadoNoTexto(mensagem) {
+  // "Janeiro a Junho" so retorna [1, 6] citados explicitamente; o range contiguo
+  // (2,3,4,5) e implicito pela preposicao "a"/"ate" entre os dois meses, igual ao caso
+  // de anos ("2024 a 2026"). Detecta esse padrao textual e expande para o range completo.
+  const texto = periodResolver.normalizarTexto(String(mensagem || ''));
+  const nomesOrdenados = Object.keys(periodResolver.MONTHS).sort((a, b) => b.length - a.length);
+  const monthPattern = nomesOrdenados.join('|');
+  const re = new RegExp(`\\b(${monthPattern})\\s+(?:a|ate)\\s+(${monthPattern})\\b`, 'i');
+  const m = texto.match(re);
+  if (!m) return null;
+  const inicio = periodResolver.MONTHS[m[1].toLowerCase()];
+  const fim = periodResolver.MONTHS[m[2].toLowerCase()];
+  if (!inicio || !fim || fim < inicio) return null;
+  const meses = [];
+  for (let mm = inicio; mm <= fim; mm++) meses.push(mm);
+  return meses;
 }
 
 function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
-  // Pergunta do tipo "mes X nos anos de A e B" exige filtrar mes e ano separadamente
-  // (SUBSTRING mes = 'MM' AND SUBSTRING ano IN (...)). Um BETWEEN de um unico mes/ano
-  // (ex: '20250601' AND '20250630') ignora silenciosamente os demais anos pedidos.
+  // Pergunta do tipo "mes X (ou range de meses) nos anos de A e B" exige filtrar mes e
+  // ano separadamente (SUBSTRING mes IN/BETWEEN AND SUBSTRING ano IN (...)). Um unico
+  // BETWEEN/>=/<= de data absoluta cobrindo do inicio do primeiro ano ao fim do ultimo
+  // ano tanto pode perder anos intermediarios quanto vazar para meses fora do range
+  // pedido nos anos que nao sao o primeiro/ultimo.
   const texto = String(sql || '');
-  const meses = _mesesCitadosNoTexto(mensagem);
   const anos = _anosCitadosNoTexto(mensagem);
   const textoNorm = periodResolver.normalizarTexto(String(mensagem || ''));
   const citaAnos = /\banos?\b/.test(textoNorm);
-  if (meses.length !== 1 || anos.length < 2 || !citaAnos) return { ok: true, erros: [] };
+  if (anos.length < 2 || !citaAnos) return { ok: true, erros: [] };
 
-  const mesStr = String(meses[0]).padStart(2, '0');
-  // Cobre tanto BETWEEN 'A' AND 'B' quanto >= 'A' AND <= 'B' (ou variantes com <, >=, etc.):
-  // qualquer par de literais 'YYYYMM01' ... 'YYYYMM(28-31)' do MESMO ano proximos no SQL
-  // restringe implicitamente a um unico ano, mesmo sem a palavra BETWEEN.
-  const reIntervaloMesUnico = new RegExp(
-    `'(\\d{4})${mesStr}01'[^']{0,40}?'(?:\\1)${mesStr}(?:28|29|30|31)'`,
+  const rangeMeses = _rangeMesesCitadoNoTexto(mensagem);
+  const mesesUnicos = _mesesCitadosNoTexto(mensagem);
+  // Prioriza range explicito ("janeiro a junho"); cai para mes unico se so 1 mes foi citado.
+  const meses = rangeMeses || (mesesUnicos.length === 1 ? mesesUnicos : null);
+  if (!meses) return { ok: true, erros: [] };
+
+  const mesInicio = String(Math.min(...meses)).padStart(2, '0');
+  const mesFim = String(Math.max(...meses)).padStart(2, '0');
+  const anosOrdenados = [...anos].sort((a, b) => a - b);
+  const primeiroAno = anosOrdenados[0];
+  const ultimoAno = anosOrdenados[anosOrdenados.length - 1];
+
+  // Dois padroes de intervalo continuo unico que ambos escapam do filtro correto
+  // (mes/range de mes repetido em cada ano pedido, via SUBSTRING mes + SUBSTRING ano):
+  // (a) mesmo ano nos dois literais — perde silenciosamente os demais anos pedidos;
+  // (b) literais indo do primeiro ao ultimo ano — cobre todos os anos, mas vaza para
+  //     meses fora do range pedido nos anos intermediarios/extremos.
+  const reMesmoAno = new RegExp(
+    `'(\\d{4})${mesInicio}01'[^']{0,60}?'(?:\\1)${mesFim}(?:28|29|30|31)'`,
     'i'
   );
-  if (!reIntervaloMesUnico.test(texto)) return { ok: true, erros: [] };
+  const reAnoInicioAoFim = new RegExp(
+    `'${primeiroAno}${mesInicio}01'[^']{0,60}?'${ultimoAno}${mesFim}(?:28|29|30|31)'`,
+    'i'
+  );
+  if (!reMesmoAno.test(texto) && !reAnoInicioAoFim.test(texto)) return { ok: true, erros: [] };
 
+  const mesesTexto = meses.length === 1 ? `SUBSTRING(campo, 5, 2) = '${mesInicio}'` : `SUBSTRING(campo, 5, 2) BETWEEN '${mesInicio}' AND '${mesFim}'`;
   return {
     ok: false,
     erros: [
-      `Nao use um intervalo de datas restrito a um unico mes/ano (BETWEEN ou >=/<=) quando a pergunta pede o mesmo mes em varios anos (${anos.join(', ')}). ` +
-      `Filtre mes e ano separadamente: SUBSTRING(campo, 5, 2) = '${mesStr}' AND SUBSTRING(campo, 1, 4) IN (${anos.map(a => `'${a}'`).join(', ')}).`,
+      `Nao use um unico intervalo continuo de datas (BETWEEN ou >=/<=) quando a pergunta pede o(s) mesmo(s) mes(es) repetidos em varios anos (${anosOrdenados.join(', ')}). ` +
+      `Um intervalo continuo entre o primeiro e o ultimo ano inclui meses fora do range pedido nos anos intermediarios/extremos. ` +
+      `Filtre mes e ano separadamente: ${mesesTexto} AND SUBSTRING(campo, 1, 4) IN (${anosOrdenados.map(a => `'${a}'`).join(', ')}).`,
     ],
   };
 }

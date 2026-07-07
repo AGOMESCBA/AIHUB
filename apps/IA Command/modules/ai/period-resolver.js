@@ -572,4 +572,4 @@ function _clampInt(value, fallback, min, max) {
   return Math.min(Math.max(n, min), max);
 }
 
-module.exports = { resolverPeriodo, identificarPeriodoTexto, normalizarTexto, MONTHS };
+module.exports = { resolverPeriodo, identificarPeriodoTexto, normalizarTexto, MONTHS, _yearsFromTextExpandido };

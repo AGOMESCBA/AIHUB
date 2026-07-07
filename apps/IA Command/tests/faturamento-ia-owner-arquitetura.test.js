@@ -99,7 +99,7 @@ const validacaoJunhoVariosAnosErrado = runner._test.validarSqlIaOwnerBasico(sqlJ
   SBM010: 'E',
 }, perguntaJunhoVariosAnos);
 assert.strictEqual(validacaoJunhoVariosAnosErrado.ok, false, 'SQL com BETWEEN de junho/2025 deve ser rejeitado quando pergunta pede 2025 e 2026');
-assert(validacaoJunhoVariosAnosErrado.erros.some(e => e.includes('Nao use um intervalo de datas restrito a um unico mes/ano')), 'erro deve orientar filtro separado de mes e anos');
+assert(validacaoJunhoVariosAnosErrado.erros.some(e => e.includes('Nao use um unico intervalo continuo de datas')), 'erro deve orientar filtro separado de mes e anos');
 
 const sqlJunhoVariosAnosCorreto = sqlJunhoVariosAnosErrado
   .replace("SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'", "SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '06'\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')");
@@ -136,6 +136,32 @@ assert.deepStrictEqual(
   { tipo: 'personalizado', data_inicio: '20240101', data_fim: '20261231' },
   'comparativo de range de meses (jan-jun) com anos "de 2024 a 2026" nao deve perder o ano intermediario (2025) nem colapsar em comparacao_acumulado_mes de 2 anos',
 );
+
+const perguntaAcumuladoJanAJunVariosAnos = 'Faturamento Acumulado dos meses de Janeiro a Junho dos anos de 2024 a 2026';
+const sqlAcumuladoJanAJunErrado = `
+SET ROWCOUNT 30000;
+SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia, COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento_acumulado
+FROM SD2010 SD2
+JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+WHERE SF2.F2_EMISSAO BETWEEN '20240101' AND '20260630' AND SF2.F2_TIPO = 'N' AND SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' '
+GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 6)
+ORDER BY competencia;
+`;
+const validacaoAcumuladoJanAJunErrado = runner._test.validarSqlIaOwnerBasico(sqlAcumuladoJanAJunErrado, faturamentoSpec, {
+  SF2010: 'E',
+  SD2010: 'E',
+}, perguntaAcumuladoJanAJunVariosAnos);
+assert.strictEqual(validacaoAcumuladoJanAJunErrado.ok, false, 'BETWEEN continuo de 20240101 a 20260630 deve ser rejeitado: vaza para jul-dez de 2024 e 2025, fora do range jan-jun pedido');
+
+const sqlAcumuladoJanAJunCorreto = sqlAcumuladoJanAJunErrado.replace(
+  "SF2.F2_EMISSAO BETWEEN '20240101' AND '20260630'",
+  "SUBSTRING(SF2.F2_EMISSAO, 5, 2) BETWEEN '01' AND '06' AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2024', '2025', '2026')"
+);
+const validacaoAcumuladoJanAJunCorreto = runner._test.validarSqlIaOwnerBasico(sqlAcumuladoJanAJunCorreto, faturamentoSpec, {
+  SF2010: 'E',
+  SD2010: 'E',
+}, perguntaAcumuladoJanAJunVariosAnos);
+assert.strictEqual(validacaoAcumuladoJanAJunCorreto.ok, true, `SQL com mes(range)+anos separados deve passar: ${validacaoAcumuladoJanAJunCorreto.erros.join(' | ')}`);
 
 const sqlGroupByInvalido = `
 SET ROWCOUNT 50000;
