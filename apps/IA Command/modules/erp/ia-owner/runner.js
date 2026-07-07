@@ -506,15 +506,25 @@ function labelsSx3ParaFormatacao(sx3Completo) {
   return out;
 }
 
-function sx3EssencialParaPrompt(essenciais = {}) {
+function sx3EssencialParaPrompt(essenciais = {}, sx3Completo = null) {
+  if (!essenciais || !Object.keys(essenciais).length) return null;
   const out = {};
-  for (const [base, campos] of Object.entries(essenciais || {})) {
-    out[String(base || '').toUpperCase()] = (campos || []).map(campo => ({
-      campo: String(campo || '').toUpperCase(),
-      tipo: null,
-      tamanho: null,
-      decimal: null,
-      descricao: 'campo essencial para IA-OWNER',
+  for (const [base, camposEssenciais] of Object.entries(essenciais)) {
+    const baseNorm = String(base || '').toUpperCase();
+    const essenciaisSet = new Set((camposEssenciais || []).map(c => String(c || '').toUpperCase()));
+    // Tenta usar o sx3Completo do banco para pegar titulo real — filtra só os essenciais
+    const tabelaFisica = sx3Completo
+      ? Object.keys(sx3Completo).find(t => baseTabelaSX2(t) === baseNorm)
+      : null;
+    const camposBanco = tabelaFisica ? (sx3Completo[tabelaFisica] || []) : [];
+    const tituloPorCampo = {};
+    for (const { campo, descricao } of camposBanco) {
+      const c = String(campo || '').toUpperCase();
+      if (c) tituloPorCampo[c] = descricao || '';
+    }
+    out[baseNorm] = [...essenciaisSet].map(campo => ({
+      campo,
+      titulo: tituloPorCampo[campo] || '',
     }));
   }
   return Object.keys(out).length ? out : null;
@@ -902,6 +912,7 @@ function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prom
   // Se null → tenant sem SX2 cadastrado → FK não existe → modelo SE5.
   const temFK1 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK1');
   const temFK2 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK2');
+  const temFK7 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK7');
 
   // Remove do sx2 exposto à IA as tabelas FK injetadas por completarSX2Permitidas
   // quando elas não estão no sx2Puro. Evita que a IA use FK1/FK2 por ver FK1010 no mapa.
@@ -943,8 +954,8 @@ function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prom
     filialPadrao: protheus.filialPadrao || null,
     modeloDados: middlewareCfg.modelo_dados || 'TRADICIONAL',
     campoFilial: middlewareCfg.campo_filial || null,
-    modelo_baixas_receber: temFK1 ? 'FK1' : 'SE5',
-    modelo_baixas_pagar: temFK2 ? 'FK2' : 'SE5',
+    modelo_baixas_receber: temFK1 ? (temFK7 ? 'FK7_FK1' : 'FK1') : 'SE5',
+    modelo_baixas_pagar: temFK2 ? (temFK7 ? 'FK7_FK2' : 'FK2') : 'SE5',
   };
 }
 
@@ -1585,6 +1596,48 @@ function validarAliasesSubqueriesEscalares(sql, spec = {}) {
   return { ok: erros.length === 0, erros };
 }
 
+function validarAliasesUsadosDeclarados(sql, spec = {}) {
+  const texto = String(sql || '');
+  const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
+  if (!basesPermitidas.size) return { ok: true, erros: [] };
+
+  const keywords = new Set([
+    'ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL',
+    'JOIN', 'CROSS', 'UNION', 'SELECT', 'FROM', 'AS', 'WITH',
+  ]);
+  const aliasesDeclarados = new Set();
+  const reFromJoin = /\b(?:FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/gi;
+  let m;
+  while ((m = reFromJoin.exec(texto)) !== null) {
+    const tabela = String(m[1] || '').toUpperCase();
+    const base = baseTabelaSX2(tabela);
+    if (!basesPermitidas.has(base)) continue;
+    const alias = String(m[2] || '').toUpperCase();
+    if (alias && !keywords.has(alias)) aliasesDeclarados.add(alias);
+    else aliasesDeclarados.add(base);
+  }
+
+  const erros = [];
+  const vistos = new Set();
+  const reCampo = /\b([A-Z][A-Z0-9_]*)\s*\.\s*([A-Z][A-Z0-9_]*)\b/gi;
+  while ((m = reCampo.exec(texto)) !== null) {
+    const alias = String(m[1] || '').toUpperCase();
+    const campo = String(m[2] || '').toUpperCase();
+    if (!basesPermitidas.has(alias)) continue;
+    if (aliasesDeclarados.has(alias)) continue;
+    const chave = `${alias}.${campo}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    erros.push(
+      `Alias de tabela usado sem FROM/JOIN declarado: "${alias}.${campo}". ` +
+      `Adicione FROM/JOIN da tabela ${alias}<sufixo> com alias ${alias} e filtro ${alias}.D_E_L_E_T_ = ' ', ` +
+      `ou remova todos os campos ${alias}.* do SELECT/GROUP BY/ORDER BY/WHERE.`
+    );
+  }
+
+  return { ok: erros.length === 0, erros };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   const texto = String(sql || '').trim();
   const erros = [];
@@ -1622,6 +1675,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   erros.push(...validarCTEsAgregadosSemGroupBy(texto).erros);
   erros.push(...validarCTEsDefinidaUsada(texto).erros);
   erros.push(...validarAliasesSubqueriesEscalares(texto, spec).erros);
+  erros.push(...validarAliasesUsadosDeclarados(texto, spec).erros);
 
   const basesPermitidas = new Set((spec.tabelas || []).map(t => String(t || '').toUpperCase()));
   const keywords = new Set(['ON', 'WHERE', 'GROUP', 'ORDER', 'HAVING', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'JOIN', 'CROSS']);
@@ -2120,7 +2174,7 @@ async function executar(spec, intent, empresaId) {
     sx2: sx2 ? Object.keys(sx2).length : 0,
     sx3: sx3 ? Object.keys(sx3).length : 0,
   });
-  let sx3Prompt = sx3EssencialParaPrompt(spec.camposSx3Essenciais || {}) || sx3;
+  let sx3Prompt = sx3EssencialParaPrompt(spec.camposSx3Essenciais || {}, sx3) || sx3;
   const middlewareCfg = spec.sqlMiddleware.carregarConfig(empresaId);
   const filial = intentEfetivo.filtros?.filial || protheus.filialPadrao || 'TODAS';
   const historico = Array.isArray(intentEfetivo._historicoResumido) ? intentEfetivo._historicoResumido : [];
@@ -2138,7 +2192,7 @@ async function executar(spec, intent, empresaId) {
     const sx3Atualizado = camposSX3(tabelasMetadados, protheus.conexaoId, empresaId, spec.sx3PromptLimit || 80, spec.camposSx3Essenciais || {});
     sx3 = sx3Atualizado.completo;
     sx3Validacao = sx3Atualizado.validacao;
-    sx3Prompt = sx3EssencialParaPrompt(spec.camposSx3Essenciais || {}) || sx3;
+    sx3Prompt = sx3EssencialParaPrompt(spec.camposSx3Essenciais || {}, sx3) || sx3;
     contextoTecnico = { ...buildContextoTecnico({ spec: { ...spec, tabelas: tabelasMetadados }, empresaId, protheus, sx2, sx2Puro, sx3Prompt, middlewareCfg, filial }), ...contextoTecnicoExtra };
     _traceIaOwner('ia_owner_metadata_expandido_sql', {
       empresa_id: empresaId,
@@ -2707,6 +2761,7 @@ module.exports = {
     validarCTEsAgregadosSemGroupBy,
     validarCTEsDefinidaUsada,
     validarAliasesSubqueriesEscalares,
+    validarAliasesUsadosDeclarados,
     _extrairSubqueriesEscalares,
     completarContratoRelacionalSD1SF1,
     _extrairCorposCTE,

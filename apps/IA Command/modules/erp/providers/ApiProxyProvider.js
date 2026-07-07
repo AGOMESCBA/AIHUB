@@ -53,7 +53,6 @@ function _request(url, method, body, apiKey) {
       sender:      body?.sender      || null,
       modulo:      body?.modulo      || null,
       empresa_id:  body?.empresa_id  || null,
-      token_prefix: apiKey ? apiKey.substring(0, 8) + '...' : '(vazio)',
     });
 
     const options = {

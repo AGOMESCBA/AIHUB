@@ -18,19 +18,101 @@
  *              (ex: fluxo_caixa_projetado depende de saldo_bancario + receber_posicao + pagar_posicao).
  */
 
-function base({ usaFK1, usaFK2 }) {
+function _joinBaixaReceber({ usaFK7Receber, usaFK1 }) {
+  if (usaFK7Receber) {
+    return `JOIN FK7<sufixo> FK7
+    ON  FK7.FK7_FILIAL  = SE1.E1_FILIAL
+    AND FK7.FK7_PREFIX  = SE1.E1_PREFIXO
+    AND FK7.FK7_NUM     = SE1.E1_NUM
+    AND FK7.FK7_PARCEL  = SE1.E1_PARCELA
+    AND FK7.FK7_TIPO    = SE1.E1_TIPO
+    AND FK7.FK7_CLIFOR  = SE1.E1_CLIENTE
+    AND FK7.FK7_LOJA    = SE1.E1_LOJA
+    AND FK7.D_E_L_E_T_  = ' '
+JOIN FK1<sufixo> FK1
+    ON  FK1.FK1_FILIAL  = FK7.FK7_FILIAL
+    AND FK1.FK1_IDDOC   = FK7.FK7_IDDOC
+    AND FK1.D_E_L_E_T_  = ' '`;
+  }
+  if (usaFK1) {
+    return `JOIN FK1<sufixo> FK1
+    ON  FK1.FK1_FILIAL  = SE1.E1_FILIAL
+    AND FK1.FK1_PREFIXO = SE1.E1_PREFIXO
+    AND FK1.FK1_NUM     = SE1.E1_NUM
+    AND FK1.FK1_PARCELA = SE1.E1_PARCELA
+    AND FK1.FK1_TIPO    = SE1.E1_TIPO
+    AND FK1.D_E_L_E_T_  = ' '`;
+  }
+  return `JOIN SE5<sufixo> SE5
+    ON  SE5.E5_FILIAL   = SE1.E1_FILIAL
+    AND SE5.E5_PREFIXO  = SE1.E1_PREFIXO
+    AND SE5.E5_NUMERO   = SE1.E1_NUM
+    AND SE5.E5_PARCELA  = SE1.E1_PARCELA
+    AND SE5.E5_TIPO     = SE1.E1_TIPO
+    AND SE5.E5_CLIFOR   = SE1.E1_CLIENTE
+    AND SE5.E5_LOJA     = SE1.E1_LOJA
+    AND SE5.E5_RECPAG   = 'R'
+    AND SE5.E5_SITUACAO <> 'C'
+    AND SE5.E5_TIPO NOT IN ('EST', 'ED')
+    AND SE5.D_E_L_E_T_  = ' '`;
+}
+
+function _joinBaixaPagar({ usaFK7Pagar, usaFK2 }) {
+  if (usaFK7Pagar) {
+    return `JOIN FK7<sufixo> FK7
+    ON  FK7.FK7_FILIAL  = SE2.E2_FILIAL
+    AND FK7.FK7_PREFIX  = SE2.E2_PREFIXO
+    AND FK7.FK7_NUM     = SE2.E2_NUM
+    AND FK7.FK7_PARCEL  = SE2.E2_PARCELA
+    AND FK7.FK7_TIPO    = SE2.E2_TIPO
+    AND FK7.FK7_CLIFOR  = SE2.E2_FORNECE
+    AND FK7.FK7_LOJA    = SE2.E2_LOJA
+    AND FK7.D_E_L_E_T_  = ' '
+JOIN FK2<sufixo> FK2
+    ON  FK2.FK2_FILIAL  = FK7.FK7_FILIAL
+    AND FK2.FK2_IDDOC   = FK7.FK7_IDDOC
+    AND FK2.D_E_L_E_T_  = ' '`;
+  }
+  if (usaFK2) {
+    return `JOIN FK2<sufixo> FK2
+    ON  FK2.FK2_FILIAL  = SE2.E2_FILIAL
+    AND FK2.FK2_PREFIXO = SE2.E2_PREFIXO
+    AND FK2.FK2_NUM     = SE2.E2_NUM
+    AND FK2.FK2_PARCELA = SE2.E2_PARCELA
+    AND FK2.FK2_TIPO    = SE2.E2_TIPO
+    AND FK2.D_E_L_E_T_  = ' '`;
+  }
+  return `JOIN SE5<sufixo> SE5
+    ON  SE5.E5_FILIAL   = SE2.E2_FILIAL
+    AND SE5.E5_PREFIXO  = SE2.E2_PREFIXO
+    AND SE5.E5_NUMERO   = SE2.E2_NUM
+    AND SE5.E5_PARCELA  = SE2.E2_PARCELA
+    AND SE5.E5_TIPO     = SE2.E2_TIPO
+    AND SE5.E5_CLIFOR   = SE2.E2_FORNECE
+    AND SE5.E5_LOJA     = SE2.E2_LOJA
+    AND SE5.E5_RECPAG   = 'P'
+    AND SE5.E5_SITUACAO <> 'C'
+    AND SE5.E5_TIPO NOT IN ('EST', 'ED')
+    AND SE5.D_E_L_E_T_  = ' '`;
+}
+
+function base({ usaFK1, usaFK2, usaFK7, usaFK7Receber, usaFK7Pagar }) {
+  const modeloReceber = usaFK7Receber ? 'SE1 -> FK7 -> FK1' : usaFK1 ? 'SE1 -> FK1' : 'SE1 -> SE5';
+  const modeloPagar   = usaFK7Pagar   ? 'SE2 -> FK7 -> FK2' : usaFK2 ? 'SE2 -> FK2' : 'SE2 -> SE5';
+  const tabBaixaReceber = usaFK1 ? 'FK1' : 'SE5';
+  const tabBaixaPagar   = usaFK2 ? 'FK2' : 'SE5';
+
   return `
 ## Campos de data padrao
 - REGRA ABSOLUTA — vencimento a pagar: use SEMPRE SE2.E2_VENCREA (vencimento real do titulo, que considera sabado/domingo/feriado). PROIBIDO usar SE2.E2_VENCTO em qualquer filtro, GROUP BY ou ORDER BY de contas a pagar — E2_VENCTO e o vencimento nominal/contratual, sem ajuste de dia nao util, e NUNCA deve ser usado como vencimento de fato neste ambiente.
 - REGRA ABSOLUTA — vencimento a receber: use SEMPRE SE1.E1_VENCREA (vencimento real do titulo, que considera sabado/domingo/feriado). PROIBIDO usar SE1.E1_VENCTO em qualquer filtro, GROUP BY ou ORDER BY de contas a receber — E1_VENCTO e o vencimento nominal/contratual, sem ajuste de dia nao util, e NUNCA deve ser usado como vencimento de fato neste ambiente.
-- Baixa/recebimento real: use o JOIN definido em "Joins padrao" (SE1->${usaFK1 ? 'FK1' : 'SE5'}), modelo deste tenant: ${usaFK1 ? 'FK1' : 'SE5'}. NUNCA use SE1.E1_BAIXA.
-- Baixa/pagamento real: use o JOIN definido em "Joins padrao" (SE2->${usaFK2 ? 'FK2' : 'SE5'}), modelo deste tenant: ${usaFK2 ? 'FK2' : 'SE5'}. NUNCA use SE2.E2_BAIXA.
+- Baixa/recebimento real: modelo deste tenant: ${modeloReceber}. NUNCA use SE1.E1_BAIXA.
+- Baixa/pagamento real: modelo deste tenant: ${modeloPagar}. NUNCA use SE2.E2_BAIXA.
 - Em aberto sem periodo explicito: consulte toda a carteira em aberto (sem BETWEEN).
 
 ## Tabelas padrao do modulo Financeiro
 - SE1: contas a receber.
-- SE2: contas a pagar.
-- SE5: movimentos/baixas financeiras (modelo_baixas deste tenant).${usaFK1 || usaFK2 ? '\n- FK1/FK2: familia moderna de baixas/movimentos deste tenant.' : ''}
+- SE2: contas a pagar.${usaFK1 || usaFK2 ? `\n- FK1/FK2: baixas realizadas deste tenant.` : '\n- SE5: movimentos/baixas financeiras deste tenant.'}${usaFK7 ? '\n- FK7: tabela de relacionamento titulo->baixa (chave: FK7_IDDOC). OBRIGATORIO no modelo deste tenant.' : ''}
 - SE8: saldos bancarios.
 - SA1: clientes.
 - SA2: fornecedores.
@@ -44,11 +126,13 @@ function base({ usaFK1, usaFK2 }) {
 - SE1 -> SED: SE1.E1_NATUREZ = SED.ED_CODIGO.
 - SE2 -> SED: SE2.E2_NATUREZ = SED.ED_CODIGO.
 - SE1 -> SA3: SE1.E1_VEND1 = SA3.A3_COD quando a pergunta pedir vendedor.
-- SE8 -> SA6: SE8.E8_BANCO = SA6.A6_COD AND SE8.E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON.${usaFK1 ? '\n- SE1 -> FK1 (recebimentos realizados, modelo FK moderno): JOIN FK1xxx FK1 ON FK1.FK1_FILIAL = SE1.E1_FILIAL AND FK1.FK1_PREFIXO = SE1.E1_PREFIXO AND FK1.FK1_NUM = SE1.E1_NUM AND FK1.FK1_PARCELA = SE1.E1_PARCELA AND FK1.FK1_TIPO = SE1.E1_TIPO AND FK1.D_E_L_E_T_ = \' \'; filtre FK1.FK1_DATA no periodo; some FK1.FK1_VALOR. OBRIGATORIO: WHERE da subquery deve incluir SE1.D_E_L_E_T_ = \' \'.' : '\n- SE1 -> SE5 (recebimentos realizados): JOIN SE5xxx SE5 ON SE5.E5_FILIAL = SE1.E1_FILIAL AND SE5.E5_PREFIXO = SE1.E1_PREFIXO AND SE5.E5_NUMERO = SE1.E1_NUM AND SE5.E5_PARCELA = SE1.E1_PARCELA AND SE5.E5_TIPO = SE1.E1_TIPO AND SE5.E5_CLIFOR = SE1.E1_CLIENTE AND SE5.E5_LOJA = SE1.E1_LOJA AND SE5.E5_RECPAG = \'R\' AND SE5.E5_SITUACAO <> \'C\' AND SE5.E5_TIPO NOT IN (\'EST\', \'ED\') AND SE5.D_E_L_E_T_ = \' \'; filtre SE5.E5_DATA no periodo; some SE5.E5_VALOR. NAO filtre SE1.E1_SITUACAO (titulo pode ter baixa parcial). OBRIGATORIO: WHERE da subquery deve incluir SE1.D_E_L_E_T_ = \' \'.'}${usaFK2 ? '\n- SE2 -> FK2 (pagamentos realizados, modelo FK moderno): JOIN FK2xxx FK2 ON FK2.FK2_FILIAL = SE2.E2_FILIAL AND FK2.FK2_PREFIXO = SE2.E2_PREFIXO AND FK2.FK2_NUM = SE2.E2_NUM AND FK2.FK2_PARCELA = SE2.E2_PARCELA AND FK2.FK2_TIPO = SE2.E2_TIPO AND FK2.D_E_L_E_T_ = \' \'; filtre FK2.FK2_DATA no periodo; some FK2.FK2_VALOR. OBRIGATORIO: WHERE da subquery deve incluir SE2.D_E_L_E_T_ = \' \'.' : '\n- SE2 -> SE5 (pagamentos realizados): JOIN SE5xxx SE5 ON SE5.E5_FILIAL = SE2.E2_FILIAL AND SE5.E5_PREFIXO = SE2.E2_PREFIXO AND SE5.E5_NUMERO = SE2.E2_NUM AND SE5.E5_PARCELA = SE2.E2_PARCELA AND SE5.E5_TIPO = SE2.E2_TIPO AND SE5.E5_CLIFOR = SE2.E2_FORNECE AND SE5.E5_LOJA = SE2.E2_LOJA AND SE5.E5_RECPAG = \'P\' AND SE5.E5_SITUACAO <> \'C\' AND SE5.E5_TIPO NOT IN (\'EST\', \'ED\') AND SE5.D_E_L_E_T_ = \' \'; filtre SE5.E5_DATA no periodo; some SE5.E5_VALOR. NAO filtre SE2.E2_SITUACAO (titulo pode ter baixa parcial). OBRIGATORIO: WHERE da subquery deve incluir SE2.D_E_L_E_T_ = \' \'.'}
+- SE8 -> SA6: SE8.E8_BANCO = SA6.A6_COD AND SE8.E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON.
+- ${modeloReceber} (recebimentos realizados): veja fragmento "Contas a receber — realizado" para o JOIN completo.
+- ${modeloPagar} (pagamentos realizados): veja fragmento "Contas a pagar — realizado" para o JOIN completo.
 
 ## Regras obrigatorias de SQL
 - Inicie sempre com SET ROWCOUNT 50000.
-- Use aliases explicitos iguais a base da tabela: SE1, SE2, SE5, SE8, SA1, SA2, SA3, SA6, SED${usaFK1 || usaFK2 ? ', FK1, FK2' : ''}. Vale em toda query, inclusive dentro de subqueries escalares — o alias no FROM e o qualificador dos campos devem ser identicos.
+- Use aliases explicitos iguais a base da tabela: SE1, SE2, SE8, SA1, SA2, SA3, SA6, SED${usaFK1 || usaFK2 ? ', FK1, FK2' : ', SE5'}${usaFK7 ? ', FK7' : ''}. Vale em toda query, inclusive dentro de subqueries escalares.
 - Qualifique campos sempre pelo alias base (SE2.E2_SALDO, nunca SE2990.E2_SALDO).
 - Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
@@ -76,11 +160,38 @@ function receberPosicao() {
 `;
 }
 
-function receberRealizado({ usaFK1 }) {
+function receberRealizado({ usaFK1, usaFK7Receber }) {
+  const joinCompleto = _joinBaixaReceber({ usaFK7Receber, usaFK1 });
+  const campoValor   = usaFK1 ? 'FK1.FK1_VALOR' : 'SE5.E5_VALOR';
+  const campoData    = usaFK1 ? 'FK1.FK1_DATA'  : 'SE5.E5_DATA';
+  const modeloDesc   = usaFK7Receber ? 'SE1 -> FK7 -> FK1' : usaFK1 ? 'SE1 -> FK1' : 'SE1 -> SE5';
+
   return `
 ## Contas a receber — realizado
-- Valor recebido/liquidado/baixado: use JOIN de "Joins padrao" (SE1->FK1 ou SE1->SE5) conforme modelo_baixas_receber. NUNCA filtre por E1_BAIXA, E1_EMISSAO, E1_VENCREA ou E1_VENCTO.
-- valor_recebido: COALESCE(SUM(${usaFK1 ? 'FK1.FK1_VALOR' : 'SE5.E5_VALOR'}),0) AS valor_recebido via JOIN "${usaFK1 ? 'SE1 -> FK1' : 'SE1 -> SE5'}" de "Joins padrao".
+- Modelo de baixas deste tenant: ${modeloDesc}. NUNCA use SE1.E1_BAIXA, E1_EMISSAO, E1_VENCREA ou E1_VENCTO para identificar recebimentos.
+- O JOIN DEVE seguir exatamente a estrutura abaixo — omitir qualquer campo de chave gera produto cartesiano e valores incorretos:
+${joinCompleto}
+- Filtre o periodo em ${campoData} (data real do recebimento). Some ${campoValor} AS valor_recebido.
+- OBRIGATORIO: o WHERE da query deve incluir SE1.D_E_L_E_T_ = ' '.
+- NAO filtre SE1.E1_SITUACAO — o titulo pode ter baixa parcial e ainda estar em aberto.
+
+-- MODELO SQL (adapte sufixos, periodo e agrupamento conforme a pergunta):
+/*
+SET ROWCOUNT 50000;
+SELECT
+    SA1.A1_NOME AS cliente,
+    COALESCE(SUM(${campoValor}), 0) AS valor_recebido
+FROM SE1<sufixo> SE1
+${joinCompleto}
+JOIN SA1<sufixo> SA1
+    ON  SA1.A1_COD      = SE1.E1_CLIENTE
+    AND SA1.A1_LOJA     = SE1.E1_LOJA
+    AND SA1.D_E_L_E_T_  = ' '
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND ${campoData} BETWEEN '<YYYYMMDD_inicio>' AND '<YYYYMMDD_fim>'
+GROUP BY SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME
+ORDER BY SA1.A1_NOME;
+*/
 `;
 }
 
@@ -97,21 +208,50 @@ function pagarPosicao() {
 `;
 }
 
-function pagarRealizado({ usaFK2 }) {
+function pagarRealizado({ usaFK2, usaFK7Pagar }) {
+  const joinCompleto = _joinBaixaPagar({ usaFK7Pagar, usaFK2 });
+  const campoValor   = usaFK2 ? 'FK2.FK2_VALOR' : 'SE5.E5_VALOR';
+  const campoData    = usaFK2 ? 'FK2.FK2_DATA'  : 'SE5.E5_DATA';
+  const modeloDesc   = usaFK7Pagar ? 'SE2 -> FK7 -> FK2' : usaFK2 ? 'SE2 -> FK2' : 'SE2 -> SE5';
+
   return `
 ## Contas a pagar — realizado
-- Valor pago/liquidado/baixado: use JOIN de "Joins padrao" (SE2->FK2 ou SE2->SE5) conforme modelo_baixas_pagar. NUNCA filtre por E2_BAIXA, E2_EMISSAO, E2_VENCREA ou E2_VENCTO.
-- valor_pago: COALESCE(SUM(${usaFK2 ? 'FK2.FK2_VALOR' : 'SE5.E5_VALOR'}),0) AS valor_pago via JOIN "${usaFK2 ? 'SE2 -> FK2' : 'SE2 -> SE5'}" de "Joins padrao".
+- Modelo de baixas deste tenant: ${modeloDesc}. NUNCA use SE2.E2_BAIXA, E2_EMISSAO, E2_VENCREA ou E2_VENCTO para identificar pagamentos.
+- O JOIN DEVE seguir exatamente a estrutura abaixo — omitir qualquer campo de chave gera produto cartesiano e valores incorretos:
+${joinCompleto}
+- Filtre o periodo em ${campoData} (data real do pagamento). Some ${campoValor} AS valor_pago.
+- OBRIGATORIO: o WHERE da query deve incluir SE2.D_E_L_E_T_ = ' '.
+- NAO filtre SE2.E2_SITUACAO — o titulo pode ter baixa parcial e ainda estar em aberto.
+
+-- MODELO SQL (adapte sufixos, periodo e agrupamento conforme a pergunta):
+/*
+SET ROWCOUNT 50000;
+SELECT
+    SA2.A2_NOME AS fornecedor,
+    COALESCE(SUM(${campoValor}), 0) AS valor_pago
+FROM SE2<sufixo> SE2
+${joinCompleto}
+JOIN SA2<sufixo> SA2
+    ON  SA2.A2_COD      = SE2.E2_FORNECE
+    AND SA2.A2_LOJA     = SE2.E2_LOJA
+    AND SA2.D_E_L_E_T_  = ' '
+WHERE SE2.D_E_L_E_T_ = ' '
+  AND ${campoData} BETWEEN '<YYYYMMDD_inicio>' AND '<YYYYMMDD_fim>'
+GROUP BY SA2.A2_COD, SA2.A2_LOJA, SA2.A2_NOME
+ORDER BY SA2.A2_NOME;
+*/
 `;
 }
 
-function comparacaoPagarXReceber({ usaFK1, usaFK2 }) {
+function comparacaoPagarXReceber({ usaFK1, usaFK2, usaFK7Receber, usaFK7Pagar }) {
+  const modeloReceber = usaFK7Receber ? 'SE1->FK7->FK1' : usaFK1 ? 'SE1->FK1' : 'SE1->SE5';
+  const modeloPagar   = usaFK7Pagar   ? 'SE2->FK7->FK2' : usaFK2 ? 'SE2->FK2' : 'SE2->SE5';
   return `
 ## Comparacao/combinacao pagar x receber
 - REGRA ABSOLUTA — SE1 e SE2 sao carteiras independentes, nunca relacionadas entre si: PROIBIDO fazer JOIN (INNER, LEFT, RIGHT, CROSS ou qualquer tipo) entre SE1 e SE2, mesmo que as chaves parecam existir. Nao existe titulo a pagar que "corresponda" a um titulo a receber — qualquer JOIN entre elas produz produto cartesiano multiplicando os valores e gerando resultado incorreto.
 - EXEMPLO ERRADO — nunca faca isso: SELECT SUM(SE2.E2_SALDO), SUM(SE1.E1_SALDO) FROM SE2xxx SE2 LEFT JOIN SE1xxx SE1 ON SE1.D_E_L_E_T_ = ' ' — mesmo com condicao no ON, o JOIN cruza todas as linhas de SE2 com todas as de SE1, inflando os valores.
 - EXEMPLO CORRETO para total de ambas em posicao/em_aberto: use UNION ALL com dois SELECTs independentes — SELECT 'pagar' AS carteira, COALESCE(SUM(SE2.E2_SALDO),0) AS saldo FROM SE2xxx SE2 WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 UNION ALL SELECT 'receber', COALESCE(SUM(SE1.E1_SALDO),0) FROM SE1xxx SE1 WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0.
-- Se o usuario pedir ambas realizadas (recebidas e pagas): gere UM UNICO SELECT com duas subqueries escalares — valor_recebido via SE1+SE5/${usaFK1 ? 'FK1' : 'SE5'} e valor_pago via SE2+SE5/${usaFK2 ? 'FK2' : 'SE5'}. PROIBIDO UNION ALL para realizados. Siga o plano estruturado query_plan_texto.
+- Se o usuario pedir ambas realizadas (recebidas e pagas): gere UM UNICO SELECT com duas subqueries escalares — valor_recebido via ${modeloReceber} e valor_pago via ${modeloPagar}. Use o JOIN completo do fragmento "realizado" correspondente dentro de cada subquery. PROIBIDO UNION ALL para realizados. Siga o plano estruturado query_plan_texto.
 - Nao misture SA1 como fornecedor nem SA2 como cliente.
 - "por cliente E fornecedor" simultaneamente (ex: "detalhe por cliente e fornecedor", "por entidade"): PROIBIDO combinar SE1 e SE2 em uma unica query. Gere UNION ALL com dois blocos independentes — bloco 1: SE1 agrupado por SA1.A1_NOME (carteira receber); bloco 2: SE2 agrupado por SA2.A2_NOME (carteira pagar). Inclua coluna carteira para distinguir os blocos. Herde o periodo do contexto anterior.
 `;
@@ -265,57 +405,61 @@ ORDER BY fluxo.competencia;
 `;
 }
 
-function fluxoCaixaRealizado({ usaFK1, usaFK2 } = {}) {
-  const tabReceber = usaFK1 ? 'FK1' : 'SE5';
-  const campoDataReceber = usaFK1 ? 'FK1.FK1_DATA' : 'SE5.E5_DATA';
+function fluxoCaixaRealizado({ usaFK1, usaFK2, usaFK7Receber, usaFK7Pagar } = {}) {
+  const tabReceber        = usaFK1 ? 'FK1' : 'SE5';
+  const campoDataReceber  = usaFK1 ? 'FK1.FK1_DATA'  : 'SE5.E5_DATA';
   const campoValorReceber = usaFK1 ? 'FK1.FK1_VALOR' : 'SE5.E5_VALOR';
-  const tabPagar = usaFK2 ? 'FK2' : 'SE5';
-  const campoDataPagar = usaFK2 ? 'FK2.FK2_DATA' : 'SE5.E5_DATA';
-  const campoValorPagar = usaFK2 ? 'FK2.FK2_VALOR' : 'SE5.E5_VALOR';
+  const tabPagar          = usaFK2 ? 'FK2' : 'SE5';
+  const campoDataPagar    = usaFK2 ? 'FK2.FK2_DATA'  : 'SE5.E5_DATA';
+  const campoValorPagar   = usaFK2 ? 'FK2.FK2_VALOR' : 'SE5.E5_VALOR';
   const filtroRecpagReceber = usaFK1 ? '' : " AND SE5.E5_RECPAG = 'R'";
-  const filtroRecpagPagar = usaFK2 ? '' : " AND SE5.E5_RECPAG = 'P'";
+  const filtroRecpagPagar   = usaFK2 ? '' : " AND SE5.E5_RECPAG = 'P'";
+  const modeloReceber = usaFK7Receber ? 'SE1->FK7->FK1' : usaFK1 ? 'SE1->FK1' : 'SE1->SE5';
+  const modeloPagar   = usaFK7Pagar   ? 'SE2->FK7->FK2' : usaFK2 ? 'SE2->FK2' : 'SE2->SE5';
+  const joinReceber   = _joinBaixaReceber({ usaFK7Receber, usaFK1 });
+  const joinPagar     = _joinBaixaPagar({ usaFK7Pagar, usaFK2 });
 
   return `
 ## Fluxo de caixa realizado
 - Fluxo de caixa realizado e operacao propria. Nao trate como simples contas a pagar/receber.
-- Fluxo de caixa realizado = saldo_bancario_base + valor_recebido - valor_pago no periodo. Fluxo realizado usa baixas/movimentos reais: use os JOINs definidos em "Joins padrao" (SE1->FK1/SE5 para recebimentos, SE2->FK2/SE5 para pagamentos), conforme modelo_baixas_receber e modelo_baixas_pagar do contextoTecnico.
-- REGRA ABSOLUTA — calcule cada componente em CTE/subquery ESCALAR SEPARADA, sem JOIN entre elas: uma para saldo_bancario_base (SE8+SA6), outra para valor_recebido (SE1+${tabReceber}, agrupado por data quando detalhado), outra para valor_pago (SE2+${tabPagar}, agrupado por data quando detalhado). PROIBIDO fazer JOIN entre SE8 e ${tabReceber}/${tabPagar} usando banco/agencia/conta — essas tabelas de baixa nao tem relacao com conta bancaria, sua chave e o titulo (SE1/SE2). Combine os componentes apenas no SELECT final.
-- Datas SEMPRE no formato Protheus CHAR(8) YYYYMMDD (ex: '20260622'). PROIBIDO usar formato 'YYYY-MM-DD' ou CONVERT/CAST para DATE em comparacoes — os campos de data do Protheus sao strings YYYYMMDD, comparacao deve ser feita como string.
-- O periodo (dia, mes, ano, ou intervalo arbitrario) e definido pela pergunta do usuario e deve ser aplicado de forma CONSISTENTE as fontes envolvidas — nunca calcule saldo bancario em uma data e receber/pagar em outra data diferente.
+- Fluxo de caixa realizado = saldo_bancario_base + valor_recebido - valor_pago no periodo.
+- Modelo de baixas deste tenant: receber=${modeloReceber}, pagar=${modeloPagar}. Use o JOIN completo de cada modelo (veja fragmentos "realizado") dentro das CTEs receber/pagar.
+- REGRA ABSOLUTA — calcule cada componente em CTE SEPARADA: saldo_bancario_base (SE8+SA6), valor_recebido (SE1+cadeia receber), valor_pago (SE2+cadeia pagar). PROIBIDO JOIN entre SE8 e tabelas de baixa — nao ha relacao por conta bancaria.
+- Datas SEMPRE no formato Protheus CHAR(8) YYYYMMDD. PROIBIDO 'YYYY-MM-DD' ou CONVERT/CAST para DATE em comparacoes.
 - saldo_bancario_base deve ser a ultima posicao SE8 menor ou igual ao inicio do periodo.
-- SQL de fluxo deve retornar aliases claros: saldo_bancario_base, total_a_receber ou valor_recebido, total_a_pagar ou valor_pago, fluxo_liquido.
-- Se SE8/SA6 nao estiverem disponiveis, retorne os componentes disponiveis e use saldo_bancario_base = 0 apenas deixando claro pelo alias que faltou saldo bancario.
-- Granularidade da resposta (decidida pela pergunta do usuario, nao fixada aqui): sintetico = 1 linha com os componentes; por fornecedor/cliente = decompoe o lado a pagar OU a receber por entidade, mantendo saldo bancario como referencia unica (nao duplicada por entidade); por titulo = lista linha a linha sem agregacao.
-- REGRA OBRIGATORIA — por dia/mes (multiplas linhas): o saldo bancario e CUMULATIVO ao longo do periodo, NUNCA o mesmo valor fixo repetido em todas as linhas. Use SUM(valor_recebido - valor_pago) OVER (ORDER BY data_ref ROWS UNBOUNDED PRECEDING) somado ao saldo_bancario_base do inicio do periodo para calcular o fluxo_liquido de cada linha. PROIBIDO fazer CROSS JOIN do saldo_bancario_base fixo em cada linha sem acumular o delta das linhas anteriores.
-- REGRA ABSOLUTA — nomenclatura do alias de data/competencia no SELECT final: quando detalhado por dia, use AS dia (valor YYYYMMDD). Quando detalhado por mes, use AS competencia (valor YYYYMM, formato SUBSTRING(campo,1,6)) — NUNCA use o alias "mes" sozinho. O formatador de WhatsApp identifica a coluna "mes" apenas quando o valor e um numero de 1 a 12 (mes do calendario); um valor YYYYMM com alias "mes" e mal interpretado e quebra a quebra por linha da resposta.
-- PROIBIDO usar FULL OUTER JOIN em qualquer hipotese (nao suportado neste ambiente). Para combinar datas de receber e pagar que podem nao coincidir, use uma CTE "datas" com UNION das datas distintas de cada lado, e LEFT JOIN dessa CTE para receber e pagar — nunca JOIN direto entre as duas subqueries de receber/pagar.
+- SQL de fluxo deve retornar aliases claros: saldo_bancario_base, valor_recebido, valor_pago, fluxo_liquido.
+- REGRA OBRIGATORIA — por dia/mes: saldo bancario CUMULATIVO. Use SUM(valor_recebido - valor_pago) OVER (ORDER BY data_ref ROWS UNBOUNDED PRECEDING) + saldo_bancario_base. PROIBIDO CROSS JOIN sem acumular delta.
+- REGRA ABSOLUTA — alias de data: por dia → AS dia (YYYYMMDD). Por mes → AS competencia (YYYYMM). NUNCA alias "mes".
+- PROIBIDO FULL OUTER JOIN. Para datas de receber/pagar que nao coincidem: CTE "datas" com UNION + LEFT JOIN.
 
-### EXEMPLO CORRETO — fluxo de caixa realizado por dia (modelo deste tenant: receber=${tabReceber}, pagar=${tabPagar})
+### EXEMPLO CORRETO — fluxo de caixa realizado por dia (modelo deste tenant: receber=${modeloReceber}, pagar=${modeloPagar})
 WITH saldo_recente AS (
   SELECT E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA, E8_SALATUA, E8_DTSALAT,
          ROW_NUMBER() OVER (PARTITION BY E8_FILIAL, E8_BANCO, E8_AGENCIA, E8_CONTA ORDER BY E8_DTSALAT DESC) AS rn
-  FROM SE8xxx SE8
-  WHERE SE8.D_E_L_E_T_ = ' ' AND SE8.E8_DTSALAT <= '20260622'
+  FROM SE8<sufixo> SE8
+  WHERE SE8.D_E_L_E_T_ = ' ' AND SE8.E8_DTSALAT <= '<data_inicio>'
 ),
 saldo_base AS (
   SELECT COALESCE(SUM(E8_SALATUA), 0) AS saldo_bancario_base FROM saldo_recente WHERE rn = 1
 ),
-datas AS (
-  SELECT DISTINCT ${campoDataReceber} AS data_ref FROM ${tabReceber}xxx ${tabReceber} WHERE ${tabReceber}.D_E_L_E_T_ = ' '${filtroRecpagReceber} AND ${campoDataReceber} BETWEEN '20260622' AND '20260722'
-  UNION
-  SELECT DISTINCT ${campoDataPagar} FROM ${tabPagar}xxx ${tabPagar} WHERE ${tabPagar}.D_E_L_E_T_ = ' '${filtroRecpagPagar} AND ${campoDataPagar} BETWEEN '20260622' AND '20260722'
-),
 receber AS (
   SELECT ${campoDataReceber} AS data_ref, COALESCE(SUM(${campoValorReceber}), 0) AS valor_recebido
-  FROM ${tabReceber}xxx ${tabReceber}
-  WHERE ${tabReceber}.D_E_L_E_T_ = ' '${filtroRecpagReceber} AND ${campoDataReceber} BETWEEN '20260622' AND '20260722'
+  FROM SE1<sufixo> SE1
+  ${joinReceber}
+  WHERE SE1.D_E_L_E_T_ = ' ' AND ${campoDataReceber} BETWEEN '<data_inicio>' AND '<data_fim>'
   GROUP BY ${campoDataReceber}
 ),
 pagar AS (
   SELECT ${campoDataPagar} AS data_ref, COALESCE(SUM(${campoValorPagar}), 0) AS valor_pago
-  FROM ${tabPagar}xxx ${tabPagar}
-  WHERE ${tabPagar}.D_E_L_E_T_ = ' '${filtroRecpagPagar} AND ${campoDataPagar} BETWEEN '20260622' AND '20260722'
+  FROM SE2<sufixo> SE2
+  ${joinPagar}
+  WHERE SE2.D_E_L_E_T_ = ' ' AND ${campoDataPagar} BETWEEN '<data_inicio>' AND '<data_fim>'
   GROUP BY ${campoDataPagar}
+),
+datas AS (
+  SELECT data_ref FROM receber
+  UNION
+  SELECT data_ref FROM pagar
 ),
 fluxo AS (
   SELECT datas.data_ref AS dia,
@@ -324,7 +468,7 @@ fluxo AS (
          (COALESCE(r.valor_recebido, 0) - COALESCE(p.valor_pago, 0)) AS delta_dia
   FROM datas
   LEFT JOIN receber r ON r.data_ref = datas.data_ref
-  LEFT JOIN pagar p ON p.data_ref = datas.data_ref
+  LEFT JOIN pagar  p ON p.data_ref = datas.data_ref
 )
 SELECT fluxo.dia,
        saldo_base.saldo_bancario_base,

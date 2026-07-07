@@ -208,7 +208,7 @@ module.exports = {
         const texto = String(sql || '');
         if (!/\b(?:FROM|JOIN)\s+SF1\w*\s+SF1\b/i.test(texto)) return null;
         if (/\bSF1\s*\.\s*F1_TIPO\b/i.test(texto)) return null;
-        return "SF1 usada sem filtro SF1.F1_TIPO. REGRA OBRIGATORIA: toda query de compras que use SF1 deve filtrar SF1.F1_TIPO = 'N' no WHERE. Isso exclui devolucoes ('D'), complementos ('C') e beneficiamentos ('B') que nao representam custo real de compra. Adicione AND SF1.F1_TIPO = 'N' ao WHERE.";
+        return "SF1 usada sem filtro SF1.F1_TIPO. REGRA OBRIGATORIA: toda query fiscal que use SF1 deve informar o tipo da NF de entrada. Use SF1.F1_TIPO = 'N' para compra normal/custo real, ou SF1.F1_TIPO = 'D' quando a pergunta for devolucao de venda. Nunca use SF1 sem F1_TIPO.";
       },
     },
     {

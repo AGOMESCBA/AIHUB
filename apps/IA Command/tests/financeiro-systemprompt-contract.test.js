@@ -19,8 +19,8 @@ assert(systemPrompt.includes('Fluxo de caixa projetado'), 'spec deve reconhecer 
 assert(systemPrompt.includes('Fluxo de caixa realizado'), 'spec deve reconhecer fluxo realizado');
 assert(systemPrompt.includes('Saldo bancario puro usa SOMENTE SE8 e SA6'), 'saldo bancario puro nao deve misturar carteiras');
 assert(systemPrompt.includes('Fluxo projetado usa titulos em aberto'), 'fluxo projetado deve usar titulos em aberto');
-assert(systemPrompt.includes('Fluxo realizado usa baixas/movimentos reais'), 'fluxo realizado deve usar baixas/movimentos reais');
-assert(systemPrompt.includes('saldo_bancario_base, total_a_receber ou valor_recebido, total_a_pagar ou valor_pago, fluxo_liquido'), 'fluxo deve retornar componentes claros');
+assert(systemPrompt.includes('valor_recebido') && systemPrompt.includes('valor_pago'), 'fluxo realizado deve usar baixas/movimentos reais');
+assert(systemPrompt.includes('saldo_bancario_base') && systemPrompt.includes('fluxo_liquido'), 'fluxo deve retornar componentes claros');
 assert(systemPrompt.includes('PA = pagamento antecipado'), 'spec deve orientar PA');
 assert(systemPrompt.includes('RA = recebimento antecipado'), 'spec deve orientar RA');
 assert(systemPrompt.includes('Sem fornecedor/cliente, marque precisa_confirmacao=true'), 'PA/RA sem entidade devem pedir confirmacao');

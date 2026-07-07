@@ -7,7 +7,7 @@ const { removerFiltrosEmpresaComoEntidade } = require('../empresa-scope-sql-guar
 const fragmentosSpec = require('./financeiro-fragmentos-spec');
 const { classificarFragmentos } = require('./financeiro-spec-classifier');
 
-const TABELAS = ['SE1', 'SE2', 'SE5', 'SE8', 'SA1', 'SA2', 'SA3', 'SA6', 'SED', 'FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB'];
+const TABELAS = ['SE1', 'SE2', 'SE5', 'SE8', 'SA1', 'SA2', 'SA3', 'SA6', 'SED', 'FK1', 'FK2', 'FK7'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
   SE1: ['E1_FILIAL', 'E1_PREFIXO', 'E1_NUM', 'E1_PARCELA', 'E1_TIPO', 'E1_CLIENTE', 'E1_LOJA', 'E1_EMISSAO', 'E1_VENCTO', 'E1_VENCREA', 'E1_VALOR', 'E1_SALDO', 'E1_NATUREZ', 'E1_SITUACAO', 'E1_VEND1', 'E1_VALCOM1', 'D_E_L_E_T_'],
@@ -19,13 +19,9 @@ const CAMPOS_SX3_ESSENCIAIS = {
   SA3: ['A3_FILIAL', 'A3_COD', 'A3_NOME', 'D_E_L_E_T_'],
   SA6: ['A6_FILIAL', 'A6_COD', 'A6_AGENCIA', 'A6_NUMCON', 'A6_NOME', 'A6_NREDUZ', 'A6_BLOCKED', 'D_E_L_E_T_'],
   SED: ['ED_FILIAL', 'ED_CODIGO', 'ED_DESCRIC', 'D_E_L_E_T_'],
-  FK1: ['FK1_FILIAL', 'FK1_PREFIXO', 'FK1_NUM', 'FK1_PARCELA', 'FK1_TIPO', 'FK1_DATA', 'FK1_VALOR', 'D_E_L_E_T_'],
-  FK2: ['FK2_FILIAL', 'FK2_PREFIXO', 'FK2_NUM', 'FK2_PARCELA', 'FK2_TIPO', 'FK2_DATA', 'FK2_VALOR', 'D_E_L_E_T_'],
-  FK5: ['FK5_FILIAL', 'FK5_DATA', 'FK5_VALOR', 'D_E_L_E_T_'],
-  FK6: ['FK6_FILIAL', 'FK6_DATA', 'FK6_VALOR', 'D_E_L_E_T_'],
-  FK7: ['FK7_FILIAL', 'FK7_IDDOC', 'D_E_L_E_T_'],
-  FKA: ['FKA_FILIAL', 'FKA_IDDOC', 'D_E_L_E_T_'],
-  FKB: ['FKB_FILIAL', 'FKB_IDDOC', 'D_E_L_E_T_'],
+  FK1: ['FK1_FILIAL', 'FK1_PREFIXO', 'FK1_NUM', 'FK1_PARCELA', 'FK1_TIPO', 'FK1_DATA', 'FK1_VALOR', 'FK1_IDDOC', 'D_E_L_E_T_'],
+  FK2: ['FK2_FILIAL', 'FK2_PREFIXO', 'FK2_NUM', 'FK2_PARCELA', 'FK2_TIPO', 'FK2_DATA', 'FK2_VALOR', 'FK2_IDDOC', 'D_E_L_E_T_'],
+  FK7: ['FK7_FILIAL', 'FK7_PREFIX', 'FK7_NUM', 'FK7_PARCEL', 'FK7_TIPO', 'FK7_CLIFOR', 'FK7_LOJA', 'FK7_IDDOC', 'D_E_L_E_T_'],
 };
 
 function garantirIntencao(empresaId) {
@@ -187,9 +183,12 @@ async function validarCorrigirSqlGerado({ sql, contexto }) {
 }
 
 function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar, mensagem } = {}) {
-  const usaFK1 = modeloBaixasReceber === 'FK1';
-  const usaFK2 = modeloBaixasPagar === 'FK2';
-  const ctx = { usaFK1, usaFK2 };
+  const usaFK7Receber = modeloBaixasReceber === 'FK7_FK1';
+  const usaFK7Pagar  = modeloBaixasPagar  === 'FK7_FK2';
+  const usaFK1 = usaFK7Receber || modeloBaixasReceber === 'FK1';
+  const usaFK2 = usaFK7Pagar  || modeloBaixasPagar  === 'FK2';
+  const usaFK7 = usaFK7Receber || usaFK7Pagar;
+  const ctx = { usaFK1, usaFK2, usaFK7, usaFK7Receber, usaFK7Pagar };
 
   const chavesAcionadas = classificarFragmentos(mensagem);
   // null = pergunta nao classificada em nenhuma sub-operacao -> injeta TODOS os
@@ -272,7 +271,64 @@ const sqlPatternsProibidos = [
     },
   },
   {
-    // Bug real confirmado em producao: a IA por vezes esquece o filtro de exclusao de banco
+    // Bug confirmado em producao: IA gera JOIN FK2/FK1 incompleto (sem campos de chave ou sem FK7).
+    // Detecta o modelo pelo que esta presente no SQL e valida a estrutura correta para cada caso.
+    validar(sql) {
+      const temFK7  = /\bJOIN\s+FK7/i.test(sql);
+      const temFK2  = /\bJOIN\s+FK2/i.test(sql);
+      const temFK1  = /\bJOIN\s+FK1/i.test(sql);
+
+      // Modelo FK7 (cadeia tripla): SE2->FK7->FK2 ou SE1->FK7->FK1
+      if (temFK7) {
+        // FK7 deve ter os campos de chave do titulo
+        const camposFK7 = ['FK7_PREFIX', 'FK7_NUM', 'FK7_PARCEL', 'FK7_TIPO', 'FK7_CLIFOR', 'FK7_LOJA'];
+        const faltandoFK7 = camposFK7.filter(c => !new RegExp(`\\b${c}\\b`, 'i').test(sql));
+        if (faltandoFK7.length) {
+          return (
+            `JOIN FK7 incompleto: faltam os campos de chave ${faltandoFK7.join(', ')} no ON. ` +
+            `FK7 liga o titulo (SE1/SE2) ao documento de baixa via FK7_IDDOC. ` +
+            `O ON do JOIN FK7 DEVE conter: FK7_FILIAL, FK7_PREFIX, FK7_NUM, FK7_PARCEL, FK7_TIPO, FK7_CLIFOR, FK7_LOJA, D_E_L_E_T_. ` +
+            `Corrija e regere o SQL.`
+          );
+        }
+        // FK2/FK1 deve ligar via IDDOC, nao por campos diretos do titulo
+        for (const tab of ['FK2', 'FK1']) {
+          if (!new RegExp(`\\bJOIN\\s+${tab}`, 'i').test(sql)) continue;
+          if (!/\bFK[12]_IDDOC\b/i.test(sql)) {
+            return (
+              `Modelo FK7 detectado mas JOIN ${tab} nao usa ${tab}_IDDOC = FK7.FK7_IDDOC. ` +
+              `Neste tenant a ligacao entre FK7 e ${tab} e feita por ${tab}.${tab}_IDDOC = FK7.FK7_IDDOC — nao pelos campos de titulo. ` +
+              `Corrija o ON do JOIN ${tab} e regere o SQL.`
+            );
+          }
+        }
+        return null;
+      }
+
+      // Modelo FK direto (sem FK7): SE2->FK2 ou SE1->FK1 com campos de chave completos
+      for (const { tab, prefixo } of [
+        { tab: 'FK2', prefixo: 'E2' },
+        { tab: 'FK1', prefixo: 'E1' },
+      ]) {
+        if (!new RegExp(`\\bJOIN\\s+${tab}`, 'i').test(sql)) continue;
+        const campos = [`${tab}_PREFIXO`, `${tab}_NUM`, `${tab}_PARCELA`, `${tab}_TIPO`];
+        const faltando = campos.filter(c => !new RegExp(`\\b${c}\\b`, 'i').test(sql));
+        if (faltando.length) {
+          const se = tab === 'FK2' ? 'SE2' : 'SE1';
+          return (
+            `JOIN ${tab} incompleto: faltam os campos de chave ${faltando.join(', ')} no ON. ` +
+            `JOIN com apenas ${tab}_FILIAL gera produto cartesiano — cada titulo ${se} cruza com TODOS os registros de ${tab} da filial, somando valores incorretos. ` +
+            `O ON DEVE conter: ${tab}.${tab}_FILIAL=${se}.${prefixo}_FILIAL, ${tab}.${tab}_PREFIXO=${se}.${prefixo}_PREFIXO, ` +
+            `${tab}.${tab}_NUM=${se}.${prefixo}_NUM, ${tab}.${tab}_PARCELA=${se}.${prefixo}_PARCELA, ` +
+            `${tab}.${tab}_TIPO=${se}.${prefixo}_TIPO, ${tab}.D_E_L_E_T_=' '. Corrija e regere o SQL.`
+          );
+        }
+      }
+      return null;
+    },
+  },
+  {
+    // Bug confirmado em producao: a IA por vezes esquece o filtro de exclusao de banco
     // mesmo com a regra textual no spec (mais provavel em continuidade de conversa). Extrai
     // os codigos de banco que o usuario pediu para excluir/desconsiderar e exige que apareçam
     // no NOT IN do SQL final — forca retry em vez de devolver resultado incompleto ao usuario.

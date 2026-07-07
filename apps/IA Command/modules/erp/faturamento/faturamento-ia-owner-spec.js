@@ -6,19 +6,20 @@ const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./faturamento-fragmentos-spec');
 const { classificarFragmentos } = require('./faturamento-spec-classifier');
 
-const TABELAS = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT'];
+const TABELAS = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT', 'ACY'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
   SF2: ['F2_FILIAL', 'F2_DOC', 'F2_SERIE', 'F2_CLIENTE', 'F2_LOJA', 'F2_EMISSAO', 'F2_TIPO', 'F2_VALBRUT', 'F2_VALMERC', 'F2_VALFAT', 'F2_VEND1', 'D_E_L_E_T_'],
   SD2: ['D2_FILIAL', 'D2_DOC', 'D2_SERIE', 'D2_CLIENTE', 'D2_LOJA', 'D2_COD', 'D2_QUANT', 'D2_TOTAL', 'D2_VALBRUT', 'D2_PRCVEN', 'D2_TES', 'D2_CF', 'D2_CCUSTO', 'D_E_L_E_T_'],
   SF1: ['F1_FILIAL', 'F1_DOC', 'F1_SERIE', 'F1_FORNECE', 'F1_LOJA', 'F1_EMISSAO', 'F1_DTDIGIT', 'F1_TIPO', 'F1_VALBRUT', 'F1_VALMERC', 'F1_TOTALNF', 'D_E_L_E_T_'],
   SD1: ['D1_FILIAL', 'D1_DOC', 'D1_SERIE', 'D1_FORNECE', 'D1_LOJA', 'D1_COD', 'D1_QUANT', 'D1_TOTAL', 'D1_DTDIGIT', 'D1_TES', 'D1_CF', 'D_E_L_E_T_'],
-  SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'A1_MUN', 'A1_EST', 'D_E_L_E_T_'],
+  SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'A1_MUN', 'A1_EST', 'A1_GRPVEN', 'D_E_L_E_T_'],
   SA3: ['A3_FILIAL', 'A3_COD', 'A3_NOME', 'D_E_L_E_T_'],
   SB1: ['B1_FILIAL', 'B1_COD', 'B1_DESC', 'B1_GRUPO', 'B1_UM', 'B1_TIPO', 'D_E_L_E_T_'],
   SBM: ['BM_FILIAL', 'BM_GRUPO', 'BM_DESC', 'D_E_L_E_T_'],
   SF4: ['F4_FILIAL', 'F4_CODIGO', 'F4_TEXTO', 'F4_DUPLIC', 'F4_ESTOQUE', 'F4_TIPO', 'F4_CF', 'D_E_L_E_T_'],
   CTT: ['CTT_FILIAL', 'CTT_CUSTO', 'CTT_DESC01', 'D_E_L_E_T_'],
+  ACY: ['ACY_FILIAL', 'ACY_GRPVEN', 'ACY_DESCRI', 'ACY_GRPSUP', 'D_E_L_E_T_'],
 };
 
 function garantirIntencao(empresaId) {
@@ -109,9 +110,73 @@ function validarFiltroTipoSF2(sql = '') {
   return "SF2 usada sem filtro SF2.F2_TIPO. REGRA OBRIGATORIA: toda query de faturamento que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Adicione AND SF2.F2_TIPO = 'N' ao WHERE.";
 }
 
+function validarGrupoCliente(sql = '', mensagem = '') {
+  // Detecta quando a pergunta pede agrupamento por grupo de cliente
+  // mas o SQL não contém JOIN ACY — a IA ignorou a dimensão e gerou escalar ou agrupou por outro campo.
+  const pedidoGrupoCliente = /\bgrupo\s+de\s+cliente\w*\b/i.test(String(mensagem || ''));
+  if (!pedidoGrupoCliente) return null;
+  const texto = String(sql || '');
+  const temACY = /\bJOIN\s+\w+\s+ACY\b/i.test(texto);
+  if (temACY) return null;
+  return [
+    'A pergunta pede agrupamento por grupo de cliente, mas o SQL nao contem JOIN ACY.',
+    'OBRIGATORIO montar a cadeia completa: SD2 -> SF2 -> SA1 -> ACY.',
+    'Template de JOIN obrigatorio:',
+    "  JOIN SA1<sufixo> SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '",
+    "  LEFT JOIN ACY<sufixo> ACY ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN AND ACY.D_E_L_E_T_ = ' '  -- ATENCAO: ACY_GRPVEN liga com SA1.A1_GRPVEN, NAO com SA1.A1_COD",
+    'SELECT obrigatorio: ACY.ACY_DESCRI AS grupo_cliente',
+    'GROUP BY obrigatorio: ACY.ACY_GRPVEN, ACY.ACY_DESCRI',
+    'ATENCAO: use LEFT JOIN para ACY — cliente pode nao ter grupo cadastrado.',
+  ].join(' ');
+}
+
+function validarGrupoProduto(sql = '', mensagem = '') {
+  // Detecta quando a pergunta pede agrupamento por grupo de produto
+  // mas o SQL não contém JOIN SBM — a IA agrupou por produto ou gerou escalar.
+  const pedidoGrupoProduto = /\bgrupo\s+de\s+produto\w*\b|\blinha\s+de\s+produto\w*\b/i.test(String(mensagem || ''));
+  if (!pedidoGrupoProduto) return null;
+  const texto = String(sql || '');
+  const temSBM = /\bJOIN\s+\w+\s+SBM\b/i.test(texto);
+  if (temSBM) return null;
+  return [
+    'A pergunta pede agrupamento por grupo de produto, mas o SQL nao contem JOIN SBM.',
+    'OBRIGATORIO montar a cadeia completa: SD2 -> SB1 -> SBM.',
+    'Template de JOIN obrigatorio:',
+    "  JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '",
+    "  JOIN SBM<sufixo> SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '",
+    'SELECT obrigatorio: SBM.BM_DESC AS grupo_produto',
+    'GROUP BY obrigatorio: SBM.BM_GRUPO, SBM.BM_DESC',
+  ].join(' ');
+}
+
+function validarAliasSemJoin(sql = '') {
+  // Detecta aliases de tabelas dimensionais usados no SELECT ou GROUP BY
+  // sem correspondente FROM/JOIN declarado — erro que causa "Invalid object name" ou
+  // "column could not be bound" no SQL Server.
+  const texto = String(sql || '');
+  // Tabelas dimensionais que requerem JOIN explícito para ser usadas
+  const dimensionais = [
+    { alias: 'SBM', campos: /\bSBM\s*\.\s*BM_\w+/i, joinTemplate: 'JOIN SBM<sufixo> SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = \' \' (requer JOIN SB1 antes)' },
+    { alias: 'ACY', campos: /\bACY\s*\.\s*ACY_\w+/i, joinTemplate: 'LEFT JOIN ACY<sufixo> ACY ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN AND ACY.D_E_L_E_T_ = \' \' (requer JOIN SA1 antes)' },
+    { alias: 'SA3', campos: /\bSA3\s*\.\s*A3_\w+/i, joinTemplate: 'JOIN SA3<sufixo> SA3 ON SF2.F2_VEND1 = SA3.A3_COD AND SA3.D_E_L_E_T_ = \' \'' },
+    { alias: 'CTT', campos: /\bCTT\s*\.\s*CTT_\w+/i, joinTemplate: 'JOIN CTT<sufixo> CTT ON SD2.D2_CCUSTO = CTT.CTT_CUSTO AND CTT.D_E_L_E_T_ = \' \'' },
+    { alias: 'SF4', campos: /\bSF4\s*\.\s*F4_\w+/i, joinTemplate: 'JOIN SF4<sufixo> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = \' \'' },
+  ];
+  const erros = [];
+  for (const { alias, campos, joinTemplate } of dimensionais) {
+    if (!campos.test(texto)) continue;
+    const reJoin = new RegExp(`\\b(?:FROM|JOIN)\\s+\\w+\\s+${alias}\\b`, 'i');
+    if (!reJoin.test(texto)) {
+      erros.push(`${alias} usado sem JOIN declarado. Adicione: ${joinTemplate}`);
+    }
+  }
+  if (!erros.length) return null;
+  return `Alias de tabela usado sem JOIN correspondente no FROM:\n${erros.join('\n')}`;
+}
+
 function validarDeleteFiltros(sql = '') {
   // Verifica tabelas do FROM/JOIN que estejam sem D_E_L_E_T_ filtrado.
-  // Aplica somente aos aliases padrão do módulo faturamento.
+  // Aceita o filtro tanto no ON quanto no WHERE — ambos são válidos no SQL Server.
   const texto = String(sql || '');
   const aliases = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT'];
   const faltando = [];
@@ -242,7 +307,7 @@ module.exports = {
   camposPeriodoObrigatorios: ['F2_EMISSAO', 'F1_DTDIGIT', 'F1_EMISSAO'],
   sx3PromptLimit: 90,
   maxTokens: 4600,
-  dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM', 'SA3'],
+  dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM', 'SA3', 'ACY'],
   sanitizarFiltrosFilialSX2: true,
   sqlPatternsProibidos: [
     {
@@ -275,7 +340,7 @@ module.exports = {
     },
     {
       regex: /^(?![\s\S]*\bJOIN\s+\w+\s+SB1\b)[\s\S]*\bSB1\s*\.\s*B1_\w+/i,
-      mensagem: 'Campo SB1.B1_* usado sem JOIN SB1 declarado no FROM. Adicione JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = " " antes de usar campos de produto.',
+      mensagem: 'Campo SB1.B1_* usado sem JOIN SB1 declarado no FROM. Adicione JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = \' \' antes de usar campos de produto.',
     },
     {
       regex: /\bAVG\s*\(\s*SF2\s*\.\s*F2_VALBRUT\s*\)/i,
@@ -290,6 +355,20 @@ module.exports = {
     },
     {
       validar: validarFiltroTipoSF2,
+    },
+    {
+      validar: validarGrupoCliente,
+    },
+    {
+      // JOIN ACY usando SA1.A1_COD é errado — o campo correto é SA1.A1_GRPVEN
+      regex: /\bACY\s*\.\s*ACY_GRPVEN\s*=\s*SA1\s*\.\s*A1_COD\b/i,
+      mensagem: "JOIN ACY com campo errado: ACY.ACY_GRPVEN deve ligar com SA1.A1_GRPVEN, nao com SA1.A1_COD. Corrija para: LEFT JOIN ACY<sufixo> ACY ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN AND ACY.D_E_L_E_T_ = ' '",
+    },
+    {
+      validar: validarGrupoProduto,
+    },
+    {
+      validar: validarAliasSemJoin,
     },
     {
       validar: validarDeleteFiltros,

@@ -216,6 +216,128 @@ WHERE SE2.D_E_L_E_T_ = ' '
 const validacaoFk2 = queryPlan.validarSqlContraPlano(sqlPagasFk2, planoPagasMes);
 assert.strictEqual(validacaoFk2.ok, true, `SQL com FK2 deve ser aceito: ${validacaoFk2.erros.join(' | ')}`);
 
+const planoRecebidasMesFk7 = { ...planoRecebidasMes, modelo_baixas_receber: 'FK7_FK1' };
+const contratoReceberFk7 = queryPlan.formatQueryPlanForPrompt(planoRecebidasMesFk7);
+assert(contratoReceberFk7.includes('modelo_baixas_receber=FK7_FK1'), 'query_plan deve declarar modelo FK7_FK1');
+assert(contratoReceberFk7.includes('Use SE1 -> FK7 -> FK1'), 'query_plan deve orientar cadeia SE1 -> FK7 -> FK1');
+assert(contratoReceberFk7.includes('PROIBIDO JOIN direto SE1 -> FK1'), 'query_plan deve proibir FK1 direto quando modelo usa FK7');
+
+const sqlRecebidasFk7Fk1 = `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(FK1.FK1_VALOR), 0) AS valor_recebido
+FROM SE1020 SE1
+JOIN FK7020 FK7 ON FK7.FK7_FILIAL = SE1.E1_FILIAL
+  AND FK7.FK7_PREFIX = SE1.E1_PREFIXO
+  AND FK7.FK7_NUM = SE1.E1_NUM
+  AND FK7.FK7_PARCEL = SE1.E1_PARCELA
+  AND FK7.FK7_TIPO = SE1.E1_TIPO
+  AND FK7.FK7_CLIFOR = SE1.E1_CLIENTE
+  AND FK7.FK7_LOJA = SE1.E1_LOJA
+  AND FK7.D_E_L_E_T_ = ' '
+JOIN FK1020 FK1 ON FK1.FK1_FILIAL = FK7.FK7_FILIAL
+  AND FK1.FK1_IDDOC = FK7.FK7_IDDOC
+  AND FK1.D_E_L_E_T_ = ' '
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND FK1.FK1_DATA BETWEEN '20260601' AND '20260630'
+`;
+const validacaoFk7Fk1 = queryPlan.validarSqlContraPlano(sqlRecebidasFk7Fk1, planoRecebidasMesFk7);
+assert.strictEqual(validacaoFk7Fk1.ok, true, `SQL com FK7_FK1 deve ser aceito: ${validacaoFk7Fk1.erros.join(' | ')}`);
+
+const sqlRecebidasFk7Fk1SemJoinSa1 = `
+SET ROWCOUNT 50000;
+SELECT SA1.A1_NOME AS cliente, COALESCE(SUM(FK1.FK1_VALOR), 0) AS valor_recebido
+FROM SE1020 SE1
+JOIN FK7020 FK7 ON FK7.FK7_FILIAL = SE1.E1_FILIAL
+  AND FK7.FK7_PREFIX = SE1.E1_PREFIXO
+  AND FK7.FK7_NUM = SE1.E1_NUM
+  AND FK7.FK7_PARCEL = SE1.E1_PARCELA
+  AND FK7.FK7_TIPO = SE1.E1_TIPO
+  AND FK7.FK7_CLIFOR = SE1.E1_CLIENTE
+  AND FK7.FK7_LOJA = SE1.E1_LOJA
+  AND FK7.D_E_L_E_T_ = ' '
+JOIN FK1020 FK1 ON FK1.FK1_FILIAL = FK7.FK7_FILIAL
+  AND FK1.FK1_IDDOC = FK7.FK7_IDDOC
+  AND FK1.D_E_L_E_T_ = ' '
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND FK1.FK1_DATA BETWEEN '20260601' AND '20260630'
+GROUP BY SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME
+ORDER BY SA1.A1_NOME
+`;
+const validacaoSemJoinSa1Runner = runner._test.validarSqlIaOwnerBasico(sqlRecebidasFk7Fk1SemJoinSa1, financeiroSpec, {
+  SE1020: 'E',
+  FK7020: 'E',
+  FK1020: 'E',
+  SA1020: 'C',
+});
+assert.strictEqual(validacaoSemJoinSa1Runner.ok, false, 'runner deve rejeitar SA1.A1_* sem FROM/JOIN SA1');
+assert(validacaoSemJoinSa1Runner.erros.join(' ').includes('SA1.A1_NOME'), 'erro deve citar alias/campo SA1 usado sem JOIN');
+
+const sqlRecebidasFk7Fk1ComJoinSa1 = `
+SET ROWCOUNT 50000;
+SELECT SA1.A1_NOME AS cliente, COALESCE(SUM(FK1.FK1_VALOR), 0) AS valor_recebido
+FROM SE1020 SE1
+JOIN FK7020 FK7 ON FK7.FK7_FILIAL = SE1.E1_FILIAL
+  AND FK7.FK7_PREFIX = SE1.E1_PREFIXO
+  AND FK7.FK7_NUM = SE1.E1_NUM
+  AND FK7.FK7_PARCEL = SE1.E1_PARCELA
+  AND FK7.FK7_TIPO = SE1.E1_TIPO
+  AND FK7.FK7_CLIFOR = SE1.E1_CLIENTE
+  AND FK7.FK7_LOJA = SE1.E1_LOJA
+  AND FK7.D_E_L_E_T_ = ' '
+JOIN FK1020 FK1 ON FK1.FK1_FILIAL = FK7.FK7_FILIAL
+  AND FK1.FK1_IDDOC = FK7.FK7_IDDOC
+  AND FK1.D_E_L_E_T_ = ' '
+JOIN SA1020 SA1 ON SA1.A1_COD = SE1.E1_CLIENTE
+  AND SA1.A1_LOJA = SE1.E1_LOJA
+  AND SA1.D_E_L_E_T_ = ' '
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND FK1.FK1_DATA BETWEEN '20260601' AND '20260630'
+GROUP BY SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME
+ORDER BY SA1.A1_NOME
+`;
+const validacaoComJoinSa1Runner = runner._test.validarSqlIaOwnerBasico(sqlRecebidasFk7Fk1ComJoinSa1, financeiroSpec, {
+  SE1020: 'E',
+  FK7020: 'E',
+  FK1020: 'E',
+  SA1020: 'C',
+});
+assert.strictEqual(validacaoComJoinSa1Runner.ok, true, `runner deve aceitar SA1.A1_* com JOIN SA1: ${validacaoComJoinSa1Runner.erros.join(' | ')}`);
+
+const validacaoFk1DiretoEmFk7 = queryPlan.validarSqlContraPlano(sqlRecebidasFk1, planoRecebidasMesFk7);
+assert.strictEqual(validacaoFk1DiretoEmFk7.ok, false, 'modelo FK7_FK1 deve rejeitar JOIN FK1 direto sem FK7');
+assert(validacaoFk1DiretoEmFk7.erros.join(' ').includes('FK7_FK1'), 'erro deve citar modelo FK7_FK1');
+
+const planoPagasMesFk7 = { ...planoPagasMes, modelo_baixas_pagar: 'FK7_FK2' };
+const contratoPagarFk7 = queryPlan.formatQueryPlanForPrompt(planoPagasMesFk7);
+assert(contratoPagarFk7.includes('modelo_baixas_pagar=FK7_FK2'), 'query_plan deve declarar modelo FK7_FK2');
+assert(contratoPagarFk7.includes('Use SE2 -> FK7 -> FK2'), 'query_plan deve orientar cadeia SE2 -> FK7 -> FK2');
+assert(contratoPagarFk7.includes('PROIBIDO JOIN direto SE2 -> FK2'), 'query_plan deve proibir FK2 direto quando modelo usa FK7');
+
+const sqlPagasFk7Fk2 = `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(FK2.FK2_VALOR), 0) AS valor_pago
+FROM SE2020 SE2
+JOIN FK7020 FK7 ON FK7.FK7_FILIAL = SE2.E2_FILIAL
+  AND FK7.FK7_PREFIX = SE2.E2_PREFIXO
+  AND FK7.FK7_NUM = SE2.E2_NUM
+  AND FK7.FK7_PARCEL = SE2.E2_PARCELA
+  AND FK7.FK7_TIPO = SE2.E2_TIPO
+  AND FK7.FK7_CLIFOR = SE2.E2_FORNECE
+  AND FK7.FK7_LOJA = SE2.E2_LOJA
+  AND FK7.D_E_L_E_T_ = ' '
+JOIN FK2020 FK2 ON FK2.FK2_FILIAL = FK7.FK7_FILIAL
+  AND FK2.FK2_IDDOC = FK7.FK7_IDDOC
+  AND FK2.D_E_L_E_T_ = ' '
+WHERE SE2.D_E_L_E_T_ = ' '
+  AND FK2.FK2_DATA BETWEEN '20260601' AND '20260630'
+`;
+const validacaoFk7Fk2 = queryPlan.validarSqlContraPlano(sqlPagasFk7Fk2, planoPagasMesFk7);
+assert.strictEqual(validacaoFk7Fk2.ok, true, `SQL com FK7_FK2 deve ser aceito: ${validacaoFk7Fk2.erros.join(' | ')}`);
+
+const validacaoFk2DiretoEmFk7 = queryPlan.validarSqlContraPlano(sqlPagasFk2, planoPagasMesFk7);
+assert.strictEqual(validacaoFk2DiretoEmFk7.ok, false, 'modelo FK7_FK2 deve rejeitar JOIN FK2 direto sem FK7');
+assert(validacaoFk2DiretoEmFk7.erros.join(' ').includes('FK7_FK2'), 'erro deve citar modelo FK7_FK2');
+
 // Verifica que system prompt proíbe E1_BAIXA/E2_BAIXA explicitamente (modelo SE5 — padrão)
 assert(systemPrompt.includes('NUNCA use SE1.E1_BAIXA'), 'system prompt deve proibir E1_BAIXA');
 assert(systemPrompt.includes('NUNCA use SE2.E2_BAIXA'), 'system prompt deve proibir E2_BAIXA');
@@ -223,8 +345,9 @@ assert(systemPrompt.includes('E5_RECPAG'), 'system prompt SE5 deve documentar E5
 assert(!systemPrompt.includes('FK1.FK1_DATA'), 'system prompt SE5 nao deve documentar FK1.FK1_DATA');
 assert(!systemPrompt.includes("E1_SITUACAO = 'B'"), 'system prompt nao deve exigir E1_SITUACAO=B (titulo pode ter baixa parcial)');
 assert(!systemPrompt.includes("E2_SITUACAO = 'B'"), 'system prompt nao deve exigir E2_SITUACAO=B (titulo pode ter baixa parcial)');
-assert(systemPrompt.includes('modelo_baixas_receber'), 'system prompt deve orientar IA a usar modelo_baixas_receber do contexto');
-assert(systemPrompt.includes('modelo_baixas_pagar'), 'system prompt deve orientar IA a usar modelo_baixas_pagar do contexto');
+assert(systemPrompt.includes('Modelo de baixas deste tenant'), 'system prompt deve orientar IA a usar o modelo de baixas do tenant');
+assert(contratoReceberFk7.includes('modelo_baixas_receber'), 'query_plan deve expor modelo_baixas_receber do contexto');
+assert(contratoPagarFk7.includes('modelo_baixas_pagar'), 'query_plan deve expor modelo_baixas_pagar do contexto');
 
 // Verifica que system prompt com modelo FK1/FK2 documenta os joins FK corretos
 const systemPromptFk = promptBuilder.buildSystemPrompt(financeiroSpec, { modeloBaixasReceber: 'FK1', modeloBaixasPagar: 'FK2' });
@@ -254,6 +377,17 @@ if (buildContextoTecnicoTest) {
   assert.ok('FK1010' in ctxComFk.sx2, '[C1] FK1010 deve aparecer no sx2 exposto');
   assert.ok('FK2010' in ctxComFk.sx2, '[C1] FK2010 deve aparecer no sx2 exposto');
   assert.ok('FK1' in ctxComFk.sx3, '[C1] FK1 deve aparecer no sx3 exposto');
+
+  const ctxComFk7 = buildContextoTecnicoTest({
+    spec: { tabelas: tabelasEspec },
+    sx2: { SE1010: 'E', SE5010: 'E', FK1010: 'E', FK2010: 'E', FK7010: 'E' },
+    sx2Puro: { SE1010: 'E', SE5010: 'E', FK1010: 'E', FK2010: 'E', FK7010: 'E' },
+    sx3Prompt: { ...sx3ComFk, FK7: [{ campo: 'FK7_IDDOC' }] },
+  });
+  assert.strictEqual(ctxComFk7.modelo_baixas_receber, 'FK7_FK1', '[C1-FK7] modelo_baixas_receber deve ser FK7_FK1');
+  assert.strictEqual(ctxComFk7.modelo_baixas_pagar, 'FK7_FK2', '[C1-FK7] modelo_baixas_pagar deve ser FK7_FK2');
+  assert.ok(ctxComFk7.tabelas_permitidas.includes('FK7'), '[C1-FK7] FK7 deve aparecer em tabelas_permitidas');
+  assert.ok('FK7010' in ctxComFk7.sx2, '[C1-FK7] FK7010 deve aparecer no sx2 exposto');
 
   // ── Cenário 2: J2A/C3I — FK injetada pelo completarSX2Permitidas mas ausente no SX2 puro ──
   const ctxFkInjetada = buildContextoTecnicoTest({

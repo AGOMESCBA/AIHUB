@@ -29,6 +29,7 @@ function base() {
 - SF1: cabecalho de NF de entrada; para devolucao de venda use SF1.F1_TIPO = 'D'.
 - SD1: itens de NF de entrada; para valor de devolucao use SD1.D1_TOTAL.
 - SA1: clientes.
+- ACY: grupo de cliente. Vinculado a SA1 via SA1.A1_GRPVEN = ACY.ACY_GRPVEN. Use LEFT JOIN (cliente pode nao ter grupo).
 - SA3: vendedores.
 - SB1: produtos.
 - SBM: grupo de produtos.
@@ -48,6 +49,7 @@ function base() {
 - SF2 -> SA3: SF2.F2_VEND1 = SA3.A3_COD
 - SD2 -> SB1: SD2.D2_COD = SB1.B1_COD
 - SB1 -> SBM: SB1.B1_GRUPO = SBM.BM_GRUPO
+- SA1 -> ACY (grupo de cliente): LEFT JOIN ACY<sufixo> ACY ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN AND ACY.D_E_L_E_T_ = ' '. OBRIGATORIO: LEFT JOIN porque cliente pode nao ter grupo cadastrado. Requer JOIN SA1 antes.
 - SD2 -> SF4: SD2.D2_TES = SF4.F4_CODIGO
 - SD2 -> CTT: SD2.D2_CCUSTO = CTT.CTT_CUSTO
 - SD1 -> SF1:
@@ -63,7 +65,7 @@ function base() {
 
 ## Regras obrigatorias de SQL
 - Inicie sempre com SET ROWCOUNT 50000.
-- Use aliases explicitos iguais a base da tabela: SF2, SD2, SF1, SD1, SA1, SA3, SB1, SBM, SF4, CTT.
+- Use aliases explicitos iguais a base da tabela: SF2, SD2, SF1, SD1, SA1, SA3, SB1, SBM, SF4, CTT, ACY.
 - Qualifique campos sempre pelo alias base (SD2.D2_TOTAL, nunca SD2990.D2_TOTAL).
 - Nao crie filtros cadastrais vazios do tipo IN (SELECT codigo FROM cadastro WHERE codigo IS NOT NULL).
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
@@ -71,6 +73,7 @@ function base() {
 ## Exibicao de entidades
 Sempre retorne nome/descricao para o usuario. Codigo sozinho nao serve.
 - cliente: SA1.A1_NOME AS cliente. Codigo/loja podem vir como cod_cliente e loja_cliente.
+- grupo_cliente: ACY.ACY_DESCRI AS grupo_cliente. Codigo pode vir como cod_grupo_cliente (ACY.ACY_GRPVEN).
 - vendedor: SA3.A3_NOME AS vendedor.
 - produto: SB1.B1_DESC AS produto. Codigo pode vir como cod_produto.
 - grupo_produto: SBM.BM_DESC AS grupo_produto.
@@ -95,6 +98,7 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 ## Metrica por agrupamento
 - "por mes": SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia no SELECT e GROUP BY.
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
+- "por grupo de cliente": faca LEFT JOIN ACY<sufixo> ACY ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN AND ACY.D_E_L_E_T_ = ' ' e agrupe por ACY.ACY_GRPVEN, ACY.ACY_DESCRI. Exiba ACY.ACY_DESCRI AS grupo_cliente no SELECT.
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
 - REGRA CRITICA SQL Server — GROUP BY com SA1: Sempre que SA1 estiver no JOIN e qualquer campo de SA1 aparecer no SELECT ou GROUP BY, inclua SA1.A1_COD e SA1.A1_LOJA obrigatoriamente no GROUP BY. O SQL Server nao aceita referenciar SA1.A1_COD ou SA1.A1_LOJA em subqueries correlacionadas se eles nao estiverem no GROUP BY da query externa (erro 8120).
@@ -201,6 +205,7 @@ function metricaQuantidadeItem() {
 - Quando o agrupamento ou filtro for por produto, grupo de produto, TES ou centro de custo: use SD2 JOIN SF2 e adote SUM(SD2.D2_TOTAL) como metrica de valor.
 - REGRA DE EXCLUSIVIDADE DE METRICA: SD2 e F2_VALBRUT sao mutuamente exclusivos. Quando SD2 estiver no FROM ou em qualquer JOIN, use OBRIGATORIAMENTE SUM(SD2.D2_TOTAL) para valor e SUM(SD2.D2_QUANT) para quantidade. Nunca use SUM(SF2.F2_VALBRUT) quando SD2 estiver presente — a multiplicidade da relacao 1-para-N inflaria todos os valores.
 - Quando o usuario pedir SIMULTANEAMENTE "por valor" e "por quantidade" com agrupamento por produto/grupo/mes/cliente: ambas as metricas devem vir de SD2. Exemplo: SELECT ..., COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_total, COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada FROM SD2... JOIN SF2...
+
 `;
 }
 
@@ -223,6 +228,80 @@ function cfopTesCentroCusto() {
 - SF4.F4_DUPLIC: 'S' = TES gera lancamento financeiro (duplicata/receber); 'N' = nao gera financeiro.
   Quando o usuario perguntar sobre notas que geraram financeiro, contas a receber ou duplicatas, filtre SF4.F4_DUPLIC = 'S' via JOIN SD2 -> SF4.
   Este filtro e mais preciso que filtrar por CF para identificar notas de receita real.
+`;
+}
+
+function grupoProduto() {
+  return `
+## Agrupamento por Grupo de Produto — REGRA CRITICA
+Quando a pergunta pedir "por grupo de produto", "por grupo", "por linha de produto" ou equivalente:
+- E OBRIGATORIO montar a cadeia completa SD2 -> SB1 -> SBM no FROM/JOIN.
+- PROIBIDO usar SBM.BM_DESC no SELECT ou GROUP BY sem JOIN SBM declarado.
+- Template obrigatorio de JOIN:
+  JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+  JOIN SBM<sufixo> SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '
+- SELECT obrigatorio: SBM.BM_DESC AS grupo_produto
+- GROUP BY obrigatorio: SBM.BM_GRUPO, SBM.BM_DESC
+- Metrica de valor: SUM(SD2.D2_TOTAL). Metrica de quantidade: SUM(SD2.D2_QUANT).
+- Nao agrupe por produto (SB1.B1_DESC) nem por cliente quando o pedido for apenas por grupo de produto.
+`;
+}
+
+function grupoCliente() {
+  return `
+## Agrupamento por Grupo de Cliente — REGRA CRITICA
+Quando a pergunta pedir "por grupo de cliente", "por segmento de cliente" ou equivalente:
+- PROIBIDO usar SF2 sozinha como base. ACY depende de SA1, que depende de SD2 como ancora da cadeia.
+- E OBRIGATORIO montar a cadeia completa: FROM SD2 JOIN SF2 JOIN SA1 LEFT JOIN ACY.
+- PROIBIDO usar ACY.ACY_DESCRI no SELECT ou GROUP BY sem LEFT JOIN ACY declarado.
+- ATENCAO: ACY.ACY_GRPVEN liga com SA1.A1_GRPVEN — NAO com SA1.A1_COD. Erro comum: ON ACY.ACY_GRPVEN = SA1.A1_COD esta ERRADO.
+- Colunas disponiveis para SELECT (inclua conforme o que o usuario pedir):
+    ACY.ACY_GRPVEN AS cod_grupo_cliente
+    ACY.ACY_DESCRI AS grupo_cliente        -- obrigatorio quando agrupando por grupo
+    SA1.A1_COD AS cod_cliente
+    SA1.A1_NOME AS cliente
+    SB1.B1_COD AS cod_produto              -- requer JOIN SB1
+    SB1.B1_DESC AS produto                 -- requer JOIN SB1
+    COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_total
+    COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
+- GROUP BY minimo quando agrupando por grupo de cliente: ACY.ACY_GRPVEN, ACY.ACY_DESCRI.
+  Adicione SA1.A1_COD, SA1.A1_NOME se detalhar por cliente; SB1.B1_COD, SB1.B1_DESC se detalhar por produto.
+
+-- MODELO DE SQL (exemplo estrutural — NAO copie literalmente; adapte sufixos, periodo e colunas conforme a pergunta):
+/*
+SET ROWCOUNT 50000;
+SELECT
+    ACY.ACY_DESCRI AS grupo_cliente,
+    SA1.A1_NOME AS cliente,           -- incluir se usuario pedir detalhe por cliente
+    SB1.B1_DESC AS produto,           -- incluir se usuario pedir detalhe por produto
+    COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_total,
+    COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
+FROM SD2<sufixo> SD2
+JOIN SF2<sufixo> SF2
+    ON SD2.D2_FILIAL = SF2.F2_FILIAL
+    AND SD2.D2_DOC = SF2.F2_DOC
+    AND SD2.D2_SERIE = SF2.F2_SERIE
+    AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
+    AND SD2.D2_LOJA = SF2.F2_LOJA
+    AND SF2.D_E_L_E_T_ = ' '
+JOIN SA1<sufixo> SA1
+    ON SF2.F2_CLIENTE = SA1.A1_COD
+    AND SF2.F2_LOJA = SA1.A1_LOJA
+    AND SA1.D_E_L_E_T_ = ' '
+LEFT JOIN ACY<sufixo> ACY
+    ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN   -- ATENCAO: A1_GRPVEN, nao A1_COD
+    AND ACY.D_E_L_E_T_ = ' '
+JOIN SB1<sufixo> SB1                    -- incluir somente se detalhar por produto
+    ON SD2.D2_COD = SB1.B1_COD
+    AND SB1.D_E_L_E_T_ = ' '
+WHERE SF2.F2_TIPO = 'N'
+    AND SD2.D_E_L_E_T_ = ' '
+    AND <filtro_periodo_em_SF2.F2_EMISSAO>
+GROUP BY ACY.ACY_GRPVEN, ACY.ACY_DESCRI
+    -- adicionar SA1.A1_COD, SA1.A1_NOME se detalhar por cliente
+    -- adicionar SB1.B1_COD, SB1.B1_DESC se detalhar por produto
+ORDER BY ACY.ACY_DESCRI;
+*/
 `;
 }
 
@@ -304,6 +383,14 @@ const FRAGMENTOS = {
     texto: cfopTesCentroCusto,
     keywords: [/\bCFOP\b/i, /\bCF\b/, /\bTES\b/, /\bcarregad[ao]\b/i, /\bentrega\s+futura\b/i, /\bnota\s+mae\b/i, /\bestoque\b/i, /\bcentro\s+de\s+custo\b/i],
   },
+  grupo_produto: {
+    texto: grupoProduto,
+    keywords: [/\bgrupo\s+de\s+produto\w*\b/i, /\bgrupo\s+de\s+produtos\b/i, /\blinha\s+de\s+produto\w*\b/i],
+  },
+  grupo_cliente: {
+    texto: grupoCliente,
+    keywords: [/\bgrupo\s+de\s+cliente\w*\b/i, /\bgrupo\s+de\s+clientes\b/i, /\bsegmento\s+de\s+cliente\w*\b/i],
+  },
   frequencia_cliente: {
     texto: frequenciaCliente,
     keywords: [/\btodos\s+os\s+meses\b/i, /\bfrequ[eê]ncia\b/i, /\brecorr[eê]ncia\b/i, /\btodo\s+mes\b/i],
@@ -348,6 +435,8 @@ const ORDEM_FALLBACK = [
   'devolucoes',
   'metrica_valor_total',
   'metrica_quantidade_item',
+  'grupo_produto',
+  'grupo_cliente',
   'cfop_tes_centro_custo',
   'frequencia_cliente',
   'media_diaria',

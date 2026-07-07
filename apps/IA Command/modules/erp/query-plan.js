@@ -497,6 +497,26 @@ function normalizarPlanoIA(raw, fallbackPlan = {}) {
   return _sincronizarRegraPeriodo(plano);
 }
 
+function _contratoBaixaReceber(modelo = 'SE5') {
+  if (modelo === 'FK7_FK1') {
+    return "modelo_baixas_receber=FK7_FK1. Use SE1 -> FK7 -> FK1. JOIN FK7 por FK7.FK7_FILIAL=SE1.E1_FILIAL AND FK7.FK7_PREFIX=SE1.E1_PREFIXO AND FK7.FK7_NUM=SE1.E1_NUM AND FK7.FK7_PARCEL=SE1.E1_PARCELA AND FK7.FK7_TIPO=SE1.E1_TIPO AND FK7.FK7_CLIFOR=SE1.E1_CLIENTE AND FK7.FK7_LOJA=SE1.E1_LOJA AND FK7.D_E_L_E_T_=' '. Depois JOIN FK1 por FK1.FK1_FILIAL=FK7.FK7_FILIAL AND FK1.FK1_IDDOC=FK7.FK7_IDDOC AND FK1.D_E_L_E_T_=' '. PROIBIDO JOIN direto SE1 -> FK1 neste modelo. Filtre FK1.FK1_DATA, some FK1.FK1_VALOR.";
+  }
+  if (modelo === 'FK1') {
+    return "modelo_baixas_receber=FK1. Use SE1 -> FK1 direto. JOIN FK1 por FK1.FK1_FILIAL=SE1.E1_FILIAL AND FK1.FK1_PREFIXO=SE1.E1_PREFIXO AND FK1.FK1_NUM=SE1.E1_NUM AND FK1.FK1_PARCELA=SE1.E1_PARCELA AND FK1.FK1_TIPO=SE1.E1_TIPO AND FK1.D_E_L_E_T_=' '. Filtre FK1.FK1_DATA, some FK1.FK1_VALOR.";
+  }
+  return "modelo_baixas_receber=SE5. Use SE1 -> SE5. JOIN SE5 por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG='R' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' '. Filtre SE5.E5_DATA, some SE5.E5_VALOR.";
+}
+
+function _contratoBaixaPagar(modelo = 'SE5') {
+  if (modelo === 'FK7_FK2') {
+    return "modelo_baixas_pagar=FK7_FK2. Use SE2 -> FK7 -> FK2. JOIN FK7 por FK7.FK7_FILIAL=SE2.E2_FILIAL AND FK7.FK7_PREFIX=SE2.E2_PREFIXO AND FK7.FK7_NUM=SE2.E2_NUM AND FK7.FK7_PARCEL=SE2.E2_PARCELA AND FK7.FK7_TIPO=SE2.E2_TIPO AND FK7.FK7_CLIFOR=SE2.E2_FORNECE AND FK7.FK7_LOJA=SE2.E2_LOJA AND FK7.D_E_L_E_T_=' '. Depois JOIN FK2 por FK2.FK2_FILIAL=FK7.FK7_FILIAL AND FK2.FK2_IDDOC=FK7.FK7_IDDOC AND FK2.D_E_L_E_T_=' '. PROIBIDO JOIN direto SE2 -> FK2 neste modelo. Filtre FK2.FK2_DATA, some FK2.FK2_VALOR.";
+  }
+  if (modelo === 'FK2') {
+    return "modelo_baixas_pagar=FK2. Use SE2 -> FK2 direto. JOIN FK2 por FK2.FK2_FILIAL=SE2.E2_FILIAL AND FK2.FK2_PREFIXO=SE2.E2_PREFIXO AND FK2.FK2_NUM=SE2.E2_NUM AND FK2.FK2_PARCELA=SE2.E2_PARCELA AND FK2.FK2_TIPO=SE2.E2_TIPO AND FK2.D_E_L_E_T_=' '. Filtre FK2.FK2_DATA, some FK2.FK2_VALOR.";
+  }
+  return "modelo_baixas_pagar=SE5. Use SE2 -> SE5. JOIN SE5 por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG='P' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' '. Filtre SE5.E5_DATA, some SE5.E5_VALOR.";
+}
+
 function formatQueryPlanForPrompt(plano = {}) {
   if (!plano || !plano.versao) return '';
   const linhas = [
@@ -537,7 +557,7 @@ function formatQueryPlanForPrompt(plano = {}) {
   if (plano.modulo === 'financeiro' && plano.carteira === 'receber') {
     linhas.push('  financeiro_receber: use SE1 + SA1; nao use SA2/fornecedor em contas a receber.');
     if (plano.estado === 'recebido') {
-      linhas.push(`  financeiro_receber_recebido: modelo_baixas_receber=${plano.modelo_baixas_receber || 'SE5'}. SE modelo=FK1: JOIN FK1 por FK1.FK1_FILIAL=SE1.E1_FILIAL AND FK1.FK1_PREFIXO=SE1.E1_PREFIXO AND FK1.FK1_NUM=SE1.E1_NUM AND FK1.FK1_PARCELA=SE1.E1_PARCELA AND FK1.FK1_TIPO=SE1.E1_TIPO AND FK1.D_E_L_E_T_=' ', filtro FK1.FK1_DATA, some FK1.FK1_VALOR. SE modelo=SE5: JOIN SE5 por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG='R' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' ', filtro SE5.E5_DATA, some SE5.E5_VALOR. Use SOMENTE o modelo indicado.`);
+      linhas.push(`  financeiro_receber_recebido: ${_contratoBaixaReceber(plano.modelo_baixas_receber || 'SE5')} Use SOMENTE o modelo indicado.`);
       linhas.push('  financeiro_receber_recebido: PROIBIDO usar SE1.E1_BAIXA, E1_EMISSAO, E1_VENCREA, E1_VENCTO. NAO filtre SE1.E1_SITUACAO (titulo pode ter baixa parcial).');
     }
   }
@@ -545,16 +565,17 @@ function formatQueryPlanForPrompt(plano = {}) {
     linhas.push('  financeiro_pagar: use SE2 + SA2; nao use SA1/cliente em contas a pagar.');
     if (plano.estado === 'pago') {
       linhas.push('  financeiro_pagar_pago: use somente SE2 + SA2; nao use SE1/SA1, recebimentos nem UNION ALL.');
-      linhas.push(`  financeiro_pagar_pago: modelo_baixas_pagar=${plano.modelo_baixas_pagar || 'SE5'}. SE modelo=FK2: JOIN FK2 por FK2.FK2_FILIAL=SE2.E2_FILIAL AND FK2.FK2_PREFIXO=SE2.E2_PREFIXO AND FK2.FK2_NUM=SE2.E2_NUM AND FK2.FK2_PARCELA=SE2.E2_PARCELA AND FK2.FK2_TIPO=SE2.E2_TIPO AND FK2.D_E_L_E_T_=' ', filtro FK2.FK2_DATA, some FK2.FK2_VALOR. SE modelo=SE5: JOIN SE5 por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG='P' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' ', filtro SE5.E5_DATA, some SE5.E5_VALOR. Use SOMENTE o modelo indicado.`);
+      linhas.push(`  financeiro_pagar_pago: ${_contratoBaixaPagar(plano.modelo_baixas_pagar || 'SE5')} Use SOMENTE o modelo indicado.`);
       linhas.push('  financeiro_pagar_pago: PROIBIDO usar SE2.E2_BAIXA, E2_EMISSAO, E2_VENCREA, E2_VENCTO, SE2.E2_SITUACAO, SE2.E2_VALOR ou SE2.E2_SALDO como base de pagamento realizado.');
     }
   }
   if (plano.modulo === 'financeiro' && plano.carteira === 'ambas') {
     const estadoAmbas = plano.estado;
     if (estadoAmbas === 'recebido' || estadoAmbas === 'pago' || estadoAmbas === 'realizado') {
-      linhas.push('  financeiro_ambas_realizado: gere UM UNICO SELECT com duas colunas: valor_recebido e valor_pago. Use duas subqueries escalares no SELECT — uma para SE1+SE5/FK1 e outra para SE2+SE5/FK2. PROIBIDO gerar dois SELECTs separados ou UNION ALL.');
-      linhas.push(`  financeiro_ambas_realizado: modelo_baixas_receber=${plano.modelo_baixas_receber || 'SE5'}, modelo_baixas_pagar=${plano.modelo_baixas_pagar || 'SE5'}. Use os modelos indicados para cada subquery.`);
-      linhas.push("  financeiro_ambas_realizado: estrutura obrigatoria: SELECT (SELECT COALESCE(SUM(...),0) FROM SE1 JOIN SE5/FK1 ON ... AND SE5.D_E_L_E_T_ = ' ' WHERE SE1.D_E_L_E_T_ = ' ' AND SE5.E5_TIPO NOT IN ('EST','ED') AND SE5.E5_DATA BETWEEN ...) AS valor_recebido, (SELECT COALESCE(SUM(...),0) FROM SE2 JOIN SE5/FK2 ON ... AND SE5.D_E_L_E_T_ = ' ' WHERE SE2.D_E_L_E_T_ = ' ' AND SE5.E5_TIPO NOT IN ('EST','ED') AND SE5.E5_DATA BETWEEN ...) AS valor_pago. OBRIGATORIO: SE1.D_E_L_E_T_ = ' ' no WHERE da subquery de receber; SE2.D_E_L_E_T_ = ' ' no WHERE da subquery de pagar.");
+      linhas.push('  financeiro_ambas_realizado: gere UM UNICO SELECT com duas colunas: valor_recebido e valor_pago. Use duas subqueries escalares no SELECT. PROIBIDO gerar dois SELECTs separados ou UNION ALL.');
+      linhas.push(`  financeiro_ambas_realizado_receber: ${_contratoBaixaReceber(plano.modelo_baixas_receber || 'SE5')}`);
+      linhas.push(`  financeiro_ambas_realizado_pagar: ${_contratoBaixaPagar(plano.modelo_baixas_pagar || 'SE5')}`);
+      linhas.push("  financeiro_ambas_realizado: OBRIGATORIO: SE1.D_E_L_E_T_ = ' ' no WHERE da subquery de receber; SE2.D_E_L_E_T_ = ' ' no WHERE da subquery de pagar.");
     } else {
       linhas.push('  financeiro_ambas: receber usa SE1 + SA1, pagar usa SE2 + SA2; nao faca JOIN direto entre SE1 e SE2.');
     }
@@ -582,6 +603,46 @@ function _camposDataPorPlano(plano = {}) {
   if (plano.modulo === 'faturamento') return ['F2_EMISSAO', 'D2_EMISSAO'];
   if (plano.modulo === 'comissao') return ['E3_VENCTO', 'E3_DATA'];
   return [];
+}
+
+function _temTabelaSql(texto, base) {
+  const b = String(base || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b(?:FROM|JOIN)\\s+${b}(?:\\d{3,4}|[Xx]{3})?\\b`, 'i').test(texto);
+}
+
+function _temJoinIdDoc(texto, tabMovimento) {
+  const tab = String(tabMovimento || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const campo = `${tab}_IDDOC`;
+  return new RegExp(`\\b${tab}\\s*\\.\\s*${campo}\\s*=\\s*FK7\\s*\\.\\s*FK7_IDDOC\\b`, 'i').test(texto)
+    || new RegExp(`\\bFK7\\s*\\.\\s*FK7_IDDOC\\s*=\\s*${tab}\\s*\\.\\s*${campo}\\b`, 'i').test(texto);
+}
+
+function _validarModeloBaixaFk7(texto, plano = {}) {
+  const erros = [];
+  const modeloReceber = plano.modelo_baixas_receber || 'SE5';
+  const modeloPagar = plano.modelo_baixas_pagar || 'SE5';
+
+  if ((plano.carteira === 'receber' || plano.carteira === 'ambas') && modeloReceber === 'FK7_FK1') {
+    const temFk1 = _temTabelaSql(texto, 'FK1');
+    const temFk7 = _temTabelaSql(texto, 'FK7');
+    if (!temFk7 || !temFk1) {
+      erros.push('modelo_baixas_receber=FK7_FK1 exige JOIN SE1 -> FK7 -> FK1; nao use FK1 direto nem omita FK7.');
+    } else if (!_temJoinIdDoc(texto, 'FK1')) {
+      erros.push('modelo_baixas_receber=FK7_FK1 exige FK1.FK1_IDDOC = FK7.FK7_IDDOC no JOIN entre FK7 e FK1.');
+    }
+  }
+
+  if ((plano.carteira === 'pagar' || plano.carteira === 'ambas') && modeloPagar === 'FK7_FK2') {
+    const temFk2 = _temTabelaSql(texto, 'FK2');
+    const temFk7 = _temTabelaSql(texto, 'FK7');
+    if (!temFk7 || !temFk2) {
+      erros.push('modelo_baixas_pagar=FK7_FK2 exige JOIN SE2 -> FK7 -> FK2; nao use FK2 direto nem omita FK7.');
+    } else if (!_temJoinIdDoc(texto, 'FK2')) {
+      erros.push('modelo_baixas_pagar=FK7_FK2 exige FK2.FK2_IDDOC = FK7.FK7_IDDOC no JOIN entre FK7 e FK2.');
+    }
+  }
+
+  return erros;
 }
 
 function validarSqlContraPlano(sql, plano = {}) {
@@ -625,6 +686,7 @@ function validarSqlContraPlano(sql, plano = {}) {
     if (temSe5 && !temFiltroEstorno) {
       erros.push("SQL usa SE5 mas nao filtrou estornos: adicione AND SE5.E5_TIPO NOT IN ('EST','ED') no JOIN de SE5. Estornos devem ser excluidos do valor realizado.");
     }
+    erros.push(..._validarModeloBaixaFk7(texto, plano));
 
     if (plano.carteira === 'ambas') {
       const temSe5OuFk = /\b(?:FROM|JOIN)\s+(?:SE5|FK1|FK2)(?:\d{3,4}|[Xx]{3})?\b/i.test(texto);
