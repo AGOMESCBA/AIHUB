@@ -228,11 +228,21 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Nao remover periodo, metrica ou demais filtros ja corretos.',
     ];
   } else if (/D_E_L_E_T_|deletad/i.test(mensagem)) {
+    // Extrai os aliases faltantes da propria mensagem de erro (ex: "sem filtro D_E_L_E_T_: SF2, SB1")
+    // para citar cada tabela pelo nome no retry — em queries com 3+ JOINs a IA tende a
+    // esquecer justamente a tabela do FROM principal quando corrige as tabelas dos JOINs.
+    const aliasesFaltantesMatch = mensagem.match(/sem filtro D_E_L_E_T_:\s*([A-Z0-9,\s]+?)\./i);
+    const aliasesFaltantes = aliasesFaltantesMatch
+      ? aliasesFaltantesMatch[1].split(',').map(a => a.trim()).filter(Boolean)
+      : [];
     bloco = [
       'Contrato obrigatorio:',
       "- Toda tabela no FROM/JOIN precisa de D_E_L_E_T_ = ' '.",
       "- Tabela principal: filtro no WHERE.",
       "- Tabelas em JOIN: filtro dentro do ON.",
+      ...(aliasesFaltantes.length
+        ? [`- TABELA(S) ESPECIFICA(S) QUE FALTOU O FILTRO NA TENTATIVA ANTERIOR: ${aliasesFaltantes.join(', ')}. Adicione ${aliasesFaltantes.map(a => `${a}.D_E_L_E_T_ = ' '`).join(' e ')} nesta nova tentativa, sem remover os filtros D_E_L_E_T_ que ja estavam corretos nas outras tabelas.`]
+        : []),
       ...linhasEntidades,
       'Tarefa:',
       '- Gere novo SQL a partir da pergunta original.',
