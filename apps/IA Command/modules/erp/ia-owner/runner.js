@@ -1690,9 +1690,11 @@ function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
   // pedido nos anos que nao sao o primeiro/ultimo.
   const texto = String(sql || '');
   const anos = _anosCitadosNoTexto(mensagem);
-  const textoNorm = periodResolver.normalizarTexto(String(mensagem || ''));
-  const citaAnos = /\banos?\b/.test(textoNorm);
-  if (anos.length < 2 || !citaAnos) return { ok: true, erros: [] };
+  // Basta 2+ anos citados na pergunta (ex: "junho de 2025 e 2026") para o risco existir,
+  // mesmo sem a palavra "ano"/"anos" explicita — exigi-la deixava passar casos reais
+  // (confirmado com IA real: "faturamento ... junho de 2025 e 2026" perde 2026 em ~100%
+  // das tentativas quando a frase nao tem "ano/anos", e o guardrail nunca chegava a examinar o SQL).
+  if (anos.length < 2) return { ok: true, erros: [] };
 
   const rangeMeses = _rangeMesesCitadoNoTexto(mensagem);
   const mesesUnicos = _mesesCitadosNoTexto(mensagem);
@@ -1717,12 +1719,16 @@ function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
   // vaza para meses fora do conjunto pedido nos anos intermediarios/extremos. Usa o menor
   // e o maior mes citado como ancora do padrao mesmo quando os meses sao avulsos
   // (nao-contiguos), pois BETWEEN do min ao max tambem inclui os meses pulados entre eles.
+  // Cobre tanto literal de data completa (8 digitos, 'YYYYMMDD', com dia) quanto literal
+  // de competencia truncada (6 digitos, 'YYYYMM', ex: SUBSTRING(campo,1,6) BETWEEN '202501'
+  // AND '202606') — a IA pode gerar qualquer um dos dois formatos para o mesmo erro.
+  const diaOuFim = `(?:28|29|30|31)?`;
   const reMesmoAno = new RegExp(
-    `'(\\d{4})${mesInicio}01'[^']{0,60}?'(?:\\1)${mesFim}(?:28|29|30|31)'`,
+    `'(\\d{4})${mesInicio}(?:01)?'[^']{0,60}?'(?:\\1)${mesFim}${diaOuFim}'`,
     'i'
   );
   const reAnoInicioAoFim = new RegExp(
-    `'${primeiroAno}${mesInicio}01'[^']{0,60}?'${ultimoAno}${mesFim}(?:28|29|30|31)'`,
+    `'${primeiroAno}${mesInicio}(?:01)?'[^']{0,60}?'${ultimoAno}${mesFim}${diaOuFim}'`,
     'i'
   );
   if (!reMesmoAno.test(texto) && !reAnoInicioAoFim.test(texto)) return { ok: true, erros: [] };
@@ -1882,6 +1888,69 @@ function sqlTemFiltroPeriodoEmCampo(sql, campo) {
   return padroes.some(re => re.test(texto));
 }
 
+function _numerosValidos(lista, min, max) {
+  if (!Array.isArray(lista)) return null;
+  const nums = lista
+    .map(n => parseInt(n, 10))
+    .filter(n => Number.isFinite(n) && n >= min && n <= max);
+  return nums.length ? [...new Set(nums)] : null;
+}
+
+function validarMesesAnosDeclaradosNoSql(sql, spec = {}, periodo = null) {
+  // Guardrail semantico: compara periodo.meses/periodo.anos — DECLARADOS PELA PROPRIA IA no
+  // JSON de resposta — contra o SQL gerado, em vez de reinterpretar a pergunta em portugues
+  // via regex (abordagem antiga, fragil a variacoes de redacao). So roda quando a IA preencheu
+  // os campos opcionais; se nao preencheu, cai no guardrail textual legado como fallback.
+  const meses = _numerosValidos(periodo?.meses, 1, 12);
+  const anos = _numerosValidos(periodo?.anos, 1900, 2999);
+  if (!meses || !anos || anos.length < 2) return { ok: true, erros: [] };
+
+  const campos = _camposPeriodoObrigatorios(spec);
+  if (!campos.length) return { ok: true, erros: [] };
+
+  const texto = String(sql || '');
+  const mesesOrdenados = [...meses].sort((a, b) => a - b);
+  const anosOrdenados = [...anos].sort((a, b) => a - b);
+  const mesInicio = String(mesesOrdenados[0]).padStart(2, '0');
+  const mesFim = String(mesesOrdenados[mesesOrdenados.length - 1]).padStart(2, '0');
+  const primeiroAno = anosOrdenados[0];
+  const ultimoAno = anosOrdenados[anosOrdenados.length - 1];
+
+  // Um campo de data satisfaz o periodo declarado quando existe SUBSTRING(campo,5,2) filtrando
+  // mes (= / IN / BETWEEN) E SUBSTRING(campo,1,4) filtrando ano (= / IN) no mesmo SQL — sem
+  // exigir sintaxe especifica (IN, BETWEEN, OR), so que a granularidade mes+ano exista separada.
+  const algumCampoSatisfeito = campos.some(campo => {
+    const campoRe = `(?:[A-Z][A-Z0-9_]*\\.)?${_escapeRegexLiteral(campo)}`;
+    const reMes = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*5\\s*,\\s*2\\s*\\)\\s*(?:=\\s*'\\d{2}'|IN\\s*\\([^)]*\\)|BETWEEN\\s*'\\d{2}'\\s*AND\\s*'\\d{2}')`, 'i');
+    const reAno = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*4\\s*\\)\\s*(?:=\\s*'\\d{4}'|IN\\s*\\([^)]*\\))`, 'i');
+    return reMes.test(texto) && reAno.test(texto);
+  });
+  if (algumCampoSatisfeito) return { ok: true, erros: [] };
+
+  // Um unico intervalo continuo (BETWEEN/>=/<= de data absoluta ou competencia truncada) do
+  // primeiro ao ultimo periodo declarado tambem escapa da granularidade correta — mesmo padrao
+  // ja detectado pelo guardrail textual legado, agora ancorado no periodo DECLARADO pela IA.
+  const diaOuFim = `(?:28|29|30|31)?`;
+  const reIntervaloContinuo = campos.some(campo => {
+    const reMesmoAno = new RegExp(`'(\\d{4})${mesInicio}(?:01)?'[^']{0,60}?'(?:\\1)${mesFim}${diaOuFim}'`, 'i');
+    const reAnoInicioAoFim = new RegExp(`'${primeiroAno}${mesInicio}(?:01)?'[^']{0,60}?'${ultimoAno}${mesFim}${diaOuFim}'`, 'i');
+    return reMesmoAno.test(texto) || reAnoInicioAoFim.test(texto);
+  });
+
+  const mesesTexto = mesesOrdenados.length === 1
+    ? `SUBSTRING(campo, 5, 2) = '${mesInicio}'`
+    : `SUBSTRING(campo, 5, 2) IN (${mesesOrdenados.map(m => `'${String(m).padStart(2, '0')}'`).join(', ')}) ou BETWEEN '${mesInicio}' AND '${mesFim}' se contiguo`;
+
+  return {
+    ok: false,
+    erros: [
+      `O plano declarou periodo.meses=[${mesesOrdenados.join(',')}] e periodo.anos=[${anosOrdenados.join(',')}], mas o SQL nao filtra mes e ano separadamente em nenhum campo de data do modulo (${campos.join(', ')})` +
+      (reIntervaloContinuo ? ' — encontrado intervalo continuo unico, que perde anos ou vaza para meses fora do declarado.' : '.') +
+      ` Filtre mes e ano separadamente: ${mesesTexto} AND SUBSTRING(campo, 1, 4) IN (${anosOrdenados.map(a => `'${a}'`).join(', ')}).`,
+    ],
+  };
+}
+
 function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null) {
   const dataInicio = String(periodo?.dataInicio || '').trim();
   const dataFim = String(periodo?.dataFim || '').trim();
@@ -1890,13 +1959,15 @@ function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null) {
     return { ok: true, erros: [] };
   }
   const temFiltroPeriodo = campos.some(campo => sqlTemFiltroPeriodoEmCampo(sql, campo));
-  if (temFiltroPeriodo) return { ok: true, erros: [] };
-  return {
-    ok: false,
-    erros: [
-      `O plano declarou periodo ${dataInicio} a ${dataFim}, mas o SQL nao aplicou filtro temporal em nenhum campo de data do modulo (${campos.join(', ')}). Gere novamente incluindo o filtro de periodo no WHERE/subquery correta.`,
-    ],
-  };
+  if (!temFiltroPeriodo) {
+    return {
+      ok: false,
+      erros: [
+        `O plano declarou periodo ${dataInicio} a ${dataFim}, mas o SQL nao aplicou filtro temporal em nenhum campo de data do modulo (${campos.join(', ')}). Gere novamente incluindo o filtro de periodo no WHERE/subquery correta.`,
+      ],
+    };
+  }
+  return validarMesesAnosDeclaradosNoSql(sql, spec, periodo);
 }
 
 function construirQueryPlanTecnico({ spec, mensagem, periodo, filtros, entidades } = {}) {
@@ -2861,6 +2932,7 @@ module.exports = {
     validarSqlIaOwnerBasico,
     normalizarAliasesBaseAusentes,
     validarPeriodoDeclaradoNoSql,
+    validarMesesAnosDeclaradosNoSql,
     sqlTemFiltroPeriodoEmCampo,
     construirQueryPlanTecnico,
     _buildContextoFormatacao,

@@ -163,6 +163,55 @@ const validacaoAcumuladoJanAJunCorreto = runner._test.validarSqlIaOwnerBasico(sq
 }, perguntaAcumuladoJanAJunVariosAnos);
 assert.strictEqual(validacaoAcumuladoJanAJunCorreto.ok, true, `SQL com mes(range)+anos separados deve passar: ${validacaoAcumuladoJanAJunCorreto.erros.join(' | ')}`);
 
+const perguntaAcumuladoPorAnoCompetencia = 'Faturamento acumulado por ano do mes de Janeiro a junho dos anos de 2025 e 2026';
+const sqlAcumuladoPorAnoCompetenciaErrado = `
+SET ROWCOUNT 30000;
+SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 4) AS ano,
+       COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento_acumulado
+FROM SF2010 SF2
+WHERE SF2.D_E_L_E_T_ = ' '
+  AND SF2.F2_TIPO = 'N'
+  AND SUBSTRING(SF2.F2_EMISSAO, 1, 6) BETWEEN '202501' AND '202606'
+GROUP BY SUBSTRING(SF2.F2_EMISSAO, 1, 4)
+ORDER BY ano;
+`;
+const validacaoAcumuladoPorAnoCompetenciaErrado = runner._test.validarSqlIaOwnerBasico(sqlAcumuladoPorAnoCompetenciaErrado, faturamentoSpec, {
+  SF2010: 'E',
+}, perguntaAcumuladoPorAnoCompetencia);
+assert.strictEqual(validacaoAcumuladoPorAnoCompetenciaErrado.ok, false, 'BETWEEN de competencia truncada (6 digitos, 202501 a 202606) deve ser rejeitado igual ao formato de data completa (8 digitos)');
+
+const sqlAcumuladoPorAnoCompetenciaCorreto = sqlAcumuladoPorAnoCompetenciaErrado.replace(
+  "SUBSTRING(SF2.F2_EMISSAO, 1, 6) BETWEEN '202501' AND '202606'",
+  "SUBSTRING(SF2.F2_EMISSAO, 5, 2) BETWEEN '01' AND '06' AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')"
+);
+const validacaoAcumuladoPorAnoCompetenciaCorreto = runner._test.validarSqlIaOwnerBasico(sqlAcumuladoPorAnoCompetenciaCorreto, faturamentoSpec, {
+  SF2010: 'E',
+}, perguntaAcumuladoPorAnoCompetencia);
+assert.strictEqual(validacaoAcumuladoPorAnoCompetenciaCorreto.ok, true, `SQL com mes+ano separados (competencia) deve passar: ${validacaoAcumuladoPorAnoCompetenciaCorreto.erros.join(' | ')}`);
+
+// Guardrail semantico novo: periodo.meses/periodo.anos declarados pela IA (via prompt-builder),
+// comparados contra o SQL — sem reinterpretar a pergunta em portugues. Cenario real capturado
+// com IA (empresa CAIEIRA): "Faturamento acumulado por ano do mes de Janeiro a junho dos anos
+// de 2025 e 2026" gera periodo.meses=[1..6], periodo.anos=[2025,2026].
+const periodoDeclaradoRealIA = {
+  tipo: 'isolado', dataInicio: '20250101', dataFim: '20260630',
+  meses: [1, 2, 3, 4, 5, 6], anos: [2025, 2026],
+};
+const sqlCompetenciaTruncadaErrado = `SELECT SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano, SUM(SF2.F2_VALBRUT) AS f FROM SF2010 SF2 WHERE SF2.D_E_L_E_T_=' ' AND SF2.F2_TIPO='N' AND SUBSTRING(SF2.F2_EMISSAO,1,6) BETWEEN '202501' AND '202606' GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,4);`;
+const validacaoSemanticaErrado = runner._test.validarPeriodoDeclaradoNoSql(sqlCompetenciaTruncadaErrado, faturamentoSpec, periodoDeclaradoRealIA);
+assert.strictEqual(validacaoSemanticaErrado.ok, false, 'guardrail semantico deve rejeitar SQL que nao bate com periodo.meses/anos declarado pela IA (competencia truncada BETWEEN)');
+
+const sqlMesAnoSeparadoCorreto = `SELECT SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano, SUM(SF2.F2_VALBRUT) AS f FROM SF2010 SF2 WHERE SF2.D_E_L_E_T_=' ' AND SF2.F2_TIPO='N' AND SUBSTRING(SF2.F2_EMISSAO,5,2) BETWEEN '01' AND '06' AND SUBSTRING(SF2.F2_EMISSAO,1,4) IN ('2025','2026') GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,4);`;
+const validacaoSemanticaCorreto = runner._test.validarPeriodoDeclaradoNoSql(sqlMesAnoSeparadoCorreto, faturamentoSpec, periodoDeclaradoRealIA);
+assert.strictEqual(validacaoSemanticaCorreto.ok, true, `guardrail semantico deve aceitar SQL com mes+ano separados batendo com periodo declarado: ${validacaoSemanticaCorreto.erros.join(' | ')}`);
+
+// Sem meses/anos declarados (comportamento legado): guardrail semantico nao interfere,
+// so a checagem de presenca de filtro (validarPeriodoDeclaradoNoSql original) roda.
+const periodoSemMesesAnos = { dataInicio: '20260101', dataFim: '20261231' };
+const sqlQualquerComFiltro = `SELECT SUM(SF2.F2_VALBRUT) AS f FROM SF2010 SF2 WHERE SF2.D_E_L_E_T_=' ' AND SF2.F2_TIPO='N' AND SF2.F2_EMISSAO BETWEEN '20260101' AND '20261231';`;
+const validacaoSemMesesAnos = runner._test.validarPeriodoDeclaradoNoSql(sqlQualquerComFiltro, faturamentoSpec, periodoSemMesesAnos);
+assert.strictEqual(validacaoSemMesesAnos.ok, true, 'sem periodo.meses/anos declarado, guardrail semantico deve ser no-op (fallback ao comportamento legado)');
+
 const perguntaMesesAvulsosVariosAnos = 'Faturamento de Marco e Setembro dos anos de 2024 e 2025';
 const sqlMesesAvulsosErrado = `
 SET ROWCOUNT 30000;
