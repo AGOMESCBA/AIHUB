@@ -404,6 +404,36 @@ ok('crescimento mensal: exibe valor e percentual retornados pelo SQL', () => {
   assert.ok(!/\*Subtotal\*: .*Crescimento %/.test(texto), texto);
 });
 
+ok('temporal mensal: agrupa competencias de multiplos anos por ano e mes', () => {
+  const rows = [
+    { competencia: '202501', faturamento: 4431101.34 },
+    { competencia: '202502', faturamento: 5026064.15 },
+    { competencia: '202503', faturamento: 4633069.82 },
+    { competencia: '202504', faturamento: 4811671.09 },
+    { competencia: '202505', faturamento: 5588180.33 },
+    { competencia: '202506', faturamento: 6558174.84 },
+    { competencia: '202601', faturamento: 4118233.32 },
+    { competencia: '202602', faturamento: 4214876.76 },
+    { competencia: '202603', faturamento: 6225179.64 },
+    { competencia: '202604', faturamento: 5921216.90 },
+    { competencia: '202605', faturamento: 6281922.27 },
+    { competencia: '202606', faturamento: 6049682.89 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Faturamento de janeiro a junho dos anos 2025 a 2026',
+  });
+
+  assert.ok(texto.includes('*Por Ano e Mes*'), texto);
+  assert.ok(/📅 \*2025\*[\s\S]*1\. Janeiro: Faturamento: \*R\$\s*4\.431\.101,34\*/.test(texto), texto);
+  assert.ok(/📅 \*2025\*[\s\S]*6\. Junho: Faturamento: \*R\$\s*6\.558\.174,84\*/.test(texto), texto);
+  assert.ok(/Subtotal 2025\*: Faturamento: \*R\$\s*31\.048\.261,57\*/.test(texto), texto);
+  assert.ok(/📅 \*2026\*[\s\S]*1\. Janeiro: Faturamento: \*R\$\s*4\.118\.233,32\*/.test(texto), texto);
+  assert.ok(/Subtotal 2026\*: Faturamento: \*R\$\s*32\.811\.111,78\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Faturamento: \*R\$\s*63\.859\.373,35\*/.test(texto), texto);
+  assert.ok(!texto.includes('*Por Competencia*'), texto);
+});
+
 ok('crescimento mensal: consolidado recalcula valor e percentual sobre total das empresas', () => {
   const texto = canonical.renderAll([
     {

@@ -1267,6 +1267,65 @@ function renderMultiplasDimensoes(rows, shape, linhas) {
   linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
 }
 
+function competenciaMensalInfo(valor) {
+  const s = String(valor ?? '').trim();
+  if (!/^\d{6}$/.test(s)) return null;
+  const ano = s.slice(0, 4);
+  const mes = parseInt(s.slice(4, 6), 10);
+  if (mes < 1 || mes > 12) return null;
+  return { ano, mes };
+}
+
+function deveAgruparMensalPorAno(dim, entradas, metricas) {
+  if (!RE_TEMPORAL.test(keyNorm(dim))) return false;
+  if (temMetricaPosicional(metricas) || temCrescimento(metricas)) return false;
+  const infos = (entradas || []).map(([label]) => competenciaMensalInfo(label));
+  if (!infos.length || infos.some(info => !info)) return false;
+  return new Set(infos.map(info => info.ano)).size > 1;
+}
+
+function renderMensalPorAno(linhas, dim, entradas, metricas, metricasTotal) {
+  if (!deveAgruparMensalPorAno(dim, entradas, metricas)) return false;
+
+  const porAno = new Map();
+  const porMes = new Map();
+  for (const [label, totais] of entradas) {
+    const info = competenciaMensalInfo(label);
+    if (!porAno.has(info.ano)) porAno.set(info.ano, []);
+    porAno.get(info.ano).push({ ...info, totais });
+    if (!porMes.has(info.mes)) porMes.set(info.mes, totalVazio(metricasTotal));
+    const totalMes = porMes.get(info.mes);
+    for (const col of metricasTotal) totalMes[col] += toNumber(totais[col]);
+  }
+
+  linhas.push('\u{1F4CB} *Por Ano e Mes*');
+  [...porAno.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([ano, itens]) => {
+      const subtotal = totalVazio(metricasTotal);
+      linhas.push('');
+      linhas.push(`\u{1F4C5} *${ano}*`);
+      itens
+        .sort((a, b) => a.mes - b.mes)
+        .forEach((item, idx) => {
+          for (const col of metricasTotal) subtotal[col] += toNumber(item.totais[col]);
+          const vals = metricas.map(col => `${labelMetrica(col)}: *${fmt(col, item.totais[col])}*`).join(' | ');
+          linhas.push(`  ${idx + 1}. ${MESES[item.mes - 1]}: ${vals}`);
+        });
+      linhas.push(`\u{1F9FE} *Subtotal ${ano}*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, subtotal[col])}*`).join(' | ')}`);
+    });
+
+  linhas.push('');
+  linhas.push('\u{1F4CA} *Consolidado por Mes*');
+  [...porMes.entries()]
+    .sort(([a], [b]) => a - b)
+    .forEach(([mes, totais], idx) => {
+      const vals = metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
+      linhas.push(`  ${idx + 1}. ${MESES[mes - 1]}: ${vals}`);
+    });
+  return true;
+}
+
 function renderSingle(rows, opts = {}) {
   const shape = detectarShape(rows, opts);
   if (!shape) return null;
@@ -1327,12 +1386,15 @@ function renderSingle(rows, opts = {}) {
   entradas = ajustarSaldoBaseDiario(entradas, dim, shape.metricas);
 
   const metricasTotal = metricasTotalizaveis(shape.metricas);
-  linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
-  entradas.slice(0, 50).forEach(([label, totais], idx) => {
-    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
-    linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
-  });
-  if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+  const agrupouAnoMes = renderMensalPorAno(linhas, dim, entradas, shape.metricas, metricasTotal);
+  if (!agrupouAnoMes) {
+    linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
+    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+      const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
+      linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
+    });
+    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+  }
 
   const totais = dimTemporal && temMetricaPosicional(shape.metricas)
     ? totalTemporalOrdenado(entradas, metricasTotal)
@@ -1541,14 +1603,18 @@ function renderAll(sucessos, opts = {}) {
     ? sortValorDimensao(dim, labelA).localeCompare(sortValorDimensao(dim, labelB))
     : (b[primary] || 0) - (a[primary] || 0));
   if (dimTemporal) entradas = recalcularCrescimentoTemporal(entradas, shape.metricas);
-  linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
-  entradas.slice(0, 50).forEach(([label, totais], idx) => {
-    const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
-    linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
-  });
-  if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
   linhas.push('');
   const metricasTotal = metricasTotalizaveis(shape.metricas);
+  const agrupouAnoMes = renderMensalPorAno(linhas, dim, entradas, shape.metricas, metricasTotal);
+  if (!agrupouAnoMes) {
+    linhas.push(`\u{1F4CB} *Por ${labelDimensao(dim)}*`);
+    entradas.slice(0, 50).forEach(([label, totais], idx) => {
+      const vals = shape.metricas.map(col => `${labelMetrica(col)}: *${fmt(col, totais[col])}*`).join(' | ');
+      linhas.push(`  ${idx + 1}. ${labelValorDimensao(dim, label)}: ${vals}`);
+    });
+    if (entradas.length > 50) linhas.push(`  ... e mais ${entradas.length - 50}`);
+  }
+  linhas.push('');
   const totalGeralExibicao = {};
   for (const col of metricasTotal) totalGeralExibicao[col] = totalGeral[col] || 0;
   linhas.push(`\u{1F9FE} *Subtotal*: ${metricasTotal.map(col => `${labelMetrica(col)}: *${fmt(col, totalGeralExibicao[col])}*`).join(' | ')}`);

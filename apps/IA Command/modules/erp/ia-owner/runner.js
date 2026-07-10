@@ -281,6 +281,7 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Gere novo SQL com AND SF2.F2_TIPO = \'N\' obrigatoriamente no WHERE.',
       '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
       '- Nao remova nenhum filtro existente.',
+      '- Antes de retornar: releia o SQL inteiro e confirme visualmente que F2_TIPO esta presente — nao confie so na memoria da correcao, ela pode ter sido perdida ao reescrever outras partes do SQL.',
     ];
   } else if (/SF1.*F1_TIPO|F1_TIPO.*SF1/i.test(mensagem)) {
     bloco = [
@@ -293,6 +294,7 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Gere novo SQL com AND SF1.F1_TIPO = \'N\' obrigatoriamente no WHERE.',
       '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
       '- Nao remova nenhum filtro existente.',
+      '- Antes de retornar: releia o SQL inteiro e confirme visualmente que F1_TIPO esta presente — nao confie so na memoria da correcao, ela pode ter sido perdida ao reescrever outras partes do SQL.',
     ];
   } else if (subtipo === 'contrato_sx3_invalido' || /SX3|Campo .* nao consta/i.test(mensagem)) {
     bloco = [
