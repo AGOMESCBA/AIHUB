@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>IA Command</title>
   <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="./css/ia-command-responsive.css?v=20260710-responsive-shell">
   <style>
     /* ── Acento roxo para IA Command ───────────────────────────────── */
     :root {
@@ -146,7 +147,7 @@
     .nav-item.active { border-left-color: #7c3aed !important; }
   </style>
 </head>
-<body>
+<body class="iac-shell-responsive">
 <div class="layout" id="layout">
 
   <nav class="sidebar" id="sidebar">
@@ -159,6 +160,7 @@
       <span style="font-size:11px;color:var(--text-lo)">Seu ERP conversando com você.</span>
     </div>
   </nav>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarDrawer()" aria-hidden="true"></div>
 
   <div class="main">
 
@@ -271,6 +273,7 @@
     const label = link.querySelector('.nav-label')?.textContent?.trim() || url;
     const icon  = link.querySelector('.nav-icon')?.textContent?.trim()  || '📄';
     window.openTab(url, label, icon);
+    window.closeSidebarDrawer?.();
   });
 
   // No shell MDI, trocar empresa atualiza variáveis e badge sem recarregar a página.

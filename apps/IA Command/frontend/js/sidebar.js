@@ -209,6 +209,18 @@
 
   function getSidebar() { return document.getElementById('sidebar'); }
   function getLayout()  { return document.querySelector('.layout'); }
+  function getOverlay() { return document.getElementById('sidebar-overlay'); }
+  function isDrawerMode() {
+    return window.matchMedia?.('(max-width: 900px)').matches;
+  }
+
+  function setDrawer(open) {
+    const sb = getSidebar();
+    if (!sb) return;
+    sb.classList.toggle('drawer-open', open);
+    getOverlay()?.classList.toggle('open', open);
+    document.body?.classList.toggle('sidebar-drawer-open', open);
+  }
 
   function applyPin(pinned) {
     const sb = getSidebar();
@@ -225,9 +237,17 @@
   function toggle() {
     const sb = getSidebar();
     if (!sb) return;
+    if (isDrawerMode()) {
+      setDrawer(!sb.classList.contains('drawer-open'));
+      return;
+    }
     const pinned = !sb.classList.contains('pinned');
     applyPin(pinned);
     localStorage.setItem(PIN_KEY, pinned ? '1' : '0');
+  }
+
+  function closeDrawer() {
+    setDrawer(false);
   }
 
   async function sair() {
@@ -261,11 +281,15 @@
       sb.querySelector('.sidebar-logo')?.appendChild(btn);
     }
     applyPin(localStorage.getItem(PIN_KEY) === '1');
+    window.addEventListener('resize', () => {
+      if (!isDrawerMode()) setDrawer(false);
+    });
   }
 
   window._sidebarSair = sair;
 
   window.toggleSidebar = toggle;
+  window.closeSidebarDrawer = closeDrawer;
   window.toggleSection = toggleSection;
   window.toggleGroup   = toggleGroup;
   window.MENU = MENU;

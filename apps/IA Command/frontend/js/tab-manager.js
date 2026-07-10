@@ -392,11 +392,12 @@
       const s = doc.createElement('style');
       s.id = '_mdi-style';
       s.textContent = `
-        html, body { overflow: hidden !important; }
+        html, body { overflow: hidden !important; min-width: 0 !important; }
         #sidebar, .sidebar, .topbar, #_empresa-badge,
         .sidebar-userinfo { display: none !important; }
-        .layout { display: flex !important; flex-direction: column !important; height: 100% !important; }
-        .main   { margin-left: 0 !important; flex: 1 !important; min-height: 0 !important; padding-top: 0 !important; }
+        .layout { display: flex !important; flex-direction: column !important; height: 100% !important; min-width: 0 !important; }
+        .main   { margin-left: 0 !important; flex: 1 !important; min-height: 0 !important; min-width: 0 !important; padding-top: 0 !important; }
+        .page-content { min-width: 0 !important; }
         #_mdi-emp-bar {
           display: flex; align-items: center;
           padding: 5px 16px;
@@ -427,6 +428,77 @@
         #_mdi-help-btn:hover {
           color: #7c3aed; background: var(--bg-hover, #f1f5f9);
           border-color: var(--border, #e2e8f0);
+        }
+        .table-wrap,
+        .card,
+        .form-section,
+        .detail-card,
+        .tabulator {
+          min-width: 0 !important;
+        }
+        .table-wrap,
+        .tabulator {
+          overflow-x: auto !important;
+        }
+        .quick-row,
+        .grid-toolbar,
+        .head-row,
+        .head-actions,
+        .page-head,
+        .editor-bar,
+        .editor-actions,
+        .con-toolbar {
+          min-width: 0 !important;
+        }
+        @media (max-width: 900px) {
+          .page-content { padding: 16px !important; }
+          .page-head,
+          .head-row,
+          .editor-bar,
+          .grid-toolbar {
+            align-items: flex-start !important;
+            flex-direction: column !important;
+          }
+          .head-actions,
+          .editor-actions,
+          .quick-row,
+          .con-toolbar,
+          .grid-toolbar > * {
+            width: 100% !important;
+          }
+          .quick-row .form-control,
+          .quick-row input.form-control,
+          .quick-row select.form-control,
+          .busca-wrap,
+          .busca-wrap input {
+            width: 100% !important;
+            min-width: 0 !important;
+          }
+          .btn {
+            max-width: 100%;
+          }
+          .editor-grid,
+          .editor-grid-wide,
+          .split,
+          .dialog-grid,
+          .inline-form,
+          .date-row {
+            grid-template-columns: 1fr !important;
+          }
+          .tabs,
+          .form-tabs,
+          .tabs-header {
+            overflow-x: auto !important;
+            flex-wrap: nowrap !important;
+          }
+        }
+        @media (max-width: 520px) {
+          .page-content { padding: 12px !important; }
+          .card-body,
+          .form-section-body,
+          .tab-panel {
+            padding: 14px !important;
+          }
         }
       `;
       doc.head.appendChild(s);

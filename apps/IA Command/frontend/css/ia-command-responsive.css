@@ -1,0 +1,164 @@
+.iac-shell-responsive {
+  --iac-shell-topbar-h: 56px;
+  --iac-shell-tabbar-h: 42px;
+}
+
+.iac-shell-responsive .layout,
+.iac-shell-responsive .main,
+.iac-shell-responsive .mdi-content {
+  min-width: 0;
+}
+
+.iac-shell-responsive .main {
+  min-height: 0;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.iac-shell-responsive .mdi-content {
+  min-height: 0;
+}
+
+.iac-shell-responsive .topbar-title,
+.iac-shell-responsive .mdi-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iac-shell-responsive .sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .iac-shell-responsive {
+    --sidebar-w: 280px;
+  }
+
+  .iac-shell-responsive .mdi-tab {
+    flex-basis: clamp(180px, 24vw, 240px);
+    max-width: 240px;
+  }
+
+  .iac-shell-responsive .shell-nav-btn {
+    padding-inline: 10px;
+  }
+}
+
+@media (max-width: 900px) {
+  .iac-shell-responsive {
+    --sidebar-w: min(320px, calc(100vw - 48px));
+  }
+
+  .iac-shell-responsive .layout {
+    position: relative;
+  }
+
+  .iac-shell-responsive .main,
+  .iac-shell-responsive .layout.sidebar-pinned .main {
+    margin-left: 0;
+  }
+
+  .iac-shell-responsive .sidebar {
+    width: var(--sidebar-w);
+    transform: translateX(-102%);
+    box-shadow: none;
+    transition: transform var(--transition), box-shadow var(--transition);
+  }
+
+  .iac-shell-responsive .sidebar:hover,
+  .iac-shell-responsive .sidebar.pinned {
+    width: var(--sidebar-w);
+  }
+
+  .iac-shell-responsive .sidebar.drawer-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-md);
+  }
+
+  .iac-shell-responsive .sidebar .logo-text,
+  .iac-shell-responsive .sidebar .nav-label,
+  .iac-shell-responsive .sidebar .nav-arrow,
+  .iac-shell-responsive .sidebar .nav-section-title,
+  .iac-shell-responsive .sidebar .sidebar-userinfo .user-info-text,
+  .iac-shell-responsive .sidebar .btn-logout .btn-logout-text,
+  .iac-shell-responsive .sidebar .sidebar-pin-btn {
+    opacity: 1;
+  }
+
+  .iac-shell-responsive .sidebar .nav-section-body.open,
+  .iac-shell-responsive .sidebar .submenu.open {
+    max-height: 700px;
+  }
+
+  .iac-shell-responsive .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 190;
+    display: block;
+    background: rgba(15, 23, 42, .36);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition);
+  }
+
+  .iac-shell-responsive .sidebar-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .iac-shell-responsive .iac-topbar {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+
+  .iac-shell-responsive .iac-actions {
+    gap: 5px;
+  }
+
+  .iac-shell-responsive .shell-nav-btn {
+    width: 34px;
+    padding: 0;
+  }
+
+  .iac-shell-responsive .shell-nav-btn span {
+    display: none;
+  }
+
+  .iac-shell-responsive .mdi-tabbar {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .iac-shell-responsive .mdi-tab {
+    flex-basis: clamp(150px, 42vw, 210px);
+    max-width: 210px;
+    padding: 6px 8px 7px 10px;
+  }
+}
+
+@media (max-width: 520px) {
+  .iac-shell-responsive {
+    --sidebar-w: min(300px, calc(100vw - 28px));
+  }
+
+  .iac-shell-responsive .topbar-menu-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .iac-shell-responsive .iac-topbar .topbar-title {
+    font-size: 13px;
+  }
+
+  .iac-shell-responsive .mdi-tab {
+    flex-basis: min(76vw, 190px);
+    max-width: 190px;
+    font-size: 12px;
+  }
+
+  .iac-shell-responsive .mdi-empty {
+    padding: 24px;
+    text-align: center;
+  }
+}
