@@ -615,6 +615,50 @@ ok('comparativo temporal sem periodo: nao exibe resumo agregado ambiguo', () => 
   assert.ok(!texto.includes('Total Geral: R$'), texto);
 });
 
+ok('indicador nao somavel: preco medio por mes nao imprime subtotal nem total geral', () => {
+  const texto = canonical.renderSingle([
+    { competencia: '202601', preco_medio: 60 },
+    { competencia: '202602', preco_medio: 60.21 },
+    { competencia: '202603', preco_medio: 61.76 },
+  ], {
+    nomeEmpresa: 'CAIEIRA',
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'preco medio vendido de BRITA (01 FINA) por mes do ano de 2026',
+  });
+
+  assert.ok(texto.includes('Janeiro/2026: Preco Medio: *R$'), texto);
+  assert.ok(texto.includes('Fevereiro/2026: Preco Medio: *R$'), texto);
+  assert.ok(!texto.includes('Subtotal'), texto);
+  assert.ok(!texto.includes('Total Geral'), texto);
+  assert.ok(texto.includes('nao foi somado por ser indicador nao somavel'), texto);
+});
+
+ok('indicador nao somavel: consolidado nao soma preco medio entre empresas', () => {
+  const texto = canonical.renderAll([
+    {
+      nomeEmpresa: 'Empresa A',
+      rows: [
+        { competencia: '202601', preco_medio: 60 },
+        { competencia: '202602', preco_medio: 62 },
+      ],
+    },
+    {
+      nomeEmpresa: 'Empresa B',
+      rows: [
+        { competencia: '202601', preco_medio: 50 },
+        { competencia: '202602', preco_medio: 52 },
+      ],
+    },
+  ], { mensagem: 'preco medio vendido por mes' });
+
+  assert.ok(texto.includes('*Resumo por Empresa*'), texto);
+  assert.ok(texto.includes('*Empresa A*'), texto);
+  assert.ok(texto.includes('*Empresa B*'), texto);
+  assert.ok(!texto.includes('R$ 110,00'), texto);
+  assert.ok(!texto.includes('Total Geral'), texto);
+  assert.ok(texto.includes('nao foi somado por ser indicador nao somavel'), texto);
+});
+
 ok('etapa 4: formata detalhe por cliente e documento', () => {
   const texto = canonical.renderSingle([
     { cliente: 'BIPAR', documento: '004750', valor_total: 4906.62 },

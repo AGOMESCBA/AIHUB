@@ -209,6 +209,13 @@ function _garantirColunasCompatibilidade() {
     confianca_minima: 'REAL DEFAULT 0.6',
     whisper_model: "TEXT DEFAULT 'whisper-large-v3'",
     audio_idioma: "TEXT DEFAULT 'pt'",
+    agente_local_url: 'TEXT DEFAULT NULL',
+    agente_local_token: 'TEXT DEFAULT NULL',
+    agente_local_ativo: 'INTEGER DEFAULT 0',
+    agente_local_ultimo_teste: 'TEXT DEFAULT NULL',
+    agente_local_teste_ok: 'INTEGER DEFAULT NULL',
+    agente_local_crypto_key: 'TEXT DEFAULT NULL',
+    agente_local_crypto_ativo: 'INTEGER DEFAULT 0',
   };
 
   const datasets = {

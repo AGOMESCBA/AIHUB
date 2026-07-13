@@ -143,9 +143,12 @@ Write-Host ""
 Write-Host "Arquivo: $OUTPUT_PATH  ($sizeMB MB)" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Proximos passos:" -ForegroundColor Yellow
-Write-Host "  1. Envie o ZIP para o servidor (RDP, FTP, etc.)"
+Write-Host "  1. Envie o ZIP para a pasta C:\Web\iahub\deploy do servidor"
 Write-Host "  2. No servidor, abra PowerShell como Administrador e execute:"
-Write-Host "     C:\Web\iahub\deploy\3-atualizar.ps1 -Zip C:\iahub-deploy-$TIMESTAMP.zip"
+Write-Host "     C:\Web\iahub\deploy\3-atualizar.ps1 -Zip C:\Web\iahub\deploy\$PACKAGE_NAME"
+Write-Host ""
+Write-Host "  Alternativa: se o ZIP estiver em C:\Web\iahub\deploy, tambem pode executar:"
+Write-Host "     C:\Web\iahub\deploy\3-atualizar.ps1"
 Write-Host ""
 Write-Host "Consulte deploy\INSTRUCOES.md para o guia completo." -ForegroundColor Cyan
 Write-Host ""

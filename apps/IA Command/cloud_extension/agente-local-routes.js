@@ -7,6 +7,10 @@ const https    = require('https');
 const crypto   = require('crypto');
 const fs       = require('fs');
 const path     = require('path');
+const {
+  generateKeyBase64,
+  normalizeKey,
+} = require('../modules/security/aes-gcm-envelope');
 
 const _LOG_FILE = path.join(__dirname, '..', '..', '..', 'logs', 'agente-local.log');
 
@@ -104,6 +108,11 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
   function eid(req) { return getEmpresaId(req); }
   const canConfig = requireRotina('iac-config-ia');
 
+  function _validarCryptoKeyOuErro(key) {
+    if (!key) return;
+    normalizeKey(key);
+  }
+
   // ── GET config (token mascarado) ─────────────────────────────────────────────
   app.get('/api/ia-command/agente-local/config', requireAuth, requireIaCommand, canConfig, (req, res) => {
     const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
@@ -113,6 +122,8 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
       agente_local_ultimo_teste: null,
       agente_local_teste_ok:     null,
       token_configurado:         false,
+      crypto_key_configurada:     false,
+      agente_local_crypto_ativo:  0,
     });
     res.json({
       agente_local_url:          row.agente_local_url          || null,
@@ -120,18 +131,40 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
       agente_local_ultimo_teste: row.agente_local_ultimo_teste || null,
       agente_local_teste_ok:     row.agente_local_teste_ok     ?? null,
       token_configurado:         !!row.agente_local_token,
+      crypto_key_configurada:     !!row.agente_local_crypto_key,
+      agente_local_crypto_ativo:  row.agente_local_crypto_ativo ?? 0,
     });
   });
 
   // ── POST salvar config ────────────────────────────────────────────────────────
   app.post('/api/ia-command/agente-local/config', requireAuth, requireIaCommand, canConfig, (req, res) => {
-    const { url, token, ativo } = req.body;
+    const { url, token, ativo, crypto_key, crypto_ativo } = req.body;
     const existing = crud.buscarPor('ai_config', 'empresa_id', eid(req));
 
     const dados = {};
     if (url   !== undefined) dados.agente_local_url   = url   || null;
     if (ativo !== undefined) dados.agente_local_ativo = ativo ? 1 : 0;
     if (token && token !== '***') dados.agente_local_token = token;
+    if (crypto_ativo !== undefined) dados.agente_local_crypto_ativo = crypto_ativo ? 1 : 0;
+    if (crypto_key && crypto_key !== '***') {
+      try { _validarCryptoKeyOuErro(crypto_key); }
+      catch (err) {
+        _logAgente('WARN', 'crypto_key_invalida_ao_salvar', {
+          empresa_id: eid(req),
+          usuario: req.session?.usuario || 'desconhecido',
+          erro: err.message,
+        });
+        return res.status(400).json({ ok: false, erro: err.message });
+      }
+      dados.agente_local_crypto_key = crypto_key;
+    }
+    if (dados.agente_local_crypto_ativo === 1 && !dados.agente_local_crypto_key && !existing?.agente_local_crypto_key) {
+      _logAgente('WARN', 'crypto_ativo_sem_chave_ao_salvar', {
+        empresa_id: eid(req),
+        usuario: req.session?.usuario || 'desconhecido',
+      });
+      return res.status(400).json({ ok: false, erro: 'Configure a chave AES-256-GCM antes de ativar a criptografia do /execute.' });
+    }
 
     let row;
     if (existing) {
@@ -144,6 +177,8 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
       agente_local_url:   row.agente_local_url   || null,
       agente_local_ativo: row.agente_local_ativo  ?? 0,
       token_configurado:  !!row.agente_local_token,
+      agente_local_crypto_ativo: row.agente_local_crypto_ativo ?? 0,
+      crypto_key_configurada: !!row.agente_local_crypto_key,
     });
   });
 
@@ -208,6 +243,28 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
   app.get('/api/ia-command/agente-local/reveal-token', requireAuth, requireIaCommand, canConfig, (req, res) => {
     const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
     res.json({ token: row?.agente_local_token || null });
+  });
+
+  app.post('/api/ia-command/agente-local/regerar-crypto-key', requireAuth, requireIaCommand, canConfig, (req, res) => {
+    const novaChave = generateKeyBase64();
+    const existing  = crud.buscarPor('ai_config', 'empresa_id', eid(req));
+
+    if (existing) {
+      crud.atualizar('ai_config', existing.id, { agente_local_crypto_key: novaChave });
+    } else {
+      crud.criar('ai_config', { empresa_id: eid(req), agente_local_crypto_key: novaChave });
+    }
+
+    _logAgente('INFO', 'crypto_key_gerada', {
+      empresa_id: eid(req),
+      usuario: req.session?.usuario || 'desconhecido',
+    });
+    res.json({ crypto_key: novaChave });
+  });
+
+  app.get('/api/ia-command/agente-local/reveal-crypto-key', requireAuth, requireIaCommand, canConfig, (req, res) => {
+    const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
+    res.json({ crypto_key: row?.agente_local_crypto_key || null });
   });
 
   // ── POST reset-senha — redefine a senha do painel local via Bearer Token ─────

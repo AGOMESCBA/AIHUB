@@ -582,6 +582,39 @@
         </div>
 
         <!-- Sub-aba: Código API -->
+        <div class="card" id="conapi-panel-crypto">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Criptografia AES-256-GCM</div>
+              <div class="card-subtitle">Chave compartilhada com a nuvem para criptografar somente o endpoint /execute</div>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group" style="max-width:600px">
+              <label class="form-label">CRYPTO_KEY</label>
+              <div class="pass-wrap">
+                <input id="crypto-key-field" type="password" class="form-control" placeholder="Cole a chave base64 de 32 bytes" style="font-family:monospace;font-size:12px">
+                <button type="button" class="btn-pass-toggle" onclick="revelarCryptoKey()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="form-group" style="max-width:340px">
+              <label class="form-label">Exigir criptografia</label>
+              <select id="CRYPTO_REQUIRED" class="form-control">
+                <option value="false">false — aceita claro e criptografado</option>
+                <option value="true">true — rejeita /execute em claro</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-8 mt-8">
+              <button class="btn btn-primary btn-sm" onclick="salvarCryptoLocal()">Salvar criptografia</button>
+              <button class="btn btn-warn btn-sm" onclick="regerarCryptoKeyLocal()">Gerar chave local</button>
+              <button class="btn btn-ghost btn-sm" id="btn-copiar-crypto-local" onclick="copiarCryptoKeyLocal()" style="display:none">Copiar chave</button>
+            </div>
+            <div id="crypto-alert" class="alert" style="display:none"></div>
+          </div>
+        </div>
+
         <div id="conapi-panel-codigo" style="display:none">
           <div class="card" style="padding:0;overflow:hidden">
             <div class="editor-layout">
@@ -739,7 +772,9 @@ function mudarConapiTab(nome, btn) {
     const el = document.getElementById('conapi-panel-' + n);
     if (el) el.style.display = n === nome ? '' : 'none';
   });
-  if (nome === 'token')  carregarStatusToken();
+  const cryptoPanel = document.getElementById('conapi-panel-crypto');
+  if (cryptoPanel) cryptoPanel.style.display = nome === 'token' ? '' : 'none';
+  if (nome === 'token')  { carregarStatusToken(); carregarConfigERP(); }
   if (nome === 'codigo') carregarArquivosEditor();
 }
 
@@ -1175,6 +1210,15 @@ async function carregarConfigERP() {
   ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_DRIVER','FILIAL'].forEach(k => {
     const el = document.getElementById(k); if (el) el.value = c[k] || '';
   });
+  const reqEl = document.getElementById('CRYPTO_REQUIRED');
+  if (reqEl) reqEl.value = c.CRYPTO_REQUIRED ? 'true' : 'false';
+  const keyEl = document.getElementById('crypto-key-field');
+  if (keyEl) {
+    keyEl.value = c.CRYPTO_KEY_CONFIGURADA ? '••••••••••••••••' : '';
+    keyEl.dataset.cryptoKey = '';
+    keyEl.dataset.configurada = c.CRYPTO_KEY_CONFIGURADA ? '1' : '0';
+    keyEl.type = 'password';
+  }
 }
 
 async function salvarERP() {
@@ -1186,6 +1230,67 @@ async function salvarERP() {
   if (pass) body.DB_PASS = pass;
   const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
   if (r.ok) toast('Conexão salva!'); else toast('Erro ao salvar.', 'err');
+}
+
+async function salvarCryptoLocal() {
+  const keyEl = document.getElementById('crypto-key-field');
+  const body = {
+    CRYPTO_REQUIRED: document.getElementById('CRYPTO_REQUIRED').value,
+  };
+  const key = keyEl.value.trim();
+  if (key && !key.includes('•')) body.CRYPTO_KEY = key;
+  const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  const al = document.getElementById('crypto-alert');
+  al.style.display = 'block';
+  if (r.ok) {
+    al.className = 'alert alert-ok';
+    al.textContent = 'Criptografia salva.';
+    await carregarConfigERP();
+  } else {
+    const e = await r.json().catch(() => ({}));
+    al.className = 'alert alert-err';
+    al.textContent = e.detail || 'Erro ao salvar criptografia.';
+  }
+}
+
+async function revelarCryptoKey() {
+  const el = document.getElementById('crypto-key-field');
+  if (el.type === 'password') {
+    const data = await fetch('/api/crypto-key/reveal').then(r => r.json()).catch(() => ({}));
+    el.type = 'text';
+    el.value = data.crypto_key || '';
+    el.dataset.cryptoKey = data.crypto_key || '';
+    if (data.crypto_key) document.getElementById('btn-copiar-crypto-local').style.display = 'inline-flex';
+  } else {
+    el.type = 'password';
+    el.value = el.dataset.configurada === '1' ? '••••••••••••••••' : '';
+  }
+}
+
+async function regerarCryptoKeyLocal() {
+  if (!confirm('Gerar uma nova chave local exige atualizar a mesma chave no painel nuvem do IA Command.\n\nContinuar?')) return;
+  const data = await fetch('/api/crypto-key/regerar', { method:'POST' }).then(r => r.json());
+  const el = document.getElementById('crypto-key-field');
+  el.type = 'text';
+  el.value = data.crypto_key;
+  el.dataset.cryptoKey = data.crypto_key;
+  el.dataset.configurada = '1';
+  document.getElementById('btn-copiar-crypto-local').style.display = 'inline-flex';
+  const al = document.getElementById('crypto-alert');
+  al.style.display = 'block';
+  al.className = 'alert alert-warn';
+  al.textContent = 'Nova chave gerada. Copie e cole a mesma chave no IA Command.';
+}
+
+function copiarCryptoKeyLocal() {
+  const el = document.getElementById('crypto-key-field');
+  const val = el.type === 'text' ? el.value.trim() : el.dataset.cryptoKey;
+  if (!val || val.includes('•')) return;
+  const btn = document.getElementById('btn-copiar-crypto-local');
+  const orig = btn.innerHTML;
+  const ok = () => { btn.textContent = 'Copiada!'; setTimeout(() => { btn.innerHTML = orig; }, 1500); };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(val).then(ok).catch(() => _clipboardFallback(val, ok, ok));
+  else _clipboardFallback(val, ok, ok);
 }
 
 async function testarERP() {

@@ -37,7 +37,9 @@ function carregarConexao(empresaId) {
 
   // Se agente local estiver ativo, roteia para ele em vez da conexão ERP direta
   const aiCfg = db.prepare(
-    'SELECT agente_local_ativo, agente_local_url, agente_local_token FROM ai_config WHERE empresa_id = ? LIMIT 1'
+    `SELECT agente_local_ativo, agente_local_url, agente_local_token,
+            agente_local_crypto_key, agente_local_crypto_ativo
+       FROM ai_config WHERE empresa_id = ? LIMIT 1`
   ).get(empresaId);
   if (aiCfg?.agente_local_ativo && aiCfg?.agente_local_url && aiCfg?.agente_local_token) {
     // Normaliza: usa só scheme://host:port, ignora qualquer path que o usuário tenha digitado
@@ -51,6 +53,8 @@ function carregarConexao(empresaId) {
       host:       baseUrl,
       database:   '/',
       password:   aiCfg.agente_local_token,
+      crypto_key: aiCfg.agente_local_crypto_key || '',
+      crypto_ativo: aiCfg.agente_local_crypto_ativo ? 1 : 0,
       _agente_url: baseUrl,
     };
   }

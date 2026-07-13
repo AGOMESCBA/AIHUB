@@ -13,6 +13,11 @@ const http   = require('http');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+const {
+  decryptPayload,
+  encryptPayload,
+  isEncryptedEnvelope,
+} = require('../../security/aes-gcm-envelope');
 
 const _LOG_FILE = path.join(__dirname, '..', '..', '..', '..', 'logs', 'agente-local.log');
 function _logProxy(nivel, msg, dados = {}) {
@@ -127,19 +132,58 @@ async function executar(conn, query, params = {}) {
   const apiKey   = conn.password;
   const sqlFinal = _resolverParams(query, params);
   const url      = _buildUrl(conn, '/execute');
+  const cryptoAtivo = conn.crypto_ativo === true || conn.crypto_ativo === 1;
 
   const limit = Math.min(conn.limite_max || 10000, 50000);
-  const data  = await _request(url, 'POST', {
+  const requestId = crypto.randomUUID();
+  const plainBody = {
     sql:        sqlFinal,
     limit,
-    uuid:       crypto.randomUUID(),
+    uuid:       requestId,
     modulo:     conn._modulo      || '',
     operacao:   conn._operacao    || '',
     pergunta:   conn._pergunta    || '',
     sender:     conn._sender      || '',
     usuario:    conn._usuario     || '',
     empresa_id: conn._empresa_id  || '',
-  }, apiKey);
+    iat:        Date.now(),
+    request_id: requestId,
+  };
+
+  let body = plainBody;
+  if (cryptoAtivo) {
+    if (!conn.crypto_key) {
+      _logProxy('ERRO', 'crypto_chave_ausente', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId });
+      throw new Error('Criptografia do Agente Local ativa, mas a chave AES-256-GCM nao esta configurada.');
+    }
+    try {
+      body = encryptPayload(plainBody, conn.crypto_key, { kid: String(conn._empresa_id || 'default') });
+      _logProxy('INFO', 'crypto_request_envelope_gerado', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId });
+    } catch (err) {
+      _logProxy('ERRO', 'crypto_request_falha', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId, erro: err.message });
+      throw err;
+    }
+  }
+
+  const resposta = await _request(url, 'POST', body, apiKey);
+  let data = resposta;
+
+  if (cryptoAtivo) {
+    if (!isEncryptedEnvelope(resposta)) {
+      _logProxy('ERRO', 'crypto_resposta_em_claro_ou_invalida', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId });
+      throw new Error('Agente Local retornou resposta nao criptografada com criptografia ativa.');
+    }
+    try {
+      data = decryptPayload(resposta, conn.crypto_key);
+      _logProxy('INFO', 'crypto_resposta_descriptografada', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId });
+    } catch (err) {
+      _logProxy('ERRO', 'crypto_resposta_falha_descriptografia', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId, erro: err.message });
+      throw new Error('Falha ao descriptografar resposta do Agente Local.');
+    }
+  } else if (isEncryptedEnvelope(resposta)) {
+    _logProxy('WARN', 'crypto_resposta_criptografada_com_modo_inativo', { url, empresa_id: conn._empresa_id || null, modulo: conn._modulo || null, request_id: requestId });
+    throw new Error('Agente Local retornou resposta criptografada, mas a criptografia esta inativa no IA Command.');
+  }
 
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.rows)) return data.rows;

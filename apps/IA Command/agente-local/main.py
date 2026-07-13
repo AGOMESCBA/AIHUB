@@ -14,6 +14,7 @@ from database import init_db, registrar_execucao, listar_execucoes, limpar_histo
 from auth import verificar_token_api, verificar_sessao_web, autenticar_admin, alterar_senha, salvar_hash
 from modules.erp_executor import executar_sql, testar_conexao
 from modules.factory_reset import resetar_fabrica
+from crypto_envelope import decrypt_payload, encrypt_payload, generate_key_base64, is_encrypted_envelope, normalize_key
 
 BASE_DIR = Path(__file__).parent
 
@@ -29,6 +30,35 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 
+def _bool_cfg(value):
+    return str(value or "").strip().lower() in ("1", "true", "sim", "yes", "on")
+
+
+def _registrar_anomalia_crypto(*, ip_origem, erro, detalhe="", uuid_tx=None, empresa_id=None, usuario=None):
+    try:
+        registrar_execucao(
+            uuid=uuid_tx or str(_uuid.uuid4()),
+            modulo="sistema",
+            operacao="crypto_anomalia",
+            sql_entrada=detalhe or "Anomalia de criptografia no /execute",
+            sql_executado="",
+            payload_saida=[],
+            duracao_ms=0,
+            status="erro",
+            erro=erro,
+            ip_origem=ip_origem,
+            pergunta=None,
+            sender=None,
+            empresa_id=empresa_id,
+            usuario=usuario,
+            linhas_retornadas=0,
+            limite_solicitado=0,
+            tipo_erro="crypto",
+        )
+    except Exception as exc:
+        print(f"[agente-local] falha ao registrar anomalia crypto: {exc}")
+
+
 # ── Health (público — chamado pela nuvem para testar conexão) ─────────────────
 @app.get("/apicommand")
 def health():
@@ -42,7 +72,29 @@ async def execute(request: Request, authorization: str = Header(default=None)):
     if not verificar_token_api(raw_token):
         raise HTTPException(status_code=401, detail="Token inválido.")
 
-    body       = await request.json()
+    ip_origem  = request.client.host if request.client else "desconhecido"
+    cfg        = get_config()
+    crypto_key = cfg.get("CRYPTO_KEY", "")
+    crypto_required = _bool_cfg(cfg.get("CRYPTO_REQUIRED", "false"))
+
+    body_raw = await request.json()
+    request_encrypted = is_encrypted_envelope(body_raw)
+
+    if request_encrypted:
+        if not crypto_key:
+            _registrar_anomalia_crypto(ip_origem=ip_origem, erro="CRYPTO_KEY ausente para payload criptografado.", detalhe="Requisicao /execute criptografada recebida sem chave configurada.")
+            raise HTTPException(status_code=400, detail="Chave de criptografia nao configurada no agente.")
+        try:
+            body = decrypt_payload(body_raw, crypto_key)
+        except Exception as exc:
+            _registrar_anomalia_crypto(ip_origem=ip_origem, erro=f"Falha ao descriptografar payload: {exc}", detalhe="Envelope AES-256-GCM invalido ou chave incorreta.")
+            raise HTTPException(status_code=400, detail="Payload criptografado invalido.")
+    else:
+        if crypto_required:
+            _registrar_anomalia_crypto(ip_origem=ip_origem, erro="Payload em claro rejeitado: CRYPTO_REQUIRED=true.", detalhe="Requisicao /execute em claro bloqueada pelo agente.")
+            raise HTTPException(status_code=426, detail="Criptografia obrigatoria para /execute.")
+        body = body_raw
+
     sql        = body.get("sql", "").strip()
     limit      = int(body.get("limit", 10000))
     uuid_tx    = body.get("uuid") or str(_uuid.uuid4())
@@ -52,7 +104,6 @@ async def execute(request: Request, authorization: str = Header(default=None)):
     sender     = body.get("sender", "")   or ""
     usuario    = body.get("usuario", "")  or ""
     empresa_id = body.get("empresa_id", "") or ""
-    ip_origem  = request.client.host if request.client else "desconhecido"
 
     if not sql:
         raise HTTPException(status_code=400, detail="Campo 'sql' é obrigatório.")
@@ -94,6 +145,20 @@ async def execute(request: Request, authorization: str = Header(default=None)):
         limite_solicitado=limit,
         tipo_erro=tipo_erro,
     )
+
+    if request_encrypted:
+        try:
+            return encrypt_payload(resultado, crypto_key, kid=str(empresa_id or "default"))
+        except Exception as exc:
+            _registrar_anomalia_crypto(
+                ip_origem=ip_origem,
+                erro=f"Falha ao criptografar resposta: {exc}",
+                detalhe=sql,
+                uuid_tx=uuid_tx,
+                empresa_id=empresa_id or None,
+                usuario=usuario or None,
+            )
+            raise HTTPException(status_code=500, detail="Falha ao criptografar resposta do agente.")
 
     return resultado
 
@@ -180,6 +245,8 @@ def api_get_config(request: Request):
         "FILIAL":             c.get("FILIAL", "01"),
         "API_PORT":           c.get("API_PORT", "8765"),
         "TOKEN_CONFIGURADO":  bool(c.get("API_TOKEN")),
+        "CRYPTO_KEY_CONFIGURADA": bool(c.get("CRYPTO_KEY")),
+        "CRYPTO_REQUIRED":    _bool_cfg(c.get("CRYPTO_REQUIRED", "false")),
     }
 
 
@@ -187,11 +254,17 @@ def api_get_config(request: Request):
 async def api_set_config(request: Request):
     verificar_sessao_web(request)
     body = await request.json()
-    for campo in ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_DRIVER", "FILIAL", "API_PORT"]:
+    for campo in ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_DRIVER", "FILIAL", "API_PORT", "CRYPTO_REQUIRED"]:
         if campo in body:
             set_config(campo, body[campo])
     if body.get("DB_PASS"):
         set_config("DB_PASS", body["DB_PASS"])
+    if body.get("CRYPTO_KEY"):
+        try:
+            normalize_key(body["CRYPTO_KEY"])
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        set_config("CRYPTO_KEY", body["CRYPTO_KEY"])
     return {"ok": True}
 
 
@@ -215,6 +288,25 @@ def api_reveal_token(request: Request):
     verificar_sessao_web(request)
     c = get_config()
     return {"token": c.get("API_TOKEN") or None, "configurado": bool(c.get("API_TOKEN"))}
+
+
+@app.post("/api/crypto-key/regerar")
+def api_regerar_crypto_key(request: Request):
+    verificar_sessao_web(request)
+    nova = generate_key_base64()
+    set_config("CRYPTO_KEY", nova)
+    return {"crypto_key": nova}
+
+
+@app.get("/api/crypto-key/reveal")
+def api_reveal_crypto_key(request: Request):
+    verificar_sessao_web(request)
+    c = get_config()
+    return {
+        "crypto_key": c.get("CRYPTO_KEY") or None,
+        "configurado": bool(c.get("CRYPTO_KEY")),
+        "required": _bool_cfg(c.get("CRYPTO_REQUIRED", "false")),
+    }
 
 
 # ── API Web: senha admin ──────────────────────────────────────────────────────

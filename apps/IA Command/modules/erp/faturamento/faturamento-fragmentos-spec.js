@@ -340,6 +340,17 @@ function media({ granularidade = 'mensal' } = {}) {
 `;
 }
 
+function precoMedioVenda() {
+  return `
+## Preco medio de venda (por unidade) — nao confundir com faturamento medio de periodo
+- "preco medio vendido", "preco medio de venda", "valor medio por unidade/kg/saco/tonelada" = preco medio PONDERADO pela quantidade, nunca AVG(SD2.D2_PRCVEN) e nunca AVG de faturamento por periodo.
+- FORMULA OBRIGATORIA: SUM(SD2.D2_TOTAL) / NULLIF(SUM(SD2.D2_QUANT), 0). AVG(SD2.D2_PRCVEN) da a media aritmetica simples do preco por linha/item, ignorando o volume de cada venda — distorce o resultado quando as quantidades variam entre notas.
+- Por mes: SELECT SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia, SUM(SD2.D2_TOTAL) / NULLIF(SUM(SD2.D2_QUANT),0) AS preco_medio FROM SD2 SD2 JOIN SF2 SF2 ON ... GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,6).
+- Por produto: agrupe tambem por SB1.B1_COD, SB1.B1_DESC alem da competencia, se pedido.
+- NUNCA use AVG(SD2.D2_PRCVEN) para responder "preco medio de venda" — isso e ticket medio de preco por linha, nao preco medio ponderado real.
+`;
+}
+
 function crescimento({ granularidade = 'mensal' } = {}) {
   const { tam, alias } = TRUNC_POR_GRANULARIDADE[granularidade] || TRUNC_POR_GRANULARIDADE.mensal;
   return `
@@ -398,10 +409,12 @@ const FRAGMENTOS = {
   media_diaria: {
     texto: () => media({ granularidade: 'diaria' }),
     keywords: [/\bm[eé]di[ao]\b.*\bdi[aá]ri[ao]\b|\bdi[aá]ri[ao]\b.*\bm[eé]di[ao]\b/i, /\bm[eé]di[ao]\s+por\s+dia\b/i],
+    excluiSe: [/\bpre[cç]o\s+m[eé]di[ao]\b/i],
   },
   media_anual: {
     texto: () => media({ granularidade: 'anual' }),
     keywords: [/\bm[eé]di[ao]\b.*\banual\b|\banual\b.*\bm[eé]di[ao]\b/i, /\bm[eé]di[ao]\s+por\s+ano\b/i, /\bm[eé]dia\s+anual\b/i],
+    excluiSe: [/\bpre[cç]o\s+m[eé]di[ao]\b/i],
   },
   media_mensal: {
     texto: () => media({ granularidade: 'mensal' }),
@@ -410,7 +423,12 @@ const FRAGMENTOS = {
       /\bm[eé]di[ao]\b.*\b(di[aá]ri[ao]|anual)\b|\b(di[aá]ri[ao]|anual)\b.*\bm[eé]di[ao]\b/i,
       /\bm[eé]di[ao]\s+por\s+dia\b/i,
       /\bm[eé]di[ao]\s+por\s+ano\b/i,
+      /\bpre[cç]o\s+m[eé]di[ao]\b/i,
     ],
+  },
+  preco_medio_venda: {
+    texto: precoMedioVenda,
+    keywords: [/\bpre[cç]o\s+m[eé]di[ao]\b/i, /\bvalor\s+m[eé]di[ao]\s+(por|de)\s+(unidade|kg|saco|tonelada|item)\b/i],
   },
   crescimento_diario: {
     texto: () => crescimento({ granularidade: 'diaria' }),
@@ -442,6 +460,7 @@ const ORDEM_FALLBACK = [
   'media_diaria',
   'media_mensal',
   'media_anual',
+  'preco_medio_venda',
   'crescimento_diario',
   'crescimento_mensal',
   'crescimento_anual',

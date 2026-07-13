@@ -149,6 +149,31 @@ function validarGrupoProduto(sql = '', mensagem = '') {
   ].join(' ');
 }
 
+function validarFiltroProdutoAusente(sql = '', mensagem = '') {
+  // Detecta quando a pergunta cita um produto especifico (nome entre parenteses/aspas,
+  // ou termo apos "produto"/"item") mas o SQL final nao filtra por SB1.B1_COD ou SB1.B1_DESC.
+  // Cobre tanto o caminho por entidade resolvida (B1_COD = codigo) quanto LIKE direto em B1_DESC.
+  const texto = String(mensagem || '');
+  const citaProdutoEspecifico = /\bproduto\s+["'“”(]|\bitem\s+["'“”(]|\bdo\s+produto\s+\S/i.test(texto)
+    || /["'“”]\s*[\wÀ-ÿ0-9 .\-]{2,40}\s*["'”]/i.test(texto)
+    || /\([\wÀ-ÿ0-9 .\-]{2,40}\)/i.test(texto);
+  if (!citaProdutoEspecifico) return null;
+  const sqlTexto = String(sql || '');
+  const temJoinSB1 = /\b(?:FROM|JOIN)\s+\w*SB1\w*\s+SB1\b/i.test(sqlTexto);
+  const filtraViaSB1 = /\bSB1\s*\.\s*B1_COD\s*(?:=|IN\b)/i.test(sqlTexto)
+    || /\bSB1\s*\.\s*B1_DESC\b[\s\S]{0,40}\bLIKE\b/i.test(sqlTexto)
+    || /\bUPPER\s*\(\s*SB1\s*\.\s*B1_DESC\s*\)/i.test(sqlTexto);
+  // Entidade resolvida tambem pode filtrar direto em SD2.D2_COD, sem precisar de JOIN SB1
+  // (o codigo interno ja foi resolvido pelo sistema; JOIN SB1 so e necessario para exibir a descricao).
+  const filtraViaSD2Cod = /\bSD2\s*\.\s*D2_COD\s*(?:=|IN\b)/i.test(sqlTexto);
+  if ((temJoinSB1 && filtraViaSB1) || filtraViaSD2Cod) return null;
+  return [
+    'A pergunta parece citar um produto especifico, mas o SQL nao filtra por SB1.B1_COD, SB1.B1_DESC nem SD2.D2_COD.',
+    'Se o texto do produto e um nome proprio cadastral, declare-o em entidades_necessarias (tipo "produto") para o sistema resolver o codigo interno e filtrar por SB1.B1_COD.',
+    'Nunca gere o SQL final ignorando o produto citado pelo usuario.',
+  ].join(' ');
+}
+
 function validarAliasSemJoin(sql = '') {
   // Detecta aliases de tabelas dimensionais usados no SELECT ou GROUP BY
   // sem correspondente FROM/JOIN declarado — erro que causa "Invalid object name" ou
@@ -248,15 +273,17 @@ async function buscarEntidade({ empresaId, sx2, tipo, termoTexto, periodo, filia
     // em campos CHAR do Protheus. SA1 e consulta direta; deduplicamos no Node.
     sql = `SET ROWCOUNT 10;\nSELECT SA1.A1_COD AS codigo, SA1.A1_LOJA AS loja, SA1.A1_NOME AS nome\nFROM ${tabelaCad} SA1\nWHERE SA1.D_E_L_E_T_ = ' '\n  AND (${camposLike(def, termoTexto, 'SA1', helpers)})\nORDER BY SA1.A1_NOME;`;
   } else if (tipo === 'vendedor' && tabelaSF2 && tabelaSA3) {
-    sql = `SET ROWCOUNT 10;\nSELECT DISTINCT SA3.A3_COD AS codigo, NULL AS loja, SA3.A3_NOME AS nome\nFROM ${tabelaSF2} SF2\nINNER JOIN ${tabelaCad} SA3 ON SF2.F2_VEND1 = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' '\nWHERE SF2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SA3', helpers)})\nORDER BY SA3.A3_NOME;`;
+    // Sem DISTINCT: mesmo problema de agente-local retornando vazio para DISTINCT+LIKE
+    // observado em SA1 (comentario acima). Deduplicamos no Node via deduplicarCandidatos().
+    sql = `SET ROWCOUNT 200;\nSELECT SA3.A3_COD AS codigo, NULL AS loja, SA3.A3_NOME AS nome\nFROM ${tabelaSF2} SF2\nINNER JOIN ${tabelaCad} SA3 ON SF2.F2_VEND1 = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' '\nWHERE SF2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SA3', helpers)})\nORDER BY SA3.A3_NOME;`;
   } else if (tipo === 'produto' && tabelaSD2 && tabelaSF2 && tabelaSB1) {
-    sql = `SET ROWCOUNT 10;\nSELECT DISTINCT SB1.B1_COD AS codigo, NULL AS loja, SB1.B1_DESC AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaCad} SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SB1', helpers)})\nORDER BY SB1.B1_DESC;`;
+    sql = `SET ROWCOUNT 200;\nSELECT SB1.B1_COD AS codigo, NULL AS loja, SB1.B1_DESC AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaCad} SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SB1', helpers)})\nORDER BY SB1.B1_DESC;`;
   } else if (tipo === 'grupo_produto' && tabelaSD2 && tabelaSF2 && tabelaSB1 && tabelaSBM) {
-    sql = `SET ROWCOUNT 10;\nSELECT DISTINCT SBM.BM_GRUPO AS codigo, NULL AS loja, SBM.BM_DESC AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaSB1} SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaSBM} SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SBM', helpers)})\nORDER BY SBM.BM_DESC;`;
+    sql = `SET ROWCOUNT 200;\nSELECT SBM.BM_GRUPO AS codigo, NULL AS loja, SBM.BM_DESC AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaSB1} SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaSBM} SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SBM', helpers)})\nORDER BY SBM.BM_DESC;`;
   } else if (tipo === 'centro_custo' && tabelaSD2 && tabelaSF2 && tabelaCTT) {
-    sql = `SET ROWCOUNT 10;\nSELECT DISTINCT CTT.CTT_CUSTO AS codigo, NULL AS loja, CTT.CTT_DESC01 AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaCTT} CTT ON SD2.D2_CCUSTO = CTT.CTT_CUSTO AND CTT.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'CTT', helpers)})\nORDER BY CTT.CTT_DESC01;`;
+    sql = `SET ROWCOUNT 200;\nSELECT CTT.CTT_CUSTO AS codigo, NULL AS loja, CTT.CTT_DESC01 AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaCTT} CTT ON SD2.D2_CCUSTO = CTT.CTT_CUSTO AND CTT.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'CTT', helpers)})\nORDER BY CTT.CTT_DESC01;`;
   } else if (tipo === 'tes' && tabelaSD2 && tabelaSF2 && tabelaSF4) {
-    sql = `SET ROWCOUNT 10;\nSELECT DISTINCT SF4.F4_CODIGO AS codigo, NULL AS loja, SF4.F4_TEXTO AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaSF4} SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SF4', helpers)})\nORDER BY SF4.F4_TEXTO;`;
+    sql = `SET ROWCOUNT 200;\nSELECT SF4.F4_CODIGO AS codigo, NULL AS loja, SF4.F4_TEXTO AS nome\nFROM ${tabelaSD2} SD2\nINNER JOIN ${tabelaSF2} SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' '\nINNER JOIN ${tabelaSF4} SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' '\nWHERE SD2.D_E_L_E_T_ = ' '\n${periodoWhere}${filialWhere}  AND (${camposLike(def, termoTexto, 'SF4', helpers)})\nORDER BY SF4.F4_TEXTO;`;
   }
 
   if (!sql) return [];
@@ -351,10 +378,17 @@ module.exports = {
       mensagem: 'AVG(SD2.D2_TOTAL) calcula media por item/linha, nao faturamento medio por produto. Para faturamento medio por produto, use subquery de 2 camadas: interna SUM(SD2.D2_TOTAL) por produto e competencia; externa AVG(h.faturamento_mes) agrupada por h.cod_produto, h.produto.',
     },
     {
+      regex: /\bAVG\s*\(\s*SD2\s*\.\s*D2_PRCVEN\s*\)/i,
+      mensagem: "AVG(SD2.D2_PRCVEN) calcula a media aritmetica simples do preco unitario por linha/item, ignorando o volume de cada venda — distorce o resultado quando as quantidades variam entre notas. Preco medio de venda real e o preco medio PONDERADO pela quantidade: SUM(SD2.D2_TOTAL) / NULLIF(SUM(SD2.D2_QUANT), 0). Substitua AVG(SD2.D2_PRCVEN) por essa razao, mantendo o mesmo agrupamento (ex: por mes).",
+    },
+    {
       validar: validarMediaMensalProduto,
     },
     {
       validar: validarFiltroTipoSF2,
+    },
+    {
+      validar: validarFiltroProdutoAusente,
     },
     {
       validar: validarGrupoCliente,

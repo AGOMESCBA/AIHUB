@@ -774,6 +774,14 @@ const MIGRATIONS = [
       ALTER TABLE interpretation_log ADD COLUMN agente_url TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 47,
+    descricao: 'IA Command - criptografia ponta a ponta AES-256-GCM para Agente Local',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN agente_local_crypto_key   TEXT    DEFAULT NULL;
+      ALTER TABLE ai_config ADD COLUMN agente_local_crypto_ativo INTEGER DEFAULT 0;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -428,6 +428,31 @@
                     <div class="form-hint">Quando ativo, o IA Command envia o SQL gerado ao agente para execução no ERP do cliente.</div>
                   </div>
 
+                  <div class="form-group">
+                    <label class="form-label">Chave de criptografia AES-256-GCM</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="agente-crypto-key" class="form-control" placeholder="Cole a chave base64 de 32 bytes">
+                      <button type="button" class="btn-pass-toggle" id="toggle-agente-crypto-key" onclick="toggleAgenteCryptoKey()" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div class="form-hint">Chave compartilhada com o agente local para criptografar apenas o endpoint <code>/execute</code>. Cole a mesma chave no <code>.env</code> do agente (<code>CRYPTO_KEY=...</code>).</div>
+                    <div id="status-agente-crypto-key" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button class="btn btn-warning" onclick="regerarCryptoKey()">↻ Gerar nova chave</button>
+                      <button class="btn btn-ghost" id="btn-copiar-crypto-key" onclick="copiarCryptoKey()" style="display:none">⎘ Copiar</button>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Criptografia do /execute</label>
+                    <select id="agente-crypto-ativo" class="form-control" style="max-width:420px">
+                      <option value="0">Inativa — envia SQL e retorno em claro</option>
+                      <option value="1">Ativa — envia SQL e exige retorno criptografado</option>
+                    </select>
+                    <div class="form-hint">Ative apenas depois de configurar a mesma chave no IA Command e no Agente Local.</div>
+                  </div>
+
                   <div class="agente-info-grid" id="agente-info-grid" style="display:none">
                     <div class="agente-info-item">
                       <div class="agente-info-label">Último teste</div>
@@ -899,6 +924,8 @@
 
       document.getElementById('agente-url').value   = cfg.agente_local_url || '';
       document.getElementById('agente-ativo').value = (cfg.agente_local_ativo ?? 0).toString();
+      const cryptoAtivoEl = document.getElementById('agente-crypto-ativo');
+      if (cryptoAtivoEl) cryptoAtivoEl.value = (cfg.agente_local_crypto_ativo ?? 0).toString();
 
       const tokenEl = document.getElementById('agente-token');
       tokenEl.value = '';
@@ -913,6 +940,22 @@
         tokenEl.dataset.configurado = '0';
         tokenEl.placeholder = 'Clique em "Gerar Token" para criar';
         document.getElementById('status-agente-token').innerHTML = '<span style="color:var(--text-lo)">— Não configurado</span>';
+      }
+
+      const cryptoEl = document.getElementById('agente-crypto-key');
+      if (cryptoEl) {
+        cryptoEl.value = '';
+        cryptoEl.type  = 'password';
+        document.getElementById('toggle-agente-crypto-key').innerHTML = _svgEyeAgente(false);
+        if (cfg.crypto_key_configurada) {
+          cryptoEl.dataset.configurado = '1';
+          cryptoEl.placeholder = '••••••• (configurada — deixe em branco para manter)';
+          document.getElementById('status-agente-crypto-key').innerHTML = '<span style="color:var(--success)">✓ Chave de criptografia configurada</span>';
+        } else {
+          cryptoEl.dataset.configurado = '0';
+          cryptoEl.placeholder = 'Cole a chave base64 de 32 bytes';
+          document.getElementById('status-agente-crypto-key').innerHTML = '<span style="color:var(--text-lo)">— Não configurada</span>';
+        }
       }
 
       if (cfg.agente_local_ultimo_teste) {
@@ -932,15 +975,22 @@
     const url   = document.getElementById('agente-url').value.trim();
     const ativo = document.getElementById('agente-ativo').value === '1';
     const token = document.getElementById('agente-token').value.trim();
+    const cryptoKey = document.getElementById('agente-crypto-key')?.value.trim() || '';
+    const cryptoAtivo = document.getElementById('agente-crypto-ativo')?.value === '1';
 
-    const body = { url: url || null, ativo };
+    const body = { url: url || null, ativo, crypto_ativo: cryptoAtivo };
     if (token && token !== '***') body.token = token;
+    if (cryptoKey && cryptoKey !== '***') body.crypto_key = cryptoKey;
 
-    await fetch('/api/ia-command/agente-local/config', {
+    const r = await fetch('/api/ia-command/agente-local/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+    if (!r.ok) {
+      const e = await r.json().catch(() => ({}));
+      throw new Error(e.erro || e.error || 'Erro ao salvar Agente Local.');
+    }
   }
 
   async function testarAgente() {
@@ -1037,6 +1087,62 @@
     }
   }
   // ── fim Agente Local ──────────────────────────────────────────────────────────
+
+  async function regerarCryptoKey() {
+    if (!confirm('Isso ira gerar uma nova chave AES-256-GCM.\nVoce precisara atualizar o CRYPTO_KEY no .env do agente local.\n\nContinuar?')) return;
+
+    try {
+      const r    = await fetch('/api/ia-command/agente-local/regerar-crypto-key', { method: 'POST' });
+      const data = await r.json();
+
+      const keyEl = document.getElementById('agente-crypto-key');
+      keyEl.value              = data.crypto_key;
+      keyEl.type               = 'text';
+      keyEl.dataset.configurado = '1';
+      keyEl.placeholder        = '';
+      document.getElementById('toggle-agente-crypto-key').innerHTML = _svgEyeAgente(true);
+      document.getElementById('status-agente-crypto-key').innerHTML = '<span style="color:#d97706">⚠ Nova chave gerada — copie antes de sair e configure no agente local</span>';
+      document.getElementById('btn-copiar-crypto-key').style.display = 'inline-flex';
+
+      const div = document.getElementById('test-agente');
+      div.className    = 'test-result ok';
+      div.textContent  = '🔐 Chave gerada. Copie-a acima, salve as configurações e cole no .env do agente (CRYPTO_KEY=...).';
+      div.style.display = 'block';
+    } catch (e) {
+      alert('Erro ao gerar chave: ' + e.message);
+    }
+  }
+
+  function copiarCryptoKey() {
+    const keyEl = document.getElementById('agente-crypto-key');
+    const val = keyEl.value.trim();
+    if (!val || val === '***') return;
+    navigator.clipboard.writeText(val).then(() => {
+      const btn = document.getElementById('btn-copiar-crypto-key');
+      btn.textContent = '✓ Copiada!';
+      setTimeout(() => { btn.textContent = '⎘ Copiar'; }, 2000);
+    }).catch(() => { keyEl.select(); document.execCommand('copy'); });
+  }
+
+  async function toggleAgenteCryptoKey() {
+    const inp = document.getElementById('agente-crypto-key');
+    const btn = document.getElementById('toggle-agente-crypto-key');
+    const show = inp.type === 'password';
+    inp.type      = show ? 'text' : 'password';
+    btn.innerHTML = _svgEyeAgente(show);
+
+    if (show && inp.value === '' && inp.dataset.configurado === '1') {
+      btn.disabled = true;
+      try {
+        const data = await fetch('/api/ia-command/agente-local/reveal-crypto-key').then(r => r.json());
+        inp.value = data.crypto_key || '';
+        if (data.crypto_key) document.getElementById('btn-copiar-crypto-key').style.display = 'inline-flex';
+      } catch (_) {
+        inp.type      = 'password';
+        btn.innerHTML = _svgEyeAgente(false);
+      } finally { btn.disabled = false; }
+    }
+  }
 
   carregar();
   carregarAgente();

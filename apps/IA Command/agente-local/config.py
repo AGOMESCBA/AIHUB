@@ -13,6 +13,8 @@ _DEFAULTS = {
     "FILIAL":        "01",
     "API_PORT":      "8765",
     "API_TOKEN":     "",
+    "CRYPTO_KEY":    "",
+    "CRYPTO_REQUIRED": "false",
     "ADMIN_HASH":    "",
     "SESSION_SECRET": "",
 }

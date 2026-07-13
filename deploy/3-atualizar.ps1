@@ -5,12 +5,13 @@
 # ============================================================
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$Zip
 )
 
 $ErrorActionPreference = "Stop"
 
+$SCRIPT_DIR   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PROJECT_PATH = "C:\Web\iahub"
 $SERVICE_NAME = "iahub"
 $PARENT_PATH  = "C:\Web"
@@ -20,6 +21,24 @@ $BACKUP_ROOT  = "C:\Web\backups"
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
     Write-Host "ERRO: Execute este script como Administrador!" -ForegroundColor Red
     exit 1
+}
+
+# Se o ZIP nao for informado, usa o pacote mais recente na pasta deploy.
+if ([string]::IsNullOrWhiteSpace($Zip)) {
+    $latestZip = Get-ChildItem -Path $SCRIPT_DIR -Filter "iahub-deploy-*.zip" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if (!$latestZip) {
+        Write-Host "ERRO: Informe -Zip ou copie um iahub-deploy-*.zip para $SCRIPT_DIR" -ForegroundColor Red
+        exit 1
+    }
+
+    $Zip = $latestZip.FullName
+}
+
+if (![System.IO.Path]::IsPathRooted($Zip)) {
+    $Zip = Join-Path $SCRIPT_DIR $Zip
 }
 
 # Verificar se o ZIP existe
