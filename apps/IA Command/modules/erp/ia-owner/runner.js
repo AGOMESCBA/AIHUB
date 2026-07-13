@@ -315,6 +315,17 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Gere novo SQL usando os codigos internos das entidades resolvidas.',
       '- Preserve periodo, metrica e escopo tecnico.',
     ];
+  } else if (/';'.*conteudo apos o fim|';'.*na statement SELECT\/WITH/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- O SQL deve ter EXATAMENTE dois ';': um apos SET ROWCOUNT N, e um so no final de tudo.",
+      "- PROIBIDO qualquer ';' no meio do WHERE, JOIN, GROUP BY ou ORDER BY — isso corta a instrucao e deixa o restante invalido.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL do zero, com um unico bloco SELECT/WITH continuo, terminado por um unico ; no final.',
+      '- Preserve periodo, metrica, entidades resolvidas, agrupamentos e tabelas corretas.',
+      '- Antes de retornar: releia o SQL e confirme que so existem 2 ";" no total (apos SET ROWCOUNT e no final).',
+    ];
   } else {
     bloco = [
       'Contrato obrigatorio:',
@@ -1753,9 +1764,37 @@ function validarMesesRecorrentesVariosAnosNoSql(sql, spec = {}, mensagem = '') {
   };
 }
 
+function validarPontoEVirgulaUnico(sql) {
+  // Guardrail de SINTAXE (nao de dominio): um ';' solto no meio do SQL termina a
+  // statement prematuramente, deixando o restante (ex: "AND SUBSTRING(...) = '...'")
+  // orfao e sintaticamente invalido — SQL Server rejeitaria na execucao, mas nenhum
+  // guardrail de conteudo pega isso porque todos assumem SQL sintaticamente valido.
+  // Remove o "SET ROWCOUNT N;" inicial (sempre presente por contrato) e verifica que
+  // o restante (a statement SELECT/WITH em si) tem no maximo um ';', e somente no fim.
+  const texto = String(sql || '').trim();
+  const semSetRowcount = texto.replace(/^SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '');
+  const semStrings = semSetRowcount.replace(/'[^']*'/g, "''");
+  const semicolons = [...semStrings.matchAll(/;/g)];
+  if (semicolons.length === 0) return { ok: true, erros: [] };
+  if (semicolons.length === 1) {
+    const idx = semicolons[0].index;
+    const resto = semStrings.slice(idx + 1).trim();
+    if (resto === '') return { ok: true, erros: [] };
+    return {
+      ok: false,
+      erros: [`SQL contem ';' seguido de conteudo apos o fim aparente da consulta: "${resto.slice(0, 80)}". Isso indica um ';' colocado por engano no meio do SQL (ex: dentro do WHERE), cortando a instrucao e deixando o restante invalido. Gere novamente com um unico ';' no final do SQL.`],
+    };
+  }
+  return {
+    ok: false,
+    erros: [`SQL contem ${semicolons.length} ';' na statement SELECT/WITH (excluindo o SET ROWCOUNT inicial) — deve haver no maximo um, apenas no final. Verifique se nao ha ';' colocado por engano no meio do WHERE/JOIN/GROUP BY, separando a consulta em pedacos invalidos.`],
+  };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   const texto = String(sql || '').trim();
   const erros = [];
+  erros.push(...validarPontoEVirgulaUnico(texto).erros);
   if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*(?:WITH\b|SELECT\b)/i.test(texto)) {
     erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
   }
@@ -2932,6 +2971,7 @@ module.exports = {
     formatarValorRespostaPlanejada,
     interpolarRespostaPlanejada,
     validarSqlIaOwnerBasico,
+    validarPontoEVirgulaUnico,
     normalizarAliasesBaseAusentes,
     validarPeriodoDeclaradoNoSql,
     validarMesesAnosDeclaradosNoSql,

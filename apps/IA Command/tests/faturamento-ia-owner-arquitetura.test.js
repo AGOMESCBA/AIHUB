@@ -568,4 +568,47 @@ assert.strictEqual(
   'placeholder nao-metrico desconhecido deve cair para formatacao normal'
 );
 
+// Guardrail de sintaxe: ';' solto no meio do SQL corta a instrucao e deixa o restante
+// orfao (invalido). Caso real reportado: IA gerou ';' apos o WHERE, antes de um AND final.
+const sqlPontoVirgulaNoMeio = `SET ROWCOUNT 30000;
+SELECT COUNT(*) AS quantidade_faturada
+FROM SF2010 SF2
+JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL
+  AND SD2.D2_DOC = SF2.F2_DOC
+  AND SD2.D2_SERIE = SF2.F2_SERIE
+  AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
+  AND SD2.D2_LOJA = SF2.F2_LOJA
+WHERE SF2.F2_TIPO = 'N'
+  AND SF2.D_E_L_E_T_ = ' '
+  AND SD2.D_E_L_E_T_ = ' ';
+  AND SUBSTRING(SF2.F2_EMISSAO, 1, 8) = '20260710'`;
+const validacaoPontoVirgulaNoMeio = runner._test.validarPontoEVirgulaUnico(sqlPontoVirgulaNoMeio);
+assert.strictEqual(validacaoPontoVirgulaNoMeio.ok, false, "';' solto no meio do WHERE deve ser rejeitado — corta a instrucao e deixa o AND final orfao");
+
+const sqlPontoVirgulaCorreto = sqlPontoVirgulaNoMeio
+  .replace("SD2.D_E_L_E_T_ = ' ';\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 8) = '20260710'",
+    "SD2.D_E_L_E_T_ = ' '\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 8) = '20260710';");
+assert.strictEqual(runner._test.validarPontoEVirgulaUnico(sqlPontoVirgulaCorreto).ok, true, "SQL com unico ';' no final deve passar");
+
+// Nao deve gerar falso positivo em SQL com CTE (WITH ... AS (...), ... SELECT ... ;)
+const sqlCTEValido = `SET ROWCOUNT 50000;
+WITH faturamento AS (
+  SELECT SUBSTRING(SF2.F2_EMISSAO, 1, 6) AS competencia, COALESCE(SUM(SF2.F2_VALBRUT), 0) AS total_faturamento
+  FROM SF2010 SF2
+  WHERE SF2.F2_TIPO = 'N'
+),
+compras AS (
+  SELECT SUBSTRING(SF1.F1_DTDIGIT, 1, 6) AS competencia, COALESCE(SUM(SD1.D1_TOTAL), 0) AS total_compras
+  FROM SF1010 SF1
+)
+SELECT f.competencia, f.total_faturamento, c.total_compras
+FROM faturamento f
+FULL OUTER JOIN compras c ON f.competencia = c.competencia
+ORDER BY f.competencia;`;
+assert.strictEqual(runner._test.validarPontoEVirgulaUnico(sqlCTEValido).ok, true, 'SQL com CTE (multiplos parenteses, sem ; no meio) nao deve gerar falso positivo');
+
+// validarSqlIaOwnerBasico deve incluir a checagem de ponto-e-virgula
+const validacaoCompletaComBug = runner._test.validarSqlIaOwnerBasico(sqlPontoVirgulaNoMeio, faturamentoSpec, { SF2010: 'E', SD2010: 'E' }, 'quantidade faturada hoje');
+assert.strictEqual(validacaoCompletaComBug.ok, false, 'validarSqlIaOwnerBasico deve propagar a rejeicao de ponto-e-virgula solto');
+
 console.log('faturamento-ia-owner-arquitetura.test.js: ok');
