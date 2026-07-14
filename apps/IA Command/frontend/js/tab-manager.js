@@ -62,13 +62,24 @@
     const baseUrl   = _stripEmpresaParam(url);
     const empresaId   = (empresaIdOverride != null) ? empresaIdOverride : (window._iahubEmpresa?.id ?? null);
     const empresaNome = empresaNomeOverride ?? window._iahubEmpresa?.nome ?? '';
-    const tabKey = empresaId ? `${baseUrl}?empresa_id=${empresaId}` : baseUrl;
+    const tabKey = _urlComEmpresa(baseUrl, empresaId);
 
-    if (_tabs.has(tabKey)) { _activateTab(tabKey); _reloadTab(tabKey); return; }
+    if (_tabs.has(tabKey)) {
+      const tab = _tabs.get(tabKey);
+      if (empresaNomeOverride != null) tab.empresaNome = empresaNomeOverride || tab.empresaNome;
+      _activateTab(tabKey);
+      _reloadTab(tabKey);
+      return;
+    }
 
     // Fallback: aba com mesma URL base já aberta (ex.: empresa mudou mas página é a mesma)
     for (const [key, tab] of _tabs) {
-      if (tab.url === baseUrl) { _activateTab(key); _reloadTab(key); return; }
+      if (tab.url === baseUrl && Number(tab.empresaId || 0) === Number(empresaId || 0)) {
+        if (empresaNomeOverride != null) tab.empresaNome = empresaNomeOverride || tab.empresaNome;
+        _activateTab(key);
+        _reloadTab(key);
+        return;
+      }
     }
 
     const bar     = document.getElementById('mdi-tabbar');
@@ -133,7 +144,15 @@
   }
 
   function _tabSrc(baseUrl, empresaId) {
-    return empresaId ? `${baseUrl}?empresa_id=${empresaId}&_v=${Date.now()}` : `${baseUrl}?_v=${Date.now()}`;
+    const url = _urlComEmpresa(baseUrl, empresaId);
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}_v=${Date.now()}`;
+  }
+
+  function _urlComEmpresa(baseUrl, empresaId) {
+    if (!empresaId) return baseUrl;
+    const sep = baseUrl.includes('?') ? '&' : '?';
+    return `${baseUrl}${sep}empresa_id=${empresaId}`;
   }
 
   function _reloadTab(tabKey) {
@@ -233,7 +252,7 @@
   }
 
   function _tabKey(tab, empresaId) {
-    return empresaId ? `${tab.url}?empresa_id=${empresaId}` : tab.url;
+    return _urlComEmpresa(tab.url, empresaId);
   }
 
   function _aplicarEmpresaNaTab(oldKey, tab, emp) {

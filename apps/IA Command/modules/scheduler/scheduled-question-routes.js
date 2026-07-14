@@ -214,10 +214,10 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
   }));
 
   app.delete('/api/ia-command/admin/agendamento/jobs/:id', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
-    const ok = store.excluirJob(getEmpresaId(req), req.params.id, usuario(req));
-    if (!ok) return res.status(404).json({ error: 'Job nao encontrado.' });
-    audit(req, 'excluir_job_agendamento', { id: req.params.id });
-    res.json({ ok: true });
+    const result = store.excluirJob(getEmpresaId(req), req.params.id, usuario(req));
+    if (!result) return res.status(404).json({ error: 'Job nao encontrado.' });
+    audit(req, 'excluir_job_agendamento', { id: req.params.id, historico_removido: result.historico_removido || 0 });
+    res.json(result);
   }));
 
   app.get('/api/ia-command/admin/agendamento/jobs/:id/runs', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
@@ -237,6 +237,59 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
       jobId: req.query.job_id || null,
       limit: req.query.limit,
     }));
+  }));
+
+  app.post('/api/ia-command/admin/agendamento/runs/excluir-selecionados', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Informe ao menos um ID para excluir.' });
+    }
+    if (ids.length > 200) {
+      return res.status(400).json({ error: 'Maximo de 200 registros por operacao.' });
+    }
+    const removidos = store.excluirRunsPorIds(getEmpresaId(req), ids);
+    audit(req, 'excluir_execucoes_agendamento_selecionadas', { ids, removidos });
+    res.json({ ok: true, removidos });
+  }));
+
+  app.post('/api/ia-command/admin/agendamento/runs/limpar', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
+    const empresaId = getEmpresaId(req);
+    const modo = String(req.body?.modo || 'periodo').trim().toLowerCase();
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim = String(req.body?.data_fim || '').trim();
+    const jobId = String(req.body?.job_id || '').trim() || null;
+
+    if (jobId && !store.buscarJob(empresaId, jobId)) {
+      return res.status(404).json({ error: 'Job nao encontrado.' });
+    }
+    const jobAntes = jobId ? store.buscarJob(empresaId, jobId) : null;
+
+    let inicio = null;
+    let fim = null;
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) {
+        return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      }
+      if (dataInicio > dataFim) {
+        return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+      }
+      inicio = `${dataInicio}T00:00:00.000`;
+      fim = `${dataFim}T23:59:59.999`;
+    }
+
+    const removidos = store.limparRuns(empresaId, { inicio, fim, jobId });
+    const jobDepois = jobId ? store.buscarJob(empresaId, jobId) : null;
+    if (jobAntes && !jobDepois) {
+      throw Object.assign(new Error('Protecao acionada: a limpeza do historico nao pode remover o cadastro do job.'), { statusCode: 500 });
+    }
+    audit(req, 'limpar_execucoes_agendamento', {
+      modo,
+      data_inicio: dataInicio || null,
+      data_fim: dataFim || null,
+      job_id: jobId,
+      removidos,
+    });
+    res.json({ ok: true, removidos, job_preservado: jobId ? !!jobDepois : null });
   }));
 
   app.get('/api/ia-command/admin/agendamento/runs/:id/deliveries', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {

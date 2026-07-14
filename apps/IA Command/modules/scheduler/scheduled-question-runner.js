@@ -29,10 +29,11 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         pergunta: job.pergunta,
         jobNome: job.nome,
       });
-      sucessos++;
+      if (result.ok === false) falhas++;
+      else sucessos++;
       if (!primeiroLogId && result.interpretation_log_id) primeiroLogId = result.interpretation_log_id;
       if (!primeiraResposta && result.resposta) primeiraResposta = result.resposta;
-      resumo.push(`${dest.nome || dest.numero}: enviado`);
+      resumo.push(`${dest.nome || dest.numero}: ${result.ok === false ? (result.error_detail || 'executado com erro na consulta') : 'enviado'}`);
       store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
     } catch (err) {
       falhas++;

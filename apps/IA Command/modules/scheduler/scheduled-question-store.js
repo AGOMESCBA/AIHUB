@@ -43,8 +43,12 @@ function recipientFromRow(row) {
 
 function runFromRow(row) {
   if (!row) return null;
+  const status = row.status === 'sucesso' && row.interpretation_resultado_tipo === 'erro'
+    ? 'erro'
+    : row.status;
   return {
     ...row,
+    status,
     empresa_id: Number(row.empresa_id),
     attempt: Number(row.attempt || 1),
     duration_ms: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
@@ -56,7 +60,11 @@ function listarJobs(empresaId) {
     SELECT j.*,
       (SELECT COUNT(*) FROM scheduled_question_recipients r WHERE r.job_id = j.id AND r.ativo = 1) AS destinatarios_count,
       (SELECT COUNT(*) FROM scheduled_question_runs ru WHERE ru.job_id = j.id) AS runs_count,
-      (SELECT ru.status FROM scheduled_question_runs ru WHERE ru.job_id = j.id ORDER BY ru.criado_em DESC LIMIT 1) AS ultimo_status
+      (SELECT CASE WHEN ru.status = 'sucesso' AND i.resultado_tipo = 'erro' THEN 'erro' ELSE ru.status END
+         FROM scheduled_question_runs ru
+         LEFT JOIN interpretation_log i ON i.id = ru.interpretation_log_id AND i.empresa_id = ru.empresa_id
+        WHERE ru.job_id = j.id
+        ORDER BY ru.criado_em DESC LIMIT 1) AS ultimo_status
     FROM scheduled_question_jobs j
     WHERE j.empresa_id = ? AND j.status <> 'excluido'
     ORDER BY
@@ -146,10 +154,17 @@ function listarDestinatarios(empresaId, jobId) {
 
 function listarRuns(empresaId, jobId, limit = 50) {
   return getDB().prepare(`
-    SELECT *
-    FROM scheduled_question_runs
-    WHERE empresa_id = ? AND job_id = ?
-    ORDER BY criado_em DESC
+    SELECT r.*,
+      i.resultado_tipo AS interpretation_resultado_tipo,
+      i.rows_count AS interpretation_rows_count,
+      i.sql_gerado AS interpretation_sql_gerado,
+      i.sql_final_executado AS interpretation_sql_final_executado,
+      i.sql_validacao_erro AS interpretation_sql_validacao_erro,
+      i.agente_url AS interpretation_agente_url
+    FROM scheduled_question_runs r
+    LEFT JOIN interpretation_log i ON i.id = r.interpretation_log_id AND i.empresa_id = r.empresa_id
+    WHERE r.empresa_id = ? AND r.job_id = ?
+    ORDER BY r.criado_em DESC
     LIMIT ?
   `).all(Number(empresaId), jobId, Math.max(1, Math.min(200, Number(limit) || 50))).map(runFromRow);
 }
@@ -168,11 +183,18 @@ function listarRunsGerais(empresaId, { jobId = null, limit = 300 } = {}) {
       j.modulo AS job_modulo,
       j.schedule_tipo AS job_schedule_tipo,
       j.timezone AS job_timezone,
+      i.resultado_tipo AS interpretation_resultado_tipo,
+      i.rows_count AS interpretation_rows_count,
+      i.sql_gerado AS interpretation_sql_gerado,
+      i.sql_final_executado AS interpretation_sql_final_executado,
+      i.sql_validacao_erro AS interpretation_sql_validacao_erro,
+      i.agente_url AS interpretation_agente_url,
       (SELECT COUNT(*) FROM scheduled_question_deliveries d WHERE d.run_id = r.id) AS entregas_total,
       (SELECT COUNT(*) FROM scheduled_question_deliveries d WHERE d.run_id = r.id AND d.status = 'sucesso') AS entregas_sucesso,
       (SELECT COUNT(*) FROM scheduled_question_deliveries d WHERE d.run_id = r.id AND d.status = 'erro') AS entregas_erro
     FROM scheduled_question_runs r
     JOIN scheduled_question_jobs j ON j.id = r.job_id AND j.empresa_id = r.empresa_id
+    LEFT JOIN interpretation_log i ON i.id = r.interpretation_log_id AND i.empresa_id = r.empresa_id
     WHERE r.empresa_id = ?
       ${whereJob}
     ORDER BY r.criado_em DESC
@@ -193,6 +215,59 @@ function listarEntregas(empresaId, runId) {
     WHERE d.run_id = ? AND r.empresa_id = ?
     ORDER BY d.criado_em ASC
   `).all(runId, Number(empresaId));
+}
+
+function excluirRunsPorIds(empresaId, ids = []) {
+  const lista = [...new Set((ids || []).map(String).filter(Boolean))].slice(0, 200);
+  if (!lista.length) return 0;
+  const db = getDB();
+  const placeholders = lista.map(() => '?').join(',');
+  const tx = db.transaction(() => {
+    const runs = db.prepare(`
+      SELECT id
+      FROM scheduled_question_runs
+      WHERE empresa_id = ? AND id IN (${placeholders})
+    `).all(Number(empresaId), ...lista).map(row => String(row.id));
+    if (!runs.length) return 0;
+    const runPlaceholders = runs.map(() => '?').join(',');
+    db.prepare(`DELETE FROM scheduled_question_deliveries WHERE run_id IN (${runPlaceholders})`).run(...runs);
+    const info = db.prepare(`
+      DELETE FROM scheduled_question_runs
+      WHERE empresa_id = ? AND id IN (${runPlaceholders})
+    `).run(Number(empresaId), ...runs);
+    return info.changes || 0;
+  });
+  return tx();
+}
+
+function limparRuns(empresaId, { inicio = null, fim = null, jobId = null } = {}) {
+  const db = getDB();
+  const wheres = ['empresa_id = ?'];
+  const params = [Number(empresaId)];
+  if (jobId) {
+    wheres.push('job_id = ?');
+    params.push(String(jobId));
+  }
+  if (inicio) {
+    wheres.push('criado_em >= ?');
+    params.push(String(inicio));
+  }
+  if (fim) {
+    wheres.push('criado_em <= ?');
+    params.push(String(fim));
+  }
+  const where = wheres.join(' AND ');
+  const tx = db.transaction(() => {
+    const runs = db.prepare(`SELECT id FROM scheduled_question_runs WHERE ${where}`)
+      .all(...params)
+      .map(row => String(row.id));
+    if (!runs.length) return 0;
+    const placeholders = runs.map(() => '?').join(',');
+    db.prepare(`DELETE FROM scheduled_question_deliveries WHERE run_id IN (${placeholders})`).run(...runs);
+    const info = db.prepare(`DELETE FROM scheduled_question_runs WHERE ${where}`).run(...params);
+    return info.changes || 0;
+  });
+  return tx();
 }
 
 function criarRun(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema' } = {}) {
@@ -435,10 +510,37 @@ function alterarStatus(empresaId, id, { ativo, status }, usuario) {
 }
 
 function excluirJob(empresaId, id, usuario) {
+  const db = getDB();
   const job = buscarJob(empresaId, id);
-  if (!job) return false;
-  alterarStatus(empresaId, id, { ativo: 0, status: 'excluido' }, usuario);
-  return true;
+  if (!job) return null;
+  const tx = db.transaction(() => {
+    db.prepare(`
+      DELETE FROM scheduled_question_deliveries
+      WHERE job_id = ?
+        AND run_id IN (SELECT id FROM scheduled_question_runs WHERE empresa_id = ? AND job_id = ?)
+    `).run(id, Number(empresaId), id);
+    const runsInfo = db.prepare(`
+      DELETE FROM scheduled_question_runs
+      WHERE empresa_id = ? AND job_id = ?
+    `).run(Number(empresaId), id);
+    db.prepare(`
+      UPDATE scheduled_question_recipients
+      SET ativo = 0, atualizado_em = ?
+      WHERE empresa_id = ? AND job_id = ?
+    `).run(agora(), Number(empresaId), id);
+    db.prepare(`
+      UPDATE scheduled_question_jobs
+      SET ativo = 0,
+          status = 'excluido',
+          lock_until = NULL,
+          running_token = NULL,
+          atualizado_por = ?,
+          atualizado_em = ?
+      WHERE empresa_id = ? AND id = ?
+    `).run(usuario || 'sistema', agora(), Number(empresaId), id);
+    return { ok: true, historico_removido: runsInfo.changes || 0 };
+  });
+  return tx();
 }
 
 module.exports = {
@@ -451,6 +553,8 @@ module.exports = {
   listarRuns,
   listarRunsGerais,
   listarEntregas,
+  excluirRunsPorIds,
+  limparRuns,
   criarRun,
   buscarRun,
   atualizarRun,

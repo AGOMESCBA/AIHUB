@@ -61,7 +61,7 @@
     .job-status-dot.normal { background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.16); }
     .job-status-dot.paused { background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18); }
     .job-status-dot.due { background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.18); }
-    .job-status-dot.running { background:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.16); }
+    .job-status-dot.running { background:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.18); }
     .job-status-dot.error { background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.16); }
     .job-main { min-width:0; }
     .job-title { font-weight:800;color:var(--text-hi);margin-bottom:2px; }
@@ -74,11 +74,14 @@
     .badge-paused { background:var(--bg-hover);color:var(--text-lo); }
     .badge-mod { background:var(--accent-glow);color:var(--accent); }
     .badge-fail { background:#fee2e2;color:#b91c1c; }
+    .badge-run { background:#dbeafe;color:#1d4ed8; }
     .btn-icon { width:28px;height:28px;background:none;border:none;cursor:pointer;padding:0;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s;color:var(--text-md);vertical-align:middle; }
     .btn-icon svg { width:15px;height:15px;display:block; }
     .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
     .btn-icon.primary { color:var(--accent); }
     .btn-icon.danger { color:#dc2626; }
+    .btn-icon:disabled { opacity:.45;cursor:not-allowed; }
+    .btn-icon:disabled:hover { background:transparent;color:var(--text-md); }
     .empty-state { padding:44px 24px;text-align:center;color:var(--text-md); }
     .empty-icon { width:52px;height:52px;margin:0 auto 14px;border-radius:14px;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800; }
     .empty-title { font-size:16px;font-weight:800;color:var(--text-hi);margin-bottom:6px; }
@@ -158,9 +161,9 @@
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
               <span>Executor...</span>
             </button>
-            <button class="btn btn-ghost" id="btn-legenda" type="button" onclick="alternarLegenda()">
+            <button class="btn btn-ghost" id="btn-legenda" type="button" onclick="alternarLegenda()" aria-expanded="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
-              <span>Legenda</span>
+              <span>Ocultar legenda</span>
             </button>
             <button class="btn btn-ghost" id="btn-atualizar" type="button" onclick="atualizarLista(this)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.5 5.7L21 8"/><path d="M21 3v5h-5"/></svg>
@@ -180,7 +183,7 @@
           <div class="kpi-item"><span>Falhas</span><strong id="m-falhas">0</strong></div>
           <div class="kpi-item"><span>Executor</span><strong id="m-executor">-</strong></div>
         </div>
-        <div class="status-legend" id="status-legend" aria-label="Legenda dos status dos jobs">
+        <div class="status-legend open" id="status-legend" aria-label="Legenda dos status dos jobs">
           <span class="status-legend-item"><span class="job-status-dot normal"></span>Normal</span>
           <span class="status-legend-item"><span class="job-status-dot paused"></span>Parado</span>
           <span class="status-legend-item"><span class="job-status-dot due"></span>Vencido</span>
@@ -418,6 +421,11 @@
   let editId = null;
   let selectedRecipients = new Set();
   let table = null;
+  let empresasCache = null;
+  let executorAutoTimer = null;
+  let executorAutoBusy = false;
+  let executorMarker = '';
+  const manualRunningJobs = new Set();
   const GROUP_STATE_KEY = 'iac_admin_agendamento_group_state_v2';
   const GROUP_FIELDS = {
     nome: 'Job',
@@ -457,6 +465,20 @@
       return data;
     });
   }
+  function marcadorExecutor(status) {
+    if (!status) return '';
+    const erroAt = status.last_error?.at || '';
+    return [
+      status.running ? '1' : '0',
+      status.executing ? '1' : '0',
+      status.last_run_at || '',
+      String(status.total_executions || 0),
+      erroAt,
+    ].join('|');
+  }
+  function listaVisivel() {
+    return !document.getElementById('sec-lista')?.classList.contains('d-none');
+  }
   function fmtData(iso) {
     if (!iso) return '-';
     const d = new Date(iso);
@@ -478,7 +500,7 @@
     return { manual:'Manual', once:'Uma vez', daily:'Diario', weekly:'Semanal', monthly:'Mensal' }[tipo] || tipo || 'Manual';
   }
   function statusVisualJob(job) {
-    const ultimo = String(job?.ultimo_status || '').toLowerCase();
+    const ultimo = String(manualRunningJobs.has(String(job?.id)) ? 'executando' : (job?.ultimo_status || '')).toLowerCase();
     const ativo = !!job?.ativo && job?.status === 'ativo';
     const next = job?.next_run_at ? new Date(job.next_run_at) : null;
     if (ultimo === 'erro' || ultimo === 'falha') return { key:'error', label:'Erro recente' };
@@ -606,6 +628,7 @@
       renderMetricas();
       renderExecutorStatus();
       renderJobs();
+      executorMarker = marcadorExecutor(executorStatus);
     } catch (err) {
       document.getElementById('tabela').innerHTML = `<div class="empty-state"><div class="empty-title">Erro ao carregar</div><div class="empty-text">${esc(err.message)}</div></div>`;
     }
@@ -646,6 +669,37 @@
     return executorStatus;
   }
 
+  async function verificarAtualizacaoAutomatica(force = false) {
+    if (executorAutoBusy) return;
+    if (!force && document.hidden) return;
+    executorAutoBusy = true;
+    try {
+      const status = await api('/api/ia-command/admin/agendamento/executor/status').catch(() => null);
+      const novoMarcador = marcadorExecutor(status);
+      const mudou = novoMarcador && novoMarcador !== executorMarker;
+      executorStatus = status;
+      renderExecutorStatus();
+      if (mudou && listaVisivel()) {
+        await carregarTudo();
+        const agora = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        const total = jobs.length === 1 ? '1 job encontrado' : `${jobs.length} jobs encontrados`;
+        document.getElementById('count').textContent = `${total} - atualizado pelo executor as ${agora}`;
+      } else {
+        executorMarker = novoMarcador;
+      }
+    } finally {
+      executorAutoBusy = false;
+    }
+  }
+
+  function iniciarAtualizacaoAutomatica() {
+    if (executorAutoTimer) clearInterval(executorAutoTimer);
+    executorAutoTimer = setInterval(() => verificarAtualizacaoAutomatica().catch(() => null), 8000);
+    window.addEventListener('visibilitychange', () => {
+      if (!document.hidden) verificarAtualizacaoAutomatica(true).catch(() => null);
+    });
+  }
+
   async function alternarExecutor() {
     const btn = document.getElementById('btn-executor');
     const running = !!executorStatus?.running;
@@ -661,6 +715,8 @@
         headers:{'Content-Type':'application/json'},
       });
       renderExecutorStatus();
+      executorMarker = marcadorExecutor(executorStatus);
+      verificarAtualizacaoAutomatica(true).catch(() => null);
     } catch (err) {
       alert(err.message);
       await atualizarExecutorStatus();
@@ -707,7 +763,8 @@
   function renderJobs() {
     const data = jobs.map(job => ({
       ...job,
-      status_label: job.ativo && job.status === 'ativo' ? 'Ativo' : 'Pausado',
+      _manual_running: manualRunningJobs.has(String(job.id)),
+      status_label: manualRunningJobs.has(String(job.id)) ? 'Executando' : (job.ativo && job.status === 'ativo' ? 'Ativo' : 'Pausado'),
       modulo_label: moduloLabel(job.modulo),
       schedule_tipo_label: scheduleTipoLabel(job.schedule_tipo),
       agenda_label: scheduleLabel(job),
@@ -719,6 +776,7 @@
       table.replaceData(data);
       document.getElementById('count').textContent = data.length === 1 ? '1 job encontrado' : `${data.length} jobs encontrados`;
       aplicarAgrupamento();
+      setTimeout(() => garantirJobsVisiveis(data), 0);
       return;
     }
     table = new Tabulator('#tabela', {
@@ -742,7 +800,11 @@
             </div>
           </div>`;
         }},
-        { title:'Status', field:'status_label', width:115, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Ativo':'Ativo','Pausado':'Pausado'}}, formatter:c=>c.getValue()==='Ativo'?'<span class="badge badge-ok">Ativo</span>':'<span class="badge badge-paused">Pausado</span>' },
+        { title:'Status', field:'status_label', width:115, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Ativo':'Ativo','Pausado':'Pausado','Executando':'Executando'}}, formatter:c=>{
+          const value = c.getValue();
+          if (value === 'Executando') return '<span class="badge badge-run">Executando</span>';
+          return value === 'Ativo' ? '<span class="badge badge-ok">Ativo</span>' : '<span class="badge badge-paused">Pausado</span>';
+        } },
         { title:'Modulo', field:'modulo_label', width:135, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Automatico':'Automatico','Compras':'Compras','Financeiro':'Financeiro','Faturamento':'Faturamento','Comissao':'Comissao'}}, formatter:c=>`<span class="badge badge-mod">${esc(c.getValue())}</span>` },
         { title:'Agenda', field:'agenda_label', width:170, headerFilter:true },
         { title:'Proxima execucao', field:'next_run_at', width:160, sorter:'datetime', headerFilter:true, formatter:c=>esc(fmtData(c.getValue())) },
@@ -751,20 +813,38 @@
         { title:'Acoes', field:'id', width:200, hozAlign:'right', headerSort:false, headerFilter:false, groupable:false, formatter:c=>{
           const row = c.getRow().getData();
           const statusIcon = row.ativo ? ICONS.pause : ICONS.play;
-          return `<button class="btn-icon primary" title="Executar agora" aria-label="Executar agora" onclick="event.stopPropagation();executarAgora('${esc(row.id)}')">${ICONS.play}</button>
-            <button class="btn-icon" title="${row.ativo ? 'Pausar' : 'Ativar'}" aria-label="${row.ativo ? 'Pausar' : 'Ativar'}" onclick="event.stopPropagation();alternarStatus('${esc(row.id)}','${row.ativo ? 'pausado' : 'ativo'}')">${statusIcon}</button>
+          const disabled = row._manual_running ? ' disabled' : '';
+          return `<button class="btn-icon primary" title="${row._manual_running ? 'Job em execucao' : 'Executar agora'}" aria-label="${row._manual_running ? 'Job em execucao' : 'Executar agora'}"${disabled} onclick="event.stopPropagation();executarAgora('${esc(row.id)}')">${row._manual_running ? ICONS.stop : ICONS.play}</button>
+            <button class="btn-icon" title="${row.ativo ? 'Pausar' : 'Ativar'}" aria-label="${row.ativo ? 'Pausar' : 'Ativar'}"${disabled} onclick="event.stopPropagation();alternarStatus('${esc(row.id)}','${row.ativo ? 'pausado' : 'ativo'}')">${statusIcon}</button>
             <button class="btn-icon" title="Historico de execucoes" aria-label="Historico de execucoes" onclick="event.stopPropagation();abrirHistorico('${esc(row.id)}')">${ICONS.history}</button>
-            <button class="btn-icon" title="Editar" aria-label="Editar" onclick="event.stopPropagation();abrirFormulario('${esc(row.id)}')">${ICONS.edit}</button>
-            <button class="btn-icon danger" title="Excluir" aria-label="Excluir" onclick="event.stopPropagation();excluirJob('${esc(row.id)}')">${ICONS.trash}</button>`;
+            <button class="btn-icon" title="Editar" aria-label="Editar"${disabled} onclick="event.stopPropagation();abrirFormulario('${esc(row.id)}')">${ICONS.edit}</button>
+            <button class="btn-icon danger" title="Excluir" aria-label="Excluir"${disabled} onclick="event.stopPropagation();excluirJob('${esc(row.id)}')">${ICONS.trash}</button>`;
         }},
       ],
       rowClick:(e,row)=>{ if (!e.target.closest('button')) abrirFormulario(row.getData().id); },
       dataFiltered:(_filters, rows)=>{
-        document.getElementById('count').textContent = rows.length === 1 ? '1 job encontrado' : `${rows.length} jobs encontrados`;
+        const total = table?.getData?.().length ?? jobs.length;
+        document.getElementById('count').textContent = rows.length === total
+          ? (rows.length === 1 ? '1 job encontrado' : `${rows.length} jobs encontrados`)
+          : `${rows.length} de ${total} job${total !== 1 ? 's' : ''} encontrado${rows.length !== 1 ? 's' : ''}`;
       },
     });
     document.getElementById('count').textContent = data.length === 1 ? '1 job encontrado' : `${data.length} jobs encontrados`;
     renderPainelAgrupamento();
+  }
+
+  function garantirJobsVisiveis(data) {
+    if (!table || !data.length) return;
+    try {
+      const visiveis = table.getRows('active').length;
+      const filtros = table.getHeaderFilters?.() || [];
+      if (visiveis === 0 && filtros.length) {
+        table.clearHeaderFilter?.();
+        table.clearFilter?.(true);
+        table.redraw(true);
+        document.getElementById('count').textContent = `${data.length === 1 ? '1 job encontrado' : `${data.length} jobs encontrados`} - filtros limpos automaticamente`;
+      }
+    } catch (_) {}
   }
 
   async function abrirFormulario(id = null) {
@@ -792,11 +872,25 @@
   }
 
   async function abrirHistorico(id) {
+    const job = jobs.find(j => String(j.id) === String(id));
+    const empresaId = Number(job?.empresa_id || 0) || null;
+    const empresaNome = await nomeEmpresaPorId(empresaId);
     const url = `/app/ia-command/admin-agendamento-historico.html?job_id=${encodeURIComponent(id)}`;
     if (window.parent && window.parent !== window && typeof window.parent.openTab === 'function') {
-      window.parent.openTab(url, 'Historico de Execucoes', '🕘');
+      window.parent.openTab(url, 'Historico de Execucoes', '🕘', empresaId, empresaNome);
     } else {
-      location.href = url;
+      location.href = empresaId ? `${url}&empresa_id=${encodeURIComponent(empresaId)}` : url;
+    }
+  }
+
+  async function nomeEmpresaPorId(empresaId) {
+    if (!empresaId) return null;
+    try {
+      if (!empresasCache) empresasCache = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+      const emp = empresasCache.find(e => Number(e.id) === Number(empresaId));
+      return emp ? (emp.razao_social || emp.nome || '') : null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -983,9 +1077,15 @@
 
   async function executarAgora(id) {
     if (!id) return;
+    if (manualRunningJobs.has(String(id))) return;
     const job = jobs.find(j => String(j.id) === String(id));
     const nome = job?.nome || 'este job';
     if (!confirm(`Executar agora "${nome}"? O agendamento futuro sera mantido.`)) return;
+    manualRunningJobs.add(String(id));
+    if (job) job.ultimo_status = 'executando';
+    renderMetricas();
+    renderJobs();
+    document.getElementById('count').textContent = `Executando "${nome}"...`;
     try {
       const btnForm = document.getElementById('btn-run-now-form');
       if (String(editId || '') === String(id) && btnForm) {
@@ -996,19 +1096,22 @@
         method:'POST',
         headers:{'Content-Type':'application/json'},
       });
-      alert(run.status === 'sucesso'
-        ? 'Job executado e enviado com sucesso.'
-        : `Job executado com status: ${run.status || 'desconhecido'}. Verifique o historico.`);
       await carregarTudo();
       if (editId) carregarRuns(editId);
+      const status = run.status || 'desconhecido';
+      document.getElementById('count').textContent = status === 'sucesso'
+        ? `Job "${nome}" executado e enviado com sucesso.`
+        : `Job "${nome}" finalizado com status ${status}. Verifique o historico.`;
     } catch (err) {
       alert(err.message);
     } finally {
+      manualRunningJobs.delete(String(id));
       const btnForm = document.getElementById('btn-run-now-form');
       if (btnForm) {
         btnForm.disabled = false;
         setButtonLabel(btnForm, 'Executar agora');
       }
+      renderJobs();
     }
   }
 
@@ -1074,7 +1177,8 @@
 
   lerEstadoAgrupamento();
   inicializarPainelAgrupamento();
-  window._iahubAuthReady?.then(carregarTudo) ?? carregarTudo();
+  const boot = () => carregarTudo().finally(iniciarAtualizacaoAutomatica);
+  window._iahubAuthReady?.then(boot) ?? boot();
 </script>
 </body>
 </html>

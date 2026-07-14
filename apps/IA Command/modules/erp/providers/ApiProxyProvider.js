@@ -86,6 +86,9 @@ function _request(url, method, body, apiKey) {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           let msg = `Agente retornou HTTP ${res.statusCode}`;
           try { msg = JSON.parse(data)?.error || msg; } catch (_) {}
+          if (res.statusCode === 426 && /^Agente retornou HTTP 426$/i.test(msg)) {
+            msg = 'Agente Local recusou a execucao (HTTP 426): criptografia obrigatoria no agente, mas a conexao do IA Command esta sem criptografia ativa.';
+          }
           return _reject(new Error(msg));
         }
         try { _resolve(JSON.parse(data)); }

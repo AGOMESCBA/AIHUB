@@ -3257,6 +3257,39 @@ class IACWhatsAppService extends EventEmitter {
 
   // ── IA Pipeline: classify → route → format ──────────────────────────────────
 
+  _formatScheduledDeliveryMessage({ jobNome = null, resposta = '', ok = true } = {}) {
+    const corpo = String(resposta || '').trim() || 'Consulta concluida sem conteudo para exibir.';
+    const titulo = String(jobNome || 'Pergunta agendada').trim();
+    const pareceErro = !ok || /^(nao consegui|não consegui|nao foi possivel|não foi possivel|ocorreu um erro|erro\b)/i.test(corpo);
+    const linhas = [
+      '*IA Command - Agendamento*',
+      `*Job:* ${titulo}`,
+      `*Status:* ${pareceErro ? 'Atencao' : 'Concluido'}`,
+      '',
+    ];
+    linhas.push(pareceErro && !/^[\u26A0\u274C]/u.test(corpo) ? `⚠️ ${corpo}` : corpo);
+    linhas.push('', '_Executado automaticamente pelo sistema._');
+    return linhas.join('\n');
+  }
+
+  _scheduledExecutionStatus(empresaId, logId, resposta = '') {
+    const corpo = String(resposta || '').trim();
+    const status = {
+      ok: !/^(nao consegui|nÃ£o consegui|nao foi possivel|nÃ£o foi possivel|ocorreu um erro|erro\b)/i.test(corpo),
+      error_detail: null,
+    };
+    if (!logId) return status;
+    try {
+      const log = interpretationLog.obterPorId(logId, empresaId);
+      if (log?.resultado_tipo === 'erro') status.ok = false;
+      const sqlComErro = log?.sql_gerado || log?.sql_final_executado || '';
+      const match = String(sqlComErro).match(/--\s*ERRO:\s*([\s\S]+)$/i);
+      if (match?.[1]) status.error_detail = match[1].trim();
+      else if (log?.sql_validacao_erro) status.error_detail = log.sql_validacao_erro;
+    } catch (_) {}
+    return status;
+  }
+
   async executeScheduledQuestion({ empresaId, numero, pergunta, jobNome = null } = {}) {
     if (!this.client || this.status !== 'connected') {
       throw new Error('WhatsApp nao esta conectado.');
@@ -3287,14 +3320,16 @@ class IACWhatsAppService extends EventEmitter {
       _skipChannelTenantResolution: true,
       _systemOrigin: 'agendamento',
     });
-    const titulo = jobNome ? `*${jobNome}*\n\n` : '';
-    await this.sendMessage(digits, `${titulo}${resposta}`);
+    const statusExecucao = this._scheduledExecutionStatus(empresaExecucao, timingCtx.logId, resposta);
+    await this.sendMessage(digits, this._formatScheduledDeliveryMessage({ jobNome, resposta, ok: statusExecucao.ok }));
     const entregueMs = Date.now() - t0;
     if (timingCtx.logId) {
       try { interpretationLog.atualizarEntregue(timingCtx.logId, entregueMs); } catch (_) {}
     }
     return {
       resposta,
+      ok: statusExecucao.ok,
+      error_detail: statusExecucao.error_detail,
       interpretation_log_id: timingCtx.logId || null,
       duration_ms: Date.now() - t0,
       entregue_ms: entregueMs,
