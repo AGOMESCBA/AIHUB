@@ -3,7 +3,7 @@
 
   const MENU = [
     {
-      id: 'operacao', label: 'Monitor', icon: '⚡', defaultOpen: true,
+      id: 'operacao', label: 'Monitor', icon: '⚡', defaultOpen: false,
       items: [
         { id: 'iac-dashboard',           label: 'Dashboard',            href: '/app/ia-command/dashboard.html',          icon: '⊞' },
         { id: 'iac-whatsapp-services',   label: 'WhatsApp Services',    href: '/app/ia-command/whatsapp-services.html',  icon: '📡' },
@@ -13,7 +13,7 @@
       ],
     },
     {
-      id: 'whatsapp', label: 'WhatsApp', icon: '💬', defaultOpen: true,
+      id: 'whatsapp', label: 'WhatsApp', icon: '💬', defaultOpen: false,
       items: [
         { id: 'iac-admin-canais-whatsapp',        label: 'Canais',              href: '/app/ia-command/admin-canais-whatsapp.html',        icon: '📡' },
         { id: 'iac-admin-numeros-whatsapp',       label: 'Números Autorizados', href: '/app/ia-command/admin-numeros-whatsapp.html',       icon: '📱' },
@@ -56,6 +56,12 @@
             { id: 'iac-agente-local-cargas', label: 'Cargas', href: '/app/ia-command/admin-agente-local-cargas.html', icon: '📤' },
           ],
         },
+      ],
+    },
+    {
+      id: 'agendamento', label: 'Agendamento', icon: '⏱', defaultOpen: false,
+      items: [
+        { id: 'iac-admin-agendamento', label: 'Perguntas Agendadas', href: '/app/ia-command/admin-agendamento.html', icon: '⏱' },
       ],
     },
     {
@@ -280,7 +286,8 @@
       btn.onclick   = (e) => { e.stopPropagation(); toggle(); };
       sb.querySelector('.sidebar-logo')?.appendChild(btn);
     }
-    applyPin(localStorage.getItem(PIN_KEY) === '1');
+    localStorage.removeItem(PIN_KEY);
+    applyPin(false);
     window.addEventListener('resize', () => {
       if (!isDrawerMode()) setDrawer(false);
     });

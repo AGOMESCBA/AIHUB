@@ -782,6 +782,102 @@ const MIGRATIONS = [
       ALTER TABLE ai_config ADD COLUMN agente_local_crypto_ativo INTEGER DEFAULT 0;
     `,
   },
+  {
+    version: 48,
+    descricao: 'IA Command - jobs de perguntas agendadas para WhatsApp',
+    sql: `
+      CREATE TABLE IF NOT EXISTS scheduled_question_jobs (
+        id                  TEXT PRIMARY KEY,
+        empresa_id          INTEGER NOT NULL,
+        channel_id          TEXT NOT NULL,
+        nome                TEXT NOT NULL,
+        pergunta            TEXT NOT NULL,
+        modulo              TEXT DEFAULT NULL,
+        escopo_empresa      TEXT NOT NULL DEFAULT 'empresa_atual',
+        schedule_tipo       TEXT NOT NULL DEFAULT 'manual',
+        schedule_json       TEXT NOT NULL DEFAULT '{}',
+        timezone            TEXT NOT NULL DEFAULT 'America/Manaus',
+        ativo               INTEGER NOT NULL DEFAULT 1,
+        status              TEXT NOT NULL DEFAULT 'ativo',
+        next_run_at         TEXT DEFAULT NULL,
+        last_run_at         TEXT DEFAULT NULL,
+        retry_max           INTEGER NOT NULL DEFAULT 2,
+        retry_interval_min  INTEGER NOT NULL DEFAULT 5,
+        lock_until          TEXT DEFAULT NULL,
+        running_token       TEXT DEFAULT NULL,
+        criado_por          TEXT DEFAULT NULL,
+        atualizado_por      TEXT DEFAULT NULL,
+        criado_em           TEXT NOT NULL,
+        atualizado_em       TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_jobs_due
+        ON scheduled_question_jobs (ativo, status, next_run_at);
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_jobs_empresa
+        ON scheduled_question_jobs (empresa_id, atualizado_em);
+
+      CREATE TABLE IF NOT EXISTS scheduled_question_recipients (
+        id             TEXT PRIMARY KEY,
+        job_id         TEXT NOT NULL REFERENCES scheduled_question_jobs(id) ON DELETE CASCADE,
+        empresa_id     INTEGER NOT NULL,
+        numero_id      TEXT NOT NULL,
+        nome           TEXT NOT NULL,
+        numero         TEXT NOT NULL,
+        ativo          INTEGER NOT NULL DEFAULT 1,
+        criado_em      TEXT NOT NULL,
+        atualizado_em  TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_question_recipients_job_numero
+        ON scheduled_question_recipients (job_id, numero_id);
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_recipients_empresa
+        ON scheduled_question_recipients (empresa_id, ativo);
+
+      CREATE TABLE IF NOT EXISTS scheduled_question_runs (
+        id                    TEXT PRIMARY KEY,
+        job_id                TEXT NOT NULL REFERENCES scheduled_question_jobs(id) ON DELETE CASCADE,
+        empresa_id            INTEGER NOT NULL,
+        channel_id            TEXT NOT NULL,
+        trigger_tipo          TEXT NOT NULL DEFAULT 'manual',
+        status                TEXT NOT NULL DEFAULT 'pendente',
+        pergunta              TEXT NOT NULL,
+        started_at            TEXT DEFAULT NULL,
+        finished_at           TEXT DEFAULT NULL,
+        duration_ms           INTEGER DEFAULT NULL,
+        attempt               INTEGER NOT NULL DEFAULT 1,
+        interpretation_log_id TEXT DEFAULT NULL,
+        resposta              TEXT DEFAULT NULL,
+        erro                  TEXT DEFAULT NULL,
+        criado_em             TEXT NOT NULL,
+        atualizado_em         TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_runs_job
+        ON scheduled_question_runs (job_id, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_runs_empresa
+        ON scheduled_question_runs (empresa_id, criado_em);
+
+      CREATE TABLE IF NOT EXISTS scheduled_question_deliveries (
+        id             TEXT PRIMARY KEY,
+        run_id         TEXT NOT NULL REFERENCES scheduled_question_runs(id) ON DELETE CASCADE,
+        job_id         TEXT NOT NULL REFERENCES scheduled_question_jobs(id) ON DELETE CASCADE,
+        recipient_id   TEXT NOT NULL REFERENCES scheduled_question_recipients(id) ON DELETE CASCADE,
+        numero_id      TEXT NOT NULL,
+        nome           TEXT NOT NULL,
+        numero         TEXT NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'pendente',
+        sent_at        TEXT DEFAULT NULL,
+        erro           TEXT DEFAULT NULL,
+        criado_em      TEXT NOT NULL,
+        atualizado_em  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_deliveries_run
+        ON scheduled_question_deliveries (run_id, status);
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_deliveries_job
+        ON scheduled_question_deliveries (job_id, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

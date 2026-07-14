@@ -123,16 +123,18 @@
       <a class="nav-etapa" onclick="abrirEtapa('e1-1',event)"><div class="nav-etapa-dot"></div>O que é o IA Command</a>
       <a class="nav-etapa" onclick="abrirEtapa('e1-2',event)"><div class="nav-etapa-dot"></div>Arquitetura em Nuvem</a>
       <a class="nav-etapa" onclick="abrirEtapa('e1-3',event)"><div class="nav-etapa-dot"></div>Agente Local x Conexão Direta</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-4',event)"><div class="nav-etapa-dot"></div>Fluxo da Mensagem</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-5',event)"><div class="nav-etapa-dot"></div>Arquitetura IA-first (SPEC)</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-6',event)"><div class="nav-etapa-dot"></div>Motor de Classificação (SPEC)</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-7',event)"><div class="nav-etapa-dot"></div>Multi-turn e Contexto</a>
-      <a class="nav-etapa" onclick="abrirEtapa('e1-8',event)"><div class="nav-etapa-dot"></div>Stack Tecnológica</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-4',event)"><div class="nav-etapa-dot"></div>Criptografia AES-256-GCM</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-5',event)"><div class="nav-etapa-dot"></div>Fluxo da Mensagem</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-6',event)"><div class="nav-etapa-dot"></div>Arquitetura IA-first (SPEC)</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-7',event)"><div class="nav-etapa-dot"></div>Motor de Classificação (SPEC)</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-8',event)"><div class="nav-etapa-dot"></div>Multi-turn e Contexto</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e1-9',event)"><div class="nav-etapa-dot"></div>Stack Tecnológica</a>
       <div class="nav-fase-hdr" onclick="scrollFase('f2')"><div class="nav-fase-num">2</div>Configuração Inicial</div>
       <a class="nav-etapa" onclick="abrirEtapa('e2-1a',event)"><div class="nav-etapa-dot"></div>Pré-requisitos no IAHub</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-1',event)"><div class="nav-etapa-dot"></div>Dashboard</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-2',event)"><div class="nav-etapa-dot"></div>Configurar IA</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-3',event)"><div class="nav-etapa-dot"></div>Conexões ERP</a>
+      <a class="nav-etapa" onclick="abrirEtapa('e2-4a',event)"><div class="nav-etapa-dot"></div>Instalar Agente Local</a>
       <a class="nav-etapa" onclick="abrirEtapa('e2-4',event)"><div class="nav-etapa-dot"></div>Middleware Protheus</a>
       <div class="nav-fase-hdr" onclick="scrollFase('f3')"><div class="nav-fase-num">3</div>WhatsApp</div>
       <a class="nav-etapa" onclick="abrirEtapa('e3-1',event)"><div class="nav-etapa-dot"></div>Monitor</a>
@@ -330,7 +332,7 @@
           </div>
           <div class="campo-lista">
             <div class="campo-item campo-obrigatorio"><div class="campo-nome">Roteamento automático por empresa</div><div class="campo-desc">A cada consulta, a nuvem verifica <code>ai_config.agente_local_ativo</code> para a empresa. Se estiver ativo e URL/token configurados, a query é enviada ao Agente Local; caso contrário, usa a conexão ERP direta cadastrada em "Conexões ERP".</div></div>
-            <div class="campo-item"><div class="campo-nome">Contrato do Agente Local</div><div class="campo-desc">A nuvem faz <code>POST {agente_url}/execute</code> com corpo <code>{ sql, limit, uuid, modulo, operacao, empresa_id }</code> e header <code>Authorization: Bearer {token}</code>. O Agente Local responde com <code>{ rows, status, duracao_ms }</code>. Timeout de 240s para consultas pesadas.</div></div>
+            <div class="campo-item"><div class="campo-nome">Contrato do Agente Local</div><div class="campo-desc">A nuvem faz <code>POST {agente_url}/execute</code> com corpo <code>{ sql, limit, uuid, modulo, operacao, empresa_id }</code> e header <code>Authorization: Bearer {token}</code>. O Agente Local responde com <code>{ rows, status, duracao_ms }</code>. Timeout de 240s para consultas pesadas. Esse corpo pode viajar criptografado com AES-256-GCM — ver <a href="#" onclick="abrirEtapa('e1-4',event)">seção seguinte</a>.</div></div>
             <div class="campo-item"><div class="campo-nome">Segurança do Agente Local</div><div class="campo-desc">Aceita apenas <code>SELECT</code> — qualquer outro comando é bloqueado antes de tocar o banco. Autenticação por Bearer token, painel administrativo protegido por senha, limite de 50.000 linhas por consulta.</div></div>
             <div class="campo-item"><div class="campo-nome">Quando usar cada uma</div><div class="campo-desc">Use <strong>Agente Local</strong> como padrão: não exige abrir porta de banco para a internet e é mais fácil de auditar. Use <strong>Conexão Direta</strong> quando já existe VPN ou rede segura estabelecida entre a nuvem e o cliente.</div></div>
           </div>
@@ -340,7 +342,72 @@
 
       <article class="etapa-card open" id="e1-4">
         <div class="etapa-card-header" onclick="toggleEtapa('e1-4')">
-          <span class="etapa-num">1.4</span><span class="etapa-titulo">O Fluxo da Mensagem — do WhatsApp até a resposta</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">1.4</span><span class="etapa-titulo">Criptografia Ponta a Ponta — AES-256-GCM no Agente Local</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Quando o acesso ao ERP usa <strong>Agente Local</strong>, o corpo da requisição/resposta do endpoint <code>/execute</code> — o SQL enviado e as linhas de dados retornadas — pode viajar <strong>criptografado de ponta a ponta</strong> com <strong>AES-256-GCM</strong>, além do transporte HTTPS já existente. É uma camada de segurança adicional e opcional, configurável por empresa.</p>
+          <div class="diagrama-wrap">
+            <div class="diagrama-titulo">Infográfico 4 — Envelope criptografado do endpoint /execute</div>
+            <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:700px;display:block;margin:0 auto;font-family:system-ui,sans-serif">
+              <rect width="700" height="260" rx="10" fill="#f5f3ff"/>
+              <defs><marker id="cr1" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 Z" fill="#7c3aed"/></marker></defs>
+              <rect x="14" y="14" width="300" height="70" rx="7" fill="rgba(124,58,237,.08)" stroke="#7c3aed" stroke-width="1.5"/>
+              <text x="164" y="32" font-size="10" font-weight="800" fill="#4c1d95" text-anchor="middle">☁ Nuvem IA Command</text>
+              <text x="30" y="48" font-size="8.5" fill="#4c1d95">1. Monta o SQL + parâmetros (JSON em claro)</text>
+              <text x="30" y="61" font-size="8.5" fill="#4c1d95">2. encryptPayload(payload, crypto_key)</text>
+              <text x="30" y="74" font-size="8.5" fill="#4c1d95">3. Gera IV aleatório de 12 bytes por chamada</text>
+              <rect x="386" y="14" width="300" height="70" rx="7" fill="rgba(5,150,105,.08)" stroke="#059669" stroke-width="1.5"/>
+              <text x="536" y="32" font-size="10" font-weight="800" fill="#065f46" text-anchor="middle">🔌 Agente Local</text>
+              <text x="402" y="48" font-size="8.5" fill="#065f46">1. Recebe envelope, identifica {v, enc, iv, tag, data}</text>
+              <text x="402" y="61" font-size="8.5" fill="#065f46">2. decrypt_payload(envelope, CRYPTO_KEY)</text>
+              <text x="402" y="74" font-size="8.5" fill="#065f46">3. GCM valida a tag — payload alterado = rejeita</text>
+              <line x1="314" y1="49" x2="386" y2="49" stroke="#7c3aed" stroke-width="2" marker-end="url(#cr1)"/>
+              <text x="350" y="42" font-size="7.5" fill="#7c3aed" text-anchor="middle">POST /execute</text>
+              <rect x="150" y="98" width="400" height="70" rx="7" fill="#1e1e2e"/>
+              <text x="350" y="116" font-size="9" font-weight="800" fill="#a78bfa" text-anchor="middle">Envelope trafegado (exemplo estrutural)</text>
+              <text x="170" y="132" font-size="8" fill="#cdd6f4" font-family="Consolas,monospace">{ "v": 1, "enc": "AES-256-GCM", "kid": "empresa_id",</text>
+              <text x="170" y="145" font-size="8" fill="#cdd6f4" font-family="Consolas,monospace">  "iv": "base64(12 bytes)", "tag": "base64(16 bytes)",</text>
+              <text x="170" y="158" font-size="8" fill="#cdd6f4" font-family="Consolas,monospace">  "data": "base64(SQL + linhas cifrados)" }</text>
+              <line x1="536" y1="84" x2="536" y2="98" stroke="#059669" stroke-width="1.5" stroke-dasharray="3,2"/>
+              <line x1="164" y1="84" x2="164" y2="98" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="3,2"/>
+              <rect x="386" y="176" width="300" height="70" rx="7" fill="rgba(5,150,105,.08)" stroke="#059669" stroke-width="1.5"/>
+              <text x="536" y="194" font-size="10" font-weight="800" fill="#065f46" text-anchor="middle">🔌 Agente Local (resposta)</text>
+              <text x="402" y="210" font-size="8.5" fill="#065f46">1. Executa o SQL, monta as linhas (JSON em claro)</text>
+              <text x="402" y="223" font-size="8.5" fill="#065f46">2. encrypt_payload(resultado, CRYPTO_KEY)</text>
+              <text x="402" y="236" font-size="8.5" fill="#065f46">3. Novo IV aleatório — nunca reaproveita o da requisição</text>
+              <rect x="14" y="176" width="300" height="70" rx="7" fill="rgba(124,58,237,.08)" stroke="#7c3aed" stroke-width="1.5"/>
+              <text x="164" y="194" font-size="10" font-weight="800" fill="#4c1d95" text-anchor="middle">☁ Nuvem (recebe resposta)</text>
+              <text x="30" y="210" font-size="8.5" fill="#4c1d95">1. Confere que a resposta veio no envelope</text>
+              <text x="30" y="223" font-size="8.5" fill="#4c1d95">2. decryptPayload(envelope, crypto_key)</text>
+              <text x="30" y="236" font-size="8.5" fill="#4c1d95">3. Retorna as linhas ao pipeline SPEC/IA</text>
+              <line x1="386" y1="211" x2="314" y2="211" stroke="#059669" stroke-width="2" marker-end="url(#cr1)"/>
+            </svg>
+          </div>
+          <div class="campo-secao">Como o AES-256-GCM funciona aqui</div>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Chave simétrica de 256 bits, por empresa</div><div class="campo-desc">A mesma chave de 32 bytes (256 bits) é usada para cifrar e decifrar — por isso "simétrica". Cada empresa tem sua própria chave (<code>agente_local_crypto_key</code>), gerada aleatoriamente (<code>crypto.randomBytes(32)</code>) e nunca reaproveitada entre empresas. A chave precisa estar configurada <strong>idêntica</strong> nos dois lados: na nuvem (Configurar IA) e no <code>.env</code> do Agente Local (<code>CRYPTO_KEY=...</code>).</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">GCM = confidencialidade + integridade no mesmo passo</div><div class="campo-desc">GCM (Galois/Counter Mode) não é só uma forma de esconder o conteúdo — ele gera uma <strong>tag de autenticação</strong> de 16 bytes junto com o texto cifrado. Se um único byte do envelope for alterado no meio do caminho (adulteração, corrupção de rede), a verificação da tag falha e a descriptografia é rejeitada — o sistema nunca processa um payload que possa ter sido modificado.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">IV (vetor de inicialização) único a cada chamada</div><div class="campo-desc">Cada requisição e cada resposta usa um IV novo, aleatório, de 12 bytes — nunca reutilizado. Isso é uma exigência de segurança do AES-GCM: reusar o mesmo IV com a mesma chave enfraquece a criptografia. O sistema gera um IV novo automaticamente a cada chamada, sem intervenção manual.</div></div>
+            <div class="campo-item"><div class="campo-nome">Implementação idêntica em Node.js e Python</div><div class="campo-desc">O envelope é byte-compatível entre os dois lados: <code>modules/security/aes-gcm-envelope.js</code> (nuvem, Node.js/<code>crypto</code> nativo) e <code>agente-local/crypto_envelope.py</code> (Agente Local, biblioteca <code>cryptography</code>) implementam exatamente o mesmo formato — o que um lado cifra, o outro decifra sem ajustes.</div></div>
+          </div>
+          <div class="campo-secao">O que é protegido e o que não é</div>
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">Escopo: só o endpoint /execute</div><div class="campo-desc">A criptografia cobre exclusivamente o corpo da requisição e da resposta do <code>/execute</code> — o SQL gerado pela IA e as linhas de dados devolvidas pelo ERP. Outros endpoints do Agente Local (<code>/health</code>, sincronização de empresas, configuração) não usam este envelope.</div></div>
+            <div class="campo-item"><div class="campo-nome">Complementa o HTTPS, não substitui</div><div class="campo-desc">Se a URL do Agente Local já usa HTTPS, a conexão já é criptografada em trânsito. O AES-256-GCM adiciona uma segunda camada, independente do transporte — útil em redes internas sem HTTPS configurado, VPNs corporativas ou como defesa adicional caso o TLS seja comprometido.</div></div>
+          </div>
+          <div class="campo-secao">Configuração (por empresa)</div>
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">Ativar em Configurar IA → Agente Local</div><div class="campo-desc">Campo "Criptografia AES-256-GCM": gere a chave clicando em <strong>Gerar nova chave</strong>, copie o valor, cole no <code>.env</code> do Agente Local (<code>CRYPTO_KEY=...</code>) e ative o modo. A chave fica mascarada na tela (<code>***</code>) depois de salva, revelável só sob autenticação.</div></div>
+            <div class="campo-item"><div class="campo-nome">Modo obrigatório no Agente Local</div><div class="campo-desc">O <code>.env</code> do Agente Local tem a flag <code>CRYPTO_REQUIRED</code>. Quando <code>true</code>, o agente rejeita (HTTP 426) qualquer chamada a <code>/execute</code> que chegue sem criptografia — útil para forçar que nenhuma chamada em claro seja aceita, mesmo por engano de configuração na nuvem.</div></div>
+            <div class="campo-item"><div class="campo-nome">Falha explícita em caso de descompasso</div><div class="campo-desc">Se a nuvem está configurada para criptografar mas o Agente Local responde em claro (ou vice-versa), a chamada falha com erro claro em vez de aceitar silenciosamente um formato inesperado — evita que uma configuração incompleta passe despercebida.</div></div>
+          </div>
+          <div class="callout danger"><span class="callout-icon">!</span><span><strong>A chave nunca é enviada pela rede.</strong> Ela precisa ser copiada manualmente da tela "Configurar IA" para o arquivo <code>.env</code> do Agente Local durante a instalação. Perder a chave sem backup significa gerar uma nova e reconfigurar os dois lados — não existe recuperação de chave perdida.</span></div>
+        </div></div>
+      </article>
+
+      <article class="etapa-card open" id="e1-5">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-5')">
+          <span class="etapa-num">1.5</span><span class="etapa-titulo">O Fluxo da Mensagem — do WhatsApp até a resposta</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">Toda pergunta enviada pelo WhatsApp percorre o mesmo ciclo de vida, independentemente do módulo ou da forma de acesso ao ERP escolhida pela empresa.</p>
@@ -383,9 +450,9 @@
         </div></div>
       </article>
 
-      <article class="etapa-card open" id="e1-5">
-        <div class="etapa-card-header" onclick="toggleEtapa('e1-5')">
-          <span class="etapa-num">1.5</span><span class="etapa-titulo">Arquitetura IA-first (SPEC) — visão em camadas</span><span class="etapa-arrow">&#8964;</span>
+      <article class="etapa-card open" id="e1-6">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-6')">
+          <span class="etapa-num">1.6</span><span class="etapa-titulo">Arquitetura IA-first (SPEC) — visão em camadas</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">A diretriz é <strong>IA-first</strong>: a inteligência artificial externa é o provider principal para qualquer pedido. O conjunto <strong>Orquestrador IA + Guardrails determinísticos</strong> é chamado neste guia de <strong>SPEC</strong> — é ele quem corrige o contrato da IA quando necessário. O motor local resolve apenas como último recurso.</p>
@@ -431,9 +498,9 @@
         </div></div>
       </article>
 
-      <article class="etapa-card" id="e1-6">
-        <div class="etapa-card-header" onclick="toggleEtapa('e1-6')">
-          <span class="etapa-num">1.6</span><span class="etapa-titulo">Motor de Classificação — Cascata de decisão</span><span class="etapa-arrow">&#8964;</span>
+      <article class="etapa-card" id="e1-7">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-7')">
+          <span class="etapa-num">1.7</span><span class="etapa-titulo">Motor de Classificação — Cascata de decisão</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">Para cada mensagem recebida, o sistema percorre uma cascata antes de chegar ao ERP. Entender esse fluxo é essencial para diagnosticar comportamentos inesperados.</p>
@@ -495,9 +562,9 @@
         </div></div>
       </article>
 
-      <article class="etapa-card" id="e1-7">
-        <div class="etapa-card-header" onclick="toggleEtapa('e1-7')">
-          <span class="etapa-num">1.7</span><span class="etapa-titulo">Multi-turn e Contexto Conversacional</span><span class="etapa-arrow">&#8964;</span>
+      <article class="etapa-card" id="e1-8">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-8')">
+          <span class="etapa-num">1.8</span><span class="etapa-titulo">Multi-turn e Contexto Conversacional</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">O sistema mantém contexto de conversa por usuário/empresa com TTL de 10 minutos. Perguntas de refinamento herdam automaticamente módulo, período, filtros e entidades já resolvidas no turno anterior.</p>
@@ -546,9 +613,9 @@
         </div></div>
       </article>
 
-      <article class="etapa-card" id="e1-8">
-        <div class="etapa-card-header" onclick="toggleEtapa('e1-8')">
-          <span class="etapa-num">1.8</span><span class="etapa-titulo">Stack Tecnológica — o que roda por baixo</span><span class="etapa-arrow">&#8964;</span>
+      <article class="etapa-card" id="e1-9">
+        <div class="etapa-card-header" onclick="toggleEtapa('e1-9')">
+          <span class="etapa-num">1.9</span><span class="etapa-titulo">Stack Tecnológica — o que roda por baixo</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">O IA Command é construído sobre tecnologias maduras de mercado, sem dependência de infraestrutura proprietária pesada. Cada peça tem um papel único na cadeia — da mensagem no celular do usuário até o dado retornado do Protheus.</p>
@@ -560,10 +627,13 @@
             <div class="campo-item"><div class="campo-nome">mssql / pg (SQL Server e PostgreSQL)</div><div class="campo-desc">Drivers de conexão usados na <strong>Conexão Direta</strong> ao ERP do cliente. O Protheus roda tipicamente sobre SQL Server (driver <code>mssql</code>), mas o sistema também suporta PostgreSQL.</div></div>
             <div class="campo-item"><div class="campo-nome">Python + FastAPI (Agente Local)</div><div class="campo-desc">O Agente Local instalado no servidor do cliente é uma API escrita em Python com FastAPI, expondo os endpoints <code>/health</code> e <code>/execute</code>. Roda como serviço Windows via NSSM, com driver ODBC (<code>pyodbc</code>) para acessar o SQL Server do Protheus.</div></div>
             <div class="campo-item"><div class="campo-nome">Provedores de IA — chamadas HTTP diretas</div><div class="campo-desc">O sistema não depende de SDKs oficiais de terceiros: ele faz requisições HTTPS nativas do Node.js para a API de cada provedor. <strong>Groq</strong> e <strong>DeepSeek</strong> usam o formato compatível OpenAI (<code>/v1/chat/completions</code>); <strong>OpenAI</strong> usa o mesmo formato na API oficial; <strong>Claude</strong> (Anthropic) usa a API nativa própria (<code>anthropic-version: 2023-06-01</code>, modelo <code>claude-haiku-4-5-20251001</code>); <strong>Gemini</strong> usa a API própria do Google (modelo <code>gemini-2.0-flash</code>).</div></div>
+            <div class="campo-item"><div class="campo-nome">Transcrição de áudio — Groq/OpenAI Whisper + Gemini multimodal</div><div class="campo-desc">Mensagens de voz do WhatsApp são transcritas em cadeia de fallback: <strong>Groq Whisper</strong> (<code>whisper-large-v3</code>) → <strong>OpenAI Whisper</strong> (<code>whisper-1</code>) → <strong>Gemini</strong> (<code>gemini-2.0-flash</code>, via prompt multimodal com áudio em base64, já que não há endpoint de transcrição dedicado no Gemini). Ver <a href="#" onclick="abrirEtapa('e3-5',event)">Mensagens de Voz</a>.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Criptografia AES-256-GCM — crypto nativo (Node.js) e cryptography (Python)</div><div class="campo-desc">O envelope criptografado do endpoint <code>/execute</code> do Agente Local usa o módulo <code>crypto</code> nativo do Node.js (<code>createCipheriv('aes-256-gcm', ...)</code>) na nuvem e a biblioteca <code>cryptography</code> (pacote Python, classe <code>AESGCM</code>) no Agente Local — nenhuma dependência externa de terceiros além dessas bibliotecas padrão de cada linguagem. Ver <a href="#" onclick="abrirEtapa('e1-4',event)">Criptografia Ponta a Ponta</a>.</div></div>
             <div class="campo-item"><div class="campo-nome">bcryptjs</div><div class="campo-desc">Hash de senhas para autenticação dos painéis administrativos — tanto na nuvem quanto no painel local do Agente Local.</div></div>
+            <div class="campo-item"><div class="campo-nome">form-data</div><div class="campo-desc">Biblioteca Node.js usada para montar requisições <code>multipart/form-data</code> ao enviar o arquivo de áudio para transcrição nas APIs da Groq e da OpenAI.</div></div>
             <div class="campo-item"><div class="campo-nome">Persistência do cadastro central (IAHub) é em arquivos JSON</div><div class="campo-desc">Empresas, usuários, permissões e sistemas são armazenados em arquivos JSON no IAHub (não em banco relacional) — diferente do IA Command, que usa SQLite. Cada leitura/escrita processa o arquivo inteiro; o ponto de atenção não é volume de leitura (irrelevante nas quantidades atuais de empresas/usuários), e sim duas escritas simultâneas no mesmo arquivo, que podem sobrescrever uma à outra sem aviso. Não é uma falha ativa hoje — é um ponto conhecido a observar se o uso do IAHub crescer.</div></div>
           </div>
-          <div class="callout success"><span class="callout-icon">✓</span><span>Nenhuma dessas tecnologias exige licenciamento pago obrigatório: Node.js, Express, SQLite, Socket.IO e Python são open source. O único custo variável é o consumo das APIs de IA externas (Groq, OpenAI, Gemini, DeepSeek ou Claude), conforme o volume de perguntas processadas.</span></div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>Nenhuma dessas tecnologias exige licenciamento pago obrigatório: Node.js, Express, SQLite, Socket.IO, Python e as bibliotecas de criptografia nativas são open source. O único custo variável é o consumo das APIs de IA externas (Groq, OpenAI, Gemini, DeepSeek ou Claude), conforme o volume de perguntas processadas.</span></div>
         </div></div>
       </article>
     </section>
@@ -704,9 +774,42 @@
         </div></div>
       </article>
 
+      <article class="etapa-card" id="e2-4a">
+        <div class="etapa-card-header" onclick="toggleEtapa('e2-4a')">
+          <span class="etapa-num">2.5</span><span class="etapa-titulo">Instalando o Agente Local no servidor do cliente</span><span class="etapa-arrow">&#8964;</span>
+        </div>
+        <div class="etapa-body"><div class="etapa-body-inner">
+          <p class="etapa-desc">Alternativa recomendada à Conexão Direta (ver <a href="#" onclick="abrirEtapa('e1-3',event)">1.3 — Agente Local x Conexão Direta</a>): uma API Python leve instalada no próprio servidor Windows do cliente, que executa o SQL localmente e devolve os dados para a nuvem — sem abrir porta de banco para a internet.</p>
+          <div class="campo-secao">Pré-requisitos no servidor do cliente</div>
+          <div class="campo-lista">
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">Python 3.11+</div><div class="campo-desc">Runtime necessário para rodar a API do Agente Local.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">NSSM</div><div class="campo-desc">Ferramenta que registra o Agente Local como serviço Windows com inicialização automática. Precisa estar no PATH do sistema.</div></div>
+            <div class="campo-item campo-obrigatorio"><div class="campo-nome">ODBC Driver 17 for SQL Server</div><div class="campo-desc">Driver de banco usado pelo Agente Local (via <code>pyodbc</code>) para conectar ao SQL Server do Protheus local.</div></div>
+          </div>
+          <div class="campo-secao">Passo a passo de instalação</div>
+          <div class="step-list">
+            <div class="step-item"><div class="step-num">1</div><div class="step-body">Copie a pasta <code>agente-local/</code> para o servidor do cliente e crie o ambiente virtual: <code>python -m venv venv</code> seguido de <code>venv\Scripts\pip install -r requirements.txt</code>.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body">Copie <code>.env.example</code> para <code>.env</code> e preencha as credenciais do banco: <code>DB_HOST</code>, <code>DB_PORT</code>, <code>DB_NAME</code>, <code>DB_USER</code>, <code>DB_PASS</code>, <code>FILIAL</code>.</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body">Execute <code>deploy\install-service.bat</code> como Administrador — cria o serviço Windows <code>IACommand-Agente</code> com inicialização automática.</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body">Acesse o painel administrativo local em <code>http://localhost:8765</code> (senha padrão inicial: <code>admin</code> — troque no primeiro acesso).</div></div>
+            <div class="step-item"><div class="step-num">5</div><div class="step-body">No painel local, vá em <strong>Segurança → Token de API → Gerar novo token</strong> e copie o valor gerado.</div></div>
+            <div class="step-item"><div class="step-num">6</div><div class="step-body">Na nuvem, acesse <strong>Configurar IA → Agente Local</strong>, cole o token e a URL do agente (ex: <code>http://ip-do-servidor:8765</code>), ative e salve.</div></div>
+            <div class="step-item"><div class="step-num">7</div><div class="step-body">Clique em <strong>Testar conexão</strong> na tela Configurar IA — confirma que a nuvem consegue chamar o endpoint <code>/health</code> do agente.</div></div>
+            <div class="step-item"><div class="step-num">8</div><div class="step-body">Opcional, mas recomendado: ative a <a href="#" onclick="abrirEtapa('e1-4',event)">Criptografia AES-256-GCM</a> gerando a chave na nuvem e colando no <code>CRYPTO_KEY</code> do <code>.env</code> do agente.</div></div>
+          </div>
+          <div class="campo-secao">Gerenciamento e manutenção do serviço</div>
+          <div class="campo-lista">
+            <div class="campo-item"><div class="campo-nome">Iniciar / parar / remover</div><div class="campo-desc">Scripts prontos em <code>deploy\start-service.bat</code>, <code>stop-service.bat</code> e <code>remove-service.bat</code>. Também é possível usar NSSM diretamente: <code>nssm start|stop|restart|status IACommand-Agente</code>.</div></div>
+            <div class="campo-item"><div class="campo-nome">Factory Reset</div><div class="campo-desc">Se os arquivos Python forem alterados manualmente e causarem problemas, o painel local (<strong>Sistema → Restaurar Código Original</strong>, confirmando com a palavra <code>RESTAURAR</code>) restaura os arquivos originais a partir de <code>backup_original/</code> e reinicia o serviço. As configurações do <code>.env</code> (token, senha, banco, chave de criptografia) não são afetadas pelo reset.</div></div>
+            <div class="campo-item"><div class="campo-nome">Sincronização de empresas</div><div class="campo-desc">Empresas atendidas por aquele agente podem ser sincronizadas da nuvem para o painel local (nome, CNPJ, identidade visual), usado para personalizar o painel administrativo do agente quando ele atende múltiplas empresas.</div></div>
+          </div>
+          <div class="callout success"><span class="callout-icon">✓</span><span>Depois de instalado e testado, ative o Agente Local para a empresa em <strong>Configurar IA</strong> — a partir daí, o <a href="#" onclick="abrirEtapa('e1-3',event)">roteamento automático</a> passa a usá-lo em vez da Conexão Direta, sem precisar mexer em datasets ou intenções já cadastrados.</span></div>
+        </div></div>
+      </article>
+
       <article class="etapa-card" id="e2-4">
         <div class="etapa-card-header" onclick="toggleEtapa('e2-4')">
-          <span class="etapa-num">2.5</span><span class="etapa-titulo">Middleware Protheus — Segurança e controle SQL</span><span class="etapa-arrow">&#8964;</span>
+          <span class="etapa-num">2.6</span><span class="etapa-titulo">Middleware Protheus — Segurança e controle SQL</span><span class="etapa-arrow">&#8964;</span>
         </div>
         <div class="etapa-body"><div class="etapa-body-inner">
           <p class="etapa-desc">O Middleware Protheus é a camada de segurança aplicada sobre todo SQL gerado pela IA (Text-to-SQL dinâmico). Ele bloqueia operações destrutivas, injeta filtros de tenant e limita o número de linhas retornadas.</p>
@@ -1488,17 +1591,19 @@ Pagamento real (apenas quando campos existirem):
           <p class="etapa-desc">Siga esta sequência para evitar retrabalho. Cada etapa depende da anterior estar funcionando.</p>
           <div class="step-list">
             <div class="step-item"><div class="step-num">1</div><div class="step-body"><strong>Configurar IA (config-ia.html)</strong> — Informe o provedor e a chave de API. Teste a conexão. Sem isso, apenas bypass funciona.</div></div>
-            <div class="step-item"><div class="step-num">2</div><div class="step-body"><strong>Configurar Conexão ERP (config-conexoes.html)</strong> — Adicione a conexão ao banco Protheus. Teste a conectividade com o botão de teste.</div></div>
-            <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Configurar Middleware (config-middleware-protheus.html)</strong> — Revise o ROWCOUNT máximo e confirme que o bloqueio DDL/DML está ativo.</div></div>
-            <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Cadastrar Canal WhatsApp (admin-canais-whatsapp.html)</strong> — Adicione o número do canal e vincule à empresa.</div></div>
-            <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Autenticar no Monitor (monitor.html)</strong> — Escaneie o QR Code com o celular do número configurado.</div></div>
-            <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Configurar Números Autorizados (admin-numeros-whatsapp.html)</strong> — Adicione os números que podem fazer consultas. Deixe vazio para aceitar qualquer número (somente em testes).</div></div>
-            <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Testar módulos dinâmicos</strong> — Envie uma pergunta de teste pelo WhatsApp: "faturamento do mês". Verifique em Execuções se a intenção foi classificada corretamente.</div></div>
-            <div class="step-item"><div class="step-num">8</div><div class="step-body"><strong>Consultar SX2/SX3 (admin-protheus-sx2/sx3.html)</strong> — Verifique quais tabelas e campos estão disponíveis para confirmar que o Text-to-SQL tem acesso ao esquema correto.</div></div>
-            <div class="step-item"><div class="step-num">9</div><div class="step-body"><strong>Adicionar Sinônimos (admin-sinonimos.html)</strong> — Após os primeiros dias de uso, identifique termos não reconhecidos no histórico de mensagens e adicione-os.</div></div>
-            <div class="step-item"><div class="step-num">10</div><div class="step-body"><strong>Configurar Diálogos (admin-dialogos.html)</strong> — Adicione respostas para saudações e perguntas sobre o sistema que não sejam consultas ERP.</div></div>
-            <div class="step-item"><div class="step-num">11</div><div class="step-body"><strong>Criar Datasets manuais (admin-datasets.html)</strong> — Para consultas frequentes e estáveis que não precisam de Text-to-SQL, crie datasets com SQL fixo parametrizado.</div></div>
-            <div class="step-item"><div class="step-num">12</div><div class="step-body"><strong>Monitorar Auditoria e Logs</strong> — Revise execuções, interpretações e log de consultas periodicamente para identificar oportunidades de melhoria.</div></div>
+            <div class="step-item"><div class="step-num">2</div><div class="step-body"><strong>Decidir Agente Local ou Conexão Direta</strong> — Para Agente Local, instale a API Python no servidor do cliente (ver <a href="#" onclick="abrirEtapa('e2-4a',event)">Instalando o Agente Local</a>) e gere/configure o token na nuvem. Para Conexão Direta, siga o próximo passo.</div></div>
+            <div class="step-item"><div class="step-num">3</div><div class="step-body"><strong>Configurar Conexão ERP (config-conexoes.html)</strong> — Se optou por Conexão Direta, adicione a conexão ao banco Protheus. Teste a conectividade com o botão de teste.</div></div>
+            <div class="step-item"><div class="step-num">4</div><div class="step-body"><strong>Ativar Criptografia AES-256-GCM (opcional)</strong> — Se usar Agente Local, gere a chave em Configurar IA e cole no <code>.env</code> do agente (<code>CRYPTO_KEY=...</code>) para criptografar o endpoint <code>/execute</code>.</div></div>
+            <div class="step-item"><div class="step-num">5</div><div class="step-body"><strong>Configurar Middleware (config-middleware-protheus.html)</strong> — Revise o ROWCOUNT máximo e confirme que o bloqueio DDL/DML está ativo.</div></div>
+            <div class="step-item"><div class="step-num">6</div><div class="step-body"><strong>Cadastrar Canal WhatsApp (admin-canais-whatsapp.html)</strong> — Adicione o número do canal e vincule à empresa.</div></div>
+            <div class="step-item"><div class="step-num">7</div><div class="step-body"><strong>Autenticar no Monitor (monitor.html)</strong> — Escaneie o QR Code com o celular do número configurado.</div></div>
+            <div class="step-item"><div class="step-num">8</div><div class="step-body"><strong>Configurar Números Autorizados (admin-numeros-whatsapp.html)</strong> — Adicione os números que podem fazer consultas. Deixe vazio para aceitar qualquer número (somente em testes).</div></div>
+            <div class="step-item"><div class="step-num">9</div><div class="step-body"><strong>Testar módulos dinâmicos</strong> — Envie uma pergunta de teste pelo WhatsApp: "faturamento do mês". Verifique em Execuções se a intenção foi classificada corretamente.</div></div>
+            <div class="step-item"><div class="step-num">10</div><div class="step-body"><strong>Consultar SX2/SX3 (admin-protheus-sx2/sx3.html)</strong> — Verifique quais tabelas e campos estão disponíveis para confirmar que o Text-to-SQL tem acesso ao esquema correto.</div></div>
+            <div class="step-item"><div class="step-num">11</div><div class="step-body"><strong>Adicionar Sinônimos (admin-sinonimos.html)</strong> — Após os primeiros dias de uso, identifique termos não reconhecidos no histórico de mensagens e adicione-os.</div></div>
+            <div class="step-item"><div class="step-num">12</div><div class="step-body"><strong>Configurar Diálogos (admin-dialogos.html)</strong> — Adicione respostas para saudações e perguntas sobre o sistema que não sejam consultas ERP.</div></div>
+            <div class="step-item"><div class="step-num">13</div><div class="step-body"><strong>Criar Datasets manuais (admin-datasets.html)</strong> — Para consultas frequentes e estáveis que não precisam de Text-to-SQL, crie datasets com SQL fixo parametrizado.</div></div>
+            <div class="step-item"><div class="step-num">14</div><div class="step-body"><strong>Monitorar Auditoria e Logs</strong> — Revise execuções, interpretações e log de consultas periodicamente para identificar oportunidades de melhoria.</div></div>
           </div>
           <div class="callout success"><span class="callout-icon">✓</span><span>Os módulos <strong>compras_dinamico</strong>, <strong>faturamento_dinamico</strong>, <strong>financeiro_dinamico</strong> e <strong>comissao_dinamico</strong> são criados automaticamente na inicialização do sistema — não é necessário cadastrá-los.</span></div>
         </div></div>
@@ -1523,6 +1628,9 @@ Pagamento real (apenas quando campos existirem):
                 <tr><td>Contexto multi-turn não herda</td><td>Intervalo entre mensagens &gt; 10 minutos</td><td>O TTL de 10 min expirou — normal. O usuário precisa repetir o contexto na nova mensagem.</td></tr>
                 <tr><td>Módulo dinâmico não aparece nas intenções</td><td>Inicialização não criou os módulos automaticamente</td><td>Reinicie o servidor IA Command — os módulos _dinamico são criados na inicialização se não existirem.</td></tr>
                 <tr><td>Chave de IA inválida</td><td>Chave expirou ou foi revogada</td><td>Acesse Configurar IA, atualize a chave e use Testar conexão para validar.</td></tr>
+                <tr><td>"Falha ao descriptografar resposta do Agente Local"</td><td>Chave AES-256-GCM diferente entre a nuvem e o <code>.env</code> do agente</td><td>Confira se o <code>CRYPTO_KEY</code> do agente é exatamente igual à chave salva em Configurar IA. Se não bater, gere uma nova chave e atualize os dois lados.</td></tr>
+                <tr><td>"Criptografia obrigatória para /execute" (HTTP 426)</td><td>Agente com <code>CRYPTO_REQUIRED=true</code>, mas a nuvem está enviando sem criptografia</td><td>Ative a criptografia em Configurar IA → Agente Local, ou desative <code>CRYPTO_REQUIRED</code> no <code>.env</code> se a criptografia ainda não deve ser obrigatória.</td></tr>
+                <tr><td>Agente Local não responde ao teste de conexão</td><td>Serviço parado, firewall bloqueando a porta 8765, ou URL/token incorretos</td><td>Verifique <code>nssm status IACommand-Agente</code> no servidor do cliente, confirme que a porta está acessível pela nuvem e revise URL/token em Configurar IA.</td></tr>
               </tbody>
             </table>
           </div>

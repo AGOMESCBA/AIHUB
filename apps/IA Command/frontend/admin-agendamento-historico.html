@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historico de Execucoes - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-head { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:8px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { color:var(--text-lo);font-size:12px;margin-top:3px; }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .btn { display:inline-flex;align-items:center;justify-content:center;gap:6px; }
+    .btn svg { width:14px;height:14px;flex-shrink:0; }
+    .kpi-strip { display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;color:var(--text-md);font-size:12px; }
+    .kpi-item { display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap; }
+    .kpi-item span { color:var(--text-lo);font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:10px; }
+    .kpi-item strong { color:var(--text-hi);font-size:13px;font-weight:800; }
+    .group-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:12px; }
+    .group-panel-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+    .group-panel-status { font-size:12px;color:var(--text-lo); }
+    .group-panel-options { display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
+    .group-panel.open .group-panel-options { display:flex; }
+    .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
+    .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-target-row { flex:1 1 100%;display:flex;align-items:center;gap:12px;margin-top:2px; }
+    .group-target-row .btn { flex-shrink:0; }
+    .group-dropzone { flex:1;min-width:260px;min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px; }
+    .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
+    .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px; }
+    .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
+    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:800 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-col-title { white-space:nowrap; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:800 !important;color:var(--text-lo) !important; }
+    .run-title { font-weight:800;color:var(--text-hi);margin-bottom:2px; }
+    .run-sub { color:var(--text-lo);font-size:12px;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .text-preview { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35;word-break:break-word; }
+    .badge { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-fail { background:#fee2e2;color:#b91c1c; }
+    .badge-warn { background:#fef3c7;color:#92400e; }
+    .badge-run { background:#ede9fe;color:#6d28d9; }
+    .badge-muted { background:var(--bg-hover);color:var(--text-lo); }
+    .btn-icon { width:28px;height:28px;background:none;border:none;cursor:pointer;padding:0;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s;color:var(--text-md);vertical-align:middle; }
+    .btn-icon svg { width:15px;height:15px;display:block; }
+    .btn-icon:hover { background:var(--bg-hover);color:var(--accent); }
+    .modal-backdrop { position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.48);z-index:500;padding:18px; }
+    .modal-backdrop.open { display:flex; }
+    .modal { width:min(940px,96vw);max-height:90vh;overflow:auto;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md); }
+    .modal-head { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border); }
+    .modal-title { color:var(--text-hi);font-size:16px;font-weight:800; }
+    .modal-close { border:none;background:transparent;color:var(--text-lo);font-size:22px;line-height:1;cursor:pointer; }
+    .modal-body { padding:18px; }
+    .meta-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:14px; }
+    .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:10px;min-width:0; }
+    .meta-item span { display:block;font-size:11px;color:var(--text-lo);margin-bottom:4px;font-weight:800;text-transform:uppercase;letter-spacing:.04em; }
+    .meta-item strong { display:block;color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .text-box { background:var(--bg-base);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:10px; }
+    .text-box label { display:block;font-size:11px;font-weight:800;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px; }
+    .text-box pre { margin:0;white-space:pre-wrap;word-break:break-word;font-family:inherit;font-size:13px;color:var(--text-hi);line-height:1.5; }
+    .delivery-list { display:grid;gap:8px;margin-top:10px; }
+    .delivery-item { display:grid;grid-template-columns:minmax(160px,1fr) 120px minmax(160px,1fr);gap:10px;align-items:start;border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:10px;font-size:12px;color:var(--text-md); }
+    .d-none { display:none !important; }
+    @media (max-width: 760px) {
+      .page-head { align-items:flex-start;flex-direction:column; }
+      .delivery-item { grid-template-columns:1fr; }
+      .group-target-row { align-items:stretch;flex-direction:column; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &rsaquo;</span> Historico de Execucoes</span>
+    </div>
+
+    <div class="page-content">
+      <div class="page-head">
+        <div>
+          <div class="page-kicker">Agendamento</div>
+          <div class="page-title">Historico de Execucoes</div>
+          <div class="page-subtitle" id="page-subtitle">Execucoes dos jobs agendados da empresa ativa.</div>
+        </div>
+        <div class="head-actions">
+          <button class="btn btn-ghost" type="button" onclick="abrirAgendamento()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            <span>Agendamento</span>
+          </button>
+          <button class="btn btn-ghost" id="btn-atualizar" type="button" onclick="atualizarLista(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.5 5.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            <span>Atualizar</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-item"><span>Total</span><strong id="m-total">0</strong></div>
+        <div class="kpi-item"><span>Sucesso</span><strong id="m-sucesso">0</strong></div>
+        <div class="kpi-item"><span>Parcial</span><strong id="m-parcial">0</strong></div>
+        <div class="kpi-item"><span>Erro</span><strong id="m-erro">0</strong></div>
+        <div class="kpi-item"><span>Entregas</span><strong id="m-entregas">0</strong></div>
+      </div>
+
+      <div class="group-panel" id="group-panel">
+        <div class="group-panel-row">
+          <button class="btn btn-ghost" id="group-toggle" type="button">+ Mostrar agrupamento</button>
+          <span class="group-panel-status" id="group-status">Sem agrupamento ativo</span>
+        </div>
+        <div class="group-panel-options" id="group-options">
+          <span class="group-panel-status">Arraste para agrupar:</span>
+          <button class="group-chip" type="button" draggable="true" data-group-field="job_nome">Job</button>
+          <button class="group-chip" type="button" draggable="true" data-group-field="status_label">Status</button>
+          <button class="group-chip" type="button" draggable="true" data-group-field="trigger_label">Acionamento</button>
+          <button class="group-chip" type="button" draggable="true" data-group-field="modulo_label">Modulo</button>
+          <button class="group-chip" type="button" draggable="true" data-group-field="criado_data">Data</button>
+          <div class="group-target-row">
+            <button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>
+            <div class="group-dropzone" id="group-dropzone">Solte um campo aqui para agrupar</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div id="tabela"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-title">Detalhe da execucao</div>
+      <button class="modal-close" type="button" onclick="fecharDetalhe()">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let runs = [];
+  let table = null;
+  const params = new URLSearchParams(location.search);
+  const jobIdFiltro = params.get('job_id') || '';
+  const GROUP_STATE_KEY = 'iac_admin_agendamento_historico_group_state_v1';
+  const GROUP_FIELDS = {
+    job_nome: 'Job',
+    status_label: 'Status',
+    trigger_label: 'Acionamento',
+    modulo_label: 'Modulo',
+    criado_data: 'Data',
+  };
+  const groupState = { fields: [], open: false };
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function api(url, opts = {}) {
+    return fetch(url, opts).then(async r => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Erro na requisicao.');
+      return data;
+    });
+  }
+  function setButtonLabel(button, label) {
+    const span = button?.querySelector('span');
+    if (span) span.textContent = label;
+    else if (button) button.textContent = label;
+  }
+  function fmtData(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'medium' });
+  }
+  function fmtDataCurta(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString('pt-BR');
+  }
+  function moduloLabel(m) {
+    return { compras:'Compras', financeiro:'Financeiro', faturamento:'Faturamento', comissao:'Comissao' }[m] || 'Automatico';
+  }
+  function triggerLabel(v) {
+    return { manual:'Manual', schedule:'Agendado' }[v] || v || '-';
+  }
+  function statusLabel(v) {
+    return { sucesso:'Sucesso', parcial:'Parcial', erro:'Erro', executando:'Executando' }[v] || v || '-';
+  }
+  function statusBadge(status) {
+    const label = statusLabel(status);
+    const cls = status === 'sucesso' ? 'badge-ok' : status === 'parcial' ? 'badge-warn' : status === 'executando' ? 'badge-run' : status === 'erro' ? 'badge-fail' : 'badge-muted';
+    return `<span class="badge ${cls}">${esc(label)}</span>`;
+  }
+  function duracao(ms) {
+    if (ms === null || ms === undefined || Number.isNaN(Number(ms))) return '-';
+    const n = Number(ms);
+    if (n < 1000) return `${n} ms`;
+    return `${(n / 1000).toFixed(1)} s`;
+  }
+
+  function lerEstadoAgrupamento() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GROUP_STATE_KEY) || 'null');
+      if (!saved || typeof saved !== 'object') return;
+      groupState.fields = Array.isArray(saved.fields) ? saved.fields.filter(f => GROUP_FIELDS[f]) : [];
+      groupState.open = !!saved.open;
+    } catch (_) {
+      localStorage.removeItem(GROUP_STATE_KEY);
+    }
+  }
+  function salvarEstadoAgrupamento() {
+    try { localStorage.setItem(GROUP_STATE_KEY, JSON.stringify({ fields: groupState.fields, open: groupState.open })); } catch (_) {}
+  }
+  function aplicarAgrupamento() {
+    if (!table) return;
+    if (groupState.fields.length === 1) table.setGroupBy(groupState.fields[0]);
+    else table.setGroupBy(groupState.fields.length ? groupState.fields : false);
+  }
+  function renderPainelAgrupamento() {
+    const panel = document.getElementById('group-panel');
+    const toggle = document.getElementById('group-toggle');
+    const status = document.getElementById('group-status');
+    const drop = document.getElementById('group-dropzone');
+    if (!panel || !toggle || !status || !drop) return;
+    panel.classList.toggle('open', groupState.open);
+    toggle.textContent = groupState.open ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+    status.textContent = groupState.fields.length
+      ? `Agrupado por ${groupState.fields.map(f => GROUP_FIELDS[f]).join(' > ')}`
+      : 'Sem agrupamento ativo';
+    drop.innerHTML = groupState.fields.length
+      ? groupState.fields.map(f => `<span class="active-group-chip">${esc(GROUP_FIELDS[f])}<button class="active-group-remove" type="button" data-remove-group="${esc(f)}">&times;</button></span>`).join('')
+      : 'Solte um campo aqui para agrupar';
+    document.querySelectorAll('[data-group-field]').forEach(btn => btn.classList.toggle('active', groupState.fields.includes(btn.dataset.groupField)));
+  }
+  function adicionarAgrupamento(field) {
+    if (!GROUP_FIELDS[field] || groupState.fields.includes(field)) return;
+    groupState.fields.push(field);
+    salvarEstadoAgrupamento();
+    renderPainelAgrupamento();
+    aplicarAgrupamento();
+  }
+  function removerAgrupamento(field) {
+    groupState.fields = groupState.fields.filter(f => f !== field);
+    salvarEstadoAgrupamento();
+    renderPainelAgrupamento();
+    aplicarAgrupamento();
+  }
+  function inicializarPainelAgrupamento() {
+    document.getElementById('group-toggle')?.addEventListener('click', () => {
+      groupState.open = !groupState.open;
+      salvarEstadoAgrupamento();
+      renderPainelAgrupamento();
+    });
+    document.getElementById('group-clear')?.addEventListener('click', () => {
+      groupState.fields = [];
+      salvarEstadoAgrupamento();
+      renderPainelAgrupamento();
+      aplicarAgrupamento();
+    });
+    document.querySelectorAll('[data-group-field]').forEach(btn => {
+      btn.addEventListener('click', () => adicionarAgrupamento(btn.dataset.groupField));
+      btn.addEventListener('dragstart', event => event.dataTransfer.setData('text/group-field', btn.dataset.groupField));
+    });
+    const drop = document.getElementById('group-dropzone');
+    drop?.addEventListener('dragover', event => { event.preventDefault(); drop.classList.add('drag-over'); });
+    drop?.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+    drop?.addEventListener('drop', event => {
+      event.preventDefault();
+      drop.classList.remove('drag-over');
+      adicionarAgrupamento(event.dataTransfer.getData('text/group-field') || event.dataTransfer.getData('text/plain'));
+    });
+    drop?.addEventListener('click', event => {
+      const remove = event.target.closest('[data-remove-group]');
+      if (remove) removerAgrupamento(remove.dataset.removeGroup);
+    });
+    renderPainelAgrupamento();
+  }
+
+  async function carregarTudo() {
+    const qs = new URLSearchParams({ limit:'500' });
+    if (jobIdFiltro) qs.set('job_id', jobIdFiltro);
+    runs = await api(`/api/ia-command/admin/agendamento/runs?${qs.toString()}`);
+    if (jobIdFiltro && runs[0]?.job_nome) {
+      document.getElementById('page-subtitle').textContent = `Historico filtrado para o job: ${runs[0].job_nome}.`;
+    }
+    renderMetricas();
+    renderGrid();
+  }
+
+  function dadosGrid() {
+    return runs.map(r => ({
+      ...r,
+      status_label: statusLabel(r.status),
+      trigger_label: triggerLabel(r.trigger_tipo),
+      modulo_label: moduloLabel(r.job_modulo),
+      criado_label: fmtData(r.criado_em),
+      criado_data: fmtDataCurta(r.criado_em),
+      entregas_label: `${Number(r.entregas_sucesso || 0)}/${Number(r.entregas_total || 0)}`,
+      erro_label: r.erro || '-',
+    }));
+  }
+
+  function renderMetricas() {
+    document.getElementById('m-total').textContent = String(runs.length);
+    document.getElementById('m-sucesso').textContent = String(runs.filter(r => r.status === 'sucesso').length);
+    document.getElementById('m-parcial').textContent = String(runs.filter(r => r.status === 'parcial').length);
+    document.getElementById('m-erro').textContent = String(runs.filter(r => r.status === 'erro').length);
+    document.getElementById('m-entregas').textContent = String(runs.reduce((acc, r) => acc + Number(r.entregas_total || 0), 0));
+  }
+
+  function renderGrid() {
+    const data = dadosGrid();
+    if (table) {
+      table.replaceData(data);
+      aplicarAgrupamento();
+      return;
+    }
+    table = new Tabulator('#tabela', {
+      data,
+      index:'id',
+      layout:'fitColumns',
+      height:'calc(100vh - 220px)',
+      movableColumns:true,
+      groupBy:groupState.fields.length === 1 ? groupState.fields[0] : (groupState.fields.length ? groupState.fields : false),
+      groupStartOpen:true,
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma execucao registrada.</div>',
+      columns:[
+        { title:'Data/Hora', field:'criado_em', width:160, sorter:'datetime', headerFilter:true, formatter:c=>esc(fmtData(c.getValue())) },
+        { title:'Job', field:'job_nome', minWidth:230, headerFilter:true, formatter:c=>{
+          const row = c.getRow().getData();
+          return `<div class="run-title">${esc(row.job_nome || '-')}</div><div class="run-sub">${esc(row.pergunta || '')}</div>`;
+        }},
+        { title:'Status', field:'status_label', width:120, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Sucesso':'Sucesso','Parcial':'Parcial','Erro':'Erro','Executando':'Executando'}}, formatter:c=>statusBadge(c.getRow().getData().status) },
+        { title:'Acionamento', field:'trigger_label', width:130, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Manual':'Manual','Agendado':'Agendado'}} },
+        { title:'Modulo', field:'modulo_label', width:135, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Automatico':'Automatico','Compras':'Compras','Financeiro':'Financeiro','Faturamento':'Faturamento','Comissao':'Comissao'}} },
+        { title:'Entregas', field:'entregas_label', width:105, hozAlign:'center', headerFilter:true, formatter:c=>{
+          const row = c.getRow().getData();
+          const cls = Number(row.entregas_erro || 0) ? 'badge-fail' : 'badge-ok';
+          return `<span class="badge ${cls}">${esc(c.getValue())}</span>`;
+        }},
+        { title:'Duracao', field:'duration_ms', width:105, hozAlign:'right', sorter:'number', formatter:c=>esc(duracao(c.getValue())) },
+        { title:'Resposta / Erro', field:'resposta', minWidth:260, headerFilter:true, formatter:c=>{
+          const row = c.getRow().getData();
+          return `<div class="text-preview">${esc(row.erro || row.resposta || '-')}</div>`;
+        }},
+        { title:'Acoes', field:'id', width:80, hozAlign:'center', headerSort:false, formatter:c=>`<button class="btn-icon" title="Ver detalhes" onclick="event.stopPropagation();abrirDetalhe('${esc(c.getValue())}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>` },
+      ],
+      rowClick:(_e,row)=>abrirDetalhe(row.getData().id),
+    });
+    renderPainelAgrupamento();
+  }
+
+  async function atualizarLista(btn) {
+    const original = btn?.textContent || 'Atualizar';
+    if (btn) {
+      btn.disabled = true;
+      setButtonLabel(btn, 'Atualizando...');
+    }
+    try {
+      await carregarTudo();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        setButtonLabel(btn, original);
+      }
+    }
+  }
+
+  async function abrirDetalhe(id) {
+    const row = runs.find(r => String(r.id) === String(id));
+    if (!row) return;
+    const entregas = await api(`/api/ia-command/admin/agendamento/runs/${encodeURIComponent(id)}/deliveries`).catch(() => []);
+    document.getElementById('modal-title').textContent = `Execucao - ${row.job_nome || row.id}`;
+    document.getElementById('modal-body').innerHTML = `
+      <div class="meta-grid">
+        <div class="meta-item"><span>Job</span><strong>${esc(row.job_nome || '-')}</strong></div>
+        <div class="meta-item"><span>Status</span><strong>${statusBadge(row.status)}</strong></div>
+        <div class="meta-item"><span>Acionamento</span><strong>${esc(triggerLabel(row.trigger_tipo))}</strong></div>
+        <div class="meta-item"><span>Data/Hora</span><strong>${esc(fmtData(row.criado_em))}</strong></div>
+        <div class="meta-item"><span>Modulo</span><strong>${esc(moduloLabel(row.job_modulo))}</strong></div>
+        <div class="meta-item"><span>Duracao</span><strong>${esc(duracao(row.duration_ms))}</strong></div>
+      </div>
+      <div class="text-box"><label>Pergunta</label><pre>${esc(row.pergunta || '-')}</pre></div>
+      <div class="text-box"><label>Resposta / Erro</label><pre>${esc(row.erro || row.resposta || '-')}</pre></div>
+      <div class="text-box">
+        <label>Entregas por destinatario</label>
+        <div class="delivery-list">
+          ${entregas.length ? entregas.map(d => `
+            <div class="delivery-item">
+              <div><strong>${esc(d.nome || '-')}</strong><br>${esc(d.numero || '-')}</div>
+              <div>${d.status === 'sucesso' ? '<span class="badge badge-ok">Sucesso</span>' : d.status === 'erro' ? '<span class="badge badge-fail">Erro</span>' : '<span class="badge badge-muted">Pendente</span>'}</div>
+              <div>${esc(d.erro || (d.sent_at ? `Enviado em ${fmtData(d.sent_at)}` : '-'))}</div>
+            </div>`).join('') : '<div class="run-sub">Nenhuma entrega registrada para esta execucao.</div>'}
+        </div>
+      </div>`;
+    document.getElementById('modal').classList.add('open');
+  }
+  function fecharDetalhe() {
+    document.getElementById('modal').classList.remove('open');
+  }
+  function abrirAgendamento() {
+    const url = '/app/ia-command/admin-agendamento.html';
+    if (window.parent && window.parent !== window && typeof window.parent.openTab === 'function') {
+      window.parent.openTab(url, 'Perguntas Agendadas', '⏱');
+    } else {
+      location.href = url;
+    }
+  }
+
+  lerEstadoAgrupamento();
+  inicializarPainelAgrupamento();
+  window._iahubAuthReady?.then(carregarTudo) ?? carregarTudo();
+</script>
+</body>
+</html>

@@ -28,6 +28,8 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
 
   // Rotas do painel administrativo (intenções, datasets, logs)
   require('./admin-routes')(app, { requireAuth, requireIaCommand });
+  require('./scheduler/scheduled-question-routes')(app, { requireAuth, requireIaCommand });
+  require('./scheduler/scheduled-question-executor').start();
 
   // Rota para geração do instalador do Agente Local
   require('./instalador-agente-routes')(app, { requireAuth, requireIaCommand });

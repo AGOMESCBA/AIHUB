@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agendamento - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-head { display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:8px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.25; }
+    .head-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .btn { display:inline-flex;align-items:center;justify-content:center;gap:6px; }
+    .btn svg { width:14px;height:14px;flex-shrink:0; }
+    .kpi-strip { display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px;color:var(--text-md);font-size:12px; }
+    .kpi-item { display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap; }
+    .kpi-item span { color:var(--text-lo);font-weight:800;text-transform:uppercase;letter-spacing:.04em;font-size:10px; }
+    .kpi-item strong { color:var(--text-hi);font-size:13px;font-weight:800; }
+    .executor-ok { color:#15803d !important; }
+    .executor-off { color:#b91c1c !important; }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control { flex:1;min-width:220px; }
+    .quick-row select.form-control { width:auto;min-width:150px; }
+    .group-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:12px; }
+    .group-panel-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+    .group-panel-status { font-size:12px;color:var(--text-lo); }
+    .group-panel-options { display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
+    .group-panel.open .group-panel-options { display:flex; }
+    .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
+    .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-target-row { flex:1 1 100%;display:flex;align-items:center;gap:12px;margin-top:2px; }
+    .group-target-row .btn { flex-shrink:0; }
+    .group-dropzone { flex:1;min-width:260px;min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px; }
+    .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
+    .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px; }
+    .active-group-chip[draggable="true"] { cursor:grab; }
+    .active-group-chip[draggable="true"]:active { cursor:grabbing; }
+    .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
+    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .sr-status { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0; }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:800 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-col-title { white-space:nowrap; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important;border-bottom:1px solid var(--border) !important;font-size:12px !important;font-weight:800 !important;color:var(--text-lo) !important; }
+    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    .job-cell { display:flex;align-items:flex-start;gap:9px;min-width:0; }
+    .job-status-dot { width:9px;height:9px;border-radius:99px;flex:0 0 9px;margin-top:5px;box-shadow:0 0 0 3px rgba(148,163,184,.14); }
+    .job-status-dot.normal { background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.16); }
+    .job-status-dot.paused { background:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18); }
+    .job-status-dot.due { background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.18); }
+    .job-status-dot.running { background:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.16); }
+    .job-status-dot.error { background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.16); }
+    .job-main { min-width:0; }
+    .job-title { font-weight:800;color:var(--text-hi);margin-bottom:2px; }
+    .job-sub { color:var(--text-lo);font-size:12px;line-height:1.45;max-width:560px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .status-legend { display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:-2px 0 10px;color:var(--text-lo);font-size:11px; }
+    .status-legend.open { display:flex; }
+    .status-legend-item { display:inline-flex;align-items:center;gap:6px;white-space:nowrap; }
+    .badge { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-paused { background:var(--bg-hover);color:var(--text-lo); }
+    .badge-mod { background:var(--accent-glow);color:var(--accent); }
+    .badge-fail { background:#fee2e2;color:#b91c1c; }
+    .btn-icon { width:28px;height:28px;background:none;border:none;cursor:pointer;padding:0;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s;color:var(--text-md);vertical-align:middle; }
+    .btn-icon svg { width:15px;height:15px;display:block; }
+    .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .btn-icon.primary { color:var(--accent); }
+    .btn-icon.danger { color:#dc2626; }
+    .empty-state { padding:44px 24px;text-align:center;color:var(--text-md); }
+    .empty-icon { width:52px;height:52px;margin:0 auto 14px;border-radius:14px;background:var(--accent-glow);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800; }
+    .empty-title { font-size:16px;font-weight:800;color:var(--text-hi);margin-bottom:6px; }
+    .empty-text { font-size:13px;line-height:1.6;max-width:620px;margin:0 auto;color:var(--text-md); }
+    .save-feedback { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .form-grid { display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:16px;align-items:start; }
+    .form-section { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:14px; }
+    .form-section-header { padding:14px 16px;border-bottom:1px solid var(--border); }
+    .form-section-title { font-size:13px;font-weight:800;color:var(--text-hi); }
+    .form-section-subtitle { font-size:12px;color:var(--text-lo);margin-top:2px;line-height:1.45; }
+    .form-section-body { padding:16px; }
+    .form-row { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .form-group { margin-bottom:13px; }
+    .form-group:last-child { margin-bottom:0; }
+    .form-label { display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:5px; }
+    .form-help { font-size:12px;color:var(--text-lo);line-height:1.45;margin-top:5px; }
+    textarea.form-control { min-height:92px;resize:vertical;line-height:1.45; }
+    .recipient-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-base); }
+    .recipient-item { display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px;background:var(--bg-card);cursor:pointer; }
+    .recipient-item:hover { border-color:var(--accent-light); }
+    .recipient-item input { margin-top:2px;flex-shrink:0; }
+    .recipient-name { color:var(--text-hi);font-weight:800;font-size:13px;line-height:1.25; }
+    .recipient-num { color:var(--text-lo);font-size:12px;font-family:Consolas,monospace;margin-top:2px; }
+    .summary-list { display:grid;gap:10px; }
+    .summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:11px; }
+    .summary-label { color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px; }
+    .summary-value { color:var(--text-hi);font-size:13px;font-weight:800;line-height:1.35;word-break:break-word; }
+    .runs-list { display:grid;gap:8px; }
+    .run-item { border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg-base); }
+    .run-top { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px; }
+    .run-date { color:var(--text-hi);font-weight:800;font-size:12px; }
+    .run-msg { color:var(--text-md);font-size:12px;line-height:1.45; }
+    .d-none { display:none !important; }
+    @media (max-width: 980px) {
+      .page-head { flex-direction:column; }
+      .form-grid { grid-template-columns:1fr; }
+      .recipient-list { grid-template-columns:1fr; }
+      .group-target-row { align-items:stretch;flex-direction:column; }
+    }
+    @media (max-width: 620px) {
+      .form-row { grid-template-columns:1fr; }
+      .tabulator .tabulator-col[tabulator-field="next_run_at"],
+      .tabulator .tabulator-cell[tabulator-field="next_run_at"] { display:none; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &rsaquo;</span> Agendamento</span>
+    </div>
+
+    <div class="page-content">
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">Agendamento</div>
+            <div class="page-title">Perguntas Agendadas</div>
+          </div>
+          <div class="head-actions">
+            <button class="btn btn-ghost" id="btn-executor" type="button" onclick="alternarExecutor()">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <span>Executor...</span>
+            </button>
+            <button class="btn btn-ghost" id="btn-legenda" type="button" onclick="alternarLegenda()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+              <span>Legenda</span>
+            </button>
+            <button class="btn btn-ghost" id="btn-atualizar" type="button" onclick="atualizarLista(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.5 5.7L21 8"/><path d="M21 3v5h-5"/></svg>
+              <span>Atualizar</span>
+            </button>
+            <button class="btn btn-primary" type="button" onclick="abrirFormulario()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+              <span>Novo Job</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="kpi-strip">
+          <div class="kpi-item"><span>Ativos</span><strong id="m-ativos">0</strong></div>
+          <div class="kpi-item"><span>Proxima</span><strong id="m-proxima">-</strong></div>
+          <div class="kpi-item"><span>Total</span><strong id="m-total">0</strong></div>
+          <div class="kpi-item"><span>Falhas</span><strong id="m-falhas">0</strong></div>
+          <div class="kpi-item"><span>Executor</span><strong id="m-executor">-</strong></div>
+        </div>
+        <div class="status-legend" id="status-legend" aria-label="Legenda dos status dos jobs">
+          <span class="status-legend-item"><span class="job-status-dot normal"></span>Normal</span>
+          <span class="status-legend-item"><span class="job-status-dot paused"></span>Parado</span>
+          <span class="status-legend-item"><span class="job-status-dot due"></span>Vencido</span>
+          <span class="status-legend-item"><span class="job-status-dot running"></span>Executando</span>
+          <span class="status-legend-item"><span class="job-status-dot error"></span>Erro recente</span>
+        </div>
+
+        <div class="group-panel" id="group-panel">
+          <div class="group-panel-row">
+            <button class="btn btn-ghost" id="group-toggle" type="button">+ Mostrar agrupamento</button>
+            <span class="group-panel-status" id="group-status">Sem agrupamento ativo</span>
+          </div>
+          <div class="group-panel-options" id="group-options">
+            <span class="group-panel-status">Arraste para agrupar:</span>
+            <button class="group-chip" type="button" draggable="true" data-group-field="nome">Job</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="status_label">Status</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="modulo_label">Modulo</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="agenda_label">Agenda</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="next_run_at_label">Proxima execucao</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="destinatarios_label">Destinatarios</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="timezone">Timezone</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="ultimo_status_label">Ultimo status</button>
+            <div class="group-target-row">
+              <button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>
+              <div class="group-dropzone" id="group-dropzone">Solte um campo aqui para agrupar</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div id="count" class="sr-status" aria-live="polite">carregando...</div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <div id="sec-form" class="d-none">
+        <div class="editor-actionbar">
+          <div class="editor-actionbar-title">
+            <strong id="form-title">Novo Job</strong>
+            <span id="form-subtitle">Cadastre uma pergunta e seus destinatarios autorizados.</span>
+          </div>
+          <div class="editor-actions">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost d-none" id="btn-run-now-form" type="button" onclick="executarAgora(editId)">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              <span>Executar agora</span>
+            </button>
+            <button class="btn btn-ghost" type="button" onclick="fecharFormulario()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+              <span>Voltar</span>
+            </button>
+            <button class="btn btn-primary" type="button" onclick="salvarJob()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+              <span>Salvar</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-grid" style="margin-top:16px">
+          <main>
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Pergunta</div>
+                <div class="form-section-subtitle">Use uma pergunta completa, sem depender de complementos conversacionais.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Nome do job</label>
+                    <input id="f-nome" class="form-control" placeholder="Ex: Faturamento diario por vendedor" oninput="atualizarResumo()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Modulo esperado</label>
+                    <select id="f-modulo" class="form-control" onchange="onModuloChange()">
+                      <option value="">Detectar automaticamente</option>
+                      <option value="compras">Compras</option>
+                      <option value="financeiro">Financeiro</option>
+                      <option value="faturamento">Faturamento</option>
+                      <option value="comissao">Comissao</option>
+                    </select>
+                    <div class="form-help">Quando informado, os destinatarios tambem precisam ter este modulo liberado.</div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Pergunta</label>
+                  <textarea id="f-pergunta" class="form-control" placeholder="Ex: Qual foi o faturamento de ontem por vendedor?" oninput="atualizarResumo()"></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Canal WhatsApp</label>
+                    <select id="f-channel" class="form-control" onchange="atualizarResumo()"></select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select id="f-ativo" class="form-control" onchange="atualizarResumo()">
+                      <option value="1">Ativo</option>
+                      <option value="0">Pausado</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Agenda</div>
+                <div class="form-section-subtitle">O executor interno dispara os jobs ativos conforme a proxima execucao.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select id="f-schedule-tipo" class="form-control" onchange="onAgendaChange()">
+                      <option value="manual">Manual</option>
+                      <option value="once">Uma vez</option>
+                      <option value="daily">Diario</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="monthly">Mensal</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Horario</label>
+                    <input id="f-hora" type="time" class="form-control" value="08:00" onchange="atualizarResumo()">
+                  </div>
+                </div>
+                <div class="form-row" id="row-primeira">
+                  <div class="form-group">
+                    <label class="form-label">Primeira execucao</label>
+                    <input id="f-data" type="date" class="form-control" onchange="atualizarResumo()">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Timezone</label>
+                    <select id="f-timezone" class="form-control" onchange="atualizarResumo()">
+                      <option value="America/Noronha">UTC-02 - Fernando de Noronha</option>
+                      <option value="America/Sao_Paulo">UTC-03 - Brasilia / Sao Paulo</option>
+                      <option value="America/Bahia">UTC-03 - Bahia</option>
+                      <option value="America/Fortaleza">UTC-03 - Fortaleza / Recife</option>
+                      <option value="America/Belem">UTC-03 - Belem</option>
+                      <option value="America/Santarem">UTC-03 - Santarem</option>
+                      <option value="America/Araguaina">UTC-03 - Araguaina</option>
+                      <option value="America/Maceio">UTC-03 - Maceio</option>
+                      <option value="America/Cuiaba">UTC-04 - Cuiaba</option>
+                      <option value="America/Campo_Grande">UTC-04 - Campo Grande</option>
+                      <option value="America/Manaus" selected>UTC-04 - Manaus</option>
+                      <option value="America/Boa_Vista">UTC-04 - Boa Vista</option>
+                      <option value="America/Porto_Velho">UTC-04 - Porto Velho</option>
+                      <option value="America/Rio_Branco">UTC-05 - Rio Branco</option>
+                      <option value="America/Eirunepe">UTC-05 - Eirunepe</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group d-none" id="grp-weekly">
+                  <label class="form-label">Dias da semana</label>
+                  <div class="quick-row" style="gap:8px">
+                    <label><input type="checkbox" name="dias" value="1"> Seg</label>
+                    <label><input type="checkbox" name="dias" value="2"> Ter</label>
+                    <label><input type="checkbox" name="dias" value="3"> Qua</label>
+                    <label><input type="checkbox" name="dias" value="4"> Qui</label>
+                    <label><input type="checkbox" name="dias" value="5"> Sex</label>
+                    <label><input type="checkbox" name="dias" value="6"> Sab</label>
+                    <label><input type="checkbox" name="dias" value="0"> Dom</label>
+                  </div>
+                </div>
+                <div class="form-group d-none" id="grp-monthly">
+                  <label class="form-label">Dia do mes</label>
+                  <input id="f-dia-mes" type="number" class="form-control" min="1" max="31" value="1" onchange="atualizarResumo()">
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Destinatarios</div>
+                <div class="form-section-subtitle">A lista vem dos numeros autorizados da empresa ativa. A validacao tambem acontece no backend.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="quick-row" style="margin-bottom:10px">
+                  <input id="q-dest" class="form-control" placeholder="Filtrar destinatarios..." oninput="renderDestinatarios()">
+                  <button class="btn btn-ghost" type="button" onclick="marcarDestinatarios(true)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                    <span>Marcar todos</span>
+                  </button>
+                  <button class="btn btn-ghost" type="button" onclick="marcarDestinatarios(false)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    <span>Limpar</span>
+                  </button>
+                </div>
+                <div id="destinatarios" class="recipient-list"></div>
+              </div>
+            </section>
+          </main>
+
+          <aside>
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Resumo</div>
+                <div class="form-section-subtitle">Conferencia rapida antes de salvar.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="summary-list">
+                  <div class="summary-item"><div class="summary-label">Nome</div><div class="summary-value" id="s-nome">Novo Job</div></div>
+                  <div class="summary-item"><div class="summary-label">Canal</div><div class="summary-value" id="s-canal">-</div></div>
+                  <div class="summary-item"><div class="summary-label">Agenda</div><div class="summary-value" id="s-agenda">Manual</div></div>
+                  <div class="summary-item"><div class="summary-label">Destinatarios</div><div class="summary-value" id="s-dest">0</div></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section" id="sec-historico-job">
+              <div class="form-section-header">
+                <div class="form-section-title">Historico</div>
+                <div class="form-section-subtitle">Ultimas execucoes registradas para este job.</div>
+              </div>
+              <div class="form-section-body">
+                <div id="runs-list" class="runs-list">
+                  <div class="form-help">Salve o job para visualizar o historico.</div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let jobs = [];
+  let canais = [];
+  let destinatarios = [];
+  let executorStatus = null;
+  let editId = null;
+  let selectedRecipients = new Set();
+  let table = null;
+  const GROUP_STATE_KEY = 'iac_admin_agendamento_group_state_v2';
+  const GROUP_FIELDS = {
+    nome: 'Job',
+    status_label: 'Status',
+    modulo_label: 'Modulo',
+    agenda_label: 'Agenda',
+    next_run_at_label: 'Proxima execucao',
+    destinatarios_label: 'Destinatarios',
+    timezone: 'Timezone',
+    ultimo_status_label: 'Ultimo status',
+  };
+  const ICONS = {
+    play:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    stop:'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg>',
+    pause:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="9" y1="5" x2="9" y2="19"/><line x1="15" y1="5" x2="15" y2="19"/></svg>',
+    edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    history:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg>',
+    trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>',
+  };
+  const groupState = { fields: [], open: false };
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function setButtonLabel(button, label) {
+    if (!button) return;
+    const span = button.querySelector('span');
+    if (span) span.textContent = label;
+    else button.textContent = label;
+  }
+  function setButtonIcon(button, iconHtml) {
+    const svg = button?.querySelector('svg');
+    if (svg && iconHtml) svg.outerHTML = iconHtml;
+  }
+  function api(url, opts = {}) {
+    return fetch(url, opts).then(async r => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || 'Erro na requisicao.');
+      return data;
+    });
+  }
+  function fmtData(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '-';
+    return d.toLocaleString('pt-BR', { dateStyle:'short', timeStyle:'short' });
+  }
+  function fmtNumero(n) { const v = String(n || '').replace(/\D/g,''); return v ? `+${v}` : '-'; }
+  function moduloLabel(m) {
+    return { compras:'Compras', financeiro:'Financeiro', faturamento:'Faturamento', comissao:'Comissao' }[m] || 'Automatico';
+  }
+  function scheduleLabel(job) {
+    const tipo = job?.schedule_tipo || document.getElementById('f-schedule-tipo')?.value || 'manual';
+    const labels = { manual:'Manual', once:'Uma vez', daily:'Diario', weekly:'Semanal', monthly:'Mensal' };
+    const base = labels[tipo] || tipo;
+    const next = job?.next_run_at ? ` - ${fmtData(job.next_run_at)}` : '';
+    return base + next;
+  }
+  function scheduleTipoLabel(tipo) {
+    return { manual:'Manual', once:'Uma vez', daily:'Diario', weekly:'Semanal', monthly:'Mensal' }[tipo] || tipo || 'Manual';
+  }
+  function statusVisualJob(job) {
+    const ultimo = String(job?.ultimo_status || '').toLowerCase();
+    const ativo = !!job?.ativo && job?.status === 'ativo';
+    const next = job?.next_run_at ? new Date(job.next_run_at) : null;
+    if (ultimo === 'erro' || ultimo === 'falha') return { key:'error', label:'Erro recente' };
+    if (ultimo === 'executando') return { key:'running', label:'Executando' };
+    if (!ativo) return { key:'paused', label:'Parado' };
+    if (next && !Number.isNaN(next.getTime()) && next.getTime() < Date.now()) return { key:'due', label:'Vencido' };
+    return { key:'normal', label:'Normal' };
+  }
+  function hojeIsoDate() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+
+  function lerEstadoAgrupamento() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GROUP_STATE_KEY) || 'null');
+      if (!saved || typeof saved !== 'object') return;
+      groupState.fields = Array.isArray(saved.fields) ? saved.fields.filter(f => GROUP_FIELDS[f]) : [];
+      groupState.open = !!saved.open;
+    } catch (_) {
+      localStorage.removeItem(GROUP_STATE_KEY);
+    }
+  }
+
+  function salvarEstadoAgrupamento() {
+    try {
+      localStorage.setItem(GROUP_STATE_KEY, JSON.stringify({ fields: groupState.fields, open: groupState.open }));
+    } catch (_) {}
+  }
+
+  function aplicarAgrupamento() {
+    if (!table) return;
+    if (groupState.fields.length === 1) table.setGroupBy(groupState.fields[0]);
+    else table.setGroupBy(groupState.fields.length ? groupState.fields : false);
+  }
+
+  function renderPainelAgrupamento() {
+    const panel = document.getElementById('group-panel');
+    const toggle = document.getElementById('group-toggle');
+    const status = document.getElementById('group-status');
+    const drop = document.getElementById('group-dropzone');
+    if (!panel || !toggle || !status || !drop) return;
+
+    panel.classList.toggle('open', groupState.open);
+    toggle.textContent = groupState.open ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+    status.textContent = groupState.fields.length
+      ? `Agrupado por ${groupState.fields.map(f => GROUP_FIELDS[f]).join(' > ')}`
+      : 'Sem agrupamento ativo';
+    drop.innerHTML = groupState.fields.length
+      ? groupState.fields.map(f => `<span class="active-group-chip" draggable="true" data-active-group="${esc(f)}">${esc(GROUP_FIELDS[f])}<button class="active-group-remove" type="button" data-remove-group="${esc(f)}" title="Remover agrupamento">&times;</button></span>`).join('')
+      : 'Solte um campo aqui para agrupar';
+    document.querySelectorAll('[data-group-field]').forEach(btn => {
+      btn.classList.toggle('active', groupState.fields.includes(btn.dataset.groupField));
+    });
+  }
+
+  function adicionarAgrupamento(field) {
+    if (!GROUP_FIELDS[field] || groupState.fields.includes(field)) return;
+    groupState.fields.push(field);
+    salvarEstadoAgrupamento();
+    renderPainelAgrupamento();
+    aplicarAgrupamento();
+  }
+
+  function removerAgrupamento(field) {
+    groupState.fields = groupState.fields.filter(f => f !== field);
+    salvarEstadoAgrupamento();
+    renderPainelAgrupamento();
+    aplicarAgrupamento();
+  }
+
+  function limparAgrupamento() {
+    groupState.fields = [];
+    salvarEstadoAgrupamento();
+    renderPainelAgrupamento();
+    aplicarAgrupamento();
+  }
+
+  function inicializarPainelAgrupamento() {
+    const toggle = document.getElementById('group-toggle');
+    const clear = document.getElementById('group-clear');
+    const drop = document.getElementById('group-dropzone');
+    if (!toggle || !clear || !drop) return;
+
+    toggle.addEventListener('click', () => {
+      groupState.open = !groupState.open;
+      salvarEstadoAgrupamento();
+      renderPainelAgrupamento();
+    });
+    clear.addEventListener('click', limparAgrupamento);
+
+    document.querySelectorAll('[data-group-field]').forEach(btn => {
+      btn.addEventListener('click', () => adicionarAgrupamento(btn.dataset.groupField));
+      btn.addEventListener('dragstart', event => {
+        event.dataTransfer.setData('text/group-field', btn.dataset.groupField);
+      });
+    });
+    drop.addEventListener('dragover', event => {
+      event.preventDefault();
+      drop.classList.add('drag-over');
+    });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+    drop.addEventListener('drop', event => {
+      event.preventDefault();
+      drop.classList.remove('drag-over');
+      const field = event.dataTransfer.getData('text/group-field') || event.dataTransfer.getData('text/plain');
+      adicionarAgrupamento(field);
+    });
+    drop.addEventListener('click', event => {
+      const remove = event.target.closest('[data-remove-group]');
+      if (remove) removerAgrupamento(remove.dataset.removeGroup);
+    });
+
+    renderPainelAgrupamento();
+  }
+
+  async function carregarTudo() {
+    try {
+      [jobs, canais, executorStatus] = await Promise.all([
+        api('/api/ia-command/admin/agendamento/jobs'),
+        api('/api/ia-command/admin/agendamento/canais'),
+        api('/api/ia-command/admin/agendamento/executor/status').catch(() => null),
+      ]);
+      renderMetricas();
+      renderExecutorStatus();
+      renderJobs();
+    } catch (err) {
+      document.getElementById('tabela').innerHTML = `<div class="empty-state"><div class="empty-title">Erro ao carregar</div><div class="empty-text">${esc(err.message)}</div></div>`;
+    }
+  }
+
+  function renderExecutorStatus() {
+    const metric = document.getElementById('m-executor');
+    const btn = document.getElementById('btn-executor');
+    const running = !!executorStatus?.running;
+    const executing = !!executorStatus?.executing;
+    if (metric) {
+      metric.textContent = running ? (executing ? 'Executando' : 'Ligado') : 'Parado';
+      metric.className = running ? 'executor-ok' : 'executor-off';
+    }
+    if (btn) {
+      setButtonLabel(btn, running ? 'Parar Job' : 'Iniciar Job');
+      setButtonIcon(btn, running ? ICONS.stop : ICONS.play);
+      btn.title = running
+        ? 'Pausa o job interno de agendamento ate o backend reiniciar ou voce iniciar novamente.'
+        : 'Inicia o job interno de agendamento agora.';
+    }
+  }
+
+  function alternarLegenda() {
+    const legend = document.getElementById('status-legend');
+    const btn = document.getElementById('btn-legenda');
+    const open = !legend?.classList.contains('open');
+    legend?.classList.toggle('open', open);
+    if (btn) {
+      setButtonLabel(btn, open ? 'Ocultar legenda' : 'Legenda');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+  }
+
+  async function atualizarExecutorStatus() {
+    executorStatus = await api('/api/ia-command/admin/agendamento/executor/status').catch(() => null);
+    renderExecutorStatus();
+    return executorStatus;
+  }
+
+  async function alternarExecutor() {
+    const btn = document.getElementById('btn-executor');
+    const running = !!executorStatus?.running;
+    const action = running ? 'stop' : 'start';
+    const original = btn?.textContent || 'Executor';
+    if (btn) {
+      btn.disabled = true;
+      setButtonLabel(btn, running ? 'Parando...' : 'Iniciando...');
+    }
+    try {
+      executorStatus = await api(`/api/ia-command/admin/agendamento/executor/${action}`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+      });
+      renderExecutorStatus();
+    } catch (err) {
+      alert(err.message);
+      await atualizarExecutorStatus();
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        if (!executorStatus) setButtonLabel(btn, original);
+      }
+    }
+  }
+
+  async function atualizarLista(btn) {
+    const button = btn || document.getElementById('btn-atualizar');
+    const original = button?.textContent || 'Atualizar';
+    if (button) {
+      button.disabled = true;
+      setButtonLabel(button, 'Atualizando...');
+    }
+    document.getElementById('count').textContent = 'atualizando...';
+    try {
+      await carregarTudo();
+      if (table) setTimeout(() => table.redraw(true), 0);
+      const agora = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      const total = jobs.length === 1 ? '1 job encontrado' : `${jobs.length} jobs encontrados`;
+      document.getElementById('count').textContent = `${total} - atualizado as ${agora}`;
+    } finally {
+      if (button) {
+        button.disabled = false;
+        setButtonLabel(button, original);
+      }
+    }
+  }
+
+  function renderMetricas() {
+    const ativos = jobs.filter(j => j.ativo && j.status === 'ativo');
+    const proximas = ativos.map(j => j.next_run_at).filter(Boolean).sort();
+    const falhas = jobs.filter(j => j.ultimo_status === 'erro' || j.ultimo_status === 'falha').length;
+    document.getElementById('m-ativos').textContent = String(ativos.length);
+    document.getElementById('m-total').textContent = String(jobs.length);
+    document.getElementById('m-falhas').textContent = String(falhas);
+    document.getElementById('m-proxima').textContent = proximas[0] ? fmtData(proximas[0]) : '-';
+  }
+
+  function renderJobs() {
+    const data = jobs.map(job => ({
+      ...job,
+      status_label: job.ativo && job.status === 'ativo' ? 'Ativo' : 'Pausado',
+      modulo_label: moduloLabel(job.modulo),
+      schedule_tipo_label: scheduleTipoLabel(job.schedule_tipo),
+      agenda_label: scheduleLabel(job),
+      next_run_at_label: fmtData(job.next_run_at),
+      destinatarios_label: `${Number(job.destinatarios_count || 0)} numero(s)`,
+      ultimo_status_label: job.ultimo_status || '-',
+    }));
+    if (table) {
+      table.replaceData(data);
+      document.getElementById('count').textContent = data.length === 1 ? '1 job encontrado' : `${data.length} jobs encontrados`;
+      aplicarAgrupamento();
+      return;
+    }
+    table = new Tabulator('#tabela', {
+      data,
+      index:'id',
+      layout:'fitColumns',
+      height:'calc(100vh - 190px)',
+      movableColumns:true,
+      groupBy:groupState.fields.length === 1 ? groupState.fields[0] : (groupState.fields.length ? groupState.fields : false),
+      groupStartOpen:true,
+      placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum job cadastrado.</div>',
+      columns:[
+        { title:'Job', field:'nome', minWidth:260, headerFilter:true, formatter:c=>{
+          const row = c.getRow().getData();
+          const visual = statusVisualJob(row);
+          return `<div class="job-cell">
+            <span class="job-status-dot ${esc(visual.key)}" title="${esc(visual.label)}" aria-label="${esc(visual.label)}"></span>
+            <div class="job-main">
+              <div class="job-title">${esc(row.nome)}</div>
+              <div class="job-sub">${esc(row.pergunta)}</div>
+            </div>
+          </div>`;
+        }},
+        { title:'Status', field:'status_label', width:115, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Ativo':'Ativo','Pausado':'Pausado'}}, formatter:c=>c.getValue()==='Ativo'?'<span class="badge badge-ok">Ativo</span>':'<span class="badge badge-paused">Pausado</span>' },
+        { title:'Modulo', field:'modulo_label', width:135, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Automatico':'Automatico','Compras':'Compras','Financeiro':'Financeiro','Faturamento':'Faturamento','Comissao':'Comissao'}}, formatter:c=>`<span class="badge badge-mod">${esc(c.getValue())}</span>` },
+        { title:'Agenda', field:'agenda_label', width:170, headerFilter:true },
+        { title:'Proxima execucao', field:'next_run_at', width:160, sorter:'datetime', headerFilter:true, formatter:c=>esc(fmtData(c.getValue())) },
+        { title:'Destinatarios', field:'destinatarios_count', width:125, hozAlign:'right', headerFilter:true, formatter:c=>`${Number(c.getValue() || 0)} numero(s)` },
+        { title:'Ultimo status', field:'ultimo_status_label', width:130, headerFilter:true },
+        { title:'Acoes', field:'id', width:200, hozAlign:'right', headerSort:false, headerFilter:false, groupable:false, formatter:c=>{
+          const row = c.getRow().getData();
+          const statusIcon = row.ativo ? ICONS.pause : ICONS.play;
+          return `<button class="btn-icon primary" title="Executar agora" aria-label="Executar agora" onclick="event.stopPropagation();executarAgora('${esc(row.id)}')">${ICONS.play}</button>
+            <button class="btn-icon" title="${row.ativo ? 'Pausar' : 'Ativar'}" aria-label="${row.ativo ? 'Pausar' : 'Ativar'}" onclick="event.stopPropagation();alternarStatus('${esc(row.id)}','${row.ativo ? 'pausado' : 'ativo'}')">${statusIcon}</button>
+            <button class="btn-icon" title="Historico de execucoes" aria-label="Historico de execucoes" onclick="event.stopPropagation();abrirHistorico('${esc(row.id)}')">${ICONS.history}</button>
+            <button class="btn-icon" title="Editar" aria-label="Editar" onclick="event.stopPropagation();abrirFormulario('${esc(row.id)}')">${ICONS.edit}</button>
+            <button class="btn-icon danger" title="Excluir" aria-label="Excluir" onclick="event.stopPropagation();excluirJob('${esc(row.id)}')">${ICONS.trash}</button>`;
+        }},
+      ],
+      rowClick:(e,row)=>{ if (!e.target.closest('button')) abrirFormulario(row.getData().id); },
+      dataFiltered:(_filters, rows)=>{
+        document.getElementById('count').textContent = rows.length === 1 ? '1 job encontrado' : `${rows.length} jobs encontrados`;
+      },
+    });
+    document.getElementById('count').textContent = data.length === 1 ? '1 job encontrado' : `${data.length} jobs encontrados`;
+    renderPainelAgrupamento();
+  }
+
+  async function abrirFormulario(id = null) {
+    editId = id;
+    selectedRecipients = new Set();
+    document.getElementById('sec-lista').classList.add('d-none');
+    document.getElementById('sec-form').classList.remove('d-none');
+    document.getElementById('save-feedback').textContent = '';
+    document.getElementById('btn-run-now-form').classList.toggle('d-none', !id);
+    preencherCanais();
+    resetForm();
+    if (id) {
+      const job = await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}`);
+      preencherForm(job);
+      await carregarDestinatarios(job.modulo || '');
+      (job.destinatarios || []).forEach(r => selectedRecipients.add(String(r.numero_id)));
+      renderDestinatarios();
+      carregarRuns(id);
+    } else {
+      await carregarDestinatarios('');
+      renderDestinatarios();
+      renderRuns([]);
+    }
+    atualizarResumo();
+  }
+
+  async function abrirHistorico(id) {
+    const url = `/app/ia-command/admin-agendamento-historico.html?job_id=${encodeURIComponent(id)}`;
+    if (window.parent && window.parent !== window && typeof window.parent.openTab === 'function') {
+      window.parent.openTab(url, 'Historico de Execucoes', '🕘');
+    } else {
+      location.href = url;
+    }
+  }
+
+  function resetForm() {
+    document.getElementById('form-title').textContent = 'Novo Job';
+    document.getElementById('f-nome').value = '';
+    document.getElementById('f-modulo').value = '';
+    document.getElementById('f-pergunta').value = '';
+    document.getElementById('f-channel').value = canais[0]?.id || '';
+    document.getElementById('f-ativo').value = '1';
+    document.getElementById('f-schedule-tipo').value = 'manual';
+    document.getElementById('f-hora').value = '08:00';
+    document.getElementById('f-data').value = hojeIsoDate();
+    document.getElementById('f-timezone').value = 'America/Manaus';
+    document.getElementById('f-dia-mes').value = '1';
+    document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = false);
+    document.getElementById('q-dest').value = '';
+    onAgendaChange();
+  }
+
+  function preencherForm(job) {
+    document.getElementById('form-title').textContent = job.nome || 'Editar Job';
+    document.getElementById('f-nome').value = job.nome || '';
+    document.getElementById('f-modulo').value = job.modulo || '';
+    document.getElementById('f-pergunta').value = job.pergunta || '';
+    document.getElementById('f-channel').value = job.channel_id || '';
+    document.getElementById('f-ativo').value = job.ativo ? '1' : '0';
+    document.getElementById('f-schedule-tipo').value = job.schedule_tipo || 'manual';
+    document.getElementById('f-timezone').value = job.timezone || 'America/Manaus';
+    const sj = job.schedule_json || {};
+    document.getElementById('f-hora').value = sj.time || '08:00';
+    document.getElementById('f-dia-mes').value = sj.month_day || '1';
+    if (job.next_run_at) {
+      const d = new Date(job.next_run_at);
+      if (!Number.isNaN(d.getTime())) {
+        const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
+        document.getElementById('f-data').value = local.slice(0, 10);
+        document.getElementById('f-hora').value = local.slice(11, 16);
+      }
+    }
+    const dias = new Set((sj.weekdays || []).map(String));
+    document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = dias.has(c.value));
+    onAgendaChange();
+  }
+
+  function preencherCanais() {
+    const sel = document.getElementById('f-channel');
+    sel.innerHTML = canais.length
+      ? canais.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}${c.numero ? ` - ${fmtNumero(c.numero)}` : ''}</option>`).join('')
+      : '<option value="">Nenhum canal vinculado</option>';
+  }
+
+  async function carregarDestinatarios(modulo) {
+    const qs = modulo ? `?modulo=${encodeURIComponent(modulo)}` : '';
+    destinatarios = await api(`/api/ia-command/admin/agendamento/destinatarios${qs}`);
+  }
+
+  async function onModuloChange() {
+    const anteriores = new Set(selectedRecipients);
+    await carregarDestinatarios(document.getElementById('f-modulo').value);
+    const validos = new Set(destinatarios.map(d => String(d.id)));
+    selectedRecipients = new Set([...anteriores].filter(id => validos.has(id)));
+    renderDestinatarios();
+    atualizarResumo();
+  }
+
+  function renderDestinatarios() {
+    const busca = document.getElementById('q-dest').value.trim().toLowerCase();
+    const rows = destinatarios.filter(d => !busca || `${d.nome} ${d.numero}`.toLowerCase().includes(busca));
+    const el = document.getElementById('destinatarios');
+    if (!rows.length) {
+      el.innerHTML = '<div class="form-help">Nenhum numero autorizado disponivel para este filtro/modulo.</div>';
+      atualizarResumo();
+      return;
+    }
+    el.innerHTML = rows.map(d => `
+      <label class="recipient-item">
+        <input type="checkbox" value="${esc(d.id)}" ${selectedRecipients.has(String(d.id)) ? 'checked' : ''} onchange="toggleDestinatario(this)">
+        <span>
+          <div class="recipient-name">${esc(d.nome)}</div>
+          <div class="recipient-num">${esc(fmtNumero(d.numero))}</div>
+        </span>
+      </label>`).join('');
+    atualizarResumo();
+  }
+
+  function toggleDestinatario(el) {
+    if (el.checked) selectedRecipients.add(String(el.value));
+    else selectedRecipients.delete(String(el.value));
+    atualizarResumo();
+  }
+
+  function marcarDestinatarios(marcar) {
+    const busca = document.getElementById('q-dest').value.trim().toLowerCase();
+    destinatarios
+      .filter(d => !busca || `${d.nome} ${d.numero}`.toLowerCase().includes(busca))
+      .forEach(d => marcar ? selectedRecipients.add(String(d.id)) : selectedRecipients.delete(String(d.id)));
+    renderDestinatarios();
+  }
+
+  function onAgendaChange() {
+    const tipo = document.getElementById('f-schedule-tipo').value;
+    document.getElementById('grp-weekly').classList.toggle('d-none', tipo !== 'weekly');
+    document.getElementById('grp-monthly').classList.toggle('d-none', tipo !== 'monthly');
+    document.getElementById('row-primeira').classList.toggle('d-none', tipo === 'manual');
+    atualizarResumo();
+  }
+
+  function montarAgenda() {
+    const tipo = document.getElementById('f-schedule-tipo').value;
+    const time = document.getElementById('f-hora').value || '08:00';
+    const schedule = { tipo, time };
+    if (tipo === 'weekly') schedule.weekdays = [...document.querySelectorAll('input[name="dias"]:checked')].map(c => Number(c.value));
+    if (tipo === 'monthly') schedule.month_day = Number(document.getElementById('f-dia-mes').value || 1);
+    let next_run_at = null;
+    if (tipo !== 'manual') {
+      const data = document.getElementById('f-data').value;
+      if (data) next_run_at = new Date(`${data}T${time}:00`).toISOString();
+    }
+    return { schedule_json: schedule, next_run_at };
+  }
+
+  function atualizarResumo() {
+    const nome = document.getElementById('f-nome')?.value.trim() || 'Novo Job';
+    const canal = canais.find(c => String(c.id) === String(document.getElementById('f-channel')?.value));
+    const tipo = document.getElementById('f-schedule-tipo')?.value || 'manual';
+    const labels = { manual:'Manual', once:'Uma vez', daily:'Diario', weekly:'Semanal', monthly:'Mensal' };
+    const hora = document.getElementById('f-hora')?.value || '08:00';
+    document.getElementById('s-nome').textContent = nome;
+    document.getElementById('s-canal').textContent = canal ? canal.nome : '-';
+    document.getElementById('s-agenda').textContent = tipo === 'manual' ? 'Manual' : `${labels[tipo] || tipo} as ${hora}`;
+    document.getElementById('s-dest').textContent = String(selectedRecipients.size);
+  }
+
+  async function salvarJob() {
+    try {
+      const nome = document.getElementById('f-nome').value.trim();
+      const pergunta = document.getElementById('f-pergunta').value.trim();
+      const channel_id = document.getElementById('f-channel').value;
+      if (!nome) throw new Error('Informe o nome do job.');
+      if (!pergunta) throw new Error('Informe a pergunta.');
+      if (!channel_id) throw new Error('Selecione um canal WhatsApp.');
+      if (!selectedRecipients.size) throw new Error('Selecione ao menos um destinatario.');
+      const agenda = montarAgenda();
+      const body = {
+        nome,
+        pergunta,
+        channel_id,
+        modulo: document.getElementById('f-modulo').value || null,
+        schedule_tipo: document.getElementById('f-schedule-tipo').value,
+        schedule_json: agenda.schedule_json,
+        next_run_at: agenda.next_run_at,
+        timezone: document.getElementById('f-timezone').value || 'America/Manaus',
+        ativo: document.getElementById('f-ativo').value === '1',
+        destinatarios: [...selectedRecipients],
+      };
+      const url = editId
+        ? `/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(editId)}`
+        : '/api/ia-command/admin/agendamento/jobs';
+      const method = editId ? 'PUT' : 'POST';
+      const saved = await api(url, { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      editId = saved.id;
+      feedback('Salvo com sucesso.', true);
+      await carregarTudo();
+      mostrarLista();
+      limparFiltrosGrade();
+    } catch (err) {
+      feedback(err.message, false);
+    }
+  }
+
+  async function alternarStatus(id, status) {
+    try {
+      await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}/status`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ status }),
+      });
+      await carregarTudo();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function executarAgora(id) {
+    if (!id) return;
+    const job = jobs.find(j => String(j.id) === String(id));
+    const nome = job?.nome || 'este job';
+    if (!confirm(`Executar agora "${nome}"? O agendamento futuro sera mantido.`)) return;
+    try {
+      const btnForm = document.getElementById('btn-run-now-form');
+      if (String(editId || '') === String(id) && btnForm) {
+        btnForm.disabled = true;
+        setButtonLabel(btnForm, 'Executando...');
+      }
+      const run = await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}/run-now`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+      });
+      alert(run.status === 'sucesso'
+        ? 'Job executado e enviado com sucesso.'
+        : `Job executado com status: ${run.status || 'desconhecido'}. Verifique o historico.`);
+      await carregarTudo();
+      if (editId) carregarRuns(editId);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      const btnForm = document.getElementById('btn-run-now-form');
+      if (btnForm) {
+        btnForm.disabled = false;
+        setButtonLabel(btnForm, 'Executar agora');
+      }
+    }
+  }
+
+  async function excluirJob(id) {
+    if (!confirm('Excluir este job de agendamento?')) return;
+    try {
+      await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}`, { method:'DELETE' });
+      await carregarTudo();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function carregarRuns(id) {
+    try {
+      const rows = await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}/runs?limit=20`);
+      renderRuns(rows);
+    } catch (_) {
+      renderRuns([]);
+    }
+  }
+
+  function renderRuns(rows) {
+    const el = document.getElementById('runs-list');
+    if (!rows.length) {
+      el.innerHTML = '<div class="form-help">Ainda nao ha execucoes registradas.</div>';
+      return;
+    }
+    el.innerHTML = rows.map(r => `
+      <div class="run-item">
+        <div class="run-top">
+          <div class="run-date">${esc(fmtData(r.criado_em))}</div>
+          <span class="badge ${r.status === 'sucesso' ? 'badge-ok' : r.status === 'erro' ? 'badge-fail' : 'badge-paused'}">${esc(r.status)}</span>
+        </div>
+        <div class="run-msg">${esc(r.erro || r.resposta || r.pergunta || '-')}</div>
+      </div>`).join('');
+  }
+
+  function feedback(msg, ok) {
+    const el = document.getElementById('save-feedback');
+    el.textContent = msg || '';
+    el.className = 'save-feedback ' + (ok ? 'ok' : 'fail');
+  }
+
+  function fecharFormulario() {
+    mostrarLista();
+    carregarTudo();
+  }
+
+  function mostrarLista() {
+    editId = null;
+    document.getElementById('sec-form').classList.add('d-none');
+    document.getElementById('sec-lista').classList.remove('d-none');
+    if (table) setTimeout(() => table.redraw(true), 0);
+  }
+
+  function limparFiltrosGrade() {
+    if (!table) return;
+    if (typeof table.clearHeaderFilter === 'function') table.clearHeaderFilter();
+    if (typeof table.clearFilter === 'function') table.clearFilter(true);
+    setTimeout(() => table.redraw(true), 0);
+  }
+
+  lerEstadoAgrupamento();
+  inicializarPainelAgrupamento();
+  window._iahubAuthReady?.then(carregarTudo) ?? carregarTudo();
+</script>
+</body>
+</html>

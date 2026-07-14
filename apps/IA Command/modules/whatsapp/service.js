@@ -3257,13 +3257,57 @@ class IACWhatsAppService extends EventEmitter {
 
   // ── IA Pipeline: classify → route → format ──────────────────────────────────
 
+  async executeScheduledQuestion({ empresaId, numero, pergunta, jobNome = null } = {}) {
+    if (!this.client || this.status !== 'connected') {
+      throw new Error('WhatsApp nao esta conectado.');
+    }
+    const empresaExecucao = Number(empresaId || this._empresaId || 0);
+    if (!empresaExecucao) throw new Error('Empresa do agendamento nao informada.');
+
+    const digits = String(numero || '').replace(/\D/g, '');
+    if (!digits) throw new Error('Numero do destinatario invalido.');
+    const sender = `${digits}@c.us`;
+    if (!channelStore.senderAutorizadoEmpresa(empresaExecucao, sender)) {
+      throw new Error('Numero nao autorizado para esta empresa.');
+    }
+
+    const texto = String(pergunta || '').trim();
+    if (!texto) throw new Error('Pergunta do agendamento vazia.');
+
+    const t0 = Date.now();
+    const timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
+    this._tipoMensagemAtual = 'agendamento';
+    this._setSenderContext(sender, { empresaId: empresaExecucao, pendingText: null, _chatHistory: [] });
+
+    const resposta = await this._pipeline(texto, sender, {
+      _pipelineTs: t0,
+      _recebidoEm: t0,
+      _timingCtx: timingCtx,
+      _empresaIdFixa: empresaExecucao,
+      _skipChannelTenantResolution: true,
+      _systemOrigin: 'agendamento',
+    });
+    const titulo = jobNome ? `*${jobNome}*\n\n` : '';
+    await this.sendMessage(digits, `${titulo}${resposta}`);
+    const entregueMs = Date.now() - t0;
+    if (timingCtx.logId) {
+      try { interpretationLog.atualizarEntregue(timingCtx.logId, entregueMs); } catch (_) {}
+    }
+    return {
+      resposta,
+      interpretation_log_id: timingCtx.logId || null,
+      duration_ms: Date.now() - t0,
+      entregue_ms: entregueMs,
+    };
+  }
+
   async _pipeline(texto, sender, opts = {}) {
     const _t0 = Date.now();
     const _timings = { inicio: _t0 };
     // _timingCtx é um objeto mutável compartilhado com o handler para registrar entregue_ms após sendMessage
     const _timingCtx = opts._timingCtx || null;
     const _recebidoEm = opts._recebidoEm ? new Date(opts._recebidoEm).toISOString() : null;
-    let empresaId = this._empresaId;
+    let empresaId = opts._empresaIdFixa ? Number(opts._empresaIdFixa) : this._empresaId;
     let empresaResolvida = null;
     let textoExecucao = texto;
 
@@ -3316,7 +3360,7 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
 
-    if (this._channelId) {
+    if (this._channelId && !opts._skipChannelTenantResolution) {
       // Comandos explícitos de troca — sempre ativam o menu (independente de sessão prévia)
       const _trocaExplicita = [
         'trocar empresa',    'mudar empresa',    'alterar empresa',    'selecionar empresa',

@@ -67,6 +67,8 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-protheus-sx2.html':          'iac-admin-protheus-sx2',
   '/app/ia-command/admin-protheus-sx3.html':          'iac-admin-protheus-sx3',
   '/app/ia-command/admin-agente-local-cargas.html':   'iac-agente-local-cargas',
+  '/app/ia-command/admin-agendamento.html':           'iac-admin-agendamento',
+  '/app/ia-command/admin-agendamento-historico.html': 'iac-admin-agendamento',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -119,6 +121,7 @@ const _ROTINA_LABELS = {
   'iac-admin-protheus-sx2':     'IA Command - Dicionário SX2 Protheus',
   'iac-admin-protheus-sx3':     'IA Command - Dicionário SX3 Protheus',
   'iac-agente-local-cargas':    'IA Command - Cargas Agente Local',
+  'iac-admin-agendamento':      'IA Command - Agendamento',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',
