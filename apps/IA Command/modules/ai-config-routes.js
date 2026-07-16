@@ -35,45 +35,6 @@ function _getJson({ hostname, path, headers = {} }) {
   });
 }
 
-async function _consultarSaldoOpenAI(apiKey) {
-  const now = new Date();
-  await _getJson({
-    hostname: 'api.openai.com',
-    path: '/v1/models',
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-
-  const startTime = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), 1) / 1000);
-
-  try {
-    const costs = await _getJson({
-      hostname: 'api.openai.com',
-      path: `/v1/organization/costs?start_time=${startTime}&limit=31`,
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    const buckets = Array.isArray(costs?.data) ? costs.data : [];
-    const total = buckets.reduce((sum, bucket) => {
-      const results = Array.isArray(bucket?.results) ? bucket.results : [];
-      return sum + results.reduce((acc, item) => acc + (Number(item?.amount?.value) || 0), 0);
-    }, 0);
-    return {
-      disponivel: true,
-      unidade: 'USD',
-      valor: parseFloat(total.toFixed(4)),
-      detalhe: `API operacional. Custo do mês: $${total.toFixed(4)}.`,
-    };
-  } catch (err) {
-    return {
-      disponivel: true,
-      unidade: 'USD',
-      valor: null,
-      detalhe: err.statusCode === 403
-        ? 'API operacional. A chave não tem permissão api.usage.read para consultar custos; veja o saldo no painel OpenAI.'
-        : 'API operacional. Consulte o painel OpenAI para saldo/custos atualizados.',
-    };
-  }
-}
-
 async function _consultarSaldoDeepSeek(apiKey) {
   const data = await _getJson({
     hostname: 'api.deepseek.com',
@@ -110,7 +71,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       openai_api_key:   row.openai_api_key   ? '***' : null,
       groq_modelo:      row.groq_modelo      || 'llama-3.3-70b-versatile',
       openai_modelo:    row.openai_modelo    || 'gpt-4o-mini',
-      gemini_modelo:    row.gemini_modelo    || 'gemini-2.0-flash',
+      gemini_modelo:    row.gemini_modelo    || 'gemini-3.5-flash',
       deepseek_modelo:  row.deepseek_modelo  || 'deepseek-chat',
       claude_modelo:    row.claude_modelo    || 'claude-haiku-4-5-20251001',
     });
@@ -168,7 +129,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       openai_api_key:   row.openai_api_key   ? '***' : null,
       groq_modelo:      row.groq_modelo      || 'llama-3.3-70b-versatile',
       openai_modelo:    row.openai_modelo    || 'gpt-4o-mini',
-      gemini_modelo:    row.gemini_modelo    || 'gemini-2.0-flash',
+      gemini_modelo:    row.gemini_modelo    || 'gemini-3.5-flash',
       deepseek_modelo:  row.deepseek_modelo  || 'deepseek-chat',
       claude_modelo:    row.claude_modelo    || 'claude-haiku-4-5-20251001',
     });
@@ -178,15 +139,16 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
   app.post('/api/ia-command/ai-config/test', requireAuth, requireIaCommand, canConfigIa, async (req, res) => {
     const { provedor, api_key } = req.body;
     const testMsg = 'Qual o faturamento deste mês?';
+    const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
 
     try {
       let result;
       if (provedor === 'gemini') {
-        result = await require('./ai/providers/gemini').classificarIntencao(testMsg, api_key);
+        result = await require('./ai/providers/gemini').classificarIntencao(testMsg, api_key, [], [], null, row?.gemini_modelo);
       } else if (provedor === 'deepseek') {
         result = await require('./ai/providers/deepseek').classificarIntencao(testMsg, api_key);
       } else if (provedor === 'claude') {
-        result = await require('./ai/providers/claude').classificarIntencao(testMsg, api_key);
+        result = await require('./ai/providers/claude').classificarIntencao(testMsg, api_key, [], [], null, row?.claude_modelo);
       } else if (provedor === 'openai') {
         result = await require('./ai/providers/openai').classificarIntencao(testMsg, api_key);
       } else {
@@ -226,14 +188,6 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
         }
       }
 
-      if (p.id === 'openai') {
-        try {
-          return { ...base, consultado: true, ...(await _consultarSaldoOpenAI(row[p.keyField])) };
-        } catch (err) {
-          return base;
-        }
-      }
-
       return base;
     }));
 
@@ -256,7 +210,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     };
 
     const testMsg = 'Faturamento do mês';
-    const TIMEOUT_MS = 8000;
+    const TIMEOUT_MS = 20000;
 
     function _classificarStatus(msg = '') {
       const m = msg.toLowerCase();
@@ -273,8 +227,13 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       const t0 = Date.now();
       try {
         const mod = PROVIDER_MODULES[p.id]?.();
-        const promessa = mod.classificarIntencao(testMsg, chave, [], []);
-        const timeout  = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout de 8s excedido.')), TIMEOUT_MS));
+        const modeloConfigurado = p.id === 'claude' ? row.claude_modelo
+          : p.id === 'gemini' ? row.gemini_modelo
+          : null;
+        const promessa = modeloConfigurado
+          ? mod.classificarIntencao(testMsg, chave, [], [], null, modeloConfigurado)
+          : mod.classificarIntencao(testMsg, chave, [], []);
+        const timeout  = new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout de ${TIMEOUT_MS / 1000}s excedido.`)), TIMEOUT_MS));
         await Promise.race([promessa, timeout]);
         return { id: p.id, nome: p.label, painel_url: p.painelUrl, status: 'operacional', latencia_ms: Date.now() - t0, detalhe: null };
       } catch (err) {

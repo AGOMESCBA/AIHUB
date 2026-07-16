@@ -1052,7 +1052,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.3, maxOutputTokens: 2048, responseMimeType: 'application/json' },
       });
-      const path = `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const path = `/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
       const opts = { hostname: 'generativelanguage.googleapis.com', path, method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {
@@ -1847,7 +1847,7 @@ Responda SOMENTE com JSON válido, sem markdown:
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.4, maxOutputTokens: 3000, responseMimeType: 'application/json' },
       });
-      const path = `/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+      const path = `/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
       const opts = { hostname: 'generativelanguage.googleapis.com', path, method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
       const r = https.request(opts, (resp) => {

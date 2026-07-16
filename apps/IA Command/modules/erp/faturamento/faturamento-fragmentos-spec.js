@@ -22,8 +22,8 @@ function base() {
 - Devolucoes de venda: SF1.F1_DTDIGIT ou SF1.F1_EMISSAO; prefira SF1.F1_DTDIGIT.
 
 ## Tabelas padrao do modulo Faturamento
-- SF2: cabecalho de NF de saida. Metrica geral preferencial: SF2.F2_VALBRUT quando nao precisar de item.
-- SD2: itens de NF de saida. Use para produto, grupo, quantidade, valor medio, TES, centro de custo e faturamento liquido com devolucoes. Metrica de item: SD2.D2_TOTAL. Quantidade: SD2.D2_QUANT.
+- SF2: cabecalho de NF de saida. Sempre em JOIN com SD2 para consultas de faturamento (ver DIRETRIZ DE SELECAO DE TABELAS abaixo) — nao use F2_VALBRUT como metrica de valor.
+- SD2: itens de NF de saida. Metrica de valor padrao para TODA consulta de faturamento: SD2.D2_TOTAL (ou SD2.D2_TOTAL - SD2.D2_VALDEV para liquido). Quantidade: SD2.D2_QUANT.
 - Tipos de nota fiscal de saida no Protheus (SF2.F2_TIPO): N=Normal (venda real), D=Devolucao de cliente, B=Beneficiamento (envio para conserto/industrializacao por terceiro), I=Complementar de impostos (correcao de ICMS/IPI), P=Complementar alternativo. Apenas tipo 'N' representa receita de venda de produtos.
 - REGRA OBRIGATORIA — SF2.F2_TIPO = 'N': toda consulta de faturamento/receita que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE, sem excecao. Notas tipo 'D' (devolucao), 'B' (beneficiamento), 'I'/'P' (complementar) nao representam receita real de venda e distorceriam o resultado. Nunca use SF2.F2_TIPO = '1'.
 - SF1: cabecalho de NF de entrada; para devolucao de venda use SF1.F1_TIPO = 'D'.
@@ -112,73 +112,35 @@ function devolucoes() {
 - Nao inclua devolucoes de vendas nas metricas de faturamento por padrao.
 - Somente considere devolucoes quando o usuario pedir explicitamente: devolucao, devolucoes, retorno, estorno, abatendo devolucoes, considerar devolucoes, faturamento liquido.
 - "considerando devolucoes", "com devolucoes", "abatendo devolucoes" ou "faturamento liquido" significa faturamento bruto menos devolucoes de vendas.
-- So retorne apenas devolucoes quando o usuario disser claramente "somente devolucoes", "apenas devolucoes", "total de devolucoes" ou equivalente.
-- No Protheus, devolucao de venda e nota de entrada do SIGACOM: use obrigatoriamente SF1/SD1, com SF1.F1_TIPO = 'D'. Nao use SF4/TES nem CASE em SD2 para identificar devolucao de venda.
-- Quando o usuario pedir para considerar devolucoes, faturamento liquido ou abatendo devolucoes, monte obrigatoriamente uma consulta externa sobre subqueries unificadas por UNION ALL:
-  1. Subquery de faturamento (SD2/SF2): projete TODAS as metricas pedidas + 0 para as metricas que so existem na outra subquery. Ex com valor+quantidade: COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_faturamento, COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada, 0 AS valor_devolucao.
-  2. Subquery de devolucoes (SD1/SF1): projete 0 para metricas que nao existem em SF1/SD1. Ex: 0 AS valor_faturamento, 0 AS quantidade_faturada, COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_devolucao.
-  3. REGRA CRITICA DE SCHEMA: as duas subqueries do UNION ALL DEVEM ter exatamente as mesmas colunas, na mesma ordem, com os mesmos aliases. Se a pergunta pede valor+quantidade+devolucoes, ambas as subqueries projetam valor_faturamento, quantidade_faturada, valor_devolucao — usando 0 onde a fonte nao tem o dado.
-- A query externa agrega SUM de cada coluna. Exemplos: SUM(valor_faturamento) AS total_faturamento, SUM(quantidade_faturada) AS total_quantidade, SUM(valor_devolucao) AS total_devolucoes, (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido.
-- REGRA ABSOLUTA — GROUP BY nas subqueries do UNION ALL:
-  - Total escalar (sem agrupamento): ambas as subqueries SEM GROUP BY, retornam 1 linha cada.
-  - Com agrupamento por produto, cliente, etc.: ambas as subqueries DEVEM ter o mesmo GROUP BY. A subquery de devolucao deve agrupar pelo mesmo campo (ex: produto) usando o campo equivalente de SD1/SF1. A query externa NAO agrega com SUM() — seleciona os aliases diretamente.
-  - PROIBIDO agrupar por chave de documento (filial+doc+serie+cliente/loja) — isso gera 1 linha por nota.
-- REGRA ABSOLUTA — filtros obrigatorios dentro de cada subquery do UNION ALL:
-  - Subquery de faturamento (SD2/SF2): SEMPRE incluir SF2.F2_TIPO = 'N' (ou IN ('N','C','I')) no WHERE. Este filtro e obrigatorio dentro da subquery, mesmo que seja redundante com contexto externo.
-  - Subquery de devolucoes (SD1/SF1): SEMPRE incluir SF1.F1_TIPO = 'D' no WHERE.
-- PROIBIDO ABSOLUTO — LEFT JOIN SD1/SF1 na query principal: NUNCA use LEFT JOIN SD1 ou LEFT JOIN SF1 na query principal (FROM SD2/SF2). Devolucoes SEMPRE vem de subquery UNION ALL separada.
-- PROIBIDO ABSOLUTO — referenciar SD2/SF2 fora do UNION ALL em total escalar: quando a query externa e um SELECT SUM() sobre o resultado do UNION ALL, nao pode referenciar SD2.D2_TOTAL, SD2.D2_QUANT etc. — esses campos so existem dentro da subquery. Use EXCLUSIVAMENTE os aliases exportados.
-- Aplique o mesmo periodo e os mesmos filtros cadastrais nas duas subqueries. Para faturamento use SF2.F2_EMISSAO. Para devolucoes use SF1.F1_DTDIGIT ou SF1.F1_EMISSAO conforme campos disponiveis.
-- Nota Protheus: na devolucao de vendas (SF1 tipo D), o codigo do cliente e gravado em SF1.F1_FORNECE/SD1.D1_FORNECE e loja em SF1.F1_LOJA/SD1.D1_LOJA. Se houver filtro de cliente resolvido, filtre faturamento por SF2.F2_CLIENTE/F2_LOJA e devolucoes por SF1.F1_FORNECE/F1_LOJA.
-- Para devolucoes por produto: a subquery de devolucoes agrupa por SD1.D1_COD + SB1.B1_DESC e projeta 0 para as metricas de faturamento. A query externa une os resultados com UNION ALL sem agregar — retorna linha por produto.
+- "considerando devolucoes"/"com devolucoes" SEMPRE significa liquido (bruto - devolvido), nunca soma separada.
+- REGRA CRITICA — 2 casos de devolucao, NUNCA misture os padroes: (1) pergunta envolve faturamento/quantidade/carregada JUNTO com devolucao (ex: "faturamento do mes considerando devolucoes", "quantidade carregada com devolucoes") → SEMPRE use os campos de devolucao ja vinculados ao item na propria SD2: SD2.D2_VALDEV (valor devolvido) e SD2.D2_QTDEDEV (quantidade devolvida). Formula: SUM(SD2.D2_TOTAL - SD2.D2_VALDEV) para valor liquido, SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV) para quantidade liquida. NUNCA use UNION ALL nem SD1/SF1 neste caso — SD2 ja tem o dado da devolucao por item, sem precisar de outra tabela. Ver EXEMPLO 1 e EXEMPLO 2 abaixo.
+- (2) pergunta e EXCLUSIVAMENTE sobre devolucao, sem pedir faturamento/quantidade/carregada junto (ex: "total de devolucoes do mes", "quantas devolucoes tivemos") → consulta simples em SD1/SF1 (nota de entrada, SF1.F1_TIPO = 'D'), SEM UNION ALL (nao ha o que unificar, e a unica fonte de dado). Ver EXEMPLO 3 abaixo.
+- So retorne apenas devolucoes (caso 2) quando o usuario disser claramente "somente devolucoes", "apenas devolucoes", "total de devolucoes" ou equivalente.
+- LISTAGEM de devolucoes (ex: "mostre as devolucoes de vendas do periodo", "liste as devolucoes"): tambem e caso (2), SD1/SF1 sozinha, SEM UNION ALL — SD1 ja guarda a referencia completa a nota de venda original: D1_NFORI (numero da NF de venda original), D1_SERIORI (serie original) e D1_ITEMORI (item da nota original). Quando o usuario pedir para ver de qual venda veio a devolucao, inclua esses 3 campos no SELECT (ex: SD1.D1_NFORI AS nf_venda_original, SD1.D1_SERIORI AS serie_venda_original, SD1.D1_ITEMORI AS item_venda_original) — NAO faca JOIN/UNION com SD2/SF2 para isso, os dados ja estao em SD1.
 
-### EXEMPLO 1 — total escalar (sem agrupamento): valor + quantidade + devolucoes
-SELECT SUM(valor_faturamento) AS total_faturamento, SUM(quantidade_faturada) AS total_quantidade,
-       SUM(valor_devolucao) AS total_devolucoes,
-       (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido
-FROM (
-  SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_faturamento,
-         COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada,
-         0                               AS valor_devolucao
-  FROM SD2xxx SD2
-  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
-  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260601' AND '20260630' AND SF2.F2_TIPO IN ('N','C','I')
-  UNION ALL
-  SELECT 0                               AS valor_faturamento,
-         0                               AS quantidade_faturada,
-         COALESCE(SUM(SD1.D1_TOTAL), 0)  AS valor_devolucao
-  FROM SD1xxx SD1
-  JOIN SF1xxx SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
-  WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_DTDIGIT BETWEEN '20260601' AND '20260630' AND SF1.F1_TIPO = 'D'
-) AS subquery;
+### EXEMPLO 1 — faturamento + quantidade + devolucoes JUNTOS (caso 1 da REGRA CRITICA — usa D2_VALDEV/D2_QTDEDEV, SEM UNION ALL, SEM SD1/SF1):
+SELECT COALESCE(SUM(SD2.D2_TOTAL - SD2.D2_VALDEV), 0) AS valor_liquido,
+       COALESCE(SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), 0) AS quantidade_liquida
+FROM SD2xxx SD2
+JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260601' AND '20260630' AND SF2.F2_TIPO = 'N';
 
-### EXEMPLO 2 — por produto com devolucoes (GROUP BY dentro de cada subquery, sem wrapper de SUM)
-SELECT produto, SUM(valor_faturamento) AS total_faturamento, SUM(quantidade_faturada) AS total_quantidade,
-       SUM(valor_devolucao) AS total_devolucoes,
-       (SUM(valor_faturamento) - SUM(valor_devolucao)) AS faturamento_liquido
-FROM (
-  SELECT SB1.B1_DESC AS produto,
-         COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_faturamento,
-         COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada,
-         0                               AS valor_devolucao
-  FROM SD2xxx SD2
-  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
-  JOIN SB1xxx SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
-  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260601' AND '20260630' AND SF2.F2_TIPO IN ('N','C','I')
-  GROUP BY SB1.B1_DESC
-  UNION ALL
-  SELECT SB1.B1_DESC AS produto,
-         0                               AS valor_faturamento,
-         0                               AS quantidade_faturada,
-         COALESCE(SUM(SD1.D1_TOTAL), 0)  AS valor_devolucao
-  FROM SD1xxx SD1
-  JOIN SF1xxx SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
-  JOIN SB1xxx SB1 ON SD1.D1_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
-  WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_DTDIGIT BETWEEN '20260601' AND '20260630' AND SF1.F1_TIPO = 'D'
-  GROUP BY SB1.B1_DESC
-) AS subquery
-GROUP BY produto
-ORDER BY total_faturamento DESC;
+### EXEMPLO 2 — faturamento + devolucao por produto (caso 1, agrupado — ainda D2_VALDEV/D2_QTDEDEV, sem UNION ALL):
+SELECT SB1.B1_DESC AS produto,
+       COALESCE(SUM(SD2.D2_TOTAL - SD2.D2_VALDEV), 0) AS valor_liquido,
+       COALESCE(SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), 0) AS quantidade_liquida
+FROM SD2xxx SD2
+JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+JOIN SB1xxx SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260601' AND '20260630' AND SF2.F2_TIPO = 'N'
+GROUP BY SB1.B1_DESC
+ORDER BY valor_liquido DESC;
+
+### EXEMPLO 3 — SOMENTE devolucao, sem faturamento/quantidade junto (caso 2 da REGRA CRITICA — usa SD1/SF1, sem UNION ALL pois nao ha o que unificar):
+SELECT COALESCE(SUM(SD1.D1_TOTAL), 0) AS total_devolucoes
+FROM SD1xxx SD1
+JOIN SF1xxx SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
+WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_DTDIGIT BETWEEN '20260601' AND '20260630' AND SF1.F1_TIPO = 'D';
 `;
 }
 
@@ -188,11 +150,12 @@ function metricaValorTotal() {
 Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FROM/JOIN. O uso incorreto gera duplicidade matematica ou metricas zeradas.
 
 ### Consultas por VALOR Financeiro Total (sem produto/item)
-- Quando o usuario pedir "Total de faturamento", "Faturamento do ano", "Faturamento do mes" ou "Faturamento de um periodo" — metricas puramente monetarias, sem especificar produto, grupo de produto ou QUANTIDADE de itens — use OBRIGATORIAMENTE APENAS a tabela de cabecalho SF2.
-- Metrica escalar obrigatoria: COALESCE(SUM(SF2.F2_VALBRUT), 0) AS faturamento.
-- FILTRO OBRIGATORIO: inclua SEMPRE SF2.F2_TIPO = 'N' no WHERE junto com D_E_L_E_T_ = ' '. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Exemplo: WHERE SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '...' AND '...'.
-- Agrupamentos por cliente, vendedor ou natureza sao compativeis com SF2 sozinha: faca JOIN com SA1 (via Joins padrao SF2->SA1), SA3 ou SED conforme o agrupamento pedido. SD2 nao entra neste caminho.
-- EXPRESSAMENTE PROIBIDO fazer JOIN com SD2 nesses casos de valor total: o relacionamento 1-para-muitos multiplica F2_VALBRUT pela quantidade de itens da nota, gerando valores duplicados errados.
+- Quando o usuario pedir "Total de faturamento", "Faturamento do ano", "Faturamento do mes" ou "Faturamento de um periodo" — SEMPRE use SD2 JOIN SF2, mesmo sem produto/grupo/quantidade na pergunta.
+- Metrica escalar obrigatoria: COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento. NUNCA use SUM(SF2.F2_VALBRUT) — SD2.D2_TOTAL e a metrica de item, correta para agregacao por nota (SF2.F2_VALBRUT somado com JOIN em SD2 duplicaria o valor pela quantidade de itens da nota).
+- EXCECAO — pergunta pede "faturamento considerando devolucoes", "com devolucoes", "abatendo devolucoes" ou "liquido": use COALESCE(SUM(SD2.D2_TOTAL - SD2.D2_VALDEV), 0) AS faturamento_liquido — SD2.D2_VALDEV e o valor de devolucao ja vinculado ao item, dispensando UNION ALL com SD1/SF1.
+- FILTRO OBRIGATORIO: inclua SEMPRE SF2.F2_TIPO = 'N' no WHERE junto com D_E_L_E_T_ = ' ' (em SD2 e SF2). Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Exemplo: WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '...' AND '...'.
+- Agrupamentos por cliente, vendedor ou natureza: faca JOIN adicional com SA1 (via Joins padrao SF2->SA1), SA3 ou SED conforme o agrupamento pedido.
+- Exemplo completo de "faturamento do mes": SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento FROM SD2... JOIN SF2... WHERE SF2.F2_TIPO = 'N' AND [demais filtros D_E_L_E_T_/periodo].
 `;
 }
 
@@ -205,6 +168,49 @@ function metricaQuantidadeItem() {
 - Quando o agrupamento ou filtro for por produto, grupo de produto, TES ou centro de custo: use SD2 JOIN SF2 e adote SUM(SD2.D2_TOTAL) como metrica de valor.
 - REGRA DE EXCLUSIVIDADE DE METRICA: SD2 e F2_VALBRUT sao mutuamente exclusivos. Quando SD2 estiver no FROM ou em qualquer JOIN, use OBRIGATORIAMENTE SUM(SD2.D2_TOTAL) para valor e SUM(SD2.D2_QUANT) para quantidade. Nunca use SUM(SF2.F2_VALBRUT) quando SD2 estiver presente — a multiplicidade da relacao 1-para-N inflaria todos os valores.
 - Quando o usuario pedir SIMULTANEAMENTE "por valor" e "por quantidade" com agrupamento por produto/grupo/mes/cliente: ambas as metricas devem vir de SD2. Exemplo: SELECT ..., COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_total, COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada FROM SD2... JOIN SF2...
+- REGRA CRITICA — duas metricas com regras fiscais DIFERENTES na mesma pergunta (ex: "quantidade carregada e valor faturado", "faturamento e carregamento do mes", com ou sem devolucao): cada metrica tem seu proprio JOIN/filtro. "Carregada"/"carregamento" exige JOIN SF4/F4_ESTOQUE='S' e NUNCA filtro de D2_CF. "Faturada"/"faturamento"/valor NUNCA usa JOIN SF4 e NUNCA usa filtro de D2_CF. NUNCA junte as duas metricas em um UNICO SELECT com um UNICO FROM/WHERE — isso aplicaria o JOIN SF4 (exclusivo de carregada) tambem sobre faturada, contaminando o resultado mesmo que cada COALESCE(SUM(...)) pareca correto isoladamente. ESTE ERRO E FACIL DE COMETER: nao gera erro de sintaxe, so um numero errado. SEMPRE use DUAS subqueries/CTEs 100% independentes (cada uma com seu proprio FROM/JOIN/WHERE completo, sem compartilhar nada), combinadas via CROSS JOIN no SELECT externo. Quando a pergunta tambem pedir devolucao (ex: "faturamento e carregamento do mes considerando devolucao"), aplique a formula de devolucao (D2_VALDEV/D2_QTDEDEV) DENTRO DE CADA subquery — nunca esqueca de aplicar em AMBAS.
+
+EXEMPLO OBRIGATORIO — "faturamento e carregamento do mes considerando devolucao" (copie esta estrutura, so trocando o periodo):
+WITH faturamento AS (
+  SELECT COALESCE(SUM(SD2.D2_TOTAL - SD2.D2_VALDEV), 0) AS valor_liquido
+  FROM SD2xxx SD2
+  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N'
+),
+carregamento AS (
+  SELECT COALESCE(SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), 0) AS quantidade_carregada_liquida
+  FROM SD2xxx SD2
+  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  JOIN SF4xxx SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N'
+)
+SELECT f.valor_liquido, c.quantidade_carregada_liquida FROM faturamento f CROSS JOIN carregamento c;
+
+EXEMPLO OBRIGATORIO — "quantidade faturada e carregada no mes" (SEM devolucao — repare que "faturada" NAO tem JOIN SF4 nem filtro de D2_CF):
+WITH faturamento AS (
+  SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
+  FROM SD2xxx SD2
+  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N'
+),
+carregamento AS (
+  SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_carregada
+  FROM SD2xxx SD2
+  JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  JOIN SF4xxx SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N'
+)
+SELECT f.quantidade_faturada, c.quantidade_carregada FROM faturamento f CROSS JOIN carregamento c;
+- 3 GRUPOS FISCAIS DE SD2.D2_CF (mutuamente exclusivos, nunca misture, NUNCA omita quando a pergunta cair em um destes casos):
+  REMESSA = (LIKE '59%' OR LIKE '69%') | TRANSFERENCIA = IN ('5151','6151','5152','6152','5155','6155','5156','6156') | ENTREGA_FUTURA/NOTA_MAE = IN ('5117','6117')
+- REMESSA tem 2 condicoes com OR: SEMPRE escreva entre parenteses no WHERE — (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') — nunca solto, senao o AND seguinte quebra a precedencia logica do filtro.
+- "faturada"/"faturado" SEM mencionar carregada/carga/entrega futura/nota mae/remessa/transferencia: NAO aplique NENHUM filtro de D2_CF. Quantidade/valor faturado e o total bruto de SD2, sem exclusao fiscal. Exemplo completo de "quantidade faturada no mes": SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada FROM SD2... JOIN SF2... WHERE SF2.F2_TIPO = 'N' AND [demais filtros D_E_L_E_T_/periodo] — sem D2_CF no WHERE.
+- pergunta pede remessa especificamente: use SOMENTE o filtro REMESSA, entre parenteses: (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%').
+- pergunta pede transferencia especificamente: use SOMENTE o filtro TRANSFERENCIA (IN de 8 codigos acima). Nunca troque por REMESSA.
+- pergunta usa "carregada"/"carregado"/"carga"/"carregamento" (sinonimos, mesmo conceito — ex: "carregamento do dia" = "quantidade carregada do dia"): NAO use filtro de D2_CF (nenhum dos 3 grupos fiscais acima). Em vez disso, faca OBRIGATORIAMENTE JOIN adicional com SF4 (TES) exigindo F4_ESTOQUE = 'S' — isso identifica exatamente as saidas que geraram movimentacao fisica de estoque (o que "carregada" significa de fato), sem depender de decorar codigos fiscais. JOIN: SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'. Exemplo completo de "quantidade carregada no mes": SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_carregada FROM SD2... JOIN SF2... JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' WHERE SF2.F2_TIPO = 'N' AND [demais filtros D_E_L_E_T_/periodo]. OBRIGATORIO, nunca omita o JOIN com SF4/F4_ESTOQUE='S' nesse caso.
+- pergunta pede entrega futura/nota mae: use SOMENTE SD2.D2_CF IN ('5117', '6117').
+- DEVOLUCAO — quando SD2 ja estiver no FROM (quantidade faturada, quantidade carregada, valor por item) e a pergunta pedir "considerando devolucoes", "com devolucoes", "abatendo devolucoes" ou "liquido": NAO use o padrao UNION ALL com SD1/SF1 (esse padrao e exclusivo para consultas SOMENTE de devolucao, sem SD2 no FROM — ver bloco DEVOLUCOES abaixo). Em vez disso, use os campos de devolucao ja disponiveis na propria SD2, por item da nota: quantidade liquida = SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), valor liquido = SUM(SD2.D2_TOTAL - SD2.D2_VALDEV). Exemplo: "quantidade carregada no mes considerando devolucoes" = SELECT COALESCE(SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), 0) AS quantidade_carregada_liquida FROM SD2... JOIN SF2... JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' WHERE SF2.F2_TIPO = 'N' AND [demais filtros].
+- REGRA DE PREFIXO CFOP: no CFOP do Protheus, prefixo 5 = operacao estadual, prefixo 6 = a MESMA operacao interestadual (ex: 5117/6117 sao a mesma operacao). Os 3 grupos acima ja tem essa equivalencia aplicada (REMESSA via LIKE cobre ambos os prefixos; TRANSFERENCIA e ENTREGA_FUTURA ja listam os pares 5xxx/6xxx explicitamente) — nao precisa de ajuste adicional.
 
 `;
 }
@@ -214,13 +220,10 @@ function cfopTesCentroCusto() {
 ## Codigo Fiscal (CF/CFOP), TES e modos fiscais de quantidade — Faturamento
 - Sinonimos para nota fiscal de saida/faturamento: nota de saida, nota fiscal de saida, NF de saida, faturamento, venda.
 - CF, CFOP, codigo fiscal e codigo fiscal de operacao sao sinonimos — referem-se ao campo SD2.D2_CF.
-- Por padrao, em consultas de receita de vendas, faturamento financeiro ou quantidade faturada, excluir simples remessa e transferencia:
-  SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '60%'
-  Razao: CFs iniciados com 59 ou 60 sao simples remessa/transferencia — nao representam venda que gerou financeiro.
-- Modos fiscais de quantidade:
-  - Quantidade faturada: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '60%'.
-  - Quantidade carregada: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF <> '5117'.
-  - Entrega futura, venda para entrega futura ou nota mae: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF = '5117'.
+- Quantidade/valor faturado NAO tem filtro de CF por padrao. Filtros especificos de remessa/transferencia (quando a pergunta pedir explicitamente): ver regras no bloco de QUANTIDADE/PRODUTO acima — aplicam-se igualmente aqui sempre que SD2 estiver envolvido.
+- Modos fiscais de quantidade adicionais (5117 = entrega futura/nota mae estadual, 6117 = a mesma operacao interestadual — ver REGRA DE PREFIXO CFOP no bloco de QUANTIDADE/PRODUTO):
+  - Quantidade carregada: SUM(SD2.D2_QUANT), com JOIN adicional SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' (NAO filtra por D2_CF — ver regra completa no bloco de QUANTIDADE/PRODUTO acima).
+  - Entrega futura, venda para entrega futura ou nota mae: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF IN ('5117', '6117').
   - Movimentacao total, todas as saidas, volume total, sem filtro fiscal ou incluindo remessa/transferencia: SUM(SD2.D2_QUANT) sem filtro em SD2.D2_CF.
 - TES pode ser chamado de TES ou Tipos de Saida. Refere-se ao campo SD2.D2_TES / tabela SF4 (F4_CODIGO, F4_TEXTO).
 - SF4.F4_ESTOQUE: 'S' = TES gera movimentacao de estoque; 'N' = nao gera.
@@ -327,13 +330,13 @@ function media({ granularidade = 'mensal' } = {}) {
   const { tam, alias } = TRUNC_POR_GRANULARIDADE[granularidade] || TRUNC_POR_GRANULARIDADE.mensal;
   return `
 ## Media de faturamento — granularidade ${granularidade}
-- Subquery/CTE interna agrupa por SUBSTRING(SF2.F2_EMISSAO,1,${tam}) AS ${alias}, exportando COALESCE(SUM(SF2.F2_VALBRUT),0) AS faturamento_${granularidade === 'anual' ? 'ano' : granularidade === 'diaria' ? 'dia' : 'mes'}.
+- Subquery/CTE interna usa SD2 JOIN SF2, agrupa por SUBSTRING(SF2.F2_EMISSAO,1,${tam}) AS ${alias}, exportando COALESCE(SUM(SD2.D2_TOTAL),0) AS faturamento_${granularidade === 'anual' ? 'ano' : granularidade === 'diaria' ? 'dia' : 'mes'}. NUNCA use SUM(SF2.F2_VALBRUT).
 - Media mensal por ano (subquery agrupada por nivel maior): Subquery interna OBRIGATORIAMENTE exporta DOIS aliases de data: o nivel de detalhe (ex: SUBSTRING(SF2.F2_EMISSAO,1,6) AS competencia) E o nivel de agrupamento externo (ex: SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano). Nunca exporte so o nivel de detalhe — sem o alias do nivel externo, a query externa nao consegue agrupar (GROUP BY h.ano).
 - REGRA DE DECISAO — agrupar ou nao na query externa: SO agrupe a query externa (GROUP BY h.<nivel_externo>) quando o usuario pedir explicitamente a media "POR" o nivel externo (ex: "media mensal POR ano" = uma media para cada ano, GROUP BY h.ano). Quando o usuario pedir a media de UM CONJUNTO de periodos especificos sem dizer "por" (ex: "media anual considerando 2025 e 2026", "media anual dos ultimos 2 anos", "media mensal de 2026") — mesmo citando varios periodos — o resultado e ESCALAR (1 linha, sem GROUP BY na query externa): a subquery interna filtra os periodos pedidos no WHERE, e a query externa faz AVG(h.faturamento_${granularidade === 'anual' ? 'ano' : granularidade === 'diaria' ? 'dia' : 'mes'}) sem GROUP BY, calculando a media UNICA entre todos os periodos filtrados. PROIBIDO agrupar por h.ano/h.competencia/h.dia quando o usuario apenas cita os periodos a incluir na media, sem pedir "por ano/mes/dia".
 - Query externa (quando agrupada, ex: "media mensal por ano"): SELECT h.<nivel_externo>, AVG(h.faturamento_${granularidade === 'anual' ? 'ano' : granularidade === 'diaria' ? 'dia' : 'mes'}) AS media FROM (...) AS h GROUP BY h.<nivel_externo>.
 - Media mensal escalar (1 ano especifico, caso mais comum — usuario nao pediu "por" nivel externo): Query externa: SELECT AVG(h.faturamento_${granularidade === 'anual' ? 'ano' : granularidade === 'diaria' ? 'dia' : 'mes'}) AS media FROM (...) AS h. Sem GROUP BY. HAVING SUM > 0 na subquery interna se o usuario pedir so periodos com faturamento.
-- Media anual escalar: subquery interna SUM por ano (filtrando no WHERE os anos pedidos, ex: SUBSTRING(SF2.F2_EMISSAO,1,4) IN ('2025','2026')) → query externa AVG dos totais anuais SEM GROUP BY. Camada externa usa SOMENTE h.faturamento_ano — nunca SF2.*. Retorna 1 linha.
-- Camada externa usa SOMENTE os aliases exportados pela subquery (h.<...>) — NUNCA referencie SF2.* fora da subquery/CTE.
+- Media anual escalar: subquery interna (SD2 JOIN SF2) SUM(SD2.D2_TOTAL) por ano (filtrando no WHERE os anos pedidos, ex: SUBSTRING(SF2.F2_EMISSAO,1,4) IN ('2025','2026')) → query externa AVG dos totais anuais SEM GROUP BY. Camada externa usa SOMENTE h.faturamento_ano — nunca SD2.*/SF2.*. Retorna 1 linha.
+- Camada externa usa SOMENTE os aliases exportados pela subquery (h.<...>) — NUNCA referencie SD2.*/SF2.* fora da subquery/CTE.
 - Media mensal por produto: quando o usuario pedir "faturamento medio por produto" ou equivalente, a SQL da IA ja deve calcular a media correta; o backend nao recalcula nem corrige a metrica. Use obrigatoriamente duas camadas: (1) subquery interna agrupada por SB1.B1_COD, SB1.B1_DESC e ${alias} (SUBSTRING(SF2.F2_EMISSAO,1,${tam})), com SUM(SD2.D2_TOTAL) AS faturamento_${alias}; (2) query externa agrupada somente por h.cod_produto, h.produto, com AVG(h.faturamento_${alias}) AS faturamento_medio. Aplique periodo, F2_TIPO e D_E_L_E_T_ dentro da subquery interna, nos aliases reais SD2/SF2/SB1. A query externa deve referenciar apenas aliases exportados por h; nunca referencie SD2, SF2 ou SB1 fora da subquery.
 - NUNCA use AVG(SF2.F2_VALBRUT) diretamente sobre a tabela fato: isso calcula ticket medio por nota fiscal, nao media de periodo.
 - NUNCA use AVG(SD2.D2_TOTAL) ou AVG(SD2.D2_VALBRUT) diretamente sobre a tabela fato: isso calcula media de linha/item, nao media de periodo.
@@ -356,8 +359,8 @@ function crescimento({ granularidade = 'mensal' } = {}) {
   return `
 ## Crescimento mensal / variacao mensal / evolucao mes a mes (granularidade ${granularidade})
 - Quando o usuario pedir faturamento por ${granularidade === 'anual' ? 'ano' : granularidade === 'diaria' ? 'dia' : 'mes'} demonstrando crescimento, variacao, aumento, queda ou evolucao, a SQL deve calcular a comparacao contra o periodo anterior (LAG). Nao retorne apenas ${alias} + faturamento.
-- Use duas camadas: (1) subquery/CTE com SUBSTRING(SF2.F2_EMISSAO,1,${tam}) AS ${alias} e COALESCE(SUM(SF2.F2_VALBRUT),0) AS faturamento; (2) query externa com h.${alias}, h.faturamento, LAG(h.faturamento) OVER (ORDER BY h.${alias}) AS faturamento_anterior, (h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.${alias})) AS crescimento_valor e CASE WHEN LAG(h.faturamento) OVER (ORDER BY h.${alias}) IS NULL OR LAG(h.faturamento) OVER (ORDER BY h.${alias}) = 0 THEN NULL ELSE ((h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.${alias})) * 100.0 / LAG(h.faturamento) OVER (ORDER BY h.${alias})) END AS crescimento_percentual.
-- Na query externa use SOMENTE aliases exportados pela camada interna (h.${alias}, h.faturamento). NUNCA referencie SF2.* fora da subquery/CTE.
+- Use duas camadas: (1) subquery/CTE com SD2 JOIN SF2, agrupada por SUBSTRING(SF2.F2_EMISSAO,1,${tam}) AS ${alias} e COALESCE(SUM(SD2.D2_TOTAL),0) AS faturamento (NUNCA SUM(SF2.F2_VALBRUT)); (2) query externa com h.${alias}, h.faturamento, LAG(h.faturamento) OVER (ORDER BY h.${alias}) AS faturamento_anterior, (h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.${alias})) AS crescimento_valor e CASE WHEN LAG(h.faturamento) OVER (ORDER BY h.${alias}) IS NULL OR LAG(h.faturamento) OVER (ORDER BY h.${alias}) = 0 THEN NULL ELSE ((h.faturamento - LAG(h.faturamento) OVER (ORDER BY h.${alias})) * 100.0 / LAG(h.faturamento) OVER (ORDER BY h.${alias})) END AS crescimento_percentual.
+- Na query externa use SOMENTE aliases exportados pela camada interna (h.${alias}, h.faturamento). NUNCA referencie SD2.*/SF2.* fora da subquery/CTE.
 - Se o usuario pedir "crescimento" sem especificar valor ou percentual, inclua ambos: crescimento_valor e crescimento_percentual. O primeiro periodo deve ficar com crescimento_percentual NULL por nao haver periodo anterior.
 `;
 }
@@ -368,7 +371,7 @@ function comparativoPeriodos() {
 - Diferente de crescimento (que compara cada periodo com o IMEDIATAMENTE anterior via LAG), comparativo trata de periodos ESPECIFICOS escolhidos pelo usuario, que podem nao ser adjacentes (ex: "junho de 2025 vs junho de 2026", "este ano comparado a 2 anos atras", "marco e setembro").
 - Para comparar UM periodo de referencia contra OUTROS periodos (ex: "junho/2026 comparado com junhos anteriores, trazendo os menores"): o periodo de REFERENCIA vai em subquery escalar SEM GROUP BY (retorna 1 valor); os periodos COMPARADOS ficam na query principal com GROUP BY.
 - PROIBIDO: subquery com GROUP BY dentro de uma comparacao escalar (=, <, >, <=, >=, HAVING). GROUP BY na subquery retorna N linhas, causando erro do SQL Server ("Subquery returned more than 1 value").
-- CORRETO: HAVING SUM(SF2.F2_VALBRUT) < (SELECT SUM(F2_VALBRUT) FROM SF2... WHERE <periodo_referencia>) — subquery sem GROUP BY, retorna 1 linha escalar.
+- CORRETO: HAVING SUM(SD2.D2_TOTAL) < (SELECT SUM(SD2.D2_TOTAL) FROM SD2... JOIN SF2... WHERE <periodo_referencia>) — subquery sem GROUP BY, retorna 1 linha escalar. NUNCA use SF2.F2_VALBRUT.
 - Para comparar MULTIPLOS periodos especificos lado a lado (ex: "2024 vs 2025 vs 2026", "marco e setembro de 2024 e 2025"): use GROUP BY pela mesma dimensao em todos, com filtro WHERE restringindo exatamente aos periodos pedidos (ex: SUBSTRING(SF2.F2_EMISSAO,1,4) IN ('2024','2026') quando o usuario pular anos intermediarios).
 - Granularidade do comparativo (dia/mes/ano) e definida pela pergunta do usuario — use SUBSTRING(SF2.F2_EMISSAO,1,8) para dia, 1,6 para mes, 1,4 para ano, sempre consistente entre os periodos comparados.
 - REGRA ABSOLUTA — calculo de competencia "mesmo mes, ano diferente": ao montar o valor de competencia (formato AAAAMM) para "mesmo mes do ano anterior/seguinte", o MES permanece IDENTICO e SOMENTE o ANO muda. Erro comum a evitar: ao comparar "junho de 2026 com junho de 2025", o periodo comparado e competencia = '202506' (ano 2025, mes 06) — NUNCA mude o mes ao trocar o ano (ex: gerar '202505' seria errado, pois mudou o mes de 06 para 05 junto com o ano). Construa cada competencia explicitamente como CONCAT(ano, mes) ou string literal com os 4 digitos do ano + 2 digitos do mes do periodo de referencia, nunca subtraindo do valor numerico da competencia inteira.
@@ -388,11 +391,11 @@ const FRAGMENTOS = {
   },
   metrica_quantidade_item: {
     texto: metricaQuantidadeItem,
-    keywords: [/\bquantidade\b/i, /\bvolume\b/i, /\bpe[çc]as?\b/i, /\bproduto\w*\b/i, /\bgrupo\s+de\s+produto\w*\b/i],
+    keywords: [/\bquantidade\b/i, /\bvolume\b/i, /\bpe[çc]as?\b/i, /\bproduto\w*\b/i, /\bgrupo\s+de\s+produto\w*\b/i, /\bfaturad[ao]\b/i, /\bremessa\b/i, /\btransfer[eê]ncia\b/i, /\btoneladas?\b/i, /\bcarregad[ao]s?\b/i, /\bcarregamentos?\b/i, /\bcarga\b/i],
   },
   cfop_tes_centro_custo: {
     texto: cfopTesCentroCusto,
-    keywords: [/\bCFOP\b/i, /\bCF\b/, /\bTES\b/, /\bcarregad[ao]\b/i, /\bentrega\s+futura\b/i, /\bnota\s+mae\b/i, /\bestoque\b/i, /\bcentro\s+de\s+custo\b/i],
+    keywords: [/\bCFOP\b/i, /\bCF\b/, /\bTES\b/, /\bcarregad[ao]s?\b/i, /\bcarregamentos?\b/i, /\bentrega\s+futura\b/i, /\bnota\s+mae\b/i, /\bestoque\b/i, /\bcentro\s+de\s+custo\b/i],
   },
   grupo_produto: {
     texto: grupoProduto,

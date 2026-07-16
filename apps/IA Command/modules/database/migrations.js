@@ -878,6 +878,13 @@ const MIGRATIONS = [
         ON scheduled_question_deliveries (job_id, criado_em);
     `,
   },
+  {
+    version: 49,
+    descricao: 'IA Command - chave Admin OpenAI opcional para consulta de custo no dashboard',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN openai_admin_key TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

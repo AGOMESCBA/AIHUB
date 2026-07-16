@@ -92,7 +92,7 @@ async function _resolveKeys(empresaId) {
     const { getDB } = require('../database');
     const db  = getDB();
     const row = db.prepare(`
-      SELECT groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, openai_api_key, provedor_primario, fallback_ordem, confianca_minima
+      SELECT groq_api_key, gemini_api_key, deepseek_api_key, claude_api_key, openai_api_key, provedor_primario, fallback_ordem, confianca_minima, claude_modelo, gemini_modelo
       FROM ai_config
       WHERE empresa_id = ?
       LIMIT 1
@@ -865,7 +865,10 @@ async function classificar(mensagem, empresaId, opts = {}) {
     for (const provedor of ordem) {
       if (!keys[provedor]) continue;
       try {
-        const raw = await PROVIDERS[provedor].classificarIntencao(mensagem, keys[provedor], intencoes, sinonimos, contextoAnterior);
+        const modeloConfigurado = provedor === 'claude' ? cfg.claude_modelo
+          : provedor === 'gemini' ? cfg.gemini_modelo
+          : null;
+        const raw = await PROVIDERS[provedor].classificarIntencao(mensagem, keys[provedor], intencoes, sinonimos, contextoAnterior, modeloConfigurado);
         const result = validator.validar(raw, nomesPermitidos);
         if (result.valido) {
           let intent = _appendTrace(

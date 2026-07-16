@@ -146,7 +146,7 @@ function buildPrompt(mensagem, intencoes = [], sinonimos = [], contextoAnterior 
     '    "data_inicio": string|null,  // "YYYYMMDD", apenas quando tipo="personalizado"',
     '    "data_fim": string|null      // "YYYYMMDD", apenas quando tipo="personalizado"',
     '  },',
-    '  "filtros": {               // campos extras extraídos da mensagem',
+    '  "filtros": {               // campos extras extraídos da mensagem — SEMPRE string no singular, NUNCA array nem chave no plural (produtos/clientes/vendedores)',
     '    "cliente": string|null,',
     '    "vendedor": string|null,',
     '    "fornecedor": string|null,',

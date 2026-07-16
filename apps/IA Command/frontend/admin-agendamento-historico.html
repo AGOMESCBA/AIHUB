@@ -226,7 +226,9 @@
   let table = null;
   const params = new URLSearchParams(location.search);
   const jobIdFiltro = String(params.get('job_id') || '').split(/[?&]/)[0];
+  const empresaIdFiltro = Number(params.get('empresa_id') || 0) || null;
   let jobNomeFiltro = '';
+  let empresasCache = null;
   const GROUP_STATE_KEY = 'iac_admin_agendamento_historico_group_state_v1';
   const GROUP_FIELDS = {
     job_nome: 'Job',
@@ -756,12 +758,24 @@
     document.getElementById('sec-lista').classList.remove('d-none');
     setTimeout(() => table?.redraw(true), 0);
   }
-  function abrirAgendamento() {
+  async function abrirAgendamento() {
     const url = '/app/ia-command/admin-agendamento.html';
+    const empresaId = empresaIdFiltro || Number(runs[0]?.empresa_id || 0) || null;
     if (window.parent && window.parent !== window && typeof window.parent.openTab === 'function') {
-      window.parent.openTab(url, 'Perguntas Agendadas', '⏱');
+      const empresaNome = await nomeEmpresaPorId(empresaId);
+      window.parent.openTab(url, 'Perguntas Agendadas', '⏱', empresaId, empresaNome);
     } else {
-      location.href = url;
+      location.href = empresaId ? `${url}?empresa_id=${encodeURIComponent(empresaId)}` : url;
+    }
+  }
+  async function nomeEmpresaPorId(empresaId) {
+    if (!empresaId) return null;
+    try {
+      if (!empresasCache) empresasCache = await fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []);
+      const emp = empresasCache.find(e => Number(e.id) === Number(empresaId));
+      return emp ? (emp.razao_social || emp.nome || '') : null;
+    } catch (_) {
+      return null;
     }
   }
 

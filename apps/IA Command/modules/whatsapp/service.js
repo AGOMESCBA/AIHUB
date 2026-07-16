@@ -668,21 +668,40 @@ class IACWhatsAppService extends EventEmitter {
     return partes.length;
   }
 
+  async _resolveReplyChat(chatIds = []) {
+    if (!this.client || typeof this.client.getChatById !== 'function') return null;
+    const ids = [...new Set((chatIds || []).filter(Boolean).map(v => String(v)))];
+    for (const id of ids) {
+      try {
+        const chat = await this.client.getChatById(id);
+        if (chat && typeof chat.sendMessage === 'function') return chat;
+      } catch (_) {}
+    }
+    return null;
+  }
+
   async _sendReplyMessageSafe(chat, sender, texto) {
     const partes = _quebrarMensagemWhatsapp(texto);
+    let directRouteLogged = false;
     for (let i = 0; i < partes.length; i++) {
       const prefixo = partes.length > 1 ? `(${i + 1}/${partes.length})\n` : '';
       const parte = prefixo + partes[i];
       try {
+        if (!chat || typeof chat.sendMessage !== 'function') {
+          throw new Error('Chat nao disponivel');
+        }
         await chat.sendMessage(parte);
       } catch (chatErr) {
-        this.log(`Envio pelo chat falhou; tentando envio direto para ${sender}: ${chatErr.message}`, 'warning');
         if (!this.client) {
           this.log(`Cliente WhatsApp nulo — mensagem nao entregue para ${sender}`, 'error');
           continue;
         }
         try {
           await this.client.sendMessage(sender, parte);
+          if (!directRouteLogged) {
+            this.log(`Chat indisponível; resposta enviada por rota direta para ${sender}.`, 'warning');
+            directRouteLogged = true;
+          }
         } catch (directErr) {
           this.log(`Envio direto tambem falhou para ${sender}: ${directErr.message}`, 'error');
         }
@@ -3094,17 +3113,26 @@ class IACWhatsAppService extends EventEmitter {
     this._tipoMensagemAtual = 'texto';
     this.log(`📩 Texto recebido: "${texto}"`, 'received');
 
-    let chat;
+    let chat = null;
     try {
       chat = await msg.getChat();
-      await chat.sendMessage(messageTemplates.render(this._empresaId, 'processando', {
+      await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, 'processando', {
         canal_nome: this._channelName || '',
         numero: this._normalizarNumeroWa(sender),
       }));
       this.log(`⏳ Acuse de recebimento enviado — iniciando pipeline...`, 'info');
     } catch (chatErr) {
-      this.log(`Falha ao obter chat ou enviar acuse: ${chatErr.message}`, 'error');
-      return;
+      this.log(`Chat indisponível pelo evento; tentando recuperar por ID antes da rota direta: ${chatErr.message}`, 'warning');
+      chat = await this._resolveReplyChat([msg.from, msg?.id?.remote, sender]);
+      if (chat) this.log(`Chat recuperado por getChatById para ${sender}.`, 'info');
+      try {
+        await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, 'processando', {
+          canal_nome: this._channelName || '',
+          numero: this._normalizarNumeroWa(sender),
+        }));
+      } catch (directAckErr) {
+        this.log(`Falha tambem no acuse direto: ${directAckErr.message}`, 'warning');
+      }
     }
 
     const t0 = Date.now();
@@ -3126,7 +3154,7 @@ class IACWhatsAppService extends EventEmitter {
           clearInterval(heartbeatId);
           return;
         }
-        await chat.sendMessage(messageTemplates.render(this._empresaId, 'aguardando_processamento', {}));
+        await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, 'aguardando_processamento', {}));
         this.log(`⏳ Heartbeat #${heartbeatCount} enviado para ${sender} (${Math.round((Date.now() - t0) / 1000)}s)`, 'info');
       } catch (hbErr) {
         this.log(`Falha ao enviar heartbeat: ${hbErr.message}`, 'error');
@@ -3168,7 +3196,7 @@ class IACWhatsAppService extends EventEmitter {
       const templateChave = isTimeout ? 'timeout_agente' : 'erro_processamento';
       try {
         if (this.client) {
-          await chat.sendMessage(messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
+          await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
         } else {
           this.log(`Cliente nulo — mensagem de erro nao entregue para ${sender}`, 'error');
         }

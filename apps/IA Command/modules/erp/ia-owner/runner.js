@@ -178,7 +178,7 @@ function mensagemErro(spec, tipo) {
 }
 
 function maxTentativasPrepararSql(entidadesResolvidas = []) {
-  return 3;
+  return 4;
 }
 
 function _linhasEntidadesRetry(entidadesResolvidas = []) {
@@ -201,17 +201,7 @@ function _linhasEntidadesRetry(entidadesResolvidas = []) {
   ];
 }
 
-function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
-  const subtipo = String(erro?._tipo || '').trim();
-  const mensagem = String(erro?.message || erro || '').trim();
-  const linhasEntidades = _linhasEntidadesRetry(entidadesResolvidas);
-  const base = [
-    'RETRY TECNICO IA-OWNER',
-    '',
-    `Motivo da rejeicao: ${mensagem || subtipo || 'erro nao classificado'}`,
-    '',
-  ];
-
+function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
   let bloco;
   if (subtipo === 'contrato_entidade_invalido' || /entidades resolvidas|filtro de codigo|filtro da loja|por nome\/descricao/i.test(mensagem)) {
     bloco = [
@@ -326,24 +316,141 @@ function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
       '- Preserve periodo, metrica, entidades resolvidas, agrupamentos e tabelas corretas.',
       '- Antes de retornar: releia o SQL e confirme que so existem 2 ";" no total (apos SET ROWCOUNT e no final).',
     ];
-  } else {
+  } else if (/nao tem o JOIN obrigatorio com SF4 exigindo estoque/i.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio:',
-      '- O SQL deve respeitar o erro tecnico informado e o contexto tecnico atual.',
+      "- Pergunta sobre \"carregada\"/\"carregado\"/\"carga\"/\"carregamento\" exige JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' no FROM.",
+      "- NAO use filtro de D2_CF (nem faturada, remessa, transferencia ou entrega futura) para este caso — a regra de negocio mudou, carregada agora usa SF4/F4_ESTOQUE.",
       ...linhasEntidades,
       'Tarefa:',
-      '- Gere novo SQL do zero a partir da pergunta original.',
-      '- Preserve periodo, metrica, entidades resolvidas, agrupamentos e tabelas corretas.',
-      '- Corrija especificamente a violacao apontada no motivo da rejeicao.',
-      '',
-      'Nao fazer:',
-      '- Nao copiar o SQL anterior sem revisar todos os contratos.',
+      '- Gere novo SQL adicionando o JOIN SF4 obrigatorio.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+      '- Antes de retornar: releia o SQL e confirme visualmente que o JOIN SF4 com F4_ESTOQUE = \'S\' esta presente.',
     ];
+  } else if (/carregada.*JUNTO com.*faturada.*apenas 1 SELECT/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- Pergunta pede \"carregada\" JUNTO com \"faturada\"/valor/quantidade: sao 2 metricas com regras fiscais DIFERENTES (carregada usa JOIN SF4/F4_ESTOQUE='S'; faturada NAO usa esse JOIN).",
+      "- NUNCA combine as duas em 1 SELECT com FROM/WHERE unico — o JOIN SF4 contaminaria a metrica de faturada tambem.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL com DUAS subqueries/CTEs independentes (uma por metrica, cada uma com seu proprio FROM/JOIN/WHERE), combinadas via CROSS JOIN no SELECT externo.',
+      '- Preserve periodo, entidades resolvidas e agrupamentos em AMBAS as subqueries.',
+      '- Antes de retornar: confirme que ha 2+ SELECTs no SQL (uma subquery por metrica), nao apenas 1.',
+    ];
+  } else if (/"remessa".*nao filtra SD2\.D2_CF/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- Pergunta sobre \"remessa\" (com SD2 no SQL) exige (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') no WHERE, entre parenteses.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL com o filtro de remessa entre parenteses no WHERE.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+    ];
+  } else if (/"transferencia".*nao filtra SD2\.D2_CF/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- Pergunta sobre \"transferencia\" (com SD2 no SQL) exige SD2.D2_CF IN ('5151','6151','5152','6152','5155','6155','5156','6156') no WHERE.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL com o filtro de transferencia no WHERE.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+    ];
+  } else if (/filtro de remessa .*sem parenteses|LIKE '59%'.*OR.*LIKE '69%'.*AND/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- O filtro de remessa (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') deve estar SEMPRE entre parenteses quando combinado com outros AND no WHERE, para nao alterar a precedencia dos demais filtros.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL envolvendo o filtro de remessa entre parenteses: (SD2.D2_CF LIKE \'59%\' OR SD2.D2_CF LIKE \'69%\').',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+    ];
+  } else if (/pede devolucao\/liquido mas o SQL.*nao usa SD2\.D2_QTDEDEV/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- Pergunta pede devolucao/liquido: aplique SUM(SD2.D2_TOTAL - SD2.D2_VALDEV) para valor liquido e/ou SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV) para quantidade liquida, conforme a metrica pedida.',
+      "- Este campo foi omitido na tentativa anterior — SD2 estava presente mas sem D2_QTDEDEV/D2_VALDEV.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL subtraindo D2_QTDEDEV e/ou D2_VALDEV da metrica correspondente.',
+      '- Preserve periodo, entidades resolvidas e agrupamentos.',
+      '- Antes de retornar: releia o SQL e confirme visualmente que D2_QTDEDEV/D2_VALDEV esta presente para a(s) metrica(s) pedida(s).',
+    ];
+  } else if (/NAO pede devolucao\/liquido mas o SQL usa SD2\.D2_QTDEDEV/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      '- Pergunta NAO pede devolucao/liquido: use SUM(SD2.D2_QUANT) e/ou SUM(SD2.D2_TOTAL) SEM subtrair D2_QTDEDEV/D2_VALDEV.',
+      "- Na tentativa anterior o SQL subtraiu devolucao indevidamente, distorcendo a metrica.",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL removendo a subtracao de D2_QTDEDEV/D2_VALDEV.',
+      '- Preserve periodo, entidades resolvidas e agrupamentos.',
+    ];
+  } else {
+    bloco = null;
   }
+  return bloco;
+}
+
+function _blocoRetryGenericoIaOwner(linhasEntidades) {
+  return [
+    'Contrato obrigatorio:',
+    '- O SQL deve respeitar o erro tecnico informado e o contexto tecnico atual.',
+    ...linhasEntidades,
+    'Tarefa:',
+    '- Gere novo SQL do zero a partir da pergunta original.',
+    '- Preserve periodo, metrica, entidades resolvidas, agrupamentos e tabelas corretas.',
+    '- Corrija especificamente a violacao apontada no motivo da rejeicao.',
+    '',
+    'Nao fazer:',
+    '- Nao copiar o SQL anterior sem revisar todos os contratos.',
+  ];
+}
+
+function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
+  const subtipo = String(erro?._tipo || '').trim();
+  const mensagem = String(erro?.message || erro || '').trim();
+  const linhasEntidades = _linhasEntidadesRetry(entidadesResolvidas);
+  const base = [
+    'RETRY TECNICO IA-OWNER',
+    '',
+    `Motivo da rejeicao: ${mensagem || subtipo || 'erro nao classificado'}`,
+    '',
+  ];
+
+  // Uma mensagem de erro pode conter multiplas violacoes concatenadas por " | "
+  // (varios guardrails rejeitaram o mesmo SQL simultaneamente). Gerar um bloco de
+  // contrato por segmento evita que apenas a primeira violacao seja comunicada no
+  // retry, deixando a IA cega para as demais e repetindo o mesmo erro.
+  const segmentos = mensagem.split(/\s*\|\s*/).map(s => s.trim()).filter(Boolean);
+  const blocosGerados = [];
+  const vistos = new Set();
+  segmentos.forEach((segmento, idx) => {
+    // subtipo (categoria de excecao) so se aplica ao segmento que originou a excecao;
+    // os demais segmentos (outros guardrails que rejeitaram o mesmo SQL) sao
+    // classificados apenas pelo texto, para nao herdar uma categoria que nao e sua.
+    const bloco = _blocoRetryTecnicoIaOwner(idx === 0 ? subtipo : '', segmento, linhasEntidades);
+    if (!bloco) return;
+    const chave = bloco[0] + '|' + (bloco[1] || '');
+    if (vistos.has(chave)) return;
+    vistos.add(chave);
+    blocosGerados.push(bloco);
+  });
+  if (!blocosGerados.length) {
+    blocosGerados.push(_blocoRetryGenericoIaOwner(linhasEntidades));
+  }
+
+  const corpo = blocosGerados.length === 1
+    ? blocosGerados[0]
+    : blocosGerados.flatMap((bloco, idx) => [
+        `--- Violacao ${idx + 1}/${blocosGerados.length} ---`,
+        ...bloco,
+        '',
+      ]);
 
   return [
     ...base,
-    ...bloco,
+    ...corpo,
     '',
     'Retorne somente o JSON obrigatorio.',
   ].join('\n');
@@ -813,11 +920,35 @@ function _filtrarTermosTenant(termos, channelId) {
   }
 }
 
+function _normalizarFiltrosEntidadeSchema(filtros = {}, definicoes = {}) {
+  // Rede de seguranca contra desvio da IA de orquestracao do schema declarado
+  // (intent-classifier.js define filtros.<tipo> como string singular). Se a IA
+  // devolver a chave no plural (ex: "produtos") ou o valor como array (ex:
+  // ["01 FINA"]), sem essa normalizacao o termo cai silenciosamente do caminho
+  // deterministico (filtro_estruturado) para resolucao ambigua via IA generica,
+  // que pode tentar "cliente" antes de "produto" e gerar desambiguacao errada.
+  const normalizados = {};
+  for (const [campo, valor] of Object.entries(filtros || {})) {
+    let campoNormalizado = campo;
+    if (!definicoes[campo]) {
+      const singular = campo.replace(/s$/i, '');
+      if (definicoes[singular]) campoNormalizado = singular;
+    }
+    let valorNormalizado = valor;
+    if (Array.isArray(valor) && valor.length === 1 && typeof valor[0] === 'string') {
+      valorNormalizado = valor[0];
+    }
+    if (normalizados[campoNormalizado] === undefined) normalizados[campoNormalizado] = valorNormalizado;
+  }
+  return normalizados;
+}
+
 async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, entidadesResolvidas = [], empresaId = null) {
   if (!spec.resolverEntidadesAntesDaIa || typeof spec.resolverEntidades !== 'function') return [];
   const definicoes = spec.entityCatalog?.DEFINICOES || {};
   const explicitosMensagem = intent._filtroEntidadeExplicitaMensagem || {};
-  const termosFiltros = Object.entries(intent.filtros || {})
+  const filtrosNormalizados = _normalizarFiltrosEntidadeSchema(intent.filtros, definicoes);
+  const termosFiltros = Object.entries(filtrosNormalizados)
     .filter(([campo, valor]) => (
       definicoes[campo]
       && typeof valor === 'string'
@@ -1791,10 +1922,124 @@ function validarPontoEVirgulaUnico(sql) {
   };
 }
 
+function validarFiltroFiscalCarregada(sql, mensagem = '') {
+  // Guardrail de DOMINIO especifico do faturamento: perguntas sobre "carregada"/"carga",
+  // "faturada"/"faturado", "remessa" ou "transferencia" exigem um filtro SD2.D2_CF
+  // especifico por regra de negocio (ver spec: 3 grupos fiscais mutuamente exclusivos).
+  // A IA, sob pressao de um prompt fiscal denso com 3 grupos concorrentes, as vezes omite
+  // o filtro D2_CF por completo — o que faz o resultado incluir indevidamente
+  // remessa/transferencia/nota mae. Um SQL sem filtro D2_CF nenhum passa despercebido por
+  // qualquer guardrail de conteudo generico, entao validamos aqui explicitamente.
+  const texto = String(sql || '');
+  const msg = String(mensagem || '');
+  if (!/\bSD2\b/i.test(texto)) return { ok: true, erros: [] };
+  // "carregada" NAO usa mais filtro de D2_CF — usa JOIN com SF4 exigindo F4_ESTOQUE = 'S'
+  // (TES que gera movimentacao fisica de estoque). Validado ANTES do check generico de
+  // "algum D2_CF presente" porque o erro mais comum aqui e a IA continuar aplicando um
+  // filtro de D2_CF (habito dos outros 3 casos fiscais) em vez do JOIN com SF4.
+  if (/\bcarregad[ao]s?\b|\bcarregamentos?\b|\bcarga\b/i.test(msg)) {
+    const temJoinSF4Estoque = /\bSF4\b[\s\S]{0,200}?F4_ESTOQUE\s*=\s*'S'|F4_ESTOQUE\s*=\s*'S'[\s\S]{0,200}?\bSF4\b/i.test(texto)
+      && /SD2\s*\.\s*D2_TES\s*=\s*SF4\s*\.\s*F4_CODIGO|SF4\s*\.\s*F4_CODIGO\s*=\s*SD2\s*\.\s*D2_TES/i.test(texto);
+    if (!temJoinSF4Estoque) {
+      return {
+        ok: false,
+        erros: [`Pergunta menciona "carregada/carga" mas o SQL nao tem o JOIN obrigatorio com SF4 exigindo estoque. Adicione: JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' (regra de "quantidade carregada" do spec) — NAO use filtro de D2_CF (nem o de faturada, remessa, transferencia ou entrega futura) para este caso.`],
+      };
+    }
+    // Pergunta pede "carregada" JUNTO com "faturada"/valor/quantidade (metrica que NAO usa
+    // JOIN SF4): se o SQL tem so 1 SELECT com FROM unico, o JOIN SF4 (que so deveria
+    // filtrar a metrica de carregada) contamina a outra metrica tambem, ja que ambas
+    // compartilham o mesmo WHERE/FROM. So passa quando ha 2+ SELECTs independentes
+    // (subqueries/CTEs), cada um com seu proprio FROM.
+    const pedeOutraMetricaJunto = /\bfaturad[ao]s?\b|\bfaturamentos?\b/i.test(msg);
+    if (pedeOutraMetricaJunto) {
+      const qtdSelects = (texto.match(/\bSELECT\b/gi) || []).length;
+      if (qtdSelects < 2) {
+        return {
+          ok: false,
+          erros: [`Pergunta pede "carregada" JUNTO com "faturada"/valor/quantidade, mas o SQL tem apenas 1 SELECT com FROM unico — isso aplica o JOIN SF4/F4_ESTOQUE='S' (exclusivo da metrica "carregada") tambem sobre a metrica de "faturada", contaminando o resultado. Use DUAS subqueries/CTEs independentes, uma por metrica, cada uma com seu proprio FROM/JOIN/WHERE, combinadas via CROSS JOIN no SELECT externo (ver REGRA CRITICA — duas metricas com regras fiscais DIFERENTES no spec).`],
+        };
+      }
+    }
+    return { ok: true, erros: [] };
+  }
+  if (/\bSD2\s*\.\s*D2_CF\b/i.test(texto)) return { ok: true, erros: [] };
+  // "faturada"/"faturado" NAO tem filtro de CF obrigatorio (decisao de negocio): quantidade/
+  // valor faturado e o total bruto de SD2, sem exclusao fiscal — entao nao ha o que validar
+  // aqui, ao contrario de remessa/transferencia que exigem um filtro especifico.
+  if (/\bremessa\b/i.test(msg)) {
+    return {
+      ok: false,
+      erros: [`Pergunta menciona "remessa" mas o SQL (com SD2 no FROM/JOIN) nao filtra SD2.D2_CF. Filtro obrigatorio ausente: adicione (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') no WHERE, entre parenteses, para nao alterar a precedencia dos demais filtros AND.`],
+    };
+  }
+  if (/\btransfer[eê]ncia\b/i.test(msg)) {
+    return {
+      ok: false,
+      erros: [`Pergunta menciona "transferencia" mas o SQL (com SD2 no FROM/JOIN) nao filtra SD2.D2_CF. Filtro obrigatorio ausente: adicione SD2.D2_CF IN ('5151','6151','5152','6152','5155','6155','5156','6156') no WHERE.`],
+    };
+  }
+  return { ok: true, erros: [] };
+}
+
+function validarPrecedenciaOrRemessaSemParenteses(sql) {
+  // Guardrail de SINTAXE: o filtro de remessa (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%')
+  // precisa estar entre parenteses quando combinado com outros AND no WHERE — sem
+  // parenteses, a precedencia padrao de SQL (AND antes de OR) faz o OR "vazar" e se
+  // combinar incorretamente com a clausula seguinte (ex: D_E_L_E_T_), potencialmente
+  // incluindo linhas que deveriam ser excluidas.
+  const texto = String(sql || '');
+  const re = /D2_CF\s+LIKE\s+'59%'\s+OR\s+SD2\s*\.\s*D2_CF\s+LIKE\s+'69%'\s+AND\b/i;
+  if (!re.test(texto)) return { ok: true, erros: [] };
+  return {
+    ok: false,
+    erros: [`O filtro de remessa "SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%'" aparece sem parenteses antes de um AND — por precedencia de SQL (AND antes de OR), isso altera o significado do WHERE. Envolva o filtro entre parenteses: (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%').`],
+  };
+}
+
+function validarDevolucaoConsistente(sql, mensagem = '') {
+  // Guardrail de DOMINIO: quando SD2 esta no FROM/JOIN, a presenca de D2_QTDEDEV/D2_VALDEV
+  // (campos de devolucao vinculados ao item) deve corresponder EXATAMENTE ao pedido de
+  // devolucao na pergunta — nunca a mais, nunca a menos. A IA tem se mostrado inconsistente
+  // aqui (testes reais mostraram o mesmo SQL de "quantidade carregada" ora subtraindo
+  // devolucao sem a pergunta pedir, ora nao subtraindo quando a pergunta pedia
+  // explicitamente), o que gera numeros diferentes para a mesma metrica sem motivo.
+  const texto = String(sql || '');
+  const msg = String(mensagem || '');
+  if (!/\bSD2\b/i.test(texto)) return { ok: true, erros: [] };
+  const pedeDevolucao = /\bdevolu\w*|\bestorno\b|\bl[ií]quid[ao]\b|\babatendo\b/i.test(msg);
+  // Um SQL com metricas mistas (ex: "faturamento e carregamento") pode ter 2+ CTEs/subqueries
+  // — uma checagem global de "SD2.D2_QTDEDEV aparece em algum lugar do SQL" erra quando so
+  // UMA das subqueries aplica devolucao e a outra deveria mas nao aplica (ou vice-versa).
+  // Divide o SQL por SELECT (aproximacao: cada bloco vai ate o proximo SELECT) e valida cada
+  // bloco que tiver SD2 no FROM/JOIN individualmente.
+  const blocos = texto.split(/(?=\bSELECT\b)/i).filter(b => /\bSELECT\b/i.test(b));
+  for (const bloco of blocos) {
+    if (!/\bSD2\b/i.test(bloco)) continue;
+    const usaCamposDevolucaoNoBloco = /SD2\s*\.\s*D2_QTDEDEV|SD2\s*\.\s*D2_VALDEV/i.test(bloco);
+    if (pedeDevolucao && !usaCamposDevolucaoNoBloco) {
+      return {
+        ok: false,
+        erros: [`Pergunta pede devolucao/liquido mas ao menos uma parte do SQL (com SD2 no FROM/JOIN) nao usa SD2.D2_QTDEDEV nem SD2.D2_VALDEV. Filtro obrigatorio ausente: aplique SUM(SD2.D2_TOTAL - SD2.D2_VALDEV) para valor liquido e/ou SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV) para quantidade liquida em TODAS as subqueries/CTEs que envolvem SD2, conforme a metrica pedida em cada uma (regra de devolucao do spec).`],
+      };
+    }
+    if (!pedeDevolucao && usaCamposDevolucaoNoBloco) {
+      return {
+        ok: false,
+        erros: [`Pergunta NAO pede devolucao/liquido mas o SQL usa SD2.D2_QTDEDEV/SD2.D2_VALDEV (campos de devolucao), inflando/reduzindo a metrica indevidamente. Remova a subtracao de D2_QTDEDEV/D2_VALDEV — use SUM(SD2.D2_QUANT) e/ou SUM(SD2.D2_TOTAL) sem devolucao, ja que a pergunta nao pediu isso.`],
+      };
+    }
+  }
+  return { ok: true, erros: [] };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   const texto = String(sql || '').trim();
   const erros = [];
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
+  erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
+  erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
+  erros.push(...validarPrecedenciaOrRemessaSemParenteses(texto).erros);
   if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*(?:WITH\b|SELECT\b)/i.test(texto)) {
     erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
   }
@@ -2972,6 +3217,9 @@ module.exports = {
     interpolarRespostaPlanejada,
     validarSqlIaOwnerBasico,
     validarPontoEVirgulaUnico,
+    validarFiltroFiscalCarregada,
+    validarPrecedenciaOrRemessaSemParenteses,
+    validarDevolucaoConsistente,
     normalizarAliasesBaseAusentes,
     validarPeriodoDeclaradoNoSql,
     validarMesesAnosDeclaradosNoSql,
@@ -2999,6 +3247,7 @@ module.exports = {
     buildRetryTecnicoIaOwner,
     deduplicarTermosEntidade,
     extrairTermosEntidadesAntesIa,
+    _normalizarFiltrosEntidadeSchema,
     normalizarEntidadesNecessarias,
     _buildContextoConsulta,
     _extrairLabelIntencao,

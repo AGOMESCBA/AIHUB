@@ -31,7 +31,7 @@ const PROVIDER_CONFIGS = {
   gemini: {
     hostname: 'generativelanguage.googleapis.com',
     path: null,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.5-flash',
     tipo: 'gemini',
   },
 };

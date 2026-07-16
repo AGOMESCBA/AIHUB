@@ -6,7 +6,7 @@ const FormData = require('form-data');
 
 const WHISPER_MODEL_GROQ   = 'whisper-large-v3';
 const WHISPER_MODEL_OPENAI = 'whisper-1';
-const GEMINI_MODEL         = 'gemini-2.0-flash';
+const GEMINI_MODEL         = 'gemini-3.5-flash';
 
 // Ordem de fallback de transcrição: mesma filosofia do fallback de texto em
 // ai-provider-client.js — tenta na ordem, qualquer erro cai para o próximo.

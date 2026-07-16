@@ -52,6 +52,9 @@
     .badge-semchave{ background:var(--bg-hover);color:var(--text-lo); }
     .badge-loading { background:var(--bg-hover);color:var(--text-lo); }
     .ia-prov-lat  { font-size:11px;color:var(--text-lo);min-width:48px;text-align:right; }
+    .ia-prov-saldo{ font-size:11px;font-weight:700;color:var(--text-hi);min-width:56px;text-align:right; }
+    .ia-prov-saldo-link{ font-size:11px;color:#7c3aed;text-decoration:none;min-width:56px;text-align:right; }
+    .ia-prov-saldo-link:hover{ text-decoration:underline; }
     .ia-primario  { font-size:11px;color:var(--text-lo);margin-top:10px;padding-top:8px;border-top:1px solid var(--border); }
     .ia-primario strong { color:#7c3aed; }
     .ia-last-test { font-size:10px;color:var(--text-lo);margin-top:4px; }
@@ -554,6 +557,8 @@
     { id: 'openai',   nome: 'OpenAI / GPT' },
   ];
 
+  let SALDOS_POR_PROVEDOR = {};
+
   function renderProvList(provedores, primario) {
     const listEl = document.getElementById('ia-prov-list');
     const primEl = document.getElementById('ia-primario');
@@ -562,13 +567,24 @@
       const cfg    = BADGE_CFG[p.status] || BADGE_CFG.erro;
       const lat    = p.latencia_ms != null && p.status === 'operacional' ? `${p.latencia_ms}ms` : '';
       const title  = p.detalhe ? ` title="${esc(p.detalhe)}"` : '';
-      const nome   = p.painel_url
-        ? `<a href="${esc(p.painel_url)}" target="_blank" rel="noopener">${esc(p.nome)}</a>`
+      const painelUrl = p.painel_url || (SALDOS_POR_PROVEDOR[p.id] || {}).painel_url;
+      const nome   = painelUrl
+        ? `<a href="${esc(painelUrl)}" target="_blank" rel="noopener">${esc(p.nome)}</a>`
         : esc(p.nome);
+      const saldo  = SALDOS_POR_PROVEDOR[p.id];
+      let saldoHtml = '';
+      if (saldo && saldo.configurado) {
+        if (saldo.consultado && saldo.valor != null) {
+          saldoHtml = `<span class="ia-prov-saldo" title="${esc(saldo.detalhe || '')}">${esc(saldo.unidade === 'USD' ? '$' : '')}${Number(saldo.valor).toFixed(2)}${esc(saldo.unidade && saldo.unidade !== 'USD' ? ' ' + saldo.unidade : '')}</span>`;
+        } else if (painelUrl) {
+          saldoHtml = `<a class="ia-prov-saldo-link" href="${esc(painelUrl)}" target="_blank" rel="noopener">Ver saldo</a>`;
+        }
+      }
       return `<div class="ia-prov-row">
         <span class="ia-prov-name">${nome}</span>
         <span class="ia-prov-badge ${cfg.cls}"${title}>${cfg.label}</span>
         <span class="ia-prov-lat">${esc(lat)}</span>
+        ${saldoHtml}
       </div>`;
     }).join('');
 
@@ -576,6 +592,15 @@
       primEl.style.display = '';
       primEl.innerHTML = `Primário: <strong>${esc(primario)}</strong>`;
     }
+  }
+
+  async function carregarSaldos() {
+    try {
+      const data = await fetch('/api/ia-command/ai-config/saldo').then(r => r.json());
+      const mapa = {};
+      (Array.isArray(data.provedores) ? data.provedores : []).forEach(p => { mapa[p.id] = p; });
+      SALDOS_POR_PROVEDOR = mapa;
+    } catch (_) { /* saldo é informativo — falha não bloqueia o card de status */ }
   }
 
   function mostrarCarregando() {
@@ -591,7 +616,10 @@
     lastEl.textContent = 'Testando…';
 
     try {
-      const data = await fetch('/api/ia-command/ai-config/testar-provedores').then(r => r.json());
+      const [data] = await Promise.all([
+        fetch('/api/ia-command/ai-config/testar-provedores').then(r => r.json()),
+        carregarSaldos(),
+      ]);
       renderProvList(Array.isArray(data.provedores) ? data.provedores : [], data.primario);
       const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       lastEl.textContent = `Último teste: ${agora}`;

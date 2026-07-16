@@ -204,6 +204,7 @@ function _garantirColunasCompatibilidade() {
     deepseek_api_key: 'TEXT',
     claude_api_key: 'TEXT',
     openai_api_key: 'TEXT',
+    openai_admin_key: 'TEXT DEFAULT NULL',
     provedor_primario: "TEXT DEFAULT 'groq'",
     fallback_ordem: "TEXT DEFAULT 'groq,openai,gemini,deepseek,claude'",
     confianca_minima: 'REAL DEFAULT 0.6',

@@ -1,6 +1,6 @@
 const https = require('https');
 
-const CLAUDE_MODEL = 'claude-3-5-haiku-latest';
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
 function _extractJson(text) {
   const raw = String(text || '').trim();
@@ -11,10 +11,10 @@ function _extractJson(text) {
   throw new Error('Claude nao retornou JSON valido.');
 }
 
-async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null) {
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null, modelo = null) {
   const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos, contextoAnterior);
   const body = JSON.stringify({
-    model: CLAUDE_MODEL,
+    model: modelo || CLAUDE_MODEL,
     max_tokens: 512,
     temperature: 0,
     messages: [{ role: 'user', content: prompt }],

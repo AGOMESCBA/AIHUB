@@ -25,13 +25,13 @@ const PROVIDER_CONFIGS = {
   claude: {
     hostname: 'api.anthropic.com',
     path: '/v1/messages',
-    model: 'claude-3-5-haiku-latest',
+    model: 'claude-haiku-4-5-20251001',
     tipo: 'anthropic',
   },
   gemini: {
     hostname: 'generativelanguage.googleapis.com',
     path: null,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.5-flash',
     tipo: 'gemini',
   },
 };
@@ -204,11 +204,15 @@ async function responder(mensagem, empresaId) {
     if (!keys[provedor] || !PROVIDER_CONFIGS[provedor]) continue;
     try {
       const pcfg = PROVIDER_CONFIGS[provedor];
-      const resposta = pcfg.tipo === 'gemini'
-        ? await _requestGemini(pcfg, keys[provedor], prompt)
-        : pcfg.tipo === 'anthropic'
-          ? await _requestClaude(pcfg, keys[provedor], prompt)
-          : await _requestOpenAICompat(pcfg, keys[provedor], prompt);
+      const modeloConfigurado = provedor === 'claude' ? cfg.claude_modelo
+        : provedor === 'gemini' ? cfg.gemini_modelo
+        : null;
+      const pcfgEfetivo = modeloConfigurado ? { ...pcfg, model: modeloConfigurado } : pcfg;
+      const resposta = pcfgEfetivo.tipo === 'gemini'
+        ? await _requestGemini(pcfgEfetivo, keys[provedor], prompt)
+        : pcfgEfetivo.tipo === 'anthropic'
+          ? await _requestClaude(pcfgEfetivo, keys[provedor], prompt)
+          : await _requestOpenAICompat(pcfgEfetivo, keys[provedor], prompt);
       return { ok: true, resposta, provedor, erros };
     } catch (e) {
       erros.push({ provedor, erro: e.message });

@@ -54,13 +54,13 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(
   runner._test.maxTentativasPrepararSql([]),
-  3,
-  'sem entidade resolvida o runner deve ter 3 tentativas de SQL (necessario para erros combinados D_E_L_E_T_+estrutura)',
+  4,
+  'sem entidade resolvida o runner deve ter 4 tentativas de SQL (necessario para erros combinados D_E_L_E_T_+estrutura+metricas mistas)',
 );
 assert.strictEqual(
   runner._test.maxTentativasPrepararSql([{ tipo: 'cliente', codigo: '000048', _todos: true }]),
-  3,
-  'com entidade resolvida o runner deve ter 3 tentativas de SQL',
+  4,
+  'com entidade resolvida o runner deve ter 4 tentativas de SQL',
 );
 
 const perguntaJunhoVariosAnos = 'Faturamento do mes de Junho dos anos de 2025 e 2026 por ANO E grupo de produto';
