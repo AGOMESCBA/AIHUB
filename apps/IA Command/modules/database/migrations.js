@@ -885,6 +885,28 @@ const MIGRATIONS = [
       ALTER TABLE ai_config ADD COLUMN openai_admin_key TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 50,
+    descricao: 'Datasets semanticos para views canonicas multi-ERP',
+    sql: `
+      ALTER TABLE datasets ADD COLUMN tipo TEXT DEFAULT 'sql_base';
+      ALTER TABLE datasets ADD COLUMN modulo TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN spec TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN suboperacao TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN ativo_ia_owner INTEGER DEFAULT 0;
+      ALTER TABLE datasets ADD COLUMN prioridade INTEGER DEFAULT 0;
+      ALTER TABLE datasets ADD COLUMN view_nome TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN view_descricao TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN view_grao TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN campos_semanticos_json TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN regras_semanticas TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN exemplos_perguntas TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN limitacoes TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_datasets_semantic_lookup
+        ON datasets (empresa_id, tipo, ativo_ia_owner, modulo, spec, suboperacao, prioridade);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

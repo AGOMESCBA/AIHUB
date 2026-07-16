@@ -223,6 +223,19 @@ function _garantirColunasCompatibilidade() {
     sql_base:        'TEXT',
     campo_data:      "TEXT DEFAULT 'data'",
     colunas_metrica: 'TEXT',
+    tipo:                    "TEXT DEFAULT 'sql_base'",
+    modulo:                  'TEXT DEFAULT NULL',
+    spec:                    'TEXT DEFAULT NULL',
+    suboperacao:             'TEXT DEFAULT NULL',
+    ativo_ia_owner:          'INTEGER DEFAULT 0',
+    prioridade:              'INTEGER DEFAULT 0',
+    view_nome:               'TEXT DEFAULT NULL',
+    view_descricao:          'TEXT DEFAULT NULL',
+    view_grao:               'TEXT DEFAULT NULL',
+    campos_semanticos_json:  'TEXT DEFAULT NULL',
+    regras_semanticas:       'TEXT DEFAULT NULL',
+    exemplos_perguntas:      'TEXT DEFAULT NULL',
+    limitacoes:              'TEXT DEFAULT NULL',
   };
 
   const whatsappAllowedNumbers = {

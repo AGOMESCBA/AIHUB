@@ -593,17 +593,88 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json(row);
   });
 
+  const _datasetSemanticFields = [
+    'tipo', 'modulo', 'spec', 'suboperacao', 'ativo_ia_owner', 'prioridade',
+    'view_nome', 'view_descricao', 'view_grao', 'campos_semanticos_json',
+    'regras_semanticas', 'exemplos_perguntas', 'limitacoes',
+  ];
+
+  function _normalizarDatasetPayload(body = {}) {
+    const tipo = String(body.tipo || 'sql_base').trim() || 'sql_base';
+    const campos = {
+      nome:            body.nome ? String(body.nome).trim() : '',
+      erp:             body.erp || 'protheus',
+      sql_base:        body.sql_base || null,
+      campo_data:      String(body.campo_data || 'data').trim(),
+      colunas_metrica: body.colunas_metrica ? String(body.colunas_metrica).trim() : null,
+      limite_max:      parseInt(body.limite_max) || 1000,
+      tipo,
+      modulo:          body.modulo ? String(body.modulo).trim() : null,
+      spec:            body.spec ? String(body.spec).trim() : null,
+      suboperacao:     body.suboperacao ? String(body.suboperacao).trim() : null,
+      ativo_ia_owner:  body.ativo_ia_owner ? 1 : 0,
+      prioridade:      parseInt(body.prioridade) || 0,
+      view_nome:       body.view_nome ? String(body.view_nome).trim() : null,
+      view_descricao:  body.view_descricao ? String(body.view_descricao).trim() : null,
+      view_grao:       body.view_grao ? String(body.view_grao).trim() : null,
+      regras_semanticas:  body.regras_semanticas ? String(body.regras_semanticas).trim() : null,
+      exemplos_perguntas: body.exemplos_perguntas ? String(body.exemplos_perguntas).trim() : null,
+      limitacoes:         body.limitacoes ? String(body.limitacoes).trim() : null,
+      campos_semanticos_json: body.campos_semanticos_json || null,
+    };
+
+    if (Array.isArray(body.campos_semanticos)) {
+      campos.campos_semanticos_json = JSON.stringify(body.campos_semanticos);
+    } else if (campos.campos_semanticos_json && typeof campos.campos_semanticos_json !== 'string') {
+      campos.campos_semanticos_json = JSON.stringify(campos.campos_semanticos_json);
+    }
+    if (campos.campos_semanticos_json) campos.campos_semanticos_json = String(campos.campos_semanticos_json).trim();
+    return campos;
+  }
+
+  function _validarDatasetSemantico(campos = {}) {
+    const erros = [];
+    if (!campos.nome) erros.push('Campo obrigatório: nome.');
+    if (!['sql_base', 'view_semantica'].includes(String(campos.tipo || 'sql_base'))) {
+      erros.push('Tipo de dataset inválido. Use sql_base ou view_semantica.');
+    }
+    if (String(campos.tipo || 'sql_base') !== 'view_semantica') return erros;
+    if (!campos.view_nome) erros.push('View semântica exige Nome da view.');
+    if (!campos.modulo) erros.push('View semântica exige Módulo.');
+    if (!campos.spec) erros.push('View semântica exige Spec.');
+    if (campos.campos_semanticos_json) {
+      try {
+        const lista = JSON.parse(campos.campos_semanticos_json);
+        if (!Array.isArray(lista)) erros.push('Campos semânticos devem ser uma lista JSON.');
+        for (const [idx, campo] of (Array.isArray(lista) ? lista : []).entries()) {
+          if (!campo?.coluna) erros.push(`Campo semântico #${idx + 1} está sem coluna.`);
+          if (campo?.tipo === 'metrica' && !campo?.agregacao_padrao) {
+            erros.push(`Métrica "${campo.coluna || idx + 1}" exige agregação padrão.`);
+          }
+          if (campo?.tipo === 'data' && !campo?.papel_temporal) {
+            erros.push(`Data "${campo.coluna || idx + 1}" exige papel temporal.`);
+          }
+        }
+      } catch (_) {
+        erros.push('Campos semânticos devem estar em JSON válido.');
+      }
+    }
+    if (campos.ativo_ia_owner && !campos.campos_semanticos_json) {
+      erros.push('Para ativar no IA Owner, documente pelo menos um campo semântico.');
+    }
+    if (campos.ativo_ia_owner && !campos.view_descricao) {
+      erros.push('Para ativar no IA Owner, informe a descrição de negócio da view.');
+    }
+    return erros;
+  }
+
   app.post('/api/ia-command/admin/datasets', requireAuth, requireIaCommand, canDatasets, (req, res) => {
-    const { nome, erp, sql_base, campo_data, colunas_metrica, limite_max } = req.body;
-    if (!nome) return res.status(400).json({ error: 'Campo obrigatório: nome.' });
+    const campos = _normalizarDatasetPayload(req.body);
+    const erros = _validarDatasetSemantico(campos);
+    if (erros.length) return res.status(400).json({ error: erros.join(' ') });
     const row = crud.criar('datasets', {
       empresa_id:      eid(req),
-      nome:            nome.trim(),
-      erp:             erp             || 'protheus',
-      sql_base:        sql_base        || null,
-      campo_data:      String(campo_data || 'data').trim(),
-      colunas_metrica: colunas_metrica ? String(colunas_metrica).trim() : null,
-      limite_max:      parseInt(limite_max) || 1000,
+      ...campos,
     });
     _audit(req, 'criar_dataset', { id: row.id, nome: row.nome });
     res.status(201).json(row);
@@ -612,11 +683,15 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.put('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const existing = crud.buscarPorId('datasets', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
-    const allowed = ['nome', 'erp', 'sql_base', 'campo_data', 'colunas_metrica', 'limite_max'];
+    const allowed = ['nome', 'erp', 'sql_base', 'campo_data', 'colunas_metrica', 'limite_max', ..._datasetSemanticFields];
     const campos  = {};
     for (const k of allowed) { if (req.body[k] !== undefined) campos[k] = req.body[k]; }
-    if (campos.campo_data)      campos.campo_data      = String(campos.campo_data).trim();
-    if (campos.colunas_metrica) campos.colunas_metrica = String(campos.colunas_metrica).trim();
+    const normalizados = _normalizarDatasetPayload({ ...existing, ...campos });
+    for (const k of allowed) {
+      if (normalizados[k] !== undefined) campos[k] = normalizados[k];
+    }
+    const erros = _validarDatasetSemantico({ ...existing, ...campos });
+    if (erros.length) return res.status(400).json({ error: erros.join(' ') });
     const row = crud.atualizar('datasets', req.params.id, campos);
     _audit(req, 'editar_dataset', { id: req.params.id, campos: Object.keys(campos) });
     res.json(row);

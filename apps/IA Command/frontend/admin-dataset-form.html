@@ -18,6 +18,27 @@
 
     .form-row { display:grid;grid-template-columns:1fr 1fr;gap:16px; }
     @media(max-width:720px) { .form-row { grid-template-columns:1fr; } }
+    .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
+    @media(max-width:920px) { .form-row-3 { grid-template-columns:1fr; } }
+    .semantic-table-wrap { border:1px solid var(--border);border-radius:8px;overflow:auto;background:var(--bg-card); }
+    .semantic-table { width:100%;border-collapse:collapse;font-size:12px;min-width:980px; }
+    .semantic-table th { text-align:left;padding:8px 10px;background:var(--bg-hover);color:var(--text-lo);font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border); }
+    .semantic-table td { padding:6px;border-bottom:1px solid var(--border);vertical-align:top; }
+    .semantic-table tr:last-child td { border-bottom:none; }
+    .semantic-table input,.semantic-table select,.semantic-table textarea { width:100%;min-width:0;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:12px;padding:6px 7px;box-sizing:border-box; }
+    .semantic-table textarea { min-height:34px;resize:vertical;line-height:1.35; }
+    .semantic-actions { display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px; }
+    .semantic-note { color:var(--text-lo);font-size:12px;line-height:1.5; }
+    .semantic-switch { display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-md); }
+    .semantic-switch input { width:auto; }
+    .semantic-subtabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px;overflow:auto; }
+    .semantic-subtab { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:12px;font-weight:700;padding:9px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap; }
+    .semantic-subtab:hover { color:var(--accent); }
+    .semantic-subtab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    #panel-semantica[data-sem-tab="uso"] .editor-main > section:not(:nth-of-type(1)),
+    #panel-semantica[data-sem-tab="view"] .editor-main > section:not(:nth-of-type(2)),
+    #panel-semantica[data-sem-tab="campos"] .editor-main > section:not(:nth-of-type(3)),
+    #panel-semantica[data-sem-tab="regras"] .editor-main > section:not(:nth-of-type(4)) { display:none; }
 
     .save-feedback      { font-size:13px;color:var(--text-lo); }
     .save-feedback.ok   { color:#15803d; }
@@ -202,6 +223,7 @@
         <!-- Tabs -->
         <div class="iac-tabs" style="margin-bottom:0;margin-top:4px">
           <button class="iac-tab active" id="tab-cadastro" onclick="trocarAba('cadastro')">📋 Cadastro</button>
+          <button class="iac-tab" id="tab-semantica" onclick="trocarAba('semantica')">Semântica</button>
           <button class="iac-tab" id="tab-sql" onclick="trocarAba('sql')">🗄️ SQL Base</button>
         </div>
 
@@ -299,6 +321,60 @@
         </div>
 
         <!-- ══ ABA 2: SQL BASE ═════════════════════════════════════════════ -->
+        <div class="iac-tab-panel" id="panel-semantica" data-sem-tab="uso">
+          <div class="editor-grid editor-grid-wide">
+            <main class="editor-main">
+              <div class="semantic-subtabs">
+                <button class="semantic-subtab active" type="button" data-sem-tab-btn="uso" onclick="trocarAbaSemantica('uso')">Uso</button>
+                <button class="semantic-subtab" type="button" data-sem-tab-btn="view" onclick="trocarAbaSemantica('view')">View</button>
+                <button class="semantic-subtab" type="button" data-sem-tab-btn="campos" onclick="trocarAbaSemantica('campos')">Campos</button>
+                <button class="semantic-subtab" type="button" data-sem-tab-btn="regras" onclick="trocarAbaSemantica('regras')">Regras</button>
+              </div>
+              <section class="form-section">
+                <div class="form-section-header"><div class="form-section-title">Uso Semântico</div><div class="form-section-subtitle">Metadados passivos para preparar views canônicas multi-ERP. Esta fase não altera o processamento da IA.</div></div>
+                <div class="form-section-body">
+                  <div class="form-row-3">
+                    <div class="form-group"><label class="form-label">Tipo do dataset</label><select id="f-tipo" class="form-control" onchange="atualizarResumo()"><option value="sql_base">SQL base atual</option><option value="view_semantica">View semântica</option></select></div>
+                    <div class="form-group"><label class="form-label">Módulo</label><select id="f-modulo" class="form-control" onchange="sincronizarSpecPadrao();atualizarResumo()"><option value="">Não definido</option><option value="faturamento">Faturamento</option><option value="financeiro">Financeiro</option><option value="compras">Compras</option><option value="comissao">Comissão</option></select></div>
+                    <div class="form-group"><label class="form-label">Spec</label><input type="text" id="f-spec" class="form-control" placeholder="ex: faturamento" oninput="atualizarResumo()"></div>
+                  </div>
+                  <div class="form-row-3">
+                    <div class="form-group"><label class="form-label">Suboperação</label><input type="text" id="f-suboperacao" class="form-control" placeholder="opcional: vendas, aberto, realizado..." oninput="atualizarResumo()"></div>
+                    <div class="form-group"><label class="form-label">Prioridade</label><input type="number" id="f-prioridade" class="form-control" value="0" min="0" max="999" oninput="atualizarResumo()"></div>
+                    <div class="form-group"><label class="form-label">Ativação futura</label><label class="semantic-switch"><input type="checkbox" id="f-ativo-ia-owner" onchange="atualizarResumo()"> Disponível para IA Owner</label></div>
+                  </div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header"><div class="form-section-title">View Canônica</div><div class="form-section-subtitle">Identifique a view e o grão de negócio que ela representa.</div></div>
+                <div class="form-section-body">
+                  <div class="form-row">
+                    <div class="form-group"><label class="form-label">Nome da view</label><input type="text" id="f-view-nome" class="form-control" placeholder="ex: vw_iac_faturamento" oninput="atualizarResumo()"></div>
+                    <div class="form-group"><label class="form-label">Grão da view</label><input type="text" id="f-view-grao" class="form-control" placeholder="ex: uma linha por item de nota fiscal" oninput="atualizarResumo()"></div>
+                  </div>
+                  <div class="form-group"><label class="form-label">Descrição de negócio</label><textarea id="f-view-descricao" class="form-control" rows="3" placeholder="Explique o que a view responde e em que contexto deve ser usada."></textarea></div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header"><div class="form-section-title">Campos Semânticos</div><div class="form-section-subtitle">Documente cada coluna com significado, sinônimos, agregação e regras de uso.</div></div>
+                <div class="form-section-body">
+                  <div class="semantic-actions"><button class="btn btn-ghost" type="button" onclick="adicionarCampoSemantico()">Adicionar campo</button><button class="btn btn-ghost" type="button" onclick="importarColunasPreview()">Importar colunas do preview</button><span class="semantic-note">A importação usa as colunas da última execução do SQL nesta tela.</span></div>
+                  <div class="semantic-table-wrap"><table class="semantic-table"><thead><tr><th>Coluna</th><th>Tipo</th><th>Descrição</th><th>Sinônimos</th><th>Agregação</th><th>Papel temporal</th><th>Valores/Regras</th><th></th></tr></thead><tbody id="semantic-fields-body"></tbody></table></div>
+                </div>
+              </section>
+              <section class="form-section">
+                <div class="form-section-header"><div class="form-section-title">Regras E Exemplos</div><div class="form-section-subtitle">Contexto de negócio para orientar o futuro contrato da IA.</div></div>
+                <div class="form-section-body">
+                  <div class="form-group"><label class="form-label">Regras semânticas</label><textarea id="f-regras-semanticas" class="form-control" rows="4" placeholder="Ex: perguntas com em aberto usam status = ABERTO; faturamento usa data_emissao..."></textarea></div>
+                  <div class="form-group"><label class="form-label">Exemplos de perguntas</label><textarea id="f-exemplos-perguntas" class="form-control" rows="4" placeholder="Uma pergunta por linha, opcionalmente com interpretação esperada."></textarea></div>
+                  <div class="form-group" style="margin-bottom:0"><label class="form-label">Limitações conhecidas</label><textarea id="f-limitacoes" class="form-control" rows="3" placeholder="O que esta view não responde com segurança."></textarea></div>
+                </div>
+              </section>
+            </main>
+            <aside class="editor-side"><section class="form-section" style="position:sticky;top:56px"><div class="form-section-header"><div class="form-section-title">Checklist</div></div><div class="form-section-body"><div class="summary-note" id="semantic-checklist">Configure tipo, módulo/spec e campos semânticos para preparar o dataset para fases futuras.</div></div></section></aside>
+          </div>
+        </div>
+
         <div class="iac-tab-panel" id="panel-sql">
 
           <!-- Label -->
@@ -384,6 +460,83 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
 <script>
   const params = new URLSearchParams(location.search);
   const editId = params.get('id');
+  let _previewColumns = [];
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function _semanticFields() {
+    return [...document.querySelectorAll('#semantic-fields-body tr')].map(tr => ({
+      coluna: tr.querySelector('[data-sem="coluna"]')?.value.trim() || '',
+      tipo: tr.querySelector('[data-sem="tipo"]')?.value || 'dimensao',
+      descricao: tr.querySelector('[data-sem="descricao"]')?.value.trim() || '',
+      sinonimos: tr.querySelector('[data-sem="sinonimos"]')?.value.trim() || '',
+      agregacao_padrao: tr.querySelector('[data-sem="agregacao"]')?.value.trim() || '',
+      papel_temporal: tr.querySelector('[data-sem="papel"]')?.value.trim() || '',
+      regras: tr.querySelector('[data-sem="regras"]')?.value.trim() || '',
+    })).filter(c => c.coluna || c.descricao || c.sinonimos);
+  }
+
+  function adicionarCampoSemantico(campo = {}) {
+    const tbody = document.getElementById('semantic-fields-body');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input data-sem="coluna" value="${esc(campo.coluna || '')}" placeholder="valor_faturado"></td>
+      <td><select data-sem="tipo">${['metrica','dimensao','data','status','identificador','texto'].map(t => `<option value="${t}" ${campo.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+      <td><textarea data-sem="descricao" placeholder="Significado de negócio">${esc(campo.descricao || '')}</textarea></td>
+      <td><textarea data-sem="sinonimos" placeholder="faturamento, receita">${esc(campo.sinonimos || '')}</textarea></td>
+      <td><input data-sem="agregacao" value="${esc(campo.agregacao_padrao || '')}" placeholder="SUM, COUNT, AVG"></td>
+      <td><input data-sem="papel" value="${esc(campo.papel_temporal || '')}" placeholder="emissao, vencimento"></td>
+      <td><textarea data-sem="regras" placeholder="Valores possíveis, quando usar...">${esc(campo.regras || '')}</textarea></td>
+      <td><button class="btn-icon" type="button" onclick="this.closest('tr').remove();atualizarResumo()" title="Remover" style="color:#dc2626">×</button></td>
+    `;
+    tbody.appendChild(tr);
+    tr.querySelectorAll('input,select,textarea').forEach(el => el.addEventListener('input', atualizarResumo));
+    atualizarResumo();
+  }
+
+  function _carregarCamposSemanticos(valor) {
+    document.getElementById('semantic-fields-body').innerHTML = '';
+    let lista = [];
+    try { lista = valor ? JSON.parse(valor) : []; } catch (_) { lista = []; }
+    if (Array.isArray(lista) && lista.length) lista.forEach(adicionarCampoSemantico);
+    else adicionarCampoSemantico();
+  }
+
+  function importarColunasPreview() {
+    if (!_previewColumns.length) { _feedback('Execute o SQL primeiro para importar colunas.', false); return; }
+    const existentes = new Set(_semanticFields().map(c => c.coluna.toLowerCase()).filter(Boolean));
+    for (const coluna of _previewColumns) {
+      if (existentes.has(String(coluna).toLowerCase())) continue;
+      adicionarCampoSemantico({ coluna, tipo: _inferirTipoSemantico(coluna) });
+    }
+    _feedback('Colunas importadas para o dicionário semântico.', true);
+  }
+
+  function _inferirTipoSemantico(coluna) {
+    const c = String(coluna || '').toLowerCase();
+    if (/data|dt_|emissao|venc|competencia|periodo/.test(c)) return 'data';
+    if (/valor|total|saldo|quant|qtd|fatur|receita|custo|margem|comissao|preco/.test(c)) return 'metrica';
+    if (/status|situacao|estado/.test(c)) return 'status';
+    if (/^id|_id$|codigo|cod_|_cod|documento|doc|numero|num/.test(c)) return 'identificador';
+    return 'dimensao';
+  }
+
+  function sincronizarSpecPadrao() {
+    const modulo = document.getElementById('f-modulo').value;
+    const spec = document.getElementById('f-spec');
+    if (modulo && !spec.value.trim()) spec.value = modulo;
+  }
+
+  function trocarAbaSemantica(aba) {
+    const panel = document.getElementById('panel-semantica');
+    if (!panel) return;
+    panel.dataset.semTab = aba;
+    panel.querySelectorAll('.semantic-subtab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.semTabBtn === aba);
+    });
+  }
 
   // ── Navegação entre abas ────────────────────────────────────────────────────
   function trocarAba(aba) {
@@ -399,11 +552,23 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const erp    = document.getElementById('f-erp').value || '—';
     const limite = document.getElementById('f-limite').value || '—';
     const sql    = document.getElementById('f-sql-base').value.trim();
+    const tipo   = document.getElementById('f-tipo')?.value || 'sql_base';
+    const modulo = document.getElementById('f-modulo')?.value || '';
+    const campos = _semanticFields();
 
     document.getElementById('meta-nome').textContent   = nome;
     document.getElementById('meta-erp').textContent    = erp;
     document.getElementById('meta-limite').textContent = limite;
     document.getElementById('meta-sql').textContent    = sql ? `${sql.split('\n').length} linhas` : '—';
+    const checklist = document.getElementById('semantic-checklist');
+    if (checklist) {
+      checklist.innerHTML = [
+        `Tipo: <strong>${esc(tipo)}</strong>`,
+        `Módulo/spec: <strong>${esc(modulo || 'não definido')}</strong>`,
+        `Campos documentados: <strong>${campos.length}</strong>`,
+        document.getElementById('f-ativo-ia-owner')?.checked ? 'Disponível para IA Owner: <strong>sim</strong>' : 'Disponível para IA Owner: não',
+      ].join('<br>');
+    }
     document.getElementById('form-title').textContent  = editId ? nome : `Novo Dataset${nome !== '—' ? ' — ' + nome : ''}`;
   }
 
@@ -430,6 +595,8 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     if (!editId) {
       document.getElementById('f-empresa').value =
         window._iahubEmpresa ? `${window._iahubEmpresa.nome} (ID ${window._iahubEmpresa.id})` : '—';
+      _carregarCamposSemanticos(null);
+      atualizarResumo();
       return;
     }
 
@@ -444,6 +611,19 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     document.getElementById('f-sql-base').value        = row.sql_base        || '';
     document.getElementById('f-campo-data').value      = row.campo_data      || 'data';
     document.getElementById('f-colunas-metrica').value = row.colunas_metrica || '';
+    document.getElementById('f-tipo').value = row.tipo || 'sql_base';
+    document.getElementById('f-modulo').value = row.modulo || '';
+    document.getElementById('f-spec').value = row.spec || '';
+    document.getElementById('f-suboperacao').value = row.suboperacao || '';
+    document.getElementById('f-prioridade').value = row.prioridade ?? 0;
+    document.getElementById('f-ativo-ia-owner').checked = Number(row.ativo_ia_owner || 0) === 1;
+    document.getElementById('f-view-nome').value = row.view_nome || '';
+    document.getElementById('f-view-descricao').value = row.view_descricao || '';
+    document.getElementById('f-view-grao').value = row.view_grao || '';
+    document.getElementById('f-regras-semanticas').value = row.regras_semanticas || '';
+    document.getElementById('f-exemplos-perguntas').value = row.exemplos_perguntas || '';
+    document.getElementById('f-limitacoes').value = row.limitacoes || '';
+    _carregarCamposSemanticos(row.campos_semanticos_json);
 
     document.getElementById('meta-id').textContent  = row.id.slice(0, 8) + '…';
     document.getElementById('form-subtitle').textContent =
@@ -468,6 +648,19 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       sql_base:        sqlBase,
       campo_data:      document.getElementById('f-campo-data').value.trim() || 'data',
       colunas_metrica: document.getElementById('f-colunas-metrica').value.trim() || null,
+      tipo:            document.getElementById('f-tipo').value || 'sql_base',
+      modulo:          document.getElementById('f-modulo').value || null,
+      spec:            document.getElementById('f-spec').value.trim() || null,
+      suboperacao:     document.getElementById('f-suboperacao').value.trim() || null,
+      ativo_ia_owner:  document.getElementById('f-ativo-ia-owner').checked ? 1 : 0,
+      prioridade:      parseInt(document.getElementById('f-prioridade').value) || 0,
+      view_nome:       document.getElementById('f-view-nome').value.trim() || null,
+      view_descricao:  document.getElementById('f-view-descricao').value.trim() || null,
+      view_grao:       document.getElementById('f-view-grao').value.trim() || null,
+      campos_semanticos_json: JSON.stringify(_semanticFields()),
+      regras_semanticas:      document.getElementById('f-regras-semanticas').value.trim() || null,
+      exemplos_perguntas:     document.getElementById('f-exemplos-perguntas').value.trim() || null,
+      limitacoes:             document.getElementById('f-limitacoes').value.trim() || null,
     };
 
     const url    = editId ? `/api/ia-command/admin/datasets/${editId}` : '/api/ia-command/admin/datasets';
@@ -564,6 +757,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   }
 
   function _renderPreview({ columns, rows, total, conexao }) {
+    _previewColumns = Array.isArray(columns) ? columns : [];
     const thead = document.getElementById('preview-thead');
     const tbody = document.getElementById('preview-tbody');
     const info  = document.getElementById('preview-info');
