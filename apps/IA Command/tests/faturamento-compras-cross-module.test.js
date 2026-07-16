@@ -27,9 +27,11 @@ assert.ok(systemPrompt.includes('AND SD1.D1_FORNECE = SF1.F1_FORNECE'), 'contrat
 assert.ok(systemPrompt.includes('AND SD1.D1_LOJA = SF1.F1_LOJA'), 'contrato SD1/SF1 deve incluir loja');
 assert.ok(systemPrompt.includes('dono semantico das metricas'), 'prompt cross-module deve declarar dono semantico por metrica');
 assert.ok(systemPrompt.includes('Aliases de faturamento (total_faturamento, faturamento, valor_faturamento, receita)'), 'prompt cross-module deve mapear aliases de faturamento');
-assert.ok(systemPrompt.includes('devem usar SF2.F2_VALBRUT'), 'faturamento cross-module deve orientar SF2.F2_VALBRUT para valor sem item');
+assert.ok(systemPrompt.includes('devem usar SEMPRE SD2 JOIN SF2 com SUM(SD2.D2_TOTAL)'), 'faturamento cross-module deve orientar SD2.D2_TOTAL (SD2 JOIN SF2) para valor de faturamento');
 assert.ok(systemPrompt.includes('SF1/SD1 nao sao faturamento normal'), 'prompt cross-module deve impedir SF1/SD1 como faturamento normal');
-assert.ok(systemPrompt.includes('compras = SD1/SF1 filtrado por SD1.D1_DTDIGIT; faturamento = SF2 filtrado por SF2.F2_EMISSAO'), 'prompt deve orientar comparativo compras x faturamento por data correta');
+assert.ok(systemPrompt.includes('compras = SD1/SF1 filtrado por SD1.D1_DTDIGIT; faturamento = SD2/SF2 filtrado por SF2.F2_EMISSAO'), 'prompt deve orientar comparativo compras x faturamento por data correta');
+assert.ok(systemPrompt.includes('SUM(SD2.D2_TOTAL - SD2.D2_VALDEV)'), 'prompt cross-module deve orientar faturamento liquido com D2_VALDEV, nao SF1/SD1');
+assert.ok(systemPrompt.includes('EXCLUSIVAMENTE devolucao de venda'), 'prompt cross-module deve restringir SF1.F1_TIPO=D a devolucao de venda isolada, sem faturamento junto');
 assert.ok(systemPromptPerguntaComparativoJunho.includes('comparativo compras x faturamento'), 'prompt classificado para pergunta real deve manter regra cross-module');
 
 const sx2 = {

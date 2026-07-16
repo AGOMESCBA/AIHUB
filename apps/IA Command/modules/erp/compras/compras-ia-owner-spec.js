@@ -5,6 +5,7 @@ const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./compras-fragmentos-spec');
 const { classificarFragmentos } = require('./compras-spec-classifier');
+const { resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
 
 const TABELAS = ['SF1', 'SD1', 'SF2', 'SD2', 'SB1', 'SBM', 'SA2', 'SC7', 'CTT', 'SED', 'SF4'];
 
@@ -75,6 +76,41 @@ function regrasTecnicas({ mensagem } = {}) {
     if (fragmento) partes.push(fragmento.texto());
   }
   return partes.join('\n').trim();
+}
+
+// Compras nao possui campo de vendedor/comprador em nenhuma tabela (SC7, SD1, SA2) — sem
+// forma de restringir por escopo, entao o modulo fica bloqueado integralmente para vendedor.
+// Gestor e numeros sem erp_tipo continuam com acesso total, sem qualquer alteracao.
+function prepararIntent({ intent, empresaId, mensagem }) {
+  const remetente = intent._remetente || null;
+  if (!remetente) return {};
+
+  const resolucao = resolverVendedorFixoPorEmpresa(remetente, empresaId);
+
+  if (resolucao.estado === 'nao_cadastrado') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'nao_cadastrado',
+        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de compras, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
+      },
+    };
+  }
+
+  if (resolucao.estado === 'vendedor' || resolucao.estado === 'vendedor_sem_codigo') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'acesso_negado_vendedor',
+        resposta_direta: 'O módulo de compras não está disponível para o perfil de vendedor. Para consultar compras, peça para um gestor consultar.',
+        sql_gerado: `-- bloqueado: modulo compras nao possui campo de vendedor/comprador\n-- mensagem: ${mensagem}`,
+      },
+    };
+  }
+
+  // gestor ou sem_restricao: acesso total, sem filtro
+  return {};
 }
 
 const contratosTecnicosPrioritarios = `
@@ -291,9 +327,11 @@ module.exports = {
     sem_conexao: 'Esta empresa nao possui uma conexao com o ERP configurada. Solicite ao administrador.',
   },
   garantirIntencao,
+  prepararIntent,
   resolverEntidades,
   formatarPerguntaAmbiguidade,
   _test: {
+    prepararIntent,
     buscarEntidade,
     resolverEntidades,
   },

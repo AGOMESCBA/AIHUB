@@ -52,7 +52,7 @@ JOIN FK1<sufixo> FK1
     AND SE5.E5_CLIFOR   = SE1.E1_CLIENTE
     AND SE5.E5_LOJA     = SE1.E1_LOJA
     AND SE5.E5_RECPAG   = 'R'
-    AND SE5.E5_SITUACAO <> 'C'
+    AND SE5.E5_SITUACA <> 'C'
     AND SE5.E5_TIPO NOT IN ('EST', 'ED')
     AND SE5.D_E_L_E_T_  = ' '`;
 }
@@ -91,7 +91,7 @@ JOIN FK2<sufixo> FK2
     AND SE5.E5_CLIFOR   = SE2.E2_FORNECE
     AND SE5.E5_LOJA     = SE2.E2_LOJA
     AND SE5.E5_RECPAG   = 'P'
-    AND SE5.E5_SITUACAO <> 'C'
+    AND SE5.E5_SITUACA <> 'C'
     AND SE5.E5_TIPO NOT IN ('EST', 'ED')
     AND SE5.D_E_L_E_T_  = ' '`;
 }
@@ -151,7 +151,7 @@ function receberPosicao() {
   return `
 ## Contas a receber — posicao/em aberto
 - Contas a receber usa SE1 e cliente SA1.
-- Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE1.E1_VENCREA — PROIBIDO usar SE1.E1_VENCTO. NAO filtre SE1.E1_SITUACAO.
+- Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE1.E1_VENCREA — PROIBIDO usar SE1.E1_VENCTO. NAO filtre SE1.E1_SITUACA.
 - REGRA ABSOLUTA — periodo/data especifica em posicao/em aberto: filtre DIRETAMENTE SE1.E1_VENCREA (ex: SE1.E1_VENCREA = '20260629' ou BETWEEN). PROIBIDO fazer JOIN com a tabela de baixas/movimentos (SE5 ou equivalente) para aplicar filtro de data nesta operacao — baixas/movimentos sao da operacao "Contas a receber — realizado" (outro fragmento, dados JA PAGOS/RECEBIDOS), sem relacao com vencimento em aberto. Misturar E1_SALDO > 0 (saldo aberto) com filtro pela data de baixa produz resultado sem sentido de negocio.
 - Natureza financeira: SE1.E1_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
@@ -173,7 +173,7 @@ function receberRealizado({ usaFK1, usaFK7Receber }) {
 ${joinCompleto}
 - Filtre o periodo em ${campoData} (data real do recebimento). Some ${campoValor} AS valor_recebido.
 - OBRIGATORIO: o WHERE da query deve incluir SE1.D_E_L_E_T_ = ' '.
-- NAO filtre SE1.E1_SITUACAO — o titulo pode ter baixa parcial e ainda estar em aberto.
+- NAO filtre SE1.E1_SITUACA — o titulo pode ter baixa parcial e ainda estar em aberto.
 
 -- MODELO SQL (adapte sufixos, periodo e agrupamento conforme a pergunta):
 /*
@@ -221,7 +221,7 @@ function pagarRealizado({ usaFK2, usaFK7Pagar }) {
 ${joinCompleto}
 - Filtre o periodo em ${campoData} (data real do pagamento). Some ${campoValor} AS valor_pago.
 - OBRIGATORIO: o WHERE da query deve incluir SE2.D_E_L_E_T_ = ' '.
-- NAO filtre SE2.E2_SITUACAO — o titulo pode ter baixa parcial e ainda estar em aberto.
+- NAO filtre SE2.E2_SITUACA — o titulo pode ter baixa parcial e ainda estar em aberto.
 
 -- MODELO SQL (adapte sufixos, periodo e agrupamento conforme a pergunta):
 /*
@@ -498,6 +498,18 @@ function antecipacoesPaRa() {
 `;
 }
 
+function identidadeVendedor() {
+  return `
+## Identidade do vendedor — REGRA DE SEGURANCA OBRIGATORIA
+- Se o contexto tecnico trouxer vendedorFixo, aplique OBRIGATORIAMENTE o filtro desse vendedor em TODA query de SE1, cobrindo as 5 posicoes de rateio com OR: AND (SE1.E1_VEND1 = '<codigo>' OR SE1.E1_VEND2 = '<codigo>' OR SE1.E1_VEND3 = '<codigo>' OR SE1.E1_VEND4 = '<codigo>' OR SE1.E1_VEND5 = '<codigo>').
+- PROIBIDO filtrar apenas SE1.E1_VEND1 sozinho — titulos rateados podem ter o vendedor autorizado em qualquer uma das 5 posicoes; filtrar so uma esconde titulos legitimos do proprio vendedor.
+- Nunca use SE2 (contas a pagar) quando vendedorFixo estiver presente — SE2 nao possui campo de vendedor e e proibido para este perfil. Se a pergunta pedir contas a pagar, recuse com precisa_confirmacao=true.
+- Nunca retorne dados de outros vendedores quando vendedorFixo estiver presente, mesmo que o usuario nao cite vendedor (agregados gerais tambem devem ser filtrados pelo vendedorFixo).
+- REGRA ABSOLUTA: se entidades_resolvidas contiver um vendedor com codigo DIFERENTE do vendedorFixo, NAO gere SQL algum. Retorne precisa_confirmacao=true com pergunta_confirmacao recusando o pedido.
+- Quando vendedorFixo NAO estiver presente (quem pergunta e gestor), a consulta pode abranger todos os vendedores e SE1/SE2 normalmente, sem filtro de vendedor.
+`;
+}
+
 function mediaPorPeriodo() {
   return `
 ## Media por periodo (agrupamento temporal)
@@ -511,13 +523,24 @@ function mediaPorPeriodo() {
 }
 
 const FRAGMENTOS = {
+  // identidade_vendedor nao tem keywords: e sempre injetado pelo classificador,
+  // independente do texto da pergunta (regra de seguranca, nao de assunto).
+  identidade_vendedor: {
+    texto: identidadeVendedor,
+    sempre: true,
+  },
   receber_posicao: {
     texto: receberPosicao,
     keywords: [/\ba\s+receber\b/i, /\brecebiv\w*/i, /\bem\s+aberto\b.*\b(receber|client)/i],
   },
   receber_realizado: {
     texto: receberRealizado,
-    keywords: [/\brecebid[oa]s?\b/i, /\brecebiment\w*\s+(realizad|efetuad)/i, /\bvalor\s+recebido\b/i, /\brecebi\b/i],
+    // "contas pagas por cliente"/"paguei por cliente" e ambiguo: no contexto de
+    // recebimento de vendedor/cliente, "pago" significa titulo do cliente ja quitado,
+    // nao pagamento a fornecedor. Sem esta keyword, a pergunta so aciona pagar_realizado
+    // (join SE2/fornecedor) e a IA reconstroi de memoria o join SE1->SE5, omitindo
+    // E5_NUMERO=E1_NUM — bug real observado em producao (join casa com titulo errado).
+    keywords: [/\brecebid[oa]s?\b/i, /\brecebiment\w*\s+(realizad|efetuad)/i, /\bvalor\s+recebido\b/i, /\brecebi\b/i, /\bpag[oa]s?\b.*\bclient\w*\b/i, /\bclient\w*\b.*\bpag[oa]s?\b/i],
   },
   pagar_posicao: {
     texto: pagarPosicao,
@@ -526,6 +549,11 @@ const FRAGMENTOS = {
   pagar_realizado: {
     texto: pagarRealizado,
     keywords: [/\bpag[oa]s?\b/i, /\bpagamento\s+(realizad|efetuad)/i, /\bvalor\s+pago\b/i, /\bpaguei\b/i],
+    // Quando a pergunta menciona cliente e nao menciona fornecedor, o "pago/pagas"
+    // se refere a titulo de RECEBER ja quitado pelo cliente, nao pagamento a
+    // fornecedor — exclui pagar_realizado para nao injetar o join SE2 errado junto
+    // com receber_realizado (que ja cobre esse caso via keyword acima).
+    excluiSe: [/\bclient\w*\b(?![\s\S]*\bfornece\w*\b)/i],
   },
   comparacao_pagar_x_receber: {
     texto: comparacaoPagarXReceber,
@@ -567,6 +595,7 @@ const FRAGMENTOS = {
 };
 
 const ORDEM_FALLBACK = [
+  'identidade_vendedor',
   'receber_posicao',
   'receber_realizado',
   'pagar_posicao',

@@ -1,6 +1,18 @@
 'use strict';
 
 const DEFINICOES = {
+  // Tipo de segurança: código ERP do remetente resolvido por empresa pelo sistema.
+  // SE1 (contas a receber) permite rateio entre até 5 vendedores (E1_VEND1..E1_VEND5);
+  // qualquer um deles que contenha o código do vendedor autorizado satisfaz a presença.
+  // SE2 (contas a pagar) não tem campo de vendedor — bloqueado integralmente para vendedor
+  // via sqlPatternsProibidos (ver financeiro-ia-owner-spec.js).
+  vendedor_fixo_seguranca: {
+    tipo: 'vendedor_fixo_seguranca',
+    rotuloTipo: 'vendedor_fixo_seguranca',
+    tabelaBase: 'SE1',
+    codigoCampo: 'E1_VEND1',
+    nomeCampos: [],
+  },
   cliente: {
     tipo: 'cliente',
     rotuloTipo: 'cliente',

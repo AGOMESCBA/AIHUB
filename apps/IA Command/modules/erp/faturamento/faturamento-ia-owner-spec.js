@@ -5,11 +5,16 @@ const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./faturamento-fragmentos-spec');
 const { classificarFragmentos } = require('./faturamento-spec-classifier');
+const { resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
+
+// Vendas em SF2 podem ser rateadas entre ate 5 vendedores (F2_VEND1..F2_VEND5).
+// O filtro de seguranca deve aceitar o vendedor em QUALQUER uma dessas posicoes.
+const CAMPOS_VENDEDOR_SEGURANCA = ['F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5'];
 
 const TABELAS = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT', 'ACY'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
-  SF2: ['F2_FILIAL', 'F2_DOC', 'F2_SERIE', 'F2_CLIENTE', 'F2_LOJA', 'F2_EMISSAO', 'F2_TIPO', 'F2_VALBRUT', 'F2_VALMERC', 'F2_VALFAT', 'F2_VEND1', 'D_E_L_E_T_'],
+  SF2: ['F2_FILIAL', 'F2_DOC', 'F2_SERIE', 'F2_CLIENTE', 'F2_LOJA', 'F2_EMISSAO', 'F2_TIPO', 'F2_VALBRUT', 'F2_VALMERC', 'F2_VALFAT', 'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5', 'D_E_L_E_T_'],
   SD2: ['D2_FILIAL', 'D2_DOC', 'D2_SERIE', 'D2_CLIENTE', 'D2_LOJA', 'D2_COD', 'D2_QUANT', 'D2_TOTAL', 'D2_VALBRUT', 'D2_PRCVEN', 'D2_TES', 'D2_CF', 'D2_CCUSTO', 'D_E_L_E_T_'],
   SF1: ['F1_FILIAL', 'F1_DOC', 'F1_SERIE', 'F1_FORNECE', 'F1_LOJA', 'F1_EMISSAO', 'F1_DTDIGIT', 'F1_TIPO', 'F1_VALBRUT', 'F1_VALMERC', 'F1_TOTALNF', 'D_E_L_E_T_'],
   SD1: ['D1_FILIAL', 'D1_DOC', 'D1_SERIE', 'D1_FORNECE', 'D1_LOJA', 'D1_COD', 'D1_QUANT', 'D1_TOTAL', 'D1_DTDIGIT', 'D1_TES', 'D1_CF', 'D_E_L_E_T_'],
@@ -66,6 +71,54 @@ function regrasTecnicas({ mensagem } = {}) {
     if (fragmento) partes.push(fragmento.texto());
   }
   return partes.join('\n').trim();
+}
+
+function prepararIntent({ intent, empresaId, mensagem }) {
+  const remetente = intent._remetente || null;
+  if (!remetente) return {};
+
+  const resolucao = resolverVendedorFixoPorEmpresa(remetente, empresaId);
+
+  if (resolucao.estado === 'nao_cadastrado') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'nao_cadastrado',
+        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de faturamento, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
+      },
+    };
+  }
+
+  if (resolucao.estado === 'vendedor_sem_codigo') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'erp_id_nao_configurado',
+        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código ERP* nas suas configurações de acesso.',
+        sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
+      },
+    };
+  }
+
+  if (resolucao.estado === 'vendedor') {
+    // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de segurança
+    // (para parametrização/validação do SQL gerado). SF2 permite rateio ate 5 vendedores.
+    return {
+      contextoTecnicoExtra: {
+        vendedorFixo: { codigo: resolucao.codigo, nome: resolucao.nome },
+        regraVendedorFixo: 'Aplique OBRIGATORIAMENTE o filtro do vendedorFixo cobrindo TODAS as 5 posicoes de rateio, sempre, em toda query, mesmo que a venda pareca ter um so vendedor: AND (SF2.F2_VEND1 = \'<codigo>\' OR SF2.F2_VEND2 = \'<codigo>\' OR SF2.F2_VEND3 = \'<codigo>\' OR SF2.F2_VEND4 = \'<codigo>\' OR SF2.F2_VEND5 = \'<codigo>\'). Nunca filtre apenas F2_VEND1 sozinho — vendas rateadas podem ter o vendedor autorizado em qualquer uma das 5 posicoes, e omitir as demais esconde vendas legitimas do proprio vendedor. Nao retorne dados de outros vendedores.',
+      },
+      entidadeSeguranca: {
+        tipo: 'vendedor_fixo_seguranca',
+        codigo: resolucao.codigo,
+        nome: resolucao.nome,
+      },
+    };
+  }
+
+  // gestor ou sem_restricao: acesso total, sem filtro
+  return {};
 }
 
 const contratosTecnicosPrioritarios = `
@@ -215,7 +268,12 @@ function validarDeleteFiltros(sql = '') {
   return `FROM/JOIN sem filtro D_E_L_E_T_: ${faltando.join(', ')}. REGRA ABSOLUTA: toda tabela no FROM ou JOIN deve ter alias.D_E_L_E_T_ = ' ' — tabela no FROM: WHERE alias.D_E_L_E_T_ = ' '; tabela em JOIN: AND alias.D_E_L_E_T_ = ' ' dentro do ON. Adicione os filtros faltantes.`;
 }
 
-function formatarPerguntaAmbiguidade(texto, candidatos = []) {
+function formatarPerguntaAmbiguidade(texto, candidatos = [], contexto = {}) {
+  // Vendedor (nao gestor): nunca revela nomes/codigos de outros vendedores nem oferece
+  // "Todos" — pede apenas para refinar com nome e sobrenome, sem expor o cadastro.
+  if (contexto?.ehVendedorRestrito) {
+    return `Encontrei mais de um registro para *${texto}*. Por favor, informe o nome completo (nome e sobrenome) para eu localizar o registro correto.`;
+  }
   const linhas = candidatos.map((c, i) => `${i + 1}. *${c.nome}* (${c.rotuloTipo || c.tipo}: ${c.codigo}${c.loja ? `/${c.loja}` : ''})`);
   linhas.push(`${candidatos.length + 1}. *Todos*`);
   return `Encontrei mais de um registro para *${texto}*:\n\n${linhas.join('\n')}\n\nQual deles voce quer consultar? Responda com o numero.`;
@@ -336,6 +394,8 @@ module.exports = {
   maxTokens: 4600,
   dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM', 'SA3', 'ACY'],
   sanitizarFiltrosFilialSX2: true,
+  camposVendedorSeguranca: CAMPOS_VENDEDOR_SEGURANCA,
+  camposRateioVendedor: CAMPOS_VENDEDOR_SEGURANCA,
   sqlPatternsProibidos: [
     {
       regex: /\bSF2\s*\.\s*F2_TIPO\s*=\s*'1'/i,
@@ -444,9 +504,12 @@ module.exports = {
     sem_conexao: 'Esta empresa nao possui uma conexao com o ERP configurada. Solicite ao administrador.',
   },
   garantirIntencao,
+  prepararIntent,
+  resolverVendedorFixoPorEmpresa,
   resolverEntidades,
   formatarPerguntaAmbiguidade,
   _test: {
+    prepararIntent,
     buscarEntidade,
     resolverEntidades,
   },

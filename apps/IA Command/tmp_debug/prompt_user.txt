@@ -1,0 +1,600 @@
+Mensagem atual do usuario:
+Qual o faturamento total de todos os vendedores este mes?
+Ultimas mensagens/consultas do usuario neste escopo:
+[]
+Classificacao/estado previo fornecido pelo sistema, quando existir:
+ATENCAO: isto e evidencia tecnica nao autoritativa; pode conter periodo/filtros herdados por camadas antigas.
+{
+  "aviso": "Evidencia nao autoritativa. A IA-OWNER deve confirmar pela mensagem atual e historico antes de herdar qualquer campo.",
+  "intent": "faturamento_dinamico",
+  "modulo": "faturamento",
+  "filtros": {},
+  "agrupamentos": [
+    "vendedor"
+  ],
+  "empresas_iahub_mencionadas": [],
+  "aviso_empresas_iahub": null,
+  "contrato_orquestrador": {
+    "modulo": "faturamento",
+    "intencao": "faturamento_dinamico",
+    "filtros": {},
+    "agrupamentos": [
+      "vendedor"
+    ],
+    "operacao": "soma",
+    "carteira": null,
+    "estado": null,
+    "fluxoTipo": null,
+    "herdou_contexto": false,
+    "contexto_usado": null,
+    "confianca": 0.95,
+    "precisa_confirmacao": false,
+    "periodo": null
+  },
+  "contexto_ia_anterior": null,
+  "ultimo_sql": null,
+  "ultima_resposta": null,
+  "aviso_periodo_relativo": "A mensagem atual contem periodo relativo; ignore periodos/contratos antigos e calcule usando contextoTecnico.data_atual.",
+  "periodo": null
+}
+Contexto tecnico de execucao:
+{
+  "empresaId": 1,
+  "data_atual": "2026-07-16",
+  "tabelas_permitidas": [
+    "SF2",
+    "SD2",
+    "SF1",
+    "SD1",
+    "SA1",
+    "SA3",
+    "SB1",
+    "SBM",
+    "SF4",
+    "CTT",
+    "ACY"
+  ],
+  "sx2": {
+    "ACY990": "C",
+    "CTT990": "E",
+    "SA1990": "C",
+    "SA3990": "C",
+    "SB1990": "E",
+    "SBM990": "E",
+    "SD1990": "E",
+    "SD2990": "E",
+    "SF1990": "E",
+    "SF2990": "E",
+    "SF4990": "E"
+  },
+  "sufixoTabela": "010",
+  "sufixosPorTabela": {
+    "ACY": "990",
+    "CTT": "990",
+    "SA1": "990",
+    "SA3": "990",
+    "SB1": "990",
+    "SBM": "990",
+    "SD1": "990",
+    "SD2": "990",
+    "SF1": "990",
+    "SF2": "990",
+    "SF4": "990"
+  },
+  "sx3": {
+    "SF2": [
+      {
+        "campo": "F2_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "F2_DOC",
+        "titulo": "Numero"
+      },
+      {
+        "campo": "F2_SERIE",
+        "titulo": "Serie Docto."
+      },
+      {
+        "campo": "F2_CLIENTE",
+        "titulo": "Cliente"
+      },
+      {
+        "campo": "F2_LOJA",
+        "titulo": "Loja"
+      },
+      {
+        "campo": "F2_EMISSAO",
+        "titulo": "DT Emissao"
+      },
+      {
+        "campo": "F2_TIPO",
+        "titulo": "Tipo da nota"
+      },
+      {
+        "campo": "F2_VALBRUT",
+        "titulo": "Vlr.Bruto"
+      },
+      {
+        "campo": "F2_VALMERC",
+        "titulo": "Vlr.Mercad"
+      },
+      {
+        "campo": "F2_VALFAT",
+        "titulo": "Valor Fatura"
+      },
+      {
+        "campo": "F2_VEND1",
+        "titulo": "Vendedor 1"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SD2": [
+      {
+        "campo": "D2_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "D2_DOC",
+        "titulo": "Num. Docto."
+      },
+      {
+        "campo": "D2_SERIE",
+        "titulo": "Serie"
+      },
+      {
+        "campo": "D2_CLIENTE",
+        "titulo": "Cliente"
+      },
+      {
+        "campo": "D2_LOJA",
+        "titulo": "Loja"
+      },
+      {
+        "campo": "D2_COD",
+        "titulo": "Produto"
+      },
+      {
+        "campo": "D2_QUANT",
+        "titulo": "Quantidade"
+      },
+      {
+        "campo": "D2_TOTAL",
+        "titulo": "Vlr.Total"
+      },
+      {
+        "campo": "D2_VALBRUT",
+        "titulo": "Vlr.Bruto"
+      },
+      {
+        "campo": "D2_PRCVEN",
+        "titulo": "Vlr.Unitario"
+      },
+      {
+        "campo": "D2_TES",
+        "titulo": "Tipo Saida"
+      },
+      {
+        "campo": "D2_CF",
+        "titulo": "Cod. Fiscal"
+      },
+      {
+        "campo": "D2_CCUSTO",
+        "titulo": "Centro Custo"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SF1": [
+      {
+        "campo": "F1_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "F1_DOC",
+        "titulo": "Numero"
+      },
+      {
+        "campo": "F1_SERIE",
+        "titulo": "Serie"
+      },
+      {
+        "campo": "F1_FORNECE",
+        "titulo": "Fornecedor"
+      },
+      {
+        "campo": "F1_LOJA",
+        "titulo": "Loja"
+      },
+      {
+        "campo": "F1_EMISSAO",
+        "titulo": "DT Emissao"
+      },
+      {
+        "campo": "F1_DTDIGIT",
+        "titulo": "Dt.Digitacao"
+      },
+      {
+        "campo": "F1_TIPO",
+        "titulo": "Tipo da Nota"
+      },
+      {
+        "campo": "F1_VALBRUT",
+        "titulo": "Vlr.Bruto"
+      },
+      {
+        "campo": "F1_VALMERC",
+        "titulo": "Vlr.Mercad"
+      },
+      {
+        "campo": "F1_TOTALNF",
+        "titulo": "campo padrao essencial IA-OWNER"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SD1": [
+      {
+        "campo": "D1_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "D1_DOC",
+        "titulo": "Documento"
+      },
+      {
+        "campo": "D1_SERIE",
+        "titulo": "Serie"
+      },
+      {
+        "campo": "D1_FORNECE",
+        "titulo": "Forn/Cliente"
+      },
+      {
+        "campo": "D1_LOJA",
+        "titulo": "Loja"
+      },
+      {
+        "campo": "D1_COD",
+        "titulo": "Produto"
+      },
+      {
+        "campo": "D1_QUANT",
+        "titulo": "Quantidade"
+      },
+      {
+        "campo": "D1_TOTAL",
+        "titulo": "Vlr.Total"
+      },
+      {
+        "campo": "D1_DTDIGIT",
+        "titulo": "DT Digitacao"
+      },
+      {
+        "campo": "D1_TES",
+        "titulo": "Tipo Entrada"
+      },
+      {
+        "campo": "D1_CF",
+        "titulo": "Cod. Fiscal"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SA1": [
+      {
+        "campo": "A1_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "A1_COD",
+        "titulo": "Codigo"
+      },
+      {
+        "campo": "A1_LOJA",
+        "titulo": "Loja"
+      },
+      {
+        "campo": "A1_NOME",
+        "titulo": "Nome"
+      },
+      {
+        "campo": "A1_NREDUZ",
+        "titulo": "N Fantasia"
+      },
+      {
+        "campo": "A1_CGC",
+        "titulo": "CNPJ/CPF"
+      },
+      {
+        "campo": "A1_MUN",
+        "titulo": "Municipio"
+      },
+      {
+        "campo": "A1_EST",
+        "titulo": "Estado"
+      },
+      {
+        "campo": "A1_GRPVEN",
+        "titulo": "Grp.Vendas"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SA3": [
+      {
+        "campo": "A3_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "A3_COD",
+        "titulo": "Codigo"
+      },
+      {
+        "campo": "A3_NOME",
+        "titulo": "Nome"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SB1": [
+      {
+        "campo": "B1_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "B1_COD",
+        "titulo": "Codigo"
+      },
+      {
+        "campo": "B1_DESC",
+        "titulo": "Descricao"
+      },
+      {
+        "campo": "B1_GRUPO",
+        "titulo": "Grupo"
+      },
+      {
+        "campo": "B1_UM",
+        "titulo": "Unidade"
+      },
+      {
+        "campo": "B1_TIPO",
+        "titulo": "Tipo"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SBM": [
+      {
+        "campo": "BM_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "BM_GRUPO",
+        "titulo": "Cod Grupo"
+      },
+      {
+        "campo": "BM_DESC",
+        "titulo": "Desc Grupo"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "SF4": [
+      {
+        "campo": "F4_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "F4_CODIGO",
+        "titulo": "Cod. do Tipo"
+      },
+      {
+        "campo": "F4_TEXTO",
+        "titulo": "Txt Padrao"
+      },
+      {
+        "campo": "F4_DUPLIC",
+        "titulo": "Gera Dupl."
+      },
+      {
+        "campo": "F4_ESTOQUE",
+        "titulo": "Atu.Estoque"
+      },
+      {
+        "campo": "F4_TIPO",
+        "titulo": "Tipo do TES"
+      },
+      {
+        "campo": "F4_CF",
+        "titulo": "Cod. Fiscal"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "CTT": [
+      {
+        "campo": "CTT_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "CTT_CUSTO",
+        "titulo": "C Custo"
+      },
+      {
+        "campo": "CTT_DESC01",
+        "titulo": "Desc Moeda 1"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ],
+    "ACY": [
+      {
+        "campo": "ACY_FILIAL",
+        "titulo": "Filial"
+      },
+      {
+        "campo": "ACY_GRPVEN",
+        "titulo": "Grupo"
+      },
+      {
+        "campo": "ACY_DESCRI",
+        "titulo": "Descricao"
+      },
+      {
+        "campo": "ACY_GRPSUP",
+        "titulo": "Grp.Superior"
+      },
+      {
+        "campo": "D_E_L_E_T_",
+        "titulo": "campo padrao essencial IA-OWNER"
+      }
+    ]
+  },
+  "filial": "TODAS",
+  "filialPadrao": null,
+  "modeloDados": "TRADICIONAL",
+  "campoFilial": null,
+  "modelo_baixas_receber": "SE5",
+  "modelo_baixas_pagar": "SE5",
+  "vendedorFixo": {
+    "codigo": "000007",
+    "nome": "Jean Duarte"
+  },
+  "regraVendedorFixo": "Aplique OBRIGATORIAMENTE o filtro do vendedorFixo cobrindo TODAS as 5 posicoes de rateio, sempre, em toda query, mesmo que a venda pareca ter um so vendedor: AND (SF2.F2_VEND1 = '<codigo>' OR SF2.F2_VEND2 = '<codigo>' OR SF2.F2_VEND3 = '<codigo>' OR SF2.F2_VEND4 = '<codigo>' OR SF2.F2_VEND5 = '<codigo>'). Nunca filtre apenas F2_VEND1 sozinho — vendas rateadas podem ter o vendedor autorizado em qualquer uma das 5 posicoes, e omitir as demais esconde vendas legitimas do proprio vendedor. Nao retorne dados de outros vendedores.",
+  "entidades_nao_resolvidas_pelo_sistema": [
+    {
+      "status": "nao_encontrado",
+      "texto": "este mes",
+      "origem": "explicito",
+      "candidatos": [],
+      "instrucao": "A busca auxiliar do sistema nao resolveu esta entidade. Analise a pergunta original e gere o SQL pela IA usando apenas tabelas e sufixos do contexto tecnico atual."
+    }
+  ],
+  "query_plan": {
+    "versao": 1,
+    "modulo": "faturamento",
+    "periodo": {
+      "tipo": "mes_atual",
+      "dataInicio": "20260701",
+      "dataFim": "20260731",
+      "meses": null,
+      "anos": null,
+      "origem": "data_atual",
+      "motivo": "Usuario pediu 'este mes'; data_atual e 2026-07-16, logo julho de 2026"
+    },
+    "periodoExplicito": true,
+    "agrupamentos": [
+      "vendedor"
+    ],
+    "filtros": {
+      "vendedor_fixo": "000007",
+      "tipo_nota": "N",
+      "periodo_mes": "202607"
+    },
+    "entidades": [
+      {
+        "tipo": "vendedor_fixo_seguranca",
+        "codigo": "000007",
+        "loja": null,
+        "nome": "Jean Duarte"
+      }
+    ],
+    "regras": [],
+    "carteira": null,
+    "estado": null,
+    "operacao": "consulta",
+    "comparativo": false,
+    "calcularPercentualCrescimento": false,
+    "dataPadrao": "emissao",
+    "exigirSaldoAberto": false,
+    "proibirFiltroData": false,
+    "modelo_baixas_receber": "SE5",
+    "modelo_baixas_pagar": "SE5"
+  }
+}
+Entidades ja resolvidas pelo sistema:
+[
+  {
+    "tipo": "vendedor_fixo_seguranca",
+    "codigo": "000007",
+    "nome": "Jean Duarte"
+  }
+]
+
+## CONTRATO OBRIGATORIO DE SQL (leia antes de gerar qualquer SQL)
+Plano estruturado da consulta (contrato obrigatorio entre interpretacao e SQL):
+  modulo: faturamento
+  operacao: consulta
+  carteira: nao_aplicavel
+  estado: nao_informado
+  periodo: explicito
+  campo_data_semantico: emissao
+O SQL gerado DEVE obedecer integralmente este contrato. Nao gere SQL que contradiga carteira, estado, dataPadrao ou estrutura acima.
+
+Tentativa/correcao solicitada: RETRY TECNICO IA-OWNER
+
+Motivo da rejeicao: SQL rejeitado por SX3: Campo SF2.F2_VEND2 nao consta no SX3 cadastrado para SF2990. | Campo SF2.F2_VEND3 nao consta no SX3 cadastrado para SF2990. | Campo SF2.F2_VEND4 nao consta no SX3 cadastrado para SF2990. | Campo SF2.F2_VEND5 nao consta no SX3 cadastrado para SF2990.
+
+Contrato obrigatorio:
+- Use somente campos existentes no SX3/contexto tecnico atual.
+- Alias calculado em CTE/subquery deve ser referenciado pelo alias exportado, nao pela tabela original.
+Entidades obrigatorias ja resolvidas:
+- vendedor_fixo_seguranca: codigo 000007; loja nao informada | nome: Jean Duarte
+
+Tarefa:
+- Gere novo SQL substituindo campos invalidos por campos permitidos.
+- Preserve periodo, metrica e entidades resolvidas.
+
+Retorne somente o JSON obrigatorio.
+
+Erro retornado pelo banco/validador:
+SQL rejeitado por SX3: Campo SF2.F2_VEND2 nao consta no SX3 cadastrado para SF2990. | Campo SF2.F2_VEND3 nao consta no SX3 cadastrado para SF2990. | Campo SF2.F2_VEND4 nao consta no SX3 cadastrado para SF2990. | Campo SF2.F2_VEND5 nao consta no SX3 cadastrado para SF2990.
+
+SQL com erro:
+SET ROWCOUNT 50000;
+SELECT
+  SA3.A3_COD AS cod_vendedor,
+  SA3.A3_NOME AS vendedor,
+  SUM(SD2.D2_TOTAL) AS faturamento_total
+FROM SD2990 SD2
+INNER JOIN SF2990 SF2
+  ON SD2.D2_FILIAL = SF2.F2_FILIAL
+  AND SD2.D2_DOC = SF2.F2_DOC
+  AND SD2.D2_SERIE = SF2.F2_SERIE
+  AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
+  AND SD2.D2_LOJA = SF2.F2_LOJA
+  AND SF2.D_E_L_E_T_ = ' '
+LEFT JOIN SA3990 SA3
+  ON (SF2.F2_VEND1 = SA3.A3_COD OR SF2.F2_VEND2 = SA3.A3_COD OR SF2.F2_VEND3 = SA3.A3_COD OR SF2.F2_VEND4 = SA3.A3_COD OR SF2.F2_VEND5 = SA3.A3_COD)
+  AND SA3.D_E_L_E_T_ = ' '
+WHERE SD2.D_E_L_E_T_ = ' '
+  AND SF2.F2_TIPO = 'N'
+  AND SUBSTRING(SF2.F2_EMISSAO, 1, 6) = '202607'
+  AND (SF2.F2_VEND1 = '000007' OR SF2.F2_VEND2 = '000007' OR SF2.F2_VEND3 = '000007' OR SF2.F2_VEND4 = '000007' OR SF2.F2_VEND5 = '000007')
+GROUP BY SA3.A3_COD, SA3.A3_NOME
+ORDER BY faturamento_total DESC;
+Decida se a mensagem atual herda, altera ou ignora o contexto anterior. Gere o SQL final quando possivel.
+Retorne apenas o JSON obrigatorio.

@@ -147,6 +147,71 @@ ok('contrato de apresentacao: troca campos fisicos de contas a pagar por nomes a
   assert.ok(!texto.includes('E2 VALOR'), texto);
 });
 
+ok('contas a pagar SE2: ignora colunas tecnicas e totaliza saldo', () => {
+  const rows = [{
+    E2_FILIAL: '0',
+    E2_PREFIXO: '14',
+    E2_NUM: '2273261',
+    E2_PARCELA: '7',
+    E2_TIPO: 'NF',
+    E2_FORNECE: '1088079',
+    E2_LOJA: '18',
+    E2_EMISSAO: '20260701',
+    vencimento: '20260716',
+    E2_VALOR: 87155.85,
+    E2_SALDO: 87155.85,
+    E2_NATUREZ: '3594118',
+  }];
+  const shape = canonical.detectarShape(rows, { mensagem: 'Contas a pagar no dia' });
+  const texto = canonical.renderSingle(rows, {
+    nomeEmpresa: 'CAIEIRA',
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Contas a pagar no dia',
+  });
+
+  assert.ok(shape, 'shape deveria ser detectado');
+  assert.strictEqual(shape.tipo, 'multiplas_dimensoes');
+  assert.deepStrictEqual(shape.metricas, ['E2_SALDO']);
+  assert.ok(texto.includes('*Por Vencimento, Documento, Fornecedor*'), texto);
+  assert.ok(/Vencimento 16\/07\/2026 \| Documento 2273261 \| Fornecedor 1088079: A pagar: \*R\$\s*87\.155,85\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: A pagar: \*R\$\s*87\.155,85\*/.test(texto), texto);
+  assert.ok(!texto.includes('2.273.261,00'), texto);
+  assert.ok(!texto.includes('3.594.118,00'), texto);
+  assert.ok(!texto.includes('E2 VALOR'), texto);
+});
+
+ok('contas a receber SE1: ignora colunas tecnicas e totaliza saldo', () => {
+  const rows = [{
+    E1_FILIAL: '0',
+    E1_PREFIXO: '1',
+    E1_NUM: '4588',
+    E1_PARCELA: '1',
+    E1_TIPO: 'NF',
+    E1_CLIENTE: '102030',
+    E1_LOJA: '01',
+    E1_EMISSAO: '20260701',
+    vencimento: '20260716',
+    E1_VALOR: 1234.56,
+    E1_SALDO: 1234.56,
+    E1_NATUREZ: '400',
+  }];
+  const shape = canonical.detectarShape(rows, { mensagem: 'Contas a receber no dia' });
+  const texto = canonical.renderSingle(rows, {
+    nomeEmpresa: 'CAIEIRA',
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Contas a receber no dia',
+  });
+
+  assert.ok(shape, 'shape deveria ser detectado');
+  assert.strictEqual(shape.tipo, 'multiplas_dimensoes');
+  assert.deepStrictEqual(shape.metricas, ['E1_SALDO']);
+  assert.ok(texto.includes('*Por Vencimento, Documento, Cliente*'), texto);
+  assert.ok(/Vencimento 16\/07\/2026 \| Documento 4588 \| Cliente 102030: A receber: \*R\$\s*1\.234,56\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: A receber: \*R\$\s*1\.234,56\*/.test(texto), texto);
+  assert.ok(!texto.includes('4.588,00'), texto);
+  assert.ok(!texto.includes('E1 VALOR'), texto);
+});
+
 ok('contrato de apresentacao: compras fisico Protheus consolida com alias semantico', () => {
   const texto = canonical.renderAll([
     { nomeEmpresa: 'C3i Systems', rows: [{ F1_VALBRUT: 29743.83 }] },

@@ -9,13 +9,22 @@ function _normalizarTipo(tipo) {
 }
 
 const CAMPOS_CODIGO_EQUIVALENTES = {
-  cliente: ['A1_COD', 'E1_CLIENTE', 'F2_CLIENTE', 'D2_CLIENTE', 'E3_CLIENT'],
+  cliente: ['A1_COD', 'E1_CLIENTE', 'F2_CLIENTE', 'D2_CLIENTE', 'E3_CODCLI'],
   fornecedor: ['A2_COD', 'E2_FORNECE', 'F1_FORNECE', 'D1_FORNECE'],
-  vendedor: ['A3_COD', 'E3_VEND', 'E3_VENDED', 'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5'],
+  vendedor: ['A3_COD', 'E3_VEND', 'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5'],
   // Tipo exclusivo de segurança: código ERP do remetente por empresa, resolvido pelo sistema
-  // (não pelo usuário). Usa os mesmos campos do vendedor para parametrização do SQL canônico.
-  // Nunca deve ser confundido com entidade de negócio pedida pelo usuário.
-  vendedor_fixo_seguranca: ['E3_VEND', 'E3_VENDED'],
+  // (não pelo usuário). União de todos os campos de vendedor usados por qualquer módulo com
+  // restrição de segurança (comissão: SE3.E3_VEND — único campo confirmado no SX3 real desta
+  // base; faturamento: SF2 rateado até 5 posições; financeiro: SE1 rateado até 5 posições) —
+  // cada spec usa apenas os campos da sua própria tabela; a exclusividade real (proibir código
+  // diferente) é sempre restrita pelo `campos` explícito que cada spec passa a
+  // validarExclusividadeVendedorSeguranca. Nunca confundir com entidade de negócio "vendedor"
+  // pedida pelo usuário.
+  vendedor_fixo_seguranca: [
+    'E3_VEND',
+    'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5',
+    'E1_VEND1', 'E1_VEND2', 'E1_VEND3', 'E1_VEND4', 'E1_VEND5',
+  ],
   produto: ['B1_COD', 'D1_COD', 'D2_COD'],
   grupo_produto: ['BM_GRUPO', 'B1_GRUPO'],
   centro_custo: ['CTT_CUSTO', 'D1_CC', 'D2_CCUSTO'],
@@ -238,23 +247,67 @@ function removerFiltrosLojaEntidadesTodas(sql, entidades) {
 }
 
 // Garante que, quando ha entidade de seguranca de vendedor (vendedor_fixo_seguranca),
-// NENHUM outro codigo de vendedor apareca nos campos de filtro de SE3 — nem mesmo via
+// NENHUM outro codigo de vendedor apareca nos campos de filtro do modulo — nem mesmo via
 // OR, subquery ou JOIN adicional que a IA tente usar para contornar o filtro principal.
 // Defesa em profundidade: roda DEPOIS do SQL gerado, mesmo que o bloqueio antecipado
 // (antes da chamada a IA) ja tenha tentado impedir o caso comum.
-function validarExclusividadeVendedorSeguranca(sql, entidadeSeguranca) {
+// `campos` deve ser passado pelo spec do modulo (ex.: comissao usa ['E3_VEND'];
+// faturamento usa ['F2_VEND1'..'F2_VEND5']; financeiro usa ['E1_VEND1'..'E1_VEND5']).
+// Se omitido, cai no default historico de comissao — mantem compatibilidade sem regressao.
+function validarExclusividadeVendedorSeguranca(sql, entidadeSeguranca, campos) {
   if (!entidadeSeguranca?.codigo) return { ok: true, erros: [] };
-  const campos = CAMPOS_CODIGO_EQUIVALENTES.vendedor_fixo_seguranca || [];
+  const camposAlvo = campos || CAMPOS_CODIGO_EQUIVALENTES.vendedor_fixo_seguranca || [];
   const codigoEsperado = String(entidadeSeguranca.codigo);
   const where = _sqlSemComentarios(sql);
   const erros = [];
-  for (const campo of campos) {
+  for (const campo of camposAlvo) {
     const re = new RegExp(`\\b(?:[A-Z0-9_]+\\.)?${_escapeRegexLiteral(campo)}\\s*=\\s*'([^']*)'`, 'gi');
     let m;
     while ((m = re.exec(where))) {
       if (m[1] !== codigoEsperado) {
-        erros.push(`SQL filtra ${campo} pelo codigo '${m[1]}', diferente do vendedor autorizado '${codigoEsperado}'. Acesso negado: nunca filtre comissao de outro vendedor.`);
+        erros.push(`SQL filtra ${campo} pelo codigo '${m[1]}', diferente do vendedor autorizado '${codigoEsperado}'. Acesso negado: nunca filtre dados de outro vendedor.`);
       }
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
+// Exige que, quando a tabela permite rateio entre multiplas posicoes de vendedor
+// (ex.: F2_VEND1..F2_VEND5), o SQL filtre pelo codigo autorizado em TODAS as posicoes
+// via OR — nunca apenas um subconjunto (ex.: so F2_VEND1). Um titulo/venda rateado pode
+// ter o vendedor autorizado em qualquer posicao; filtrar so uma esconde registros
+// legitimos do proprio vendedor E abre brecha para a IA "esquecer" posicoes em queries
+// futuras. So valida quando pelo menos um dos campos aparece filtrado pelo codigo
+// autorizado no SQL (ou seja, nao dispara para SQL que nao usa a tabela rateada).
+function validarCoberturaCompletaVendedorRateado(sql, entidadeSeguranca, camposRateio) {
+  if (!entidadeSeguranca?.codigo || !camposRateio || camposRateio.length < 2) return { ok: true, erros: [] };
+  const codigoEsperado = String(entidadeSeguranca.codigo);
+  const where = _sqlSemComentarios(sql);
+  const presentes = camposRateio.filter(campo => sqlTemCampoValor(where, campo, codigoEsperado));
+  if (!presentes.length) return { ok: true, erros: [] };
+  const faltando = camposRateio.filter(campo => !presentes.includes(campo));
+  if (!faltando.length) return { ok: true, erros: [] };
+  return {
+    ok: false,
+    erros: [
+      `SQL filtra o vendedor autorizado apenas em ${presentes.join(', ')}, mas nao em ${faltando.join(', ')}. ` +
+      `Registros rateados com o vendedor autorizado somente em ${faltando.join(' ou ')} ficariam ocultos. ` +
+      `Use OR cobrindo todas as posicoes: ${camposRateio.map(c => `${c} = '${codigoEsperado}'`).join(' OR ')}.`,
+    ],
+  };
+}
+
+// Bloqueia SQL que referencie tabelas sem campo de vendedor (ex.: SE2 contas a pagar)
+// quando o remetente esta restrito por entidadeSeguranca. Usado por modulos onde apenas
+// parte das tabelas tem campo de vendedor (financeiro: SE1 tem, SE2 nao tem).
+function validarTabelasBloqueadasParaVendedor(sql, entidadeSeguranca, tabelasBloqueadas = []) {
+  if (!entidadeSeguranca?.codigo || !tabelasBloqueadas.length) return { ok: true, erros: [] };
+  const texto = _sqlSemComentarios(sql);
+  const erros = [];
+  for (const tabela of tabelasBloqueadas) {
+    const re = new RegExp(`\\b(?:FROM|JOIN)\\s+${_escapeRegexLiteral(tabela)}\\w*\\s+${_escapeRegexLiteral(tabela)}\\b`, 'i');
+    if (re.test(texto)) {
+      erros.push(`SQL usa a tabela ${tabela}, que nao possui campo de vendedor. Acesso negado para este perfil.`);
     }
   }
   return { ok: erros.length === 0, erros };
@@ -262,6 +315,8 @@ function validarExclusividadeVendedorSeguranca(sql, entidadeSeguranca) {
 
 module.exports = {
   validarSqlEntidadesResolvidas,
+  validarCoberturaCompletaVendedorRateado,
+  validarTabelasBloqueadasParaVendedor,
   termosDeFiltrosEstruturados,
   sqlTemCampoValor,
   sqlTemFiltroEntidade,

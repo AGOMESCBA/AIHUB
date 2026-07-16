@@ -5,11 +5,17 @@ const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./comissao-fragmentos-spec');
 const { classificarFragmentos } = require('./comissao-spec-classifier');
+const { resolverIdentidadeVendedor, resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
+
+// SX3 real confirmado (protheus_sx3): a tabela SE3 desta base so possui E3_VEND.
+// E3_VENDED nao existe no dicionario de dados e foi removido para nao mascarar
+// silenciosamente uma referencia a campo inexistente nos guards de seguranca.
+const CAMPOS_VENDEDOR_SEGURANCA = ['E3_VEND'];
 
 const TABELAS = ['SE3', 'SA3', 'SA1', 'SE2', 'SE5'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
-  SE3: ['E3_FILIAL', 'E3_VEND', 'E3_VENDED', 'E3_CLIENT', 'E3_LOJA', 'E3_NUM', 'E3_PARCELA', 'E3_SERIE', 'E3_VENCTO', 'E3_DATA', 'E3_STATUS', 'E3_COMIS', 'E3_VALOR', 'E3_BASE', 'E3_PERCCOM', 'D_E_L_E_T_'],
+  SE3: ['E3_FILIAL', 'E3_VEND', 'E3_CODCLI', 'E3_LOJA', 'E3_NUM', 'E3_PARCELA', 'E3_SERIE', 'E3_VENCTO', 'E3_DATA', 'E3_STATUS', 'E3_COMIS', 'E3_VALOR', 'E3_BASE', 'E3_PERCCOM', 'D_E_L_E_T_'],
   SA3: ['A3_FILIAL', 'A3_COD', 'A3_NOME', 'D_E_L_E_T_'],
   SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'D_E_L_E_T_'],
   SE2: ['E2_FILIAL', 'E2_FORNECE', 'E2_LOJA', 'E2_NUM', 'E2_PARCELA', 'E2_TIPO', 'E2_PREFIXO', 'E2_VENCTO', 'E2_SALDO', 'E2_VALOR', 'D_E_L_E_T_'],
@@ -42,62 +48,6 @@ function garantirIntencao(empresaId) {
   } catch (e) {
     console.warn(`[ComissaoIAOwner] Falha ao garantir intencao para empresa #${empresaId}:`, e.message);
   }
-}
-
-// Retorna o registro completo do número na empresa, ou null se não cadastrado/inativo.
-// Três estados possíveis:
-//   null                          → não cadastrado nesta empresa → bloquear
-//   { erp_tipo: 'gestor', ... }  → acesso total, sem filtro de vendedor
-//   { erp_tipo: 'vendedor', erp_id: 'XXXXXX', ... } → acesso restrito ao próprio código
-function resolverIdentidadeVendedor(remetente, empresaId) {
-  try {
-    const { getDB } = require('../../database');
-    const channelStore = require('../../whatsapp/channel-store');
-    const db = getDB();
-
-    const variantes = channelStore.variantesNumeroBrasil(remetente);
-    const lid = channelStore.extrairLid(remetente);
-    const placeholders = variantes.map(() => '?').join(',');
-
-    const row = db.prepare(
-      `SELECT nome, erp_tipo, erp_id FROM whatsapp_allowed_numbers
-        WHERE empresa_id = ? AND ativo = 1
-          AND (numero IN (${placeholders}) OR wa_lid = ?)
-        LIMIT 1`
-    ).get(empresaId, ...variantes, lid);
-
-    if (!row) return null;
-    return {
-      nome:     row.nome,
-      erp_tipo: String(row.erp_tipo || '').trim().toLowerCase(),
-      erp_id:   String(row.erp_id  || '').trim().toUpperCase(),
-    };
-  } catch (e) {
-    console.warn('[ComissaoIAOwner] Falha ao resolver identidade do vendedor:', e.message);
-    return null;
-  }
-}
-
-// Resolve o vendedorFixo de segurança para uma empresa específica dado o remetente.
-// Retorna um dos três estados de segurança:
-//   { estado: 'nao_cadastrado' }                        → bloquear execução
-//   { estado: 'gestor' }                                → executar sem filtro
-//   { estado: 'vendedor', codigo, nome }                → executar com filtro do código
-//   { estado: 'vendedor_sem_codigo' }                   → bloquear — config incompleta
-// Exportada para uso no pipeline canônico multiempresa (service.js).
-function resolverVendedorFixoPorEmpresa(remetente, empresaId) {
-  if (!remetente) return { estado: 'sem_remetente' };
-  const identidade = resolverIdentidadeVendedor(remetente, empresaId);
-  if (!identidade) return { estado: 'nao_cadastrado' };
-  if (identidade.erp_tipo === 'gestor') return { estado: 'gestor', nome: identidade.nome };
-  if (identidade.erp_tipo === 'vendedor' && identidade.erp_id) {
-    return { estado: 'vendedor', codigo: identidade.erp_id, nome: identidade.nome };
-  }
-  if (identidade.erp_tipo === 'vendedor' && !identidade.erp_id) {
-    return { estado: 'vendedor_sem_codigo', nome: identidade.nome };
-  }
-  // erp_tipo vazio ou desconhecido: sem restrição (número cadastrado mas sem perfil ERP)
-  return { estado: 'sem_restricao' };
 }
 
 function prepararIntent({ intent, empresaId, mensagem }) {
@@ -134,7 +84,7 @@ function prepararIntent({ intent, empresaId, mensagem }) {
     return {
       contextoTecnicoExtra: {
         vendedorFixo: { codigo: resolucao.codigo, nome: resolucao.nome },
-        regraVendedorFixo: 'Aplique obrigatoriamente filtro do vendedorFixo em SE3.E3_VEND ou SE3.E3_VENDED quando existir. Nao retorne dados de outros vendedores.',
+        regraVendedorFixo: 'Aplique obrigatoriamente filtro do vendedorFixo em SE3.E3_VEND. Nao retorne dados de outros vendedores.',
       },
       entidadeSeguranca: {
         tipo: 'vendedor_fixo_seguranca',
@@ -239,6 +189,7 @@ module.exports = {
   maxTokens: 4200,
   dimensionLeftJoinBases: ['SA3', 'SA1'],
   sanitizarFiltrosFilialSX2: true,
+  camposVendedorSeguranca: CAMPOS_VENDEDOR_SEGURANCA,
   sqlPatternsProibidos: [
     {
       validar(sql, mensagem) {

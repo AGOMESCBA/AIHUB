@@ -56,7 +56,7 @@ ok('SQL filtrando SOMENTE codigo de outro vendedor (sem o autorizado) e rejeitad
   assert.strictEqual(r.ok, false, 'deveria rejeitar');
 });
 
-ok('SQL sem nenhum filtro de E3_VEND/E3_VENDED nao dispara este guard (outro guard cobre ausencia de filtro)', () => {
+ok('SQL sem nenhum filtro de E3_VEND nao dispara este guard (outro guard cobre ausencia de filtro)', () => {
   const sql = "SET ROWCOUNT 50000; SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3";
   const r = entitySqlGuard.validarExclusividadeVendedorSeguranca(sql, { codigo: '000012' });
   assert.strictEqual(r.ok, true, 'guard de exclusividade nao deve reclamar de ausencia, so de codigo errado');
@@ -66,12 +66,6 @@ ok('sem entidadeSeguranca (gestor), guard nao bloqueia nada', () => {
   const sql = "SET ROWCOUNT 50000; SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.E3_VEND = '000045'";
   const r = entitySqlGuard.validarExclusividadeVendedorSeguranca(sql, null);
   assert.strictEqual(r.ok, true);
-});
-
-ok('SQL com E3_VENDED (campo alternativo) tambem e validado', () => {
-  const sql = "SET ROWCOUNT 50000; SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3 WHERE SE3.E3_VENDED = '000099'";
-  const r = entitySqlGuard.validarExclusividadeVendedorSeguranca(sql, { codigo: '000012' });
-  assert.strictEqual(r.ok, false, 'deveria rejeitar codigo diferente em E3_VENDED tambem');
 });
 
 console.log('\n[3] Camada 3 — formatarPerguntaAmbiguidade restrita para vendedor');

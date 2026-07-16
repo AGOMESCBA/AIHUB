@@ -427,11 +427,46 @@ function devePularMetrica(col, keys) {
   return false;
 }
 
+function normalizarMetricasFinanceiras(metricas) {
+  const set = new Set(metricas.map(keyNorm));
+  return metricas.filter(col => {
+    const k = keyNorm(col);
+    if (k === 'e2_valor' && set.has('e2_saldo')) return false;
+    if (k === 'e1_valor' && set.has('e1_saldo')) return false;
+    return true;
+  });
+}
+
+function scoreDimensaoFinanceiraDetalhe(dim) {
+  const k = keyNorm(dim);
+  if (/^(vencimento|vencto|vencrea|data_vencimento|dt_vencimento|e1_vencto|e1_vencrea|e2_vencto|e2_vencrea)$/.test(k)) return 10;
+  if (/^(documento|doc|titulo|duplicata|nota|nota_fiscal|nf|nfe|e1_num|e2_num)$/.test(k)) return 20;
+  if (/^(fornecedor|fornec|nome_fornecedor|e2_fornece|a2_nome|cliente|nome_cliente|e1_cliente|a1_nome)$/.test(k)) return 30;
+  if (/^(natureza|naturez|e1_naturez|e2_naturez)$/.test(k)) return 40;
+  if (/^(tipo|e1_tipo|e2_tipo)$/.test(k)) return 50;
+  if (/^(emissao|data_emissao|dt_emissao|e1_emissao|e2_emissao)$/.test(k)) return 60;
+  if (/^(prefixo|e1_prefixo|e2_prefixo|parcela|e1_parcela|e2_parcela|filial|e1_filial|e2_filial|loja|e1_loja|e2_loja)$/.test(k)) return 90;
+  return 70;
+}
+
+function reduzirDimensoesFinanceirasDetalhe(dimensoes, metricas, opts = {}) {
+  if (dimensoes.length <= 3) return dimensoes;
+  const ksMetricas = new Set(metricas.map(keyNorm));
+  const texto = norm(opts.mensagem || opts.contextoConsulta || '');
+  const financeiroAberto = /\b(contas?\s+a\s+pagar|contas?\s+a\s+receber|a\s+pagar|a\s+receber|pagar|receber)\b/.test(texto);
+  const temCarteira = ['e1_saldo', 'e2_saldo', 'saldo_a_pagar', 'saldo_a_receber', 'a_pagar', 'a_receber'].some(k => ksMetricas.has(k));
+  if (!financeiroAberto && !temCarteira) return dimensoes;
+  return dimensoes
+    .slice()
+    .sort((a, b) => scoreDimensaoFinanceiraDetalhe(a) - scoreDimensaoFinanceiraDetalhe(b))
+    .slice(0, 3);
+}
+
 function detectarShape(rows, opts = {}) {
   if (!Array.isArray(rows) || !rows.length) return null;
   const keys = Object.keys(rows[0] || {});
   const amostra = sampleRows(rows);
-  const metricas = keys.filter(k => {
+  const metricas = normalizarMetricasFinanceiras(keys.filter(k => {
     const nk = keyNorm(k);
     if (presentation.dimension(k)) return false;
     const metric = presentation.metric(k, opts);
@@ -442,7 +477,7 @@ function detectarShape(rows, opts = {}) {
     if (devePularMetrica(k, keys)) return false;
     if (!RE_METRICA.test(nk)) return false;
     return amostra.some(r => isNumericValue(r[k]));
-  });
+  }));
   if (!metricas.length) return null;
 
   const dimensoes = keys.filter(k => {
@@ -456,7 +491,8 @@ function detectarShape(rows, opts = {}) {
     return amostra.some(r => String(r[k] ?? '').trim() !== '') && !amostra.every(r => isNumericValue(r[k]));
   });
 
-  const dimensoesNormalizadas = compactarDimensoesBancarias(dimensoes);
+  let dimensoesNormalizadas = compactarDimensoesBancarias(dimensoes);
+  dimensoesNormalizadas = reduzirDimensoesFinanceirasDetalhe(dimensoesNormalizadas, metricas, opts);
 
   if (dimensoesNormalizadas.length > 3) return null;
   if (dimensoesNormalizadas.length === 0) return { tipo: 'metricas_simples', dimensao: null, dimensoes: [], metricas };

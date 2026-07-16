@@ -7,6 +7,8 @@ const crud = require('../database/crud');
 const crossModuleDetector = require('./cross-module-detector');
 const crossModuleSpecCombiner = require('./cross-module-spec-combiner');
 const iaOwnerRunner = require('./ia-owner/runner');
+const semanticDatasetResolver = require('./semantic-dataset-resolver');
+const semanticDatasetRunner = require('./semantic-dataset-ai-runner');
 const { getDB } = require('../database');
 const channelStore = require('../whatsapp/channel-store');
 
@@ -439,6 +441,39 @@ async function rotear(intent, empresaId) {
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('cross_module');
       else resultado._pipeline_origem = 'cross_module';
     } else {
+      const semanticDataset = modulo === 'faturamento'
+        ? semanticDatasetResolver.resolverDatasetView({
+          empresaId,
+          modulo,
+          spec: modulo,
+          mensagem: intent._mensagemOriginal || '',
+        })
+        : null;
+
+      if (semanticDataset?.dataset) {
+        console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Executando por dataset semantico: dataset=${semanticDataset.dataset.nome} | empresa=${empresaId}`);
+        _tracePipeline('router_dinamico_dataset_semantico_inicio', {
+          empresa_id: empresaId,
+          modulo,
+          dataset_id: semanticDataset.dataset.id,
+          dataset_nome: semanticDataset.dataset.nome,
+          suboperacao: semanticDataset.suboperacaoDetectada,
+        });
+        resultado = await semanticDatasetRunner.executar(semanticDataset.dataset, intent, empresaId, {
+          suboperacaoDetectada: semanticDataset.suboperacaoDetectada,
+        });
+        _tracePipeline('router_dinamico_dataset_semantico_fim', {
+          empresa_id: empresaId,
+          modulo,
+          dataset_id: semanticDataset.dataset.id,
+          tipo: resultado?.tipo || null,
+          subtipo: resultado?.subtipo || null,
+          rows: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
+          duracao_ms: resultado?.duracao_ms ?? null,
+        });
+        if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('dataset_semantico');
+        else resultado._pipeline_origem = 'dataset_semantico';
+      } else {
       console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Executando pelo motor systemprompt.`);
       _tracePipeline('router_dinamico_handler_inicio', { empresa_id: empresaId, modulo });
       resultado = await AiSqlHandler.executar(intent, empresaId);
@@ -452,6 +487,7 @@ async function rotear(intent, empresaId) {
       });
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('systemprompt');
       else resultado._pipeline_origem = 'systemprompt';
+      }
     }
 
     const traceResultado = [
@@ -466,7 +502,12 @@ async function rotear(intent, empresaId) {
       },
     ];
     console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Resultado: tipo=${resultado.tipo || 'n/a'} | subtipo=${resultado.subtipo || 'n/a'} | linhas=${Array.isArray(resultado.rows) ? resultado.rows.length : 'n/a'} | duracao_ms=${Date.now() - t0}`);
-    return { dataset_id: null, dataset_nome: registro.modulo || 'ai_sql', ...resultado, trace: traceResultado };
+    return {
+      dataset_id: resultado.dataset_id || null,
+      dataset_nome: resultado.dataset_nome || registro.modulo || 'ai_sql',
+      ...resultado,
+      trace: traceResultado,
+    };
   }
 
   if (!registro.dataset_id) {

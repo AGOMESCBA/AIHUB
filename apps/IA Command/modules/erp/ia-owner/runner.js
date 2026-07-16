@@ -203,7 +203,65 @@ function _linhasEntidadesRetry(entidadesResolvidas = []) {
 
 function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
   let bloco;
-  if (subtipo === 'contrato_entidade_invalido' || /entidades resolvidas|filtro de codigo|filtro da loja|por nome\/descricao/i.test(mensagem)) {
+  if (/JOIN SE[12]->SE5 incompleto/i.test(mensagem)) {
+    // Bug real confirmado em producao: a IA usa E5_NUM (campo que nao existe) em vez
+    // de E5_NUMERO, ou omite o campo por completo — mesmo com o template correto no
+    // spec. Reforca aqui com o ON completo pronto para copiar, nome de campo exato.
+    const usaSE1 = /JOIN SE1->SE5/i.test(mensagem);
+    const tabela = usaSE1 ? 'SE1' : 'SE2';
+    const camposPrefixo = usaSE1
+      ? { filial: 'E1_FILIAL', prefixo: 'E1_PREFIXO', num: 'E1_NUM', parcela: 'E1_PARCELA', tipo: 'E1_TIPO', clifor: 'E1_CLIENTE', loja: 'E1_LOJA', recpag: "'R'" }
+      : { filial: 'E2_FILIAL', prefixo: 'E2_PREFIXO', num: 'E2_NUM', parcela: 'E2_PARCELA', tipo: 'E2_TIPO', clifor: 'E2_FORNECE', loja: 'E2_LOJA', recpag: "'P'" };
+    bloco = [
+      `Contrato obrigatorio — JOIN ${tabela}->SE5 (CRITICO: campo de nome parecido, mas ERRADO, causa dado incorreto):`,
+      `- O campo correto na tabela SE5 e E5_NUMERO (NAO existe campo E5_NUM na SE5 — nao confundir com ${camposPrefixo.num} da ${tabela}).`,
+      '- Sem SE5.E5_NUMERO no ON, a baixa casa com QUALQUER titulo do mesmo cliente/prefixo/tipo/parcela, nao so o titulo certo — o valor somado fica errado (as vezes multiplicado por 5-10x).',
+      '- O ON do JOIN SE5 DEVE conter EXATAMENTE estes 7 campos, nem mais nem menos:',
+      `  AND SE5.E5_FILIAL  = ${tabela}.${camposPrefixo.filial}`,
+      `  AND SE5.E5_PREFIXO = ${tabela}.${camposPrefixo.prefixo}`,
+      `  AND SE5.E5_NUMERO  = ${tabela}.${camposPrefixo.num}`,
+      `  AND SE5.E5_PARCELA = ${tabela}.${camposPrefixo.parcela}`,
+      `  AND SE5.E5_TIPO    = ${tabela}.${camposPrefixo.tipo}`,
+      `  AND SE5.E5_CLIFOR  = ${tabela}.${camposPrefixo.clifor}`,
+      `  AND SE5.E5_LOJA    = ${tabela}.${camposPrefixo.loja}`,
+      `  AND SE5.E5_RECPAG  = ${camposPrefixo.recpag}`,
+      "  AND SE5.D_E_L_E_T_ = ' '",
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, metrica e demais filtros ja corretos.',
+      '- Use EXATAMENTE o nome de campo E5_NUMERO (nunca E5_NUM) no ON do JOIN SE5.',
+      '',
+      'Nao fazer:',
+      '- Nao use E5_NUM — esse campo nao existe na tabela SE5.',
+      '- Nao omita nenhum dos 7 campos de chave listados acima.',
+    ];
+  } else if (/cobertura incompleta de rateio/i.test(mensagem)) {
+    // Extrai o OR completo sugerido na propria mensagem de erro (ja formatado pelo guard
+    // validarCoberturaCompletaVendedorRateado) para repeti-lo literalmente no retry —
+    // a IA tende a "lembrar" so de filtrar VEND1 mesmo apos ler a regra em texto livre,
+    // entao aqui reforcamos com o trecho SQL pronto para copiar, nao so a explicacao.
+    const orSugeridoMatch = mensagem.match(/Use OR cobrindo todas as posicoes:\s*(.+?)\.?$/i);
+    const orSugerido = orSugeridoMatch ? orSugeridoMatch[1].trim() : null;
+    bloco = [
+      'Contrato obrigatorio — FILTRO DE VENDEDOR RATEADO (CRITICO DE SEGURANCA):',
+      '- A tabela permite rateio do vendedor entre ate 5 posicoes (VEND1..VEND5).',
+      '- E PROIBIDO filtrar apenas uma posicao (ex: so VEND1). Isso e uma FALHA DE SEGURANCA:',
+      '  esconde registros legitimos do proprio vendedor quando ele esta rateado em outra posicao.',
+      '- O filtro deve SEMPRE ser um OR entre TODAS as 5 posicoes, envolto em parenteses, assim:',
+      ...(orSugerido ? [`  AND (${orSugerido})`] : []),
+      '- Essa condicao substitui qualquer filtro que use apenas uma posicao isolada.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, metrica, tabelas e escopo tecnico.',
+      '- Troque o filtro de vendedor por posicao unica pelo OR completo das 5 posicoes acima.',
+      '',
+      'Nao fazer:',
+      '- Nao filtre so VEND1 (ou qualquer posicao isolada) sozinho.',
+      '- Nao remova periodo, metrica ou demais filtros ja corretos.',
+    ];
+  } else if (subtipo === 'contrato_entidade_invalido' || /entidades resolvidas|filtro de codigo|filtro da loja|por nome\/descricao/i.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio:',
       ...linhasEntidades,
@@ -385,6 +443,18 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       'Tarefa:',
       '- Gere novo SQL removendo a subtracao de D2_QTDEDEV/D2_VALDEV.',
       '- Preserve periodo, entidades resolvidas e agrupamentos.',
+    ];
+  } else if (/usa SD2\.D2_VALDEV\/D2_QTDEDEV.*filtra SF2\.F2_TIPO\s*=\s*'D'/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio:',
+      "- Faturamento liquido (SD2.D2_VALDEV/D2_QTDEDEV) usa SF2.F2_TIPO = 'N' (nota normal) — NUNCA F2_TIPO = 'D'.",
+      "- F2_TIPO = 'D' filtra APENAS notas de devolucao e retorna vazio/zero — nao e o mesmo conceito de faturamento liquido.",
+      "- Na tentativa anterior o bloco combinou D2_VALDEV/D2_QTDEDEV (correto) com F2_TIPO = 'D' (errado), resultando em zero.",
+      ...linhasEntidades,
+      'Tarefa:',
+      "- Gere novo SQL trocando SF2.F2_TIPO = 'D' por SF2.F2_TIPO = 'N' no(s) bloco(s) que usam D2_VALDEV/D2_QTDEDEV.",
+      '- Preserve periodo, entidades resolvidas e agrupamentos.',
+      '- Antes de retornar: confirme que todo bloco com D2_VALDEV/D2_QTDEDEV tem F2_TIPO = \'N\', nunca \'D\'.',
     ];
   } else {
     bloco = null;
@@ -2029,6 +2099,16 @@ function validarDevolucaoConsistente(sql, mensagem = '') {
         erros: [`Pergunta NAO pede devolucao/liquido mas o SQL usa SD2.D2_QTDEDEV/SD2.D2_VALDEV (campos de devolucao), inflando/reduzindo a metrica indevidamente. Remova a subtracao de D2_QTDEDEV/D2_VALDEV — use SUM(SD2.D2_QUANT) e/ou SUM(SD2.D2_TOTAL) sem devolucao, ja que a pergunta nao pediu isso.`],
       };
     }
+    // Erro cross-module especifico: a IA as vezes usa D2_VALDEV/D2_QTDEDEV (faturamento
+    // liquido, correto) mas mantem F2_TIPO='D' por confusao com o padrao antigo de
+    // "devolucao pura" (SF1.F1_TIPO='D') — F2_TIPO='D' filtra SOMENTE notas de devolucao,
+    // retornando vazio/zero, pois a imensa maioria das notas e tipo 'N'.
+    if (usaCamposDevolucaoNoBloco && /SF2\s*\.\s*F2_TIPO\s*=\s*'D'/i.test(bloco)) {
+      return {
+        ok: false,
+        erros: [`Bloco usa SD2.D2_VALDEV/D2_QTDEDEV (faturamento liquido) mas filtra SF2.F2_TIPO = 'D' — isso restringe a consulta apenas as notas de devolucao, retornando vazio/zero. Faturamento liquido usa D2_VALDEV/D2_QTDEDEV JUNTO com SF2.F2_TIPO = 'N' (nota normal), nao 'D'. Troque para SF2.F2_TIPO = 'N'.`],
+      };
+    }
   }
   return { ok: true, erros: [] };
 }
@@ -2544,9 +2624,27 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
   // bloqueio antecipado via OR/subquery/JOIN adicional.
   const entidadeSegurancaSql = (entidades || []).find(e => String(e?.tipo || '').toLowerCase() === 'vendedor_fixo_seguranca');
   if (entidadeSegurancaSql) {
-    const validacaoVendedor = entitySqlGuard.validarExclusividadeVendedorSeguranca(out, entidadeSegurancaSql);
+    const validacaoVendedor = entitySqlGuard.validarExclusividadeVendedorSeguranca(out, entidadeSegurancaSql, spec.camposVendedorSeguranca);
     if (!validacaoVendedor.ok) {
       throw Object.assign(new Error(`Violacao de seguranca: ${validacaoVendedor.erros.join(' | ')}`), { _tipo: 'acesso_negado_vendedor', _sql: out });
+    }
+    // Exige cobertura de TODAS as posicoes de rateio (F2_VEND1..5 / E1_VEND1..5), nao so
+    // uma: filtrar apenas uma posicao esconderia registros legitimos rateados em outra.
+    // Usa `camposRateioVendedor` (distinto de `camposVendedorSeguranca`): comissao usa um
+    // unico campo (E3_VEND, confirmado no SX3 real), sem rateio entre multiplas posicoes,
+    // entao nao deve disparar este guard — so faturamento/financeiro declaram este campo.
+    if (spec.camposRateioVendedor) {
+      const validacaoCobertura = entitySqlGuard.validarCoberturaCompletaVendedorRateado(out, entidadeSegurancaSql, spec.camposRateioVendedor);
+      if (!validacaoCobertura.ok) {
+        throw Object.assign(new Error(`SQL rejeitado por cobertura incompleta de rateio: ${validacaoCobertura.erros.join(' | ')}`), { _tipo: 'contrato_entidade_invalido', _sql: out });
+      }
+    }
+    // Bloqueia tabelas sem campo de vendedor (ex.: SE2 contas a pagar em financeiro) quando
+    // o remetente esta restrito — sem essa checagem, um vendedor poderia consultar dados
+    // sem qualquer filtro de escopo nessas tabelas.
+    const validacaoTabelasBloqueadas = entitySqlGuard.validarTabelasBloqueadasParaVendedor(out, entidadeSegurancaSql, spec.tabelasBloqueadasParaVendedor);
+    if (!validacaoTabelasBloqueadas.ok) {
+      throw Object.assign(new Error(`Violacao de seguranca: ${validacaoTabelasBloqueadas.erros.join(' | ')}`), { _tipo: 'acesso_negado_vendedor', _sql: out });
     }
   }
   const sx3Validacao = sx3SqlValidator.validarCamposSqlContraSX3(out, sx3);
@@ -2727,7 +2825,7 @@ async function executar(spec, intent, empresaId) {
       return {
         tipo: 'erro',
         subtipo: 'acesso_negado_vendedor',
-        resposta_direta: 'Você só pode consultar suas próprias comissões. Para ver dados de outro vendedor, peça para um gestor consultar.',
+        resposta_direta: 'Você só pode consultar seus próprios dados. Para ver dados de outro vendedor, peça para um gestor consultar.',
         sql_gerado: `-- bloqueado: vendedor ${entidadeSeguranca.codigo} tentou acessar dados do vendedor ${outroVendedor.codigo}`,
         duracao_ms: Date.now() - t0,
       };
@@ -2983,7 +3081,7 @@ async function executar(spec, intent, empresaId) {
         return {
           tipo: 'erro',
           subtipo: 'acesso_negado_vendedor',
-          resposta_direta: 'Você só pode consultar suas próprias comissões. Para ver dados de outro vendedor, peça para um gestor consultar.',
+          resposta_direta: 'Você só pode consultar seus próprios dados. Para ver dados de outro vendedor, peça para um gestor consultar.',
           sql_gerado: `${e._sql || plano.sql}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
           _sql_auditoria: auditoriaBase,
           duracao_ms: Date.now() - t0,
@@ -3186,7 +3284,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         tipo: 'erro',
         subtipo,
         resposta_direta: subtipo === 'acesso_negado_vendedor'
-          ? 'Você só pode consultar suas próprias comissões. Para ver dados de outro vendedor, peça para um gestor consultar.'
+          ? 'Você só pode consultar seus próprios dados. Para ver dados de outro vendedor, peça para um gestor consultar.'
           : mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'),
         sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
         _sql_auditoria: auditoriaBase,

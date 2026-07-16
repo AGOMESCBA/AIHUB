@@ -1,6 +1,16 @@
 'use strict';
 
 const DEFINICOES = {
+  // Tipo de segurança: código ERP do remetente resolvido por empresa pelo sistema.
+  // SF2 permite rateio entre até 5 vendedores (F2_VEND1..F2_VEND5); qualquer um deles
+  // que contenha o código do vendedor autorizado satisfaz o filtro de presença.
+  vendedor_fixo_seguranca: {
+    tipo: 'vendedor_fixo_seguranca',
+    rotuloTipo: 'vendedor_fixo_seguranca',
+    tabelaBase: 'SF2',
+    codigoCampo: 'F2_VEND1',
+    nomeCampos: [],
+  },
   cliente: {
     tipo: 'cliente',
     rotuloTipo: 'cliente',

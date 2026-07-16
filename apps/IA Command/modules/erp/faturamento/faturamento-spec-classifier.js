@@ -6,19 +6,28 @@ const { FRAGMENTOS, ORDEM_FALLBACK } = require('./faturamento-fragmentos-spec');
  * Decide quais fragmentos de regrasTecnicas injetar no prompt, a partir da
  * mensagem do usuario.
  *
- * Retorna null quando nenhum fragmento foi identificado — sinal para o
- * chamador injetar TODOS os fragmentos (fallback = comportamento anterior
- * a fragmentacao, sem regressao).
+ * Retorna null quando a mensagem esta vazia — sinal para o chamador injetar
+ * TODOS os fragmentos (fallback = comportamento anterior a fragmentacao, sem
+ * regressao).
+ *
+ * Fragmentos marcados como `sempre: true` (ex: identidade_vendedor, regra de
+ * seguranca) sao incluidos em toda chamada com mensagem nao vazia,
+ * independente de keywords — mesmo mecanismo usado em comissao-spec-classifier.js.
  *
  * @returns {string[] | null} chaves de FRAGMENTOS a injetar, ou null para fallback total.
  */
 function classificarFragmentos(mensagem) {
   const texto = String(mensagem || '');
-  if (!texto.trim()) return null;
-
   const acionados = new Set();
 
   for (const [chave, fragmento] of Object.entries(FRAGMENTOS)) {
+    if (fragmento.sempre) acionados.add(chave);
+  }
+
+  if (!texto.trim()) return null;
+
+  for (const [chave, fragmento] of Object.entries(FRAGMENTOS)) {
+    if (fragmento.sempre) continue;
     const bateuKeyword = (fragmento.keywords || []).some(regex => regex.test(texto));
     if (!bateuKeyword) continue;
     const bateuExclusao = (fragmento.excluiSe || []).some(regex => regex.test(texto));
@@ -26,7 +35,10 @@ function classificarFragmentos(mensagem) {
     acionados.add(chave);
   }
 
-  if (acionados.size === 0) return null;
+  // Mensagem com texto mas nenhum fragmento de assunto bateu: usa so os
+  // fragmentos "sempre" (nao o fallback total de todos os fragmentos).
+  const apenasSempre = [...acionados].every(chave => FRAGMENTOS[chave]?.sempre);
+  if (apenasSempre) return ORDEM_FALLBACK.filter(chave => acionados.has(chave));
 
   for (const chave of Array.from(acionados)) {
     const fragmento = FRAGMENTOS[chave];

@@ -4675,7 +4675,7 @@ class IACWhatsAppService extends EventEmitter {
                   ? { ...e, codigo: resolucao.codigo, nome: resolucao.nome }
                   : e
               );
-              this.log(`[All] Segurança: ${sender} é vendedor na empresa #${emp.empresa_id} — filtro E3_VEND='${resolucao.codigo}'.`, 'info');
+              this.log(`[All] Segurança: ${sender} é vendedor na empresa #${emp.empresa_id} — filtro vendedor='${resolucao.codigo}'.`, 'info');
             }
             // sem_restricao / sem_remetente: mantém entidades sem alteração
           }
@@ -4730,7 +4730,15 @@ class IACWhatsAppService extends EventEmitter {
           ultimoResultadoDinamico = { empresaId: emp.empresa_id, resultado };
 
           if (resultado.tipo === 'sucesso_ai_sql') {
-            if (!sqlCanonicoDinamico && resultado._sql_canonico) {
+            const origemSqlCanonico = String(resultado._pipeline_origem || resultado._sql_canonico_origem || '').toLowerCase();
+            const sqlCanonicoEhDatasetSemantico = origemSqlCanonico === 'dataset_semantico';
+            if (!sqlCanonicoDinamico && resultado._sql_canonico && sqlCanonicoEhDatasetSemantico) {
+              resultado._sql_canonico_reuso_tecnico_permitido = false;
+              resultado._sql_canonico_reuso_permitido = false;
+              resultado._sql_canonico_reuso_motivo = 'dataset_semantico_nao_reutilizavel_entre_empresas';
+              this.log(`[All] SQL da empresa #${emp.empresa_id} veio de dataset semantico; nao sera reutilizado como canonico para outras empresas.`, 'info');
+            }
+            if (!sqlCanonicoDinamico && resultado._sql_canonico && !sqlCanonicoEhDatasetSemantico) {
               _tracePipelineWhatsapp('all_canonico_inicio', {
                 empresa_id: emp?.empresa_id,
                 sql_canonico_chars: String(resultado._sql_canonico || '').length,

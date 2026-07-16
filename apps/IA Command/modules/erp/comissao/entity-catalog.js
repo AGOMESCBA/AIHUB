@@ -2,9 +2,10 @@
 
 const DEFINICOES = {
   // Tipo de segurança: código ERP do remetente resolvido por empresa pelo sistema.
-  // Campos intencionalmente restritos a E3_VEND/E3_VENDED — nunca A3_COD (cadastro).
-  // Isso garante que apenas o filtro da tabela fato (SE3) seja parametrizado,
-  // sem risco de substituição indevida em JOINs com SA3.
+  // Campo intencionalmente restrito a E3_VEND (unico campo de vendedor confirmado no
+  // SX3 real desta base) — nunca A3_COD (cadastro). Isso garante que apenas o filtro
+  // da tabela fato (SE3) seja parametrizado, sem risco de substituicao indevida em
+  // JOINs com SA3.
   vendedor_fixo_seguranca: {
     tipo: 'vendedor_fixo_seguranca',
     rotuloTipo: 'vendedor_fixo_seguranca',
@@ -27,7 +28,7 @@ const DEFINICOES = {
     codigoCampo: 'A1_COD',
     lojaCampo: 'A1_LOJA',
     nomeCampos: ['A1_NOME', 'A1_NREDUZ'],
-    joinHint: 'SE3.E3_CLIENT = SA1.A1_COD AND SE3.E3_LOJA = SA1.A1_LOJA',
+    joinHint: 'SE3.E3_CODCLI = SA1.A1_COD AND SE3.E3_LOJA = SA1.A1_LOJA',
   },
 };
 

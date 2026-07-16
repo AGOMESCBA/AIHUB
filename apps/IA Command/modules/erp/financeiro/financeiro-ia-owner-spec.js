@@ -6,13 +6,17 @@ const entityCatalog = require('./entity-catalog');
 const { removerFiltrosEmpresaComoEntidade } = require('../empresa-scope-sql-guard');
 const fragmentosSpec = require('./financeiro-fragmentos-spec');
 const { classificarFragmentos } = require('./financeiro-spec-classifier');
+const { resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
+
+// SE1 (contas a receber) permite rateio entre ate 5 vendedores (E1_VEND1..E1_VEND5).
+const CAMPOS_VENDEDOR_SEGURANCA = ['E1_VEND1', 'E1_VEND2', 'E1_VEND3', 'E1_VEND4', 'E1_VEND5'];
 
 const TABELAS = ['SE1', 'SE2', 'SE5', 'SE8', 'SA1', 'SA2', 'SA3', 'SA6', 'SED', 'FK1', 'FK2', 'FK7'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
-  SE1: ['E1_FILIAL', 'E1_PREFIXO', 'E1_NUM', 'E1_PARCELA', 'E1_TIPO', 'E1_CLIENTE', 'E1_LOJA', 'E1_EMISSAO', 'E1_VENCTO', 'E1_VENCREA', 'E1_VALOR', 'E1_SALDO', 'E1_NATUREZ', 'E1_SITUACAO', 'E1_VEND1', 'E1_VALCOM1', 'D_E_L_E_T_'],
-  SE2: ['E2_FILIAL', 'E2_PREFIXO', 'E2_NUM', 'E2_PARCELA', 'E2_TIPO', 'E2_FORNECE', 'E2_LOJA', 'E2_EMISSAO', 'E2_VENCTO', 'E2_VENCREA', 'E2_VALOR', 'E2_SALDO', 'E2_NATUREZ', 'E2_SITUACAO', 'D_E_L_E_T_'],
-  SE5: ['E5_FILIAL', 'E5_PREFIXO', 'E5_NUM', 'E5_PARCELA', 'E5_TIPO', 'E5_DATA', 'E5_VALOR', 'E5_CLIFOR', 'E5_LOJA', 'E5_SITUACAO', 'E5_TIPODOC', 'E5_NATUREZ', 'D_E_L_E_T_'],
+  SE1: ['E1_FILIAL', 'E1_PREFIXO', 'E1_NUM', 'E1_PARCELA', 'E1_TIPO', 'E1_CLIENTE', 'E1_LOJA', 'E1_EMISSAO', 'E1_VENCTO', 'E1_VENCREA', 'E1_VALOR', 'E1_SALDO', 'E1_NATUREZ', 'E1_SITUACA', 'E1_VEND1', 'E1_VEND2', 'E1_VEND3', 'E1_VEND4', 'E1_VEND5', 'E1_VALCOM1', 'D_E_L_E_T_'],
+  SE2: ['E2_FILIAL', 'E2_PREFIXO', 'E2_NUM', 'E2_PARCELA', 'E2_TIPO', 'E2_FORNECE', 'E2_LOJA', 'E2_EMISSAO', 'E2_VENCTO', 'E2_VENCREA', 'E2_VALOR', 'E2_SALDO', 'E2_NATUREZ', 'E2_SITUACA', 'D_E_L_E_T_'],
+  SE5: ['E5_FILIAL', 'E5_PREFIXO', 'E5_NUM', 'E5_PARCELA', 'E5_TIPO', 'E5_DATA', 'E5_VALOR', 'E5_CLIFOR', 'E5_LOJA', 'E5_SITUACA', 'E5_TIPODOC', 'E5_NATUREZ', 'D_E_L_E_T_'],
   SE8: ['E8_FILIAL', 'E8_BANCO', 'E8_AGENCIA', 'E8_CONTA', 'E8_DTSALAT', 'E8_SALATUA', 'D_E_L_E_T_'],
   SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'D_E_L_E_T_'],
   SA2: ['A2_FILIAL', 'A2_COD', 'A2_LOJA', 'A2_NOME', 'A2_NREDUZ', 'A2_CGC', 'D_E_L_E_T_'],
@@ -150,13 +154,67 @@ async function resolverEntidades({ pedidos, empresaId, sx2, estadoAnterior, help
   return { status: 'resolvido', entidades: resolvidas };
 }
 
-function formatarPerguntaAmbiguidade(texto, candidatos = []) {
+function formatarPerguntaAmbiguidade(texto, candidatos = [], contexto = {}) {
+  // Vendedor (nao gestor): nunca revela nomes/codigos de outros vendedores nem oferece
+  // "Todos" — pede apenas para refinar com nome e sobrenome, sem expor o cadastro.
+  if (contexto?.ehVendedorRestrito) {
+    return `Encontrei mais de um registro para *${texto}*. Por favor, informe o nome completo (nome e sobrenome) para eu localizar o registro correto.`;
+  }
   const linhas = candidatos.map((c, i) => {
     const tipo = c.rotuloTipo || c.tipo;
     return `${i + 1}. *${c.nome}* (${tipo}: ${c.codigo}${c.loja ? `/${c.loja}` : ''})`;
   });
   linhas.push(`${candidatos.length + 1}. *Todos*`);
   return `Encontrei mais de um registro para *${texto}*:\n\n${linhas.join('\n')}\n\nQual deles voce quer consultar? Responda com o numero.`;
+}
+
+function prepararIntent({ intent, empresaId, mensagem }) {
+  const remetente = intent._remetente || null;
+  if (!remetente) return {};
+
+  const resolucao = resolverVendedorFixoPorEmpresa(remetente, empresaId);
+
+  if (resolucao.estado === 'nao_cadastrado') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'nao_cadastrado',
+        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados financeiros, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
+      },
+    };
+  }
+
+  if (resolucao.estado === 'vendedor_sem_codigo') {
+    return {
+      retorno: {
+        tipo: 'erro',
+        subtipo: 'erp_id_nao_configurado',
+        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código ERP* nas suas configurações de acesso.',
+        sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
+      },
+    };
+  }
+
+  if (resolucao.estado === 'vendedor') {
+    // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de segurança.
+    // SE1 (contas a receber) permite rateio ate 5 vendedores. SE2 (contas a pagar) nao tem
+    // campo de vendedor — fica bloqueado integralmente (ver tabelasBloqueadasParaVendedor).
+    return {
+      contextoTecnicoExtra: {
+        vendedorFixo: { codigo: resolucao.codigo, nome: resolucao.nome },
+        regraVendedorFixo: 'Aplique OBRIGATORIAMENTE o filtro do vendedorFixo cobrindo TODAS as 5 posicoes de rateio, sempre, em toda query de SE1, mesmo que o titulo pareca ter um so vendedor: AND (SE1.E1_VEND1 = \'<codigo>\' OR SE1.E1_VEND2 = \'<codigo>\' OR SE1.E1_VEND3 = \'<codigo>\' OR SE1.E1_VEND4 = \'<codigo>\' OR SE1.E1_VEND5 = \'<codigo>\'). Nunca filtre apenas E1_VEND1 sozinho — titulos rateados podem ter o vendedor autorizado em qualquer uma das 5 posicoes, e omitir as demais esconde titulos legitimos do proprio vendedor. Nunca use SE2 (contas a pagar) para este perfil — SE2 nao possui campo de vendedor e e proibido para vendedor. Nao retorne dados de outros vendedores.',
+      },
+      entidadeSeguranca: {
+        tipo: 'vendedor_fixo_seguranca',
+        codigo: resolucao.codigo,
+        nome: resolucao.nome,
+      },
+    };
+  }
+
+  // gestor ou sem_restricao: acesso total, sem filtro
+  return {};
 }
 
 function ajustarSqlAposSx2({ sql }) {
@@ -211,6 +269,33 @@ const sqlPatternsProibidos = [
   {
     regex: /\bSE8\b(?=[\s\S]*?\bJOIN\s+\w+\s+SA6\b)(?![\s\S]*?\bE8_AGENCIA\s*=\s*SA6\.A6_AGENCIA\b)/i,
     mensagem: 'JOIN SE8→SA6 incompleto: falta E8_AGENCIA = SA6.A6_AGENCIA AND SE8.E8_CONTA = SA6.A6_NUMCON na condicao ON. Sem esses campos, o banco retorna zero linhas ou duplicidade por agencia.',
+  },
+  {
+    // Bug real confirmado em producao: a IA gera JOIN SE1<->SE5 ou SE2<->SE5 sem a
+    // condicao E5_NUMERO = E1_NUM (ou E2_NUM) no ON. Sem essa chave, a baixa (SE5)
+    // casa com QUALQUER titulo do mesmo cliente/prefixo/tipo/parcela — nao apenas o
+    // titulo correto — inflando o valor somado por ordens de grandeza quando o
+    // cliente/fornecedor tem multiplos titulos com o mesmo prefixo/tipo.
+    validar(sql) {
+      const erros = [];
+      const usaSE1SE5 = /\bJOIN\s+\w*SE5\w*\s+SE5\b/i.test(sql) && /\bSE5\s*\.\s*E5_CLIFOR\s*=\s*SE1\s*\.\s*E1_CLIENTE\b/i.test(sql);
+      if (usaSE1SE5 && !/\bSE5\s*\.\s*E5_NUMERO\s*=\s*SE1\s*\.\s*E1_NUM\b/i.test(sql)) {
+        erros.push(
+          'JOIN SE1->SE5 incompleto: falta SE5.E5_NUMERO = SE1.E1_NUM na condicao ON. ' +
+          'Sem esse campo, a baixa (SE5) casa com QUALQUER titulo do mesmo cliente/prefixo/tipo/parcela, nao apenas o titulo correto, inflando o valor somado. ' +
+          'O ON do JOIN SE5 DEVE conter: E5_FILIAL=E1_FILIAL, E5_PREFIXO=E1_PREFIXO, E5_NUMERO=E1_NUM, E5_PARCELA=E1_PARCELA, E5_TIPO=E1_TIPO, E5_CLIFOR=E1_CLIENTE, E5_LOJA=E1_LOJA, E5_RECPAG=\'R\', D_E_L_E_T_=\' \'.'
+        );
+      }
+      const usaSE2SE5 = /\bJOIN\s+\w*SE5\w*\s+SE5\b/i.test(sql) && /\bSE5\s*\.\s*E5_CLIFOR\s*=\s*SE2\s*\.\s*E2_FORNECE\b/i.test(sql);
+      if (usaSE2SE5 && !/\bSE5\s*\.\s*E5_NUMERO\s*=\s*SE2\s*\.\s*E2_NUM\b/i.test(sql)) {
+        erros.push(
+          'JOIN SE2->SE5 incompleto: falta SE5.E5_NUMERO = SE2.E2_NUM na condicao ON. ' +
+          'Sem esse campo, a baixa (SE5) casa com QUALQUER titulo do mesmo fornecedor/prefixo/tipo/parcela, nao apenas o titulo correto, inflando o valor somado. ' +
+          'O ON do JOIN SE5 DEVE conter: E5_FILIAL=E2_FILIAL, E5_PREFIXO=E2_PREFIXO, E5_NUMERO=E2_NUM, E5_PARCELA=E2_PARCELA, E5_TIPO=E2_TIPO, E5_CLIFOR=E2_FORNECE, E5_LOJA=E2_LOJA, E5_RECPAG=\'P\', D_E_L_E_T_=\' \'.'
+        );
+      }
+      return erros.length ? erros.join(' ') : null;
+    },
   },
   {
     validar(sql) {
@@ -372,6 +457,9 @@ module.exports = {
   maxTokens: 5200,
   dimensionLeftJoinBases: ['SA1', 'SA2', 'SA3', 'SA6', 'SED'],
   sanitizarFiltrosFilialSX2: true,
+  camposVendedorSeguranca: CAMPOS_VENDEDOR_SEGURANCA,
+  camposRateioVendedor: CAMPOS_VENDEDOR_SEGURANCA,
+  tabelasBloqueadasParaVendedor: ['SE2'],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta financeira no momento. Tente novamente em breve.',
     sql_invalido: 'Tivemos uma inconsistencia ao interpretar sua consulta financeira. Por favor, reformule a pergunta e tente novamente.',
@@ -380,11 +468,14 @@ module.exports = {
     sem_conexao: 'Esta empresa nao possui uma conexao com o ERP configurada. Solicite ao administrador.',
   },
   garantirIntencao,
+  prepararIntent,
+  resolverVendedorFixoPorEmpresa,
   resolverEntidades,
   formatarPerguntaAmbiguidade,
   ajustarSqlAposSx2,
   validarCorrigirSqlGerado,
   _test: {
+    prepararIntent,
     gruposBuscaEntidade,
     buscarEntidade,
     resolverEntidades,

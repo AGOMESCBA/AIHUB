@@ -365,6 +365,17 @@ function crescimento({ granularidade = 'mensal' } = {}) {
 `;
 }
 
+function identidadeVendedor() {
+  return `
+## Identidade do vendedor — REGRA DE SEGURANCA OBRIGATORIA
+- Se o contexto tecnico trouxer vendedorFixo, aplique OBRIGATORIAMENTE o filtro desse vendedor em TODA query, cobrindo as 5 posicoes de rateio de SF2 com OR: AND (SF2.F2_VEND1 = '<codigo>' OR SF2.F2_VEND2 = '<codigo>' OR SF2.F2_VEND3 = '<codigo>' OR SF2.F2_VEND4 = '<codigo>' OR SF2.F2_VEND5 = '<codigo>').
+- PROIBIDO filtrar apenas SF2.F2_VEND1 sozinho — vendas rateadas podem ter o vendedor autorizado em qualquer uma das 5 posicoes; filtrar so uma esconde vendas legitimas do proprio vendedor.
+- Nunca retorne dados de outros vendedores quando vendedorFixo estiver presente, mesmo que o usuario nao cite vendedor (agregados gerais tambem devem ser filtrados pelo vendedorFixo).
+- REGRA ABSOLUTA: se entidades_resolvidas contiver um vendedor com codigo DIFERENTE do vendedorFixo, NAO gere SQL algum. Retorne precisa_confirmacao=true com pergunta_confirmacao recusando o pedido.
+- Quando vendedorFixo NAO estiver presente (quem pergunta e gestor), a consulta pode abranger todos os vendedores normalmente, sem filtro de vendedor.
+`;
+}
+
 function comparativoPeriodos() {
   return `
 ## Comparativo entre periodos especificos (nao necessariamente adjacentes)
@@ -380,6 +391,12 @@ function comparativoPeriodos() {
 }
 
 const FRAGMENTOS = {
+  // identidade_vendedor nao tem keywords: e sempre injetado pelo classificador,
+  // independente do texto da pergunta (regra de seguranca, nao de assunto).
+  identidade_vendedor: {
+    texto: identidadeVendedor,
+    sempre: true,
+  },
   devolucoes: {
     texto: devolucoes,
     keywords: [/\bdevolu\w*/i, /\bestorno\b/i, /\bretorno\b/i, /\bl[ií]quido\b/i, /\babatendo\b/i],
@@ -453,6 +470,7 @@ const FRAGMENTOS = {
 };
 
 const ORDEM_FALLBACK = [
+  'identidade_vendedor',
   'devolucoes',
   'metrica_valor_total',
   'metrica_quantidade_item',

@@ -504,7 +504,7 @@ function _contratoBaixaReceber(modelo = 'SE5') {
   if (modelo === 'FK1') {
     return "modelo_baixas_receber=FK1. Use SE1 -> FK1 direto. JOIN FK1 por FK1.FK1_FILIAL=SE1.E1_FILIAL AND FK1.FK1_PREFIXO=SE1.E1_PREFIXO AND FK1.FK1_NUM=SE1.E1_NUM AND FK1.FK1_PARCELA=SE1.E1_PARCELA AND FK1.FK1_TIPO=SE1.E1_TIPO AND FK1.D_E_L_E_T_=' '. Filtre FK1.FK1_DATA, some FK1.FK1_VALOR.";
   }
-  return "modelo_baixas_receber=SE5. Use SE1 -> SE5. JOIN SE5 por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG='R' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' '. Filtre SE5.E5_DATA, some SE5.E5_VALOR.";
+  return "modelo_baixas_receber=SE5. Use SE1 -> SE5. JOIN SE5 por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG='R' AND E5_SITUACA<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' '. Filtre SE5.E5_DATA, some SE5.E5_VALOR.";
 }
 
 function _contratoBaixaPagar(modelo = 'SE5') {
@@ -514,7 +514,7 @@ function _contratoBaixaPagar(modelo = 'SE5') {
   if (modelo === 'FK2') {
     return "modelo_baixas_pagar=FK2. Use SE2 -> FK2 direto. JOIN FK2 por FK2.FK2_FILIAL=SE2.E2_FILIAL AND FK2.FK2_PREFIXO=SE2.E2_PREFIXO AND FK2.FK2_NUM=SE2.E2_NUM AND FK2.FK2_PARCELA=SE2.E2_PARCELA AND FK2.FK2_TIPO=SE2.E2_TIPO AND FK2.D_E_L_E_T_=' '. Filtre FK2.FK2_DATA, some FK2.FK2_VALOR.";
   }
-  return "modelo_baixas_pagar=SE5. Use SE2 -> SE5. JOIN SE5 por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG='P' AND E5_SITUACAO<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' '. Filtre SE5.E5_DATA, some SE5.E5_VALOR.";
+  return "modelo_baixas_pagar=SE5. Use SE2 -> SE5. JOIN SE5 por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG='P' AND E5_SITUACA<>'C' AND E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_=' '. Filtre SE5.E5_DATA, some SE5.E5_VALOR.";
 }
 
 function formatQueryPlanForPrompt(plano = {}) {
@@ -558,7 +558,7 @@ function formatQueryPlanForPrompt(plano = {}) {
     linhas.push('  financeiro_receber: use SE1 + SA1; nao use SA2/fornecedor em contas a receber.');
     if (plano.estado === 'recebido') {
       linhas.push(`  financeiro_receber_recebido: ${_contratoBaixaReceber(plano.modelo_baixas_receber || 'SE5')} Use SOMENTE o modelo indicado.`);
-      linhas.push('  financeiro_receber_recebido: PROIBIDO usar SE1.E1_BAIXA, E1_EMISSAO, E1_VENCREA, E1_VENCTO. NAO filtre SE1.E1_SITUACAO (titulo pode ter baixa parcial).');
+      linhas.push('  financeiro_receber_recebido: PROIBIDO usar SE1.E1_BAIXA, E1_EMISSAO, E1_VENCREA, E1_VENCTO. NAO filtre SE1.E1_SITUACA (titulo pode ter baixa parcial).');
     }
   }
   if (plano.modulo === 'financeiro' && plano.carteira === 'pagar') {
@@ -566,7 +566,7 @@ function formatQueryPlanForPrompt(plano = {}) {
     if (plano.estado === 'pago') {
       linhas.push('  financeiro_pagar_pago: use somente SE2 + SA2; nao use SE1/SA1, recebimentos nem UNION ALL.');
       linhas.push(`  financeiro_pagar_pago: ${_contratoBaixaPagar(plano.modelo_baixas_pagar || 'SE5')} Use SOMENTE o modelo indicado.`);
-      linhas.push('  financeiro_pagar_pago: PROIBIDO usar SE2.E2_BAIXA, E2_EMISSAO, E2_VENCREA, E2_VENCTO, SE2.E2_SITUACAO, SE2.E2_VALOR ou SE2.E2_SALDO como base de pagamento realizado.');
+      linhas.push('  financeiro_pagar_pago: PROIBIDO usar SE2.E2_BAIXA, E2_EMISSAO, E2_VENCREA, E2_VENCTO, SE2.E2_SITUACA, SE2.E2_VALOR ou SE2.E2_SALDO como base de pagamento realizado.');
     }
   }
   if (plano.modulo === 'financeiro' && plano.carteira === 'ambas') {
@@ -703,7 +703,7 @@ function validarSqlContraPlano(sql, plano = {}) {
     if (plano.carteira === 'pagar') {
       const usaDataErrada = ['E2_VENCREA', 'E2_VENCTO', 'E2_EMISSAO', 'E2_BAIXA'].some(campoTemFiltro);
       if (usaDataErrada) {
-        erros.push('SQL filtrou pagamento realizado por vencimento/emissao/E2_BAIXA; use modelo_baixas_pagar do contextoTecnico: FK2 (JOIN por FILIAL+PREFIXO+NUM+PARCELA+TIPO, filtro FK2.FK2_DATA) ou SE5 (JOIN por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG=\'P\' AND E5_SITUACAO<>\'C\', filtro SE5.E5_DATA).');
+        erros.push('SQL filtrou pagamento realizado por vencimento/emissao/E2_BAIXA; use modelo_baixas_pagar do contextoTecnico: FK2 (JOIN por FILIAL+PREFIXO+NUM+PARCELA+TIPO, filtro FK2.FK2_DATA) ou SE5 (JOIN por E5_PREFIXO=E2_PREFIXO AND E5_NUMERO=E2_NUM AND E5_PARCELA=E2_PARCELA AND E5_TIPO=E2_TIPO AND E5_CLIFOR=E2_FORNECE AND E5_LOJA=E2_LOJA AND E5_RECPAG=\'P\' AND E5_SITUACA<>\'C\', filtro SE5.E5_DATA).');
       }
       const temFk2OuSe5 = /\b(?:FROM|JOIN)\s+FK2\d{0,3}\b/i.test(texto) || /\b(?:FROM|JOIN)\s+SE5\d{0,3}\b/i.test(texto);
       if (!temFk2OuSe5) {
@@ -713,7 +713,7 @@ function validarSqlContraPlano(sql, plano = {}) {
     if (plano.carteira === 'receber') {
       const usaDataErrada = ['E1_VENCREA', 'E1_VENCTO', 'E1_EMISSAO', 'E1_BAIXA'].some(campoTemFiltro);
       if (usaDataErrada) {
-        erros.push('SQL filtrou recebimento realizado por vencimento/emissao/E1_BAIXA; use modelo_baixas_receber do contextoTecnico: FK1 (JOIN por FILIAL+PREFIXO+NUM+PARCELA+TIPO, filtro FK1.FK1_DATA) ou SE5 (JOIN por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG=\'R\' AND E5_SITUACAO<>\'C\', filtro SE5.E5_DATA). NAO filtre SE1.E1_SITUACAO.');
+        erros.push('SQL filtrou recebimento realizado por vencimento/emissao/E1_BAIXA; use modelo_baixas_receber do contextoTecnico: FK1 (JOIN por FILIAL+PREFIXO+NUM+PARCELA+TIPO, filtro FK1.FK1_DATA) ou SE5 (JOIN por E5_PREFIXO=E1_PREFIXO AND E5_NUMERO=E1_NUM AND E5_PARCELA=E1_PARCELA AND E5_TIPO=E1_TIPO AND E5_CLIFOR=E1_CLIENTE AND E5_LOJA=E1_LOJA AND E5_RECPAG=\'R\' AND E5_SITUACA<>\'C\', filtro SE5.E5_DATA). NAO filtre SE1.E1_SITUACA.');
       }
       const temFk1OuSe5 = /\b(?:FROM|JOIN)\s+FK1\d{0,3}\b/i.test(texto) || /\b(?:FROM|JOIN)\s+SE5\d{0,3}\b/i.test(texto);
       if (!temFk1OuSe5) {

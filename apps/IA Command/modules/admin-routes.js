@@ -556,12 +556,19 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // ── PREVIEW SQL — executa sem salvar, retorna primeiras 100 linhas ──────────
   app.post('/api/ia-command/admin/datasets/preview-sql', requireAuth, requireIaCommand, canDatasets, async (req, res) => {
     const { sql_base, conexao_id } = req.body;
+    const tipoDataset = String(req.body?.tipo || 'sql_base').trim().toLowerCase();
+    const usarAgenteLocal = tipoDataset === 'view_semantica';
     if (!sql_base?.trim()) return res.status(400).json({ error: 'sql_base é obrigatório.' });
 
     const factory = require('./erp/providers/connection-factory');
     let conn;
     try {
-      if (conexao_id) {
+      if (usarAgenteLocal) {
+        conn = factory.carregarConexao(eid(req));
+        if (String(conn.tipo || '').toLowerCase() !== 'api_proxy') {
+          return res.status(400).json({ error: 'View semantica deve ser testada pelo Agente Local. Ative e configure o Agente Local desta empresa antes de executar o preview.' });
+        }
+      } else if (conexao_id) {
         const crud2 = require('./database/crud');
         conn = crud2.buscarPorId('connections', conexao_id);
         if (!conn || conn.empresa_id !== eid(req)) return res.status(404).json({ error: 'Conexão não encontrada.' });
@@ -580,8 +587,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     try {
       const rows    = await factory.executar(conn, wrapper, {});
       const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-      _audit(req, 'preview_sql', { linhas: rows.length, conexao: conn.nome });
-      res.json({ columns, rows, total: rows.length, conexao: conn.nome });
+      const conexaoLabel = usarAgenteLocal ? `Agente Local${conn._agente_url ? ` (${conn._agente_url})` : ''}` : (conn.nome || conn.id || conn.tipo);
+      _audit(req, 'preview_sql', { linhas: rows.length, conexao: conexaoLabel, tipo: tipoDataset });
+      res.json({ columns, rows, total: rows.length, conexao: conexaoLabel });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -648,12 +656,6 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         if (!Array.isArray(lista)) erros.push('Campos semânticos devem ser uma lista JSON.');
         for (const [idx, campo] of (Array.isArray(lista) ? lista : []).entries()) {
           if (!campo?.coluna) erros.push(`Campo semântico #${idx + 1} está sem coluna.`);
-          if (campo?.tipo === 'metrica' && !campo?.agregacao_padrao) {
-            erros.push(`Métrica "${campo.coluna || idx + 1}" exige agregação padrão.`);
-          }
-          if (campo?.tipo === 'data' && !campo?.papel_temporal) {
-            erros.push(`Data "${campo.coluna || idx + 1}" exige papel temporal.`);
-          }
         }
       } catch (_) {
         erros.push('Campos semânticos devem estar em JSON válido.');

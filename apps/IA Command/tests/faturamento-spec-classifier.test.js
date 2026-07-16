@@ -104,9 +104,9 @@ ok('pergunta vazia retorna null', () => {
   assert.strictEqual(classificarFragmentos(''), null);
 });
 
-ok('pergunta sem nenhuma keyword conhecida retorna null', () => {
+ok('pergunta sem nenhuma keyword conhecida usa so identidade_vendedor (sempre:true), nao o fallback total', () => {
   const r = classificarFragmentos('isso eh bom ou mau?');
-  assert.strictEqual(r, null, `esperava null, obteve: ${JSON.stringify(r)}`);
+  assert.deepStrictEqual(r, ['identidade_vendedor'], `esperava so identidade_vendedor, obteve: ${JSON.stringify(r)}`);
 });
 
 console.log(`\n${'─'.repeat(60)}`);

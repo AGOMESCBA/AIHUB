@@ -31,11 +31,11 @@ function base() {
 - SE3 -> SA3:
   SE3.E3_VEND = SA3.A3_COD
 - SE3 -> SA1:
-  SE3.E3_CLIENT = SA1.A1_COD
+  SE3.E3_CODCLI = SA1.A1_COD
   AND SE3.E3_LOJA = SA1.A1_LOJA
 - SE3 -> SE2, apenas quando necessario e campos existirem:
   SE2.E2_FILIAL = SE3.E3_FILIAL
-  AND SE2.E2_FORNECE = SE3.E3_VENDED ou SE3.E3_VEND conforme campo disponivel
+  AND SE2.E2_FORNECE = SE3.E3_VEND
   AND SE2.E2_NUM = SE3.E3_NUM
   AND SE2.E2_PARCELA = SE3.E3_PARCELA quando ambos existirem
   AND SE2.E2_TIPO IN ('COM','TX') quando E2_TIPO existir
@@ -72,7 +72,7 @@ Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP B
 function identidadeVendedor() {
   return `
 ## Identidade do vendedor — REGRA DE SEGURANCA OBRIGATORIA
-- Se o contexto tecnico trouxer vendedorFixo, aplique obrigatoriamente filtro desse vendedor em SE3.E3_VEND ou SE3.E3_VENDED conforme campos disponiveis.
+- Se o contexto tecnico trouxer vendedorFixo, aplique obrigatoriamente filtro desse vendedor em SE3.E3_VEND.
 - Nunca retorne dados de outros vendedores quando vendedorFixo estiver presente, mesmo que o usuario nao cite vendedor (agregados gerais tambem devem ser filtrados pelo vendedorFixo).
 - REGRA ABSOLUTA: se entidades_resolvidas contiver um vendedor com codigo DIFERENTE do vendedorFixo, NAO gere SQL algum. Retorne precisa_confirmacao=true com pergunta_confirmacao recusando o pedido — o sistema ja bloqueia esse caso antes desta etapa, mas a IA nunca deve tentar conciliar dois codigos de vendedor distintos (ex: via OR, UNION ou subquery) em uma mesma consulta.
 - Quando vendedorFixo NAO estiver presente (quem pergunta e gestor), a consulta pode abranger todos os vendedores normalmente.

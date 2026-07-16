@@ -154,7 +154,7 @@ WHERE SE1.D_E_L_E_T_ = ' '
 const validacaoFk1 = queryPlan.validarSqlContraPlano(sqlRecebidasFk1, planoRecebidasMes);
 assert.strictEqual(validacaoFk1.ok, true, `SQL com FK1 deve ser aceito: ${validacaoFk1.erros.join(' | ')}`);
 
-// SQL correto modelo SE5 fallback (sem E1_SITUACAO — titulo pode ter baixa parcial)
+// SQL correto modelo SE5 fallback (sem E1_SITUACA — titulo pode ter baixa parcial)
 const sqlRecebidasSe5 = `
 SET ROWCOUNT 50000;
 SELECT COALESCE(SUM(SE5.E5_VALOR), 0) AS valor_recebido
@@ -162,7 +162,7 @@ FROM SE1020 SE1
 JOIN SE5020 SE5 ON SE5.E5_FILIAL = SE1.E1_FILIAL AND SE5.E5_PREFIXO = SE1.E1_PREFIXO
   AND SE5.E5_NUMERO = SE1.E1_NUM AND SE5.E5_PARCELA = SE1.E1_PARCELA AND SE5.E5_TIPO = SE1.E1_TIPO
   AND SE5.E5_CLIFOR = SE1.E1_CLIENTE AND SE5.E5_LOJA = SE1.E1_LOJA
-  AND SE5.E5_RECPAG = 'R' AND SE5.E5_SITUACAO <> 'C'
+  AND SE5.E5_RECPAG = 'R' AND SE5.E5_SITUACA <> 'C'
   AND SE5.E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_ = ' '
 WHERE SE1.D_E_L_E_T_ = ' '
   AND SE5.E5_DATA BETWEEN '20260601' AND '20260630'
@@ -343,8 +343,8 @@ assert(systemPrompt.includes('NUNCA use SE1.E1_BAIXA'), 'system prompt deve proi
 assert(systemPrompt.includes('NUNCA use SE2.E2_BAIXA'), 'system prompt deve proibir E2_BAIXA');
 assert(systemPrompt.includes('E5_RECPAG'), 'system prompt SE5 deve documentar E5_RECPAG');
 assert(!systemPrompt.includes('FK1.FK1_DATA'), 'system prompt SE5 nao deve documentar FK1.FK1_DATA');
-assert(!systemPrompt.includes("E1_SITUACAO = 'B'"), 'system prompt nao deve exigir E1_SITUACAO=B (titulo pode ter baixa parcial)');
-assert(!systemPrompt.includes("E2_SITUACAO = 'B'"), 'system prompt nao deve exigir E2_SITUACAO=B (titulo pode ter baixa parcial)');
+assert(!systemPrompt.includes("E1_SITUACA = 'B'"), 'system prompt nao deve exigir E1_SITUACA=B (titulo pode ter baixa parcial)');
+assert(!systemPrompt.includes("E2_SITUACA = 'B'"), 'system prompt nao deve exigir E2_SITUACA=B (titulo pode ter baixa parcial)');
 assert(systemPrompt.includes('Modelo de baixas deste tenant'), 'system prompt deve orientar IA a usar o modelo de baixas do tenant');
 assert(contratoReceberFk7.includes('modelo_baixas_receber'), 'query_plan deve expor modelo_baixas_receber do contexto');
 assert(contratoPagarFk7.includes('modelo_baixas_pagar'), 'query_plan deve expor modelo_baixas_pagar do contexto');
