@@ -3285,14 +3285,11 @@ class IACWhatsAppService extends EventEmitter {
 
   // ── IA Pipeline: classify → route → format ──────────────────────────────────
 
-  _formatScheduledDeliveryMessage({ jobNome = null, resposta = '', ok = true } = {}) {
+  _formatScheduledDeliveryMessage({ resposta = '', ok = true } = {}) {
     const corpo = String(resposta || '').trim() || 'Consulta concluida sem conteudo para exibir.';
-    const titulo = String(jobNome || 'Pergunta agendada').trim();
     const pareceErro = !ok || /^(nao consegui|não consegui|nao foi possivel|não foi possivel|ocorreu um erro|erro\b)/i.test(corpo);
     const linhas = [
       '*IA Command - Agendamento*',
-      `*Job:* ${titulo}`,
-      `*Status:* ${pareceErro ? 'Atencao' : 'Concluido'}`,
       '',
     ];
     linhas.push(pareceErro && !/^[\u26A0\u274C]/u.test(corpo) ? `⚠️ ${corpo}` : corpo);
