@@ -325,14 +325,14 @@
             <main class="editor-main">
               <div class="semantic-subtabs">
                 <button class="semantic-subtab active" type="button" data-sem-tab-btn="uso" onclick="trocarAbaSemantica('uso')">Uso</button>
-                <button class="semantic-subtab" type="button" data-sem-tab-btn="view" onclick="trocarAbaSemantica('view')">View</button>
+                <button class="semantic-subtab" type="button" data-sem-tab-btn="view" onclick="trocarAbaSemantica('view')">SQL/View</button>
                 <button class="semantic-subtab" type="button" data-sem-tab-btn="campos" onclick="trocarAbaSemantica('campos')">Campos</button>
               </div>
               <section class="form-section">
                 <div class="form-section-header"><div class="form-section-title">Uso Semântico</div><div class="form-section-subtitle">Metadados passivos para preparar views canônicas multi-ERP. Esta fase não altera o processamento da IA.</div></div>
                 <div class="form-section-body">
                   <div class="form-row-3">
-                    <div class="form-group"><label class="form-label">Tipo do dataset</label><select id="f-tipo" class="form-control" onchange="tipoDatasetAlterado();atualizarResumo()"><option value="sql_base">SQL base atual</option><option value="view_semantica">View semântica</option></select></div>
+                    <div class="form-group"><label class="form-label">Tipo do dataset</label><select id="f-tipo" class="form-control" onchange="tipoDatasetAlterado();atualizarResumo()"><option value="sql_base">SQL base atual</option><option value="view_semantica">SQL/View semântica</option></select></div>
                     <div class="form-group"><label class="form-label">Módulo</label><select id="f-modulo" class="form-control" onchange="sincronizarSpecPadrao(true);atualizarResumo()"><option value="">Não definido</option><option value="faturamento">Faturamento</option><option value="financeiro">Financeiro</option><option value="compras">Compras</option><option value="comissao">Comissão</option></select></div>
                     <div class="form-group"><label class="form-label">Spec</label><select id="f-spec" class="form-control" onchange="sincronizarModuloPorSpec();popularSuboperacoes();atualizarResumo()"><option value="">Não definido</option><option value="faturamento">Faturamento</option><option value="financeiro">Financeiro</option><option value="compras">Compras</option><option value="comissao">Comissão</option></select></div>
                   </div>
@@ -344,9 +344,9 @@
                 </div>
               </section>
               <section class="form-section">
-                <div class="form-section-header"><div class="form-section-title">View Canônica</div><div class="form-section-subtitle">Identifique a view de negócio usada pelo dataset.</div></div>
+                <div class="form-section-header"><div class="form-section-title">SQL/View Canônico</div><div class="form-section-subtitle">Identifique a fonte de negócio usada pelo dataset.</div></div>
                 <div class="form-section-body">
-                  <div class="form-group"><label class="form-label">Nome da view</label><input type="text" id="f-view-nome" class="form-control" placeholder="ex: vw_iac_faturamento" oninput="atualizarResumo()"></div>
+                  <div class="form-group"><label class="form-label">Nome da Fonte (View/SQL)</label><input type="text" id="f-view-nome" class="form-control" placeholder="ex: vw_iac_faturamento ou sql_faturamento_canonico" oninput="atualizarResumo()"></div>
                   <div class="form-group"><label class="form-label">Descrição de negócio</label><textarea id="f-view-descricao" class="form-control" rows="3" placeholder="Explique o que a view responde e em que contexto deve ser usada."></textarea></div>
                 </div>
               </section>

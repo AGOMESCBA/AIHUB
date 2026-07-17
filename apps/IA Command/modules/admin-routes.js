@@ -644,12 +644,12 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const erros = [];
     if (!campos.nome) erros.push('Campo obrigatório: nome.');
     if (!['sql_base', 'view_semantica'].includes(String(campos.tipo || 'sql_base'))) {
-      erros.push('Tipo de dataset inválido. Use sql_base ou view_semantica.');
+      erros.push('Tipo de dataset inválido. Use sql_base ou view_semantica (SQL/View semântica).');
     }
     if (String(campos.tipo || 'sql_base') !== 'view_semantica') return erros;
-    if (!campos.view_nome) erros.push('View semântica exige Nome da view.');
-    if (!campos.modulo) erros.push('View semântica exige Módulo.');
-    if (!campos.spec) erros.push('View semântica exige Spec.');
+    if (!campos.view_nome) erros.push('SQL/View semântica exige Nome da Fonte (View/SQL).');
+    if (!campos.modulo) erros.push('SQL/View semântica exige Módulo.');
+    if (!campos.spec) erros.push('SQL/View semântica exige Spec.');
     if (campos.campos_semanticos_json) {
       try {
         const lista = JSON.parse(campos.campos_semanticos_json);

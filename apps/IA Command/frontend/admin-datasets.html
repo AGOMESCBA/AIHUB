@@ -369,7 +369,7 @@
               <main class="editor-main">
                 <div class="semantic-subtabs">
                   <button class="semantic-subtab active" type="button" data-sem-tab-btn="uso" onclick="trocarAbaSemantica('uso')">Uso</button>
-                  <button class="semantic-subtab" type="button" data-sem-tab-btn="view" onclick="trocarAbaSemantica('view')">View</button>
+                  <button class="semantic-subtab" type="button" data-sem-tab-btn="view" onclick="trocarAbaSemantica('view')">SQL/View</button>
                   <button class="semantic-subtab" type="button" data-sem-tab-btn="campos" onclick="trocarAbaSemantica('campos')">Campos</button>
                 </div>
                 <section class="form-section">
@@ -383,7 +383,7 @@
                         <label class="form-label">Tipo do dataset</label>
                         <select id="f-tipo" class="form-control" onchange="tipoDatasetAlterado();atualizarResumo()">
                           <option value="sql_base">SQL base atual</option>
-                          <option value="view_semantica">View semântica</option>
+                          <option value="view_semantica">SQL/View semântica</option>
                         </select>
                       </div>
                       <div class="form-group">
@@ -428,12 +428,12 @@
 
                 <section class="form-section">
                   <div class="form-section-header">
-                    <div class="form-section-title">View Canônica</div>
+                    <div class="form-section-title">SQL/View Canônico</div>
                     <div class="form-section-subtitle">Identifique a view de negócio usada pelo dataset.</div>
                   </div>
                   <div class="form-section-body">
                     <div class="form-group">
-                      <label class="form-label">Nome da view</label>
+                      <label class="form-label">Nome da Fonte (View/SQL)</label>
                       <input type="text" id="f-view-nome" class="form-control" placeholder="ex: vw_iac_faturamento" oninput="atualizarResumo()">
                     </div>
                     <div class="form-group">
@@ -1131,7 +1131,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       ...row,
       conexao_nome: conn ? conn.nome : null,
       conexao_tipo: conn ? conn.tipo : null,
-      tipo_label: row.tipo === 'view_semantica' ? 'View semântica' : 'SQL base',
+      tipo_label: row.tipo === 'view_semantica' ? 'SQL/View semântica' : 'SQL base',
       modulo_label: row.modulo || row.spec || '',
       sql_resumo: _resumirSql(row.sql_base),
     };
