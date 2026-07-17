@@ -846,7 +846,12 @@ async function classificar(mensagem, empresaId, opts = {}) {
       );
       intent = unsupportedRequest.aplicarBloqueioSeNecessario(intent, mensagem, { intencoes, datasets });
       if (intent._erroTipo === 'dataset_sem_informacao') return intent;
-      if (intent.confianca < confiancaMinima && intent.intencao === 'desconhecido') {
+      // intencao=desconhecido (fora dos modulos com spec dedicado) segue direto para o
+      // intent-router.js SEM bloquear aqui: o router decide (via _parecePerguntaErp) entre
+      // acionar o fallback erp_generico (spec combinado, ex: perguntas de estoque) ou retornar
+      // "desconhecido" pedindo reformulacao. Bloquear aqui impediria o fallback erp_generico
+      // de ser alcancado para qualquer dominio ainda sem spec proprio.
+      if (intent.confianca < confiancaMinima && intent.intencao !== 'desconhecido') {
         return _appendTrace({
           ...intent,
           precisa_confirmacao: true,

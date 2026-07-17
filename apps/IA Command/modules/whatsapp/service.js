@@ -5203,8 +5203,25 @@ class IACWhatsAppService extends EventEmitter {
       return respostaErro;
     }
 
-    // Intenção não reconhecida — retorna direto sem tentar as empresas
+    // Intenção não reconhecida — antes de desistir, tenta o fallback erp_generico (spec
+    // combinado de todos os módulos) via intentRouter.rotear, usando a primeira empresa apta
+    // como referência. Cobre perguntas de domínios ainda sem spec dedicado (ex: estoque) no
+    // modo "todas as empresas", espelhando o mesmo fallback já usado no pipeline single-empresa.
     if (intent.intencao === 'desconhecido') {
+      const _empresaFallbackAll = empresasLoop[0]?.empresa_id || empresas[0]?.empresa_id;
+      const resultadoFallbackAll = _empresaFallbackAll
+        ? await intentRouter.rotear(intent, _empresaFallbackAll)
+        : null;
+      if (resultadoFallbackAll && resultadoFallbackAll.tipo !== 'desconhecido') {
+        this.log(`🔄 [FallbackAll] erp_generico resolveu consulta desconhecida via empresa #${_empresaFallbackAll}`, 'info');
+        const respostaFallbackAll = responseFormatter.formatar(
+          resultadoFallbackAll,
+          intent,
+          { empresaId: _empresaFallbackAll, messageTemplates }
+        );
+        { const _n = Date.now(), _pm = _recebidoEmAll ? (_n - new Date(_recebidoEmAll).getTime()) : (_n - _t0); const _l = this._registrarInterpretacao({ empresaId: _empresaFallbackAll, sender: senderAll, texto, intent, resultado: resultadoFallbackAll, resposta: respostaFallbackAll, duracaoMs: _n - _t0, recebidoEm: _recebidoEmAll, pipelineMs: _pm }); if (_timingCtxAll) { _timingCtxAll.logId = _l; _timingCtxAll.recebidoEm = _recebidoEmAll; } }
+        return respostaFallbackAll;
+      }
       const resultadoErro = { tipo: 'desconhecido', mensagem: intent._erro || 'Fiquei em duvida sobre qual indicador, periodo ou detalhe voce quer consultar.' };
       this.emit('iac-intent', {
         empresaId:      empresaLogId,

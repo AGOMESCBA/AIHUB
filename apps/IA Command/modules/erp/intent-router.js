@@ -129,6 +129,9 @@ const SPEC_LOADERS = {
   comissao:    () => require('./comissao/comissao-ia-owner-spec'),
 };
 
+// Spec GLOBAL enxuto, usado como fallback para domínios sem spec dedicado (ex: estoque).
+const genericoSpec = require('./generico/generico-ia-owner-spec');
+
 const LOG_PREFIX_MODULO = {
   compras: 'ComprasAI',
   financeiro: 'FinanceiroAI',
@@ -293,8 +296,10 @@ async function rotear(intent, empresaId) {
       const _todosModulos = Object.keys(SPEC_LOADERS);
       const erroAutorizacao = _verificarAlgumModuloAutorizado(intent, empresaId, _todosModulos);
       if (erroAutorizacao) return erroAutorizacao;
-      const _specs = _todosModulos.map(m => SPEC_LOADERS[m]());
-      const _specCombinado = crossModuleSpecCombiner.combinarSpecs(_specs);
+      // Spec GLOBAL enxuto (nao o combinado dos 4 modulos): evita payload grande demais para
+      // alguns providers e evita contaminar a IA com regras especificas de outros modulos
+      // (ex: SF4.F4_ESTOQUE do faturamento nao deve influenciar uma pergunta de saldo de estoque).
+      const _specGenerico = genericoSpec;
       const _intentLimpo = {
         _mensagemOriginal: mensagem,
         _remetente: intent._remetente || null,
@@ -304,8 +309,8 @@ async function rotear(intent, empresaId) {
         filtros: {},
         _dynamicAiScope: true,
       };
-      console.log(`[IACommandAI] Desconhecido com sinal ERP — roteando para spec combinado (todos os modulos) | empresa=${empresaId}`);
-      const resultado = await iaOwnerRunner.executar(_specCombinado, _intentLimpo, empresaId);
+      console.log(`[IACommandAI] Desconhecido com sinal ERP — roteando para spec generico global | empresa=${empresaId}`);
+      const resultado = await iaOwnerRunner.executar(_specGenerico, _intentLimpo, empresaId);
       const traceResultado = [
         ...(Array.isArray(intent._trace) ? intent._trace : []),
         ...(Array.isArray(resultado?.trace) ? resultado.trace : []),

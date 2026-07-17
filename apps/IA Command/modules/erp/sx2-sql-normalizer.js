@@ -16,7 +16,7 @@ const SQL_KEYWORDS = new Set([
 
 const ALIASES_PROTHEUS = new Set([
   'SA1', 'SA2', 'SA3', 'SA6',
-  'SB1', 'SBM',
+  'SB1', 'SB2', 'SBM',
   'SC7',
   'SD1', 'SD2',
   'SE1', 'SE2', 'SE3', 'SE5', 'SE8',
@@ -110,18 +110,27 @@ function _removerPredicadoLiteral(sql, alias, campo) {
 
 // Remove condição de igualdade entre campos de filial em cláusula JOIN quando
 // a tabela com o alias indicado é compartilhada/global (X2_MODO C ou G).
-// Padrão alvo: AND aliasA.campoFilialA = aliasB.campoFilialB (qualquer ordem)
+// Padrão alvo: aliasA.campoFilialA = aliasB.campoFilialB (qualquer ordem), em qualquer
+// posição da cláusula ON — logo após ON, no meio (precedido/seguido de AND) ou por último.
 // Isso ocorre quando a IA une tabela exclusiva com cadastro compartilhado pelo campo filial,
 // o que exclui registros válidos — cadastros compartilhados não têm filial significativa.
 function _removerPredicadoFilialJoin(sql, aliasCompartilhado, campoCompartilhado) {
   const a = aliasCompartilhado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const c = campoCompartilhado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   let out = String(sql || '');
-  // Captura AND qualquerAlias.qualquerCampo = aliasComp.campoComp (ou ordem inversa)
+  // Captura qualquerAlias.qualquerCampo = aliasComp.campoComp (ou ordem inversa)
   const qualquer = '[A-Z_][A-Z0-9_]*\\s*\\.\\s*[A-Z_][A-Z0-9_]*';
   const lado = `${a}\\s*\\.\\s*${c}`;
-  out = out.replace(new RegExp(`\\s+AND\\s+${qualquer}\\s*=\\s*${lado}`, 'gi'), '');
-  out = out.replace(new RegExp(`\\s+AND\\s+${lado}\\s*=\\s*${qualquer}`, 'gi'), '');
+  const predicado = `(?:${qualquer}\\s*=\\s*${lado}|${lado}\\s*=\\s*${qualquer})`;
+  // 1) Predicado no meio ou no fim da cláusula: sempre precedido por AND — remove junto com o AND.
+  out = out.replace(new RegExp(`\\s+AND\\s+${predicado}`, 'gi'), '');
+  // 2) Predicado é o PRIMEIRO logo após ON, seguido de outro predicado: remove o predicado e
+  //    o AND seguinte, preservando a condição restante (senão sobraria "ON AND <resto>").
+  out = out.replace(new RegExp(`\\bON\\s+${predicado}\\s+AND\\s+`, 'gi'), 'ON ');
+  // 3) Predicado é o ÚNICO da cláusula ON (sem nenhum AND antes ou depois): não há como remover
+  //    sem deixar o JOIN sem condição — substitui por 1=1, condição neutra sempre verdadeira,
+  //    equivalente semanticamente a "sem filtro de filial" (mesmo efeito da regra de negócio).
+  out = out.replace(new RegExp(`\\bON\\s+${predicado}(\\s*(?:WHERE|GROUP\\s+BY|ORDER\\s+BY|LEFT\\s+JOIN|INNER\\s+JOIN|JOIN|;|$))`, 'gi'), 'ON 1=1$1');
   return out;
 }
 

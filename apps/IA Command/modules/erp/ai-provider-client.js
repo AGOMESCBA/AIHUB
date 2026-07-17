@@ -202,12 +202,19 @@ function normalizarOrdem(cfg = {}) {
   return require('../ai/intent-service')._normalizarOrdem(cfg);
 }
 
-// Provedores bloqueados por "payload too large" nesta sessão de processo.
-// Evita desperdiçar retries num provider que já rejeitou por limite de tokens.
+// Provedores bloqueados nesta sessão de processo por payload grande demais. O tamanho do
+// payload não muda entre tentativas dentro da mesma pergunta, então não faz sentido reenviar
+// ao mesmo provider — mas erros de cota/crédito são potencialmente temporários (rate limit
+// reseta em minutos, crédito pode ser recarregado), então esses NÃO entram em blocklist:
+// o provider é sempre tentado de novo na ordem configurada; se falhar, passa para o próximo.
 const _provedoresBloqueadosGrande = new Set();
 
 function _erroPayloadGrande(msg) {
   return /too large|payload.{0,20}size|token.{0,30}limit|reduce your message/i.test(msg);
+}
+
+function _erroCotaOuCredito(msg) {
+  return /quota|rate.?limit|free_tier|exceeded|429|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing/i.test(msg);
 }
 
 async function chamarIA(keys, cfg, systemPrompt, userPrompt, opts = {}) {
@@ -229,7 +236,8 @@ async function chamarIA(keys, cfg, systemPrompt, userPrompt, opts = {}) {
     } catch (e) {
       const msg = e?.message || String(e);
       erros.push({ provedor, msg });
-      if (/quota|rate.?limit|free_tier|exceeded|429/i.test(msg)) e._cotaEsgotada = true;
+      const cotaOuCredito = _erroCotaOuCredito(msg);
+      if (cotaOuCredito) e._cotaEsgotada = true;
       if (_erroPayloadGrande(msg)) {
         _provedoresBloqueadosGrande.add(provedor);
         console.warn(`[${logPrefix}] ${provedor} bloqueado (payload too large): proxy direto para proximo provider.`);

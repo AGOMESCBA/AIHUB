@@ -11,7 +11,8 @@
  * - entityCatalog:        merge de DEFINICOES; tiposParaTermo roteia pelo tipo da entidade
  * - resolverEntidades:    despacha cada pedido ao spec que conhece aquele tipo de entidade
  * - sqlMiddleware:        pass-through (v1) — cross-module nao usa middleware de modulo individual
- * - sanitizarFiltrosFilialSX2: desabilitado (cada modulo usa campo de filial diferente)
+ * - sanitizarFiltrosFilialSX2: habilitado (mesmo guard usado pelos specs individuais; resolve o
+ *   campo de filial dinamicamente por tabela via SX2, cobre qualquer combinacao de modulos)
  */
 function combinarSpecs(specs = []) {
   if (!specs.length) throw new Error('cross-module-spec-combiner: nenhum spec fornecido.');
@@ -156,7 +157,7 @@ function combinarSpecs(specs = []) {
     dimensionLeftJoinBases,
     maxTokens: Math.max(...specs.map(s => s.maxTokens || 3500)) + 1500,
     sx3PromptLimit: Math.max(...specs.map(s => s.sx3PromptLimit || 80)),
-    sanitizarFiltrosFilialSX2: false,
+    sanitizarFiltrosFilialSX2: true,
     resolverEntidades,
     formatarPerguntaAmbiguidade,
     mensagensErro: specs[0].mensagensErro,
