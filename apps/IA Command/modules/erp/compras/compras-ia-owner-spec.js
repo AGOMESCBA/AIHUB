@@ -7,25 +7,27 @@ const fragmentosSpec = require('./compras-fragmentos-spec');
 const { classificarFragmentos } = require('./compras-spec-classifier');
 const { resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
 
-const TABELAS = ['SF1', 'SD1', 'SF2', 'SD2', 'SB1', 'SBM', 'SA2', 'SC7', 'CTT', 'SED', 'SF4'];
+const TABELAS = ['SF1', 'SD1', 'SF2', 'SD2', 'SB1', 'SBM', 'SA2', 'SC7', 'CTT', 'SED', 'SF4', 'SCR', 'SAK'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
   SD1: ['D1_FILIAL', 'D1_DOC', 'D1_SERIE', 'D1_FORNECE', 'D1_LOJA', 'D1_COD', 'D1_DESCRI', 'D1_QUANT', 'D1_VUNIT', 'D1_TOTAL', 'D1_DTDIGIT', 'D1_TES', 'D1_NATUREZ', 'D1_PEDIDO', 'D1_ITEMPC', 'D1_CC', 'D1_CF', 'D_E_L_E_T_'],
   SF1: ['F1_FILIAL', 'F1_DOC', 'F1_SERIE', 'F1_FORNECE', 'F1_LOJA', 'F1_EMISSAO', 'F1_DTDIGIT', 'F1_TIPO', 'F1_VALBRUT', 'F1_VALMERC', 'F1_TOTALNF', 'D_E_L_E_T_'],
-  SD2: ['D2_FILIAL', 'D2_DOC', 'D2_SERIE', 'D2_CLIENTE', 'D2_LOJA', 'D2_COD', 'D2_TOTAL', 'D2_EMISSAO', 'D2_NFORI', 'D2_SERIORI', 'D2_ITEMORI', 'D_E_L_E_T_'],
+  SD2: ['D2_FILIAL', 'D2_DOC', 'D2_SERIE', 'D2_CLIENTE', 'D2_LOJA', 'D2_COD', 'D2_TOTAL', 'D2_VALDEV', 'D2_QTDEDEV', 'D2_EMISSAO', 'D2_NFORI', 'D2_SERIORI', 'D2_ITEMORI', 'D_E_L_E_T_'],
   SF2: ['F2_FILIAL', 'F2_DOC', 'F2_SERIE', 'F2_CLIENTE', 'F2_LOJA', 'F2_EMISSAO', 'F2_TIPO', 'F2_VALBRUT', 'F2_VALMERC', 'D_E_L_E_T_'],
   SA2: ['A2_FILIAL', 'A2_COD', 'A2_LOJA', 'A2_NOME', 'A2_NREDUZ', 'A2_CGC', 'D_E_L_E_T_'],
   SB1: ['B1_FILIAL', 'B1_COD', 'B1_DESC', 'B1_GRUPO', 'B1_UM', 'D_E_L_E_T_'],
   SBM: ['BM_FILIAL', 'BM_GRUPO', 'BM_DESC', 'D_E_L_E_T_'],
-  SC7: ['C7_FILIAL', 'C7_NUM', 'C7_ITEM', 'C7_FORNECE', 'C7_LOJA', 'C7_PRODUTO', 'C7_QUANT', 'C7_PRECO', 'C7_TOTAL', 'C7_EMISSAO', 'C7_DATPRF', 'C7_RESIDUO', 'C7_OK', 'D_E_L_E_T_'],
+  SC7: ['C7_FILIAL', 'C7_NUM', 'C7_ITEM', 'C7_FORNECE', 'C7_LOJA', 'C7_PRODUTO', 'C7_QUANT', 'C7_QUJE', 'C7_PRECO', 'C7_TOTAL', 'C7_EMISSAO', 'C7_DATPRF', 'C7_RESIDUO', 'C7_OK', 'C7_APROV', 'D_E_L_E_T_'],
   CTT: ['CTT_FILIAL', 'CTT_CUSTO', 'CTT_DESC01', 'D_E_L_E_T_'],
   SED: ['ED_FILIAL', 'ED_CODIGO', 'ED_DESCRIC', 'D_E_L_E_T_'],
   SF4: ['F4_FILIAL', 'F4_CODIGO', 'F4_TEXTO', 'F4_TIPO', 'F4_DUPLIC', 'F4_ESTOQUE', 'F4_CF', 'D_E_L_E_T_'],
+  SCR: ['CR_FILIAL', 'CR_NUM', 'CR_TIPO', 'CR_STATUS', 'CR_APROV', 'CR_NIVEL', 'CR_USER', 'CR_USERLIB', 'CR_EMISSAO', 'CR_DATALIB', 'D_E_L_E_T_'],
+  SAK: ['AK_FILIAL', 'AK_COD', 'AK_NOME', 'D_E_L_E_T_'],
 };
 
 function validarDeleteFiltros(sql = '') {
   const texto = String(sql || '');
-  const aliases = ['SF1', 'SD1', 'SF2', 'SD2', 'SA2', 'SB1', 'SBM', 'SC7', 'CTT', 'SED', 'SF4'];
+  const aliases = ['SF1', 'SD1', 'SF2', 'SD2', 'SA2', 'SB1', 'SBM', 'SC7', 'CTT', 'SED', 'SF4', 'SCR', 'SAK'];
   const faltando = [];
   for (const alias of aliases) {
     const reDeclarado = new RegExp(`\\b(?:FROM|JOIN)\\s+\\w+\\s+${alias}\\b`, 'i');
@@ -66,14 +68,21 @@ function garantirIntencao(empresaId) {
   }
 }
 
-function regrasTecnicas({ mensagem } = {}) {
+// temSaldoAlcadaAprovador (tabela DBM) ainda nao e usado por nenhum fragmento — reservado
+// ate a sincronizacao do SX3 real da DBM confirmar os campos. Aceito aqui so por paridade
+// com o restante do contexto tecnico, sem efeito no prompt.
+function regrasTecnicas({ mensagem, temAprovacaoPedidoCompra, temNomeAprovador, temSaldoAlcadaAprovador } = {}) {
   const chavesAcionadas = classificarFragmentos(mensagem);
   const chaves = chavesAcionadas || fragmentosSpec.ORDEM_FALLBACK;
 
   const partes = [fragmentosSpec.base()];
   for (const chave of chaves) {
     const fragmento = fragmentosSpec.FRAGMENTOS[chave];
-    if (fragmento) partes.push(fragmento.texto());
+    if (!fragmento) continue;
+    // aprovacao_pedido_compra depende de SCR existir no SX2 do tenant (contexto tecnico).
+    // Sem essa tabela cadastrada, o fragmento e omitido silenciosamente — nunca gera erro.
+    if (chave === 'aprovacao_pedido_compra' && !temAprovacaoPedidoCompra) continue;
+    partes.push(fragmento.texto({ temNomeAprovador, temSaldoAlcadaAprovador }));
   }
   return partes.join('\n').trim();
 }

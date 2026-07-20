@@ -4,7 +4,7 @@ function json(value) {
   return JSON.stringify(value == null ? null : value, null, 2);
 }
 
-function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, mensagem } = {}) {
+function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, mensagem, temAprovacaoPedidoCompra, temNomeAprovador, temSaldoAlcadaAprovador } = {}) {
   return [
     `Voce e o IA-OWNER do modulo ${spec.nome || 'ERP'}.`,
     'Voce e dono da decisao semantica: contexto, heranca, periodo, filtros, agrupamentos e SQL.',
@@ -170,7 +170,7 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     '',
 
     typeof spec.regrasTecnicas === 'function'
-      ? spec.regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar, mensagem })
+      ? spec.regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar, mensagem, temAprovacaoPedidoCompra, temNomeAprovador, temSaldoAlcadaAprovador })
       : (spec.regrasTecnicas || ''),
   ].filter(Boolean).join('\n');
 }

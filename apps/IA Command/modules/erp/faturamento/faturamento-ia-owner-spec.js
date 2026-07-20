@@ -7,15 +7,14 @@ const fragmentosSpec = require('./faturamento-fragmentos-spec');
 const { classificarFragmentos } = require('./faturamento-spec-classifier');
 const { resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
 
-// Vendas em SF2 podem ser rateadas entre ate 5 vendedores (F2_VEND1..F2_VEND5).
-// O filtro de seguranca deve aceitar o vendedor em QUALQUER uma dessas posicoes.
-const CAMPOS_VENDEDOR_SEGURANCA = ['F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5'];
+// Decisao semantica: consultas e seguranca de vendedor usam o vendedor principal.
+const CAMPOS_VENDEDOR_SEGURANCA = ['F2_VEND1'];
 
 const TABELAS = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT', 'ACY'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
   SF2: ['F2_FILIAL', 'F2_DOC', 'F2_SERIE', 'F2_CLIENTE', 'F2_LOJA', 'F2_EMISSAO', 'F2_TIPO', 'F2_VALBRUT', 'F2_VALMERC', 'F2_VALFAT', 'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5', 'D_E_L_E_T_'],
-  SD2: ['D2_FILIAL', 'D2_DOC', 'D2_SERIE', 'D2_CLIENTE', 'D2_LOJA', 'D2_COD', 'D2_QUANT', 'D2_TOTAL', 'D2_VALBRUT', 'D2_PRCVEN', 'D2_TES', 'D2_CF', 'D2_CCUSTO', 'D_E_L_E_T_'],
+  SD2: ['D2_FILIAL', 'D2_DOC', 'D2_SERIE', 'D2_CLIENTE', 'D2_LOJA', 'D2_COD', 'D2_QUANT', 'D2_TOTAL', 'D2_VALDEV', 'D2_QTDEDEV', 'D2_VALBRUT', 'D2_PRCVEN', 'D2_TES', 'D2_CF', 'D2_CCUSTO', 'D_E_L_E_T_'],
   SF1: ['F1_FILIAL', 'F1_DOC', 'F1_SERIE', 'F1_FORNECE', 'F1_LOJA', 'F1_EMISSAO', 'F1_DTDIGIT', 'F1_TIPO', 'F1_VALBRUT', 'F1_VALMERC', 'F1_TOTALNF', 'D_E_L_E_T_'],
   SD1: ['D1_FILIAL', 'D1_DOC', 'D1_SERIE', 'D1_FORNECE', 'D1_LOJA', 'D1_COD', 'D1_QUANT', 'D1_TOTAL', 'D1_DTDIGIT', 'D1_TES', 'D1_CF', 'D_E_L_E_T_'],
   SA1: ['A1_FILIAL', 'A1_COD', 'A1_LOJA', 'A1_NOME', 'A1_NREDUZ', 'A1_CGC', 'A1_MUN', 'A1_EST', 'A1_GRPVEN', 'D_E_L_E_T_'],
@@ -102,12 +101,12 @@ function prepararIntent({ intent, empresaId, mensagem }) {
   }
 
   if (resolucao.estado === 'vendedor') {
-    // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de segurança
-    // (para parametrização/validação do SQL gerado). SF2 permite rateio ate 5 vendedores.
+    // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de seguranca
+    // (para parametrizacao/validacao do SQL gerado). A regra atual usa vendedor principal.
     return {
       contextoTecnicoExtra: {
         vendedorFixo: { codigo: resolucao.codigo, nome: resolucao.nome },
-        regraVendedorFixo: 'Aplique OBRIGATORIAMENTE o filtro do vendedorFixo cobrindo TODAS as 5 posicoes de rateio, sempre, em toda query, mesmo que a venda pareca ter um so vendedor: AND (SF2.F2_VEND1 = \'<codigo>\' OR SF2.F2_VEND2 = \'<codigo>\' OR SF2.F2_VEND3 = \'<codigo>\' OR SF2.F2_VEND4 = \'<codigo>\' OR SF2.F2_VEND5 = \'<codigo>\'). Nunca filtre apenas F2_VEND1 sozinho — vendas rateadas podem ter o vendedor autorizado em qualquer uma das 5 posicoes, e omitir as demais esconde vendas legitimas do proprio vendedor. Nao retorne dados de outros vendedores.',
+        regraVendedorFixo: 'Aplique OBRIGATORIAMENTE o filtro do vendedorFixo somente no vendedor principal: AND SF2.F2_VEND1 = \'<codigo>\'. Nao use F2_VEND2, F2_VEND3, F2_VEND4 ou F2_VEND5 para filtro ou agrupamento de vendedor. Nao retorne dados de outros vendedores.',
       },
       entidadeSeguranca: {
         tipo: 'vendedor_fixo_seguranca',
@@ -395,7 +394,6 @@ module.exports = {
   dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM', 'SA3', 'ACY'],
   sanitizarFiltrosFilialSX2: true,
   camposVendedorSeguranca: CAMPOS_VENDEDOR_SEGURANCA,
-  camposRateioVendedor: CAMPOS_VENDEDOR_SEGURANCA,
   sqlPatternsProibidos: [
     {
       regex: /\bSF2\s*\.\s*F2_TIPO\s*=\s*'1'/i,

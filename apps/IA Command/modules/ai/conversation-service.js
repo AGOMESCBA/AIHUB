@@ -416,17 +416,32 @@ function _rotearCacheSet(key, valor) {
 }
 
 // ── Bypass determinístico: padrões ERP claros → pula chamada de IA ──────────
-const _PADROES_ERP = [
+// Padrões de DOMÍNIO: nomeiam um assunto de ERP inequívoco. Cada um sozinho já basta
+// para acionar o bypass (ex: "faturamento" só, sem mais nada, é claramente ERP).
+const _PADROES_ERP_DOMINIO = [
   /\b(faturamento|vendas?|receita)\b/i,
   /\b(compras?|fornecedor|pedido)\b/i,
   /\b(financeiro|contas?\s+a\s+pagar|contas?\s+a\s+receber|t[ií]tulos?|baixas?)\b/i,
   /\b(comiss[ãa]o|comissoes|vendedor)\b/i,
-  /\b(ontem|hoje|essa\s+semana|esse\s+m[eê]s|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i,
-  /\b(quanto|total|valor|saldo|resumo|relat[oó]rio)\b/i,
 ];
 
+// Padrão TEMPORAL: aparece tanto em perguntas de ERP ("faturamento de hoje") quanto em
+// conversas triviais ("como está o clima hoje?", "que dia é hoje?"). Isolado NÃO basta —
+// só conta como sinal de ERP quando combinado com um padrão de domínio ou de métrica.
+const _PADRAO_ERP_TEMPORAL = /\b(ontem|hoje|essa\s+semana|esse\s+m[eê]s|jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i;
+
+// Padrão de MÉTRICA: "quanto", "total", "valor" etc. também aparecem fora de ERP
+// ("quanto custa isso?", "qual o valor da entrada?"). Isolado NÃO basta — só conta
+// combinado com um padrão de domínio ou temporal (ex: "total de hoje", "saldo do mês").
+const _PADRAO_ERP_METRICA = /\b(quanto|total|valor|saldo|resumo|relat[oó]rio)\b/i;
+
 function _ehPadraoErp(mensagem) {
-  return _PADROES_ERP.some(p => p.test(mensagem));
+  // Um padrão de domínio sozinho já é suficiente (ex: "faturamento", "compras").
+  if (_PADROES_ERP_DOMINIO.some(p => p.test(mensagem))) return true;
+  // Sem termo de domínio: exige temporal + métrica juntos (ex: "saldo de hoje", "total do
+  // mês") — nem um nem outro isolado é confiável o bastante, pois ambos aparecem em
+  // conversas triviais ("como está o clima hoje?", "quanto custa isso?").
+  return _PADRAO_ERP_TEMPORAL.test(mensagem) && _PADRAO_ERP_METRICA.test(mensagem);
 }
 
 async function rotear(mensagem, empresaId, historico = [], contextoTecnico = null) {

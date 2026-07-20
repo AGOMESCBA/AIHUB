@@ -737,6 +737,9 @@ async function chamarIaOwner(spec, keys, cfg, userPrompt, opts = {}) {
     modeloBaixasReceber: opts.modeloBaixasReceber,
     modeloBaixasPagar: opts.modeloBaixasPagar,
     mensagem: opts.mensagem,
+    temAprovacaoPedidoCompra: opts.temAprovacaoPedidoCompra,
+    temNomeAprovador: opts.temNomeAprovador,
+    temSaldoAlcadaAprovador: opts.temSaldoAlcadaAprovador,
   });
   const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
     json: true,
@@ -1131,7 +1134,12 @@ function buildEstadoAnterior(intent = {}) {
 }
 
 // Bases FK que só devem aparecer no sx2 enviado à IA se realmente existirem no SX2 do tenant.
-const FK_BASES_CONDICIONAIS = new Set(['FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB']);
+// SCR/SAK (aprovação de pedido de compra) seguem o mesmo mecanismo: só empresas que
+// realmente têm essas tabelas cadastradas no SX2 as veem no prompt — sem erro para quem não tem.
+// DBM (saldo de alçada do aprovador) está registrada aqui por paridade, mas ainda SEM
+// regra de negócio no spec de compras — aguardando sincronização do SX3 real (campos
+// confirmados, não assumidos) antes de qualquer fragmento usar essa tabela.
+const FK_BASES_CONDICIONAIS = new Set(['FK1', 'FK2', 'FK5', 'FK6', 'FK7', 'FKA', 'FKB', 'SCR', 'SAK', 'DBM']);
 
 function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prompt, middlewareCfg, filial }) {
   // sx2Puro = mapa direto do SX2 do IAHub (null quando nada cadastrado).
@@ -1139,6 +1147,9 @@ function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prom
   const temFK1 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK1');
   const temFK2 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK2');
   const temFK7 = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'FK7');
+  const temSCR = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'SCR');
+  const temSAK = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'SAK');
+  const temDBM = sx2Puro != null && !!tabelaFisicaSX2(sx2Puro, 'DBM');
 
   // Remove do sx2 exposto à IA as tabelas FK injetadas por completarSX2Permitidas
   // quando elas não estão no sx2Puro. Evita que a IA use FK1/FK2 por ver FK1010 no mapa.
@@ -1182,6 +1193,9 @@ function buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prom
     campoFilial: middlewareCfg.campo_filial || null,
     modelo_baixas_receber: temFK1 ? (temFK7 ? 'FK7_FK1' : 'FK1') : 'SE5',
     modelo_baixas_pagar: temFK2 ? (temFK7 ? 'FK7_FK2' : 'FK2') : 'SE5',
+    tem_aprovacao_pedido_compra: temSCR,
+    tem_nome_aprovador: temSAK,
+    tem_saldo_alcada_aprovador: temDBM,
   };
 }
 
@@ -1615,6 +1629,31 @@ function validarJoinSD2SF2Completo(sql = '') {
     const temLoja = /\bSD2\s*\.\s*D2_LOJA\s*=\s*SF2\s*\.\s*F2_LOJA\b|\bSF2\s*\.\s*F2_LOJA\s*=\s*SD2\s*\.\s*D2_LOJA\b/i.test(on);
     if (!temCliente || !temLoja) {
       erros.push('JOIN SD2->SF2 incompleto: a condicao ON deve incluir SD2.D2_CLIENTE = SF2.F2_CLIENTE e SD2.D2_LOJA = SF2.F2_LOJA para evitar duplicidade no SUM.');
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
+function validarJoinSA3VendedorPrincipal(sql = '') {
+  const texto = String(sql || '');
+  const erros = [];
+  const reJoin = /\bJOIN\s+[A-Z_][A-Z0-9_]*\s+(?:AS\s+)?SA3\b\s+ON\s+/gi;
+  let match;
+  while ((match = reJoin.exec(texto)) !== null) {
+    const inicioOn = reJoin.lastIndex;
+    const fimOn = localizarKeywordNivelZero(texto, 'JOIN', inicioOn);
+    const fins = ['WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'UNION']
+      .map(k => localizarKeywordNivelZero(texto, k, inicioOn))
+      .filter(pos => pos >= 0);
+    if (fimOn >= 0) fins.push(fimOn);
+    const fim = fins.length ? Math.min(...fins) : texto.length;
+    const on = texto.slice(inicioOn, fim);
+    const usaVendPrincipal = /\bSF2\s*\.\s*F2_VEND1\s*=\s*SA3\s*\.\s*A3_COD\b|\bSA3\s*\.\s*A3_COD\s*=\s*SF2\s*\.\s*F2_VEND1\b/i.test(on);
+    if (!usaVendPrincipal) {
+      erros.push('JOIN SF2->SA3 deve usar somente vendedor principal: SF2.F2_VEND1 = SA3.A3_COD.');
+    }
+    if (/\bOR\b/i.test(on) || /\bSF2\s*\.\s*F2_VEND[2-5]\b/i.test(on)) {
+      erros.push('JOIN SF2->SA3 nao pode usar OR nem SF2.F2_VEND2..F2_VEND5; isso duplica faturamento por vendedor. Use somente SF2.F2_VEND1 = SA3.A3_COD.');
     }
   }
   return { ok: erros.length === 0, erros };
@@ -2113,13 +2152,41 @@ function validarDevolucaoConsistente(sql, mensagem = '') {
   return { ok: true, erros: [] };
 }
 
+function validarTesDescricaoQuandoAgrupado(sql = '', mensagem = '') {
+  const msg = String(mensagem || '');
+  if (!/\bTES\b|tipo(?:s)?\s+de\s+sa[ií]da/i.test(msg)) return { ok: true, erros: [] };
+
+  const texto = String(sql || '');
+  const usaD2Tes = /\bSD2\s*\.\s*D2_TES\b/i.test(texto);
+  if (!usaD2Tes) return { ok: true, erros: [] };
+
+  const temDescricaoTes = /\bSF4\s*\.\s*F4_TEXTO\b/i.test(texto);
+  const temJoinTes = /\bJOIN\s+\w*SF4\w*\s+SF4\b[\s\S]{0,300}\bSD2\s*\.\s*D2_TES\s*=\s*SF4\s*\.\s*F4_CODIGO\b|\bJOIN\s+\w*SF4\w*\s+SF4\b[\s\S]{0,300}\bSF4\s*\.\s*F4_CODIGO\s*=\s*SD2\s*\.\s*D2_TES\b/i.test(texto);
+  if (temDescricaoTes && temJoinTes) return { ok: true, erros: [] };
+
+  return {
+    ok: false,
+    erros: [
+      'Pergunta pede TES/Tipo de Saida, mas o SQL usa apenas SD2.D2_TES (codigo) sem a descricao SF4.F4_TEXTO. ' +
+      "Gere novamente com JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ', " +
+      'retorne SF4.F4_TEXTO AS tes e agrupe por SF4.F4_CODIGO, SF4.F4_TEXTO. Use SD2.D2_TES apenas como codigo auxiliar se necessario.',
+    ],
+  };
+}
+
 function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   const texto = String(sql || '').trim();
   const erros = [];
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
   erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
+  if (String(spec.nome || '').toLowerCase() === 'faturamento') {
+    erros.push(...validarTesDescricaoQuandoAgrupado(texto, mensagem).erros);
+  }
   erros.push(...validarPrecedenciaOrRemessaSemParenteses(texto).erros);
+  if (String(spec.nome || '').toLowerCase() === 'faturamento') {
+    erros.push(...validarJoinSA3VendedorPrincipal(texto).erros);
+  }
   if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*(?:WITH\b|SELECT\b)/i.test(texto)) {
     erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
   }
@@ -2834,6 +2901,9 @@ async function executar(spec, intent, empresaId) {
   const modeloOpts = {
     modeloBaixasReceber: contextoTecnico.modelo_baixas_receber,
     modeloBaixasPagar: contextoTecnico.modelo_baixas_pagar,
+    temAprovacaoPedidoCompra: contextoTecnico.tem_aprovacao_pedido_compra,
+    temNomeAprovador: contextoTecnico.tem_nome_aprovador,
+    temSaldoAlcadaAprovador: contextoTecnico.tem_saldo_alcada_aprovador,
     mensagem,
     empresaId,
     numeroWa: intentEfetivo._remetente || null,

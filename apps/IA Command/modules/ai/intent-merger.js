@@ -163,7 +163,7 @@ function _moduloDinamicoDoIntent(intent = {}) {
 
 function _mensagemMencionaDominioExplicito(mensagem = '') {
   const texto = _normalizar(mensagem);
-  return /\b(compras?|pedido(?:s)?\s+de\s+compra|fornecedores?|faturamento|vendas?|receita|comissao|comissoes|financeiro|contas?\s+a\s+pagar|contas?\s+a\s+receber|saldo\s+bancario|fluxo\s+de\s+caixa)\b/.test(texto);
+  return /\b(compras?|pedido(?:s)?\s+de\s+compra|fornecedores?|faturamento|vendas?|receita|comissao|comissoes|financeiro|contas?\s+a\s+pagar|contas?\s+a\s+receber|saldo\s+bancario|fluxo\s+de\s+caixa|estoque|requisicao|transferencia\s+de\s+estoque|giro\s+de\s+estoque|curva\s+abc)\b/.test(texto);
 }
 
 /**

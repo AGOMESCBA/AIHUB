@@ -210,6 +210,14 @@ const TERMOS_ESCOPO_DINAMICO = {
     'duplicata', 'duplicatas', 'titulos', 'titulo', 'boletos',
     'inadimplencia', 'inadimplentes', 'cobranca', 'cobrancas',
   ],
+  estoque: [
+    'estoque', 'saldo em estoque', 'saldo de estoque', 'posicao de estoque',
+    'estoque disponivel', 'estoque reservado', 'estoque empenhado',
+    'requisicao', 'requisitado', 'transferencia de estoque', 'transferencias de estoque',
+    'perda de estoque', 'perdas de estoque', 'avaria', 'avarias',
+    'apontamento de producao', 'ajuste de inventario', 'curva abc', 'giro de estoque',
+    'cobertura de estoque',
+  ],
 };
 
 const INTENCOES_DINAMICAS_PADRAO = [
@@ -342,6 +350,7 @@ function _dominioIntentAiSql(i = {}) {
   if (_containsTerm(base, 'compras') || _containsTerm(base, 'compra')) return 'compras';
   if (_containsTerm(base, 'financeiro') || _containsTerm(base, 'contas pagar') || _containsTerm(base, 'contas receber') || _containsTerm(base, 'fluxo caixa')) return 'financeiro';
   if (_containsTerm(base, 'faturamento') || _containsTerm(base, 'vendas') || _containsTerm(base, 'venda')) return 'faturamento';
+  if (_containsTerm(base, 'estoque')) return 'estoque';
   return localResolver.normalizarTexto(i.modulo || i.nome || '').split(/\s|_/).filter(Boolean)[0] || 'dinamico';
 }
 
@@ -391,6 +400,7 @@ function _ranquearIntencoesAiSql(mensagem, intencoes = [], sinonimos = [], norma
     faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
     financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
     comissao: ['comissao', 'comissoes', 'comissionamento'],
+    estoque: ['estoque', 'saldo em estoque', 'posicao de estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc'],
   };
 
   return candidatas.map(intent => {
@@ -424,6 +434,7 @@ function _intencaoAiSqlPreferencial(mensagem, intencoes = [], sinonimos = [], no
     faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
     financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
     comissao: ['comissao', 'comissoes', 'comissionamento'],
+    estoque: ['estoque', 'saldo em estoque', 'posicao de estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc'],
   };
 
   const ranqueadas = candidatas.map(intent => {

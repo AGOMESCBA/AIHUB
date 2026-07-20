@@ -46,7 +46,7 @@ function camposInferidos(intent = {}) {
 function moduloDinamico(payload = {}) {
   const intent = payload.intent || {};
   const resultado = payload.resultado || {};
-  const conhecido = new Set(['compras', 'financeiro', 'faturamento', 'comissao']);
+  const conhecido = new Set(['compras', 'financeiro', 'faturamento', 'comissao', 'estoque']);
 
   const candidatos = [
     intent._moduloDinamico,

@@ -37,6 +37,7 @@ const AI_SQL_HANDLERS = {
   financeiro: './financeiro/ai-sql-handler-v2',
   faturamento: './faturamento/ai-sql-handler-v2',
   comissao: './comissao/ai-sql-handler-v2',
+  estoque: './estoque/ai-sql-handler-v2',
 };
 
 const NOMES_MODULOS = {
@@ -44,6 +45,7 @@ const NOMES_MODULOS = {
   financeiro:  'Financeiro',
   faturamento: 'Faturamento',
   comissao:    'Comissão',
+  estoque:     'Estoque',
 };
 
 function _verificarAutorizacaoModulo(intent, empresaId, modulo) {
@@ -127,9 +129,11 @@ const SPEC_LOADERS = {
   compras:     () => require('./compras/compras-ia-owner-spec'),
   financeiro:  () => require('./financeiro/financeiro-ia-owner-spec'),
   comissao:    () => require('./comissao/comissao-ia-owner-spec'),
+  estoque:     () => require('./estoque/estoque-ia-owner-spec'),
 };
 
-// Spec GLOBAL enxuto, usado como fallback para domínios sem spec dedicado (ex: estoque).
+// Spec GLOBAL enxuto, usado como fallback para domínios sem spec dedicado (ex: RH, producao) e
+// como rede de seguranca para perguntas de estoque que a intencao 'estoque_dinamico' nao capture.
 const genericoSpec = require('./generico/generico-ia-owner-spec');
 
 const LOG_PREFIX_MODULO = {
@@ -137,6 +141,7 @@ const LOG_PREFIX_MODULO = {
   financeiro: 'FinanceiroAI',
   faturamento: 'FaturamentoAI',
   comissao: 'ComissaoAI',
+  estoque: 'EstoqueAI',
 };
 
 function _appendTrace(intent = {}, evento = {}) {
@@ -157,6 +162,7 @@ function _normalizarModuloDinamico(registro = {}) {
   if (texto.includes('financeiro')) return 'financeiro';
   if (texto.includes('faturamento')) return 'faturamento';
   if (texto.includes('comissao') || texto.includes('comissão')) return 'comissao';
+  if (texto.includes('estoque')) return 'estoque';
   return texto.split(/[_\s-]+/).filter(Boolean)[0] || 'dinamico';
 }
 
@@ -369,7 +375,7 @@ async function rotear(intent, empresaId) {
       detalhe: `handler=${handlerPath}`,
     });
 
-    console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Caminho systemprompt: intencao=${intent.intencao} | handler=${handlerPath} | empresa=${empresaId}`);
+    console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Caminho AI SQL dinamico: intencao=${intent.intencao} | handler=${handlerPath} | empresa=${empresaId}`);
     const AiSqlHandler = require(handlerPath);
 
     const sqlCanonicoHerdado = intent._escopoExecucao === 'whatsapp_all'
@@ -400,11 +406,21 @@ async function rotear(intent, empresaId) {
       && _crossInfo.modulos.length >= 2
       && _crossInfo.modulos.every(m => SPEC_LOADERS[m]);
 
+    const semanticDataset = modulo === 'faturamento'
+      ? semanticDatasetResolver.resolverDatasetView({
+        empresaId,
+        modulo,
+        spec: modulo,
+        mensagem: intent._mensagemOriginal || '',
+      })
+      : null;
+    const deveUsarDatasetSemantico = !_usarCrossModule && !!semanticDataset?.dataset;
+
     // SQL canônico tem prioridade absoluta: gerado uma vez pela primeira empresa,
     // reutilizado por todas as demais com substituição de sufixo — sem nova chamada à IA.
     // Para cross-module, usa o spec combinado (mesmas tabelas usadas na geração) para que
     // modosSX2 resolva SD1/SF1 corretamente em vez de depender do sufixo fallback.
-    if (sqlCanonicoHerdado) {
+    if (sqlCanonicoHerdado && !deveUsarDatasetSemantico) {
       _tracePipeline('router_dinamico_sql_direto_inicio', { empresa_id: empresaId, modulo, sql_chars: sqlCanonicoHerdado.length });
       const _executarSqlDireto = _usarCrossModule
         ? () => iaOwnerRunner.executarSqlDireto(crossModuleSpecCombiner.combinarSpecs(_crossInfo.modulos.map(m => SPEC_LOADERS[m]())), sqlCanonicoHerdado, intent, empresaId)
@@ -446,16 +462,7 @@ async function rotear(intent, empresaId) {
       if (!resultado || typeof resultado !== 'object') resultado = _resultadoFallback('cross_module');
       else resultado._pipeline_origem = 'cross_module';
     } else {
-      const semanticDataset = modulo === 'faturamento'
-        ? semanticDatasetResolver.resolverDatasetView({
-          empresaId,
-          modulo,
-          spec: modulo,
-          mensagem: intent._mensagemOriginal || '',
-        })
-        : null;
-
-      if (semanticDataset?.dataset) {
+      if (deveUsarDatasetSemantico) {
         console.log(`[${LOG_PREFIX_MODULO[modulo] || 'IACommandAI'}] Executando por dataset semantico: dataset=${semanticDataset.dataset.nome} | empresa=${empresaId}`);
         _tracePipeline('router_dinamico_dataset_semantico_inicio', {
           empresa_id: empresaId,

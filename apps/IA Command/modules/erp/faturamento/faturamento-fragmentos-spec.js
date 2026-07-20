@@ -100,6 +100,7 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - "por cliente": agrupe por SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME.
 - "por grupo de cliente": faca LEFT JOIN ACY<sufixo> ACY ON ACY.ACY_GRPVEN = SA1.A1_GRPVEN AND ACY.D_E_L_E_T_ = ' ' e agrupe por ACY.ACY_GRPVEN, ACY.ACY_DESCRI. Exiba ACY.ACY_DESCRI AS grupo_cliente no SELECT.
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
+- "por vendedor": use somente o vendedor principal da nota: JOIN SA3<sufixo> SA3 ON SF2.F2_VEND1 = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' '. PROIBIDO usar OR com SF2.F2_VEND2..F2_VEND5, pois duplica o valor quando a nota possui mais de um vendedor.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
 - REGRA CRITICA SQL Server — GROUP BY com SA1: Sempre que SA1 estiver no JOIN e qualquer campo de SA1 aparecer no SELECT ou GROUP BY, inclua SA1.A1_COD e SA1.A1_LOJA obrigatoriamente no GROUP BY. O SQL Server nao aceita referenciar SA1.A1_COD ou SA1.A1_LOJA em subqueries correlacionadas se eles nao estiverem no GROUP BY da query externa (erro 8120).
 - REGRA CRITICA — subquery correlacionada com SA1: NUNCA use SA1.A1_COD ou SA1.A1_LOJA como correlacao em subquery se SA1 esta na query externa com GROUP BY. Use UNION ALL com subqueries escalares conforme o padrao de devolucoes.
@@ -368,8 +369,8 @@ function crescimento({ granularidade = 'mensal' } = {}) {
 function identidadeVendedor() {
   return `
 ## Identidade do vendedor — REGRA DE SEGURANCA OBRIGATORIA
-- Se o contexto tecnico trouxer vendedorFixo, aplique OBRIGATORIAMENTE o filtro desse vendedor em TODA query, cobrindo as 5 posicoes de rateio de SF2 com OR: AND (SF2.F2_VEND1 = '<codigo>' OR SF2.F2_VEND2 = '<codigo>' OR SF2.F2_VEND3 = '<codigo>' OR SF2.F2_VEND4 = '<codigo>' OR SF2.F2_VEND5 = '<codigo>').
-- PROIBIDO filtrar apenas SF2.F2_VEND1 sozinho — vendas rateadas podem ter o vendedor autorizado em qualquer uma das 5 posicoes; filtrar so uma esconde vendas legitimas do proprio vendedor.
+- Se o contexto tecnico trouxer vendedorFixo, aplique OBRIGATORIAMENTE o filtro desse vendedor em TODA query usando somente o vendedor principal: AND SF2.F2_VEND1 = '<codigo>'.
+- PROIBIDO usar SF2.F2_VEND2, SF2.F2_VEND3, SF2.F2_VEND4 ou SF2.F2_VEND5 para filtro ou agrupamento de vendedor no modulo faturamento.
 - Nunca retorne dados de outros vendedores quando vendedorFixo estiver presente, mesmo que o usuario nao cite vendedor (agregados gerais tambem devem ser filtrados pelo vendedorFixo).
 - REGRA ABSOLUTA: se entidades_resolvidas contiver um vendedor com codigo DIFERENTE do vendedorFixo, NAO gere SQL algum. Retorne precisa_confirmacao=true com pergunta_confirmacao recusando o pedido.
 - Quando vendedorFixo NAO estiver presente (quem pergunta e gestor), a consulta pode abranger todos os vendedores normalmente, sem filtro de vendedor.

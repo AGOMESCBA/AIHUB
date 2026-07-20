@@ -907,6 +907,13 @@ const MIGRATIONS = [
         ON datasets (empresa_id, tipo, ativo_ia_owner, modulo, spec, suboperacao, prioridade);
     `,
   },
+  {
+    version: 51,
+    descricao: 'IA Command - autorizacao do modulo dedicado de estoque em whatsapp_allowed_numbers',
+    sql: `
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN modulo_estoque INTEGER DEFAULT 0;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -161,6 +161,7 @@ const _TERMOS_CONSULTA_ERP = [
   'pagamento', 'recebimento', 'fluxo de caixa', 'saldo',
   'nota fiscal', 'pedido', 'titulo', 'titulos', 'duplicata',
   'total de', 'por ano', 'por mes', 'por cliente', 'por fornecedor',
+  'estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc',
 ];
 
 function _pareceConsultaERP(textoNorm) {

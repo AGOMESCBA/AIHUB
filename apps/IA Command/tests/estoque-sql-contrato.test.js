@@ -1,0 +1,21 @@
+'use strict';
+
+const assert = require('assert');
+const path = require('path');
+const ROOT = path.resolve(__dirname, '..');
+
+const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
+const spec = require(path.join(ROOT, 'modules/erp/estoque/estoque-ia-owner-spec'));
+
+const sysPrompt = promptBuilder.buildSystemPrompt(spec);
+assert(sysPrompt.includes('IA-OWNER do modulo estoque'), 'estoque deve usar IA-OWNER');
+assert(sysPrompt.includes('data_atual') && sysPrompt.includes('Voce calcula o periodo EXCLUSIVAMENTE'), 'periodos relativos devem ser calculados pela IA a partir de data_atual e contexto');
+assert(sysPrompt.includes('Regras de Validacao de Tabelas Fisicas'), 'estoque deve receber regras SX2 multi-tenant');
+assert(sysPrompt.includes('Formato de Data Protheus') && sysPrompt.includes('data_atual'), 'estoque deve receber regras cronologicas');
+assert(sysPrompt.includes('SB1.B1_DESC AS produto'), 'estoque deve retornar descricao de produto');
+assert(sysPrompt.includes('SBM.BM_DESC AS grupo_produto'), 'estoque deve retornar descricao de grupo de produto');
+assert(sysPrompt.includes('SB2.B2_QATU'), 'estoque deve documentar campo de saldo atual');
+assert(sysPrompt.includes('SD3.D3_QUANT'), 'estoque deve documentar quantidade movimentada');
+assert(typeof spec.resolverEntidades === 'function', 'estoque IA-OWNER deve expor resolver tecnico de entidades');
+
+console.log('estoque-sql-contrato.test.js: ok (ia-owner)');

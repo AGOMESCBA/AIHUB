@@ -179,9 +179,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const select = db.prepare('SELECT * FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND numero = ?');
     const insert = db.prepare(`
       INSERT INTO whatsapp_allowed_numbers
-        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, erp_tipo, erp_id, criado_em, atualizado_em)
+        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, modulo_estoque, erp_tipo, erp_id, criado_em, atualizado_em)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const update = db.prepare(`
       UPDATE whatsapp_allowed_numbers
@@ -192,6 +192,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
              modulo_compras = ?,
              modulo_faturamento = ?,
              modulo_comissao = ?,
+             modulo_estoque = ?,
              erp_tipo = ?,
              erp_id = ?,
              atualizado_em = ?
@@ -223,6 +224,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             campos.modulo_compras ?? existente.modulo_compras ?? 0,
             campos.modulo_faturamento ?? existente.modulo_faturamento ?? 0,
             campos.modulo_comissao ?? existente.modulo_comissao ?? 0,
+            campos.modulo_estoque ?? existente.modulo_estoque ?? 0,
             erpTipo,
             erpId,
             agora,
@@ -242,6 +244,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             campos.modulo_compras ?? 0,
             campos.modulo_faturamento ?? 0,
             campos.modulo_comissao ?? 0,
+            campos.modulo_estoque ?? 0,
             erpTipo,
             erpId,
             agora,
@@ -323,7 +326,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     if (incluirAtivo && body.ativo !== undefined) campos.ativo = body.ativo !== false && Number(body.ativo) !== 0 ? 1 : 0;
     if (!incluirPermissoes) return campos;
     // Autorizações por módulo
-    for (const m of ['financeiro', 'compras', 'faturamento', 'comissao']) {
+    for (const m of ['financeiro', 'compras', 'faturamento', 'comissao', 'estoque']) {
       const chave = `modulo_${m}`;
       if (body[chave] !== undefined) campos[chave] = body[chave] ? 1 : 0;
     }
@@ -1459,6 +1462,47 @@ Responda SOMENTE com JSON válido, sem markdown:
     const faseExecucao = String(req.query.fase_execucao || '').trim();
 
     const filtroModulo = _whereLogModuloDinamico('comissao');
+    const wheres = ["empresa_id = ?", filtroModulo.where];
+    const params = [empresaId, ...filtroModulo.params];
+
+    if (inicio) { wheres.push("criado_em >= ?"); params.push(inicio); }
+    if (fim)    { wheres.push("criado_em <= ?"); params.push(fim + 'T23:59:59'); }
+    if (status) { wheres.push("resultado_tipo = ?"); params.push(status); }
+    if (faseExecucao) { wheres.push("fase_execucao = ?"); params.push(faseExecucao); }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, criado_em, texto_original, sql_gerado, rows_count,
+             resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
+             escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
+             recebido_em, pipeline_ms, entregue_ms
+      FROM interpretation_log
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+    res.json(rows);
+  });
+
+  // ── ESTOQUE — Consultas Text-to-SQL ─────────────────────────────────────────
+  const canEstoque = requireRotina('iac-admin-estoque');
+
+  app.get('/api/ia-command/admin/estoque/consultas', requireAuth, requireIaCommand, canEstoque, (req, res) => {
+    const db = getDB();
+    const empresaId = eid(req);
+
+    // Garante que a intenção estoque_dinamico existe para esta empresa (bootstrap automático)
+    try { require('./erp/estoque/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+
+    const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
+    const inicio = String(req.query.inicio || '').trim();
+    const fim    = String(req.query.fim    || '').trim();
+    const status = String(req.query.status || '').trim();
+    const faseExecucao = String(req.query.fase_execucao || '').trim();
+
+    const filtroModulo = _whereLogModuloDinamico('estoque');
     const wheres = ["empresa_id = ?", filtroModulo.where];
     const params = [empresaId, ...filtroModulo.params];
 

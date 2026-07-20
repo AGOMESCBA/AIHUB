@@ -27,7 +27,7 @@ function base() {
 - SA2: fornecedores.
 - SB1: produtos.
 - SBM: grupo de produtos.
-- SC7: pedidos de compra.
+- SC7: pedidos de compra. Para status de aprovacao/aberto/atendido, use SEMPRE os campos do proprio SC7 (C7_APROV, C7_QUANT, C7_QUJE, C7_RESIDUO) — nunca infira status via SD1/SF1.
 - CTT: centro de custo.
 - SED: natureza.
 - SF4: TES.
@@ -206,6 +206,74 @@ function crescimento({ granularidade = 'mensal' } = {}) {
 `;
 }
 
+function statusPedidoCompra() {
+  return `
+## Status de pedido de compra (SC7) — aberto, atendido, aprovado, nao aprovado
+- Sinonimos para pedido de compra: pedido de compra, pedidos de compra, PC, PCs (singular ou plural, maiusculo ou minusculo) — todos referem-se a linhas de SC7.
+- Campos de status no cabecalho/item do pedido: SC7.C7_APROV (situacao de aprovacao/liberacao), SC7.C7_QUANT (quantidade pedida), SC7.C7_QUJE (quantidade ja atendida/recebida), SC7.C7_RESIDUO (quantidade residual/cancelada).
+- Saldo pendente de receber (quantidade que ainda falta chegar): (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO).
+- Pedido de compra APROVADO / liberado: SC7.C7_APROV = 'L'.
+- Pedido de compra NAO APROVADO / pendente de aprovacao: SC7.C7_APROV <> 'L'.
+- Pedido de compra EM ABERTO (aprovado e com saldo pendente de nota fiscal de entrada): SC7.C7_APROV = 'L' AND (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0.
+- Pedido de compra ATENDIDO (totalmente recebido, sem saldo pendente): (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) <= 0.
+- REGRA OBRIGATORIA — nunca infira status de pedido de compra a partir de EXISTS/NOT EXISTS em SD1 (notas de entrada). O status correto vem SEMPRE dos campos SC7.C7_APROV, C7_QUANT, C7_QUJE, C7_RESIDUO, calculados diretamente no SC7, sem necessidade de JOIN com SD1/SF1.
+- Periodo de pedidos de compra (dia/mes/ano, comparativos entre periodos): use sempre SC7.C7_EMISSAO (data de emissao do pedido), no mesmo formato CHAR(8) YYYYMMDD dos demais campos de data do modulo.
+- "Pedidos de compra" sem qualificacao adicional refere-se a linhas de SC7 (FROM SC7), nao a notas fiscais de entrada (SD1/SF1) nem a produtos comprados via SD1.
+
+### EXEMPLO CORRETO — pedidos de compra em aberto no mes
+SELECT SC7.C7_NUM AS pedido, SC7.C7_ITEM AS item, SA2.A2_NOME AS fornecedor, SB1.B1_DESC AS produto,
+       SC7.C7_QUANT AS quantidade_pedida, SC7.C7_QUJE AS quantidade_atendida,
+       (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) AS quantidade_pendente
+FROM SC7xxx SC7
+JOIN SA2xxx SA2 ON SC7.C7_FORNECE = SA2.A2_COD AND SC7.C7_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = ' '
+JOIN SB1xxx SB1 ON SC7.C7_PRODUTO = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_APROV = 'L'
+  AND (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0
+  AND SC7.C7_EMISSAO BETWEEN '20260701' AND '20260731';
+`;
+}
+
+function aprovacaoPedidoCompra({ temNomeAprovador } = {}) {
+  const joinAprovador = temNomeAprovador
+    ? `- SCR -> SAK (nome do aprovador): SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '. Use LEFT JOIN (aprovador pode nao estar cadastrado em SAK) e exiba SAK.AK_NOME AS aprovador.`
+    : `- Esta empresa nao tem a tabela SAK (cadastro de aprovadores) disponivel: exiba SCR.CR_APROV (codigo do aprovador) diretamente, sem tentar resolver o nome. NUNCA invente JOIN com SAK ou outra tabela de usuarios nesse caso.`;
+  return `
+## Aprovacao/liberacao de pedido de compra por aprovador (SCR)
+- Esta empresa POSSUI a tabela SCR (controle de aprovacao/alcada de documentos) disponivel — use-a SOMENTE quando a pergunta mencionar aprovador, nivel de aprovacao, alcada ou liberacao/aprovacao pendente de pedido de compra.
+- SCR e tabela de CABECALHO de documento (nao tem item) — chave: SCR.CR_FILIAL + SCR.CR_NUM + SCR.CR_TIPO.
+- SCR.CR_TIPO identifica o tipo de documento em aprovacao. Para pedido de compra, filtre SEMPRE SCR.CR_TIPO = 'PC'. NUNCA use SCR sem esse filtro — sem ele a consulta mistura outros tipos de documento (solicitacao de compra 'SC', nota fiscal 'NF', contrato 'CT', etc.), retornando aprovacoes que nao sao de pedido de compra.
+- Join SCR -> SC7 (pedido de compra): SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.D_E_L_E_T_ = ' '. E relacionamento de CABECALHO (SCR nao tem C7_ITEM) — nao junte por item.
+${joinAprovador}
+- SCR.CR_STATUS (controle da aprovacao, valores fixos do Protheus):
+  '01' = pendente em niveis anteriores (aguardando aprovador de nivel anterior).
+  '02' = pendente no nivel atual (aguardando ESTE aprovador).
+  '03' = aprovado.
+  '04' = bloqueado.
+  '05' = aprovado/rejeitado pelo nivel.
+  '06' = rejeitado.
+  '07' = documento rejeitado ou bloqueado por outro usuario.
+- "Pendente de liberacao/aprovacao" ou "aguardando aprovacao": SCR.CR_STATUS IN ('01', '02'). NUNCA use apenas '02' para "pendente" a menos que o usuario peca explicitamente "pendente no nivel atual" ou "minha alcada" — o padrao "pendente" cobre ambos os niveis (01 e 02).
+- "Aprovado" ou "liberado" (via SCR): SCR.CR_STATUS = '03'. "Rejeitado": SCR.CR_STATUS IN ('06', '07'). "Bloqueado": SCR.CR_STATUS = '04'.
+- SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
+- Quando o usuario pedir "por aprovador", agrupe pelo aprovador (SCR.CR_APROV ou SAK.AK_NOME conforme disponibilidade) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
+- Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado (resultado final). SCR detalha o FLUXO de aprovacao (quem, em que nivel, em que status) que levou (ou nao) a essa liberacao. Para perguntas "por aprovador" ou sobre o fluxo/alcada, use SCR — nao tente derivar aprovador a partir de SC7.
+
+### EXEMPLO CORRETO — pedidos de compra pendentes de liberacao, agrupados por aprovador
+SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
+       CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
+       SCR.CR_NUM AS numero_pedido,
+       SCR.CR_STATUS AS status_aprovacao
+FROM SCRxxx SCR
+JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.D_E_L_E_T_ = ' '
+${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
+  AND SCR.CR_TIPO = 'PC'
+  AND SCR.CR_STATUS IN ('01', '02')
+  AND SCR.CR_EMISSAO BETWEEN '20260701' AND '20260731'
+ORDER BY ${temNomeAprovador ? 'SAK.AK_NOME' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM;
+`;
+}
+
 function comparativoPeriodos() {
   return `
 ## Comparativo entre periodos especificos (nao necessariamente adjacentes)
@@ -271,6 +339,15 @@ const FRAGMENTOS = {
     texto: comparativoPeriodos,
     keywords: [/\bcompar\w*\b/i, /\bversus\b/i, /\bvs\.?\b/i, /\bem\s+rela[cç][aã]o\s+a\b/i, /\bcontra\b.*\b(mes|ano|periodo)\b/i],
   },
+  status_pedido_compra: {
+    texto: statusPedidoCompra,
+    keywords: [/\bpedidos?\s+de\s+compras?\b/i, /\bpedidos?\s+em\s+aberto\b/i, /\bpedidos?\s+atendidos?\b/i, /\bpedidos?\s+aprovados?\b/i, /\bpedidos?\s+n[aã]o\s+aprovados?\b/i, /\bpedidos?\s+pendentes?\s+de\s+aprova[cç][aã]o\b/i, /\bC7_APROV\b/i, /\bPCs?\b/i],
+  },
+  aprovacao_pedido_compra: {
+    texto: aprovacaoPedidoCompra,
+    keywords: [/\bpor\s+aprovador\b/i, /\baprovador(?:es)?\b/i, /\bal[cç]ada\b/i, /\bn[ií]vel(?:eis)?\s+de\s+aprova[cç][aã]o\b/i, /\bpendente(?:s)?\s+de\s+(?:libera[cç][aã]o|aprova[cç][aã]o)\b/i, /\bfluxo\s+de\s+aprova[cç][aã]o\b/i, /\bCR_APROV\b/i, /\bSCR\b/],
+    requerJunto: ['status_pedido_compra'],
+  },
 };
 
 const ORDEM_FALLBACK = [
@@ -285,6 +362,8 @@ const ORDEM_FALLBACK = [
   'crescimento_mensal',
   'crescimento_anual',
   'comparativo_periodos',
+  'status_pedido_compra',
+  'aprovacao_pedido_compra',
 ];
 
 module.exports = { base, FRAGMENTOS, ORDEM_FALLBACK };

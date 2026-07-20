@@ -20,6 +20,7 @@ const ARQUIVOS_POR_MODULO = {
   faturamento: path.join(__dirname, '..', 'erp', 'faturamento', 'faturamento-fragmentos-spec.js'),
   compras: path.join(__dirname, '..', 'erp', 'compras', 'compras-fragmentos-spec.js'),
   comissao: path.join(__dirname, '..', 'erp', 'comissao', 'comissao-fragmentos-spec.js'),
+  estoque: path.join(__dirname, '..', 'erp', 'estoque', 'estoque-fragmentos-spec.js'),
 };
 
 function normalizarModulo(modulo) {

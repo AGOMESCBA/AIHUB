@@ -2,7 +2,7 @@
 
 const aiProviderClient = require('../erp/ai-provider-client');
 
-const MODULOS_DINAMICOS = new Set(['financeiro', 'compras', 'faturamento', 'comissao']);
+const MODULOS_DINAMICOS = new Set(['financeiro', 'compras', 'faturamento', 'comissao', 'estoque']);
 
 function _parseJsonLoose(raw) {
   if (!raw) return null;
@@ -32,6 +32,7 @@ function _moduloPorIntencao(nome = '') {
   if (texto.includes('compras') || texto.includes('compra')) return 'compras';
   if (texto.includes('faturamento')) return 'faturamento';
   if (texto.includes('comissao')) return 'comissao';
+  if (texto.includes('estoque')) return 'estoque';
   return null;
 }
 
@@ -373,17 +374,24 @@ function buildSystemPrompt() {
     '- compras: compras, notas fiscais de entrada, pedidos/ordens de compra, fornecedores/produtos comprados.',
     '- faturamento: vendas, faturamento, notas fiscais de saida, receita, clientes/produtos vendidos, carregada/carregado/carga, entrega futura, nota mae/nota mãe, movimentacao total, quantidade faturada.',
     '- comissao: comissoes, vendedores, comissao paga/a receber, base/percentual de comissao.',
+    '- estoque: saldo/posicao/quantidade em estoque de um produto, estoque disponivel/reservado/empenhado, requisicao,',
+    '  transferencia entre armazens, perda/avaria de estoque, apontamento de producao, ajuste de inventario, curva ABC,',
+    '  giro de estoque, cobertura de estoque.',
     '',
-    'IMPORTANTE — nao force um modulo que nao se encaixa: os 4 modulos acima sao os UNICOS modulos com spec dedicado.',
-    'Se a pergunta for sobre um assunto que NAO pertence a nenhum dos 4 (ex: saldo/posicao/quantidade em estoque de um produto,',
-    'recursos humanos, folha de pagamento, producao, qualquer outro dominio fora da lista), retorne "modulo":"desconhecido"',
+    'IMPORTANTE — nao force um modulo que nao se encaixa: os 5 modulos acima sao os UNICOS modulos com spec dedicado.',
+    'Se a pergunta for sobre um assunto que NAO pertence a nenhum dos 5 (ex: recursos humanos, folha de pagamento,',
+    'producao industrial fora do contexto de estoque, qualquer outro dominio fora da lista), retorne "modulo":"desconhecido"',
     'com confianca baixa (<=0.3). NAO tente encaixar a pergunta no modulo mais parecido — isso gera respostas erradas.',
-    'Exemplo: "saldo em estoque do produto X" ou "quantidade em estoque" NAO e faturamento (mesmo que faturamento tambem',
-    'referencie estoque para saber se uma nota MOVIMENTOU estoque) — pergunta sobre POSICAO/SALDO de estoque de produto e desconhecido.',
+    'Exemplo: "saldo em estoque do produto X" ou "quantidade em estoque" e SEMPRE modulo estoque, mesmo que faturamento',
+    'tambem referencie estoque para saber se uma nota MOVIMENTOU estoque — pergunta sobre POSICAO/SALDO/MOVIMENTACAO',
+    'INTERNA de estoque de produto e sempre estoque, nunca faturamento nem compras.',
     '',
     'Regras criticas:',
     '- saldo bancario, fluxo de caixa, fluxo de caixa realizado e fluxo de caixa projetado sempre sao financeiro.',
     '- "carregada", "carregado", "carga", "entrega futura", "nota mae"/"nota mãe" e "movimentacao total" sao SEMPRE faturamento (nota fiscal de saida), mesmo que o contexto anterior seja de outro modulo — a presenca dessas palavras troca o modulo para faturamento independente do historico.',
+    '- saldo/posicao atual de estoque, disponivel/reservado/empenhado, requisicao, transferencia entre armazens,',
+    '  perda/avaria de estoque, apontamento de producao, ajuste de inventario, curva ABC e giro de estoque sao SEMPRE',
+    '  modulo estoque, mesmo que o contexto anterior seja de outro modulo.',
     '- contas a pagar e fornecedor sao financeiro/carteira pagar.',
     '- contas a receber e cliente sao financeiro/carteira receber.',
     '- Se a pergunta atual for continuidade, use historico_resumido dentro do limite recebido.',
@@ -402,7 +410,7 @@ function buildSystemPrompt() {
     '',
     'Formato obrigatorio:',
     '{',
-    '  "modulo": "financeiro"|"compras"|"faturamento"|"comissao"|"desconhecido",',
+    '  "modulo": "financeiro"|"compras"|"faturamento"|"comissao"|"estoque"|"desconhecido",',
     '  "periodo": {"tipo":"nenhum"|string, "dataInicio": string|null, "dataFim": string|null},',
     '  "filtros": object,',
     '  "agrupamentos": string[]|null,',

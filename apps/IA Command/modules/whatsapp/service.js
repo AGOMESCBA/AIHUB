@@ -22,6 +22,7 @@ const crud                = require('../database/crud');
 const { getDB }           = require('../database');
 const entitySqlGuard      = require('../erp/entity-sql-guard');
 const sx2SqlNormalizer    = require('../erp/sx2-sql-normalizer');
+const semanticDatasetResolver = require('../erp/semantic-dataset-resolver');
 const financeiroEntityCatalog  = require('../erp/financeiro/entity-catalog');
 const comprasEntityCatalog     = require('../erp/compras/entity-catalog');
 const faturamentoEntityCatalog = require('../erp/faturamento/entity-catalog');
@@ -244,6 +245,37 @@ function _scoreEmpresaTexto(termo, empresa) {
     }
   }
   return melhor;
+}
+
+function _aliasesEmpresaParaTexto(empresa) {
+  const valores = [
+    empresa?.alias,
+    empresa?.sigla,
+    empresa?.codigo,
+    empresa?.nome,
+    ...(String(empresa?.aliases || '').split(',').map(x => x.trim())),
+  ].filter(Boolean);
+  const vistos = new Set();
+  return valores.filter(valor => {
+    const chave = _normalizarBuscaEmpresa(valor);
+    if (!chave || vistos.has(chave)) return false;
+    vistos.add(chave);
+    return true;
+  });
+}
+
+function _textoMencionaEmpresaTenant(texto, empresa) {
+  const textoNorm = ` ${_normalizarBuscaEmpresa(texto)} `;
+  if (!textoNorm.trim()) return null;
+  for (const alias of _aliasesEmpresaParaTexto(empresa)) {
+    const aliasNorm = _normalizarBuscaEmpresa(alias);
+    if (!aliasNorm) continue;
+    const padrao = new RegExp(`(^|\\s)${aliasNorm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'i');
+    if (padrao.test(textoNorm) || _scoreEmpresaTexto(aliasNorm, empresa) >= 0.95 && textoNorm.includes(` ${aliasNorm} `)) {
+      return alias;
+    }
+  }
+  return null;
 }
 
 // Padrões léxicos de refinamento de consulta — usados pelo fallback de continuidade.
@@ -4156,6 +4188,24 @@ class IACWhatsAppService extends EventEmitter {
     if (intent._contextoAplicado && falhasClassificacao.length) {
       this.log('ℹ️  IA externa indisponivel, mas a engine interna resolveu pelo contexto da conversa.', 'info');
     }
+    const tenantTextosDetectados = intent._empresasMencionadasTextos ? [...intent._empresasMencionadasTextos] : [];
+    const tenantIdsDetectados = intent._empresasMencionadasIds ? [...intent._empresasMencionadasIds] : [];
+    for (const emp of empresasLoop) {
+      const termo = _textoMencionaEmpresaTenant(texto, emp);
+      if (!termo) continue;
+      if (!tenantTextosDetectados.some(t => _normalizarBuscaEmpresa(t) === _normalizarBuscaEmpresa(termo))) {
+        tenantTextosDetectados.push(termo);
+      }
+      if (!tenantIdsDetectados.map(Number).includes(Number(emp.empresa_id))) {
+        tenantIdsDetectados.push(emp.empresa_id);
+      }
+    }
+    if (tenantTextosDetectados.length) {
+      intent._empresasMencionadasTextos = tenantTextosDetectados;
+      intent._empresasMencionadasIds = tenantIdsDetectados;
+      intent._empresaMencionadaTexto = tenantTextosDetectados.join(' | ');
+      intent._empresaMencionadaId = tenantIdsDetectados[0];
+    }
     // Guard tenant (all): varre empresa/cliente/fornecedor sem parar no primeiro match.
     // Cobre multi-tenant ("J2A e C3I" → empresa="J2A" cliente="C3I") e alias isolado.
     if (this._channelId) {
@@ -4345,6 +4395,27 @@ class IACWhatsAppService extends EventEmitter {
           return resposta;
         }
       }
+      const moduloDinamicoAll = this._moduloMonitorIntent(intent);
+      if (moduloDinamicoAll === 'faturamento' && empresasProcessamento.length > 1) {
+        const comEstadoDataset = empresasProcessamento.map((emp, idx) => {
+          let temDatasetView = false;
+          try {
+            temDatasetView = !!semanticDatasetResolver.resolverDatasetView({
+              empresaId: emp.empresa_id,
+              modulo: 'faturamento',
+              spec: 'faturamento',
+              mensagem: texto,
+            })?.dataset;
+          } catch (_) {}
+          return { emp, idx, temDatasetView };
+        });
+        if (comEstadoDataset.some(x => x.temDatasetView) && comEstadoDataset.some(x => !x.temDatasetView)) {
+          empresasProcessamento = comEstadoDataset
+            .sort((a, b) => Number(a.temDatasetView) - Number(b.temDatasetView) || a.idx - b.idx)
+            .map(x => x.emp);
+          this.log('[All] Dataset View: priorizando empresa sem view para gerar SQL/aliases de referencia.', 'info');
+        }
+      }
       const diagnosticoErroEmpresa = ({ emp, resultado, respostaUsuario, retryPendente = false, retryExecutado = false, retrySucesso = false, canonicoOrigem = null }) => {
         const subtipo = resultado?.subtipo || resultado?.tipo || 'erro';
         const nomeEmpresa = emp?.nome || `Empresa #${emp?.empresa_id || 'n/a'}`;
@@ -4423,11 +4494,44 @@ class IACWhatsAppService extends EventEmitter {
         if (!Array.isArray(rows) || !rows.length || !rows[0] || typeof rows[0] !== 'object') return [];
         return Object.keys(rows[0]);
       };
+      const colunaContratoCanonica = col => {
+        const c = String(col || '').toLowerCase();
+        if (/^(faturamento|total_faturamento|faturamento_total|total_faturado|valor_total)$/.test(c)) return 'faturamento_total';
+        if (/^(quantidade|total_quantidade|quantidade_total)$/.test(c)) return 'quantidade_total';
+        if (/^(competencia|ano_mes|aaaamm)$/.test(c)) return 'competencia';
+        if (/^(cfop|d2_cf|cod_fiscal|codigo_fiscal)$/.test(c)) return 'cfop';
+        if (/^(tes|d2_tes|tipo_saida|tipo_entrada)$/.test(c)) return 'tes';
+        if (/^(cliente|a1_nome|a1_nreduz|f2_cliente)$/.test(c)) return 'cliente';
+        if (/^(produto|b1_desc|d2_cod)$/.test(c)) return 'produto';
+        if (/^(vendedor|a3_nome|a3_cod|f2_vend1)$/.test(c)) return 'vendedor';
+        if (/^(negocio|b1_grupo|grupo)$/.test(c)) return 'negocio';
+        if (/^(preco_medio|preco_medio_venda|ticket_medio|valor_medio)$/.test(c)) return 'preco_medio_venda';
+        return c;
+      };
+      const normalizarRowsContratoSaida = rows => {
+        if (!Array.isArray(rows)) return rows;
+        return rows.map(row => {
+          if (!row || typeof row !== 'object') return row;
+          const out = {};
+          for (const [col, valor] of Object.entries(row)) {
+            const canon = colunaContratoCanonica(col);
+            if (out[canon] === undefined) {
+              out[canon] = valor;
+              continue;
+            }
+            const atual = Number(out[canon]);
+            const novo = Number(valor);
+            out[canon] = Number.isFinite(atual) && Number.isFinite(novo) ? atual + novo : valor;
+          }
+          return out;
+        });
+      };
+      const colunasContratoCanonicas = cols => (cols || []).map(colunaContratoCanonica);
       const contratosSaidaIguais = (esperado, recebido) =>
         Array.isArray(esperado)
         && Array.isArray(recebido)
-        && esperado.length === recebido.length
-        && esperado.every((col, idx) => col === recebido[idx]);
+        && colunasContratoCanonicas(esperado).length === colunasContratoCanonicas(recebido).length
+        && colunasContratoCanonicas(esperado).every((col, idx) => col === colunasContratoCanonicas(recebido)[idx]);
       const erroContratoSaida = (emp, intentExecucao, colunasAtuais, retryExecutado = false, canonicoOrigem = null) => {
         const nomeEmpresaErro = emp?.nome || `Empresa #${emp?.empresa_id || 'n/a'}`;
         const mensagem = `${nomeEmpresaErro}: retorno com colunas diferentes do contrato multiempresa; consolidacao bloqueada para evitar total incorreto.`;
@@ -4448,7 +4552,8 @@ class IACWhatsAppService extends EventEmitter {
         });
       };
       const registrarSucessoDinamico = (emp, intentExecucao, resultado, respostaAiSql, nomeEmpresa, rows, registrado = true) => {
-        const colunasAtuais = colunasContratoSaida(rows);
+        const rowsCanonicas = normalizarRowsContratoSaida(rows || []);
+        const colunasAtuais = colunasContratoSaida(rowsCanonicas);
         if (colunasAtuais.length) {
           if (!contratoSaidaDinamico) {
             contratoSaidaDinamico = colunasAtuais;
@@ -4471,10 +4576,32 @@ class IACWhatsAppService extends EventEmitter {
           resultado,
           nomeEmpresa,
           resposta: respostaAiSql,
-          rows: rows || [],
+          rows: rowsCanonicas || [],
           _registrado: registrado,
         });
         return true;
+      };
+      const limparFiltroTenantExecucaoAll = (intentBase) => {
+        const out = { ...(intentBase || {}) };
+        const filtros = { ...(out.filtros || {}) };
+        const valorEmpresa = filtros.empresa;
+        const temEmpresasEscopo = empresasProcessamento.length > 1;
+        if (temEmpresasEscopo && valorEmpresa !== undefined && valorEmpresa !== null) {
+          delete filtros.empresa;
+          out._filtroEmpresaRemovidoPorEscopoAll = valorEmpresa;
+        }
+        if (temEmpresasEscopo && out._orquestradorContrato?.filtros?.empresa !== undefined) {
+          out._orquestradorContrato = {
+            ...out._orquestradorContrato,
+            filtros: { ...(out._orquestradorContrato.filtros || {}) },
+          };
+          delete out._orquestradorContrato.filtros.empresa;
+        }
+        if (temEmpresasEscopo && out._filtroEntidadeExplicitaMensagem?.campo === 'empresa') {
+          delete out._filtroEntidadeExplicitaMensagem;
+        }
+        out.filtros = filtros;
+        return out;
       };
       const tentarRetryCanonicoPendentes = async () => {
         if (!sqlCanonicoDinamico || bloqueioReusoCanonicoDinamico || !pendentesRetryCanonico.length) return;
@@ -4492,7 +4619,7 @@ class IACWhatsAppService extends EventEmitter {
               entidadesCanonicoDinamico
             );
             const intentRetry = {
-              ...intent,
+              ...limparFiltroTenantExecucaoAll(intent),
               ...(entidadesRetry.length ? { _entidadesResolvidas: entidadesRetry } : {}),
               _mensagemOriginal: texto,
               _remetente: sender,
@@ -4678,7 +4805,7 @@ class IACWhatsAppService extends EventEmitter {
           }
 
           const intentExecucao = {
-            ...intent,
+            ...limparFiltroTenantExecucaoAll(intent),
             ...(_entidadesEmpFinal.length ? { _entidadesResolvidas: _entidadesEmpFinal } : {}),
             _mensagemOriginal: texto,
             _remetente: sender,
