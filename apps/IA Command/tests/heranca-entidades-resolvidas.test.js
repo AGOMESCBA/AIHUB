@@ -1,13 +1,13 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const intentMerger = require(path.join(ROOT, 'modules/ai/intent-merger'));
-const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
+const intentRouter = require(path.join(ROOT, 'modules/erp/core/intent-router'));
 const iaOwnerRunner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const faturamentoHandlerV2 = require(path.join(ROOT, 'modules/erp/faturamento/ai-sql-handler-v2'));
+const faturamentoHandlerV2 = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/ai-sql-handler-v2'));
 const WhatsAppService = require(path.join(ROOT, 'modules/whatsapp/service'));
 
 const fornecedorSoftexpert = {

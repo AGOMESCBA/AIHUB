@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Teste de faturamento completo — 4 perguntas + 1 multi-turn
  * Empresas: CAIEIRA (4), J2A (1), C3I (2)
@@ -18,7 +18,7 @@ svc._channelId   = 'emp_1';
 svc._channelName = 'WhatsApp J2A Consultoria';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

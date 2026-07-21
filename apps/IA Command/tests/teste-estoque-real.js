@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Teste real e isolado — pergunta de estoque (sem spec dedicado).
  * Verifica se o fallback erp_generico (spec global enxuto) é acionado
@@ -19,7 +19,7 @@ const { inicializarDB } = require(BASE_DIR + '/modules/database/index');
 inicializarDB();
 
 const intentService = require(BASE_DIR + '/modules/ai/intent-service');
-const intentRouter  = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter  = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

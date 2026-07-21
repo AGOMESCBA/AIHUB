@@ -26,7 +26,7 @@ const ROOT = path.resolve(__dirname, '..');
 const {
   sqlParaCanonico,
   adaptarSqlCanonicoPorSX2,
-} = require(path.join(ROOT, 'modules/erp/sx2-sql-normalizer'));
+} = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx2-sql-normalizer'));
 
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 const { validarSqlIaOwnerBasico } = runner._test;

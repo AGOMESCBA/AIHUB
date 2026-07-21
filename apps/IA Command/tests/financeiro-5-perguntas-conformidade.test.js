@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Suite de conformidade: 5 perguntas canônicas do módulo financeiro.
@@ -24,9 +24,9 @@ const assert = require('assert');
 const path   = require('path');
 const ROOT   = path.resolve(__dirname, '..');
 
-const queryPlan    = require(path.join(ROOT, 'modules/erp/query-plan'));
+const queryPlan    = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const runner       = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const finSpec      = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const finSpec      = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 const entityRes    = require(path.join(ROOT, 'modules/ai/entity-resolver'));
 const promptBld    = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 

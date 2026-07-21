@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+﻿const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode               = require('qrcode');
 const { EventEmitter }     = require('events');
 const path                 = require('path');
@@ -9,10 +9,10 @@ const intentService       = require('../ai/intent-service');
 const intentMerger        = require('../ai/intent-merger');
 const contextPreCheck     = require('../ai/context-pre-check');
 const transcriptionService = require('../ai/transcription-service');
-const intentRouter        = require('../erp/intent-router');
-const responseFormatter   = require('../erp/response-formatter');
+const intentRouter        = require('../erp/core/intent-router');
+const responseFormatter   = require('../erp/core/response-formatter');
 const { _extrairMes, _extrairAno, detectarDimensaoCategorica } = responseFormatter;
-const canonicalWhatsappFormat = require('../erp/canonical-whatsapp-format');
+const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
 const interpretationLog   = require('../ai/interpretation-log');
 const channelStore        = require('./channel-store');
 const messageTemplates    = require('./message-templates');
@@ -20,14 +20,14 @@ const dialogResolver      = require('../ai/dialog-resolver');
 const conversationService = require('../ai/conversation-service');
 const crud                = require('../database/crud');
 const { getDB }           = require('../database');
-const entitySqlGuard      = require('../erp/entity-sql-guard');
-const sx2SqlNormalizer    = require('../erp/sx2-sql-normalizer');
-const semanticDatasetResolver = require('../erp/semantic-dataset-resolver');
-const financeiroEntityCatalog  = require('../erp/financeiro/entity-catalog');
-const comprasEntityCatalog     = require('../erp/compras/entity-catalog');
-const faturamentoEntityCatalog = require('../erp/faturamento/entity-catalog');
-const comissaoEntityCatalog    = require('../erp/comissao/entity-catalog');
-const comissaoIAOwnerSpec      = require('../erp/comissao/comissao-ia-owner-spec');
+const entitySqlGuard      = require('../erp/totvs_protheus/guards/entity-sql-guard');
+const sx2SqlNormalizer    = require('../erp/totvs_protheus/SX/sx2-sql-normalizer');
+const semanticDatasetResolver = require('../erp/core/semantic-dataset-resolver');
+const financeiroEntityCatalog  = require('../erp/totvs_protheus/financeiro/entity-catalog');
+const comprasEntityCatalog     = require('../erp/totvs_protheus/compras/entity-catalog');
+const faturamentoEntityCatalog = require('../erp/totvs_protheus/faturamento/entity-catalog');
+const comissaoEntityCatalog    = require('../erp/totvs_protheus/comissao/entity-catalog');
+const comissaoIAOwnerSpec      = require('../erp/totvs_protheus/comissao/comissao-ia-owner-spec');
 
 const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
@@ -2763,7 +2763,7 @@ class IACWhatsAppService extends EventEmitter {
     const idadeMs = Date.now() - new Date(criadoEmIso).getTime();
     if (!Number.isFinite(idadeMs) || idadeMs < 0 || idadeMs > JANELA_ANCORAGEM_MS) return null; // consulta velha/invalida — nao ancora, segue fluxo normal
 
-    const specFeedbackDialog = require('../erp/spec-feedback-dialog');
+    const specFeedbackDialog = require('../erp/core/spec-feedback-dialog');
     const sql = registro.sql_final_executado || registro.sql_gerado || '';
     const historico = [{ papel: 'usuario', texto }];
     let resultado;
@@ -2810,7 +2810,7 @@ class IACWhatsAppService extends EventEmitter {
   }
 
   async _conduzirDialogoFeedback(sender, texto, sessao) {
-    const specFeedbackDialog = require('../erp/spec-feedback-dialog');
+    const specFeedbackDialog = require('../erp/core/spec-feedback-dialog');
     const historico = [...sessao.historico, { papel: 'usuario', texto }];
     let resultado;
     try {
@@ -5598,7 +5598,7 @@ class IACWhatsAppService extends EventEmitter {
     if (resultadoCombinado.tipo === 'sucesso_ai_sql' && todosRows.length) {
       // IA-owner: formata as rows consolidadas (com coluna 'empresa') usando os mesmos
       // formatters programáticos do runner single — garante estilo uniforme entre empresas.
-      const whatsappFmt = require('../erp/whatsapp-format-prompt');
+      const whatsappFmt = require('../erp/core/whatsapp-format-prompt');
       const runner = require('../erp/ia-owner/runner');
       const _NOME_MOD = { faturamento: 'Faturamento', compras: 'Compras', financeiro: 'Financeiro', comissao: 'Comissão' };
       const nomeModulo = _NOME_MOD[(intent._moduloDinamico || '').replace('_dinamico', '')] || null;

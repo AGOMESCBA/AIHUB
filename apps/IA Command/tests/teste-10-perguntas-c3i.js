@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Mesmo lote de 10 perguntas, agora para C3I (empresa_id=2), para comparar
  * comportamento entre tenants apos a fragmentacao do spec do financeiro.
@@ -20,7 +20,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'C3i Systems';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

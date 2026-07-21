@@ -4,10 +4,10 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const faturamento = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
-const comissao = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec'));
-const compras = require(path.join(ROOT, 'modules/erp/compras/compras-ia-owner-spec'));
-const financeiro = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const faturamento = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec'));
+const comissao = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec'));
+const compras = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
+const financeiro = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 
 function resolverRegrasTecnicas(spec) {
   return typeof spec.regrasTecnicas === 'function' ? spec.regrasTecnicas() : (spec.regrasTecnicas || '');

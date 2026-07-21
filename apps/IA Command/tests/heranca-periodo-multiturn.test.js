@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Testes de herança de período em conversas multi-turn — IA Command
@@ -18,7 +18,7 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const temporal = require(path.join(ROOT, 'modules/erp/temporal-contract'));
+const temporal = require(path.join(ROOT, 'modules/erp/core/temporal-contract'));
 const orch = require(path.join(ROOT, 'modules/ai/orchestrator-service'));
 
 const hoje = new Date('2026-05-24T12:00:00');

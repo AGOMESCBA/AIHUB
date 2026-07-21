@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Validacao manual da fragmentacao de compras — 2 perguntas reais por fragmento,
  * rodadas contra a IA real (empresa J2A).
@@ -20,7 +20,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'J2A Consultoria';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

@@ -1,11 +1,11 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const canonical = require(path.join(ROOT, 'modules/erp/canonical-whatsapp-format'));
-const whatsappPrompt = require(path.join(ROOT, 'modules/erp/whatsapp-format-prompt'));
+const canonical = require(path.join(ROOT, 'modules/erp/core/canonical-whatsapp-format'));
+const whatsappPrompt = require(path.join(ROOT, 'modules/erp/core/whatsapp-format-prompt'));
 
 let passou = 0;
 let falhou = 0;

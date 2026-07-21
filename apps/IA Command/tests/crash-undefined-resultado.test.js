@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 // Testa os três pontos corrigidos para prevenir crash por resultado undefined
 // no pipeline multi-empresa (status=all).
@@ -10,7 +10,7 @@ const ROOT   = path.resolve(__dirname, '..');
 // ── helpers de mock ──────────────────────────────────────────────────────────
 
 function makeSpec() {
-  const sqlMiddleware = require(path.join(ROOT, 'modules/erp/faturamento/sql-middleware'));
+  const sqlMiddleware = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/sql-middleware'));
   return {
     nome: 'faturamento',
     tabelas: [],
@@ -59,7 +59,7 @@ function makeSpec() {
 // ── Ponto 2: _resultadoFallback produz objeto válido e bloqueia acesso a undefined ──
 // Testa o guard adicionado em rotear() sem precisar do banco inicializado.
 {
-  const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
+  const intentRouter = require(path.join(ROOT, 'modules/erp/core/intent-router'));
   assert(typeof intentRouter.rotear === 'function', 'intentRouter.rotear deve ser exportado');
 
   // Verifica que _deveFallbackAposFalhaCanonico retorna false para resultado undefined,
@@ -80,7 +80,7 @@ function makeSpec() {
 // Verifica indiretamente via rotear: se chegar um resultado inválido do handler,
 // o router retorna objeto com tipo 'erro' — nunca undefined ou sem .tipo.
 {
-  const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
+  const intentRouter = require(path.join(ROOT, 'modules/erp/core/intent-router'));
 
   // _deveFallbackAposFalhaCanonico com resultado undefined não deve lançar
   assert.doesNotThrow(() => {

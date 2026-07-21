@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 const SENDER = '5565999875116';
 const BASE_DIR = require('path').resolve(__dirname, '..');
 process.chdir(BASE_DIR);
@@ -8,7 +8,7 @@ const IACWhatsAppService = require(BASE_DIR + '/modules/whatsapp/service');
 const svc = new IACWhatsAppService();
 svc._empresaId = 1; svc._channelId = 'emp_1'; svc._channelName = 'WhatsApp J2A Consultoria';
 svc._isSenderAuthorized = () => true;
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') intentRouter._verificarAutorizacaoModulo = () => null;
 const EMPRESAS_CANAL = [
   { empresa_id: 1, nome: 'J2A Consultoria', alias: 'J2A' },

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const fs = require('fs');
@@ -7,13 +7,13 @@ const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const sx2Normalizer = require(path.join(ROOT, 'modules/erp/sx2-sql-normalizer'));
-const sx3Validator = require(path.join(ROOT, 'modules/erp/sx3-sql-validator'));
-const faturamentoSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
-const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
+const sx2Normalizer = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx2-sql-normalizer'));
+const sx3Validator = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx3-sql-validator'));
+const faturamentoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec'));
+const intentRouter = require(path.join(ROOT, 'modules/erp/core/intent-router'));
 const entityResolver = require(path.join(ROOT, 'modules/ai/entity-resolver'));
 const periodResolver = require(path.join(ROOT, 'modules/ai/period-resolver'));
-const queryPlan = require(path.join(ROOT, 'modules/erp/query-plan'));
+const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);

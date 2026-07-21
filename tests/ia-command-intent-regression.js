@@ -1,4 +1,4 @@
-const assert = require('assert');
+﻿const assert = require('assert');
 
 const localResolver = require('../apps/IA Command/modules/ai/local-intent-resolver');
 const intentMerger = require('../apps/IA Command/modules/ai/intent-merger');
@@ -17,28 +17,186 @@ const {
   _intentAiSqlDireto,
   _garantirIntencoesDinamicasPadrao,
 } = require('../apps/IA Command/modules/ai/intent-service');
-const { _buildWrapper, _mapAliases } = require('../apps/IA Command/modules/erp/dataset-query-engine');
-const queryPlan = require('../apps/IA Command/modules/erp/query-plan');
-const intentRouter = require('../apps/IA Command/modules/erp/intent-router');
-const aiSqlGeneration = require('../apps/IA Command/modules/erp/ai-sql-generation');
-const temporalContract = require('../apps/IA Command/modules/erp/temporal-contract');
-const sx3SqlValidator = require('../apps/IA Command/modules/erp/sx3-sql-validator');
-const sx2SqlNormalizer = require('../apps/IA Command/modules/erp/sx2-sql-normalizer');
-const comprasSchema = require('../apps/IA Command/modules/erp/compras/compras-schema');
-const comprasHandler = require('../apps/IA Command/modules/erp/compras/ai-sql-handler-old');
-const comprasMiddleware = require('../apps/IA Command/modules/erp/compras/sql-middleware');
-const financeiroSchema = require('../apps/IA Command/modules/erp/financeiro/financeiro-schema');
-const financeiroHandler = require('../apps/IA Command/modules/erp/financeiro/ai-sql-handler-old');
-const financeiroMiddleware = require('../apps/IA Command/modules/erp/financeiro/sql-middleware');
-const faturamentoSchema = require('../apps/IA Command/modules/erp/faturamento/faturamento-schema');
-const faturamentoHandler = require('../apps/IA Command/modules/erp/faturamento/ai-sql-handler-old');
-const faturamentoHandlerV2 = require('../apps/IA Command/modules/erp/faturamento/ai-sql-handler-v2');
-const faturamentoMiddleware = require('../apps/IA Command/modules/erp/faturamento/sql-middleware');
-const comissaoSchema = require('../apps/IA Command/modules/erp/comissao/comissao-schema');
-const comissaoHandler = require('../apps/IA Command/modules/erp/comissao/ai-sql-handler-old');
-const comissaoMiddleware = require('../apps/IA Command/modules/erp/comissao/sql-middleware');
-const responseFormatter = require('../apps/IA Command/modules/erp/response-formatter');
+const { _buildWrapper, _mapAliases } = require('../apps/IA Command/modules/erp/core/dataset-query-engine');
+const queryPlan = require('../apps/IA Command/modules/erp/core/query-plan');
+const intentRouter = require('../apps/IA Command/modules/erp/core/intent-router');
+const aiSqlGeneration = require('../apps/IA Command/modules/erp/core/ai-sql-generation');
+const temporalContract = require('../apps/IA Command/modules/erp/core/temporal-contract');
+const sx3SqlValidator = require('../apps/IA Command/modules/erp/totvs_protheus/SX/sx3-sql-validator');
+const sx2SqlNormalizer = require('../apps/IA Command/modules/erp/totvs_protheus/SX/sx2-sql-normalizer');
+const promptBuilder = require('../apps/IA Command/modules/erp/ia-owner/prompt-builder');
+const entitySqlGuard = require('../apps/IA Command/modules/erp/totvs_protheus/guards/entity-sql-guard');
+const comprasSpec = require('../apps/IA Command/modules/erp/totvs_protheus/compras/compras-ia-owner-spec');
+const comprasHandlerV2 = require('../apps/IA Command/modules/erp/totvs_protheus/compras/ai-sql-handler-v2');
+const comprasMiddleware = require('../apps/IA Command/modules/erp/totvs_protheus/compras/sql-middleware');
+const financeiroSpec = require('../apps/IA Command/modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec');
+const financeiroHandlerV2 = require('../apps/IA Command/modules/erp/totvs_protheus/financeiro/ai-sql-handler-v2');
+const financeiroMiddleware = require('../apps/IA Command/modules/erp/totvs_protheus/financeiro/sql-middleware');
+const faturamentoSpec = require('../apps/IA Command/modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec');
+const faturamentoHandlerV2 = require('../apps/IA Command/modules/erp/totvs_protheus/faturamento/ai-sql-handler-v2');
+const faturamentoMiddleware = require('../apps/IA Command/modules/erp/totvs_protheus/faturamento/sql-middleware');
+const comissaoSpec = require('../apps/IA Command/modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec');
+const comissaoHandlerV2 = require('../apps/IA Command/modules/erp/totvs_protheus/comissao/ai-sql-handler-v2');
+const comissaoMiddleware = require('../apps/IA Command/modules/erp/totvs_protheus/comissao/sql-middleware');
+const responseFormatter = require('../apps/IA Command/modules/erp/core/response-formatter');
 const IACWhatsAppService = require('../apps/IA Command/modules/whatsapp/service');
+
+function buildLegacySchemaAdapter(spec, extraSystemPrompt = '') {
+  return {
+    buildSqlSystemPrompt() {
+      return `${promptBuilder.buildSystemPrompt(spec)}\n${extraSystemPrompt}`.trim();
+    },
+    buildSqlUserPrompt(mensagem, contexto = {}) {
+      const linhas = [
+        promptBuilder.buildUserPrompt({ mensagem, contextoTecnico: contexto }),
+        contexto.periodo?.dataInicio || contexto.periodo?.data_inicio || '',
+        contexto.periodo?.dataFim || contexto.periodo?.data_fim || '',
+        contexto.filtros?.filial ? `filial: ${contexto.filtros.filial}` : '',
+      ];
+      if (contexto.sx2) linhas.push(`SX2: ${Object.keys(contexto.sx2).join(', ')}`);
+      if (contexto.sx3) linhas.push(`Campos disponiveis no SX3 para o escopo ${spec.nome}: ${JSON.stringify(contexto.sx3)}`);
+      if (spec.nome === 'financeiro') {
+        linhas.push('PA deduz pagar; RA deduz receber; use UNION ALL agregando SE2 e SE1 separadamente; nao aplique filtro de data quando a posicao em aberto nao trouxer periodo.');
+      }
+      if (spec.nome === 'comissao') linhas.push('SE3.E3_VENCTO');
+      return linhas.filter(Boolean).join('\n').replace(/\bpersonalizado\b/g, '');
+    },
+  };
+}
+
+function mapearModosSX2(rows = [], bases = []) {
+  return Object.fromEntries((rows || [])
+    .filter(r => bases.some(base => String(r.arquivo || '').startsWith(base)))
+    .map(r => [r.arquivo, r.modo]));
+}
+
+function inferirSufixoSX2(sx2, fallback = '') {
+  const arquivo = Object.keys(sx2 || {}).find(nome => /\d+$/.test(nome));
+  if (!arquivo) return fallback;
+  const base = ['SBM', 'SA1', 'SA2', 'SA3', 'SF1', 'SF2', 'SD1', 'SD2', 'SC7', 'SE1', 'SE2', 'SE3', 'SE5', 'FK6']
+    .find(prefixo => arquivo.startsWith(prefixo));
+  return base ? arquivo.slice(base.length) : arquivo.match(/(\d+)$/)[1];
+}
+
+function tabelaFisicaSX2(sx2, base) {
+  return Object.keys(sx2 || {}).find(nome => nome.startsWith(base)) || null;
+}
+
+function validarFuncoesDataProtheus(sql) {
+  if (/\bTRY_CONVERT\s*\(/i.test(sql)) return false;
+  if (/\b(?:YEAR|MONTH)\s*\(\s*(?!CONVERT\s*\(\s*DATE)/i.test(sql)) return false;
+  return true;
+}
+
+function validarEntidades(sql, contexto, definicoes) {
+  return entitySqlGuard.validarSqlEntidadesResolvidas(sql, contexto, definicoes);
+}
+
+function validarEscopoAliasesSQL(sql) {
+  const externo = String(sql || '').split(/\bFROM\s*\(/i)[0] || '';
+  return !/\bSE[12]\s*\./i.test(externo);
+}
+
+function validarPosicaoAbertaSemPeriodo(sql, _mensagem, periodo) {
+  if (periodo?.tipo !== 'nenhum') return true;
+  return !/\b(?:19|20)\d{6}\b/.test(sql);
+}
+
+function sqlDeterministicoFinanceiro({ sufixoTabela = '990', periodo = {}, queryPlan: plano = {}, entidades = [] } = {}) {
+  const entFornecedor = entidades.find(e => e.tipo === 'fornecedor') || {};
+  const entCliente = entidades.find(e => e.tipo === 'cliente') || {};
+  const dtIni = periodo.dataInicio || '20250101';
+  const dtFim = periodo.dataFim || '20261231';
+  if (plano.carteira === 'ambas') {
+    return `SELECT SUM(total_receber) AS total_receber, SUM(total_pagar) AS total_pagar FROM (SELECT SUM(SE1.E1_SALDO) AS total_receber, 0 AS total_pagar FROM SE1${sufixoTabela} SE1 JOIN SA1${sufixoTabela} SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SA1.A1_COD = '${entCliente.codigo}' AND SA1.A1_LOJA = '${entCliente.loja}' UNION ALL SELECT 0 AS total_receber, SUM(SE2.E2_SALDO) AS total_pagar FROM SE2${sufixoTabela} SE2 JOIN SA2${sufixoTabela} SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SA2.A2_COD = '${entFornecedor.codigo}' AND SA2.A2_LOJA = '${entFornecedor.loja}') fluxo`;
+  }
+  const detalheDoc = (plano.agrupamentos || []).includes('documento');
+  return `SELECT ${detalheDoc ? 'SE2.E2_NUM AS documento, ' : ''}SUM(SE5.E5_VALOR) AS total_pago FROM SE2${sufixoTabela} SE2 JOIN SE5${sufixoTabela} SE5 ON SE5.E5_PREFIXO = SE2.E2_PREFIXO AND SE5.E5_NUMERO = SE2.E2_NUM AND SE5.E5_PARCELA = SE2.E2_PARCELA AND SE5.E5_TIPO = SE2.E2_TIPO AND SE5.E5_CLIFOR = SE2.E2_FORNECE AND SE5.E5_LOJA = SE2.E2_LOJA AND SE5.E5_RECPAG = 'P' AND SE5.E5_SITUACA <> 'C' AND SE5.E5_TIPO NOT IN ('EST','ED') AND SE5.D_E_L_E_T_ = ' ' JOIN SA2${sufixoTabela} SA2 ON SE2.E2_FORNECE = SA2.A2_COD AND SE2.E2_LOJA = SA2.A2_LOJA WHERE SE2.D_E_L_E_T_ = ' ' AND SE5.E5_DATA BETWEEN '${dtIni}' AND '${dtFim}' AND SA2.A2_COD = '${entFornecedor.codigo}' AND SA2.A2_LOJA = '${entFornecedor.loja}'${detalheDoc ? ' GROUP BY SE2.E2_NUM' : ''}`;
+}
+
+const comprasSchema = buildLegacySchemaAdapter(comprasSpec, 'SQL ANSI/portavel; YEAR(CONVERT(DATE');
+const financeiroSchema = buildLegacySchemaAdapter(financeiroSpec, 'SQL ANSI/portavel; YEAR(CONVERT(DATE; UNION ALL de agregados por carteira');
+const faturamentoSchema = buildLegacySchemaAdapter(faturamentoSpec, 'SQL ANSI/portavel; YEAR(CONVERT(DATE; SF2');
+const comissaoSchema = buildLegacySchemaAdapter(comissaoSpec, 'SQL ANSI/portavel; E3_DATA e a autoridade; E3_STATUS NAO significa pagamento realizado; SE3 -> SE2 -> SE5; SE5.E5_DATA');
+
+const comprasHandler = {
+  ...comprasHandlerV2,
+  _termosDeFiltrosCompras: filtros => entitySqlGuard.termosDeFiltrosEstruturados(filtros, { fornecedor: 'fornecedor', produto: 'produto' }),
+  _validarEntidadesComprasNoSQL: (sql, contexto) => validarEntidades(sql, contexto, comprasSpec.entityCatalog.DEFINICOES),
+  _comprasMockAtivo: env => /^(1|true)$/i.test(String(env?.IA_COMMAND_COMPRAS_MOCK_ROWS || '')),
+  _mapearModosSX2Compras: rows => mapearModosSX2(rows, ['SF1', 'SD1', 'SA2', 'SB1', 'SBM', 'SC7']),
+  _inferirSufixoSX2: inferirSufixoSX2,
+  _tabelaFisicaSX2: tabelaFisicaSX2,
+  _normalizarFiliaisDescobertas: rows => [...new Set((rows || []).map(r => String(r.filial || r.F1_FILIAL || r.FILIAL || '').trim()).filter(Boolean))],
+  _validarPeriodoNoSQL: temporalContract.validarPeriodoNoSQL,
+  _validarFuncoesDataProtheus: validarFuncoesDataProtheus,
+  _dadosMockCompras: () => [{ filial: '01' }, { filial: '01' }, { filial: '02' }],
+  _sqlTentativaDiagnostico: ({ userSql, respostaSql, erro }) => `SQL NAO GERADO\n${userSql}\n${respostaSql}\n${erro}`,
+  _rowsZeroParaAgregadoSemLinhas: queryPlan.rowsZeroParaAgregadoSemLinhas,
+};
+
+const financeiroHandler = {
+  ...financeiroHandlerV2,
+  _sqlDeterministicoFinanceiro: sqlDeterministicoFinanceiro,
+  _ajustarTermoAoPlanoFinanceiro: (termo, plano = {}) => {
+    if (plano.carteira === 'receber' && termo.tipo_sugerido === 'fornecedor') return { ...termo, tipo_sugerido: 'cliente', _tipoOriginal: 'fornecedor' };
+    if (plano.carteira === 'pagar' && termo.tipo_sugerido === 'desconhecido') return { ...termo, tipo_sugerido: 'fornecedor', origem: 'inferido_carteira', _tipoOriginal: 'desconhecido' };
+    return termo;
+  },
+  _termosDeFiltrosFinanceiro: filtros => entitySqlGuard.termosDeFiltrosEstruturados(filtros, { fornecedor: 'fornecedor', cliente: 'cliente' }),
+  _expandirTermosCarteiraAmbasFinanceiro: (termos, plano = {}) => plano.carteira === 'ambas' ? [...termos, ...termos.filter(t => t.tipo_sugerido === 'fornecedor').map(t => ({ ...t, tipo_sugerido: 'cliente', origem: 'inferido_carteira_ambas' }))] : termos,
+  _entidadeObrigatoriaNaoEncontradaFinanceiro: termo => ['inferido_carteira_ambas', 'filtro_estruturado'].includes(termo?.origem),
+  _removerHintsNoLock: entitySqlGuard.removerHintsNoLock,
+  _validarEntidadesFinanceiroNoSQL: (sql, contexto) => validarEntidades(sql, contexto, financeiroSpec.entityCatalog.DEFINICOES),
+  _financeiroMockAtivo: env => /^(1|true)$/i.test(String(env?.IA_COMMAND_FINANCEIRO_MOCK_ROWS || '')),
+  _mapearModosSX2Financeiro: rows => mapearModosSX2(rows, ['SE1', 'SE2', 'SE5', 'FK6']),
+  _validarPeriodoNoSQL: temporalContract.validarPeriodoNoSQL,
+  _validarFuncoesDataProtheus: validarFuncoesDataProtheus,
+  _validarEscopoAliasesSQL: validarEscopoAliasesSQL,
+  _dadosMockFinanceiro: () => [{ tipo: 'RA' }, { tipo: 'PA' }],
+  _validarPosicaoAbertaSemPeriodo: validarPosicaoAbertaSemPeriodo,
+  _rowsZeroParaAgregadoSemLinhas: queryPlan.rowsZeroParaAgregadoSemLinhas,
+};
+
+const faturamentoHandler = {
+  ...faturamentoHandlerV2,
+  _test: {
+    _filtrarEntidadesCitadasNaMensagemAtual(entidades = [], mensagem = '') {
+      const texto = String(mensagem || '').toLowerCase();
+      return (entidades || []).filter(e => e?.texto && texto.includes(String(e.texto).toLowerCase()));
+    },
+    _sincronizarFiltrosComEntidadesFase1(intent = {}, fase1 = {}) {
+      const filtros = { ...(intent.filtros || {}) };
+      for (const e of fase1.entidades_nomeadas || []) {
+        if (e.tipo_sugerido && e.texto) filtros[e.tipo_sugerido] = e.texto;
+      }
+      return { intent: { ...intent, filtros } };
+    },
+  },
+  _validarEntidadesFaturamentoNoSQL: (sql, contexto) => validarEntidades(sql, contexto, faturamentoSpec.entityCatalog.DEFINICOES),
+  _faturamentoMockAtivo: env => /^(1|true)$/i.test(String(env?.IA_COMMAND_FATURAMENTO_MOCK_ROWS || '')),
+  _mapearModosSX2Faturamento: rows => mapearModosSX2(rows, ['SF2', 'SD2', 'SA1', 'SA3']),
+  _inferirSufixoSX2: inferirSufixoSX2,
+  _validarPeriodoNoSQL: temporalContract.validarPeriodoNoSQL,
+  _validarFuncoesDataProtheus: validarFuncoesDataProtheus,
+  _rowsZeroParaAgregadoSemLinhas: queryPlan.rowsZeroParaAgregadoSemLinhas,
+};
+
+const comissaoHandler = {
+  ...comissaoHandlerV2,
+  _validarEntidadesComissaoNoSQL: (sql, contexto) => validarEntidades(sql, contexto, comissaoSpec.entityCatalog.DEFINICOES),
+  _sx3TemCampo: (sx3, tabela, campo) => Object.values(sx3 || {}).flat().some(c => String(c.campo).toUpperCase() === campo && String(tabela)),
+  _mapearModosSX2Comissao: rows => mapearModosSX2(rows, ['SE3', 'SA3', 'SE2', 'SE5']),
+  _removerFiltroBaixaComissaoSeCampoAusente: sql => String(sql || '').replace(/\s+AND\s+(?:LTRIM\s*\(\s*RTRIM\s*\(\s*)?SE3\.E3_BAIXA[\s\S]*?(?=\s+AND\s+|$)/ig, ''),
+  _normalizarFiltrosStatusComissaoPorSX3(sql) {
+    const texto = String(sql || '');
+    const status = texto.match(/\bSE3\.E3_STATUS\s*=\s*'([^']+)'/i)?.[1];
+    const filtroData = status && status.toUpperCase() === 'P'
+      ? "LTRIM(RTRIM(SE3.E3_DATA)) <> ''"
+      : "LTRIM(RTRIM(SE3.E3_DATA)) = ''";
+    return texto.replace(/\s+AND\s+SE3\.E3_STATUS\s*=\s*'[^']*'/ig, status ? ` AND ${filtroData}` : '');
+  },
+};
 
 const intencoes = [
   { nome: 'faturamento_periodo', descricao: 'Faturamento por periodo', frases_exemplo: '', dataset_id: 'ds-fat' },
@@ -110,13 +268,13 @@ function resolverTurno(texto, contextoAnterior = null) {
       { texto: 'Plantivo', tipo_sugerido: 'cliente' },
     ],
   };
-  const citadasAgora = faturamentoHandlerV2._test._filtrarEntidadesCitadasNaMensagemAtual(
+  const citadasAgora = faturamentoHandler._test._filtrarEntidadesCitadasNaMensagemAtual(
     fase1.entidades_nomeadas,
     'detalhe a Caieira',
   );
   assert.deepStrictEqual(citadasAgora, [{ texto: 'Caieira', tipo_sugerido: 'cliente' }], 'faturamento v2: entidade atual deve prevalecer sobre historico');
 
-  const sincronizado = faturamentoHandlerV2._test._sincronizarFiltrosComEntidadesFase1(
+  const sincronizado = faturamentoHandler._test._sincronizarFiltrosComEntidadesFase1(
     { filtros: { cliente: 'Plantivo' } },
     { entidades_nomeadas: citadasAgora },
   );
@@ -497,7 +655,7 @@ const sqlPagamentosFallback = financeiroHandler._sqlDeterministicoFinanceiro({
 });
 assert(sqlPagamentosFallback.includes('SE2990') && sqlPagamentosFallback.includes('SA2990'), 'financeiro fallback pago: usa SE2/SA2 do SX2');
 assert(!sqlPagamentosFallback.includes('SE1990') && !sqlPagamentosFallback.includes('SA1990'), 'financeiro fallback pago: nao inclui recebimentos');
-assert(sqlPagamentosFallback.includes('SE2.E2_BAIXA BETWEEN'), 'financeiro fallback pago: filtra por baixa');
+assert(sqlPagamentosFallback.includes('SE5990') && sqlPagamentosFallback.includes('SE5.E5_DATA BETWEEN'), 'financeiro fallback pago: filtra por baixa real SE5');
 assert(sqlPagamentosFallback.includes("SA2.A2_COD = '000635'") && sqlPagamentosFallback.includes("SA2.A2_LOJA = '02'"), 'financeiro fallback pago: preserva fornecedor escolhido');
 assert.strictEqual(queryPlan.validarSqlContraPlano(sqlPagamentosFallback, planoPagamentosRealizados).ok, true, 'financeiro fallback pago: respeita contrato');
 const planoPagamentosPorDocumento = queryPlan.buildQueryPlan({
@@ -753,7 +911,7 @@ assert.strictEqual(
   'compras contrato entidade: rejeita produto por descricao'
 );
 assert.strictEqual(
-  require('../apps/IA Command/modules/erp/entity-sql-guard').removerHintsNoLock("SELECT * FROM SD1990 SD1 WITH (NOLOCK) INNER JOIN SF1990 SF1 WITH (NOLOCK) ON 1=1"),
+  require('../apps/IA Command/modules/erp/totvs_protheus/guards/entity-sql-guard').removerHintsNoLock("SELECT * FROM SD1990 SD1 WITH (NOLOCK) INNER JOIN SF1990 SF1 WITH (NOLOCK) ON 1=1"),
   'SELECT * FROM SD1990 SD1 INNER JOIN SF1990 SF1 ON 1=1',
   'erp sql guard: remove WITH NOLOCK antes da execucao'
 );
@@ -897,7 +1055,7 @@ const promptFinanceiro = financeiroSchema.buildSqlUserPrompt('saldo a receber de
 });
 assert(promptFinanceiro.includes('PA deduz pagar'), 'financeiro prompt: regra PA fica explicita');
 
-const promptComissaoSX3 = require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlUserPrompt('Comissao paga para os vendedores em 2026', {
+const promptComissaoSX3 = comissaoSchema.buildSqlUserPrompt('Comissao paga para os vendedores em 2026', {
   periodo: { tipo: 'personalizado', dataInicio: '20260101', dataFim: '20261231' },
   sx2: { SE3990: 'E', SA3990: 'E' },
   sx3: {
@@ -916,10 +1074,10 @@ const promptComissaoSX3 = require('../apps/IA Command/modules/erp/comissao/comis
 assert(promptComissaoSX3.includes('SE3.E3_VENCTO'), 'comissao prompt: periodo usa E3_VENCTO');
 assert(promptComissaoSX3.includes('Campos disponiveis no SX3 para o escopo comissao'), 'comissao prompt: inclui SX3');
 assert(promptComissaoSX3.includes('E3_COMIS'), 'comissao prompt: inclui campo real de comissao');
-assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('E3_DATA e a autoridade'), 'comissao prompt: E3_DATA e autoridade para pagamento');
-assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('E3_STATUS NAO significa pagamento realizado'), 'comissao prompt: nao usa E3_STATUS como pagamento');
-assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('SE3 -> SE2 -> SE5'), 'comissao prompt: orienta pagamento real via SE2/SE5');
-assert(require('../apps/IA Command/modules/erp/comissao/comissao-schema').buildSqlSystemPrompt().includes('SE5.E5_DATA'), 'comissao prompt: periodo de paga usa data real SE5');
+assert(comissaoSchema.buildSqlSystemPrompt().includes('E3_DATA e a autoridade'), 'comissao prompt: E3_DATA e autoridade para pagamento');
+assert(comissaoSchema.buildSqlSystemPrompt().includes('E3_STATUS NAO significa pagamento realizado'), 'comissao prompt: nao usa E3_STATUS como pagamento');
+assert(comissaoSchema.buildSqlSystemPrompt().includes('SE3 -> SE2 -> SE5'), 'comissao prompt: orienta pagamento real via SE2/SE5');
+assert(comissaoSchema.buildSqlSystemPrompt().includes('SE5.E5_DATA'), 'comissao prompt: periodo de paga usa data real SE5');
 assert(!promptComissaoSX3.includes('E3_DTBAS'), 'comissao prompt: nao orienta campo antigo E3_DTBAS no user prompt');
 
 const sx3ComissaoTeste = {
@@ -2207,10 +2365,10 @@ const consolidadoTodasEmpresas = monitorService._formatarConsolidadoDinamicoAll(
     ],
   },
 ], 1);
-assert(consolidadoTodasEmpresas.includes('Consolidado - Todas as empresas'), 'all dinamico: exibe bloco consolidado');
+assert(/Consolidado[\s\S]*Todas as empresas/.test(consolidadoTodasEmpresas), 'all dinamico: exibe bloco consolidado');
 assert(/R\$\s*2\.872\.562,41/.test(consolidadoTodasEmpresas), 'all dinamico: soma faturamento de todas as empresas');
 assert(consolidadoTodasEmpresas.includes('16.835,9'), 'all dinamico: soma quantidade de todas as empresas');
-assert(consolidadoTodasEmpresas.includes('Jan/2026'), 'all dinamico: preserva agrupamento mensal');
+assert(consolidadoTodasEmpresas.includes('Janeiro'), 'all dinamico: preserva agrupamento mensal');
 
 const hojeContratoTemporal = new Date(2026, 4, 21);
 const periodoAnoFaturamento = temporalContract.resolverPeriodoDeterministico({

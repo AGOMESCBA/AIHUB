@@ -5,7 +5,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
-const spec = require(path.join(ROOT, 'modules/erp/compras/compras-ia-owner-spec'));
+const spec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
 
 const sysPrompt = promptBuilder.buildSystemPrompt(spec);
 assert(sysPrompt.includes('IA-OWNER do modulo compras'), 'compras deve usar IA-OWNER');

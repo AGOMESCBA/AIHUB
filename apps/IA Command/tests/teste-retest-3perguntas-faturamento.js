@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Re-teste das 3 perguntas que apresentaram bug na bateria de 24 do faturamento.
  */
@@ -19,7 +19,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'teste';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

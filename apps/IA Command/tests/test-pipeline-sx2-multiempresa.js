@@ -14,7 +14,7 @@ const {
   adaptarSqlCanonicoPorSX2,
   normalizarTabelasPorAliasSX2,
   aliasTabelaSql,
-} = require(path.join(ROOT, 'modules/erp/sx2-sql-normalizer'));
+} = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx2-sql-normalizer'));
 
 let passed = 0;
 let failed = 0;

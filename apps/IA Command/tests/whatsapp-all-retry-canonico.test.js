@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
@@ -6,7 +6,7 @@ const ROOT = path.resolve(__dirname, '..');
 
 const IACWhatsAppService = require(path.join(ROOT, 'modules/whatsapp/service'));
 const intentService = require(path.join(ROOT, 'modules/ai/intent-service'));
-const intentRouter = require(path.join(ROOT, 'modules/erp/intent-router'));
+const intentRouter = require(path.join(ROOT, 'modules/erp/core/intent-router'));
 
 const orig = {
   garantir: intentService._garantirIntencoesDinamicasPadrao,

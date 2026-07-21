@@ -24,7 +24,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 // Importa formatarPerguntaAmbiguidade diretamente do spec de faturamento
-const fatSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
+const fatSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec'));
 
 let passou = 0;
 let falhou = 0;
@@ -78,10 +78,10 @@ ok('pergunta inclui código/loja de cada candidato', () => {
 
 ok('formatarPerguntaAmbiguidade exportada nos 4 specs', () => {
   const specs = [
-    'faturamento/faturamento-ia-owner-spec',
-    'compras/compras-ia-owner-spec',
-    'financeiro/financeiro-ia-owner-spec',
-    'comissao/comissao-ia-owner-spec',
+    'totvs_protheus/faturamento/faturamento-ia-owner-spec',
+    'totvs_protheus/compras/compras-ia-owner-spec',
+    'totvs_protheus/financeiro/financeiro-ia-owner-spec',
+    'totvs_protheus/comissao/comissao-ia-owner-spec',
   ];
   for (const nome of specs) {
     const s = require(path.join(ROOT, 'modules/erp', nome));

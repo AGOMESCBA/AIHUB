@@ -10,8 +10,8 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const entitySqlGuard = require(path.join(ROOT, 'modules/erp/entity-sql-guard'));
-const comissaoSpec = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec'));
+const entitySqlGuard = require(path.join(ROOT, 'modules/erp/totvs_protheus/guards/entity-sql-guard'));
+const comissaoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec'));
 
 let passou = 0;
 let falhou = 0;

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Teste manual REAL (contra a IA) com 3 perguntas especificas pedidas pelo
  * usuario, usando o numero real de vendedor (erp_tipo='vendedor',
@@ -20,7 +20,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'teste-3perguntas-vendedor';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

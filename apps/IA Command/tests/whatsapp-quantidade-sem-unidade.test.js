@@ -1,11 +1,11 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const whatsappFormatPrompt = require(path.join(ROOT, 'modules/erp/whatsapp-format-prompt'));
-const responseFormatter = require(path.join(ROOT, 'modules/erp/response-formatter'));
+const whatsappFormatPrompt = require(path.join(ROOT, 'modules/erp/core/whatsapp-format-prompt'));
+const responseFormatter = require(path.join(ROOT, 'modules/erp/core/response-formatter'));
 const chatFormatter = require(path.join(ROOT, 'modules/ai/chat/whatsapp-formatter'));
 
 const systemPrompt = whatsappFormatPrompt.buildFormatSystemPrompt();

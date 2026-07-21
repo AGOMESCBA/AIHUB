@@ -4,9 +4,9 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const compras = require(path.join(ROOT, 'modules/erp/compras/compras-ia-owner-spec'));
-const comissao = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec'));
-const financeiro = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const compras = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
+const comissao = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec'));
+const financeiro = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 
 function helpersComResposta({ tabelaEsperada, entidade }) {

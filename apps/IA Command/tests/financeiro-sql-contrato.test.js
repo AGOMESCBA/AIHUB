@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const fs = require('fs');
@@ -7,15 +7,15 @@ const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const queryPlan = require(path.join(ROOT, 'modules/erp/query-plan'));
-const sx2Normalizer = require(path.join(ROOT, 'modules/erp/sx2-sql-normalizer'));
-const entitySqlGuard = require(path.join(ROOT, 'modules/erp/entity-sql-guard'));
-const financeiroCatalog = require(path.join(ROOT, 'modules/erp/financeiro/entity-catalog'));
-const financeiroSpec = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
+const sx2Normalizer = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx2-sql-normalizer'));
+const entitySqlGuard = require(path.join(ROOT, 'modules/erp/totvs_protheus/guards/entity-sql-guard'));
+const financeiroCatalog = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/entity-catalog'));
+const financeiroSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 
-const handlerFonte = fs.readFileSync(path.join(ROOT, 'modules/erp/financeiro/ai-sql-handler-v2.js'), 'utf8');
-assert(handlerFonte.includes('../ia-owner/runner'), 'handler financeiro deve usar ia-owner/runner');
-assert(handlerFonte.includes('./financeiro-ia-owner-spec'), 'handler financeiro deve usar financeiro-ia-owner-spec');
+const handlerFonte = fs.readFileSync(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/ai-sql-handler-v2.js'), 'utf8');
+assert(handlerFonte.includes('../../ia-owner/runner'), 'handler financeiro deve usar ia-owner/runner');
+assert(handlerFonte.includes('./financeiro-ia-owner-spec'), 'handler financeiro deve usar financeiro-ia-owner-spec Protheus');
 assert(!handlerFonte.includes(['financeiro', 'contract'].join('-')), 'handler financeiro nao deve usar contrato legado');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(financeiroSpec);

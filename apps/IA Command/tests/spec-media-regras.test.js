@@ -24,10 +24,10 @@ const ROOT = path.resolve(__dirname, '..');
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 
 const SPECS = {
-  faturamento: require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec')),
-  compras:     require(path.join(ROOT, 'modules/erp/compras/compras-ia-owner-spec')),
-  financeiro:  require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec')),
-  comissao:    require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec')),
+  faturamento: require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec')),
+  compras:     require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec')),
+  financeiro:  require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec')),
+  comissao:    require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec')),
 };
 
 let passou = 0;

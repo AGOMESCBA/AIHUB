@@ -1,10 +1,10 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const formatter = require(path.join(ROOT, 'modules/erp/response-formatter'));
+const formatter = require(path.join(ROOT, 'modules/erp/core/response-formatter'));
 
 const resposta = formatter.formatarAiSqlLocal([
   { ano_mes: 202601, cliente: 'Cliente A', valor_total: 100 },

@@ -7,13 +7,13 @@ const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const comissaoSpec = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec'));
+const comissaoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec'));
 
-const handlerPath = path.join(ROOT, 'modules/erp/comissao/ai-sql-handler-v2.js');
+const handlerPath = path.join(ROOT, 'modules/erp/totvs_protheus/comissao/ai-sql-handler-v2.js');
 const handlerFonte = fs.readFileSync(handlerPath, 'utf8');
 
-assert(handlerFonte.includes("../ia-owner/runner") || handlerFonte.includes('../ia-owner/runner'), 'handler de comissao deve usar ia-owner/runner');
-assert(handlerFonte.includes('./comissao-ia-owner-spec'), 'handler de comissao deve usar comissao-ia-owner-spec');
+assert(handlerFonte.includes("../../ia-owner/runner") || handlerFonte.includes('../../ia-owner/runner'), 'handler de comissao deve usar ia-owner/runner');
+assert(handlerFonte.includes('./comissao-ia-owner-spec'), 'handler de comissao deve usar comissao-ia-owner-spec Protheus');
 assert(!handlerFonte.includes(['comissao', 'contract'].join('-')), 'handler de comissao nao deve usar contrato legado');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(comissaoSpec);

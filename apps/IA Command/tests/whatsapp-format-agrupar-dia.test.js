@@ -1,10 +1,10 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const { prepararDadosComTotais } = require(path.join(ROOT, 'modules/erp/whatsapp-format-prompt'));
+const { prepararDadosComTotais } = require(path.join(ROOT, 'modules/erp/core/whatsapp-format-prompt'));
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function row(vencimento, saldo, fornecedor) {

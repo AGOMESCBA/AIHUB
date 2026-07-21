@@ -1,16 +1,16 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const routerSrc = fs.readFileSync(path.join(ROOT, 'modules/erp/intent-router.js'), 'utf8');
+const routerSrc = fs.readFileSync(path.join(ROOT, 'modules/erp/core/intent-router.js'), 'utf8');
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const financeiroSpec = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const financeiroSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 
-assert(routerSrc.includes("financeiro: './financeiro/ai-sql-handler-v2'"), 'financeiro deve estar habilitado no roteador');
+assert(routerSrc.includes("financeiro: './totvs_protheus/financeiro/ai-sql-handler-v2'"), 'financeiro deve estar habilitado no roteador');
 assert.strictEqual(financeiroSpec.nome, 'financeiro', 'spec financeiro deve identificar o modulo');
 assert.strictEqual(typeof financeiroSpec.resolverEntidades, 'function', 'spec financeiro deve resolver entidades');
 

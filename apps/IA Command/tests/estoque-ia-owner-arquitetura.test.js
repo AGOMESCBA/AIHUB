@@ -6,7 +6,8 @@ const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const estoqueSpec = require(path.join(ROOT, 'modules/erp/estoque/estoque-ia-owner-spec'));
+const sx2Normalizer = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx2-sql-normalizer'));
+const estoqueSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/estoque/estoque-ia-owner-spec'));
 
 const systemPrompt = promptBuilder.buildSystemPrompt(estoqueSpec);
 assert(systemPrompt.includes('Voce e o IA-OWNER do modulo estoque'), 'prompt deve declarar IA-OWNER de estoque');
@@ -40,6 +41,12 @@ const sx2 = {
   SBM990: 'E',
   SD3990: 'E',
 };
+
+const sqlComPlaceholderPrompt = "SET ROWCOUNT 50; SELECT SB2.B2_COD AS produto FROM SB2<010> SB2 JOIN SB1<990> SB1 ON SB2.B2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' ' WHERE SB2.D_E_L_E_T_ = ' '";
+const sqlPlaceholderNormalizado = sx2Normalizer.adaptarSqlCanonicoPorSX2(sqlComPlaceholderPrompt, sx2, { logPrefix: 'teste-estoque-placeholder' });
+assert(sqlPlaceholderNormalizado.includes('FROM SB2990 SB2'), 'placeholder SB2<...> deve usar tabela fisica do SX2 atual');
+assert(sqlPlaceholderNormalizado.includes('JOIN SB1990 SB1'), 'placeholder SB1<...> deve usar tabela fisica do SX2 atual');
+assert(!sqlPlaceholderNormalizado.includes('<010>') && !sqlPlaceholderNormalizado.includes('<990>'), 'placeholders <...> nao devem sobreviver no SQL final');
 
 const sqlRuim = `
 SELECT TOP 10000 SUM(SB2990.B2_QATU) AS saldo

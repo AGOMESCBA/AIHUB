@@ -6,7 +6,7 @@ const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const comissaoSpec = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec'));
+const comissaoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec'));
 
 const systemPrompt = promptBuilder.buildSystemPrompt(comissaoSpec);
 assert(systemPrompt.includes('Voce e o IA-OWNER do modulo comissao'), 'prompt deve declarar IA-OWNER de comissao');

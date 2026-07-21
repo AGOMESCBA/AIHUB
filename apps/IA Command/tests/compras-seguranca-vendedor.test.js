@@ -19,7 +19,7 @@ const { inicializarDB, getDB } = require(path.join(ROOT, 'modules/database/index
 inicializarDB();
 const crud = require(path.join(ROOT, 'modules/database/crud'));
 
-const comprasSpec = require(path.join(ROOT, 'modules/erp/compras/compras-ia-owner-spec'));
+const comprasSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
 
 const EMPRESA_ID = 1;
 const SENDER_VENDEDOR = '5565900000101';

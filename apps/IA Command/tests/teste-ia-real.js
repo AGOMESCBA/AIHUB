@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Teste de integração real com IA — IA Command
  *
@@ -37,7 +37,7 @@ svc._channelName = 'WhatsApp J2A Consultoria';
 svc._isSenderAuthorized = () => true;
 
 // Bypassa verificação de módulo (banco local tem modulo_* = 0; em prod estão habilitados)
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

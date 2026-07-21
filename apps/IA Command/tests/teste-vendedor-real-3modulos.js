@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Validacao manual REAL (contra a IA) dos cenarios de seguranca de vendedor
  * nos modulos faturamento, financeiro e compras. Usa o numero real fornecido
@@ -23,7 +23,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'teste-seguranca-vendedor-real';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

@@ -4,7 +4,7 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const { classificarFragmentos } = require(path.join(ROOT, 'modules/erp/comissao/comissao-spec-classifier'));
+const { classificarFragmentos } = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-spec-classifier'));
 
 let passou = 0;
 let falhou = 0;

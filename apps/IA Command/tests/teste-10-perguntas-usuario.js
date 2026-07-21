@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Validacao manual das 10 perguntas enviadas pelo usuario para avaliar a
  * fragmentacao do spec do financeiro (Fase 1) e o comportamento atual dos
@@ -27,7 +27,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'WhatsApp J2A Consultoria';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

@@ -1,7 +1,7 @@
-'use strict';
+﻿'use strict';
 
-const aiProviderClient    = require('../../erp/ai-provider-client');
-const whatsappFormatPrompt = require('../../erp/whatsapp-format-prompt');
+const aiProviderClient    = require('../../erp/core/ai-provider-client');
+const whatsappFormatPrompt = require('../../erp/core/whatsapp-format-prompt');
 
 function _brl(v) {
   const n = parseFloat(v);

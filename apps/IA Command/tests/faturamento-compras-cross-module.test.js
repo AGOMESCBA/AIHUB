@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
@@ -6,9 +6,9 @@ const ROOT = path.resolve(__dirname, '..');
 
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
-const { combinarSpecs } = require(path.join(ROOT, 'modules/erp/cross-module-spec-combiner'));
-const faturamentoSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
-const comprasSpec = require(path.join(ROOT, 'modules/erp/compras/compras-ia-owner-spec'));
+const { combinarSpecs } = require(path.join(ROOT, 'modules/erp/core/cross-module-spec-combiner'));
+const faturamentoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec'));
+const comprasSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
 
 const spec = combinarSpecs([faturamentoSpec, comprasSpec]);
 

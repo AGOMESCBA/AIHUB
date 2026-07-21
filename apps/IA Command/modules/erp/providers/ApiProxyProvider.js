@@ -131,13 +131,24 @@ function _resolverParams(sql, params) {
   return result;
 }
 
+function _aplicarTopPadraoSqlServer(sql, limite) {
+  const n = Math.min(Math.max(Number(limite) || 10000, 1), 50000);
+  const texto = String(sql || '');
+  if (/\bOFFSET\b[\s\S]*\bFETCH\s+NEXT\b/i.test(texto)) return texto;
+  const corrigido = texto.replace(/\bSELECT\s+TOP\s+(\(?\d+\)?)\s+DISTINCT\b/i, 'SELECT DISTINCT TOP $1');
+  if (corrigido !== texto) return corrigido;
+  if (/\bSELECT\s+(?:DISTINCT\s+)?TOP\s+\(?\d+\)?\b/i.test(texto)) return texto;
+
+  return texto.replace(/\bSELECT\s+DISTINCT\b/i, `SELECT DISTINCT TOP ${n}`);
+}
+
 async function executar(conn, query, params = {}) {
   const apiKey   = conn.password;
-  const sqlFinal = _resolverParams(query, params);
   const url      = _buildUrl(conn, '/execute');
   const cryptoAtivo = conn.crypto_ativo === true || conn.crypto_ativo === 1;
 
   const limit = Math.min(conn.limite_max || 10000, 50000);
+  const sqlFinal = _aplicarTopPadraoSqlServer(_resolverParams(query, params), limit);
   const requestId = crypto.randomUUID();
   const plainBody = {
     sql:        sqlFinal,
@@ -203,4 +214,4 @@ async function testar(conn) {
 // Fechar não se aplica a providers HTTP (sem pool permanente)
 async function fechar() {}
 
-module.exports = { executar, testar, fechar };
+module.exports = { executar, testar, fechar, _test: { _aplicarTopPadraoSqlServer } };

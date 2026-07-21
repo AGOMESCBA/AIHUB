@@ -4,9 +4,9 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const compras = require(path.join(ROOT, 'modules/erp/compras/ai-sql-handler-v2'));
-const catalog = require(path.join(ROOT, 'modules/erp/compras/entity-catalog'));
-const guard   = require(path.join(ROOT, 'modules/erp/entity-sql-guard'));
+const compras = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/ai-sql-handler-v2'));
+const catalog = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/entity-catalog'));
+const guard   = require(path.join(ROOT, 'modules/erp/totvs_protheus/guards/entity-sql-guard'));
 
 // ── Contrato de API do handler v2 ─────────────────────────────────────────────
 

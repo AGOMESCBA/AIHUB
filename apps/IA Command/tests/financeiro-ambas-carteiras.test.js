@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Testes para carteira='ambas' no módulo financeiro.
@@ -14,9 +14,9 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const queryPlan = require(path.join(ROOT, 'modules/erp/query-plan'));
+const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const runner    = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const financeiroSpec = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const financeiroSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 
 const { _extrairLabelIntencao, _buildContextoConsulta, _buildContextoFormatacao, construirQueryPlanTecnico } = runner._test;
 

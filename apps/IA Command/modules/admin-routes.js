@@ -1342,7 +1342,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const empresaId = eid(req);
 
     // Garante que a intenção compras_dinamico existe para esta empresa (bootstrap automático)
-    try { require('./erp/compras/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+    try { require('./erp/totvs_protheus/compras/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
 
     const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
     const inicio = String(req.query.inicio || '').trim();
@@ -1382,7 +1382,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const db = getDB();
     const empresaId = eid(req);
 
-    try { require('./erp/faturamento/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+    try { require('./erp/totvs_protheus/faturamento/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
 
     const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
     const inicio = String(req.query.inicio || '').trim();
@@ -1422,7 +1422,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const db = getDB();
     const empresaId = eid(req);
 
-    try { require('./erp/financeiro/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+    try { require('./erp/totvs_protheus/financeiro/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
 
     const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
     const inicio = String(req.query.inicio || '').trim();
@@ -1462,7 +1462,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const db = getDB();
     const empresaId = eid(req);
 
-    try { require('./erp/comissao/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+    try { require('./erp/totvs_protheus/comissao/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
 
     const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
     const inicio = String(req.query.inicio || '').trim();
@@ -1503,7 +1503,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     const empresaId = eid(req);
 
     // Garante que a intenção estoque_dinamico existe para esta empresa (bootstrap automático)
-    try { require('./erp/estoque/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
+    try { require('./erp/totvs_protheus/estoque/ai-sql-handler-v2').garantirIntencao(empresaId); } catch (_) {}
 
     const limit  = Math.min(parseInt(req.query.limit  || '500', 10), 2000);
     const inicio = String(req.query.inicio || '').trim();

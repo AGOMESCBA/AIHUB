@@ -1,6 +1,6 @@
-'use strict';
+﻿'use strict';
 
-const aiProviderClient = require('../erp/ai-provider-client');
+const aiProviderClient = require('../erp/core/ai-provider-client');
 
 const MODULOS_DINAMICOS = new Set(['financeiro', 'compras', 'faturamento', 'comissao', 'estoque']);
 

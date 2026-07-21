@@ -1,9 +1,9 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Testes para duas alterações no IA Command:
  *
- *   1. enriquecerContratoComGroupBy (modules/erp/query-plan.js)
+ *   1. enriquecerContratoComGroupBy (modules/erp/core/query-plan.js)
  *      Garante que o group_by acumulado pelo merger sobrescreve agrupamentos
  *      menores vindos do orquestrador (que só vê o turno atual).
  *
@@ -15,7 +15,7 @@ const assert = require('assert');
 const path   = require('path');
 const ROOT   = path.resolve(__dirname, '..');
 
-const { enriquecerContratoComGroupBy } = require(path.join(ROOT, 'modules/erp/query-plan'));
+const { enriquecerContratoComGroupBy } = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const { mesclar }                       = require(path.join(ROOT, 'modules/ai/intent-merger'));
 
 let passou = 0;

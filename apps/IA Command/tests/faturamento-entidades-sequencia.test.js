@@ -5,10 +5,10 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
-const entitySqlGuard = require(path.join(ROOT, 'modules/erp/entity-sql-guard'));
+const entitySqlGuard = require(path.join(ROOT, 'modules/erp/totvs_protheus/guards/entity-sql-guard'));
 const entityResolver = require(path.join(ROOT, 'modules/ai/entity-resolver'));
-const faturamentoSpec = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-ia-owner-spec'));
-const entityCatalog = require(path.join(ROOT, 'modules/erp/faturamento/entity-catalog'));
+const faturamentoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec'));
+const entityCatalog = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/entity-catalog'));
 
 async function main() {
   assert.strictEqual(faturamentoSpec.resolverEntidadesAntesDaIa, true, 'faturamento deve resolver entidades antes da primeira IA-OWNER');

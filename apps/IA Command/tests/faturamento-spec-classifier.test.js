@@ -8,7 +8,7 @@ const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const { classificarFragmentos } = require(path.join(ROOT, 'modules/erp/faturamento/faturamento-spec-classifier'));
+const { classificarFragmentos } = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-spec-classifier'));
 
 let passou = 0;
 let falhou = 0;

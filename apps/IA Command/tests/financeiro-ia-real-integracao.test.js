@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 /**
  * Teste de integração com IA REAL — módulo financeiro
@@ -20,11 +20,11 @@ const { inicializarDB } = require(path.join(ROOT, 'modules/database/index'));
 inicializarDB();
 
 // ── Módulos do sistema ─────────────────────────────────────────────────────
-const aiProviderClient = require(path.join(ROOT, 'modules/erp/ai-provider-client'));
+const aiProviderClient = require(path.join(ROOT, 'modules/erp/core/ai-provider-client'));
 const promptBuilder    = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
-const queryPlan        = require(path.join(ROOT, 'modules/erp/query-plan'));
-const financeiroSpec   = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
-const normalizer       = require(path.join(ROOT, 'modules/erp/sx2-sql-normalizer'));
+const queryPlan        = require(path.join(ROOT, 'modules/erp/core/query-plan'));
+const financeiroSpec   = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
+const normalizer       = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/sx2-sql-normalizer'));
 const runner           = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 
 // ── Contexto simulado (espelho exato do log com erro) ─────────────────────

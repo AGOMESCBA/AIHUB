@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Teste de integração CAIEIRA — IA Command
  *
@@ -30,7 +30,7 @@ svc._channelId   = 'emp_1';
 svc._channelName = 'WhatsApp J2A Consultoria';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

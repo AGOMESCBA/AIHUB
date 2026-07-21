@@ -1,10 +1,10 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path   = require('path');
 const ROOT   = path.resolve(__dirname, '..');
 
-const fmt    = require(path.join(ROOT, 'modules/erp/whatsapp-format-prompt'));
+const fmt    = require(path.join(ROOT, 'modules/erp/core/whatsapp-format-prompt'));
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 const { _extrairLabelIntencao, _buildContextoConsulta } = runner._test;
 

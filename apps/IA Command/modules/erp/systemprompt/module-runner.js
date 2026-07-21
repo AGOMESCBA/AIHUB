@@ -1,14 +1,14 @@
 'use strict';
 
 const connectionFactory = require('../providers/connection-factory');
-const aiProviderClient  = require('../ai-provider-client');
-const { _periodoAtualPorTextoSemAno } = require('../temporal-contract');
+const aiProviderClient  = require('../core/ai-provider-client');
+const { _periodoAtualPorTextoSemAno } = require('../core/temporal-contract');
 const { identificarPeriodoTexto, resolverPeriodo } = require('../../ai/period-resolver');
-const aiSqlGeneration   = require('../ai-sql-generation');
-const sx3SqlValidator   = require('../sx3-sql-validator');
-const sx2SqlNormalizer  = require('../sx2-sql-normalizer');
-const entitySqlGuard    = require('../entity-sql-guard');
-const responseFormatter = require('../response-formatter');
+const aiSqlGeneration   = require('../core/ai-sql-generation');
+const sx3SqlValidator   = require('../totvs_protheus/SX/sx3-sql-validator');
+const sx2SqlNormalizer  = require('../totvs_protheus/SX/sx2-sql-normalizer');
+const entitySqlGuard    = require('../totvs_protheus/guards/entity-sql-guard');
+const responseFormatter = require('../core/response-formatter');
 
 function baseTabelaSX2(nome) {
   return sx2SqlNormalizer.baseTabelaSX2(nome);

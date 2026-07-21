@@ -20,11 +20,11 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   require('../cloud_extension/agente-local-routes')(app, { requireAuth, requireIaCommand });
 
   // Rotas do middleware SQL Protheus
-  require('./erp/compras/middleware-routes')(app, { requireAuth, requireIaCommand });
+  require('./erp/totvs_protheus/compras/middleware-routes')(app, { requireAuth, requireIaCommand });
 
   // Rotas do dicionário SX2 do Protheus
-  require('./erp/SX/sx2-routes')(app, { requireAuth, requireIaCommand });
-  require('./erp/SX/sx3-routes')(app, { requireAuth, requireIaCommand });
+  require('./erp/totvs_protheus/SX/sx2-routes')(app, { requireAuth, requireIaCommand });
+  require('./erp/totvs_protheus/SX/sx3-routes')(app, { requireAuth, requireIaCommand });
 
   // Rotas do painel administrativo (intenções, datasets, logs)
   require('./admin-routes')(app, { requireAuth, requireIaCommand });

@@ -1,10 +1,10 @@
-'use strict';
+﻿'use strict';
 
 const assert = require('assert');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
-const temporal = require(path.join(ROOT, 'modules/erp/temporal-contract'));
+const temporal = require(path.join(ROOT, 'modules/erp/core/temporal-contract'));
 
 const hoje = new Date('2026-05-24T12:00:00');
 

@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Testes de integracao da fragmentacao de spec ponta a ponta.
  *
@@ -15,9 +15,9 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
-const crossModuleSpecCombiner = require(path.join(ROOT, 'modules/erp/cross-module-spec-combiner'));
-const comissaoSpec = require(path.join(ROOT, 'modules/erp/comissao/comissao-ia-owner-spec'));
-const financeiroSpec = require(path.join(ROOT, 'modules/erp/financeiro/financeiro-ia-owner-spec'));
+const crossModuleSpecCombiner = require(path.join(ROOT, 'modules/erp/core/cross-module-spec-combiner'));
+const comissaoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/comissao/comissao-ia-owner-spec'));
+const financeiroSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 
 let passou = 0;
 let falhou = 0;

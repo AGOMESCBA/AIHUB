@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Validacao manual REAL (contra a IA) de que o perfil GESTOR continua com
  * acesso total nos modulos faturamento, financeiro e compras — sem nenhuma
@@ -21,7 +21,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'teste-seguranca-gestor-real';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

@@ -1,6 +1,6 @@
-const crud        = require('./database/crud');
+﻿const crud        = require('./database/crud');
 const factory     = require('./erp/providers/connection-factory');
-const erpRegistry = require('./erp/erp-registry');
+const erpRegistry = require('./erp/core/erp-registry');
 const { requireRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 

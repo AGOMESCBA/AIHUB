@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Reexecucao das 4 perguntas usadas nesta sessao de correcao, para empresa 4 (CAIEIRA):
  * faturamento, carregamento, cross-modulo (compras x faturamento) e estoque.
@@ -18,7 +18,7 @@ const { inicializarDB } = require(BASE_DIR + '/modules/database/index');
 inicializarDB();
 
 const intentService = require(BASE_DIR + '/modules/ai/intent-service');
-const intentRouter  = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter  = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }

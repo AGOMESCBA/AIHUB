@@ -3,14 +3,14 @@
 const fs = require('fs');
 const path = require('path');
 const connectionFactory = require('../providers/connection-factory');
-const aiProviderClient = require('../ai-provider-client');
-const sx2SqlNormalizer = require('../sx2-sql-normalizer');
-const sx3SqlValidator = require('../sx3-sql-validator');
-const entitySqlGuard = require('../entity-sql-guard');
-const responseFormatter = require('../response-formatter');
+const aiProviderClient = require('../core/ai-provider-client');
+const sx2SqlNormalizer = require('../totvs_protheus/SX/sx2-sql-normalizer');
+const sx3SqlValidator = require('../totvs_protheus/SX/sx3-sql-validator');
+const entitySqlGuard = require('../totvs_protheus/guards/entity-sql-guard');
+const responseFormatter = require('../core/response-formatter');
 const channelStore = require('../../whatsapp/channel-store');
-const queryPlan = require('../query-plan');
-const canonicalWhatsappFormat = require('../canonical-whatsapp-format');
+const queryPlan = require('../core/query-plan');
+const canonicalWhatsappFormat = require('../core/canonical-whatsapp-format');
 const promptBuilder = require('./prompt-builder');
 const entityResolver = require('../../ai/entity-resolver');
 const periodResolver = require('../../ai/period-resolver');
@@ -2519,7 +2519,7 @@ function _buildContextoFormatacao(mensagem = '', contextoConsulta = null) {
 async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodoResolvido = null, protheus = null, empresaId = null) {
   if (typeof spec.formatarResposta === 'function') return spec.formatarResposta({ mensagem, rows, keys, cfg });
   if (!rows || !rows.length) return mensagemErro(spec, 'sem_resultado');
-  const whatsappFormat = require('../whatsapp-format-prompt');
+  const whatsappFormat = require('../core/whatsapp-format-prompt');
   const contextoConsulta = _buildContextoConsulta(intent, periodoResolvido, mensagem);
 
   if (protheus?.conexaoId && empresaId) {
@@ -2638,7 +2638,12 @@ function interpolarRespostaPlanejada(template, rows = []) {
 }
 
 async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem }) {
-  const sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
+  let sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
+  sqlEntradaNormalizado = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(sqlEntradaNormalizado, sx2, {
+    logPrefix: spec.logPrefix,
+    sufixoFallback: inferirSufixoSX2(sx2, protheus?.sufixoTabela),
+  });
+  sqlEntradaNormalizado = sx2SqlNormalizer.sanitizarEspacosKeywords(sqlEntradaNormalizado);
   const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2, mensagem);
   if (!validacaoBasica.ok) {
     // Acumula também erros do query_plan para que o retry receba todos os problemas de uma vez,
@@ -3113,7 +3118,7 @@ async function executar(spec, intent, empresaId) {
         ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent, plano.obj.periodo || null, protheus, empresaId)
         : mensagemErro(spec, 'sem_resultado');
       // Formatter programático tem prioridade sobre template planejado pela IA (evita Total Geral errado em comparativos)
-      const _wf = require('../whatsapp-format-prompt');
+      const _wf = require('../core/whatsapp-format-prompt');
       const _comparativo = rows?.length
         ? _wf.buildFormatComparativoSimples(rows, {
             contextoConsulta: _buildContextoConsulta(intent, plano.obj.periodo || null, mensagem),
@@ -3311,7 +3316,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null, protheus, empresaId)
         : mensagemErro(spec, 'sem_resultado');
       // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
-      const _wfD = require('../whatsapp-format-prompt');
+      const _wfD = require('../core/whatsapp-format-prompt');
       const _comparativoD = rows?.length
         ? _wfD.buildFormatComparativoSimples(rows, {
             contextoConsulta: _buildContextoConsulta(intent, intent._periodoCanonicoResolvido || null, intent._mensagemOriginal || 'consulta'),

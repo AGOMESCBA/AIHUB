@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 /**
  * Validacao manual REAL (contra a IA) dos cenarios de seguranca de vendedor
  * no modulo comissao. Usa 2 numeros de teste temporarios cadastrados em
@@ -20,7 +20,7 @@ svc._channelId  = 'emp_1';
 svc._channelName = 'teste-seguranca';
 svc._isSenderAuthorized = () => true;
 
-const intentRouter = require(BASE_DIR + '/modules/erp/intent-router');
+const intentRouter = require(BASE_DIR + '/modules/erp/core/intent-router');
 if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
   intentRouter._verificarAutorizacaoModulo = () => null;
 }
