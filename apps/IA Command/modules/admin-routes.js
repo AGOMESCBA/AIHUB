@@ -179,9 +179,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const select = db.prepare('SELECT * FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND numero = ?');
     const insert = db.prepare(`
       INSERT INTO whatsapp_allowed_numbers
-        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, modulo_estoque, erp_tipo, erp_id, criado_em, atualizado_em)
+        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, modulo_estoque, erp_tipo, erp_id, cod_aprov_erp, criado_em, atualizado_em)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const update = db.prepare(`
       UPDATE whatsapp_allowed_numbers
@@ -195,6 +195,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
              modulo_estoque = ?,
              erp_tipo = ?,
              erp_id = ?,
+             cod_aprov_erp = ?,
              atualizado_em = ?
        WHERE id = ?
     `);
@@ -215,6 +216,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         const observacoes = item.observacoes !== undefined ? (item.observacoes || null) : (existente?.observacoes || null);
         const erpTipo = campos.erp_tipo ?? existente?.erp_tipo ?? null;
         const erpId = campos.erp_id ?? existente?.erp_id ?? null;
+        const codAprovErp = campos.cod_aprov_erp ?? existente?.cod_aprov_erp ?? null;
         if (existente) {
           update.run(
             nome,
@@ -227,6 +229,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             campos.modulo_estoque ?? existente.modulo_estoque ?? 0,
             erpTipo,
             erpId,
+            codAprovErp,
             agora,
             existente.id
           );
@@ -247,6 +250,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             campos.modulo_estoque ?? 0,
             erpTipo,
             erpId,
+            codAprovErp,
             agora,
             agora
           );
@@ -337,6 +341,11 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     }
     if (body.erp_id !== undefined) {
       campos.erp_id = String(body.erp_id || '').trim().toUpperCase() || null;
+    }
+    // Codigo de aprovador ERP (SCR.CR_APROV/SAK.AK_COD) — independente de erp_tipo/erp_id,
+    // permite o mesmo numero ser vendedor E aprovador simultaneamente.
+    if (body.cod_aprov_erp !== undefined) {
+      campos.cod_aprov_erp = String(body.cod_aprov_erp || '').trim().toUpperCase() || null;
     }
     return campos;
   }

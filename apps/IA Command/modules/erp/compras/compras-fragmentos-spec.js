@@ -258,18 +258,21 @@ ${joinAprovador}
 - SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
 - Quando o usuario pedir "por aprovador", agrupe pelo aprovador (SCR.CR_APROV ou SAK.AK_NOME conforme disponibilidade) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
 - Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado (resultado final). SCR detalha o FLUXO de aprovacao (quem, em que nivel, em que status) que levou (ou nao) a essa liberacao. Para perguntas "por aprovador" ou sobre o fluxo/alcada, use SCR — nao tente derivar aprovador a partir de SC7.
+- REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido (SUM(SC7.C7_TOTAL)) na projecao, mesmo que o usuario nao peca valor explicitamente. SCR e cabecalho, mas SC7 e tabela de ITEM (varias linhas por pedido) — para nao duplicar o numero do pedido em N linhas, agrupe por SCR.CR_NUM (e demais colunas de identificacao) com SUM(SC7.C7_TOTAL) AS valor_pedido. Uma listagem de pedidos SEM nenhuma coluna de valor monetario e uma listagem incompleta — sempre agregue e exiba o valor.
 
 ### EXEMPLO CORRETO — pedidos de compra pendentes de liberacao, agrupados por aprovador
 SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
        CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
        SCR.CR_NUM AS numero_pedido,
-       SCR.CR_STATUS AS status_aprovacao
+       SCR.CR_STATUS AS status_aprovacao,
+       SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SCRxxx SCR
 JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.D_E_L_E_T_ = ' '
 ${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
   AND SCR.CR_TIPO = 'PC'
   AND SCR.CR_STATUS IN ('01', '02')
   AND SCR.CR_EMISSAO BETWEEN '20260701' AND '20260731'
+GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM, SCR.CR_STATUS
 ORDER BY ${temNomeAprovador ? 'SAK.AK_NOME' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM;
 `;
 }

@@ -914,6 +914,13 @@ const MIGRATIONS = [
       ALTER TABLE whatsapp_allowed_numbers ADD COLUMN modulo_estoque INTEGER DEFAULT 0;
     `,
   },
+  {
+    version: 52,
+    descricao: 'IA Command - codigo de aprovador ERP (SCR.CR_APROV/SAK.AK_COD) em whatsapp_allowed_numbers',
+    sql: `
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN cod_aprov_erp TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

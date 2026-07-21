@@ -13,11 +13,15 @@ const _RE_CAMPO_SOMAVEL    = /valor|total|saldo|juros|multa|desconto|vlr|vl_|bru
 const _RE_CAMPO_QUANTIDADE = /^qtd|^qt_|quantidade|^volume/i;
 const _RE_CAMPO_MEDIA      = /media|medio|ticket|avg|average|pct|percent|percentual|taxa|indice|proporcao/i;
 const _RE_CAMPO_PERCENTUAL = /crescimento|variacao|pct|percent|percentual|margem/i;
+// Identificadores/códigos nunca são somáveis mesmo casando em _RE_CAMPO_SOMAVEL
+// (ex: "numero_pedido" contém "pedido", mas é rótulo, não valor monetário).
+const _RE_CAMPO_IDENTIFICADOR = /^(numero|num|nro|nr|codigo|cod|id|seq)_|_(numero|num|nro|nr|codigo|cod|id)$/i;
 
 function _calcularTotais(rows) {
   if (!rows || !rows.length) return {};
   const totais = {};
   for (const campo of Object.keys(rows[0])) {
+    if (_RE_CAMPO_IDENTIFICADOR.test(campo)) continue;
     if (_RE_CAMPO_MEDIA.test(campo)) continue;
     if (!_RE_CAMPO_SOMAVEL.test(campo) && !_RE_CAMPO_QUANTIDADE.test(campo)) continue;
     const soma = rows.reduce((acc, row) => {
@@ -119,7 +123,7 @@ function _formatarFallback(rows, mensagemOriginal) {
     const partes = Object.entries(row)
       .filter(([, v]) => v !== null && v !== undefined && v !== '')
       .map(([k, v]) => {
-        const isMonetario = _RE_CAMPO_SOMAVEL.test(k) && !_RE_CAMPO_MEDIA.test(k) && !_RE_CAMPO_QUANTIDADE.test(k);
+        const isMonetario = _RE_CAMPO_SOMAVEL.test(k) && !_RE_CAMPO_MEDIA.test(k) && !_RE_CAMPO_QUANTIDADE.test(k) && !_RE_CAMPO_IDENTIFICADOR.test(k);
         const isPercentual = _RE_CAMPO_PERCENTUAL.test(k);
         if (isMonetario) return `${k}: *${_brl(v)}*`;
         if (isPercentual) {

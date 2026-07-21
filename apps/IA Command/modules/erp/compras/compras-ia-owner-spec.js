@@ -6,6 +6,7 @@ const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./compras-fragmentos-spec');
 const { classificarFragmentos } = require('./compras-spec-classifier');
 const { resolverVendedorFixoPorEmpresa } = require('../vendedor-seguranca');
+const { resolverAprovadorFixoPorEmpresa } = require('../aprovador-seguranca');
 
 const TABELAS = ['SF1', 'SD1', 'SF2', 'SD2', 'SB1', 'SBM', 'SA2', 'SC7', 'CTT', 'SED', 'SF4', 'SCR', 'SAK'];
 
@@ -118,7 +119,21 @@ function prepararIntent({ intent, empresaId, mensagem }) {
     };
   }
 
-  // gestor ou sem_restricao: acesso total, sem filtro
+  // gestor ou sem_restricao: acesso total, sem filtro por padrao — mas se o numero tiver
+  // cod_aprov_erp cadastrado, disponibiliza o codigo no contexto tecnico para a IA aplicar
+  // SOMENTE quando a pergunta usar linguagem de posse ("meus pedidos", "para eu aprovar").
+  // Diferente do vendedorFixo (sempre restrito), aqui o filtro e condicional a intencao —
+  // um gestor com codigo de aprovador cadastrado ainda pode consultar todos os aprovadores.
+  const resolucaoAprovador = resolverAprovadorFixoPorEmpresa(remetente, empresaId);
+  if (resolucaoAprovador.estado === 'aprovador') {
+    return {
+      contextoTecnicoExtra: {
+        aprovadorFixo: { codigo: resolucaoAprovador.codigo, nome: resolucaoAprovador.nome },
+        regraAprovadorFixo: `O numero que enviou esta pergunta tem o codigo de aprovador ERP "${resolucaoAprovador.codigo}" cadastrado (SCR.CR_APROV/SAK.AK_COD). Use SCR.CR_APROV = '${resolucaoAprovador.codigo}' SOMENTE quando a pergunta usar linguagem de posse referente ao proprio remetente — ex: "meus pedidos pendentes", "pedidos para eu aprovar", "minha alcada", "o que eu preciso liberar". Quando a pergunta for generica sobre aprovadores (ex: "pedidos pendentes por aprovador", "pedidos do aprovador X"), NAO aplique esse filtro — retorne todos os aprovadores normalmente.`,
+      },
+    };
+  }
+
   return {};
 }
 
@@ -324,6 +339,43 @@ module.exports = {
         return (
           'AVG(SD1.D1_TOTAL) ou AVG(SF1.F1_VALBRUT) com GROUP BY na mesma camada calcula o ticket medio por nota dentro de cada periodo, NAO a media do total comprado entre os periodos. ' +
           'Monte a estrutura de duas camadas: subquery interna agrupada por periodo com SUM() (nao AVG), e query externa com AVG(h.<coluna_soma>) sobre os totais da subquery.'
+        );
+      },
+    },
+    {
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bpor\s+aprovador\b/.test(texto);
+        if (!pedeAprovador) return null;
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaSCR) return null;
+        const temCrAprov = /\bSCR\s*\.\s*CR_APROV\b/i.test(sql);
+        const temJoinSak = /\bJOIN\s+\w*SAK\w*\s+SAK\b/i.test(sql);
+        if (temCrAprov || temJoinSak) return null;
+        return (
+          'A pergunta pede "por aprovador", mas o SQL usa SCR sem projetar/agrupar SCR.CR_APROV nem fazer JOIN com SAK. ' +
+          'Adicione SCR.CR_APROV (ou LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD para exibir o nome) no SELECT e no GROUP BY — sem essa coluna a consulta nao identifica QUEM precisa aprovar, apenas lista os pedidos.'
+        );
+      },
+    },
+    {
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const linguagemPosse = /\bmeus?\s+pedidos?\b/.test(texto)
+          || /\bpara\s+eu\s+aprovar\b/.test(texto)
+          || /\bminha\s+al[cç]ada\b/.test(texto)
+          || /\bpendentes?\s+de\s+aprova[cç][aã]o\s+(?:pra|para)\s+mim\b/.test(texto)
+          || /\bo\s+que\s+eu\s+preciso\s+liberar\b/.test(texto);
+        if (!linguagemPosse) return null;
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaSCR) return null;
+        // Exige comparacao com literal (SCR.CR_APROV = '000001') — projecao em COALESCE/SELECT
+        // (ex: COALESCE(SAK.AK_NOME, SCR.CR_APROV)) nao filtra nada, so exibe o codigo.
+        const temFiltroCrAprov = /\bSCR\s*\.\s*CR_APROV\s*=\s*'/i.test(sql);
+        if (temFiltroCrAprov) return null;
+        return (
+          'A pergunta usa linguagem de posse ("meus pedidos", "para eu aprovar", "minha alcada") indicando que o remetente quer ver APENAS os pedidos pendentes para o proprio codigo de aprovador. ' +
+          'Verifique se o contexto tecnico trouxe aprovadorFixo.codigo e regraAprovadorFixo — se sim, adicione AND SCR.CR_APROV = \'<codigo do aprovadorFixo>\' no WHERE. Sem esse filtro a consulta retorna pedidos de TODOS os aprovadores, nao apenas os do remetente.'
         );
       },
     },

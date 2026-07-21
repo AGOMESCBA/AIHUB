@@ -259,11 +259,12 @@
                             <th style="min-width:170px">Nome no contato</th>
                             <th style="min-width:220px">Modulos</th>
                             <th style="width:120px">Perfil ERP</th>
-                            <th style="width:130px">Cod. ERP</th>
+                            <th style="width:130px">Cod Vend ERP</th>
+                            <th style="width:130px">Cod Aprov ERP</th>
                           </tr>
                         </thead>
                         <tbody id="empresas-tbody">
-                          <tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
+                          <tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -429,11 +430,12 @@
               <th style="min-width:170px">Nome no contato</th>
               <th style="min-width:220px">Modulos</th>
               <th style="width:120px">Perfil ERP</th>
-              <th style="width:130px">Cod. ERP</th>
+              <th style="width:130px">Cod Vend ERP</th>
+              <th style="width:130px">Cod Aprov ERP</th>
             </tr>
           </thead>
           <tbody id="empresas-global-tbody">
-            <tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
+            <tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
           </tbody>
         </table>
       </div>
@@ -609,7 +611,7 @@
       ? `${empresas.length} empresa atual disponivel para este contato.`
       : 'Nenhuma empresa disponivel para seu usuario.';
     if (!empresas.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
       sincronizarResumoEmpresaAtual();
       return;
     }
@@ -640,6 +642,7 @@
             </select>
           </td>
           <td><input type="text" data-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase"></td>
+          <td><input type="text" data-access="cod_aprov_erp" value="${esc(row?.cod_aprov_erp || '')}" style="text-transform:uppercase"></td>
         </tr>
       `;
     }).join('');
@@ -663,6 +666,7 @@
         modulo_estoque: get('modulo_estoque')?.checked ? 1 : 0,
         erp_tipo: get('erp_tipo')?.value || null,
         erp_id: (get('erp_id')?.value || '').trim().toUpperCase() || null,
+        cod_aprov_erp: (get('cod_aprov_erp')?.value || '').trim().toUpperCase() || null,
       };
     });
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas`, {
@@ -684,10 +688,10 @@
     document.getElementById('global-access-overlay').classList.add('open');
     document.getElementById('global-access-feedback').textContent = '';
     document.getElementById('global-access-subtitle').textContent = `${nome || 'Contato WhatsApp'} - ${formatarNumero(numero)}`;
-    document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Carregando empresas...</td></tr>';
+    document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Carregando empresas...</td></tr>';
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas-global`);
     if (!res.ok) {
-      document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nao foi possivel carregar os acessos globais.</td></tr>';
+      document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nao foi possivel carregar os acessos globais.</td></tr>';
       return;
     }
     acessosGlobaisContato = await res.json();
@@ -706,7 +710,7 @@
     const tbody = document.getElementById('empresas-global-tbody');
     const empresas = acessosGlobaisContato.empresas || [];
     if (!empresas.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel para seu usuario.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel para seu usuario.</td></tr>';
       return;
     }
     const nomeFallback = document.getElementById('f-nome').value || '';
@@ -740,6 +744,7 @@
             </select>
           </td>
           <td><input type="text" data-global-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase"></td>
+          <td><input type="text" data-global-access="cod_aprov_erp" value="${esc(row?.cod_aprov_erp || '')}" style="text-transform:uppercase"></td>
         </tr>
       `;
     }).join('');
@@ -763,6 +768,7 @@
         modulo_estoque: get('modulo_estoque')?.checked ? 1 : 0,
         erp_tipo: get('erp_tipo')?.value || null,
         erp_id: (get('erp_id')?.value || '').trim().toUpperCase() || null,
+        cod_aprov_erp: (get('cod_aprov_erp')?.value || '').trim().toUpperCase() || null,
       };
     });
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas-global`, {
