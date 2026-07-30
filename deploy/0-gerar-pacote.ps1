@@ -20,6 +20,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Projeto: $PROJECT_ROOT"
 Write-Host "Saida:   $OUTPUT_PATH"
+Write-Host "Seguro:  nao inclui banco, .env, uploads, sessoes ou dados locais"
 Write-Host ""
 
 # Pastas/arquivos excluidos do pacote (dados locais, secrets e artefatos de trabalho)
@@ -127,6 +128,58 @@ foreach ($file in $files) {
 
 $zip.Dispose()
 
+function Test-ZipEntryUnsafe {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    $entryName = $Name.Replace('\', '/')
+
+    if ($entryName -notmatch '^iahub(/|$)') {
+        return "fora da pasta iahub"
+    }
+
+    if ($entryName -match '(^|/)\.\.(/|$)|^[A-Za-z]:') {
+        return "caminho invalido"
+    }
+
+    if ($entryName -match '^iahub/(data|uploads|sessions|\.wwebjs_auth|\.wwebjs_cache|logs|backups|node_modules)(/|$)') {
+        return "diretorio protegido"
+    }
+
+    if ($entryName -match '(^|/)\.env$|(^|/)data\.json$|\.(db|sqlite|sqlite3|sqlite-wal|sqlite-shm)$') {
+        return "arquivo protegido"
+    }
+
+    return $null
+}
+
+$zipCheck = [System.IO.Compression.ZipFile]::OpenRead($OUTPUT_PATH)
+try {
+    $unsafeEntries = @()
+    foreach ($entry in $zipCheck.Entries) {
+        $motivo = Test-ZipEntryUnsafe -Name $entry.FullName
+        if ($motivo) {
+            $unsafeEntries += [pscustomobject]@{
+                FullName = $entry.FullName
+                Motivo   = $motivo
+            }
+        }
+    }
+} finally {
+    $zipCheck.Dispose()
+}
+
+if ($unsafeEntries.Count -gt 0) {
+    Remove-Item $OUTPUT_PATH -Force
+    Write-Host "ERRO: pacote cancelado porque continha caminhos protegidos." -ForegroundColor Red
+    $unsafeEntries | Select-Object -First 30 | ForEach-Object {
+        Write-Host "  - $($_.FullName) [$($_.Motivo)]" -ForegroundColor Yellow
+    }
+    exit 1
+}
+
 if ($skipped.Count -gt 0) {
     Write-Host ""
     Write-Host "Arquivos pulados ($($skipped.Count)):" -ForegroundColor Yellow
@@ -141,6 +194,7 @@ Write-Host "  Pacote criado com sucesso!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Arquivo: $OUTPUT_PATH  ($sizeMB MB)" -ForegroundColor Cyan
+Write-Host "Validacao: pacote sem dados, banco, .env, uploads ou sessoes." -ForegroundColor Green
 Write-Host ""
 Write-Host "Proximos passos:" -ForegroundColor Yellow
 Write-Host "  1. Envie o ZIP para a pasta C:\Web\iahub\deploy do servidor"

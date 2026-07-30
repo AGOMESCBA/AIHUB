@@ -16,6 +16,7 @@ const { inicializarConfig }         = require('./modules/configuracoes/database'
 const sistemasDb                    = require('./modules/sistemas/database');
 const { inicializarSistemas }       = sistemasDb;
 const { requireSystemAccess }       = require('./modules/sistemas/access');
+const permissoesDb                  = require('./modules/permissoes/database');
 const { APPS, LEGACY_STATIC_DIRS }   = require('./apps/registry');
 const iahubData                     = require('./apps/IAHUB/backend/data-paths');
 
@@ -406,6 +407,11 @@ io.on('connection', (socket) => {
   socket.on('join-iac-console', () => {
     const sess = socket.request.session;
     if (!sess?.authenticated) return;
+    if (sess.role !== 'admin') {
+      const empresaId = Number(sess.empresa_id || 0);
+      const rotinas = empresaId ? permissoesDb.getRotinas(sess.user_id, empresaId) : [];
+      if (!Array.isArray(rotinas) || !rotinas.includes('iac-console-servidor')) return;
+    }
     socket.join('iac-console');
     _consoleBuffer.forEach(entry => socket.emit('iac-console', entry));
   });

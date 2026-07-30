@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Log de Execuções — IA Command</title>
+  <title>Auditoria de Consultas IA — IA Command</title>
   <link rel="stylesheet" href="/css/iahub.css">
-  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
   <style>
     :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
     .sidebar-logo .logo-icon { background:#7c3aed !important; }
@@ -21,27 +20,61 @@
 
     .ctrl-bar       { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
     .ctrl-bar-left  { min-width:0; }
-    .ctrl-bar-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.25;display:flex;align-items:baseline;gap:8px; }
+    .ctrl-bar-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.2;display:flex;align-items:baseline;gap:8px; }
     .ctrl-count     { font-size:12px;color:var(--text-lo);font-weight:400; }
     .ctrl-bar-right { display:flex;gap:8px;align-items:center;flex-shrink:0; }
 
-    .filter-bar     { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm); }
-    .filter-bar-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px; }
-    .filter-bar-row .form-control { height:34px;font-size:13px; }
-    .filter-bar-row input.form-control  { flex:1;min-width:180px; }
-    .filter-bar-row select.form-control { width:auto;min-width:150px; }
-
-    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
-    .gp-label     { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .group-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:12px; }
+    .group-panel-row { display:flex;align-items:center;gap:12px;flex-wrap:wrap; }
+    .group-panel-status { font-size:12px;color:var(--text-lo); }
+    .group-panel-options { display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
+    .group-panel.open .group-panel-options { display:flex; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .group-chip { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:12px;font-weight:700;padding:0 10px;cursor:pointer; }
+    .group-chip:hover, .group-chip.active { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-target-row { flex:1 1 100%;display:flex;align-items:center;gap:12px;margin-top:2px; }
+    .group-target-row .btn { flex-shrink:0; }
+    .group-panel .filter-bar-row { display:none; }
+    .group-panel .gp-chips-row, .group-panel .group-target-row { display:none; }
+    .group-panel.open .gp-chips-row { display:flex; }
+    .group-panel.open .group-target-row { display:flex; }
+    .group-panel .gp-chips-row { align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border); }
+    .group-panel #dz { margin-top:0; }
+    .group-dropzone { flex:1;min-width:260px;min-height:38px;border:1px dashed var(--border);border-radius:7px;background:var(--bg-base);color:var(--text-lo);display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;font-size:12px; }
+    .group-dropzone.drag-over { border-color:var(--accent);background:var(--accent-glow);color:var(--accent); }
+    .active-group-chip { display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-glow);color:var(--accent);font-size:12px;font-weight:700;padding:4px 8px; }
+    .active-group-remove { border:none;background:transparent;color:inherit;font-weight:900;line-height:1;cursor:pointer;padding:0 1px;font-size:14px; }
+    .status-text { display:none;font-size:12px;color:var(--text-lo); }
 
     .badge-ok   { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dcfce7;color:#15803d; }
     .badge-fail { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fee2e2;color:#b91c1c; }
     .badge-warn { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fef9c3;color:#854d0e; }
     .badge-info { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8; }
     .badge-neutro { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .badge-cache-ok { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#dcfce7;color:#15803d; }
+    .badge-cache-pend { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#fef9c3;color:#854d0e; }
+    .badge-cache-block { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#fee2e2;color:#b91c1c; }
+    .badge-cache-off { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:var(--bg-base);color:var(--text-lo);border:1px solid var(--border); }
 
     .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--text-md);transition:background .15s,color .15s; }
     .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .grid-text-preview { display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;line-height:1.35;word-break:break-word; }
+    .grid-text-preview.question { color:var(--text-hi);font-weight:700; }
+    .loading-panel {
+      display:none; align-items:center; justify-content:center; flex-direction:column; gap:10px;
+      min-height:220px; color:var(--text-md); background:var(--bg-card);
+      border:1px solid var(--border); border-radius:var(--radius);
+      box-shadow:var(--shadow-sm); margin-bottom:10px;
+    }
+    .loading-panel.show { display:flex; }
+    .loading-spinner {
+      width:28px; height:28px; border-radius:50%;
+      border:3px solid rgba(124,58,237,.18); border-top-color:var(--accent);
+      animation: spin .8s linear infinite;
+    }
+    .loading-copy { font-size:14px;font-weight:600;color:var(--text-hi); }
+    .loading-hint { font-size:12px;color:var(--text-lo); }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Detalhe / Abas ─────────────────────────────────────────────────────── */
     .detail-tab-bar {
@@ -69,6 +102,10 @@
     .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
     .meta-item span { color:var(--text-lo);font-size:11px;display:block;margin-bottom:4px; }
     .meta-item strong { color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .question-box { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:18px; }
+    .question-box .lbl { font-size:11px;font-weight:700;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px; }
+    .question-box pre { font-family:inherit;font-size:14px;font-weight:600;color:var(--text-hi);white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.55; }
+    .audit-grid { display:grid;grid-template-columns:1fr 1fr;gap:14px; }
 
     /* Aba 2 — SQL splitter */
     .split-wrap {
@@ -98,7 +135,7 @@
       color:var(--text-md); background:var(--bg-base);
     }
 
-    /* Aba 3 — Detalhes técnicos */
+    /* Abas tecnicas */
     .tech-pre {
       background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);
       padding:14px;font-family:ui-monospace,monospace;font-size:12px;
@@ -122,16 +159,39 @@
     .cleanup-warning { background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.5;margin-top:12px; }
     .cleanup-error { color:#b91c1c;font-size:13px;margin-top:10px;display:none; }
 
-    .tabulator { border:none !important; background:transparent !important; }
-    .tabulator .tabulator-header { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; }
-    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important; border-right:none !important; color:var(--text-lo) !important; font-size:11px !important; font-weight:700 !important; text-transform:uppercase; letter-spacing:.05em; }
-    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
-    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important; color:var(--text-hi) !important; border:1px solid var(--border) !important; border-radius:4px !important; font-size:11px !important; padding:3px 6px !important; width:100% !important; }
-    .tabulator .tabulator-row { background:var(--bg-card) !important; border-bottom:1px solid var(--border) !important; cursor:pointer; }
-    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
-    .tabulator .tabulator-row .tabulator-cell { border-right:none !important; color:var(--text-md); font-size:13px; padding:10px 12px !important; }
-    .tabulator .tabulator-row.tabulator-group { background:var(--bg-base) !important; border-bottom:1px solid var(--border) !important; font-size:12px !important; font-weight:700 !important; color:var(--text-lo) !important; }
-    .tabulator .tabulator-placeholder { background:var(--bg-card) !important; }
+    .audit-table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .audit-table-wrap { height:calc(100vh - 240px);min-height:360px;overflow:auto;background:var(--bg-card); }
+    .audit-table { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .audit-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
+    .audit-table thead th.sortable { cursor:pointer;user-select:none; }
+    .audit-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
+    .audit-table thead .filter-cell th { top:34px;padding:6px 10px;background:var(--bg-card); }
+    .audit-table thead input, .audit-table thead select { width:100%;height:26px;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);font-size:11px;padding:3px 6px;box-sizing:border-box; }
+    .audit-table tbody td { border-bottom:1px solid var(--border);color:var(--text-md);padding:10px;vertical-align:top;background:var(--bg-card); }
+    .audit-table tbody tr.data-row { cursor:pointer; }
+    .audit-table tbody tr.data-row:hover td { background:var(--bg-hover); }
+    .audit-table tbody tr.group-row td { background:var(--bg-base);color:var(--text-hi);font-weight:800;font-size:12px;padding:8px 10px;border-bottom:1px solid var(--border); }
+    .audit-table tbody tr.group-row { cursor:pointer; }
+    .audit-table tbody tr.group-row:hover td { background:var(--bg-hover); }
+    .audit-table tbody tr.group-row.level-1 td { padding-left:28px; }
+    .audit-table tbody tr.group-row.level-2 td { padding-left:46px; }
+    .audit-table tbody tr.group-row.level-3 td { padding-left:64px; }
+    .group-toggle-btn { width:22px;height:22px;border:1px solid var(--border);border-radius:5px;background:var(--bg-card);color:var(--text-hi);font-size:14px;font-weight:900;line-height:1;cursor:pointer;margin-right:8px;vertical-align:middle; }
+    .group-toggle-btn:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .group-row-label { vertical-align:middle; }
+    .empty-state { height:320px;display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:22px;font-weight:800; }
+    .col-action { width:42px;text-align:center; }
+    .col-date { width:155px; }
+    .col-user { width:150px; }
+    .col-question { width:260px; }
+    .col-intent { width:170px; }
+    .col-module { width:120px; }
+    .col-status { width:130px; }
+    .col-cache { width:125px; }
+    .col-template { width:95px;text-align:center; }
+    .col-key { width:100px; }
+    .col-ms { width:90px; }
+    .col-type { width:95px; }
 
     /* Help drawer */
     .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
@@ -152,6 +212,7 @@
 
     @media (max-width: 860px) {
       .meta-grid { grid-template-columns:1fr 1fr; }
+      .audit-grid { grid-template-columns:1fr; }
       .split-wrap { flex-direction:column; height:auto; }
       .split-handle { display:none; }
       .split-pane-left { border-right:none; border-bottom:1px solid var(--border); }
@@ -179,7 +240,7 @@
           <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Log de Execuções</span>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command ›</span> Auditoria de Consultas IA</span>
     </div>
 
     <div class="page-content">
@@ -190,7 +251,7 @@
           <div class="ctrl-bar-left">
             <div class="page-kicker">Administração</div>
             <div class="ctrl-bar-title">
-              Log de Execuções
+              Auditoria de Consultas IA
               <span id="count" class="ctrl-count">—</span>
             </div>
           </div>
@@ -204,9 +265,14 @@
           </div>
         </div>
 
-        <div class="filter-bar">
+        <div class="group-panel" id="group-panel">
+          <div class="group-panel-row">
+            <button class="btn btn-ghost" id="group-toggle" type="button">+ Mostrar agrupamento</button>
+            <span class="group-panel-status" id="group-status">Sem agrupamento ativo</span>
+            <span class="status-text" id="filter-status">Sem filtros ativos</span>
+          </div>
           <div class="filter-bar-row">
-            <input id="f-intent" type="text" class="form-control" placeholder="Filtrar por intenção…" oninput="filtrar()">
+            <input id="f-intent" type="text" class="form-control" placeholder="Buscar intenção, pergunta, chave ou SQL…" oninput="filtrar()">
             <select id="f-sucesso" class="form-control" onchange="filtrar()">
               <option value="">Todos os status</option>
               <option value="sucesso">Sucesso</option>
@@ -214,6 +280,21 @@
               <option value="sem_dados">Sem dados</option>
               <option value="dialogo">Diálogo</option>
               <option value="desconhecido">Desconhecido</option>
+            </select>
+            <select id="f-cache" class="form-control" onchange="filtrar()">
+              <option value="">Todos os caches</option>
+              <option value="confiavel">Confiável</option>
+              <option value="pendente">Pendente</option>
+              <option value="bloqueado_feedback">Bloqueado por feedback</option>
+              <option value="inapto_status">Inapto</option>
+            </select>
+            <select id="f-modulo" class="form-control" onchange="filtrar()">
+              <option value="">Todos os módulos</option>
+              <option value="financeiro">Financeiro</option>
+              <option value="compras">Compras</option>
+              <option value="faturamento">Faturamento</option>
+              <option value="comissao">Comissão</option>
+              <option value="estoque">Estoque</option>
             </select>
             <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
           </div>
@@ -224,7 +305,49 @@
         </div>
 
         <div class="card" style="padding:0;overflow:hidden">
-          <div id="tabela"></div>
+          <div id="loading-panel" class="loading-panel" aria-live="polite" aria-busy="false">
+            <div class="loading-spinner"></div>
+            <div class="loading-copy">Carregando auditoria...</div>
+            <div class="loading-hint">Buscando execuções, intents canônicos e templates SQL.</div>
+          </div>
+          <div class="audit-table-wrap" id="tabela">
+            <table class="audit-table">
+              <thead>
+                <tr>
+                  <th class="col-action"></th>
+                  <th class="col-date sortable" draggable="true" data-group-field="criado_data" data-sort="criado_em">Data/Hora</th>
+                  <th class="col-question sortable" draggable="true" data-group-field="texto_original" data-sort="texto_original">Pergunta</th>
+                  <th class="col-user sortable" draggable="true" data-group-field="numero_wa" data-sort="numero_wa">Usuario / Remetente</th>
+                  <th class="col-intent sortable" draggable="true" data-group-field="intencao" data-sort="intencao">Intencao</th>
+                  <th class="col-module sortable" draggable="true" data-group-field="modulo" data-sort="modulo">Modulo</th>
+                  <th class="col-status sortable" draggable="true" data-group-field="status" data-sort="status">Status</th>
+                  <th class="col-cache sortable" draggable="true" data-group-field="cache_status" data-sort="cache_status">Cache</th>
+                  <th class="col-template sortable" draggable="true" data-group-field="template_flag" data-sort="template_flag">Template</th>
+                  <th class="col-key sortable" data-sort="chave_cache">Chave</th>
+                  <th class="col-ms sortable" data-sort="duracao_ms">Proc.</th>
+                  <th class="col-ms sortable" data-sort="entregue_ms">Entregue</th>
+                  <th class="col-type sortable" draggable="true" data-group-field="tipo_mensagem" data-sort="tipo_mensagem">Tipo</th>
+                </tr>
+                <tr class="filter-cell">
+                  <th></th>
+                  <th></th>
+                  <th><input data-filter="texto_original" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="numero_wa" autocomplete="off" spellcheck="false"></th>
+                  <th><input data-filter="intencao" autocomplete="off" spellcheck="false"></th>
+                  <th><select data-filter="modulo" autocomplete="off"><option value="">Todos</option><option value="financeiro">Financeiro</option><option value="compras">Compras</option><option value="faturamento">Faturamento</option><option value="comissao">Comissao</option><option value="estoque">Estoque</option></select></th>
+                  <th><select data-filter="status" autocomplete="off"><option value="">Todos</option><option value="sucesso">Sucesso</option><option value="erro">Erro</option><option value="sem_dados">Sem dados</option><option value="dialogo">Dialogo</option><option value="desconhecido">Desconhecido</option></select></th>
+                  <th><select data-filter="cache_status" autocomplete="off"><option value="">Todos</option><option value="confiavel">Confiavel</option><option value="pendente">Pendente</option><option value="bloqueado_feedback">Bloqueado</option><option value="inapto_status">Inapto</option></select></th>
+                  <th><select data-filter="template_flag" autocomplete="off"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Nao</option></select></th>
+                  <th><input data-filter="chave_cache" autocomplete="off" spellcheck="false"></th>
+                  <th></th>
+                  <th></th>
+                  <th><select data-filter="tipo_mensagem" autocomplete="off"><option value="">Todos</option><option value="texto">Texto</option><option value="audio">Audio</option><option value="imagem">Imagem</option></select></th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+            <div class="empty-state" id="empty-state" style="display:none">Nenhuma execucao registrada.</div>
+          </div>
         </div>
       </div><!-- /sec-lista -->
 
@@ -244,12 +367,17 @@
           <!-- Abas -->
           <div class="detail-tab-bar" style="margin-top:16px">
             <button class="detail-tab active" onclick="ativarAba('aba-geral',this)">Dados gerais</button>
-            <button class="detail-tab" onclick="ativarAba('aba-sql',this)">SQL / Auditoria</button>
-            <button class="detail-tab" onclick="ativarAba('aba-tech',this)">Detalhes técnicos</button>
+            <button class="detail-tab" onclick="ativarAba('aba-intent',this)">Intent / Cache</button>
+            <button class="detail-tab" onclick="ativarAba('aba-sql',this)">SQL / Template</button>
+            <button class="detail-tab" onclick="ativarAba('aba-tech',this)">JSON bruto</button>
           </div>
 
           <!-- Aba 1 — Dados gerais -->
           <div id="aba-geral" class="detail-tab-panel active">
+            <div class="question-box">
+              <div class="lbl">Pergunta original</div>
+              <pre id="d-texto-original">(sem texto)</pre>
+            </div>
             <div class="meta-grid">
               <div class="meta-item"><span>Data/Hora</span><strong id="d-data">-</strong></div>
               <div class="meta-item"><span>Remetente</span><strong id="d-remetente">-</strong></div>
@@ -264,11 +392,26 @@
               <div class="meta-item"><span>Escopo</span><strong id="d-escopo">-</strong></div>
               <div class="meta-item"><span>SQL canônico</span><strong id="d-canonico">-</strong></div>
               <div class="meta-item"><span>Reuso canônico</span><strong id="d-reuso">-</strong></div>
+              <div class="meta-item"><span>Cache da consulta</span><strong id="d-cache-status">-</strong></div>
+              <div class="meta-item"><span>Chave cache</span><strong id="d-cache-key" style="font-size:11px;word-break:break-all">-</strong></div>
               <div class="meta-item"><span>ID correlação</span><strong id="d-id" style="font-size:11px;word-break:break-all">-</strong></div>
             </div>
           </div>
 
-          <!-- Aba 2 — SQL / Auditoria -->
+          <!-- Aba 2 - Intent / Cache -->
+          <div id="aba-intent" class="detail-tab-panel">
+            <div class="audit-grid">
+              <div>
+                <div class="tech-lbl">Intent Canônico</div>
+                <pre class="tech-pre" id="d-intent-canonico"></pre>
+              </div>
+              <div>
+                <div class="tech-lbl">Contrato Estrutural / Cache</div>
+                <pre class="tech-pre" id="d-cache-json"></pre>
+              </div>
+            </div>
+          </div>
+
           <div id="aba-sql" class="detail-tab-panel">
             <div class="split-wrap" id="split-wrap-sql">
               <div class="split-pane split-pane-left" id="pane-sql-final">
@@ -281,18 +424,22 @@
               <div class="split-handle" id="split-handle-sql" title="Arraste para redimensionar"></div>
               <div class="split-pane split-pane-right" id="pane-sql-audit">
                 <div class="split-pane-header">
-                  <span class="split-pane-title">Auditoria SQL completa</span>
-                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarEl('d-sql-audit')">Copiar</button>
+                  <span class="split-pane-title">SQL Template Parametrizado</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarEl('d-sql-template')">Copiar</button>
                 </div>
-                <pre class="split-pane-body" id="d-sql-audit"></pre>
+                <pre class="split-pane-body" id="d-sql-template"></pre>
               </div>
             </div>
           </div>
 
-          <!-- Aba 3 — Detalhes técnicos -->
+          <!-- Aba 4 - JSON bruto -->
           <div id="aba-tech" class="detail-tab-panel">
             <div style="margin-bottom:16px">
-              <div class="tech-lbl">detalhes_json (dados brutos)</div>
+              <div class="tech-lbl">Auditoria SQL completa</div>
+              <pre class="tech-pre" id="d-sql-audit"></pre>
+            </div>
+            <div style="margin-bottom:16px">
+              <div class="tech-lbl">execution_log + detalhes_json</div>
               <pre class="tech-pre" id="d-raw-json"></pre>
             </div>
           </div>
@@ -308,7 +455,7 @@
 <div class="detail-overlay" id="cleanup-overlay" onclick="if(event.target===this)fecharLimpeza()">
   <div class="detail-modal">
     <div class="detail-header">
-      <span class="detail-title">Limpar log de Execuções</span>
+      <span class="detail-title">Limpar auditoria de consultas IA</span>
       <button class="detail-close" onclick="fecharLimpeza()">×</button>
     </div>
     <div class="cleanup-options">
@@ -331,7 +478,7 @@
         <input id="cleanup-fim" class="form-control" type="date">
       </div>
     </div>
-    <div class="cleanup-warning">Esta ação remove definitivamente os registros do log de execuções. A auditoria da limpeza será registrada.</div>
+    <div class="cleanup-warning">Esta ação remove definitivamente os registros da auditoria de consultas IA. A auditoria da limpeza será registrada.</div>
     <div id="cleanup-error" class="cleanup-error"></div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
       <button class="btn btn-ghost" onclick="fecharLimpeza()">Cancelar</button>
@@ -340,14 +487,20 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
-<script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
-  let table, gp;
+  let table = null;
   let _dados = [];
-  let _quickFilterFn = null;
+  let _visiveis = [];
+  const gridState = {
+    sortField: 'criado_em',
+    sortDir: 'desc',
+    filters: {},
+    groupFields: [],
+    groupPanelOpen: false,
+    collapsedGroups: new Set(),
+  };
 
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -387,6 +540,39 @@
     if (v === 'sem_dados')    return '<span class="badge-warn">— Sem dados</span>';
     if (v === 'dialogo')      return '<span class="badge-info">💬 Diálogo</span>';
     return `<span class="badge-neutro">${esc(v || '?')}</span>`;
+  }
+
+  function cacheBadgeHtml(v) {
+    if (v === 'confiavel') return '<span class="badge-cache-ok">Confiavel</span>';
+    if (v === 'pendente') return '<span class="badge-cache-pend">Pendente</span>';
+    if (v === 'bloqueado_feedback') return '<span class="badge-cache-block">Bloqueado</span>';
+    if (v === 'inapto_status') return '<span class="badge-cache-off">Inapto</span>';
+    return '<span class="badge-cache-off">Sem cache</span>';
+  }
+
+  function moduloDoRow(row) {
+    const det = parseJson(row?.detalhes_json, {}) || {};
+    const intent = parseJson(row?.intent_canonico_json, null);
+    return row?.modulo || det.modulo || intent?.module || intent?.intent || '-';
+  }
+
+  function pretty(valor, vazio = '(sem dados registrados)') {
+    if (valor == null) return vazio;
+    if (typeof valor === 'string') return valor.trim() || vazio;
+    if (Array.isArray(valor) && !valor.length) return vazio;
+    if (typeof valor === 'object' && !Object.keys(valor).length) return vazio;
+    return JSON.stringify(valor, null, 2);
+  }
+
+  function setLoading(on, texto = 'Carregando auditoria...') {
+    const panel = document.getElementById('loading-panel');
+    const grid = document.getElementById('tabela');
+    if (!panel || !grid) return;
+    panel.classList.toggle('show', !!on);
+    panel.setAttribute('aria-busy', on ? 'true' : 'false');
+    const copy = panel.querySelector('.loading-copy');
+    if (copy) copy.textContent = texto;
+    grid.style.display = on && !table ? 'none' : '';
   }
 
   // ── Abas ──────────────────────────────────────────────────────────────────
@@ -458,13 +644,16 @@
   function verDetalhe(row) {
     const det = parseJson(row.detalhes_json, {}) || {};
     const aud = det.sql_auditoria || {};
+    const intentCanonico = parseJson(row.intent_canonico_json, null);
+    const intentEstrutural = parseJson(row.intent_canonico_estrutural_json, null);
 
     // Header
     const idCurto = String(row.correlation_id || '').slice(0,8) || '-';
-    document.getElementById('d-title-header').textContent = `Execução #${idCurto}`;
+    document.getElementById('d-title-header').textContent = `Auditoria #${idCurto}`;
     document.getElementById('d-subtitle-header').textContent = fmtData(row.criado_em) + (row.intencao ? ` · ${row.intencao}` : '');
 
     // Aba 1 — Dados gerais
+    document.getElementById('d-texto-original').textContent = row.texto_original || det.texto_original || '(sem texto registrado)';
     document.getElementById('d-data').textContent      = fmtData(row.criado_em);
     document.getElementById('d-remetente').textContent = fmtFone(row.numero_wa) || row.usuario || '-';
     document.getElementById('d-intencao').textContent  = row.intencao || '-';
@@ -472,16 +661,36 @@
     document.getElementById('d-duracao').textContent     = formatMs(row.duracao_ms);
     document.getElementById('d-entregue-ms').textContent = formatMs(row.entregue_ms);
     document.getElementById('d-tipo').textContent      = row.tipo_mensagem || '-';
-    document.getElementById('d-modulo').textContent    = det.modulo || '-';
+    document.getElementById('d-modulo').textContent    = moduloDoRow(row);
     document.getElementById('d-rows').textContent      = det.rows_count != null ? String(det.rows_count) : '-';
     document.getElementById('d-subtipo').textContent   = det.subtipo || '-';
     document.getElementById('d-escopo').textContent    = det.escopo_execucao || '-';
     document.getElementById('d-canonico').textContent  = det.sql_canonico_origem || '-';
     document.getElementById('d-reuso').textContent     = det.sql_canonico_reuso_motivo || (det.sql_canonico_reuso_permitido === false ? 'Não permitido' : '-');
+    document.getElementById('d-cache-status').innerHTML = cacheBadgeHtml(row.cache_status);
+    document.getElementById('d-cache-key').textContent = row.chave_cache || det.chave_cache || '-';
     document.getElementById('d-id').textContent        = row.correlation_id || '-';
 
-    // Aba 2 — SQL
+    // Aba 2 - Intent / Cache
+    document.getElementById('d-intent-canonico').textContent = pretty(intentCanonico, '(Intent Canonico nao registrado nesta execucao)');
+    document.getElementById('d-cache-json').textContent = pretty({
+      chave_cache: row.chave_cache || det.chave_cache || null,
+      intent_canonico_hash: row.intent_canonico_hash || null,
+      cache_status: row.cache_status || null,
+      confiavel_cache: row.confiavel_cache ?? null,
+      confiavel_cache_em: row.confiavel_cache_em || null,
+      prompt_version: row.prompt_version || intentCanonico?.prompt_version || null,
+      spec_version: row.spec_version || intentCanonico?.spec_version || null,
+      schema_version: row.schema_version || intentCanonico?.schema_version || null,
+      model: row.model || intentCanonico?.model || null,
+      structural: intentEstrutural,
+      validation: intentCanonico?.validation || det.intent_canonico_validation || null,
+      sql_template_parametros: det.sql_template_parametros || aud.sql_template_parametros || [],
+    });
+
+    // Aba 3 - SQL
     const sqlFinal =
+      row.sql_final_executado ||
       aud.sql_final_executado ||
       aud.sql_apos_sx2 ||
       aud.sql_apos_sx3 ||
@@ -490,14 +699,21 @@
       '(SQL não registrado nesta execução)';
 
     document.getElementById('d-sql-final').textContent = sqlFinal;
-    document.getElementById('d-sql-audit').textContent = Object.keys(aud).length
-      ? JSON.stringify(aud, null, 2)
-      : '(Auditoria SQL não registrada nesta execução)';
-
-    // Aba 3 — Detalhes técnicos
-    document.getElementById('d-raw-json').textContent = Object.keys(det).length
-      ? JSON.stringify(det, null, 2)
-      : '(Sem dados extras registrados)';
+    document.getElementById('d-sql-template').textContent = row.sql_template || aud.sql_template || '(template SQL nao registrado nesta execucao)';
+    document.getElementById('d-sql-audit').textContent = pretty({
+      ...aud,
+      intent_canonico: intentCanonico,
+      intent_canonico_hash: row.intent_canonico_hash || null,
+      chave_cache: row.chave_cache || det.chave_cache || null,
+      sql_final_executado: row.sql_final_executado || aud.sql_final_executado || null,
+      sql_template: row.sql_template || aud.sql_template || null,
+      sql_template_parametros: det.sql_template_parametros || aud.sql_template_parametros || [],
+      cache_status: row.cache_status || null,
+    }, '(Auditoria SQL nao registrada nesta execucao)');
+    document.getElementById('d-raw-json').textContent = pretty({
+      ...row,
+      detalhes_json_parseado: det,
+    }, '(Sem dados extras registrados)');
 
     // Ir para aba 1
     document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
@@ -512,6 +728,7 @@
   function fecharDetalhe() {
     document.getElementById('sec-detalhe').style.display = 'none';
     document.getElementById('sec-lista').style.display = '';
+    setTimeout(() => table?.redraw?.(true), 30);
   }
 
   // ── Filtros ───────────────────────────────────────────────────────────────
@@ -520,10 +737,25 @@
     if (_quickFilterFn) { table.removeFilter(_quickFilterFn); _quickFilterFn = null; }
     const b = document.getElementById('f-intent').value.trim().toLowerCase();
     const s = document.getElementById('f-sucesso').value;
-    if (b || s !== '') {
+    const cache = document.getElementById('f-cache').value;
+    const modulo = document.getElementById('f-modulo').value;
+    if (b || s !== '' || cache !== '' || modulo !== '') {
       _quickFilterFn = row => {
         if (s !== '' && row.status !== s) return false;
-        if (b && !(row.intencao || '').toLowerCase().includes(b)) return false;
+        if (cache !== '' && row.cache_status !== cache) return false;
+        if (modulo !== '' && moduloDoRow(row) !== modulo) return false;
+        if (b) {
+          const hay = [
+            row.intencao,
+            row.texto_original,
+            row.chave_cache,
+            row.intent_canonico_hash,
+            row.sql_template,
+            row.sql_final_executado,
+            row.detalhes_json,
+          ].filter(Boolean).join(' ').toLowerCase();
+          if (!hay.includes(b)) return false;
+        }
         return true;
       };
       table.addFilter(_quickFilterFn);
@@ -533,15 +765,33 @@
   function limparFiltros() {
     document.getElementById('f-intent').value  = '';
     document.getElementById('f-sucesso').value = '';
+    document.getElementById('f-cache').value = '';
+    document.getElementById('f-modulo').value = '';
     filtrar();
   }
 
   // ── Grid ──────────────────────────────────────────────────────────────────
   async function carregar() {
-    _dados = await fetch('/api/ia-command/admin/execucoes?limit=200').then(r => r.json()).catch(() => []);
-    document.getElementById('count').textContent = `• ${_dados.length} registro(s)`;
-    if (table) { table.replaceData(_dados); filtrar(); return; }
-    _criarTabela(_dados);
+    setLoading(true, 'Carregando auditoria...');
+    try {
+      const res = await fetch('/api/ia-command/admin/execucoes?limit=200');
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      _dados = await res.json();
+      document.getElementById('count').textContent = `• ${_dados.length} registro(s)`;
+      if (table) {
+        await table.replaceData(_dados);
+        filtrar();
+      } else {
+        _criarTabela(_dados);
+      }
+    } catch (err) {
+      document.getElementById('count').textContent = table
+        ? `• ${_dados.length} registro(s) · falha ao atualizar`
+        : '• erro ao carregar';
+      if (!table) _criarTabela([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function _criarTabela(data) {
@@ -566,14 +816,39 @@
         },
         { title: 'Data/Hora', field: 'criado_em', width: 155,
           formatter: c => fmtData(c.getValue()) },
+        { title: 'Pergunta', field: 'texto_original', minWidth: 220, headerFilter: true,
+          formatter: c => {
+            const v = c.getValue() || parseJson(c.getRow().getData().detalhes_json, {})?.texto_original || '';
+            return `<div class="grid-text-preview question" title="${esc(v)}">${esc(v || '-')}</div>`;
+          },
+        },
         { title: 'Usuário / Remetente', field: 'numero_wa', minWidth: 140, headerFilter: true,
           formatter: c => esc(fmtFone(c.getValue()) || c.getValue() || '—') },
         { title: 'Intenção', field: 'intencao', minWidth: 160, headerFilter: true,
           formatter: c => `<strong style="color:var(--text-hi)">${esc(c.getValue() || '—')}</strong>` },
+        { title: 'Modulo', field: 'modulo', width: 115,
+          headerFilter: 'select',
+          headerFilterParams: { values: { '':'Todos', 'financeiro':'Financeiro', 'compras':'Compras', 'faturamento':'Faturamento', 'comissao':'Comissao', 'estoque':'Estoque' } },
+          formatter: c => esc(moduloDoRow(c.getRow().getData())),
+        },
         { title: 'Status', field: 'status', width: 130,
           headerFilter: 'select',
           headerFilterParams: { values: { '':'Todos', 'sucesso':'Sucesso', 'erro':'Erro', 'sem_dados':'Sem dados', 'dialogo':'Diálogo', 'desconhecido':'Desconhecido' } },
           formatter: c => statusBadgeHtml(c.getValue()),
+        },
+        { title: 'Cache', field: 'cache_status', width: 120,
+          headerFilter: 'select',
+          headerFilterParams: { values: { '':'Todos', 'confiavel':'Confiavel', 'pendente':'Pendente', 'bloqueado_feedback':'Bloqueado', 'inapto_status':'Inapto' } },
+          formatter: c => cacheBadgeHtml(c.getValue()),
+        },
+        { title: 'Template', field: 'sql_template', width: 95, hozAlign: 'center',
+          formatter: c => c.getValue() ? '<span class="badge-cache-ok">Sim</span>' : '<span class="badge-cache-off">Nao</span>',
+        },
+        { title: 'Chave', field: 'chave_cache', width: 92,
+          formatter: c => {
+            const v = c.getValue() || '';
+            return v ? `<span title="${esc(v)}">${esc(v.slice(0, 8))}</span>` : '-';
+          },
         },
         { title: 'Proc.', field: 'duracao_ms', width: 85,
           formatter: c => {
@@ -602,6 +877,362 @@
   }
 
   // ── Limpeza ───────────────────────────────────────────────────────────────
+  function gridFieldLabel(field) {
+    return {
+      criado_data: 'Data',
+      criado_hora: 'Hora',
+      criado_em: 'Data/Hora',
+      texto_original: 'Pergunta',
+      numero_wa: 'Usuario / Remetente',
+      intencao: 'Intencao',
+      modulo: 'Modulo',
+      status: 'Status',
+      cache_status: 'Cache',
+      template_flag: 'Template',
+      chave_cache: 'Chave',
+      duracao_ms: 'Proc.',
+      duracao_faixa: 'Faixa Proc.',
+      entregue_ms: 'Entregue',
+      entregue_faixa: 'Faixa Entrega',
+      tipo_mensagem: 'Tipo',
+    }[field] || '';
+  }
+
+  function gridValue(row, field) {
+    if (field === 'criado_data') return fmtData(row.criado_em).slice(0, 10);
+    if (field === 'criado_hora') return fmtData(row.criado_em).slice(11, 19);
+    if (field === 'numero_wa') return fmtFone(row.numero_wa) || row.usuario || '-';
+    if (field === 'modulo') return moduloDoRow(row);
+    if (field === 'template_flag') return row.sql_template ? 'sim' : 'nao';
+    if (field === 'duracao_faixa') return tempoFaixa(row.duracao_ms);
+    if (field === 'entregue_faixa') return tempoFaixa(row.entregue_ms);
+    if (field === 'texto_original') {
+      const det = parseJson(row.detalhes_json, {}) || {};
+      return row.texto_original || det.texto_original || '';
+    }
+    return row[field] ?? '';
+  }
+
+  function tempoFaixa(ms) {
+    if (ms == null || ms === '') return 'Sem tempo';
+    const n = Number(ms);
+    if (!Number.isFinite(n)) return 'Sem tempo';
+    if (n < 1000) return '< 1s';
+    if (n < 3000) return '1s a 3s';
+    if (n < 5000) return '3s a 5s';
+    return '> 5s';
+  }
+
+  function groupDisplayValue(row, field) {
+    const value = gridValue(row, field);
+    if (field === 'template_flag') return value === 'sim' ? 'Sim' : 'Nao';
+    if (field === 'cache_status') return value || 'Sem cache';
+    return value || '-';
+  }
+
+  function protegerFiltroGrid(el) {
+    el.setAttribute('autocomplete', 'off');
+    el.setAttribute('name', `iac_audit_${el.dataset.filter || 'filter'}_${Date.now()}`);
+    if (el.tagName === 'INPUT') {
+      el.setAttribute('spellcheck', 'false');
+      el.setAttribute('autocapitalize', 'off');
+      el.setAttribute('readonly', 'readonly');
+      el.addEventListener('focus', () => {
+        el.removeAttribute('readonly');
+        limparFiltroFantasmaGrid(el);
+      }, { once: true });
+      el.addEventListener('keydown', () => { el.dataset.userTouched = '1'; });
+    }
+  }
+
+  function limparFiltroFantasmaGrid(el) {
+    if (!el || el.dataset.userTouched === '1') return false;
+    if (!String(el.value || '').trim()) return false;
+    el.value = '';
+    delete gridState.filters[el.dataset.filter];
+    return true;
+  }
+
+  function limparFiltrosFantasmaGrid() {
+    let mudou = false;
+    document.querySelectorAll('#tabela [data-filter]').forEach(el => {
+      mudou = limparFiltroFantasmaGrid(el) || mudou;
+    });
+    if (mudou) gridState.filters = {};
+  }
+
+  function filtrar() {
+    aplicarGrid();
+  }
+
+  function limparFiltros() {
+    document.querySelectorAll('#tabela [data-filter]').forEach(el => { el.value = ''; });
+    gridState.filters = {};
+    aplicarGrid();
+  }
+
+  async function carregar() {
+    setLoading(true, 'Carregando auditoria...');
+    try {
+      const res = await fetch('/api/ia-command/admin/execucoes?limit=200');
+      if (!res.ok) throw new Error(`Erro ${res.status}`);
+      _dados = await res.json();
+      table = true;
+      aplicarGrid();
+    } catch (err) {
+      document.getElementById('count').textContent = table
+        ? `• ${_dados.length} registro(s) · falha ao atualizar`
+        : '• erro ao carregar';
+      table = true;
+      _dados = Array.isArray(_dados) ? _dados : [];
+      aplicarGrid();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function _criarTabela(data) {
+    _dados = Array.isArray(data) ? data : [];
+    table = true;
+    aplicarGrid();
+  }
+
+  function aplicarGrid() {
+    limparFiltrosFantasmaGrid();
+    _visiveis = _dados.filter(row => {
+      for (const [field, raw] of Object.entries(gridState.filters)) {
+        const needle = String(raw || '').trim().toLowerCase();
+        if (!needle) continue;
+        const value = String(gridValue(row, field) || '').toLowerCase();
+        if (!value.includes(needle)) return false;
+      }
+      return true;
+    });
+    ordenarGrid();
+    renderTabelaGrid();
+    atualizarStatusGrid();
+  }
+
+  function ordenarGrid() {
+    const dir = gridState.sortDir === 'asc' ? 1 : -1;
+    const field = gridState.sortField;
+    _visiveis.sort((a, b) => {
+      const av = gridValue(a, field);
+      const bv = gridValue(b, field);
+      if (typeof av === 'number' || typeof bv === 'number') return ((Number(av) || 0) - (Number(bv) || 0)) * dir;
+      return String(av || '').localeCompare(String(bv || ''), 'pt-BR') * dir;
+    });
+  }
+
+  function atualizarStatusGrid() {
+    document.getElementById('count').textContent = `• ${_visiveis.length} de ${_dados.length} registro(s)`;
+    const activeFilters = Object.values(gridState.filters).filter(Boolean).length;
+    const filterStatus = document.getElementById('filter-status');
+    if (filterStatus) filterStatus.textContent = activeFilters ? `${activeFilters} filtro(s) ativo(s)` : 'Sem filtros ativos';
+    const groupStatus = document.getElementById('group-status');
+    if (groupStatus) {
+      groupStatus.textContent = gridState.groupFields.length
+        ? `Agrupamento ativo: ${gridState.groupFields.map(gridFieldLabel).join(' > ')}`
+        : 'Sem agrupamento ativo';
+    }
+  }
+
+  function renderTabelaGrid() {
+    renderGroupControlsGrid();
+    const tbody = document.getElementById('tbody');
+    const empty = document.getElementById('empty-state');
+    if (!_visiveis.length) {
+      tbody.innerHTML = '';
+      empty.style.display = 'flex';
+      return;
+    }
+    empty.style.display = 'none';
+    const parts = [];
+    if (gridState.groupFields.length) renderGroupedGrid(parts, _visiveis, gridState.groupFields, 0, '');
+    else _visiveis.forEach(row => parts.push(renderDataRowGrid(row)));
+    tbody.innerHTML = parts.join('');
+  }
+
+  function renderDataRowGrid(row) {
+    const key = esc(row.correlation_id || '');
+    const pergunta = gridValue(row, 'texto_original') || '-';
+    const chave = row.chave_cache || '';
+    const duracao = row.duracao_ms == null ? '-' : formatMs(row.duracao_ms);
+    const entregue = row.entregue_ms == null ? '-' : formatMs(row.entregue_ms);
+    return `<tr class="data-row" data-id="${key}">
+      <td><button class="btn-icon" data-view="${key}" title="Visualizar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></td>
+      <td>${esc(fmtData(row.criado_em))}</td>
+      <td><div class="grid-text-preview question" title="${esc(pergunta)}">${esc(pergunta)}</div></td>
+      <td>${esc(gridValue(row, 'numero_wa'))}</td>
+      <td><strong style="color:var(--text-hi)">${esc(row.intencao || '-')}</strong></td>
+      <td>${esc(moduloDoRow(row))}</td>
+      <td>${statusBadgeHtml(row.status)}</td>
+      <td>${cacheBadgeHtml(row.cache_status)}</td>
+      <td>${row.sql_template ? '<span class="badge-cache-ok">Sim</span>' : '<span class="badge-cache-off">Nao</span>'}</td>
+      <td>${chave ? `<span title="${esc(chave)}">${esc(chave.slice(0, 8))}</span>` : '-'}</td>
+      <td>${esc(duracao)}</td>
+      <td>${esc(entregue)}</td>
+      <td>${esc(row.tipo_mensagem || '-')}</td>
+    </tr>`;
+  }
+
+  function renderGroupedGrid(parts, rows, groups, level, prefix) {
+    const field = groups[level];
+    const buckets = new Map();
+    rows.forEach(row => {
+      const label = groupDisplayValue(row, field);
+      if (!buckets.has(label)) buckets.set(label, []);
+      buckets.get(label).push(row);
+    });
+    [...buckets.entries()].forEach(([label, items]) => {
+      const key = `${prefix}${field}:${label}`;
+      const collapsed = gridState.collapsedGroups.has(key);
+      const icon = collapsed ? '+' : '-';
+      parts.push(`<tr class="group-row level-${Math.min(level, 3)}" data-group-key="${esc(key)}"><td colspan="13"><button class="group-toggle-btn" data-group-toggle="${esc(key)}">${icon}</button><span class="group-row-label">${esc(gridFieldLabel(field))}: ${esc(label)} (${items.length})</span></td></tr>`);
+      if (collapsed) return;
+      if (level + 1 < groups.length) renderGroupedGrid(parts, items, groups, level + 1, `${key}|`);
+      else items.forEach(row => parts.push(renderDataRowGrid(row)));
+    });
+  }
+
+  function renderGroupControlsGrid() {
+    const row = document.getElementById('gp-chips-row');
+    const dz = document.getElementById('dz');
+    if (!row || !dz) return;
+    dz.classList.add('group-dropzone');
+    row.querySelectorAll('.group-chip').forEach(el => el.remove());
+    [
+      'criado_data',
+      'criado_hora',
+      'texto_original',
+      'numero_wa',
+      'intencao',
+      'modulo',
+      'status',
+      'cache_status',
+      'template_flag',
+      'chave_cache',
+      'duracao_faixa',
+      'entregue_faixa',
+      'tipo_mensagem',
+    ].forEach(field => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'group-chip' + (gridState.groupFields.includes(field) ? ' active' : '');
+      btn.draggable = true;
+      btn.dataset.groupField = field;
+      btn.textContent = gridFieldLabel(field);
+      btn.addEventListener('click', () => addGroupFieldGrid(field));
+      btn.addEventListener('dragstart', event => {
+        event.dataTransfer.setData('text/plain', field);
+        event.dataTransfer.effectAllowed = 'copy';
+      });
+      row.appendChild(btn);
+    });
+    dz.innerHTML = gridState.groupFields.length
+      ? gridState.groupFields.map(field => `<span class="active-group-chip">${esc(gridFieldLabel(field))}<button class="active-group-remove" type="button" data-remove-group="${esc(field)}" title="Remover agrupamento">x</button></span>`).join('')
+      : 'Solte um campo aqui para agrupar';
+  }
+
+  function addGroupFieldGrid(field) {
+    if (!gridFieldLabel(field) || gridState.groupFields.includes(field)) return;
+    limparFiltrosFantasmaGrid();
+    gridState.groupFields.push(field);
+    aplicarGrid();
+  }
+
+  function removeGroupFieldGrid(field) {
+    gridState.groupFields = gridState.groupFields.filter(item => item !== field);
+    gridState.collapsedGroups.clear();
+    aplicarGrid();
+  }
+
+  function bindGrid() {
+    document.querySelectorAll('#tabela [data-filter]').forEach(el => {
+      protegerFiltroGrid(el);
+      el.addEventListener('input', () => {
+        el.dataset.userTouched = '1';
+        gridState.filters[el.dataset.filter] = el.value;
+        aplicarGrid();
+      });
+      el.addEventListener('change', () => {
+        gridState.filters[el.dataset.filter] = el.value;
+        aplicarGrid();
+      });
+    });
+    document.querySelectorAll('#tabela th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const field = th.dataset.sort;
+        if (gridState.sortField === field) gridState.sortDir = gridState.sortDir === 'asc' ? 'desc' : 'asc';
+        else { gridState.sortField = field; gridState.sortDir = 'asc'; }
+        aplicarGrid();
+      });
+      th.addEventListener('dragstart', event => {
+        const field = th.dataset.groupField;
+        if (!field) return;
+        event.dataTransfer.setData('text/plain', field);
+        event.dataTransfer.effectAllowed = 'copy';
+      });
+    });
+    document.getElementById('tbody').addEventListener('click', event => {
+      const groupBtn = event.target.closest('[data-group-toggle]');
+      if (groupBtn) {
+        const key = groupBtn.dataset.groupToggle;
+        if (gridState.collapsedGroups.has(key)) gridState.collapsedGroups.delete(key);
+        else gridState.collapsedGroups.add(key);
+        renderTabelaGrid();
+        return;
+      }
+      const row = event.target.closest('tr.data-row');
+      if (!row) return;
+      const item = _dados.find(r => String(r.correlation_id || '') === row.dataset.id);
+      if (item) verDetalhe(item);
+    });
+    const toggle = document.getElementById('group-toggle');
+    toggle?.addEventListener('click', () => {
+      gridState.groupPanelOpen = !gridState.groupPanelOpen;
+      document.getElementById('group-panel').classList.toggle('open', gridState.groupPanelOpen);
+      toggle.textContent = gridState.groupPanelOpen ? '- Ocultar agrupamento' : '+ Mostrar agrupamento';
+      renderGroupControlsGrid();
+    });
+    const dz = document.getElementById('dz');
+    if (dz && !document.getElementById('group-target-row')) {
+      const targetRow = document.createElement('div');
+      targetRow.id = 'group-target-row';
+      targetRow.className = 'group-target-row';
+      dz.parentNode.insertBefore(targetRow, dz);
+      targetRow.appendChild(dz);
+    }
+    if (dz && !document.getElementById('group-clear')) {
+      const clear = document.createElement('button');
+      clear.className = 'btn btn-ghost';
+      clear.id = 'group-clear';
+      clear.type = 'button';
+      clear.textContent = 'Limpar agrupamento';
+      clear.addEventListener('click', () => {
+        gridState.groupFields = [];
+        gridState.collapsedGroups.clear();
+        aplicarGrid();
+      });
+      dz.parentNode.insertBefore(clear, dz);
+    }
+    dz?.addEventListener('dragover', event => { event.preventDefault(); dz.classList.add('drag-over'); });
+    dz?.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz?.addEventListener('drop', event => {
+      event.preventDefault();
+      dz.classList.remove('drag-over');
+      addGroupFieldGrid(event.dataTransfer.getData('text/plain'));
+    });
+    dz?.addEventListener('click', event => {
+      const btn = event.target.closest('[data-remove-group]');
+      if (btn) removeGroupFieldGrid(btn.dataset.removeGroup);
+    });
+    renderGroupControlsGrid();
+    setTimeout(() => { limparFiltrosFantasmaGrid(); aplicarGrid(); }, 250);
+  }
+
+  bindGrid();
+
   function abrirLimpeza() {
     const hoje = new Date().toISOString().slice(0,10);
     document.querySelector('input[name="cleanup-modo"][value="periodo"]').checked = true;
@@ -664,27 +1295,40 @@
 <div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
 <div class="help-drawer" id="help-drawer">
   <div class="help-drawer-header">
-    <span class="help-drawer-title">Ajuda — Log de Execuções</span>
+    <span class="help-drawer-title">Ajuda — Auditoria de Consultas IA</span>
     <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>
   <div class="help-drawer-body">
     <div class="help-section">
       <div class="help-section-title">O que aparece aqui</div>
-      <div class="help-item-desc">Cada linha representa uma consulta processada pelo motor de IA — seja via WhatsApp, seja via o chat interno. Clique em qualquer linha ou no ícone de olho para abrir o detalhe completo.</div>
+      <div class="help-item-desc">Cada linha representa uma consulta de IA auditável: pergunta original, intenção, Intent Canônico, status do cache, SQL final executado e template parametrizado.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Objetivo</div>
+      <div class="help-item-desc">Investigar uma execução específica e entender exatamente o que aconteceu: o que o usuário perguntou, qual caminho a IA escolheu, qual SQL foi executado, se houve cache e quanto tempo levou.</div>
     </div>
     <div class="help-section">
       <div class="help-section-title">Colunas</div>
       <div class="help-item"><div class="help-item-label">Data/Hora</div><div class="help-item-desc">Momento em que a consulta foi processada.</div></div>
       <div class="help-item"><div class="help-item-label">Usuário / Remetente</div><div class="help-item-desc">Número do WhatsApp ou usuário do chat interno que fez a pergunta.</div></div>
-      <div class="help-item"><div class="help-item-label">Intenção</div><div class="help-item-desc">Intenção identificada pela IA para a mensagem recebida.</div></div>
+      <div class="help-item"><div class="help-item-label">Pergunta / Intenção</div><div class="help-item-desc">Texto recebido e intenção identificada para a consulta.</div></div>
+      <div class="help-item"><div class="help-item-label">Cache</div><div class="help-item-desc">Mostra se a execução está pendente, confiável, inapta ou bloqueada por feedback para reaproveitamento determinístico.</div></div>
+      <div class="help-item"><div class="help-item-label">Template</div><div class="help-item-desc">Indica se existe SQL parametrizado salvo para reuso com novos períodos e filtros resolvidos.</div></div>
       <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc"><span style="color:#15803d;font-weight:600">✓ Sucesso</span> — consulta executada. <span style="color:#b91c1c;font-weight:600">✗ Erro</span> — falha (ver detalhe). <span style="color:#854d0e;font-weight:600">— Sem dados</span> — consulta executou mas retornou zero linhas.</div></div>
       <div class="help-item"><div class="help-item-label">Duração</div><div class="help-item-desc">Tempo total em milissegundos (IA + banco). Verde &lt; 1s, amarelo 1-3s, vermelho &gt; 3s.</div></div>
     </div>
     <div class="help-section">
       <div class="help-section-title">Abas do detalhe</div>
-      <div class="help-item"><div class="help-item-label">Dados gerais</div><div class="help-item-desc">Resumo dos metadados da execução: remetente, intenção, status, módulo, linhas retornadas e informações sobre o SQL canônico utilizado.</div></div>
-      <div class="help-item"><div class="help-item-label">SQL / Auditoria</div><div class="help-item-desc">Exibe lado a lado o SQL final executado e a auditoria completa em JSON. Use o botão Copiar para transportar o SQL para outro ambiente. Arraste a divisória para redimensionar.</div></div>
-      <div class="help-item"><div class="help-item-label">Detalhes técnicos</div><div class="help-item-desc">JSON bruto do campo <code>detalhes_json</code> — útil para diagnóstico avançado e debugging de reuso canônico.</div></div>
+      <div class="help-item"><div class="help-item-label">Dados gerais</div><div class="help-item-desc">Resumo operacional: pergunta, remetente, intenção, status, módulo, linhas retornadas e chave de cache.</div></div>
+      <div class="help-item"><div class="help-item-label">Intent / Cache</div><div class="help-item-desc">Mostra o Intent Canônico persistido e o contrato estrutural usado para cache, versionamento e quarentena.</div></div>
+      <div class="help-item"><div class="help-item-label">SQL / Template</div><div class="help-item-desc">Exibe lado a lado o SQL final executado e o template parametrizado usado no reuso determinístico.</div></div>
+      <div class="help-item"><div class="help-item-label">JSON bruto</div><div class="help-item-desc">Mostra execution_log, detalhes_json e auditoria SQL completa para diagnóstico avançado.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Exemplos práticos</div>
+      <div class="help-item"><div class="help-item-label">Resposta errada</div><div class="help-item-desc">Busque pelo texto da pergunta, abra o detalhe e compare intenção, SQL final e resposta entregue.</div></div>
+      <div class="help-item"><div class="help-item-label">Cache suspeito</div><div class="help-item-desc">Filtre por cache confiável ou bloqueado, abra o registro e confira a chave de cache e o template usado.</div></div>
+      <div class="help-item"><div class="help-item-label">Lentidão</div><div class="help-item-desc">Ordene por processamento ou entrega para encontrar consultas lentas e verificar se o problema veio da IA, do banco ou do volume retornado.</div></div>
       <div class="help-tip">Se muitas consultas retornam "intenção desconhecida", adicione mais exemplos de frases nas intenções relevantes.</div>
     </div>
   </div>

@@ -1,6 +1,6 @@
 const crud = require('./database/crud');
 const { getDB } = require('./database');
-const { requireRotina } = require('./permissions');
+const { requireRotina, requireAnyRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 const { normalizarTexto } = require('./ai/local-intent-resolver');
 const messageTemplates = require('./whatsapp/message-templates');
@@ -19,6 +19,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   const canDatasets  = requireRotina('iac-admin-datasets');
   const canExecucoes = requireRotina('iac-admin-execucoes');
   const canAuditoria = requireRotina('iac-admin-auditoria');
+  const canSpecFeedback = requireRotina('iac-admin-spec-feedback');
+  const canLogsConsultas = requireRotina('iac-admin-logs-consultas');
+  const canLerModulos = requireAnyRotina(['iac-admin-modulos', 'iac-admin-intencoes', 'iac-admin-datasets']);
 
   function _audit(req, acao, detalhes) {
     try {
@@ -88,6 +91,45 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       });
   }
 
+  function _idsEmpresasPermitidas(req, rotina = 'iac-admin-auditoria') {
+    const ids = _empresasPermitidas(req, rotina).map(e => Number(e.id)).filter(Boolean);
+    if (ids.length) return ids;
+    const atual = Number(eid(req));
+    return atual ? [atual] : [];
+  }
+
+  function _whereEmpresasPermitidas(req, rotina = 'iac-admin-auditoria') {
+    const ids = _idsEmpresasPermitidas(req, rotina);
+    if (!ids.length) return { where: '1 = 0', params: [], ids };
+    return {
+      where: `empresa_id IN (${ids.map(() => '?').join(',')})`,
+      params: ids,
+      ids,
+    };
+  }
+
+  function _empresasNlsqlDoCanal(req, rotina = 'iac-admin-auditoria') {
+    const channelStore = require('./whatsapp/channel-store');
+    const empresaAtual = eid(req);
+    const src = { ...(req.query || {}), ...(req.body || {}) };
+    const channelIdReq = String(src.channel_id || '').trim();
+    const numeroWa = String(src.numero_wa || src.numero || '').trim();
+    const canal = channelIdReq
+      ? channelStore.buscarCanalDaEmpresa(channelIdReq, empresaAtual)
+      : (channelStore.getDefaultForEmpresa(empresaAtual) || channelStore.ensureDefaultForEmpresa(empresaAtual));
+    const empresasCanal = canal?.id
+      ? channelStore.listarEmpresasDoCanal(canal.id)
+      : [{ empresa_id: empresaAtual, nome: `Empresa #${empresaAtual}` }];
+    const empresas = empresasCanal
+      .filter(e => _empresaPermitida(req, Number(e.empresa_id), rotina))
+      .filter(e => !numeroWa || channelStore.senderAutorizadoEmpresa(Number(e.empresa_id), numeroWa))
+      .map(e => ({ id: Number(e.empresa_id), nome: e.nome || `Empresa #${e.empresa_id}` }));
+    const fallback = empresas.length || numeroWa
+      ? empresas
+      : _empresasPermitidas(req, rotina).filter(e => Number(e.id) === Number(empresaAtual));
+    return { canal, empresas: fallback };
+  }
+
   // ────────────────────────────────────────────────────────────────────────────
   // MÓDULOS DE INTENÇÃO
   // ────────────────────────────────────────────────────────────────────────────
@@ -98,7 +140,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   });
 
   // Listagem pública (para selects nos formulários de intenção)
-  app.get('/api/ia-command/modulos', requireAuth, requireIaCommand, (req, res) => {
+  app.get('/api/ia-command/modulos', requireAuth, requireIaCommand, canLerModulos, (req, res) => {
     const rows = crud.listar('intention_modules', { empresa_id: eid(req), ativo: 1 });
     res.json(rows);
   });
@@ -798,6 +840,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
   const canSinonimos = requireRotina('iac-admin-sinonimos');
   const canNormalizacao = requireRotina('iac-admin-normalizacao');
+  const canLerSinonimosSistema = requireAnyRotina(['iac-admin-sinonimos', 'iac-admin-normalizacao']);
 
   function _seedarSistema(empresaId) {
     const { _SINONIMOS_SISTEMA } = require('./ai/intent-service');
@@ -859,7 +902,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   }
 
   // Padrões do sistema (hardcoded no intent-service) — expostos ao frontend para exibição
-  app.get('/api/ia-command/sinonimos/sistema', requireAuth, requireIaCommand, (_req, res) => {
+  app.get('/api/ia-command/sinonimos/sistema', requireAuth, requireIaCommand, canLerSinonimosSistema, (_req, res) => {
     const { _SINONIMOS_SISTEMA } = require('./ai/intent-service');
     res.json(_SINONIMOS_SISTEMA || []);
   });
@@ -1261,7 +1304,7 @@ Responda SOMENTE com JSON válido, sem markdown:
   // PROPOSTAS DE CORRECAO DE SPEC (feedback tecnico via WhatsApp)
   // ────────────────────────────────────────────────────────────────────────────
 
-  app.get('/api/ia-command/admin/spec-feedback', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.get('/api/ia-command/admin/spec-feedback', requireAuth, requireIaCommand, canSpecFeedback, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     res.json(specFeedbackStore.listar(eid(req), {
       status: req.query.status,
@@ -1269,7 +1312,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     }));
   });
 
-  app.get('/api/ia-command/admin/spec-feedback/:id', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.get('/api/ia-command/admin/spec-feedback/:id', requireAuth, requireIaCommand, canSpecFeedback, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     const empresaId = eid(req);
     const row = specFeedbackStore.obterPorId(req.params.id, empresaId);
@@ -1277,7 +1320,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json(row);
   });
 
-  app.post('/api/ia-command/admin/spec-feedback/:id/status', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.post('/api/ia-command/admin/spec-feedback/:id/status', requireAuth, requireIaCommand, canSpecFeedback, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     const empresaId = eid(req);
     const status = String(req.body.status || '').trim();
@@ -1287,7 +1330,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json({ ok: true });
   });
 
-  app.get('/api/ia-command/admin/spec-feedback/:id/preview-aplicacao', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.get('/api/ia-command/admin/spec-feedback/:id/preview-aplicacao', requireAuth, requireIaCommand, canSpecFeedback, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     const specFragmentApplier = require('./ai/spec-fragment-applier');
     const empresaId = eid(req);
@@ -1300,7 +1343,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json({ ...avaliacao, textoProposto: row.texto_proposto || null });
   });
 
-  app.post('/api/ia-command/admin/spec-feedback/:id/aplicar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.post('/api/ia-command/admin/spec-feedback/:id/aplicar', requireAuth, requireIaCommand, canSpecFeedback, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     const specFragmentApplier = require('./ai/spec-fragment-applier');
     const empresaId = eid(req);
@@ -1320,7 +1363,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json({ ok: true, arquivo: resultado.arquivo, nomeFuncao: resultado.nomeFuncao });
   });
 
-  app.post('/api/ia-command/admin/spec-feedback/excluir-selecionados', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.post('/api/ia-command/admin/spec-feedback/excluir-selecionados', requireAuth, requireIaCommand, canSpecFeedback, (req, res) => {
     const specFeedbackStore = require('./ai/spec-feedback-store');
     const ids = req.body?.ids;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -1364,7 +1407,9 @@ Responda SOMENTE com JSON válido, sem markdown:
       SELECT id, criado_em, texto_original, sql_gerado, rows_count,
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
-             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado,
+             intent_canonico_json, intent_canonico_hash, intent_canonico_estrutural_json, chave_cache, sql_template, sql_template_parametros_json,
+             sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
              pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
              recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
@@ -1404,7 +1449,9 @@ Responda SOMENTE com JSON válido, sem markdown:
       SELECT id, criado_em, texto_original, sql_gerado, rows_count,
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
-             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado,
+             intent_canonico_json, intent_canonico_hash, intent_canonico_estrutural_json, chave_cache, sql_template, sql_template_parametros_json,
+             sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
              pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
              recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
@@ -1444,7 +1491,9 @@ Responda SOMENTE com JSON válido, sem markdown:
       SELECT id, criado_em, texto_original, sql_gerado, rows_count,
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
-             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado,
+             intent_canonico_json, intent_canonico_hash, intent_canonico_estrutural_json, chave_cache, sql_template, sql_template_parametros_json,
+             sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
              pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
              recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
@@ -1484,7 +1533,9 @@ Responda SOMENTE com JSON válido, sem markdown:
       SELECT id, criado_em, texto_original, sql_gerado, rows_count,
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
-             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado,
+             intent_canonico_json, intent_canonico_hash, intent_canonico_estrutural_json, chave_cache, sql_template, sql_template_parametros_json,
+             sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
              pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
              recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
@@ -1525,7 +1576,9 @@ Responda SOMENTE com JSON válido, sem markdown:
       SELECT id, criado_em, texto_original, sql_gerado, rows_count,
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue, trace_json,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
-             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado,
+             intent_canonico_json, intent_canonico_hash, intent_canonico_estrutural_json, chave_cache, sql_template, sql_template_parametros_json,
+             sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
              pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
              recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
@@ -1671,7 +1724,7 @@ Responda SOMENTE com JSON válido, sem markdown:
   // ── LOG UNIFICADO DE CONSULTAS (todos os módulos) ───────────────────────────
   const MODULOS_VALIDOS = new Set(['compras', 'faturamento', 'financeiro', 'comissao']);
 
-  app.get('/api/ia-command/admin/logs/consultas', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.get('/api/ia-command/admin/logs/consultas', requireAuth, requireIaCommand, canLogsConsultas, (req, res) => {
     const db = getDB();
     const empresaId = eid(req);
 
@@ -1702,7 +1755,9 @@ Responda SOMENTE com JSON válido, sem markdown:
              resultado_tipo, provedor, confianca, duracao_ms, resposta_entregue,
              trace_json, intencao, usuario, numero_wa,
              escopo_execucao, sql_canonico_origem, sql_canonico_empresa_origem,
-             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado, sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
+             sql_canonico_original, sql_canonico_adaptado, sql_auditoria_json, sql_canonico_parametros_json, sql_canonico_parametrizado, sql_ia_bruto, sql_final_executado,
+             intent_canonico_json, intent_canonico_hash, intent_canonico_estrutural_json, chave_cache, sql_template, sql_template_parametros_json,
+             sql_canonico_reuso_motivo, sql_canonico_reuso_permitido, sql_canonico_empresa_atual,
              pipeline_origem, chat_turno, sql_validacao_erro, fase_execucao,
              recebido_em, pipeline_ms, entregue_ms
       FROM interpretation_log
@@ -1713,7 +1768,7 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json(rows);
   });
 
-  app.post('/api/ia-command/admin/logs/consultas/limpar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+  app.post('/api/ia-command/admin/logs/consultas/limpar', requireAuth, requireIaCommand, canLogsConsultas, (req, res) => {
     const db = getDB();
     const empresaId = eid(req);
     const modo = String(req.body?.modo || 'periodo');
@@ -1741,6 +1796,683 @@ Responda SOMENTE com JSON válido, sem markdown:
     const info = db.prepare(`DELETE FROM interpretation_log WHERE ${wheres.join(' AND ')}`).run(...params);
     _audit(req, 'limpar_log_consultas', { modulo: modulo || 'todos', modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
     res.json({ ok: true, removidos: info.changes });
+  });
+
+  const SHADOW_RESULTADOS_VALIDOS = new Set([
+    'sem_candidato',
+    'template_invalido',
+    'match_template_exato',
+    'match_sql_aplicado_exato',
+    'mismatch',
+  ]);
+  const SHADOW_CLASSIFICACOES_VALIDAS = new Set([
+    'aprovado_automatico',
+    'reprovado_automatico',
+    'inconclusivo',
+    'bloqueado_por_risco',
+    'aprovado_usuario',
+    'reprovado_usuario',
+    'ignorado_usuario',
+    'bloqueado_usuario',
+  ]);
+
+  function _parseJsonAdmin(valor, fallback = null) {
+    if (!valor) return fallback;
+    if (typeof valor !== 'string') return valor;
+    try { return JSON.parse(valor); } catch (_) { return fallback; }
+  }
+
+  function _shadowWhere(req) {
+    const inicio = String(req.query.inicio || '').trim();
+    const fim = String(req.query.fim || '').trim();
+    const modulo = String(req.query.modulo || '').trim().toLowerCase();
+    const resultado = String(req.query.resultado || '').trim();
+    const elegivel = String(req.query.elegivel || '').trim();
+    const classificacao = String(req.query.classificacao || '').trim();
+    const escopo = _whereEmpresasPermitidas(req, 'iac-admin-auditoria');
+    const wheres = [escopo.where];
+    const params = [...escopo.params];
+
+    if (inicio) { wheres.push('criado_em >= ?'); params.push(`${inicio}T00:00:00.000`); }
+    if (fim) { wheres.push('criado_em <= ?'); params.push(`${fim}T23:59:59.999`); }
+    if (modulo) { wheres.push('module = ?'); params.push(modulo); }
+    if (resultado && SHADOW_RESULTADOS_VALIDOS.has(resultado)) {
+      wheres.push('comparacao_resultado = ?');
+      params.push(resultado);
+    }
+    if (elegivel === '1' || elegivel === '0') {
+      wheres.push('auto_reuse_elegivel = ?');
+      params.push(Number(elegivel));
+    }
+    if (classificacao && SHADOW_CLASSIFICACOES_VALIDAS.has(classificacao)) {
+      wheres.push('classificacao_efetiva = ?');
+      params.push(classificacao);
+    }
+    return { wheres, params };
+  }
+
+  function _shadowResumo(rows) {
+    const total = rows.length;
+    const porResultado = {};
+    const porModulo = {};
+    const porClassificacao = {};
+    for (const row of rows) {
+      const resultado = row.comparacao_resultado || 'desconhecido';
+      const modulo = row.module || 'sem_modulo';
+      const classificacao = row.classificacao_efetiva || row.classificacao_auto || 'nao_classificado';
+      porResultado[resultado] = (porResultado[resultado] || 0) + 1;
+      porModulo[modulo] = (porModulo[modulo] || 0) + 1;
+      porClassificacao[classificacao] = (porClassificacao[classificacao] || 0) + 1;
+    }
+    const matchTemplate = porResultado.match_template_exato || 0;
+    const matchAplicado = porResultado.match_sql_aplicado_exato || 0;
+    const comCandidato = total - (porResultado.sem_candidato || 0);
+    return {
+      total,
+      com_candidato: comCandidato,
+      match_template_exato: matchTemplate,
+      match_sql_aplicado_exato: matchAplicado,
+      mismatch: porResultado.mismatch || 0,
+      template_invalido: porResultado.template_invalido || 0,
+      sem_candidato: porResultado.sem_candidato || 0,
+      auto_reuse_elegivel: rows.filter(r => Number(r.auto_reuse_elegivel) === 1).length,
+      precisao_template: comCandidato ? matchTemplate / comCandidato : null,
+      taxa_match_total: total ? (matchTemplate + matchAplicado) / total : null,
+      por_resultado: porResultado,
+      por_modulo: porModulo,
+      por_classificacao: porClassificacao,
+    };
+  }
+
+  app.get('/api/ia-command/admin/nlsql-shadow', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    try {
+      const classificacao = require('./erp/nlsql-cache/nlsql-classificacao');
+      for (const empresaId of _idsEmpresasPermitidas(req, 'iac-admin-auditoria')) {
+        classificacao.reprocessarPendentes({ empresaId, limit: 5000 });
+      }
+    } catch (_) {}
+    const limit = Math.max(1, Math.min(parseInt(req.query.limit || '500', 10) || 500, 2000));
+    const { wheres, params } = _shadowWhere(req);
+    const resumoRows = db.prepare(`
+      SELECT module, comparacao_resultado, auto_reuse_elegivel, classificacao_auto, classificacao_efetiva
+        FROM nlsql_semantic_shadow_log
+       WHERE ${wheres.join(' AND ')}
+    `).all(...params);
+    const rows = db.prepare(`
+      SELECT id, empresa_id, numero_wa, module, intent, intent_canonico_hash, chave_cache,
+             candidate_execution_log_id, candidate_score, candidate_sql_template, candidate_sql_aplicado,
+             actual_sql_template, actual_sql_canonico, actual_sql_final, template_valido,
+             comparacao_resultado, auto_reuse_limiar, auto_reuse_elegivel,
+             classificacao_auto, classificacao_auto_motivo, classificacao_auto_em, classificacao_efetiva,
+             override_classificacao, override_motivo, override_usuario, override_em,
+             detalhes_json,
+             servido_em_producao, criado_em
+        FROM nlsql_semantic_shadow_log
+       WHERE ${wheres.join(' AND ')}
+       ORDER BY criado_em DESC
+       LIMIT ?
+    `).all(...params, limit).map(row => ({
+      ...row,
+      detalhes: _parseJsonAdmin(row.detalhes_json, null),
+    }));
+    res.json({ rows, resumo: _shadowResumo(resumoRows) });
+  });
+
+  app.get('/api/ia-command/admin/nlsql-shadow/:id', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    const escopo = _whereEmpresasPermitidas(req, 'iac-admin-auditoria');
+    const row = db.prepare(`
+      SELECT *
+        FROM nlsql_semantic_shadow_log
+       WHERE ${escopo.where}
+         AND id = ?
+       LIMIT 1
+    `).get(...escopo.params, req.params.id);
+    if (!row) return res.status(404).json({ error: 'Registro de shadow mode nao encontrado.' });
+    res.json({
+      ...row,
+      detalhes: _parseJsonAdmin(row.detalhes_json, null),
+    });
+  });
+
+  app.post('/api/ia-command/admin/nlsql-shadow/classificacao/reprocessar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const classificacao = require('./erp/nlsql-cache/nlsql-classificacao');
+    const limit = Math.max(1, Math.min(parseInt(req.body?.limit || '1000', 10) || 1000, 50000));
+    const porEmpresa = _idsEmpresasPermitidas(req, 'iac-admin-auditoria')
+      .map(empresaId => ({ empresa_id: empresaId, ...classificacao.reprocessarPendentes({ empresaId, limit }) }));
+    const resultado = {
+      candidatos: porEmpresa.reduce((s, r) => s + Number(r.candidatos || 0), 0),
+      atualizados: porEmpresa.reduce((s, r) => s + Number(r.atualizados || 0), 0),
+      por_empresa: porEmpresa,
+    };
+    _audit(req, 'nlsql_shadow_classificacao_reprocessar', resultado);
+    res.json({ ok: true, resultado });
+  });
+
+  app.post('/api/ia-command/admin/nlsql-shadow/:id/classificacao', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    try {
+      const classificacao = require('./erp/nlsql-cache/nlsql-classificacao');
+      const escopo = _whereEmpresasPermitidas(req, 'iac-admin-auditoria');
+      const row = getDB().prepare(`
+        SELECT empresa_id
+          FROM nlsql_semantic_shadow_log
+         WHERE ${escopo.where}
+           AND id = ?
+         LIMIT 1
+      `).get(...escopo.params, req.params.id);
+      if (!row) return res.status(404).json({ error: 'Registro de shadow mode nao encontrado.' });
+      const resultado = classificacao.aplicarOverride({
+        id: req.params.id,
+        empresaId: row.empresa_id,
+        classificacao: req.body?.classificacao || null,
+        motivo: req.body?.motivo || '',
+        usuario: req.session?.username || req.session?.user || 'sistema',
+      });
+      _audit(req, 'nlsql_shadow_classificacao_override', {
+        id: req.params.id,
+        classificacao: resultado.override_classificacao,
+        efetiva: resultado.classificacao_efetiva,
+      });
+      res.json({ ok: true, resultado });
+    } catch (err) {
+      res.status(400).json({ error: err?.message || 'Nao foi possivel alterar a classificacao.' });
+    }
+  });
+
+  function _nlsqlCalibracaoFiltros(req) {
+    return {
+      empresaId: eid(req),
+      inicio: String(req.query.inicio || '').trim(),
+      fim: String(req.query.fim || '').trim(),
+      modulo: String(req.query.modulo || '').trim().toLowerCase(),
+      fonte: String(req.query.fonte || '').trim(),
+      limit: Math.max(100, Math.min(parseInt(req.query.limit || '5000', 10) || 5000, 50000)),
+    };
+  }
+
+  app.get('/api/ia-command/admin/nlsql-calibracao', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const calibracao = require('./erp/nlsql-cache/nlsql-calibracao');
+    const filtros = _nlsqlCalibracaoFiltros(req);
+    if (filtros.inicio && filtros.fim && filtros.inicio > filtros.fim) {
+      return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+    }
+    try {
+      const classificacao = require('./erp/nlsql-cache/nlsql-classificacao');
+      for (const empresaId of _idsEmpresasPermitidas(req, 'iac-admin-auditoria')) {
+        classificacao.reprocessarPendentes({ empresaId, limit: 5000 });
+      }
+    } catch (_) {}
+    const rows = _idsEmpresasPermitidas(req, 'iac-admin-auditoria')
+      .flatMap(empresaId => calibracao.carregarRows
+        ? calibracao.carregarRows({ ...filtros, empresaId })
+        : []);
+    if (calibracao.calibrarShadowRows) {
+      return res.json({
+        filtros: { ...filtros, empresaIds: _idsEmpresasPermitidas(req, 'iac-admin-auditoria'), empresaId: null },
+        amostra_lida: rows.length,
+        ...calibracao.calibrarShadowRows(rows),
+      });
+    }
+    res.json(calibracao.calibrarShadow(filtros));
+  });
+
+  function _nlsqlPoliticasFiltros(req) {
+    return {
+      empresaId: eid(req),
+      inicio: String(req.query.inicio || '').trim(),
+      fim: String(req.query.fim || '').trim(),
+      modulo: String(req.query.modulo || '').trim().toLowerCase(),
+      fonte: String(req.query.fonte || '').trim(),
+      limit: Math.max(100, Math.min(parseInt(req.query.limit || '50000', 10) || 50000, 50000)),
+    };
+  }
+
+  app.get('/api/ia-command/admin/nlsql-politicas', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const politicas = require('./erp/nlsql-cache/nlsql-politicas');
+    const filtros = _nlsqlPoliticasFiltros(req);
+    if (filtros.inicio && filtros.fim && filtros.inicio > filtros.fim) {
+      return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+    }
+    try {
+      const classificacao = require('./erp/nlsql-cache/nlsql-classificacao');
+      for (const empresaId of _idsEmpresasPermitidas(req, 'iac-admin-auditoria')) {
+        classificacao.reprocessarPendentes({ empresaId, limit: 5000 });
+      }
+    } catch (_) {}
+    const escopoNlsql = _empresasNlsqlDoCanal(req, 'iac-admin-auditoria');
+    const nomesEmpresasNlsql = new Map(escopoNlsql.empresas.map(e => [Number(e.id), e.nome || `Empresa #${e.id}`]));
+    const porEmpresa = escopoNlsql.empresas.map(e => Number(e.id))
+      .map(empresaId => {
+        try { politicas.autoPromoverPoliticas({ ...filtros, empresaId }); } catch (_) {}
+        return politicas.listarPoliticas({ ...filtros, empresaId });
+      });
+    const rows = porEmpresa.flatMap(p => (p.rows || []).map(r => {
+      const empresaId = p.filtros?.empresaId || null;
+      return {
+        ...r,
+        empresa_id: empresaId,
+        empresa_nome: nomesEmpresasNlsql.get(Number(empresaId)) || `Empresa #${empresaId}`,
+      };
+    }));
+    res.json({
+      filtros: { ...filtros, empresaId: null, empresaIds: porEmpresa.map(p => p.filtros?.empresaId).filter(Boolean) },
+      total: rows.length,
+      rows,
+      resumo: {
+        observacao: rows.filter(r => r.status === 'observacao').length,
+        elegivel: rows.filter(r => r.status === 'elegivel').length,
+        liberado: rows.filter(r => r.status === 'liberado').length,
+        bloqueado: rows.filter(r => r.status === 'bloqueado').length,
+      },
+    });
+  });
+
+  app.get('/api/ia-command/admin/nlsql-politicas/settings', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    try {
+      const politicas = require('./erp/nlsql-cache/nlsql-politicas');
+      const escopoNlsql = _empresasNlsqlDoCanal(req, 'iac-admin-auditoria');
+      const empresaIds = escopoNlsql.empresas.map(e => Number(e.id)).filter(Boolean);
+      const nomes = new Map(escopoNlsql.empresas.map(e => [Number(e.id), e.nome || `Empresa #${e.id}`]));
+      res.json({
+        empresa_id_atual: eid(req),
+        channel_id: escopoNlsql.canal?.id || null,
+        channel_nome: escopoNlsql.canal?.nome || null,
+        rows: empresaIds.map(empresaId => ({
+          ...politicas.carregarSettings({ empresaId }),
+          empresa_nome: nomes.get(Number(empresaId)) || `Empresa #${empresaId}`,
+        })),
+      });
+    } catch (err) {
+      res.status(400).json({ error: err?.message || 'Nao foi possivel carregar configuracao NL-SQL.' });
+    }
+  });
+
+  app.post('/api/ia-command/admin/nlsql-politicas/settings', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    try {
+      const empresaId = Number(req.body?.empresa_id || eid(req));
+      const escopoNlsql = _empresasNlsqlDoCanal(req, 'iac-admin-auditoria');
+      if (!escopoNlsql.empresas.some(e => Number(e.id) === empresaId)) {
+        return res.status(403).json({ error: 'Sem permissao para alterar esta empresa.' });
+      }
+      const politicas = require('./erp/nlsql-cache/nlsql-politicas');
+      const resultado = politicas.salvarSettings({
+        empresaId,
+        shadowEnabled: req.body?.shadow_enabled,
+        autoReuseEnabled: req.body?.auto_reuse_enabled,
+        autoPolicyEnabled: req.body?.auto_policy_enabled,
+        precisionMin: req.body?.precision_min,
+        sampleMin: req.body?.sample_min,
+        usuario: req.session?.username || req.session?.user || 'sistema',
+      });
+      _audit(req, 'nlsql_politica_settings', resultado);
+      res.json({ ok: true, resultado });
+    } catch (err) {
+      res.status(400).json({ error: err?.message || 'Nao foi possivel salvar configuracao NL-SQL.' });
+    }
+  });
+
+  app.post('/api/ia-command/admin/nlsql-politicas/status', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    try {
+      const politicas = require('./erp/nlsql-cache/nlsql-politicas');
+      const empresaId = Number(req.body?.empresa_id || eid(req));
+      const escopoNlsql = _empresasNlsqlDoCanal(req, 'iac-admin-auditoria');
+      if (!escopoNlsql.empresas.some(e => Number(e.id) === empresaId)) {
+        return res.status(403).json({ error: 'Sem permissao para alterar esta empresa.' });
+      }
+      const resultado = politicas.salvarStatus({
+        empresaId,
+        module: req.body?.module,
+        fonteRanking: req.body?.fonte_ranking,
+        minScore: req.body?.min_score,
+        status: req.body?.status,
+        motivo: req.body?.motivo || '',
+        usuario: req.session?.username || req.session?.user || 'sistema',
+      });
+      _audit(req, 'nlsql_politica_status', resultado);
+      res.json({ ok: true, resultado });
+    } catch (err) {
+      res.status(400).json({ error: err?.message || 'Nao foi possivel salvar politica NL-SQL.' });
+    }
+  });
+
+  function _nlsqlBackfillFiltros(req, origem = 'query') {
+    const src = origem === 'body' ? (req.body || {}) : (req.query || {});
+    return {
+      empresaId: eid(req),
+      inicio: String(src.inicio || src.data_inicio || '').trim(),
+      fim: String(src.fim || src.data_fim || '').trim(),
+      modulo: String(src.modulo || '').trim().toLowerCase(),
+      limit: Math.max(1, Math.min(parseInt(src.limit || '200', 10) || 200, 1000)),
+    };
+  }
+
+  app.get('/api/ia-command/admin/nlsql-backfill/status', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const semanticExamples = require('./erp/nlsql-cache/nlsql-semantic-examples');
+    const filtros = _nlsqlBackfillFiltros(req);
+    res.json({
+      filtros,
+      status: semanticExamples.statusBackfill(filtros),
+    });
+  });
+
+  app.post('/api/ia-command/admin/nlsql-backfill/run', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const semanticExamples = require('./erp/nlsql-cache/nlsql-semantic-examples');
+    const filtros = _nlsqlBackfillFiltros(req, 'body');
+    if (filtros.inicio && filtros.fim && filtros.inicio > filtros.fim) {
+      return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+    }
+    const antes = semanticExamples.statusBackfill(filtros);
+    const resultado = semanticExamples.backfillConfiaveis(filtros);
+    const depois = semanticExamples.statusBackfill(filtros);
+    _audit(req, 'nlsql_backfill_admin', {
+      modulo: filtros.modulo || 'todos',
+      inicio: filtros.inicio || null,
+      fim: filtros.fim || null,
+      limit: filtros.limit,
+      candidatos: resultado.candidatos,
+      inseridos: resultado.inseridos,
+      ignorados: resultado.ignorados,
+    });
+    res.json({ ok: true, filtros, antes, resultado, depois });
+  });
+
+  function _nlsqlEmbeddingFiltros(req, origem = 'query') {
+    const src = origem === 'body' ? (req.body || {}) : (req.query || {});
+    return {
+      empresaId: eid(req),
+      modulo: String(src.modulo || '').trim().toLowerCase(),
+      limit: Math.max(1, Math.min(parseInt(src.limit || '50', 10) || 50, 500)),
+      incluirErros: src.incluir_erros === true || src.incluir_erros === '1' || src.incluirErros === true,
+    };
+  }
+
+  app.get('/api/ia-command/admin/nlsql-embeddings/status', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const embeddings = require('./erp/nlsql-cache/nlsql-embeddings');
+    const filtros = _nlsqlEmbeddingFiltros(req);
+    res.json({
+      filtros,
+      provider: process.env.IAC_NLSQL_EMBEDDING_PROVIDER || embeddings.DEFAULT_PROVIDER,
+      model: process.env.IAC_NLSQL_EMBEDDING_MODEL || embeddings.DEFAULT_MODEL,
+      status: embeddings.statusEmbeddings(filtros),
+    });
+  });
+
+  app.post('/api/ia-command/admin/nlsql-embeddings/run', requireAuth, requireIaCommand, canAuditoria, async (req, res) => {
+    const embeddings = require('./erp/nlsql-cache/nlsql-embeddings');
+    const filtros = _nlsqlEmbeddingFiltros(req, 'body');
+    try {
+      const antes = embeddings.statusEmbeddings(filtros);
+      const resultado = await embeddings.processarPendentes(filtros);
+      const depois = embeddings.statusEmbeddings(filtros);
+      _audit(req, 'nlsql_embeddings_admin', {
+        modulo: filtros.modulo || 'todos',
+        limit: filtros.limit,
+        incluir_erros: filtros.incluirErros,
+        candidatos: resultado.candidatos,
+        processados: resultado.processados,
+        erros: resultado.erros,
+        provider: resultado.provider,
+        model: resultado.model,
+      });
+      res.json({ ok: true, filtros, antes, resultado, depois });
+    } catch (err) {
+      res.status(400).json({ error: err?.message || 'Nao foi possivel processar embeddings NL-SQL.' });
+    }
+  });
+
+  function _nlsqlSaudeFiltros(req) {
+    return {
+      inicio: String(req.query.inicio || '').trim(),
+      fim: String(req.query.fim || '').trim(),
+      modulo: String(req.query.modulo || '').trim().toLowerCase(),
+      limit: Math.max(20, Math.min(parseInt(req.query.limit || '100', 10) || 100, 500)),
+    };
+  }
+
+  function _moduloExpr(alias = 'i') {
+    return `COALESCE(NULLIF(${alias}.modulo, ''), CASE WHEN ${alias}.intencao LIKE '%_dinamico' THEN replace(${alias}.intencao, '_dinamico', '') ELSE NULLIF(${alias}.intencao, '') END, 'sem_modulo')`;
+  }
+
+  function _escopoEmpresasAprendizado(req) {
+    const empresas = _empresasPermitidas(req, 'iac-admin-auditoria');
+    const ids = empresas.map(e => Number(e.id)).filter(Boolean);
+    if (!ids.length) return { where: '1 = 0', params: [], ids, empresas };
+    return {
+      where: `empresa_id IN (${ids.map(() => '?').join(',')})`,
+      params: ids,
+      ids,
+      empresas,
+    };
+  }
+
+  function _whereInterpretacoesAprendizado(req, filtros) {
+    const escopo = _escopoEmpresasAprendizado(req);
+    const wheres = [escopo.where.replace(/\bempresa_id\b/g, 'i.empresa_id')];
+    const params = [...escopo.params];
+    if (filtros.inicio) { wheres.push('i.criado_em >= ?'); params.push(`${filtros.inicio}T00:00:00.000`); }
+    if (filtros.fim) { wheres.push('i.criado_em <= ?'); params.push(`${filtros.fim}T23:59:59.999`); }
+    if (filtros.modulo) {
+      wheres.push(`(${_moduloExpr('i')} = ? OR i.dataset_nome = ?)`);
+      params.push(filtros.modulo, filtros.modulo);
+    }
+    return { wheres, params, ids: escopo.ids };
+  }
+
+  function _whereExecutionAprendizado(req, filtros) {
+    const escopo = _escopoEmpresasAprendizado(req);
+    const wheres = [escopo.where.replace(/\bempresa_id\b/g, 'e.empresa_id')];
+    const params = [...escopo.params];
+    if (filtros.inicio) { wheres.push('e.criado_em >= ?'); params.push(`${filtros.inicio}T00:00:00.000`); }
+    if (filtros.fim) { wheres.push('e.criado_em <= ?'); params.push(`${filtros.fim}T23:59:59.999`); }
+    if (filtros.modulo) {
+      wheres.push('(e.intencao = ? OR e.intent_canonico_json LIKE ? OR e.detalhes_json LIKE ?)');
+      params.push(`${filtros.modulo}_dinamico`, `%"module":"${filtros.modulo}"%`, `%"modulo":"${filtros.modulo}"%`);
+    }
+    return { wheres, params, ids: escopo.ids };
+  }
+
+  function _whereNlsqlTabela(req, filtros, alias = 'x') {
+    const escopo = _escopoEmpresasAprendizado(req);
+    const wheres = [escopo.where.replace(/\bempresa_id\b/g, `${alias}.empresa_id`)];
+    const params = [...escopo.params];
+    if (filtros.inicio) { wheres.push(`${alias}.criado_em >= ?`); params.push(`${filtros.inicio}T00:00:00.000`); }
+    if (filtros.fim) { wheres.push(`${alias}.criado_em <= ?`); params.push(`${filtros.fim}T23:59:59.999`); }
+    if (filtros.modulo) { wheres.push(`${alias}.module = ?`); params.push(filtros.modulo); }
+    return { wheres, params, ids: escopo.ids };
+  }
+
+  function _empresaNomeMap(req) {
+    return new Map(_escopoEmpresasAprendizado(req).empresas.map(e => [Number(e.id), e.nome]));
+  }
+
+  function _pctSeguro(num, den) {
+    const d = Number(den || 0);
+    return d ? Number(num || 0) / d : null;
+  }
+
+  app.get('/api/ia-command/admin/nlsql-saude', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    const filtros = _nlsqlSaudeFiltros(req);
+    if (filtros.inicio && filtros.fim && filtros.inicio > filtros.fim) {
+      return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+    }
+
+    const nomesEmpresas = _empresaNomeMap(req);
+    const wi = _whereInterpretacoesAprendizado(req, filtros);
+    const we = _whereExecutionAprendizado(req, filtros);
+    const wx = _whereNlsqlTabela(req, filtros, 'x');
+    const ws = _whereNlsqlTabela(req, filtros, 's');
+    const moduloExpr = _moduloExpr('i');
+    const origemCase = `
+      CASE
+        WHEN i.pipeline_origem = 'dataset_semantico' OR i.sql_canonico_origem = 'dataset_semantico' OR i.dataset_id IS NOT NULL THEN 'dataset_semantico'
+        WHEN i.sql_canonico_origem = 'cache_deterministico' OR i.cache_hit = 1 THEN 'cache_deterministico'
+        WHEN i.sql_canonico_origem IN ('whatsapp_all_reuso', 'ia_owner_reuso') OR i.pipeline_origem = 'canonico_reuso' THEN 'reuso_canonico'
+        WHEN i.sql_canonico_origem = 'auto_reuse_semantico' THEN 'auto_reuse_semantico'
+        WHEN i.pipeline_origem = 'consolidado' THEN 'consolidado'
+        WHEN i.pipeline_origem = 'systemprompt' OR i.sql_canonico_origem IN ('ia_owner', 'ia', 'chat') THEN 'sql_direto_ia'
+        ELSE COALESCE(NULLIF(i.pipeline_origem, ''), NULLIF(i.sql_canonico_origem, ''), 'nao_informado')
+      END
+    `;
+
+    const resumoConsultas = db.prepare(`
+      SELECT COUNT(*) AS total,
+             SUM(CASE WHEN i.resultado_tipo IN ('sucesso', 'sucesso_ai_sql') THEN 1 ELSE 0 END) AS sucesso,
+             SUM(CASE WHEN i.resultado_tipo = 'erro' THEN 1 ELSE 0 END) AS erro,
+             SUM(CASE WHEN i.sql_validacao_erro IS NOT NULL AND i.sql_validacao_erro <> '' THEN 1 ELSE 0 END) AS bloqueios_contrato,
+             SUM(CASE WHEN i.pipeline_origem = 'dataset_semantico' OR i.sql_canonico_origem = 'dataset_semantico' OR i.dataset_id IS NOT NULL THEN 1 ELSE 0 END) AS dataset_semantico,
+             SUM(CASE WHEN i.pipeline_origem = 'systemprompt' OR i.sql_canonico_origem IN ('ia_owner', 'ia', 'chat') THEN 1 ELSE 0 END) AS sql_direto_ia,
+             SUM(CASE WHEN i.sql_canonico_origem = 'cache_deterministico' OR i.cache_hit = 1 THEN 1 ELSE 0 END) AS cache_deterministico,
+             SUM(CASE WHEN i.sql_canonico_origem IN ('whatsapp_all_reuso', 'ia_owner_reuso') OR i.pipeline_origem = 'canonico_reuso' THEN 1 ELSE 0 END) AS reuso_canonico,
+             SUM(CASE WHEN i.sql_canonico_origem = 'auto_reuse_semantico' THEN 1 ELSE 0 END) AS auto_reuse_semantico,
+             SUM(CASE WHEN i.intent_canonico_json IS NOT NULL AND i.intent_canonico_json <> '' THEN 1 ELSE 0 END) AS com_intent_canonico,
+             SUM(CASE WHEN i.sql_template IS NOT NULL AND i.sql_template <> '' THEN 1 ELSE 0 END) AS com_template,
+             AVG(CASE WHEN i.duracao_ms IS NOT NULL THEN i.duracao_ms END) AS duracao_media_ms
+        FROM interpretation_log i
+       WHERE ${wi.wheres.join(' AND ')}
+    `).get(...wi.params) || {};
+
+    const resumoExecution = db.prepare(`
+      SELECT COUNT(*) AS total,
+             SUM(CASE WHEN e.cache_status = 'confiavel' THEN 1 ELSE 0 END) AS confiaveis,
+             SUM(CASE WHEN e.cache_status = 'pendente' THEN 1 ELSE 0 END) AS pendentes,
+             SUM(CASE WHEN e.cache_status LIKE 'bloqueado%' THEN 1 ELSE 0 END) AS bloqueados,
+             SUM(CASE WHEN e.chave_cache IS NOT NULL AND e.chave_cache <> '' THEN 1 ELSE 0 END) AS com_chave_cache,
+             SUM(CASE WHEN e.sql_template IS NOT NULL AND e.sql_template <> '' THEN 1 ELSE 0 END) AS com_template
+        FROM execution_log e
+       WHERE ${we.wheres.join(' AND ')}
+    `).get(...we.params) || {};
+
+    const resumoExamples = db.prepare(`
+      SELECT COUNT(*) AS total,
+             SUM(CASE WHEN x.embedding_status IN ('ok', 'done') THEN 1 ELSE 0 END) AS embedding_ok,
+             SUM(CASE WHEN x.embedding_status IN ('pendente', 'pending') THEN 1 ELSE 0 END) AS embedding_pendente,
+             SUM(CASE WHEN x.embedding_status IN ('erro', 'error') THEN 1 ELSE 0 END) AS embedding_erro,
+             SUM(CASE WHEN x.embedding_json IS NOT NULL AND x.embedding_json <> '' THEN 1 ELSE 0 END) AS com_vetor
+        FROM nlsql_semantic_examples x
+       WHERE ${wx.wheres.join(' AND ')}
+    `).get(...wx.params) || {};
+
+    const resumoShadow = db.prepare(`
+      SELECT COUNT(*) AS total,
+             SUM(CASE WHEN s.candidate_execution_log_id IS NOT NULL AND s.candidate_execution_log_id <> '' THEN 1 ELSE 0 END) AS com_candidato,
+             SUM(CASE WHEN s.comparacao_resultado = 'match_template_exato' THEN 1 ELSE 0 END) AS match_template,
+             SUM(CASE WHEN s.comparacao_resultado = 'match_sql_aplicado_exato' THEN 1 ELSE 0 END) AS match_aplicado,
+             SUM(CASE WHEN s.comparacao_resultado = 'mismatch' THEN 1 ELSE 0 END) AS mismatch,
+             SUM(CASE WHEN s.comparacao_resultado = 'template_invalido' THEN 1 ELSE 0 END) AS template_invalido,
+             SUM(CASE WHEN s.comparacao_resultado = 'sem_candidato' THEN 1 ELSE 0 END) AS sem_candidato,
+             SUM(CASE WHEN s.auto_reuse_elegivel = 1 THEN 1 ELSE 0 END) AS auto_reuse_elegivel,
+             SUM(CASE WHEN s.classificacao_efetiva = 'aprovado_automatico' THEN 1 ELSE 0 END) AS aprovado_auto,
+             SUM(CASE WHEN s.servido_em_producao = 1 THEN 1 ELSE 0 END) AS servido_producao
+        FROM nlsql_semantic_shadow_log s
+       WHERE ${ws.wheres.join(' AND ')}
+    `).get(...ws.params) || {};
+
+    const porOrigem = db.prepare(`
+      SELECT ${origemCase} AS origem,
+             COUNT(*) AS total,
+             SUM(CASE WHEN i.resultado_tipo IN ('sucesso', 'sucesso_ai_sql') THEN 1 ELSE 0 END) AS sucesso,
+             SUM(CASE WHEN i.resultado_tipo = 'erro' THEN 1 ELSE 0 END) AS erro,
+             AVG(CASE WHEN i.duracao_ms IS NOT NULL THEN i.duracao_ms END) AS duracao_media_ms,
+             AVG(CASE WHEN i.rows_count IS NOT NULL THEN i.rows_count END) AS rows_media
+        FROM interpretation_log i
+       WHERE ${wi.wheres.join(' AND ')}
+       GROUP BY origem
+       ORDER BY total DESC
+    `).all(...wi.params);
+
+    const porModulo = db.prepare(`
+      SELECT ${moduloExpr} AS modulo,
+             COUNT(*) AS total,
+             SUM(CASE WHEN i.resultado_tipo IN ('sucesso', 'sucesso_ai_sql') THEN 1 ELSE 0 END) AS sucesso,
+             SUM(CASE WHEN i.sql_validacao_erro IS NOT NULL AND i.sql_validacao_erro <> '' THEN 1 ELSE 0 END) AS bloqueios_contrato,
+             SUM(CASE WHEN i.pipeline_origem = 'dataset_semantico' OR i.sql_canonico_origem = 'dataset_semantico' OR i.dataset_id IS NOT NULL THEN 1 ELSE 0 END) AS dataset_semantico,
+             SUM(CASE WHEN i.sql_canonico_origem = 'cache_deterministico' OR i.cache_hit = 1 THEN 1 ELSE 0 END) AS cache_deterministico,
+             SUM(CASE WHEN i.sql_canonico_origem = 'auto_reuse_semantico' THEN 1 ELSE 0 END) AS auto_reuse_semantico,
+             AVG(CASE WHEN i.duracao_ms IS NOT NULL THEN i.duracao_ms END) AS duracao_media_ms
+        FROM interpretation_log i
+       WHERE ${wi.wheres.join(' AND ')}
+       GROUP BY modulo
+       ORDER BY total DESC
+    `).all(...wi.params);
+
+    const porEmpresa = db.prepare(`
+      SELECT i.empresa_id,
+             COUNT(*) AS total,
+             SUM(CASE WHEN i.resultado_tipo IN ('sucesso', 'sucesso_ai_sql') THEN 1 ELSE 0 END) AS sucesso,
+             SUM(CASE WHEN i.pipeline_origem = 'dataset_semantico' OR i.sql_canonico_origem = 'dataset_semantico' OR i.dataset_id IS NOT NULL THEN 1 ELSE 0 END) AS dataset_semantico,
+             SUM(CASE WHEN i.sql_canonico_origem = 'cache_deterministico' OR i.cache_hit = 1 THEN 1 ELSE 0 END) AS cache_deterministico,
+             SUM(CASE WHEN i.sql_canonico_origem = 'auto_reuse_semantico' THEN 1 ELSE 0 END) AS auto_reuse_semantico,
+             AVG(CASE WHEN i.duracao_ms IS NOT NULL THEN i.duracao_ms END) AS duracao_media_ms
+        FROM interpretation_log i
+       WHERE ${wi.wheres.join(' AND ')}
+       GROUP BY i.empresa_id
+       ORDER BY total DESC
+    `).all(...wi.params).map(r => ({ ...r, empresa_nome: nomesEmpresas.get(Number(r.empresa_id)) || `Empresa #${r.empresa_id}` }));
+
+    const recentes = db.prepare(`
+      SELECT i.id, i.empresa_id, i.criado_em, i.numero_wa, ${moduloExpr} AS modulo,
+             i.texto_original, i.resultado_tipo, i.rows_count, i.duracao_ms,
+             i.pipeline_origem, i.sql_canonico_origem, i.cache_hit, i.dataset_nome,
+             i.chave_cache, i.sql_validacao_erro
+        FROM interpretation_log i
+       WHERE ${wi.wheres.join(' AND ')}
+       ORDER BY i.criado_em DESC
+       LIMIT ?
+    `).all(...wi.params, filtros.limit).map(r => ({ ...r, empresa_nome: nomesEmpresas.get(Number(r.empresa_id)) || `Empresa #${r.empresa_id}` }));
+
+    const shadowRecentes = db.prepare(`
+      SELECT s.id, s.empresa_id, s.criado_em, s.module, s.intent, s.candidate_score,
+             s.comparacao_resultado, s.auto_reuse_elegivel, s.classificacao_efetiva,
+             s.classificacao_auto, s.servido_em_producao
+        FROM nlsql_semantic_shadow_log s
+       WHERE ${ws.wheres.join(' AND ')}
+       ORDER BY s.criado_em DESC
+       LIMIT ?
+    `).all(...ws.params, Math.min(filtros.limit, 100)).map(r => ({ ...r, empresa_nome: nomesEmpresas.get(Number(r.empresa_id)) || `Empresa #${r.empresa_id}` }));
+
+    const totalConsultas = Number(resumoConsultas.total || 0);
+    const economiaChamadas = Number(resumoConsultas.cache_deterministico || 0)
+      + Number(resumoConsultas.reuso_canonico || 0)
+      + Number(resumoConsultas.auto_reuse_semantico || 0);
+    const comCandidato = Number(resumoShadow.com_candidato || 0);
+    const matchTotal = Number(resumoShadow.match_template || 0) + Number(resumoShadow.match_aplicado || 0);
+
+    res.json({
+      filtros: { ...filtros, empresa_ids: wi.ids },
+      empresas: [...nomesEmpresas.entries()].map(([id, nome]) => ({ id, nome })),
+      resumo: {
+        consultas: {
+          ...resumoConsultas,
+          taxa_sucesso: _pctSeguro(resumoConsultas.sucesso, totalConsultas),
+          taxa_dataset: _pctSeguro(resumoConsultas.dataset_semantico, totalConsultas),
+          taxa_intent_canonico: _pctSeguro(resumoConsultas.com_intent_canonico, totalConsultas),
+          economia_chamadas_llm: economiaChamadas,
+          taxa_economia_llm: _pctSeguro(economiaChamadas, totalConsultas),
+        },
+        cache: {
+          ...resumoExecution,
+          taxa_confiavel: _pctSeguro(resumoExecution.confiaveis, resumoExecution.total),
+          taxa_pendente: _pctSeguro(resumoExecution.pendentes, resumoExecution.total),
+        },
+        exemplos: {
+          ...resumoExamples,
+          taxa_embedding_ok: _pctSeguro(resumoExamples.embedding_ok, resumoExamples.total),
+        },
+        shadow: {
+          ...resumoShadow,
+          precisao_match_total: _pctSeguro(matchTotal, comCandidato),
+          precisao_template: _pctSeguro(resumoShadow.match_template, comCandidato),
+          taxa_mismatch: _pctSeguro(resumoShadow.mismatch, comCandidato),
+        },
+      },
+      por_origem: porOrigem,
+      por_modulo: porModulo,
+      por_empresa: porEmpresa,
+      recentes,
+      shadow_recentes: shadowRecentes,
+    });
   });
 
   // ---------------------------------------------------------------------------

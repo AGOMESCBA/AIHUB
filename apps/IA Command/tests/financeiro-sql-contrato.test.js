@@ -100,6 +100,15 @@ assert.strictEqual(planoRecebidasMes.carteira, 'receber', 'contas recebidas deve
 assert.strictEqual(planoRecebidasMes.estado, 'recebido', 'contas recebidas deve ser estado recebido');
 assert.strictEqual(planoRecebidasMes.dataPadrao, 'baixa_movimento', 'contas recebidas deve usar baixa/movimento');
 
+const planoCompareReceber = runner._test.construirQueryPlanTecnico({
+  spec: financeiroSpec,
+  mensagem: 'compare esse resultado com julho do ano passado',
+  periodo: { tipo: 'mes', dataInicio: '20250701', dataFim: '20250731' },
+  filtros: { vencido: true },
+  entidades: [],
+});
+assert.strictEqual(planoCompareReceber.comparativo, true, 'query_plan deve reconhecer "compare" como comparativo');
+
 const sqlRecebidasPorEmissao = `
 SET ROWCOUNT 50000;
 SELECT COALESCE(SUM(SE1.E1_VALOR - SE1.E1_SALDO), 0) AS valor_recebido
@@ -109,6 +118,68 @@ WHERE SE1.D_E_L_E_T_ = ' ' AND SUBSTRING(SE1.E1_EMISSAO, 1, 6) = '202606'
 const validacaoRecebidasEmissao = queryPlan.validarSqlContraPlano(sqlRecebidasPorEmissao, planoRecebidasMes);
 assert.strictEqual(validacaoRecebidasEmissao.ok, false, 'recebidas no mes nao pode filtrar por E1_EMISSAO');
 assert(validacaoRecebidasEmissao.erros.join(' ').includes('FK1'), 'erro deve orientar baixa/movimento com FK1/SE5/E1_BAIXA');
+
+const sqlPeriodoErrado = `
+SET ROWCOUNT 50000;
+SELECT SUM(SE1.E1_VALOR) AS total_contas_a_receber
+FROM SE1990 SE1
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND SE1.E1_VENCREA BETWEEN '20260701' AND '20260731'
+`;
+const validacaoPeriodoAutoritativo = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlPeriodoErrado,
+  financeiroSpec,
+  { tipo: 'mes', dataInicio: '20250701', dataFim: '20250731' },
+);
+assert.strictEqual(validacaoPeriodoAutoritativo.ok, false, 'SQL com datas diferentes do periodo autoritativo deve ser rejeitado');
+assert(validacaoPeriodoAutoritativo.erros.join(' ').includes('20250701'), 'erro deve citar o periodo autoritativo esperado');
+
+const sqlPeriodoCorreto = `
+SET ROWCOUNT 50000;
+SELECT SUM(SE1.E1_VALOR) AS total_contas_a_receber
+FROM SE1990 SE1
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND SE1.E1_VENCREA BETWEEN '20250701' AND '20250731'
+`;
+const validacaoPeriodoCorreto = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlPeriodoCorreto,
+  financeiroSpec,
+  { tipo: 'mes', dataInicio: '20250701', dataFim: '20250731' },
+);
+assert.strictEqual(validacaoPeriodoCorreto.ok, true, `SQL com periodo autoritativo correto deve passar: ${validacaoPeriodoCorreto.erros.join(' | ')}`);
+
+const sqlFaixaAtrasoDiasErrado = `
+SET ROWCOUNT 10000;
+SELECT SA1.A1_NOME AS cliente, SUM(SE1.E1_VALOR) AS total_vencido
+FROM SE1990 SE1
+JOIN SA1990 SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '
+WHERE SE1.E1_VENCREA > '60' AND SE1.D_E_L_E_T_ = ' '
+GROUP BY SA1.A1_NOME;
+`;
+const validacaoFaixaAtrasoDiasErrado = runner._test.validarSqlIaOwnerBasico(
+  sqlFaixaAtrasoDiasErrado,
+  financeiroSpec,
+  sx2,
+  'Agora detalhe por cliente somente a faixa acima de 60 dias',
+);
+assert.strictEqual(validacaoFaixaAtrasoDiasErrado.ok, false, 'faixa de atraso nao pode comparar E1_VENCREA com numero de dias');
+assert(validacaoFaixaAtrasoDiasErrado.erros.join(' ').includes('DATEDIFF'), 'erro deve orientar calculo de dias_atraso com DATEDIFF');
+
+const sqlPeriodoComFiltroContraditorio = `
+SET ROWCOUNT 10000;
+SELECT SUM(SE1.E1_VALOR) AS total_contas_receber
+FROM SE1990 SE1
+WHERE SE1.D_E_L_E_T_ = ' '
+  AND SUBSTRING(SE1.E1_VENCREA, 1, 6) = '202307'
+  AND SE1.E1_VENCREA BETWEEN '20250701' AND '20250731'
+`;
+const validacaoFiltroContraditorio = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlPeriodoComFiltroContraditorio,
+  financeiroSpec,
+  { tipo: 'mes', dataInicio: '20250701', dataFim: '20250731' },
+);
+assert.strictEqual(validacaoFiltroContraditorio.ok, false, 'SQL com BETWEEN correto mas filtro temporal contraditorio deve ser rejeitado');
+assert(validacaoFiltroContraditorio.erros.join(' ').includes('202307'), 'erro deve citar a competencia contraditoria');
 
 const planoPagasMes = runner._test.construirQueryPlanTecnico({
   spec: financeiroSpec,
@@ -137,6 +208,16 @@ const retryQueryPlan = runner._test.buildRetryTecnicoIaOwner({
 });
 assert(retryQueryPlan.includes('query_plan'), 'retry deve citar query_plan');
 assert(retryQueryPlan.includes('baixa_movimento'), 'retry deve preservar campo_data_semantico baixa_movimento');
+
+const retryPeriodo = runner._test.buildRetryTecnicoIaOwner({
+  erro: Object.assign(
+    new Error("SQL rejeitado por periodo inconsistente: O plano declarou periodo 20250701 a 20250731, mas o SQL filtrou datas diferentes"),
+    { _tipo: 'periodo_sql_inconsistente' },
+  ),
+  entidadesResolvidas: [],
+});
+assert(retryPeriodo.includes('CONTRATO OBRIGATORIO DE SQL'), 'retry de periodo deve mandar seguir o contrato atual');
+assert(retryPeriodo.includes('SUBSTRING/LEFT/LIKE'), 'retry de periodo deve orientar remover filtro temporal residual');
 
 // ── Novo contrato: recebidas devem usar FK1 ou SE5, nunca E1_BAIXA ────────────
 

@@ -11,6 +11,10 @@ const responseFormatter = require('../core/response-formatter');
 const channelStore = require('../../whatsapp/channel-store');
 const queryPlan = require('../core/query-plan');
 const canonicalWhatsappFormat = require('../core/canonical-whatsapp-format');
+const canonicalIntent = require('../nlsql-cache/canonical-intent');
+const sqlTemplate = require('../nlsql-cache/sql-template');
+const nlsqlSemanticExamples = require('../nlsql-cache/nlsql-semantic-examples');
+const nlsqlPoliticas = require('../nlsql-cache/nlsql-politicas');
 const promptBuilder = require('./prompt-builder');
 const entityResolver = require('../../ai/entity-resolver');
 const periodResolver = require('../../ai/period-resolver');
@@ -165,6 +169,115 @@ function limitarTexto(valor, max = 4000) {
   return texto.length > max ? `${texto.slice(0, max)}...` : texto;
 }
 
+function cacheDeterministicoAtivo() {
+  return String(process.env.IAC_NLSQL_DETERMINISTIC_CACHE || '').trim() === '1';
+}
+
+function semanticFewShotAtivo() {
+  return String(process.env.IAC_NLSQL_SEMANTIC_FEWSHOT || '').trim() === '1';
+}
+
+function semanticShadowAtivo(empresaId) {
+  const env = flagEnvBoolean('IAC_NLSQL_SEMANTIC_SHADOW');
+  if (env !== null) return env;
+  return nlsqlPoliticas.configShadowAtivo({ empresaId });
+}
+
+function flagEnvBoolean(nome) {
+  const raw = process.env[nome];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const valor = String(raw).trim().toLowerCase();
+  if (['1', 'true', 'sim', 'yes', 'on'].includes(valor)) return true;
+  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(valor)) return false;
+  return null;
+}
+
+function semanticAutoReuseAtivo(empresaId) {
+  const env = flagEnvBoolean('IAC_NLSQL_SEMANTIC_AUTO_REUSE');
+  if (env !== null) return env;
+  return nlsqlPoliticas.configAutoReuseAtivo({ empresaId });
+}
+
+function semanticEmbeddingRankingAtivo() {
+  return String(process.env.IAC_NLSQL_SEMANTIC_EMBEDDING_RANKING || '').trim() === '1';
+}
+
+function numeroEnv(nome, padrao, { min = 0, max = 1000 } = {}) {
+  const raw = process.env[nome];
+  if (raw === undefined || raw === null || String(raw).trim() === '') return padrao;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return padrao;
+  return Math.max(min, Math.min(max, n));
+}
+
+function _filtroTemplateParametrizavel(chave, valor) {
+  if (valor === null || valor === undefined || valor === '') return false;
+  if (String(chave).toLowerCase() === 'filial' && /^(todas?|todos?|all)$/i.test(String(valor))) return false;
+  if (typeof valor === 'object' && !Array.isArray(valor)) return false;
+  return true;
+}
+
+function validarTemplateAplicado(intentCanonico = {}, aplicado = {}) {
+  if (!aplicado?.ok) {
+    return { ok: false, motivo: `placeholders_template_pendentes:${(aplicado.pendentes_template || []).map(p => p.placeholder).join(',')}` };
+  }
+  const aplicados = Array.isArray(aplicado.aplicados) ? aplicado.aplicados : [];
+  const tem = (tipo, campo) => aplicados.some(p => p.tipo === tipo && p.campo === campo);
+  if (intentCanonico.period?.start && !tem('period', 'start')) return { ok: false, motivo: 'period_start_nao_parametrizado' };
+  if (intentCanonico.period?.end && !tem('period', 'end')) return { ok: false, motivo: 'period_end_nao_parametrizado' };
+  for (const [chave, valor] of Object.entries(intentCanonico.filters || {})) {
+    if (!_filtroTemplateParametrizavel(chave, valor)) continue;
+    if (!tem('filter', String(chave))) return { ok: false, motivo: `filtro_${chave}_nao_parametrizado` };
+  }
+  return { ok: true };
+}
+
+function buscarTemplateCacheDeterministico({ empresaId, numeroWa, intentCanonicoInfo }) {
+  if (!cacheDeterministicoAtivo()) return null;
+  if (!empresaId || !numeroWa || !intentCanonicoInfo?.cacheKey) return null;
+  try {
+    const { getDB } = require('../../database');
+    const channelStore = require('../../whatsapp/channel-store');
+    const numeroNormalizado = channelStore.normalizarNumero(String(numeroWa || '').split('@')[0]);
+    if (!numeroNormalizado) return null;
+    const c = intentCanonicoInfo.canonical || {};
+    return getDB().prepare(`
+      SELECT correlation_id, sql_template, sql_final_executado, prompt_version, spec_version, schema_version, model, criado_em
+        FROM execution_log
+       WHERE empresa_id = ?
+         AND numero_wa = ?
+         AND chave_cache = ?
+         AND cache_status = 'confiavel'
+         AND confiavel_cache = 1
+         AND sql_template IS NOT NULL
+         AND sql_final_executado IS NOT NULL
+         AND TRIM(sql_template) NOT LIKE '-- ERRO:%'
+         AND TRIM(sql_final_executado) NOT LIKE '-- ERRO:%'
+         AND sql_template NOT LIKE '%SQL rejeitado por contrato%'
+         AND sql_template NOT LIKE '%SQL rejeitado por periodo inconsistente%'
+         AND sql_final_executado NOT LIKE '%SQL rejeitado por contrato%'
+         AND sql_final_executado NOT LIKE '%SQL rejeitado por periodo inconsistente%'
+         AND prompt_version IS ?
+         AND spec_version IS ?
+         AND schema_version IS ?
+         AND model IS ?
+      ORDER BY criado_em DESC
+       LIMIT 1
+    `).get(
+      Number(empresaId),
+      numeroNormalizado,
+      intentCanonicoInfo.cacheKey,
+      c.prompt_version || null,
+      c.spec_version || null,
+      c.schema_version || null,
+      c.model || null,
+    ) || null;
+  } catch (e) {
+    console.warn('[IAOwner] Falha no lookup de cache deterministico:', e.message);
+    return null;
+  }
+}
+
 function mensagemErro(spec, tipo) {
   const msgs = spec.mensagensErro || {};
   const fallback = {
@@ -313,6 +426,8 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
     bloco = [
       'Contrato obrigatorio:',
       '- O periodo declarado no plano deve aparecer no SQL em campo temporal valido do modulo.',
+      '- Se a tentativa anterior trouxe periodo diferente no JSON ou no SQL, ignore esse periodo anterior: ele foi rejeitado. Use somente dataInicio/dataFim do CONTRATO OBRIGATORIO DE SQL atual.',
+      '- Remova qualquer filtro temporal antigo/inferido que contradiga o periodo do contrato, inclusive SUBSTRING/LEFT/LIKE no mesmo campo de data.',
       ...linhasEntidades,
       'Tarefa:',
       '- Gere novo SQL aplicando explicitamente o periodo no WHERE/subquery correta.',
@@ -1412,6 +1527,208 @@ function validarSelectContraGroupBy(sql = '') {
   return { ok: erros.length === 0, erros };
 }
 
+function dividirSelectsPorUnionNivelZero(sql = '') {
+  const texto = String(sql || '');
+  const partes = [];
+  let inicio = 0;
+  let nivel = 0;
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') {
+      aspas = !aspas;
+      continue;
+    }
+    if (aspas) continue;
+    if (c === '(') {
+      nivel++;
+      continue;
+    }
+    if (c === ')') {
+      nivel = Math.max(0, nivel - 1);
+      continue;
+    }
+    if (nivel !== 0) continue;
+    if (!/^UNION\b/i.test(texto.slice(i))) continue;
+    partes.push(texto.slice(inicio, i));
+    const m = texto.slice(i).match(/^UNION\s+ALL\b/i);
+    i += (m ? m[0].length : 'UNION'.length) - 1;
+    inicio = i + 1;
+  }
+  partes.push(texto.slice(inicio));
+  return partes.map(p => p.trim()).filter(Boolean);
+}
+
+function validarAgregadoSemGroupBy(sql = '') {
+  const erros = [];
+  const partes = dividirSelectsPorUnionNivelZero(sql);
+  for (const parte of partes) {
+    const { select, group } = extrairSelectEGroupByNivelZero(parte);
+    if (!select || group) continue;
+    if (!/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(select)) continue;
+    for (const itemBruto of dividirExpressoesSql(select)) {
+      const item = itemBruto
+        .replace(/^\s*DISTINCT\s+/i, '')
+        .replace(/\s+AS\s+[A-Z_][A-Z0-9_]*\s*$/i, '')
+        .trim();
+      if (!item || /^['"\d]/.test(item)) continue;
+      if (/\b(SUM|COUNT|AVG|MIN|MAX|STRING_AGG)\s*\(/i.test(item)) continue;
+      if (!/\b[A-Z][A-Z0-9_]*\s*\.\s*[A-Z][A-Z0-9_]*\b/i.test(item)) continue;
+      erros.push(`SELECT com agregacao sem GROUP BY contem expressao nao agregada: ${item}. Adicione GROUP BY para essa expressao ou substitua por literal/alias fixo de periodo no UNION ALL.`);
+    }
+  }
+  return { ok: erros.length === 0, erros };
+}
+
+function _keywordAt(texto, pos, keyword) {
+  const alvo = String(keyword || '').toUpperCase();
+  if (!alvo || String(texto || '').slice(pos, pos + alvo.length).toUpperCase() !== alvo) return false;
+  const antes = pos > 0 ? texto[pos - 1] : ' ';
+  const depois = texto[pos + alvo.length] || ' ';
+  return !/[A-Z0-9_]/i.test(antes) && !/[A-Z0-9_]/i.test(depois);
+}
+
+function extrairEscoposSelect(sql = '') {
+  const texto = String(sql || '');
+  const escopos = [];
+  let nivel = 0;
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') {
+      aspas = !aspas;
+      continue;
+    }
+    if (aspas) continue;
+    if (c === '(') {
+      nivel++;
+      continue;
+    }
+    if (c === ')') {
+      nivel = Math.max(0, nivel - 1);
+      continue;
+    }
+    if (!_keywordAt(texto, i, 'SELECT')) continue;
+    const nivelSelect = nivel;
+    let nivelInterno = nivel;
+    let aspasInterna = false;
+    let fim = texto.length;
+    for (let j = i + 6; j < texto.length; j++) {
+      const cj = texto[j];
+      if (cj === "'" && texto[j - 1] !== '\\') {
+        aspasInterna = !aspasInterna;
+        continue;
+      }
+      if (aspasInterna) continue;
+      if (cj === '(') {
+        nivelInterno++;
+        continue;
+      }
+      if (cj === ')') {
+        nivelInterno = Math.max(0, nivelInterno - 1);
+        if (nivelInterno < nivelSelect) {
+          fim = j;
+          break;
+        }
+        continue;
+      }
+      if (nivelSelect === 0 && nivelInterno === 0 && cj === ';') {
+        fim = j;
+        break;
+      }
+      if (nivelInterno === nivelSelect && _keywordAt(texto, j, 'UNION')) {
+        fim = j;
+        break;
+      }
+    }
+    escopos.push(texto.slice(i, fim));
+  }
+  return escopos;
+}
+
+function _pularEspacos(texto, pos) {
+  let i = pos;
+  while (i < texto.length && /\s/.test(texto[i])) i++;
+  return i;
+}
+
+function _pularTabelaOuSubquery(texto, pos) {
+  let i = _pularEspacos(texto, pos);
+  if (texto[i] === '(') {
+    let nivel = 0;
+    let aspas = false;
+    for (; i < texto.length; i++) {
+      const c = texto[i];
+      if (c === "'" && texto[i - 1] !== '\\') {
+        aspas = !aspas;
+        continue;
+      }
+      if (aspas) continue;
+      if (c === '(') nivel++;
+      if (c === ')') {
+        nivel--;
+        if (nivel === 0) return i + 1;
+      }
+    }
+    return i;
+  }
+  const m = texto.slice(i).match(/^[#\[\]A-Z0-9_.$]+/i);
+  return m ? i + m[0].length : i;
+}
+
+function _extrairAliasesTabelaNivelZero(escopo = '') {
+  const texto = String(escopo || '');
+  const aliases = [];
+  let nivel = 0;
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') {
+      aspas = !aspas;
+      continue;
+    }
+    if (aspas) continue;
+    if (c === '(') {
+      nivel++;
+      continue;
+    }
+    if (c === ')') {
+      nivel = Math.max(0, nivel - 1);
+      continue;
+    }
+    if (nivel !== 0) continue;
+    const ehFrom = _keywordAt(texto, i, 'FROM');
+    const ehJoin = _keywordAt(texto, i, 'JOIN');
+    if (!ehFrom && !ehJoin) continue;
+    let pos = i + (ehFrom ? 4 : 4);
+    pos = _pularTabelaOuSubquery(texto, pos);
+    pos = _pularEspacos(texto, pos);
+    if (_keywordAt(texto, pos, 'AS')) pos = _pularEspacos(texto, pos + 2);
+    const aliasMatch = texto.slice(pos).match(/^([A-Z_][A-Z0-9_]*)/i);
+    if (!aliasMatch) continue;
+    const alias = aliasMatch[1].toUpperCase();
+    if (/^(ON|WHERE|JOIN|INNER|LEFT|RIGHT|FULL|CROSS|OUTER|GROUP|HAVING|ORDER|UNION|OFFSET|FETCH)$/.test(alias)) continue;
+    aliases.push(alias);
+  }
+  return aliases;
+}
+
+function validarAliasesTabelaDuplicados(sql = '') {
+  const erros = [];
+  for (const escopo of extrairEscoposSelect(sql)) {
+    const aliases = _extrairAliasesTabelaNivelZero(escopo);
+    const vistos = new Set();
+    for (const alias of aliases) {
+      if (!vistos.has(alias)) {
+        vistos.add(alias);
+        continue;
+      }
+      erros.push(`Alias de tabela duplicado no mesmo SELECT: ${alias}. Declare cada tabela uma unica vez por escopo ou use aliases diferentes.`);
+    }
+  }
+  return { ok: erros.length === 0, erros: [...new Set(erros)] };
+}
+
 function _extrairDerivedTableInfo(sql) {
   const texto = String(sql || '').trim();
   const posFrom = localizarKeywordNivelZero(texto, 'FROM');
@@ -2152,6 +2469,34 @@ function validarDevolucaoConsistente(sql, mensagem = '') {
   return { ok: true, erros: [] };
 }
 
+function validarComparativoCrossModuleNormalizado(sql, spec = {}, mensagem = '') {
+  const nomeSpec = String(spec?.nome || '').toLowerCase();
+  const texto = String(sql || '');
+  const msg = String(mensagem || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const ehCrossModule = nomeSpec.includes('faturamento') && nomeSpec.includes('compras');
+  if (!ehCrossModule) return { ok: true, erros: [] };
+  const referenciaDoisMeses = /\b(?:desses|destes|esses|estes)\s+(?:dois\s+)?meses\b/.test(msg);
+  const aliasesEscalaresMeses = [
+    /\bAS\s+total_compras_junho\b/i,
+    /\bAS\s+total_compras_julho\b/i,
+    /\bAS\s+total_faturamento_junho\b/i,
+    /\bAS\s+total_faturamento_julho\b/i,
+  ].every(re => re.test(texto));
+  if (!referenciaDoisMeses && !aliasesEscalaresMeses) return { ok: true, erros: [] };
+  if (/\bAS\s+competencia\b/i.test(texto) && /\bAS\s+tipo\b/i.test(texto) && /\bAS\s+valor\b/i.test(texto)) {
+    return { ok: true, erros: [] };
+  }
+  return {
+    ok: false,
+    erros: [
+      'Comparativo cross-module de compras e faturamento para dois meses deve retornar linhas normalizadas com colunas tipo, valor e competencia. Nao use aliases escalares total_compras_junho/total_compras_julho/total_faturamento_junho/total_faturamento_julho.',
+    ],
+  };
+}
+
 function validarTesDescricaoQuandoAgrupado(sql = '', mensagem = '') {
   const msg = String(mensagem || '');
   if (!/\bTES\b|tipo(?:s)?\s+de\s+sa[ií]da/i.test(msg)) return { ok: true, erros: [] };
@@ -2180,6 +2525,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
   erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
+  erros.push(...validarComparativoCrossModuleNormalizado(texto, spec, mensagem).erros);
   if (String(spec.nome || '').toLowerCase() === 'faturamento') {
     erros.push(...validarTesDescricaoQuandoAgrupado(texto, mensagem).erros);
   }
@@ -2215,6 +2561,8 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   if (!escopoCheck.ok) {
     erros.push(...escopoCheck.erros);
   } else {
+    erros.push(...validarAgregadoSemGroupBy(texto).erros);
+    erros.push(...validarAliasesTabelaDuplicados(texto).erros);
     erros.push(...validarSelectContraGroupBy(texto).erros);
     erros.push(...validarAliasesDerivadosExternos(texto).erros);
   }
@@ -2321,6 +2669,130 @@ function sqlTemFiltroPeriodoEmCampo(sql, campo) {
   return padroes.some(re => re.test(texto));
 }
 
+function _fimMes(ano, mes) {
+  return new Date(Number(ano), Number(mes), 0).getDate();
+}
+
+function _periodoEhMesCompleto(dataInicio, dataFim) {
+  if (!/^\d{8}$/.test(dataInicio) || !/^\d{8}$/.test(dataFim)) return false;
+  const ano = dataInicio.slice(0, 4);
+  const mes = dataInicio.slice(4, 6);
+  if (dataFim.slice(0, 6) !== `${ano}${mes}`) return false;
+  return dataInicio.endsWith('01') && dataFim.endsWith(String(_fimMes(ano, mes)).padStart(2, '0'));
+}
+
+function sqlContemPeriodoDeclarado(sql, campos = [], dataInicio, dataFim) {
+  const texto = String(sql || '');
+  const ini = String(dataInicio || '').trim();
+  const fim = String(dataFim || '').trim();
+  if (!/^\d{8}$/.test(ini) || !/^\d{8}$/.test(fim)) return true;
+
+  const temInicio = new RegExp(`'${_escapeRegexLiteral(ini)}'`, 'i').test(texto);
+  const temFim = new RegExp(`'${_escapeRegexLiteral(fim)}'`, 'i').test(texto);
+  if (temInicio && temFim) return true;
+
+  if (_periodoEhMesCompleto(ini, fim)) {
+    const competencia = ini.slice(0, 6);
+    if (new RegExp(`'${_escapeRegexLiteral(competencia)}'`, 'i').test(texto)) return true;
+    const ano = ini.slice(0, 4);
+    const mes = ini.slice(4, 6);
+    const algumCampoCompetencia = campos.some(campo => {
+      const campoRe = `(?:[A-Z][A-Z0-9_]*\\.)?${_escapeRegexLiteral(campo)}`;
+      const reSubstr6 = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*6\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
+      const reLeft6 = new RegExp(`LEFT\\s*\\(\\s*${campoRe}\\s*,\\s*6\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
+      const reAnoMesSeparado = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*4\\s*\\)\\s*=\\s*'${ano}'[\\s\\S]{0,240}SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*5\\s*,\\s*2\\s*\\)\\s*=\\s*'${mes}'`, 'i');
+      const reMesAnoSeparado = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*5\\s*,\\s*2\\s*\\)\\s*=\\s*'${mes}'[\\s\\S]{0,240}SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*4\\s*\\)\\s*=\\s*'${ano}'`, 'i');
+      return reSubstr6.test(texto) || reLeft6.test(texto) || reAnoMesSeparado.test(texto) || reMesAnoSeparado.test(texto);
+    });
+    if (algumCampoCompetencia) return true;
+  }
+
+  return false;
+}
+
+function campoContemPeriodoDeclarado(sql, campo, dataInicio, dataFim) {
+  const texto = String(sql || '');
+  const ini = String(dataInicio || '').trim();
+  const fim = String(dataFim || '').trim();
+  if (!/^\d{8}$/.test(ini) || !/^\d{8}$/.test(fim) || !campo) return false;
+
+  const campoRe = `(?:[A-Z][A-Z0-9_]*\\.)?${_escapeRegexLiteral(campo)}`;
+  const reBetween = new RegExp(`\\b${campoRe}\\s+BETWEEN\\s*'${_escapeRegexLiteral(ini)}'\\s+AND\\s*'${_escapeRegexLiteral(fim)}'`, 'i');
+  if (reBetween.test(texto)) return true;
+
+  if (_periodoEhMesCompleto(ini, fim)) {
+    const competencia = ini.slice(0, 6);
+    const ano = ini.slice(0, 4);
+    const mes = ini.slice(4, 6);
+    const reSubstr6 = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*6\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
+    const reLeft6 = new RegExp(`LEFT\\s*\\(\\s*${campoRe}\\s*,\\s*6\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
+    const reAnoMesSeparado = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*4\\s*\\)\\s*=\\s*'${ano}'[\\s\\S]{0,240}SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*5\\s*,\\s*2\\s*\\)\\s*=\\s*'${mes}'`, 'i');
+    const reMesAnoSeparado = new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*5\\s*,\\s*2\\s*\\)\\s*=\\s*'${mes}'[\\s\\S]{0,240}SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*4\\s*\\)\\s*=\\s*'${ano}'`, 'i');
+    return reSubstr6.test(texto) || reLeft6.test(texto) || reAnoMesSeparado.test(texto) || reMesAnoSeparado.test(texto);
+  }
+
+  return false;
+}
+
+function _periodoTemporalCompativel(valor, dataInicio, dataFim) {
+  const v = String(valor || '').trim();
+  const ini = String(dataInicio || '').trim();
+  const fim = String(dataFim || '').trim();
+  if (/^\d{8}$/.test(v)) return v >= ini && v <= fim;
+  if (/^\d{6}$/.test(v)) {
+    const inicioCompetencia = `${v}01`;
+    const fimCompetencia = `${v}${String(_fimMes(v.slice(0, 4), v.slice(4, 6))).padStart(2, '0')}`;
+    return inicioCompetencia <= fim && fimCompetencia >= ini;
+  }
+  if (/^\d{4}$/.test(v)) return `${v}0101` <= fim && `${v}1231` >= ini;
+  return true;
+}
+
+function filtrosTemporaisContraditorios(sql, campos = [], dataInicio, dataFim, periodosPermitidos = null) {
+  const texto = String(sql || '');
+  const ini = String(dataInicio || '').trim();
+  const fim = String(dataFim || '').trim();
+  if (!/^\d{8}$/.test(ini) || !/^\d{8}$/.test(fim)) return [];
+  const permitidos = (Array.isArray(periodosPermitidos) && periodosPermitidos.length
+    ? periodosPermitidos
+    : [{ dataInicio: ini, dataFim: fim }]
+  ).map(periodoComDatas).filter(Boolean);
+  const valorPermitido = valor => permitidos.some(p => _periodoTemporalCompativel(valor, p.dataInicio, p.dataFim));
+
+  const erros = [];
+  for (const campo of campos) {
+    if (!campoContemPeriodoDeclarado(texto, campo, ini, fim)) continue;
+    const campoRe = `(?:[A-Z][A-Z0-9_]*\\.)?${_escapeRegexLiteral(campo)}`;
+    const ocorrencias = [];
+    const regexes = [
+      new RegExp(`SUBSTRING\\s*\\(\\s*${campoRe}\\s*,\\s*1\\s*,\\s*6\\s*\\)\\s*=\\s*'(\\d{6})'`, 'gi'),
+      new RegExp(`LEFT\\s*\\(\\s*${campoRe}\\s*,\\s*6\\s*\\)\\s*=\\s*'(\\d{6})'`, 'gi'),
+      new RegExp(`\\b${campoRe}\\s+LIKE\\s*'(\\d{6,8})%?'`, 'gi'),
+      new RegExp(`\\b${campoRe}\\s*=\\s*'(\\d{6,8})'`, 'gi'),
+      new RegExp(`\\b${campoRe}\\s+BETWEEN\\s*'(\\d{6,8})'\\s+AND\\s*'(\\d{6,8})'`, 'gi'),
+    ];
+
+    for (const re of regexes) {
+      let match;
+      while ((match = re.exec(texto)) !== null) {
+        if (match[2]) {
+          const inicioOk = valorPermitido(match[1]);
+          const fimOk = valorPermitido(match[2]);
+          if (!inicioOk || !fimOk) ocorrencias.push(`${match[1]} a ${match[2]}`);
+        } else if (!valorPermitido(match[1])) {
+          ocorrencias.push(match[1]);
+        }
+      }
+    }
+
+    if (ocorrencias.length) {
+      const escopo = permitidos.map(p => `${p.dataInicio} a ${p.dataFim}`).join(' ou ');
+      erros.push(`O SQL contem filtro temporal contraditorio em ${campo}: ${[...new Set(ocorrencias)].join(', ')} fora dos periodos permitidos pelo contrato (${escopo}). Remova filtros antigos/inferidos e mantenha apenas os periodos do contrato.`);
+    }
+  }
+  return erros;
+}
+
 function _numerosValidos(lista, min, max) {
   if (!Array.isArray(lista)) return null;
   const nums = lista
@@ -2384,10 +2856,13 @@ function validarMesesAnosDeclaradosNoSql(sql, spec = {}, periodo = null) {
   };
 }
 
-function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null) {
+function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null, opts = {}) {
   const dataInicio = String(periodo?.dataInicio || '').trim();
   const dataFim = String(periodo?.dataFim || '').trim();
   const campos = _camposPeriodoObrigatorios(spec);
+  const periodosPermitidos = Array.isArray(opts.periodosPermitidos)
+    ? opts.periodosPermitidos.map(periodoComDatas).filter(Boolean)
+    : [];
   if (!/^\d{8}$/.test(dataInicio) || !/^\d{8}$/.test(dataFim) || !campos.length) {
     return { ok: true, erros: [] };
   }
@@ -2400,7 +2875,282 @@ function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null) {
       ],
     };
   }
+  if (periodosPermitidos.length > 1) {
+    const contradicoes = filtrosTemporaisContraditorios(sql, campos, dataInicio, dataFim, periodosPermitidos);
+    if (contradicoes.length) {
+      return { ok: false, erros: contradicoes };
+    }
+    return { ok: true, erros: [] };
+  }
+  if (!sqlContemPeriodoDeclarado(sql, campos, dataInicio, dataFim)) {
+    return {
+      ok: false,
+      erros: [
+        `O plano declarou periodo ${dataInicio} a ${dataFim}, mas o SQL filtrou datas diferentes ou abertas. O SQL deve usar exatamente '${dataInicio}' e '${dataFim}' ou competencia equivalente do mesmo mes em campo temporal valido (${campos.join(', ')}).`,
+      ],
+    };
+  }
+  const contradicoes = filtrosTemporaisContraditorios(sql, campos, dataInicio, dataFim, opts.periodosPermitidos);
+  if (contradicoes.length) {
+    return { ok: false, erros: contradicoes };
+  }
   return validarMesesAnosDeclaradosNoSql(sql, spec, periodo);
+}
+
+function periodoComDatas(periodo = {}) {
+  const p = periodo && typeof periodo === 'object' ? periodo : {};
+  const dataInicio = String(p.dataInicio || p.data_inicio || p.start || p.inicio || '').trim();
+  const dataFim = String(p.dataFim || p.data_fim || p.end || p.fim || '').trim();
+  if (!/^\d{8}$/.test(dataInicio) || !/^\d{8}$/.test(dataFim)) return null;
+  return { ...p, dataInicio, dataFim };
+}
+
+function periodoAutoritativoParaSql(intent = {}, planoObj = {}) {
+  return periodoComDatas(intent?._periodoCanonicoResolvido)
+    || periodoComDatas(intent?.periodo)
+    || periodoComDatas(planoObj?.periodo)
+    || planoObj?.periodo
+    || intent?.periodo
+    || null;
+}
+
+function periodoDeterministicoMensagem(mensagem = '') {
+  try {
+    const detectado = periodResolver.identificarPeriodoTexto(mensagem || '');
+    if (!detectado?.tipo || detectado.tipo === 'nenhum') return null;
+    const resolvido = periodResolver.resolverPeriodo(detectado);
+    const periodo = periodoComDatas({ ...detectado, ...resolvido });
+    return periodo || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function periodosComparativoContinuidade(intent = {}, periodoAtual = null, planoConsulta = {}) {
+  if (!planoConsulta?.comparativo) return null;
+  const contexto = intent?._contextoUsadoOrquestrador || intent?._orquestradorContrato?.contexto_usado || null;
+  const historico = Array.isArray(intent?._historicoResumido) ? intent._historicoResumido : [];
+  const ultimoPeriodoHistorico = [...historico]
+    .reverse()
+    .map(t => periodoComDatas(t?.periodo) || periodoComDatas(t?.contrato_orquestrador?.periodo) || periodoComDatas(t?.contexto_usado?.periodo))
+    .find(Boolean);
+  const base = periodoComDatas(contexto?.periodo) || ultimoPeriodoHistorico;
+  const comparacao = periodoComDatas(periodoAtual || intent?.periodo || planoConsulta?.periodo);
+  if (!base || !comparacao) return null;
+  if (base.dataInicio === comparacao.dataInicio && base.dataFim === comparacao.dataFim) return null;
+  return { periodo_base: base, periodo_comparacao: comparacao };
+}
+
+function aplicarPeriodosComparativoContinuidade(planoConsulta = {}, intent = {}, periodoAtual = null) {
+  const periodosDeclarados = deduplicarPeriodosComparativos(Array.isArray(periodoAtual?.periodos_comparativos)
+    ? periodoAtual.periodos_comparativos.map(periodoComDatas).filter(Boolean)
+    : []);
+  if (periodosDeclarados.length > 1) {
+    return {
+      ...planoConsulta,
+      comparativo: true,
+      periodo_base: periodosDeclarados[0],
+      periodo_comparacao: periodosDeclarados[1],
+      periodos_comparativos: periodosDeclarados,
+    };
+  }
+  const periodos = periodosComparativoContinuidade(intent, periodoAtual, planoConsulta);
+  if (!periodos) return planoConsulta;
+  return {
+    ...planoConsulta,
+    ...periodos,
+    periodos_comparativos: [periodos.periodo_base, periodos.periodo_comparacao],
+  };
+}
+
+function deduplicarPeriodosComparativos(periodos = []) {
+  const vistos = new Set();
+  const out = [];
+  for (const periodo of periodos || []) {
+    const p = periodoComDatas(periodo);
+    if (!p) continue;
+    const chave = `${p.dataInicio}:${p.dataFim}`;
+    if (vistos.has(chave)) continue;
+    vistos.add(chave);
+    out.push(p);
+  }
+  return out;
+}
+
+function periodoResolvidoComComparativos(periodoBase = null, planoConsulta = {}) {
+  const periodo = periodoComDatas(periodoBase) || periodoBase || null;
+  if (!periodo) return null;
+  const periodosComparativos = deduplicarPeriodosComparativos(Array.isArray(planoConsulta?.periodos_comparativos)
+    ? planoConsulta.periodos_comparativos.map(periodoComDatas).filter(Boolean)
+    : []);
+  if (periodosComparativos.length > 1) {
+    return {
+      ...periodo,
+      dataInicio: periodosComparativos[0].dataInicio,
+      dataFim: periodosComparativos[periodosComparativos.length - 1].dataFim,
+      data_inicio: periodosComparativos[0].dataInicio,
+      data_fim: periodosComparativos[periodosComparativos.length - 1].dataFim,
+      periodos_comparativos: periodosComparativos,
+      origem: periodo.origem || 'comparativo',
+    };
+  }
+  return periodo;
+}
+
+function aplicarAgrupamentosIntentNoPlano(planoConsulta = {}, intent = {}) {
+  const gruposRaw = Array.isArray(intent?.group_by) && intent.group_by.length
+    ? intent.group_by
+    : Array.isArray(intent?.agrupar_por_composto) && intent.agrupar_por_composto.length
+      ? intent.agrupar_por_composto
+      : intent?.agrupar_por
+        ? [intent.agrupar_por]
+        : [];
+  const gruposIntent = gruposRaw
+    .map(g => String(g || '').trim().toLowerCase())
+    .filter(g => g && g !== 'empresa');
+  if (!gruposIntent.length) return planoConsulta;
+  const atuais = Array.isArray(planoConsulta?.agrupamentos)
+    ? planoConsulta.agrupamentos.map(g => String(g || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const agrupamentos = [...new Set([...atuais, ...gruposIntent])];
+  return { ...planoConsulta, agrupamentos };
+}
+
+function prepararPlanoConsultaTecnico({ spec, mensagem, periodo, filtros, entidades, intent } = {}) {
+  let planoConsulta = construirQueryPlanTecnico({ spec, mensagem, periodo, filtros, entidades });
+  planoConsulta = aplicarAgrupamentosIntentNoPlano(planoConsulta, intent);
+  planoConsulta = aplicarPeriodosComparativoContinuidade(planoConsulta, intent, periodo);
+  return planoConsulta;
+}
+
+function validarPeriodosComparativosNoSql(sql, spec = {}, planoConsulta = {}) {
+  const periodos = deduplicarPeriodosComparativos(Array.isArray(planoConsulta?.periodos_comparativos)
+    ? planoConsulta.periodos_comparativos.map(periodoComDatas).filter(Boolean)
+    : []);
+  const campos = _camposPeriodoObrigatorios(spec);
+  if (!periodos.length || !campos.length) return { ok: true, erros: [] };
+
+  const validacaoSobreposicao = validarSobreposicaoPeriodosComparativos(sql, periodos);
+  if (!validacaoSobreposicao.ok) return validacaoSobreposicao;
+
+  const validacaoSaida = validarSaidaComparativaPeriodos(sql, periodos);
+  if (!validacaoSaida.ok) return validacaoSaida;
+
+  const faltantes = periodos.filter(p => !sqlContemPeriodoDeclarado(sql, campos, p.dataInicio, p.dataFim));
+  if (!faltantes.length) return { ok: true, erros: [] };
+
+  const declarados = periodos.map(p => `${p.dataInicio} a ${p.dataFim}`).join(' e ');
+  const faltantesTxt = faltantes.map(p => `${p.dataInicio} a ${p.dataFim}`).join(' e ');
+  return {
+    ok: false,
+    erros: [
+      `Comparativo de continuidade exige que o SQL retorne todos os periodos declarados (${declarados}), mas faltou ${faltantesTxt}. Gere SQL com os dois periodos, usando UNION ALL com rotulo/competencia ou filtro de competencia explicito para cada periodo; nao retorne apenas o periodo_comparacao.`,
+    ],
+  };
+}
+
+function _cabecalhosSelectComparativo(sql) {
+  return String(sql || '')
+    .split(/\bUNION\s+ALL\b/i)
+    .map(bloco => {
+      const semRowcount = bloco.replace(/\bSET\s+ROWCOUNT\s+\d+\s*;?/ig, ' ');
+      const match = semRowcount.match(/\bSELECT\b([\s\S]*?)\bFROM\b/i);
+      return match ? match[1] : '';
+    })
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function validarSaidaComparativaPeriodos(sql, periodos = []) {
+  const periodosValidos = (periodos || []).map(periodoComDatas).filter(Boolean);
+  if (periodosValidos.length < 2) return { ok: true, erros: [] };
+
+  const sqlTexto = String(sql || '');
+  const cabecalhos = _cabecalhosSelectComparativo(sqlTexto);
+  if (!cabecalhos.length) return { ok: true, erros: [] };
+
+  const temColunaPeriodo = cabecalhos.every(cabecalho => (
+    /\bAS\s+(?:competencia|periodo|ano_mes|mes_ano|mes|ano)\b/i.test(cabecalho)
+    || /\b(?:competencia|periodo|ano_mes|mes_ano)\b/i.test(cabecalho)
+  ));
+  if (temColunaPeriodo) return { ok: true, erros: [] };
+
+  const competencias = periodosValidos.map(p => String(p.dataInicio || '').slice(0, 6)).filter(Boolean);
+  const temLiteralPeriodoEmTodos = competencias.length === cabecalhos.length
+    && cabecalhos.every((cabecalho, idx) => cabecalho.includes(`'${competencias[idx]}'`) || cabecalho.includes(`"${competencias[idx]}"`));
+  if (temLiteralPeriodoEmTodos) return { ok: true, erros: [] };
+
+  return {
+    ok: false,
+    erros: [
+      'Comparativo com multiplos periodos precisa expor uma coluna de periodo/competencia no SELECT. Nao some periodos diferentes na mesma linha de fornecedor/cliente/produto; use UNION ALL com literal AS competencia ou agrupe por SUBSTRING(campo_data,1,6) AS competencia.',
+    ],
+  };
+}
+
+function _sqlSegmentoContemPeriodoComparativo(segmentoSql, periodo) {
+  const segmento = String(segmentoSql || '').toUpperCase();
+  const inicio = String(periodo?.dataInicio || '');
+  const fim = String(periodo?.dataFim || '');
+  const competencia = inicio.slice(0, 6);
+  const ano = inicio.slice(0, 4);
+  const mes = inicio.slice(4, 6);
+  if (!inicio || !fim || !competencia || !ano || !mes) return false;
+  if (segmento.includes(inicio) || segmento.includes(fim) || segmento.includes(competencia)) return true;
+  const reMesAno = new RegExp(`['"]${mes}['"][\\s\\S]{0,120}['"]${ano}['"]|['"]${ano}['"][\\s\\S]{0,120}['"]${mes}['"]`, 'i');
+  return reMesAno.test(segmento);
+}
+
+function validarSobreposicaoPeriodosComparativos(sql, periodos = []) {
+  const textoSql = String(sql || '');
+  if (!/\bUNION\s+ALL\b/i.test(textoSql) || periodos.length < 2) return { ok: true, erros: [] };
+
+  const blocos = textoSql.split(/\bUNION\s+ALL\b/i).map(s => s.trim()).filter(Boolean);
+  if (blocos.length < 2) return { ok: true, erros: [] };
+
+  const ocorrenciasPorPeriodo = new Map();
+  for (const periodo of periodos) {
+    const chave = String(periodo.dataInicio || '').slice(0, 6);
+    if (chave) ocorrenciasPorPeriodo.set(chave, 0);
+  }
+
+  for (let i = 0; i < blocos.length; i += 1) {
+    const encontrados = periodos
+      .map(p => ({ periodo: p, competencia: String(p.dataInicio || '').slice(0, 6) }))
+      .filter(p => p.competencia && _sqlSegmentoContemPeriodoComparativo(blocos[i], p.periodo));
+    for (const item of encontrados) {
+      ocorrenciasPorPeriodo.set(item.competencia, (ocorrenciasPorPeriodo.get(item.competencia) || 0) + 1);
+    }
+    if (encontrados.length > 1) {
+      return {
+        ok: false,
+        erros: [
+          `Comparativo com UNION ALL contem bloco que cobre multiplos periodos (${encontrados.map(p => p.competencia).join(', ')}). Cada bloco do UNION deve filtrar apenas uma competencia, ou use uma unica consulta agrupada por competencia.`,
+        ],
+      };
+    }
+  }
+
+  const duplicados = [...ocorrenciasPorPeriodo.entries()].filter(([, total]) => total > 1).map(([competencia]) => competencia);
+  if (duplicados.length) {
+    return {
+      ok: false,
+      erros: [
+        `Comparativo com UNION ALL duplicou periodo(s) ${duplicados.join(', ')}. Cada competencia comparativa deve aparecer em apenas um bloco do UNION.`,
+      ],
+    };
+  }
+
+  return { ok: true, erros: [] };
+}
+
+function podeParametrizarTemplateSql(planoConsulta = {}) {
+  const periodosComparativos = Array.isArray(planoConsulta?.periodos_comparativos)
+    ? planoConsulta.periodos_comparativos.filter(Boolean)
+    : [];
+  // Comparativos carregam periodo_base + periodo_comparacao. O template atual so sabe
+  // parametrizar period.start/end; cachear isso deixaria o periodo_base literal.
+  return periodosComparativos.length <= 1;
 }
 
 function construirQueryPlanTecnico({ spec, mensagem, periodo, filtros, entidades } = {}) {
@@ -2657,9 +3407,15 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
     }
     throw Object.assign(new Error(`SQL rejeitado por contrato IA-OWNER: ${errosCombinados.join(' | ')}`), { _tipo: 'contrato_ia_owner_invalido', _sql: sqlEntradaNormalizado });
   }
-  const validacaoPeriodo = validarPeriodoDeclaradoNoSql(sqlEntradaNormalizado, spec, periodo);
+  const validacaoPeriodo = validarPeriodoDeclaradoNoSql(sqlEntradaNormalizado, spec, periodo, {
+    periodosPermitidos: planoConsulta?.periodos_comparativos,
+  });
   if (!validacaoPeriodo.ok) {
     throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodo.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
+  }
+  const validacaoPeriodosComparativos = validarPeriodosComparativosNoSql(sqlEntradaNormalizado, spec, planoConsulta);
+  if (!validacaoPeriodosComparativos.ok) {
+    throw Object.assign(new Error(`SQL rejeitado por periodo inconsistente: ${validacaoPeriodosComparativos.erros.join(' | ')}`), { _tipo: 'periodo_sql_inconsistente', _sql: sqlEntradaNormalizado });
   }
   let out = sx3SqlValidator.normalizarReferenciasAliasSql(sqlEntradaNormalizado);
   const contratosRelacionais = completarContratoRelacionalSD1SF1(out);
@@ -2793,6 +3549,17 @@ async function executar(spec, intent, empresaId) {
   }
   intentEfetivo = normalizarFiltroEmpresaComoEntidade(spec, intentEfetivo, mensagem);
   intentEfetivo = limparFiltrosEntidadeHerdadosDaConsultaAtual(spec, intentEfetivo, mensagem);
+  const periodoDeterministico = periodoDeterministicoMensagem(mensagem);
+  if (periodoDeterministico) {
+    intentEfetivo = {
+      ...intentEfetivo,
+      periodo: {
+        ...(intentEfetivo.periodo || {}),
+        ...periodoDeterministico,
+      },
+      _periodoCanonicoResolvido: periodoDeterministico,
+    };
+  }
 
   _traceIaOwner('ia_owner_metadata_inicio', { empresa_id: empresaId });
   const protheus = configProtheus(empresaId);
@@ -2903,6 +3670,280 @@ async function executar(spec, intent, empresaId) {
       };
     }
   }
+  let intentCanonicoInfo = null;
+  try {
+    const provedorPreferido = aiProviderClient.normalizarOrdem(cfg)[0] || null;
+    const modeloPreferido = provedorPreferido ? cfg?.[`${provedorPreferido}_modelo`] || null : null;
+    intentCanonicoInfo = canonicalIntent.gerarIntentCanonico({
+      spec,
+      intent: intentEfetivo,
+      empresaId,
+      mensagem,
+      entidadesResolvidas,
+      modelo: modeloPreferido,
+    });
+    intentEfetivo = {
+      ...intentEfetivo,
+      _intentCanonico: intentCanonicoInfo.canonical,
+      _intentCanonicoHash: intentCanonicoInfo.canonicalHash,
+      _intentCanonicoEstrutural: intentCanonicoInfo.structural,
+      _chaveCacheIntent: intentCanonicoInfo.cacheKey,
+    };
+  } catch (e) {
+    console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao gerar Intent Canonico: ${e.message}`);
+  }
+  if (intentCanonicoInfo) {
+    const cacheRow = buscarTemplateCacheDeterministico({
+      empresaId,
+      numeroWa: intentEfetivo._remetente || null,
+      intentCanonicoInfo,
+    });
+    if (cacheRow?.sql_template) {
+      const aplicado = sqlTemplate.aplicarSqlTemplate(cacheRow.sql_template, intentCanonicoInfo.canonical);
+      const validacaoTemplate = validarTemplateAplicado(intentCanonicoInfo.canonical, aplicado);
+      if (validacaoTemplate.ok) {
+        _traceIaOwner('ia_owner_cache_deterministico_hit', {
+          empresa_id: empresaId,
+          modulo: spec.nome || spec.handlerName || null,
+          correlation_id_origem: cacheRow.correlation_id || null,
+        });
+        const intentReuso = {
+          ...intentEfetivo,
+          _periodoCanonicoResolvido: intentCanonicoInfo.canonical.period || null,
+          _intentCanonico: intentCanonicoInfo.canonical,
+          _intentCanonicoHash: intentCanonicoInfo.canonicalHash,
+          _intentCanonicoEstrutural: intentCanonicoInfo.structural,
+          _chaveCacheIntent: intentCanonicoInfo.cacheKey,
+          _entidadesResolvidas: entidadesResolvidas,
+        };
+        const resultadoCache = await executarSqlDireto(spec, aplicado.sql, intentReuso, empresaId);
+        if (resultadoCache?.tipo === 'sucesso_ai_sql') {
+          return {
+            ...resultadoCache,
+            _pipeline_origem: 'cache_deterministico',
+            _sql_canonico_origem: 'cache_deterministico',
+            _sql_canonico_original: cacheRow.sql_template,
+            _intent_canonico: intentCanonicoInfo.canonical,
+            _intent_canonico_hash: intentCanonicoInfo.canonicalHash,
+            _intent_canonico_estrutural: intentCanonicoInfo.structural,
+            _chave_cache: intentCanonicoInfo.cacheKey,
+            _sql_template: cacheRow.sql_template,
+            _sql_template_parametros: aplicado.aplicados,
+            _sql_canonico_reuso_motivo: `cache_deterministico:${cacheRow.correlation_id || 'sem_id'}`,
+            _sql_canonico_reuso_permitido: true,
+            trace: [
+              ...(Array.isArray(resultadoCache.trace) ? resultadoCache.trace : []),
+              { etapa: 'cache_deterministico', acao: 'hit', modulo: spec.nome || null, detalhe: `origem=${cacheRow.correlation_id || 'n/a'}` },
+            ],
+          };
+        }
+        console.warn(`[${spec.logPrefix || 'IAOwner'}] Cache deterministico falhou, seguindo via LLM: ${resultadoCache?.subtipo || resultadoCache?.tipo || 'sem_resultado'}`);
+      } else {
+        _traceIaOwner('ia_owner_cache_deterministico_miss_template', {
+          empresa_id: empresaId,
+          motivo: validacaoTemplate.motivo,
+        });
+      }
+    }
+  }
+  const semanticRuntime = {
+    fewShotAtivo: semanticFewShotAtivo(),
+    shadowAtivo: semanticShadowAtivo(empresaId),
+    autoReuseAtivo: semanticAutoReuseAtivo(empresaId),
+    candidatos: [],
+    shadowCandidate: null,
+    autoReuseCandidate: null,
+    autoReusePolitica: null,
+    shadowThreshold: null,
+    autoReuseThreshold: null,
+    autoReuseExecThreshold: null,
+    embeddingRankingAtivo: semanticEmbeddingRankingAtivo(),
+    rankingFonte: 'estrutural',
+  };
+  if ((semanticRuntime.fewShotAtivo || semanticRuntime.shadowAtivo || semanticRuntime.autoReuseAtivo) && intentCanonicoInfo) {
+    try {
+      const backfillLimit = numeroEnv('IAC_NLSQL_SEMANTIC_BACKFILL_LIMIT', 50, { min: 0, max: 1000 });
+      const fewShotLimit = numeroEnv('IAC_NLSQL_SEMANTIC_FEWSHOT_LIMIT', 3, { min: 0, max: 5 });
+      const fewShotThreshold = numeroEnv('IAC_NLSQL_SEMANTIC_FEWSHOT_THRESHOLD', 0.45, { min: 0, max: 1 });
+      const shadowLimit = numeroEnv('IAC_NLSQL_SEMANTIC_SHADOW_LIMIT', 1, { min: 1, max: 5 });
+      const shadowThreshold = numeroEnv('IAC_NLSQL_SEMANTIC_SHADOW_THRESHOLD', 0.7, { min: 0, max: 1 });
+      const autoReuseThreshold = numeroEnv('IAC_NLSQL_SEMANTIC_AUTO_REUSE_THRESHOLD', 0.98, { min: 0, max: 1 });
+      const autoReuseExecThreshold = numeroEnv('IAC_NLSQL_SEMANTIC_AUTO_REUSE_EXEC_THRESHOLD', 0.995, { min: 0, max: 1 });
+      semanticRuntime.shadowThreshold = shadowThreshold;
+      semanticRuntime.autoReuseThreshold = autoReuseThreshold;
+      semanticRuntime.autoReuseExecThreshold = autoReuseExecThreshold;
+      const backfill = backfillLimit > 0
+        ? nlsqlSemanticExamples.backfillConfiaveis({ empresaId, limit: backfillLimit })
+        : { candidatos: 0, inseridos: 0 };
+      const lookupLimit = Math.max(
+        semanticRuntime.fewShotAtivo ? fewShotLimit : 0,
+        semanticRuntime.shadowAtivo ? shadowLimit : 0,
+        semanticRuntime.autoReuseAtivo ? 1 : 0,
+      );
+      const thresholds = [
+        semanticRuntime.fewShotAtivo ? fewShotThreshold : null,
+        semanticRuntime.shadowAtivo ? shadowThreshold : null,
+        semanticRuntime.autoReuseAtivo ? autoReuseExecThreshold : null,
+      ].filter(v => v !== null);
+      const lookupThreshold = thresholds.length ? Math.min(...thresholds) : fewShotThreshold;
+      let exemplos = [];
+      if (semanticRuntime.embeddingRankingAtivo) {
+        try {
+          const rankingEmbedding = await nlsqlSemanticExamples.buscarFewShotComEmbeddings({
+            empresaId,
+            intentCanonicoInfo,
+            limit: lookupLimit,
+            threshold: lookupThreshold,
+          });
+          exemplos = rankingEmbedding.exemplos || [];
+          semanticRuntime.rankingFonte = rankingEmbedding.fonte || 'embedding_hibrido';
+          if (!exemplos.length && Number(rankingEmbedding.candidatos_vetoriais || 0) === 0) {
+            semanticRuntime.rankingFonte = 'estrutural_fallback_sem_embedding';
+            exemplos = nlsqlSemanticExamples.buscarFewShot({
+              empresaId,
+              intentCanonicoInfo,
+              limit: lookupLimit,
+              threshold: lookupThreshold,
+            });
+          }
+        } catch (errEmbedding) {
+          semanticRuntime.rankingFonte = 'estrutural_fallback';
+          _traceIaOwner('ia_owner_semantic_embedding_fallback', {
+            empresa_id: empresaId,
+            erro: errEmbedding?.message || String(errEmbedding),
+          });
+          exemplos = nlsqlSemanticExamples.buscarFewShot({
+            empresaId,
+            intentCanonicoInfo,
+            limit: lookupLimit,
+            threshold: lookupThreshold,
+          });
+        }
+      } else {
+        exemplos = nlsqlSemanticExamples.buscarFewShot({
+          empresaId,
+          intentCanonicoInfo,
+          limit: lookupLimit,
+          threshold: lookupThreshold,
+        });
+      }
+      semanticRuntime.candidatos = exemplos;
+      semanticRuntime.shadowCandidate = semanticRuntime.shadowAtivo
+        ? exemplos.find(ex => Number(ex.score || 0) >= shadowThreshold) || null
+        : null;
+      if (semanticRuntime.autoReuseAtivo) {
+        for (const ex of exemplos) {
+          if (Number(ex.score || 0) < autoReuseExecThreshold) continue;
+          const fonte = ex.score_fonte || semanticRuntime.rankingFonte || 'nao_informado';
+          const politica = nlsqlPoliticas.politicaLiberadaParaCandidato({
+            empresaId,
+            module: ex.module,
+            fonteRanking: fonte,
+            score: ex.score,
+          });
+          if (politica.liberado) {
+            semanticRuntime.autoReuseCandidate = ex;
+            semanticRuntime.autoReusePolitica = politica;
+            break;
+          }
+        }
+      }
+      if (semanticRuntime.fewShotAtivo && exemplos.length) {
+        contextoTecnico = {
+          ...contextoTecnico,
+          few_shot_semantico: nlsqlSemanticExamples.exemplosParaPrompt(exemplos.slice(0, fewShotLimit)),
+        };
+      }
+      _traceIaOwner('ia_owner_semantic_fewshot', {
+        empresa_id: empresaId,
+        backfill_candidatos: backfill.candidatos,
+        backfill_inseridos: backfill.inseridos,
+        exemplos: exemplos.length,
+        fewshot_ativo: semanticRuntime.fewShotAtivo,
+        shadow_ativo: semanticRuntime.shadowAtivo,
+        auto_reuse_ativo: semanticRuntime.autoReuseAtivo,
+        embedding_ranking_ativo: semanticRuntime.embeddingRankingAtivo,
+        ranking_fonte: semanticRuntime.rankingFonte,
+        fewshot_threshold: fewShotThreshold,
+        shadow_threshold: shadowThreshold,
+        auto_reuse_threshold: autoReuseThreshold,
+        auto_reuse_exec_threshold: autoReuseExecThreshold,
+        shadow_candidate: semanticRuntime.shadowCandidate?.execution_log_id || null,
+        auto_reuse_candidate: semanticRuntime.autoReuseCandidate?.execution_log_id || null,
+        auto_reuse_politica: semanticRuntime.autoReusePolitica?.motivo || null,
+      });
+    } catch (e) {
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Contexto semantico indisponivel: ${e.message}`);
+    }
+  }
+  if (semanticRuntime.autoReuseAtivo && semanticRuntime.autoReuseCandidate && intentCanonicoInfo) {
+    try {
+      const candidato = semanticRuntime.autoReuseCandidate;
+      const aplicado = sqlTemplate.aplicarSqlTemplate(candidato.sql_template, intentCanonicoInfo.canonical);
+      const validacaoTemplate = validarTemplateAplicado(intentCanonicoInfo.canonical, aplicado);
+      if (!validacaoTemplate.ok) {
+        _traceIaOwner('ia_owner_semantic_auto_reuse_miss_template', {
+          empresa_id: empresaId,
+          motivo: validacaoTemplate.motivo,
+          candidato: candidato.execution_log_id || null,
+        });
+      } else {
+        _traceIaOwner('ia_owner_semantic_auto_reuse_hit', {
+          empresa_id: empresaId,
+          modulo: spec.nome || spec.handlerName || null,
+          candidato: candidato.execution_log_id || null,
+          score: candidato.score,
+          fonte: candidato.score_fonte || semanticRuntime.rankingFonte || null,
+          politica: semanticRuntime.autoReusePolitica?.motivo || null,
+        });
+        const intentReuso = {
+          ...intentEfetivo,
+          _periodoCanonicoResolvido: intentCanonicoInfo.canonical.period || null,
+          _intentCanonico: intentCanonicoInfo.canonical,
+          _intentCanonicoHash: intentCanonicoInfo.canonicalHash,
+          _intentCanonicoEstrutural: intentCanonicoInfo.structural,
+          _chaveCacheIntent: intentCanonicoInfo.cacheKey,
+          _entidadesResolvidas: entidadesResolvidas,
+        };
+        const resultadoReuso = await executarSqlDireto(spec, aplicado.sql, intentReuso, empresaId);
+        if (resultadoReuso?.tipo === 'sucesso_ai_sql') {
+          return {
+            ...resultadoReuso,
+            _pipeline_origem: 'auto_reuse_semantico',
+            _sql_canonico_origem: 'auto_reuse_semantico',
+            _sql_canonico_original: candidato.sql_template,
+            _intent_canonico: intentCanonicoInfo.canonical,
+            _intent_canonico_hash: intentCanonicoInfo.canonicalHash,
+            _intent_canonico_estrutural: intentCanonicoInfo.structural,
+            _chave_cache: intentCanonicoInfo.cacheKey,
+            _sql_template: candidato.sql_template,
+            _sql_template_parametros: aplicado.aplicados,
+            _sql_canonico_reuso_motivo: `auto_reuse_semantico:${candidato.execution_log_id || 'sem_id'};score=${Number(candidato.score || 0).toFixed(3)};fonte=${candidato.score_fonte || semanticRuntime.rankingFonte || 'nao_informado'}`,
+            _sql_canonico_reuso_permitido: true,
+            _semantic_auto_reuse: {
+              candidato_execution_log_id: candidato.execution_log_id || null,
+              score: candidato.score,
+              score_fonte: candidato.score_fonte || semanticRuntime.rankingFonte || null,
+              politica: semanticRuntime.autoReusePolitica || null,
+            },
+            trace: [
+              ...(Array.isArray(resultadoReuso.trace) ? resultadoReuso.trace : []),
+              { etapa: 'auto_reuse_semantico', acao: 'hit', modulo: spec.nome || null, detalhe: `origem=${candidato.execution_log_id || 'n/a'}; score=${Number(candidato.score || 0).toFixed(3)}` },
+            ],
+          };
+        }
+        _traceIaOwner('ia_owner_semantic_auto_reuse_fallback_llm', {
+          empresa_id: empresaId,
+          candidato: candidato.execution_log_id || null,
+          subtipo: resultadoReuso?.subtipo || resultadoReuso?.tipo || null,
+        });
+        console.warn(`[${spec.logPrefix || 'IAOwner'}] Auto-reuse semantico falhou, seguindo via LLM: ${resultadoReuso?.subtipo || resultadoReuso?.tipo || 'sem_resultado'}`);
+      }
+    } catch (e) {
+      _traceIaOwner('ia_owner_semantic_auto_reuse_erro', { empresa_id: empresaId, erro: e?.message || String(e) });
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Auto-reuse semantico indisponivel, seguindo via LLM: ${e.message}`);
+    }
+  }
   const modeloOpts = {
     modeloBaixasReceber: contextoTecnico.modelo_baixas_receber,
     modeloBaixasPagar: contextoTecnico.modelo_baixas_pagar,
@@ -2932,6 +3973,12 @@ async function executar(spec, intent, empresaId) {
     sql_apos_parametros: null,
     sql_apos_contrato: null,
     sql_final_executado: null,
+    intent_canonico: intentCanonicoInfo?.canonical || null,
+    intent_canonico_hash: intentCanonicoInfo?.canonicalHash || null,
+    intent_canonico_estrutural: intentCanonicoInfo?.structural || null,
+    chave_cache: intentCanonicoInfo?.cacheKey || null,
+    sql_template: null,
+    sql_template_parametros: [],
     plano_ia_owner: null,
     query_plan: null,
     resposta_ia_bruta: null,
@@ -2956,12 +4003,17 @@ async function executar(spec, intent, empresaId) {
     return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- IA-OWNER falhou: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
   }
 
-  let planoConsulta = construirQueryPlanTecnico({
+  let periodoAutoritativo = periodoAutoritativoParaSql(intentEfetivo, plano.obj);
+  if (periodoAutoritativo) {
+    intentEfetivo = { ...intentEfetivo, _periodoCanonicoResolvido: periodoAutoritativo };
+  }
+  let planoConsulta = prepararPlanoConsultaTecnico({
     spec,
     mensagem,
-    periodo: plano.obj?.periodo,
+    periodo: periodoAutoritativo || plano.obj?.periodo,
     filtros: plano.obj?.filtros || intentEfetivo.filtros || {},
     entidades: entidadesResolvidas,
+    intent: intentEfetivo,
   });
   // Propaga o modelo de baixas detectado para o plano, para que formatQueryPlanForPrompt
   // gere a instrução com o modelo correto para este tenant (FK1/FK2 ou SE5).
@@ -3082,9 +4134,26 @@ async function executar(spec, intent, empresaId) {
   const maxTentativas = maxTentativasPrepararSql(entidadesResolvidas);
   for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
     try {
+      periodoAutoritativo = periodoAutoritativoParaSql(intentEfetivo, plano.obj);
+      if (periodoAutoritativo) {
+        intentEfetivo = { ...intentEfetivo, _periodoCanonicoResolvido: periodoAutoritativo };
+      }
+      planoConsulta = prepararPlanoConsultaTecnico({
+        spec,
+        mensagem,
+        periodo: periodoAutoritativo || plano.obj?.periodo,
+        filtros: plano.obj?.filtros || intentEfetivo.filtros || {},
+        entidades: entidadesResolvidas,
+        intent: intentEfetivo,
+      });
+      planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
+      planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
+      contextoTecnico.query_plan = planoConsulta;
+      contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
+      auditoriaBase.query_plan = planoConsulta;
       expandirMetadadosParaSql(plano.sql);
       _traceIaOwner('ia_owner_preparar_sql_inicio', { empresa_id: empresaId, tentativa });
-      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades: entidadesResolvidas, filial, periodo: plano.obj.periodo, planoConsulta, mensagem });
+      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem });
       _traceIaOwner('ia_owner_preparar_sql_fim', {
         empresa_id: empresaId,
         tentativa,
@@ -3097,6 +4166,11 @@ async function executar(spec, intent, empresaId) {
       auditoriaBase.sql_apos_parametros = preparado.sqlCanonico;
       auditoriaBase.sql_apos_contrato = preparado.sqlCanonico;
       auditoriaBase.sql_final_executado = preparado.sqlFinal;
+      const templateSql = podeParametrizarTemplateSql(planoConsulta)
+        ? sqlTemplate.parametrizarSqlTemplate(preparado.sqlCanonico, intentCanonicoInfo?.canonical || {})
+        : { sql_template: null, parametros: [] };
+      auditoriaBase.sql_template = templateSql.sql_template;
+      auditoriaBase.sql_template_parametros = templateSql.parametros;
       const conn = connectionFactory.carregarConexao(empresaId);
       _traceIaOwner('ia_owner_erp_executar_inicio', {
         empresa_id: empresaId,
@@ -3114,29 +4188,71 @@ async function executar(spec, intent, empresaId) {
         tentativa,
         rows: Array.isArray(rows) ? rows.length : null,
       });
+      const periodoRetorno = periodoResolvidoComComparativos(periodoAutoritativo || plano.obj.periodo || null, planoConsulta);
       const resposta = rows && rows.length
-        ? await formatarResposta(spec, mensagem, rows, keys, cfg, intent, plano.obj.periodo || null, protheus, empresaId)
+        ? await formatarResposta(spec, mensagem, rows, keys, cfg, intentEfetivo, periodoRetorno, protheus, empresaId)
         : mensagemErro(spec, 'sem_resultado');
       // Formatter programático tem prioridade sobre template planejado pela IA (evita Total Geral errado em comparativos)
       const _wf = require('../core/whatsapp-format-prompt');
       const _comparativo = rows?.length
         ? _wf.buildFormatComparativoSimples(rows, {
-            contextoConsulta: _buildContextoConsulta(intent, plano.obj.periodo || null, mensagem),
+            contextoConsulta: _buildContextoConsulta(intentEfetivo, periodoRetorno, mensagem),
           })
         : null;
       const respostaCanonica = intent?._formatacaoCaminho === 'canonico' ? resposta : null;
       const respostaDireta = _comparativo || respostaCanonica || interpolarRespostaPlanejada(plano.obj.resposta_planejada, rows) || resposta;
+      let shadowLog = null;
+      if (semanticRuntime.shadowAtivo && intentCanonicoInfo) {
+        try {
+          shadowLog = nlsqlSemanticExamples.registrarShadowLog({
+            empresaId,
+            numeroWa: intentEfetivo._remetente || null,
+            intentCanonicoInfo,
+            candidato: semanticRuntime.shadowCandidate,
+            actualSqlTemplate: templateSql.sql_template,
+            actualSqlCanonico: preparado.sqlCanonico,
+            actualSqlFinal: preparado.sqlFinal,
+            autoReuseThreshold: semanticRuntime.autoReuseThreshold,
+            detalhes: {
+              fewshot_ativo: semanticRuntime.fewShotAtivo,
+              embedding_ranking_ativo: semanticRuntime.embeddingRankingAtivo,
+              ranking_fonte: semanticRuntime.rankingFonte,
+              shadow_threshold: semanticRuntime.shadowThreshold,
+              candidatos_considerados: semanticRuntime.candidatos.map(ex => ({
+                execution_log_id: ex.execution_log_id,
+                score: ex.score,
+              })),
+            },
+          });
+          _traceIaOwner('ia_owner_semantic_shadow_log', {
+            empresa_id: empresaId,
+            shadow_id: shadowLog.id,
+            resultado: shadowLog.comparacao_resultado,
+            auto_reuse_elegivel: !!shadowLog.auto_reuse_elegivel,
+          });
+        } catch (e) {
+          console.warn(`[${spec.logPrefix || 'IAOwner'}] Shadow semantico nao registrado: ${e.message}`);
+        }
+      }
       return {
         tipo: 'sucesso_ai_sql',
         resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
         rows: rows || [],
         sql_gerado: preparado.sqlFinal,
-        periodo_resolvido: plano.obj.periodo || null,
+        periodo_resolvido: periodoRetorno,
+        _periodoCanonicoResolvido: periodoRetorno,
         _sql_canonico: preparado.sqlCanonico,
         _sql_canonico_origem: 'ia_owner',
         _sql_canonico_original: sqlOriginalIa,
         _sql_canonico_empresa_origem: empresaId,
         _sql_canonico_parametros: preparado.parametros,
+        _intent_canonico: intentCanonicoInfo?.canonical || null,
+        _intent_canonico_hash: intentCanonicoInfo?.canonicalHash || null,
+        _intent_canonico_estrutural: intentCanonicoInfo?.structural || null,
+        _chave_cache: intentCanonicoInfo?.cacheKey || null,
+        _sql_template: templateSql.sql_template,
+        _sql_template_parametros: templateSql.parametros,
+        _semantic_shadow: shadowLog,
         _sql_auditoria: auditoriaBase,
         _entidadesResolvidas: entidadesResolvidas,
         _ia_owner_plano: plano.obj,
@@ -3182,12 +4298,17 @@ async function executar(spec, intent, empresaId) {
       auditoriaBase.sql_ia_bruto = plano.sql || auditoriaBase.sql_ia_bruto;
       auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
       auditoriaBase.resposta_ia_bruta = plano.raw || auditoriaBase.resposta_ia_bruta;
-      planoConsulta = construirQueryPlanTecnico({
+      periodoAutoritativo = periodoAutoritativoParaSql(intentEfetivo, plano.obj);
+      if (periodoAutoritativo && intentEfetivo) {
+        intentEfetivo._periodoCanonicoResolvido = periodoAutoritativo;
+      }
+      planoConsulta = prepararPlanoConsultaTecnico({
         spec,
         mensagem,
-        periodo: plano.obj?.periodo,
+        periodo: periodoAutoritativo || plano.obj?.periodo,
         filtros: plano.obj?.filtros || intentEfetivo.filtros || {},
         entidades: entidadesResolvidas,
+        intent: intentEfetivo,
       });
       planoConsulta.modelo_baixas_receber = contextoTecnico.modelo_baixas_receber;
       planoConsulta.modelo_baixas_pagar = contextoTecnico.modelo_baixas_pagar;
@@ -3281,12 +4402,13 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         await new Promise(r => setTimeout(r, 2000));
         console.warn(`[${spec.logPrefix || 'IAOwner'}] executarSqlDireto retry ${tentativaDireto}/${MAX_TENTATIVAS_DIRETO} para empresa #${empresaId} após erro de agente.`);
       }
-      const planoConsulta = construirQueryPlanTecnico({
+      let planoConsulta = prepararPlanoConsultaTecnico({
         spec,
         mensagem,
         periodo: intent._periodoCanonicoResolvido || intent.periodo,
         filtros: intent.filtros || {},
         entidades,
+        intent,
       });
       auditoriaBase.query_plan = planoConsulta;
       preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem });
@@ -3312,14 +4434,15 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       const rows = await connectionFactory.executar(conn, preparado.sqlFinal, {});
       const { keys, cfg } = await aiProviderClient.resolverKeysEOrdem(empresaId);
       const template = intent._respostaPlanejadaCanonica || intent._iaOwnerRespostaPlanejada || null;
+      const periodoRetorno = periodoResolvidoComComparativos(intent._periodoCanonicoResolvido || intent.periodo || null, planoConsulta);
       const resposta = rows && rows.length
-        ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, intent._periodoCanonicoResolvido || null, protheus, empresaId)
+        ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, periodoRetorno, protheus, empresaId)
         : mensagemErro(spec, 'sem_resultado');
       // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
       const _wfD = require('../core/whatsapp-format-prompt');
       const _comparativoD = rows?.length
         ? _wfD.buildFormatComparativoSimples(rows, {
-            contextoConsulta: _buildContextoConsulta(intent, intent._periodoCanonicoResolvido || null, intent._mensagemOriginal || 'consulta'),
+            contextoConsulta: _buildContextoConsulta(intent, periodoRetorno, intent._mensagemOriginal || 'consulta'),
           })
         : null;
       const respostaCanonicaD = intent?._formatacaoCaminho === 'canonico' ? resposta : null;
@@ -3329,6 +4452,8 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
         rows: rows || [],
         sql_gerado: preparado.sqlFinal,
+        periodo_resolvido: periodoRetorno,
+        _periodoCanonicoResolvido: periodoRetorno,
         _sql_canonico: preparado.sqlCanonico,
         _sql_canonico_origem: 'ia_owner_reuso',
         _sql_canonico_original: sqlCanonico,
@@ -3395,11 +4520,21 @@ module.exports = {
     validarDevolucaoConsistente,
     normalizarAliasesBaseAusentes,
     validarPeriodoDeclaradoNoSql,
+    validarPeriodosComparativosNoSql,
+    periodoDeterministicoMensagem,
+    podeParametrizarTemplateSql,
     validarMesesAnosDeclaradosNoSql,
     sqlTemFiltroPeriodoEmCampo,
     construirQueryPlanTecnico,
+    aplicarAgrupamentosIntentNoPlano,
+    prepararPlanoConsultaTecnico,
+    aplicarPeriodosComparativoContinuidade,
     _buildContextoFormatacao,
     validarSelectContraGroupBy,
+    validarAgregadoSemGroupBy,
+    dividirSelectsPorUnionNivelZero,
+    validarAliasesTabelaDuplicados,
+    extrairEscoposSelect,
     validarAliasesDerivadosExternos,
     validarCTEsAgregadosSemGroupBy,
     validarCTEsDefinidaUsada,

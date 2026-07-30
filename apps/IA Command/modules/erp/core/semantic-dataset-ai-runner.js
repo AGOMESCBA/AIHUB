@@ -205,6 +205,7 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
     instrucaoFiltroMes,
     '- Quando a pergunta pedir agrupamento por cliente/produto/vendedor, mantenha o filtro de periodo solicitado; agrupamento nunca substitui filtro de periodo.',
     instrucaoAgrupamentoMes,
+    '- Em consultas com UNION ALL, cada SELECT deve estar sintaticamente completo antes do UNION. Feche funcoes no GROUP BY, por exemplo: GROUP BY SUBSTRING(F2_EMISSAO, 1, 6).',
     '- Para metricas somadas, use COALESCE(SUM(campo), 0) para retornar zero quando nao houver movimentos.',
     `- Para faturamento, use a metrica ${campoFaturamento} quando existir.`,
     `- Faturamento liquido = ${campoFaturamento} - ${campoValorDevolvido}, quando a pergunta mencionar devolucao, devolucoes, liquido ou abatendo devolucoes.`,
@@ -240,10 +241,28 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
   ].filter(Boolean).join('\n');
 }
 
-function _buildUserPrompt({ mensagem, dataAtual, historico, estadoAnterior, entidadeSeguranca }) {
+function _buildContratoTemporalDataset(intent = {}) {
+  const atual = _periodoComDatas(intent?.periodo);
+  const periodos = _periodosComparativosDataset(intent, {});
+  const linhas = [];
+  if (atual) {
+    linhas.push('CONTRATO OBRIGATORIO DE SQL DATASET:');
+    linhas.push(`- periodo_autoritativo: ${atual.dataInicio} a ${atual.dataFim}`);
+  }
+  if (periodos.length > 1) {
+    linhas.push(`- periodo_base: ${periodos[0].dataInicio} a ${periodos[0].dataFim}`);
+    linhas.push(`- periodo_comparacao: ${periodos[1].dataInicio} a ${periodos[1].dataFim}`);
+    linhas.push('- comparativo_continuidade: o SQL deve retornar os dois periodos, nao apenas o periodo_comparacao.');
+    linhas.push("- Use UNION ALL com literal de competencia correto para cada bloco, ou agrupe por competencia com filtro IN ('AAAAMM','AAAAMM').");
+  }
+  return linhas.join('\n');
+}
+
+function _buildUserPrompt({ mensagem, dataAtual, historico, estadoAnterior, entidadeSeguranca, contratoTemporal = '', retryErro = '' }) {
   return [
     `Data atual: ${dataAtual}`,
     `Mensagem do usuario: ${mensagem || ''}`,
+    contratoTemporal ? ['', contratoTemporal].join('\n') : '',
     '',
     'Historico resumido:',
     JSON.stringify(historico || [], null, 2),
@@ -255,6 +274,13 @@ function _buildUserPrompt({ mensagem, dataAtual, historico, estadoAnterior, enti
       'Restricao de seguranca ja aplicada pelo sistema na CTE base:',
       `- vendedor autorizado: ${entidadeSeguranca.codigo} (${entidadeSeguranca.nome || ''})`,
       '- Nao tente remover, contornar ou ampliar essa restricao.',
+    ].join('\n') : '',
+    retryErro ? [
+      '',
+      'A tentativa anterior foi rejeitada pelo contrato tecnico:',
+      retryErro,
+      'Gere novamente corrigindo o SQL. Nao reaproveite o trecho rejeitado.',
+      'Se o erro for parenteses sem fechamento em GROUP BY SUBSTRING(..., 1, 6), feche a funcao antes de UNION ALL ou do fim do SELECT.',
     ].join('\n') : '',
     '',
     'Gere o SQL final sobre FROM base e retorne o JSON obrigatorio.',
@@ -322,7 +348,20 @@ function _sanitizarSqlSelectDataset(sql, dataset, campoData, camposPermitidos, m
   let out = String(sql || '');
   out = _normalizarCampoDataLegado(out, campoData, camposPermitidos);
   out = _removerFiltroEmpresaDivergente(out, _empresaFixaSqlBase(dataset?.sql_base));
+  out = _corrigirGroupBySubstringIncompleto(out);
   return out;
+}
+
+function _corrigirGroupBySubstringIncompleto(sql) {
+  return String(sql || '')
+    .replace(
+      /(\bGROUP\s+BY\s+SUBSTRING\s*\(\s*(?:base\s*\.\s*)?\[?[A-Za-z_][A-Za-z0-9_]*\]?\s*,\s*1\s*,\s*6)(\s+(?:UNION\b|HAVING\b|ORDER\b|$))/gi,
+      '$1)$2',
+    )
+    .replace(
+      /(\bGROUP\s+BY\s+CONVERT\s*\(\s*char\s*\(\s*6\s*\)\s*,\s*(?:base\s*\.\s*)?\[?[A-Za-z_][A-Za-z0-9_]*\]?\s*,\s*112)(\s+(?:UNION\b|HAVING\b|ORDER\b|$))/gi,
+      '$1)$2',
+    );
 }
 
 function _posicaoFromPrincipal(sql, inicioBusca = 0) {
@@ -587,6 +626,44 @@ function _normalizarSubstringTemporalTraduzido(sql, permitidos) {
   );
 }
 
+function _temUnionTopLevel(sql = '') {
+  const texto = String(sql || '');
+  let aspas = null;
+  let nivel = 0;
+  for (let i = 0; i < texto.length; i++) {
+    const ch = texto[i];
+    if (aspas) {
+      if (ch === aspas) {
+        if (aspas === "'" && texto[i + 1] === "'") i++;
+        else aspas = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      aspas = ch;
+      continue;
+    }
+    if (ch === '[') {
+      aspas = ']';
+      continue;
+    }
+    if (ch === '(') {
+      nivel++;
+      continue;
+    }
+    if (ch === ')' && nivel > 0) {
+      nivel--;
+      continue;
+    }
+    if (nivel === 0 && /\bUNION\b/i.test(texto.slice(i, i + 12))) {
+      const antes = i > 0 ? texto[i - 1] : ' ';
+      const depois = texto[i + 5] || ' ';
+      if (!/[A-Z0-9_]/i.test(antes) && !/[A-Z0-9_]/i.test(depois)) return true;
+    }
+  }
+  return false;
+}
+
 function _prefixoSelectAtual(sql) {
   const texto = String(sql || '').trim();
   const m = texto.match(/^select\s+(top\s+\(?\d+\)?\s+)?/i);
@@ -594,6 +671,9 @@ function _prefixoSelectAtual(sql) {
 }
 
 function _aplicarEstruturaSqlModelo(sqlView, sqlModeloReferencia, camposPermitidos = []) {
+  if (_temUnionTopLevel(sqlModeloReferencia)) {
+    return { sql: sqlView, aplicado: false, motivo: 'modelo_union_nao_aplicado_dataset' };
+  }
   const modelo = _extrairClausulasExternas(sqlModeloReferencia);
   const view = _extrairClausulasExternas(sqlView);
   if (!modelo || !view || !/\bfrom\s+base\b/i.test(view.fromWhere)) {
@@ -654,6 +734,212 @@ function _aplicarTopPergunta(sql, mensagem, intent = {}) {
     return String(sql || '').replace(/^select\s+distinct\b/i, `SELECT DISTINCT TOP ${limite}`);
   }
   return String(sql || '').replace(/^select\b/i, `SELECT TOP ${limite}`);
+}
+
+function _periodoComDatas(periodo = {}) {
+  const p = periodo && typeof periodo === 'object' ? periodo : {};
+  const dataInicio = String(p.dataInicio || p.data_inicio || p.start || p.inicio || '').trim();
+  const dataFim = String(p.dataFim || p.data_fim || p.end || p.fim || '').trim();
+  if (!/^\d{8}$/.test(dataInicio) || !/^\d{8}$/.test(dataFim)) return null;
+  return { ...p, dataInicio, dataFim };
+}
+
+function _textoComparativoContinuidade(texto = '') {
+  return /\b(compare|comparar|comparativo|comparacao|versus|vs\.?|contra|crescimento|variacao|evolucao)\b/i
+    .test(String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+}
+
+function _periodosComparativosDataset(intent = {}, plano = {}) {
+  const atual = _periodoComDatas(intent?.periodo) || _periodoComDatas(plano?.periodo);
+  const declarados = Array.isArray(intent?.periodo?.periodos_comparativos)
+    ? intent.periodo.periodos_comparativos.map(_periodoComDatas).filter(Boolean)
+    : Array.isArray(plano?.periodo?.periodos_comparativos)
+      ? plano.periodo.periodos_comparativos.map(_periodoComDatas).filter(Boolean)
+      : [];
+  if (declarados.length > 1) return declarados;
+  const base = _periodoComDatas(intent?._contextoUsadoOrquestrador?.periodo)
+    || _periodoComDatas(intent?._contextoUsadoOrquestrador?.contexto_usado?.periodo)
+    || _periodoComDatas(intent?._historicoResumido?.[intent._historicoResumido.length - 1]?.periodo);
+  if (!atual || !base || !_textoComparativoContinuidade(intent?._mensagemOriginal || intent?.intencao || '')) return [];
+  if (base.dataInicio === atual.dataInicio && base.dataFim === atual.dataFim) return [atual];
+  return [base, atual];
+}
+
+function _campoRe(campoData) {
+  const campo = String(campoData || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `(?:base\\s*\\.\\s*)?\\[?${campo}\\]?`;
+}
+
+function _sqlTemFiltroPeriodoDataset(sql, campoData, periodo) {
+  const texto = String(sql || '');
+  const p = _periodoComDatas(periodo);
+  if (!p) return true;
+  const campo = _campoRe(campoData);
+  const ini = p.dataInicio;
+  const fim = p.dataFim;
+  const competencia = ini.slice(0, 6);
+  const reBetween = new RegExp(`\\b${campo}\\s+BETWEEN\\s*'${ini}'\\s+AND\\s*'${fim}'`, 'i');
+  const reSubstr = new RegExp(`SUBSTRING\\s*\\(\\s*${campo}\\s*,\\s*1\\s*,\\s*6\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
+  const reConvert = new RegExp(`CONVERT\\s*\\(\\s*char\\s*\\(\\s*6\\s*\\)\\s*,\\s*${campo}\\s*,\\s*112\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
+  const reIn = new RegExp(`(?:SUBSTRING\\s*\\(\\s*${campo}\\s*,\\s*1\\s*,\\s*6\\s*\\)|CONVERT\\s*\\(\\s*char\\s*\\(\\s*6\\s*\\)\\s*,\\s*${campo}\\s*,\\s*112\\s*\\))\\s+IN\\s*\\([^)]*'${competencia}'`, 'i');
+  return reBetween.test(texto) || reSubstr.test(texto) || reConvert.test(texto) || reIn.test(texto);
+}
+
+function _dividirUnionTopLevel(sql = '') {
+  const texto = String(sql || '');
+  const partes = [];
+  let aspas = null;
+  let nivel = 0;
+  let inicio = 0;
+  for (let i = 0; i < texto.length; i++) {
+    const ch = texto[i];
+    if (aspas) {
+      if (ch === aspas) {
+        if (aspas === "'" && texto[i + 1] === "'") i++;
+        else aspas = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      aspas = ch;
+      continue;
+    }
+    if (ch === '[') {
+      aspas = ']';
+      continue;
+    }
+    if (ch === '(') {
+      nivel++;
+      continue;
+    }
+    if (ch === ')' && nivel > 0) {
+      nivel--;
+      continue;
+    }
+    if (nivel !== 0 || !/\bUNION\b/i.test(texto.slice(i, i + 12))) continue;
+    const antes = i > 0 ? texto[i - 1] : ' ';
+    const depois = texto[i + 5] || ' ';
+    if (/[A-Z0-9_]/i.test(antes) || /[A-Z0-9_]/i.test(depois)) continue;
+    partes.push(texto.slice(inicio, i));
+    const m = texto.slice(i).match(/^UNION\s+ALL\b/i);
+    i += (m ? m[0].length : 'UNION'.length) - 1;
+    inicio = i + 1;
+  }
+  partes.push(texto.slice(inicio));
+  return partes.map(p => p.trim()).filter(Boolean);
+}
+
+function _competenciasFiltradasNoTrecho(trecho = '', campoData) {
+  const texto = String(trecho || '');
+  const campo = _campoRe(campoData);
+  const valores = new Set();
+  const regexes = [
+    new RegExp(`\\b${campo}\\s+BETWEEN\\s*'(\\d{8})'\\s+AND\\s*'(\\d{8})'`, 'gi'),
+    new RegExp(`SUBSTRING\\s*\\(\\s*${campo}\\s*,\\s*1\\s*,\\s*6\\s*\\)\\s*=\\s*'(\\d{6})'`, 'gi'),
+    new RegExp(`CONVERT\\s*\\(\\s*char\\s*\\(\\s*6\\s*\\)\\s*,\\s*${campo}\\s*,\\s*112\\s*\\)\\s*=\\s*'(\\d{6})'`, 'gi'),
+  ];
+  for (const re of regexes) {
+    let m;
+    while ((m = re.exec(texto)) !== null) {
+      if (m[2]) {
+        if (m[1].slice(0, 6) === m[2].slice(0, 6)) valores.add(m[1].slice(0, 6));
+      } else {
+        valores.add(m[1]);
+      }
+    }
+  }
+  const reIn = new RegExp(`(?:SUBSTRING\\s*\\(\\s*${campo}\\s*,\\s*1\\s*,\\s*6\\s*\\)|CONVERT\\s*\\(\\s*char\\s*\\(\\s*6\\s*\\)\\s*,\\s*${campo}\\s*,\\s*112\\s*\\))\\s+IN\\s*\\(([^)]*)\\)`, 'gi');
+  let m;
+  while ((m = reIn.exec(texto)) !== null) {
+    for (const valor of String(m[1] || '').match(/'\d{6}'/g) || []) valores.add(valor.replace(/'/g, ''));
+  }
+  return valores;
+}
+
+function _validarCompetenciaLiteralDataset(sql, campoData) {
+  const erros = [];
+  for (const parte of _dividirUnionTopLevel(sql)) {
+    const select = _selectPrincipal(parte);
+    const selectTexto = select ? parte.slice(select.listaInicio, select.fromInicio) : '';
+    const literais = [...selectTexto.matchAll(/'(\d{6})'\s+AS\s+(?:\[?competencia\]?|\[?periodo\]?)/gi)]
+      .map(m => m[1]);
+    if (!literais.length) continue;
+    const filtradas = _competenciasFiltradasNoTrecho(parte, campoData);
+    for (const comp of literais) {
+      if (filtradas.size && !filtradas.has(comp)) {
+        erros.push(`Competencia literal ${comp} nao corresponde ao filtro temporal em ${campoData} (${[...filtradas].join(', ')}).`);
+      }
+    }
+  }
+  return erros;
+}
+
+function _validarSintaxeBasicaSqlDataset(sql) {
+  const texto = String(sql || '');
+  const erros = [];
+  let aspas = null;
+  let nivel = 0;
+  for (let i = 0; i < texto.length; i += 1) {
+    const ch = texto[i];
+    if (aspas) {
+      if (ch === aspas) {
+        if (aspas === "'" && texto[i + 1] === "'") i += 1;
+        else aspas = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      aspas = ch;
+      continue;
+    }
+    if (ch === '[') {
+      aspas = ']';
+      continue;
+    }
+    if (ch === '(') {
+      nivel += 1;
+      continue;
+    }
+    if (ch === ')') {
+      nivel -= 1;
+      if (nivel < 0) {
+        erros.push('SQL do dataset contem fechamento de parenteses sem abertura correspondente.');
+        nivel = 0;
+      }
+    }
+  }
+  if (aspas) erros.push('SQL do dataset contem aspas ou delimitador sem fechamento.');
+  if (nivel !== 0) erros.push('SQL do dataset contem parenteses sem fechamento.');
+
+  const partes = _dividirUnionTopLevel(texto);
+  if (!partes.length) erros.push('SQL do dataset nao contem SELECT valido.');
+  for (const parte of partes) {
+    if (!/^\s*SELECT\b/i.test(parte)) {
+      erros.push('Cada bloco do UNION no dataset deve iniciar com SELECT.');
+      break;
+    }
+    if (!/\bFROM\b/i.test(parte)) {
+      erros.push('Cada bloco SELECT do dataset deve conter FROM.');
+      break;
+    }
+  }
+
+  return { ok: erros.length === 0, erros };
+}
+
+function _validarPeriodoDataset(sql, campoData, intent = {}, plano = {}) {
+  const erros = [];
+  const periodosComparativos = _periodosComparativosDataset(intent, plano);
+  const periodos = periodosComparativos.length > 1
+    ? periodosComparativos
+    : [_periodoComDatas(intent?.periodo) || _periodoComDatas(plano?.periodo)].filter(Boolean);
+  for (const periodo of periodos) {
+    if (!_sqlTemFiltroPeriodoDataset(sql, campoData, periodo)) {
+      erros.push(`O SQL do dataset deve filtrar ${campoData} no periodo ${periodo.dataInicio} a ${periodo.dataFim}.`);
+    }
+  }
+  erros.push(..._validarCompetenciaLiteralDataset(sql, campoData));
+  return { ok: erros.length === 0, erros };
 }
 
 function _intentFormatacaoDataset(intent = {}) {
@@ -864,49 +1150,67 @@ async function executar(dataset, intent, empresaId, opts = {}) {
     suboperacaoDetectada: opts.suboperacaoDetectada,
     sqlModeloReferencia: intent._sqlCanonicoOriginal || intent._sql_canonico_original || null,
   });
-  const userPrompt = _buildUserPrompt({
-    mensagem,
-    dataAtual: _dataAtual(),
-    historico: intent._historicoResumido,
-    estadoAnterior: {
-      filtros: intent.filtros || {},
-      agrupamentos: Array.isArray(intent.group_by) ? intent.group_by : (intent.agrupar_por ? [intent.agrupar_por] : []),
-      periodo: intent.periodo || null,
-    },
-    entidadeSeguranca,
-  });
+  const camposPermitidos = campos.map(c => c.coluna);
+  let plano = null;
+  let sqlSelect = null;
+  let estruturaModelo = { aplicado: false, motivo: 'nao_processado' };
+  let validacao = { ok: false, erros: ['nao_processado'] };
+  let retryErro = '';
 
-  let plano;
-  try {
-    const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
-      json: true,
-      maxTokens: 2800,
-      timeoutMs: 45000,
-      temperature: 0,
-      geminiCombinedPrompt: true,
-      logPrefix: 'SemanticDatasetAI',
-      empresaId,
-      numeroWa: intent._remetente || null,
-      canalId: intent._channelId || intent._canalId || null,
-      usageOrigem: 'ia-owner',
-      usageOperacao: 'faturamento_dataset_semantico',
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    const userPrompt = _buildUserPrompt({
+      mensagem,
+      dataAtual: _dataAtual(),
+      historico: intent._historicoResumido,
+      estadoAnterior: {
+        filtros: intent.filtros || {},
+        agrupamentos: Array.isArray(intent.group_by) ? intent.group_by : (intent.agrupar_por ? [intent.agrupar_por] : []),
+        periodo: intent.periodo || null,
+      },
+      entidadeSeguranca,
+      contratoTemporal: _buildContratoTemporalDataset(intent),
+      retryErro,
     });
-    plano = _json(raw);
-    if (!plano || typeof plano !== 'object') throw new Error('IA nao retornou JSON valido.');
-  } catch (e) {
-    return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: 'Nao consigo processar sua consulta no momento. Tente novamente em breve.', sql_gerado: `-- IA semantica falhou: ${e.message}`, duracao_ms: Date.now() - t0 };
+
+    try {
+      const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
+        json: true,
+        maxTokens: 2800,
+        timeoutMs: 45000,
+        temperature: 0,
+        geminiCombinedPrompt: true,
+        logPrefix: 'SemanticDatasetAI',
+        empresaId,
+        numeroWa: intent._remetente || null,
+        canalId: intent._channelId || intent._canalId || null,
+        usageOrigem: 'ia-owner',
+        usageOperacao: 'faturamento_dataset_semantico',
+      });
+      plano = _json(raw);
+      if (!plano || typeof plano !== 'object') throw new Error('IA nao retornou JSON valido.');
+    } catch (e) {
+      return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: 'Nao consigo processar sua consulta no momento. Tente novamente em breve.', sql_gerado: `-- IA semantica falhou: ${e.message}`, duracao_ms: Date.now() - t0 };
+    }
+
+    const sqlSelectOriginal = _aplicarTop(String(plano.sql || '').trim().replace(/;+\s*$/g, ''), intent.limite || dataset.limite_max || 1000);
+    const sqlSanitizado = _sanitizarSqlSelectDataset(sqlSelectOriginal, dataset, campoData, camposPermitidos, mensagem, campos);
+    estruturaModelo = _aplicarEstruturaSqlModelo(
+      sqlSanitizado,
+      intent._sqlCanonicoOriginal || intent._sql_canonico_original || null,
+      camposPermitidos,
+    );
+    sqlSelect = _aplicarTopPergunta(estruturaModelo.sql, mensagem, intent);
+    const validacaoSintaxe = _validarSintaxeBasicaSqlDataset(sqlSelect);
+    const validacaoBase = _validarSelectBase(sqlSelect, camposPermitidos);
+    const validacaoPeriodo = _validarPeriodoDataset(sqlSelect, campoData, intent, plano);
+    validacao = {
+      ok: validacaoSintaxe.ok && validacaoBase.ok && validacaoPeriodo.ok,
+      erros: [...validacaoSintaxe.erros, ...validacaoBase.erros, ...validacaoPeriodo.erros],
+    };
+    if (validacao.ok) break;
+    retryErro = validacao.erros.join(' | ');
   }
 
-  const camposPermitidos = campos.map(c => c.coluna);
-  const sqlSelectOriginal = _aplicarTop(String(plano.sql || '').trim().replace(/;+\s*$/g, ''), intent.limite || dataset.limite_max || 1000);
-  const sqlSanitizado = _sanitizarSqlSelectDataset(sqlSelectOriginal, dataset, campoData, camposPermitidos, mensagem, campos);
-  const estruturaModelo = _aplicarEstruturaSqlModelo(
-    sqlSanitizado,
-    intent._sqlCanonicoOriginal || intent._sql_canonico_original || null,
-    camposPermitidos,
-  );
-  const sqlSelect = _aplicarTopPergunta(estruturaModelo.sql, mensagem, intent);
-  const validacao = _validarSelectBase(sqlSelect, camposPermitidos);
   if (!validacao.ok) {
     return {
       tipo: 'erro',
@@ -938,16 +1242,22 @@ async function executar(dataset, intent, empresaId, opts = {}) {
       ? _normalizarRowsMultiempresa(rowsBrutas)
       : rowsBrutas;
     const respostaFallback = _formatarRespostaDataset(rows, intent, mensagem);
+    const periodoCanonico = _periodoComDatas(intent?._periodoCanonicoResolvido)
+      || _periodoComDatas(intent?.periodo)
+      || _periodoComDatas(plano?.periodo)
+      || plano.periodo
+      || null;
     return {
       tipo: 'sucesso_ai_sql',
       resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaFallback),
       rows: rows || [],
       sql_gerado: sqlFinal,
-      periodo_resolvido: plano.periodo || null,
+      periodo_resolvido: periodoCanonico,
       dataset_id: dataset.id,
       dataset_nome: dataset.nome,
       _sql_canonico: sqlFinal,
       _sql_canonico_origem: 'dataset_semantico',
+      _periodoCanonicoResolvido: periodoCanonico,
       _ia_owner_plano: {
         ...plano,
         dataset_modelo_sql_aplicado: estruturaModelo.aplicado,
@@ -981,5 +1291,11 @@ module.exports = {
     _aplicarEstruturaSqlModelo,
     _extrairClausulasExternas,
     _traduzirTrechoSqlModeloParaBase,
+    _temUnionTopLevel,
+    _corrigirGroupBySubstringIncompleto,
+    _validarPeriodoDataset,
+    _validarCompetenciaLiteralDataset,
+    _validarSintaxeBasicaSqlDataset,
+    _periodosComparativosDataset,
   },
 };

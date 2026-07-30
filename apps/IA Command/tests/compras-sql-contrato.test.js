@@ -5,12 +5,14 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
+const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
+const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const spec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
 
 const sysPrompt = promptBuilder.buildSystemPrompt(spec);
 assert(sysPrompt.includes('IA-OWNER do modulo compras'), 'compras deve usar IA-OWNER');
 assert(sysPrompt.includes('Voce e dono da decisao semantica'), 'IA deve decidir heranca/continuidade');
-assert(sysPrompt.includes('data_atual') && sysPrompt.includes('Voce calcula o periodo EXCLUSIVAMENTE'), 'periodos relativos devem ser calculados pela IA a partir de data_atual e contexto');
+assert(sysPrompt.includes('data_atual') && sysPrompt.includes('CONTRATO OBRIGATORIO DE SQL'), 'compras deve manter ancora cronologica e respeitar contrato autoritativo');
 assert(/devolu(?:cao|coes)|devolu[cç](?:ao|oes)/i.test(sysPrompt), 'prompt deve enviar regras de devolucao quando o usuario pedir');
 assert(sysPrompt.includes('Regras de Validacao de Tabelas Fisicas'), 'compras deve receber regras SX2 multi-tenant');
 assert(sysPrompt.includes('Formato de Data Protheus') && sysPrompt.includes('data_atual'), 'compras deve receber regras cronologicas');
@@ -19,6 +21,152 @@ assert(sysPrompt.includes('SB1.B1_DESC AS produto'), 'compras deve retornar desc
 assert(sysPrompt.includes('Se uma entidade estiver no GROUP BY'), 'compras deve retornar descricao de entidades agrupadas');
 assert(sysPrompt.includes('SD1.D1_DTDIGIT'), 'compras deve documentar data padrao de entrada');
 assert(sysPrompt.includes('SC7.C7_EMISSAO'), 'compras deve documentar data padrao de pedidos');
+assert(sysPrompt.includes('Continuidade e Periodo em Compras'), 'compras deve conter regra modular de continuidade/periodo');
+assert(sysPrompt.includes('periodo_base e periodo_comparacao'), 'compras deve exigir dois periodos em comparativo de continuidade');
+assert.deepStrictEqual(spec.camposPeriodoObrigatorios, ['D1_DTDIGIT', 'F1_DTDIGIT', 'F1_EMISSAO', 'C7_EMISSAO'], 'compras deve declarar campos temporais para o guard');
 assert(typeof spec.resolverEntidades === 'function', 'compras IA-OWNER deve expor resolver tecnico de entidades');
+
+const sqlPeriodoErradoCompras = `
+SET ROWCOUNT 50000;
+SELECT SUM(SD1.D1_TOTAL) AS total_compras
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL
+  AND SD1.D1_DOC = SF1.F1_DOC
+  AND SD1.D1_SERIE = SF1.F1_SERIE
+  AND SD1.D1_FORNECE = SF1.F1_FORNECE
+  AND SD1.D1_LOJA = SF1.F1_LOJA
+  AND SF1.D_E_L_E_T_ = ' '
+WHERE SD1.D1_DTDIGIT BETWEEN '20230701' AND '20230731'
+  AND SF1.F1_TIPO = 'N'
+  AND SD1.D_E_L_E_T_ = ' ';
+`;
+const validacaoPeriodoErradoCompras = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlPeriodoErradoCompras,
+  spec,
+  { tipo: 'mensal', dataInicio: '20250701', dataFim: '20250731' },
+);
+assert.strictEqual(validacaoPeriodoErradoCompras.ok, false, 'compras deve rejeitar julho/2023 quando contrato exige julho/2025');
+
+const sqlPeriodoCorretoCompras = sqlPeriodoErradoCompras.replace(/202307/g, '202507');
+const validacaoPeriodoCorretoCompras = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlPeriodoCorretoCompras,
+  spec,
+  { tipo: 'mensal', dataInicio: '20250701', dataFim: '20250731' },
+);
+assert.strictEqual(validacaoPeriodoCorretoCompras.ok, true, `compras deve aceitar periodo autoritativo correto: ${validacaoPeriodoCorretoCompras.erros.join(' | ')}`);
+
+const planoComparativo = runner._test.aplicarPeriodosComparativoContinuidade(
+  runner._test.construirQueryPlanTecnico({
+    spec,
+    mensagem: 'Compare esse resultado com julho do ano passado.',
+    periodo: { tipo: 'mensal', dataInicio: '20250701', dataFim: '20250731' },
+    filtros: {},
+    entidades: [],
+  }),
+  {
+    _contextoUsadoOrquestrador: {
+      periodo: { tipo: 'mensal', dataInicio: '20250601', dataFim: '20250630' },
+    },
+  },
+  { tipo: 'mensal', dataInicio: '20250701', dataFim: '20250731' },
+);
+const planoComparativoTexto = queryPlan.formatQueryPlanForPrompt(planoComparativo);
+assert(planoComparativoTexto.includes('periodo_base: 20250601 a 20250630'), 'query_plan de compras deve expor periodo base herdado');
+assert(planoComparativoTexto.includes('periodo_comparacao: 20250701 a 20250731'), 'query_plan de compras deve expor periodo de comparacao');
+
+const planoComparativoViaHistorico = runner._test.aplicarPeriodosComparativoContinuidade(
+  runner._test.construirQueryPlanTecnico({
+    spec,
+    mensagem: 'Compare esse resultado com julho do ano passado.',
+    periodo: { tipo: 'personalizado', dataInicio: '20250701', dataFim: '20250731' },
+    filtros: {},
+    entidades: [],
+  }),
+  {
+    _contextoUsadoOrquestrador: { modulo: 'compras' },
+    _historicoResumido: [
+      { periodo: { tipo: 'personalizado', dataInicio: '20250601', dataFim: '20250630' } },
+    ],
+  },
+  { tipo: 'personalizado', dataInicio: '20250701', dataFim: '20250731' },
+);
+assert.strictEqual(planoComparativoViaHistorico.periodos_comparativos?.[0]?.dataInicio, '20250601', 'compras deve herdar periodo_base do historico resumido quando contexto formal vier sem periodo');
+assert.strictEqual(planoComparativoViaHistorico.periodos_comparativos?.[1]?.dataFim, '20250731', 'compras deve manter periodo de comparacao explicitamente pedido');
+
+const sqlComparativoCompras = `
+SET ROWCOUNT 50000;
+SELECT '202506' AS competencia, SUM(SD1.D1_TOTAL) AS total_compras
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' '
+WHERE SD1.D1_DTDIGIT BETWEEN '20250601' AND '20250630' AND SF1.F1_TIPO = 'N' AND SD1.D_E_L_E_T_ = ' '
+UNION ALL
+SELECT '202507' AS competencia, SUM(SD1.D1_TOTAL) AS total_compras
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' '
+WHERE SD1.D1_DTDIGIT BETWEEN '20250701' AND '20250731' AND SF1.F1_TIPO = 'N' AND SD1.D_E_L_E_T_ = ' ';
+`;
+const validacaoComparativoCompras = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlComparativoCompras,
+  spec,
+  { tipo: 'mensal', dataInicio: '20250701', dataFim: '20250731' },
+  { periodosPermitidos: planoComparativo.periodos_comparativos },
+);
+assert.strictEqual(validacaoComparativoCompras.ok, true, `compras deve aceitar periodo_base no comparativo: ${validacaoComparativoCompras.erros.join(' | ')}`);
+const validacaoComparativoCompletoCompras = runner._test.validarPeriodosComparativosNoSql(sqlComparativoCompras, spec, planoComparativo);
+assert.strictEqual(validacaoComparativoCompletoCompras.ok, true, `compras deve aceitar SQL com os dois periodos: ${validacaoComparativoCompletoCompras.erros.join(' | ')}`);
+
+const sqlComparativoSemCompetenciaCompras = `
+SET ROWCOUNT 50000;
+SELECT SA2.A2_NOME AS fornecedor, SUM(SD1.D1_TOTAL) AS total_compras
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' '
+JOIN SA2990 SA2 ON SF1.F1_FORNECE = SA2.A2_COD AND SF1.F1_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = ' '
+WHERE SD1.D1_DTDIGIT BETWEEN '20250601' AND '20250630' AND SF1.F1_TIPO = 'N' AND SD1.D_E_L_E_T_ = ' '
+GROUP BY SA2.A2_NOME
+UNION ALL
+SELECT SA2.A2_NOME AS fornecedor, SUM(SD1.D1_TOTAL) AS total_compras
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' '
+JOIN SA2990 SA2 ON SF1.F1_FORNECE = SA2.A2_COD AND SF1.F1_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = ' '
+WHERE SD1.D1_DTDIGIT BETWEEN '20250701' AND '20250731' AND SF1.F1_TIPO = 'N' AND SD1.D_E_L_E_T_ = ' '
+GROUP BY SA2.A2_NOME;
+`;
+const validacaoComparativoSemCompetencia = runner._test.validarPeriodosComparativosNoSql(sqlComparativoSemCompetenciaCompras, spec, planoComparativo);
+assert.strictEqual(validacaoComparativoSemCompetencia.ok, false, 'compras deve rejeitar comparativo que mistura periodos sem coluna competencia/periodo');
+assert(validacaoComparativoSemCompetencia.erros.join(' ').includes('competencia'), 'erro deve orientar coluna competencia/periodo');
+
+const validacaoComparativoComMesesAnosLegado = runner._test.validarPeriodoDeclaradoNoSql(
+  sqlComparativoCompras,
+  spec,
+  {
+    tipo: 'mensal',
+    dataInicio: '20250701',
+    dataFim: '20250731',
+    meses: [6, 7],
+    anos: [2025, 2026],
+  },
+  { periodosPermitidos: planoComparativo.periodos_comparativos },
+);
+assert.strictEqual(
+  validacaoComparativoComMesesAnosLegado.ok,
+  true,
+  `compras deve priorizar periodos_comparativos sobre meses/anos legado: ${validacaoComparativoComMesesAnosLegado.erros.join(' | ')}`,
+);
+
+const sqlComparativoComprasSemGroupBy = `
+SET ROWCOUNT 50000;
+SELECT SUM(SD1.D1_TOTAL) AS total_compras, SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' '
+WHERE SF1.F1_TIPO = 'N' AND SUBSTRING(SD1.D1_DTDIGIT, 1, 6) = '202507' AND SD1.D_E_L_E_T_ = ' '
+UNION ALL
+SELECT SUM(SD1.D1_TOTAL) AS total_compras, SUBSTRING(SD1.D1_DTDIGIT, 1, 6) AS competencia
+FROM SD1990 SD1
+JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' '
+WHERE SF1.F1_TIPO = 'N' AND SUBSTRING(SD1.D1_DTDIGIT, 1, 6) = '202506' AND SD1.D_E_L_E_T_ = ' ';
+`;
+const validacaoAgregadoSemGroup = runner._test.validarAgregadoSemGroupBy(sqlComparativoComprasSemGroupBy);
+assert.strictEqual(validacaoAgregadoSemGroup.ok, false, 'compras deve rejeitar SUM + SUBSTRING sem GROUP BY em comparativo UNION ALL');
+assert(validacaoAgregadoSemGroup.erros.join(' ').includes('GROUP BY'), 'erro deve orientar GROUP BY ou literal de periodo');
 
 console.log('compras-sql-contrato.test.js: ok (ia-owner)');

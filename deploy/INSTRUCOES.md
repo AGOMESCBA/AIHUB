@@ -159,7 +159,35 @@ services.msc
 
 ---
 
-## Atualizar o sistema no futuro
+## Atualizacao segura em producao
+
+Para aplicar uma nova versao do codigo sem apagar dados nem tabelas existentes:
+
+1. Gere o pacote com `deploy\0-gerar-pacote.ps1`
+2. Envie o ZIP para `C:\Web\iahub\deploy` no servidor
+3. Abra o PowerShell como Administrador no servidor
+4. Execute:
+
+```powershell
+C:\Web\iahub\deploy\3-atualizar.ps1 -Zip C:\Web\iahub\deploy\iahub-deploy-YYYYMMDD_HHMM.zip
+```
+
+Se o ZIP estiver na pasta `deploy`, tambem pode executar sem informar o arquivo:
+
+```powershell
+C:\Web\iahub\deploy\3-atualizar.ps1
+```
+
+O atualizador seguro:
+- valida o ZIP antes de aplicar;
+- cancela se encontrar `.env`, banco SQLite, `data`, `uploads`, `sessions`, `.wwebjs_auth`, `.wwebjs_cache`, `logs`, `backups` ou `node_modules`;
+- para o servico, gera backup em `C:\Web\backups`, extrai somente os fontes e reinstala dependencias;
+- nao executa `DROP TABLE`, `DELETE FROM` ou `TRUNCATE`;
+- nao remove tabelas existentes nem diretorios de dados.
+
+---
+
+## Atualizar o sistema no futuro (fluxo manual antigo - nao recomendado)
 
 Para aplicar uma nova versão do código:
 

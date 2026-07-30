@@ -107,6 +107,7 @@ function _healthCheck(endpointUrl, token, timeoutMs = 8000) {
 module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireIaCommand }) {
   function eid(req) { return getEmpresaId(req); }
   const canConfig = requireRotina('iac-config-ia');
+  const canCargas = requireRotina('iac-agente-local-cargas');
 
   function _validarCryptoKeyOuErro(key) {
     if (!key) return;
@@ -293,7 +294,7 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
   });
 
   // ── GET cargas/empresas — lista empresas do usuário + status de sync no agente ──
-  app.get('/api/ia-command/agente-local/cargas/empresas', requireAuth, requireIaCommand, canConfig, async (req, res) => {
+  app.get('/api/ia-command/agente-local/cargas/empresas', requireAuth, requireIaCommand, canCargas, async (req, res) => {
     const row   = crud.buscarPor('ai_config', 'empresa_id', eid(req));
     const url   = row?.agente_local_url;
     const token = row?.agente_local_token;
@@ -311,7 +312,7 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
   });
 
   // ── POST cargas/sincronizar — envia empresas selecionadas ao agente-local ─────
-  app.post('/api/ia-command/agente-local/cargas/sincronizar', requireAuth, requireIaCommand, canConfig, async (req, res) => {
+  app.post('/api/ia-command/agente-local/cargas/sincronizar', requireAuth, requireIaCommand, canCargas, async (req, res) => {
     const row   = crud.buscarPor('ai_config', 'empresa_id', eid(req));
     const url   = row?.agente_local_url;
     const token = row?.agente_local_token;

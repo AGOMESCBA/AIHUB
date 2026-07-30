@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calibracao NL-SQL - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .ctrl-bar { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
+    .ctrl-bar-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.25;display:flex;align-items:baseline;gap:8px; }
+    .ctrl-count { font-size:12px;color:var(--text-lo);font-weight:400; }
+    .filter-bar { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm); }
+    .filter-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .filter-row .form-control { height:34px;font-size:13px; }
+    .filter-row input[type="date"].form-control { width:150px;flex:0 0 150px; }
+    .filter-row select.form-control { width:auto;min-width:160px; }
+    .metric-row { display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-bottom:10px; }
+    .metric { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;min-width:0; }
+    .metric span { display:block;font-size:11px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin-bottom:5px; }
+    .metric strong { display:block;font-size:20px;color:var(--text-hi);line-height:1.2; }
+    .metric small { display:block;font-size:11px;color:var(--text-lo);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .recommendation { display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:14px 16px;margin-bottom:12px; }
+    .recommendation.ok { border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.05); }
+    .recommendation.warn { border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06); }
+    .recommendation-title { color:var(--text-hi);font-weight:800;font-size:14px;margin-bottom:3px; }
+    .recommendation-desc { color:var(--text-md);font-size:13px;line-height:1.45; }
+    .recommendation-value { color:var(--accent);font-size:24px;font-weight:900;white-space:nowrap; }
+    .tables-grid { display:grid;grid-template-columns:1.25fr .9fr;gap:12px;align-items:start; }
+    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:12px; }
+    .panel-head { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border); }
+    .panel-title { font-size:13px;font-weight:900;color:var(--text-hi);text-transform:uppercase;letter-spacing:.04em; }
+    .panel-sub { font-size:11px;color:var(--text-lo); }
+    .data-table { width:100%;border-collapse:collapse; }
+    .data-table th { text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap; }
+    .data-table td { padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text-md);font-size:13px;vertical-align:middle; }
+    .data-table tr:last-child td { border-bottom:none; }
+    .data-table td.num, .data-table th.num { text-align:right; }
+    .badge { display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-warn { background:#fef3c7;color:#92400e; }
+    .badge-fail { background:#fee2e2;color:#b91c1c; }
+    .badge-neutro { background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .empty { padding:26px;text-align:center;color:var(--text-lo);font-size:13px; }
+    .loading { display:none;align-items:center;justify-content:center;gap:10px;min-height:80px;color:var(--text-md); }
+    .loading.show { display:flex; }
+    .spinner { width:22px;height:22px;border-radius:50%;border:3px solid rgba(124,58,237,.18);border-top-color:var(--accent);animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @media (max-width: 1120px) { .metric-row { grid-template-columns:repeat(3,1fr); } .tables-grid { grid-template-columns:1fr; } }
+    @media (max-width: 700px) { .metric-row { grid-template-columns:1fr 1fr; } .ctrl-bar,.recommendation { align-items:flex-start;flex-direction:column; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command /</span> Calibracao NL-SQL</span>
+    </div>
+
+    <div class="content">
+      <div class="ctrl-bar">
+        <div>
+          <div class="page-kicker">Aprendizado NL-SQL</div>
+          <div class="ctrl-bar-title">Calibracao do Shadow Mode <span class="ctrl-count" id="count">carregando...</span></div>
+        </div>
+        <button class="btn btn-secondary" id="btn-atualizar" onclick="atualizarClick()">Atualizar</button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-row">
+          <input class="form-control" type="date" id="f-inicio" title="Data inicial">
+          <input class="form-control" type="date" id="f-fim" title="Data final">
+          <select class="form-control" id="f-modulo">
+            <option value="">Todos os modulos</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="compras">Compras</option>
+            <option value="faturamento">Faturamento</option>
+            <option value="comissao">Comissao</option>
+            <option value="estoque">Estoque</option>
+          </select>
+          <select class="form-control" id="f-fonte">
+            <option value="">Todas as fontes</option>
+            <option value="embedding_hibrido">Embedding hibrido</option>
+            <option value="estrutural">Estrutural</option>
+            <option value="estrutural_fallback">Fallback estrutural</option>
+            <option value="estrutural_fallback_sem_embedding">Sem embedding</option>
+            <option value="nao_informado">Nao informado</option>
+          </select>
+          <select class="form-control" id="f-limit">
+            <option value="1000">1.000</option>
+            <option value="5000" selected>5.000</option>
+            <option value="10000">10.000</option>
+            <option value="50000">50.000</option>
+          </select>
+          <button class="btn btn-primary" onclick="carregar()">Aplicar</button>
+        </div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric"><span>Total</span><strong id="m-total">0</strong><small>Shadows lidos</small></div>
+        <div class="metric"><span>Com candidato</span><strong id="m-candidato">0</strong><small>Score registrado</small></div>
+        <div class="metric"><span>Precisao template</span><strong id="m-precisao">-</strong><small>Match template / candidato</small></div>
+        <div class="metric"><span>Match total</span><strong id="m-match-total">-</strong><small>Template ou SQL aplicado</small></div>
+        <div class="metric"><span>Mismatch</span><strong id="m-mismatch">0</strong><small>Divergencia real</small></div>
+        <div class="metric"><span>Template invalido</span><strong id="m-invalido">0</strong><small>Candidato inaplicavel</small></div>
+      </div>
+
+      <div class="recommendation warn" id="recomendacao">
+        <div>
+          <div class="recommendation-title" id="rec-title">Aguardando amostra</div>
+          <div class="recommendation-desc" id="rec-desc">Carregando dados de shadow mode.</div>
+        </div>
+        <div class="recommendation-value" id="rec-value">-</div>
+      </div>
+
+      <div class="loading show" id="loading"><div class="spinner"></div><strong>Calculando calibracao</strong></div>
+
+      <div class="tables-grid">
+        <div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Precisao por faixa de score</div><div class="panel-sub">Base para escolher limiar conservador</div></div></div>
+            <div id="tbl-faixas"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Faixas por modulo</div><div class="panel-sub">Ajuda a liberar modulo por modulo no futuro</div></div></div>
+            <div id="tbl-modulo-faixas"></div>
+          </div>
+        </div>
+        <div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Resumo por modulo</div><div class="panel-sub">Volume e risco por area</div></div></div>
+            <div id="tbl-modulos"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Fonte do ranking</div><div class="panel-sub">Embedding, estrutural ou fallback</div></div></div>
+            <div id="tbl-fontes"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Classificacao efetiva</div><div class="panel-sub">Decisao automatica ou override por excecao</div></div></div>
+            <div id="tbl-classificacoes"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+  function pct(v) {
+    return v === null || v === undefined ? '-' : `${(Number(v) * 100).toFixed(2)}%`;
+  }
+  function num(v) {
+    return Number(v || 0).toLocaleString('pt-BR');
+  }
+  function score(v) {
+    return v === null || v === undefined ? '-' : Number(v).toFixed(3);
+  }
+  function riscoBadge(row) {
+    if (!row.com_candidato) return '<span class="badge badge-neutro">Sem amostra</span>';
+    if (Number(row.precisao_template) >= 0.995 && row.com_candidato >= 30) return '<span class="badge badge-ok">Forte</span>';
+    if (Number(row.precisao_template) >= 0.98 && row.com_candidato >= 10) return '<span class="badge badge-warn">Observar</span>';
+    return '<span class="badge badge-fail">Risco</span>';
+  }
+  function paramsFiltros() {
+    const p = new URLSearchParams();
+    for (const [id, nome] of [['f-inicio','inicio'], ['f-fim','fim'], ['f-modulo','modulo'], ['f-fonte','fonte'], ['f-limit','limit']]) {
+      const v = document.getElementById(id)?.value || '';
+      if (v) p.set(nome, v);
+    }
+    return p.toString();
+  }
+  function setLoading(on) {
+    document.getElementById('loading').classList.toggle('show', !!on);
+  }
+  function atualizarMetricas(resumo) {
+    document.getElementById('m-total').textContent = num(resumo.total);
+    document.getElementById('m-candidato').textContent = num(resumo.com_candidato);
+    document.getElementById('m-precisao').textContent = pct(resumo.precisao_template);
+    document.getElementById('m-match-total').textContent = pct(resumo.precisao_match_total);
+    document.getElementById('m-mismatch').textContent = num(resumo.mismatch);
+    document.getElementById('m-invalido').textContent = num(resumo.template_invalido);
+  }
+  function atualizarRecomendacao(rec) {
+    const box = document.getElementById('recomendacao');
+    const ok = rec?.status === 'recomendado';
+    box.classList.toggle('ok', ok);
+    box.classList.toggle('warn', !ok);
+    document.getElementById('rec-title').textContent = ok ? 'Limiar recomendado para estudo' : 'Amostra insuficiente para recomendar limiar';
+    document.getElementById('rec-desc').textContent = rec?.criterio || '-';
+    document.getElementById('rec-value').textContent = ok ? score(rec.limiar) : '-';
+  }
+  function tabelaSimples(elId, rows, columns) {
+    const el = document.getElementById(elId);
+    if (!rows || !rows.length) {
+      el.innerHTML = '<div class="empty">Sem dados para os filtros selecionados.</div>';
+      return;
+    }
+    el.innerHTML = `<table class="data-table"><thead><tr>${columns.map(c => `<th class="${c.cls || ''}">${esc(c.title)}</th>`).join('')}</tr></thead><tbody>${
+      rows.map(row => `<tr>${columns.map(c => `<td class="${c.cls || ''}">${c.render ? c.render(row) : esc(row[c.field])}</td>`).join('')}</tr>`).join('')
+    }</tbody></table>`;
+  }
+  function render(payload) {
+    document.getElementById('count').textContent = `${num(payload.amostra_lida)} registro(s)`;
+    atualizarMetricas(payload.resumo || {});
+    atualizarRecomendacao(payload.recomendacao || {});
+    const colsBase = [
+      { title: 'Grupo', field: 'label', render: r => `<strong>${esc(r.label)}</strong>` },
+      { title: 'Amostra', cls: 'num', render: r => num(r.com_candidato) },
+      { title: 'Precisao', cls: 'num', render: r => pct(r.precisao_template) },
+      { title: 'Match total', cls: 'num', render: r => pct(r.precisao_match_total) },
+      { title: 'Mismatch', cls: 'num', render: r => num(r.mismatch) },
+      { title: 'Status', render: riscoBadge },
+    ];
+    tabelaSimples('tbl-faixas', payload.faixas || [], colsBase);
+    tabelaSimples('tbl-modulos', payload.modulos || [], [
+      { title: 'Modulo', field: 'label', render: r => `<strong>${esc(r.label)}</strong>` },
+      { title: 'Total', cls: 'num', render: r => num(r.total) },
+      { title: 'Cand.', cls: 'num', render: r => num(r.com_candidato) },
+      { title: 'Precisao', cls: 'num', render: r => pct(r.precisao_template) },
+      { title: 'Risco', render: riscoBadge },
+    ]);
+    tabelaSimples('tbl-fontes', payload.fontes || [], [
+      { title: 'Fonte', field: 'label', render: r => `<strong>${esc(r.label)}</strong>` },
+      { title: 'Total', cls: 'num', render: r => num(r.total) },
+      { title: 'Cand.', cls: 'num', render: r => num(r.com_candidato) },
+      { title: 'Precisao', cls: 'num', render: r => pct(r.precisao_template) },
+      { title: 'Mismatch', cls: 'num', render: r => num(r.mismatch) },
+    ]);
+    tabelaSimples('tbl-classificacoes', payload.classificacoes || [], [
+      { title: 'Classificacao', field: 'label', render: r => `<strong>${esc(r.label)}</strong>` },
+      { title: 'Total', cls: 'num', render: r => num(r.total) },
+      { title: 'Cand.', cls: 'num', render: r => num(r.com_candidato) },
+      { title: 'Precisao', cls: 'num', render: r => pct(r.precisao_template) },
+      { title: 'Mismatch', cls: 'num', render: r => num(r.mismatch) },
+    ]);
+    tabelaSimples('tbl-modulo-faixas', payload.modulo_faixas || [], [
+      { title: 'Modulo', render: r => `<strong>${esc(r.module)}</strong>` },
+      { title: 'Faixa', field: 'faixa' },
+      { title: 'Amostra', cls: 'num', render: r => num(r.com_candidato) },
+      { title: 'Precisao', cls: 'num', render: r => pct(r.precisao_template) },
+      { title: 'Mismatch', cls: 'num', render: r => num(r.mismatch) },
+      { title: 'Status', render: riscoBadge },
+    ]);
+  }
+  async function carregar() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ia-command/admin/nlsql-calibracao?${paramsFiltros()}`);
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || `Erro ${res.status}`);
+      render(payload);
+    } catch (err) {
+      document.getElementById('count').textContent = 'erro ao carregar';
+      alert(err.message || 'Nao foi possivel carregar a calibracao.');
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function atualizarClick() {
+    const btn = document.getElementById('btn-atualizar');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Atualizando...';
+    try { await carregar(); } finally { btn.textContent = old; btn.disabled = false; }
+  }
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+</body>
+</html>

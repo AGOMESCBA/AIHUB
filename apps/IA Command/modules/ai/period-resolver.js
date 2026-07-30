@@ -162,6 +162,9 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   const mesTexto = _monthFromText(texto);
 
   if (comparacao) {
+    if (_referenciaComparativoHistorico(texto) && !_temMesOuAnoExplicito(texto)) {
+      return { tipo: 'nenhum', referencia_contexto: true };
+    }
     const anosComparacao = _yearsFromTextExpandido(texto);
     if (_containsTerm(texto, 'ano') && _containsAny(texto, ['ano anterior', 'ano passado']) && _containsAny(texto, ['ano atual', 'este ano', 'esse ano', 'atual'])) {
       return {
@@ -196,6 +199,21 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
     const mesesRange = _monthsFromText(texto);
     if (mesesRange.length >= 2 && anosComparacao.length >= 2) {
       return { tipo: 'comparacao_acumulado_mes', mes: Math.max(...mesesRange), ano_base: anosComparacao[0], ano_comparacao: anosComparacao[1] };
+    }
+    const mesesMesmoAno = _comparacaoMesesMesmoAno(texto, hoje);
+    if (mesesMesmoAno) return mesesMesmoAno;
+    if (
+      mesTexto
+      && _containsAny(texto, ['ano passado', 'ano anterior'])
+      && !_containsAny(texto, ['ano atual', 'este ano', 'esse ano', 'atual'])
+    ) {
+      const anoRef = hoje.getFullYear() - 1;
+      const mm = String(mesTexto).padStart(2, '0');
+      return {
+        tipo: 'personalizado',
+        data_inicio: `${anoRef}${mm}01`,
+        data_fim: _fmt(_endOfMonth(anoRef, mesTexto - 1)),
+      };
     }
     if (mesTexto) return { tipo: 'comparacao_mesmo_mes', mes: mesTexto };
     if (anosComparacao.length >= 2) {
@@ -303,7 +321,13 @@ function _removerAgrupamentosTemporais(texto) {
 function _resolverPersonalizado(periodo, hoje) {
   const ini = _coerceYmd(periodo.data_inicio, hoje);
   const fim = _coerceYmd(periodo.data_fim, hoje) || ini;
-  if (ini) return { dataInicio: ini, dataFim: fim };
+  if (ini) {
+    const extras = {};
+    if (Array.isArray(periodo.meses)) extras.meses = periodo.meses;
+    if (Array.isArray(periodo.anos)) extras.anos = periodo.anos;
+    if (Array.isArray(periodo.periodos_comparativos)) extras.periodos_comparativos = periodo.periodos_comparativos;
+    return { dataInicio: ini, dataFim: fim, ...extras };
+  }
 
   const n = _clampInt(periodo.meses_atras, 1, 1, 60);
   return _range(_startOfMonth(hoje.getFullYear(), hoje.getMonth() - n), _endOfMonth(hoje.getFullYear(), hoje.getMonth() - 1));
@@ -344,6 +368,38 @@ function _namedMonthRange(texto, hoje) {
   return {
     data_inicio: _fmt(_startOfMonth(ano, Math.min(first, last) - 1)),
     data_fim: _fmt(_endOfMonth(ano, Math.max(first, last) - 1)),
+  };
+}
+
+function _comparacaoMesesMesmoAno(texto, hoje) {
+  if (!_hasComparison(texto)) return null;
+  const meses = _monthsFromText(texto);
+  const distintos = [...new Set(meses)];
+  if (distintos.length < 2) return null;
+
+  const anosExplicitos = _yearsFromTextExpandido(texto);
+  if (anosExplicitos.length > 1) return null;
+
+  const ano = anosExplicitos[0] || _yearFromText(texto, hoje);
+  const mesesOrdenados = [...distintos].sort((a, b) => a - b);
+  const inicioMes = mesesOrdenados[0];
+  const fimMes = mesesOrdenados[mesesOrdenados.length - 1];
+  const periodoMes = mes => {
+    const mm = String(mes).padStart(2, '0');
+    return {
+      label: `${ano}${mm}`,
+      dataInicio: _fmt(_startOfMonth(ano, mes - 1)),
+      dataFim: _fmt(_endOfMonth(ano, mes - 1)),
+    };
+  };
+
+  return {
+    tipo: 'personalizado',
+    data_inicio: _fmt(_startOfMonth(ano, inicioMes - 1)),
+    data_fim: _fmt(_endOfMonth(ano, fimMes - 1)),
+    meses: mesesOrdenados,
+    anos: [ano],
+    periodos_comparativos: mesesOrdenados.map(periodoMes),
   };
 }
 
@@ -549,6 +605,15 @@ function _endOfMonth(ano, mes) {
 
 function _addDays(d, days) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+}
+
+function _referenciaComparativoHistorico(texto) {
+  return /\b(?:desses|destes|esses|estes)\s+(?:dois\s+)?(?:meses|periodos)\b/.test(texto)
+    || /\b(?:dos|os)\s+dois\s+(?:meses|periodos)\b/.test(texto);
+}
+
+function _temMesOuAnoExplicito(texto) {
+  return !!_monthFromText(texto) || /\b(?:19|20)\d{2}\b/.test(texto) || /\b(?:ano passado|ano anterior|ano atual|este ano|esse ano)\b/.test(texto);
 }
 
 function _startOfDay(d) {

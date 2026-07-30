@@ -144,6 +144,10 @@ const LOG_PREFIX_MODULO = {
   estoque: 'EstoqueAI',
 };
 
+function datasetSemanticoDesabilitadoParaAuditoria() {
+  return String(process.env.IAC_NLSQL_DISABLE_SEMANTIC_DATASET || '').trim() === '1';
+}
+
 function _appendTrace(intent = {}, evento = {}) {
   const trace = Array.isArray(intent._trace) ? intent._trace.slice(0, 40) : [];
   trace.push({
@@ -299,6 +303,29 @@ async function rotear(intent, empresaId) {
   if (intent.intencao === 'desconhecido') {
     const mensagem = intent._mensagemOriginal || intent.intencao || '';
     if (_parecePerguntaErp(mensagem)) {
+      const crossInfo = crossModuleDetector.ehCrossModule(mensagem);
+      const usarCrossModule = crossInfo.ehCross
+        && crossInfo.modulos.length >= 2
+        && crossInfo.modulos.every(m => SPEC_LOADERS[m]);
+      if (usarCrossModule) {
+        const erroAutorizacaoCross = _verificarAlgumModuloAutorizado(intent, empresaId, crossInfo.modulos);
+        if (erroAutorizacaoCross) return erroAutorizacaoCross;
+        const specCombinado = crossModuleSpecCombiner.combinarSpecs(crossInfo.modulos.map(m => SPEC_LOADERS[m]()));
+        const intentCross = {
+          ...intent,
+          intencao: `${crossInfo.modulos[0]}_dinamico`,
+          _dynamicAiScope: true,
+          _moduloDinamico: crossInfo.modulos[0],
+        };
+        console.log(`[CrossModule] Desconhecido com sinal cross-module: ${crossInfo.modulos.join(' + ')} | empresa=${empresaId}`);
+        const resultado = await iaOwnerRunner.executar(specCombinado, intentCross, empresaId);
+        const traceResultado = [
+          ...(Array.isArray(intent._trace) ? intent._trace : []),
+          ...(Array.isArray(resultado?.trace) ? resultado.trace : []),
+          { etapa: 'router', acao: 'fallback_cross_module', modulo: crossInfo.modulos.join('+'), intencao: 'desconhecido', detalhe: `tipo=${resultado?.tipo || 'n/a'}; duracao_ms=${Date.now() - t0}` },
+        ];
+        return { dataset_id: null, dataset_nome: crossInfo.modulos.join('_'), ...(resultado || {}), _pipeline_origem: 'cross_module', trace: traceResultado };
+      }
       const _todosModulos = Object.keys(SPEC_LOADERS);
       const erroAutorizacao = _verificarAlgumModuloAutorizado(intent, empresaId, _todosModulos);
       if (erroAutorizacao) return erroAutorizacao;
@@ -406,7 +433,7 @@ async function rotear(intent, empresaId) {
       && _crossInfo.modulos.length >= 2
       && _crossInfo.modulos.every(m => SPEC_LOADERS[m]);
 
-    const semanticDataset = modulo === 'faturamento'
+    const semanticDataset = modulo === 'faturamento' && !datasetSemanticoDesabilitadoParaAuditoria()
       ? semanticDatasetResolver.resolverDatasetView({
         empresaId,
         modulo,

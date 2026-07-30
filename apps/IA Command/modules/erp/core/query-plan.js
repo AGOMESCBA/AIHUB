@@ -104,7 +104,7 @@ function _inferirPlanoFinanceiro(texto, periodo) {
     'pagamento realizado', 'pagamentos realizados', 'contas pagas',
     'pago', 'pagos', 'pagas',
   ]);
-  const comparativo = _containsAny(texto, ['comparativo', 'comparar', 'comparacao', 'versus', 'vs', 'crescimento', 'variacao']);
+  const comparativo = _containsAny(texto, ['comparativo', 'comparar', 'compare', 'comparacao', 'versus', 'vs', 'crescimento', 'variacao']);
   const calcularPercentualCrescimento = _containsAny(texto, ['percentual de crescimento', 'crescimento percentual', 'percentual', 'variacao percentual']);
   // fluxoRealizado só dispara com termos explícitos de movimento passado — palavras genéricas como
   // "pagamentos" e "recebimentos" foram removidas pois aparecem em qualquer contexto financeiro
@@ -186,10 +186,23 @@ function _inferirPlanoFinanceiro(texto, periodo) {
 }
 
 function _inferirPlanoCompras(texto) {
+  const comparativo = _containsAny(texto, [
+    'comparativo', 'comparar', 'compare', 'comparacao', 'versus', 'vs',
+    'crescimento', 'cresceu', 'evolucao', 'variacao', 'aumento', 'queda',
+  ]);
+  const calcularPercentualCrescimento = _containsAny(texto, [
+    'crescimento', 'cresceu', 'crescimento percentual',
+    'variacao', 'variacao percentual', 'percentual',
+    'evolucao', 'aumento', 'queda',
+  ]);
   return {
     carteira: null,
     estado: _containsAny(texto, ['pedido aberto', 'pedidos abertos', 'saldo pedido', 'a receber']) ? 'em_aberto' : null,
-    operacao: _containsAny(texto, ['pedido', 'ordem de compra', 'oc']) ? 'pedido_compra' : 'consulta',
+    operacao: comparativo
+      ? 'comparativo'
+      : _containsAny(texto, ['pedido', 'ordem de compra', 'oc']) ? 'pedido_compra' : 'consulta',
+    comparativo,
+    calcularPercentualCrescimento,
     dataPadrao: 'entrada',
     exigirSaldoAberto: false,
     proibirFiltroData: false,
@@ -198,7 +211,7 @@ function _inferirPlanoCompras(texto) {
 
 function _inferirPlanoFaturamento(texto) {
   const comparativo = _containsAny(texto, [
-    'comparativo', 'comparar', 'comparacao', 'versus', 'vs',
+    'comparativo', 'comparar', 'compare', 'comparacao', 'versus', 'vs',
     'crescimento', 'cresceu', 'evolucao', 'variacao', 'aumento', 'queda',
   ]);
   const calcularPercentualCrescimento = _containsAny(texto, [
@@ -527,10 +540,23 @@ function formatQueryPlanForPrompt(plano = {}) {
     `  estado: ${plano.estado || 'nao_informado'}`,
     `  periodo: ${plano.periodoExplicito ? 'explicito' : 'nenhum'}`,
   ];
+  if (plano.periodoExplicito && (plano.periodo?.dataInicio || plano.periodo?.dataFim)) {
+    linhas.push(`  periodo_datas: ${plano.periodo?.dataInicio || 'null'} a ${plano.periodo?.dataFim || 'null'}`);
+  }
+  if (plano.comparativo && plano.periodo_base?.dataInicio && plano.periodo_base?.dataFim && plano.periodo_comparacao?.dataInicio && plano.periodo_comparacao?.dataFim) {
+    linhas.push(`  periodo_base: ${plano.periodo_base.dataInicio} a ${plano.periodo_base.dataFim}`);
+    linhas.push(`  periodo_comparacao: ${plano.periodo_comparacao.dataInicio} a ${plano.periodo_comparacao.dataFim}`);
+    linhas.push('  comparativo_continuidade: o SQL deve retornar os dois periodos, nao apenas o periodo_comparacao. Use UNION ALL com rotulo/competencia ou agrupe por competencia/periodo.');
+  }
   if (plano.fluxoTipo) linhas.push(`  fluxo_tipo: ${plano.fluxoTipo}`);
   if (plano.dataPadrao) linhas.push(`  campo_data_semantico: ${plano.dataPadrao}`);
-  // agrupamentos não são enviados para a IA — ela infere da pergunta original.
-  // O campo é usado apenas internamente (correções de domínio e validações).
+  const agrupamentosSql = Array.isArray(plano.agrupamentos)
+    ? plano.agrupamentos.filter(g => g && g !== 'empresa')
+    : [];
+  if (agrupamentosSql.length) {
+    linhas.push(`  agrupamentos_obrigatorios: ${agrupamentosSql.join(', ')}`);
+    linhas.push('  regra_agrupamentos: preserve esses agrupamentos no SELECT e no GROUP BY; continuidade/comparativo nao remove detalhamento herdado.');
+  }
   if (Array.isArray(plano.regras) && plano.regras.length) linhas.push(`  regras: ${plano.regras.join(', ')}`);
   if (plano.comparativo) linhas.push('  comparativo: gere linhas comparaveis para os periodos solicitados.');
   if (plano.calcularPercentualCrescimento) linhas.push('  calculo_obrigatorio: incluir crescimento/variacao entre os periodos comparados, com valor anterior e percentual quando houver denominador valido.');
@@ -659,6 +685,25 @@ function validarSqlContraPlano(sql, plano = {}) {
       new RegExp(`\\b(?:SUBSTRING|LEFT|RIGHT)\\s*\\(\\s*${campoRe}[\\s\\S]{0,120}\\)\\s*(?:BETWEEN|>=|<=|=|>|<|IN\\s*\\()`, 'i'),
     ].some(re => re.test(texto));
   };
+  const agrupamentos = Array.isArray(plano.agrupamentos)
+    ? plano.agrupamentos.map(g => String(g || '').toLowerCase()).filter(Boolean)
+    : [];
+  const exigeAgrupamento = (nome, campos, descricao) => {
+    if (!agrupamentos.includes(nome)) return;
+    const temGroup = /\bGROUP\s+BY\b/i.test(texto);
+    const camposRe = campos.map(c => String(c || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const algumCampo = camposRe.some(c => new RegExp(`\\b(?:[A-Z][A-Z0-9_]*\\.)?${c}\\b`, 'i').test(texto));
+    const algumCampoNoGroup = temGroup && camposRe.some(c => new RegExp(`\\bGROUP\\s+BY[\\s\\S]*\\b(?:[A-Z][A-Z0-9_]*\\.)?${c}\\b`, 'i').test(texto));
+    if (!temGroup || !algumCampo || !algumCampoNoGroup) {
+      erros.push(`O plano exige agrupamento por ${descricao}; preserve esse agrupamento no SELECT e no GROUP BY.`);
+    }
+  };
+
+  if (plano.modulo === 'faturamento') {
+    exigeAgrupamento('cliente', ['A1_NOME', 'A1_NREDUZ', 'F2_CLIENTE', 'D2_CLIENTE'], 'cliente');
+    exigeAgrupamento('produto', ['B1_DESC', 'D2_COD'], 'produto');
+    exigeAgrupamento('vendedor', ['A3_NOME', 'F2_VEND1'], 'vendedor');
+  }
 
   if (plano.proibirFiltroData) {
     const campos = _camposDataPorPlano(plano);

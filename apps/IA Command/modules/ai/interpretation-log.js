@@ -57,6 +57,7 @@ function moduloDinamico(payload = {}) {
     String(intent.intencao || '').replace(/_dinamico$/i, ''),
   ].filter(Boolean).map(v => String(v).toLowerCase());
 
+  if (candidatos.some(v => /(?:^|[_+])compras(?:$|[_+])/.test(v) && /(?:^|[_+])faturamento(?:$|[_+])/.test(v))) return 'compras';
   return candidatos.find(v => conhecido.has(v)) || null;
 }
 
@@ -125,6 +126,12 @@ function registrar(payload = {}) {
     sql_canonico_parametrizado: (resultado._sql_canonico_parametrizado || payload.sql_canonico_parametrizado) ? 1 : 0,
     sql_ia_bruto: resultado._sql_auditoria?.sql_ia_bruto || payload.sql_ia_bruto || null,
     sql_final_executado: resultado._sql_auditoria?.sql_final_executado || resultado.sql_gerado || payload.sql_final_executado || null,
+    intent_canonico_json: json(resultado._intent_canonico || intent._intentCanonico || payload.intent_canonico || null),
+    intent_canonico_hash: resultado._intent_canonico_hash || intent._intentCanonicoHash || payload.intent_canonico_hash || null,
+    intent_canonico_estrutural_json: json(resultado._intent_canonico_estrutural || intent._intentCanonicoEstrutural || payload.intent_canonico_estrutural || null),
+    chave_cache: resultado._chave_cache || intent._chaveCacheIntent || payload.chave_cache || null,
+    sql_template: resultado._sql_template || resultado._sql_auditoria?.sql_template || payload.sql_template || null,
+    sql_template_parametros_json: json(resultado._sql_template_parametros || resultado._sql_auditoria?.sql_template_parametros || payload.sql_template_parametros || []),
     sql_canonico_reuso_motivo: resultado._sql_canonico_reuso_motivo || payload.sql_canonico_reuso_motivo || null,
     sql_canonico_reuso_permitido: resultado._sql_canonico_reuso_permitido == null && payload.sql_canonico_reuso_permitido == null
       ? null

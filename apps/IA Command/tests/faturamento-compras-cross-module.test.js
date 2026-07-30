@@ -6,6 +6,7 @@ const ROOT = path.resolve(__dirname, '..');
 
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-builder'));
+const intentRouterSrc = require('fs').readFileSync(path.join(ROOT, 'modules/erp/core/intent-router.js'), 'utf8');
 const { combinarSpecs } = require(path.join(ROOT, 'modules/erp/core/cross-module-spec-combiner'));
 const faturamentoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/faturamento/faturamento-ia-owner-spec'));
 const comprasSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
@@ -30,9 +31,15 @@ assert.ok(systemPrompt.includes('Aliases de faturamento (total_faturamento, fatu
 assert.ok(systemPrompt.includes('devem usar SEMPRE SD2 JOIN SF2 com SUM(SD2.D2_TOTAL)'), 'faturamento cross-module deve orientar SD2.D2_TOTAL (SD2 JOIN SF2) para valor de faturamento');
 assert.ok(systemPrompt.includes('SF1/SD1 nao sao faturamento normal'), 'prompt cross-module deve impedir SF1/SD1 como faturamento normal');
 assert.ok(systemPrompt.includes('compras = SD1/SF1 filtrado por SD1.D1_DTDIGIT; faturamento = SD2/SF2 filtrado por SF2.F2_EMISSAO'), 'prompt deve orientar comparativo compras x faturamento por data correta');
+assert.ok(systemPrompt.includes('comparativo de "esses dois meses" entre compras e faturamento'), 'prompt deve orientar formato normalizado para continuidade cross-module');
 assert.ok(systemPrompt.includes('SUM(SD2.D2_TOTAL - SD2.D2_VALDEV)'), 'prompt cross-module deve orientar faturamento liquido com D2_VALDEV, nao SF1/SD1');
 assert.ok(systemPrompt.includes('EXCLUSIVAMENTE devolucao de venda'), 'prompt cross-module deve restringir SF1.F1_TIPO=D a devolucao de venda isolada, sem faturamento junto');
 assert.ok(systemPromptPerguntaComparativoJunho.includes('comparativo compras x faturamento'), 'prompt classificado para pergunta real deve manter regra cross-module');
+assert.ok(
+  intentRouterSrc.indexOf('Desconhecido com sinal cross-module') > 0
+    && intentRouterSrc.indexOf('Desconhecido com sinal cross-module') < intentRouterSrc.indexOf('fallback_erp_generico'),
+  'router deve tentar cross-module antes do fallback generico quando a classificacao vier desconhecida'
+);
 
 const sx2 = {
   SF2990: 'E',
@@ -151,6 +158,23 @@ assert.ok(!/SUM\s*\(\s*SF1\s*\.\s*F1_VALBRUT\s*\)[\s\S]{0,250}\bAS\s+total_fatur
 const validacaoComparativoJunho = runner._test.validarSqlIaOwnerBasico(sqlComparativoJunho2026vs2025Canonico, spec, sx2, perguntaComparativoJunho);
 assert.strictEqual(validacaoComparativoJunho.ok, true, `SQL canonico junho/2026 vs junho/2025 deve passar: ${validacaoComparativoJunho.erros.join(' | ')}`);
 
+const sqlComparativoDoisMesesEscalarRuim = `
+SET ROWCOUNT 50000;
+SELECT
+  COALESCE((SELECT SUM(SD1.D1_TOTAL) FROM SD1990 SD1 JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' ' WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO = 'N' AND SD1.D1_DTDIGIT BETWEEN '20250601' AND '20250630'), 0) AS total_compras_junho,
+  COALESCE((SELECT SUM(SD1.D1_TOTAL) FROM SD1990 SD1 JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA AND SF1.D_E_L_E_T_ = ' ' WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO = 'N' AND SD1.D1_DTDIGIT BETWEEN '20250701' AND '20250731'), 0) AS total_compras_julho,
+  COALESCE((SELECT SUM(SD2.D2_TOTAL) FROM SD2990 SD2 JOIN SF2990 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' ' WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'), 0) AS total_faturamento_junho,
+  COALESCE((SELECT SUM(SD2.D2_TOTAL) FROM SD2990 SD2 JOIN SF2990 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SF2.D_E_L_E_T_ = ' ' WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '20250701' AND '20250731'), 0) AS total_faturamento_julho;
+`;
+const validacaoComparativoDoisMesesEscalarRuim = runner._test.validarSqlIaOwnerBasico(
+  sqlComparativoDoisMesesEscalarRuim,
+  spec,
+  sx2,
+  'Compare compras e faturamento desses dois meses.',
+);
+assert.strictEqual(validacaoComparativoDoisMesesEscalarRuim.ok, false, 'cross-module deve rejeitar comparativo de dois meses em colunas escalares');
+assert(validacaoComparativoDoisMesesEscalarRuim.erros.join(' ').includes('tipo, valor e competencia'), 'erro deve orientar saida normalizada');
+
 const sqlCteVirgula = `
 SET ROWCOUNT 50000;
 WITH faturamento AS (
@@ -177,6 +201,25 @@ FROM faturamento f, compras c;
 
 const validacaoCteVirgula = runner._test.validarSqlIaOwnerBasico(sqlCteVirgula, spec, sx2);
 assert.strictEqual(validacaoCteVirgula.ok, true, `CTE usada em FROM separado por virgula deve ser aceita: ${validacaoCteVirgula.erros.join(' | ')}`);
+
+const sqlAliasDuplicadoMesmoEscopo = `
+SET ROWCOUNT 50000;
+SELECT
+  COALESCE((SELECT SUM(SD1.D1_TOTAL)
+    FROM SD1990 SD1
+    JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL
+      AND SD1.D1_DOC = SF1.F1_DOC
+      AND SD1.D1_SERIE = SF1.F1_SERIE
+      AND SD1.D1_FORNECE = SF1.F1_FORNECE
+      AND SD1.D1_LOJA = SF1.F1_LOJA
+      AND SD1.D_E_L_E_T_ = ' '
+    JOIN SF1990 SF1 ON SF1.D_E_L_E_T_ = ' '
+    WHERE SF1.F1_TIPO = 'N'
+      AND SD1.D1_DTDIGIT BETWEEN '20250601' AND '20250630'), 0) AS total_compras_junho;
+`;
+const validacaoAliasDuplicado = runner._test.validarSqlIaOwnerBasico(sqlAliasDuplicadoMesmoEscopo, spec, sx2);
+assert.strictEqual(validacaoAliasDuplicado.ok, false, 'SQL com alias duplicado no mesmo SELECT deve ser rejeitado');
+assert(validacaoAliasDuplicado.erros.join(' ').includes('Alias de tabela duplicado'), 'erro deve explicar alias duplicado');
 
 const sqlJoinIncompleto = sqlCanonico
   .replace(/\s+AND SD1\.D1_FORNECE = SF1\.F1_FORNECE/, '')

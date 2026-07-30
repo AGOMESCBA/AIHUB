@@ -2,6 +2,7 @@
 # IAHub - Atualizar Fontes no Servidor
 # Execute como Administrador apos copiar o novo ZIP para o servidor
 # Uso: .\3-atualizar.ps1 -Zip "C:\caminho\iahub-deploy-YYYYMMDD_HHMM.zip"
+# Modo seguro: nao apaga banco, .env, uploads, sessoes ou diretorios de dados.
 # ============================================================
 
 param(
@@ -49,20 +50,66 @@ if (!(Test-Path $Zip)) {
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-$protectedEntryPattern = '(^|/)(data|uploads|sessions|\.wwebjs_auth|\.wwebjs_cache)(/|$)|(^|/)iahub/\.env$|\.(db|sqlite|sqlite3)$'
+function Test-ZipEntryUnsafe {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    $entryName = $Name.Replace('\', '/')
+
+    if ([string]::IsNullOrWhiteSpace($entryName)) {
+        return "entrada vazia"
+    }
+
+    if ($entryName -notmatch '^iahub(/|$)') {
+        return "fora da pasta iahub"
+    }
+
+    if ($entryName -match '(^|/)\.\.(/|$)|^[A-Za-z]:') {
+        return "caminho invalido"
+    }
+
+    if ($entryName -match '^iahub/(data|uploads|sessions|\.wwebjs_auth|\.wwebjs_cache|logs|backups|node_modules)(/|$)') {
+        return "diretorio protegido"
+    }
+
+    if ($entryName -match '(^|/)\.env$|(^|/)data\.json$|\.(db|sqlite|sqlite3|sqlite-wal|sqlite-shm)$') {
+        return "arquivo protegido"
+    }
+
+    return $null
+}
+
 $zipCheck = [System.IO.Compression.ZipFile]::OpenRead($Zip)
 try {
-    $protectedEntries = @($zipCheck.Entries | Where-Object { $_.FullName -match $protectedEntryPattern } | Select-Object -First 20)
+    $unsafeEntries = @()
+    foreach ($entry in $zipCheck.Entries) {
+        $motivo = Test-ZipEntryUnsafe -Name $entry.FullName
+        if ($motivo) {
+            $unsafeEntries += [pscustomobject]@{
+                FullName = $entry.FullName
+                Motivo   = $motivo
+            }
+        }
+    }
 } finally {
     $zipCheck.Dispose()
 }
 
-if ($protectedEntries.Count -gt 0) {
-    Write-Host "ERRO: O ZIP contem caminhos protegidos de dados/configuracao. Atualizacao cancelada." -ForegroundColor Red
-    $protectedEntries | ForEach-Object { Write-Host "  - $($_.FullName)" -ForegroundColor Yellow }
+if ($unsafeEntries.Count -gt 0) {
+    Write-Host "ERRO: O ZIP contem caminhos inseguros ou protegidos. Atualizacao cancelada." -ForegroundColor Red
+    $unsafeEntries | Select-Object -First 30 | ForEach-Object {
+        Write-Host "  - $($_.FullName) [$($_.Motivo)]" -ForegroundColor Yellow
+    }
     Write-Host "Gere novamente o pacote com deploy\0-gerar-pacote.ps1." -ForegroundColor Yellow
     exit 1
 }
+
+$envPath = Join-Path $PROJECT_PATH ".env"
+$dbPath  = Join-Path $PROJECT_PATH "apps\IA Command\data\ia-command.db"
+$hadEnv  = Test-Path -LiteralPath $envPath
+$hadDb   = Test-Path -LiteralPath $dbPath
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
@@ -71,6 +118,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "ZIP:     $Zip"
 Write-Host "Destino: $PROJECT_PATH"
+Write-Host "Seguro:  sem DROP/DELETE/TRUNCATE; nao sobrescreve .env, banco, uploads ou sessoes"
 Write-Host ""
 
 # ── 1. Parar o servico ────────────────────────────────────────
@@ -93,7 +141,7 @@ if (Test-Path $PROJECT_PATH) {
     }
 
     $backupZip = Join-Path $BACKUP_ROOT ("iahub-before-update-{0}.zip" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-    $backupExcludes = @("node_modules", ".wwebjs_auth", ".wwebjs_cache", "logs")
+    $backupExcludes = @("node_modules", "logs")
     $backupFiles = Get-ChildItem -Path $PROJECT_PATH -Recurse -File | Where-Object {
         $relative = $_.FullName.Substring($PROJECT_PATH.Length + 1)
         $parts = $relative.Split([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -125,6 +173,14 @@ Write-Host "[3/5] Extraindo novos fontes..." -ForegroundColor Yellow
 Expand-Archive -Path $Zip -DestinationPath $PARENT_PATH -Force
 
 Write-Host "      Fontes atualizados!" -ForegroundColor Green
+
+if ($hadEnv -and !(Test-Path -LiteralPath $envPath)) {
+    throw "ERRO CRITICO: .env existia antes da atualizacao e nao foi encontrado depois. Verifique o backup antes de iniciar."
+}
+
+if ($hadDb -and !(Test-Path -LiteralPath $dbPath)) {
+    throw "ERRO CRITICO: banco SQLite existia antes da atualizacao e nao foi encontrado depois. Verifique o backup antes de iniciar."
+}
 
 # ── 3. Atualizar dependencias npm ────────────────────────────
 Write-Host "[4/5] Atualizando dependencias npm..." -ForegroundColor Yellow

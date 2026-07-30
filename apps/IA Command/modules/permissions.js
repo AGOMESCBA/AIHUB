@@ -17,4 +17,21 @@ function requireRotina(rotinaId) {
   };
 }
 
-module.exports = { requireRotina };
+function requireAnyRotina(rotinaIds) {
+  const ids = Array.isArray(rotinaIds) ? rotinaIds : [rotinaIds];
+  return (req, res, next) => {
+    const ctx = resolveEmpresaId(req);
+    if (!ctx.ok) return res.status(ctx.status || 403).json({ error: ctx.error });
+
+    if (req.session?.role === 'admin') return next();
+
+    const empresaId = Number(ctx.empresaId || 0);
+    const userId = Number(req.session?.user_id || 0);
+    const rotinas = permissoesDb.getRotinas(userId, empresaId);
+
+    if (Array.isArray(rotinas) && ids.some(id => rotinas.includes(id))) return next();
+    return res.status(403).json({ error: 'Usuario sem permissao para esta rotina.' });
+  };
+}
+
+module.exports = { requireRotina, requireAnyRotina };

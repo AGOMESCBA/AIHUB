@@ -109,7 +109,7 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     '## Formato de Data Protheus',
     '- Datas sao CHAR(8) YYYYMMDD. Para periodos continuos reais, compare com BETWEEN em texto: BETWEEN \'20260101\' AND \'20261231\'.',
     '- O campo "data_atual" no contexto tecnico e a ancora para calcular "hoje", "este mes", "este ano", "mes passado" etc.',
-    '- REGRA CRITICA — PERIODO: O sistema nao fornece datas pre-calculadas. Voce calcula o periodo EXCLUSIVAMENTE a partir da mensagem atual, do historico de turnos e de "data_atual". Em continuidade, confirme o periodo lendo a mensagem original no historico e o ultimo_sql antes de herdar.',
+    '- REGRA CRITICA - CONTRATO: quando o prompt trouxer "CONTRATO OBRIGATORIO DE SQL", ele e a fonte de verdade para periodo, carteira, estado e estrutura semantica.',
     '',
 
     '## Filtro de Valores Temporais Isolados (Mes ou Dia Especifico)',
@@ -177,9 +177,10 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
 
 function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico, entidadesResolvidas, tentativa, erroSql, sqlComErro } = {}) {
   const queryPlanTexto = contextoTecnico?.query_plan_texto || null;
+  const fewShotSemantico = Array.isArray(contextoTecnico?.few_shot_semantico) ? contextoTecnico.few_shot_semantico : [];
   // Serializa contextoTecnico sem query_plan_texto — já será exibido em destaque abaixo
   const contextoSemPlano = contextoTecnico
-    ? Object.fromEntries(Object.entries(contextoTecnico).filter(([k]) => k !== 'query_plan_texto'))
+    ? Object.fromEntries(Object.entries(contextoTecnico).filter(([k]) => k !== 'query_plan_texto' && k !== 'few_shot_semantico'))
     : {};
 
   const _empresasIahubCtx = Array.isArray(contextoTecnico?.empresas_iahub_mencionadas) ? contextoTecnico.empresas_iahub_mencionadas : [];
@@ -203,9 +204,17 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
     'Contexto tecnico de execucao:',
     json(contextoSemPlano),
     '',
+    fewShotSemantico.length ? [
+      'Exemplos confiaveis de consultas parecidas (USO CONSULTIVO):',
+      'Use estes exemplos apenas para entender padroes de metrica, agrupamento e forma de SQL.',
+      'Nao copie sufixos fisicos, tabelas fisicas ou periodos dos exemplos; use sempre o SX2/SX3 e o periodo da requisicao atual.',
+      'Nao trate similaridade como cache. Gere o SQL normalmente e obedeca o contrato atual.',
+      json(fewShotSemantico),
+      '',
+    ].join('\n') : '',
     'Entidades ja resolvidas pelo sistema:',
     json(entidadesResolvidas || []),
-    queryPlanTexto ? `\n## CONTRATO OBRIGATORIO DE SQL (leia antes de gerar qualquer SQL)\n${queryPlanTexto}\nO SQL gerado DEVE obedecer integralmente este contrato. Nao gere SQL que contradiga carteira, estado, dataPadrao ou estrutura acima.` : '',
+    queryPlanTexto ? `\n## CONTRATO OBRIGATORIO DE SQL (leia antes de gerar qualquer SQL)\n${queryPlanTexto}\nO SQL gerado DEVE obedecer integralmente este contrato. Nao gere SQL que contradiga carteira, estado, dataPadrao, periodo ou estrutura acima. Se periodo for explicito, use exatamente as datas declaradas no contrato; nao substitua por data_atual, ano atual ou outro ano inferido.` : '',
     tentativa ? `\nTentativa/correcao solicitada: ${tentativa}` : '',
     erroSql ? `\nErro retornado pelo banco/validador:\n${erroSql}` : '',
     sqlComErro ? `\nSQL com erro:\n${sqlComErro}` : '',

@@ -253,7 +253,19 @@ function regrasTecnicas({ modeloBaixasReceber, modeloBaixasPagar, mensagem } = {
   // fragmentos (fallback idempotente ao comportamento anterior a fragmentacao).
   const chaves = chavesAcionadas || fragmentosSpec.ORDEM_FALLBACK;
 
-  const partes = [fragmentosSpec.base(ctx)];
+  const partes = [
+    [
+      '## Continuidade e Periodo no Financeiro',
+      '- Em perguntas de continuidade, o periodo herdado pelo contrato/query_plan e autoritativo. Preserve exatamente dataInicio/dataFim no SQL.',
+      '- "Agora detalhe por cliente", "por fornecedor", "por titulo" ou "somente vencidos" sao refinamentos da consulta anterior; nao removem o periodo anterior.',
+      '- "Vencido" em continuidade significa adicionar a condicao de vencimento/estado dentro do mesmo periodo herdado, nao consultar tudo que venceu ate hoje.',
+      "- Faixa de atraso em dias deve ser calculada com DATEDIFF(DAY, CONVERT(DATE, SE1.E1_VENCREA, 112), data_atual) para receber, ou SE2.E2_VENCREA para pagar. PROIBIDO comparar E1_VENCREA/E2_VENCREA diretamente com numero de dias, como E1_VENCREA > '60'.",
+      '- Se o contrato trouxer periodo 20250601 a 20250630, o SQL deve conter esse intervalo ou competencia 202506. PROIBIDO trocar para 202607, para data_atual ou para intervalo aberto.',
+      '- Nao mantenha filtros temporais antigos ou inferidos junto do periodo do contrato. Exemplo proibido: SUBSTRING(campo,1,6)=202307 e BETWEEN 20250701..20250731 no mesmo campo.',
+      '- Para contas a receber vencidas por cliente dentro de um periodo, use SE1 + SA1, preserve o filtro temporal do periodo em E1_VENCREA e aplique o criterio de vencido/saldo conforme a pergunta.',
+    ].join('\n'),
+    fragmentosSpec.base(ctx),
+  ];
   for (const chave of chaves) {
     const fragmento = fragmentosSpec.FRAGMENTOS[chave];
     if (fragmento) partes.push(fragmento.texto(ctx));
@@ -413,6 +425,19 @@ const sqlPatternsProibidos = [
     },
   },
   {
+    validar(sql) {
+      const comparacaoDataComDias = /\bSE[12]\s*\.\s*E[12]_VENCREA\s*(?:=|<>|!=|<|>|<=|>=)\s*'?\d{1,3}'?\b/i;
+      const betweenDias = /\bSE[12]\s*\.\s*E[12]_VENCREA\s+BETWEEN\s+'?\d{1,3}'?\s+AND\s+'?\d{1,3}'?\b/i;
+      if (!comparacaoDataComDias.test(sql) && !betweenDias.test(sql)) return null;
+      return (
+        'Campo de vencimento real foi comparado com quantidade de dias. ' +
+        'E1_VENCREA/E2_VENCREA sao datas YYYYMMDD, nao numero de dias. ' +
+        'Para faixa de atraso, calcule dias_atraso com DATEDIFF(DAY, CONVERT(DATE, SE1.E1_VENCREA, 112), data_atual) ' +
+        'ou DATEDIFF(DAY, CONVERT(DATE, SE2.E2_VENCREA, 112), data_atual), e filtre o resultado calculado.'
+      );
+    },
+  },
+  {
     // Bug confirmado em producao: a IA por vezes esquece o filtro de exclusao de banco
     // mesmo com a regra textual no spec (mais provavel em continuidade de conversa). Extrai
     // os codigos de banco que o usuario pediu para excluir/desconsiderar e exige que apareçam
@@ -451,6 +476,7 @@ module.exports = {
   entityCatalog,
   resolverEntidadesAntesDaIa: true,
   camposSx3Essenciais: CAMPOS_SX3_ESSENCIAIS,
+  camposPeriodoObrigatorios: ['E1_VENCREA', 'E1_VENCTO', 'E1_EMISSAO', 'E1_BAIXA', 'E2_VENCREA', 'E2_VENCTO', 'E2_EMISSAO', 'E2_BAIXA', 'E5_DATA', 'E8_DTSALAT'],
   sqlMiddleware,
   regrasTecnicas,
   sx3PromptLimit: 90,

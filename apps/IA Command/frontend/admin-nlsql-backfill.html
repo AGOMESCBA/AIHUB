@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Backfill NL-SQL - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .ctrl-bar { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
+    .ctrl-title { font-size:18px;font-weight:800;color:var(--text-hi); }
+    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:14px;margin-bottom:12px; }
+    .filter-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .filter-row .form-control { height:34px;font-size:13px; }
+    .filter-row input[type="date"].form-control { width:150px;flex:0 0 150px; }
+    .filter-row select.form-control { width:auto;min-width:150px; }
+    .metric-row { display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-bottom:12px; }
+    .metric { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px; }
+    .metric span { display:block;font-size:11px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin-bottom:5px; }
+    .metric strong { display:block;font-size:22px;color:var(--text-hi);line-height:1.2; }
+    .metric small { display:block;font-size:11px;color:var(--text-lo);margin-top:3px; }
+    .result-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px; }
+    .result-box { border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-base);overflow:hidden; }
+    .result-head { display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--bg-card);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo); }
+    .result-pre { margin:0;min-height:180px;max-height:380px;overflow:auto;padding:12px;font-family:ui-monospace,monospace;font-size:12px;line-height:1.55;color:var(--text-md);white-space:pre-wrap;word-break:break-word; }
+    .notice { font-size:13px;color:var(--text-md);line-height:1.6;background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 12px;margin-top:10px; }
+    .error { display:none;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;margin-top:10px; }
+    @media (max-width: 1100px) { .metric-row { grid-template-columns:repeat(3,1fr); } .result-grid { grid-template-columns:1fr; } }
+    @media (max-width: 720px) { .metric-row { grid-template-columns:1fr 1fr; } .ctrl-bar { align-items:flex-start;flex-direction:column; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command /</span> Backfill NL-SQL</span>
+    </div>
+
+    <div class="content">
+      <div class="ctrl-bar">
+        <div>
+          <div class="page-kicker">Aprendizado NL-SQL</div>
+          <div class="ctrl-title">Backfill Administrativo</div>
+        </div>
+        <button class="btn btn-secondary" id="btn-status" onclick="carregarStatus()">Atualizar status</button>
+      </div>
+
+      <div class="panel">
+        <div class="filter-row">
+          <input class="form-control" type="date" id="f-inicio" title="Data inicial">
+          <input class="form-control" type="date" id="f-fim" title="Data final">
+          <select class="form-control" id="f-modulo">
+            <option value="">Todos os modulos</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="compras">Compras</option>
+            <option value="faturamento">Faturamento</option>
+            <option value="comissao">Comissao</option>
+            <option value="estoque">Estoque</option>
+          </select>
+          <select class="form-control" id="f-limit">
+            <option value="50">50 por lote</option>
+            <option value="100">100 por lote</option>
+            <option value="200" selected>200 por lote</option>
+            <option value="500">500 por lote</option>
+            <option value="1000">1000 por lote</option>
+          </select>
+          <button class="btn btn-primary" id="btn-run" onclick="executarBackfill()">Executar backfill</button>
+        </div>
+        <div class="notice">A rotina processa somente execucoes confiaveis, com Intent Canonico e template SQL. Ela nao executa SQL no ERP e nao ativa auto-reuse semantico.</div>
+        <div class="error" id="erro"></div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric"><span>Confiaveis</span><strong id="m-confiaveis">0</strong><small>Sucessos liberados pela quarentena</small></div>
+        <div class="metric"><span>Elegiveis</span><strong id="m-elegiveis">0</strong><small>Com intent e template</small></div>
+        <div class="metric"><span>Indexados</span><strong id="m-indexados">0</strong><small>Ja viraram exemplo</small></div>
+        <div class="metric"><span>Pendentes</span><strong id="m-pendentes">0</strong><small>Podem entrar no backfill</small></div>
+        <div class="metric"><span>Sem intent</span><strong id="m-sem-intent">0</strong><small>Ignorados</small></div>
+        <div class="metric"><span>Sem template</span><strong id="m-sem-template">0</strong><small>Ignorados</small></div>
+      </div>
+
+      <div class="result-grid">
+        <div class="result-box">
+          <div class="result-head">Ultima execucao</div>
+          <pre class="result-pre" id="resultado">Nenhum backfill executado nesta tela.</pre>
+        </div>
+        <div class="result-box">
+          <div class="result-head">Status bruto</div>
+          <pre class="result-pre" id="status-json">{}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  function filtros() {
+    const out = {
+      inicio: document.getElementById('f-inicio').value || '',
+      fim: document.getElementById('f-fim').value || '',
+      modulo: document.getElementById('f-modulo').value || '',
+      limit: document.getElementById('f-limit').value || '200',
+    };
+    return out;
+  }
+  function qs(obj) {
+    const p = new URLSearchParams();
+    Object.entries(obj).forEach(([k, v]) => { if (v) p.set(k, v); });
+    return p.toString();
+  }
+  function setErro(msg) {
+    const el = document.getElementById('erro');
+    el.style.display = msg ? 'block' : 'none';
+    el.textContent = msg || '';
+  }
+  function preencherStatus(status) {
+    document.getElementById('m-confiaveis').textContent = status.confiaveis || 0;
+    document.getElementById('m-elegiveis').textContent = status.elegiveis || 0;
+    document.getElementById('m-indexados').textContent = status.ja_indexados || 0;
+    document.getElementById('m-pendentes').textContent = status.pendentes || 0;
+    document.getElementById('m-sem-intent').textContent = status.sem_intent || 0;
+    document.getElementById('m-sem-template').textContent = status.sem_template || 0;
+  }
+  async function carregarStatus() {
+    setErro('');
+    const btn = document.getElementById('btn-status');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Atualizando...';
+    try {
+      const res = await fetch(`/api/ia-command/admin/nlsql-backfill/status?${qs(filtros())}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+      preencherStatus(data.status || {});
+      document.getElementById('status-json').textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      setErro(err.message || 'Nao foi possivel carregar o status.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  }
+  async function executarBackfill() {
+    setErro('');
+    const f = filtros();
+    if (f.inicio && f.fim && f.inicio > f.fim) {
+      setErro('A data inicial nao pode ser maior que a data final.');
+      return;
+    }
+    if (!confirm(`Executar backfill de ate ${f.limit} registro(s) elegiveis agora?`)) return;
+    const btn = document.getElementById('btn-run');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Executando...';
+    try {
+      const res = await fetch('/api/ia-command/admin/nlsql-backfill/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(f),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+      preencherStatus(data.depois || {});
+      document.getElementById('resultado').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('status-json').textContent = JSON.stringify({ filtros: data.filtros, status: data.depois }, null, 2);
+    } catch (err) {
+      setErro(err.message || 'Nao foi possivel executar o backfill.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  }
+  window._iahubAuthReady?.then(carregarStatus) ?? carregarStatus();
+</script>
+</body>
+</html>

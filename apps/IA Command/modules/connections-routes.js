@@ -1,7 +1,7 @@
 ﻿const crud        = require('./database/crud');
 const factory     = require('./erp/providers/connection-factory');
 const erpRegistry = require('./erp/core/erp-registry');
-const { requireRotina } = require('./permissions');
+const { requireRotina, requireAnyRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 
 function _invalidarMetaConexao(empresaId) {
@@ -12,6 +12,14 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
 
   function eid(req) { return getEmpresaId(req); }
   const canConfigConexoes = requireRotina('iac-config-conexoes');
+  const canLerConexoes = requireAnyRotina([
+    'iac-config-conexoes',
+    'iac-admin-datasets',
+    'iac-admin-intencoes',
+    'iac-config-middleware',
+    'iac-admin-protheus-sx2',
+    'iac-admin-protheus-sx3',
+  ]);
 
   // ── LIST SUPPORTED ERPS ──────────────────────────────────────────────────────
   app.get('/api/ia-command/erps', requireAuth, requireIaCommand, canConfigConexoes, (_req, res) => {
@@ -24,8 +32,8 @@ module.exports = function registrarRotasConexoes(app, { requireAuth, requireIaCo
     res.json(rows.map((r) => ({ ...r, password: undefined })));
   });
 
-  // ── LIST DISPONÍVEIS (dropdown em outros módulos — só requer requireIaCommand) ─
-  app.get('/api/ia-command/connections/available', requireAuth, requireIaCommand, (req, res) => {
+  // ── LIST DISPONIVEIS (dropdown em outros modulos) ────────────────────────────
+  app.get('/api/ia-command/connections/available', requireAuth, requireIaCommand, canLerConexoes, (req, res) => {
     const rows = crud.listar('connections', { empresa_id: eid(req) });
     res.json(rows.map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, erp: r.erp, ativo: r.ativo })));
   });

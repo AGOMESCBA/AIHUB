@@ -841,6 +841,12 @@
       sql_canonico_reuso_motivo: row.sql_canonico_reuso_motivo || null,
       sql_canonico_adaptado: row.sql_canonico_adaptado || null,
       sql_canonico_original: row.sql_canonico_original || null,
+      intent_canonico: parseJson(row.intent_canonico_json, null),
+      intent_canonico_hash: row.intent_canonico_hash || null,
+      intent_canonico_estrutural: parseJson(row.intent_canonico_estrutural_json, null),
+      chave_cache: row.chave_cache || null,
+      sql_template: row.sql_template || null,
+      sql_template_parametros: parseJson(row.sql_template_parametros_json, []),
       sql_ia_bruto: row.sql_ia_bruto || null,
       sql_final_executado: row.sql_final_executado || null,
       fase_execucao: row.fase_execucao || null,
@@ -887,6 +893,7 @@
 
     const blocos = [
       ['SQL final executado', row.sql_final_executado || row.sql_gerado || aud.sql_final_executado],
+      ['SQL template parametrizado', row.sql_template || aud.sql_template],
       ['SQL canônico adaptado da empresa', row.sql_canonico_adaptado || aud.sql_apos_contrato || aud.sql_apos_parametros],
       ['SQL canônico original/reaproveitado', row.sql_canonico_original || aud.sql_canonico_recebido],
       ['SQL bruto da IA ou recebido para reuso', row.sql_ia_bruto || aud.sql_ia_bruto],

@@ -443,7 +443,7 @@ const MIGRATIONS = [
     version: 25,
     descricao: 'erp_config — torna connection_id opcional (config de middleware independe de conexão)',
     sql: `
-      CREATE TABLE IF NOT EXISTS erp_config_new (
+      CREATE TABLE IF NOT EXISTS erp_config_v25 (
         id            TEXT PRIMARY KEY,
         connection_id TEXT,
         empresa_id    INTEGER NOT NULL,
@@ -452,9 +452,9 @@ const MIGRATIONS = [
         criado_em     TEXT NOT NULL,
         atualizado_em TEXT NOT NULL
       );
-      INSERT INTO erp_config_new SELECT id, connection_id, empresa_id, erp, config, criado_em, atualizado_em FROM erp_config;
-      DROP TABLE erp_config;
-      ALTER TABLE erp_config_new RENAME TO erp_config;
+      INSERT OR IGNORE INTO erp_config_v25 SELECT id, connection_id, empresa_id, erp, config, criado_em, atualizado_em FROM erp_config;
+      ALTER TABLE erp_config RENAME TO erp_config_legacy_v25;
+      ALTER TABLE erp_config_v25 RENAME TO erp_config;
     `,
   },
   {
@@ -919,6 +919,207 @@ const MIGRATIONS = [
     descricao: 'IA Command - codigo de aprovador ERP (SCR.CR_APROV/SAK.AK_COD) em whatsapp_allowed_numbers',
     sql: `
       ALTER TABLE whatsapp_allowed_numbers ADD COLUMN cod_aprov_erp TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 53,
+    descricao: 'IA Command - fundacao do Intent Canonico no execution_log',
+    sql: `
+      ALTER TABLE execution_log ADD COLUMN texto_original TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN intent_canonico_json TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN intent_canonico_hash TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN chave_cache TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN sql_final_executado TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN sql_template TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN prompt_version TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN spec_version TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN schema_version TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN model TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN confiavel_cache INTEGER DEFAULT 0;
+      ALTER TABLE execution_log ADD COLUMN confiavel_cache_em TEXT DEFAULT NULL;
+      ALTER TABLE execution_log ADD COLUMN cache_status TEXT DEFAULT 'pendente';
+
+      CREATE INDEX IF NOT EXISTS idx_iac_execution_cache_lookup
+        ON execution_log (empresa_id, numero_wa, chave_cache, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_execution_cache_status
+        ON execution_log (empresa_id, cache_status, criado_em);
+    `,
+  },
+  {
+    version: 54,
+    descricao: 'IA Command - Intent Canonico e template SQL na interpretation_log',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN intent_canonico_json TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN intent_canonico_hash TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN intent_canonico_estrutural_json TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN chave_cache TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_template TEXT DEFAULT NULL;
+      ALTER TABLE interpretation_log ADD COLUMN sql_template_parametros_json TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_interpretation_intent_cache
+        ON interpretation_log (empresa_id, chave_cache, criado_em);
+    `,
+  },
+  {
+    version: 55,
+    descricao: 'IA Command - indices de performance em protheus_sx2, erp_config, intentions e connections',
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_protheus_sx2_empresa
+        ON protheus_sx2 (empresa_id);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_erp_config_empresa_erp
+        ON erp_config (empresa_id, erp, connection_id);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_intentions_empresa_nome
+        ON intentions (empresa_id, nome);
+      CREATE INDEX IF NOT EXISTS idx_iac_intentions_empresa_ativo
+        ON intentions (empresa_id, ativo);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_connections_empresa_ativo
+        ON connections (empresa_id, ativo);
+    `,
+  },
+  {
+    version: 56,
+    descricao: 'IA Command - exemplos semanticos consultivos para cache NL-SQL',
+    sql: `
+      CREATE TABLE IF NOT EXISTS nlsql_semantic_examples (
+        id                              TEXT PRIMARY KEY,
+        execution_log_id                TEXT NOT NULL UNIQUE,
+        empresa_id                      INTEGER NOT NULL,
+        numero_wa                       TEXT DEFAULT NULL,
+        module                          TEXT DEFAULT NULL,
+        intent                          TEXT DEFAULT NULL,
+        metric_json                     TEXT DEFAULT NULL,
+        date_basis                      TEXT DEFAULT NULL,
+        group_by_json                   TEXT DEFAULT NULL,
+        filter_keys_json                TEXT DEFAULT NULL,
+        entity_types_json               TEXT DEFAULT NULL,
+        security_scope_json             TEXT DEFAULT NULL,
+        prompt_version                  TEXT DEFAULT NULL,
+        spec_version                    TEXT DEFAULT NULL,
+        schema_version                  TEXT DEFAULT NULL,
+        model                           TEXT DEFAULT NULL,
+        chave_cache                     TEXT DEFAULT NULL,
+        intent_canonico_hash            TEXT DEFAULT NULL,
+        intent_canonico_json            TEXT NOT NULL,
+        intent_canonico_estrutural_json TEXT DEFAULT NULL,
+        search_text                     TEXT NOT NULL,
+        sql_template                    TEXT NOT NULL,
+        sql_final_executado             TEXT DEFAULT NULL,
+        embedding_json                  TEXT DEFAULT NULL,
+        embedding_provider              TEXT DEFAULT NULL,
+        embedding_model                 TEXT DEFAULT NULL,
+        embedding_status                TEXT NOT NULL DEFAULT 'pendente',
+        criado_em                       TEXT NOT NULL,
+        atualizado_em                   TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_examples_lookup
+        ON nlsql_semantic_examples (empresa_id, module, spec_version, prompt_version, schema_version, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_examples_cache
+        ON nlsql_semantic_examples (empresa_id, chave_cache, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_examples_embedding
+        ON nlsql_semantic_examples (embedding_status, criado_em);
+    `,
+  },
+  {
+    version: 57,
+    descricao: 'IA Command - shadow mode para auto-reuse semantico NL-SQL',
+    sql: `
+      CREATE TABLE IF NOT EXISTS nlsql_semantic_shadow_log (
+        id                         TEXT PRIMARY KEY,
+        empresa_id                 INTEGER NOT NULL,
+        numero_wa                  TEXT DEFAULT NULL,
+        module                     TEXT DEFAULT NULL,
+        intent                     TEXT DEFAULT NULL,
+        intent_canonico_hash       TEXT DEFAULT NULL,
+        chave_cache                TEXT DEFAULT NULL,
+        candidate_execution_log_id TEXT DEFAULT NULL,
+        candidate_score            REAL DEFAULT NULL,
+        candidate_sql_template     TEXT DEFAULT NULL,
+        candidate_sql_aplicado     TEXT DEFAULT NULL,
+        actual_sql_template        TEXT DEFAULT NULL,
+        actual_sql_canonico        TEXT DEFAULT NULL,
+        actual_sql_final           TEXT DEFAULT NULL,
+        template_valido            INTEGER DEFAULT 0,
+        comparacao_resultado       TEXT NOT NULL,
+        auto_reuse_limiar          REAL DEFAULT NULL,
+        auto_reuse_elegivel        INTEGER DEFAULT 0,
+        detalhes_json              TEXT DEFAULT NULL,
+        servido_em_producao        INTEGER NOT NULL DEFAULT 0,
+        criado_em                  TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_shadow_lookup
+        ON nlsql_semantic_shadow_log (empresa_id, module, comparacao_resultado, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_shadow_candidate
+        ON nlsql_semantic_shadow_log (candidate_execution_log_id, criado_em);
+    `,
+  },
+  {
+    version: 58,
+    descricao: 'IA Command - erro de processamento em embeddings NL-SQL',
+    sql: `
+      ALTER TABLE nlsql_semantic_examples ADD COLUMN embedding_error TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 59,
+    descricao: 'IA Command - classificacao automatica e override opcional no shadow NL-SQL',
+    sql: `
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN classificacao_auto TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN classificacao_auto_motivo TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN classificacao_auto_em TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN classificacao_efetiva TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN override_classificacao TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN override_motivo TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN override_usuario TEXT DEFAULT NULL;
+      ALTER TABLE nlsql_semantic_shadow_log ADD COLUMN override_em TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_shadow_classificacao
+        ON nlsql_semantic_shadow_log (empresa_id, classificacao_efetiva, criado_em);
+    `,
+  },
+  {
+    version: 60,
+    descricao: 'IA Command - politicas de promocao NL-SQL',
+    sql: `
+      CREATE TABLE IF NOT EXISTS nlsql_semantic_policies (
+        id             TEXT PRIMARY KEY,
+        empresa_id     INTEGER NOT NULL,
+        module         TEXT NOT NULL,
+        fonte_ranking  TEXT NOT NULL,
+        min_score      REAL DEFAULT NULL,
+        min_score_key  TEXT NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'observacao',
+        status_motivo  TEXT DEFAULT NULL,
+        atualizado_por TEXT DEFAULT NULL,
+        criado_em      TEXT NOT NULL,
+        atualizado_em  TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_nlsql_policies_unique
+        ON nlsql_semantic_policies (empresa_id, module, fonte_ranking, min_score_key);
+      CREATE INDEX IF NOT EXISTS idx_iac_nlsql_policies_status
+        ON nlsql_semantic_policies (empresa_id, status, module);
+    `,
+  },
+  {
+    version: 61,
+    descricao: 'IA Command - configuracao operacional do auto-reuse semantico NL-SQL',
+    sql: `
+      CREATE TABLE IF NOT EXISTS nlsql_semantic_settings (
+        empresa_id             INTEGER PRIMARY KEY,
+        shadow_enabled          INTEGER NOT NULL DEFAULT 1,
+        auto_reuse_enabled     INTEGER NOT NULL DEFAULT 0,
+        auto_policy_enabled    INTEGER NOT NULL DEFAULT 1,
+        precision_min          REAL NOT NULL DEFAULT 0.995,
+        sample_min             INTEGER NOT NULL DEFAULT 30,
+        atualizado_por         TEXT DEFAULT NULL,
+        criado_em              TEXT NOT NULL,
+        atualizado_em          TEXT NOT NULL
+      );
     `,
   },
 ];

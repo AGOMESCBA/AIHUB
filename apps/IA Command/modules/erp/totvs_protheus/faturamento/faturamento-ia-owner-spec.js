@@ -64,7 +64,19 @@ function regrasTecnicas({ mensagem } = {}) {
   // fragmentos (fallback idempotente ao comportamento anterior a fragmentacao).
   const chaves = chavesAcionadas || fragmentosSpec.ORDEM_FALLBACK;
 
-  const partes = [fragmentosSpec.base()];
+  const partes = [
+    [
+      '## Continuidade e Periodo no Faturamento',
+      '- Em perguntas de continuidade, o periodo herdado pelo contrato/query_plan e autoritativo. Preserve exatamente dataInicio/dataFim no SQL.',
+      '- "Agora detalhe por cliente", "por produto", "por vendedor" ou "compare esse resultado" sao refinamentos da consulta anterior; nao removem o periodo nem inventam outro ano.',
+      '- Se o contrato trouxer periodo 20250701 a 20250731, o SQL deve conter esse intervalo ou competencia 202507 em F2_EMISSAO. PROIBIDO trocar para 202307, para data_atual ou para outro ano inferido.',
+      '- Nao mantenha filtros temporais antigos ou inferidos junto do periodo do contrato. Exemplo proibido: F2_EMISSAO BETWEEN 20230701..20230731 quando o contrato manda 20250701..20250731.',
+      '- Quando o contrato trouxer periodo_base e periodo_comparacao, gere SQL com os dois periodos. PROIBIDO retornar apenas o periodo_comparacao.',
+      "- Para comparativo de meses, prefira UNION ALL com coluna periodo/competencia, ou filtre competencia explicitamente com IN ('AAAAMM','AAAAMM') e agrupe por SUBSTRING(SF2.F2_EMISSAO,1,6).",
+      '- Para faturamento normal, use SF2 + SD2 quando precisar de itens/produtos e preserve F2_EMISSAO como campo temporal padrao.',
+    ].join('\n'),
+    fragmentosSpec.base(),
+  ];
   for (const chave of chaves) {
     const fragmento = fragmentosSpec.FRAGMENTOS[chave];
     if (fragmento) partes.push(fragmento.texto());

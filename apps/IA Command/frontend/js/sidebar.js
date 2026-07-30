@@ -65,9 +65,17 @@
       ],
     },
     {
+      id: 'aprendizado-nlsql', label: 'Aprendizado NL-SQL', icon: '◈', defaultOpen: false,
+      items: [
+        { id: 'iac-admin-auditoria', label: 'Saude do Aprendizado', href: '/app/ia-command/admin-nlsql-saude.html?v=20260727-scroll', icon: '◎' },
+        { id: 'iac-admin-execucoes', label: 'Auditoria de Consultas IA', href: '/app/ia-command/admin-execucoes.html', icon: '📋' },
+        { id: 'iac-admin-auditoria', label: 'Auditoria do Shadow Mode', href: '/app/ia-command/admin-nlsql-shadow.html', icon: '◐' },
+        { id: 'iac-admin-auditoria', label: 'Decisoes Automaticas', href: '/app/ia-command/admin-nlsql-politicas.html', icon: '◇' },
+      ],
+    },
+    {
       id: 'administracao', label: 'Administração', icon: '🛠', defaultOpen: false,
       items: [
-        { id: 'iac-admin-execucoes',          label: 'Log Execuções',            href: '/app/ia-command/admin-execucoes.html',          icon: '📋' },
         { id: 'iac-admin-auditoria',          label: 'Interpretações',           href: '/app/ia-command/admin-interpretacoes-v2.html',     icon: '🧭' },
         { id: 'iac-admin-spec-feedback',      label: 'Propostas de Correção',    href: '/app/ia-command/admin-spec-feedback.html',       icon: '🛠️' },
         { id: 'iac-admin-auditoria',          label: 'Auditoria',                href: '/app/ia-command/admin-auditoria.html',           icon: '🔍' },

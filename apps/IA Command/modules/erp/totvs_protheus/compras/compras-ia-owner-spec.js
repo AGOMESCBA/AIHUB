@@ -76,7 +76,20 @@ function regrasTecnicas({ mensagem, temAprovacaoPedidoCompra, temNomeAprovador, 
   const chavesAcionadas = classificarFragmentos(mensagem);
   const chaves = chavesAcionadas || fragmentosSpec.ORDEM_FALLBACK;
 
-  const partes = [fragmentosSpec.base()];
+  const partes = [
+    [
+      '## Continuidade e Periodo em Compras',
+      '- Em perguntas de continuidade, o periodo herdado pelo contrato/query_plan e autoritativo. Preserve exatamente dataInicio/dataFim no SQL.',
+      '- "Agora detalhe por fornecedor", "por produto", "por centro de custo" ou "compare esse resultado" sao refinamentos da consulta anterior; nao removem o periodo nem inventam outro ano.',
+      '- Se o contrato trouxer periodo 20250701 a 20250731, o SQL deve conter esse intervalo ou competencia 202507 em SD1.D1_DTDIGIT para notas de entrada, ou SC7.C7_EMISSAO para pedidos de compra. PROIBIDO trocar para 202307, para data_atual ou para outro ano inferido.',
+      '- Nao mantenha filtros temporais antigos ou inferidos junto do periodo do contrato. Exemplo proibido: SD1.D1_DTDIGIT BETWEEN 20230701..20230731 quando o contrato manda 20250701..20250731.',
+      '- Quando o contrato trouxer periodo_base e periodo_comparacao, gere SQL com os dois periodos. PROIBIDO retornar apenas o periodo_comparacao.',
+      "- Para comparativo de meses, prefira UNION ALL com coluna periodo/competencia, ou filtre competencia explicitamente com IN ('AAAAMM','AAAAMM') e agrupe por SUBSTRING(SD1.D1_DTDIGIT,1,6).",
+      "- Se usar UNION ALL e cada SELECT filtrar um unico mes, retorne a competencia como literal fixo (ex: SELECT '202506' AS competencia, SUM(...)). Se retornar SUBSTRING(SD1.D1_DTDIGIT,1,6) junto com SUM(), o SELECT precisa ter GROUP BY da mesma expressao.",
+      '- Para compras normais de NF de entrada, use SF1 + SD1 e preserve SD1.D1_DTDIGIT como campo temporal padrao.',
+    ].join('\n'),
+    fragmentosSpec.base(),
+  ];
   for (const chave of chaves) {
     const fragmento = fragmentosSpec.FRAGMENTOS[chave];
     if (!fragmento) continue;
@@ -387,6 +400,7 @@ module.exports = {
     erro_erp: 'Nao consegui buscar as compras no ERP. Tente um periodo menor ou filtros mais especificos.',
     sem_conexao: 'Esta empresa nao possui uma conexao com o ERP configurada. Solicite ao administrador.',
   },
+  camposPeriodoObrigatorios: ['D1_DTDIGIT', 'F1_DTDIGIT', 'F1_EMISSAO', 'C7_EMISSAO'],
   garantirIntencao,
   prepararIntent,
   resolverEntidades,

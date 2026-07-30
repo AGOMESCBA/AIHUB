@@ -131,6 +131,12 @@ function _garantirColunasCompatibilidade() {
     sql_canonico_reuso_permitido: 'INTEGER DEFAULT NULL',
     sql_canonico_empresa_atual: 'INTEGER DEFAULT NULL',
     fase_execucao: 'TEXT DEFAULT NULL',
+    intent_canonico_json: 'TEXT DEFAULT NULL',
+    intent_canonico_hash: 'TEXT DEFAULT NULL',
+    intent_canonico_estrutural_json: 'TEXT DEFAULT NULL',
+    chave_cache: 'TEXT DEFAULT NULL',
+    sql_template: 'TEXT DEFAULT NULL',
+    sql_template_parametros_json: 'TEXT DEFAULT NULL',
   };
 
   for (const [coluna, definicao] of Object.entries(interpretationLog)) {
@@ -140,7 +146,166 @@ function _garantirColunasCompatibilidade() {
   _db.exec(`
     CREATE INDEX IF NOT EXISTS idx_iac_interpretation_fase_execucao
       ON interpretation_log (empresa_id, fase_execucao, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_interpretation_intent_cache
+      ON interpretation_log (empresa_id, chave_cache, criado_em);
   `);
+
+  const executionLog = {
+    detalhes_json: 'TEXT DEFAULT NULL',
+    texto_original: 'TEXT DEFAULT NULL',
+    intent_canonico_json: 'TEXT DEFAULT NULL',
+    intent_canonico_hash: 'TEXT DEFAULT NULL',
+    chave_cache: 'TEXT DEFAULT NULL',
+    sql_final_executado: 'TEXT DEFAULT NULL',
+    sql_template: 'TEXT DEFAULT NULL',
+    prompt_version: 'TEXT DEFAULT NULL',
+    spec_version: 'TEXT DEFAULT NULL',
+    schema_version: 'TEXT DEFAULT NULL',
+    model: 'TEXT DEFAULT NULL',
+    confiavel_cache: 'INTEGER DEFAULT 0',
+    confiavel_cache_em: 'TEXT DEFAULT NULL',
+    cache_status: "TEXT DEFAULT 'pendente'",
+  };
+
+  for (const [coluna, definicao] of Object.entries(executionLog)) {
+    _adicionarColunaSeFaltar('execution_log', coluna, definicao);
+  }
+
+  _db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_iac_execution_cache_lookup
+      ON execution_log (empresa_id, numero_wa, chave_cache, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_execution_cache_status
+      ON execution_log (empresa_id, cache_status, criado_em);
+  `);
+
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS nlsql_semantic_examples (
+      id                              TEXT PRIMARY KEY,
+      execution_log_id                TEXT NOT NULL UNIQUE,
+      empresa_id                      INTEGER NOT NULL,
+      numero_wa                       TEXT DEFAULT NULL,
+      module                          TEXT DEFAULT NULL,
+      intent                          TEXT DEFAULT NULL,
+      metric_json                     TEXT DEFAULT NULL,
+      date_basis                      TEXT DEFAULT NULL,
+      group_by_json                   TEXT DEFAULT NULL,
+      filter_keys_json                TEXT DEFAULT NULL,
+      entity_types_json               TEXT DEFAULT NULL,
+      security_scope_json             TEXT DEFAULT NULL,
+      prompt_version                  TEXT DEFAULT NULL,
+      spec_version                    TEXT DEFAULT NULL,
+      schema_version                  TEXT DEFAULT NULL,
+      model                           TEXT DEFAULT NULL,
+      chave_cache                     TEXT DEFAULT NULL,
+      intent_canonico_hash            TEXT DEFAULT NULL,
+      intent_canonico_json            TEXT NOT NULL,
+      intent_canonico_estrutural_json TEXT DEFAULT NULL,
+      search_text                     TEXT NOT NULL,
+      sql_template                    TEXT NOT NULL,
+      sql_final_executado             TEXT DEFAULT NULL,
+      embedding_json                  TEXT DEFAULT NULL,
+      embedding_provider              TEXT DEFAULT NULL,
+      embedding_model                 TEXT DEFAULT NULL,
+      embedding_status                TEXT NOT NULL DEFAULT 'pendente',
+      criado_em                       TEXT NOT NULL,
+      atualizado_em                   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_examples_lookup
+      ON nlsql_semantic_examples (empresa_id, module, spec_version, prompt_version, schema_version, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_examples_cache
+      ON nlsql_semantic_examples (empresa_id, chave_cache, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_examples_embedding
+      ON nlsql_semantic_examples (embedding_status, criado_em);
+  `);
+  _adicionarColunaSeFaltar('nlsql_semantic_examples', 'embedding_error', 'TEXT DEFAULT NULL');
+
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS nlsql_semantic_shadow_log (
+      id                         TEXT PRIMARY KEY,
+      empresa_id                 INTEGER NOT NULL,
+      numero_wa                  TEXT DEFAULT NULL,
+      module                     TEXT DEFAULT NULL,
+      intent                     TEXT DEFAULT NULL,
+      intent_canonico_hash       TEXT DEFAULT NULL,
+      chave_cache                TEXT DEFAULT NULL,
+      candidate_execution_log_id TEXT DEFAULT NULL,
+      candidate_score            REAL DEFAULT NULL,
+      candidate_sql_template     TEXT DEFAULT NULL,
+      candidate_sql_aplicado     TEXT DEFAULT NULL,
+      actual_sql_template        TEXT DEFAULT NULL,
+      actual_sql_canonico        TEXT DEFAULT NULL,
+      actual_sql_final           TEXT DEFAULT NULL,
+      template_valido            INTEGER DEFAULT 0,
+      comparacao_resultado       TEXT NOT NULL,
+      auto_reuse_limiar          REAL DEFAULT NULL,
+      auto_reuse_elegivel        INTEGER DEFAULT 0,
+      classificacao_auto         TEXT DEFAULT NULL,
+      classificacao_auto_motivo  TEXT DEFAULT NULL,
+      classificacao_auto_em      TEXT DEFAULT NULL,
+      classificacao_efetiva      TEXT DEFAULT NULL,
+      override_classificacao     TEXT DEFAULT NULL,
+      override_motivo            TEXT DEFAULT NULL,
+      override_usuario           TEXT DEFAULT NULL,
+      override_em                TEXT DEFAULT NULL,
+      detalhes_json              TEXT DEFAULT NULL,
+      servido_em_producao        INTEGER NOT NULL DEFAULT 0,
+      criado_em                  TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_shadow_lookup
+      ON nlsql_semantic_shadow_log (empresa_id, module, comparacao_resultado, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_shadow_candidate
+      ON nlsql_semantic_shadow_log (candidate_execution_log_id, criado_em);
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_shadow_classificacao
+      ON nlsql_semantic_shadow_log (empresa_id, classificacao_efetiva, criado_em);
+  `);
+  for (const [coluna, definicao] of Object.entries({
+    classificacao_auto: 'TEXT DEFAULT NULL',
+    classificacao_auto_motivo: 'TEXT DEFAULT NULL',
+    classificacao_auto_em: 'TEXT DEFAULT NULL',
+    classificacao_efetiva: 'TEXT DEFAULT NULL',
+    override_classificacao: 'TEXT DEFAULT NULL',
+    override_motivo: 'TEXT DEFAULT NULL',
+    override_usuario: 'TEXT DEFAULT NULL',
+    override_em: 'TEXT DEFAULT NULL',
+  })) {
+    _adicionarColunaSeFaltar('nlsql_semantic_shadow_log', coluna, definicao);
+  }
+
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS nlsql_semantic_policies (
+      id             TEXT PRIMARY KEY,
+      empresa_id     INTEGER NOT NULL,
+      module         TEXT NOT NULL,
+      fonte_ranking  TEXT NOT NULL,
+      min_score      REAL DEFAULT NULL,
+      min_score_key  TEXT NOT NULL,
+      status         TEXT NOT NULL DEFAULT 'observacao',
+      status_motivo  TEXT DEFAULT NULL,
+      atualizado_por TEXT DEFAULT NULL,
+      criado_em      TEXT NOT NULL,
+      atualizado_em  TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_nlsql_policies_unique
+      ON nlsql_semantic_policies (empresa_id, module, fonte_ranking, min_score_key);
+    CREATE INDEX IF NOT EXISTS idx_iac_nlsql_policies_status
+      ON nlsql_semantic_policies (empresa_id, status, module);
+  `);
+  _adicionarColunaSeFaltar('nlsql_semantic_policies', 'min_score_key', "TEXT DEFAULT 'sem_score'");
+
+  _db.exec(`
+    CREATE TABLE IF NOT EXISTS nlsql_semantic_settings (
+      empresa_id             INTEGER PRIMARY KEY,
+      shadow_enabled          INTEGER NOT NULL DEFAULT 1,
+      auto_reuse_enabled     INTEGER NOT NULL DEFAULT 0,
+      auto_policy_enabled    INTEGER NOT NULL DEFAULT 1,
+      precision_min          REAL NOT NULL DEFAULT 0.995,
+      sample_min             INTEGER NOT NULL DEFAULT 30,
+      atualizado_por         TEXT DEFAULT NULL,
+      criado_em              TEXT NOT NULL,
+      atualizado_em          TEXT NOT NULL
+    );
+  `);
+  _adicionarColunaSeFaltar('nlsql_semantic_settings', 'shadow_enabled', 'INTEGER NOT NULL DEFAULT 1');
 
   _db.exec(`
     CREATE TABLE IF NOT EXISTS ia_usage_pricing (
@@ -244,8 +409,10 @@ function _garantirColunasCompatibilidade() {
     modulo_compras:     'INTEGER DEFAULT 0',
     modulo_faturamento: 'INTEGER DEFAULT 0',
     modulo_comissao:    'INTEGER DEFAULT 0',
+    modulo_estoque:     'INTEGER DEFAULT 0',
     erp_tipo:           'TEXT DEFAULT NULL',
     erp_id:             'TEXT DEFAULT NULL',
+    cod_aprov_erp:      'TEXT DEFAULT NULL',
   };
 
   for (const [coluna, definicao] of Object.entries(connections)) {

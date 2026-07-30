@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Decisoes Automaticas NL-SQL - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    html, body { height:100%;overflow:hidden; }
+    body.nlsql-politicas-page .layout { height:100vh !important;overflow:hidden !important; }
+    body.nlsql-politicas-page .main { height:100vh !important;min-height:0 !important;overflow:hidden !important; }
+    body.nlsql-politicas-page .content { flex:1 1 auto !important;min-height:0 !important;overflow-y:auto !important;overflow-x:hidden !important;padding-bottom:32px;scrollbar-width:thin;scrollbar-color:var(--border-hi) transparent; }
+    body.nlsql-politicas-page .content::-webkit-scrollbar { width:10px; }
+    body.nlsql-politicas-page .content::-webkit-scrollbar-track { background:transparent; }
+    body.nlsql-politicas-page .content::-webkit-scrollbar-thumb { background:var(--border-hi);border-radius:999px;border:2px solid transparent;background-clip:content-box; }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .ctrl-bar { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:10px; }
+    .ctrl-bar-title { font-size:18px;font-weight:700;color:var(--text-hi);line-height:1.25;display:flex;align-items:baseline;gap:8px; }
+    .ctrl-count { font-size:12px;color:var(--text-lo);font-weight:400; }
+    .filter-bar { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm); }
+    .filter-row { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .filter-row .form-control { height:34px;font-size:13px; }
+    .filter-row input[type="date"].form-control { width:150px;flex:0 0 150px; }
+    .filter-row select.form-control { width:auto;min-width:155px; }
+    .settings-bar { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:10px;box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap; }
+    .settings-left { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .settings-title { font-size:12px;font-weight:900;color:var(--text-hi);text-transform:uppercase;letter-spacing:.05em;margin-right:4px; }
+    .settings-note { color:var(--text-lo);font-size:12px; }
+    .toggle-item { display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:7px;padding:6px 9px;background:var(--bg-base);font-size:12px;font-weight:800;color:var(--text-md);white-space:nowrap; }
+    .toggle-item input { width:16px;height:16px;accent-color:var(--accent); }
+    .settings-right { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+    .settings-right .form-control { height:32px;font-size:12px; }
+    .settings-right input[type="number"].form-control { width:86px; }
+    .metric-row { display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:10px;margin-bottom:10px; }
+    .metric { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;min-width:0; }
+    .metric span { display:block;font-size:11px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.05em;font-weight:800;margin-bottom:5px; }
+    .metric strong { display:block;font-size:20px;color:var(--text-hi);line-height:1.2; }
+    .panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:auto;max-height:none; }
+    .data-table { width:100%;min-width:1280px;border-collapse:collapse; }
+    .data-table th { text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap; }
+    .data-table td { padding:9px 10px;border-bottom:1px solid var(--border);color:var(--text-md);font-size:13px;vertical-align:middle; }
+    .data-table tr:last-child td { border-bottom:none; }
+    .data-table td.num, .data-table th.num { text-align:right; }
+    .badge { display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-info { background:#dbeafe;color:#1d4ed8; }
+    .badge-warn { background:#fef3c7;color:#92400e; }
+    .badge-fail { background:#fee2e2;color:#b91c1c; }
+    .badge-neutro { background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .action-row { display:flex;align-items:center;gap:6px;min-width:260px; }
+    .action-row select { height:30px;font-size:12px;min-width:105px; }
+    .action-row input { height:30px;font-size:12px;min-width:130px; }
+    details.exception { min-width:250px; }
+    details.exception summary { cursor:pointer;color:var(--text-lo);font-size:12px;font-weight:800; }
+    details.exception[open] summary { color:var(--accent);margin-bottom:6px; }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;color:var(--text-md);transition:background .15s,color .15s; }
+    .btn-icon:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .btn-mini { height:30px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-md);font-size:11px;font-weight:800;padding:0 9px;cursor:pointer; }
+    .btn-mini:hover { border-color:var(--accent);color:var(--accent);background:var(--accent-glow); }
+    .row-actions { display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:250px; }
+    .empty { padding:30px;text-align:center;color:var(--text-lo);font-size:13px; }
+    .detail-tab-bar { display:flex;gap:2px;border-bottom:1px solid var(--border);background:var(--bg-card);padding:10px 20px 0;overflow-x:auto; }
+    .detail-tab { padding:10px 18px;font-size:13px;font-weight:700;color:var(--text-lo);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap; }
+    .detail-tab:hover { color:var(--text-hi); }
+    .detail-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .detail-tab-panel { display:none;padding:28px 20px 20px; }
+    .detail-tab-panel.active { display:block; }
+    .meta-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:18px; }
+    .meta-item { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;min-width:0; }
+    .meta-item span { color:var(--text-lo);font-size:11px;display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;font-weight:800; }
+    .meta-item strong { color:var(--text-hi);font-size:13px;word-break:break-word; }
+    .detail-pre { margin:0;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-base);padding:14px;min-height:280px;max-height:calc(100vh - 300px);overflow:auto;font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--text-md); }
+    .detail-summary { background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:14px;color:var(--text-md);font-size:13px;line-height:1.65; }
+    #sec-detalhe { padding:96px 0 32px;scroll-margin-top:96px; }
+    .editor-shell { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .editor-actionbar { display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:22px 24px;border-bottom:1px solid var(--border);background:var(--bg-card);min-height:92px;position:relative;z-index:1; }
+    .editor-actionbar-title { display:flex;flex-direction:column;gap:5px;min-width:0;line-height:1.25; }
+    .editor-actionbar-title strong { display:block;font-size:18px;color:var(--text-hi);white-space:normal;overflow:visible;text-overflow:clip; }
+    .editor-actionbar-title span { display:block;white-space:normal;word-break:break-word; }
+    .editor-actions { display:flex;align-items:center;gap:8px;flex-shrink:0; }
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+    @media (max-width: 900px) { .metric-row { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body class="nlsql-politicas-page">
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command /</span> Decisoes Automaticas NL-SQL</span>
+      <button class="btn btn-ghost" onclick="abrirAjuda()">Ajuda</button>
+    </div>
+
+    <div class="content">
+      <section id="sec-lista">
+      <div class="ctrl-bar">
+        <div>
+          <div class="page-kicker">Aprendizado NL-SQL</div>
+          <div class="ctrl-bar-title">Decisoes Automaticas <span class="ctrl-count" id="count">carregando...</span></div>
+        </div>
+        <button class="btn btn-secondary" id="btn-atualizar" onclick="atualizarClick()">Atualizar</button>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-row">
+          <input class="form-control" type="date" id="f-inicio" title="Data inicial">
+          <input class="form-control" type="date" id="f-fim" title="Data final">
+          <select class="form-control" id="f-modulo">
+            <option value="">Todos os modulos</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="compras">Compras</option>
+            <option value="faturamento">Faturamento</option>
+            <option value="comissao">Comissao</option>
+            <option value="estoque">Estoque</option>
+          </select>
+          <select class="form-control" id="f-fonte">
+            <option value="">Todas as fontes</option>
+            <option value="embedding_hibrido">Embedding hibrido</option>
+            <option value="estrutural">Estrutural</option>
+            <option value="estrutural_fallback">Fallback estrutural</option>
+            <option value="estrutural_fallback_sem_embedding">Sem embedding</option>
+            <option value="nao_informado">Nao informado</option>
+          </select>
+          <button class="btn btn-primary" onclick="carregar()">Aplicar</button>
+        </div>
+      </div>
+
+      <div class="settings-bar">
+        <div class="settings-left">
+          <span class="settings-title">Operacao</span>
+          <select class="form-control" id="cfg-empresa" title="Empresa da configuracao"></select>
+          <label class="toggle-item" title="Grava comparacoes de candidatos semanticos contra o SQL real da IA, sem executar o candidato.">
+            <input type="checkbox" id="cfg-shadow">
+            Shadow Mode
+          </label>
+          <label class="toggle-item" title="Permite ao sistema liberar automaticamente uma faixa quando atingir a precisao minima configurada.">
+            <input type="checkbox" id="cfg-auto-policy">
+            Auto-liberar por precisao
+          </label>
+          <label class="toggle-item" title="Desliga apenas a execucao em producao via auto-reuse semantico. Shadow Mode e estatisticas continuam gravando.">
+            <input type="checkbox" id="cfg-auto-reuse">
+            Auto-reuse semantico
+          </label>
+          <span class="settings-note" id="cfg-note">carregando configuracao...</span>
+        </div>
+        <div class="settings-right">
+          <input class="form-control" type="number" min="0.9" max="1" step="0.001" id="cfg-precision" title="Precisao minima">
+          <input class="form-control" type="number" min="1" max="100000" step="1" id="cfg-sample" title="Amostra minima">
+          <button class="btn-mini" onclick="salvarSettings()">Salvar operacao</button>
+        </div>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric"><span>Observacao</span><strong id="m-observacao">0</strong></div>
+        <div class="metric"><span>Elegivel</span><strong id="m-elegivel">0</strong></div>
+        <div class="metric"><span>Liberado</span><strong id="m-liberado">0</strong></div>
+        <div class="metric"><span>Bloqueado</span><strong id="m-bloqueado">0</strong></div>
+      </div>
+
+      <div class="panel" id="table-wrap"></div>
+      </section>
+
+      <section id="sec-detalhe" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong id="d-title-header">Detalhe da Decisao Automatica</strong>
+              <span id="d-subtitle-header" style="font-size:13px;color:var(--text-lo)">-</span>
+            </div>
+            <div class="editor-actions">
+              <button class="btn btn-ghost" onclick="fecharDetalhe()">Voltar a lista</button>
+            </div>
+          </div>
+
+          <div class="detail-tab-bar">
+            <button class="detail-tab active" onclick="ativarAba('aba-geral',this)">Dados gerais</button>
+            <button class="detail-tab" onclick="ativarAba('aba-criterios',this)">Criterios</button>
+            <button class="detail-tab" onclick="ativarAba('aba-json',this)">JSON completo</button>
+          </div>
+
+          <div id="aba-geral" class="detail-tab-panel active">
+            <div class="meta-grid" id="d-meta-geral"></div>
+          </div>
+
+          <div id="aba-criterios" class="detail-tab-panel">
+            <div class="detail-summary" id="d-criterio-texto"></div>
+            <div class="meta-grid" id="d-meta-criterios"></div>
+          </div>
+
+          <div id="aba-json" class="detail-tab-panel">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+              <button class="btn btn-ghost" style="font-size:12px;padding:5px 14px;font-weight:700;color:#1e3a8a" onclick="copiarDetalhe(this)">Copiar JSON</button>
+            </div>
+            <pre class="detail-pre" id="detail-json"></pre>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  let rows = [];
+  let settingsRows = [];
+  let detalheAtual = null;
+  function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+  }
+  function pct(v) { return v === null || v === undefined ? '-' : `${(Number(v) * 100).toFixed(2)}%`; }
+  function num(v) { return Number(v || 0).toLocaleString('pt-BR'); }
+  function score(v) { return v === null || v === undefined ? 'sem_score' : Number(v).toFixed(3); }
+  function badgeStatus(v) {
+    const cls = v === 'liberado' ? 'badge-ok' : v === 'elegivel' ? 'badge-info' : v === 'bloqueado' ? 'badge-fail' : 'badge-warn';
+    return `<span class="badge ${cls}">${esc(v || 'observacao')}</span>`;
+  }
+  function badgeOrigem(v) {
+    const cls = v === 'persistido' ? 'badge-info' : 'badge-neutro';
+    return `<span class="badge ${cls}">${esc(v || 'sugerido')}</span>`;
+  }
+  function fmtValor(v) {
+    if (v === null || v === undefined || v === '') return '-';
+    if (typeof v === 'number') return Number.isInteger(v) ? num(v) : String(v);
+    return String(v);
+  }
+  function metaHtml(items) {
+    return items.map(([label, valor]) => `
+      <div class="meta-item"><span>${esc(label)}</span><strong>${esc(fmtValor(valor))}</strong></div>
+    `).join('');
+  }
+  function ativarAba(id, btn) {
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById(id)?.classList.add('active');
+    btn?.classList.add('active');
+  }
+  function paramsFiltros() {
+    const p = new URLSearchParams();
+    for (const [id, nome] of [['f-inicio','inicio'], ['f-fim','fim'], ['f-modulo','modulo'], ['f-fonte','fonte']]) {
+      const v = document.getElementById(id)?.value || '';
+      if (v) p.set(nome, v);
+    }
+    return p.toString();
+  }
+  function atualizarMetricas(resumo = {}) {
+    document.getElementById('m-observacao').textContent = num(resumo.observacao);
+    document.getElementById('m-elegivel').textContent = num(resumo.elegivel);
+    document.getElementById('m-liberado').textContent = num(resumo.liberado);
+    document.getElementById('m-bloqueado').textContent = num(resumo.bloqueado);
+  }
+  function renderSettings(data = {}) {
+    settingsRows = data.rows || [];
+    const select = document.getElementById('cfg-empresa');
+    const atual = String(data.empresa_id_atual || settingsRows[0]?.empresa_id || '');
+    select.innerHTML = settingsRows.map(s => {
+      const nome = String(s.empresa_nome || '').trim() || `Empresa ${s.empresa_id}`;
+      return `<option value="${esc(s.empresa_id)}" ${String(s.empresa_id) === atual ? 'selected' : ''}>${esc(nome)} (#${esc(s.empresa_id)})</option>`;
+    }).join('');
+    if (!select.value && settingsRows[0]) select.value = String(settingsRows[0].empresa_id);
+    select.title = data.channel_nome ? `Empresas vinculadas ao canal ${data.channel_nome}` : 'Empresas vinculadas ao canal atual';
+    aplicarSettingsSelecionada();
+  }
+  function aplicarSettingsSelecionada() {
+    const empresaId = Number(document.getElementById('cfg-empresa')?.value || 0);
+    const s = settingsRows.find(row => Number(row.empresa_id) === empresaId) || settingsRows[0] || {};
+    document.getElementById('cfg-shadow').checked = Number(s.shadow_enabled ?? 1) === 1;
+    document.getElementById('cfg-auto-reuse').checked = Number(s.auto_reuse_enabled ?? 0) === 1;
+    document.getElementById('cfg-auto-policy').checked = Number(s.auto_policy_enabled ?? 1) === 1;
+    document.getElementById('cfg-precision').value = Number(s.precision_min ?? 0.995).toFixed(3);
+    document.getElementById('cfg-sample').value = Number(s.sample_min ?? 30);
+    const shadow = Number(s.shadow_enabled ?? 1) === 1 ? 'shadow gravando' : 'shadow desligado';
+    const reuse = Number(s.auto_reuse_enabled ?? 0) === 1 ? 'auto-reuse ligado' : 'auto-reuse desligado';
+    const policy = Number(s.auto_policy_enabled ?? 1) === 1 ? 'auto-liberacao ligada' : 'auto-liberacao desligada';
+    document.getElementById('cfg-note').textContent = `${shadow}; ${reuse}; ${policy}.`;
+  }
+  function render(data) {
+    rows = data.rows || [];
+    document.getElementById('count').textContent = `${num(rows.length)} decisao(oes)`;
+    atualizarMetricas(data.resumo || {});
+    const wrap = document.getElementById('table-wrap');
+    if (!rows.length) {
+      wrap.innerHTML = '<div class="empty">Sem decisoes automaticas para os filtros selecionados.</div>';
+      return;
+    }
+    wrap.innerHTML = `<table class="data-table"><thead><tr>
+      <th></th><th>Empresa</th><th>Modulo</th><th>Fonte</th><th>Faixa</th><th class="num">Amostra</th><th class="num">Precisao</th><th class="num">Mismatch</th><th>Sistema</th><th>Decisao</th><th>Origem</th><th>Criterio</th><th>Excecao</th>
+    </tr></thead><tbody>${rows.map((r, i) => `<tr>
+      <td style="width:46px;text-align:center">
+        <button class="btn-icon" title="Visualizar" onclick="verDetalhe(${i})">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </td>
+      <td><strong>${esc(r.empresa_nome || `Empresa #${r.empresa_id || '-'}`)}</strong></td>
+      <td><strong>${esc(r.module)}</strong></td>
+      <td>${esc(r.fonte_ranking)}</td>
+      <td>${esc(r.score_label || score(r.min_score))}</td>
+      <td class="num">${num(r.com_candidato)}</td>
+      <td class="num">${pct(r.precisao_template)}</td>
+      <td class="num">${num(r.mismatch)}</td>
+      <td>${badgeStatus(r.status_sugerido)}</td>
+      <td>${badgeStatus(r.status)}</td>
+      <td>${badgeOrigem(r.status_origem)}</td>
+      <td>${esc(r.criterio || r.status_motivo || '-')}</td>
+      <td>
+        <div class="row-actions">
+          <details class="exception">
+            <summary>Alterar excecao</summary>
+            <div class="action-row">
+            <select class="form-control" id="st-${i}">
+              ${['observacao','elegivel','liberado','bloqueado'].map(s => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+            <input class="form-control" id="mt-${i}" placeholder="motivo">
+            <button class="btn-mini" onclick="salvar(${i})">Salvar</button>
+            </div>
+          </details>
+        </div>
+      </td>
+    </tr>`).join('')}</tbody></table>`;
+  }
+  function verDetalhe(i) {
+    const row = rows[i];
+    if (!row) return;
+    detalheAtual = row;
+    document.getElementById('d-title-header').textContent = `Decisao ${row.status || 'observacao'}`;
+    document.getElementById('d-subtitle-header').textContent = `${row.empresa_nome || `Empresa #${row.empresa_id || '-'}`} | ${row.module || 'sem modulo'} | ${row.score_label || score(row.min_score)}`;
+    const gerais = [
+      ['Empresa', row.empresa_nome ? `${row.empresa_nome} (#${row.empresa_id})` : row.empresa_id],
+      ['Modulo', row.module],
+      ['Fonte ranking', row.fonte_ranking],
+      ['Faixa score', row.score_label || score(row.min_score)],
+      ['Status sistema', row.status_sugerido],
+      ['Decisao efetiva', row.status],
+      ['Origem', row.status_origem],
+      ['ID politica', row.id],
+      ['Atualizado por', row.atualizado_por],
+      ['Atualizado em', row.atualizado_em],
+    ];
+    const criterios = [
+      ['Amostra com candidato', row.com_candidato],
+      ['Precisao template', pct(row.precisao_template)],
+      ['Precisao total', pct(row.precisao_match_total)],
+      ['Mismatch', row.mismatch],
+      ['Template invalido', row.template_invalido],
+      ['Sem candidato', row.sem_candidato],
+      ['Aprovado auto', row.aprovado_auto],
+      ['Bloqueado auto', row.bloqueado_auto],
+      ['Motivo persistido', row.status_motivo],
+      ['Criterio', row.criterio],
+    ];
+    document.getElementById('d-meta-geral').innerHTML = metaHtml(gerais);
+    document.getElementById('d-meta-criterios').innerHTML = metaHtml(criterios);
+    document.getElementById('d-criterio-texto').textContent = row.criterio || row.status_motivo || 'Sem criterio registrado.';
+    document.getElementById('detail-json').textContent = JSON.stringify(row, null, 2);
+    document.querySelectorAll('.detail-tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.detail-tab').forEach(b => b.classList.remove('active'));
+    document.getElementById('aba-geral').classList.add('active');
+    document.querySelectorAll('.detail-tab')[0].classList.add('active');
+    document.getElementById('sec-lista').style.display = 'none';
+    document.getElementById('sec-detalhe').style.display = '';
+    const content = document.querySelector('.content') || document.scrollingElement || document.documentElement;
+    if (content && typeof content.scrollTo === 'function') content.scrollTo({ top: 0, behavior: 'auto' });
+  }
+  function fecharDetalhe() {
+    detalheAtual = null;
+    document.getElementById('sec-detalhe').style.display = 'none';
+    document.getElementById('sec-lista').style.display = '';
+  }
+  function copiarDetalhe(btn) {
+    const texto = JSON.stringify(detalheAtual || {}, null, 2);
+    const original = btn.textContent;
+    const ok = () => { btn.textContent = 'Copiado'; setTimeout(() => { btn.textContent = original; }, 1200); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(texto).then(ok).catch(ok);
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+      ok();
+    }
+  }
+  async function carregar() {
+    await carregarSettings();
+    const res = await fetch(`/api/ia-command/admin/nlsql-politicas?${paramsFiltros()}`);
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(payload.error || 'Nao foi possivel carregar politicas.');
+      return;
+    }
+    render(payload);
+  }
+  async function carregarSettings() {
+    const res = await fetch('/api/ia-command/admin/nlsql-politicas/settings');
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      document.getElementById('cfg-note').textContent = payload.error || 'configuracao indisponivel';
+      return;
+    }
+    renderSettings(payload);
+  }
+  async function salvarSettings() {
+    const empresaId = Number(document.getElementById('cfg-empresa').value || 0);
+    const res = await fetch('/api/ia-command/admin/nlsql-politicas/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        empresa_id: empresaId,
+        shadow_enabled: document.getElementById('cfg-shadow').checked ? 1 : 0,
+        auto_reuse_enabled: document.getElementById('cfg-auto-reuse').checked ? 1 : 0,
+        auto_policy_enabled: document.getElementById('cfg-auto-policy').checked ? 1 : 0,
+        precision_min: Number(document.getElementById('cfg-precision').value || 0.995),
+        sample_min: Number(document.getElementById('cfg-sample').value || 30),
+      }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(payload.error || 'Nao foi possivel salvar configuracao.');
+      return;
+    }
+    await carregarSettings();
+    await carregar();
+  }
+  async function salvar(i) {
+    const row = rows[i];
+    if (!row) return;
+    const status = document.getElementById(`st-${i}`).value;
+    const motivo = document.getElementById(`mt-${i}`).value;
+    const res = await fetch('/api/ia-command/admin/nlsql-politicas/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        module: row.module,
+        empresa_id: row.empresa_id,
+        fonte_ranking: row.fonte_ranking,
+        min_score: row.min_score === null || row.min_score === undefined ? 'sem_score' : row.min_score,
+        status,
+        motivo,
+      }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(payload.error || 'Nao foi possivel salvar politica.');
+      return;
+    }
+    await carregar();
+  }
+  document.getElementById('cfg-empresa').addEventListener('change', aplicarSettingsSelecionada);
+  async function atualizarClick() {
+    const btn = document.getElementById('btn-atualizar');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Atualizando...';
+    try { await carregar(); } finally { btn.textContent = old; btn.disabled = false; }
+  }
+  function abrirAjuda() {
+    document.getElementById('help-overlay').classList.add('open');
+    document.getElementById('help-drawer').classList.add('open');
+  }
+  function fecharAjuda() {
+    document.getElementById('help-overlay').classList.remove('open');
+    document.getElementById('help-drawer').classList.remove('open');
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      fecharAjuda();
+      fecharDetalhe();
+    }
+  });
+  window._iahubAuthReady?.then(carregar) ?? carregar();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda - Decisoes Automaticas</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar">X</button>
+  </div>
+  <div class="help-drawer-body">
+    <div class="help-section">
+      <div class="help-section-title">O que e esta tela</div>
+      <div class="help-item-desc">E a central de governanca do auto-reuse semantico. Ela transforma as medicoes do Shadow Mode em decisoes por empresa, modulo, fonte de ranking e faixa de score: observar, tornar elegivel, liberar ou bloquear.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Objetivo</div>
+      <div class="help-item-desc">Evitar liberacao manual no escuro. A tela so deve liberar faixas quando existe amostra suficiente, precisao minima atingida e baixo volume de mismatch. Quando houver risco, a faixa fica bloqueada ou em observacao.</div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Campos principais</div>
+      <div class="help-item"><div class="help-item-label">Sistema</div><div class="help-item-desc">Decisao calculada automaticamente com base na precisao e na amostra do shadow.</div></div>
+      <div class="help-item"><div class="help-item-label">Decisao</div><div class="help-item-desc">Decisao efetiva usada pela operacao. Pode ser igual ao sistema ou vir de uma excecao manual.</div></div>
+      <div class="help-item"><div class="help-item-label">Origem</div><div class="help-item-desc">Mostra se a decisao e sugerida pelo calculo ou persistida como excecao operacional.</div></div>
+      <div class="help-item"><div class="help-item-label">Precisao e amostra</div><div class="help-item-desc">Precisao indica acerto do template candidato; amostra indica se ja houve volume suficiente para confiar na estatistica.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Exemplos praticos</div>
+      <div class="help-item"><div class="help-item-label">Liberar com seguranca</div><div class="help-item-desc">Se Financeiro, embedding hibrido, score 0.995+, tem amostra alta, precisao acima do minimo e zero mismatch, a faixa tende a ficar liberada.</div></div>
+      <div class="help-item"><div class="help-item-label">Manter observando</div><div class="help-item-desc">Se a precisao parece boa mas a amostra ainda e pequena, mantenha em observacao ate o Shadow Mode juntar mais casos reais.</div></div>
+      <div class="help-item"><div class="help-item-label">Bloquear excecao</div><div class="help-item-desc">Se uma faixa aparece liberada mas voce encontrou erro critico em auditoria, altere a excecao para bloqueado e registre o motivo.</div></div>
+      <div class="help-tip">Fluxo recomendado: Saude do Aprendizado aponta o sinal, Auditoria de Consultas mostra o caso real, Shadow Mode explica a comparacao e esta tela decide a liberacao.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

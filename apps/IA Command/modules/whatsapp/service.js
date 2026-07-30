@@ -43,6 +43,39 @@ const NOMES_MODULOS_WHATSAPP = {
   faturamento: 'Faturamento',
   comissao:    'Comissao',
 };
+const NLSQL_CACHE_QUARANTINE_DEFAULT_MINUTES = 30;
+const NLSQL_CACHE_FEEDBACK_DEFAULT_MINUTES = 30;
+
+function _textoSqlIncacheavel(valor) {
+  const texto = String(valor || '').trim();
+  if (!texto) return true;
+  if (/^--\s*ERRO\s*:/i.test(texto)) return true;
+  return /\bSQL rejeitado por (?:contrato|periodo inconsistente|SX3|cobertura incompleta)\b/i.test(texto);
+}
+
+function _resultadoSqlCacheavel({ resultado = {}, statusExecucao = 'desconhecido', sqlFinalExecutado = null, sqlTemplate = null, chaveCache = null } = {}) {
+  const erroValidacao = resultado?._sql_validacao_erro || resultado?.sql_validacao_erro || resultado?._sql_auditoria?.sql_validacao_erro || null;
+  const subtipo = String(resultado?.subtipo || '').trim();
+  const subtipoInvalido = /^(?:contrato_|sql_|periodo_sql_|funcao_data_|filtro_)/i.test(subtipo);
+  if (statusExecucao !== 'sucesso') return { ok: false, cacheStatus: 'inapto_status' };
+  if (resultado?.tipo !== 'sucesso_ai_sql') return { ok: false, cacheStatus: 'inapto_sem_sql_cacheavel' };
+  if (erroValidacao || subtipoInvalido) return { ok: false, cacheStatus: 'inapto_validacao' };
+  if (!chaveCache || !sqlFinalExecutado || !sqlTemplate) return { ok: false, cacheStatus: 'inapto_sem_sql_cacheavel' };
+  if (_textoSqlIncacheavel(sqlFinalExecutado) || _textoSqlIncacheavel(sqlTemplate)) return { ok: false, cacheStatus: 'inapto_validacao' };
+  return { ok: true, cacheStatus: 'pendente' };
+}
+
+function _minutosEnv(nome, padrao, { min = 0, max = 24 * 60 } = {}) {
+  const bruto = process.env[nome];
+  if (bruto === undefined || bruto === null || String(bruto).trim() === '') return padrao;
+  const n = Number(String(bruto).replace(',', '.'));
+  if (!Number.isFinite(n)) return padrao;
+  return Math.max(min, Math.min(max, n));
+}
+
+function _janelaCacheMs(nome, padraoMinutos) {
+  return Math.round(_minutosEnv(nome, padraoMinutos) * 60 * 1000);
+}
 
 function _normalizarTextoEnvioWhatsapp(valor) {
   if (valor === null || valor === undefined) return '';
@@ -930,13 +963,29 @@ class IACWhatsAppService extends EventEmitter {
     const HISTORY_MAX = this._historicoTurnosConfig(empresaId);
     const historyKey = `_history_${scope}`;
     const historicoEscopo = Array.isArray(ctx[historyKey]) ? ctx[historyKey] : [];
+    const clonarPeriodoContexto = periodo => {
+      if (!periodo) return null;
+      const out = {
+        ...periodo,
+        tipo: periodo.tipo,
+        dataInicio: periodo.dataInicio || periodo.data_inicio || null,
+        dataFim: periodo.dataFim || periodo.data_fim || null,
+      };
+      if (Array.isArray(periodo.periodos_comparativos)) {
+        out.periodos_comparativos = periodo.periodos_comparativos.map(p => ({ ...p }));
+      }
+      if (Array.isArray(periodo.meses)) out.meses = [...periodo.meses];
+      if (Array.isArray(periodo.anos)) out.anos = [...periodo.anos];
+      return out;
+    };
+
     const novaEntrada = {
       ts,
       seq,
       mensagem: intent._mensagemOriginal || '',
       intencao: intent.intencao || 'desconhecido',
       modulo: intent._moduloDinamico || intent._orquestradorContrato?.modulo || null,
-      periodo: intent.periodo ? { tipo: intent.periodo.tipo, dataInicio: intent.periodo.dataInicio || intent.periodo.data_inicio, dataFim: intent.periodo.dataFim || intent.periodo.data_fim } : null,
+      periodo: clonarPeriodoContexto(intent._periodoCanonicoResolvido || intent.periodo),
       filtros: intent.filtros || {},
       agrupamento: Array.isArray(intent.group_by) && intent.group_by.length ? intent.group_by : (intent.agrupar_por ? [intent.agrupar_por] : []),
       operacao: intent._orquestradorContrato?.operacao || null,
@@ -987,6 +1036,13 @@ class IACWhatsAppService extends EventEmitter {
     }
     if (resultado?._contextoIAAnterior) {
       enriquecido._contextoIAAnterior = resultado._contextoIAAnterior;
+    }
+    if (resultado?._periodoCanonicoResolvido) {
+      enriquecido._periodoCanonicoResolvido = resultado._periodoCanonicoResolvido;
+      enriquecido.periodo = {
+        ...(enriquecido.periodo || {}),
+        ...resultado._periodoCanonicoResolvido,
+      };
     }
     // Propaga o SQL canônico para o próximo turno poder herdar a estrutura exata
     // (evita que a IA-OWNER regenere do zero ao receber pedidos de reordenamento/refinamento)
@@ -1073,6 +1129,73 @@ class IACWhatsAppService extends EventEmitter {
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
     return /\bpor\s+empresas?\b/.test(normalizado);
+  }
+
+  _normalizarGroupByIntent(intent = {}) {
+    const raw = Array.isArray(intent.group_by) && intent.group_by.length
+      ? intent.group_by
+      : Array.isArray(intent.agrupar_por_composto) && intent.agrupar_por_composto.length
+        ? intent.agrupar_por_composto
+        : intent.agrupar_por ? [intent.agrupar_por] : [];
+    return raw
+      .map(v => String(v || '').trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  _mensagemReferenciaResultado(texto) {
+    const normalizado = String(texto || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return /\b(esse|essa|estes|estas|isso|resultado|resultados|compare|comparar|comparativo|detalhe|detalhar|agora|tambem)\b/.test(normalizado);
+  }
+
+  _groupBySeguroParaHerdar(groupBy = []) {
+    const bloqueados = new Set(['empresa']);
+    const permitidos = new Set([
+      'cliente', 'fornecedor', 'produto', 'vendedor', 'filial', 'loja',
+      'grupo', 'categoria', 'negocio', 'tes', 'cfop', 'documento',
+      'nota', 'titulo', 'centro_custo', 'departamento',
+    ]);
+    return (groupBy || [])
+      .map(v => String(v || '').trim().toLowerCase())
+      .filter(v => v && !bloqueados.has(v) && permitidos.has(v));
+  }
+
+  _aplicarGroupByHerdadoContinuidade(intent, contextoAnterior, texto) {
+    if (!intent || this._normalizarGroupByIntent(intent).length) return intent;
+    if (!contextoAnterior || !this._mensagemReferenciaResultado(texto)) return intent;
+
+    const herdouContexto = !!(
+      intent._contextoAplicado ||
+      intent._herdouContextoOrquestrador ||
+      intent._orquestradorContrato?.herdou_contexto ||
+      intent._orquestradorContrato?.contexto_usado
+    );
+    if (!herdouContexto) return intent;
+
+    const groupByAnterior = this._groupBySeguroParaHerdar(
+      this._normalizarGroupByIntent(contextoAnterior)
+    );
+    if (!groupByAnterior.length) return intent;
+
+    const out = {
+      ...intent,
+      group_by: groupByAnterior,
+      agrupar_por: groupByAnterior.length === 1 ? groupByAnterior[0] : null,
+      agrupar_por_composto: groupByAnterior.length > 1 ? groupByAnterior : null,
+      _groupByHerdadoContinuidade: true,
+    };
+    if (out._orquestradorContrato && !this._normalizarGroupByIntent(out._orquestradorContrato).length) {
+      out._orquestradorContrato = {
+        ...out._orquestradorContrato,
+        group_by: groupByAnterior,
+        agrupar_por: groupByAnterior.length === 1 ? groupByAnterior[0] : null,
+        agrupar_por_composto: groupByAnterior.length > 1 ? groupByAnterior : null,
+      };
+    }
+    this.log(`🔄 Continuidade: agrupamento herdado do contexto anterior (${groupByAnterior.join(', ')}).`, 'info');
+    return out;
   }
 
   _isPedidoTodasEmpresas(texto) {
@@ -2340,7 +2463,7 @@ class IACWhatsAppService extends EventEmitter {
   }
 
   _moduloMonitorIntent(intent = {}, resultado = null) {
-    const conhecidos = new Set(['compras', 'financeiro', 'faturamento', 'comissao']);
+    const conhecidos = new Set(['compras', 'financeiro', 'faturamento', 'comissao', 'estoque']);
     const candidatos = [
       intent._moduloDinamico,
       resultado?.dataset_nome,
@@ -2348,7 +2471,53 @@ class IACWhatsAppService extends EventEmitter {
       ...(Array.isArray(resultado?.trace) ? resultado.trace.map(t => t?.modulo) : []),
       String(intent.intencao || '').replace(/_dinamico$/i, ''),
     ].filter(Boolean).map(v => String(v).toLowerCase());
+    if (candidatos.some(v => /(?:^|[_+])compras(?:$|[_+])/.test(v) && /(?:^|[_+])faturamento(?:$|[_+])/.test(v))) return 'compras';
     return candidatos.find(v => conhecidos.has(v)) || null;
+  }
+
+  _promoverExecutionLogConfiavelCache(empresaId, numeroWa) {
+    try {
+      const janelaMs = _janelaCacheMs('IAC_NLSQL_CACHE_QUARANTINE_MINUTES', NLSQL_CACHE_QUARANTINE_DEFAULT_MINUTES);
+      const limite = new Date(Date.now() - janelaMs).toISOString();
+      const info = getDB().prepare(`
+        UPDATE execution_log
+           SET confiavel_cache = 1,
+               confiavel_cache_em = ?,
+               cache_status = 'confiavel'
+         WHERE empresa_id = ?
+           AND numero_wa = ?
+           AND status IN ('sucesso', 'sucesso_ai_sql')
+           AND cache_status = 'pendente'
+           AND criado_em <= ?
+      `).run(new Date().toISOString(), empresaId, numeroWa, limite);
+      if (info.changes > 0) {
+        this.log(`Cache NL-SQL: ${info.changes} execucao(oes) promovida(s) a confiavel apos quarentena de ${Math.round(janelaMs / 60000)} min.`, 'info');
+      }
+    } catch (err) {
+      this.log(`Falha ao promover execution_log para cache confiavel: ${err.message}`, 'warning');
+    }
+  }
+
+  _bloquearExecutionLogRecenteParaCache(empresaId, numeroWa) {
+    try {
+      const janelaMs = _janelaCacheMs('IAC_NLSQL_CACHE_FEEDBACK_WINDOW_MINUTES', NLSQL_CACHE_FEEDBACK_DEFAULT_MINUTES);
+      const limite = new Date(Date.now() - janelaMs).toISOString();
+      const info = getDB().prepare(`
+        UPDATE execution_log
+           SET confiavel_cache = 0,
+               cache_status = 'bloqueado_feedback'
+         WHERE empresa_id = ?
+           AND numero_wa = ?
+           AND status IN ('sucesso', 'sucesso_ai_sql')
+           AND criado_em >= ?
+           AND cache_status IN ('pendente', 'confiavel')
+      `).run(empresaId, numeroWa, limite);
+      if (info.changes > 0) {
+        this.log(`Cache NL-SQL: ${info.changes} execucao(oes) recente(s) bloqueada(s) por feedback do usuario na janela de ${Math.round(janelaMs / 60000)} min.`, 'warning');
+      }
+    } catch (err) {
+      this.log(`Falha ao bloquear execution_log por feedback: ${err.message}`, 'warning');
+    }
   }
 
   _verificarAcessoModuloWhatsapp({ empresaId, sender, modulo }) {
@@ -2581,10 +2750,30 @@ class IACWhatsAppService extends EventEmitter {
 
     try {
       const { getDB } = require('../database');
-      const STATUS_MAP = { sucesso: 'sucesso', erro: 'erro', sem_dados: 'sem_dados', dialogo: 'dialogo', desconhecido: 'desconhecido' };
+      const STATUS_MAP = { sucesso: 'sucesso', sucesso_ai_sql: 'sucesso', erro: 'erro', sem_dados: 'sem_dados', dialogo: 'dialogo', desconhecido: 'desconhecido' };
+      const numeroWa = this._normalizarNumeroWa(sender);
+      this._promoverExecutionLogConfiavelCache(empresaId, numeroWa);
+      const intentCanonico = resultado?._intent_canonico || intent?._intentCanonico || null;
+      const ehConsolidadoSemIntentCache = resultado?._pipeline_origem === 'consolidado'
+        && !intentCanonico
+        && !(resultado?._chave_cache || intent?._chaveCacheIntent);
+      if (ehConsolidadoSemIntentCache) return logId;
+      const statusExecucao = STATUS_MAP[resultado?.tipo] ?? resultado?.tipo ?? 'desconhecido';
+      const sqlFinalExecutado = resultado?._sql_auditoria?.sql_final_executado || resultado?.sql_gerado || null;
+      const sqlTemplate = resultado?._sql_template || resultado?._sql_auditoria?.sql_template || resultado?._sql_canonico || null;
+      const chaveCache = resultado?._chave_cache || intent?._chaveCacheIntent || null;
+      const cacheavel = _resultadoSqlCacheavel({ resultado, statusExecucao, sqlFinalExecutado, sqlTemplate, chaveCache });
+      const chaveCacheAprendizado = cacheavel.ok ? chaveCache : null;
+      const sqlTemplateAprendizado = cacheavel.ok ? sqlTemplate : null;
       const detalhesExecucao = JSON.stringify({
         escopo_execucao: intent?._escopoExecucao || null,
         modulo: this._moduloMonitorIntent(intent, resultado) || null,
+        intent_canonico_hash: resultado?._intent_canonico_hash || intent?._intentCanonicoHash || null,
+        chave_cache: chaveCache,
+        cache_aprendizado_bloqueado: !cacheavel.ok,
+        cache_aprendizado_motivo: cacheavel.cacheStatus,
+        intent_canonico_validation: intentCanonico?.validation || null,
+        sql_template_parametros: resultado?._sql_template_parametros || resultado?._sql_auditoria?.sql_template_parametros || [],
         sql_canonico_origem: resultado?._sql_canonico_origem || null,
         sql_canonico_empresa_origem: resultado?._sql_canonico_empresa_origem || null,
         sql_canonico_parametrizado: !!resultado?._sql_canonico_parametrizado,
@@ -2596,18 +2785,33 @@ class IACWhatsAppService extends EventEmitter {
       });
       getDB().prepare(
         `INSERT OR IGNORE INTO execution_log
-           (correlation_id, empresa_id, usuario, numero_wa, intencao, status, duracao_ms, tipo_mensagem, detalhes_json, criado_em)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           (correlation_id, empresa_id, usuario, numero_wa, intencao, status, duracao_ms, tipo_mensagem,
+            detalhes_json, texto_original, intent_canonico_json, intent_canonico_hash, chave_cache,
+            sql_final_executado, sql_template, prompt_version, spec_version, schema_version, model,
+            confiavel_cache, cache_status, criado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         require('crypto').randomUUID(),
         empresaId,
         sender,
-        this._normalizarNumeroWa(sender),
+        numeroWa,
         intent?.intencao || 'desconhecido',
-        STATUS_MAP[resultado?.tipo] ?? resultado?.tipo ?? 'desconhecido',
+        statusExecucao,
         duracaoMs ?? null,
         this._tipoMensagemAtual || 'texto',
         detalhesExecucao,
+        texto || null,
+        intentCanonico ? JSON.stringify(intentCanonico) : null,
+        resultado?._intent_canonico_hash || intent?._intentCanonicoHash || null,
+        chaveCacheAprendizado,
+        sqlFinalExecutado,
+        sqlTemplateAprendizado,
+        intentCanonico?.prompt_version || null,
+        intentCanonico?.spec_version || null,
+        intentCanonico?.schema_version || null,
+        intentCanonico?.model || null,
+        0,
+        cacheavel.cacheStatus,
         new Date().toISOString(),
       );
     } catch (err) {
@@ -2762,6 +2966,7 @@ class IACWhatsAppService extends EventEmitter {
       : `${String(registro.criado_em || '').replace(' ', 'T')}Z`;
     const idadeMs = Date.now() - new Date(criadoEmIso).getTime();
     if (!Number.isFinite(idadeMs) || idadeMs < 0 || idadeMs > JANELA_ANCORAGEM_MS) return null; // consulta velha/invalida — nao ancora, segue fluxo normal
+    this._bloquearExecutionLogRecenteParaCache(registro.empresa_id, numeroWa);
 
     const specFeedbackDialog = require('../erp/core/spec-feedback-dialog');
     const sql = registro.sql_final_executado || registro.sql_gerado || '';
@@ -3836,6 +4041,7 @@ class IACWhatsAppService extends EventEmitter {
         intent._contextoEmpresaOrigem = scopedContexto.empresaIdOrigem || null;
       }
     }
+    intent = this._aplicarGroupByHerdadoContinuidade(intent, contextoAnterior, textoExecucao);
     // Verifica se filtros cadastrais (empresa, cliente, fornecedor) são na verdade tenants do canal.
     // Varre TODOS os campos — não para no primeiro — para capturar multi-tenant ("J2A e C3I").
     if (this._channelId) {
@@ -4185,6 +4391,7 @@ class IACWhatsAppService extends EventEmitter {
         intent._contextoEmpresaOrigem = scopedContextAll.empresaIdOrigem || null;
       }
     }
+    intent = this._aplicarGroupByHerdadoContinuidade(intent, contextoAnteriorAll, texto);
     if (intent._contextoAplicado && falhasClassificacao.length) {
       this.log('ℹ️  IA externa indisponivel, mas a engine interna resolveu pelo contexto da conversa.', 'info');
     }
@@ -4323,6 +4530,7 @@ class IACWhatsAppService extends EventEmitter {
         'contrato_ia_owner_invalido',
         'contrato_sx3_invalido',
         'contrato_entidade_sql_invalido',
+        'periodo_sql_inconsistente',
         'sql_parametro_entidade_pendente',
         'sql_nao_extraido',
       ]);
@@ -4898,7 +5106,7 @@ class IACWhatsAppService extends EventEmitter {
                 sqlCanonicoDinamico = sqlCanonicoAuditavel;
                 entidadesCanonicoDinamico = entidadesCanonico;
                 respostaPlanejadaCanonicaDinamico = resultado._ia_owner_plano?.resposta_planejada || resultado._resposta_planejada || null;
-                periodoCanonicoDinamico = resultado._ia_owner_plano?.periodo || resultado.periodo_resolvido || null;
+                periodoCanonicoDinamico = resultado.periodo_resolvido || resultado._periodoCanonicoResolvido || resultado._ia_owner_plano?.periodo || null;
                 const veioDaIaOwner = resultado._sql_canonico_origem === 'ia_owner' || !!resultado._ia_owner_plano;
                 this.log(`[All] SQL canonico definido pela empresa #${emp.empresa_id}${veioDaIaOwner ? ' (ia_owner, sufixos normalizados)' : ''}; proximas empresas serao adaptadas por SX2/SX3${canonico.alterou ? ' com entidades parametrizadas' : ''}.`, 'info');
               } else {
@@ -4994,6 +5202,12 @@ class IACWhatsAppService extends EventEmitter {
                 retryPendente: retryElegivel,
               }),
             };
+            if (inconsistenciaInterna && retryElegivel) {
+              const erroMsg = `${emp.nome || `Empresa #${emp.empresa_id}`}: ${respostaUsuario}`;
+              pendentesRetryCanonico.push({ emp, intentExecucao, resultado: resultadoComDiagnostico, respostaUsuario, subtipoErro, erroMsg });
+              this.log(`[All] Empresa #${emp.empresa_id} aguardara retry com SQL canonico: ${subtipoErro}.`, 'info');
+              return; // falha transitória: só audita se o retry canonico não recuperar
+            }
             this._registrarInterpretacao({
               empresaId: emp.empresa_id,
               sender: senderAll,
@@ -5009,10 +5223,6 @@ class IACWhatsAppService extends EventEmitter {
             } else if (inconsistenciaInterna) {
               const erroMsg = `${emp.nome || `Empresa #${emp.empresa_id}`}: ${respostaUsuario}`;
               errosDinamicos.push(erroMsg);
-              if (retryElegivel) {
-                pendentesRetryCanonico.push({ emp, intentExecucao, resultado: resultadoComDiagnostico, respostaUsuario, subtipoErro, erroMsg });
-                this.log(`[All] Empresa #${emp.empresa_id} aguardara retry com SQL canonico: ${subtipoErro}.`, 'info');
-              }
             } else {
               errosDinamicos.push(`${emp.nome || `Empresa #${emp.empresa_id}`}: ${respostaUsuario}`);
             }
