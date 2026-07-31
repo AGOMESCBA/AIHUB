@@ -21,39 +21,47 @@
 
     /* ── Abas internas ── */
     .ws-tabs { display:flex; align-items:center; gap:0; border-bottom:2px solid var(--border); flex-shrink:0; padding:0 16px; overflow:hidden; }
-
-    /* ── Sidebar direita de controles ── */
-    .ws-controls { width:var(--ws-controls-w); flex-shrink:0; border-left:1px solid var(--border); background:var(--bg-card); display:flex; flex-direction:column; align-items:center; padding:14px 10px; gap:6px; overflow-y:auto; overflow-x:hidden; scrollbar-width:none; box-sizing:border-box; }
-    .ws-ctrl-sep { width:100%; height:1px; background:var(--border); margin:10px 0; flex-shrink:0; }
-    .ws-ctrl-btn { width:var(--ws-control-btn-w); min-height:48px; border-radius:8px; border:1px solid transparent; background:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--text-lo); transition:background .15s, border-color .15s, color .15s; flex-shrink:0; padding:6px 8px; box-sizing:border-box; }
-    .ws-ctrl-btn:hover { background:var(--bg-hover); border-color:var(--border); color:var(--text-hi); }
-    .ws-ctrl-btn:disabled { opacity:.35; cursor:default; pointer-events:none; }
-    .ws-ctrl-btn.primary { background:#7c3aed; border-color:#7c3aed; color:#fff; }
-    .ws-ctrl-btn.primary:hover { background:#6d28d9; }
-    .ws-ctrl-btn.warning { border-color:#fde68a; color:#92400e; }
-    .ws-ctrl-btn.warning:hover { background:#fef9c3; border-color:#f59e0b; }
-    .ws-ctrl-btn.danger  { border-color:transparent; color:#b91c1c; }
-    .ws-ctrl-btn.danger:hover  { background:#fee2e2; border-color:#fca5a5; }
-    .ws-ctrl-lbl { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; line-height:1.12; text-align:center; max-width:100%; }
-    .ws-ctrl-group-label { width:var(--ws-control-btn-w); font-size:9px; font-weight:800; line-height:1.25; text-align:center; text-transform:uppercase; letter-spacing:.05em; color:var(--text-lo); }
-    .ws-ctrl-group-label.selected { color:#7c3aed; }
     .ws-tab { padding:9px 16px; font-size:13px; font-weight:600; color:var(--text-lo); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:color .15s, border-color .15s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
     .ws-tab:hover { color:var(--text-hi); }
     .ws-tab.active { color:#7c3aed; border-bottom-color:#7c3aed; }
     .ws-tab-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:18px; padding:0 5px; border-radius:99px; font-size:10px; font-weight:800; background:var(--bg-hover); color:var(--text-lo); }
     .ws-tab.active .ws-tab-badge { background:rgba(124,58,237,.15); color:#7c3aed; }
 
-    /* ── Corpo principal (split) ── */
+    /* ── Corpo principal (3 colunas: lista | log | painel) ── */
     .ws-body { display:flex; flex:1; overflow:hidden; gap:0; }
 
-    /* ── Painel esquerdo — lista de canais ── */
-    .ws-sidebar { width:320px; min-width:280px; max-width:380px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
+    /* ── Coluna esquerda — lista de canais ── */
+    .ws-sidebar { width:280px; min-width:240px; max-width:320px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; flex-shrink:0; }
     .ws-sidebar-toolbar { display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
     .ws-search { flex:1; height:32px; padding:0 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-base); color:var(--text-hi); font-size:13px; outline:none; transition:border-color .15s; }
     .ws-search:focus { border-color:#7c3aed; }
     .ws-search::placeholder { color:var(--text-lo); }
-
     .ws-channel-list { flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px; scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.2) transparent; }
+
+    /* ── Coluna direita — painel de controle (estilo monitor) ── */
+    .ws-panel { width:260px; min-width:260px; border-left:1px solid var(--border); background:var(--bg-card); display:flex; flex-direction:column; overflow-y:auto; flex-shrink:0; padding:16px 14px; gap:10px; scrollbar-width:thin; }
+    .ws-panel-title { font-size:13px; font-weight:800; color:var(--text-hi); border-bottom:1px solid var(--border); padding-bottom:10px; text-align:center; }
+    .ws-panel-section { display:flex; flex-direction:column; gap:6px; }
+    .ws-panel-sep { height:1px; background:var(--border); margin:2px 0; }
+    .ws-panel-lbl { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--text-lo); }
+    .ws-panel-stat { display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:12px; color:var(--text-lo); }
+    .ws-panel-stat strong { color:var(--text-hi); text-align:right; word-break:break-all; font-size:12px; }
+    .ws-panel-waiting { background:var(--bg-hover); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; font-size:12px; color:var(--text-md); line-height:1.5; text-align:center; }
+    .ws-panel-connected { background:#dcfce7; border:1px solid #86efac; border-radius:var(--radius-sm); padding:12px; font-size:13px; color:#15803d; font-weight:700; text-align:center; line-height:1.5; }
+    .ws-panel-qr-img { width:100%; aspect-ratio:1; border:3px solid #fde68a; border-radius:var(--radius-sm); background:#fff; object-fit:contain; image-rendering:pixelated; display:none; }
+    .ws-panel-qr-hint { font-size:11px; color:var(--text-md); line-height:1.6; text-align:center; display:none; }
+
+    /* Botões do painel (largura total, estilo monitor) */
+    .ws-panel-btn { width:100%; height:36px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--bg-base); color:var(--text-md); font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; transition:all .15s; }
+    .ws-panel-btn:hover { background:var(--bg-hover); color:var(--text-hi); }
+    .ws-panel-btn:disabled { opacity:.4; cursor:default; pointer-events:none; }
+    .ws-panel-btn.primary { background:#7c3aed; border-color:#7c3aed; color:#fff; }
+    .ws-panel-btn.primary:hover { background:#6d28d9; }
+    .ws-panel-btn.warning { border-color:#fde68a; color:#92400e; }
+    .ws-panel-btn.warning:hover { background:#fef9c3; border-color:#f59e0b; }
+    .ws-panel-btn.danger  { border-color:#fca5a5; color:#b91c1c; }
+    .ws-panel-btn.danger:hover  { background:#fee2e2; border-color:#ef4444; }
+    .ws-panel-btn.sm { height:30px; font-size:12px; }
 
     /* ── Card de canal ── */
     .ws-channel-card { border:1px solid var(--border); border-radius:var(--radius); padding:12px 13px; cursor:pointer; transition:border-color .15s, background .15s, box-shadow .15s; position:relative; background:var(--bg-card); }
@@ -109,11 +117,11 @@
     .ws-main-status.badge-noservice { font-size:9.5px; letter-spacing:-.01em; }
 
     /* QR inline no painel direito */
-    .ws-qr-banner { display:flex; align-items:center; gap:16px; padding:12px 16px; background:#fef9c3; border-bottom:1px solid #fde68a; flex-shrink:0; }
-    .ws-qr-img { width:80px; height:80px; border:2px solid #fde68a; border-radius:8px; background:#fff; object-fit:contain; }
-    .ws-qr-info { flex:1; }
-    .ws-qr-info strong { font-size:13px; color:#92400e; display:block; margin-bottom:3px; }
-    .ws-qr-info span { font-size:12px; color:#a16207; line-height:1.5; }
+    .ws-qr-banner { display:flex; align-items:flex-start; gap:20px; padding:16px 20px; background:#fef9c3; border-bottom:1px solid #fde68a; flex-shrink:0; }
+    .ws-qr-img { width:200px; height:200px; border:3px solid #fde68a; border-radius:10px; background:#fff; object-fit:contain; flex-shrink:0; image-rendering:pixelated; }
+    .ws-qr-info { flex:1; padding-top:4px; }
+    .ws-qr-info strong { font-size:14px; color:#92400e; display:block; margin-bottom:6px; }
+    .ws-qr-info span { font-size:12px; color:#a16207; line-height:1.6; }
 
     /* Terminal */
     .ws-terminal { flex:1; overflow-y:auto; padding:10px 16px; font-family:ui-monospace,'Cascadia Code',Consolas,monospace; font-size:12px; line-height:1.75; background:var(--bg-base); scrollbar-width:thin; scrollbar-color:rgba(124,58,237,.25) transparent; }
@@ -160,6 +168,9 @@
     .progress-bar { height:100%;border-radius:99px;background:linear-gradient(90deg,#7c3aed,#a78bfa);transition:width .5s ease; }
     .progress-frac { font-size:24px;font-weight:800;color:var(--text-hi);line-height:1; }
     .progress-sub  { font-size:12px;color:var(--text-lo);margin-bottom:16px; }
+
+    /* ── Intent panel ── */
+    .ws-intent-nome { font-size:13px; font-weight:700; color:var(--text-hi); line-height:1.35; word-break:break-word; }
 
     /* ── Dot animado ── */
     @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.25} }
@@ -265,89 +276,133 @@
           </div>
         </div>
 
-        <!-- Painel direito: log ao vivo -->
+        <!-- Centro: log ao vivo -->
         <div class="ws-main" id="ws-main-panel">
-
-          <!-- Estado inicial: nenhum canal selecionado -->
           <div class="ws-empty-state" id="main-empty">
             <div class="ws-empty-icon">📱</div>
             <div class="ws-empty-title">Nenhum canal selecionado</div>
             <div class="ws-empty-desc">Clique em um canal na lista para ver os logs em tempo real e controlar o serviço.</div>
           </div>
-
-          <!-- Painel de canal selecionado (oculto inicialmente) -->
           <div id="main-channel" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-
-            <!-- Banner QR (oculto por padrão) -->
-            <div class="ws-qr-banner" id="qr-banner" style="display:none">
-              <img class="ws-qr-img" id="qr-img" src="" alt="QR Code">
-              <div class="ws-qr-info">
-                <strong>Aguardando leitura do QR Code</strong>
-                <span>Abra o WhatsApp → Aparelhos conectados → Conectar aparelho → Escaneie o código ao lado.</span>
-              </div>
-            </div>
-
-            <!-- Terminal -->
             <div class="ws-terminal" id="ws-terminal"></div>
-
           </div>
-        </div><!-- /#ws-main-panel -->
+        </div>
 
-        <!-- ── Sidebar direita de controles ── -->
-        <div class="ws-controls">
+        <!-- Direita: painel de controle + QR (estilo monitor) -->
+        <div class="ws-panel">
 
-          <!-- Canal selecionado — info + ações individuais -->
-          <div id="ctrl-canal-info" style="display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;padding:0 8px;box-sizing:border-box;">
-            <div class="ws-ctrl-group-label selected">Tenant selecionado</div>
-            <div id="ctrl-canal-badge" class="ws-main-status badge-stopped" style="width:100%;justify-content:center;font-size:11px;">Selecione</div>
-            <div id="ctrl-canal-nome" style="font-size:10px;font-weight:700;color:var(--text-hi);text-align:center;line-height:1.3;word-break:break-word;">Nenhum tenant</div>
-            <div id="ctrl-canal-num"  style="font-size:10px;color:var(--text-lo);text-align:center;">Clique em um card</div>
-            <div id="ctrl-canal-actions" style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
-              <button class="ws-ctrl-btn primary" disabled>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <span class="ws-ctrl-lbl">Iniciar</span>
-              </button>
-              <button class="ws-ctrl-btn warning" disabled>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                <span class="ws-ctrl-lbl">Parar</span>
-              </button>
+          <!-- Status badge -->
+          <div style="text-align:center;">
+            <div id="ctrl-canal-badge" class="ws-main-status badge-stopped" style="display:inline-flex;justify-content:center;font-size:12px;padding:4px 14px;">Selecione um canal</div>
+          </div>
+
+          <!-- Nome + número -->
+          <div style="text-align:center;border-bottom:1px solid var(--border);padding-bottom:10px;">
+            <div id="ctrl-canal-nome" style="font-size:13px;font-weight:800;color:var(--text-hi);line-height:1.3;">Nenhum canal</div>
+            <div id="ctrl-canal-num"  style="font-size:11px;color:var(--text-lo);margin-top:2px;">Clique em um card à esquerda</div>
+          </div>
+
+          <!-- Ações do canal selecionado -->
+          <div id="ctrl-canal-actions" class="ws-panel-section">
+            <button class="ws-panel-btn primary" disabled>▶ Iniciar</button>
+            <button class="ws-panel-btn warning" disabled>■ Parar</button>
+          </div>
+
+          <!-- Separador -->
+          <div class="ws-panel-sep"></div>
+
+          <!-- Conexão WhatsApp (QR / aguardando / conectado) -->
+          <div class="ws-panel-title">Conexão WhatsApp</div>
+
+          <div class="ws-panel-waiting" id="qr-waiting">Inicie o serviço para conectar o WhatsApp.</div>
+          <img class="ws-panel-qr-img" id="qr-img" alt="QR Code">
+          <p class="ws-panel-qr-hint" id="qr-hint">Abra o WhatsApp → <strong>Aparelhos conectados</strong> → <strong>Conectar aparelho</strong> → escaneie.</p>
+          <div class="ws-panel-connected" id="qr-connected" style="display:none;">
+            ✅ WhatsApp conectado
+            <div id="qr-connected-num" style="font-size:16px;font-weight:900;color:#166534;margin-top:4px;"></div>
+          </div>
+
+          <!-- Separador -->
+          <div class="ws-panel-sep"></div>
+
+          <!-- Infos do canal -->
+          <div class="ws-panel-section">
+            <div class="ws-panel-stat"><span>Canal</span><strong id="info-canal">—</strong></div>
+            <div class="ws-panel-stat"><span>Empresas</span><strong id="info-empresas">—</strong></div>
+            <div class="ws-panel-stat"><span>Msgs</span><strong id="info-msgs">0</strong></div>
+            <div class="ws-panel-stat" id="info-pid-row" style="display:none"><span>Processo</span><strong id="info-pid">—</strong></div>
+            <div class="ws-panel-stat" id="info-uptime-row" style="display:none"><span>Uptime</span><strong id="info-uptime">—</strong></div>
+          </div>
+
+          <!-- Separador -->
+          <div class="ws-panel-sep"></div>
+
+          <!-- Log: utilidades -->
+          <div class="ws-panel-section">
+            <div class="ws-panel-lbl">Log</div>
+            <div style="display:flex;gap:6px;">
+              <button class="ws-panel-btn sm" id="btn-clear-selected"  onclick="limparLog()"  disabled title="Limpar log">🗑 Limpar</button>
+              <button class="ws-panel-btn sm" id="btn-copy-selected"   onclick="copiarLog()"  disabled title="Copiar log">📋 Copiar</button>
             </div>
-            <button class="ws-ctrl-btn" id="btn-refresh-selected" onclick="atualizarCanalSelecionado()" title="Atualizar status do tenant selecionado" disabled>
-              <svg id="refresh-selected-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-              <span class="ws-ctrl-lbl">Atualizar</span>
-            </button>
-            <button class="ws-ctrl-btn" id="btn-clear-selected" onclick="limparLog()" title="Limpar log do tenant selecionado" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-              <span class="ws-ctrl-lbl">Limpar</span>
-            </button>
-            <button class="ws-ctrl-btn" id="btn-save-selected" onclick="salvarLog()" title="Salvar log do tenant selecionado" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-              <span class="ws-ctrl-lbl">Salvar</span>
+            <button class="ws-panel-btn sm" id="btn-save-selected" onclick="salvarLog()" disabled title="Salvar log">💾 Salvar log</button>
+            <button class="ws-panel-btn sm" id="btn-refresh-selected" onclick="atualizarCanalSelecionado()" disabled title="Atualizar status">
+              <svg id="refresh-selected-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Atualizar status
             </button>
           </div>
-          <div id="ctrl-canal-sep" class="ws-ctrl-sep"></div>
 
-          <!-- Grupo: canais (todos) -->
-          <div class="ws-ctrl-group-label selected">Todos os tenants</div>
-          <button class="ws-ctrl-btn primary" onclick="iniciarTodos()" title="Iniciar todos os canais">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <span class="ws-ctrl-lbl">Iniciar todos</span>
-          </button>
-          <button class="ws-ctrl-btn warning" onclick="confirmarPararTodos()" title="Parar todos os canais conectados">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-            <span class="ws-ctrl-lbl">Parar todos</span>
-          </button>
-          <button class="ws-ctrl-btn" onclick="atualizarTodos()" title="Atualizar status de todos os canais">
-            <svg id="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            <span class="ws-ctrl-lbl">Atualizar</span>
-          </button>
+          <!-- Separador -->
+          <div class="ws-panel-sep"></div>
 
-          <div class="ws-ctrl-sep"></div>
+          <!-- Todos os canais -->
+          <div class="ws-panel-section">
+            <div class="ws-panel-lbl">Todos os canais</div>
+            <button class="ws-panel-btn primary" onclick="iniciarTodos()">▶ Iniciar todos</button>
+            <button class="ws-panel-btn warning" onclick="confirmarPararTodos()">■ Parar todos</button>
+            <button class="ws-panel-btn sm" onclick="atualizarTodos()">
+              <svg id="refresh-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Atualizar todos
+            </button>
+          </div>
 
-          <!-- Contador de logs -->
-          <div style="font-size:11px;font-weight:800;color:var(--text-lo);text-align:center;line-height:1.4;padding:0 4px;" id="log-count-side">0<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span></div>
+          <!-- Separador -->
+          <div class="ws-panel-sep"></div>
 
-        </div><!-- /.ws-controls -->
+          <!-- Painel Última Consulta (igual ao monitor) -->
+          <div class="ws-intent-panel" id="intent-panel" style="display:none;flex-direction:column;gap:6px;width:100%;">
+            <div class="ws-panel-lbl" style="color:var(--accent);">🧠 Última consulta</div>
+            <div class="ws-intent-nome" id="intent-nome">—</div>
+            <div id="intent-badge-wrap"></div>
+            <div id="intent-pipeline-wrap" style="display:none;margin-top:2px"></div>
+            <div class="ws-panel-stat" id="intent-modulo-row"   style="display:none"><span>Módulo</span><strong id="intent-modulo">—</strong></div>
+            <div class="ws-panel-stat"><span>IA usada</span><strong id="intent-provedor">—</strong></div>
+            <div class="ws-panel-stat"><span>Confiança</span><strong id="intent-confianca">—</strong></div>
+            <div class="ws-panel-stat" id="intent-turno-row"    style="display:none"><span>Turno chat</span><strong id="intent-turno">—</strong></div>
+            <div class="ws-panel-stat" id="intent-duracao-row"  style="display:none"><span>Proc.</span><strong id="intent-duracao">—</strong></div>
+            <div class="ws-panel-stat" id="intent-pipeline-row" style="display:none"><span>Pipeline</span><strong id="intent-pipeline">—</strong></div>
+            <div class="ws-panel-stat" id="intent-entregue-row" style="display:none"><span>Entregue</span><strong id="intent-entregue">—</strong></div>
+            <div class="ws-panel-stat" id="intent-rows-row"     style="display:none"><span>Registros</span><strong id="intent-rows">—</strong></div>
+            <div class="ws-panel-stat" id="intent-periodo-row"  style="display:none"><span>Período</span><strong id="intent-periodo">—</strong></div>
+            <div class="ws-panel-stat" id="intent-dataset-row"  style="display:none"><span>Dataset</span><strong id="intent-dataset">—</strong></div>
+            <div class="ws-panel-stat" id="intent-metricas-row" style="display:none"><span>Métricas</span><strong id="intent-metricas">—</strong></div>
+            <div id="intent-filtros-wrap" style="display:none">
+              <div class="ws-panel-stat" style="margin-bottom:3px"><span>Filtros</span></div>
+              <div id="intent-filtros" style="display:flex;flex-direction:column;gap:2px;width:100%;"></div>
+            </div>
+            <div class="ws-panel-stat" id="intent-group-row"    style="display:none"><span>Agrupar por</span><strong id="intent-group">—</strong></div>
+            <div class="ws-panel-stat" id="intent-contexto-row" style="display:none"><span>Contexto</span><strong id="intent-contexto">—</strong></div>
+            <div class="ws-panel-stat" id="intent-trace-row"    style="display:none"><span>Caminho</span><strong id="intent-trace" style="font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
+            <div id="intent-sql-wrap" style="display:none;width:100%">
+              <div class="ws-panel-stat" style="cursor:pointer" onclick="toggleIntentSql()">
+                <span>SQL gerado</span><span id="intent-sql-toggle" style="font-size:10px;color:var(--accent);cursor:pointer;">▼ ver</span>
+              </div>
+              <pre id="intent-sql-preview" style="display:none;font-family:ui-monospace,Consolas,monospace;font-size:9px;line-height:1.5;background:var(--bg-base);border:1px solid var(--border);border-radius:4px;padding:6px 8px;overflow-x:auto;max-height:130px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:var(--text-md);margin:2px 0 0;width:100%;box-sizing:border-box;"></pre>
+            </div>
+            <div class="ws-panel-stat" id="intent-validerro-row" style="display:none"><span>Validação</span><strong id="intent-validerro" style="color:#f59e0b;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
+            <div class="ws-panel-stat" id="intent-err-row"       style="display:none"><span>Detalhe</span><strong id="intent-err" style="color:#ef4444;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.4">—</strong></div>
+          </div>
+
+        </div><!-- /.ws-panel -->
 
       </div>
 
@@ -428,84 +483,280 @@
 </div>
 
 <script src="/js/auth.js"></script>
+<script src="/socket.io/socket.io.js"></script>
 <script src="/app/ia-command/js/sidebar.js"></script>
 <script>
-// ═══════════════════════════════════════════════════════════════
-// DADOS MOCK — substituir por chamadas à API real quando o
-// backend de Windows Services estiver implementado
-// ═══════════════════════════════════════════════════════════════
-const MOCK_CANAIS = [
-  {
-    id: 'ch_001',
-    nome: 'Empresa ABC',
-    numero: '+55 65 99999-0001',
-    icone: '🏢',
-    estado: 'connected',   // connected | starting | stopped | error | noservice
-    servico: 'IACommand-empresa-abc',
-    servicoInstalado: true,
-    msgs: 128,
-    empresas: ['J2A Consultoria (padrão)', 'Filial São Paulo', 'Distribuidora Norte S/A'],
-    uptime: '3d 14h 22min',
-    pid: 14872,
-  },
-  {
-    id: 'ch_002',
-    nome: 'Suporte 24h',
-    numero: '+55 65 99999-0002',
-    icone: '🎧',
-    estado: 'stopped',
-    servico: 'IACommand-suporte-24h',
-    servicoInstalado: true,
-    msgs: 0,
-    empresas: ['Empresa ABC Ltda'],
-    uptime: null,
-    pid: null,
-  },
-  {
-    id: 'ch_003',
-    nome: 'Vendas Norte',
-    numero: '+55 65 99999-0003',
-    icone: '📦',
-    estado: 'noservice',
-    servico: 'IACommand-vendas-norte',
-    servicoInstalado: false,
-    msgs: 0,
-    empresas: ['Distribuidora Norte S/A'],
-    uptime: null,
-    pid: null,
-  },
-];
 
-// Logs mock por canal
-const MOCK_LOGS = {
-  ch_001: [
-    { ts: '10:32:14', tipo: 'success', icon: '✅', msg: 'WhatsApp conectado — +55 65 99999-0001' },
-    { ts: '10:32:10', tipo: 'info',    icon: '⚙',  msg: 'Iniciando sessão cliente iac_ch_001' },
-    { ts: '10:31:55', tipo: 'info',    icon: '⚙',  msg: 'Carregando dados de autenticação salva' },
-    { ts: '10:31:52', tipo: 'system',  icon: '🖥',  msg: 'Serviço IACommand-empresa-abc iniciado pelo Windows Services' },
-    { ts: '09:47:33', tipo: 'received',icon: '📨',  msg: 'Mensagem recebida de 5565988880001: "qual o saldo do mês?"' },
-    { ts: '09:47:35', tipo: 'success', icon: '✅',  msg: 'Pipeline executado — módulo: financeiro | confiança: 0.94' },
-    { ts: '09:47:35', tipo: 'info',    icon: '📤',  msg: 'Resposta enviada (847 chars)' },
-    { ts: '09:12:01', tipo: 'received',icon: '📨',  msg: 'Mensagem recebida de 5565977770002: "faturamento de junho"' },
-    { ts: '09:12:03', tipo: 'success', icon: '✅',  msg: 'Pipeline executado — módulo: faturamento | confiança: 0.91' },
-    { ts: '09:12:03', tipo: 'info',    icon: '📤',  msg: 'Resposta enviada (1243 chars)' },
-    { ts: '08:00:00', tipo: 'system',  icon: '🖥',  msg: 'Servidor reiniciado — serviço restaurado automaticamente pelo Windows' },
-  ],
-  ch_002: [
-    { ts: '07:15:30', tipo: 'warning', icon: '⏹',  msg: 'Serviço parado manualmente pelo operador' },
-    { ts: '07:15:28', tipo: 'info',    icon: '⚙',  msg: 'Encerrando conexão WhatsApp…' },
-    { ts: '07:15:25', tipo: 'info',    icon: '⚙',  msg: 'Finalizando processos Chrome (PID 13904)' },
-    { ts: '06:00:01', tipo: 'system',  icon: '🖥',  msg: 'Serviço IACommand-suporte-24h reiniciado pelo Windows Services' },
-    { ts: '06:00:05', tipo: 'success', icon: '✅',  msg: 'WhatsApp reconectado com sessão salva' },
-  ],
-  ch_003: [],
-};
-
-// Estado local (simulado)
-let canais = JSON.parse(JSON.stringify(MOCK_CANAIS));
+// ═══════════════════════════════════════════════════════════════
+// ESTADO — alimentado pela API real + Socket.IO
+// ═══════════════════════════════════════════════════════════════
+let canais             = [];
 let canalSelecionadoId = null;
-let logsPorCanal = JSON.parse(JSON.stringify(MOCK_LOGS));
-let pollingTimer = null;
+let logsPorCanal       = {};
+let pollingTimer       = null;
+let _socket            = null;
+let _carregando        = false;
+
+// ── Socket.IO — conexão e eventos em tempo real ───────────────
+function _conectarSocket() {
+  if (_socket) return;
+  try {
+    _socket = io({ transports: ['websocket', 'polling'] });
+
+    // Deduplificação: eventos chegam pela sala da empresa E pela sala do canal — filtra repetidos.
+    // Usa msg+channelId como chave (não o payload inteiro, que pode ter timestamps variáveis).
+    const _dedup = new Map();
+    function _isDuplicado(evt, payload) {
+      const chave = typeof payload === 'object'
+        ? evt + '|' + (payload?.channelId || payload?.channel_id || '') + '|' + (payload?.msg || payload?.url || payload?.status || '')
+        : evt + '|' + String(payload);
+      const now = Date.now();
+      if (_dedup.has(chave) && now - _dedup.get(chave) < 500) return true;
+      _dedup.set(chave, now);
+      if (_dedup.size > 300) { const first = _dedup.keys().next().value; _dedup.delete(first); }
+      return false;
+    }
+
+    // Ao conectar: entra APENAS na sala do canal — não na sala da empresa.
+    // A sala da empresa duplicaria todos os eventos pois o hub emite para ambas.
+    _socket.on('connect', () => {
+      if (canalSelecionadoId) _socket.emit('join-channel', canalSelecionadoId);
+    });
+
+    // Log — roteia pelo channelId ou empresa_id
+    _socket.on('iac-log', (entry) => {
+      if (_isDuplicado('iac-log', entry)) return;
+      // Mensagens técnicas de boot são muito granulares para o painel — suprimir
+      const msg = entry?.msg || '';
+      if (/^\[boot\]/.test(msg)) return;
+      if (/^Chrome:/.test(msg)) return;
+      if (/^Sessao WhatsApp:/.test(msg)) return;
+      const canalId = entry?.channelId || entry?.channel_id || _canalPorEmpresa(entry?.empresa_id);
+      if (canalId) _receberLog(canalId, entry);
+    });
+
+    // Status
+    _socket.on('iac-status', (data) => {
+      if (_isDuplicado('iac-status', data)) return;
+      const canalId = data?.channelId || data?.channel_id || _canalPorEmpresa(data?.empresa_id);
+      if (!canalId) return;
+      const canal = canais.find(c => c.id === canalId);
+      if (!canal) return;
+      const mapa = { connected:'connected', starting:'starting', stopped:'stopped', error:'error' };
+      canal.estado = mapa[data.status] || data.status;
+      renderListaCanais();
+      // Só mexe no painel visual se for o canal selecionado
+      if (canalSelecionadoId !== canalId) return;
+      _aplicarStatusPainel(canal.estado);
+    });
+
+    // QR
+    _socket.on('iac-qr', (payload) => {
+      if (_isDuplicado('iac-qr', payload)) return;
+      const url       = typeof payload === 'string' ? payload : (payload?.url || payload?.qr || payload?.data || '');
+      const channelId = typeof payload === 'object' ? (payload?.channelId || null) : null;
+      const origem    = channelId ? canais.find(x => x.id === channelId) : canais.find(x => x.id === canalSelecionadoId);
+      if (origem && origem.estado !== 'connected') { origem.estado = 'starting'; renderListaCanais(); }
+      if (url && (!channelId || channelId === canalSelecionadoId)) _mostrarQr(url);
+    });
+
+    // Mensagem recebida — igual ao monitor
+    _socket.on('iac-msg', ({ sender, tipo, body, channelId, empresa_id }) => {
+      const canalId = channelId || _canalPorEmpresa(empresa_id);
+      if (!canalId) return;
+      const canal = canais.find(c => c.id === canalId);
+      if (canal) {
+        canal.msgs = (canal.msgs || 0) + 1;
+        if (canalSelecionadoId === canalId) {
+          const el = document.getElementById('info-msgs');
+          if (el) el.textContent = canal.msgs;
+        }
+      }
+      _receberLog(canalId, {
+        tipo: 'received', icon: '📩',
+        msg: `[${tipo || 'chat'}] de ${sender || '?'}: ${body ? '"' + String(body).slice(0, 80) + '"' : '(mídia)'}`,
+      });
+    });
+
+    // Intent — igual ao monitor
+    _socket.on('iac-intent', (data) => {
+      const canalId = data?.channelId || _canalPorEmpresa(data?.empresaId || data?.empresa_id);
+      if (!canalId) return;
+      _receberLog(canalId, { tipo: 'success', icon: '✅',
+        msg: `Pipeline — módulo: ${data?.modulo || '?'} | intenção: ${data?.intencao || '?'}` });
+      if (canalId === canalSelecionadoId) renderIntent(data);
+    });
+
+    // Limpar terminal — igual ao monitor
+    _socket.on('clear-monitor', () => {
+      if (canalSelecionadoId) { logsPorCanal[canalSelecionadoId] = []; renderLog(canalSelecionadoId); }
+    });
+
+  } catch (_) {}
+}
+
+// Aplica status no painel direito sem tocar no selecionarCanal (igual ao monitor.aplicarStatus)
+function _aplicarStatusPainel(status) {
+  if (status === 'connected') {
+    _esconderQr();
+    document.getElementById('qr-waiting').style.display   = 'none';
+    document.getElementById('qr-connected').style.display = 'block';
+    setTimeout(() => carregarCanais(), 2000);
+  } else if (status === 'stopped' || status === 'starting') {
+    _esconderQr();
+    document.getElementById('qr-connected').style.display = 'none';
+    document.getElementById('qr-waiting').style.display   = 'block';
+    document.getElementById('qr-waiting').textContent =
+      status === 'starting' ? 'Iniciando… aguarde o QR Code.' : 'Inicie o serviço para conectar o WhatsApp.';
+  }
+}
+
+function _canalPorEmpresa(empresaId) {
+  if (!empresaId) return null;
+  const c = canais.find(canal =>
+    canal.empresas?.some(e => Number(e.empresa_id) === Number(empresaId))
+  );
+  return c?.id || null;
+}
+
+function _receberLog(canalId, entry) {
+  if (!logsPorCanal[canalId]) logsPorCanal[canalId] = [];
+  let ts = entry.ts || entry.timestamp || null;
+  if (ts) {
+    const d = new Date(ts);
+    ts = isNaN(d.getTime()) ? String(ts).slice(0, 8) : d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  } else {
+    ts = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+  // Aceita tanto o formato do worker (msg/tipo) quanto o formato do monitor legado (message/type)
+  const tipo = entry.tipo || entry.type || 'info';
+  const msg  = entry.msg  || entry.message || '';
+  logsPorCanal[canalId].push({ ts, tipo, icon: entry.icon || 'ℹ', msg });
+  if (logsPorCanal[canalId].length > 500) logsPorCanal[canalId].shift();
+  if (canalSelecionadoId === canalId) renderLog(canalId);
+}
+
+let _fallbackQrTimer = null;
+
+function _agendarFallbackQr(canalId, delayMs) {
+  if (_fallbackQrTimer) clearTimeout(_fallbackQrTimer);
+  _fallbackQrTimer = setTimeout(async () => {
+    _fallbackQrTimer = null;
+    // Só age se o canal ainda estiver em 'starting' e selecionado
+    const canal = canais.find(c => c.id === canalId);
+    if (!canal || canal.estado !== 'starting') return;
+    if (canalId !== canalSelecionadoId) return;
+    // Verifica se QR já está visível
+    const img = document.getElementById('qr-img');
+    if (img && img.src && img.src.startsWith('data:')) return;
+    // Solicita QR explicitamente via API
+    try {
+      await fetch('/api/ia-command/whatsapp/services/get-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: canalId }),
+      });
+    } catch (_) {}
+  }, delayMs);
+}
+
+function _mostrarQr(url) {
+  const img = document.getElementById('qr-img');
+  if (!img || !url) return;
+  // Cancela fallback — QR chegou via Socket.IO
+  if (_fallbackQrTimer) { clearTimeout(_fallbackQrTimer); _fallbackQrTimer = null; }
+  img.src = url;
+  img.style.display = 'block';
+  document.getElementById('qr-hint').style.display      = 'block';
+  document.getElementById('qr-waiting').style.display   = 'none';
+  document.getElementById('qr-connected').style.display = 'none';
+  document.getElementById('main-empty').style.display   = 'none';
+  document.getElementById('main-channel').style.display = 'flex';
+}
+
+function _esconderQr() {
+  const img = document.getElementById('qr-img');
+  if (img) { img.src = ''; img.style.display = 'none'; }
+  document.getElementById('qr-hint').style.display = 'none';
+}
+
+// ── Carregamento de dados via API real ────────────────────────
+async function carregarCanais() {
+  if (_carregando) return;
+  _carregando = true;
+  try {
+    const res  = await fetch('/api/ia-command/whatsapp/services/status');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    canais = (data.canais || []).map(c => ({
+      id:               c.id,
+      nome:             c.nome,
+      numero:           c.numero ? _formatarNumero(c.numero) : '—',
+      icone:            '📡',
+      estado:           c.status || 'sem_servico',
+      servico:          c.service_name || '',
+      servicoInstalado: c.status !== 'sem_servico',
+      msgs:             c.msgs || 0,
+      empresas:         c.empresas || [],
+      uptime:           c.worker_uptime ? _formatarUptime(c.worker_uptime) : null,
+      pid:              c.worker_pid || null,
+      worker_port:      c.worker_port || null,
+      slug:             c.slug || '',
+    }));
+
+    // Carrega buffer de logs do canal selecionado (replay ao reconectar)
+    if (canalSelecionadoId) await _carregarBuffer(canalSelecionadoId);
+
+  } catch (err) {
+    toast('error', `Erro ao carregar canais: ${err.message}`);
+  } finally {
+    _carregando = false;
+  }
+  renderListaCanais();
+  atualizarResumo();
+  if (canalSelecionadoId) selecionarCanal(canalSelecionadoId);
+}
+
+async function _carregarBuffer(canalId) {
+  try {
+    const r = await fetch(`/api/ia-command/whatsapp/services/${canalId}/buffer`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (Array.isArray(d.buffer) && d.buffer.length) {
+      // Acumula sem sobrescrever logs já existentes na sessão
+      if (!logsPorCanal[canalId]) logsPorCanal[canalId] = [];
+      const novos = d.buffer.map(e => {
+        let ts = e.ts || e.timestamp || null;
+        if (ts) {
+          const d2 = new Date(ts);
+          ts = isNaN(d2.getTime()) ? String(ts).slice(0, 8) : d2.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        } else {
+          ts = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        }
+        return { ts, tipo: e.tipo || e.type || 'info', icon: e.icon || 'ℹ', msg: e.msg || e.message || '' };
+      });
+      // Adiciona apenas entradas que ainda não estão no log local
+      const existentes = new Set(logsPorCanal[canalId].map(l => `${l.ts}|${l.msg}`));
+      novos.forEach(n => { if (!existentes.has(`${n.ts}|${n.msg}`)) logsPorCanal[canalId].push(n); });
+      if (canalSelecionadoId === canalId) renderLog(canalId);
+    }
+  } catch (_) {}
+}
+
+function _formatarNumero(n) {
+  const d = String(n).replace(/\D/g, '');
+  if (d.length === 13) return `+${d.slice(0,2)} ${d.slice(2,4)} ${d.slice(4,9)}-${d.slice(9)}`;
+  return `+${d}`;
+}
+
+function _formatarUptime(seg) {
+  const s = Math.floor(seg);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}min`;
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+  return m ? `${h}h ${m}min` : `${h}h`;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // RENDER
@@ -526,18 +777,20 @@ function mudarAba(aba) {
 
 function badgeHtml(estado) {
   const map = {
-    connected: '<span class="ws-card-badge badge-connected"><span class="dot-pulse">●</span> Conectado</span>',
-    starting:  '<span class="ws-card-badge badge-starting"><span class="dot-pulse">◌</span> Aguardando QR</span>',
-    stopped:   '<span class="ws-card-badge badge-stopped">⏹ Parado</span>',
-    error:     '<span class="ws-card-badge badge-error">⚠ Erro</span>',
-    noservice: '<span class="ws-card-badge badge-noservice">— Sem serviço</span>',
+    connected:  '<span class="ws-card-badge badge-connected"><span class="dot-pulse">●</span> Conectado</span>',
+    starting:   '<span class="ws-card-badge badge-starting"><span class="dot-pulse">◌</span> Aguardando QR</span>',
+    stopped:    '<span class="ws-card-badge badge-stopped">⏹ Parado</span>',
+    error:      '<span class="ws-card-badge badge-error">⚠ Erro</span>',
+    noservice:  '<span class="ws-card-badge badge-noservice ws-main-status badge-noservice">— Sem serviço</span>',
+    sem_servico:'<span class="ws-card-badge badge-noservice ws-main-status badge-noservice">— Sem serviço</span>',
+    unknown:    '<span class="ws-card-badge badge-stopped">? Desconhecido</span>',
   };
   return map[estado] || map.stopped;
 }
 
 function botoesCard(canal) {
   const { id, estado, servicoInstalado } = canal;
-  if (!servicoInstalado || estado === 'noservice') {
+  if (!servicoInstalado || estado === 'noservice' || estado === 'sem_servico') {
     return `<button class="ws-btn primary" onclick="event.stopPropagation();acao('instalar',${JSON.stringify(id)})">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>
       Instalar e Iniciar</button>`;
@@ -570,8 +823,9 @@ function renderCardCanal(canal) {
   const isActive = id === canalSelecionadoId;
 
   // Indicador de empresas — sempre compacto, clicável
+  const _empNome0 = empresas.length > 0 ? (typeof empresas[0] === 'string' ? empresas[0] : (empresas[0].nome || `Empresa #${empresas[0].empresa_id}`)) : '—';
   const empLabel = empresas.length === 1
-    ? `🏢 ${escHtml(empresas[0])}`
+    ? `🏢 ${escHtml(_empNome0)}`
     : `🏢 <span class="ws-emp-count">${empresas.length}</span> empresas`;
   const empBtn = `<button class="ws-card-emp-btn" onclick="event.stopPropagation();abrirPopoverEmpresas(event,'${id}')" title="Ver empresas neste canal">${empLabel}</button>`;
 
@@ -597,9 +851,14 @@ function renderCardCanal(canal) {
 
 function renderListaCanais() {
   const q = (document.getElementById('search-canais')?.value || '').toLowerCase();
-  const filtrados = canais.filter(c =>
-    !q || c.nome.toLowerCase().includes(q) || c.empresas.some(e => e.toLowerCase().includes(q)) || c.numero.includes(q)
-  );
+  const filtrados = canais.filter(c => {
+    if (!q) return true;
+    const empMatch = c.empresas.some(e => {
+      const n = typeof e === 'string' ? e : (e.nome || '');
+      return n.toLowerCase().includes(q);
+    });
+    return c.nome.toLowerCase().includes(q) || empMatch || c.numero.includes(q);
+  });
   const el = document.getElementById('channel-list');
   if (!filtrados.length) {
     el.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text-lo);font-size:13px;">Nenhum canal encontrado</div>`;
@@ -617,6 +876,11 @@ function atualizarResumo() {
 // SELEÇÃO DE CANAL
 // ═══════════════════════════════════════════════════════════════
 function selecionarCanal(id) {
+  // Sai da sala do canal anterior e entra na nova
+  if (_socket) {
+    if (canalSelecionadoId && canalSelecionadoId !== id) _socket.emit('leave-channel', canalSelecionadoId);
+    if (id) _socket.emit('join-channel', id);
+  }
   canalSelecionadoId = id;
   renderListaCanais();
 
@@ -627,25 +891,52 @@ function selecionarCanal(id) {
   document.getElementById('main-empty').style.display = 'none';
   document.getElementById('main-channel').style.display = 'flex';
 
-  // QR banner
-  document.getElementById('qr-banner').style.display = canal.estado === 'starting' ? '' : 'none';
+  // QR — se há imagem visível na tela, não interfere (o Socket.IO controla o painel)
+  // Só define o estado inicial quando não há QR ativo
+  const qrImg = document.getElementById('qr-img');
+  const temQr = qrImg && qrImg.src && qrImg.src.length > 10;
+  if (!temQr) {
+    _esconderQr();
+    if (canal.estado === 'connected') {
+      document.getElementById('qr-waiting').style.display   = 'none';
+      document.getElementById('qr-connected').style.display = 'block';
+    } else {
+      document.getElementById('qr-waiting').style.display   = 'block';
+      document.getElementById('qr-connected').style.display = 'none';
+    }
+  }
+  // Se tem QR visível e o banco diz connected: deixa o QR — o usuário ainda não escaneou
 
   document.getElementById('ctrl-canal-nome').textContent = `${canal.icone} ${canal.nome}`;
   document.getElementById('ctrl-canal-num').textContent  = canal.numero;
+  document.getElementById('info-canal').textContent      = canal.nome;
+
+  // Empresas
+  const empNomes = canal.empresas.map(e => typeof e === 'string' ? e : (e.nome || `#${e.empresa_id}`));
+  document.getElementById('info-empresas').textContent = empNomes.join(', ') || '—';
+
+  // PID / Uptime
+  const pidRow    = document.getElementById('info-pid-row');
+  const uptimeRow = document.getElementById('info-uptime-row');
+  if (canal.pid)    { document.getElementById('info-pid').textContent = `PID ${canal.pid}`; pidRow.style.display = 'flex'; } else { pidRow.style.display = 'none'; }
+  if (canal.uptime) { document.getElementById('info-uptime').textContent = canal.uptime; uptimeRow.style.display = 'flex'; } else { uptimeRow.style.display = 'none'; }
+  const numEl = document.getElementById('qr-connected-num');
+  if (numEl) numEl.textContent = canal.numero && canal.numero !== '—' ? canal.numero : '';
 
   const badgeMap = {
     connected: { cls: 'badge-connected', txt: '<span class="dot-pulse">●</span> Conectado' },
-    starting:  { cls: 'badge-starting',  txt: '<span class="dot-pulse">◌</span> Aguard. QR' },
+    starting:  { cls: 'badge-starting',  txt: '<span class="dot-pulse">◌</span> Aguardando QR' },
     stopped:   { cls: 'badge-stopped',   txt: '⏹ Parado' },
     error:     { cls: 'badge-error',     txt: '⚠ Erro' },
     noservice: { cls: 'badge-noservice', txt: '— Sem serviço' },
+    sem_servico: { cls: 'badge-noservice', txt: '— Sem serviço' },
   };
   const b = badgeMap[canal.estado] || badgeMap.stopped;
   const badgeEl = document.getElementById('ctrl-canal-badge');
   badgeEl.className = `ws-main-status ${b.cls}`;
   badgeEl.innerHTML = b.txt;
 
-  // Botões de ação individuais no estilo ctrl
+  // Botões de ação
   document.getElementById('ctrl-canal-actions').innerHTML = botoesCtrlCanal(canal);
   setBotoesTenantSelecionado(true);
 
@@ -653,7 +944,7 @@ function selecionarCanal(id) {
 }
 
 function setBotoesTenantSelecionado(enabled) {
-  ['btn-refresh-selected', 'btn-clear-selected', 'btn-save-selected'].forEach(id => {
+  ['btn-refresh-selected', 'btn-clear-selected', 'btn-copy-selected', 'btn-save-selected'].forEach(id => {
     const btn = document.getElementById(id);
     if (btn) btn.disabled = !enabled;
   });
@@ -661,37 +952,22 @@ function setBotoesTenantSelecionado(enabled) {
 
 function botoesCtrlCanal(canal) {
   const { id, estado, servicoInstalado } = canal;
-  if (!servicoInstalado || estado === 'noservice') {
-    return `<button class="ws-ctrl-btn primary" onclick="acao('instalar','${id}')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      <span class="ws-ctrl-lbl">Iniciar</span>
-    </button>`;
+  if (!servicoInstalado || estado === 'noservice' || estado === 'sem_servico') {
+    return `<button class="ws-panel-btn primary" onclick="acao('instalar','${id}')">▶ Instalar e Iniciar</button>`;
   }
   if (estado === 'stopped' || estado === 'error') {
-    return `<button class="ws-ctrl-btn primary" onclick="acao('iniciar','${id}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        <span class="ws-ctrl-lbl">Iniciar</span>
-      </button>
-      <button class="ws-ctrl-btn danger" onclick="confirmar('remover','${id}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-        <span class="ws-ctrl-lbl">Remover</span>
-      </button>`;
+    return `<button class="ws-panel-btn primary" onclick="acao('iniciar','${id}')">▶ Iniciar</button>
+      <button class="ws-panel-btn"         onclick="acao('reconectar','${id}')" title="Inicia e gera novo QR">↺ Novo QR</button>
+      <button class="ws-panel-btn danger"   onclick="confirmar('remover','${id}')">🗑 Remover serviço</button>`;
   }
   if (estado === 'starting') {
-    return `<button class="ws-ctrl-btn" disabled>
-      <span class="spinning" style="font-size:14px">⟳</span>
-      <span class="ws-ctrl-lbl">Iniciando…</span>
-    </button>`;
+    return `<button class="ws-panel-btn warning" onclick="acao('reconectar','${id}')">↺ Reconectar</button>
+      <button class="ws-panel-btn danger"   onclick="confirmar('remover','${id}')">🗑 Remover serviço</button>`;
   }
   if (estado === 'connected') {
-    return `<button class="ws-ctrl-btn warning" onclick="confirmar('parar','${id}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-        <span class="ws-ctrl-lbl">Parar</span>
-      </button>
-      <button class="ws-ctrl-btn danger" onclick="confirmar('remover','${id}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-        <span class="ws-ctrl-lbl">Remover</span>
-      </button>`;
+    return `<button class="ws-panel-btn warning" onclick="confirmar('parar','${id}')">■ Parar</button>
+      <button class="ws-panel-btn"         onclick="acao('reconectar','${id}')" title="Para e gera novo QR">↺ Novo QR</button>
+      <button class="ws-panel-btn danger"   onclick="confirmar('remover','${id}')">🗑 Remover serviço</button>`;
   }
   return '';
 }
@@ -720,8 +996,7 @@ function renderLog(canalId) {
   const logs = logsPorCanal[canalId] || [];
 
   if (!logs.length) {
-    terminal.innerHTML = `<div style="color:var(--text-lo);font-size:12px;padding:12px 0;">Nenhuma entrada de log para este canal ainda. Inicie o serviço para ver os logs.</div>`;
-    document.getElementById('log-count-side').innerHTML = '0<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span>';
+    terminal.innerHTML = `<div style="color:var(--text-lo);font-size:12px;padding:12px 0;">Nenhuma entrada de log. Inicie o serviço para ver os logs em tempo real.</div>`;
     return;
   }
 
@@ -732,15 +1007,14 @@ function renderLog(canalId) {
       <span class="log-msg ${l.tipo}">${escHtml(l.msg)}</span>
     </div>`).join('');
 
-  document.getElementById('log-count-side').innerHTML = `${logs.length}<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span>`;
   if (autoScrollAtivo) terminal.scrollTop = terminal.scrollHeight;
 }
 
 function adicionarLog(canalId, tipo, icon, msg) {
   if (!logsPorCanal[canalId]) logsPorCanal[canalId] = [];
   const ts = new Date().toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  logsPorCanal[canalId].unshift({ ts, tipo, icon, msg });
-  if (logsPorCanal[canalId].length > 500) logsPorCanal[canalId].pop();
+  logsPorCanal[canalId].push({ ts, tipo, icon, msg });
+  if (logsPorCanal[canalId].length > 500) logsPorCanal[canalId].shift();
   if (canalSelecionadoId === canalId) renderLog(canalId);
 }
 
@@ -748,7 +1022,6 @@ function limparLog() {
   if (!canalSelecionadoId) return;
   logsPorCanal[canalSelecionadoId] = [];
   renderLog(canalSelecionadoId);
-  document.getElementById('log-count-side').innerHTML = '0<br><span style="font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;">LOGS</span>';
 }
 
 function salvarLog() {
@@ -763,78 +1036,138 @@ function salvarLog() {
   a.click();
 }
 
+function copiarLog() {
+  if (!canalSelecionadoId) return;
+  const logs = logsPorCanal[canalSelecionadoId] || [];
+  if (!logs.length) { toast('info', 'Nenhum log para copiar.'); return; }
+  const txt = logs.map(l => `[${l.ts}] ${l.msg}`).join('\n');
+  navigator.clipboard.writeText(txt).then(() => toast('success', 'Log copiado para a área de transferência.')).catch(() => toast('error', 'Falha ao copiar.'));
+}
+
 // ═══════════════════════════════════════════════════════════════
-// AÇÕES (mock — integrar com API real)
+// AÇÕES — chamadas à API real
 // ═══════════════════════════════════════════════════════════════
+const _ENDPOINT = {
+  instalar:   '/api/ia-command/whatsapp/services/install',
+  iniciar:    '/api/ia-command/whatsapp/services/start',
+  parar:      '/api/ia-command/whatsapp/services/stop',
+  remover:    '/api/ia-command/whatsapp/services/remove',
+  reconectar: '/api/ia-command/whatsapp/services/reconnect',
+  'get-qr':   '/api/ia-command/whatsapp/services/get-qr',
+};
+
 async function acao(tipo, canalId) {
   const canal = canais.find(c => c.id === canalId);
   if (!canal) return;
 
-  const labels = {
-    instalar: 'Instalando e iniciando serviço…',
-    iniciar:  'Iniciando serviço…',
-    parar:    'Parando serviço…',
-    remover:  'Removendo serviço…',
-  };
+  // Desabilita todos os botões do painel durante a operação
+  document.querySelectorAll('.ws-panel-btn').forEach(b => b.disabled = true);
 
+  // Garante que está na sala do canal antes de qualquer operação que gere eventos
+  if (_socket && canalId) _socket.emit('join-channel', canalId);
+
+  const labels = { instalar:'Instalando serviço…', iniciar:'Iniciando serviço…', parar:'Parando serviço…', remover:'Removendo serviço…', reconectar:'Reconectando WhatsApp…', 'get-qr':'Solicitando QR Code…' };
   toast('info', labels[tipo] || 'Executando…');
-  adicionarLog(canalId, 'system', '🖥', `Operação solicitada: ${tipo.toUpperCase()} — IACommand-${slugify(canal.nome)}`);
+  const labelsLog = {
+    instalar:   `Instalando serviço Windows: ${canal.servico || canal.nome}`,
+    iniciar:    `Iniciando serviço: ${canal.servico || canal.nome}`,
+    parar:      `Parando serviço: ${canal.servico || canal.nome}`,
+    remover:    `Removendo serviço: ${canal.servico || canal.nome}`,
+    reconectar: 'Desconectando sessão atual e gerando novo QR Code…',
+    'get-qr':   'Solicitando QR Code ao worker…',
+  };
+  adicionarLog(canalId, 'system', '🖥', labelsLog[tipo] || tipo);
 
-  // Simula delay de operação
-  await sleep(1800);
+  try {
+    const res = await fetch(_ENDPOINT[tipo], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel_id: canalId }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
 
-  if (tipo === 'instalar') {
-    canal.servicoInstalado = true;
-    canal.estado = 'starting';
-    adicionarLog(canalId, 'system', '🖥', `Serviço ${canal.servico} instalado via NSSM`);
-    adicionarLog(canalId, 'info',   '⚙',  `Iniciando processo Node.js — whatsapp-worker.js --channel=${canalId}`);
-    adicionarLog(canalId, 'info',   '⚙',  `Aguardando leitura do QR Code…`);
-    toast('success', `Serviço instalado e iniciado — ${canal.nome}`);
-
-    await sleep(3000);
-    canal.estado = 'connected';
-    canal.uptime = '0min';
-    canal.pid    = Math.floor(Math.random() * 20000) + 10000;
-    adicionarLog(canalId, 'success', '✅', `WhatsApp conectado — ${canal.numero}`);
-    toast('success', `Canal conectado — ${canal.nome}`);
-  }
-  else if (tipo === 'iniciar') {
-    canal.estado = 'starting';
-    adicionarLog(canalId, 'system', '🖥', `Iniciando serviço ${canal.servico} via NSSM`);
-    adicionarLog(canalId, 'info',   '⚙',  `Restaurando sessão salva…`);
-    toast('success', `Serviço iniciado — ${canal.nome}`);
-
-    await sleep(2500);
-    canal.estado = 'connected';
-    canal.pid    = Math.floor(Math.random() * 20000) + 10000;
-    adicionarLog(canalId, 'success', '✅', `WhatsApp reconectado com sessão salva`);
-  }
-  else if (tipo === 'parar') {
-    canal.estado = 'stopped';
-    canal.uptime = null;
-    canal.pid    = null;
-    adicionarLog(canalId, 'warning', '⏹', `Serviço ${canal.servico} parado via NSSM`);
-    toast('warning', `Serviço parado — ${canal.nome}`);
-  }
-  else if (tipo === 'remover') {
-    canal.estado = 'noservice';
-    canal.servicoInstalado = false;
-    canal.uptime = null;
-    canal.pid    = null;
-    adicionarLog(canalId, 'warning', '🗑', `Serviço ${canal.servico} removido do Windows Services`);
-    toast('warning', `Serviço removido — ${canal.nome}`);
+    if (tipo === 'get-qr') {
+      if (json.hasQr) toast('success', 'QR Code solicitado — verifique o painel.');
+      else toast('warning', 'QR Code ainda não disponível. Aguarde o serviço inicializar.');
+    } else if (tipo === 'instalar' || tipo === 'iniciar') {
+      canal.servicoInstalado = true;
+      // Se foi instalar, precisa iniciar em seguida
+      if (tipo === 'instalar') {
+        adicionarLog(canalId, 'success', '✅', `Serviço instalado com sucesso. Iniciando processo worker…`);
+        try {
+          const r2 = await fetch(_ENDPOINT.iniciar, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel_id: canalId }),
+          });
+          const j2 = await r2.json();
+          if (!r2.ok) throw new Error(j2.error || `HTTP ${r2.status}`);
+        } catch (e2) {
+          toast('error', `Instalado mas falhou ao iniciar: ${e2.message}`);
+          adicionarLog(canalId, 'error', '❌', `Falha ao iniciar após instalar: ${e2.message}`);
+          renderListaCanais();
+          atualizarResumo();
+          if (canalSelecionadoId === canalId) selecionarCanal(canalId);
+          setTimeout(() => carregarCanais(), 3000);
+          document.querySelectorAll('.ws-panel-btn').forEach(b => b.disabled = false);
+          return;
+        }
+      }
+      canal.estado = 'starting';
+      toast('success', `Serviço iniciado — ${canal.nome}.`);
+      const msgInicio = tipo === 'instalar'
+        ? 'Worker iniciado. Verificando sessão WhatsApp salva…'
+        : 'Serviço iniciado. Verificando sessão WhatsApp salva…';
+      adicionarLog(canalId, 'success', '✅', msgInicio);
+      // Fallback: se o QR não chegou via Socket.IO em 15s, solicita explicitamente
+      _agendarFallbackQr(canalId, 15000);
+    } else if (tipo === 'reconectar') {
+      canal.estado = 'starting';
+      canal.servicoInstalado = true;
+      toast('success', `Reconectando — ${canal.nome}.`);
+      adicionarLog(canalId, 'info', '🔄', `Reconexão solicitada. Aguardando novo QR Code...`);
+      // Limpa painel QR imediatamente — QR chegará via Socket.IO
+      if (canalId === canalSelecionadoId) {
+        _esconderQr();
+        document.getElementById('qr-connected').style.display = 'none';
+        document.getElementById('qr-waiting').style.display   = 'block';
+        document.getElementById('qr-waiting').textContent     = 'Reconectando… aguarde o QR Code.';
+      }
+      // Fallback: se o QR não chegou via Socket.IO em 12s, solicita explicitamente
+      _agendarFallbackQr(canalId, 12000);
+    } else if (tipo === 'parar') {
+      canal.estado = 'stopped';
+      canal.uptime = null; canal.pid = null;
+      toast('warning', `Serviço parado — ${canal.nome}`);
+      adicionarLog(canalId, 'warning', '⏹', `Serviço parado. WhatsApp desconectado.`);
+    } else if (tipo === 'remover') {
+      canal.estado = 'sem_servico';
+      canal.servicoInstalado = false;
+      canal.uptime = null; canal.pid = null;
+      toast('warning', `Serviço removido — ${canal.nome}`);
+      adicionarLog(canalId, 'warning', '🗑', `Serviço ${canal.servico || canal.nome} removido do Windows Services.`);
+    }
+  } catch (err) {
+    toast('error', `Erro: ${err.message}`);
+    adicionarLog(canalId, 'error', '❌', `Falha na operação ${tipo}: ${err.message}`);
   }
 
   renderListaCanais();
   atualizarResumo();
   if (canalSelecionadoId === canalId) selecionarCanal(canalId);
+  // Atualiza status real após 3s (o NSSM precisa de um instante para processar)
+  setTimeout(() => carregarCanais(), 3000);
+
+  // Reabilita botões após renderizar
+  document.querySelectorAll('.ws-panel-btn').forEach(b => b.disabled = false);
 }
 
 function iniciarTodos() {
   const paraIniciar = canais.filter(c => c.estado !== 'connected' && c.estado !== 'starting');
   if (!paraIniciar.length) { toast('info', 'Todos os canais já estão conectados.'); return; }
   paraIniciar.forEach(c => {
-    const tipo = (!c.servicoInstalado || c.estado === 'noservice') ? 'instalar' : 'iniciar';
+    const tipo = (!c.servicoInstalado || c.estado === 'sem_servico') ? 'instalar' : 'iniciar';
     acao(tipo, c.id);
   });
 }
@@ -854,29 +1187,20 @@ function confirmarPararTodos() {
   document.getElementById('confirm-modal').style.display = 'flex';
 }
 
-function atualizarTodos() {
+async function atualizarTodos() {
   const icon = document.getElementById('refresh-icon');
-  icon.style.animation = 'spin .8s linear infinite';
-  setTimeout(() => { icon.style.animation = ''; }, 1200);
-  atualizarResumo();
-  renderListaCanais();
+  if (icon) { icon.style.animation = 'spin .8s linear infinite'; setTimeout(() => { icon.style.animation = ''; }, 1200); }
+  await carregarCanais();
   toast('info', 'Status atualizado.');
 }
 
-function atualizarCanalSelecionado() {
-  if (!canalSelecionadoId) {
-    toast('info', 'Selecione um tenant para atualizar.');
-    return;
-  }
+async function atualizarCanalSelecionado() {
+  if (!canalSelecionadoId) { toast('info', 'Selecione um canal para atualizar.'); return; }
   const icon = document.getElementById('refresh-selected-icon');
-  if (icon) {
-    icon.style.animation = 'spin .8s linear infinite';
-    setTimeout(() => { icon.style.animation = ''; }, 900);
-  }
-  renderListaCanais();
-  selecionarCanal(canalSelecionadoId);
+  if (icon) { icon.style.animation = 'spin .8s linear infinite'; setTimeout(() => { icon.style.animation = ''; }, 900); }
+  await carregarCanais();
   const canal = canais.find(c => c.id === canalSelecionadoId);
-  toast('info', `Status atualizado — ${canal?.nome || 'tenant selecionado'}.`);
+  toast('info', `Status atualizado — ${canal?.nome || 'canal selecionado'}.`);
 }
 
 function filtrarCanais() { renderListaCanais(); }
@@ -994,8 +1318,8 @@ function abrirPopoverEmpresas(event, canalId) {
   pop.id = 'ws-popover-emp';
 
   const itens = canal.empresas.map(e => {
-    const isPadrao = e.includes('padrão');
-    const nome = e.replace(' (padrão)', '').replace('(padrão)', '').trim();
+    const nome = typeof e === 'string' ? e : (e.nome || `Empresa #${e.empresa_id}`);
+    const isPadrao = typeof e === 'object' ? e.padrao : e.includes('padrão');
     return `<div class="ws-popover-item">
       <span>🏢</span>
       <strong>${escHtml(nome)}</strong>
@@ -1050,31 +1374,201 @@ window.addEventListener('message', (e) => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// PAINEL ÚLTIMA CONSULTA (iac-intent) — igual ao monitor.html
+// ═══════════════════════════════════════════════════════════════
+// ── Funções idênticas ao monitor.html ────────────────────────
+function iaUsadaIntent(d) {
+  const provedor = String(d.provedor || '').trim();
+  const origem   = String(d.origem   || '').toLowerCase();
+  const motor    = String(d.motor    || '').trim();
+  const pipeline = String(d.pipeline_origem || '').toLowerCase();
+
+  if (pipeline === 'chat')           return `Chat-first${provedor ? ` (${provedor})` : ''}`;
+  if (pipeline === 'canonico_reuso') return 'Reuso canônico multi-empresa';
+  if (pipeline === 'classico')       return `Clássico${provedor ? ` (${provedor})` : ''}`;
+
+  if (d.contexto_aplicado || origem.includes('contexto')) return 'ENGINE interna (contexto da conversa)';
+  if (provedor === 'deterministico' || origem.includes('motor local')) return 'ENGINE interna do sistema';
+  if (provedor === 'escopo_dinamico') return 'ENGINE interna (escopo_dinamico)';
+  if (provedor === 'nenhum' || origem.includes('nao reconhecida')) return 'Nenhuma IA usada';
+  if (origem.includes('ia externa') || motor.includes('IA externa')) return `IA externa${provedor ? ` (${provedor})` : ''}`;
+  return motor || provedor || '—';
+}
+
+function contextoIntent(d) {
+  const partes = [];
+  if (d.contexto_aplicado)       partes.push('aplicado');
+  if (d.herdou_intencao)         partes.push('herdou intenção');
+  if (d.herdou_periodo)          partes.push('herdou período');
+  if (d.herdou_filtros)          partes.push('herdou filtros');
+  if (d.herdou_metricas)         partes.push('herdou métricas');
+  if (d.periodo_mes_contexto)    partes.push('mês recortado do contexto');
+  if (d.dimensao_detectada)      partes.push(`dimensão: ${d.dimensao_detectada}`);
+  if (d.granularidade_detectada) partes.push(`granularidade: ${d.granularidade_detectada}`);
+  if (Array.isArray(d.agrupamento_composto) && d.agrupamento_composto.length)
+    partes.push(`agrupamento composto: ${d.agrupamento_composto.join(' + ')}`);
+  return partes.join(' | ');
+}
+
+function resumoTrace(trace) {
+  if (!Array.isArray(trace) || !trace.length) return null;
+  return trace.map(item =>
+    [item.etapa, item.acao, item.modulo || item.motor || item.intencao].filter(Boolean).join(':')
+  ).join(' -> ');
+}
+
+function setIntentRow(rowId, valueId, value) {
+  const row = document.getElementById(rowId);
+  const el  = document.getElementById(valueId);
+  if (!row || !el) return;
+  if (value === null || value === undefined || value === '') { row.style.display = 'none'; return; }
+  el.textContent = value;
+  row.style.display = 'flex';
+}
+
+function toggleIntentSql() {
+  const pre    = document.getElementById('intent-sql-preview');
+  const toggle = document.getElementById('intent-sql-toggle');
+  if (!pre || !toggle) return;
+  const aberto = pre.style.display !== 'none';
+  pre.style.display  = aberto ? 'none'  : 'block';
+  toggle.textContent = aberto ? '▼ ver' : '▲ fechar';
+}
+
+function renderIntent(d) {
+  if (!d) return;
+  const panel = document.getElementById('intent-panel');
+  if (!panel) return;
+  panel.style.display = 'flex';
+
+  document.getElementById('intent-nome').textContent = d.intencao || '—';
+
+  // Badge resultado — idêntico ao monitor
+  const tipo = d.resultado_tipo;
+  let badgeClass, badgeLabel;
+  if (tipo === 'sucesso_ai_sql' || tipo === 'sucesso') { badgeClass = 'ok';  badgeLabel = `✅ ${d.rows_count ?? 0} registros`; }
+  else if (tipo === 'desconhecido') { badgeClass = 'unk'; badgeLabel = '❓ Não reconhecida'; }
+  else if (tipo === 'sem_dados')    { badgeClass = 'unk'; badgeLabel = 'ℹ️ Sem dados'; }
+  else                              { badgeClass = 'err'; badgeLabel = d.provedor === 'nenhum' ? '❌ Falha IA' : '❌ Erro'; }
+  document.getElementById('intent-badge-wrap').innerHTML =
+    `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;${
+      badgeClass==='ok'  ? 'background:#dcfce7;color:#15803d' :
+      badgeClass==='unk' ? 'background:var(--bg-hover);color:var(--text-lo)' :
+                           'background:#fee2e2;color:#b91c1c'
+    }">${badgeLabel}</span>`;
+
+  // Badge pipeline — idêntico ao monitor
+  const pipelineWrap = document.getElementById('intent-pipeline-wrap');
+  const pipeline = String(d.pipeline_origem || '').toLowerCase();
+  if (pipeline) {
+    const plabels = {
+      chat:           ['chat',    '🔵 Chat-first'],
+      classico:       ['classico','⚙️ Clássico'],
+      canonico_reuso: ['canonico','♻️ Reuso canônico'],
+    };
+    const [cls, lbl] = plabels[pipeline] || ['classico', pipeline];
+    const cores = { chat:'#ede9fe,#6d28d9', classico:'var(--bg-hover),var(--text-md)', canonico:'#dbeafe,#1d4ed8' };
+    const [bg, fg] = (cores[cls] || 'var(--bg-hover),var(--text-md)').split(',');
+    pipelineWrap.innerHTML = `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:${bg};color:${fg};">${lbl}</span>`;
+    pipelineWrap.style.display = 'block';
+  } else { pipelineWrap.style.display = 'none'; }
+
+  setIntentRow('intent-modulo-row', 'intent-modulo', d.modulo || null);
+
+  document.getElementById('intent-provedor').textContent  = iaUsadaIntent(d);
+  const conf = typeof d.confianca === 'number' ? `${Math.round(d.confianca * 100)}%` : (d.confianca ?? '—');
+  document.getElementById('intent-confianca').textContent = conf;
+
+  setIntentRow('intent-turno-row', 'intent-turno',
+    d.chat_turno != null ? `Turno ${d.chat_turno} da conversa` : null);
+
+  function fmtMs(ms) { return ms == null ? null : ms < 1000 ? `${ms}ms` : `${(ms/1000).toFixed(1)}s`; }
+  setIntentRow('intent-duracao-row',  'intent-duracao',  fmtMs(d.duracao_ms));
+  setIntentRow('intent-pipeline-row', 'intent-pipeline', fmtMs(d.pipeline_ms));
+  setIntentRow('intent-entregue-row', 'intent-entregue', fmtMs(d.entregue_ms));
+  setIntentRow('intent-rows-row',     'intent-rows',     typeof d.rows_count === 'number' ? String(d.rows_count) : null);
+
+  // Período — só em pipeline legado/clássico
+  const periodoRow = document.getElementById('intent-periodo-row');
+  const ptipo = d.periodo?.tipo;
+  if (ptipo && ptipo !== 'nenhum' && pipeline !== 'chat' && pipeline !== 'canonico_reuso') {
+    let ptxt = ptipo;
+    if (d.periodo.dataInicio) ptxt += ` (${d.periodo.dataInicio.slice(5)} → ${(d.periodo.dataFim||'').slice(5)})`;
+    document.getElementById('intent-periodo').textContent = ptxt;
+    periodoRow.style.display = 'flex';
+  } else { periodoRow.style.display = 'none'; }
+
+  setIntentRow('intent-dataset-row',  'intent-dataset',  d.dataset_nome || null);
+
+  const metricas = Array.isArray(d.metricas) ? d.metricas.filter(Boolean) : [];
+  setIntentRow('intent-metricas-row', 'intent-metricas', metricas.length ? metricas.join(', ') : null);
+
+  // Filtros — só em pipeline legado/clássico
+  const filtrosWrap = document.getElementById('intent-filtros-wrap');
+  const filtrosEl   = document.getElementById('intent-filtros');
+  const filtros = d.filtros || {};
+  const filtrosKeys = Object.keys(filtros).filter(k => filtros[k]);
+  if (filtrosKeys.length && pipeline !== 'chat' && pipeline !== 'canonico_reuso') {
+    filtrosEl.innerHTML = filtrosKeys.map(k =>
+      `<div style="font-size:10px;background:var(--bg-hover);border-radius:4px;padding:2px 6px;color:var(--text-md);word-break:break-all;">${escHtml(k)} = "${escHtml(filtros[k])}"</div>`
+    ).join('');
+    filtrosWrap.style.display = 'block';
+  } else { filtrosWrap.style.display = 'none'; }
+
+  // Agrupamento — só em pipeline legado/clássico
+  const groupRow = document.getElementById('intent-group-row');
+  if (d.agrupar_por && pipeline !== 'chat' && pipeline !== 'canonico_reuso') {
+    const composto = Array.isArray(d.agrupamento_composto) && d.agrupamento_composto.length
+      ? d.agrupamento_composto.join(' + ') : d.agrupar_por;
+    document.getElementById('intent-group').textContent = composto;
+    groupRow.style.display = 'flex';
+  } else { groupRow.style.display = 'none'; }
+
+  setIntentRow('intent-contexto-row', 'intent-contexto', contextoIntent(d));
+  setIntentRow('intent-trace-row',    'intent-trace',    d.trace_resumo || resumoTrace(d.trace));
+
+  // SQL colapsável
+  const sqlWrap = document.getElementById('intent-sql-wrap');
+  const sqlPre  = document.getElementById('intent-sql-preview');
+  const sqlGerado = d.sql_gerado || d.sql_canonico_adaptado || null;
+  if (sqlGerado) {
+    sqlPre.textContent   = sqlGerado;
+    sqlPre.style.display = 'none';
+    document.getElementById('intent-sql-toggle').textContent = '▼ ver';
+    sqlWrap.style.display = 'block';
+  } else { sqlWrap.style.display = 'none'; }
+
+  // Erro de validação (chat-service fallback para clássico)
+  setIntentRow('intent-validerro-row', 'intent-validerro', d.sql_validacao_erro || null);
+
+  // Erro / detalhe execução — condicional por resultado_tipo
+  const errRow = document.getElementById('intent-err-row');
+  const errEl  = document.getElementById('intent-err');
+  const errMsg = d.resultado_msg || '';
+  if (errMsg && (tipo === 'erro' || tipo === 'sem_dados' || tipo === 'desconhecido')) {
+    errEl.textContent  = errMsg;
+    errEl.style.color  = tipo === 'erro' ? '#ef4444' : 'var(--text-md)';
+    errRow.style.display = 'flex';
+  } else { errRow.style.display = 'none'; }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
-(function init() {
+(async function init() {
+  // Limpa busca ao carregar
   const search = document.getElementById('search-canais');
-  if (search) {
-    search.value = '';
-    [150, 600, 1400].forEach(delay => setTimeout(() => {
-      if (document.activeElement !== search) {
-        search.value = '';
-        renderListaCanais();
-      }
-    }, delay));
-  }
-  renderListaCanais();
-  atualizarResumo();
+  if (search) search.value = '';
 
-  // Polling automático a cada 30s (no mock apenas atualiza resumo)
-  pollingTimer = setInterval(() => {
-    atualizarResumo();
-    renderListaCanais();
-    if (canalSelecionadoId) {
-      const canal = canais.find(c => c.id === canalSelecionadoId);
-      if (canal) selecionarCanal(canalSelecionadoId);
-    }
-  }, 30000);
+  // Conecta Socket.IO para eventos em tempo real
+  _conectarSocket();
+
+  // Carrega dados reais da API
+  await carregarCanais();
+
+  // Polling a cada 30s para sincronizar status NSSM
+  // (Socket.IO já cobre eventos em tempo real; o polling é só para drift de status do serviço Windows)
+  pollingTimer = setInterval(carregarCanais, 30000);
 })();
 </script>
 

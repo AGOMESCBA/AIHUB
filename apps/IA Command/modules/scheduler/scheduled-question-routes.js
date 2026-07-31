@@ -70,6 +70,12 @@ function validarPayload(req, { parcial = false } = {}) {
   if (body.modulo && !out.modulo) {
     throw Object.assign(new Error('Modulo invalido. Use compras, financeiro, faturamento ou comissao.'), { statusCode: 400 });
   }
+  if (!parcial || body.sql_fixo !== undefined) {
+    out.sql_fixo = String(body.sql_fixo || '').trim() || null;
+  }
+  if (out.sql_fixo && !out.modulo && !parcial) {
+    throw Object.assign(new Error('Informe o modulo esperado para usar SQL fixo.'), { statusCode: 400 });
+  }
 
   if (!parcial || body.schedule_tipo !== undefined || body.schedule?.tipo !== undefined) {
     out.schedule_tipo = String(body.schedule_tipo || body.schedule?.tipo || 'manual').trim().toLowerCase();
@@ -161,6 +167,10 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
     const payload = validarPayload(req, { parcial: true });
     validarCanalEmpresa(empresaId, payload.channel_id || existing.channel_id);
     const modulo = payload.modulo === undefined ? existing.modulo : payload.modulo;
+    const sqlFixo = payload.sql_fixo === undefined ? existing.sql_fixo : payload.sql_fixo;
+    if (sqlFixo && !modulo) {
+      throw Object.assign(new Error('Informe o modulo esperado para usar SQL fixo.'), { statusCode: 400 });
+    }
     const destinatarios = (req.body?.destinatarios || req.body?.destinatario_ids)
       ? validarDestinatarios(empresaId, req.body.destinatarios || req.body.destinatario_ids, modulo)
       : undefined;

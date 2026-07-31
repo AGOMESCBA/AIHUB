@@ -286,7 +286,7 @@
 
     _socket.on('iac-log',    (entry) => addLog(entry.message, entry.type));
     _socket.on('iac-status', ({ status }) => aplicarStatus(status));
-    _socket.on('iac-qr',     (url) => mostrarQR(url));
+    _socket.on('iac-qr',     (payload) => mostrarQR(typeof payload === 'string' ? payload : payload?.url || ''));
     _socket.on('clear-monitor', () => limparTerminalLocal());
     _socket.on('iac-intent', (data) => renderIntent(data));
     _socket.on('iac-msg',    ({ sender, tipo, body }) => {

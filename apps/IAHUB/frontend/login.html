@@ -358,9 +358,9 @@
       location.href = dest;
     })();
 
-    // ── Listeners: dispara verificação ao digitar ────────────────────────────────
+    // ── Listeners: valida no blur da senha ou no submit ──────────────────────────
     document.getElementById('user').addEventListener('input', ao_trocar_usuario);
-    document.getElementById('pass').addEventListener('input', agendarVerificacao);
+    document.getElementById('pass').addEventListener('input', ao_trocar_senha);
     document.getElementById('pass').addEventListener('blur',  verificarAgora);
     document.getElementById('empresa-select').addEventListener('change', () => {
       const id = Number(document.getElementById('empresa-select').value || 0);
@@ -414,21 +414,16 @@
         _logado      = false;
         _role        = null;
         _bypassAdmin = false;
-        resetSelect('— Digite usuário e senha para carregar —');
+        resetSelect('Digite usuario e senha para carregar');
         fetch('/api/logout', { method: 'POST' }).catch(() => {});
       }
-      agendarVerificacao();
+      clearTimeout(_checkTimer);
+      resetSelect('Digite usuario e senha para carregar');
     }
 
-    function agendarVerificacao() {
+    function ao_trocar_senha() {
       clearTimeout(_checkTimer);
-      const u = document.getElementById('user').value.trim();
-      const p = document.getElementById('pass').value;
-      if (u && p.length >= 4) {
-        _checkTimer = setTimeout(verificarAgora, 600);
-      } else if (!_logado) {
-        resetSelect('— Digite usuário e senha para carregar —');
-      }
+      if (!_logado) resetSelect('Digite usuario e senha para carregar');
     }
 
     async function verificarAgora() {

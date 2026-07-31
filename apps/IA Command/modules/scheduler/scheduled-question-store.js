@@ -387,6 +387,7 @@ function payloadJob(dados, empresaId, usuario, existing = {}) {
     channel_id: String(dados.channel_id ?? existing.channel_id ?? '').trim(),
     nome: String(dados.nome ?? existing.nome ?? '').trim(),
     pergunta: String(dados.pergunta ?? existing.pergunta ?? '').trim(),
+    sql_fixo: String(dados.sql_fixo ?? existing.sql_fixo ?? '').trim() || null,
     modulo: dados.modulo === undefined ? (existing.modulo || null) : (String(dados.modulo || '').trim() || null),
     escopo_empresa: String(dados.escopo_empresa ?? existing.escopo_empresa ?? 'empresa_atual').trim() || 'empresa_atual',
     schedule_tipo: String(dados.schedule_tipo ?? existing.schedule_tipo ?? 'manual').trim() || 'manual',
@@ -415,11 +416,11 @@ function criarJob(empresaId, dados, destinatarios, usuario) {
     };
     db.prepare(`
       INSERT INTO scheduled_question_jobs (
-        id, empresa_id, channel_id, nome, pergunta, modulo, escopo_empresa,
+        id, empresa_id, channel_id, nome, pergunta, sql_fixo, modulo, escopo_empresa,
         schedule_tipo, schedule_json, timezone, ativo, status, next_run_at,
         retry_max, retry_interval_min, criado_por, atualizado_por, criado_em, atualizado_em
       ) VALUES (
-        @id, @empresa_id, @channel_id, @nome, @pergunta, @modulo, @escopo_empresa,
+        @id, @empresa_id, @channel_id, @nome, @pergunta, @sql_fixo, @modulo, @escopo_empresa,
         @schedule_tipo, @schedule_json, @timezone, @ativo, @status, @next_run_at,
         @retry_max, @retry_interval_min, @criado_por, @atualizado_por, @criado_em, @atualizado_em
       )
@@ -441,6 +442,7 @@ function atualizarJob(empresaId, id, dados, destinatarios, usuario) {
       SET channel_id = @channel_id,
           nome = @nome,
           pergunta = @pergunta,
+          sql_fixo = @sql_fixo,
           modulo = @modulo,
           escopo_empresa = @escopo_empresa,
           schedule_tipo = @schedule_tipo,

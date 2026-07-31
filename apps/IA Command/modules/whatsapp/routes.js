@@ -6,6 +6,8 @@ const sistemasDb = require('../../../../modules/sistemas/database');
 const permissoesDb = require('../../../../modules/permissoes/database');
 const intentService = require('../ai/intent-service');
 
+const registrarRotasWindowsService = require('./windows-service/service-routes');
+
 module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCommand, io }) {
   function eid(req) { return getEmpresaId(req); }
 
@@ -299,5 +301,8 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     if (svc) svc.clearBuffer();
     res.json({ ok: true });
   });
+
+  // ── Windows Service — novos endpoints (não toca nos existentes) ───────────
+  registrarRotasWindowsService(app, { requireAuth, requireIaCommand, io });
 
 };

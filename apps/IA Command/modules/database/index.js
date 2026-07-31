@@ -19,6 +19,7 @@ function inicializarDB() {
   _db = new Database(DB_PATH);
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
+  _db.pragma('busy_timeout = 5000');
 
   _criarTabelaMigracoes();
   _executarMigracoes();
@@ -142,6 +143,10 @@ function _garantirColunasCompatibilidade() {
   for (const [coluna, definicao] of Object.entries(interpretationLog)) {
     _adicionarColunaSeFaltar('interpretation_log', coluna, definicao);
   }
+
+  try {
+    _adicionarColunaSeFaltar('scheduled_question_jobs', 'sql_fixo', 'TEXT DEFAULT NULL');
+  } catch (_) {}
 
   _db.exec(`
     CREATE INDEX IF NOT EXISTS idx_iac_interpretation_fase_execucao

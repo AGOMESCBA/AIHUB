@@ -1122,6 +1122,22 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 62,
+    descricao: 'IA Command - suporte a canais WhatsApp como Windows Service',
+    sql: `
+      ALTER TABLE whatsapp_channels ADD COLUMN is_windows_service INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE whatsapp_channels ADD COLUMN worker_port        INTEGER DEFAULT NULL;
+      ALTER TABLE whatsapp_channels ADD COLUMN service_slug      TEXT    DEFAULT NULL;
+    `,
+  },
+  {
+    version: 63,
+    descricao: 'IA Command - SQL fixo opcional nos jobs de perguntas agendadas',
+    sql: `
+      ALTER TABLE scheduled_question_jobs ADD COLUMN sql_fixo TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

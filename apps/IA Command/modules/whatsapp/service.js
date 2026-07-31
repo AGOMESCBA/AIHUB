@@ -384,6 +384,10 @@ class IACWhatsAppService extends EventEmitter {
     this.emit('iac-log', entry);
   }
 
+  logLocal(message, type = 'info') {
+    process.stdout.write(`[${new Date().toISOString()}] [${type.toUpperCase()}] ${message}\n`);
+  }
+
   setStatus(s) {
     this.status = s;
     this.emit('iac-status', { status: s, empresa_id: this._empresaId, channel_id: this._channelId });
@@ -459,6 +463,7 @@ class IACWhatsAppService extends EventEmitter {
     this.client = new Client({
       authStrategy: new LocalAuth({ clientId: this._authClientId, dataPath: AUTH_BASE }),
       puppeteer: puppeteerCfg,
+      qrMaxRetries: 8, // ~200s de janela (QR renova a cada ~25s)
     });
     this._bootLog('cliente WhatsApp criado');
 
@@ -3293,7 +3298,7 @@ class IACWhatsAppService extends EventEmitter {
     const msgTs = Number(msg.timestamp || 0);
     if (msgTs && this._acceptMessagesAfterTs && msgTs < this._acceptMessagesAfterTs) {
       const idadeSeg = Math.max(0, Math.floor(Date.now() / 1000) - msgTs);
-      this.log(`Mensagem antiga ignorada apos sincronizacao (${idadeSeg}s): ${msgId || 'sem-id'}`, 'warning');
+      this.logLocal(`Mensagem antiga ignorada apos sincronizacao (${idadeSeg}s): ${msgId || 'sem-id'}`);
       return;
     }
 
@@ -3307,8 +3312,12 @@ class IACWhatsAppService extends EventEmitter {
     }
 
     const senderRaw = msg.from;
-    const sender = await this._resolverSender(msg);
     const tipo   = msg.type;
+
+    // Notificações internas do WhatsApp — invisíveis ao usuário, sem ação necessária
+    if (tipo === 'e2e_notification' || tipo === 'notification_template' || tipo === 'protocol') return;
+
+    const sender = await this._resolverSender(msg);
 
     this._msgCount++;
     this.log(`━━ Mensagem #${this._msgCount} — tipo: ${tipo} | de: ${sender}`, 'info');
@@ -3552,7 +3561,7 @@ class IACWhatsAppService extends EventEmitter {
     return status;
   }
 
-  async executeScheduledQuestion({ empresaId, numero, pergunta, jobNome = null } = {}) {
+  async executeScheduledQuestionOnce({ empresaId, numero, pergunta } = {}) {
     if (!this.client || this.status !== 'connected') {
       throw new Error('WhatsApp nao esta conectado.');
     }
@@ -3583,18 +3592,51 @@ class IACWhatsAppService extends EventEmitter {
       _systemOrigin: 'agendamento',
     });
     const statusExecucao = this._scheduledExecutionStatus(empresaExecucao, timingCtx.logId, resposta);
-    await this.sendMessage(digits, this._formatScheduledDeliveryMessage({ jobNome, resposta, ok: statusExecucao.ok }));
-    const entregueMs = Date.now() - t0;
-    if (timingCtx.logId) {
-      try { interpretationLog.atualizarEntregue(timingCtx.logId, entregueMs); } catch (_) {}
-    }
     return {
       resposta,
       ok: statusExecucao.ok,
       error_detail: statusExecucao.error_detail,
       interpretation_log_id: timingCtx.logId || null,
       duration_ms: Date.now() - t0,
-      entregue_ms: entregueMs,
+    };
+  }
+
+  async sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok = true } = {}) {
+    if (!this.client || this.status !== 'connected') {
+      throw new Error('WhatsApp nao esta conectado.');
+    }
+    const empresaExecucao = Number(empresaId || this._empresaId || 0);
+    if (!empresaExecucao) throw new Error('Empresa do agendamento nao informada.');
+
+    const digits = String(numero || '').replace(/\D/g, '');
+    if (!digits) throw new Error('Numero do destinatario invalido.');
+    const sender = `${digits}@c.us`;
+    if (!channelStore.senderAutorizadoEmpresa(empresaExecucao, sender)) {
+      throw new Error('Numero nao autorizado para esta empresa.');
+    }
+
+    const t0 = Date.now();
+    await this.sendMessage(digits, this._formatScheduledDeliveryMessage({ resposta, ok }));
+    return { entregue_ms: Date.now() - t0 };
+  }
+
+  async executeScheduledQuestion({ empresaId, numero, pergunta, jobNome = null } = {}) {
+    const t0 = Date.now();
+    const result = await this.executeScheduledQuestionOnce({ empresaId, numero, pergunta });
+    const entrega = await this.sendScheduledQuestionDelivery({
+      empresaId,
+      numero,
+      resposta: result.resposta,
+      ok: result.ok,
+      jobNome,
+    });
+    if (result.interpretation_log_id) {
+      try { interpretationLog.atualizarEntregue(result.interpretation_log_id, Date.now() - t0); } catch (_) {}
+    }
+    return {
+      ...result,
+      duration_ms: Date.now() - t0,
+      entregue_ms: entrega.entregue_ms,
     };
   }
 

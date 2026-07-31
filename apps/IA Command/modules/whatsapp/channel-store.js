@@ -61,6 +61,9 @@ function _channelFromRow(row) {
     provider: row.provider || 'wweb',
     auth_client_id: row.auth_client_id,
     ativo: row.ativo,
+    is_windows_service: row.is_windows_service || 0,
+    worker_port: row.worker_port || null,
+    service_slug: row.service_slug || null,
   };
 }
 
@@ -312,6 +315,24 @@ function resolverEmpresaDoCanal({ channelId, sender, texto, sessaoEmpresaId = nu
   return { status: 'ambiguous', empresas };
 }
 
+function listarTodosCanais() {
+  const db = getDB();
+  return db.prepare('SELECT * FROM whatsapp_channels WHERE ativo = 1 ORDER BY nome').all();
+}
+
+function atualizarCanalWindowsService(channelId, { slug, porta, is_windows_service }) {
+  const db  = getDB();
+  const now = agora();
+  db.prepare(`
+    UPDATE whatsapp_channels
+    SET service_slug       = ?,
+        worker_port        = ?,
+        is_windows_service = ?,
+        atualizado_em      = ?
+    WHERE id = ?
+  `).run(slug ?? null, porta ?? null, is_windows_service ? 1 : 0, now, channelId);
+}
+
 module.exports = {
   criarCanal,
   atualizarCanal,
@@ -331,4 +352,6 @@ module.exports = {
   normalizarNumero,
   variantesNumeroBrasil,
   extrairLid,
+  listarTodosCanais,
+  atualizarCanalWindowsService,
 };

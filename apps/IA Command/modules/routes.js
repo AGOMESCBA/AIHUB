@@ -1,9 +1,33 @@
 const { getDB } = require('./database');
 const { requireRotina } = require('./permissions');
 const { requireEmpresaContext } = require('./empresa-context');
+const channels = require('./whatsapp/channel-store');
+
+const WORKER_TOKEN = process.env.IAC_HUB_INTERNAL_TOKEN || '';
 
 module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, io }) {
   const canDashboard = requireRotina('iac-dashboard');
+
+  // IMPORTANTE: worker-event é chamado pelo processo Windows Service (sem sessão de usuário).
+  // Deve ser registrado ANTES do app.use que aplica requireAuth a todo /api/ia-command/*.
+  // Segurança via X-Worker-Token (token de segredo), não via sessão de usuário.
+  app.post('/api/ia-command/whatsapp/worker-event', (req, res) => {
+    if (WORKER_TOKEN && req.headers['x-worker-token'] !== WORKER_TOKEN) {
+      return res.status(401).json({ error: 'Token inválido.' });
+    }
+    const { channelId, event, payload } = req.body || {};
+    if (!channelId || !event) return res.status(400).json({ error: 'channelId e event obrigatórios.' });
+    try {
+      const enriched = payload && typeof payload === 'object' ? { ...payload, channelId } : payload;
+      const empresas = channels.listarEmpresasDoCanal(channelId);
+      for (const emp of empresas) io.to(`emp_${emp.empresa_id}`).emit(event, enriched);
+      io.to(`channel_${channelId}`).emit(event, enriched);
+      console.log(`[worker-event] event=${event} channelId=${channelId} salas=emp_${empresas.map(e=>e.empresa_id).join(',emp_')},channel_${channelId}`);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
   app.use('/api/ia-command', requireAuth, requireIaCommand, requireEmpresaContext);
 

@@ -450,6 +450,17 @@ io.on('connection', (socket) => {
       emitirReplayIaCommand(socket, freshEid);
     });
   });
+
+  // Permite que o frontend entre na sala de um canal específico (para monitorar WS workers)
+  socket.on('join-channel', (channelId) => {
+    if (!channelId || typeof channelId !== 'string') return;
+    socket.join(`channel_${channelId}`);
+  });
+
+  socket.on('leave-channel', (channelId) => {
+    if (!channelId || typeof channelId !== 'string') return;
+    socket.leave(`channel_${channelId}`);
+  });
 });
 
 // ── Módulo Auth ───────────────────────────────────────────────────────────────

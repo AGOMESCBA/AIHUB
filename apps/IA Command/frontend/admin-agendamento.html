@@ -101,6 +101,7 @@
     .form-label { display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:5px; }
     .form-help { font-size:12px;color:var(--text-lo);line-height:1.45;margin-top:5px; }
     textarea.form-control { min-height:92px;resize:vertical;line-height:1.45; }
+    .sql-textarea { min-height:150px;font-family:Consolas,'Courier New',monospace;font-size:12px; }
     .recipient-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-base); }
     .recipient-item { display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px;background:var(--bg-card);cursor:pointer; }
     .recipient-item:hover { border-color:var(--accent-light); }
@@ -270,6 +271,11 @@
                 <div class="form-group">
                   <label class="form-label">Pergunta</label>
                   <textarea id="f-pergunta" class="form-control" placeholder="Ex: Qual foi o faturamento de ontem por vendedor?" oninput="atualizarResumo()"></textarea>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">SQL fixo opcional</label>
+                  <textarea id="f-sql-fixo" class="form-control sql-textarea" placeholder="Cole aqui um SELECT ja validado no ERP. Se ficar vazio, o IA Command gera o SQL pela pergunta." oninput="atualizarResumo()"></textarea>
+                  <div class="form-help">Quando preenchido, o job executa este SQL uma unica vez, formata o resultado e entrega a mesma resposta para todos os destinatarios. O modulo esperado passa a ser obrigatorio.</div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -900,6 +906,7 @@
     document.getElementById('f-nome').value = '';
     document.getElementById('f-modulo').value = '';
     document.getElementById('f-pergunta').value = '';
+    document.getElementById('f-sql-fixo').value = '';
     document.getElementById('f-channel').value = canais[0]?.id || '';
     document.getElementById('f-ativo').value = '1';
     document.getElementById('f-schedule-tipo').value = 'manual';
@@ -917,6 +924,7 @@
     document.getElementById('f-nome').value = job.nome || '';
     document.getElementById('f-modulo').value = job.modulo || '';
     document.getElementById('f-pergunta').value = job.pergunta || '';
+    document.getElementById('f-sql-fixo').value = job.sql_fixo || '';
     document.getElementById('f-channel').value = job.channel_id || '';
     document.getElementById('f-ativo').value = job.ativo ? '1' : '0';
     document.getElementById('f-schedule-tipo').value = job.schedule_tipo || 'manual';
@@ -1020,9 +1028,10 @@
     const tipo = document.getElementById('f-schedule-tipo')?.value || 'manual';
     const labels = { manual:'Manual', once:'Uma vez', daily:'Diario', weekly:'Semanal', monthly:'Mensal' };
     const hora = document.getElementById('f-hora')?.value || '08:00';
+    const sqlFixo = document.getElementById('f-sql-fixo')?.value.trim();
     document.getElementById('s-nome').textContent = nome;
     document.getElementById('s-canal').textContent = canal ? canal.nome : '-';
-    document.getElementById('s-agenda').textContent = tipo === 'manual' ? 'Manual' : `${labels[tipo] || tipo} as ${hora}`;
+    document.getElementById('s-agenda').textContent = `${tipo === 'manual' ? 'Manual' : `${labels[tipo] || tipo} as ${hora}`}${sqlFixo ? ' | SQL fixo' : ''}`;
     document.getElementById('s-dest').textContent = String(selectedRecipients.size);
   }
 
@@ -1030,17 +1039,21 @@
     try {
       const nome = document.getElementById('f-nome').value.trim();
       const pergunta = document.getElementById('f-pergunta').value.trim();
+      const sql_fixo = document.getElementById('f-sql-fixo').value.trim();
+      const modulo = document.getElementById('f-modulo').value || null;
       const channel_id = document.getElementById('f-channel').value;
       if (!nome) throw new Error('Informe o nome do job.');
       if (!pergunta) throw new Error('Informe a pergunta.');
+      if (sql_fixo && !modulo) throw new Error('Informe o modulo esperado para usar SQL fixo.');
       if (!channel_id) throw new Error('Selecione um canal WhatsApp.');
       if (!selectedRecipients.size) throw new Error('Selecione ao menos um destinatario.');
       const agenda = montarAgenda();
       const body = {
         nome,
         pergunta,
+        sql_fixo: sql_fixo || null,
         channel_id,
-        modulo: document.getElementById('f-modulo').value || null,
+        modulo,
         schedule_tipo: document.getElementById('f-schedule-tipo').value,
         schedule_json: agenda.schedule_json,
         next_run_at: agenda.next_run_at,
