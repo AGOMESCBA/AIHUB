@@ -24,7 +24,7 @@ const APP_DIR        = path.resolve(__dirname, '..', '..', '..', '..', '..');
 // NSSM split AppParameters pelo espaço, e "IA Command" contém espaço no path.
 const LAUNCHER_PATH  = path.join(APP_DIR, 'iac-worker.js');
 const LOGS_DIR       = path.join(APP_DIR, 'logs', 'whatsapp-services');
-const SERVICE_PREFIX = 'IAHub_IACommand-';
+const SERVICE_PREFIX = 'IA Hub - IACommand-';
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
 
