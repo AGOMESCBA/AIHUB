@@ -574,7 +574,7 @@ function _conectarSocket() {
       }
       _receberLog(canalId, {
         tipo: 'received', icon: '📩',
-        msg: `[${tipo || 'chat'}] de ${sender || '?'}: ${body ? '"' + String(body).slice(0, 80) + '"' : '(mídia)'}`,
+        msg: `[${tipo || 'chat'}] de ${sender || '?'}: ${body ? '"' + body + '"' : '(mídia)'}`,
       });
     });
 
