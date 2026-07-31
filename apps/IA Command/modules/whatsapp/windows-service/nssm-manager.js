@@ -157,7 +157,7 @@ function instalarServico(channelId, slug, workerPort, env = {}) {
   nssmCmd('install', svc, NODE_EXE);
   nssmCmd('set', svc, 'AppParameters',  LAUNCHER_PATH);
   nssmCmd('set', svc, 'AppDirectory',   APP_DIR);
-  nssmCmd('set', svc, 'DisplayName',    `IA Command WhatsApp ${slug}`);
+  nssmCmd('set', svc, 'DisplayName',    `IAHub - IACommand-${slug}`);
   nssmCmd('set', svc, 'Description',    `Canal WhatsApp IAHub: ${channelId}`);
   nssmCmd('set', svc, 'Start',          'SERVICE_DEMAND_START');
   nssmCmd('set', svc, 'AppStdout',      path.join(logDir, 'service.log'));
