@@ -22,7 +22,6 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
       const empresas = channels.listarEmpresasDoCanal(channelId);
       for (const emp of empresas) io.to(`emp_${emp.empresa_id}`).emit(event, enriched);
       io.to(`channel_${channelId}`).emit(event, enriched);
-      console.log(`[worker-event] event=${event} channelId=${channelId} salas=emp_${empresas.map(e=>e.empresa_id).join(',emp_')},channel_${channelId}`);
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
