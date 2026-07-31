@@ -133,7 +133,8 @@ function instalarServico(channelId, slug, workerPort, env = {}) {
   if (!fs.existsSync(LAUNCHER_PATH)) {
     fs.writeFileSync(
       LAUNCHER_PATH,
-      `// Auto-gerado por nssm-manager.js — não editar manualmente.\nrequire(${JSON.stringify(WORKER_PATH)});\n`,
+      `// Auto-gerado por nssm-manager.js — não editar manualmente.\n` +
+      `require(require('path').join(__dirname, 'apps', 'IA Command', 'modules', 'whatsapp', 'windows-service', 'worker.js'));\n`,
       'utf8'
     );
   }
