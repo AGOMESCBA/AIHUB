@@ -212,6 +212,27 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/scheduled-question') {
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', async () => {
+      try {
+        const { empresaId, numero, pergunta } = JSON.parse(body || '{}');
+        if (!empresaId || !numero || !pergunta) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ erro: 'empresaId, numero e pergunta são obrigatórios.' }));
+        }
+        const resultado = await svc.executeScheduledQuestionOnce({ empresaId, numero, pergunta });
+        res.writeHead(200);
+        res.end(JSON.stringify(resultado));
+      } catch (err) {
+        res.writeHead(err.message?.includes('nao esta conectado') ? 409 : 500);
+        res.end(JSON.stringify({ erro: err.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404);
   res.end(JSON.stringify({ erro: 'Não encontrado.' }));
 });
