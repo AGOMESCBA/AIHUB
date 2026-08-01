@@ -1138,6 +1138,13 @@ const MIGRATIONS = [
       ALTER TABLE scheduled_question_jobs ADD COLUMN sql_fixo TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 64,
+    descricao: 'IA Command - Modo de execucao do run (sql_fixo ou pergunta_ia)',
+    sql: `
+      ALTER TABLE scheduled_question_runs ADD COLUMN execucao_modo TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

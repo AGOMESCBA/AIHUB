@@ -34,12 +34,59 @@ function partesData(date, timezone) {
   };
 }
 
+function partesCalendario(ano, mes, dia) {
+  const date = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+  const y = String(date.getUTCFullYear()).padStart(4, '0');
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return { ano: y, mes: m, dia: d, yyyymmdd: `${y}${m}${d}`, iso: `${y}-${m}-${d}` };
+}
+
+function normalizarAnoMes(ano, mes) {
+  const indice = (Number(ano) * 12) + (Number(mes) - 1);
+  const y = Math.floor(indice / 12);
+  const m = indice - (y * 12) + 1;
+  return { ano: y, mes: m };
+}
+
+function ultimoDiaDoMes(ano, mes) {
+  return new Date(Date.UTC(Number(ano), Number(mes), 0)).getUTCDate();
+}
+
+function deslocarDia(base, dias) {
+  return partesCalendario(base.ano, base.mes, Number(base.dia) + Number(dias || 0));
+}
+
+function deslocarMes(base, meses) {
+  const alvo = normalizarAnoMes(base.ano, Number(base.mes) + Number(meses || 0));
+  const dia = Math.min(Number(base.dia), ultimoDiaDoMes(alvo.ano, alvo.mes));
+  return partesCalendario(alvo.ano, alvo.mes, dia);
+}
+
+function periodoMes(base, meses = 0) {
+  const alvo = normalizarAnoMes(base.ano, Number(base.mes) + Number(meses || 0));
+  const inicio = partesCalendario(alvo.ano, alvo.mes, 1);
+  const fim = partesCalendario(alvo.ano, alvo.mes, ultimoDiaDoMes(alvo.ano, alvo.mes));
+  return { inicio, fim };
+}
+
+function periodoAno(base, anos = 0) {
+  const ano = Number(base.ano) + Number(anos || 0);
+  return {
+    inicio: partesCalendario(ano, 1, 1),
+    fim: partesCalendario(ano, 12, 31),
+  };
+}
+
 function macrosDataSql(job, referencia = new Date()) {
   const timezone = job?.timezone || 'America/Manaus';
   const hoje = partesData(referencia, timezone);
-  const ontem = partesData(new Date(referencia.getTime() - 24 * 60 * 60 * 1000), timezone);
-  const amanha = partesData(new Date(referencia.getTime() + 24 * 60 * 60 * 1000), timezone);
-  const ultimoDiaMes = String(new Date(Date.UTC(Number(hoje.ano), Number(hoje.mes), 0)).getUTCDate()).padStart(2, '0');
+  const ontem = deslocarDia(hoje, -1);
+  const amanha = deslocarDia(hoje, 1);
+  const mesAtual = periodoMes(hoje, 0);
+  const mesAnterior = periodoMes(hoje, -1);
+  const anoAtual = periodoAno(hoje, 0);
+  const anoAnterior = periodoAno(hoje, -1);
   return {
     DATA_EXECUCAO: hoje.yyyymmdd,
     DATA_EXECUCAO_ISO: hoje.iso,
@@ -49,21 +96,58 @@ function macrosDataSql(job, referencia = new Date()) {
     ONTEM_ISO: ontem.iso,
     AMANHA: amanha.yyyymmdd,
     AMANHA_ISO: amanha.iso,
-    INICIO_MES: `${hoje.ano}${hoje.mes}01`,
-    INICIO_MES_ISO: `${hoje.ano}-${hoje.mes}-01`,
-    FIM_MES: `${hoje.ano}${hoje.mes}${ultimoDiaMes}`,
-    FIM_MES_ISO: `${hoje.ano}-${hoje.mes}-${ultimoDiaMes}`,
+    INICIO_MES: mesAtual.inicio.yyyymmdd,
+    INICIO_MES_ISO: mesAtual.inicio.iso,
+    FIM_MES: mesAtual.fim.yyyymmdd,
+    FIM_MES_ISO: mesAtual.fim.iso,
+    INICIO_MES_ANTERIOR: mesAnterior.inicio.yyyymmdd,
+    INICIO_MES_ANTERIOR_ISO: mesAnterior.inicio.iso,
+    FIM_MES_ANTERIOR: mesAnterior.fim.yyyymmdd,
+    FIM_MES_ANTERIOR_ISO: mesAnterior.fim.iso,
+    INICIO_ANO: anoAtual.inicio.yyyymmdd,
+    INICIO_ANO_ISO: anoAtual.inicio.iso,
+    FIM_ANO: anoAtual.fim.yyyymmdd,
+    FIM_ANO_ISO: anoAtual.fim.iso,
+    INICIO_ANO_ANTERIOR: anoAnterior.inicio.yyyymmdd,
+    INICIO_ANO_ANTERIOR_ISO: anoAnterior.inicio.iso,
+    FIM_ANO_ANTERIOR: anoAnterior.fim.yyyymmdd,
+    FIM_ANO_ANTERIOR_ISO: anoAnterior.fim.iso,
     ANO: hoje.ano,
     MES: hoje.mes,
     DIA: hoje.dia,
   };
 }
 
-function aplicarMacrosSql(sql, job) {
-  const macros = macrosDataSql(job);
-  return String(sql || '').replace(/\{\{\s*([A-Z0-9_]+)\s*\}\}/gi, (match, nome) => {
-    const chave = String(nome || '').toUpperCase();
-    return macros[chave] === undefined ? match : macros[chave];
+function resolverMacroDataSql(nome, deslocamento, job, referencia = new Date()) {
+  const chave = String(nome || '').toUpperCase();
+  const offset = deslocamento === undefined || deslocamento === null || deslocamento === '' ? null : Number(deslocamento);
+  const hoje = partesData(referencia, job?.timezone || 'America/Manaus');
+
+  if (offset !== null && !Number.isFinite(offset)) return undefined;
+
+  if (offset !== null) {
+    if (chave === 'HOJE' || chave === 'DATA_EXECUCAO') return deslocarDia(hoje, offset).yyyymmdd;
+    if (chave === 'HOJE_ISO' || chave === 'DATA_EXECUCAO_ISO') return deslocarDia(hoje, offset).iso;
+    if (chave === 'INICIO_MES') return periodoMes(hoje, offset).inicio.yyyymmdd;
+    if (chave === 'INICIO_MES_ISO') return periodoMes(hoje, offset).inicio.iso;
+    if (chave === 'FIM_MES') return periodoMes(hoje, offset).fim.yyyymmdd;
+    if (chave === 'FIM_MES_ISO') return periodoMes(hoje, offset).fim.iso;
+    if (chave === 'INICIO_ANO') return periodoAno(hoje, offset).inicio.yyyymmdd;
+    if (chave === 'INICIO_ANO_ISO') return periodoAno(hoje, offset).inicio.iso;
+    if (chave === 'FIM_ANO') return periodoAno(hoje, offset).fim.yyyymmdd;
+    if (chave === 'FIM_ANO_ISO') return periodoAno(hoje, offset).fim.iso;
+    if (chave === 'ANO') return String(Number(hoje.ano) + offset);
+    return undefined;
+  }
+
+  const macros = macrosDataSql(job, referencia);
+  return macros[chave];
+}
+
+function aplicarMacrosSql(sql, job, referencia = new Date()) {
+  return String(sql || '').replace(/\{\{\s*([A-Z0-9_]+)(?::\s*([+-]?\d+))?\s*\}\}/gi, (match, nome, deslocamento) => {
+    const valor = resolverMacroDataSql(nome, deslocamento, job, referencia);
+    return valor === undefined ? match : valor;
   });
 }
 
@@ -158,15 +242,15 @@ async function executarPerguntaUmaVez(svc, empresaId, job, destinatarios) {
   });
 }
 
-// Chama o worker Windows Service via HTTP para executar a pergunta agendada.
-function _executarViaWorker(workerPort, empresaId, numero, pergunta) {
+// Chama o worker Windows Service via HTTP.
+function _postWorker(workerPort, path, payload, timeoutMs = 330000) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ empresaId, numero, pergunta });
+    const body = JSON.stringify(payload);
     const req  = http.request({
-      hostname: '127.0.0.1', port: workerPort, path: '/scheduled-question',
+      hostname: '127.0.0.1', port: workerPort, path,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-      timeout: 330000,
+      timeout: timeoutMs,
     }, (res) => {
       let b = '';
       res.on('data', d => { b += d; });
@@ -185,6 +269,14 @@ function _executarViaWorker(workerPort, empresaId, numero, pergunta) {
   });
 }
 
+function _executarViaWorker(workerPort, empresaId, numero, pergunta, jobNome) {
+  return _postWorker(workerPort, '/scheduled-question', { empresaId, numero, pergunta, jobNome });
+}
+
+function _enviarViaWorker(workerPort, empresaId, numero, resposta, ok, jobNome) {
+  return _postWorker(workerPort, '/send-message', { empresaId, numero, resposta, ok, jobNome }, 30000);
+}
+
 async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema' } = {}) {
   const destinatarios = store.listarDestinatarios(empresaId, job.id);
   if (!destinatarios.length) {
@@ -194,30 +286,67 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
   // Detecta se o canal roda como Windows Service — delega ao worker via HTTP
   const canal = channels.buscarCanal(job.channel_id);
   if (canal?.is_windows_service && canal?.worker_port) {
-    const run  = store.criarRun(empresaId, job, { trigger_tipo, usuario });
-    const dest = destinatarios[0];
-    store.criarDelivery(empresaId, run.id, job.id, dest);
+    const run = store.criarRun(empresaId, job, { trigger_tipo, usuario });
+    const started = Date.now();
+    const resumo = [];
+    let sucessos = 0;
+    let falhas = 0;
+    const entregas = destinatarios.map(dest => ({
+      dest,
+      deliveryId: store.criarDelivery(empresaId, run.id, job.id, dest),
+    }));
     try {
+      let resultado;
       if (sqlFixo(job)) {
-        // SQL fixo não passa pelo worker — executa localmente sem WhatsApp
-        const svc = whatsappManager.get(job.channel_id);
-        if (!svc) throw Object.assign(new Error('Canal WhatsApp do job nao esta conectado.'), { statusCode: 409 });
-        return await executarSqlFixoUmaVez(empresaId, job);
+        // SQL fixo: executa localmente e envia para cada destinatário via worker
+        resultado = await executarSqlFixoUmaVez(empresaId, job);
+        for (const { dest, deliveryId } of entregas) {
+          try {
+            await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultado.resposta, resultado.ok, job.nome);
+            if (resultado.ok === false) falhas++;
+            else sucessos++;
+            resumo.push(`${dest.nome || dest.numero}: ${resultado.ok === false ? (resultado.error_detail || 'executado com erro na consulta') : 'enviado'}`);
+            store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
+          } catch (err) {
+            falhas++;
+            resumo.push(`${dest.nome || dest.numero}: ${err.message}`);
+            store.atualizarDelivery(deliveryId, { status: 'erro', erro: err.message });
+          }
+        }
+      } else {
+        // Pergunta IA: worker executa e envia em uma chamada (apenas primeiro destinatário)
+        resultado = await _executarViaWorker(canal.worker_port, empresaId, destinatarios[0]?.numero, job.pergunta, job.nome);
+        const { dest, deliveryId } = entregas[0];
+        if (resultado.ok === false) falhas++;
+        else sucessos++;
+        resumo.push(`${dest.nome || dest.numero}: ${resultado.ok === false ? (resultado.error_detail || 'executado com erro na consulta') : 'enviado'}`);
+        store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
       }
-      const resultado = await _executarViaWorker(canal.worker_port, empresaId, dest.numero, job.pergunta);
+      const statusDelivery = sucessos && !falhas ? 'sucesso' : sucessos ? 'parcial' : 'erro';
+      if (resultado.interpretation_log_id) {
+        try { interpretationLog.atualizarEntregue(resultado.interpretation_log_id, Date.now() - started); } catch (_) {}
+      }
       store.atualizarRun(empresaId, run.id, {
-        status: resultado.ok !== false ? 'sucesso' : 'erro',
+        status: statusDelivery,
         resposta: resultado.resposta,
+        erro: falhas ? resumo.filter(x => !x.endsWith(': enviado')).join('\n') : null,
         interpretation_log_id: resultado.interpretation_log_id,
         finished_at: new Date().toISOString(),
-        duration_ms: resultado.duration_ms,
+        duration_ms: Date.now() - started,
       });
       return resultado;
     } catch (err) {
+      for (const { dest, deliveryId } of entregas) {
+        falhas++;
+        resumo.push(`${dest.nome || dest.numero}: ${err.message}`);
+        store.atualizarDelivery(deliveryId, { status: 'erro', erro: err.message });
+      }
       store.atualizarRun(empresaId, run.id, {
         status: 'erro',
         erro: err.message,
+        resposta: resumo.join('\n') || null,
         finished_at: new Date().toISOString(),
+        duration_ms: Date.now() - started,
       });
       throw err;
     }
@@ -296,4 +425,11 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
   });
 }
 
-module.exports = { executarJob };
+module.exports = {
+  executarJob,
+  _test: {
+    aplicarMacrosSql,
+    macrosDataSql,
+    resolverMacroDataSql,
+  },
+};

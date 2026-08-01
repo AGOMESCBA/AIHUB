@@ -217,14 +217,42 @@ const server = http.createServer((req, res) => {
     req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
-        const { empresaId, numero, pergunta } = JSON.parse(body || '{}');
+        const { empresaId, numero, pergunta, jobNome } = JSON.parse(body || '{}');
         if (!empresaId || !numero || !pergunta) {
           res.writeHead(400);
           return res.end(JSON.stringify({ erro: 'empresaId, numero e pergunta são obrigatórios.' }));
         }
         const resultado = await svc.executeScheduledQuestionOnce({ empresaId, numero, pergunta });
+        await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta: resultado.resposta, ok: resultado.ok });
+        const statusEmoji = resultado.ok === false ? '⚠️' : '✅';
+        const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';
+        _enfileirar('iac-log', { tipo: resultado.ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });
         res.writeHead(200);
         res.end(JSON.stringify(resultado));
+      } catch (err) {
+        res.writeHead(err.message?.includes('nao esta conectado') ? 409 : 500);
+        res.end(JSON.stringify({ erro: err.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/send-message') {
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', async () => {
+      try {
+        const { empresaId, numero, resposta, ok, jobNome } = JSON.parse(body || '{}');
+        if (!empresaId || !numero || !resposta) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ erro: 'empresaId, numero e resposta são obrigatórios.' }));
+        }
+        await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok });
+        const statusEmoji = ok === false ? '⚠️' : '✅';
+        const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';
+        _enfileirar('iac-log', { tipo: ok === false ? 'warning' : 'success', msg: `${statusEmoji} ${nomeJob} enviado → ${numero}` });
+        res.writeHead(200);
+        res.end(JSON.stringify({ enviado: true }));
       } catch (err) {
         res.writeHead(err.message?.includes('nao esta conectado') ? 409 : 500);
         res.end(JSON.stringify({ erro: err.message }));

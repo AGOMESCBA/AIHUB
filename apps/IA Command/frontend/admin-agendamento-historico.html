@@ -231,11 +231,15 @@
   let empresasCache = null;
   const GROUP_STATE_KEY = 'iac_admin_agendamento_historico_group_state_v1';
   const GROUP_FIELDS = {
+    criado_data: 'Data',
     job_nome: 'Job',
     status_label: 'Status',
     trigger_label: 'Acionamento',
+    execucao_label: 'Execucao via',
     modulo_label: 'Modulo',
-    criado_data: 'Data',
+    entregas_label: 'Entregas',
+    duracao_label: 'Duracao',
+    resposta_label: 'Resposta / Erro',
   };
   const groupState = { fields: [], open: false };
 
@@ -309,6 +313,18 @@
     return String(row.interpretation_sql_final_executado || row.interpretation_sql_gerado || '')
       .replace(/\n\n--\s*ERRO:[\s\S]+$/i, '')
       .trim();
+  }
+  function execucaoModo(row) {
+    if (row?.execucao_modo === 'sql_fixo') return 'sql_fixo';
+    if (row?.execucao_modo === 'pergunta_ia') return 'pergunta_ia';
+    if (row?.job_sql_fixo || row?.interpretation_origem === 'agendamento_sql_fixo' || row?.interpretation_pipeline_origem === 'agendamento_sql_fixo') return 'sql_fixo';
+    return 'pergunta_ia';
+  }
+  function execucaoLabel(row) {
+    return execucaoModo(row) === 'sql_fixo' ? 'SQL Fixo' : 'Pergunta IA';
+  }
+  function sqlOriginal(row) {
+    return String(row?.interpretation_sql_canonico_original || row?.job_sql_fixo || '').trim();
   }
   function protegerFiltrosDaGrid() {
     setTimeout(() => {
@@ -584,9 +600,12 @@
       status_label: statusLabel(r.status),
       trigger_label: triggerLabel(r.trigger_tipo),
       modulo_label: moduloLabel(r.job_modulo),
+      execucao_label: execucaoLabel(r),
       criado_label: fmtData(r.criado_em),
       criado_data: fmtDataCurta(r.criado_em),
       entregas_label: `${Number(r.entregas_sucesso || 0)}/${Number(r.entregas_total || 0)}`,
+      duracao_label: duracao(r.duration_ms),
+      resposta_label: r.erro || r.resposta || '-',
       erro_label: r.erro || '-',
     }));
   }
@@ -626,6 +645,7 @@
         }},
         { title:'Status', field:'status_label', width:120, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Sucesso':'Sucesso','Parcial':'Parcial','Erro':'Erro','Executando':'Executando'}}, formatter:c=>statusBadge(c.getRow().getData().status) },
         { title:'Acionamento', field:'trigger_label', width:130, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Manual':'Manual','Agendado':'Agendado'}} },
+        { title:'Execucao via', field:'execucao_label', width:135, headerFilter:'select', headerFilterParams:{values:{'':'Todos','SQL Fixo':'SQL Fixo','Pergunta IA':'Pergunta IA'}} },
         { title:'Modulo', field:'modulo_label', width:135, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Automatico':'Automatico','Compras':'Compras','Financeiro':'Financeiro','Faturamento':'Faturamento','Comissao':'Comissao'}} },
         { title:'Entregas', field:'entregas_label', width:105, hozAlign:'center', headerFilter:'input', headerFilterParams:headerInputAttrs('entregas'), formatter:c=>{
           const row = c.getRow().getData();
@@ -679,6 +699,9 @@
     document.getElementById('detail-subtitle').textContent = `${fmtData(row.criado_em)} - ${statusLabel(row.status)} - ${triggerLabel(row.trigger_tipo)}`;
     const detalheErro = erroTecnico(row);
     const sqlExecutado = sqlSemErro(row);
+    const sqlBase = sqlOriginal(row);
+    const modo = execucaoModo(row);
+    const entregasResumo = `${Number(row.entregas_sucesso || 0)}/${Number(row.entregas_total || 0)}`;
     document.getElementById('detail-body').innerHTML = `
       <section class="detail-section">
         <div class="detail-section-header">
@@ -695,6 +718,9 @@
             <div class="meta-item"><span>Duracao</span><strong>${esc(duracao(row.duration_ms))}</strong></div>
             <div class="meta-item"><span>Resultado IA</span><strong>${esc(row.interpretation_resultado_tipo || '-')}</strong></div>
             <div class="meta-item"><span>Linhas ERP</span><strong>${row.interpretation_rows_count ?? '-'}</strong></div>
+            <div class="meta-item"><span>Execucao via</span><strong>${esc(execucaoLabel(row))}</strong></div>
+            <div class="meta-item"><span>Consulta</span><strong>Executada uma vez</strong></div>
+            <div class="meta-item"><span>Entregas</span><strong>${esc(entregasResumo)}</strong></div>
           </div>
         </div>
       </section>
@@ -710,13 +736,14 @@
         </div>
       </section>
 
-      ${detalheErro || sqlExecutado ? `<section class="detail-section">
+      ${detalheErro || sqlExecutado || sqlBase ? `<section class="detail-section">
         <div class="detail-section-header">
           <div class="detail-section-title">Diagnostico tecnico</div>
-          <div class="detail-section-subtitle">Informacoes para conferencia da execucao no ERP.</div>
+          <div class="detail-section-subtitle">${modo === 'sql_fixo' ? 'SQL fixo executado uma vez e reutilizado nas entregas.' : 'Informacoes para conferencia da execucao no ERP.'}</div>
         </div>
         <div class="detail-section-body">
           ${detalheErro ? `<div class="text-box"><label>Erro tecnico</label><pre>${esc(detalheErro)}</pre></div>` : ''}
+          ${sqlBase ? `<div class="text-box"><label>SQL original</label><pre>${esc(sqlBase)}</pre></div>` : ''}
           ${sqlExecutado ? `<div class="text-box"><label>SQL executado</label><pre>${esc(sqlExecutado)}</pre></div>` : ''}
         </div>
       </section>` : ''}

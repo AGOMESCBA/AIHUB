@@ -46,9 +46,14 @@ function runFromRow(row) {
   const status = row.status === 'sucesso' && row.interpretation_resultado_tipo === 'erro'
     ? 'erro'
     : row.status;
+  const execucaoModo = row.execucao_modo
+    || (row.job_sql_fixo || row.interpretation_origem === 'agendamento_sql_fixo' || row.interpretation_pipeline_origem === 'agendamento_sql_fixo'
+      ? 'sql_fixo'
+      : 'pergunta_ia');
   return {
     ...row,
     status,
+    execucao_modo: execucaoModo,
     empresa_id: Number(row.empresa_id),
     attempt: Number(row.attempt || 1),
     duration_ms: row.duration_ms === null || row.duration_ms === undefined ? null : Number(row.duration_ms),
@@ -155,13 +160,19 @@ function listarDestinatarios(empresaId, jobId) {
 function listarRuns(empresaId, jobId, limit = 50) {
   return getDB().prepare(`
     SELECT r.*,
+      j.sql_fixo AS job_sql_fixo,
+      i.origem AS interpretation_origem,
+      i.pipeline_origem AS interpretation_pipeline_origem,
       i.resultado_tipo AS interpretation_resultado_tipo,
       i.rows_count AS interpretation_rows_count,
+      i.sql_canonico_original AS interpretation_sql_canonico_original,
+      i.sql_auditoria_json AS interpretation_sql_auditoria_json,
       i.sql_gerado AS interpretation_sql_gerado,
       i.sql_final_executado AS interpretation_sql_final_executado,
       i.sql_validacao_erro AS interpretation_sql_validacao_erro,
       i.agente_url AS interpretation_agente_url
     FROM scheduled_question_runs r
+    LEFT JOIN scheduled_question_jobs j ON j.id = r.job_id AND j.empresa_id = r.empresa_id
     LEFT JOIN interpretation_log i ON i.id = r.interpretation_log_id AND i.empresa_id = r.empresa_id
     WHERE r.empresa_id = ? AND r.job_id = ?
     ORDER BY r.criado_em DESC
@@ -181,10 +192,15 @@ function listarRunsGerais(empresaId, { jobId = null, limit = 300 } = {}) {
     SELECT r.*,
       j.nome AS job_nome,
       j.modulo AS job_modulo,
+      j.sql_fixo AS job_sql_fixo,
       j.schedule_tipo AS job_schedule_tipo,
       j.timezone AS job_timezone,
+      i.origem AS interpretation_origem,
+      i.pipeline_origem AS interpretation_pipeline_origem,
       i.resultado_tipo AS interpretation_resultado_tipo,
       i.rows_count AS interpretation_rows_count,
+      i.sql_canonico_original AS interpretation_sql_canonico_original,
+      i.sql_auditoria_json AS interpretation_sql_auditoria_json,
       i.sql_gerado AS interpretation_sql_gerado,
       i.sql_final_executado AS interpretation_sql_final_executado,
       i.sql_validacao_erro AS interpretation_sql_validacao_erro,
@@ -270,15 +286,15 @@ function limparRuns(empresaId, { inicio = null, fim = null, jobId = null } = {})
   return tx();
 }
 
-function criarRun(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema' } = {}) {
+function criarRun(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema', execucao_modo = null } = {}) {
   const db = getDB();
   const id = uuid();
   const now = agora();
   db.prepare(`
     INSERT INTO scheduled_question_runs (
       id, job_id, empresa_id, channel_id, trigger_tipo, status, pergunta,
-      started_at, attempt, criado_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, 'executando', ?, ?, 1, ?, ?)
+      execucao_modo, started_at, attempt, criado_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, 'executando', ?, ?, ?, 1, ?, ?)
   `).run(
     id,
     job.id,
@@ -286,6 +302,7 @@ function criarRun(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema'
     String(job.channel_id || ''),
     String(trigger_tipo || 'manual'),
     String(job.pergunta || ''),
+    execucao_modo || (job.sql_fixo ? 'sql_fixo' : 'pergunta_ia'),
     now,
     now,
     now

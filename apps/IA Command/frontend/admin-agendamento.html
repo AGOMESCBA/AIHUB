@@ -117,6 +117,23 @@
     .run-top { display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px; }
     .run-date { color:var(--text-hi);font-weight:800;font-size:12px; }
     .run-msg { color:var(--text-md);font-size:12px;line-height:1.45; }
+    .help-overlay { position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:300;opacity:0;pointer-events:none;transition:opacity .2s; }
+    .help-overlay.open { opacity:1;pointer-events:all; }
+    .help-drawer { position:fixed;top:0;right:0;bottom:0;width:min(560px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .24s ease;overflow:hidden;box-shadow:var(--shadow-lg); }
+    .help-drawer.open { transform:translateX(0); }
+    .help-drawer-header { display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0; }
+    .help-drawer-title { font-size:15px;font-weight:800;color:var(--text-hi); }
+    .help-drawer-close { width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center; }
+    .help-drawer-close:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .help-drawer-body { flex:1;overflow-y:auto;padding:22px; }
+    .help-section { margin-bottom:24px; }
+    .help-section:last-child { margin-bottom:0; }
+    .help-section-title { font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:10px; }
+    .help-item { margin-bottom:13px; }
+    .help-item-label { font-size:13px;font-weight:800;color:var(--text-hi);margin-bottom:4px; }
+    .help-item-desc { font-size:13px;color:var(--text-md);line-height:1.65; }
+    .help-tip { background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px; }
+    .help-code { display:block;background:var(--bg-base);border:1px solid var(--border);border-radius:7px;padding:10px 12px;color:var(--text-hi);font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.5;white-space:pre-wrap;margin-top:8px; }
     .d-none { display:none !important; }
     @media (max-width: 980px) {
       .page-head { flex-direction:column; }
@@ -274,8 +291,8 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label">SQL fixo opcional</label>
-                  <textarea id="f-sql-fixo" class="form-control sql-textarea" placeholder="Cole aqui um SELECT ja validado no ERP. Se ficar vazio, o IA Command gera o SQL pela pergunta." oninput="atualizarResumo()"></textarea>
-                  <div class="form-help">Quando preenchido, o job executa este SQL uma unica vez, formata o resultado e entrega a mesma resposta para todos os destinatarios. O modulo esperado passa a ser obrigatorio.</div>
+                  <textarea id="f-sql-fixo" class="form-control sql-textarea" placeholder="Ex: WITH dados AS (...) SELECT ... WHERE F2_EMISSAO = '{{HOJE}}'" oninput="atualizarResumo()"></textarea>
+                  <div class="form-help">Quando preenchido, o job executa este SQL uma unica vez e entrega a mesma resposta para todos. Use macros Protheus ({{HOJE}} = 20260731) ou ISO ({{HOJE_ISO}} = 2026-07-31), inclusive com deslocamentos como {{INICIO_ANO_ISO:-1}}. O modulo esperado passa a ser obrigatorio.</div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -416,6 +433,95 @@
     </div>
   </div>
 </div>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<aside class="help-drawer" id="help-drawer" aria-label="Ajuda do Agendamento">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda - Perguntas Agendadas</span>
+    <button class="help-drawer-close" type="button" onclick="fecharAjuda()" title="Fechar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="help-drawer-body">
+    <section class="help-section">
+      <div class="help-section-title">Como o job executa</div>
+      <div class="help-item-desc">Cada job pertence a uma empresa, usa um canal WhatsApp vinculado e envia a resposta apenas para numeros autorizados daquela empresa. Quando houver varios destinatarios, a consulta e executada uma unica vez e a mesma resposta e entregue para todos.</div>
+    </section>
+
+    <section class="help-section">
+      <div class="help-section-title">SQL fixo opcional</div>
+      <div class="help-item"><div class="help-item-label">Campo vazio</div><div class="help-item-desc">O IA Command interpreta a pergunta e gera o SQL dinamicamente, como acontece nas mensagens normais.</div></div>
+      <div class="help-item"><div class="help-item-label">Campo preenchido</div><div class="help-item-desc">O sistema pula a etapa de geracao por IA, executa o SQL informado, formata o resultado e envia a resposta. O modulo esperado deve ser informado para aplicar o handler e as regras de seguranca corretas.</div></div>
+      <div class="help-tip">Use SQL fixo para relatorios estaveis e recorrentes. Evite datas literais, como 20260731, porque elas deixam o job preso em um periodo antigo.</div>
+    </section>
+
+    <section class="help-section">
+      <div class="help-section-title">Macros de data</div>
+      <div class="help-item-desc">As macros sao substituidas no momento da execucao, usando o timezone configurado no job.</div>
+      <div class="help-item"><div class="help-item-label">Formato Protheus</div><div class="help-item-desc">Retorna data como texto <strong>YYYYMMDD</strong>, usado em campos Protheus como <code>F2_EMISSAO</code>.</div></div>
+      <code class="help-code">{{HOJE}}                  20260731
+{{ONTEM}}                 20260730
+{{AMANHA}}                20260801
+{{INICIO_MES}}            20260701
+{{FIM_MES}}               20260731
+{{INICIO_MES_ANTERIOR}}   20260601
+{{FIM_MES_ANTERIOR}}      20260630
+{{INICIO_ANO}}            20260101
+{{FIM_ANO}}               20261231
+{{INICIO_ANO_ANTERIOR}}   20250101
+{{FIM_ANO_ANTERIOR}}      20251231</code>
+      <div class="help-item"><div class="help-item-label">Formato ISO</div><div class="help-item-desc">Retorna data como <strong>YYYY-MM-DD</strong>, formato padrao para campos DATE/DATETIME no SQL Server e em bancos relacionais. Use quando o campo da tabela for uma data real, ou quando fizer <code>CAST(... AS DATE)</code>.</div></div>
+      <code class="help-code">{{HOJE_ISO}}                  2026-07-31
+{{ONTEM_ISO}}                 2026-07-30
+{{AMANHA_ISO}}                2026-08-01
+{{INICIO_MES_ISO}}            2026-07-01
+{{FIM_MES_ISO}}               2026-07-31
+{{INICIO_MES_ANTERIOR_ISO}}   2026-06-01
+{{FIM_MES_ANTERIOR_ISO}}      2026-06-30
+{{INICIO_ANO_ISO}}            2026-01-01
+{{FIM_ANO_ISO}}               2026-12-31
+{{INICIO_ANO_ANTERIOR_ISO}}   2025-01-01
+{{FIM_ANO_ANTERIOR_ISO}}      2025-12-31</code>
+      <div class="help-item-desc">Tambem existem macros separadas para partes da data: {{ANO}}, {{MES}} e {{DIA}}.</div>
+    </section>
+
+    <section class="help-section">
+      <div class="help-section-title">Deslocamentos</div>
+      <div class="help-item-desc">Use dois pontos e um numero para voltar ou avancar periodos. Em macros de mes, o numero representa meses. Em macros de ano, representa anos. Em {{HOJE}}, representa dias.</div>
+      <code class="help-code">{{INICIO_MES:-1}}       inicio do mes anterior em Protheus
+{{INICIO_MES_ISO:-1}}   inicio do mes anterior em ISO
+{{FIM_MES:-12}}         fim do mesmo mes do ano passado em Protheus
+{{FIM_MES_ISO:-12}}     fim do mesmo mes do ano passado em ISO
+{{INICIO_ANO:-1}}       inicio do ano passado em Protheus
+{{INICIO_ANO_ISO:-1}}   inicio do ano passado em ISO
+{{FIM_ANO:-2}}          fim do ano retrasado em Protheus
+{{FIM_ANO_ISO:-2}}      fim do ano retrasado em ISO
+{{HOJE:-7}}             data de 7 dias atras em Protheus
+{{HOJE_ISO:-7}}         data de 7 dias atras em ISO</code>
+    </section>
+
+    <section class="help-section">
+      <div class="help-section-title">Exemplos</div>
+      <div class="help-item"><div class="help-item-label">Consulta do dia</div><code class="help-code">WHERE SF2.F2_EMISSAO = '{{HOJE}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Consulta do mes atual</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_MES}}' AND '{{FIM_MES}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Campo DATE/DATETIME no SQL Server</div><code class="help-code">WHERE CAST(DATA_EMISSAO AS DATE) BETWEEN '{{INICIO_MES_ISO}}' AND '{{FIM_MES_ISO}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Mes anterior</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_MES:-1}}' AND '{{FIM_MES:-1}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Ano passado</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_ANO:-1}}' AND '{{FIM_ANO:-1}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Ano passado em campo DATE/DATETIME</div><code class="help-code">WHERE DATA_EMISSAO >= '{{INICIO_ANO_ISO:-1}}'
+  AND DATA_EMISSAO < DATEADD(DAY, 1, '{{FIM_ANO_ISO:-1}}')</code></div>
+      <div class="help-item"><div class="help-item-label">Ano retrasado</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_ANO:-2}}' AND '{{FIM_ANO:-2}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Mesmo mes do ano passado</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_MES:-12}}' AND '{{FIM_MES:-12}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Limite de linhas</div><code class="help-code">SET ROWCOUNT 10000;
+WITH dados AS (...)
+SELECT * FROM dados;</code></div>
+    </section>
+
+    <section class="help-section">
+      <div class="help-section-title">Cuidados</div>
+      <div class="help-item-desc">O SQL fixo deve ser uma consulta de leitura, iniciando com SELECT ou WITH. O prefixo SET ROWCOUNT numerico e aceito antes da consulta. Comandos de escrita, alteracao de estrutura ou execucao dinamica sao bloqueados.</div>
+    </section>
+  </div>
+</aside>
 
 <script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
 <script src="/js/auth.js"></script>
@@ -1188,6 +1294,20 @@
     if (typeof table.clearFilter === 'function') table.clearFilter(true);
     setTimeout(() => table.redraw(true), 0);
   }
+
+  function abrirAjuda() {
+    document.getElementById('help-overlay')?.classList.add('open');
+    document.getElementById('help-drawer')?.classList.add('open');
+  }
+
+  function fecharAjuda() {
+    document.getElementById('help-overlay')?.classList.remove('open');
+    document.getElementById('help-drawer')?.classList.remove('open');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') fecharAjuda();
+  });
 
   lerEstadoAgrupamento();
   inicializarPainelAgrupamento();
