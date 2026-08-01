@@ -526,11 +526,14 @@ function _conectarSocket() {
     // Log — roteia pelo channelId ou empresa_id
     _socket.on('iac-log', (entry) => {
       if (_isDuplicado('iac-log', entry)) return;
-      // Mensagens técnicas de boot são muito granulares para o painel — suprimir
+      // Suprime mensagens técnicas ou já cobertas pelo evento iac-msg
       const msg = entry?.msg || '';
       if (/^\[boot\]/.test(msg)) return;
       if (/^Chrome:/.test(msg)) return;
       if (/^Sessao WhatsApp:/.test(msg)) return;
+      if (/^━━ Mensagem #/.test(msg)) return;
+      if (/^📩 Texto recebido:/.test(msg)) return;
+      if (/^Pipeline —/.test(msg)) return;
       const canalId = entry?.channelId || entry?.channel_id || _canalPorEmpresa(entry?.empresa_id);
       if (canalId) _receberLog(canalId, entry);
     });
