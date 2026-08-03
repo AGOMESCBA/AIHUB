@@ -22,9 +22,10 @@ function getIacDb() {
   return _iacDb;
 }
 
-function countIacTabela(iacDb, tabela, empresaId) {
+function countIacTabela(iacDb, tabela, empresaId, empresaIdComoTexto = false) {
   try {
-    return iacDb.prepare(`SELECT COUNT(*) AS n FROM ${tabela} WHERE empresa_id = ?`).get(empresaId)?.n ?? 0;
+    const valor = empresaIdComoTexto ? String(empresaId) : empresaId;
+    return iacDb.prepare(`SELECT COUNT(*) AS n FROM ${tabela} WHERE empresa_id = ?`).get(valor)?.n ?? 0;
   } catch (_) { return 0; }
 }
 
@@ -40,10 +41,12 @@ function remapId(oldId, destinoId) {
 // opts.autoincPk  = true  → tabela tem PK INTEGER AUTOINCREMENT, não remapeia id
 // opts.camposRef  = ['campo'] → campos TEXT que referenciam IDs de outra tabela
 //                               e devem ser remapeados com o mesmo remapId
+// opts.empresaIdComoTexto = true → empresa_id é armazenado como TEXT nessa tabela
+//                                  (ex.: chat_history) — grava String(destinoId) em vez de Number.
 function migrarIacSimples(iacDb, tabela, origemId, destinoId, opts = {}) {
-  const { autoincPk = false, camposRef = [] } = opts;
+  const { autoincPk = false, camposRef = [], empresaIdComoTexto = false } = opts;
   const linhas = iacDb.prepare(`SELECT * FROM ${tabela} WHERE empresa_id = ?`).all(origemId);
-  iacDb.prepare(`DELETE FROM ${tabela} WHERE empresa_id = ?`).run(destinoId);
+  iacDb.prepare(`DELETE FROM ${tabela} WHERE empresa_id = ?`).run(empresaIdComoTexto ? String(destinoId) : destinoId);
   if (!linhas.length) return;
 
   const allCols = Object.keys(linhas[0]);
@@ -56,11 +59,67 @@ function migrarIacSimples(iacDb, tabela, origemId, destinoId, opts = {}) {
     for (const row of linhas) {
       const r = { ...row };
       if (!autoincPk) r.id = remapId(row.id, destinoId);
-      r.empresa_id = destinoId;
+      r.empresa_id = empresaIdComoTexto ? String(destinoId) : destinoId;
       for (const campo of camposRef) {
         if (r[campo]) r[campo] = remapId(r[campo], destinoId);
       }
       stmt.run(cols.map(c => r[c]));
+    }
+  });
+  tx();
+}
+
+// Migra tabela cuja PK é a própria empresa_id (1 linha por empresa, sem remapeamento de id).
+function migrarIacPorEmpresa(iacDb, tabela, origemId, destinoId) {
+  const linha = iacDb.prepare(`SELECT * FROM ${tabela} WHERE empresa_id = ?`).get(origemId);
+  iacDb.prepare(`DELETE FROM ${tabela} WHERE empresa_id = ?`).run(destinoId);
+  if (!linha) return;
+
+  const cols = Object.keys(linha);
+  const stmt = iacDb.prepare(`INSERT INTO ${tabela} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+  const r = { ...linha, empresa_id: destinoId };
+  stmt.run(cols.map(c => r[c]));
+}
+
+// Migra scheduled_question_jobs + recipients/runs dependentes (FK job_id).
+function migrarScheduledQuestions(iacDb, origemId, destinoId) {
+  const jobs = iacDb.prepare('SELECT * FROM scheduled_question_jobs WHERE empresa_id = ?').all(origemId);
+  const jobIdMap = {};
+  for (const j of jobs) jobIdMap[j.id] = remapId(j.id, destinoId);
+
+  const oldJobIds = jobs.map(j => j.id);
+  const ph = oldJobIds.length ? oldJobIds.map(() => '?').join(', ') : "'__noop__'";
+  const recipients = iacDb.prepare(`SELECT * FROM scheduled_question_recipients WHERE job_id IN (${ph})`).all(...oldJobIds);
+  const runs        = iacDb.prepare(`SELECT * FROM scheduled_question_runs WHERE job_id IN (${ph})`).all(...oldJobIds);
+
+  const tx = iacDb.transaction(() => {
+    iacDb.prepare('DELETE FROM scheduled_question_runs WHERE empresa_id = ?').run(destinoId);
+    iacDb.prepare('DELETE FROM scheduled_question_recipients WHERE empresa_id = ?').run(destinoId);
+    iacDb.prepare('DELETE FROM scheduled_question_jobs WHERE empresa_id = ?').run(destinoId);
+
+    if (jobs.length) {
+      const cols = Object.keys(jobs[0]);
+      const stmt = iacDb.prepare(`INSERT INTO scheduled_question_jobs (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of jobs) {
+        const r = { ...row, id: jobIdMap[row.id], empresa_id: destinoId };
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+    if (recipients.length) {
+      const cols = Object.keys(recipients[0]);
+      const stmt = iacDb.prepare(`INSERT INTO scheduled_question_recipients (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of recipients) {
+        const r = { ...row, id: remapId(row.id, destinoId), job_id: jobIdMap[row.job_id] ?? row.job_id, empresa_id: destinoId };
+        stmt.run(cols.map(c => r[c]));
+      }
+    }
+    if (runs.length) {
+      const cols = Object.keys(runs[0]);
+      const stmt = iacDb.prepare(`INSERT INTO scheduled_question_runs (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+      for (const row of runs) {
+        const r = { ...row, id: remapId(row.id, destinoId), job_id: jobIdMap[row.job_id] ?? row.job_id, empresa_id: destinoId };
+        stmt.run(cols.map(c => r[c]));
+      }
     }
   });
   tx();
@@ -199,6 +258,8 @@ const IAC_TABELAS = {
   iac_wa_numeros:   { sistema: 'iac', grupo: 'WhatsApp', label: 'Números autorizados',   tabela: 'whatsapp_allowed_numbers',   tipo: 'simples', default: true,  opts: {} },
   iac_wa_templates: { sistema: 'iac', grupo: 'WhatsApp', label: 'Templates de mensagem', tabela: 'whatsapp_message_templates', tipo: 'simples', default: true,  opts: {} },
   iac_wa_canais:    { sistema: 'iac', grupo: 'WhatsApp', label: 'Canais — associações',  tabela: 'whatsapp_channel_companies', tipo: 'simples', default: false, opts: {} },
+  // whatsapp_sessions: PK é a própria empresa_id (1 sessão por empresa) — sem remapeamento de id.
+  iac_wa_sessions:  { sistema: 'iac', grupo: 'WhatsApp', label: 'Sessão WhatsApp (status/QR)', tabela: 'whatsapp_sessions', tipo: 'porempresa', default: true, opts: {} },
 
   // Conexão ERP — migração especial: cascateia protheus_config e erp_config
   iac_conexoes: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Conexões ERP + config Protheus',              tabela: 'connections',  tipo: 'conexoes', default: true },
@@ -206,10 +267,25 @@ const IAC_TABELAS = {
   iac_sx2: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Dicionário SX2 — compartilhamento de tabelas', tabela: 'protheus_sx2', tipo: 'sx',      default: true,  opts: {} },
   iac_sx3: { sistema: 'iac', grupo: 'Conexão ERP', label: 'Dicionário SX3 — campos do Protheus',          tabela: 'protheus_sx3', tipo: 'sx',      default: false, opts: {} },
 
+  // Agendamento — jobs + recipients/runs dependentes (FK job_id), migrados juntos em cascata.
+  iac_scheduled_questions: { sistema: 'iac', grupo: 'Agendamento', label: 'Perguntas agendadas + destinatários + histórico de execuções', tabela: 'scheduled_question_jobs', tipo: 'scheduled', default: true },
+
+  // Aprendizado de IA / NL-SQL — exemplos, políticas e configurações aprendidas pelo motor semântico
+  iac_nlsql_examples: { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Exemplos semânticos (NL-SQL)',        tabela: 'nlsql_semantic_examples',   tipo: 'simples',   default: true, opts: {} },
+  iac_nlsql_policies: { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Políticas semânticas',                tabela: 'nlsql_semantic_policies',   tipo: 'simples',   default: true, opts: {} },
+  // nlsql_semantic_settings: PK é a própria empresa_id — sem remapeamento de id.
+  iac_nlsql_settings: { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Configurações do motor semântico',    tabela: 'nlsql_semantic_settings',   tipo: 'porempresa', default: true, opts: {} },
+  iac_nlsql_shadow:   { sistema: 'iac', grupo: 'Aprendizado de IA', label: 'Log de shadow-testing semântico',     tabela: 'nlsql_semantic_shadow_log', tipo: 'simples',   default: false, opts: {} },
+
   // Logs — desligado por padrão
   iac_exec_log:   { sistema: 'iac', grupo: 'Logs', label: 'Log de execuções',      tabela: 'execution_log',      tipo: 'simples', default: false, opts: {} },
   iac_interp_log: { sistema: 'iac', grupo: 'Logs', label: 'Log de interpretações', tabela: 'interpretation_log', tipo: 'simples', default: false, opts: {} },
   iac_unmatched:  { sistema: 'iac', grupo: 'Logs', label: 'Mensagens sem resposta', tabela: 'unmatched_messages', tipo: 'simples', default: false, opts: {} },
+  iac_audit_log:  { sistema: 'iac', grupo: 'Logs', label: 'Log de auditoria',       tabela: 'audit_log',          tipo: 'simples', default: false, opts: {} },
+  iac_chat_history: { sistema: 'iac', grupo: 'Logs', label: 'Histórico de conversas (chat)', tabela: 'chat_history', tipo: 'simples', default: false, opts: { autoincPk: true, empresaIdComoTexto: true } },
+
+  // Propostas de correção de spec (revisão humana das sugestões da IA)
+  iac_spec_feedback: { sistema: 'iac', grupo: 'IA / NLP', label: 'Propostas de correção de spec', tabela: 'spec_feedback_propostas', tipo: 'simples', default: true, opts: {} },
 };
 
 const MIGRACAO_TABELAS = {
@@ -277,16 +353,116 @@ function normalizarEmpresa(value, destinoId, destinoNome) {
   return next;
 }
 
-function criarBackupDestino(destinoId) {
+// O frontend chama /executar uma vez por tabela marcada (para mostrar progresso item a item),
+// mas todas as chamadas de uma mesma migração compartilham o mesmo lote_id. Por isso o backup
+// só é criado na primeira chamada de cada lote — as demais reaproveitam o arquivo já gerado,
+// evitando 1 backup por tabela quando o usuário só fez "uma migração" do ponto de vista dele.
+const _lotesComBackupIahub = new Set();
+const _lotesComBackupIac   = new Set();
+
+// Evita crescimento indefinido em memória — cada lote é só algumas strings,
+// mas o processo roda dias/semanas sem reiniciar.
+function _limitarSetDeLotes(set, limite = 1000) {
+  if (set.size <= limite) return;
+  const excedente = set.size - limite;
+  const it = set.values();
+  for (let i = 0; i < excedente; i++) set.delete(it.next().value);
+}
+
+function criarBackupDestino(destinoId, loteId) {
+  if (loteId && _lotesComBackupIahub.has(loteId)) return null;
+
   const file = empresaDataFile(destinoId);
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(file)) {
+    if (loteId) _lotesComBackupIahub.add(loteId);
+    return null;
+  }
 
   const backupDir = path.join(path.dirname(file), 'backups');
   fs.mkdirSync(backupDir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupFile = path.join(backupDir, `empresa_${destinoId}_antes_migracao_${stamp}.json`);
   fs.copyFileSync(file, backupFile);
+  if (loteId) { _lotesComBackupIahub.add(loteId); _limitarSetDeLotes(_lotesComBackupIahub); }
   return backupFile;
+}
+
+// Backup do banco SQLite do IA Command antes de migrar tabelas iac_*.
+// O banco é único e compartilhado por todas as empresas (não há arquivo por empresa),
+// então o backup cobre o banco inteiro — usa iacDb.backup(), forma segura de copiar
+// um banco em modo WAL sem risco de corrupção (ao contrário de fs.copyFileSync).
+async function criarBackupIacDb(iacDb, destinoId, loteId) {
+  if (loteId && _lotesComBackupIac.has(loteId)) return null;
+
+  const dbPath = iacDb.name;
+  if (!dbPath || !fs.existsSync(dbPath)) {
+    if (loteId) _lotesComBackupIac.add(loteId);
+    return null;
+  }
+
+  const backupDir = path.join(path.dirname(dbPath), 'backups');
+  fs.mkdirSync(backupDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupFile = path.join(backupDir, `ia-command_antes_migracao_empresa_${destinoId}_${stamp}.db`);
+  await iacDb.backup(backupFile);
+  if (loteId) { _lotesComBackupIac.add(loteId); _limitarSetDeLotes(_lotesComBackupIac); }
+  return backupFile;
+}
+
+// Diretórios onde os backups de migração são gravados — usados pela tela de
+// gerenciamento de backups (listar/apagar) em /api/config/migracao/backups.
+function dirsBackupMigracao() {
+  const dirs = [];
+
+  // IAHub/IA Recruit — backup por empresa (empresa_{id}_antes_migracao_*.json)
+  try {
+    const arquivoQualquer = empresaDataFile(1);
+    dirs.push({ origem: 'iahub', dir: path.join(path.dirname(arquivoQualquer), 'backups') });
+  } catch (_) {}
+
+  // IA Command — backup do banco inteiro (ia-command_antes_migracao_empresa_*.db)
+  const iacDb = getIacDb();
+  if (iacDb?.name) {
+    dirs.push({ origem: 'iac', dir: path.join(path.dirname(iacDb.name), 'backups') });
+  }
+
+  return dirs;
+}
+
+function listarBackupsMigracao() {
+  const resultado = [];
+  for (const { origem, dir } of dirsBackupMigracao()) {
+    if (!fs.existsSync(dir)) continue;
+    for (const nome of fs.readdirSync(dir)) {
+      const caminho = path.join(dir, nome);
+      let stat;
+      try { stat = fs.statSync(caminho); } catch (_) { continue; }
+      if (!stat.isFile()) continue;
+      resultado.push({
+        origem,
+        nome,
+        tamanho: stat.size,
+        criado_em: stat.mtime.toISOString(),
+      });
+    }
+  }
+  resultado.sort((a, b) => b.criado_em.localeCompare(a.criado_em));
+  return resultado;
+}
+
+// Resolve o caminho físico de um backup validando origem + nome contra path traversal
+// (o nome do arquivo vem da URL — nunca concatenar sem checar que o resultado
+// continua dentro do diretório de backups esperado).
+function resolverArquivoBackup(origem, nome) {
+  const entrada = dirsBackupMigracao().find(d => d.origem === origem);
+  if (!entrada) return null;
+  if (!nome || nome.includes('..') || nome.includes('/') || nome.includes('\\')) return null;
+
+  const caminho = path.join(entrada.dir, nome);
+  const raiz = path.resolve(entrada.dir);
+  if (!path.resolve(caminho).startsWith(raiz + path.sep)) return null;
+  if (!fs.existsSync(caminho)) return null;
+  return caminho;
 }
 
 function parseDataUrl(dataUrl) {
@@ -517,8 +693,8 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
       id,
       grupo: def.grupo,
       label: def.label,
-      origem: iacDb ? countIacTabela(iacDb, def.tabela, origemId) : null,
-      destino: iacDb ? countIacTabela(iacDb, def.tabela, destinoId) : null,
+      origem: iacDb ? countIacTabela(iacDb, def.tabela, origemId, def.opts?.empresaIdComoTexto) : null,
+      destino: iacDb ? countIacTabela(iacDb, def.tabela, destinoId, def.opts?.empresaIdComoTexto) : null,
     }));
 
     res.json({
@@ -528,11 +704,12 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
     });
   });
 
-  app.post('/api/config/migracao/executar', requireAuth, requireAdmin, (req, res) => {
+  app.post('/api/config/migracao/executar', requireAuth, requireAdmin, async (req, res) => {
     const origemId = Number(req.body?.origem_id || 0);
     const destinoId = Number(req.body?.destino_id || 0);
     const tabelas = Array.isArray(req.body?.tabelas) ? req.body.tabelas : [];
     const confirmar = String(req.body?.confirmar || '').toUpperCase().trim();
+    const loteId = req.body?.lote_id ? String(req.body.lote_id) : null;
 
     if (!origemId || !destinoId || !tabelas.length) {
       return res.status(400).json({ error: 'Informe origem, destino e ao menos uma tabela.' });
@@ -564,7 +741,7 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
         const origemData = readEmpresaData(origemId);
         const destinoData = readEmpresaData(destinoId);
         const destinoNome = destino.razao_social || destino.nome || `Empresa ${destino.id}`;
-        criarBackupDestino(destinoId);
+        criarBackupDestino(destinoId, loteId);
 
         for (const tabela of tabelasIahub) {
           const def = MIGRACAO_TABELAS[tabela];
@@ -585,12 +762,17 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
         if (!iacDb) {
           return res.status(503).json({ error: 'IA Command nao disponivel. Verifique se o modulo esta ativo.' });
         }
+        await criarBackupIacDb(iacDb, destinoId, loteId);
         for (const tabela of tabelasIac) {
           const def = IAC_TABELAS[tabela];
           if (def.tipo === 'conexoes') {
             migrarConexoes(iacDb, origemId, destinoId);
           } else if (def.tipo === 'sx') {
             migrarSxDict(iacDb, def.tabela, origemId, destinoId);
+          } else if (def.tipo === 'porempresa') {
+            migrarIacPorEmpresa(iacDb, def.tabela, origemId, destinoId);
+          } else if (def.tipo === 'scheduled') {
+            migrarScheduledQuestions(iacDb, origemId, destinoId);
           } else {
             migrarIacSimples(iacDb, def.tabela, origemId, destinoId, def.opts || {});
           }
@@ -602,6 +784,23 @@ module.exports = function registerRoutes(app, { requireAuth, requireAdmin, requi
     }
 
     res.json({ ok: true, migradas });
+  });
+
+  app.get('/api/config/migracao/backups', requireAuth, requireAdmin, (req, res) => {
+    res.json({ backups: listarBackupsMigracao() });
+  });
+
+  app.delete('/api/config/migracao/backups/:origem/:nome', requireAuth, requireAdmin, (req, res) => {
+    const { origem, nome } = req.params;
+    const caminho = resolverArquivoBackup(origem, decodeURIComponent(nome));
+    if (!caminho) return res.status(404).json({ error: 'Backup nao encontrado.' });
+
+    try {
+      fs.unlinkSync(caminho);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message || 'Erro ao apagar backup.' });
+    }
   });
 
 };

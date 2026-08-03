@@ -231,6 +231,41 @@ app.use((req, res, next) => {
   requireIaAdmin(req, res, next);
 });
 
+// Páginas compartilhadas entre sistemas (IA Recruit + IA Command) — exigem apenas
+// sessão autenticada, sem amarrar a um systemCode específico como requireSystemAccess faz.
+function requireAuthenticatedPage(req, res, next) {
+  if (req.session?.authenticated) return next();
+  res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl || '/')}`);
+}
+
+// Migrar Dados copia dados inteiros entre empresas — restrito a administradores,
+// igual às rotas /api/config/migracao/* que ela consome (requireAdmin no backend).
+function requireAdminPage(req, res, next) {
+  if (req.session?.authenticated && req.session?.role === 'admin') return next();
+  if (!req.session?.authenticated) {
+    return res.redirect(`/login.html?next=${encodeURIComponent(req.originalUrl || '/')}`);
+  }
+  res.redirect('/iahub.html');
+}
+
+const SHARED_AUTH_PAGES = new Set([
+  '/configuracoes.html',
+]);
+
+app.use((req, res, next) => {
+  if (!SHARED_AUTH_PAGES.has(req.path)) return next();
+  requireAuthenticatedPage(req, res, next);
+});
+
+const SHARED_ADMIN_PAGES = new Set([
+  '/migrar-dados.html',
+]);
+
+app.use((req, res, next) => {
+  if (!SHARED_ADMIN_PAGES.has(req.path)) return next();
+  requireAdminPage(req, res, next);
+});
+
 app.get('/app/ia-recruit', requireRecrutamento, (req, res) => {
   res.redirect('/app/ia-recruit/shell.html');
 });

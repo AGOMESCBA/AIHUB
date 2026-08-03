@@ -7,6 +7,17 @@
   <link rel="stylesheet" href="/css/iahub.css">
   <style>
     .page-content { padding-top: 16px; }
+
+    /* Abas da página */
+    .mig-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .mig-tab {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      padding: 10px 16px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700;
+      color: var(--text-md); margin-bottom: -1px;
+    }
+    .mig-tab:hover { color: var(--text-hi); }
+    .mig-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
     .mig-layout { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; align-items: start; }
     .mig-card { border: 1px solid var(--border); background: var(--bg-card); border-radius: 8px; overflow: hidden; }
     .mig-card-hd { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 800; color: var(--text-hi); }
@@ -48,6 +59,9 @@
     .sys-hd:hover { background: var(--bg-hover); }
     .sys-icon { font-size: 15px; flex-shrink: 0; }
     .sys-name { font-size: 13px; font-weight: 800; color: var(--text-hi); flex: 1; }
+    .sys-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-mini { background: var(--bg-card); color: var(--text-md); border: 1px solid var(--border); border-radius: 6px; padding: 4px 9px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; }
+    .btn-mini:hover { border-color: var(--accent); color: var(--accent); }
     .sys-chevron { font-size: 11px; color: var(--text-lo); transition: transform var(--transition); }
     .sys-chevron.closed { transform: rotate(-90deg); }
     .sys-body { max-height: 6000px; overflow: hidden; transition: max-height .35s cubic-bezier(.4,0,.2,1); }
@@ -81,6 +95,28 @@
     .mig-row-label { font-size: 13px; color: var(--text-hi); }
     .mig-num { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--text-md); text-align: right; padding-right: 8px; }
     .mig-num.cheio { color: #b45309; font-weight: 700; }
+
+    /* Linha de backup */
+    .bkp-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      transition: background var(--transition);
+    }
+    .bkp-row:last-child { border-bottom: none; }
+    .bkp-row:hover { background: var(--bg-hover); }
+    .bkp-info { flex: 1; min-width: 0; }
+    .bkp-nome { font-size: 12px; color: var(--text-hi); word-break: break-all; }
+    .bkp-meta { font-size: 11px; color: var(--text-lo); margin-top: 2px; }
+    .bkp-tag {
+      font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+      padding: 2px 7px; border-radius: 99px; flex-shrink: 0;
+      background: var(--bg-hover); color: var(--text-md); border: 1px solid var(--border);
+    }
+    .btn-danger-light {
+      background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px;
+      padding: 5px 10px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .btn-danger-light:hover { background: #fee2e2; border-color: #fca5a5; }
 
     /* ── SPLASH ─────────────────────────────────────────────────────────── */
     .mig-splash-overlay {
@@ -255,6 +291,13 @@
     </div>
 
     <div class="page-content">
+
+      <div class="mig-tabs">
+        <button type="button" class="mig-tab active" data-tab="migrar" onclick="mostrarAba('migrar')">Migrar Dados</button>
+        <button type="button" class="mig-tab" data-tab="backups" onclick="mostrarAba('backups')">Backups</button>
+      </div>
+
+      <div id="aba-migrar" class="mig-aba">
       <div class="mig-layout">
 
         <section class="mig-card">
@@ -270,14 +313,21 @@
                 <select class="form-control" id="destino" onchange="carregarPreview()"></select>
               </div>
             </div>
-            <div class="mig-actions">
-              <button class="btn btn-primary" onclick="carregarPreview()">Atualizar prévia</button>
-            </div>
             <div class="mig-alert info show">
-              Os dados da origem são <strong>copiados</strong> para o destino. A origem não é alterada.
-              Antes de gravar, o sistema cria um backup do arquivo da empresa destino.
+              Para cada tabela marcada, os dados da origem <strong>substituem</strong> os dados do destino —
+              o conteúdo atual do destino nessa tabela é apagado antes da cópia (não é somado/adicionado).
+              A origem não é alterada. Antes de gravar, o sistema cria um backup automático (arquivo da empresa
+              destino para tabelas IAHub, banco do IA Command para tabelas IA Command) na pasta <code>backups/</code>
+              de cada módulo. A restauração, se necessário, é manual — feita por quem administra o servidor.
             </div>
             <div id="msg" class="mig-alert"></div>
+          </div>
+          <div class="mig-card-bd mig-confirm">
+            <div class="form-group">
+              <label class="form-label" for="confirmar">Digite MIGRAR para confirmar</label>
+              <input class="form-control" id="confirmar" placeholder="MIGRAR" style="text-transform:uppercase">
+            </div>
+            <button class="btn btn-primary" id="btn-exec" onclick="executarMigracao()">Migrar Dados</button>
           </div>
         </section>
 
@@ -285,6 +335,7 @@
           <div class="mig-card-hd">Tabelas para copiar</div>
           <div class="mig-panel-tools">
             <div class="mig-panel-tools-left">
+              <button class="btn-light" onclick="carregarPreview()">Atualizar contagem de registros</button>
               <button class="btn-light" onclick="marcarDefaults()">Regras e configurações</button>
               <button class="btn-light" onclick="marcarTodas(true)">Marcar todas</button>
               <button class="btn-light" onclick="marcarTodas(false)">Limpar</button>
@@ -302,17 +353,26 @@
           <div id="tabelas-panel">
             <div style="padding:16px;color:var(--text-lo);font-size:13px">Carregando...</div>
           </div>
-
-          <div class="mig-card-bd mig-confirm">
-            <div class="form-group">
-              <label class="form-label" for="confirmar">Digite MIGRAR para confirmar</label>
-              <input class="form-control" id="confirmar" placeholder="MIGRAR" style="text-transform:uppercase">
-            </div>
-            <button class="btn btn-primary" id="btn-exec" onclick="executarMigracao()">Copiar selecionadas</button>
-          </div>
         </section>
 
       </div>
+      </div>
+
+      <div id="aba-backups" class="mig-aba" style="display:none">
+        <section class="mig-card">
+          <div class="mig-card-hd">Backups de migração</div>
+          <div class="mig-panel-tools">
+            <div class="mig-panel-tools-left">
+              <button class="btn-light" onclick="carregarBackups()">Atualizar lista</button>
+            </div>
+            <span id="backup-count">0 backup(s)</span>
+          </div>
+          <div id="backups-panel">
+            <div style="padding:16px;color:var(--text-lo);font-size:13px">Carregando...</div>
+          </div>
+        </section>
+      </div>
+
     </div>
   </div>
 </div>
@@ -329,6 +389,18 @@ if (IAC_MODE) {
 const sidebarScript = document.createElement('script');
 sidebarScript.src = IAC_MODE ? '/app/ia-command/js/sidebar.js' : '/js/sidebar.js';
 document.head.appendChild(sidebarScript);
+
+// ─── Abas ──────────────────────────────────────────────────────────────────
+let _backupsCarregados = false;
+function mostrarAba(nome) {
+  document.querySelectorAll('.mig-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === nome));
+  document.getElementById('aba-migrar').style.display  = nome === 'migrar'  ? '' : 'none';
+  document.getElementById('aba-backups').style.display = nome === 'backups' ? '' : 'none';
+  if (nome === 'backups' && !_backupsCarregados) {
+    _backupsCarregados = true;
+    carregarBackups();
+  }
+}
 
 // ─── Estado ────────────────────────────────────────────────────────────────
 let tabelas = [];
@@ -384,6 +456,12 @@ function toggleGrp(grpId) {
 function renderTabelas() {
   const mapPv   = new Map(preview.map(t => [t.id, t]));
   const collapse = loadCollapse();
+  // Preserva a seleção atual entre re-renders (ex.: clique em "Atualizar prévia").
+  // null = ainda não há estado na tela (primeira carga) → cai no default de cada tabela.
+  const jaRenderizado = !!document.querySelector('.mig-check');
+  const marcadosAntes = new Set(
+    Array.from(document.querySelectorAll('.mig-check:checked')).map(c => c.dataset.id)
+  );
   const sistemas = {};
   for (const t of tabelas) {
     const sis = t.sistema || 'iahub';
@@ -399,6 +477,10 @@ function renderTabelas() {
       <div class="sys-hd" onclick="toggleSys('${esc(sisId)}')">
         <span class="sys-icon">${meta.icon}</span>
         <span class="sys-name">${esc(meta.label)}</span>
+        <span class="sys-actions" onclick="event.stopPropagation()">
+          <button type="button" class="btn-mini" onclick="marcarSistema('${esc(sisId)}', true)">Marcar todas</button>
+          <button type="button" class="btn-mini" onclick="marcarSistema('${esc(sisId)}', false)">Limpar</button>
+        </span>
         <span class="sys-chevron${sysColl ? ' closed' : ''}" id="syschev-${safeId(sisId)}">▼</span>
       </div>
       <div class="sys-body${sysColl ? ' collapsed' : ''}" id="sysbody-${safeId(sisId)}">`;
@@ -414,8 +496,9 @@ function renderTabelas() {
       for (const t of rows) {
         const p   = mapPv.get(t.id) || {};
         const cls = Number(p.destino || 0) > 0 ? ' cheio' : '';
+        const marcado = jaRenderizado ? marcadosAntes.has(t.id) : !!t.default;
         html += `<div class="mig-row">
-          <div><input class="mig-check" type="checkbox" data-id="${esc(t.id)}" ${t.default ? 'checked' : ''} onchange="atualizarSelecionadas()"></div>
+          <div><input class="mig-check" type="checkbox" data-id="${esc(t.id)}" data-sistema="${esc(sisId)}" ${marcado ? 'checked' : ''} onchange="atualizarSelecionadas()"></div>
           <div class="mig-row-label">${esc(t.label)}</div>
           <div class="mig-num">${p.origem ?? '-'}</div>
           <div class="mig-num${cls}">${p.destino ?? '-'}</div>
@@ -461,6 +544,10 @@ function atualizarSelecionadas() {
   document.getElementById('sel-count').textContent = `${n} selecionada${n === 1 ? '' : 's'}`;
 }
 function marcarTodas(v) { document.querySelectorAll('.mig-check').forEach(c => { c.checked = v; }); atualizarSelecionadas(); }
+function marcarSistema(sisId, v) {
+  document.querySelectorAll(`.mig-check[data-sistema="${sisId}"]`).forEach(c => { c.checked = v; });
+  atualizarSelecionadas();
+}
 function marcarDefaults() {
   document.querySelectorAll('.mig-check').forEach(c => {
     c.checked = !!(tabelas.find(t => t.id === c.dataset.id)?.default);
@@ -639,6 +726,10 @@ async function executarMigracao() {
   document.getElementById('btn-exec').disabled = true;
   mostrarSplash(ids);
 
+  // Um lote_id por clique — o backend usa isso para criar apenas 1 backup para
+  // toda a migração, mesmo fazendo 1 requisição por tabela (para progresso no splash).
+  const loteId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
   const migradas = [];
   const erros    = [];
 
@@ -653,6 +744,7 @@ async function executarMigracao() {
           destino_id: destinoId,
           tabelas:    [tabelaId],
           confirmar:  'MIGRAR',
+          lote_id:    loteId,
         }),
       });
       const data = await res.json();
@@ -667,6 +759,70 @@ async function executarMigracao() {
 
   document.getElementById('btn-exec').disabled = false;
   finalizarSplash(migradas, erros);
+  carregarBackups();
+}
+
+// ─── Backups de migração ────────────────────────────────────────────────────
+const ORIGEM_BACKUP_LABEL = { iahub: 'IAHub', iac: 'IA Command' };
+
+function formatarTamanho(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function formatarDataBackup(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR');
+}
+
+async function carregarBackups() {
+  const painel = document.getElementById('backups-panel');
+  painel.innerHTML = '<div style="padding:16px;color:var(--text-lo);font-size:13px">Carregando...</div>';
+  try {
+    const data = await fetch('/api/config/migracao/backups').then(r => r.json());
+    renderBackups(data.backups || []);
+  } catch (err) {
+    painel.innerHTML = `<div style="padding:16px;color:#991b1b;font-size:13px">Erro ao carregar backups: ${esc(err.message)}</div>`;
+  }
+}
+
+function renderBackups(backups) {
+  const painel = document.getElementById('backups-panel');
+  document.getElementById('backup-count').textContent = `${backups.length} backup${backups.length === 1 ? '' : 's'}`;
+
+  if (!backups.length) {
+    painel.innerHTML = '<div style="padding:16px;color:var(--text-lo);font-size:13px">Nenhum backup encontrado.</div>';
+    return;
+  }
+
+  painel.innerHTML = backups.map(b => `
+    <div class="bkp-row">
+      <span class="bkp-tag">${esc(ORIGEM_BACKUP_LABEL[b.origem] || b.origem)}</span>
+      <div class="bkp-info">
+        <div class="bkp-nome">${esc(b.nome)}</div>
+        <div class="bkp-meta">${formatarDataBackup(b.criado_em)} · ${formatarTamanho(b.tamanho)}</div>
+      </div>
+      <button type="button" class="btn-danger-light" onclick="apagarBackup('${esc(b.origem)}', '${esc(encodeURIComponent(b.nome))}')">Apagar</button>
+    </div>
+  `).join('');
+}
+
+async function apagarBackup(origem, nomeCodificado) {
+  const nome = decodeURIComponent(nomeCodificado);
+  if (!confirm(`Apagar o backup "${nome}"? Esta ação não pode ser desfeita.`)) return;
+
+  try {
+    const res = await fetch(`/api/config/migracao/backups/${encodeURIComponent(origem)}/${nomeCodificado}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao apagar backup.');
+    carregarBackups();
+  } catch (err) {
+    alert(`Erro ao apagar backup: ${err.message}`);
+  }
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────
