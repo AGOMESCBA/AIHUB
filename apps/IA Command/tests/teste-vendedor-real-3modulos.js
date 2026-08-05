@@ -3,7 +3,7 @@
  * Validacao manual REAL (contra a IA) dos cenarios de seguranca de vendedor
  * nos modulos faturamento, financeiro e compras. Usa o numero real fornecido
  * pelo usuario, ja cadastrado em whatsapp_allowed_numbers como
- * erp_tipo='vendedor', erp_id='000007', empresa_id=1.
+ * erp_tipo='usuario', erp_id='000007', empresa_id=1.
  *
  * Nao insere/altera nada no banco — apenas dispara mensagens via pipeline real.
  */
@@ -30,7 +30,7 @@ if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
 
 svc._enviarResposta = async () => {};
 
-const SENDER_VENDEDOR = '5565996385530'; // erp_tipo=vendedor, erp_id=000007, empresa_id=1
+const SENDER_VENDEDOR = '5565996385530'; // erp_tipo=usuario, erp_id=000007, empresa_id=1
 
 const CASOS = [
   { modulo: 'faturamento', desc: 'Vendedor pede o proprio faturamento do mes (deve funcionar filtrado)',

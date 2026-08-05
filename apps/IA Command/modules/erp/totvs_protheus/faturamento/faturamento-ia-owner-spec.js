@@ -6,9 +6,12 @@ const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./faturamento-fragmentos-spec');
 const { classificarFragmentos } = require('./faturamento-spec-classifier');
 const { resolverVendedorFixoPorEmpresa } = require('../guards/vendedor-seguranca');
+const { resolverClienteFixoPorEmpresa } = require('../guards/cliente-seguranca');
 
 // Decisao semantica: consultas e seguranca de vendedor usam o vendedor principal.
 const CAMPOS_VENDEDOR_SEGURANCA = ['F2_VEND1'];
+// SF2 nao tem rateio de cliente — uma nota pertence a um unico cliente.
+const CAMPOS_CLIENTE_SEGURANCA = ['F2_CLIENTE'];
 
 const TABELAS = ['SF2', 'SD2', 'SF1', 'SD1', 'SA1', 'SA3', 'SB1', 'SBM', 'SF4', 'CTT', 'ACY'];
 
@@ -95,22 +98,15 @@ function prepararIntent({ intent, empresaId, mensagem }) {
       retorno: {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de faturamento, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        resposta_direta: 'Seu número não está cadastrado como usuário ou gestor no IA Command. Para acessar dados de faturamento, solicite ao gestor do IA Command que configure seu perfil ERP.',
         sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
       },
     };
   }
 
-  if (resolucao.estado === 'vendedor_sem_codigo') {
-    return {
-      retorno: {
-        tipo: 'erro',
-        subtipo: 'erp_id_nao_configurado',
-        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código ERP* nas suas configurações de acesso.',
-        sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
-      },
-    };
-  }
+  // Nota: 'sem_codigo_vendedor' (erp_tipo='usuario' sem erp_id) NAO bloqueia aqui —
+  // o numero pode ser um usuario que so tem codigo de cliente/aprovador. O fluxo cai
+  // direto para a checagem de cliente logo abaixo.
 
   if (resolucao.estado === 'vendedor') {
     // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de seguranca
@@ -128,7 +124,27 @@ function prepararIntent({ intent, empresaId, mensagem }) {
     };
   }
 
-  // gestor ou sem_restricao: acesso total, sem filtro
+  if (resolucao.estado === 'gestor') return {}; // gestor: acesso total, sem checar cliente
+
+  // sem_restricao (numero cadastrado sem erp_tipo/erp_id): pode ainda assim ser um cliente
+  // com cod_cliente_erp cadastrado — campo independente de erp_tipo, mesmo padrao do
+  // aprovador em compras. Filtro sempre obrigatorio quando presente (nao condicional).
+  const resolucaoCliente = resolverClienteFixoPorEmpresa(remetente, empresaId);
+  if (resolucaoCliente.estado === 'cliente') {
+    return {
+      contextoTecnicoExtra: {
+        clienteFixo: { codigo: resolucaoCliente.codigo, nome: resolucaoCliente.nome },
+        regraClienteFixo: 'Aplique OBRIGATORIAMENTE AND SF2.F2_CLIENTE = \'<codigo>\' em toda query de SF2. Nao retorne dados de outros clientes.',
+      },
+      entidadeSeguranca: {
+        tipo: 'cliente_fixo_seguranca',
+        codigo: resolucaoCliente.codigo,
+        nome: resolucaoCliente.nome,
+      },
+    };
+  }
+
+  // sem vendedor nem cliente cadastrado: acesso total, sem filtro (comportamento historico)
   return {};
 }
 
@@ -406,6 +422,7 @@ module.exports = {
   dimensionLeftJoinBases: ['CTT', 'SF4', 'SBM', 'SA3', 'ACY'],
   sanitizarFiltrosFilialSX2: true,
   camposVendedorSeguranca: CAMPOS_VENDEDOR_SEGURANCA,
+  camposClienteSeguranca: CAMPOS_CLIENTE_SEGURANCA,
   sqlPatternsProibidos: [
     {
       regex: /\bSF2\s*\.\s*F2_TIPO\s*=\s*'1'/i,

@@ -17,6 +17,7 @@ $PROJECT_PATH = "C:\Web\iahub"
 $SERVICE_NAME = "iahub"
 $PARENT_PATH  = "C:\Web"
 $BACKUP_ROOT  = "C:\Web\backups"
+$STOPPED_SERVICES = @()
 
 # Verificar Administrador
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
@@ -81,6 +82,83 @@ function Test-ZipEntryUnsafe {
     return $null
 }
 
+function Stop-ServiceIfRunning {
+    param(
+        [Parameter(Mandatory=$true)]
+        [System.ServiceProcess.ServiceController]$Service
+    )
+
+    if ($Service.Status -ne "Running" -and $Service.Status -ne "StartPending") {
+        return
+    }
+
+    Write-Host "      Parando $($Service.Name) ($($Service.DisplayName))..." -ForegroundColor Gray
+    try {
+        nssm stop $Service.Name | Out-Host
+    } catch {
+        try { Stop-Service -Name $Service.Name -Force -ErrorAction Stop } catch { throw }
+    }
+
+    $Service.WaitForStatus("Stopped", [TimeSpan]::FromSeconds(20))
+    $script:STOPPED_SERVICES += $Service.Name
+}
+
+function Stop-IaHubServices {
+    Write-Host "[1/5] Parando servicos IAHub/WhatsApp..." -ForegroundColor Yellow
+
+    $services = @(Get-Service -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -eq $SERVICE_NAME -or
+        $_.Name -like "IACommand-*" -or
+        $_.Name -like "IACommand_*" -or
+        $_.Name -like "IAHub-IACommand-*" -or
+        $_.DisplayName -like "IAHub - IACommand-*"
+    } | Sort-Object { if ($_.Name -eq $SERVICE_NAME) { 1 } else { 0 } }, Name)
+
+    if ($services.Count -eq 0) {
+        Write-Host "      Nenhum servico IAHub encontrado." -ForegroundColor Gray
+        return
+    }
+
+    foreach ($service in $services) {
+        if ($service.Status -eq "Running" -or $service.Status -eq "StartPending") {
+            Stop-ServiceIfRunning -Service $service
+        } else {
+            Write-Host "      $($service.Name) ja estava parado." -ForegroundColor Gray
+        }
+    }
+}
+
+function Start-IaHubServices {
+    Write-Host "[5/5] Iniciando servicos IAHub/WhatsApp..." -ForegroundColor Yellow
+
+    $toStart = @($script:STOPPED_SERVICES | Select-Object -Unique)
+    if ($toStart.Count -eq 0) {
+        $toStart = @($SERVICE_NAME)
+    }
+
+    foreach ($serviceName in $toStart) {
+        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if (!$svc) { continue }
+        if ($svc.Status -eq "Running") {
+            Write-Host "      ${serviceName}: RODANDO" -ForegroundColor Green
+            continue
+        }
+
+        try {
+            nssm start $serviceName | Out-Host
+        } catch {
+            try { Start-Service -Name $serviceName -ErrorAction Stop } catch { Write-Host "      AVISO: falha ao iniciar ${serviceName}: $($_.Exception.Message)" -ForegroundColor Yellow }
+        }
+        Start-Sleep -Seconds 2
+        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -eq "Running") {
+            Write-Host "      ${serviceName}: RODANDO" -ForegroundColor Green
+        } else {
+            Write-Host "      AVISO: verifique o servico $serviceName" -ForegroundColor Yellow
+        }
+    }
+}
+
 $zipCheck = [System.IO.Compression.ZipFile]::OpenRead($Zip)
 try {
     $unsafeEntries = @()
@@ -122,15 +200,7 @@ Write-Host "Seguro:  sem DROP/DELETE/TRUNCATE; nao sobrescreve .env, banco, uplo
 Write-Host ""
 
 # ── 1. Parar o servico ────────────────────────────────────────
-Write-Host "[1/5] Parando servico IAHub..." -ForegroundColor Yellow
-$svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq "Running") {
-    nssm stop $SERVICE_NAME
-    Start-Sleep -Seconds 2
-    Write-Host "      Servico parado." -ForegroundColor Green
-} else {
-    Write-Host "      Servico ja estava parado." -ForegroundColor Gray
-}
+Stop-IaHubServices
 
 # ── 2. Extrair ZIP sobrescrevendo os fontes ───────────────────
 Write-Host "[2/5] Gerando backup dos fontes atuais..." -ForegroundColor Yellow
@@ -141,7 +211,7 @@ if (Test-Path $PROJECT_PATH) {
     }
 
     $backupZip = Join-Path $BACKUP_ROOT ("iahub-before-update-{0}.zip" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
-    $backupExcludes = @("node_modules", "logs")
+    $backupExcludes = @("node_modules", "logs", "data", "uploads", "sessions", ".wwebjs_auth", ".wwebjs_cache", "backups")
     $backupFiles = Get-ChildItem -Path $PROJECT_PATH -Recurse -File | Where-Object {
         $relative = $_.FullName.Substring($PROJECT_PATH.Length + 1)
         $parts = $relative.Split([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
@@ -149,18 +219,28 @@ if (Test-Path $PROJECT_PATH) {
         foreach ($dir in $backupExcludes) {
             if ($parts -contains $dir) { $skip = $true; break }
         }
+        if (!$skip -and ($_.Name -in @(".env", "data.json") -or $_.Name -like "*.db" -or $_.Name -like "*.sqlite" -or $_.Name -like "*.sqlite3" -or $_.Name -like "*.sqlite-wal" -or $_.Name -like "*.sqlite-shm" -or $_.Name -like "*.log" -or $_.Name -like "*.err")) {
+            $skip = $true
+        }
         !$skip
     }
 
     $zipBackup = [System.IO.Compression.ZipFile]::Open($backupZip, 'Create')
     foreach ($file in $backupFiles) {
-        $relative = $file.FullName.Substring($PROJECT_PATH.Length + 1)
-        $entry = $zipBackup.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
-        $entryStream = $entry.Open()
-        $fs = [System.IO.File]::Open($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
-        $fs.CopyTo($entryStream)
-        $fs.Dispose()
-        $entryStream.Dispose()
+        $fs = $null
+        $entryStream = $null
+        try {
+            $relative = $file.FullName.Substring($PROJECT_PATH.Length + 1)
+            $entry = $zipBackup.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+            $entryStream = $entry.Open()
+            $fs = [System.IO.File]::Open($file.FullName, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            $fs.CopyTo($entryStream)
+        } catch {
+            Write-Host "      AVISO: backup ignorou arquivo em uso: $($file.FullName)" -ForegroundColor Yellow
+        } finally {
+            try { if ($fs) { $fs.Dispose() } } catch {}
+            try { if ($entryStream) { $entryStream.Dispose() } } catch {}
+        }
     }
     $zipBackup.Dispose()
     Write-Host "      Backup: $backupZip" -ForegroundColor Green
@@ -190,16 +270,7 @@ Pop-Location
 Write-Host "      Dependencias ok!" -ForegroundColor Green
 
 # ── 4. Reiniciar o servico ────────────────────────────────────
-Write-Host "[5/5] Iniciando servico IAHub..." -ForegroundColor Yellow
-nssm start $SERVICE_NAME
-Start-Sleep -Seconds 3
-
-$svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq "Running") {
-    Write-Host "      Servico IAHub: RODANDO" -ForegroundColor Green
-} else {
-    Write-Host "      AVISO: Verifique os logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
-}
+Start-IaHubServices
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green

@@ -189,7 +189,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   // ---------------------------------------------------------------------------
 
   app.get('/api/ia-command/admin/numeros-whatsapp', requireAuth, requireIaCommand, canNumeros, (req, res) => {
-    const rows = crud.listar('whatsapp_allowed_numbers', { empresa_id: eid(req) });
+    // Traz apenas números com acesso ativo nesta empresa — números pré-cadastrados
+    // em outras empresas (ativo=0 aqui) não são listados nem editáveis por esta tela.
+    const rows = crud.listar('whatsapp_allowed_numbers', { empresa_id: eid(req), ativo: 1 });
     res.json(rows);
   });
 
@@ -221,9 +223,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const select = db.prepare('SELECT * FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND numero = ?');
     const insert = db.prepare(`
       INSERT INTO whatsapp_allowed_numbers
-        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, modulo_estoque, erp_tipo, erp_id, cod_aprov_erp, criado_em, atualizado_em)
+        (id, empresa_id, nome, numero, observacoes, ativo, modulo_financeiro, modulo_compras, modulo_faturamento, modulo_comissao, modulo_estoque, erp_tipo, erp_id, cod_aprov_erp, cod_cliente_erp, criado_em, atualizado_em)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const update = db.prepare(`
       UPDATE whatsapp_allowed_numbers
@@ -238,6 +240,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
              erp_tipo = ?,
              erp_id = ?,
              cod_aprov_erp = ?,
+             cod_cliente_erp = ?,
              atualizado_em = ?
        WHERE id = ?
     `);
@@ -256,9 +259,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         const ativo = autorizado ? (campos.ativo !== undefined ? campos.ativo : 1) : 0;
         const nome = String(item.nome || nomePadrao).trim();
         const observacoes = item.observacoes !== undefined ? (item.observacoes || null) : (existente?.observacoes || null);
-        const erpTipo = campos.erp_tipo ?? existente?.erp_tipo ?? null;
-        const erpId = campos.erp_id ?? existente?.erp_id ?? null;
-        const codAprovErp = campos.cod_aprov_erp ?? existente?.cod_aprov_erp ?? null;
+        // IMPORTANTE: usar "campo in campos" (nao ??) para distinguir "campo ausente do
+        // payload" (mantem valor existente) de "campo presente mas vazio" (limpa para
+        // null). Com ??, null explicito (usuario apagou o campo) seria confundido com
+        // "nao enviado" e o valor antigo nunca seria removido.
+        const erpTipo = 'erp_tipo' in campos ? campos.erp_tipo : (existente?.erp_tipo ?? null);
+        const erpId = 'erp_id' in campos ? campos.erp_id : (existente?.erp_id ?? null);
+        const codAprovErp = 'cod_aprov_erp' in campos ? campos.cod_aprov_erp : (existente?.cod_aprov_erp ?? null);
+        const codClienteErp = 'cod_cliente_erp' in campos ? campos.cod_cliente_erp : (existente?.cod_cliente_erp ?? null);
         if (existente) {
           update.run(
             nome,
@@ -272,6 +280,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             erpTipo,
             erpId,
             codAprovErp,
+            codClienteErp,
             agora,
             existente.id
           );
@@ -293,6 +302,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             erpTipo,
             erpId,
             codAprovErp,
+            codClienteErp,
             agora,
             agora
           );
@@ -376,10 +386,13 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       const chave = `modulo_${m}`;
       if (body[chave] !== undefined) campos[chave] = body[chave] ? 1 : 0;
     }
-    // Gestão de Vendas
+    // Codigos ERP — erp_tipo 'usuario' habilita os campos abaixo (codigo de vendedor via
+    // erp_id); 'gestor' zera todos os filtros. cod_aprov_erp e cod_cliente_erp sao
+    // independentes de erp_tipo — o mesmo numero pode ser usuario (vendedor) E aprovador
+    // E cliente simultaneamente, cada um com seu proprio codigo.
     if (body.erp_tipo !== undefined) {
       const tipo = String(body.erp_tipo || '').trim().toLowerCase();
-      campos.erp_tipo = ['vendedor', 'gestor'].includes(tipo) ? tipo : null;
+      campos.erp_tipo = ['usuario', 'gestor'].includes(tipo) ? tipo : null;
     }
     if (body.erp_id !== undefined) {
       campos.erp_id = String(body.erp_id || '').trim().toUpperCase() || null;
@@ -388,6 +401,11 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     // permite o mesmo numero ser vendedor E aprovador simultaneamente.
     if (body.cod_aprov_erp !== undefined) {
       campos.cod_aprov_erp = String(body.cod_aprov_erp || '').trim().toUpperCase() || null;
+    }
+    // Codigo de cliente ERP (E1_CLIENTE/F2_CLIENTE) — independente de erp_tipo/erp_id,
+    // restringe faturamento e contas a receber aos proprios dados do cliente.
+    if (body.cod_cliente_erp !== undefined) {
+      campos.cod_cliente_erp = String(body.cod_cliente_erp || '').trim().toUpperCase() || null;
     }
     return campos;
   }
@@ -403,12 +421,29 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
     const camposExtras = _extrairCamposNumeroWa(req.body, { incluirPermissoes: false, incluirAtivo: false });
 
+    // Se este número já tem uma linha para esta empresa (ex.: pré-associado via
+    // "Gerenciar em outras empresas" e ainda inativo), reativa em vez de tentar
+    // recriar — evita erro 409 e o beco-sem-saída de números invisíveis na grade.
+    const existente = getDB()
+      .prepare('SELECT * FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND numero = ?')
+      .get(eid(req), numeroNormalizado);
+
     try {
+      if (existente) {
+        const row = crud.atualizar('whatsapp_allowed_numbers', existente.id, {
+          nome: nome.trim(),
+          ativo: 1,
+          ...camposExtras,
+        });
+        _audit(req, 'reativar_numero_whatsapp', { id: row.id, nome: row.nome, numero: row.numero });
+        return res.status(200).json(row);
+      }
+
       const row = crud.criar('whatsapp_allowed_numbers', {
         empresa_id: eid(req),
         nome:       nome.trim(),
         numero:     numeroNormalizado,
-        ativo:      0,
+        ativo:      1, // todo número nasce associado e ativo na empresa atual — nunca fica "sem empresa"
         ...camposExtras,
       });
       _audit(req, 'criar_numero_whatsapp', { id: row.id, nome: row.nome, numero: row.numero });

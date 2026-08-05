@@ -3,12 +3,19 @@
 // Resolucao de identidade de vendedor/gestor compartilhada entre os modulos que
 // restringem acesso por remetente (comissao, faturamento, financeiro). Extraido de
 // comissao-ia-owner-spec.js para evitar duplicar a mesma query/normalizacao em cada spec.
+//
+// erp_tipo no banco aceita 'usuario' (renomeado de 'vendedor' — um numero "usuario" pode
+// ter codigo de vendedor, cliente e/ou aprovador simultaneamente, cada um em seu proprio
+// campo) ou 'gestor'. O estado 'sem_codigo_vendedor' NAO bloqueia sozinho — cada spec
+// chamador decide se bloqueia (comissao, que so reconhece vendedor) ou continua
+// verificando outros papeis (financeiro/faturamento/compras, que tambem reconhecem
+// cliente/aprovador).
 
 // Retorna o registro completo do número na empresa, ou null se não cadastrado/inativo.
 // Três estados possíveis:
 //   null                          → não cadastrado nesta empresa → bloquear
 //   { erp_tipo: 'gestor', ... }  → acesso total, sem filtro de vendedor
-//   { erp_tipo: 'vendedor', erp_id: 'XXXXXX', ... } → acesso restrito ao próprio código
+//   { erp_tipo: 'usuario', erp_id: 'XXXXXX', ... } → acesso restrito ao próprio código
 function resolverIdentidadeVendedor(remetente, empresaId) {
   try {
     const { getDB } = require('../../../database');
@@ -43,7 +50,13 @@ function resolverIdentidadeVendedor(remetente, empresaId) {
 //   { estado: 'nao_cadastrado' }                        → bloquear execução
 //   { estado: 'gestor' }                                → executar sem filtro
 //   { estado: 'vendedor', codigo, nome }                → executar com filtro do código
-//   { estado: 'vendedor_sem_codigo' }                   → bloquear — config incompleta
+//   { estado: 'sem_codigo_vendedor' }                   → é usuário mas sem código de
+//                                                          vendedor — NÃO bloqueia por si
+//                                                          só; o spec chamador deve checar
+//                                                          cliente/aprovador antes de
+//                                                          decidir se bloqueia. Um número
+//                                                          "usuario" pode ser só cliente,
+//                                                          nunca vendedor.
 //   { estado: 'sem_restricao' }                         → erp_tipo vazio/desconhecido
 //   { estado: 'sem_remetente' }                         → sem remetente para resolver
 function resolverVendedorFixoPorEmpresa(remetente, empresaId) {
@@ -51,11 +64,11 @@ function resolverVendedorFixoPorEmpresa(remetente, empresaId) {
   const identidade = resolverIdentidadeVendedor(remetente, empresaId);
   if (!identidade) return { estado: 'nao_cadastrado' };
   if (identidade.erp_tipo === 'gestor') return { estado: 'gestor', nome: identidade.nome };
-  if (identidade.erp_tipo === 'vendedor' && identidade.erp_id) {
+  if (identidade.erp_tipo === 'usuario' && identidade.erp_id) {
     return { estado: 'vendedor', codigo: identidade.erp_id, nome: identidade.nome };
   }
-  if (identidade.erp_tipo === 'vendedor' && !identidade.erp_id) {
-    return { estado: 'vendedor_sem_codigo', nome: identidade.nome };
+  if (identidade.erp_tipo === 'usuario' && !identidade.erp_id) {
+    return { estado: 'sem_codigo_vendedor', nome: identidade.nome };
   }
   // erp_tipo vazio ou desconhecido: sem restrição (número cadastrado mas sem perfil ERP)
   return { estado: 'sem_restricao' };

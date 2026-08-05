@@ -1145,6 +1145,20 @@ const MIGRATIONS = [
       ALTER TABLE scheduled_question_runs ADD COLUMN execucao_modo TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 65,
+    descricao: 'IA Command - codigo de cliente ERP (E1_CLIENTE/F2_CLIENTE) em whatsapp_allowed_numbers, independente de erp_tipo, analogo a cod_aprov_erp',
+    sql: `
+      ALTER TABLE whatsapp_allowed_numbers ADD COLUMN cod_cliente_erp TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 66,
+    descricao: 'IA Command - renomeia erp_tipo vendedor -> usuario em whatsapp_allowed_numbers (numero "usuario" pode ter codigo de vendedor, cliente e/ou aprovador simultaneamente, cada um em seu proprio campo)',
+    sql: `
+      UPDATE whatsapp_allowed_numbers SET erp_tipo = 'usuario' WHERE erp_tipo = 'vendedor';
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

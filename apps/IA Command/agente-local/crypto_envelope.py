@@ -61,6 +61,20 @@ def encrypt_payload(payload: Any, key: str, kid: str = "default") -> dict:
     }
 
 
+def encrypt_text(plaintext: str, key: str) -> str:
+    """Cifra uma string simples (ex.: senha) em um envelope serializado como JSON."""
+    envelope = encrypt_payload(plaintext, key)
+    return json.dumps(envelope)
+
+
+def decrypt_text(stored: str, key: str) -> str:
+    """Decifra o resultado de encrypt_text. Retorna '' se stored estiver vazio."""
+    if not stored:
+        return ""
+    envelope = json.loads(stored)
+    return decrypt_payload(envelope, key)
+
+
 def decrypt_payload(envelope: dict, key: str) -> Any:
     if not is_encrypted_envelope(envelope):
         raise ValueError("Envelope criptografado invalido.")

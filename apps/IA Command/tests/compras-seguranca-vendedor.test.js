@@ -33,7 +33,7 @@ crud.criar('whatsapp_allowed_numbers', {
   nome: 'teste-vendedor-compras',
   numero: SENDER_VENDEDOR,
   ativo: 1,
-  erp_tipo: 'vendedor',
+  erp_tipo: 'usuario',
   erp_id: '000099',
 });
 crud.criar('whatsapp_allowed_numbers', {

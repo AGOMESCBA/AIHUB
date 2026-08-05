@@ -1,6 +1,8 @@
 import time
 import asyncio
 from config import get_config
+from database import get_conexao_erp
+from crypto_envelope import decrypt_text
 
 _BLOCKED_KEYWORDS = [
     "INSERT ", "UPDATE ", "DELETE ", "DROP ", "TRUNCATE ", "ALTER ",
@@ -9,31 +11,58 @@ _BLOCKED_KEYWORDS = [
 MAX_ROWS_HARD = 50_000
 
 
-def _get_pyodbc_conn():
+def _resolver_credenciais(empresa_id: str = "") -> dict:
+    """Resolve host/porta/banco/usuário/senha/driver para a empresa informada.
+    Se não houver conexão própria cadastrada (empresa nova ou instalação single-tenant),
+    cai no .env global — comportamento legado preservado."""
+    cfg = get_config()
+    row = get_conexao_erp(empresa_id) if empresa_id else None
+
+    if row and row.get("db_host"):
+        senha = ""
+        if row.get("db_pass_enc"):
+            crypto_key = cfg.get("CRYPTO_KEY", "")
+            senha = decrypt_text(row["db_pass_enc"], crypto_key) if crypto_key else ""
+        return {
+            "driver": row.get("db_driver") or "ODBC Driver 17 for SQL Server",
+            "host":   row.get("db_host")   or "",
+            "port":   row.get("db_port")   or "1433",
+            "db":     row.get("db_name")   or "",
+            "user":   row.get("db_user")   or "",
+            "passwd": senha,
+            "origem": "conexao_propria",
+        }
+
+    return {
+        "driver": cfg.get("DB_DRIVER") or "ODBC Driver 17 for SQL Server",
+        "host":   cfg.get("DB_HOST",  ""),
+        "port":   cfg.get("DB_PORT",  "1433"),
+        "db":     cfg.get("DB_NAME",  ""),
+        "user":   cfg.get("DB_USER",  ""),
+        "passwd": cfg.get("DB_PASS",  ""),
+        "origem": "padrao_env",
+    }
+
+
+def _get_pyodbc_conn(empresa_id: str = ""):
     import pyodbc
-    cfg    = get_config()
-    driver = cfg.get("DB_DRIVER") or "ODBC Driver 17 for SQL Server"
-    host   = cfg.get("DB_HOST",  "")
-    port   = cfg.get("DB_PORT",  "1433")
-    db     = cfg.get("DB_NAME",  "")
-    user   = cfg.get("DB_USER",  "")
-    passwd = cfg.get("DB_PASS",  "")
+    cred = _resolver_credenciais(empresa_id)
     conn_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={host},{port};"
-        f"DATABASE={db};"
-        f"UID={user};"
-        f"PWD={passwd};"
+        f"DRIVER={{{cred['driver']}}};"
+        f"SERVER={cred['host']},{cred['port']};"
+        f"DATABASE={cred['db']};"
+        f"UID={cred['user']};"
+        f"PWD={cred['passwd']};"
         f"TrustServerCertificate=yes;"
         f"Connection Timeout=15;"
     )
     return pyodbc.connect(conn_str, timeout=30)
 
 
-async def testar_conexao() -> dict:
+async def testar_conexao(empresa_id: str = "") -> dict:
     def _test():
         import pyodbc
-        conn = _get_pyodbc_conn()
+        conn = _get_pyodbc_conn(empresa_id)
         conn.execute("SELECT 1")
         conn.close()
 
@@ -46,7 +75,7 @@ async def testar_conexao() -> dict:
         return {"ok": False, "erro": str(e)}
 
 
-async def executar_sql(sql: str, limit: int = 10_000) -> dict:
+async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "") -> dict:
     sql = sql.strip()
     if not sql:
         return _erro("SQL vazio.", sql, 0)
@@ -72,10 +101,11 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
     sql_final = _injetar_top(sql, upper, limit_eff)
 
     t0 = time.perf_counter()
+    origem_conexao = _resolver_credenciais(empresa_id)["origem"]
 
     def _run_query():
         import pyodbc
-        conn   = _get_pyodbc_conn()
+        conn   = _get_pyodbc_conn(empresa_id)
         try:
             cursor = conn.cursor()
             cursor.execute(sql_final)
@@ -89,11 +119,11 @@ async def executar_sql(sql: str, limit: int = 10_000) -> dict:
     try:
         rows = await asyncio.to_thread(_run_query)
         duracao = _ms(t0)
-        return {"rows": rows, "status": "ok", "duracao_ms": duracao, "sql_executado": sql_final}
+        return {"rows": rows, "status": "ok", "duracao_ms": duracao, "sql_executado": sql_final, "origem_conexao": origem_conexao}
     except ImportError:
-        return _erro("pyodbc não instalado. Execute: pip install pyodbc", sql_final, _ms(t0))
+        return _erro("pyodbc não instalado. Execute: pip install pyodbc", sql_final, _ms(t0), origem_conexao)
     except Exception as e:
-        return _erro(str(e), sql_final, _ms(t0))
+        return _erro(str(e), sql_final, _ms(t0), origem_conexao)
 
 
 def _injetar_top(sql: str, upper: str, limit: int) -> str:
@@ -109,5 +139,5 @@ def _ms(t0: float) -> int:
     return round((time.perf_counter() - t0) * 1000)
 
 
-def _erro(msg: str, sql: str, duracao: int) -> dict:
-    return {"rows": [], "status": "erro", "erro": msg, "duracao_ms": duracao, "sql_executado": sql}
+def _erro(msg: str, sql: str, duracao: int, origem_conexao: str = "") -> dict:
+    return {"rows": [], "status": "erro", "erro": msg, "duracao_ms": duracao, "sql_executado": sql, "origem_conexao": origem_conexao}

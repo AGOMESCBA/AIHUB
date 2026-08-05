@@ -489,7 +489,9 @@ function _migrarErpDeUsuariosJson() {
     for (const u of comErp) {
       const numero = String(u.erp_telefone || '').replace(/\D/g, '');
       if (!numero) continue;
-      const info = update.run(u.erp_tipo, String(u.erp_id || '').trim().toUpperCase() || null, numero);
+      // 'vendedor' (nome legado em usuarios.json) equivale a 'usuario' no modelo atual.
+      const erpTipo = String(u.erp_tipo).trim().toLowerCase() === 'vendedor' ? 'usuario' : u.erp_tipo;
+      const info = update.run(erpTipo, String(u.erp_id || '').trim().toUpperCase() || null, numero);
       if (info.changes > 0) migrados++;
     }
 

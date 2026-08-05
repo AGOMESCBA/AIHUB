@@ -5032,7 +5032,7 @@ class IACWhatsAppService extends EventEmitter {
               errosDinamicos.push(`${nomeEmpresa}: número não autorizado para consulta de comissão.`);
               return;
             }
-            if (resolucao.estado === 'vendedor_sem_codigo') {
+            if (resolucao.estado === 'sem_codigo_vendedor') {
               const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
               this.log(`[All] Segurança: ${sender} é vendedor na empresa #${emp.empresa_id} mas sem erp_id. Execução bloqueada.`, 'warning');
               errosDinamicos.push(`${nomeEmpresa}: código ERP do vendedor não configurado.`);

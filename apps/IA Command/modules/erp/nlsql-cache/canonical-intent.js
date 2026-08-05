@@ -193,6 +193,7 @@ function buscarSecurityScope({ empresaId, numeroWa }) {
     erp_tipo: null,
     erp_id: null,
     cod_aprov_erp: null,
+    cod_cliente_erp: null,
   };
   if (!empresaId || !numeroWa) return scope;
   try {
@@ -203,7 +204,7 @@ function buscarSecurityScope({ empresaId, numeroWa }) {
     if (!variantes.length) return scope;
     const placeholders = variantes.map(() => '?').join(',');
     const row = getDB().prepare(`
-      SELECT erp_tipo, erp_id, cod_aprov_erp
+      SELECT erp_tipo, erp_id, cod_aprov_erp, cod_cliente_erp
         FROM whatsapp_allowed_numbers
        WHERE empresa_id = ?
          AND ativo = 1
@@ -215,6 +216,7 @@ function buscarSecurityScope({ empresaId, numeroWa }) {
       erp_tipo: row.erp_tipo ? String(row.erp_tipo).trim().toLowerCase() : null,
       erp_id: row.erp_id ? String(row.erp_id).trim().toUpperCase() : null,
       cod_aprov_erp: row.cod_aprov_erp ? String(row.cod_aprov_erp).trim().toUpperCase() : null,
+      cod_cliente_erp: row.cod_cliente_erp ? String(row.cod_cliente_erp).trim().toUpperCase() : null,
     };
   } catch (_) {
     return scope;

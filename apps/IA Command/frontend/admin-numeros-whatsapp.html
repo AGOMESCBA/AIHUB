@@ -87,9 +87,6 @@
     .toggle-switch input:checked + .toggle-slider:before { transform:translateX(20px);background:#fff; }
     .toggle-block { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:4px 16px; }
 
-    /* Alerta de perfil ERP */
-    .erp-id-wrap { display:none; }
-    .erp-id-wrap.visible { display:block; }
     .info-box { background:var(--accent-glow);border:1px solid rgba(124,58,237,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-top:12px; }
     .access-table { width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg-card);font-size:13px; }
     .access-table th { background:var(--bg-base);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
@@ -156,11 +153,6 @@
           <div class="filter-area" id="filter-area" style="display:none">
             <div class="quick-row" style="margin-bottom:10px">
               <input id="q-busca" type="text" class="form-control" placeholder="Buscar por nome ou numero..." oninput="filtrar()">
-              <select id="q-ativo" class="form-control" onchange="filtrar()">
-                <option value="">Todos os status</option>
-                <option value="1">Ativo</option>
-                <option value="0">Inativo</option>
-              </select>
               <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
             </div>
             <div class="gp-wrap">
@@ -202,8 +194,6 @@
               <div class="form-tabs">
                 <button class="form-tab active" onclick="mudarAba('geral',this)">Geral</button>
                 <button class="form-tab" onclick="mudarAba('empresas',this)">Empresas</button>
-                <button class="form-tab" onclick="mudarAba('autorizacoes',this)">Autorizações</button>
-                <button class="form-tab" onclick="mudarAba('vendas',this)">Gestão de Vendas</button>
               </div>
 
               <!-- ABA: GERAL -->
@@ -221,8 +211,8 @@
                     </div>
                     <div class="form-group" style="margin-bottom:0">
                       <label class="form-label">Numero WhatsApp <span style="color:#dc2626">*</span></label>
-                      <input type="tel" id="f-numero" class="form-control" placeholder="ex: 5592999999999" oninput="mascararNumero(this)">
-                      <div class="form-hint">Informe com DDI e DDD. O sistema salva apenas os digitos.</div>
+                      <input type="tel" id="f-numero" class="form-control" placeholder="+55 (65) 99999-9999" oninput="mascararNumero(this)">
+                      <div class="form-hint">Informe com DDI (pais) + DDD + numero. Ex: Brasil = 55.</div>
                     </div>
                   </div>
                 </section>
@@ -258,13 +248,14 @@
                             <th style="min-width:190px">Empresa</th>
                             <th style="min-width:170px">Nome no contato</th>
                             <th style="min-width:220px">Modulos</th>
-                            <th style="width:120px">Perfil ERP</th>
+                            <th style="width:150px">Perfil ERP</th>
                             <th style="width:130px">Cod Vend ERP</th>
+                            <th style="width:130px">Cod Cliente ERP</th>
                             <th style="width:130px">Cod Aprov ERP</th>
                           </tr>
                         </thead>
                         <tbody id="empresas-tbody">
-                          <tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
+                          <tr><td colspan="8" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
                         </tbody>
                       </table>
                     </div>
@@ -272,99 +263,6 @@
                       <button class="btn btn-ghost" type="button" onclick="abrirGerenciamentoGlobal()">Gerenciar em outras empresas</button>
                       <button class="btn btn-ghost" type="button" onclick="carregarAcessosContato()">Atualizar</button>
                       <button class="btn btn-primary" type="button" onclick="salvarEmpresasContato()">Salvar empresas</button>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <div class="tab-pane" id="tab-autorizacoes">
-                <section class="form-section">
-                  <div class="form-section-header">
-                    <div class="form-section-title">Módulos Permitidos</div>
-                    <div class="form-section-subtitle">Defina quais módulos do IA Command este número pode consultar. Módulos desativados retornarão uma mensagem amigável solicitando que o usuário peça acesso ao gestor.</div>
-                  </div>
-                  <div class="form-section-body">
-                    <div class="readonly-note">As permissoes por modulo sao geridas exclusivamente na aba <strong>Empresas</strong>. Esta aba mostra apenas o estado salvo para a empresa atual.</div>
-                    <div class="toggle-block readonly-area">
-                      <div class="toggle-row">
-                        <div class="toggle-info">
-                          <div class="toggle-label">Financeiro</div>
-                          <div class="toggle-desc">Consultas de contas a pagar, receber, fluxo de caixa e saldos.</div>
-                        </div>
-                        <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-financeiro" disabled>
-                          <span class="toggle-slider"></span>
-                        </label>
-                      </div>
-                      <div class="toggle-row">
-                        <div class="toggle-info">
-                          <div class="toggle-label">Compras</div>
-                          <div class="toggle-desc">Consultas de pedidos de compra, fornecedores e estoques.</div>
-                        </div>
-                        <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-compras" disabled>
-                          <span class="toggle-slider"></span>
-                        </label>
-                      </div>
-                      <div class="toggle-row">
-                        <div class="toggle-info">
-                          <div class="toggle-label">Faturamento</div>
-                          <div class="toggle-desc">Consultas de pedidos de venda, notas fiscais e clientes.</div>
-                        </div>
-                        <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-faturamento" disabled>
-                          <span class="toggle-slider"></span>
-                        </label>
-                      </div>
-                      <div class="toggle-row">
-                        <div class="toggle-info">
-                          <div class="toggle-label">Comissão</div>
-                          <div class="toggle-desc">Consultas de comissões de vendedores. Requer configuração de perfil ERP na aba Gestão de Vendas.</div>
-                        </div>
-                        <label class="toggle-switch">
-                          <input type="checkbox" id="f-mod-comissao" disabled>
-                          <span class="toggle-slider"></span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="info-box" style="margin-top:16px">
-                      Quando um módulo está desativado, o usuário recebe a mensagem: <em>"Ainda não consigo consultar o módulo [X] para o seu número. Peça ao gestor do IA Command para liberar esse módulo no seu cadastro de WhatsApp e tente novamente."</em>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <!-- ABA: GESTÃO DE VENDAS -->
-              <div class="tab-pane" id="tab-vendas">
-                <section class="form-section">
-                  <div class="form-section-header">
-                    <div class="form-section-title">Perfil ERP</div>
-                    <div class="form-section-subtitle">Configure o tipo de acesso a dados de comissão deste número no sistema ERP. Necessário apenas para quem tiver o módulo Comissão habilitado.</div>
-                  </div>
-                  <div class="form-section-body">
-                    <div class="readonly-note">O perfil ERP por empresa tambem e gerido exclusivamente na aba <strong>Empresas</strong>. Esta aba mostra apenas o estado salvo para a empresa atual.</div>
-                    <div class="form-group">
-                      <label class="form-label">Perfil ERP</label>
-                      <select id="f-erp-tipo" class="form-control" onchange="onErpTipoChange()" disabled>
-                        <option value="">Nenhum</option>
-                        <option value="vendedor">Vendedor</option>
-                        <option value="gestor">Gestor</option>
-                      </select>
-                      <div class="form-hint">
-                        <strong>Vendedor</strong> — vê apenas as próprias comissões (filtro automático por código ERP).<br>
-                        <strong>Gestor</strong> — vê comissões de todos os vendedores sem restrição.
-                      </div>
-                    </div>
-
-                    <div class="erp-id-wrap" id="erp-id-wrap">
-                      <div class="form-group" style="margin-bottom:0">
-                        <label class="form-label">Código ERP do Vendedor <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="f-erp-id" class="form-control" placeholder="ex: V001" style="text-transform:uppercase" disabled>
-                        <div class="form-hint">Código do vendedor no Protheus (campo E3_VEND). Obrigatório quando o perfil é Vendedor.</div>
-                      </div>
-                      <div class="info-box">
-                        O sistema aplicará automaticamente o filtro <code>WHERE SE3.E3_VEND = '${codigo}'</code> em todas as consultas de comissão deste número.
-                      </div>
                     </div>
                   </div>
                 </section>
@@ -429,13 +327,14 @@
               <th style="min-width:190px">Empresa</th>
               <th style="min-width:170px">Nome no contato</th>
               <th style="min-width:220px">Modulos</th>
-              <th style="width:120px">Perfil ERP</th>
+              <th style="width:150px">Perfil ERP</th>
               <th style="width:130px">Cod Vend ERP</th>
+              <th style="width:130px">Cod Cliente ERP</th>
               <th style="width:130px">Cod Aprov ERP</th>
             </tr>
           </thead>
           <tbody id="empresas-global-tbody">
-            <tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
+            <tr><td colspan="8" style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</td></tr>
           </tbody>
         </table>
       </div>
@@ -472,7 +371,29 @@
   }
 
   function mascararNumero(input) {
-    input.value = soNumeros(input.value).slice(0, 15);
+    const digitos = soNumeros(input.value).slice(0, 15);
+    input.dataset.numeroPuro = digitos;
+
+    // DDI (1-3) + DDD (2) + numero local (8 ou 9 digitos) — formata progressivamente enquanto digita
+    let formatado = '';
+    if (digitos.length > 0) {
+      const ddi = digitos.slice(0, 2);
+      formatado = `+${ddi}`;
+      if (digitos.length > 2) {
+        const ddd = digitos.slice(2, 4);
+        formatado += ` (${ddd}`;
+        if (digitos.length >= 4) formatado += ')';
+        if (digitos.length > 4) {
+          const resto = digitos.slice(4);
+          if (resto.length > 4) {
+            formatado += ` ${resto.slice(0, -4)}-${resto.slice(-4)}`;
+          } else {
+            formatado += ` ${resto}`;
+          }
+        }
+      }
+    }
+    input.value = formatado;
   }
 
   function formatarNumero(numero) {
@@ -487,12 +408,6 @@
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(`tab-${aba}`).classList.add('active');
-  }
-
-  function onErpTipoChange() {
-    const tipo = document.getElementById('f-erp-tipo').value;
-    const wrap = document.getElementById('erp-id-wrap');
-    wrap.classList.toggle('visible', tipo === 'vendedor');
   }
 
   function abrirFormulario(id) {
@@ -528,14 +443,6 @@
     document.getElementById('f-numero').value = '';
     document.getElementById('f-observacoes').value = '';
     document.getElementById('f-ativo').value = '0';
-    // Autorizações
-    ['financeiro','compras','faturamento','comissao'].forEach(m => {
-      document.getElementById(`f-mod-${m}`).checked = false;
-    });
-    // Gestão de Vendas
-    document.getElementById('f-erp-tipo').value = '';
-    document.getElementById('f-erp-id').value = '';
-    document.getElementById('erp-id-wrap').classList.remove('visible');
     acessosContato = { empresas: [], acessos: [] };
     renderEmpresasContato();
     feedback('', true);
@@ -548,19 +455,13 @@
     document.getElementById('f-empresa-id').value = row.empresa_id;
     document.getElementById('f-empresa-nome').value = window._iahubEmpresa?.nome || '-';
     document.getElementById('f-nome').value = row.nome || '';
-    document.getElementById('f-numero').value = row.numero || '';
+    const numeroInput = document.getElementById('f-numero');
+    numeroInput.value = row.numero || '';
+    mascararNumero(numeroInput);
     document.getElementById('f-observacoes').value = row.observacoes || '';
     document.getElementById('f-ativo').value = String(row.ativo ?? 1);
     document.getElementById('form-title').textContent = row.nome || 'Editar Numero';
     document.getElementById('form-subtitle').textContent = `ID ${String(row.id).slice(0,8)}...`;
-    // Autorizações
-    ['financeiro','compras','faturamento','comissao'].forEach(m => {
-      document.getElementById(`f-mod-${m}`).checked = !!row[`modulo_${m}`];
-    });
-    // Gestão de Vendas
-    document.getElementById('f-erp-tipo').value = row.erp_tipo || '';
-    document.getElementById('f-erp-id').value = row.erp_id || '';
-    onErpTipoChange();
     await carregarAcessosContato();
   }
 
@@ -590,15 +491,6 @@
     const row = empresaId ? acessoPorEmpresa(empresaId) : null;
     const ativo = document.getElementById('f-ativo');
     if (ativo) ativo.value = row && Number(row.ativo) !== 0 ? '1' : '0';
-    ['financeiro','compras','faturamento','comissao'].forEach(m => {
-      const el = document.getElementById(`f-mod-${m}`);
-      if (el) el.checked = row ? !!row[`modulo_${m}`] : false;
-    });
-    const erpTipo = document.getElementById('f-erp-tipo');
-    const erpId = document.getElementById('f-erp-id');
-    if (erpTipo) erpTipo.value = row?.erp_tipo || '';
-    if (erpId) erpId.value = row?.erp_id || '';
-    onErpTipoChange();
   }
 
   function renderEmpresasContato(msg) {
@@ -611,7 +503,7 @@
       ? `${empresas.length} empresa atual disponivel para este contato.`
       : 'Nenhuma empresa disponivel para seu usuario.';
     if (!empresas.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</td></tr>';
       sincronizarResumoEmpresaAtual();
       return;
     }
@@ -637,12 +529,13 @@
           <td>
             <select data-access="erp_tipo">
               <option value="" ${!row?.erp_tipo ? 'selected' : ''}>Nenhum</option>
-              <option value="vendedor" ${row?.erp_tipo === 'vendedor' ? 'selected' : ''}>Vendedor</option>
+              <option value="usuario" ${row?.erp_tipo === 'usuario' ? 'selected' : ''}>Usuário</option>
               <option value="gestor" ${row?.erp_tipo === 'gestor' ? 'selected' : ''}>Gestor</option>
             </select>
           </td>
-          <td><input type="text" data-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase"></td>
-          <td><input type="text" data-access="cod_aprov_erp" value="${esc(row?.cod_aprov_erp || '')}" style="text-transform:uppercase"></td>
+          <td><input type="text" data-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase" autocomplete="off"></td>
+          <td><input type="text" data-access="cod_cliente_erp" value="${esc(row?.cod_cliente_erp || '')}" style="text-transform:uppercase" autocomplete="off"></td>
+          <td><input type="text" data-access="cod_aprov_erp" value="${esc(row?.cod_aprov_erp || '')}" style="text-transform:uppercase" autocomplete="off"></td>
         </tr>
       `;
     }).join('');
@@ -666,6 +559,7 @@
         modulo_estoque: get('modulo_estoque')?.checked ? 1 : 0,
         erp_tipo: get('erp_tipo')?.value || null,
         erp_id: (get('erp_id')?.value || '').trim().toUpperCase() || null,
+        cod_cliente_erp: (get('cod_cliente_erp')?.value || '').trim().toUpperCase() || null,
         cod_aprov_erp: (get('cod_aprov_erp')?.value || '').trim().toUpperCase() || null,
       };
     });
@@ -688,10 +582,10 @@
     document.getElementById('global-access-overlay').classList.add('open');
     document.getElementById('global-access-feedback').textContent = '';
     document.getElementById('global-access-subtitle').textContent = `${nome || 'Contato WhatsApp'} - ${formatarNumero(numero)}`;
-    document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Carregando empresas...</td></tr>';
+    document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="8" style="color:var(--text-lo);text-align:center;padding:24px">Carregando empresas...</td></tr>';
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas-global`);
     if (!res.ok) {
-      document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nao foi possivel carregar os acessos globais.</td></tr>';
+      document.getElementById('empresas-global-tbody').innerHTML = '<tr><td colspan="8" style="color:var(--text-lo);text-align:center;padding:24px">Nao foi possivel carregar os acessos globais.</td></tr>';
       return;
     }
     acessosGlobaisContato = await res.json();
@@ -710,7 +604,7 @@
     const tbody = document.getElementById('empresas-global-tbody');
     const empresas = acessosGlobaisContato.empresas || [];
     if (!empresas.length) {
-      tbody.innerHTML = '<tr><td colspan="7" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel para seu usuario.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel para seu usuario.</td></tr>';
       return;
     }
     const nomeFallback = document.getElementById('f-nome').value || '';
@@ -739,12 +633,13 @@
           <td>
             <select data-global-access="erp_tipo">
               <option value="" ${!row?.erp_tipo ? 'selected' : ''}>Nenhum</option>
-              <option value="vendedor" ${row?.erp_tipo === 'vendedor' ? 'selected' : ''}>Vendedor</option>
+              <option value="usuario" ${row?.erp_tipo === 'usuario' ? 'selected' : ''}>Usuário</option>
               <option value="gestor" ${row?.erp_tipo === 'gestor' ? 'selected' : ''}>Gestor</option>
             </select>
           </td>
-          <td><input type="text" data-global-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase"></td>
-          <td><input type="text" data-global-access="cod_aprov_erp" value="${esc(row?.cod_aprov_erp || '')}" style="text-transform:uppercase"></td>
+          <td><input type="text" data-global-access="erp_id" value="${esc(row?.erp_id || '')}" style="text-transform:uppercase" autocomplete="off"></td>
+          <td><input type="text" data-global-access="cod_cliente_erp" value="${esc(row?.cod_cliente_erp || '')}" style="text-transform:uppercase" autocomplete="off"></td>
+          <td><input type="text" data-global-access="cod_aprov_erp" value="${esc(row?.cod_aprov_erp || '')}" style="text-transform:uppercase" autocomplete="off"></td>
         </tr>
       `;
     }).join('');
@@ -768,6 +663,7 @@
         modulo_estoque: get('modulo_estoque')?.checked ? 1 : 0,
         erp_tipo: get('erp_tipo')?.value || null,
         erp_id: (get('erp_id')?.value || '').trim().toUpperCase() || null,
+        cod_cliente_erp: (get('cod_cliente_erp')?.value || '').trim().toUpperCase() || null,
         cod_aprov_erp: (get('cod_aprov_erp')?.value || '').trim().toUpperCase() || null,
       };
     });
@@ -831,22 +727,18 @@
     if (!table) return;
     if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
     const busca = document.getElementById('q-busca').value.trim().toLowerCase();
-    const ativo = document.getElementById('q-ativo').value;
-    if (busca || ativo !== '') {
+    if (busca) {
       quickFilterFn = row => {
-        if (ativo !== '' && String(row.ativo) !== ativo) return false;
         const texto = `${row.nome || ''} ${row.numero || ''} ${row.observacoes || ''}`.toLowerCase();
-        return !busca || texto.includes(busca);
+        return texto.includes(busca);
       };
       table.addFilter(quickFilterFn);
     }
-    const qtd = [busca, ativo].filter(Boolean).length;
-    document.getElementById('filter-status').textContent = qtd ? `${qtd} filtro(s) ativo(s)` : 'Sem filtros ou agrupamentos ativos';
+    document.getElementById('filter-status').textContent = busca ? '1 filtro(s) ativo(s)' : 'Sem filtros ou agrupamentos ativos';
   }
 
   function limparFiltros() {
     document.getElementById('q-busca').value = '';
-    document.getElementById('q-ativo').value = '';
     filtrar();
   }
 
@@ -879,7 +771,6 @@
         { title:'Numero', field:'numero', minWidth:150, headerFilter:true, formatter:c=>`<span style="font-family:monospace;color:var(--text-md)">${esc(formatarNumero(c.getValue()))}</span>` },
         { title:'Módulos na empresa', field:'modulo_financeiro', minWidth:190, headerFilter:false, groupable:false, formatter:c=>{
           const row = c.getRow().getData();
-          if (!row.ativo) return '<span style="color:var(--text-lo);font-size:11px">Sem acesso nesta empresa</span>';
           const tags = [];
           if (row.modulo_financeiro)  tags.push('<span style="background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">Fin</span>');
           if (row.modulo_compras)     tags.push('<span style="background:#fef9c3;color:#854d0e;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600">Cmp</span>');
@@ -890,11 +781,10 @@
         }},
         { title:'Perfil ERP', field:'erp_tipo', width:110, headerFilter:false, formatter:c=>{
           const v = c.getValue();
-          if (v === 'vendedor') return '<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:600">Vendedor</span>';
+          if (v === 'usuario') return '<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:600">Usuário</span>';
           if (v === 'gestor')   return '<span style="background:#e0e7ff;color:#3730a3;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:600">Gestor</span>';
           return '<span style="color:var(--text-lo);font-size:11px">-</span>';
         }},
-        { title:'Status', field:'ativo', width:105, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}}, formatter:c=>c.getValue()?'<span class="badge-ativo">● Ativo</span>':'<span class="badge-inativo">○ Inativo</span>' },
         { title:'Criado em', field:'criado_em', width:150, formatter:c=>c.getValue()?.slice(0,16).replace('T',' ') || '' },
         { title:'Acoes', field:'id', width:90, headerFilter:false, groupable:false, hozAlign:'right', formatter:cell=>{
           const id = cell.getValue();
@@ -936,13 +826,13 @@
       <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Numeros inativos ficam registrados, mas nao autorizam novas interacoes.</div></div>
     </div>
     <div class="help-section">
-      <div class="help-section-title">Aba: Autorizações</div>
-      <div class="help-item-desc">Controle quais módulos do IA Command este número pode acessar. Se um módulo estiver desativado, o usuário receberá uma mensagem amigável orientando a solicitar acesso ao gestor.</div>
-    </div>
-    <div class="help-section">
-      <div class="help-section-title">Aba: Gestão de Vendas</div>
-      <div class="help-item"><div class="help-item-label">Vendedor</div><div class="help-item-desc">Vê apenas as próprias comissões. O sistema aplica automaticamente o filtro pelo Código ERP informado.</div></div>
-      <div class="help-item"><div class="help-item-label">Gestor</div><div class="help-item-desc">Acesso irrestrito às comissões de todos os vendedores da empresa.</div></div>
+      <div class="help-section-title">Aba: Empresas</div>
+      <div class="help-item-desc">Controle, por empresa, os módulos que este número pode acessar e o perfil ERP. Se um módulo estiver desativado, o usuário receberá uma mensagem amigável orientando a solicitar acesso ao gestor.</div>
+      <div class="help-item"><div class="help-item-label">Usuário</div><div class="help-item-desc">Perfil restrito pelos códigos abaixo — cada um opcional e independente entre si.</div></div>
+      <div class="help-item"><div class="help-item-label">Cód Vend ERP</div><div class="help-item-desc">Filtra automaticamente comissão, faturamento e financeiro pelos próprios dados como vendedor.</div></div>
+      <div class="help-item"><div class="help-item-label">Cód Cliente ERP</div><div class="help-item-desc">Filtra automaticamente faturamento e contas a receber pelos próprios dados como cliente, em todas as filiais.</div></div>
+      <div class="help-item"><div class="help-item-label">Cód Aprov ERP</div><div class="help-item-desc">Permite consultar pedidos pendentes de aprovação em compras. Aprovar via WhatsApp ainda não está disponível.</div></div>
+      <div class="help-item"><div class="help-item-label">Gestor</div><div class="help-item-desc">Acesso irrestrito, sem nenhum filtro aplicado.</div></div>
     </div>
     <div class="help-tip">Se nenhum numero ativo estiver cadastrado, o comportamento atual e mantido para evitar bloqueio acidental do atendimento.</div>
   </div>

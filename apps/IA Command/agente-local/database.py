@@ -47,6 +47,7 @@ def init_db():
             ("linhas_retornadas", "INTEGER"),
             ("limite_solicitado", "INTEGER"),
             ("tipo_erro",         "TEXT"),
+            ("origem_conexao",    "TEXT"),
         ]:
             try:
                 db.execute(f"ALTER TABLE execucoes ADD COLUMN {col} {typ}")
@@ -73,12 +74,29 @@ def init_db():
             except Exception:
                 pass
 
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS conexoes_erp (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                empresa_id      TEXT NOT NULL UNIQUE,
+                db_host         TEXT,
+                db_port         TEXT,
+                db_name         TEXT,
+                db_user         TEXT,
+                db_pass_enc     TEXT,
+                db_driver       TEXT,
+                filial          TEXT,
+                atualizado_em   TEXT NOT NULL
+            )
+        """)
+        db.execute("CREATE INDEX IF NOT EXISTS idx_conexoes_erp_eid ON conexoes_erp (empresa_id)")
+
 
 def registrar_execucao(
     *, uuid, modulo, operacao, sql_entrada, sql_executado,
     payload_saida, duracao_ms, status, erro, ip_origem,
     pergunta=None, sender=None, empresa_id=None, usuario=None,
     linhas_retornadas=None, limite_solicitado=None, tipo_erro=None,
+    origem_conexao=None,
 ):
     agora = datetime.utcnow().isoformat()
     # Grava apenas amostra (primeiras 10 linhas) + total — evita JSON gigante no SQLite
@@ -95,12 +113,12 @@ def registrar_execucao(
             """INSERT INTO execucoes
                (uuid, modulo, operacao, ip_origem, pergunta, sender, empresa_id, usuario,
                 sql_entrada, sql_executado, payload_saida, duracao_ms,
-                status, erro, linhas_retornadas, limite_solicitado, tipo_erro,
+                status, erro, linhas_retornadas, limite_solicitado, tipo_erro, origem_conexao,
                 chegada_em, finalizado_em)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (uuid, modulo, operacao, ip_origem, pergunta, sender, empresa_id, usuario,
              sql_entrada, sql_executado, amostra, duracao_ms,
-             status, erro, linhas_retornadas, limite_solicitado, tipo_erro,
+             status, erro, linhas_retornadas, limite_solicitado, tipo_erro, origem_conexao,
              agora, agora),
         )
 
@@ -108,7 +126,7 @@ def registrar_execucao(
 _COLS_LISTA = (
     "id, uuid, modulo, operacao, ip_origem, pergunta, sender, sql_entrada, sql_executado, "
     "duracao_ms, status, erro, chegada_em, finalizado_em, empresa_id, usuario, "
-    "linhas_retornadas, limite_solicitado, tipo_erro"
+    "linhas_retornadas, limite_solicitado, tipo_erro, origem_conexao"
 )
 
 def listar_execucoes(*, modulo="", status="", data_ini="", data_fim="", empresa_id="", limit=200):
@@ -205,6 +223,43 @@ def listar_empresas_public() -> list:
         rows = db.execute(
             "SELECT empresa_id, nome, logo_url, bg_url, slogan FROM empresas WHERE ativo=1 ORDER BY nome"
         ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Conexões ERP por empresa ─────────────────────────────────────────────────
+
+def salvar_conexao_erp(*, empresa_id: str, db_host, db_port, db_name, db_user,
+                        db_pass_enc, db_driver, filial):
+    agora = datetime.utcnow().isoformat()
+    with _conn() as db:
+        db.execute(
+            """INSERT INTO conexoes_erp
+               (empresa_id, db_host, db_port, db_name, db_user, db_pass_enc, db_driver, filial, atualizado_em)
+               VALUES (?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(empresa_id) DO UPDATE SET
+                 db_host=excluded.db_host,
+                 db_port=excluded.db_port,
+                 db_name=excluded.db_name,
+                 db_user=excluded.db_user,
+                 db_pass_enc=COALESCE(excluded.db_pass_enc, db_pass_enc),
+                 db_driver=excluded.db_driver,
+                 filial=excluded.filial,
+                 atualizado_em=excluded.atualizado_em""",
+            (empresa_id, db_host, db_port, db_name, db_user, db_pass_enc, db_driver, filial, agora),
+        )
+
+
+def get_conexao_erp(empresa_id: str):
+    if not empresa_id:
+        return None
+    with _conn() as db:
+        row = db.execute("SELECT * FROM conexoes_erp WHERE empresa_id = ?", (empresa_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def listar_conexoes_erp() -> list:
+    with _conn() as db:
+        rows = db.execute("SELECT * FROM conexoes_erp ORDER BY empresa_id").fetchall()
     return [dict(r) for r in rows]
 
 

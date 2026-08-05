@@ -3475,6 +3475,22 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
       throw Object.assign(new Error(`Violacao de seguranca: ${validacaoTabelasBloqueadas.erros.join(' | ')}`), { _tipo: 'acesso_negado_vendedor', _sql: out });
     }
   }
+  // Guard de seguranca analogo ao de vendedor, para o perfil cliente (cliente_fixo_seguranca).
+  // Reaproveita as mesmas funcoes genericas de entitySqlGuard — nao ha rateio de cliente
+  // (um titulo/nota tem um unico cliente), entao nao chama validarCoberturaCompletaRateado.
+  const entidadeClienteSql = (entidades || []).find(e => String(e?.tipo || '').toLowerCase() === 'cliente_fixo_seguranca');
+  if (entidadeClienteSql) {
+    const validacaoCliente = entitySqlGuard.validarExclusividadeVendedorSeguranca(out, entidadeClienteSql, spec.camposClienteSeguranca);
+    if (!validacaoCliente.ok) {
+      throw Object.assign(new Error(`Violacao de seguranca: ${validacaoCliente.erros.join(' | ')}`), { _tipo: 'acesso_negado_cliente', _sql: out });
+    }
+    // Bloqueia tabelas sem campo de cliente (ex.: SE2 contas a pagar em financeiro) quando
+    // o remetente esta restrito a um cliente — mesma logica do bloqueio de vendedor.
+    const validacaoTabelasBloqueadasCliente = entitySqlGuard.validarTabelasBloqueadasParaVendedor(out, entidadeClienteSql, spec.tabelasBloqueadasParaCliente);
+    if (!validacaoTabelasBloqueadasCliente.ok) {
+      throw Object.assign(new Error(`Violacao de seguranca: ${validacaoTabelasBloqueadasCliente.erros.join(' | ')}`), { _tipo: 'acesso_negado_cliente', _sql: out });
+    }
+  }
   const sx3Validacao = sx3SqlValidator.validarCamposSqlContraSX3(out, sx3);
   if (!sx3Validacao.ok) {
     const errosSx3 = sx3Validacao.erros.map(err => {
@@ -3607,11 +3623,13 @@ async function executar(spec, intent, empresaId) {
 
   let entidadesResolvidas = (Array.isArray(intentEfetivo._entidadesResolvidas) ? intentEfetivo._entidadesResolvidas : [])
     .filter(entidade => !termoEhEmpresaIAHub({ texto: entidade?.nome || entidade?.texto || entidade?.descricao }, intentEfetivo));
-  // Entidade de segurança (vendedor_fixo_seguranca) precede as entidades de negócio:
-  // ela é injetada pelo sistema, não pelo usuário, e deve ser parametrizada no SQL canônico
-  // para que cada empresa seguidora use o código ERP correto sem nova chamada à IA.
+  // Entidade de segurança (vendedor_fixo_seguranca ou cliente_fixo_seguranca) precede as
+  // entidades de negócio: ela é injetada pelo sistema, não pelo usuário, e deve ser
+  // parametrizada no SQL canônico para que cada empresa seguidora use o código ERP
+  // correto sem nova chamada à IA. O tipo é dinâmico (vem de entidadeSeguranca.tipo) —
+  // remove qualquer entidade de segurança pré-existente do MESMO tipo antes de injetar.
   if (entidadeSeguranca) {
-    entidadesResolvidas = [entidadeSeguranca, ...entidadesResolvidas.filter(e => e?.tipo !== 'vendedor_fixo_seguranca')];
+    entidadesResolvidas = [entidadeSeguranca, ...entidadesResolvidas.filter(e => e?.tipo !== entidadeSeguranca.tipo)];
   }
   const diagnosticosEntidades = [];
   _traceIaOwner('ia_owner_entidades_pre_inicio', { empresa_id: empresaId });
@@ -3668,6 +3686,22 @@ async function executar(spec, intent, empresaId) {
         sql_gerado: `-- bloqueado: vendedor ${entidadeSeguranca.codigo} tentou acessar dados do vendedor ${outroVendedor.codigo}`,
         duracao_ms: Date.now() - t0,
       };
+    }
+    // Bloqueio antecipado analogo, para o perfil cliente: nega acesso se o usuario
+    // pediu/resolveu um cliente de negocio com codigo DIFERENTE do cliente autenticado.
+    if (entidadeSeguranca.tipo === 'cliente_fixo_seguranca') {
+      const outroCliente = entidadesResolvidas.find(
+        e => String(e?.tipo || '').toLowerCase() === 'cliente' && String(e.codigo) !== String(entidadeSeguranca.codigo)
+      );
+      if (outroCliente) {
+        return {
+          tipo: 'erro',
+          subtipo: 'acesso_negado_cliente',
+          resposta_direta: 'Você só pode consultar seus próprios dados. Para ver dados de outro cliente, peça para um gestor consultar.',
+          sql_gerado: `-- bloqueado: cliente ${entidadeSeguranca.codigo} tentou acessar dados do cliente ${outroCliente.codigo}`,
+          duracao_ms: Date.now() - t0,
+        };
+      }
     }
   }
   let intentCanonicoInfo = null;

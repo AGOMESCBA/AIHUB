@@ -1,7 +1,7 @@
 ﻿'use strict';
 /**
  * Teste manual REAL (contra a IA) com 3 perguntas especificas pedidas pelo
- * usuario, usando o numero real de vendedor (erp_tipo='vendedor',
+ * usuario, usando o numero real de vendedor (erp_tipo='usuario',
  * erp_id='000007', empresa_id=1).
  */
 
@@ -27,7 +27,7 @@ if (typeof intentRouter._verificarAutorizacaoModulo === 'function') {
 
 svc._enviarResposta = async () => {};
 
-const SENDER_VENDEDOR = '5565996385530'; // erp_tipo=vendedor, erp_id=000007, empresa_id=1
+const SENDER_VENDEDOR = '5565996385530'; // erp_tipo=usuario, erp_id=000007, empresa_id=1
 
 const CASOS = [
   { modulo: 'comissao', texto: 'Valor da comissão em aberto por mes' },

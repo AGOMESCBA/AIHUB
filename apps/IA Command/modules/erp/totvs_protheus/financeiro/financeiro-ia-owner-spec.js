@@ -7,9 +7,12 @@ const { removerFiltrosEmpresaComoEntidade } = require('../guards/empresa-scope-s
 const fragmentosSpec = require('./financeiro-fragmentos-spec');
 const { classificarFragmentos } = require('./financeiro-spec-classifier');
 const { resolverVendedorFixoPorEmpresa } = require('../guards/vendedor-seguranca');
+const { resolverClienteFixoPorEmpresa } = require('../guards/cliente-seguranca');
 
 // SE1 (contas a receber) permite rateio entre ate 5 vendedores (E1_VEND1..E1_VEND5).
 const CAMPOS_VENDEDOR_SEGURANCA = ['E1_VEND1', 'E1_VEND2', 'E1_VEND3', 'E1_VEND4', 'E1_VEND5'];
+// SE1 nao tem rateio de cliente — um titulo pertence a um unico cliente.
+const CAMPOS_CLIENTE_SEGURANCA = ['E1_CLIENTE'];
 
 const TABELAS = ['SE1', 'SE2', 'SE5', 'SE8', 'SA1', 'SA2', 'SA3', 'SA6', 'SED', 'FK1', 'FK2', 'FK7'];
 
@@ -179,22 +182,15 @@ function prepararIntent({ intent, empresaId, mensagem }) {
       retorno: {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados financeiros, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        resposta_direta: 'Seu número não está cadastrado como usuário ou gestor no IA Command. Para acessar dados financeiros, solicite ao gestor do IA Command que configure seu perfil ERP.',
         sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
       },
     };
   }
 
-  if (resolucao.estado === 'vendedor_sem_codigo') {
-    return {
-      retorno: {
-        tipo: 'erro',
-        subtipo: 'erp_id_nao_configurado',
-        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código ERP* nas suas configurações de acesso.',
-        sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
-      },
-    };
-  }
+  // Nota: 'sem_codigo_vendedor' (erp_tipo='usuario' sem erp_id) NAO bloqueia aqui —
+  // o numero pode ser um usuario que so tem codigo de cliente/aprovador. O fluxo cai
+  // direto para a checagem de cliente logo abaixo.
 
   if (resolucao.estado === 'vendedor') {
     // Injeta vendedorFixo no contexto da IA (para o prompt) E como entidade de segurança.
@@ -213,7 +209,28 @@ function prepararIntent({ intent, empresaId, mensagem }) {
     };
   }
 
-  // gestor ou sem_restricao: acesso total, sem filtro
+  if (resolucao.estado === 'gestor') return {}; // gestor: acesso total, sem checar cliente
+
+  // sem_restricao (numero cadastrado sem erp_tipo/erp_id): pode ainda assim ser um cliente
+  // com cod_cliente_erp cadastrado — campo independente de erp_tipo, mesmo padrao do
+  // aprovador em compras. Diferente de aprovador, o filtro de cliente e sempre obrigatorio
+  // quando presente (nunca condicional a intencao), por tratar de dado financeiro sensivel.
+  const resolucaoCliente = resolverClienteFixoPorEmpresa(remetente, empresaId);
+  if (resolucaoCliente.estado === 'cliente') {
+    return {
+      contextoTecnicoExtra: {
+        clienteFixo: { codigo: resolucaoCliente.codigo, nome: resolucaoCliente.nome },
+        regraClienteFixo: 'Aplique OBRIGATORIAMENTE AND SE1.E1_CLIENTE = \'<codigo>\' em toda query de SE1. Nunca use SE2 (contas a pagar) para este perfil — cliente so acessa contas a receber, nunca contas a pagar de fornecedor. Nao retorne dados de outros clientes.',
+      },
+      entidadeSeguranca: {
+        tipo: 'cliente_fixo_seguranca',
+        codigo: resolucaoCliente.codigo,
+        nome: resolucaoCliente.nome,
+      },
+    };
+  }
+
+  // sem vendedor nem cliente cadastrado: acesso total, sem filtro (comportamento historico)
   return {};
 }
 
@@ -486,6 +503,8 @@ module.exports = {
   camposVendedorSeguranca: CAMPOS_VENDEDOR_SEGURANCA,
   camposRateioVendedor: CAMPOS_VENDEDOR_SEGURANCA,
   tabelasBloqueadasParaVendedor: ['SE2'],
+  camposClienteSeguranca: CAMPOS_CLIENTE_SEGURANCA,
+  tabelasBloqueadasParaCliente: ['SE2'],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta financeira no momento. Tente novamente em breve.',
     sql_invalido: 'Tivemos uma inconsistencia ao interpretar sua consulta financeira. Por favor, reformule a pergunta e tente novamente.',

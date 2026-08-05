@@ -61,18 +61,21 @@ function prepararIntent({ intent, empresaId, mensagem }) {
       retorno: {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de comissão, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        resposta_direta: 'Seu número não está cadastrado como usuário ou gestor no IA Command. Para acessar dados de comissão, solicite ao gestor do IA Command que configure seu perfil ERP.',
         sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
       },
     };
   }
 
-  if (resolucao.estado === 'vendedor_sem_codigo') {
+  // Comissao so reconhece o papel de vendedor (nao ha conceito de cliente/aprovador em
+  // SE3) — diferente de financeiro/faturamento, aqui 'sem_codigo_vendedor' PRECISA
+  // bloquear, senao um numero sem codigo de vendedor veria comissao de todos.
+  if (resolucao.estado === 'sem_codigo_vendedor') {
     return {
       retorno: {
         tipo: 'erro',
         subtipo: 'erp_id_nao_configurado',
-        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código ERP* nas suas configurações de acesso.',
+        resposta_direta: 'Seu cadastro não possui um código de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo *Código de Vendedor* nas suas configurações de acesso (aba Empresas).',
         sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
       },
     };

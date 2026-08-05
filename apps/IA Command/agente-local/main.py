@@ -10,11 +10,11 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from config import get_config, set_config
 import shutil
-from database import init_db, registrar_execucao, listar_execucoes, limpar_historico, get_stats, sincronizar_empresas, listar_empresas, listar_empresas_public, remover_empresa, get_execucao
+from database import init_db, registrar_execucao, listar_execucoes, limpar_historico, get_stats, sincronizar_empresas, listar_empresas, listar_empresas_public, remover_empresa, get_execucao, salvar_conexao_erp, get_conexao_erp, listar_conexoes_erp
 from auth import verificar_token_api, verificar_sessao_web, autenticar_admin, alterar_senha, salvar_hash
 from modules.erp_executor import executar_sql, testar_conexao
 from modules.factory_reset import resetar_fabrica
-from crypto_envelope import decrypt_payload, encrypt_payload, generate_key_base64, is_encrypted_envelope, normalize_key
+from crypto_envelope import decrypt_payload, encrypt_payload, encrypt_text, decrypt_text, generate_key_base64, is_encrypted_envelope, normalize_key
 
 BASE_DIR = Path(__file__).parent
 
@@ -103,12 +103,12 @@ async def execute(request: Request, authorization: str = Header(default=None)):
     pergunta   = body.get("pergunta", "") or ""
     sender     = body.get("sender", "")   or ""
     usuario    = body.get("usuario", "")  or ""
-    empresa_id = body.get("empresa_id", "") or ""
+    empresa_id = str(body.get("empresa_id") or "")
 
     if not sql:
         raise HTTPException(status_code=400, detail="Campo 'sql' é obrigatório.")
 
-    resultado = await executar_sql(sql, limit)
+    resultado = await executar_sql(sql, limit, empresa_id)
 
     rows_list = resultado.get("rows", [])
     linhas_retornadas = len(rows_list) if isinstance(rows_list, list) else 0
@@ -144,6 +144,7 @@ async def execute(request: Request, authorization: str = Header(default=None)):
         linhas_retornadas=linhas_retornadas,
         limite_solicitado=limit,
         tipo_erro=tipo_erro,
+        origem_conexao=resultado.get("origem_conexao") or None,
     )
 
     if request_encrypted:
@@ -250,6 +251,13 @@ def api_get_config(request: Request):
     }
 
 
+@app.get("/api/config/reveal-db-pass")
+def api_reveal_db_pass(request: Request):
+    verificar_sessao_web(request)
+    c = get_config()
+    return {"senha": c.get("DB_PASS") or None}
+
+
 @app.post("/api/config")
 async def api_set_config(request: Request):
     verificar_sessao_web(request)
@@ -269,9 +277,127 @@ async def api_set_config(request: Request):
 
 
 @app.post("/api/config/testar-erp")
-async def api_testar_erp(request: Request):
+async def api_testar_erp(request: Request, empresa_id: str = ""):
     verificar_sessao_web(request)
-    return await testar_conexao()
+    return await testar_conexao(empresa_id)
+
+
+# ── API Web: config ERP por empresa ───────────────────────────────────────────
+@app.get("/api/empresas/{empresa_id}/conexao-erp")
+def api_get_conexao_erp(request: Request, empresa_id: str):
+    verificar_sessao_web(request)
+    row = get_conexao_erp(empresa_id)
+    if not row:
+        return {
+            "empresa_id": empresa_id, "db_host": "", "db_port": "1433", "db_name": "",
+            "db_user": "", "db_driver": "ODBC Driver 17 for SQL Server", "filial": "01",
+            "senha_configurada": False, "origem": "padrao_env",
+        }
+    return {
+        "empresa_id": empresa_id,
+        "db_host":    row.get("db_host") or "",
+        "db_port":    row.get("db_port") or "1433",
+        "db_name":    row.get("db_name") or "",
+        "db_user":    row.get("db_user") or "",
+        "db_driver":  row.get("db_driver") or "ODBC Driver 17 for SQL Server",
+        "filial":     row.get("filial") or "01",
+        "senha_configurada": bool(row.get("db_pass_enc")),
+        "origem": "conexao_propria",
+    }
+
+
+@app.get("/api/empresas/{empresa_id}/conexao-erp/reveal-senha")
+def api_reveal_senha_conexao_erp(request: Request, empresa_id: str):
+    verificar_sessao_web(request)
+    row = get_conexao_erp(empresa_id)
+    if not row or not row.get("db_pass_enc"):
+        return {"senha": None}
+    c = get_config()
+    crypto_key = c.get("CRYPTO_KEY", "")
+    if not crypto_key:
+        raise HTTPException(status_code=400, detail="CRYPTO_KEY não configurada — não é possível decifrar a senha salva.")
+    try:
+        senha = decrypt_text(row["db_pass_enc"], crypto_key)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Falha ao decifrar a senha salva.")
+    return {"senha": senha}
+
+
+@app.post("/api/empresas/{empresa_id}/conexao-erp")
+async def api_set_conexao_erp(request: Request, empresa_id: str):
+    verificar_sessao_web(request)
+    body = await request.json()
+
+    db_pass_enc = None
+    senha = body.get("db_pass")
+    if senha:
+        c = get_config()
+        crypto_key = c.get("CRYPTO_KEY", "")
+        if not crypto_key:
+            raise HTTPException(status_code=400, detail="Configure a CRYPTO_KEY (aba Conexão API) antes de salvar a senha da conexão ERP por empresa.")
+        db_pass_enc = encrypt_text(senha, crypto_key)
+
+    salvar_conexao_erp(
+        empresa_id=empresa_id,
+        db_host=body.get("db_host", ""),
+        db_port=body.get("db_port", "1433"),
+        db_name=body.get("db_name", ""),
+        db_user=body.get("db_user", ""),
+        db_pass_enc=db_pass_enc,
+        db_driver=body.get("db_driver") or "ODBC Driver 17 for SQL Server",
+        filial=body.get("filial", "01"),
+    )
+    return {"ok": True}
+
+
+@app.post("/api/empresas/{empresa_id}/conexao-erp/usar-padrao-env")
+def api_usar_padrao_env_conexao_erp(request: Request, empresa_id: str):
+    """Copia a conexão global do .env para a empresa informada, sem expor a senha no navegador."""
+    verificar_sessao_web(request)
+    c = get_config()
+
+    db_pass_enc = None
+    senha_env = c.get("DB_PASS", "")
+    if senha_env:
+        crypto_key = c.get("CRYPTO_KEY", "")
+        if not crypto_key:
+            raise HTTPException(status_code=400, detail="Configure a CRYPTO_KEY (aba Conexão API) antes de copiar a senha do .env para uma empresa.")
+        db_pass_enc = encrypt_text(senha_env, crypto_key)
+
+    salvar_conexao_erp(
+        empresa_id=empresa_id,
+        db_host=c.get("DB_HOST", ""),
+        db_port=c.get("DB_PORT", "1433"),
+        db_name=c.get("DB_NAME", ""),
+        db_user=c.get("DB_USER", ""),
+        db_pass_enc=db_pass_enc,
+        db_driver=c.get("DB_DRIVER") or "ODBC Driver 17 for SQL Server",
+        filial=c.get("FILIAL", "01"),
+    )
+    return {"ok": True}
+
+
+@app.post("/api/empresas/{origem_id}/conexao-erp/copiar-para/{destino_id}")
+def api_copiar_conexao_erp(request: Request, origem_id: str, destino_id: str):
+    verificar_sessao_web(request)
+    if origem_id == destino_id:
+        raise HTTPException(status_code=400, detail="Empresa de origem e destino são a mesma.")
+
+    origem = get_conexao_erp(origem_id)
+    if not origem:
+        raise HTTPException(status_code=404, detail="A empresa de origem ainda não tem conexão ERP própria cadastrada.")
+
+    salvar_conexao_erp(
+        empresa_id=destino_id,
+        db_host=origem.get("db_host", ""),
+        db_port=origem.get("db_port", "1433"),
+        db_name=origem.get("db_name", ""),
+        db_user=origem.get("db_user", ""),
+        db_pass_enc=origem.get("db_pass_enc"),
+        db_driver=origem.get("db_driver") or "ODBC Driver 17 for SQL Server",
+        filial=origem.get("filial", "01"),
+    )
+    return {"ok": True}
 
 
 # ── API Web: token ────────────────────────────────────────────────────────────
@@ -345,6 +471,32 @@ async def api_empresas_sync(request: Request, authorization: str = Header(defaul
     import time as _time
     t0 = _time.monotonic()
     sincronizar_empresas(empresas)
+
+    c = get_config()
+    crypto_key = c.get("CRYPTO_KEY", "")
+    for emp in empresas:
+        conexao = emp.get("conexao_erp")
+        if not isinstance(conexao, dict):
+            continue
+        eid = str(emp.get("empresa_id", "")).strip()
+        if not eid:
+            continue
+        db_pass_enc = None
+        if conexao.get("db_pass"):
+            if not crypto_key:
+                continue  # sem CRYPTO_KEY local não é seguro persistir a senha em claro
+            db_pass_enc = encrypt_text(conexao["db_pass"], crypto_key)
+        salvar_conexao_erp(
+            empresa_id=eid,
+            db_host=conexao.get("db_host", ""),
+            db_port=conexao.get("db_port", "1433"),
+            db_name=conexao.get("db_name", ""),
+            db_user=conexao.get("db_user", ""),
+            db_pass_enc=db_pass_enc,
+            db_driver=conexao.get("db_driver") or "ODBC Driver 17 for SQL Server",
+            filial=conexao.get("filial", "01"),
+        )
+
     duracao = int((_time.monotonic() - t0) * 1000)
     nomes   = ", ".join(e.get("nome", e.get("empresa_id", "?")) for e in empresas)
     registrar_execucao(

@@ -25,6 +25,13 @@ const CAMPOS_CODIGO_EQUIVALENTES = {
     'F2_VEND1', 'F2_VEND2', 'F2_VEND3', 'F2_VEND4', 'F2_VEND5',
     'E1_VEND1', 'E1_VEND2', 'E1_VEND3', 'E1_VEND4', 'E1_VEND5',
   ],
+  // Tipo exclusivo de segurança, analogo a vendedor_fixo_seguranca: código ERP do
+  // remetente autenticado como cliente, resolvido pelo sistema via cod_cliente_erp.
+  // Uniao dos campos de cliente usados por qualquer modulo com restricao de seguranca
+  // (financeiro: SE1.E1_CLIENTE; faturamento: SF2.F2_CLIENTE) — cada spec usa apenas o
+  // campo da sua propria tabela via `campos` explicito. Nunca confundir com a entidade
+  // de negocio "cliente" pedida pelo usuario (CAMPOS_CODIGO_EQUIVALENTES.cliente acima).
+  cliente_fixo_seguranca: ['E1_CLIENTE', 'F2_CLIENTE'],
   produto: ['B1_COD', 'B2_COD', 'D1_COD', 'D2_COD', 'D3_COD'],
   grupo_produto: ['BM_GRUPO', 'B1_GRUPO'],
   centro_custo: ['CTT_CUSTO', 'D1_CC', 'D2_CCUSTO'],

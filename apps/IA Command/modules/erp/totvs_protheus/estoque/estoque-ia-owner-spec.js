@@ -86,13 +86,15 @@ function prepararIntent({ intent, empresaId, mensagem }) {
       retorno: {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de estoque, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        resposta_direta: 'Seu número não está cadastrado como usuário ou gestor no IA Command. Para acessar dados de estoque, solicite ao gestor do IA Command que configure seu perfil ERP.',
         sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
       },
     };
   }
 
-  if (resolucao.estado === 'vendedor' || resolucao.estado === 'vendedor_sem_codigo') {
+  // Bloqueia apenas vendedor DE FATO (codigo preenchido) — 'sem_codigo_vendedor' (usuario
+  // sem erp_id, sem outro papel aplicavel a estoque) cai para acesso total, igual sem_restricao.
+  if (resolucao.estado === 'vendedor') {
     return {
       retorno: {
         tipo: 'erro',

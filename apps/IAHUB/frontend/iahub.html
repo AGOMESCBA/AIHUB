@@ -8,9 +8,21 @@
   <style>
     .hub-shell {
       min-height: 100vh;
+      min-height: 100dvh;
       background: #f3f7fb;
     }
-    .hub-main { min-height: 100vh; display: flex; flex-direction: column; }
+    html, body {
+      height: auto;
+      min-height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+    .hub-main {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
     .hub-topbar { gap: 12px; }
     .hub-topbar .topbar-title { font-size: 16px; font-weight: 800; letter-spacing: .02em; }
     .topbar-actions { margin-left: 10px; display: flex; align-items: center; gap: 10px; order: 3; }
@@ -140,9 +152,9 @@
     .empty-title { color: var(--text-hi); font-weight: 900; margin-bottom: 8px; }
     @media (max-width: 980px) { .systems-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 720px) {
-      .hub-content { width: calc(100vw - 28px); padding-top: 24px; }
+      .hub-content { width: calc(100vw - 28px); padding: 20px 0 28px; }
       .systems-panel { padding: 16px; border-radius: 14px; }
-      .systems-head { align-items: flex-start; flex-direction: column; }
+      .systems-head { align-items: flex-start; flex-direction: column; gap: 12px; margin-bottom: 16px; }
       .systems-title { font-size: 22px; }
       .systems-grid { grid-template-columns: 1fr; }
       .systems-grid.few-systems { grid-template-columns: 1fr; }

@@ -1,4 +1,5 @@
 const crud    = require('../modules/database/crud');
+const { getDB } = require('../modules/database');
 const { requireRotina }      = require('../modules/permissions');
 const { getEmpresaId }       = require('../modules/empresa-context');
 const { URL }  = require('url');
@@ -336,16 +337,35 @@ module.exports = function registrarRotasAgenteLocal(app, { requireAuth, requireI
       return res.status(403).json({ ok: false, erro: 'Nenhuma das empresas selecionadas está acessível.' });
     }
 
-    const payload = lista.map(e => ({
-      empresa_id: e.id,
-      nome:       e.nome   || `Empresa #${e.id}`,
-      cnpj:       e.cnpj   || null,
-      slogan:     e.slogan || null,
-      logo_data:  e.logo_data || null,
-      logo_mime:  e.logo_mime || null,
-      bg_data:    e.bg_data   || null,
-      bg_mime:    e.bg_mime   || null,
-    }));
+    const payload = lista.map(e => {
+      const item = {
+        empresa_id: e.id,
+        nome:       e.nome   || `Empresa #${e.id}`,
+        cnpj:       e.cnpj   || null,
+        slogan:     e.slogan || null,
+        logo_data:  e.logo_data || null,
+        logo_mime:  e.logo_mime || null,
+        bg_data:    e.bg_data   || null,
+        bg_mime:    e.bg_mime   || null,
+      };
+      // Se a empresa tiver uma conexão ERP direta (SQL Server) ativa, envia junto
+      // para o agente local persistir e usar quando essa empresa chamar /execute.
+      const conn = getDB().prepare(
+        "SELECT * FROM connections WHERE empresa_id = ? AND ativo = 1 ORDER BY criado_em DESC LIMIT 1"
+      ).get(Number(e.id));
+      if (conn && conn.tipo && conn.tipo.toLowerCase() !== 'api_proxy' && conn.host) {
+        item.conexao_erp = {
+          db_host:   conn.host,
+          db_port:   conn.port ? String(conn.port) : '1433',
+          db_name:   conn.database || '',
+          db_user:   conn.username || '',
+          db_pass:   conn.password || '',
+          db_driver: 'ODBC Driver 17 for SQL Server',
+          filial:    conn.filial || '01',
+        };
+      }
+      return item;
+    });
 
     try {
       const resultado = await _requestAgente(url, '/api/empresas/sync', 'POST', { empresas: payload }, token, 60000);

@@ -102,8 +102,10 @@ function regrasTecnicas({ mensagem, temAprovacaoPedidoCompra, temNomeAprovador, 
 }
 
 // Compras nao possui campo de vendedor/comprador em nenhuma tabela (SC7, SD1, SA2) — sem
-// forma de restringir por escopo, entao o modulo fica bloqueado integralmente para vendedor.
-// Gestor e numeros sem erp_tipo continuam com acesso total, sem qualquer alteracao.
+// forma de restringir por escopo, entao o modulo fica bloqueado integralmente para
+// vendedor DE FATO (codigo preenchido). Um usuario sem codigo de vendedor mas com codigo
+// de aprovador continua acessando normalmente (checagem abaixo). Gestor e numeros sem
+// erp_tipo continuam com acesso total, sem qualquer alteracao.
 function prepararIntent({ intent, empresaId, mensagem }) {
   const remetente = intent._remetente || null;
   if (!remetente) return {};
@@ -115,13 +117,16 @@ function prepararIntent({ intent, empresaId, mensagem }) {
       retorno: {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu número não está cadastrado como vendedor ou gestor no IA Command. Para acessar dados de compras, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        resposta_direta: 'Seu número não está cadastrado como usuário ou gestor no IA Command. Para acessar dados de compras, solicite ao gestor do IA Command que configure seu perfil ERP.',
         sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
       },
     };
   }
 
-  if (resolucao.estado === 'vendedor' || resolucao.estado === 'vendedor_sem_codigo') {
+  // Bloqueia apenas vendedor DE FATO (codigo preenchido) — 'sem_codigo_vendedor' (usuario
+  // sem erp_id) pode ainda assim ser aprovador, entao cai para a checagem abaixo em vez
+  // de ser bloqueado como se fosse vendedor.
+  if (resolucao.estado === 'vendedor') {
     return {
       retorno: {
         tipo: 'erro',
@@ -132,7 +137,7 @@ function prepararIntent({ intent, empresaId, mensagem }) {
     };
   }
 
-  // gestor ou sem_restricao: acesso total, sem filtro por padrao — mas se o numero tiver
+  // gestor, sem_restricao ou sem_codigo_vendedor: acesso total por padrao, exceto se
   // cod_aprov_erp cadastrado, disponibiliza o codigo no contexto tecnico para a IA aplicar
   // SOMENTE quando a pergunta usar linguagem de posse ("meus pedidos", "para eu aprovar").
   // Diferente do vendedorFixo (sempre restrito), aqui o filtro e condicional a intencao —

@@ -5,6 +5,8 @@ const connectionFactory = require('../providers/connection-factory');
 const responseFormatter = require('./response-formatter');
 const canonicalWhatsappFormat = require('./canonical-whatsapp-format');
 const { resolverVendedorFixoPorEmpresa } = require('../totvs_protheus/guards/vendedor-seguranca');
+const { resolverClienteFixoPorEmpresa } = require('../totvs_protheus/guards/cliente-seguranca');
+const entitySqlGuard = require('../totvs_protheus/guards/entity-sql-guard');
 
 function _json(raw) {
   if (raw && typeof raw === 'object') return raw;
@@ -74,6 +76,14 @@ function _campoVendedor(campos = []) {
     || nomes.find(n => /^vendedor$/i.test(n))
     || nomes.find(n => /cod.*vendedor|vendedor.*cod/i.test(n))
     || nomes.find(n => /^ear$/i.test(n))
+    || null;
+}
+
+function _campoCliente(campos = []) {
+  const nomes = campos.map(c => String(c.coluna || '').trim()).filter(Boolean);
+  return nomes.find(n => /^F2_CLIENTE$/i.test(n))
+    || nomes.find(n => /^D2_CLIENTE$/i.test(n))
+    || nomes.find(n => /^A1_COD$/i.test(n))
     || null;
 }
 
@@ -1071,15 +1081,17 @@ function _normalizarRowsMultiempresa(rows) {
 }
 
 function _sqlBaseSeguro(dataset, entidadeSeguranca, campos) {
-  const vendedor = entidadeSeguranca ? _campoVendedor(campos) : null;
-  if (!vendedor) return dataset.sql_base;
+  if (!entidadeSeguranca) return dataset.sql_base;
+  const ehCliente = entidadeSeguranca.tipo === 'cliente_fixo_seguranca';
+  const campo = ehCliente ? _campoCliente(campos) : _campoVendedor(campos);
+  if (!campo) return dataset.sql_base;
   const codigo = String(entidadeSeguranca.codigo || '').replace(/'/g, "''");
   return [
     'SELECT *',
     'FROM (',
     dataset.sql_base,
     ') AS _dataset_base',
-    `WHERE ${_q(vendedor)} = '${codigo}'`,
+    `WHERE ${_q(campo)} = '${codigo}'`,
   ].join('\n');
 }
 
@@ -1105,22 +1117,15 @@ async function executar(dataset, intent, empresaId, opts = {}) {
       return {
         tipo: 'erro',
         subtipo: 'nao_cadastrado',
-        resposta_direta: 'Seu numero nao esta cadastrado como vendedor ou gestor no IA Command. Para acessar dados de faturamento, solicite ao gestor do IA Command que configure seu perfil ERP.',
+        resposta_direta: 'Seu numero nao esta cadastrado como usuario ou gestor no IA Command. Para acessar dados de faturamento, solicite ao gestor do IA Command que configure seu perfil ERP.',
         sql_gerado: `-- erro: numero ${remetente} nao encontrado em whatsapp_allowed_numbers para empresa_id=${empresaId}`,
         duracao_ms: Date.now() - t0,
       };
     }
-    if (resolucao.estado === 'vendedor_sem_codigo') {
-      return {
-        tipo: 'erro',
-        subtipo: 'erp_id_nao_configurado',
-        resposta_direta: 'Seu cadastro nao possui um codigo de vendedor ERP configurado. Solicite ao gestor do IA Command que preencha o campo Codigo ERP nas suas configuracoes de acesso.',
-        sql_gerado: `-- erro: erp_id vazio para vendedor\n-- mensagem: ${mensagem}`,
-        duracao_ms: Date.now() - t0,
-      };
-    }
+    // Nota: 'sem_codigo_vendedor' (erp_tipo='usuario' sem erp_id) NAO bloqueia aqui —
+    // o numero pode ser um usuario que so tem codigo de cliente. Cai no else abaixo.
     if (resolucao.estado === 'vendedor') {
-      entidadeSeguranca = { codigo: resolucao.codigo, nome: resolucao.nome };
+      entidadeSeguranca = { tipo: 'vendedor_fixo_seguranca', codigo: resolucao.codigo, nome: resolucao.nome };
       if (!_campoVendedor(campos)) {
         return {
           tipo: 'erro',
@@ -1129,6 +1134,24 @@ async function executar(dataset, intent, empresaId, opts = {}) {
           sql_gerado: '-- erro: dataset sem campo VENDEDOR para seguranca',
           duracao_ms: Date.now() - t0,
         };
+      }
+    } else if (resolucao.estado === 'gestor') {
+      // gestor: acesso total, sem checar cliente
+    } else {
+      // sem_restricao: pode ainda assim ser cliente com cod_cliente_erp cadastrado —
+      // campo independente de erp_tipo, mesmo padrao do faturamento-ia-owner-spec.js.
+      const resolucaoCliente = resolverClienteFixoPorEmpresa(remetente, empresaId);
+      if (resolucaoCliente.estado === 'cliente') {
+        entidadeSeguranca = { tipo: 'cliente_fixo_seguranca', codigo: resolucaoCliente.codigo, nome: resolucaoCliente.nome };
+        if (!_campoCliente(campos)) {
+          return {
+            tipo: 'erro',
+            subtipo: 'dataset_sem_campo_seguranca',
+            resposta_direta: 'O dataset semantico de faturamento nao possui campo de cliente para aplicar a seguranca do seu perfil.',
+            sql_gerado: '-- erro: dataset sem campo CLIENTE para seguranca',
+            duracao_ms: Date.now() - t0,
+          };
+        }
       }
     }
   }
@@ -1203,9 +1226,21 @@ async function executar(dataset, intent, empresaId, opts = {}) {
     const validacaoSintaxe = _validarSintaxeBasicaSqlDataset(sqlSelect);
     const validacaoBase = _validarSelectBase(sqlSelect, camposPermitidos);
     const validacaoPeriodo = _validarPeriodoDataset(sqlSelect, campoData, intent, plano);
+    // Defesa em profundidade: rejeita SQL que filtre vendedor/cliente por codigo diferente
+    // do autenticado, mesmo dentro da query externa da IA (nao so o CTE base injetado pelo
+    // sistema) — mesmo padrao estrutural usado no runner.js do IA-OWNER classico.
+    let validacaoSeguranca = { ok: true, erros: [] };
+    if (entidadeSeguranca) {
+      const campoSeguranca = entidadeSeguranca.tipo === 'cliente_fixo_seguranca'
+        ? _campoCliente(campos)
+        : _campoVendedor(campos);
+      if (campoSeguranca) {
+        validacaoSeguranca = entitySqlGuard.validarExclusividadeVendedorSeguranca(sqlSelect, entidadeSeguranca, [campoSeguranca]);
+      }
+    }
     validacao = {
-      ok: validacaoSintaxe.ok && validacaoBase.ok && validacaoPeriodo.ok,
-      erros: [...validacaoSintaxe.erros, ...validacaoBase.erros, ...validacaoPeriodo.erros],
+      ok: validacaoSintaxe.ok && validacaoBase.ok && validacaoPeriodo.ok && validacaoSeguranca.ok,
+      erros: [...validacaoSintaxe.erros, ...validacaoBase.erros, ...validacaoPeriodo.erros, ...validacaoSeguranca.erros],
     };
     if (validacao.ok) break;
     retryErro = validacao.erros.join(' | ');

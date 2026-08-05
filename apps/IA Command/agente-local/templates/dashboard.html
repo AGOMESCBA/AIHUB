@@ -368,6 +368,7 @@
                 <div class="meta-item"><span>Duração</span><strong id="d-duracao">—</strong></div>
                 <div class="meta-item"><span>Linhas retornadas</span><strong id="d-linhas">—</strong></div>
                 <div class="meta-item"><span>Empresa</span><strong id="d-empresa">—</strong></div>
+                <div class="meta-item"><span>Origem da conexão</span><strong id="d-origem-conexao">—</strong></div>
                 <div class="meta-item"><span>Usuário (WhatsApp)</span><strong id="d-sender">—</strong></div>
                 <div class="meta-item"><span>IP origem</span><strong id="d-ip">—</strong></div>
                 <div class="meta-item"><span>Tipo de erro</span><strong id="d-tipo-erro">—</strong></div>
@@ -419,9 +420,13 @@
           <div class="card-header">
             <div>
               <div class="card-title">Conexão com o ERP</div>
-              <div class="card-subtitle">Banco de dados local Protheus / TOTVS</div>
+              <div class="card-subtitle" id="erp-empresa-label">Banco de dados local Protheus / TOTVS</div>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="salvarERP()">Salvar conexão</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" id="btn-usar-padrao-env" onclick="usarPadraoEnvNestaEmpresa()" style="display:none">⬇ Usar conexão padrão (.env)</button>
+              <button class="btn btn-ghost btn-sm" onclick="abrirModalCopiarConexao()">⧉ Copiar de outra empresa</button>
+              <button class="btn btn-primary btn-sm" onclick="salvarERP()">Salvar conexão</button>
+            </div>
           </div>
           <div class="card-body">
             <div class="form-grid">
@@ -449,7 +454,7 @@
                 <label class="form-label">Senha</label>
                 <div class="pass-wrap">
                   <input id="DB_PASS" type="password" class="form-control" placeholder="••••••••">
-                  <button type="button" class="btn-pass-toggle" onclick="togglePass('DB_PASS')">
+                  <button type="button" class="btn-pass-toggle" onclick="revelarSenhaERP()">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   </button>
                 </div>
@@ -717,6 +722,33 @@
   </div><!-- /main -->
 </div><!-- /layout -->
 
+<!-- Modal Copiar Conexão ERP -->
+<div class="modal-overlay" id="modal-copiar-conexao" onclick="fecharModalCopiarConexao()">
+  <div class="modal" style="max-width:440px" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Copiar conexão ERP</span>
+      <button class="modal-close" onclick="fecharModalCopiarConexao()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-md);font-size:13px;margin-bottom:16px;line-height:1.6">
+        Copia host, porta, banco, usuário, senha, driver e filial da empresa selecionada abaixo
+        para <strong id="copiar-destino-label">—</strong> (empresa ativa no topo da tela).
+      </p>
+      <div class="form-group">
+        <label class="form-label">Copiar conexão de</label>
+        <select id="copiar-origem-select" class="form-control"></select>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button class="btn btn-primary" onclick="confirmarCopiarConexao()">Copiar conexão</button>
+        <button class="btn btn-ghost" onclick="fecharModalCopiarConexao()">Cancelar</button>
+      </div>
+      <div id="copiar-conexao-alert" class="alert" style="display:none;margin-top:12px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Factory Reset -->
 <div class="modal-overlay" id="modal-reset" onclick="fecharModalReset()">
   <div class="modal" style="max-width:440px" onclick="event.stopPropagation()">
@@ -790,10 +822,11 @@ let _logsAbortCtrl = null; // AbortController da última requisição /api/logs
 
 const MODULO_CLS = { faturamento:'tbadge-faturamento', compras:'tbadge-compras', financeiro:'tbadge-financeiro', comissao:'tbadge-comissao', sistema:'tbadge-sistema' };
 const GRUPOS = [
-  { field:'empresa_id', label:'Empresa' },
-  { field:'modulo',     label:'Módulo' },
-  { field:'status',     label:'Status' },
-  { field:'ip_origem',  label:'IP origem' },
+  { field:'empresa_id',     label:'Empresa' },
+  { field:'modulo',         label:'Módulo' },
+  { field:'status',         label:'Status' },
+  { field:'ip_origem',      label:'IP origem' },
+  { field:'origem_conexao', label:'Conexão' },
 ];
 
 function _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -814,6 +847,14 @@ function fmtStatus(v) {
   return v === 'ok'
     ? '<span class="tbadge tbadge-ok">✓ Sucesso</span>'
     : '<span class="tbadge tbadge-erro">✕ Erro</span>';
+}
+
+const ORIGEM_CONEXAO_LABELS = { conexao_propria: 'Conexão própria', padrao_env: 'Padrão (.env)' };
+function fmtOrigemConexao(v) {
+  if (!v) return '<span style="color:var(--text-lo)">—</span>';
+  const label = ORIGEM_CONEXAO_LABELS[v] || v;
+  const cls   = v === 'conexao_propria' ? 'tbadge-comissao' : 'tbadge-default';
+  return `<span class="tbadge ${cls}">${_esc(label)}</span>`;
 }
 
 // Versão fire-and-forget de carregarLogs — ignora AbortError silenciosamente
@@ -859,7 +900,10 @@ function _criarTable(dados) {
     groupStartOpen: true,
     groupHeader: (value, count, _data, group) => {
       const field = Array.isArray(group._group?.field) ? group._group.field[0] : group._group?.field;
-      const label = field === 'empresa_id' ? (_empNomes.get(value) || value || '(sem empresa)') : (value || '(vazio)');
+      let label;
+      if (field === 'empresa_id')          label = _empNomes.get(value) || value || '(sem empresa)';
+      else if (field === 'origem_conexao') label = ORIGEM_CONEXAO_LABELS[value] || value || '(vazio)';
+      else                                  label = value || '(vazio)';
       return `${label} <span style="font-size:11px;font-weight:400;opacity:.6">(${count})</span>`;
     },
     placeholder: '<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum registro encontrado.</div>',
@@ -883,6 +927,10 @@ function _criarTable(dados) {
         headerFilter: 'select',
         headerFilterParams: { values: { '':'Todos', faturamento:'Faturamento', compras:'Compras', financeiro:'Financeiro', comissao:'Comissões', sistema:'Sistema' } },
         formatter: c => fmtModulo(c.getValue()) },
+      { title: 'Conexão',   field: 'origem_conexao', width: 140,
+        headerFilter: 'select',
+        headerFilterParams: { values: { '':'Todas', conexao_propria:'Conexão própria', padrao_env:'Padrão (.env)' } },
+        formatter: c => fmtOrigemConexao(c.getValue()) },
       { title: 'Operação',  field: 'operacao',  minWidth: 140, headerFilter: 'input',
         formatter: c => `<span style="font-weight:600;color:var(--text-hi)">${_esc(c.getValue()||'—')}</span>` },
       { title: 'Pergunta',  field: 'pergunta',  minWidth: 170, headerFilter: 'input',
@@ -927,6 +975,7 @@ function _preencherDetalhe(l) {
   document.getElementById('d-duracao').textContent    = (l.duracao_ms != null ? l.duracao_ms + ' ms' : '—');
   document.getElementById('d-linhas').textContent     = (l.linhas_retornadas != null ? l.linhas_retornadas : '—');
   document.getElementById('d-empresa').textContent    = empNome;
+  document.getElementById('d-origem-conexao').innerHTML = fmtOrigemConexao(l.origem_conexao);
   document.getElementById('d-sender').textContent     = l.sender     || '—';
   document.getElementById('d-ip').textContent         = l.ip_origem  || '—';
   document.getElementById('d-tipo-erro').textContent  = l.tipo_erro  || '—';
@@ -1204,32 +1253,118 @@ function _aplicarGrupo() {
   table.setGroupBy(gruposAtivos.length ? gruposAtivos : []);
 }
 
-// ── Config ERP ─────────────────────────────────────────────────────────────
+// ── Config ERP (por empresa selecionada no topbar; vazio = conexão padrão .env) ──
+function _erpEmpresaLabel() {
+  const el = document.getElementById('erp-empresa-label');
+  if (el) el.textContent = _empresaAtual.id ? `Empresa: ${_empresaAtual.nome}` : 'Conexão padrão (nenhuma empresa selecionada no topo)';
+  const btnPadrao = document.getElementById('btn-usar-padrao-env');
+  if (btnPadrao) btnPadrao.style.display = _empresaAtual.id ? '' : 'none';
+}
+
+async function usarPadraoEnvNestaEmpresa() {
+  const eid = _empresaAtual.id;
+  if (!eid) return;
+  if (!confirm(`Copiar a conexão padrão (.env) para ${_empresaAtual.nome}?\n\nIsso sobrescreve qualquer conexão própria já salva para esta empresa.`)) return;
+
+  const r = await fetch(`/api/empresas/${encodeURIComponent(eid)}/conexao-erp/usar-padrao-env`, { method: 'POST' });
+  if (r.ok) {
+    toast(`Conexão padrão copiada para ${_empresaAtual.nome}.`);
+    await carregarConfigERP();
+  } else {
+    const e = await r.json().catch(() => ({}));
+    toast(e.detail || 'Erro ao copiar conexão padrão.', 'err');
+  }
+}
+
 async function carregarConfigERP() {
-  const c = await fetch('/api/config').then(r => r.json()).catch(() => ({}));
-  ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_DRIVER','FILIAL'].forEach(k => {
-    const el = document.getElementById(k); if (el) el.value = c[k] || '';
+  _erpEmpresaLabel();
+
+  // Limpa o resultado do último teste de conexão — evita mostrar "sucesso" de outra empresa
+  const resultEl = document.getElementById('erp-result');
+  if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; resultEl.className = 'alert'; }
+
+  const eid = _empresaAtual.id;
+  const c = eid
+    ? await fetch(`/api/empresas/${encodeURIComponent(eid)}/conexao-erp`).then(r => r.json()).catch(() => ({}))
+    : await fetch('/api/config').then(r => r.json()).catch(() => ({}));
+
+  const map = eid
+    ? { DB_HOST:'db_host', DB_PORT:'db_port', DB_NAME:'db_name', DB_USER:'db_user', DB_DRIVER:'db_driver', FILIAL:'filial' }
+    : { DB_HOST:'DB_HOST', DB_PORT:'DB_PORT', DB_NAME:'DB_NAME', DB_USER:'DB_USER', DB_DRIVER:'DB_DRIVER', FILIAL:'FILIAL' };
+  Object.entries(map).forEach(([elId, key]) => {
+    const el = document.getElementById(elId); if (el) el.value = c[key] || '';
   });
-  const reqEl = document.getElementById('CRYPTO_REQUIRED');
-  if (reqEl) reqEl.value = c.CRYPTO_REQUIRED ? 'true' : 'false';
-  const keyEl = document.getElementById('crypto-key-field');
-  if (keyEl) {
-    keyEl.value = c.CRYPTO_KEY_CONFIGURADA ? '••••••••••••••••' : '';
-    keyEl.dataset.cryptoKey = '';
-    keyEl.dataset.configurada = c.CRYPTO_KEY_CONFIGURADA ? '1' : '0';
-    keyEl.type = 'password';
+
+  const passEl = document.getElementById('DB_PASS');
+  if (passEl) {
+    passEl.value = '';
+    passEl.type = 'password';
+    passEl.dataset.senhaRevelada = '';
+    const temSenha = eid ? !!c.senha_configurada : true; // conexão padrão .env: assume-se configurada se DB_HOST existir
+    passEl.dataset.temSenha = temSenha ? '1' : '0';
+    passEl.placeholder = temSenha ? 'Senha salva — digite para alterar' : '••••••••';
+  }
+
+  if (!eid) {
+    const reqEl = document.getElementById('CRYPTO_REQUIRED');
+    if (reqEl) reqEl.value = c.CRYPTO_REQUIRED ? 'true' : 'false';
+    const keyEl = document.getElementById('crypto-key-field');
+    if (keyEl) {
+      keyEl.value = c.CRYPTO_KEY_CONFIGURADA ? '••••••••••••••••' : '';
+      keyEl.dataset.cryptoKey = '';
+      keyEl.dataset.configurada = c.CRYPTO_KEY_CONFIGURADA ? '1' : '0';
+      keyEl.type = 'password';
+    }
   }
 }
 
 async function salvarERP() {
+  const eid = _empresaAtual.id;
   const body = {};
-  ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_DRIVER','FILIAL'].forEach(k => {
-    const el = document.getElementById(k); if (el) body[k] = el.value.trim();
+  const campos = eid
+    ? { DB_HOST:'db_host', DB_PORT:'db_port', DB_NAME:'db_name', DB_USER:'db_user', DB_DRIVER:'db_driver', FILIAL:'filial' }
+    : { DB_HOST:'DB_HOST', DB_PORT:'DB_PORT', DB_NAME:'DB_NAME', DB_USER:'DB_USER', DB_DRIVER:'DB_DRIVER', FILIAL:'FILIAL' };
+  Object.entries(campos).forEach(([elId, key]) => {
+    const el = document.getElementById(elId); if (el) body[key] = el.value.trim();
   });
   const pass = document.getElementById('DB_PASS').value.trim();
-  if (pass) body.DB_PASS = pass;
-  const r = await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-  if (r.ok) toast('Conexão salva!'); else toast('Erro ao salvar.', 'err');
+  if (pass) body[eid ? 'db_pass' : 'DB_PASS'] = pass;
+
+  const url = eid ? `/api/empresas/${encodeURIComponent(eid)}/conexao-erp` : '/api/config';
+  const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (r.ok) toast('Conexão salva!');
+  else { const e = await r.json().catch(() => ({})); toast(e.detail || 'Erro ao salvar.', 'err'); }
+}
+
+async function revelarSenhaERP() {
+  const passEl = document.getElementById('DB_PASS');
+  if (!passEl) return;
+
+  // Já há texto digitado pelo usuário (senha nova) — só alterna visibilidade, não busca nada.
+  if (passEl.value && !passEl.dataset.senhaRevelada) {
+    passEl.type = passEl.type === 'password' ? 'text' : 'password';
+    return;
+  }
+
+  if (passEl.type === 'text') {
+    passEl.type = 'password';
+    passEl.value = '';
+    passEl.dataset.senhaRevelada = '';
+    return;
+  }
+
+  if (passEl.dataset.temSenha !== '1') return; // nada salvo para revelar
+
+  const eid = _empresaAtual.id;
+  const url = eid
+    ? `/api/empresas/${encodeURIComponent(eid)}/conexao-erp/reveal-senha`
+    : '/api/config/reveal-db-pass';
+  const data = await fetch(url).then(r => r.json()).catch(() => ({}));
+  if (!data.senha) { toast('Não foi possível revelar a senha salva.', 'err'); return; }
+
+  passEl.type = 'text';
+  passEl.value = data.senha;
+  passEl.dataset.senhaRevelada = '1';
 }
 
 async function salvarCryptoLocal() {
@@ -1296,9 +1431,50 @@ function copiarCryptoKeyLocal() {
 async function testarERP() {
   const div = document.getElementById('erp-result');
   div.style.display = 'block'; div.className = 'alert alert-warn'; div.textContent = '⏳ Testando conexão com o ERP…';
-  const data = await fetch('/api/config/testar-erp', { method:'POST' }).then(r=>r.json());
+  const eid = _empresaAtual.id;
+  const url = '/api/config/testar-erp' + (eid ? ('?empresa_id=' + encodeURIComponent(eid)) : '');
+  const data = await fetch(url, { method:'POST' }).then(r=>r.json());
   if (data.ok) { div.className = 'alert alert-ok'; div.textContent = '✅ ' + data.mensagem; }
   else         { div.className = 'alert alert-err'; div.textContent = '❌ ' + (data.erro || 'Falha na conexão.'); }
+}
+
+// ── Copiar conexão ERP de outra empresa ─────────────────────────────────────
+function abrirModalCopiarConexao() {
+  const destLabel = document.getElementById('copiar-destino-label');
+  if (destLabel) destLabel.textContent = _empresaAtual.id ? _empresaAtual.nome : '(selecione uma empresa no topo primeiro)';
+  const sel = document.getElementById('copiar-origem-select');
+  if (sel) {
+    const atual = _empresaAtual.id;
+    const opcoes = [...(_empNomes.entries())].filter(([id]) => id && id !== atual);
+    sel.innerHTML = opcoes.length
+      ? opcoes.map(([id, nome]) => `<option value="${_esc(id)}">${_esc(nome)}</option>`).join('')
+      : '<option value="">Nenhuma outra empresa sincronizada</option>';
+  }
+  document.getElementById('modal-copiar-conexao').classList.add('open');
+}
+
+function fecharModalCopiarConexao() {
+  document.getElementById('modal-copiar-conexao').classList.remove('open');
+}
+
+async function confirmarCopiarConexao() {
+  const origemId = document.getElementById('copiar-origem-select').value;
+  const destinoId = _empresaAtual.id;
+  const al = document.getElementById('copiar-conexao-alert');
+  al.style.display = 'none';
+  if (!origemId) { al.style.display='block'; al.className='alert alert-err'; al.textContent='Selecione a empresa de origem.'; return; }
+  if (!destinoId) { al.style.display='block'; al.className='alert alert-err'; al.textContent='Selecione a empresa de destino no topo da tela antes de copiar.'; return; }
+
+  const r = await fetch(`/api/empresas/${encodeURIComponent(origemId)}/conexao-erp/copiar-para/${encodeURIComponent(destinoId)}`, { method:'POST' });
+  if (r.ok) {
+    fecharModalCopiarConexao();
+    toast(`Conexão de ${_empNomes.get(origemId) || origemId} copiada para ${_empresaAtual.nome}.`);
+    await carregarConfigERP();
+  } else {
+    const e = await r.json().catch(() => ({}));
+    al.style.display = 'block'; al.className = 'alert alert-err';
+    al.textContent = e.detail || 'Erro ao copiar conexão.';
+  }
 }
 
 function togglePass(id) { const e = document.getElementById(id); e.type = e.type==='password'?'text':'password'; }
@@ -1467,6 +1643,7 @@ function trocarEmpresa() {
     else     table.showColumn('empresa_id');
   }
   _recarregarLogs();
+  if (document.querySelector('#tab-erp.active')) carregarConfigERP();
 }
 
 // ── Empresas Grid ─────────────────────────────────────────────────────────
