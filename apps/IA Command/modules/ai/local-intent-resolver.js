@@ -303,10 +303,24 @@ function _resolverFiltros(texto, sinonimosFiltro) {
 }
 
 function _resolverLimite(texto) {
-  const m = texto.match(/\b(?:top|maiores|maior|ranking|rank)\s+(\d{1,3})\b/) || texto.match(/\b(\d{1,3})\s+(?:maiores|mais vendidos|clientes|produtos|fornecedores)\b/);
+  const quantidade = '(\\d{1,3}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte)';
+  const m = texto.match(new RegExp(`\\b(?:top|maiores|maior|ranking|rank)\\s+${quantidade}\\b`))
+    || texto.match(new RegExp(`\\b${quantidade}\\s+(?:maiores|maior|menores|menor|mais vendidos|clientes|produtos|fornecedores)\\b`));
   if (!m) return _containsAny(texto, ['maior', 'melhor', 'menor', 'pior']) ? 1 : null;
-  const n = parseInt(m[1], 10);
+  const n = _numeroNatural(m[1]);
   return Number.isFinite(n) ? Math.min(Math.max(n, 1), 100) : null;
+}
+
+function _numeroNatural(valor) {
+  if (/^\d+$/.test(String(valor))) return parseInt(valor, 10);
+  const mapa = {
+    um: 1, uma: 1,
+    dois: 2, duas: 2,
+    tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+    onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16,
+    dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+  };
+  return mapa[normalizarTexto(valor).replace(/\s+/g, '')] || null;
 }
 
 function _resolverMetricas(texto, sinonimosColuna, metricasDataset, mensagemOriginal = '') {

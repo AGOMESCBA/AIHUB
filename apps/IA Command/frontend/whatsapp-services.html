@@ -1044,7 +1044,31 @@ function copiarLog() {
   const logs = logsPorCanal[canalSelecionadoId] || [];
   if (!logs.length) { toast('info', 'Nenhum log para copiar.'); return; }
   const txt = logs.map(l => `[${l.ts}] ${l.msg}`).join('\n');
-  navigator.clipboard.writeText(txt).then(() => toast('success', 'Log copiado para a área de transferência.')).catch(() => toast('error', 'Falha ao copiar.'));
+
+  function fallbackCopy() {
+    const textarea = document.createElement('textarea');
+    textarea.value = txt;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    document.body.removeChild(textarea);
+    if (ok) toast('success', 'Log copiado para a área de transferência.');
+    else toast('error', 'Falha ao copiar. Use "Salvar" para exportar o log.');
+  }
+
+  // navigator.clipboard exige contexto seguro (HTTPS ou localhost); em acesso
+  // via HTTP em IP de rede local a API não existe e o clique parecia não fazer nada.
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(txt)
+      .then(() => toast('success', 'Log copiado para a área de transferência.'))
+      .catch(fallbackCopy);
+  } else {
+    fallbackCopy();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

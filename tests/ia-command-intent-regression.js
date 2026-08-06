@@ -21,6 +21,7 @@ const { _buildWrapper, _mapAliases } = require('../apps/IA Command/modules/erp/c
 const queryPlan = require('../apps/IA Command/modules/erp/core/query-plan');
 const intentRouter = require('../apps/IA Command/modules/erp/core/intent-router');
 const aiSqlGeneration = require('../apps/IA Command/modules/erp/core/ai-sql-generation');
+const semanticDatasetRunner = require('../apps/IA Command/modules/erp/core/semantic-dataset-ai-runner');
 const temporalContract = require('../apps/IA Command/modules/erp/core/temporal-contract');
 const sx3SqlValidator = require('../apps/IA Command/modules/erp/totvs_protheus/SX/sx3-sql-validator');
 const sx2SqlNormalizer = require('../apps/IA Command/modules/erp/totvs_protheus/SX/sx2-sql-normalizer');
@@ -39,7 +40,9 @@ const comissaoSpec = require('../apps/IA Command/modules/erp/totvs_protheus/comi
 const comissaoHandlerV2 = require('../apps/IA Command/modules/erp/totvs_protheus/comissao/ai-sql-handler-v2');
 const comissaoMiddleware = require('../apps/IA Command/modules/erp/totvs_protheus/comissao/sql-middleware');
 const responseFormatter = require('../apps/IA Command/modules/erp/core/response-formatter');
+const scheduledRunner = require('../apps/IA Command/modules/scheduler/scheduled-question-runner');
 const IACWhatsAppService = require('../apps/IA Command/modules/whatsapp/service');
+const iaOwnerRunner = require('../apps/IA Command/modules/erp/ia-owner/runner');
 
 function buildLegacySchemaAdapter(spec, extraSystemPrompt = '') {
   return {
@@ -305,6 +308,43 @@ expectLocal('top 5 produtos faturamento mes atual', {
   limite: 5,
   ordenar_por: 'faturamento:desc',
 });
+
+{
+  const hojeRanking = new Date('2026-08-05T12:00:00');
+  const rankingDezExtenso = localResolver.resolverLocal(
+    'Quais foram os dez maiores clientes de hoje em faturamento?',
+    intencoes,
+    _SINONIMOS_SISTEMA,
+    { datasets },
+  );
+  assert(rankingDezExtenso, 'dez maiores clientes hoje: resolve localmente');
+  assert.strictEqual(rankingDezExtenso.periodo.tipo, 'hoje', 'dez maiores clientes hoje: periodo hoje, nao dezembro');
+  assert.strictEqual(rankingDezExtenso.limite, 10, 'dez maiores clientes hoje: limite por extenso');
+  assert.strictEqual(rankingDezExtenso.agrupar_por, 'cliente', 'dez maiores clientes hoje: agrupamento cliente');
+  const periodoDezExtenso = {
+    ...rankingDezExtenso.periodo,
+    ...resolverPeriodo(rankingDezExtenso.periodo, { hoje: hojeRanking }),
+  };
+  assert.strictEqual(periodoDezExtenso.dataInicio, '20260805', 'dez maiores clientes hoje: data inicio');
+  assert.strictEqual(periodoDezExtenso.dataFim, '20260805', 'dez maiores clientes hoje: data fim');
+  const contratoDezExtenso = temporalContract.resolverPeriodoDeterministico({
+    modulo: 'faturamento',
+    mensagem: 'Quais foram os dez maiores clientes de hoje em faturamento?',
+    hoje: hojeRanking,
+  });
+  assert.strictEqual(contratoDezExtenso.dataInicio, '20260805', 'contrato temporal: dez maiores hoje nao vira dezembro');
+  assert.strictEqual(contratoDezExtenso.dataFim, '20260805', 'contrato temporal: dez maiores hoje fim');
+
+  const ranking10Numerico = localResolver.resolverLocal(
+    'Lista dos 10 maiores clientes em faturamento de hoje',
+    intencoes,
+    _SINONIMOS_SISTEMA,
+    { datasets },
+  );
+  assert(ranking10Numerico, '10 maiores clientes hoje: resolve localmente');
+  assert.strictEqual(ranking10Numerico.periodo.tipo, 'hoje', '10 maiores clientes hoje: periodo');
+  assert.strictEqual(ranking10Numerico.limite, 10, '10 maiores clientes hoje: limite');
+}
 
 expectLocal('fat ano produto', {
   intencao: 'consultar_faturamento_por_produto',
@@ -1456,6 +1496,53 @@ assert.strictEqual(
   false,
   'faturamento middleware: permite SELECT em tabelas de faturamento'
 );
+{
+  const sqlTopRanking = faturamentoMiddleware.processar(
+    "SET ROWCOUNT 10000; SELECT SA1.A1_NOME AS cliente, SUM(SD2.D2_TOTAL) AS faturamento FROM SF2990 SF2 JOIN SD2990 SD2 ON SD2.D2_DOC = SF2.F2_DOC JOIN SA1990 SA1 ON SA1.A1_COD = SF2.F2_CLIENTE WHERE SF2.D_E_L_E_T_ = ' ' GROUP BY SA1.A1_NOME ORDER BY faturamento DESC",
+    { limite_ranking: 10 },
+  ).sql_processado;
+  assert(/\bSELECT\s+TOP\s+10\s+SA1\.A1_NOME/i.test(sqlTopRanking), 'faturamento middleware aplica TOP 10 de ranking');
+  assert(/SET\s+ROWCOUNT\s+10000/i.test(sqlTopRanking), 'faturamento middleware preserva ROWCOUNT tecnico');
+  const sqlTop20Mensagem = faturamentoMiddleware.processar(
+    "SET ROWCOUNT 10000; SELECT SA1.A1_NOME AS cliente, SUM(SD2.D2_TOTAL) AS faturamento FROM SF2990 SF2 JOIN SD2990 SD2 ON SD2.D2_DOC = SF2.F2_DOC JOIN SA1990 SA1 ON SA1.A1_COD = SF2.F2_CLIENTE WHERE SF2.D_E_L_E_T_ = ' ' GROUP BY SA1.A1_NOME ORDER BY faturamento DESC",
+    { mensagem_original: 'TOP 20 maiores clientes em faturamento hoje' },
+  ).sql_processado;
+  assert(/\bSELECT\s+TOP\s+20\s+SA1\.A1_NOME/i.test(sqlTop20Mensagem), 'faturamento middleware aplica TOP 20 pela mensagem');
+  const sqlTopSubstituido = faturamentoMiddleware.processar(
+    "SET ROWCOUNT 10000; SELECT TOP 1000 SA1.A1_NOME AS cliente, SUM(SD2.D2_TOTAL) AS faturamento FROM SF2990 SF2 JOIN SD2990 SD2 ON SD2.D2_DOC = SF2.F2_DOC JOIN SA1990 SA1 ON SA1.A1_COD = SF2.F2_CLIENTE WHERE SF2.D_E_L_E_T_ = ' ' GROUP BY SA1.A1_NOME ORDER BY faturamento DESC",
+    { mensagem_original: 'Preciso que me envie Os dez clientes que mais compraram no dia de ontem' },
+  ).sql_processado;
+  assert(/\bSELECT\s+TOP\s+10\s+SA1\.A1_NOME/i.test(sqlTopSubstituido), 'faturamento middleware substitui TOP padrao por TOP 10 da pergunta');
+  const sqlDatasetTopSubstituido = semanticDatasetRunner._test._aplicarTopPergunta(
+    "SELECT TOP 1000 cliente, SUM(faturamento) AS faturamento_total FROM base GROUP BY cliente ORDER BY faturamento_total DESC",
+    'Preciso que me envie Os dez clientes que mais compraram no dia de ontem',
+    {},
+  );
+  assert(/\bSELECT\s+TOP\s+10\s+cliente/i.test(sqlDatasetTopSubstituido), 'dataset semantico substitui TOP padrao por TOP 10 da pergunta');
+  const sqlTopManualAgendamento = "SET ROWCOUNT 10000; SELECT TOP 10 COALESCE(SUM(SD2.D2_TOTAL),0) AS faturamento FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = ' '";
+  const validacaoTopIa = iaOwnerRunner._test.validarSqlIaOwnerBasico(sqlTopManualAgendamento, faturamentoSpec, { SD2990: 'E' });
+  const validacaoTopAgendamento = iaOwnerRunner._test.validarSqlIaOwnerBasico(
+    sqlTopManualAgendamento,
+    faturamentoSpec,
+    { SD2990: 'E' },
+    'Consulta agendada',
+    { permitirSelectTop: true },
+  );
+  assert.strictEqual(validacaoTopIa.ok, false, 'SQL IA continua rejeitando SELECT TOP por padrao');
+  assert.strictEqual(validacaoTopAgendamento.ok, true, `SQL fixo de agendamento aceita SELECT TOP: ${validacaoTopAgendamento.erros.join(' | ')}`);
+  const sqlTopNormalizadoAgendamento = scheduledRunner._test.garantirSetRowcountSqlFixo("SELECT TOP 10 * FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = ' '");
+  assert(/^SET\s+ROWCOUNT\s+10000;\s*SELECT\s+TOP\s+10\b/i.test(sqlTopNormalizadoAgendamento), 'agendamento prefixa SET ROWCOUNT sem remover TOP N manual');
+  assert.doesNotThrow(() => scheduledRunner._test.validarSqlFixoBasico(sqlTopNormalizadoAgendamento), 'SQL fixo com TOP N normalizado passa na validacao basica do agendamento');
+  for (const caso of [
+    { nome: 'compras', spec: comprasSpec, sx2: { SD1990: 'E' }, sql: "SET ROWCOUNT 10000; SELECT TOP 10 SD1.D1_DOC AS documento FROM SD1990 SD1 WHERE SD1.D_E_L_E_T_ = ' '" },
+    { nome: 'financeiro', spec: financeiroSpec, sx2: { SE1990: 'E' }, sql: "SET ROWCOUNT 10000; SELECT TOP 10 SE1.E1_NUM AS documento FROM SE1990 SE1 WHERE SE1.D_E_L_E_T_ = ' '" },
+    { nome: 'faturamento', spec: faturamentoSpec, sx2: { SD2990: 'E' }, sql: "SET ROWCOUNT 10000; SELECT TOP 10 SD2.D2_DOC AS documento FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = ' '" },
+    { nome: 'comissao', spec: comissaoSpec, sx2: { SE3990: 'E' }, sql: "SET ROWCOUNT 10000; SELECT TOP 10 SE3.E3_NUM AS documento FROM SE3990 SE3 WHERE SE3.D_E_L_E_T_ = ' '" },
+  ]) {
+    const validacaoModulo = iaOwnerRunner._test.validarSqlIaOwnerBasico(caso.sql, caso.spec, caso.sx2, 'Consulta agendada', { permitirSelectTop: true });
+    assert.strictEqual(validacaoModulo.ok, true, `SQL fixo de agendamento deve aceitar TOP N em ${caso.nome}: ${validacaoModulo.erros.join(' | ')}`);
+  }
+}
 assert.deepStrictEqual(
   faturamentoHandler._rowsZeroParaAgregadoSemLinhas("SET ROWCOUNT 10000; SELECT SUM(SD2.D2_TOTAL) AS faturamento, SUM(SD2.D2_QUANT) AS quantidade FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = ' '"),
   [{ faturamento: 0, quantidade: 0 }],

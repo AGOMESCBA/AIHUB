@@ -37,6 +37,10 @@ const WHATSAPP_INIT_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_INIT_
 const WHATSAPP_POST_CLEANUP_WAIT_MS = Math.max(0, Number(process.env.IAC_WA_POST_CLEANUP_WAIT_MS || 1500));
 const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(60000, Number(process.env.IAC_WA_SILENT_SESSION_RETRY_MS || 90000));
 const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR_AUTH_TIMEOUT_MS || 300000));
+// Reconexao automatica apos "disconnected" com motivo recuperavel (NAVIGATION, CONFLICT, etc).
+// LOGOUT nao entra aqui: significa que o vinculo foi revogado no celular e a sessao salva fica invalida.
+const WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS = Math.max(0, Number(process.env.IAC_WA_AUTO_RECONNECT_MAX_TENTATIVAS ?? 5));
+const WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS = Math.max(1000, Number(process.env.IAC_WA_AUTO_RECONNECT_BASE_DELAY_MS || 5000));
 const NOMES_MODULOS_WHATSAPP = {
   compras:     'Compras',
   financeiro:  'Financeiro',
@@ -366,6 +370,8 @@ class IACWhatsAppService extends EventEmitter {
     this._acceptMessagesAfterTs = 0;
     this._processedMessageIds = new Set();
     this._processedMessageOrder = [];
+    this._autoReconnectAttempts = 0;
+    this._autoReconnectTimer = null;
   }
 
   getStatus()    { return this.status; }
@@ -587,6 +593,7 @@ class IACWhatsAppService extends EventEmitter {
       this._processedMessageIds.clear();
       this._processedMessageOrder = [];
       this.setStatus('connected');
+      this._autoReconnectAttempts = 0;
       const seg = ((Date.now() - this._startTime) / 1000).toFixed(1);
       this._bootLog('ready');
       this.log(`Conectado! Número: ${this.client.info.wid.user} — ${seg}s`, 'success');
@@ -611,7 +618,22 @@ class IACWhatsAppService extends EventEmitter {
       this._bootLog('disconnected', this._startTime, String(reason || 'desconhecido'));
       this.setStatus('stopped');
       // reason pode ser: NAVIGATION, CONFLICT, UNLAUNCHED, UNPAIRED, LOGOUT, etc.
-      this.log(`WhatsApp desconectado. Motivo: ${reason || 'desconhecido'}`, 'warning');
+      const motivo = String(reason || 'desconhecido');
+      this.log(`WhatsApp desconectado. Motivo: ${motivo}`, 'warning');
+
+      if (motivo === 'LOGOUT') {
+        // LOGOUT = vinculo revogado no celular (removido em "Aparelhos conectados" ou
+        // expirado por dias offline). A sessao salva fica invalida; retry automatico
+        // so falharia repetidamente. Precisa de novo QR Code escaneado manualmente.
+        this.log(
+          '🔴 Sessão desconectada por LOGOUT — o vínculo com o celular foi revogado. ' +
+          'Reconexão automática não resolve neste caso. Escaneie um novo QR Code o quanto antes para retomar o atendimento.',
+          'error'
+        );
+        return;
+      }
+
+      this._agendarAutoReconnect({ empresaId, channel });
     });
 
     this.client.on('message', (msg) => this._handleMessage(msg).catch(err => {
@@ -627,6 +649,44 @@ class IACWhatsAppService extends EventEmitter {
       this.log(`Falha ao inicializar: ${err.message}`, 'error');
       await this._killChromeForSession(this._authClientId);
     });
+  }
+
+  // Tenta retomar a sessao automaticamente apos desconexao por motivo recuperavel
+  // (NAVIGATION, CONFLICT, UNLAUNCHED, etc). Nao mexe na sessao salva; se ela ainda
+  // for valida, o WhatsApp Web reconecta sem exigir novo QR. Backoff exponencial e
+  // numero maximo de tentativas evitam martelar caso o problema seja persistente.
+  _agendarAutoReconnect({ empresaId, channel }) {
+    if (this._stopping) return;
+    if (this._autoReconnectTimer) return;
+    if (this._autoReconnectAttempts >= WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS) {
+      this.log(
+        `🔴 Limite de ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} tentativas de reconexão automática atingido. ` +
+        'Verifique a conexão/celular e reconecte manualmente pelo painel.',
+        'error'
+      );
+      return;
+    }
+
+    this._autoReconnectAttempts++;
+    const tentativa = this._autoReconnectAttempts;
+    const delay = Math.min(WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS * Math.pow(2, tentativa - 1), 120000);
+    this.log(`Tentando reconexão automática (${tentativa}/${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS}) em ${Math.round(delay / 1000)}s...`, 'warning');
+
+    this._autoReconnectTimer = setTimeout(() => {
+      this._autoReconnectTimer = null;
+      if (this._stopping || this.status !== 'stopped') return;
+      this.start({ empresaId, channel }).catch(err => {
+        this.log(`Falha na reconexão automática: ${err.message}`, 'error');
+      });
+    }, delay);
+  }
+
+  _cancelarAutoReconnect() {
+    this._autoReconnectAttempts = 0;
+    if (this._autoReconnectTimer) {
+      clearTimeout(this._autoReconnectTimer);
+      this._autoReconnectTimer = null;
+    }
   }
 
   // Mata processos Chrome e limpa arquivos de lock do userDataDir desta sessão (Windows).
@@ -685,6 +745,7 @@ class IACWhatsAppService extends EventEmitter {
 
   async stop() {
     if (this._stopping) return;
+    this._cancelarAutoReconnect();
     this._stopping = true;
     const clientId = this._authClientId;
     if (this.client) {
@@ -703,6 +764,7 @@ class IACWhatsAppService extends EventEmitter {
     const clientId = authClientId || this._authClientId;
     if (!clientId) throw new Error('Identificador da sessão WhatsApp não informado.');
 
+    this._cancelarAutoReconnect();
     this._stopping = true;
     if (this.client) {
       await this.client.logout().catch(() => {});

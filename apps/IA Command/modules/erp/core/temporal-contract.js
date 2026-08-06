@@ -350,7 +350,10 @@ function _periodoAtualPorTextoSemAno({ mensagem, hoje = new Date() } = {}) {
 
   const mesNomeAtual = Object.keys(MESES_NOME)
     .sort((a, b) => b.length - a.length)
-    .find(nome => new RegExp(`\\b${nome}\\b`, 'i').test(texto));
+    .find(nome => {
+      if (nome === 'dez' && _dezEhQuantidadeRanking(texto)) return false;
+      return new RegExp(`\\b${nome}\\b`, 'i').test(texto);
+    });
   if (mesNomeAtual) {
     const mes = MESES_NOME[mesNomeAtual];
     const mm = String(mes).padStart(2, '0');
@@ -395,6 +398,12 @@ function _periodoAtualPorTextoSemAno({ mensagem, hoje = new Date() } = {}) {
   }
 
   return null;
+}
+
+function _dezEhQuantidadeRanking(texto) {
+  const t = String(texto || '');
+  return /\bdez\s+(?:maior(?:es)?|menor(?:es)?|melhor(?:es)?|pior(?:es)?|clientes?|produtos?|fornecedores?|vendedores?|itens?)\b/i.test(t)
+    || /\b(?:top|ranking|rank)\s+dez\b/i.test(t);
 }
 
 function validarPeriodoNoSQL(sql, periodo) {

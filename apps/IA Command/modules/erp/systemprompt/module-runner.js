@@ -1027,7 +1027,8 @@ async function executar(contract, intent, empresaId) {
   if (Array.isArray(contract.dimensionLeftJoinBases) && contract.dimensionLeftJoinBases.length) {
     sql = entitySqlGuard.converterInnerParaLeftJoinDimensionais(sql, contract.dimensionLeftJoinBases);
   }
-  const mw = sqlMW.processar(sql, middlewareCfg);
+  const middlewareCfgExec = { ...middlewareCfg, limite_ranking: intent?.limite, mensagem_original: mensagem };
+  const mw = sqlMW.processar(sql, middlewareCfgExec);
   if (mw.alertas?.length) console.warn(`[${contract.logPrefix}] Middleware alertas (empresa #${empresaId}):`, mw.alertas.join(' | '));
   if (mw.bloqueado) return { tipo: 'erro', subtipo: 'sql_bloqueado', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sql, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
 
@@ -1058,7 +1059,7 @@ async function executar(contract, intent, empresaId) {
         return { tipo: 'erro', subtipo: 'sem_conexao', resposta_direta: mensagemErro(contract, 'sem_conexao'), sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
       }
       console.warn(`[${contract.logPrefix}] Erro SQL no ERP; tentando auto-correcao pela IA: ${e.message.slice(0, 300)}`);
-      const sqlCorrigido = await tentarCorrigirSqlComIA(contract, keys, cfg, sqlFinal, e.message, mensagem, middlewareCfg, sqlMW.processar);
+      const sqlCorrigido = await tentarCorrigirSqlComIA(contract, keys, cfg, sqlFinal, e.message, mensagem, middlewareCfgExec, sqlMW.processar);
       if (!sqlCorrigido) {
         return { tipo: 'erro', subtipo: 'erro_erp', resposta_direta: mensagemErro(contract, 'erro_erp'), sql_gerado: `${sqlFinal}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, duracao_ms: Date.now() - t0, _contextoIAAnterior: contextoIAProximo };
       }
@@ -1162,7 +1163,7 @@ async function executarSqlDireto(contract, sqlCanonico, intent, empresaId) {
   sql = parametros.sql;
 
   const middlewareCfg = contract.sqlMiddleware.carregarConfig(empresaId);
-  const mw = contract.sqlMiddleware.processar(sql, middlewareCfg);
+  const mw = contract.sqlMiddleware.processar(sql, { ...middlewareCfg, limite_ranking: intent?.limite, mensagem_original: mensagem });
   if (mw.bloqueado) {
     return { tipo: 'erro', subtipo: 'sql_bloqueado', resposta_direta: mensagemErro(contract, 'sql_invalido'), sql_gerado: sql, duracao_ms: Date.now() - t0 };
   }

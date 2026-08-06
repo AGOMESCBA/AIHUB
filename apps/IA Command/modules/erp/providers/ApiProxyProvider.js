@@ -142,13 +142,58 @@ function _aplicarTopPadraoSqlServer(sql, limite) {
   return texto.replace(/\bSELECT\s+DISTINCT\b/i, `SELECT DISTINCT TOP ${n}`);
 }
 
+function _normalizarLimiteRanking(valor) {
+  if (Number.isFinite(Number(valor))) return parseInt(valor, 10);
+  const texto = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const mapa = {
+    um: 1, uma: 1,
+    dois: 2, duas: 2,
+    tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+    onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16,
+    dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+  };
+  return mapa[texto.replace(/\s+/g, '')] || null;
+}
+
+function _limiteRankingDaPergunta(pergunta) {
+  const texto = String(pergunta || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const quantidade = '(\\d{1,4}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte)';
+  const m = texto.match(new RegExp(`\\b(?:top\\s*|maior(?:es)?\\s+|menor(?:es)?\\s+|primeir[oa]s?\\s+|ultim[oa]s?\\s+)${quantidade}\\b`, 'i'))
+    || texto.match(new RegExp(`\\b${quantidade}\\s+(?:maior(?:es)?|menor(?:es)?|primeir[oa]s?|ultim[oa]s?|clientes?|produtos?|fornecedores?|vendedores?)\\b`, 'i'));
+  return m ? _normalizarLimiteRanking(m[1]) : null;
+}
+
+function _aplicarTopRankingSqlServer(sql, limiteRanking) {
+  const n = _normalizarLimiteRanking(limiteRanking);
+  if (!Number.isFinite(n) || n <= 0 || n > 10000) return sql;
+  const texto = String(sql || '');
+  if (/\bOFFSET\b[\s\S]*?\bFETCH\s+NEXT\b/i.test(texto)) return texto;
+  const semSet = texto.replace(/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '');
+  const prefixo = texto.slice(0, texto.length - semSet.length);
+  if (/^\s*WITH\b/i.test(semSet)) return texto;
+  if (/^\s*SELECT\s+DISTINCT\s+TOP\s+\(?\d+\)?\b/i.test(semSet)) {
+    return prefixo + semSet.replace(/^\s*SELECT\s+DISTINCT\s+TOP\s+\(?\d+\)?\b/i, `SELECT DISTINCT TOP ${n}`);
+  }
+  if (/^\s*SELECT\s+TOP\s+\(?\d+\)?\b/i.test(semSet)) {
+    return prefixo + semSet.replace(/^\s*SELECT\s+TOP\s+\(?\d+\)?\b/i, `SELECT TOP ${n}`);
+  }
+  if (/^\s*SELECT\s+DISTINCT\b/i.test(semSet)) {
+    return prefixo + semSet.replace(/^\s*SELECT\s+DISTINCT\b/i, `SELECT DISTINCT TOP ${n}`);
+  }
+  return prefixo + semSet.replace(/^\s*SELECT\b/i, `SELECT TOP ${n}`);
+}
+
 async function executar(conn, query, params = {}) {
   const apiKey   = conn.password;
   const url      = _buildUrl(conn, '/execute');
   const cryptoAtivo = conn.crypto_ativo === true || conn.crypto_ativo === 1;
 
   const limit = Math.min(conn.limite_max || 10000, 50000);
-  const sqlFinal = _aplicarTopPadraoSqlServer(_resolverParams(query, params), limit);
+  const sqlComRanking = _aplicarTopRankingSqlServer(
+    _resolverParams(query, params),
+    _limiteRankingDaPergunta(conn._pergunta)
+  );
+  const sqlFinal = _aplicarTopPadraoSqlServer(sqlComRanking, limit);
   const requestId = crypto.randomUUID();
   const plainBody = {
     sql:        sqlFinal,
@@ -214,4 +259,4 @@ async function testar(conn) {
 // Fechar não se aplica a providers HTTP (sem pool permanente)
 async function fechar() {}
 
-module.exports = { executar, testar, fechar, _test: { _aplicarTopPadraoSqlServer } };
+module.exports = { executar, testar, fechar, _test: { _aplicarTopPadraoSqlServer, _aplicarTopRankingSqlServer, _limiteRankingDaPergunta } };

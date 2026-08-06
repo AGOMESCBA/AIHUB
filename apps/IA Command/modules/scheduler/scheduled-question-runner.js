@@ -155,6 +155,14 @@ function consultaSemSetRowcount(sql) {
   return String(sql || '').replace(/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '').trim();
 }
 
+function garantirSetRowcountSqlFixo(sql, limite = 10000) {
+  const texto = String(sql || '').trim();
+  if (!texto) return texto;
+  if (/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i.test(texto)) return texto;
+  const n = Math.min(Math.max(Number(limite) || 10000, 1), 50000);
+  return `SET ROWCOUNT ${n};\n${texto}`;
+}
+
 function validarSqlFixoBasico(sql) {
   const consulta = consultaSemSetRowcount(sql);
   if (!/^\s*(select|with)\b/i.test(consulta)) {
@@ -194,7 +202,7 @@ function statusExecucaoSql(resultado, resposta) {
 
 async function executarSqlFixoUmaVez(empresaId, job) {
   const sqlOriginal = sqlFixo(job);
-  const sql = aplicarMacrosSql(sqlOriginal, job);
+  const sql = garantirSetRowcountSqlFixo(aplicarMacrosSql(sqlOriginal, job));
   validarSqlFixoBasico(sql);
 
   const modulo = String(job.modulo || '').toLowerCase();
@@ -429,6 +437,9 @@ module.exports = {
   executarJob,
   _test: {
     aplicarMacrosSql,
+    consultaSemSetRowcount,
+    garantirSetRowcountSqlFixo,
+    validarSqlFixoBasico,
     macrosDataSql,
     resolverMacroDataSql,
   },

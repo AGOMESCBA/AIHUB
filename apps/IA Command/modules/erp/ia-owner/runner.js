@@ -2519,9 +2519,10 @@ function validarTesDescricaoQuandoAgrupado(sql = '', mensagem = '') {
   };
 }
 
-function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
+function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts = {}) {
   const texto = String(sql || '').trim();
   const erros = [];
+  const permitirSelectTop = opts.permitirSelectTop === true;
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
   erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
   erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
@@ -2536,7 +2537,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '') {
   if (!/^SET\s+ROWCOUNT\s+\d+\s*;\s*(?:WITH\b|SELECT\b)/i.test(texto)) {
     erros.push('SQL deve iniciar com SET ROWCOUNT N; SELECT ... ou SET ROWCOUNT N; WITH ... (CTE)');
   }
-  if (/\bSELECT\s+TOP\s+\d+/i.test(texto)) {
+  if (!permitirSelectTop && /\bSELECT\s+TOP\s+\d+/i.test(texto)) {
     erros.push('Nao use SELECT TOP; use apenas SET ROWCOUNT como limite global.');
   }
   if (/\bIN\s*\(\s*SELECT\s+[A-Z0-9_]+\s+FROM\s+(?:SA2|SB1|SBM|SF4|SED|CTT)\d*[\s\S]{0,300}\bIS\s+NOT\s+NULL\s*\)/i.test(texto)) {
@@ -3387,14 +3388,14 @@ function interpolarRespostaPlanejada(template, rows = []) {
   return /\{[a-zA-Z0-9_]+\}/.test(saida) ? null : saida;
 }
 
-async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem }) {
+async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false }) {
   let sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
   sqlEntradaNormalizado = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(sqlEntradaNormalizado, sx2, {
     logPrefix: spec.logPrefix,
     sufixoFallback: inferirSufixoSX2(sx2, protheus?.sufixoTabela),
   });
   sqlEntradaNormalizado = sx2SqlNormalizer.sanitizarEspacosKeywords(sqlEntradaNormalizado);
-  const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2, mensagem);
+  const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2, mensagem, { permitirSelectTop });
   if (!validacaoBasica.ok) {
     // Acumula também erros do query_plan para que o retry receba todos os problemas de uma vez,
     // evitando ciclos onde a IA corrige só o D_E_L_E_T_ mas mantém UNION ALL ou estrutura errada.
@@ -3516,7 +3517,7 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
   if (!validacaoPlano.ok) {
     throw Object.assign(new Error(`SQL rejeitado pelo query_plan: ${validacaoPlano.erros.join(' | ')}`), { _tipo: 'contrato_query_plan_invalido', _sql: out });
   }
-  const mw = spec.sqlMiddleware.processar(out, middlewareCfg);
+  const mw = spec.sqlMiddleware.processar(out, { ...middlewareCfg, mensagem_original: mensagem });
   if (mw.bloqueado) throw Object.assign(new Error(mw.motivo_bloqueio || 'SQL bloqueado pelo middleware.'), { _tipo: 'sql_bloqueado' });
   return {
     sqlCanonico: out,
@@ -4187,7 +4188,7 @@ async function executar(spec, intent, empresaId) {
       auditoriaBase.query_plan = planoConsulta;
       expandirMetadadosParaSql(plano.sql);
       _traceIaOwner('ia_owner_preparar_sql_inicio', { empresa_id: empresaId, tentativa });
-      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem });
+      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intentEfetivo?.limite }, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem });
       _traceIaOwner('ia_owner_preparar_sql_fim', {
         empresa_id: empresaId,
         tentativa,
@@ -4445,7 +4446,9 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         intent,
       });
       auditoriaBase.query_plan = planoConsulta;
-      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem });
+      const permitirSelectTop = intent?.origem === 'agendamento_sql_fixo'
+        || (intent?._systemOrigin === 'agendamento' && intent?._skipIaSqlGeneration === true);
+      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
       auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;

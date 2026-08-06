@@ -726,11 +726,25 @@ function _limiteTopPergunta(mensagem, intent = {}) {
   if (Number.isFinite(limiteIntent) && limiteIntent > 0 && limiteIntent <= 10000) return limiteIntent;
 
   const texto = String(mensagem || '');
-  const m = texto.match(/\b(?:top|maiores?|menores?|primeir[oa]s?|ultim[oa]s?)\s+(\d{1,4})\b/i)
-    || texto.match(/\b(\d{1,4})\s+(?:maiores?|menores?|primeir[oa]s?|ultim[oa]s?)\b/i);
+  const quantidade = '(\\d{1,4}|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove|vinte)';
+  const m = texto.match(new RegExp(`\\b(?:top|maior(?:es)?|menor(?:es)?|primeir[oa]s?|ultim[oa]s?)\\s+${quantidade}\\b`, 'i'))
+    || texto.match(new RegExp(`\\b${quantidade}\\s+(?:maior(?:es)?|menor(?:es)?|primeir[oa]s?|ultim[oa]s?|clientes?|produtos?|fornecedores?|vendedores?)\\b`, 'i'));
   if (!m) return null;
-  const n = Number(m[1]);
+  const n = _numeroNatural(m[1]);
   return Number.isFinite(n) && n > 0 && n <= 10000 ? n : null;
+}
+
+function _numeroNatural(valor) {
+  if (/^\d+$/.test(String(valor))) return Number(valor);
+  const mapa = {
+    um: 1, uma: 1,
+    dois: 2, duas: 2,
+    tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+    onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16,
+    dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20,
+  };
+  const key = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '');
+  return mapa[key] || null;
 }
 
 function _aplicarTopPergunta(sql, mensagem, intent = {}) {
@@ -738,12 +752,18 @@ function _aplicarTopPergunta(sql, mensagem, intent = {}) {
   if (!limite) return sql;
   if (/\bOFFSET\b[\s\S]*\bFETCH\s+NEXT\b/i.test(sql)) return sql;
   const corrigido = String(sql || '').replace(/^select\s+top\s+(\(?\d+\)?)\s+distinct\b/i, 'SELECT DISTINCT TOP $1');
-  if (corrigido !== String(sql || '')) return corrigido;
-  if (/^select\s+(?:distinct\s+)?top\s+\(?\d+\)?\b/i.test(String(sql || '').trim())) return sql;
-  if (/^select\s+distinct\b/i.test(String(sql || '').trim())) {
-    return String(sql || '').replace(/^select\s+distinct\b/i, `SELECT DISTINCT TOP ${limite}`);
+  const texto = corrigido;
+  const trim = texto.trim();
+  if (/^select\s+distinct\s+top\s+\(?\d+\)?\b/i.test(trim)) {
+    return texto.replace(/^select\s+distinct\s+top\s+\(?\d+\)?\b/i, `SELECT DISTINCT TOP ${limite}`);
   }
-  return String(sql || '').replace(/^select\b/i, `SELECT TOP ${limite}`);
+  if (/^select\s+top\s+\(?\d+\)?\b/i.test(trim)) {
+    return texto.replace(/^select\s+top\s+\(?\d+\)?\b/i, `SELECT TOP ${limite}`);
+  }
+  if (/^select\s+distinct\b/i.test(trim)) {
+    return texto.replace(/^select\s+distinct\b/i, `SELECT DISTINCT TOP ${limite}`);
+  }
+  return texto.replace(/^select\b/i, `SELECT TOP ${limite}`);
 }
 
 function _periodoComDatas(periodo = {}) {
@@ -1332,5 +1352,7 @@ module.exports = {
     _validarCompetenciaLiteralDataset,
     _validarSintaxeBasicaSqlDataset,
     _periodosComparativosDataset,
+    _limiteTopPergunta,
+    _aplicarTopPergunta,
   },
 };

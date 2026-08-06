@@ -481,9 +481,16 @@ function _numeroNatural(valor) {
 function _monthsFromText(texto) {
   const out = [];
   for (const [nome, numero] of Object.entries(MONTHS)) {
+    if (nome === 'dez' && _dezEhQuantidadeRanking(texto)) continue;
     if (_containsTerm(texto, nome) && !out.includes(numero)) out.push(numero);
   }
   return out.sort((a, b) => texto.indexOf(_monthName(a)) - texto.indexOf(_monthName(b)));
+}
+
+function _dezEhQuantidadeRanking(texto) {
+  const t = String(texto || '');
+  return /\bdez\s+(?:maior(?:es)?|menor(?:es)?|melhor(?:es)?|pior(?:es)?|clientes?|produtos?|fornecedores?|vendedores?|itens?)\b/i.test(t)
+    || /\b(?:top|ranking|rank)\s+dez\b/i.test(t);
 }
 
 function _monthName(numero) {

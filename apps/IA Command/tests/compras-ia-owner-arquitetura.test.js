@@ -67,6 +67,17 @@ assert(validacaoRuim.erros.some(e => e.includes('SELECT TOP')), 'deve rejeitar S
 assert(validacaoRuim.erros.some(e => e.includes('tabela fisica como qualificador')), 'deve rejeitar qualificador fisico');
 assert(validacaoRuim.erros.some(e => e.includes('Subquery cadastral')), 'deve rejeitar subquery cadastral inutil');
 
+const sqlTopManualAgendamento = `
+SET ROWCOUNT 10000;
+SELECT TOP 10 COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_compra
+FROM SD1990 SD1
+WHERE SD1.D_E_L_E_T_ = ' '
+`;
+const validacaoTopIa = runner._test.validarSqlIaOwnerBasico(sqlTopManualAgendamento, comprasSpec, sx2);
+assert.strictEqual(validacaoTopIa.ok, false, 'SQL gerado pela IA continua rejeitando SELECT TOP');
+const validacaoTopAgendamento = runner._test.validarSqlIaOwnerBasico(sqlTopManualAgendamento, comprasSpec, sx2, 'Consulta agendada', { permitirSelectTop: true });
+assert.strictEqual(validacaoTopAgendamento.ok, true, `SQL fixo de agendamento deve aceitar SELECT TOP: ${validacaoTopAgendamento.erros.join(' | ')}`);
+
 const sqlDevolucaoErradoPorSf4 = `
 SET ROWCOUNT 50000;
 SELECT COALESCE(SUM(CASE WHEN SF4.F4_CODIGO IS NOT NULL THEN -SD1.D1_TOTAL ELSE SD1.D1_TOTAL END),0) AS valor_compra
