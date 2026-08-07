@@ -144,12 +144,26 @@ function prepararIntent({ intent, empresaId, mensagem }) {
   // um gestor com codigo de aprovador cadastrado ainda pode consultar todos os aprovadores.
   const resolucaoAprovador = resolverAprovadorFixoPorEmpresa(remetente, empresaId);
   if (resolucaoAprovador.estado === 'aprovador') {
-    return {
-      contextoTecnicoExtra: {
-        aprovadorFixo: { codigo: resolucaoAprovador.codigo, nome: resolucaoAprovador.nome },
-        regraAprovadorFixo: `O numero que enviou esta pergunta tem o codigo de aprovador ERP "${resolucaoAprovador.codigo}" cadastrado (SCR.CR_APROV/SAK.AK_COD). Use SCR.CR_APROV = '${resolucaoAprovador.codigo}' SOMENTE quando a pergunta usar linguagem de posse referente ao proprio remetente — ex: "meus pedidos pendentes", "pedidos para eu aprovar", "minha alcada", "o que eu preciso liberar". Quando a pergunta for generica sobre aprovadores (ex: "pedidos pendentes por aprovador", "pedidos do aprovador X"), NAO aplique esse filtro — retorne todos os aprovadores normalmente.`,
-      },
+    const contextoTecnicoExtra = {
+      aprovadorFixo: { codigo: resolucaoAprovador.codigo, nome: resolucaoAprovador.nome },
+      regraAprovadorFixo: `O numero que enviou esta pergunta tem o codigo de aprovador ERP "${resolucaoAprovador.codigo}" cadastrado (SCR.CR_APROV/SAK.AK_COD). Use SCR.CR_APROV = '${resolucaoAprovador.codigo}' SOMENTE quando a pergunta usar linguagem de posse referente ao proprio remetente — ex: "meus pedidos pendentes", "pedidos para eu aprovar", "pedidos bloqueados para eu aprovar", "minha alcada", "o que eu preciso liberar", "o que eu ja aprovei", "aprovei hoje/no mes". Quando a pergunta for generica sobre aprovadores (ex: "pedidos pendentes por aprovador", "pedidos do aprovador X"), NAO aplique esse filtro — retorne todos os aprovadores normalmente.`,
     };
+    // Diferente de vendedorFixo/clienteFixo (sempre restritos), o filtro de aprovador so e
+    // obrigatorio quando a MENSAGEM usa linguagem de posse — por isso a entidadeSeguranca
+    // (que aciona o guard estrutural em validarExclusividadeVendedorSeguranca/runner.js) so
+    // e injetada nesse caso. Pergunta generica sobre aprovadores nao gera entidadeSeguranca:
+    // fica so o contextoTecnicoExtra acima, sem guard, permitindo consultar todos livremente.
+    if (fragmentosSpec.mensagemUsaLinguagemPosseAprovador(mensagem)) {
+      return {
+        contextoTecnicoExtra,
+        entidadeSeguranca: {
+          tipo: 'aprovador_fixo_seguranca',
+          codigo: resolucaoAprovador.codigo,
+          nome: resolucaoAprovador.nome,
+        },
+      };
+    }
+    return { contextoTecnicoExtra };
   }
 
   return {};
@@ -405,7 +419,8 @@ module.exports = {
     erro_erp: 'Nao consegui buscar as compras no ERP. Tente um periodo menor ou filtros mais especificos.',
     sem_conexao: 'Esta empresa nao possui uma conexao com o ERP configurada. Solicite ao administrador.',
   },
-  camposPeriodoObrigatorios: ['D1_DTDIGIT', 'F1_DTDIGIT', 'F1_EMISSAO', 'C7_EMISSAO'],
+  camposPeriodoObrigatorios: ['D1_DTDIGIT', 'F1_DTDIGIT', 'F1_EMISSAO', 'C7_EMISSAO', 'CR_EMISSAO', 'CR_DATALIB'],
+  camposAprovadorSeguranca: ['CR_APROV'],
   garantirIntencao,
   prepararIntent,
   resolverEntidades,

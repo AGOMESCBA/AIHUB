@@ -63,7 +63,7 @@
     .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
     @media(max-width:920px) { .form-row-3 { grid-template-columns:1fr; } }
     .semantic-table-wrap { border:1px solid var(--border);border-radius:8px;overflow:auto;background:var(--bg-card); }
-    .semantic-table { width:100%;border-collapse:collapse;font-size:12px;min-width:620px; }
+    .semantic-table { width:100%;border-collapse:collapse;font-size:12px;min-width:920px; }
     .semantic-table th { text-align:left;padding:8px 10px;background:var(--bg-hover);color:var(--text-lo);font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border); }
     .semantic-table td { padding:6px;border-bottom:1px solid var(--border);vertical-align:top; }
     .semantic-table tr:last-child td { border-bottom:none; }
@@ -312,6 +312,7 @@
                         <label class="form-label">ERP</label>
                         <select id="f-erp" class="form-control" onchange="atualizarResumo()">
                           <option value="protheus">Protheus (TOTVS)</option>
+                          <option value="SoftExpert">SoftExpert</option>
                           <option value="sankhya">Sankhya</option>
                           <option value="sap">SAP</option>
                           <option value="senior">Senior</option>
@@ -388,23 +389,25 @@
                       </div>
                       <div class="form-group">
                         <label class="form-label">Módulo</label>
-                        <select id="f-modulo" class="form-control" onchange="sincronizarSpecPadrao(true);atualizarResumo()">
-                          <option value="">Não definido</option>
-                          <option value="faturamento">Faturamento</option>
-                          <option value="financeiro">Financeiro</option>
-                          <option value="compras">Compras</option>
-                          <option value="comissao">Comissão</option>
-                        </select>
+                        <input type="text" id="f-modulo" class="form-control" list="lista-modulos"
+                          placeholder="ex: faturamento, chamados, projetos"
+                          oninput="sincronizarSpecPadrao(true);atualizarResumo()">
+                        <datalist id="lista-modulos">
+                          <option value="faturamento">
+                          <option value="financeiro">
+                          <option value="compras">
+                          <option value="comissao">
+                          <option value="chamados">
+                          <option value="projetos">
+                        </datalist>
+                        <div class="form-hint">Domínio de negócio do dataset. Para Protheus use os módulos existentes; para outros sistemas (ex: SoftExpert), digite o domínio livremente.</div>
                       </div>
                       <div class="form-group">
                         <label class="form-label">Spec</label>
-                        <select id="f-spec" class="form-control" onchange="sincronizarModuloPorSpec();popularSuboperacoes();atualizarResumo()">
-                          <option value="">Não definido</option>
-                          <option value="faturamento">Faturamento</option>
-                          <option value="financeiro">Financeiro</option>
-                          <option value="compras">Compras</option>
-                          <option value="comissao">Comissão</option>
-                        </select>
+                        <input type="text" id="f-spec" class="form-control" list="lista-modulos"
+                          placeholder="normalmente igual ao Módulo"
+                          oninput="sincronizarModuloPorSpec();popularSuboperacoes();atualizarResumo()">
+                        <div class="form-hint">Identifica o conjunto de regras/spec usado pela IA. Por convenção, repete o valor do Módulo.</div>
                       </div>
                     </div>
                     <div class="form-row-3">
@@ -453,12 +456,13 @@
                       <button class="btn btn-ghost" type="button" onclick="adicionarCampoSemantico()">Adicionar campo</button>
                       <button class="btn btn-ghost" type="button" onclick="importarColunasPreview()">Adicionar novos pelo SQL</button>
                       <button class="btn btn-ghost" type="button" onclick="recriarCamposPreview()">Recriar todos pelo SQL</button>
-                      <span class="semantic-note">Use depois de executar o SQL Base. Adicionar preserva os atuais; recriar apaga e gera novamente.</span>
+                      <button class="btn btn-ghost" type="button" id="btn-sugerir-ia" onclick="sugerirCamposComIA()">✨ Sugerir com IA</button>
+                      <span class="semantic-note">Use depois de executar o SQL Base. Adicionar preserva os atuais; recriar apaga e gera novamente. "Sugerir com IA" propõe descrição, sinônimos e uso a partir dos dados de exemplo — revise antes de salvar.</span>
                     </div>
                     <div class="semantic-table-wrap">
                       <table class="semantic-table">
                         <thead>
-                          <tr><th>Coluna</th><th>Tipo</th><th>Descrição</th><th>Sinônimos</th><th></th></tr>
+                          <tr><th>Coluna</th><th>Tipo</th><th>Descrição</th><th>Sinônimos</th><th>Uso</th><th>Regra</th><th></th></tr>
                         </thead>
                         <tbody id="semantic-fields-body"></tbody>
                       </table>
@@ -472,6 +476,8 @@
                   <div class="form-section-header"><div class="form-section-title">Checklist</div></div>
                   <div class="form-section-body">
                     <div class="summary-note" id="semantic-checklist">Configure tipo, módulo/spec e campos semânticos para preparar o dataset para fases futuras.</div>
+                    <button class="btn btn-primary" type="button" id="btn-gerar-intencao" onclick="gerarIntencaoDoDataset()" style="width:100%;margin-top:14px;display:none">✨ Gerar Intenção a partir deste Dataset</button>
+                    <div class="summary-note" id="gerar-intencao-hint" style="margin-top:6px;display:none">Salve o dataset com Tipo = "SQL/View semântica" e "Disponível para IA Owner" marcado para habilitar.</div>
                   </div>
                 </section>
               </aside>
@@ -573,6 +579,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   let _sqlViewDatasetId = null;
   let _conexoesCarregadas = false;
   let _previewColumns = [];
+  let _previewRows = [];
 
   function valorCampo(id) {
     return document.getElementById(id)?.value?.trim() || '';
@@ -666,7 +673,11 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       tipo: tr.querySelector('[data-sem="tipo"]')?.value || 'dimensao',
       descricao: tr.querySelector('[data-sem="descricao"]')?.value.trim() || '',
       sinonimos: tr.querySelector('[data-sem="sinonimos"]')?.value.trim() || '',
-    })).filter(c => c.coluna || c.descricao || c.sinonimos);
+      filtravel: tr.querySelector('[data-sem="filtravel"]')?.checked ? 1 : 0,
+      agrupavel: tr.querySelector('[data-sem="agrupavel"]')?.checked ? 1 : 0,
+      ordenavel: tr.querySelector('[data-sem="ordenavel"]')?.checked ? 1 : 0,
+      regra: tr.querySelector('[data-sem="regra"]')?.value.trim() || '',
+    })).filter(c => c.coluna || c.descricao || c.sinonimos || c.regra);
   }
 
   function adicionarCampoSemantico(campo = {}) {
@@ -679,6 +690,12 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       </select></td>
       <td><textarea data-sem="descricao" placeholder="Significado de negócio">${esc(campo.descricao || '')}</textarea></td>
       <td><textarea data-sem="sinonimos" placeholder="faturamento, receita">${esc(campo.sinonimos || '')}</textarea></td>
+      <td>
+        <label class="semantic-switch"><input type="checkbox" data-sem="filtravel" ${campo.filtravel ? 'checked' : ''}> Filtrar</label>
+        <label class="semantic-switch"><input type="checkbox" data-sem="agrupavel" ${campo.agrupavel ? 'checked' : ''}> Agrupar</label>
+        <label class="semantic-switch"><input type="checkbox" data-sem="ordenavel" ${campo.ordenavel ? 'checked' : ''}> Ordenar</label>
+      </td>
+      <td><textarea data-sem="regra" placeholder="Ex: usar somente para status aberto/fechado">${esc(campo.regra || '')}</textarea></td>
       <td><button class="btn-icon" type="button" onclick="this.closest('tr').remove();atualizarResumo()" title="Remover" style="color:#dc2626">×</button></td>
     `;
     tbody.appendChild(tr);
@@ -714,6 +731,44 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       adicionarCampoSemantico({ coluna, tipo: _inferirTipoSemantico(coluna), descricao: _descricaoCampoSemantico(coluna) });
     }
     _feedback('Campos recriados pelo SQL executado.', true);
+  }
+
+  async function sugerirCamposComIA() {
+    if (!_previewColumns.length) { _feedback('Execute o SQL primeiro para sugerir campos com IA.', false); return; }
+    if (_semanticFields().length && !confirm('Sugerir campos com IA? As linhas atuais serão substituídas pela sugestão — revise e ajuste antes de salvar.')) return;
+
+    const btn = document.getElementById('btn-sugerir-ia');
+    const textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Consultando IA…';
+    try {
+      const res = await fetch('/api/ia-command/admin/datasets/sugerir-campos-semanticos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          columns: _previewColumns,
+          rows: _previewRows.slice(0, 5),
+          dataset_id: _editId || null,
+          conexao_id: document.getElementById('f-conexao-preview')?.value || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { _feedback(data.error || 'Falha ao sugerir campos com IA.', false); return; }
+      if (!Array.isArray(data.campos) || !data.campos.length) { _feedback('A IA não retornou sugestões.', false); return; }
+
+      document.getElementById('semantic-fields-body').innerHTML = '';
+      for (const campo of data.campos) adicionarCampoSemantico(campo);
+      const comValoresReais = Array.isArray(data.colunas_com_valores_reais) ? data.colunas_com_valores_reais.length : 0;
+      const sufixo = comValoresReais
+        ? ` (${comValoresReais} coluna(s) com valores reais confirmados no banco: ${data.colunas_com_valores_reais.join(', ')})`
+        : '';
+      _feedback(`${data.campos.length} campo(s) sugeridos pela IA — revise antes de salvar.${sufixo}`, true);
+    } catch (err) {
+      _feedback(`Falha na requisição: ${err.message}`, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    }
   }
 
   function _descricaoCampoSemantico(coluna) {
@@ -756,10 +811,8 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const sel = document.getElementById('f-conexao-preview');
     const hint = document.getElementById('preview-modo-execucao');
     if (sel) {
-      sel.disabled = usarAgente;
-      if (usarAgente) sel.value = '';
       sel.title = usarAgente
-        ? 'View semantica usa exclusivamente o Agente Local configurado para a empresa.'
+        ? 'View semantica usa o Agente Local e pode enviar esta conexao como rota do dataset.'
         : 'SQL base atual pode usar a conexao direta selecionada ou a conexao ativa da empresa.';
     }
     if (hint) {
@@ -807,6 +860,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     document.getElementById('f-campo-data').value      = 'data';
     document.getElementById('f-colunas-metrica').value = '';
     document.getElementById('f-tipo').value = 'sql_base';
+    document.getElementById('f-conexao-preview').value = '';
     atualizarModoPreviewSql();
     document.getElementById('f-modulo').value = '';
     document.getElementById('f-spec').value = '';
@@ -865,6 +919,14 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
         document.getElementById('f-ativo-ia-owner')?.checked ? 'Disponível para IA Owner: <strong>sim</strong>' : 'Disponível para IA Owner: não',
       ].join('<br>');
     }
+
+    const podeGerarIntencao = tipo === 'view_semantica'
+      && document.getElementById('f-ativo-ia-owner')?.checked
+      && !!_editId;
+    const btnGerar = document.getElementById('btn-gerar-intencao');
+    const hintGerar = document.getElementById('gerar-intencao-hint');
+    if (btnGerar) btnGerar.style.display = podeGerarIntencao ? '' : 'none';
+    if (hintGerar) hintGerar.style.display = (!podeGerarIntencao && tipo === 'view_semantica') ? '' : 'none';
   }
 
   // ── Conexões para preview SQL ───────────────────────────────────────────────
@@ -877,7 +939,6 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
         const opt = document.createElement('option');
         opt.value = c.id;
         opt.textContent = `${c.nome} (${c.tipo})${c.ativo ? ' ★' : ''}`;
-        if (c.ativo) opt.selected = true;
         sel.appendChild(opt);
       });
     } catch (_) {}
@@ -897,9 +958,8 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     document.getElementById('f-campo-data').value      = row.campo_data      || 'data';
     document.getElementById('f-colunas-metrica').value = row.colunas_metrica || '';
     document.getElementById('f-tipo').value = row.tipo || 'sql_base';
+    document.getElementById('f-conexao-preview').value = row.connection_id || '';
     atualizarModoPreviewSql();
-    garantirOpcaoSelect('f-modulo', row.modulo);
-    garantirOpcaoSelect('f-spec', row.spec);
     document.getElementById('f-modulo').value = row.modulo || '';
     document.getElementById('f-spec').value = row.spec || '';
     popularSuboperacoes(row.suboperacao || '');
@@ -920,6 +980,36 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     atualizarResumo();
   }
 
+  // ── Gerar Intenção a partir deste Dataset ───────────────────────────────────
+  async function gerarIntencaoDoDataset() {
+    if (!_editId) { _feedback('Salve o dataset antes de gerar a intenção.', false); return; }
+    const btn = document.getElementById('btn-gerar-intencao');
+    const textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Analisando dataset…';
+    try {
+      const res = await fetch(`/api/ia-command/admin/datasets/${_editId}/sugerir-intencao`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data.intencao_existente) {
+          if (confirm(`${data.error}\n\nAbrir a intenção existente para editar?`)) {
+            window.location.href = `/app/ia-command/admin-intencoes.html?editar=${data.intencao_existente.id}`;
+          }
+          return;
+        }
+        _feedback(data.error || 'Falha ao sugerir intenção.', false);
+        return;
+      }
+      sessionStorage.setItem('iac_sugestao_intencao', JSON.stringify(data.sugestao));
+      window.location.href = '/app/ia-command/admin-intencoes.html?nova=1&origem=dataset';
+    } catch (err) {
+      _feedback(`Falha na requisição: ${err.message}`, false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    }
+  }
+
   // ── Salvar ──────────────────────────────────────────────────────────────────
   async function salvarModal() {
     const nome    = document.getElementById('f-nome').value.trim();
@@ -930,6 +1020,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const body = {
       nome,
       erp:        document.getElementById('f-erp').value,
+      connection_id: document.getElementById('f-conexao-preview')?.value || null,
       limite_max: parseInt(document.getElementById('f-limite').value) || 1000,
       sql_base:   sqlBase,
       campo_data:      document.getElementById('f-campo-data').value.trim() || 'data',
@@ -974,7 +1065,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   async function executarSql() {
     const sqlBase   = document.getElementById('f-sql-base').value.trim();
     const tipoDataset = document.getElementById('f-tipo')?.value || 'sql_base';
-    const conexaoId = tipoDataset === 'view_semantica' ? null : (document.getElementById('f-conexao-preview').value || null);
+    const conexaoId = document.getElementById('f-conexao-preview').value || null;
     const btn       = document.getElementById('btn-executar');
     const status    = document.getElementById('exec-status');
     const errorBox  = document.getElementById('preview-error');
@@ -1028,7 +1119,10 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   }
 
   function _renderPreviewTarget({ columns, rows, total, conexao, theadId, tbodyId, infoId, connId, wrapId }) {
-    if (theadId === 'preview-thead') _previewColumns = Array.isArray(columns) ? columns : [];
+    if (theadId === 'preview-thead') {
+      _previewColumns = Array.isArray(columns) ? columns : [];
+      _previewRows = Array.isArray(rows) ? rows : [];
+    }
     const thead = document.getElementById(theadId);
     const tbody = document.getElementById(tbodyId);
     const info  = document.getElementById(infoId);
@@ -1254,7 +1348,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const previewWr = document.getElementById('sql-view-preview');
     const sqlBase   = String(row.sql_base || '').trim();
     const tipoDataset = row.tipo || 'sql_base';
-    const conexaoId = tipoDataset === 'view_semantica' ? null : (row.conexao_id || row.connection_id || null);
+    const conexaoId = row.conexao_id || row.connection_id || null;
 
     if (!sqlBase) {
       errorBox.textContent = 'Este dataset não tem SQL Base configurado.';

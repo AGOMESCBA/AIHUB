@@ -208,17 +208,36 @@
                   </div>
                   <div class="form-section-body">
                     <div class="form-group">
+                      <label class="form-label">Sistema ERP</label>
+                      <select id="f-erp" class="form-control" style="max-width:320px">
+                        <option value="protheus">Protheus (TOTVS)</option>
+                        <option value="SoftExpert">SoftExpert</option>
+                        <option value="sankhya">Sankhya</option>
+                        <option value="sap">SAP</option>
+                        <option value="senior">Senior</option>
+                      </select>
+                      <div class="form-hint">Define qual motor de execução responde a esta intenção. Intenções não-Protheus são resolvidas via dataset semântico (view_semantica), não pelos handlers Protheus.</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Ação</label>
+                      <select id="f-acao" class="form-control" style="max-width:320px" onchange="_atualizarVisibilidadeDataset()">
+                        <option value="">Dataset fixo (SQL pré-definido)</option>
+                        <option value="ai_text_to_sql">IA gera o SQL livremente (Text-to-SQL)</option>
+                      </select>
+                      <div class="form-hint">"Dataset fixo" executa sempre o mesmo SQL do dataset vinculado. "IA gera o SQL" permite perguntas livres dentro do módulo/sistema — a IA escreve o SQL a cada pergunta, usando o dataset de metadados semânticos correspondente (Módulo + Sistema ERP).</div>
+                    </div>
+                    <div class="form-group">
                       <label class="form-label">Módulo</label>
                       <select id="f-modulo-form" class="form-control" style="max-width:320px">
                         <option value="">— selecione —</option>
                       </select>
                     </div>
-                    <div class="form-group" style="margin-bottom:0">
+                    <div class="form-group" style="margin-bottom:0" id="grp-dataset-vinculado">
                       <label class="form-label">Dataset vinculado</label>
                       <select id="f-dataset" class="form-control">
                         <option value="">— nenhum —</option>
                       </select>
-                      <div class="form-hint">Dataset cujo SQL será executado quando esta intenção for reconhecida.</div>
+                      <div class="form-hint">Dataset cujo SQL será executado quando esta intenção for reconhecida. Não se aplica quando a Ação é "IA gera o SQL livremente".</div>
                     </div>
                   </div>
                 </section>
@@ -350,8 +369,16 @@
       document.getElementById(id).value = '';
     });
     document.getElementById('f-ativo').value = '1';
+    document.getElementById('f-erp').value   = 'protheus';
+    document.getElementById('f-acao').value  = '';
+    _atualizarVisibilidadeDataset();
     document.getElementById('save-feedback').textContent = '';
     document.getElementById('save-feedback').className   = 'save-feedback';
+  }
+
+  function _atualizarVisibilidadeDataset() {
+    const ehAiSql = document.getElementById('f-acao').value === 'ai_text_to_sql';
+    document.getElementById('grp-dataset-vinculado').style.display = ehAiSql ? 'none' : '';
   }
 
   async function _carregarForm(id) {
@@ -362,6 +389,8 @@
     document.getElementById('f-empresa-nome').value = '—';
     document.getElementById('f-nome').value         = row.nome        || '';
     document.getElementById('f-descricao').value    = row.descricao   || '';
+    document.getElementById('f-erp').value          = row.erp         || 'protheus';
+    document.getElementById('f-acao').value         = row.acao        || '';
     document.getElementById('f-modulo-form').value  = row.modulo      || '';
     document.getElementById('f-dataset').value      = row.dataset_id  || '';
     document.getElementById('f-frases').value       = row.frases_exemplo || '';
@@ -369,17 +398,21 @@
     document.getElementById('form-title').textContent = row.nome;
     document.getElementById('form-subtitle').textContent =
       `ID ${row.id.slice(0,8)}… · editado em ${row.atualizado_em?.slice(0,16).replace('T',' ') || '—'}`;
+    _atualizarVisibilidadeDataset();
   }
 
   async function salvarModal() {
     const nome = document.getElementById('f-nome').value.trim();
     if (!nome) { _feedback('Campo Nome é obrigatório.', false); return; }
 
+    const acao = document.getElementById('f-acao').value || null;
     const body = {
       nome,
       descricao:      document.getElementById('f-descricao').value.trim() || null,
+      erp:            document.getElementById('f-erp').value || 'protheus',
+      acao,
       modulo:         document.getElementById('f-modulo-form').value || null,
-      dataset_id:     document.getElementById('f-dataset').value || null,
+      dataset_id:     acao === 'ai_text_to_sql' ? null : (document.getElementById('f-dataset').value || null),
       frases_exemplo: document.getElementById('f-frases').value.trim() || null,
       ativo:          parseInt(document.getElementById('f-ativo').value),
     };
@@ -503,6 +536,8 @@
           formatter:c=>`<span style="font-family:monospace;font-size:11px;color:var(--text-lo)">${c.getValue()?.slice(0,8)}…</span>` },
         { title:'Nome', field:'nome', minWidth:160, headerFilter:true,
           formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
+        { title:'ERP', field:'erp', width:110, headerFilter:true,
+          formatter:c=>esc(c.getValue()||'protheus') },
         { title:'Módulo', field:'modulo', width:130, headerFilter:true,
           formatter:c=>{ const val=c.getValue(); return val?`<span class="badge-modulo">${esc(val)}</span>`:''; } },
         { title:'Ação', field:'acao', width:120, headerFilter:true },
@@ -532,7 +567,44 @@
 
   function _label(n) { return n===1?'1 intenção':`${n} intenções`; }
 
-  window._iahubAuthReady?.then(carregar) ?? carregar();
+  // ── Abertura automática vinda de "Gerar Intenção a partir deste Dataset" ────
+  async function _verificarAberturaAutomatica() {
+    const params = new URLSearchParams(window.location.search);
+    const editarId = params.get('editar');
+    if (editarId) {
+      abrirFormulario(editarId);
+      history.replaceState(null, '', window.location.pathname);
+      return;
+    }
+    if (params.get('nova') !== '1' || params.get('origem') !== 'dataset') return;
+    const raw = sessionStorage.getItem('iac_sugestao_intencao');
+    sessionStorage.removeItem('iac_sugestao_intencao');
+    history.replaceState(null, '', window.location.pathname);
+    if (!raw) return;
+    let sugestao;
+    try { sugestao = JSON.parse(raw); } catch (_) { return; }
+
+    abrirFormulario();
+    await _carregarOpcoes(); // garante que os <select> de Módulo/Dataset já têm opções antes de preencher
+    document.getElementById('f-nome').value        = sugestao.nome || '';
+    document.getElementById('f-descricao').value   = sugestao.descricao || '';
+    document.getElementById('f-erp').value         = sugestao.erp || 'protheus';
+    document.getElementById('f-acao').value        = sugestao.acao || '';
+    document.getElementById('f-frases').value      = sugestao.frases_exemplo || '';
+    _atualizarVisibilidadeDataset();
+
+    const selMod = document.getElementById('f-modulo-form');
+    const moduloExiste = [...selMod.options].some(opt => opt.value === sugestao.modulo);
+    let subtitulo = 'Sugestão gerada por IA a partir de um dataset — revise antes de salvar.';
+    if (moduloExiste) {
+      selMod.value = sugestao.modulo;
+    } else if (sugestao.modulo) {
+      subtitulo = `⚠️ Cadastre o módulo "${sugestao.modulo}" na tela de Módulos antes de salvar — ele ainda não existe na lista.`;
+    }
+    document.getElementById('form-subtitle').textContent = subtitulo;
+  }
+
+  window._iahubAuthReady?.then(carregar).then(_verificarAberturaAutomatica) ?? carregar().then(_verificarAberturaAutomatica);
 </script>
 
 <div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>

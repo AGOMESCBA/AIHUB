@@ -47,6 +47,11 @@ function resolverPeriodo(periodo, opts = {}) {
       inicio = _startOfWeek(fim);
       break;
 
+    case 'proxima_semana':
+      inicio = _addDays(_startOfWeek(hoje), 7);
+      fim = _addDays(inicio, 6);
+      break;
+
     case 'ultimos_N_dias': {
       const n = _clampInt(periodo.dias, 7, 1, 365);
       inicio = _addDays(hoje, -(n - 1));
@@ -279,6 +284,7 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   if (ultimosMeses) return _ultimosMeses(hoje, ultimosMeses);
 
   if (_containsAny(texto, ['semana passada', 'semana anterior'])) return { tipo: 'semana_anterior' };
+  if (_containsAny(texto, ['semana que vem', 'proxima semana', 'semana seguinte', 'semana que vira'])) return { tipo: 'proxima_semana' };
   if (_containsAny(texto, ['esta semana', 'essa semana', 'semana atual', 'da semana'])) return { tipo: 'esta_semana' };
 
   if (_containsAny(texto, ['q1', 'primeiro trimestre'])) return { tipo: 'primeiro_trimestre', ano_ref: _anoRefTexto(texto) };

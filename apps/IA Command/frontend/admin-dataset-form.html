@@ -21,7 +21,7 @@
     .form-row-3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px; }
     @media(max-width:920px) { .form-row-3 { grid-template-columns:1fr; } }
     .semantic-table-wrap { border:1px solid var(--border);border-radius:8px;overflow:auto;background:var(--bg-card); }
-    .semantic-table { width:100%;border-collapse:collapse;font-size:12px;min-width:620px; }
+    .semantic-table { width:100%;border-collapse:collapse;font-size:12px;min-width:920px; }
     .semantic-table th { text-align:left;padding:8px 10px;background:var(--bg-hover);color:var(--text-lo);font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border); }
     .semantic-table td { padding:6px;border-bottom:1px solid var(--border);vertical-align:top; }
     .semantic-table tr:last-child td { border-bottom:none; }
@@ -354,7 +354,7 @@
                 <div class="form-section-header"><div class="form-section-title">Campos Semânticos</div><div class="form-section-subtitle">Gere pelo SQL executado e ajuste apenas nomes ou sinônimos quando necessário.</div></div>
                 <div class="form-section-body">
                   <div class="semantic-actions"><button class="btn btn-ghost" type="button" onclick="adicionarCampoSemantico()">Adicionar campo</button><button class="btn btn-ghost" type="button" onclick="importarColunasPreview()">Adicionar novos pelo SQL</button><button class="btn btn-ghost" type="button" onclick="recriarCamposPreview()">Recriar todos pelo SQL</button><span class="semantic-note">Use depois de executar o SQL Base. Adicionar preserva os atuais; recriar apaga e gera novamente.</span></div>
-                  <div class="semantic-table-wrap"><table class="semantic-table"><thead><tr><th>Coluna</th><th>Tipo</th><th>Descrição</th><th>Sinônimos</th><th></th></tr></thead><tbody id="semantic-fields-body"></tbody></table></div>
+                  <div class="semantic-table-wrap"><table class="semantic-table"><thead><tr><th>Coluna</th><th>Tipo</th><th>Descrição</th><th>Sinônimos</th><th>Uso</th><th>Regra</th><th></th></tr></thead><tbody id="semantic-fields-body"></tbody></table></div>
                 </div>
               </section>
             </main>
@@ -546,7 +546,11 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       tipo: tr.querySelector('[data-sem="tipo"]')?.value || 'dimensao',
       descricao: tr.querySelector('[data-sem="descricao"]')?.value.trim() || '',
       sinonimos: tr.querySelector('[data-sem="sinonimos"]')?.value.trim() || '',
-    })).filter(c => c.coluna || c.descricao || c.sinonimos);
+      filtravel: tr.querySelector('[data-sem="filtravel"]')?.checked ? 1 : 0,
+      agrupavel: tr.querySelector('[data-sem="agrupavel"]')?.checked ? 1 : 0,
+      ordenavel: tr.querySelector('[data-sem="ordenavel"]')?.checked ? 1 : 0,
+      regra: tr.querySelector('[data-sem="regra"]')?.value.trim() || '',
+    })).filter(c => c.coluna || c.descricao || c.sinonimos || c.regra);
   }
 
   function adicionarCampoSemantico(campo = {}) {
@@ -557,6 +561,12 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       <td><select data-sem="tipo">${['metrica','dimensao','data','status','identificador','texto'].map(t => `<option value="${t}" ${campo.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
       <td><textarea data-sem="descricao" placeholder="Significado de negócio">${esc(campo.descricao || '')}</textarea></td>
       <td><textarea data-sem="sinonimos" placeholder="faturamento, receita">${esc(campo.sinonimos || '')}</textarea></td>
+      <td>
+        <label class="semantic-switch"><input type="checkbox" data-sem="filtravel" ${campo.filtravel ? 'checked' : ''}> Filtrar</label>
+        <label class="semantic-switch"><input type="checkbox" data-sem="agrupavel" ${campo.agrupavel ? 'checked' : ''}> Agrupar</label>
+        <label class="semantic-switch"><input type="checkbox" data-sem="ordenavel" ${campo.ordenavel ? 'checked' : ''}> Ordenar</label>
+      </td>
+      <td><textarea data-sem="regra" placeholder="Ex: usar somente para status aberto/fechado">${esc(campo.regra || '')}</textarea></td>
       <td><button class="btn-icon" type="button" onclick="this.closest('tr').remove();atualizarResumo()" title="Remover" style="color:#dc2626">×</button></td>
     `;
     tbody.appendChild(tr);
@@ -634,10 +644,8 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const sel = document.getElementById('f-conexao-preview');
     const hint = document.getElementById('preview-modo-execucao');
     if (sel) {
-      sel.disabled = usarAgente;
-      if (usarAgente) sel.value = '';
       sel.title = usarAgente
-        ? 'View semantica usa exclusivamente o Agente Local configurado para a empresa.'
+        ? 'View semantica usa o Agente Local e pode enviar esta conexao como rota do dataset.'
         : 'SQL base atual pode usar a conexao direta selecionada ou a conexao ativa da empresa.';
     }
     if (hint) {
@@ -709,7 +717,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
 
   // ── Carregar registro para edição ───────────────────────────────────────────
   async function carregar() {
-    carregarConexoes();
+    await carregarConexoes();
 
     if (!editId) {
       document.getElementById('f-empresa').value =
@@ -733,6 +741,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     document.getElementById('f-campo-data').value      = row.campo_data      || 'data';
     document.getElementById('f-colunas-metrica').value = row.colunas_metrica || '';
     document.getElementById('f-tipo').value = row.tipo || 'sql_base';
+    document.getElementById('f-conexao-preview').value = row.connection_id || '';
     atualizarModoPreviewSql();
     garantirOpcaoSelect('f-modulo', row.modulo);
     garantirOpcaoSelect('f-spec', row.spec);
@@ -768,6 +777,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const body = {
       nome,
       erp:             document.getElementById('f-erp').value,
+      connection_id:   document.getElementById('f-conexao-preview')?.value || null,
       limite_max:      parseInt(document.getElementById('f-limite').value) || 1000,
       sql_base:        sqlBase,
       campo_data:      document.getElementById('f-campo-data').value.trim() || 'data',
@@ -834,7 +844,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   async function executarSql() {
     const sqlBase   = document.getElementById('f-sql-base').value.trim();
     const tipoDataset = document.getElementById('f-tipo')?.value || 'sql_base';
-    const conexaoId = tipoDataset === 'view_semantica' ? null : (document.getElementById('f-conexao-preview').value || null);
+    const conexaoId = document.getElementById('f-conexao-preview').value || null;
     const btn       = document.getElementById('btn-executar');
     const status    = document.getElementById('exec-status');
     const errorBox  = document.getElementById('preview-error');

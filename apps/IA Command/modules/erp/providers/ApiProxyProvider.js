@@ -205,6 +205,11 @@ async function executar(conn, query, params = {}) {
     sender:     conn._sender      || '',
     usuario:    conn._usuario     || '',
     empresa_id: conn._empresa_id  || '',
+    dataset_id: conn._dataset_id || '',
+    connection_id: conn._connection_id || '',
+    connection_key: conn._connection_key || '',
+    connection_nome: conn._connection_nome || '',
+    sistema_origem: conn._connection_erp || '',
     iat:        Date.now(),
     request_id: requestId,
   };

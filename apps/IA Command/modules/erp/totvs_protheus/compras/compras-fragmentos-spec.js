@@ -260,6 +260,14 @@ ${joinAprovador}
 - Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado (resultado final). SCR detalha o FLUXO de aprovacao (quem, em que nivel, em que status) que levou (ou nao) a essa liberacao. Para perguntas "por aprovador" ou sobre o fluxo/alcada, use SCR — nao tente derivar aprovador a partir de SC7.
 - REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido (SUM(SC7.C7_TOTAL)) na projecao, mesmo que o usuario nao peca valor explicitamente. SCR e cabecalho, mas SC7 e tabela de ITEM (varias linhas por pedido) — para nao duplicar o numero do pedido em N linhas, agrupe por SCR.CR_NUM (e demais colunas de identificacao) com SUM(SC7.C7_TOTAL) AS valor_pedido. Uma listagem de pedidos SEM nenhuma coluna de valor monetario e uma listagem incompleta — sempre agregue e exiba o valor.
 
+### Linguagem de posse do proprio aprovador (remetente do WhatsApp)
+- SCR tem UMA LINHA POR NIVEL de aprovacao (chave real: CR_FILIAL + CR_NUM + CR_TIPO + CR_NIVEL). CR_APROV identifica o aprovador responsavel APENAS por aquele nivel especifico — nao o pedido inteiro.
+- "O que tenho que aprovar", "pedidos bloqueados/pendentes para eu aprovar", "minha alcada", "aguardando minha aprovacao": filtre SCR.CR_APROV = '<codigo do aprovador>' AND SCR.CR_STATUS IN ('01','02'). Isso cobre tanto o que ja chegou no seu nivel (02) quanto o que esta em nivel anterior mas vai chegar a voce (01) — nao filtre so '02'.
+- "O que eu ja aprovei" (hoje, ontem, na semana, no mes): filtre SCR.CR_APROV = '<codigo do aprovador>' AND SCR.CR_STATUS = '03'. Para o periodo (hoje/mes/semana), use SCR.CR_DATALIB (data em que a liberacao de fato ocorreu) — NUNCA SCR.CR_EMISSAO (que e a emissao do documento original, nao a data da aprovacao).
+- O codigo do aprovador vem do contexto tecnico (aprovadorFixo.codigo) quando a pergunta usa linguagem de posse referente ao proprio remetente — nunca peca o codigo ao usuario nem invente um.
+- Se o usuario pedir "com os itens" ou "detalhado por item", nao agregue por SCR.CR_NUM: junte SC7 (1 linha por item, chave C7_FILIAL+C7_NUM+C7_ITEM) e exiba SC7.C7_ITEM, SC7.C7_PRODUTO e SC7.C7_TOTAL por linha, sem SUM nem GROUP BY. Sem pedido explicito de itens, mantenha o padrao agregado por pedido (SUM(SC7.C7_TOTAL) AS valor_pedido, agrupado por SCR.CR_NUM).
+- REGRA ABSOLUTA — em linguagem de posse, SCR.CR_APROV = '<codigo do aprovador>' e OBRIGATORIO no WHERE em TODA variacao da query, inclusive quando o usuario pede "com os itens"/detalhamento por produto e o SQL ganha JOINs adicionais com SC7/SB1/SA2. Adicionar JOINs de item NUNCA e motivo para remover ou esquecer o filtro de CR_APROV do cabecalho SCR — ele continua valendo mesmo com mais tabelas na query.
+
 ### EXEMPLO CORRETO — pedidos de compra pendentes de liberacao, agrupados por aprovador
 SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
        CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
@@ -288,6 +296,25 @@ function comparativoPeriodos() {
 - REGRA ABSOLUTA — calculo de competencia "mesmo mes, ano diferente": ao montar o valor de competencia (formato AAAAMM) para "mesmo mes do ano anterior/seguinte", o MES permanece IDENTICO e SOMENTE o ANO muda. Erro comum a evitar: ao comparar "junho de 2026 com junho de 2025", o periodo comparado e competencia = '202506' (ano 2025, mes 06) — NUNCA mude o mes ao trocar o ano.
 - EXEMPLO CORRETO — junho/2026 vs junho/2025: SUBSTRING(SD1.D1_DTDIGIT,1,6) IN ('202606', '202506') — mesmo mes "06" nos dois anos.
 `;
+}
+
+// Linguagem de posse na 1a pessoa referente ao proprio remetente ("tenho que aprovar", "ja
+// aprovei", "minhas aprovacoes", "bloqueados para eu aprovar"). Exportado para uso tambem em
+// compras-ia-owner-spec.js (prepararIntent), que decide se injeta a entidadeSeguranca
+// aprovador_fixo_seguranca — o mesmo criterio de deteccao precisa valer nos dois lugares:
+// sem essas keywords a pergunta cai so em status_pedido_compra (SC7.C7_APROV) e a IA nunca ve
+// a regra de SCR nem o filtro por CR_APROV do proprio aprovador.
+const KEYWORDS_POSSE_APROVADOR = [
+  /\b(?:tenho|preciso|tem)\s+(?:que\s+)?aprovar\b/i, /\bpara\s+(?:eu\s+)?aprovar\b/i, /\bpra\s+(?:eu\s+)?aprovar\b/i,
+  /\b(?:eu\s+)?j[aá]\s+aprovei\b/i, /\baprovei\s+(?:hoje|ontem|essa?\s+semana|este\s+m[eê]s|esse\s+m[eê]s|no\s+m[eê]s)\b/i,
+  /\bo\s+que\s+(?:eu\s+)?aprovei\b/i, /\bminhas?\s+aprova[cç][oõ]es\b/i, /\bbloqueados?\s+para\s+(?:eu\s+)?aprovar\b/i,
+  /\bpendentes?\s+(?:para|de)\s+(?:eu\s+)?aprovar\b/i, /\baguardando\s+(?:minha\s+)?aprova[cç][aã]o\b/i,
+  /\bminha\s+alcada\b/i,
+];
+
+function mensagemUsaLinguagemPosseAprovador(mensagem) {
+  const texto = String(mensagem || '');
+  return KEYWORDS_POSSE_APROVADOR.some(re => re.test(texto));
 }
 
 const FRAGMENTOS = {
@@ -348,7 +375,11 @@ const FRAGMENTOS = {
   },
   aprovacao_pedido_compra: {
     texto: aprovacaoPedidoCompra,
-    keywords: [/\bpor\s+aprovador\b/i, /\baprovador(?:es)?\b/i, /\bal[cç]ada\b/i, /\bn[ií]vel(?:eis)?\s+de\s+aprova[cç][aã]o\b/i, /\bpendente(?:s)?\s+de\s+(?:libera[cç][aã]o|aprova[cç][aã]o)\b/i, /\bfluxo\s+de\s+aprova[cç][aã]o\b/i, /\bCR_APROV\b/i, /\bSCR\b/],
+    keywords: [
+      /\bpor\s+aprovador\b/i, /\baprovador(?:es)?\b/i, /\bal[cç]ada\b/i, /\bn[ií]vel(?:eis)?\s+de\s+aprova[cç][aã]o\b/i,
+      /\bpendente(?:s)?\s+de\s+(?:libera[cç][aã]o|aprova[cç][aã]o)\b/i, /\bfluxo\s+de\s+aprova[cç][aã]o\b/i, /\bCR_APROV\b/i, /\bSCR\b/,
+      ...KEYWORDS_POSSE_APROVADOR,
+    ],
     requerJunto: ['status_pedido_compra'],
   },
 };
@@ -369,4 +400,4 @@ const ORDEM_FALLBACK = [
   'aprovacao_pedido_compra',
 ];
 
-module.exports = { base, FRAGMENTOS, ORDEM_FALLBACK };
+module.exports = { base, FRAGMENTOS, ORDEM_FALLBACK, mensagemUsaLinguagemPosseAprovador };

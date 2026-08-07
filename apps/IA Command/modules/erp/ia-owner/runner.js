@@ -290,6 +290,24 @@ function mensagemErro(spec, tipo) {
   return msgs[tipo] || fallback[tipo] || fallback.erro_erp;
 }
 
+// Rotulo exibido ao usuario final quando a resposta foi restrita por vendedorFixo/
+// clienteFixo (entidadeSeguranca injetada pelo sistema a partir do numero remetente —
+// ver vendedor-seguranca.js). Aprovador (compras) fica de fora: o filtro la e condicional
+// a intencao da pergunta, sem garantia estrutural de que foi aplicado no SQL final.
+const ROTULOS_ENTIDADE_SEGURANCA = {
+  vendedor_fixo_seguranca: 'Vendedor',
+  cliente_fixo_seguranca: 'Cliente',
+};
+
+function rodapeFiltroSeguranca(entidadesResolvidas = []) {
+  const entidadeSeguranca = (entidadesResolvidas || []).find(
+    e => ROTULOS_ENTIDADE_SEGURANCA[e?.tipo]
+  );
+  if (!entidadeSeguranca) return '';
+  const rotulo = ROTULOS_ENTIDADE_SEGURANCA[entidadeSeguranca.tipo];
+  return `\n\n_Filtrado por ${rotulo}: ${entidadeSeguranca.codigo}_`;
+}
+
 function maxTentativasPrepararSql(entidadesResolvidas = []) {
   return 4;
 }
@@ -672,10 +690,10 @@ function configProtheus(empresaId) {
   try {
     const { getDB } = require('../../database');
     const db = getDB();
-    let row = db.prepare('SELECT id, configuracoes FROM connections WHERE empresa_id = ? AND ativo = 1 LIMIT 1').get(empresaId);
+    let row = db.prepare("SELECT id, configuracoes FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = 'protheus' ORDER BY padrao DESC LIMIT 1").get(empresaId);
     if (!row) {
       const sx2Row = db.prepare('SELECT connection_id FROM protheus_sx2 WHERE empresa_id = ? LIMIT 1').get(empresaId);
-      if (sx2Row?.connection_id) row = db.prepare('SELECT id, configuracoes FROM connections WHERE id = ? AND ativo = 1').get(sx2Row.connection_id);
+      if (sx2Row?.connection_id) row = db.prepare("SELECT id, configuracoes FROM connections WHERE id = ? AND ativo = 1 AND erp = 'protheus'").get(sx2Row.connection_id);
     }
     const cfg = row?.configuracoes ? JSON.parse(row.configuracoes) : {};
     return _metaCacheSet(cacheKey, { conexaoId: row?.id || null, sufixoTabela: cfg.sufixo_tabela || '010', filialPadrao: cfg.filial_padrao || null });
@@ -2615,6 +2633,18 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts =
   return { ok: erros.length === 0, erros };
 }
 
+function permitirSelectTopPorIntent(intent = {}) {
+  const origem = String(intent?.origem || intent?._origem || '').toLowerCase();
+  const pipelineOrigem = String(intent?._pipeline_origem || intent?.pipeline_origem || '').toLowerCase();
+  const systemOrigin = String(intent?._systemOrigin || intent?.systemOrigin || '').toLowerCase();
+  return origem === 'agendamento_sql_fixo'
+    || pipelineOrigem === 'agendamento_sql_fixo'
+    || systemOrigin === 'agendamento'
+    || intent?._skipIaSqlGeneration === true
+    || intent?._sqlFixo === true
+    || intent?.sql_fixo === true;
+}
+
 function normalizarAliasesBaseAusentes(sql, spec = {}) {
   let out = String(sql || '');
   const bases = (spec.tabelas || []).map(t => String(t || '').trim().toUpperCase()).filter(Boolean);
@@ -3492,6 +3522,17 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
       throw Object.assign(new Error(`Violacao de seguranca: ${validacaoTabelasBloqueadasCliente.erros.join(' | ')}`), { _tipo: 'acesso_negado_cliente', _sql: out });
     }
   }
+  // Guard de seguranca analogo, para o perfil aprovador (aprovador_fixo_seguranca). So existe
+  // no SQL quando a mensagem usou linguagem de posse (ver prepararIntent em
+  // compras-ia-owner-spec.js) — pergunta generica sobre aprovadores nunca injeta esta
+  // entidade, entao este bloco simplesmente nao executa nesse caso.
+  const entidadeAprovadorSql = (entidades || []).find(e => String(e?.tipo || '').toLowerCase() === 'aprovador_fixo_seguranca');
+  if (entidadeAprovadorSql) {
+    const validacaoAprovador = entitySqlGuard.validarExclusividadeVendedorSeguranca(out, entidadeAprovadorSql, spec.camposAprovadorSeguranca);
+    if (!validacaoAprovador.ok) {
+      throw Object.assign(new Error(`Violacao de seguranca: ${validacaoAprovador.erros.join(' | ')}`), { _tipo: 'acesso_negado_aprovador', _sql: out });
+    }
+  }
   const sx3Validacao = sx3SqlValidator.validarCamposSqlContraSX3(out, sx3);
   if (!sx3Validacao.ok) {
     const errosSx3 = sx3Validacao.erros.map(err => {
@@ -3624,13 +3665,25 @@ async function executar(spec, intent, empresaId) {
 
   let entidadesResolvidas = (Array.isArray(intentEfetivo._entidadesResolvidas) ? intentEfetivo._entidadesResolvidas : [])
     .filter(entidade => !termoEhEmpresaIAHub({ texto: entidade?.nome || entidade?.texto || entidade?.descricao }, intentEfetivo));
-  // Entidade de segurança (vendedor_fixo_seguranca ou cliente_fixo_seguranca) precede as
-  // entidades de negócio: ela é injetada pelo sistema, não pelo usuário, e deve ser
-  // parametrizada no SQL canônico para que cada empresa seguidora use o código ERP
-  // correto sem nova chamada à IA. O tipo é dinâmico (vem de entidadeSeguranca.tipo) —
-  // remove qualquer entidade de segurança pré-existente do MESMO tipo antes de injetar.
+  // Entidade de segurança (vendedor_fixo_seguranca, cliente_fixo_seguranca ou
+  // aprovador_fixo_seguranca) precede as entidades de negócio: ela é injetada pelo sistema,
+  // não pelo usuário, e deve ser parametrizada no SQL canônico para que cada empresa
+  // seguidora use o código ERP correto sem nova chamada à IA. O tipo é dinâmico (vem de
+  // entidadeSeguranca.tipo) — remove qualquer entidade de segurança pré-existente do MESMO
+  // tipo antes de injetar.
+  // Sempre descarta entidades *_fixo_seguranca herdadas do histórico (intentEfetivo._entidadesResolvidas)
+  // quando a mensagem ATUAL não gerou entidadeSeguranca — necessário para tipos condicionais à
+  // intenção (aprovador_fixo_seguranca só existe quando a mensagem usa linguagem de posse; sem
+  // isso, uma pergunta genérica herdaria o filtro de posse da mensagem anterior do mesmo remetente
+  // e ficaria bloqueada por um guard que não deveria se aplicar a ela). Vendedor/cliente são
+  // sempre recalculados de forma estável a cada chamada, então esta remoção nunca os afeta.
+  entidadesResolvidas = entidadesResolvidas.filter(e => {
+    const tipo = String(e?.tipo || '');
+    if (!tipo.endsWith('_fixo_seguranca')) return true;
+    return entidadeSeguranca && tipo === entidadeSeguranca.tipo;
+  });
   if (entidadeSeguranca) {
-    entidadesResolvidas = [entidadeSeguranca, ...entidadesResolvidas.filter(e => e?.tipo !== entidadeSeguranca.tipo)];
+    entidadesResolvidas = [entidadeSeguranca, ...entidadesResolvidas];
   }
   const diagnosticosEntidades = [];
   _traceIaOwner('ia_owner_entidades_pre_inicio', { empresa_id: empresaId });
@@ -4271,7 +4324,7 @@ async function executar(spec, intent, empresaId) {
       }
       return {
         tipo: 'sucesso_ai_sql',
-        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
+        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta) + rodapeFiltroSeguranca(entidadesResolvidas),
         rows: rows || [],
         sql_gerado: preparado.sqlFinal,
         periodo_resolvido: periodoRetorno,
@@ -4308,6 +4361,18 @@ async function executar(spec, intent, empresaId) {
           tipo: 'erro',
           subtipo: 'acesso_negado_vendedor',
           resposta_direta: 'Você só pode consultar seus próprios dados. Para ver dados de outro vendedor, peça para um gestor consultar.',
+          sql_gerado: `${e._sql || plano.sql}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
+          _sql_auditoria: auditoriaBase,
+          duracao_ms: Date.now() - t0,
+        };
+      }
+      // Violacao de seguranca analoga, para o perfil aprovador (aprovador esqueceu de filtrar
+      // CR_APROV numa pergunta de posse, ou tentou consultar codigo de outro aprovador).
+      if (e._tipo === 'acesso_negado_aprovador') {
+        return {
+          tipo: 'erro',
+          subtipo: 'acesso_negado_aprovador',
+          resposta_direta: 'Você só pode consultar suas próprias aprovações. Para ver dados de outro aprovador, peça para um gestor consultar.',
           sql_gerado: `${e._sql || plano.sql}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
           _sql_auditoria: auditoriaBase,
           duracao_ms: Date.now() - t0,
@@ -4446,8 +4511,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         intent,
       });
       auditoriaBase.query_plan = planoConsulta;
-      const permitirSelectTop = intent?.origem === 'agendamento_sql_fixo'
-        || (intent?._systemOrigin === 'agendamento' && intent?._skipIaSqlGeneration === true);
+      const permitirSelectTop = permitirSelectTopPorIntent(intent);
       preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
@@ -4486,7 +4550,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       const respostaDireta = _comparativoD || respostaCanonicaD || interpolarRespostaPlanejada(template, rows) || resposta;
       return {
         tipo: 'sucesso_ai_sql',
-        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
+        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta) + rodapeFiltroSeguranca(entidades),
         rows: rows || [],
         sql_gerado: preparado.sqlFinal,
         periodo_resolvido: periodoRetorno,
@@ -4551,6 +4615,7 @@ module.exports = {
     formatarValorRespostaPlanejada,
     interpolarRespostaPlanejada,
     validarSqlIaOwnerBasico,
+    permitirSelectTopPorIntent,
     validarPontoEVirgulaUnico,
     validarFiltroFiscalCarregada,
     validarPrecedenciaOrRemessaSemParenteses,

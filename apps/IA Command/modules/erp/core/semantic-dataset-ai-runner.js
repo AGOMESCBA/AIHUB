@@ -153,7 +153,7 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
   const dataTextoProtheus = _campoTemporalEhTextoProtheus(campoDataSql);
   const instrucaoFiltroMes = dataTextoProtheus
     ? `- Quando a pergunta mencionar "do mes", "este mes", "mes atual" ou nao informar outro periodo, filtre ${campoDataSql} entre YYYYMM01 e YYYYMMDD final do mes. Exemplo: ${campoDataSql} BETWEEN '20260701' AND '20260731'.`
-    : `- Quando a pergunta mencionar "do mes", "este mes", "mes atual" ou nao informar outro periodo, filtre pelo mes/ano da Data atual usando YEAR(${campoDataSql}) e MONTH(${campoDataSql}).`;
+    : `- Quando a pergunta mencionar "do mes", "este mes", "mes atual" ou nao informar outro periodo, filtre ${campoDataSql} usando BETWEEN com datas no formato YYYY-MM-DD (ex: ${campoDataSql} BETWEEN '2026-07-01' AND '2026-07-31'), ou YEAR(${campoDataSql})/MONTH(${campoDataSql}) quando o agrupamento for mensal.`;
   const instrucaoAgrupamentoMes = dataTextoProtheus
     ? `- Para agrupamento mensal use SUBSTRING(${campoDataSql}, 1, 6) AS competencia e o mesmo SUBSTRING no GROUP BY.`
     : `- Para agrupamento mensal use CONVERT(char(7), ${campoDataSql}, 120) AS competencia ou YEAR(${campoDataSql})/MONTH(${campoDataSql}).`;
@@ -177,7 +177,14 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
   ].join('\n') : '';
   const camposTexto = campos.map(c => {
     const sinonimos = c.sinonimos ? ` Sinonimos: ${c.sinonimos}.` : '';
-    return `- ${c.coluna} (${c.tipo || 'campo'}): ${c.descricao || c.coluna}.${sinonimos}`;
+    const usos = [
+      c.filtravel ? 'filtravel' : '',
+      c.agrupavel ? 'agrupavel' : '',
+      c.ordenavel ? 'ordenavel' : '',
+    ].filter(Boolean).join(', ');
+    const usoTexto = usos ? ` Uso: ${usos}.` : '';
+    const regraTexto = c.regra ? ` Regra: ${c.regra}.` : '';
+    return `- ${c.coluna} (${c.tipo || 'campo'}): ${c.descricao || c.coluna}.${sinonimos}${usoTexto}${regraTexto}`;
   }).join('\n');
   const sqlModeloTexto = _sqlModeloReferencia(sqlModeloReferencia);
   const referenciaSaidaTexto = sqlModeloTexto ? [
@@ -800,6 +807,11 @@ function _campoRe(campoData) {
   return `(?:base\\s*\\.\\s*)?\\[?${campo}\\]?`;
 }
 
+function _isoDeYyyymmdd(yyyymmdd) {
+  const s = String(yyyymmdd || '');
+  return s.length === 8 ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s;
+}
+
 function _sqlTemFiltroPeriodoDataset(sql, campoData, periodo) {
   const texto = String(sql || '');
   const p = _periodoComDatas(periodo);
@@ -808,11 +820,21 @@ function _sqlTemFiltroPeriodoDataset(sql, campoData, periodo) {
   const ini = p.dataInicio;
   const fim = p.dataFim;
   const competencia = ini.slice(0, 6);
+  const iniIso = _isoDeYyyymmdd(ini);
+  const fimIso = _isoDeYyyymmdd(fim);
+  const ano = ini.slice(0, 4);
+  const mes = ini.slice(4, 6);
   const reBetween = new RegExp(`\\b${campo}\\s+BETWEEN\\s*'${ini}'\\s+AND\\s*'${fim}'`, 'i');
+  // Colunas datetime reais (não-texto Protheus) — filtro pode vir em formato ISO YYYY-MM-DD,
+  // com hora opcional (ex: '2026-08-01' ou '2026-08-01 00:00:00' / 'T00:00:00').
+  const reBetweenIso = new RegExp(`\\b${campo}\\s+BETWEEN\\s*'${iniIso}[T ]?[^']*'\\s+AND\\s*'${fimIso}[T ]?[^']*'`, 'i');
   const reSubstr = new RegExp(`SUBSTRING\\s*\\(\\s*${campo}\\s*,\\s*1\\s*,\\s*6\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
   const reConvert = new RegExp(`CONVERT\\s*\\(\\s*char\\s*\\(\\s*6\\s*\\)\\s*,\\s*${campo}\\s*,\\s*112\\s*\\)\\s*=\\s*'${competencia}'`, 'i');
   const reIn = new RegExp(`(?:SUBSTRING\\s*\\(\\s*${campo}\\s*,\\s*1\\s*,\\s*6\\s*\\)|CONVERT\\s*\\(\\s*char\\s*\\(\\s*6\\s*\\)\\s*,\\s*${campo}\\s*,\\s*112\\s*\\))\\s+IN\\s*\\([^)]*'${competencia}'`, 'i');
-  return reBetween.test(texto) || reSubstr.test(texto) || reConvert.test(texto) || reIn.test(texto);
+  // YEAR(campo) = AAAA AND MONTH(campo) = MM — alternativa sugerida pelo prompt para colunas datetime.
+  const reYearMonth = new RegExp(`YEAR\\s*\\(\\s*${campo}\\s*\\)\\s*=\\s*${ano}\\b[\\s\\S]{0,60}?MONTH\\s*\\(\\s*${campo}\\s*\\)\\s*=\\s*${Number(mes)}\\b`, 'i');
+  return reBetween.test(texto) || reBetweenIso.test(texto) || reSubstr.test(texto)
+    || reConvert.test(texto) || reIn.test(texto) || reYearMonth.test(texto);
 }
 
 function _dividirUnionTopLevel(sql = '') {
@@ -986,7 +1008,23 @@ function _intentFormatacaoDataset(intent = {}) {
   return clone;
 }
 
-function _formatarRespostaDataset(rows, intent, mensagem) {
+function _formatarRespostaDataset(rows, intent, mensagem, dataset = {}) {
+  const camposDataset = _campos(dataset);
+  const ehProtheus = String(dataset.erp || 'protheus').trim().toLowerCase() === 'protheus';
+
+  // Sistemas fora do Protheus (ex: SoftExpert) não passam pelo formatador canonico: ele
+  // desconhece os tipos documentados no dataset (aba Semantica > Campos) e assume por
+  // padrao rotulo/formatacao de faturamento Protheus, o que produz respostas erradas
+  // (ex: contagem de chamados formatada como "R$"). Usa direto o formatador generico
+  // deste arquivo, que respeita o tipo cadastrado em cada campo do dataset.
+  if (!ehProtheus) {
+    try {
+      return _formatarRespostaSemantica(rows, mensagem, camposDataset);
+    } catch (_) {
+      return responseFormatter.formatarAiSqlLocal(rows, _intentFormatacaoDataset(intent));
+    }
+  }
+
   try {
     const canonico = canonicalWhatsappFormat.renderSingle(rows, {
       contextoConsulta: mensagem,
@@ -1000,7 +1038,7 @@ function _formatarRespostaDataset(rows, intent, mensagem) {
   try {
     return responseFormatter.formatarAiSqlLocal(rows, _intentFormatacaoDataset(intent));
   } catch (_) {
-    return _formatarRespostaSemantica(rows, mensagem);
+    return _formatarRespostaSemantica(rows, mensagem, camposDataset);
   }
 }
 
@@ -1017,7 +1055,19 @@ function _fmtMoeda(v) {
   return _num(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function _ehMetrica(col, valor) {
+// Busca o tipo documentado na grade de Campos Semanticos do dataset (aba Semantica > Campos).
+// Prioriza sempre essa fonte sobre qualquer heuristica por nome de coluna, ja que e informacao
+// que o proprio cadastrante do dataset validou (ex: sla_horas_chamado = metrica, nao moeda).
+function _tipoCampoSemantico(col, camposDataset = []) {
+  const alvo = String(col || '').trim().toLowerCase();
+  if (!alvo) return null;
+  const achado = (camposDataset || []).find(c => String(c.coluna || '').trim().toLowerCase() === alvo);
+  return achado?.tipo || null;
+}
+
+function _ehMetrica(col, valor, camposDataset = []) {
+  const tipoDoc = _tipoCampoSemantico(col, camposDataset);
+  if (tipoDoc) return tipoDoc === 'metrica';
   const c = String(col || '').toLowerCase();
   if (/competencia|ano_mes|periodo|data|emissao|ano$|mes$|dia$|codigo|cod_|^id$|_id$/.test(c)) return false;
   if (/fatur|valor|receita|total|quant|qtd|dev|devolv|crescimento|variacao|media|preco/.test(c)) return true;
@@ -1028,21 +1078,27 @@ function _label(col) {
   return String(col || '').replace(/_/g, ' ').toLowerCase();
 }
 
-function _formatarValor(col, valor) {
+function _formatarValor(col, valor, camposDataset = []) {
   if (/percent|perc|pct|%/i.test(col)) return `${_fmtNumero(valor)}%`;
+  const tipoDoc = _tipoCampoSemantico(col, camposDataset);
+  // Campo documentado como metrica no dataset: numero, nunca moeda, salvo indicacao explicita
+  // de valor monetario no nome (heuristica so entra quando NAO ha documentacao do campo).
+  if (tipoDoc === 'metrica') {
+    return /valor|fatur|receita|preco/i.test(col) ? _fmtMoeda(valor) : _fmtNumero(valor);
+  }
   return /quant|qtd/i.test(col) && !/valor/i.test(col) ? _fmtNumero(valor) : _fmtMoeda(valor);
 }
 
-function _formatarRespostaSemantica(rows, mensagem) {
+function _formatarRespostaSemantica(rows, mensagem, camposDataset = []) {
   if (!rows || !rows.length) return 'Nenhum dado encontrado para sua consulta.';
   const first = rows[0] || {};
   const cols = Object.keys(first);
-  const metricas = cols.filter(c => _ehMetrica(c, first[c]));
+  const metricas = cols.filter(c => _ehMetrica(c, first[c], camposDataset));
   const dimensoes = cols.filter(c => !metricas.includes(c));
 
   if (rows.length === 1) {
     const r = rows[0];
-    const linhasMetricas = metricas.map(c => `*${_label(c)}*: ${_formatarValor(c, r[c])}`);
+    const linhasMetricas = metricas.map(c => `*${_label(c)}*: ${_formatarValor(c, r[c], camposDataset)}`);
     const linhasDim = dimensoes
       .filter(c => r[c] !== null && r[c] !== undefined && String(r[c]).trim() !== '')
       .map(c => `${_label(c)}: ${r[c]}`);
@@ -1057,14 +1113,14 @@ function _formatarRespostaSemantica(rows, mensagem) {
       .join(' | ') || `Linha ${idx + 1}`;
     const mets = metricas
       .slice(0, 3)
-      .map(c => `${_label(c)}: *${_formatarValor(c, r[c])}*`)
+      .map(c => `${_label(c)}: *${_formatarValor(c, r[c], camposDataset)}*`)
       .join('; ');
     return `${idx + 1}. *${titulo}*${mets ? ` — ${mets}` : ''}`;
   });
 
   const totalizadores = metricas.slice(0, 3).map(c => {
     const total = rows.reduce((s, r) => s + _num(r[c]), 0);
-    return `*Total ${_label(c)}*: ${_formatarValor(c, total)}`;
+    return `*Total ${_label(c)}*: ${_formatarValor(c, total, camposDataset)}`;
   });
 
   const cabecalho = String(mensagem || '').trim() || 'Resultado';
@@ -1286,17 +1342,18 @@ async function executar(dataset, intent, empresaId, opts = {}) {
   ].join('\n');
 
   try {
-    const conn = connectionFactory.carregarConexao(empresaId);
+    const conn = connectionFactory.carregarConexao(empresaId, { connectionId: dataset.connection_id || null });
     conn._pergunta = mensagem;
     conn._sender = intent._remetente || '';
     conn._modulo = dataset.nome || 'dataset_semantico';
     conn._operacao = intent.intencao || 'faturamento_dataset_semantico';
     conn._empresa_id = empresaId || '';
+    conn._dataset_id = dataset.id || '';
     const rowsBrutas = await connectionFactory.executar(conn, sqlFinal, {});
     const rows = intent._escopoExecucao === 'whatsapp_all'
       ? _normalizarRowsMultiempresa(rowsBrutas)
       : rowsBrutas;
-    const respostaFallback = _formatarRespostaDataset(rows, intent, mensagem);
+    const respostaFallback = _formatarRespostaDataset(rows, intent, mensagem, dataset);
     const periodoCanonico = _periodoComDatas(intent?._periodoCanonicoResolvido)
       || _periodoComDatas(intent?.periodo)
       || _periodoComDatas(plano?.periodo)

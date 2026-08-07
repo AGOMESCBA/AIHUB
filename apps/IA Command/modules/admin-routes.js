@@ -22,6 +22,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   const canSpecFeedback = requireRotina('iac-admin-spec-feedback');
   const canLogsConsultas = requireRotina('iac-admin-logs-consultas');
   const canLerModulos = requireAnyRotina(['iac-admin-modulos', 'iac-admin-intencoes', 'iac-admin-datasets']);
+  const canDatasetsEIntencoes = requireAnyRotina(['iac-admin-datasets', 'iac-admin-intencoes']);
 
   function _audit(req, acao, detalhes) {
     try {
@@ -595,7 +596,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   });
 
   app.post('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
-    const { nome, descricao, modulo, acao, dataset_id, frases_exemplo, ativo } = req.body;
+    const { nome, descricao, modulo, acao, dataset_id, frases_exemplo, ativo, erp } = req.body;
     if (!nome) return res.status(400).json({ error: 'Campo obrigatório: nome.' });
     const row = crud.criar('intentions', {
       empresa_id:     eid(req),
@@ -606,6 +607,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       dataset_id:     dataset_id || null,
       frases_exemplo: frases_exemplo || null,
       ativo:          ativo !== false ? 1 : 0,
+      erp:            erp || 'protheus',
     });
     _audit(req, 'criar_intencao', { id: row.id, nome: row.nome });
     _invalidateIntentCache(eid(req));
@@ -615,7 +617,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.put('/api/ia-command/admin/intencoes/:id', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const existing = crud.buscarPorId('intentions', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
-    const allowed = ['nome', 'descricao', 'modulo', 'acao', 'dataset_id', 'frases_exemplo', 'ativo'];
+    const allowed = ['nome', 'descricao', 'modulo', 'acao', 'dataset_id', 'frases_exemplo', 'ativo', 'erp'];
     const campos  = {};
     for (const k of allowed) { if (req.body[k] !== undefined) campos[k] = req.body[k]; }
     const row = crud.atualizar('intentions', req.params.id, campos);
@@ -653,10 +655,11 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     let conn;
     try {
       if (usarAgenteLocal) {
-        conn = factory.carregarConexao(eid(req));
+        conn = factory.carregarConexao(eid(req), { connectionId: conexao_id || null });
         if (String(conn.tipo || '').toLowerCase() !== 'api_proxy') {
           return res.status(400).json({ error: 'View semantica deve ser testada pelo Agente Local. Ative e configure o Agente Local desta empresa antes de executar o preview.' });
         }
+        conn._empresa_id = String(eid(req));
       } else if (conexao_id) {
         const crud2 = require('./database/crud');
         conn = crud2.buscarPorId('connections', conexao_id);
@@ -676,9 +679,137 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     try {
       const rows    = await factory.executar(conn, wrapper, {});
       const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-      const conexaoLabel = usarAgenteLocal ? `Agente Local${conn._agente_url ? ` (${conn._agente_url})` : ''}` : (conn.nome || conn.id || conn.tipo);
+      const conexaoLabel = usarAgenteLocal
+        ? `Agente Local${conn._connection_nome ? ` / ${conn._connection_nome}` : ''}${conn._agente_url ? ` (${conn._agente_url})` : ''}`
+        : (conn.nome || conn.id || conn.tipo);
       _audit(req, 'preview_sql', { linhas: rows.length, conexao: conexaoLabel, tipo: tipoDataset });
       res.json({ columns, rows, total: rows.length, conexao: conexaoLabel });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // ── SUGERIR CAMPOS SEMÂNTICOS COM IA — usa nomes de coluna + amostra do preview já
+  // executado para propor tipo/descrição/sinônimos/uso; usuário revisa antes de salvar.
+  // Colunas candidatas a "baixa cardinalidade" (status/categoria) dentro da amostra recebida:
+  // poucos valores distintos repetidos entre as linhas de exemplo. Não é definitivo (a amostra
+  // é pequena), só decide para quais colunas vale a pena consultar os valores reais no banco.
+  function _colunasCandidatasADistinct(columns = [], rows = []) {
+    if (!Array.isArray(rows) || rows.length < 2) return [];
+    return columns.filter(col => {
+      const valores = rows.map(r => r?.[col]).filter(v => v !== null && v !== undefined && v !== '');
+      if (valores.length < 2) return false;
+      const distintos = new Set(valores.map(v => String(v)));
+      // Repetiu algum valor na amostra pequena e nenhum valor é longo demais para ser categoria.
+      return distintos.size < valores.length && [...distintos].every(v => v.length <= 40);
+    });
+  }
+
+  async function _buscarValoresReais({ empresaId, dataset, conexaoId, colunas }) {
+    if (!dataset?.sql_base || !colunas.length) return {};
+    const factory = require('./erp/providers/connection-factory');
+    let conn;
+    try {
+      conn = factory.carregarConexao(empresaId, { connectionId: conexaoId || dataset.connection_id || null });
+      if (String(conn.tipo || '').toLowerCase() !== 'api_proxy') return {};
+    } catch (_) {
+      return {};
+    }
+    const valoresPorColuna = {};
+    for (const coluna of colunas.slice(0, 8)) { // limite defensivo: no máx. 8 consultas extras
+      try {
+        conn._modulo = 'sugestao_valores_distintos';
+        conn._operacao = 'debug';
+        const sql = `SELECT TOP 20 [${coluna}] AS valor, COUNT(*) AS qtd FROM (\n${dataset.sql_base}\n) AS _base GROUP BY [${coluna}] ORDER BY qtd DESC`;
+        const linhas = await factory.executar(conn, sql, {});
+        if (Array.isArray(linhas) && linhas.length) {
+          valoresPorColuna[coluna] = linhas.map(l => l.valor).filter(v => v !== null && v !== undefined);
+        }
+      } catch (_) {
+        // Falha ao consultar uma coluna não deve travar as demais nem a sugestão como um todo.
+      }
+    }
+    return valoresPorColuna;
+  }
+
+  app.post('/api/ia-command/admin/datasets/sugerir-campos-semanticos', requireAuth, requireIaCommand, canDatasets, async (req, res) => {
+    const { columns, rows, dataset_id, conexao_id } = req.body || {};
+    if (!Array.isArray(columns) || !columns.length) {
+      return res.status(400).json({ error: 'Execute o preview do SQL Base antes de pedir sugestão de campos.' });
+    }
+
+    const aiProviderClient = require('./erp/core/ai-provider-client');
+    let keys, cfg;
+    try {
+      ({ keys, cfg } = await aiProviderClient.resolverKeysEOrdem(eid(req)));
+    } catch (e) {
+      return res.status(400).json({ error: `IA indisponível: ${e.message}` });
+    }
+    if (!Object.values(keys || {}).some(Boolean)) {
+      return res.status(400).json({ error: 'Nenhuma chave de IA configurada para esta empresa (Configurações da IA).' });
+    }
+
+    const amostra = (Array.isArray(rows) ? rows.slice(0, 5) : []);
+
+    let valoresReais = {};
+    if (dataset_id) {
+      const dataset = crud.buscarPorId('datasets', dataset_id);
+      if (dataset && dataset.empresa_id === eid(req)) {
+        const candidatas = _colunasCandidatasADistinct(columns, amostra);
+        if (candidatas.length) {
+          valoresReais = await _buscarValoresReais({ empresaId: eid(req), dataset, conexaoId: conexao_id, colunas: candidatas });
+        }
+      }
+    }
+
+    const systemPrompt = [
+      'Voce e um especialista em modelagem semantica de dados para um sistema de IA que gera SQL a partir de perguntas em portugues.',
+      'Receberá uma lista de colunas de uma consulta SQL, algumas linhas de exemplo dos dados reais, e — quando disponível — a lista COMPLETA dos valores distintos reais de colunas de baixa cardinalidade (ex: status).',
+      'Para cada coluna, proponha metadados que ajudem uma IA a entender e usar essa coluna corretamente ao gerar SQL depois.',
+      '',
+      'Retorne SOMENTE JSON valido (sem markdown), no formato:',
+      '{"campos": [{"coluna": string, "tipo": "metrica"|"dimensao"|"data"|"status"|"identificador"|"texto", "descricao": string, "sinonimos": string, "filtravel": 0|1, "agrupavel": 0|1, "ordenavel": 0|1, "regra": string}]}',
+      '',
+      'Regras de classificação de tipo:',
+      '- "identificador": IDs tecnicos internos (ex: id_x, codigo_x) sem valor de negocio direto para o usuario final.',
+      '- "metrica": valores numericos agregaveis (SUM, AVG), como horas, dias, valores monetarios, quantidades.',
+      '- "data": qualquer coluna que representa uma data ou timestamp, mesmo que o nome nao contenha "data" explicitamente — use os valores de exemplo para confirmar.',
+      '- "status": colunas que representam um estado/situacao (aberto, fechado, em atraso, etc).',
+      '- "texto": texto livre longo (descricoes, observacoes) — nunca agrupavel.',
+      '- "dimensao": os demais campos categorizaveis (nomes, categorias, codigos com significado de negocio).',
+      '',
+      'Regras de uso:',
+      '- "agrupavel" e "filtravel" = 1 apenas quando fizer sentido de negocio (nunca marque texto livre longo como agrupavel).',
+      '- "ordenavel" = 1 para metricas e datas, geralmente 0 para dimensões de texto.',
+      '- Sinonimos: liste palavras que um usuario poderia usar numa pergunta em portugues para se referir a esse campo, separadas por virgula.',
+      '- IMPORTANTE: quando "valores_reais_distintos" trouxer a lista de uma coluna, use EXATAMENTE esses valores (grafia, maiusculas/minusculas) no campo "regra", explicando o que cada valor significa em termos de negocio quando o nome do valor nao for autoexplicativo. Nunca invente um valor que nao esteja nessa lista.',
+      '- Quando o nome da coluna for ambiguo ou o significado nao puder ser inferido com confianca a partir do nome e dos dados de exemplo, ainda assim proponha o melhor palpite, mas escreva no campo "regra" o texto "Significado a confirmar: " seguido de uma breve explicacao da incerteza.',
+      '- Nao invente colunas que nao estao na lista recebida. Devolva exatamente uma entrada por coluna recebida, na mesma ordem.',
+    ].join('\n');
+
+    const userPrompt = JSON.stringify({ colunas: columns, amostra_dados: amostra, valores_reais_distintos: valoresReais });
+
+    try {
+      const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
+        json: true,
+        maxTokens: 4000,
+        timeoutMs: 45000,
+        logPrefix: 'DatasetCamposSemanticosIA',
+      });
+      let parsed;
+      try {
+        const texto = String(raw || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+        parsed = JSON.parse(texto);
+      } catch (_) {
+        const m = String(raw || '').match(/\{[\s\S]*\}/);
+        parsed = m ? JSON.parse(m[0]) : null;
+      }
+      const campos = Array.isArray(parsed?.campos) ? parsed.campos : null;
+      if (!campos) {
+        return res.status(502).json({ error: 'A IA não retornou um JSON válido. Tente novamente.' });
+      }
+      _audit(req, 'sugerir_campos_semanticos_ia', { total_colunas: columns.length, colunas_com_valores_reais: Object.keys(valoresReais) });
+      res.json({ campos, colunas_com_valores_reais: Object.keys(valoresReais) });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -688,6 +819,105 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const row = crud.buscarPorId('datasets', req.params.id);
     if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
     res.json(row);
+  });
+
+  // ── SUGERIR INTENÇÃO A PARTIR DE UM DATASET — usa SQL Base + campos semânticos já
+  // documentados para propor nome/descrição/frases_exemplo; erp e acao vêm do dataset por
+  // regra fixa (nunca por IA). Usuário revisa e confirma no formulário de Intenções.
+  app.post('/api/ia-command/admin/datasets/:id/sugerir-intencao', requireAuth, requireIaCommand, canDatasetsEIntencoes, async (req, res) => {
+    const dataset = crud.buscarPorId('datasets', req.params.id);
+    if (!dataset || dataset.empresa_id !== eid(req)) return res.status(404).json({ error: 'Dataset não encontrado.' });
+    if (String(dataset.tipo || '') !== 'view_semantica') {
+      return res.status(400).json({ error: 'Só é possível gerar intenção para datasets do tipo "SQL/View semântica".' });
+    }
+    if (!dataset.ativo_ia_owner) {
+      return res.status(400).json({ error: 'Marque "Disponível para IA Owner" no dataset antes de gerar a intenção.' });
+    }
+    if (!dataset.modulo) {
+      return res.status(400).json({ error: 'Preencha o campo Módulo do dataset antes de gerar a intenção.' });
+    }
+
+    const jaExiste = crud.listar('intentions', { empresa_id: eid(req) })
+      .find(i => String(i.erp || 'protheus').toLowerCase() === String(dataset.erp || 'protheus').toLowerCase()
+        && String(i.modulo || '').toLowerCase() === String(dataset.modulo || '').toLowerCase()
+        && i.ativo !== 0);
+    if (jaExiste) {
+      return res.status(409).json({
+        error: `Já existe a intenção "${jaExiste.nome}" ativa para o sistema "${dataset.erp || 'protheus'}" + módulo "${dataset.modulo}". Edite-a em vez de criar outra, para não gerar ambiguidade de roteamento.`,
+        intencao_existente: { id: jaExiste.id, nome: jaExiste.nome },
+      });
+    }
+
+    const campos = (() => { try { return JSON.parse(dataset.campos_semanticos_json || '[]'); } catch (_) { return []; } })();
+    const aiProviderClient = require('./erp/core/ai-provider-client');
+    let keys, cfg;
+    try {
+      ({ keys, cfg } = await aiProviderClient.resolverKeysEOrdem(eid(req)));
+    } catch (e) {
+      return res.status(400).json({ error: `IA indisponível: ${e.message}` });
+    }
+    if (!Object.values(keys || {}).some(Boolean)) {
+      return res.status(400).json({ error: 'Nenhuma chave de IA configurada para esta empresa (Configurações da IA).' });
+    }
+
+    const systemPrompt = [
+      'Voce e um especialista em interpretacao de perguntas em portugues para um sistema de IA que classifica intencoes de usuarios do WhatsApp.',
+      'Vai receber a descricao de um dataset (fonte de dados) com seus campos documentados, e deve propor os metadados de uma "intencao" que reconhece perguntas sobre esse dataset.',
+      '',
+      'Retorne SOMENTE JSON valido (sem markdown), no formato:',
+      '{"nome": string, "descricao": string, "frases_exemplo": string[]}',
+      '',
+      'Regras:',
+      '- "nome": snake_case, curto, unico, terminando com o nome do sistema de origem informado (ex: chamados_softexpert).',
+      '- "descricao": uma frase objetiva descrevendo o que essa intencao cobre.',
+      '- "frases_exemplo": entre 10 e 20 variações REALISTAS de perguntas que um usuario faria no WhatsApp sobre este dataset, cobrindo: contagens simples, filtro por cada dimensao/status relevante documentada, filtro por periodo, e pelo menos uma pergunta agrupando por uma dimensao.',
+      '- Use os nomes de negocio (coluna/descricao/sinonimos/regra) documentados nos campos para gerar frases plausiveis — nao invente conceitos que nao estao documentados.',
+      '- Nao inclua explicacoes fora do JSON.',
+    ].join('\n');
+
+    const userPrompt = JSON.stringify({
+      sistema_origem: dataset.erp || 'protheus',
+      modulo: dataset.modulo,
+      nome_dataset: dataset.nome,
+      descricao_view: dataset.view_descricao || null,
+      campos_documentados: campos.map(c => ({
+        coluna: c.coluna, tipo: c.tipo, descricao: c.descricao, sinonimos: c.sinonimos, regra: c.regra,
+      })),
+    });
+
+    try {
+      const raw = await aiProviderClient.chamarIA(keys, cfg, systemPrompt, userPrompt, {
+        json: true,
+        maxTokens: 2500,
+        timeoutMs: 45000,
+        logPrefix: 'DatasetSugerirIntencaoIA',
+      });
+      let parsed;
+      try {
+        const texto = String(raw || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+        parsed = JSON.parse(texto);
+      } catch (_) {
+        const m = String(raw || '').match(/\{[\s\S]*\}/);
+        parsed = m ? JSON.parse(m[0]) : null;
+      }
+      if (!parsed || typeof parsed !== 'object' || !parsed.nome) {
+        return res.status(502).json({ error: 'A IA não retornou um JSON válido. Tente novamente.' });
+      }
+      const sugestao = {
+        nome: String(parsed.nome).trim(),
+        descricao: String(parsed.descricao || '').trim(),
+        frases_exemplo: Array.isArray(parsed.frases_exemplo)
+          ? parsed.frases_exemplo.map(f => String(f || '').trim()).filter(Boolean).join('\n')
+          : String(parsed.frases_exemplo || '').trim(),
+        erp: dataset.erp || 'protheus',
+        acao: 'ai_text_to_sql',
+        modulo: dataset.modulo,
+      };
+      _audit(req, 'sugerir_intencao_ia', { dataset_id: dataset.id, dataset_nome: dataset.nome });
+      res.json({ sugestao });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
   const _datasetSemanticFields = [
@@ -701,6 +931,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const campos = {
       nome:            body.nome ? String(body.nome).trim() : '',
       erp:             body.erp || 'protheus',
+      connection_id:   body.connection_id ? String(body.connection_id).trim() : null,
       sql_base:        body.sql_base || null,
       campo_data:      String(body.campo_data || 'data').trim(),
       colunas_metrica: body.colunas_metrica ? String(body.colunas_metrica).trim() : null,
@@ -774,7 +1005,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.put('/api/ia-command/admin/datasets/:id', requireAuth, requireIaCommand, canDatasets, (req, res) => {
     const existing = crud.buscarPorId('datasets', req.params.id);
     if (!existing || existing.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
-    const allowed = ['nome', 'erp', 'sql_base', 'campo_data', 'colunas_metrica', 'limite_max', ..._datasetSemanticFields];
+    const allowed = ['nome', 'erp', 'connection_id', 'sql_base', 'campo_data', 'colunas_metrica', 'limite_max', ..._datasetSemanticFields];
     const campos  = {};
     for (const k of allowed) { if (req.body[k] !== undefined) campos[k] = req.body[k]; }
     const normalizados = _normalizarDatasetPayload({ ...existing, ...campos });

@@ -49,12 +49,12 @@ function _carregarConexaoProtheus(empresaId) {
   try {
     const db = getDB();
     let row = db.prepare(
-      "SELECT id, configuracoes FROM connections WHERE empresa_id = ? AND ativo = 1 ORDER BY padrao DESC LIMIT 1"
+      "SELECT id, configuracoes FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = 'protheus' ORDER BY padrao DESC LIMIT 1"
     ).get(empresaId);
     if (!row) {
       const sx2Row = db.prepare("SELECT connection_id FROM protheus_sx2 WHERE empresa_id = ? LIMIT 1").get(empresaId);
       if (sx2Row?.connection_id) {
-        row = db.prepare("SELECT id, configuracoes FROM connections WHERE id = ? AND ativo = 1").get(sx2Row.connection_id);
+        row = db.prepare("SELECT id, configuracoes FROM connections WHERE id = ? AND ativo = 1 AND erp = 'protheus'").get(sx2Row.connection_id);
       }
     }
     const cfg = row?.configuracoes ? JSON.parse(row.configuracoes || '{}') : {};

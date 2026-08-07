@@ -1530,6 +1530,9 @@ assert.strictEqual(
   );
   assert.strictEqual(validacaoTopIa.ok, false, 'SQL IA continua rejeitando SELECT TOP por padrao');
   assert.strictEqual(validacaoTopAgendamento.ok, true, `SQL fixo de agendamento aceita SELECT TOP: ${validacaoTopAgendamento.erros.join(' | ')}`);
+  assert.strictEqual(iaOwnerRunner._test.permitirSelectTopPorIntent({ _systemOrigin: 'agendamento' }), true, 'agendamento permite SELECT TOP mesmo se a origem vier sem sql_fixo explicito');
+  assert.strictEqual(iaOwnerRunner._test.permitirSelectTopPorIntent({ origem: 'agendamento_sql_fixo' }), true, 'SQL fixo de agendamento permite SELECT TOP por origem');
+  assert.strictEqual(iaOwnerRunner._test.permitirSelectTopPorIntent({ origem: 'whatsapp' }), false, 'WhatsApp comum nao libera SELECT TOP pelo contrato basico');
   const sqlTopNormalizadoAgendamento = scheduledRunner._test.garantirSetRowcountSqlFixo("SELECT TOP 10 * FROM SD2990 SD2 WHERE SD2.D_E_L_E_T_ = ' '");
   assert(/^SET\s+ROWCOUNT\s+10000;\s*SELECT\s+TOP\s+10\b/i.test(sqlTopNormalizadoAgendamento), 'agendamento prefixa SET ROWCOUNT sem remover TOP N manual');
   assert.doesNotThrow(() => scheduledRunner._test.validarSqlFixoBasico(sqlTopNormalizadoAgendamento), 'SQL fixo com TOP N normalizado passa na validacao basica do agendamento');

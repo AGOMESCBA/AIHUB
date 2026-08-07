@@ -11,9 +11,10 @@ async function executar(intent, dataset, empresaId) {
 
   intent.periodo = { ...intent.periodo, ...resolverPeriodo(intent.periodo) };
 
-  const conn = factory.carregarConexao(empresaId);
+  const conn = factory.carregarConexao(empresaId, { connectionId: dataset.connection_id || null });
   if (!conn) throw new Error('Nenhuma conexao ERP ativa para esta empresa.');
   conn._empresa_id = empresaId              || '';
+  conn._dataset_id = dataset.id             || '';
   conn._pergunta   = intent._mensagemOriginal || '';
   conn._sender     = intent._remetente       || '';
   conn._modulo     = dataset.nome            || '';

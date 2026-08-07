@@ -32,6 +32,12 @@ const CAMPOS_CODIGO_EQUIVALENTES = {
   // campo da sua propria tabela via `campos` explicito. Nunca confundir com a entidade
   // de negocio "cliente" pedida pelo usuario (CAMPOS_CODIGO_EQUIVALENTES.cliente acima).
   cliente_fixo_seguranca: ['E1_CLIENTE', 'F2_CLIENTE'],
+  // Tipo exclusivo de seguranca, analogo a vendedor_fixo_seguranca/cliente_fixo_seguranca:
+  // codigo ERP do remetente autenticado como aprovador de pedido de compra, resolvido pelo
+  // sistema via cod_aprov_erp. So e injetado como entidadeSeguranca quando a mensagem usa
+  // linguagem de posse (ver mensagemUsaLinguagemPosseAprovador em compras-fragmentos-spec.js)
+  // — diferente de vendedor/cliente, que sao sempre restritos.
+  aprovador_fixo_seguranca: ['CR_APROV'],
   produto: ['B1_COD', 'B2_COD', 'D1_COD', 'D2_COD', 'D3_COD'],
   grupo_produto: ['BM_GRUPO', 'B1_GRUPO'],
   centro_custo: ['CTT_CUSTO', 'D1_CC', 'D2_CCUSTO'],

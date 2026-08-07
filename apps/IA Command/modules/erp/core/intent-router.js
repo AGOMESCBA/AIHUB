@@ -380,6 +380,64 @@ async function rotear(intent, empresaId) {
   const erroSemModulo = _verificarAlgumModuloAutorizado(intent, empresaId);
   if (erroSemModulo) return erroSemModulo;
 
+  const erpIntencao = String(registro.erp || 'protheus').toLowerCase();
+  if (erpIntencao !== 'protheus' && (registro.acao === 'ai_text_to_sql' || _pareceAiSqlDinamico(registro))) {
+    // Intenções de sistemas fora do Protheus não passam pelos AI_SQL_HANDLERS (specs SX2/SX3
+    // Protheus). Resolvem sempre por dataset semântico (view_semantica) do próprio sistema/módulo.
+    const modulo = _resolverModuloDinamico(intent, registro);
+    console.log(`[IACommandAI] Intencao multi-sistema: erp=${erpIntencao} | modulo=${modulo} | intencao=${intent.intencao} | empresa=${empresaId}`);
+    _tracePipeline('router_multi_sistema_inicio', { empresa_id: empresaId, erp: erpIntencao, modulo, intencao: intent?.intencao || null });
+
+    const semanticDataset = semanticDatasetResolver.resolverDatasetView({
+      empresaId,
+      modulo,
+      spec: modulo,
+      erp: erpIntencao,
+      mensagem: intent._mensagemOriginal || '',
+    });
+    if (!semanticDataset?.dataset) {
+      return {
+        tipo: 'erro',
+        subtipo: 'dataset_semantico_nao_encontrado',
+        resposta_direta: `Nao encontrei uma fonte de dados configurada para "${modulo}" no sistema ${erpIntencao}. Cadastre um dataset SQL/View semantica para este modulo e sistema no painel de Datasets.`,
+        mensagem: `Nenhum dataset view_semantica ativo para erp=${erpIntencao} modulo=${modulo}.`,
+      };
+    }
+
+    const resultado = await semanticDatasetRunner.executar(semanticDataset.dataset, intent, empresaId, {
+      suboperacaoDetectada: semanticDataset.suboperacaoDetectada,
+    });
+    _tracePipeline('router_multi_sistema_fim', {
+      empresa_id: empresaId,
+      erp: erpIntencao,
+      modulo,
+      dataset_id: semanticDataset.dataset.id,
+      tipo: resultado?.tipo || null,
+      subtipo: resultado?.subtipo || null,
+      rows: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
+    });
+    const resultadoFinal = (!resultado || typeof resultado !== 'object')
+      ? { tipo: 'erro', subtipo: 'erro_erp', resposta_direta: 'Ocorreu um erro interno ao processar sua consulta. Tente novamente.', _pipeline_origem: 'dataset_semantico_multi_sistema' }
+      : { ...resultado, _pipeline_origem: 'dataset_semantico_multi_sistema' };
+
+    return {
+      dataset_id: semanticDataset.dataset.id,
+      dataset_nome: semanticDataset.dataset.nome,
+      ...resultadoFinal,
+      trace: [
+        ...(Array.isArray(intent._trace) ? intent._trace : []),
+        ...(Array.isArray(resultadoFinal.trace) ? resultadoFinal.trace : []),
+        {
+          etapa: 'router',
+          acao: 'resultado_multi_sistema',
+          modulo,
+          intencao: intent.intencao,
+          detalhe: `erp=${erpIntencao}; tipo=${resultadoFinal.tipo || 'n/a'}; duracao_ms=${Date.now() - t0}`,
+        },
+      ],
+    };
+  }
+
   if (registro.acao === 'ai_text_to_sql' || _pareceAiSqlDinamico(registro)) {
     const modulo = _resolverModuloDinamico(intent, registro);
     const handlerPath = AI_SQL_HANDLERS[modulo];

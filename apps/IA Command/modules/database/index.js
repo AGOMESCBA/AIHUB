@@ -355,6 +355,7 @@ function _garantirColunasCompatibilidade() {
   `);
 
   const connections = {
+    connection_key: 'TEXT DEFAULT NULL',
     port: 'INTEGER',
     database: 'TEXT',
     username: 'TEXT',
@@ -365,6 +366,11 @@ function _garantirColunasCompatibilidade() {
     ssl: 'INTEGER DEFAULT 0',
     ultimo_teste: 'TEXT',
     teste_ok: 'INTEGER DEFAULT 0',
+    agente_sync_status: 'TEXT DEFAULT NULL',
+    agente_sync_em: 'TEXT DEFAULT NULL',
+    agente_teste_ok: 'INTEGER DEFAULT NULL',
+    agente_ultimo_teste: 'TEXT DEFAULT NULL',
+    agente_ultimo_erro: 'TEXT DEFAULT NULL',
     configuracoes: 'TEXT',
   };
 
@@ -390,6 +396,7 @@ function _garantirColunasCompatibilidade() {
   };
 
   const datasets = {
+    connection_id:    'TEXT DEFAULT NULL',
     sql_base:        'TEXT',
     campo_data:      "TEXT DEFAULT 'data'",
     colunas_metrica: 'TEXT',

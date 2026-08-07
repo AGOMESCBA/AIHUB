@@ -360,15 +360,44 @@ function _intencoesAiSqlDinamicas(intencoes = []) {
   );
 }
 
-function _termosIntentAiSql(intent = {}, sinonimos = [], normalizacoes = []) {
-  const dominio = _dominioIntentAiSql(intent);
-  const termos = new Set(TERMOS_ESCOPO_DINAMICO[dominio] || []);
+// Palavras muito genéricas que não devem virar termo-chave sozinhas (ruído de qualquer frase).
+const _STOPWORDS_FRASE_EXEMPLO = new Set([
+  'quanto', 'quantos', 'quantas', 'qual', 'quais', 'como', 'onde', 'quando',
+  'este', 'esta', 'esse', 'essa', 'atual', 'periodo', 'mes', 'ano', 'dia',
+  'total', 'todos', 'todas', 'para', 'pelo', 'pela', 'sobre', 'entre',
+]);
 
-  for (const parte of [intent.modulo, intent.nome, intent.descricao]) {
-    const texto = localResolver.normalizarTexto(parte, normalizacoes).replace(/_/g, ' ');
-    texto.split(/\s+/).filter(t => t.length >= 4 && !['dinamico', 'consulta', 'consultas'].includes(t))
-      .forEach(t => termos.add(t));
-  }
+function _termosDeFrasesExemplo(frasesExemplo, normalizacoes = []) {
+  const termos = new Set();
+  String(frasesExemplo || '')
+    .split('\n')
+    .map(f => f.trim())
+    .filter(Boolean)
+    .forEach(frase => {
+      const texto = localResolver.normalizarTexto(frase, normalizacoes);
+      // Bigramas e palavras isoladas relevantes — frases de exemplo já são o vocabulário
+      // de negócio que o cadastrante do domínio (Protheus, SoftExpert, etc) definiu.
+      const palavras = texto.split(/\s+/).filter(t => t.length >= 4 && !_STOPWORDS_FRASE_EXEMPLO.has(t));
+      palavras.forEach(p => termos.add(p));
+      for (let i = 0; i < palavras.length - 1; i++) termos.add(`${palavras[i]} ${palavras[i + 1]}`);
+    });
+  return termos;
+}
+
+// Termos "fortes": o nome do modulo em si e sinonimos cadastrados EXPLICITAMENTE para esta
+// intencao. Sao sinal intencional e devem decidir sozinhos entre sistemas/dominios diferentes.
+// Termos "fracos": vocabulario auxiliar (descricao, palavras/bigramas extraidos automaticamente
+// das frases_exemplo, termos genericos do dicionario Protheus) — uteis so para desempate
+// dentro do MESMO sistema, nunca para decidir entre sistemas distintos (evita que uma
+// expressao comum tipo "em aberto", presente por acaso numa frase de outro dominio, roube
+// pontuacao de uma pergunta que já bateu no nome do modulo certo).
+function _termosFortesIntentAiSql(intent = {}, sinonimos = [], normalizacoes = []) {
+  const dominio = _dominioIntentAiSql(intent);
+  const termos = new Set();
+
+  const moduloTexto = localResolver.normalizarTexto(intent.modulo, normalizacoes).replace(/_/g, ' ');
+  moduloTexto.split(/\s+/).filter(Boolean).forEach(t => termos.add(t));
+  if (moduloTexto) termos.add(moduloTexto);
 
   for (const s of sinonimos || []) {
     if (s?.ativo === 0 || String(s.camada || '').toLowerCase() !== 'intencao') continue;
@@ -376,11 +405,34 @@ function _termosIntentAiSql(intent = {}, sinonimos = [], normalizacoes = []) {
     const nome = localResolver.normalizarTexto(intent.nome, normalizacoes).replace(/_/g, ' ');
     const modulo = localResolver.normalizarTexto(intent.modulo, normalizacoes).replace(/_/g, ' ');
     if (equivalencia && (nome.includes(equivalencia) || modulo.includes(equivalencia) || equivalencia.includes(dominio))) {
-      termos.add(s.termo);
+      termos.add(localResolver.normalizarTexto(s.termo, normalizacoes));
     }
   }
 
+  return [...termos].filter(Boolean);
+}
+
+function _termosFracosIntentAiSql(intent = {}, normalizacoes = []) {
+  const dominio = _dominioIntentAiSql(intent);
+  const termos = new Set(TERMOS_ESCOPO_DINAMICO[dominio] || []);
+
+  for (const parte of [intent.nome, intent.descricao]) {
+    const texto = localResolver.normalizarTexto(parte, normalizacoes).replace(/_/g, ' ');
+    texto.split(/\s+/).filter(t => t.length >= 4 && !['dinamico', 'consulta', 'consultas'].includes(t))
+      .forEach(t => termos.add(t));
+  }
+
+  for (const termo of _termosDeFrasesExemplo(intent.frases_exemplo, normalizacoes)) termos.add(termo);
+
   return [...termos].map(t => localResolver.normalizarTexto(t, normalizacoes)).filter(Boolean);
+}
+
+// Mantida por compatibilidade com quem ainda consome a lista "achatada" (fortes + fracos).
+function _termosIntentAiSql(intent = {}, sinonimos = [], normalizacoes = []) {
+  return [
+    ..._termosFortesIntentAiSql(intent, sinonimos, normalizacoes),
+    ..._termosFracosIntentAiSql(intent, normalizacoes),
+  ];
 }
 
 function _normalizarMensagemDinamica(mensagem, normalizacoes = []) {
@@ -389,27 +441,33 @@ function _normalizarMensagemDinamica(mensagem, normalizacoes = []) {
     .replace(/\bdocumetno\b/g, 'documento');
 }
 
+// Keywords primarias hard-coded do Protheus — mantidas por compatibilidade/precisao fina do
+// dominio mais maduro do produto. Sistemas novos (SoftExpert, etc) recebem o mesmo bonus
+// decisivo de forma generica via _termosFortesIntentAiSql (nome do modulo + sinonimos
+// cadastrados), sem precisar de entrada nesta lista.
+const BONUS_DOMINIO_PRIMARIO = 10;
+const KEYWORDS_PRIMARIAS = {
+  compras: ['compras', 'compra', 'pedido compra', 'pedidos compra', 'nota entrada', 'notas entrada', 'ordem compra'],
+  faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
+  financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
+  comissao: ['comissao', 'comissoes', 'comissionamento'],
+  estoque: ['estoque', 'saldo em estoque', 'posicao de estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc'],
+};
+
 function _ranquearIntencoesAiSql(mensagem, intencoes = [], sinonimos = [], normalizacoes = []) {
   const texto = _normalizarMensagemDinamica(mensagem, normalizacoes);
   const candidatas = _intencoesAiSqlDinamicas(intencoes);
   if (!texto || !candidatas.length) return [];
 
-  const BONUS_DOMINIO_PRIMARIO = 10;
-  const KEYWORDS_PRIMARIAS = {
-    compras: ['compras', 'compra', 'pedido compra', 'pedidos compra', 'nota entrada', 'notas entrada', 'ordem compra'],
-    faturamento: ['faturamento', 'fatura', 'nota fiscal', 'notas fiscais', 'venda', 'vendas', 'nf', 'carregada', 'carregado', 'entrega futura', 'nota mae', 'nota mãe', 'movimentacao total', 'movimentação total'],
-    financeiro: ['financeiro', 'contas pagar', 'contas receber', 'pagamento', 'pagamentos', 'pago', 'pagos', 'pagas', 'recebimento', 'recebimentos', 'recebido', 'recebidos', 'recebidas', 'contas pagas', 'contas recebidas', 'fluxo caixa', 'lancamento', 'titulo', 'titulos', 'duplicata', 'duplicatas'],
-    comissao: ['comissao', 'comissoes', 'comissionamento'],
-    estoque: ['estoque', 'saldo em estoque', 'posicao de estoque', 'requisicao', 'transferencia de estoque', 'giro de estoque', 'curva abc'],
-  };
-
   return candidatas.map(intent => {
     const dominio = _dominioIntentAiSql(intent);
-    const termos = _termosIntentAiSql(intent, sinonimos, normalizacoes);
-    const scoreTermos = termos.reduce((acc, termo) => acc + (_containsTerm(texto, termo) ? Math.max(1, termo.split(/\s+/).length) : 0), 0);
+    const termosFortes = _termosFortesIntentAiSql(intent, sinonimos, normalizacoes);
+    const termosFracos = _termosFracosIntentAiSql(intent, normalizacoes);
+    const scoreFracos = termosFracos.reduce((acc, termo) => acc + (_containsTerm(texto, termo) ? Math.max(1, termo.split(/\s+/).length) : 0), 0);
+    const bateForte = termosFortes.some(termo => _containsTerm(texto, termo));
     const keywords = (KEYWORDS_PRIMARIAS[dominio] || []).map(k => localResolver.normalizarTexto(k, normalizacoes));
-    const bonusDominio = keywords.some(k => _containsTerm(texto, k)) ? BONUS_DOMINIO_PRIMARIO : 0;
-    return { intent, dominio, score: scoreTermos + bonusDominio };
+    const bonusDominio = (bateForte || keywords.some(k => _containsTerm(texto, k))) ? BONUS_DOMINIO_PRIMARIO : 0;
+    return { intent, dominio, score: scoreFracos + bonusDominio, scoreForte: bonusDominio };
   }).sort((a, b) => b.score - a.score);
 }
 
@@ -576,6 +634,7 @@ function _carregarIntencoes(empresaId) {
       dataset_id:      r.dataset_id || null,
       modulo:          r.modulo || null,
       acao:            r.acao || null,
+      erp:             r.erp || 'protheus',
     }));
     return _clone(_cacheSet(_cache.intencoes, empresaId, intencoes));
   } catch (_) {
@@ -802,6 +861,51 @@ async function classificar(mensagem, empresaId, opts = {}) {
       _erroTipo:           'sem_configuracao',
       _erros:              [],
     };
+  }
+
+  // Roteador de sistema: só entra em ação quando a empresa tem intenções ai_text_to_sql de
+  // mais de um sistema (erp) cadastradas — ex: Protheus + SoftExpert. Com um único sistema
+  // (o caso comum hoje), retorna esse sistema sem nenhum calculo extra e o fluxo segue 100%
+  // igual ao anterior a esta checagem.
+  const systemRouter = require('./system-router');
+  const sistemaAlvo = systemRouter.resolverSistema(mensagem, intencoes, sinonimos, normalizacoes);
+  if (sistemaAlvo.ambiguo) {
+    const opcoes = sistemaAlvo.candidatos
+      .map(c => `${c.modulo || c.sistema} (${c.sistema})`)
+      .join(' ou ');
+    return {
+      intencao:            'desconhecido',
+      periodo:             { tipo: 'nenhum' },
+      filtros:             {},
+      agrupar_por:         null,
+      ordenar_por:         null,
+      limite:              null,
+      confianca:           0,
+      precisa_confirmacao: true,
+      origem:              'texto',
+      _provedor:           'sistema',
+      _erro:               `Nao ficou claro se a pergunta e sobre ${opcoes}. Pode reformular indicando o assunto?`,
+      _erroTipo:           'sistema_ambiguo',
+      _erros:              [],
+      _trace: [{ etapa: 'classificacao', acao: 'sistema_ambiguo', detalhe: JSON.stringify(sistemaAlvo.candidatos) }],
+    };
+  }
+  if (sistemaAlvo.sistema && sistemaAlvo.sistema !== 'protheus') {
+    // Sistema não-Protheus com correspondência clara: usa sempre o caminho determinístico
+    // (o mesmo bypass local já usado quando não há chave de IA) — não passa pelo orquestrador
+    // Protheus, que é especializado nas regras de negocio daquele sistema.
+    const decisaoBypass = _deveBypassDinamico(mensagem, intencoes, sinonimos, normalizacoes, { temChaveIA: false });
+    if (decisaoBypass.usar && systemRouter._erpDaIntencao(decisaoBypass.intencao) === sistemaAlvo.sistema) {
+      return _appendTrace(
+        { ..._intentAiSqlDireto(decisaoBypass.intencao, mensagem, normalizacoes), _bypassMotivo: `sistema_${sistemaAlvo.sistema}` },
+        {
+          acao: 'bypass_multi_sistema',
+          motor: 'sistema',
+          intencao: decisaoBypass.intencao?.nome,
+          detalhe: `erp=${sistemaAlvo.sistema}`,
+        }
+      );
+    }
   }
 
   // Escopos dinâmicos: detecção rápida por termos do módulo — bypassa local resolver e IA externa.

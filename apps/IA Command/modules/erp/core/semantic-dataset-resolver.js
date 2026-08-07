@@ -24,10 +24,12 @@ function _suboperacaoDaMensagem(mensagem = '') {
   return 'vendas';
 }
 
-function resolverDatasetView({ empresaId, modulo, spec, mensagem } = {}) {
-  if (_norm(modulo) !== 'faturamento' && _norm(spec) !== 'faturamento') return null;
+function resolverDatasetView({ empresaId, modulo, spec, mensagem, erp } = {}) {
+  const moduloNorm = _norm(modulo) || _norm(spec);
+  if (!moduloNorm) return null;
 
   const db = getDB();
+  const erpNorm = _norm(erp) || 'protheus';
   const suboperacao = _suboperacaoDaMensagem(mensagem);
   const rows = db.prepare(`
     SELECT *
@@ -35,8 +37,9 @@ function resolverDatasetView({ empresaId, modulo, spec, mensagem } = {}) {
      WHERE empresa_id = ?
        AND tipo = 'view_semantica'
        AND ativo_ia_owner = 1
-       AND LOWER(COALESCE(modulo, '')) = 'faturamento'
-       AND LOWER(COALESCE(spec, modulo, '')) = 'faturamento'
+       AND LOWER(COALESCE(erp, 'protheus')) = ?
+       AND LOWER(COALESCE(modulo, '')) = ?
+       AND LOWER(COALESCE(spec, modulo, '')) = ?
        AND COALESCE(sql_base, '') <> ''
      ORDER BY
        CASE
@@ -46,7 +49,7 @@ function resolverDatasetView({ empresaId, modulo, spec, mensagem } = {}) {
        END,
        prioridade DESC,
        atualizado_em DESC
-  `).all(Number(empresaId), suboperacao);
+  `).all(Number(empresaId), erpNorm, moduloNorm, moduloNorm, suboperacao);
 
   const escolhido = rows.find(row => {
     const sub = _norm(row.suboperacao);

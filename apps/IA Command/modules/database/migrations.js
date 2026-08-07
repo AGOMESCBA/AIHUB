@@ -1159,6 +1159,70 @@ const MIGRATIONS = [
       UPDATE whatsapp_allowed_numbers SET erp_tipo = 'usuario' WHERE erp_tipo = 'vendedor';
     `,
   },
+  {
+    version: 67,
+    descricao: 'IA Command - canal Protheus WhatsApp (chat embutido no ERP via TWebEngine): tokens de sessao, sessoes de conversa e mensagens',
+    sql: `
+      CREATE TABLE IF NOT EXISTS protheus_chat_tokens (
+        token         TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        celular       TEXT NOT NULL,
+        filial        TEXT,
+        expira_em     TEXT NOT NULL,
+        usado_em      TEXT,
+        criado_em     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_tokens_expira
+        ON protheus_chat_tokens (expira_em);
+
+      CREATE TABLE IF NOT EXISTS protheus_chat_sessions (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        celular       TEXT NOT NULL,
+        titulo        TEXT,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_sessions_celular
+        ON protheus_chat_sessions (empresa_id, celular, atualizado_em);
+
+      CREATE TABLE IF NOT EXISTS protheus_chat_messages (
+        id            TEXT PRIMARY KEY,
+        sessao_id     TEXT NOT NULL REFERENCES protheus_chat_sessions(id) ON DELETE CASCADE,
+        direcao       TEXT NOT NULL,
+        texto         TEXT NOT NULL,
+        rows_json     TEXT,
+        tipo_resultado TEXT,
+        intent_json   TEXT,
+        criado_em     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_messages_sessao
+        ON protheus_chat_messages (sessao_id, criado_em);
+    `,
+  },
+  {
+    version: 68,
+    descricao: 'IA Command - datasets com conexao de dados e metadados de sincronizacao com Agente Local',
+    sql: `
+      ALTER TABLE connections ADD COLUMN connection_key TEXT DEFAULT NULL;
+      ALTER TABLE connections ADD COLUMN agente_sync_status TEXT DEFAULT NULL;
+      ALTER TABLE connections ADD COLUMN agente_sync_em TEXT DEFAULT NULL;
+      ALTER TABLE connections ADD COLUMN agente_teste_ok INTEGER DEFAULT NULL;
+      ALTER TABLE connections ADD COLUMN agente_ultimo_teste TEXT DEFAULT NULL;
+      ALTER TABLE connections ADD COLUMN agente_ultimo_erro TEXT DEFAULT NULL;
+      ALTER TABLE datasets ADD COLUMN connection_id TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 69,
+    descricao: 'IA Command - sistema ERP de origem por intencao, para roteamento multi-sistema (Protheus/SoftExpert/etc)',
+    sql: `
+      ALTER TABLE intentions ADD COLUMN erp TEXT DEFAULT 'protheus';
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
