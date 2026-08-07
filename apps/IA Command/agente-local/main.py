@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from config import get_config, set_config
 import shutil
-from database import init_db, registrar_execucao, listar_execucoes, limpar_historico, get_stats, sincronizar_empresas, listar_empresas, listar_empresas_public, remover_empresa, get_execucao, salvar_conexao_erp, get_conexao_erp, listar_conexoes_erp
+from database import init_db, registrar_execucao, listar_execucoes, limpar_historico, get_stats, sincronizar_empresas, listar_empresas, listar_empresas_public, remover_empresa, get_execucao, salvar_conexao_erp, get_conexao_erp, listar_conexoes_erp, remover_conexao_dados
 from auth import verificar_token_api, verificar_sessao_web, autenticar_admin, alterar_senha, salvar_hash
 from modules.erp_executor import executar_sql, testar_conexao
 from modules.factory_reset import resetar_fabrica
@@ -104,11 +104,13 @@ async def execute(request: Request, authorization: str = Header(default=None)):
     sender     = body.get("sender", "")   or ""
     usuario    = body.get("usuario", "")  or ""
     empresa_id = str(body.get("empresa_id") or "")
+    connection_key = str(body.get("connection_key") or "").strip()
+    connection_nome = str(body.get("connection_nome") or "").strip()
 
     if not sql:
         raise HTTPException(status_code=400, detail="Campo 'sql' é obrigatório.")
 
-    resultado = await executar_sql(sql, limit, empresa_id)
+    resultado = await executar_sql(sql, limit, empresa_id, connection_key)
 
     rows_list = resultado.get("rows", [])
     linhas_retornadas = len(rows_list) if isinstance(rows_list, list) else 0
@@ -141,6 +143,8 @@ async def execute(request: Request, authorization: str = Header(default=None)):
         sender=sender or None,
         empresa_id=empresa_id or None,
         usuario=usuario or None,
+        connection_key=connection_key or resultado.get("connection_key") or None,
+        connection_nome=connection_nome or resultado.get("connection_nome") or None,
         linhas_retornadas=linhas_retornadas,
         limite_solicitado=limit,
         tipo_erro=tipo_erro,
@@ -280,6 +284,133 @@ async def api_set_config(request: Request):
 async def api_testar_erp(request: Request, empresa_id: str = ""):
     verificar_sessao_web(request)
     return await testar_conexao(empresa_id)
+
+
+@app.post("/api/conexoes/sync")
+async def api_conexao_sync(request: Request, authorization: str = Header(default=None)):
+    raw_token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verificar_token_api(raw_token):
+        raise HTTPException(status_code=401, detail="Token invÃ¡lido.")
+
+    body = await request.json()
+    eid = str(body.get("empresa_id") or "").strip()
+    key = str(body.get("connection_key") or "").strip()
+    if not eid or not key:
+        raise HTTPException(status_code=400, detail="empresa_id e connection_key sao obrigatorios.")
+
+    c = get_config()
+    crypto_key = c.get("CRYPTO_KEY", "")
+    db_pass_enc = None
+    if body.get("db_pass"):
+        if not crypto_key:
+            raise HTTPException(status_code=400, detail="CRYPTO_KEY nao configurada no agente para salvar senha da conexao.")
+        db_pass_enc = encrypt_text(body["db_pass"], crypto_key)
+
+    salvar_conexao_erp(
+        empresa_id=eid,
+        connection_key=key,
+        nome=body.get("nome") or key,
+        sistema_origem=body.get("sistema_origem") or body.get("erp") or "",
+        db_host=body.get("db_host", ""),
+        db_port=body.get("db_port", "1433"),
+        db_name=body.get("db_name", ""),
+        db_user=body.get("db_user", ""),
+        db_pass_enc=db_pass_enc,
+        db_driver=body.get("db_driver") or "ODBC Driver 17 for SQL Server",
+        filial=body.get("filial", "01"),
+        padrao=1 if key == "default" else 0,
+        ativo=1,
+    )
+    return {"ok": True, "empresa_id": eid, "connection_key": key}
+
+
+@app.post("/api/conexoes/testar")
+async def api_conexao_testar(request: Request, authorization: str = Header(default=None)):
+    raw_token = (authorization or "").removeprefix("Bearer ").strip()
+    if raw_token:
+        if not verificar_token_api(raw_token):
+            raise HTTPException(status_code=401, detail="Token invÃ¡lido.")
+    else:
+        verificar_sessao_web(request)
+    body = await request.json()
+    eid = str(body.get("empresa_id") or "").strip()
+    key = str(body.get("connection_key") or "").strip()
+    return await testar_conexao(eid, key)
+
+
+@app.get("/api/conexoes")
+def api_listar_conexoes_dados(request: Request, empresa_id: str = ""):
+    verificar_sessao_web(request)
+    eid = str(empresa_id or "").strip()
+    rows = listar_conexoes_erp()
+    if eid:
+        rows = [r for r in rows if str(r.get("empresa_id") or "") == eid]
+    return [
+        {
+            "empresa_id": r.get("empresa_id"),
+            "connection_key": r.get("connection_key") or "default",
+            "nome": r.get("nome") or "",
+            "sistema_origem": r.get("sistema_origem") or "",
+            "db_host": r.get("db_host") or "",
+            "db_port": r.get("db_port") or "1433",
+            "db_name": r.get("db_name") or "",
+            "db_user": r.get("db_user") or "",
+            "db_driver": r.get("db_driver") or "ODBC Driver 17 for SQL Server",
+            "filial": r.get("filial") or "01",
+            "padrao": r.get("padrao") or 0,
+            "ativo": r.get("ativo") if r.get("ativo") is not None else 1,
+            "senha_configurada": bool(r.get("db_pass_enc")),
+            "atualizado_em": r.get("atualizado_em") or "",
+        }
+        for r in rows
+    ]
+
+
+@app.post("/api/conexoes")
+async def api_salvar_conexao_dados_web(request: Request):
+    verificar_sessao_web(request)
+    body = await request.json()
+    eid = str(body.get("empresa_id") or "").strip()
+    key = str(body.get("connection_key") or "").strip()
+    if not eid:
+        raise HTTPException(status_code=400, detail="Selecione uma empresa antes de salvar a conexao.")
+    if not key or key == "default":
+        raise HTTPException(status_code=400, detail="Informe uma connection_key diferente de 'default' para conexoes adicionais.")
+
+    db_pass_enc = None
+    senha = body.get("db_pass")
+    if senha:
+        c = get_config()
+        crypto_key = c.get("CRYPTO_KEY", "")
+        if not crypto_key:
+            raise HTTPException(status_code=400, detail="Configure a CRYPTO_KEY antes de salvar a senha da conexao.")
+        db_pass_enc = encrypt_text(senha, crypto_key)
+
+    salvar_conexao_erp(
+        empresa_id=eid,
+        connection_key=key,
+        nome=body.get("nome") or key,
+        sistema_origem=body.get("sistema_origem") or "",
+        db_host=body.get("db_host", ""),
+        db_port=body.get("db_port", "1433"),
+        db_name=body.get("db_name", ""),
+        db_user=body.get("db_user", ""),
+        db_pass_enc=db_pass_enc,
+        db_driver=body.get("db_driver") or "ODBC Driver 17 for SQL Server",
+        filial=body.get("filial", "01"),
+        padrao=0,
+        ativo=1,
+    )
+    return {"ok": True, "empresa_id": eid, "connection_key": key}
+
+
+@app.delete("/api/conexoes/{empresa_id}/{connection_key}")
+def api_excluir_conexao_dados_web(request: Request, empresa_id: str, connection_key: str):
+    verificar_sessao_web(request)
+    ok = remover_conexao_dados(str(empresa_id or "").strip(), str(connection_key or "").strip())
+    if not ok:
+        raise HTTPException(status_code=400, detail="Conexao nao encontrada ou nao pode ser excluida.")
+    return {"ok": True}
 
 
 # ── API Web: config ERP por empresa ───────────────────────────────────────────

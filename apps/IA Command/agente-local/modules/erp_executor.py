@@ -11,12 +11,25 @@ _BLOCKED_KEYWORDS = [
 MAX_ROWS_HARD = 50_000
 
 
-def _resolver_credenciais(empresa_id: str = "") -> dict:
+def _resolver_credenciais(empresa_id: str = "", connection_key: str = "") -> dict:
     """Resolve host/porta/banco/usuário/senha/driver para a empresa informada.
     Se não houver conexão própria cadastrada (empresa nova ou instalação single-tenant),
     cai no .env global — comportamento legado preservado."""
     cfg = get_config()
-    row = get_conexao_erp(empresa_id) if empresa_id else None
+    row = get_conexao_erp(empresa_id, connection_key) if empresa_id else None
+
+    if empresa_id and connection_key and not row:
+        return {
+            "driver": cfg.get("DB_DRIVER") or "ODBC Driver 17 for SQL Server",
+            "host":   "",
+            "port":   cfg.get("DB_PORT", "1433"),
+            "db":     "",
+            "user":   "",
+            "passwd": "",
+            "origem": "conexao_nao_encontrada",
+            "connection_key": connection_key,
+            "connection_nome": "",
+        }
 
     if row and row.get("db_host"):
         senha = ""
@@ -31,6 +44,8 @@ def _resolver_credenciais(empresa_id: str = "") -> dict:
             "user":   row.get("db_user")   or "",
             "passwd": senha,
             "origem": "conexao_propria",
+            "connection_key": row.get("connection_key") or "default",
+            "connection_nome": row.get("nome") or "",
         }
 
     return {
@@ -41,12 +56,16 @@ def _resolver_credenciais(empresa_id: str = "") -> dict:
         "user":   cfg.get("DB_USER",  ""),
         "passwd": cfg.get("DB_PASS",  ""),
         "origem": "padrao_env",
+        "connection_key": "",
+        "connection_nome": "",
     }
 
 
-def _get_pyodbc_conn(empresa_id: str = ""):
+def _get_pyodbc_conn(empresa_id: str = "", connection_key: str = ""):
     import pyodbc
-    cred = _resolver_credenciais(empresa_id)
+    cred = _resolver_credenciais(empresa_id, connection_key)
+    if cred.get("origem") == "conexao_nao_encontrada":
+        raise RuntimeError(f"Conexao '{connection_key}' nao encontrada para a empresa {empresa_id}. Sincronize a conexao pelo IA Command.")
     conn_str = (
         f"DRIVER={{{cred['driver']}}};"
         f"SERVER={cred['host']},{cred['port']};"
@@ -59,10 +78,10 @@ def _get_pyodbc_conn(empresa_id: str = ""):
     return pyodbc.connect(conn_str, timeout=30)
 
 
-async def testar_conexao(empresa_id: str = "") -> dict:
+async def testar_conexao(empresa_id: str = "", connection_key: str = "") -> dict:
     def _test():
         import pyodbc
-        conn = _get_pyodbc_conn(empresa_id)
+        conn = _get_pyodbc_conn(empresa_id, connection_key)
         conn.execute("SELECT 1")
         conn.close()
 
@@ -75,7 +94,7 @@ async def testar_conexao(empresa_id: str = "") -> dict:
         return {"ok": False, "erro": str(e)}
 
 
-async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "") -> dict:
+async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "", connection_key: str = "") -> dict:
     sql = sql.strip()
     if not sql:
         return _erro("SQL vazio.", sql, 0)
@@ -101,11 +120,12 @@ async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "") -> d
     sql_final = _injetar_top(sql, upper, limit_eff)
 
     t0 = time.perf_counter()
-    origem_conexao = _resolver_credenciais(empresa_id)["origem"]
+    cred_resolvida = _resolver_credenciais(empresa_id, connection_key)
+    origem_conexao = cred_resolvida["origem"]
 
     def _run_query():
         import pyodbc
-        conn   = _get_pyodbc_conn(empresa_id)
+        conn   = _get_pyodbc_conn(empresa_id, connection_key)
         try:
             cursor = conn.cursor()
             cursor.execute(sql_final)
@@ -119,7 +139,15 @@ async def executar_sql(sql: str, limit: int = 10_000, empresa_id: str = "") -> d
     try:
         rows = await asyncio.to_thread(_run_query)
         duracao = _ms(t0)
-        return {"rows": rows, "status": "ok", "duracao_ms": duracao, "sql_executado": sql_final, "origem_conexao": origem_conexao}
+        return {
+            "rows": rows,
+            "status": "ok",
+            "duracao_ms": duracao,
+            "sql_executado": sql_final,
+            "origem_conexao": origem_conexao,
+            "connection_key": cred_resolvida.get("connection_key") or "",
+            "connection_nome": cred_resolvida.get("connection_nome") or "",
+        }
     except ImportError:
         return _erro("pyodbc não instalado. Execute: pip install pyodbc", sql_final, _ms(t0), origem_conexao)
     except Exception as e:

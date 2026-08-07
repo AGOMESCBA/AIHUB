@@ -416,6 +416,12 @@
 
       <!-- ── ABA ERP ── -->
       <div class="tab-panel" id="tab-erp">
+        <div class="form-tabs" id="erp-tabs">
+          <button class="form-tab-btn active" id="erp-tab-btn-principal" onclick="mudarErpTab('principal', this)">Conexao principal</button>
+          <button class="form-tab-btn" id="erp-tab-btn-adicionais" onclick="mudarErpTab('adicionais', this)">Conexoes adicionais</button>
+        </div>
+
+        <div id="erp-panel-principal">
         <div class="card">
           <div class="card-header">
             <div>
@@ -477,9 +483,94 @@
             <div id="erp-result" class="alert" style="display:none"></div>
           </div>
         </div>
-      </div>
+
+        </div>
+
+        <div id="erp-panel-adicionais" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Conexoes adicionais</div>
+              <div class="card-subtitle">Use para outros sistemas/bancos da mesma empresa. A conexao acima continua sendo a padrao.</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="copiarConexaoAdicionalSelecionada()">Copiar selecionada</button>
+              <button class="btn btn-primary btn-sm" onclick="abrirEditorConexaoAdicional()">Nova conexao</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="conn-extra-alert" class="alert alert-warn" style="display:none"></div>
+            <div id="conn-extra-grid"></div>
+          </div>
+        </div>
+
+        <div class="card" id="conn-extra-editor" style="display:none;margin-top:14px">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="conn-extra-editor-title">Nova conexao adicional</div>
+              <div class="card-subtitle">Informe a rota que o IA Command enviara ao Agente Local pela API.</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="fecharEditorConexaoAdicional()">Fechar</button>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Chave de rota</label>
+                <input id="EXTRA_KEY" class="form-control" placeholder="softexpert_chamados">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nome</label>
+                <input id="EXTRA_NOME" class="form-control" placeholder="Softexpert - Chamados">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Sistema</label>
+                <input id="EXTRA_SISTEMA" class="form-control" placeholder="softexpert">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Host / IP</label>
+                <input id="EXTRA_HOST" class="form-control" placeholder="192.168.1.100">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Porta</label>
+                <input id="EXTRA_PORT" class="form-control" placeholder="1433" value="1433">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nome do banco</label>
+                <input id="EXTRA_DB" class="form-control" placeholder="SOFTEXPERT">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Usuario</label>
+                <input id="EXTRA_USER" class="form-control" placeholder="usuario">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Senha</label>
+                <input id="EXTRA_PASS" type="password" class="form-control" placeholder="Senha salva - digite para alterar">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Driver ODBC</label>
+                <select id="EXTRA_DRIVER" class="form-control">
+                  <option value="ODBC Driver 17 for SQL Server">ODBC Driver 17 for SQL Server</option>
+                  <option value="ODBC Driver 18 for SQL Server">ODBC Driver 18 for SQL Server</option>
+                  <option value="SQL Server">SQL Server (legado)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Filial</label>
+                <input id="EXTRA_FILIAL" class="form-control" placeholder="01" value="01">
+              </div>
+            </div>
+            <div class="flex items-center gap-8 mt-12">
+              <button class="btn btn-primary btn-sm" onclick="salvarConexaoAdicional()">Salvar conexao adicional</button>
+              <button class="btn btn-ghost btn-sm" onclick="testarConexaoAdicional()">Testar conexao adicional</button>
+            </div>
+            <div id="conn-extra-result" class="alert" style="display:none"></div>
+          </div>
+        </div>
+        </div>
 
       <!-- ── ABA SEGURANÇA ── -->
+      </div>
+
       <div class="tab-panel" id="tab-seguranca">
 
         <!-- Sub-aba: Senha (única) -->
@@ -788,12 +879,25 @@ function mudarAba(nome, btn) {
   btn.classList.add('active');
   document.getElementById('topbar-title').textContent = TOPBAR_TITLES[nome] || nome;
   if (nome === 'monitor')   _recarregarLogs();
-  if (nome === 'erp')       carregarConfigERP();
+  if (nome === 'erp')       { mudarErpTab(_erpTabAtual, document.getElementById('erp-tab-btn-' + _erpTabAtual)); carregarConfigERP(); }
   if (nome === 'sistema')   carregarEmpresasGrid();
   if (nome === 'conapi')    mudarConapiTab(_conapiTabAtual, document.getElementById('conapi-tab-btn-' + _conapiTabAtual));
 }
 
 // ── Sub-abas Conexão API ───────────────────────────────────────────────────
+let _erpTabAtual = 'principal';
+
+function mudarErpTab(nome, btn) {
+  _erpTabAtual = nome || 'principal';
+  document.querySelectorAll('#erp-tabs .form-tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  ['principal','adicionais'].forEach(n => {
+    const el = document.getElementById('erp-panel-' + n);
+    if (el) el.style.display = n === _erpTabAtual ? '' : 'none';
+  });
+  if (_erpTabAtual === 'adicionais') carregarConexoesAdicionais();
+}
+
 let _conapiTabAtual = 'token';
 
 function mudarConapiTab(nome, btn) {
@@ -812,6 +916,7 @@ function mudarConapiTab(nome, btn) {
 
 // ── Monitor — Tabulator ────────────────────────────────────────────────────
 let table       = null;
+let tableConexoesAdicionais = null;
 let _logsCache  = {};
 let filtrosVisiveis = false;
 let quickFn     = null;
@@ -1316,6 +1421,7 @@ async function carregarConfigERP() {
       keyEl.type = 'password';
     }
   }
+  if (_erpTabAtual === 'adicionais') await carregarConexoesAdicionais();
 }
 
 async function salvarERP() {
@@ -1439,6 +1545,194 @@ async function testarERP() {
 }
 
 // ── Copiar conexão ERP de outra empresa ─────────────────────────────────────
+function _normalizarRotaConexao(valor) {
+  return String(valor || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+}
+
+function limparConexaoAdicional() {
+  ['EXTRA_KEY','EXTRA_NOME','EXTRA_SISTEMA','EXTRA_HOST','EXTRA_DB','EXTRA_USER','EXTRA_PASS'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('EXTRA_PORT').value = '1433';
+  document.getElementById('EXTRA_DRIVER').value = 'ODBC Driver 17 for SQL Server';
+  document.getElementById('EXTRA_FILIAL').value = '01';
+  const al = document.getElementById('conn-extra-result');
+  if (al) { al.style.display = 'none'; al.textContent = ''; }
+}
+
+function abrirEditorConexaoAdicional(c = null, modo = 'novo') {
+  if (!_empresaAtual.id) { toast('Selecione uma empresa no topo antes de cadastrar conexoes adicionais.', 'err'); return; }
+  if (c) preencherEditorConexaoAdicional(c);
+  else limparConexaoAdicional();
+  const title = document.getElementById('conn-extra-editor-title');
+  if (title) title.textContent = modo === 'copiar' ? 'Copiar conexao adicional' : (modo === 'editar' ? 'Editar conexao adicional' : 'Nova conexao adicional');
+  const editor = document.getElementById('conn-extra-editor');
+  if (editor) {
+    editor.style.display = '';
+    editor.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+}
+
+function fecharEditorConexaoAdicional() {
+  const editor = document.getElementById('conn-extra-editor');
+  if (editor) editor.style.display = 'none';
+}
+
+function preencherEditorConexaoAdicional(c) {
+  document.getElementById('EXTRA_KEY').value = c.connection_key || '';
+  document.getElementById('EXTRA_NOME').value = c.nome || '';
+  document.getElementById('EXTRA_SISTEMA').value = c.sistema_origem || '';
+  document.getElementById('EXTRA_HOST').value = c.db_host || '';
+  document.getElementById('EXTRA_PORT').value = c.db_port || '1433';
+  document.getElementById('EXTRA_DB').value = c.db_name || '';
+  document.getElementById('EXTRA_USER').value = c.db_user || '';
+  document.getElementById('EXTRA_PASS').value = '';
+  document.getElementById('EXTRA_DRIVER').value = c.db_driver || 'ODBC Driver 17 for SQL Server';
+  document.getElementById('EXTRA_FILIAL').value = c.filial || '01';
+  const al = document.getElementById('conn-extra-result');
+  if (al) { al.style.display = 'none'; al.textContent = ''; }
+}
+
+function _payloadConexaoAdicional() {
+  const key = _normalizarRotaConexao(document.getElementById('EXTRA_KEY').value);
+  document.getElementById('EXTRA_KEY').value = key;
+  return {
+    empresa_id: _empresaAtual.id,
+    connection_key: key,
+    nome: document.getElementById('EXTRA_NOME').value.trim() || key,
+    sistema_origem: document.getElementById('EXTRA_SISTEMA').value.trim(),
+    db_host: document.getElementById('EXTRA_HOST').value.trim(),
+    db_port: document.getElementById('EXTRA_PORT').value.trim() || '1433',
+    db_name: document.getElementById('EXTRA_DB').value.trim(),
+    db_user: document.getElementById('EXTRA_USER').value.trim(),
+    db_pass: document.getElementById('EXTRA_PASS').value,
+    db_driver: document.getElementById('EXTRA_DRIVER').value || 'ODBC Driver 17 for SQL Server',
+    filial: document.getElementById('EXTRA_FILIAL').value.trim() || '01',
+  };
+}
+
+async function carregarConexoesAdicionais() {
+  const grid = document.getElementById('conn-extra-grid');
+  const alertEl = document.getElementById('conn-extra-alert');
+  if (!grid) return;
+  if (!_empresaAtual.id) {
+    if (tableConexoesAdicionais) tableConexoesAdicionais.replaceData([]);
+    if (alertEl) {
+      alertEl.style.display = 'block';
+      alertEl.textContent = 'Conexoes adicionais sao sempre cadastradas para uma empresa especifica.';
+    }
+    return;
+  }
+  if (alertEl) alertEl.style.display = 'none';
+  const lista = await fetch(`/api/conexoes?empresa_id=${encodeURIComponent(_empresaAtual.id)}`).then(r => r.json()).catch(() => []);
+  const extras = Array.isArray(lista) ? lista.filter(c => c.connection_key !== 'default') : [];
+  if (tableConexoesAdicionais) {
+    tableConexoesAdicionais.replaceData(extras);
+    return;
+  }
+  tableConexoesAdicionais = new Tabulator('#conn-extra-grid', {
+    data: extras,
+    index: 'connection_key',
+    layout: 'fitColumns',
+    height: '360px',
+    movableColumns: true,
+    selectableRows: 1,
+    placeholder: '<div style="padding:32px;text-align:center;color:var(--text-lo)">Nenhuma conexao adicional cadastrada para esta empresa.</div>',
+    columns: [
+      { title:'Rota', field:'connection_key', minWidth:180, headerFilter:'input', formatter:c=>`<span style="font-family:monospace">${_esc(c.getValue())}</span>` },
+      { title:'Nome', field:'nome', minWidth:200, headerFilter:'input' },
+      { title:'Sistema', field:'sistema_origem', width:145, headerFilter:'input', formatter:c=>_esc(c.getValue() || '-') },
+      { title:'Host', field:'db_host', width:150, headerFilter:'input', formatter:c=>`<span style="font-family:monospace">${_esc(c.getValue() || '-')}</span>` },
+      { title:'Banco', field:'db_name', minWidth:150, headerFilter:'input', formatter:c=>`<span style="font-family:monospace">${_esc(c.getValue() || '-')}</span>` },
+      { title:'Acoes', field:'connection_key', width:230, hozAlign:'right', headerSort:false, formatter:()=>`
+        <button class="btn-icon" data-action="edit" title="Editar" style="font-size:12px">Editar</button>
+        <button class="btn-icon" data-action="copy" title="Copiar" style="font-size:12px">Copiar</button>
+        <button class="btn-icon" data-action="test" title="Testar" style="font-size:12px">Testar</button>
+        <button class="btn-icon" data-action="delete" title="Excluir" style="font-size:12px;color:#dc2626">Excluir</button>`,
+        cellClick:(event, cell) => {
+          event.stopPropagation();
+          const action = event.target?.dataset?.action;
+          const row = cell.getRow().getData();
+          if (action === 'edit') editarConexaoAdicional(row);
+          if (action === 'copy') copiarConexaoAdicional(row);
+          if (action === 'test') testarConexaoAdicional(row.connection_key);
+          if (action === 'delete') excluirConexaoAdicional(row.connection_key);
+        }
+      },
+    ],
+    rowClick:(_e,row)=>row.select(),
+  });
+}
+
+function editarConexaoAdicional(c) {
+  abrirEditorConexaoAdicional(c, 'editar');
+}
+
+function copiarConexaoAdicional(c) {
+  const copia = {
+    ...c,
+    connection_key: '',
+    nome: c.nome ? `${c.nome} - copia` : '',
+  };
+  abrirEditorConexaoAdicional(copia, 'copiar');
+}
+
+function copiarConexaoAdicionalSelecionada() {
+  const selecionada = tableConexoesAdicionais?.getSelectedData?.()[0];
+  if (!selecionada) { toast('Selecione uma conexao adicional na grade para copiar.', 'err'); return; }
+  copiarConexaoAdicional(selecionada);
+}
+
+async function salvarConexaoAdicional() {
+  const result = document.getElementById('conn-extra-result');
+  const body = _payloadConexaoAdicional();
+  if (!_empresaAtual.id) { toast('Selecione uma empresa no topo antes de salvar.', 'err'); return; }
+  if (!body.connection_key || body.connection_key === 'default') { toast('Informe uma chave de rota diferente de default.', 'err'); return; }
+  if (!body.db_host || !body.db_name || !body.db_user) { toast('Preencha host, banco e usuario da conexao adicional.', 'err'); return; }
+  const r = await fetch('/api/conexoes', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+  if (r.ok) {
+    if (result) { result.style.display = 'block'; result.className = 'alert alert-ok'; result.textContent = 'Conexao adicional salva.'; }
+    document.getElementById('EXTRA_PASS').value = '';
+    await carregarConexoesAdicionais();
+  } else {
+    const e = await r.json().catch(() => ({}));
+    if (result) { result.style.display = 'block'; result.className = 'alert alert-err'; result.textContent = e.detail || 'Erro ao salvar conexao adicional.'; }
+  }
+}
+
+async function testarConexaoAdicional(connectionKey = '') {
+  const result = document.getElementById('conn-extra-result');
+  const key = connectionKey || _normalizarRotaConexao(document.getElementById('EXTRA_KEY').value);
+  if (!_empresaAtual.id || !key) { toast('Selecione uma empresa e uma chave de rota.', 'err'); return; }
+  if (result) { result.style.display = 'block'; result.className = 'alert alert-warn'; result.textContent = 'Testando conexao adicional...'; }
+  const data = await fetch('/api/conexoes/testar', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ empresa_id: _empresaAtual.id, connection_key: key }),
+  }).then(r => r.json()).catch(e => ({ ok:false, erro:e.message }));
+  if (result) {
+    result.className = data.ok ? 'alert alert-ok' : 'alert alert-err';
+    result.textContent = data.ok ? data.mensagem : (data.erro || 'Falha na conexao adicional.');
+  }
+}
+
+async function excluirConexaoAdicional(connectionKey) {
+  if (!_empresaAtual.id || !connectionKey) return;
+  if (!confirm(`Excluir a conexao adicional "${connectionKey}"?`)) return;
+  const r = await fetch(`/api/conexoes/${encodeURIComponent(_empresaAtual.id)}/${encodeURIComponent(connectionKey)}`, { method:'DELETE' });
+  if (r.ok) {
+    toast('Conexao adicional excluida.');
+    await carregarConexoesAdicionais();
+  } else {
+    const e = await r.json().catch(() => ({}));
+    toast(e.detail || 'Erro ao excluir conexao adicional.', 'err');
+  }
+}
+
 function abrirModalCopiarConexao() {
   const destLabel = document.getElementById('copiar-destino-label');
   if (destLabel) destLabel.textContent = _empresaAtual.id ? _empresaAtual.nome : '(selecione uma empresa no topo primeiro)';
