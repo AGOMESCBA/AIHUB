@@ -486,8 +486,11 @@ function antecipacoesPaRa() {
 ## Antecipacoes PA/RA
 - PA = pagamento antecipado em contas a pagar, normalmente SE2.E2_TIPO = 'PA'.
 - RA = recebimento antecipado em contas a receber, normalmente SE1.E1_TIPO = 'RA'.
-- Por padrao, NAO inclua PA nem RA nas metricas. Exclua PA em contas a pagar e RA em contas a receber quando o campo tipo existir.
+- Por padrao, NAO inclua PA nem RA nas metricas. Exclua PA em contas a pagar e RA em contas a receber quando o campo tipo existir: filtre SE2.E2_TIPO <> 'PA' (pagar) ou SE1.E1_TIPO <> 'RA' (receber).
 - So considere/apresente PA ou RA quando o usuario pedir explicitamente: PA, RA, pagamento antecipado, recebimento antecipado, adiantamento, antecipacao.
+- REGRA ABSOLUTA — quando pedido explicitamente, o filtro DEVE ISOLAR o antecipado, nunca exclui-lo: use SE2.E2_TIPO = 'PA' (pagar) ou SE1.E1_TIPO = 'RA' (receber). PROIBIDO manter o operador <> (diferente) do comportamento padrao quando a pergunta pede antecipados/PA/RA explicitamente — isso inverte o resultado e responde exatamente o oposto do que foi pedido.
+- EXEMPLO CORRETO — "total de pagamentos antecipados com saldo": SELECT SUM(SE2.E2_SALDO) AS total_pagamentos_antecipados FROM SE2<sufixo> SE2 WHERE SE2.E2_TIPO = 'PA' AND SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '<inicio>' AND '<fim>'.
+- EXEMPLO ERRADO — nunca faca isso: a mesma pergunta com SE2.E2_TIPO <> 'PA' — isso soma exatamente os titulos que NAO sao antecipados, o oposto do pedido.
 - Mesmo quando pedido explicitamente, apresente PA/RA somente quando a pergunta estiver por fornecedor ou por cliente, ou quando houver fornecedor/cliente filtrado. Sem fornecedor/cliente, marque precisa_confirmacao=true perguntando qual fornecedor/cliente ou se deseja agrupar por entidade.
 - Se considerar PA/RA por entidade, retorne colunas separadas: saldo_a_pagar/saldo_a_receber, pagamento_antecipado/recebimento_antecipado, total_liquido.
 - Nao use PA para contas a receber. Nao use RA para contas a pagar.

@@ -455,6 +455,31 @@ const sqlPatternsProibidos = [
     },
   },
   {
+    // Bug real confirmado em producao (2026-08-09): pergunta pede "pagamentos antecipados"
+    // (PA) ou "recebimentos antecipados" (RA) explicitamente, mas a IA mantem o operador
+    // padrao de exclusao (E2_TIPO <> 'PA' / E1_TIPO <> 'RA') em vez de inverter para '='
+    // e ISOLAR os antecipados — resposta fica o oposto exato do que foi pedido.
+    validar(sql, mensagem) {
+      const texto = String(mensagem || '');
+      const pedeAntecipadoPagar = /\b(pagamentos?\s+antecipados?|adiantament\w*\s+(a\s+)?fornece\w*)\b/i.test(texto) || (/\bPA\b/.test(texto) && /\bpagar\b|\bpagament\w*/i.test(texto));
+      const pedeAntecipadoReceber = /\b(recebimentos?\s+antecipados?|adiantament\w*\s+(de\s+)?client\w*)\b/i.test(texto) || (/\bRA\b/.test(texto) && /\breceber\b|\brecebiment\w*/i.test(texto));
+
+      if (pedeAntecipadoPagar && /\bFROM\s+SE2/i.test(sql) && /E2_TIPO\s*<>\s*'PA'/i.test(sql)) {
+        return (
+          'A pergunta pede pagamentos antecipados (PA), mas o SQL usa SE2.E2_TIPO <> \'PA\', que EXCLUI os antecipados — o oposto do pedido. ' +
+          'Troque para SE2.E2_TIPO = \'PA\' para ISOLAR apenas os titulos antecipados. Corrija e regere o SQL.'
+        );
+      }
+      if (pedeAntecipadoReceber && /\bFROM\s+SE1/i.test(sql) && /E1_TIPO\s*<>\s*'RA'/i.test(sql)) {
+        return (
+          'A pergunta pede recebimentos antecipados (RA), mas o SQL usa SE1.E1_TIPO <> \'RA\', que EXCLUI os antecipados — o oposto do pedido. ' +
+          'Troque para SE1.E1_TIPO = \'RA\' para ISOLAR apenas os titulos antecipados. Corrija e regere o SQL.'
+        );
+      }
+      return null;
+    },
+  },
+  {
     // Bug confirmado em producao: a IA por vezes esquece o filtro de exclusao de banco
     // mesmo com a regra textual no spec (mais provavel em continuidade de conversa). Extrai
     // os codigos de banco que o usuario pediu para excluir/desconsiderar e exige que apareçam
