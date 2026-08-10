@@ -23,7 +23,7 @@ assert(sysPrompt.includes('SD1.D1_DTDIGIT'), 'compras deve documentar data padra
 assert(sysPrompt.includes('SC7.C7_EMISSAO'), 'compras deve documentar data padrao de pedidos');
 assert(sysPrompt.includes('Continuidade e Periodo em Compras'), 'compras deve conter regra modular de continuidade/periodo');
 assert(sysPrompt.includes('periodo_base e periodo_comparacao'), 'compras deve exigir dois periodos em comparativo de continuidade');
-assert.deepStrictEqual(spec.camposPeriodoObrigatorios, ['D1_DTDIGIT', 'F1_DTDIGIT', 'F1_EMISSAO', 'C7_EMISSAO'], 'compras deve declarar campos temporais para o guard');
+assert.deepStrictEqual(spec.camposPeriodoObrigatorios, ['D1_DTDIGIT', 'F1_DTDIGIT', 'F1_EMISSAO', 'C7_EMISSAO', 'CR_EMISSAO', 'CR_DATALIB'], 'compras deve declarar campos temporais para o guard (inclui CR_EMISSAO/CR_DATALIB usados pelo fragmento de aprovacao via SCR)');
 assert(typeof spec.resolverEntidades === 'function', 'compras IA-OWNER deve expor resolver tecnico de entidades');
 
 const sqlPeriodoErradoCompras = `
@@ -168,5 +168,17 @@ WHERE SF1.F1_TIPO = 'N' AND SUBSTRING(SD1.D1_DTDIGIT, 1, 6) = '202506' AND SD1.D
 const validacaoAgregadoSemGroup = runner._test.validarAgregadoSemGroupBy(sqlComparativoComprasSemGroupBy);
 assert.strictEqual(validacaoAgregadoSemGroup.ok, false, 'compras deve rejeitar SUM + SUBSTRING sem GROUP BY em comparativo UNION ALL');
 assert(validacaoAgregadoSemGroup.erros.join(' ').includes('GROUP BY'), 'erro deve orientar GROUP BY ou literal de periodo');
+
+const fragmentosSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-fragmentos-spec'));
+const { classificarFragmentos } = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-spec-classifier'));
+
+assert(spec.camposSx3Essenciais.SC7.includes('C7_CONAPRO'), 'compras deve expor C7_CONAPRO (bloqueio por alcada) nos campos essenciais de SC7');
+
+const chavesBloqueado = classificarFragmentos('Me diga quantos pedido de compras estão em aberto e bloqueados');
+assert(chavesBloqueado && chavesBloqueado.includes('status_pedido_compra'), 'pergunta sobre pedidos bloqueados deve acionar o fragmento status_pedido_compra');
+
+const textoStatusPedidoCompra = fragmentosSpec.FRAGMENTOS.status_pedido_compra.texto();
+assert(/C7_CONAPRO\s*=\s*'B'/.test(textoStatusPedidoCompra), 'fragmento de status deve ensinar C7_CONAPRO = \'B\' como bloqueio por alcada');
+assert(/nunca\s+como\s+sinonimo\s+de\s+"bloqueado"|bloqueio\s+e\s+sempre\s+C7_CONAPRO/i.test(textoStatusPedidoCompra), 'fragmento de status deve deixar explicito que C7_APROV nao e sinonimo de bloqueado');
 
 console.log('compras-sql-contrato.test.js: ok (ia-owner)');

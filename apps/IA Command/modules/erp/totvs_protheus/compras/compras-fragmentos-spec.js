@@ -208,15 +208,20 @@ function crescimento({ granularidade = 'mensal' } = {}) {
 
 function statusPedidoCompra() {
   return `
-## Status de pedido de compra (SC7) — aberto, atendido, aprovado, nao aprovado
+## Status de pedido de compra (SC7) — aberto, atendido, aprovado, nao aprovado, bloqueado
 - Sinonimos para pedido de compra: pedido de compra, pedidos de compra, PC, PCs (singular ou plural, maiusculo ou minusculo) — todos referem-se a linhas de SC7.
-- Campos de status no cabecalho/item do pedido: SC7.C7_APROV (situacao de aprovacao/liberacao), SC7.C7_QUANT (quantidade pedida), SC7.C7_QUJE (quantidade ja atendida/recebida), SC7.C7_RESIDUO (quantidade residual/cancelada).
+- Campos de status no cabecalho/item do pedido: SC7.C7_APROV (situacao de ATENDIMENTO/liberacao para recebimento), SC7.C7_CONAPRO (situacao de ALCADA/aprovacao), SC7.C7_QUANT (quantidade pedida), SC7.C7_QUJE (quantidade ja atendida/recebida), SC7.C7_RESIDUO (quantidade residual/cancelada).
+- REGRA CRITICA — C7_APROV e C7_CONAPRO sao EIXOS INDEPENDENTES, nunca confunda um pelo outro:
+  - SC7.C7_CONAPRO responde "o pedido esta liberado pela ALCADA de aprovacao?" — valores: 'A' = aprovado (passou pela alcada), 'B' = BLOQUEADO (aguardando liberacao do aprovador, por limite de valor/orcamento/regra de negocio), 'R' = rejeitado (um aprovador recusou; pedido precisa ser revisado ou cancelado).
+  - SC7.C7_APROV responde "o pedido esta ativo para ATENDIMENTO/recebimento?" — valores: 'L' = liberado/em aberto (aguardando chegada da NF), 'E' = encerrado (totalmente atendido, C7_QUANT = C7_QUJE), 'R' = residuo eliminado (encerrado manualmente via MATA235 mesmo sem receber tudo).
 - Saldo pendente de receber (quantidade que ainda falta chegar): (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO).
-- Pedido de compra APROVADO / liberado: SC7.C7_APROV = 'L'.
-- Pedido de compra NAO APROVADO / pendente de aprovacao: SC7.C7_APROV <> 'L'.
-- Pedido de compra EM ABERTO (aprovado e com saldo pendente de nota fiscal de entrada): SC7.C7_APROV = 'L' AND (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0.
+- Pedido de compra APROVADO na alcada: SC7.C7_CONAPRO = 'A'. Pedido de compra BLOQUEADO na alcada (aguardando aprovador): SC7.C7_CONAPRO = 'B'. Pedido de compra REJEITADO na alcada: SC7.C7_CONAPRO = 'R'.
+- Pedido de compra LIBERADO/em aberto para atendimento: SC7.C7_APROV = 'L'. Pedido de compra NAO LIBERADO para atendimento: SC7.C7_APROV <> 'L'. Use C7_APROV apenas quando a pergunta for sobre atendimento/recebimento, nunca como sinonimo de "bloqueado" — bloqueio e sempre C7_CONAPRO = 'B'.
+- Pedido de compra EM ABERTO (liberado para atendimento e com saldo pendente de nota fiscal de entrada): SC7.C7_APROV = 'L' AND (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0.
 - Pedido de compra ATENDIDO (totalmente recebido, sem saldo pendente): (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) <= 0.
-- REGRA OBRIGATORIA — nunca infira status de pedido de compra a partir de EXISTS/NOT EXISTS em SD1 (notas de entrada). O status correto vem SEMPRE dos campos SC7.C7_APROV, C7_QUANT, C7_QUJE, C7_RESIDUO, calculados diretamente no SC7, sem necessidade de JOIN com SD1/SF1.
+- Pedido de compra EM ABERTO E BLOQUEADO (combinacao pedida com frequencia): (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0 AND SC7.C7_CONAPRO = 'B'. NAO adicione SC7.C7_APROV = 'L' nesse caso — um pedido bloqueado na alcada normalmente ainda esta com C7_APROV = 'L' (em aberto), mas o campo que efetivamente identifica o bloqueio e SEMPRE C7_CONAPRO, nunca C7_APROV.
+- Relacao com aprovacao por nivel/alcada (tabela SCR): quando a empresa tiver SCR disponivel (ver fragmento de aprovacao), SCR.CR_STATUS = '04' identifica QUAL nivel/aprovador esta bloqueando o pedido — SC7.C7_CONAPRO = 'B' e o resultado consolidado no pedido (nao exige JOIN com SCR). Para "quantos pedidos estao bloqueados", responda direto com C7_CONAPRO = 'B', sem JOIN. Para "quem precisa liberar" ou "por aprovador", use SCR (ver fragmento de aprovacao).
+- REGRA OBRIGATORIA — nunca infira status de pedido de compra a partir de EXISTS/NOT EXISTS em SD1 (notas de entrada). O status correto vem SEMPRE dos campos SC7.C7_APROV, C7_CONAPRO, C7_QUANT, C7_QUJE, C7_RESIDUO, calculados diretamente no SC7, sem necessidade de JOIN com SD1/SF1.
 - Periodo de pedidos de compra (dia/mes/ano, comparativos entre periodos): use sempre SC7.C7_EMISSAO (data de emissao do pedido), no mesmo formato CHAR(8) YYYYMMDD dos demais campos de data do modulo.
 - "Pedidos de compra" sem qualificacao adicional refere-se a linhas de SC7 (FROM SC7), nao a notas fiscais de entrada (SD1/SF1) nem a produtos comprados via SD1.
 
@@ -231,6 +236,13 @@ WHERE SC7.D_E_L_E_T_ = ' '
   AND SC7.C7_APROV = 'L'
   AND (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0
   AND SC7.C7_EMISSAO BETWEEN '20260701' AND '20260731';
+
+### EXEMPLO CORRETO — quantos pedidos de compra estao em aberto e bloqueados
+SELECT COUNT(*) AS total_pedidos
+FROM SC7xxx SC7
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_CONAPRO = 'B'
+  AND (SC7.C7_QUANT - SC7.C7_QUJE - SC7.C7_RESIDUO) > 0;
 `;
 }
 
@@ -257,7 +269,8 @@ ${joinAprovador}
 - "Aprovado" ou "liberado" (via SCR): SCR.CR_STATUS = '03'. "Rejeitado": SCR.CR_STATUS IN ('06', '07'). "Bloqueado": SCR.CR_STATUS = '04'.
 - SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
 - Quando o usuario pedir "por aprovador", agrupe pelo aprovador (SCR.CR_APROV ou SAK.AK_NOME conforme disponibilidade) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
-- Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado (resultado final). SCR detalha o FLUXO de aprovacao (quem, em que nivel, em que status) que levou (ou nao) a essa liberacao. Para perguntas "por aprovador" ou sobre o fluxo/alcada, use SCR — nao tente derivar aprovador a partir de SC7.
+- Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado para ATENDIMENTO (resultado final de recebimento). SCR detalha o FLUXO de aprovacao por ALCADA (quem, em que nivel, em que status) que levou (ou nao) a essa liberacao. Para perguntas "por aprovador" ou sobre o fluxo/alcada, use SCR — nao tente derivar aprovador a partir de SC7.
+- Diferenca entre SC7.C7_CONAPRO e SCR.CR_STATUS: SC7.C7_CONAPRO = 'B' e o resultado CONSOLIDADO de bloqueio no pedido (nao exige JOIN, use para "quantos pedidos estao bloqueados"). SCR.CR_STATUS = '04' identifica o bloqueio no nivel de UM aprovador especifico dentro do fluxo (use para "quem esta bloqueando" ou "por aprovador"). Nao junte SCR so para responder "esta bloqueado" — isso o campo SC7.C7_CONAPRO ja responde sozinho.
 - REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido (SUM(SC7.C7_TOTAL)) na projecao, mesmo que o usuario nao peca valor explicitamente. SCR e cabecalho, mas SC7 e tabela de ITEM (varias linhas por pedido) — para nao duplicar o numero do pedido em N linhas, agrupe por SCR.CR_NUM (e demais colunas de identificacao) com SUM(SC7.C7_TOTAL) AS valor_pedido. Uma listagem de pedidos SEM nenhuma coluna de valor monetario e uma listagem incompleta — sempre agregue e exiba o valor.
 
 ### Linguagem de posse do proprio aprovador (remetente do WhatsApp)
@@ -371,7 +384,7 @@ const FRAGMENTOS = {
   },
   status_pedido_compra: {
     texto: statusPedidoCompra,
-    keywords: [/\bpedidos?\s+de\s+compras?\b/i, /\bpedidos?\s+em\s+aberto\b/i, /\bpedidos?\s+atendidos?\b/i, /\bpedidos?\s+aprovados?\b/i, /\bpedidos?\s+n[aã]o\s+aprovados?\b/i, /\bpedidos?\s+pendentes?\s+de\s+aprova[cç][aã]o\b/i, /\bC7_APROV\b/i, /\bPCs?\b/i],
+    keywords: [/\bpedidos?\s+de\s+compras?\b/i, /\bpedidos?\s+em\s+aberto\b/i, /\bpedidos?\s+atendidos?\b/i, /\bpedidos?\s+aprovados?\b/i, /\bpedidos?\s+n[aã]o\s+aprovados?\b/i, /\bpedidos?\s+pendentes?\s+de\s+aprova[cç][aã]o\b/i, /\bpedidos?\s+bloqueados?\b/i, /\bbloquead\w*/i, /\bC7_APROV\b/i, /\bC7_CONAPRO\b/i, /\bPCs?\b/i],
   },
   aprovacao_pedido_compra: {
     texto: aprovacaoPedidoCompra,

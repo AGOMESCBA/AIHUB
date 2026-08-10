@@ -28,6 +28,13 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
     }
   });
 
+  // IMPORTANTE: canal Protheus WhatsApp e chamado pela rotina ADVPL (servidor-a-
+  // servidor) e pelo TWebEngine embutido no Protheus (sem sessao de usuario do
+  // IAHub). Deve ser registrado ANTES do app.use que aplica requireAuth a todo
+  // /api/ia-command/*. Autenticacao propria via IAC_PROTHEUS_CHAT_SECRET (emissao
+  // de token) e token de sessao (demais rotas) — ver modules/protheus_whatsapp/routes.js.
+  require('./protheus_whatsapp/routes')(app);
+
   app.use('/api/ia-command', requireAuth, requireIaCommand, requireEmpresaContext);
 
   // Rotas do WhatsApp
