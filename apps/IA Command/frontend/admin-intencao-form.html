@@ -279,6 +279,23 @@
     } catch (_) {}
   }
 
+  // Se o módulo salvo no registro não está entre os cadastrados em Admin > Módulos, o
+  // <select> descartaria o valor silenciosamente ao carregar — e o próximo salvamento
+  // gravaria modulo=null, apagando o dado (causa raiz de um incidente de roteamento).
+  // Em vez disso, injeta uma opção "órfã" para preservar o valor até alguém cadastrar
+  // o módulo de verdade em Admin > Módulos.
+  function _setModuloPreservandoValor(valor) {
+    const sel = document.getElementById('f-modulo');
+    sel.value = valor || '';
+    if (valor && sel.value !== valor) {
+      const opt = document.createElement('option');
+      opt.value = valor;
+      opt.textContent = `${valor} (não cadastrado em Admin > Módulos)`;
+      sel.appendChild(opt);
+      sel.value = valor;
+    }
+  }
+
   async function _carregarDatasets() {
     const rows = await fetch('/api/ia-command/admin/datasets').then(r => r.json()).catch(() => []);
     const sel  = document.getElementById('f-dataset');
@@ -309,7 +326,7 @@
     document.getElementById('f-empresa-nome').value = '—';
     document.getElementById('f-nome').value         = row.nome        || '';
     document.getElementById('f-descricao').value    = row.descricao   || '';
-    document.getElementById('f-modulo').value       = row.modulo      || '';
+    _setModuloPreservandoValor(row.modulo);
     document.getElementById('f-ativo').value        = String(row.ativo ?? 1);
     document.getElementById('f-dataset').value      = row.dataset_id  || '';
     document.getElementById('f-frases').value       = row.frases_exemplo || '';

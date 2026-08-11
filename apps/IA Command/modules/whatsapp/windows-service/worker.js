@@ -164,6 +164,10 @@ const server = http.createServer((req, res) => {
           res.writeHead(200);
           res.end(JSON.stringify({ ok: true }));
           await _encerrar();
+        } else if (cmd === 'clear-buffer') {
+          svc.clearBuffer?.();
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true }));
         } else if (cmd === 'get-qr') {
           if (_ultimoQr) {
             // Já tem QR gerado — envia direto

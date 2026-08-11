@@ -16,6 +16,7 @@ const intentMerger = require('../ai/intent-merger');
 const intentRouter = require('../erp/core/intent-router');
 const responseFormatter = require('../erp/core/response-formatter');
 const sessionStore = require('./session-store');
+const interpretationLog = require('../ai/interpretation-log');
 const { getDB } = require('../database');
 
 // Nome de campo cru do Protheus: prefixo de tabela (letra + ate 2 letras/digitos,
@@ -75,6 +76,7 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
 }
 
 async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
+  const t0 = Date.now();
   const contextoAnterior = sessionStore.ultimoIntent({ sessaoId });
 
   let intent = await intentService.classificar(texto, empresaId, {
@@ -104,6 +106,25 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
     tipoResultado: resultado?.tipo || null,
     intent,
   });
+
+  // Mesmo registro usado pelo canal WhatsApp (interpretation-log.js) — alimenta
+  // as telas de historico/auditoria de interpretacoes (admin-interpretacoes*.html).
+  // Sem isso, conversas deste canal ficavam persistidas so em session-store.js
+  // (sessao local do chat), invisiveis ao historico administrativo.
+  try {
+    interpretationLog.registrar({
+      empresa_id: empresaId,
+      usuario: celular,
+      numero_wa: celular,
+      texto_original: texto,
+      intent,
+      resultado,
+      resposta_entregue: respostaTexto,
+      duracao_ms: Date.now() - t0,
+    });
+  } catch (_) {
+    // Falha ao logar nao pode derrubar a resposta ja calculada ao usuario.
+  }
 
   return {
     mensagemId,

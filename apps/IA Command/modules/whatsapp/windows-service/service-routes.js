@@ -328,6 +328,21 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
     }
   });
 
+  // ── POST /api/ia-command/whatsapp/services/:channelId/clear-buffer ────────
+  // Limpa o buffer de log mantido em memória no worker (usado pelo botão "Limpar").
+
+  app.post('/api/ia-command/whatsapp/services/:channelId/clear-buffer', requireAuth, requireIaCommand, canMonitor, async (req, res) => {
+    try {
+      const canal = channels.buscarCanal(req.params.channelId);
+      if (!canal || !canal.worker_port) return res.json({ ok: true });
+
+      const resultado = await _workerCommand(canal.worker_port, 'clear-buffer');
+      res.json({ ok: true, ...resultado });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 };
 
 function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

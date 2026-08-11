@@ -3,24 +3,28 @@
 #INCLUDE "TOTVS.CH"
 
 /* ============================================================================
-   IACCHAT.PRW — Chat IA Command embutido no Protheus (TWebEngine)
+   IACCHAT.PRW — Chat IA Command aberto em nova aba do navegador a partir do
+   Protheus (ShellExecute)
 
    ============================================================================
-   !!! REQUISITO MINIMO DE VERSAO — CONFIRMAR ANTES DE COMPILAR !!!
+   !!! ARQUITETURA ATUAL: SEM TWebEngine !!!
 
-   Este fonte usa TWebEngine/TWebChannel, que so existem a partir do SmartClient
-   build 170117, e depende de Chromium 111+ (embarcado a partir do SmartClient
-   20.3.2.0) para o frontend (protheus-chat.html) renderizar corretamente. Sem
-   isso, a rotina PODE NAO COMPILAR (classe inexistente) ou compilar e falhar
-   em runtime (tela em branco / erro de navegacao no TWebEngine).
+   [ALTERADO apos erro em producao 11/08/2026] Esta instalacao usa exclusiva-
+   mente SmartClient HTML/WebApp — SmartClient Desktop nao esta mais em uso,
+   confirmado pelo usuario ("Atualmente o smartclient nao funciona mais na
+   versao WINDOWS, so web"). TWebEngine/TWebChannel (Chromium embarcado) e um
+   componente do SmartClient Desktop; ao testar em producao via WebApp, a
+   navegacao resultava em tela de "pagina nao carregada" sem erro ADVPL (falha
+   silenciosa) — indicio de que o componente nao e aplicavel quando o proprio
+   SmartClient ja roda dentro de um navegador.
 
-   Nao ha mapeamento confirmado entre build do SmartClient e release do Protheus
-   (12.1.xxxx) — sao numeracoes de versionamento diferentes. ANTES de compilar:
-     - Verificar o build do SmartClient em uso na instalacao-alvo (tela "Sobre"
-       do SmartClient) e confirmar que e igual ou posterior a 20.3.2.0.
-     - Se for anterior, esta rotina NAO deve ser usada sem antes atualizar o
-       SmartClient da instalacao — nao ha fallback funcional para versoes mais
-       antigas (TWebEngine e o unico mecanismo usado aqui para embutir HTML).
+   Por isso IACChat() foi reescrita para NAO embutir a tela do chat dentro do
+   Protheus: em vez disso, abre a URL do chat em nova aba do navegador via
+   ShellExecute("open", cUrl, ...). NAO CONFIRMADO contra o Include real desta
+   versao se ShellExecute funciona a partir do processo WebApp (historicamente
+   e um comando pensado para o processo do SmartClient Desktop dar "Open" no
+   SO local do usuario) — decisao do usuario testar mesmo assim, com fallback
+   (MsgInfo exibindo o link para copiar) caso o retorno indique falha.
    ============================================================================
 
    ATENCAO: fonte de REFERENCIA, escrito fora de um ambiente Protheus e NUNCA
@@ -28,9 +32,14 @@
    para homologacao, um desenvolvedor ADVPL do time precisa validar contra o
    TDN/Include real da versao em uso os pontos abaixo (nao confirmados aqui):
 
-     a) Assinatura de TWebChannel():New() / TWebEngine():New(...) — usados
-        conforme exemplo publico da TOTVS (github.com/totvs/twebengine-sample),
-        sem validacao contra o Include instalado nesta versao.
+     a) [OBSOLETO apos remocao do TWebEngine em 11/08/2026 — ver acima] Assi-
+        natura de TWebChannel():New() / TWebEngine():New(...) nao se aplica
+        mais a este fonte.
+     a.1) ShellExecute("open", cUrl, "", "", 1) — retorno esperado nRet > 32
+        para sucesso, conforme documentacao/exemplos ADVPL consultados; NAO
+        confirmado contra o Include real desta instalacao. Se o retorno real
+        divergir, o fallback (MsgInfo com link) dispara incorretamente mesmo
+        com a aba tendo aberto — ajustar o limiar de comparacao se confirmado.
      b) [CORRIGIDO apos erro em producao 10/08/2026] FWRest():GetLastError()
         apos Post() malsucedido NAO retorna numero nesta versao (erro
         "argument #0 error, expected N->C, function str" ao tentar Str()
@@ -51,9 +60,14 @@
         confirmados contra o TDN (ex.: se GetJsonObject("error") retorna nil,
         string vazia ou erro de execucao quando a chave nao existe na resposta
         — o codigo abaixo assume que retorna vazio/nil de forma segura).
-     d) FwNoAcento() — nome usado por convencao de outras funcoes Fw* do
-        framework, mas existencia com esse nome exato NAO confirmada (pode ser
-        RemoveAcento() ou outro nome, dependendo da versao/lib instalada).
+     d) [CORRIGIDO apos erro em producao 11/08/2026] FwNoAcento() NAO existe
+        nesta instalacao (erro em runtime: "Help: NOFUNCW ... Funcao:
+        FWNOACENTOCalled By U_IACCHAT" — funcao nao encontrada, apesar do
+        fonte compilar normalmente, pois ADVPL resolve chamada de funcao em
+        runtime). Trocado por IACRemoverAcentos(), implementada localmente
+        neste arquivo via StrTran() (mesma tecnica ja usada em
+        IACEscapeJson() abaixo), sem depender de nenhuma funcao Fw* do
+        framework cuja existencia nao esteja confirmada.
 
    Todo valor de configuracao especifico de ambiente (URL do IAHub, timeout,
    empresa_id, segredo) e lido via parametro SX6 (GetMV) — ver bloco
@@ -130,13 +144,10 @@
 
 /* ----------------------------------------------------------------------------
    IACChat
-   Abre a tela de chat da IA Command embutida no Protheus via TWebEngine.
+   Abre a tela de chat da IA Command em nova aba do navegador (ShellExecute).
    Registrar no menu do modulo Comercial (SIGAFAT) — piloto definido.
 ---------------------------------------------------------------------------- */
 User Function IACChat()
-    Local oDialog
-    Local oWebEngine
-    Local oWebChannel
     Local cCelular    := ""
     Local cToken      := ""
     Local cNomeUser   := Alltrim(UsrFullName(RetCodUsr()))
@@ -176,16 +187,32 @@ User Function IACChat()
     // especiais de cadastro). Token ja e hexadecimal puro (token-service.js),
     // sem necessidade de encode. Confirmar disponibilidade de FWURLEncode no
     // Include desta versao — se indisponivel, alternativa e Escape().
-    cUrlChat := cUrlChatBase + "?token=" + cToken + "&usuario=" + FWURLEncode(FwNoAcento(cNomeUser))
+    cUrlChat := cUrlChatBase + "?token=" + cToken + "&usuario=" + FWURLEncode(IACRemoverAcentos(cNomeUser))
 
-    DEFINE MSDIALOG oDialog TITLE "IA Command" FROM 0, 0 TO 700, 1000 PIXEL
-
-    oWebChannel := TWebChannel():New()
-    oWebEngine  := TWebEngine():New(oDialog, 0, 0, 700, 1000, , oWebChannel:nPort)
-    oWebEngine:Align := CONTROL_ALIGN_ALLCLIENT
-    oWebEngine:Navigate(cUrlChat)
-
-    ACTIVATE MSDIALOG oDialog CENTERED
+    // [CORRIGIDO apos teste em producao 11/08/2026] TWebEngine/TWebChannel
+    // (Chromium embarcado no SmartClient Desktop) removido — esta instalacao
+    // usa exclusivamente SmartClient HTML/WebApp (SmartClient Desktop nao
+    // esta mais em uso, confirmado pelo usuario). TWebEngine:Navigate()
+    // resultava em tela de "pagina nao carregada" no WebApp, sem erro ADVPL
+    // (falha silenciosa) — indicio de que o componente nao e aplicavel
+    // quando o proprio SmartClient ja roda dentro de um navegador.
+    //
+    // Troca: abrir a URL do chat em nova aba do navegador via ShellExecute().
+    // NAO CONFIRMADO contra o Include real desta versao se ShellExecute()
+    // funciona a partir do processo WebApp (historicamente e um comando
+    // pensado para o processo do SmartClient Desktop dar "Open" no SO local
+    // do usuario) — decisao do usuario testar mesmo assim. Se nao abrir a
+    // aba, cai no fallback abaixo (MsgInfo com o link para copiar).
+    //
+    // Retorno de ShellExecute (fonte: documentacao/exemplos ADVPL): nRet > 32
+    // indica sucesso; nRet == -1 quando chamado fora de contexto SmartClient
+    // (ex.: Job); nRet == 2 quando o "arquivo"/protocolo nao e encontrado.
+    // Portanto sucesso e nRet > 32, nao apenas nRet != 0.
+    If ShellExecute("open", cUrlChat, "", "", 1) <= 32
+        MsgInfo("Nao foi possivel abrir o IA Command automaticamente." + CRLF + ;
+                 "Copie o link abaixo e abra em uma nova aba do navegador:" + CRLF + CRLF + ;
+                 cUrlChat, "IA Command")
+    EndIf
 
 Return
 
@@ -334,6 +361,32 @@ Return .T.
 Static Function IACEscapeJson(cTexto)
     Local cSaida := StrTran(cTexto, '\', '\\')
     cSaida := StrTran(cSaida, '"', '\"')
+Return cSaida
+
+/* ----------------------------------------------------------------------------
+   IACRemoverAcentos
+   Substitui acentos/cedilha (maiusculo e minusculo) por seu equivalente sem
+   acento, via StrTran() — sem depender de FwNoAcento() (nao existe nesta
+   instalacao, ver ressalva no cabecalho do arquivo). Cobre apenas os
+   caracteres acentuados do portugues; suficiente para nome de usuario usado
+   em querystring (o valor real ainda passa por FWURLEncode() depois).
+---------------------------------------------------------------------------- */
+Static Function IACRemoverAcentos(cTexto)
+    Local aDe   := {"á","à","â","ã","ä","é","è","ê","ë","í","ì","î","ï",;
+                     "ó","ò","ô","õ","ö","ú","ù","û","ü","ç","ñ",;
+                     "Á","À","Â","Ã","Ä","É","È","Ê","Ë","Í","Ì","Î","Ï",;
+                     "Ó","Ò","Ô","Õ","Ö","Ú","Ù","Û","Ü","Ç","Ñ"}
+    Local aPara := {"a","a","a","a","a","e","e","e","e","i","i","i","i",;
+                     "o","o","o","o","o","u","u","u","u","c","n",;
+                     "A","A","A","A","A","E","E","E","E","I","I","I","I",;
+                     "O","O","O","O","O","U","U","U","U","C","N"}
+    Local cSaida := cTexto
+    Local nI
+
+    For nI := 1 To Len(aDe)
+        cSaida := StrTran(cSaida, aDe[nI], aPara[nI])
+    Next nI
+
 Return cSaida
 
 /* ============================================================================

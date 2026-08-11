@@ -1036,10 +1036,13 @@ function adicionarLog(canalId, tipo, icon, msg) {
   if (canalSelecionadoId === canalId) renderLog(canalId);
 }
 
-function limparLog() {
+async function limparLog() {
   if (!canalSelecionadoId) return;
   logsPorCanal[canalSelecionadoId] = [];
   renderLog(canalSelecionadoId);
+  try {
+    await fetch(`/api/ia-command/whatsapp/services/${canalSelecionadoId}/clear-buffer`, { method: 'POST' });
+  } catch (_) {}
 }
 
 function salvarLog() {

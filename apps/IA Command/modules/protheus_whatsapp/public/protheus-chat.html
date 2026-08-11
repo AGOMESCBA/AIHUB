@@ -291,6 +291,13 @@
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
 
+  /* Bolha com grid de dados precisa de mais largura que uma bolha de texto —
+     66% fica apertado demais para colunas tabulares (documento/fornecedor/
+     produto/quantidade), então essa variante usa quase toda a largura do
+     painel de chat quando a resposta tem rows. */
+  .bubble.bubble-grid { max-width: 92%; white-space: normal; }
+  .bubble-grid-titulo { font-weight: 600; margin-bottom: 6px; }
+
   /* Falha real de comunicacao (rede/servidor fora do ar) — visualmente distinta
      de uma resposta normal do backend, mesmo quando essa resposta e negativa
      (ex.: "nao encontrei dados", que NAO usa este estilo). */
@@ -301,12 +308,20 @@
   .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; float: right; margin: 3px -2px -3px 8px; transform: translateY(4px); }
   .bubble .time { font-size: 10.5px; color: var(--wa-text-tertiary); white-space: nowrap; }
 
-  .result-table { margin-top: 6px; border-radius: 6px; overflow: hidden; border: 1px solid var(--wa-border); font-size: 12.8px; }
+  .result-table { margin-top: 2px; border-radius: 6px; border: 1px solid var(--wa-border); font-size: 12.8px; }
+  /* max-height + overflow: so a area da tabela rola (nao a bolha inteira) —
+     necessario porque respostas de compras/financeiro podem trazer dezenas de
+     linhas e a bolha nao pode crescer alem da altura util do chat-body. */
+  .result-table-scroll { max-height: 340px; overflow: auto; border-radius: 6px; }
   .result-table table { width: 100%; border-collapse: collapse; }
-  .result-table th, .result-table td { text-align: left; padding: 6px 8px; font-variant-numeric: tabular-nums; }
-  .result-table th { background: var(--wa-accent-soft-bg); color: var(--wa-text); font-weight: 600; font-size: 11.5px; }
+  .result-table th, .result-table td { text-align: left; padding: 6px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .result-table th { background: var(--wa-accent-soft-bg); color: var(--wa-text); font-weight: 600; font-size: 11.5px; position: sticky; top: 0; }
   .result-table td.num { text-align: right; }
   .result-table tr + tr td { border-top: 1px solid var(--wa-border); }
+
+  .result-table-rodape { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px 2px; font-size: 12px; color: var(--wa-text-secondary); }
+  .result-table-link { background: none; border: none; padding: 0; color: var(--wa-accent); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; font-family: inherit; }
+  .result-table-link:hover { opacity: 0.85; }
 
   .typing-row .bubble { display: flex; align-items: center; gap: 4px; padding: 11px 14px; }
   .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-text-tertiary); animation: bounce 1.2s infinite ease-in-out; }
@@ -681,10 +696,38 @@
     return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   }
 
-  // Decisao explicita do usuario: o chat mostra o texto COMPLETO vindo do
-  // backend, sem cortar nada — igual ao canal WhatsApp real. A aba Dados
-  // (grid, agrupamento, export) existe em paralelo para manipular os dados,
-  // mas nao substitui a mensagem de texto tradicional no chat.
+  // Decisao do usuario: quando a resposta tem dados tabulares (rows), a bolha
+  // mostra uma grid (mesma deteccao de coluna numerica/data da aba Dados) em
+  // vez do texto corrido — mais legivel para listas longas (ex.: dezenas de
+  // pedidos de compra). Um cabecalho curto + botao "Ver na aba Dados" substitui
+  // o texto completo; a aba Dados continua disponivel para agrupar/exportar.
+  // Sem rows (resposta simples, erro, sem_dados etc.) o texto segue como antes.
+  const MAX_COLUNAS_MINI_TABELA = 5;
+
+  // Extrai a primeira linha do texto (titulo/cabecalho da resposta, ex.:
+  // "📊 Compras --> Pedidos em aberto...") para usar como titulo curto da
+  // bolha-grid, sem repetir o corpo do texto que a tabela ja substitui.
+  function extrairTituloResposta(texto) {
+    const primeiraLinha = String(texto || '').split('\n')[0].trim();
+    return primeiraLinha || 'Resultado da consulta';
+  }
+
+  function montarMiniTabela(rows) {
+    const colunas = inferirColunas(rows).slice(0, MAX_COLUNAS_MINI_TABELA);
+    const thead = colunas.map((c) => `<th>${escapeHtml(c.title)}</th>`).join('');
+    const tbody = rows.map((r) => {
+      const tds = colunas.map((c) => {
+        const bruto = r[c.field];
+        let exibicao = bruto;
+        if (c.data) exibicao = formatarDataAAAAMMDD(bruto);
+        else if (c.numerico) exibicao = formatarNumeroExibicao(bruto);
+        const classe = c.numerico ? ' class="num"' : '';
+        return `<td${classe}>${escapeHtml(exibicao == null ? '' : exibicao)}</td>`;
+      }).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+    return `<div class="result-table"><div class="result-table-scroll"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div></div>`;
+  }
 
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
@@ -692,11 +735,25 @@
   function addBubble({ texto, direcao, rows, criadoEm, isFalha = false }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
-    const bubbleClass = isFalha ? 'bubble bubble-falha' : 'bubble';
+    const temGrid = !isFalha && Array.isArray(rows) && rows.length > 0;
+    const bubbleClass = isFalha ? 'bubble bubble-falha' : (temGrid ? 'bubble bubble-grid' : 'bubble');
     const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
-    // Rows so aparecem na aba Dados agora — a bolha do chat nunca mais monta
-    // a mini-tabela (evita duplicar a mesma informacao em dois formatos).
-    row.innerHTML = `<div class="${bubbleClass}">${icone}${escapeHtml(texto)}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`;
+
+    let conteudo;
+    if (temGrid) {
+      const colunasOmitidas = Object.keys(rows[0]).length > MAX_COLUNAS_MINI_TABELA;
+      conteudo = `<div class="bubble-grid-titulo">${escapeHtml(extrairTituloResposta(texto))}</div>`
+        + montarMiniTabela(rows)
+        + `<div class="result-table-rodape"><span>${rows.length} registro${rows.length === 1 ? '' : 's'}${colunasOmitidas ? ' · mais colunas na aba Dados' : ''}</span>`
+        + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`;
+    } else {
+      conteudo = escapeHtml(texto);
+    }
+
+    row.innerHTML = `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`;
+    if (temGrid) {
+      row.querySelector('[data-abrir-dados]').addEventListener('click', () => trocarAba('relatorio'));
+    }
     chatBody.appendChild(row);
   }
 
@@ -840,7 +897,7 @@
       });
       sessaoAtualId = data.sessaoId;
       hideTyping();
-      addBubble({ texto: data.resposta.texto, direcao: 'in', criadoEm: data.criadoEm });
+      addBubble({ texto: data.resposta.texto, rows: data.resposta.rows, direcao: 'in', criadoEm: data.criadoEm });
       scrollToBottom();
       await carregarSessoes();
 

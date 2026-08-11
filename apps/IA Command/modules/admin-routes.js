@@ -598,6 +598,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.post('/api/ia-command/admin/intencoes', requireAuth, requireIaCommand, canIntencoes, (req, res) => {
     const { nome, descricao, modulo, acao, dataset_id, frases_exemplo, ativo, erp } = req.body;
     if (!nome) return res.status(400).json({ error: 'Campo obrigatório: nome.' });
+    if (String(acao || '').toLowerCase() === 'ai_text_to_sql' && !String(modulo || '').trim()) {
+      return res.status(400).json({ error: 'Campo obrigatório: módulo (necessário para intenções ai_text_to_sql — usado no roteamento entre sistemas).' });
+    }
     const row = crud.criar('intentions', {
       empresa_id:     eid(req),
       nome:           nome.trim(),
@@ -620,6 +623,11 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const allowed = ['nome', 'descricao', 'modulo', 'acao', 'dataset_id', 'frases_exemplo', 'ativo', 'erp'];
     const campos  = {};
     for (const k of allowed) { if (req.body[k] !== undefined) campos[k] = req.body[k]; }
+    const acaoEfetiva   = 'acao'   in campos ? campos.acao   : existing.acao;
+    const moduloEfetivo = 'modulo' in campos ? campos.modulo : existing.modulo;
+    if (String(acaoEfetiva || '').toLowerCase() === 'ai_text_to_sql' && !String(moduloEfetivo || '').trim()) {
+      return res.status(400).json({ error: 'Campo obrigatório: módulo (necessário para intenções ai_text_to_sql — usado no roteamento entre sistemas). Cadastre o módulo em Admin > Módulos antes de salvar.' });
+    }
     const row = crud.atualizar('intentions', req.params.id, campos);
     _audit(req, 'editar_intencao', { id: req.params.id, campos: Object.keys(campos) });
     _invalidateIntentCache(eid(req));
