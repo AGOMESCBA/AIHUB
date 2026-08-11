@@ -821,12 +821,28 @@ function botoesCard(canal) {
   return '';
 }
 
+function empresaCodigo(e) {
+  if (!e || typeof e === 'string') return '';
+  return e.codigo || e.cod_empresa || e.empresa_codigo || e.empresa_id || e.id || '';
+}
+
+function empresaNome(e) {
+  if (typeof e === 'string') return e;
+  return e?.nome || `Empresa #${empresaCodigo(e) || '?'}`;
+}
+
+function empresaRotulo(e) {
+  const nome = empresaNome(e);
+  const codigo = empresaCodigo(e);
+  return codigo ? `#${codigo} - ${nome}` : nome;
+}
+
 function renderCardCanal(canal) {
   const { id, nome, icone, numero, estado, msgs, empresas, uptime, pid } = canal;
   const isActive = id === canalSelecionadoId;
 
   // Indicador de empresas — sempre compacto, clicável
-  const _empNome0 = empresas.length > 0 ? (typeof empresas[0] === 'string' ? empresas[0] : (empresas[0].nome || `Empresa #${empresas[0].empresa_id}`)) : '—';
+  const _empNome0 = empresas.length > 0 ? empresaRotulo(empresas[0]) : '—';
   const empLabel = empresas.length === 1
     ? `🏢 ${escHtml(_empNome0)}`
     : `🏢 <span class="ws-emp-count">${empresas.length}</span> empresas`;
@@ -857,8 +873,7 @@ function renderListaCanais() {
   const filtrados = canais.filter(c => {
     if (!q) return true;
     const empMatch = c.empresas.some(e => {
-      const n = typeof e === 'string' ? e : (e.nome || '');
-      return n.toLowerCase().includes(q);
+      return empresaRotulo(e).toLowerCase().includes(q);
     });
     return c.nome.toLowerCase().includes(q) || empMatch || c.numero.includes(q);
   });
@@ -915,7 +930,7 @@ function selecionarCanal(id) {
   document.getElementById('info-canal').textContent      = canal.nome;
 
   // Empresas
-  const empNomes = canal.empresas.map(e => typeof e === 'string' ? e : (e.nome || `#${e.empresa_id}`));
+  const empNomes = canal.empresas.map(empresaRotulo);
   document.getElementById('info-empresas').textContent = empNomes.join(', ') || '—';
 
   // PID / Uptime
@@ -1345,7 +1360,7 @@ function abrirPopoverEmpresas(event, canalId) {
   pop.id = 'ws-popover-emp';
 
   const itens = canal.empresas.map(e => {
-    const nome = typeof e === 'string' ? e : (e.nome || `Empresa #${e.empresa_id}`);
+    const nome = empresaRotulo(e);
     const isPadrao = typeof e === 'object' ? e.padrao : e.includes('padrão');
     return `<div class="ws-popover-item">
       <span>🏢</span>

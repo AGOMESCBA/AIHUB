@@ -217,12 +217,12 @@ const server = http.createServer((req, res) => {
     req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
-        const { empresaId, numero, pergunta, jobNome } = JSON.parse(body || '{}');
+        const { empresaId, numero, pergunta, jobNome, modulo } = JSON.parse(body || '{}');
         if (!empresaId || !numero || !pergunta) {
           res.writeHead(400);
           return res.end(JSON.stringify({ erro: 'empresaId, numero e pergunta são obrigatórios.' }));
         }
-        const resultado = await svc.executeScheduledQuestionOnce({ empresaId, numero, pergunta });
+        const resultado = await svc.executeScheduledQuestionOnce({ empresaId, numero, pergunta, modulo });
         await svc.sendScheduledQuestionDelivery({ empresaId, numero, resposta: resultado.resposta, ok: resultado.ok });
         const statusEmoji = resultado.ok === false ? '⚠️' : '✅';
         const nomeJob = jobNome ? `"${jobNome}"` : 'Agendamento';

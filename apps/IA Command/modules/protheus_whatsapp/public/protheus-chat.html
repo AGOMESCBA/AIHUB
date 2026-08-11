@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IA Command — Chat no Protheus</title>
+<!-- Mesma versao/CDN ja usada nas telas admin do IAHub (ex.: admin-agendamento.html) -->
+<link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
 <style>
   :root {
     --wa-header: #008069;
@@ -95,16 +97,30 @@
 
   .app-frame {
     display: grid;
+    /* Sidebar recolhe (0px) quando a aba Dados esta ativa, via classe
+       .sidebar-collapsed no .app-frame — ver JS em trocarAba(). Transicao
+       suave, sidebar continua acessivel ao voltar pra aba Conversa. */
     grid-template-columns: 300px 1fr;
+    transition: grid-template-columns 0.2s ease;
     height: 100vh;
-    max-width: 1180px;
+    /* Sem limite de largura: usa todo o espaco disponivel da janela do
+       Protheus/TWebEngine, em vez de travar em 1180px e sobrar espaco vazio
+       nas laterais em telas maiores. */
+    width: 100%;
     margin: 0 auto;
     background: var(--wa-bg);
     box-shadow: 0 0 0 1px var(--wa-border);
   }
+  .app-frame.sidebar-collapsed { grid-template-columns: 0px 1fr; }
+  .app-frame.sidebar-collapsed .sidebar { overflow: hidden; }
 
   /* ========================= SIDEBAR ========================= */
-  .sidebar { display: flex; flex-direction: column; background: var(--wa-sidebar); border-right: 1px solid var(--wa-border); min-width: 0; }
+  /* min-height: 0 e essencial aqui: sem isso, um item de CSS Grid/Flex tem
+     altura minima igual ao conteudo (min-height: auto) — quando uma resposta
+     grande cresce dentro de .chat-body, o .app-frame inteiro cresceria junto
+     e empurraria cabecalho/sidebar para fora da viewport (body tem overflow:
+     hidden), fazendo tudo "sumir" sem nenhum erro JS envolvido. */
+  .sidebar { display: flex; flex-direction: column; background: var(--wa-sidebar); border-right: 1px solid var(--wa-border); min-width: 0; min-height: 0; }
 
   .sidebar-header {
     flex: none;
@@ -185,7 +201,10 @@
   .sidebar-footer .user-role { font-size: 10.5px; color: var(--wa-text-tertiary); }
 
   /* ========================= PAINEL DE CHAT ========================= */
-  .chat-panel { display: flex; flex-direction: column; min-width: 0; }
+  /* min-height: 0 pelo mesmo motivo do .sidebar acima — sem isso, uma resposta
+     grande no chat-body faria este painel (e o app-frame inteiro) crescer
+     alem da tela em vez de manter o scroll interno. */
+  .chat-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
   .chat-header { flex: none; display: flex; align-items: center; gap: 12px; padding: 11px 20px; background: var(--wa-header); color: #fff; box-shadow: var(--wa-shadow); z-index: 5; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #00a884, #008069); display: flex; align-items: center; justify-content: center; flex: none; }
@@ -196,8 +215,50 @@
   .header-sub .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15); flex: none; }
   .header-badge { font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 4px; padding: 2px 6px; flex: none; }
 
+  /* Botao discreto de resetar memoria: visivel mas quieto, nao compete com o
+     restante do cabecalho — contraste suficiente pra ser encontrado sem gritar */
+  .reset-memoria-btn {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    margin-left: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.4s ease;
+  }
+  .reset-memoria-btn:hover,
+  .reset-memoria-btn:focus-visible { background: rgba(255, 255, 255, 0.22); color: #fff; outline: none; }
+  .reset-memoria-btn:active svg { transform: rotate(-50deg); }
+  .reset-memoria-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.35s ease; }
+  .reset-memoria-btn.spin svg { animation: reset-spin 0.5s ease; }
+  @keyframes reset-spin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+  .reset-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translate(-50%, 12px);
+    background: var(--wa-header);
+    color: #fff;
+    font-size: 12.5px;
+    padding: 9px 16px;
+    border-radius: 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 20;
+  }
+  .reset-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
   .chat-body {
-    flex: 1; overflow-y: auto; padding: 16px 8% 10px;
+    flex: 1; min-height: 0; overflow-y: auto; padding: 16px 8% 10px;
     background-color: var(--wa-bg);
     background-image:
       radial-gradient(circle at 10% 15%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 45%),
@@ -229,6 +290,13 @@
   .bubble { position: relative; max-width: 66%; padding: 6px 9px 8px; border-radius: 8px; font-size: 14.3px; line-height: 1.42; box-shadow: var(--wa-shadow); white-space: pre-wrap; word-wrap: break-word; }
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
+
+  /* Falha real de comunicacao (rede/servidor fora do ar) — visualmente distinta
+     de uma resposta normal do backend, mesmo quando essa resposta e negativa
+     (ex.: "nao encontrei dados", que NAO usa este estilo). */
+  .row.in .bubble.bubble-falha { background: #4a1f1f; color: #ffd8d8; border: 1px solid #a33; }
+  :root:not([data-theme="dark"]) .row.in .bubble.bubble-falha { background: #fdecec; color: #7a1f1f; border: 1px solid #e0a3a3; }
+  .bubble-falha .falha-icon { vertical-align: -2px; margin-right: 2px; }
 
   .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; float: right; margin: 3px -2px -3px 8px; transform: translateY(4px); }
   .bubble .time { font-size: 10.5px; color: var(--wa-text-tertiary); white-space: nowrap; }
@@ -262,6 +330,125 @@
   .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); }
 
   .error-banner { background: #d64545; color: #fff; font-size: 12.5px; padding: 8px 16px; text-align: center; }
+
+  /* ========================= ABAS (Conversa / Relatorio) ========================= */
+  .view-tabs {
+    flex: none;
+    display: flex;
+    gap: 2px;
+    padding: 8px 20px 0;
+    background: var(--wa-header);
+  }
+  .view-tab {
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-bottom: none;
+    background: rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .view-tab:hover { background: rgba(255, 255, 255, 0.24); color: #fff; }
+  .view-tab.active { background: var(--wa-bg); color: var(--wa-text); border-color: var(--wa-border); }
+  .view-tab .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-accent); flex: none; }
+  .view-tab:disabled { opacity: 0.5; cursor: default; }
+  .view-tab:disabled:hover { background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.92); }
+
+  .view-panel { display: none; flex: 1; min-height: 0; flex-direction: column; }
+  .view-panel.active { display: flex; }
+
+  /* ========================= ABA RELATORIO ========================= */
+  .report-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--wa-panel); }
+
+  .report-toolbar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--wa-border);
+    flex-wrap: wrap;
+  }
+  .report-toolbar .toolbar-label { font-size: 11px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); }
+
+  .group-picker { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
+  .group-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--wa-border);
+    background: var(--wa-sidebar);
+    color: var(--wa-text-secondary);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  }
+  .group-chip:hover { border-color: var(--wa-accent); color: var(--wa-text); }
+  .group-chip.active { background: var(--wa-accent); border-color: var(--wa-accent); color: #fff; }
+  .group-chip .chip-order { font-size: 10px; opacity: 0.85; }
+
+  .report-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+  .report-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--wa-border);
+    background: var(--wa-sidebar);
+    color: var(--wa-text);
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .report-btn:hover { border-color: var(--wa-accent); background: var(--wa-accent-soft-bg); }
+  .report-btn svg { width: 14px; height: 14px; fill: currentColor; }
+  .report-btn.ghost { background: transparent; }
+
+  .report-body { flex: 1; min-height: 0; padding: 12px 16px 16px; overflow: hidden; display: flex; flex-direction: column; }
+  .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); }
+  #reportGrid { height: 100%; }
+
+  .report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--wa-text-tertiary); text-align: center; padding: 30px; gap: 8px; }
+  .report-empty svg { width: 42px; height: 42px; fill: var(--wa-text-tertiary); opacity: 0.4; }
+  .report-empty p { font-size: 13px; max-width: 280px; line-height: 1.5; margin: 0; }
+
+  .report-caption { flex: none; font-size: 12px; color: var(--wa-text-secondary); padding: 0 16px 10px; }
+
+  /* Total geral da tabela inteira — Tabulator nao gera isso sozinho quando ha
+     agrupamento ativo (bottomCalc de coluna so soma dentro de cada grupo),
+     entao e calculado e exibido aqui, fora da grid. */
+  .report-grand-total {
+    flex: none;
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    margin-top: 8px;
+    border-top: 2px solid var(--wa-accent);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--wa-text);
+  }
+  .report-grand-total .total-item { display: flex; gap: 6px; align-items: baseline; }
+  .report-grand-total .total-label { font-weight: 600; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.4px; color: var(--wa-text-tertiary); }
+  .report-grand-total .total-valor { font-variant-numeric: tabular-nums; }
+
+  /* Mantido o tema padrao do Tabulator (paleta propria da lib, ja com
+     contraste correto entre linhas/grupos/totais) — apenas herda a fonte da
+     tela e remove a borda dupla, sem sobrescrever cores de fundo/texto. */
+  .tabulator { font-family: inherit; font-size: 12.8px; }
+  .tabulator .tabulator-cell.num { font-variant-numeric: tabular-nums; }
 
   @media (max-width: 760px) { .app-frame { grid-template-columns: 1fr; } .sidebar { display: none; } }
   @media (prefers-reduced-motion: reduce) { .row, .typing-dot, .send-btn { animation: none !important; transition: none !important; } }
@@ -315,27 +502,84 @@
         <div class="header-sub"><span class="dot"></span> online · respondendo em tempo real</div>
       </div>
       <div class="header-badge">Protheus</div>
+      <button class="reset-memoria-btn" id="btnResetMemoria" type="button" title="Esquecer contexto da conversa" aria-label="Esquecer contexto da conversa">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
     </header>
+
+    <div class="view-tabs" role="tablist">
+      <button class="view-tab active" id="tabConversa" type="button" role="tab" aria-selected="true">
+        Conversa
+      </button>
+      <button class="view-tab" id="tabRelatorio" type="button" role="tab" aria-selected="false" disabled>
+        <span class="badge-dot" id="relatorioBadge" style="display:none;"></span>
+        Dados
+      </button>
+    </div>
 
     <div id="errorBanner" class="error-banner" style="display:none;"></div>
 
-    <div class="chat-body" id="chatBody"></div>
+    <!-- ================= PAINEL: CONVERSA ================= -->
+    <div class="view-panel active" id="panelConversa">
+      <div class="chat-body" id="chatBody"></div>
 
-    <form class="chat-footer" id="chatForm">
-      <div class="input-wrap">
-        <input type="text" id="msgInput" placeholder="Pergunte algo sobre o ERP..." autocomplete="off" aria-label="Mensagem" />
+      <div class="reset-toast" id="resetToast">Contexto da conversa reiniciado</div>
+
+      <form class="chat-footer" id="chatForm">
+        <div class="input-wrap">
+          <input type="text" id="msgInput" placeholder="Pergunte algo sobre o ERP..." autocomplete="off" aria-label="Mensagem" />
+        </div>
+        <button type="submit" class="send-btn" id="sendBtn" aria-label="Enviar">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+      </form>
+
+      <div class="protheus-strip">
+        <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
+        Integrado ao ERP Protheus · dados em tempo real
       </div>
-      <button type="submit" class="send-btn" id="sendBtn" aria-label="Enviar">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-      </button>
-    </form>
+    </div>
 
-    <div class="protheus-strip">
-      <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
-      Integrado ao ERP Protheus · dados em tempo real
+    <!-- ================= PAINEL: RELATORIO ================= -->
+    <div class="view-panel" id="panelRelatorio">
+      <div class="report-panel">
+        <div class="report-toolbar">
+          <span class="toolbar-label">Agrupar por</span>
+          <div class="group-picker" id="groupPicker"></div>
+          <div class="report-actions">
+            <button class="report-btn ghost" id="btnLimparAgrupamento" type="button">Limpar</button>
+            <button class="report-btn" id="btnExportXlsx" type="button">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM8 18v-2h2v2H8zm0-4v-2h2v2H8zm0-4V8h2v2H8zm4 8v-2h4v2h-4zm0-4v-2h4v2h-4zm0-4V8h4v2h-4z"/></svg>
+              Excel
+            </button>
+            <button class="report-btn" id="btnExportPdf" type="button">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM8 17v-5h1.5a1.5 1.5 0 010 3H9v2H8zm4-5h2a1 1 0 011 1v3a1 1 0 01-1 1h-2v-5zm5 0v1h-1v1h1v1h-1v2h-1v-5h2z"/></svg>
+              PDF
+            </button>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-grid-wrap">
+            <div id="reportGrid"></div>
+            <div class="report-empty" id="reportEmpty">
+              <svg viewBox="0 0 24 24"><path d="M3 3h18v2H3zm0 8h18v2H3zm0 8h12v2H3z"/></svg>
+              <p>Faça uma pergunta que retorne uma lista de dados para abrir os dados aqui.</p>
+            </div>
+          </div>
+          <div class="report-grand-total" id="reportGrandTotal" style="display:none;"></div>
+        </div>
+        <div class="report-caption" id="reportCaption"></div>
+      </div>
     </div>
   </section>
 </div>
+
+<!-- Mesma versao/CDN ja usada nas telas admin do IAHub -->
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<!-- Dependencias oficiais do modulo download do Tabulator 6.x para xlsx/pdf (tabulator.info/docs/6.3/download) -->
+<script src="https://oss.sheetjs.com/sheetjs/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
 
 <script>
 (function () {
@@ -355,6 +599,7 @@
     window.history.replaceState({}, document.title, urlLimpa);
   }
 
+  const appFrame = document.querySelector('.app-frame');
   const chatBody = document.getElementById('chatBody');
   const chatForm = document.getElementById('chatForm');
   const msgInput = document.getElementById('msgInput');
@@ -365,6 +610,36 @@
   const userName = document.getElementById('userName');
   const userAvatar = document.getElementById('userAvatar');
   const btnNovaConversa = document.getElementById('btnNovaConversa');
+
+  // Elementos e estado da aba Relatorio — declarados aqui (nao mais abaixo,
+  // junto das funcoes) porque carregarMensagens() chama fecharRelatorio() e
+  // carregarRelatorioDaSessao(), que os referenciam; const/let nao sofrem
+  // hoisting como function, entao precisam existir antes de qualquer chamada.
+  const tabConversa = document.getElementById('tabConversa');
+  const tabRelatorio = document.getElementById('tabRelatorio');
+  const relatorioBadge = document.getElementById('relatorioBadge');
+  const panelConversa = document.getElementById('panelConversa');
+  const panelRelatorio = document.getElementById('panelRelatorio');
+  const groupPicker = document.getElementById('groupPicker');
+  const reportEmpty = document.getElementById('reportEmpty');
+  const reportGridEl = document.getElementById('reportGrid');
+  const reportCaption = document.getElementById('reportCaption');
+  const reportGrandTotal = document.getElementById('reportGrandTotal');
+  const btnLimparAgrupamento = document.getElementById('btnLimparAgrupamento');
+  const btnExportXlsx = document.getElementById('btnExportXlsx');
+  const btnExportPdf = document.getElementById('btnExportPdf');
+
+  let reportTable = null;
+  let reportColunas = [];
+  let reportGroupBy = [];
+  let reportMensagemId = null;
+  let gridConfigSaveTimer = null;
+
+  // Cache em memoria do relatorio por sessao — evita rebuscar via rede e
+  // recriar a grid do zero ao voltar para uma sessao ja visitada nesta janela
+  // do navegador. So e invalidado quando uma pergunta NOVA muda os dados
+  // daquela sessao (ver enviarMensagem). Fica vazio ao recarregar a pagina.
+  const relatorioCachePorSessao = new Map();
 
   let sessaoAtualId = null;
   let sessoesCache = [];
@@ -398,25 +673,30 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  function renderTabela(rows) {
-    if (!Array.isArray(rows) || !rows.length) return '';
-    const colunas = Object.keys(rows[0]);
-    const thead = colunas.map((c) => `<th>${escapeHtml(c)}</th>`).join('');
-    const tbody = rows.slice(0, 20).map((row) => {
-      const tds = colunas.map((c) => {
-        const val = row[c];
-        const isNum = typeof val === 'number';
-        return `<td class="${isNum ? 'num' : ''}">${escapeHtml(val)}</td>`;
-      }).join('');
-      return `<tr>${tds}</tr>`;
-    }).join('');
-    return `<div class="result-table"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div>`;
+  // Maximo de 3 casas decimais, formato pt-BR (virgula decimal, ponto de
+  // milhar) — evita ruido de ponto flutuante (ex.: 925273.1000000004) tanto na
+  // mini-tabela da bolha do chat quanto na grid da aba Dados (ver formatarNumero).
+  function formatarNumeroExibicao(valor) {
+    if (typeof valor !== 'number') return valor;
+    return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   }
 
-  function addBubble({ texto, direcao, rows, criadoEm }) {
+  // Decisao explicita do usuario: o chat mostra o texto COMPLETO vindo do
+  // backend, sem cortar nada — igual ao canal WhatsApp real. A aba Dados
+  // (grid, agrupamento, export) existe em paralelo para manipular os dados,
+  // mas nao substitui a mensagem de texto tradicional no chat.
+
+  // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
+  // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
+  // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
+  function addBubble({ texto, direcao, rows, criadoEm, isFalha = false }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
-    row.innerHTML = `<div class="bubble">${escapeHtml(texto)}${renderTabela(rows)}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`;
+    const bubbleClass = isFalha ? 'bubble bubble-falha' : 'bubble';
+    const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
+    // Rows so aparecem na aba Dados agora — a bolha do chat nunca mais monta
+    // a mini-tabela (evita duplicar a mesma informacao em dois formatos).
+    row.innerHTML = `<div class="${bubbleClass}">${icone}${escapeHtml(texto)}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`;
     chatBody.appendChild(row);
   }
 
@@ -458,6 +738,51 @@
       showError('Falha ao carregar mensagens: ' + err.message);
     }
     renderSessionList();
+    trocarAba('conversa');
+    fecharRelatorio();
+    carregarRelatorioDaSessao(sessaoId);
+  }
+
+  // So desmonta a INSTANCIA visual do Tabulator (exigencia da propria lib ao
+  // trocar de contexto) — NAO mexe em relatorioCachePorSessao. Os dados
+  // continuam em cache; ao reabrir a sessao, abrirRelatorio() reconstroi a
+  // grid a partir do cache, sem nova chamada de rede.
+  function fecharRelatorio() {
+    if (reportTable) { reportTable.destroy(); reportTable = null; }
+    tabRelatorio.disabled = true;
+    relatorioBadge.style.display = 'none';
+    reportEmpty.style.display = 'flex';
+    reportCaption.textContent = '';
+    reportGrandTotal.style.display = 'none';
+    reportMensagemId = null;
+    reportGroupBy = [];
+  }
+
+  async function carregarRelatorioDaSessao(sessaoId) {
+    // Cache primeiro: se ja visitamos esta sessao nesta janela do navegador,
+    // reusa os dados em memoria — sem chamada de rede, sem reconstruir a grid
+    // do zero. So busca no servidor na primeira vez que a sessao e aberta.
+    const cache = relatorioCachePorSessao.get(sessaoId);
+    if (cache) {
+      abrirRelatorio(cache);
+      return;
+    }
+
+    try {
+      const relatorio = await api('/sessoes/' + sessaoId + '/relatorio');
+      if (relatorio && Array.isArray(relatorio.rows) && relatorio.rows.length) {
+        const dados = {
+          mensagemId: relatorio.id,
+          rows: relatorio.rows,
+          gridConfig: relatorio.gridConfig,
+          texto: relatorio.texto,
+        };
+        relatorioCachePorSessao.set(sessaoId, dados);
+        abrirRelatorio(dados);
+      }
+    } catch (err) {
+      // Silencioso: ausencia de relatorio para a sessao nao e um erro do usuario.
+    }
   }
 
   function renderSessionList() {
@@ -515,12 +840,27 @@
       });
       sessaoAtualId = data.sessaoId;
       hideTyping();
-      addBubble({ texto: data.resposta.texto, direcao: 'in', rows: data.resposta.rows, criadoEm: data.criadoEm });
+      addBubble({ texto: data.resposta.texto, direcao: 'in', criadoEm: data.criadoEm });
       scrollToBottom();
       await carregarSessoes();
+
+      const temDados = Array.isArray(data.resposta.rows) && data.resposta.rows.length;
+      if (temDados) {
+        const dadosRelatorio = {
+          mensagemId: data.resposta.mensagemId,
+          rows: data.resposta.rows,
+          gridConfig: null,
+          texto: data.resposta.texto,
+        };
+        // Pergunta nova = dado novo: substitui o cache desta sessao (a grid
+        // so e reconstruida aqui, nunca por troca de aba/sessao — ver
+        // carregarRelatorioDaSessao).
+        relatorioCachePorSessao.set(sessaoAtualId, dadosRelatorio);
+        abrirRelatorio(dadosRelatorio);
+      }
     } catch (err) {
       hideTyping();
-      addBubble({ texto: '⚠️ ' + err.message, direcao: 'in', criadoEm: new Date().toISOString() });
+      addBubble({ texto: 'Não foi possível enviar sua pergunta: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
       scrollToBottom();
     } finally {
       sendBtn.disabled = false;
@@ -528,6 +868,245 @@
       msgInput.focus();
     }
   }
+
+  // =====================================================================
+  // ABA RELATORIO — grid Tabulator com agrupamento, totalizacao, filtro e
+  // exportacao. A aba sempre reflete a ULTIMA resposta tabular da conversa.
+  // (elementos e estado declarados no topo do arquivo — ver comentario la)
+  // =====================================================================
+
+  function trocarAba(aba) {
+    const paraRelatorio = aba === 'relatorio';
+    tabConversa.classList.toggle('active', !paraRelatorio);
+    tabRelatorio.classList.toggle('active', paraRelatorio);
+    tabConversa.setAttribute('aria-selected', String(!paraRelatorio));
+    tabRelatorio.setAttribute('aria-selected', String(paraRelatorio));
+    panelConversa.classList.toggle('active', !paraRelatorio);
+    panelRelatorio.classList.toggle('active', paraRelatorio);
+    // Sidebar recolhe na aba Dados (mais largura pra grid) e volta ao
+    // clicar em Conversa — nao esconde nada permanentemente, so reorganiza
+    // espaco conforme o contexto.
+    appFrame.classList.toggle('sidebar-collapsed', paraRelatorio);
+    if (paraRelatorio && reportTable) {
+      // redraw(false) recalcula so o layout das linhas ja visiveis (o painel
+      // estava display:none, entao a largura das colunas precisa reajustar) —
+      // redraw(true) forcaria re-renderizar TODAS as milhares de linhas do
+      // dataset a cada troca de aba, sendo a causa principal do travamento
+      // relatado ao clicar em Dados e voltar.
+      setTimeout(() => reportTable.redraw(false), 0);
+    }
+  }
+
+  tabConversa.addEventListener('click', () => trocarAba('conversa'));
+  tabRelatorio.addEventListener('click', () => { if (!tabRelatorio.disabled) trocarAba('relatorio'); });
+
+  // Numero vs texto decidido pelo dado real (typeof), nao por metadado do
+  // backend — decisao tomada para nao mudar o contrato do pipeline de IA.
+  // Datas do Protheus costumam chegar como string "AAAAMMDD" (8 digitos, sem
+  // separador) — formato de campo data ADVPL serializado, nao texto livre.
+  // Deteccao pelo VALOR (nao pelo nome do campo, que varia entre modulos) —
+  // regex estrita evita falso positivo com codigos numericos de 8 digitos que
+  // nao sejam data (o mes/dia sao validados no range correto).
+  const REGEX_DATA_AAAAMMDD = /^(\d{4})(\d{2})(\d{2})$/;
+
+  function pareceDataAAAAMMDD(valor) {
+    if (typeof valor !== 'string') return false;
+    const m = valor.match(REGEX_DATA_AAAAMMDD);
+    if (!m) return false;
+    const mes = Number(m[2]);
+    const dia = Number(m[3]);
+    return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31;
+  }
+
+  function formatarDataAAAAMMDD(valor) {
+    const m = String(valor).match(REGEX_DATA_AAAAMMDD);
+    if (!m) return valor;
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
+  function inferirColunas(rows) {
+    const nomes = Object.keys(rows[0] || {});
+    return nomes.map((campo) => {
+      const algumNumero = rows.some((r) => typeof r[campo] === 'number');
+      const todosParecemData = rows.every((r) => r[campo] == null || pareceDataAAAAMMDD(r[campo]));
+      const algumValorPreenchido = rows.some((r) => r[campo] != null && r[campo] !== '');
+      const ehData = !algumNumero && todosParecemData && algumValorPreenchido;
+      return { field: campo, title: campo, numerico: algumNumero, data: ehData };
+    });
+  }
+
+  // Mesma regra de formatarNumeroExibicao (mini-tabela do chat): maximo 3
+  // casas decimais, formato pt-BR — usada nas celulas e na linha de totais
+  // (bottomCalc) da grid.
+  function formatarNumero(valor) {
+    return formatarNumeroExibicao(valor);
+  }
+
+  function somaColuna(values, data, calcParams) {
+    const soma = values.reduce((acc, v) => acc + (typeof v === 'number' ? v : 0), 0);
+    return formatarNumero(soma);
+  }
+
+  function renderGroupPicker() {
+    groupPicker.innerHTML = '';
+    reportColunas.forEach((col) => {
+      const idx = reportGroupBy.indexOf(col.field);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'group-chip' + (idx > -1 ? ' active' : '');
+      chip.innerHTML = escapeHtml(col.title) + (idx > -1 && reportGroupBy.length > 1 ? ` <span class="chip-order">${idx + 1}</span>` : '');
+      chip.addEventListener('click', () => toggleAgrupamento(col.field));
+      groupPicker.appendChild(chip);
+    });
+  }
+
+  function toggleAgrupamento(field) {
+    const idx = reportGroupBy.indexOf(field);
+    if (idx > -1) reportGroupBy.splice(idx, 1);
+    else reportGroupBy.push(field);
+    aplicarAgrupamento();
+  }
+
+  function aplicarAgrupamento() {
+    if (!reportTable) return;
+    reportTable.setGroupBy(reportGroupBy.length ? reportGroupBy : false);
+    renderGroupPicker();
+    agendarSalvarGridConfig();
+  }
+
+  btnLimparAgrupamento.addEventListener('click', () => {
+    reportGroupBy = [];
+    aplicarAgrupamento();
+  });
+
+  function agendarSalvarGridConfig() {
+    if (!reportMensagemId || !sessaoAtualId) return;
+    clearTimeout(gridConfigSaveTimer);
+    gridConfigSaveTimer = setTimeout(async () => {
+      try {
+        await api('/sessoes/' + sessaoAtualId + '/mensagens/' + reportMensagemId + '/grid-config', {
+          method: 'PUT',
+          body: JSON.stringify({ groupBy: reportGroupBy }),
+        });
+      } catch (err) {
+        // Falha ao salvar preferencia de grid nao deve interromper o uso da tela.
+      }
+    }, 600);
+  }
+
+  function montarColunasTabulator() {
+    return reportColunas.map((col) => {
+      // accessorDownload controla o valor usado no export (Excel/PDF) —
+      // SEPARADO do formatter visual da grid. Sem isso, o Tabulator exporta o
+      // dado bruto (ex.: "20260226", "17000") mesmo com a tela mostrando
+      // formatado (ex.: "26/02/2026", "17.000,00") — era exatamente o bug
+      // relatado no PDF gerado.
+      const accessorDownload = col.numerico
+        ? (value) => formatarNumero(value)
+        : (col.data ? (value) => formatarDataAAAAMMDD(value) : undefined);
+      return {
+        field: col.field,
+        title: col.title,
+        headerFilter: true,
+        hozAlign: col.numerico ? 'right' : (col.data ? 'center' : 'left'),
+        formatter: col.numerico
+          ? (cell) => formatarNumero(cell.getValue())
+          : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue()) : undefined),
+        accessorDownload,
+        bottomCalc: col.numerico ? somaColuna : undefined,
+        bottomCalcFormatter: col.numerico ? (cell) => formatarNumero(cell.getValue()) : undefined,
+      };
+    });
+  }
+
+  function abrirRelatorio({ mensagemId, rows, gridConfig, texto }) {
+    if (!Array.isArray(rows) || !rows.length) return;
+
+    reportMensagemId = mensagemId || null;
+    reportColunas = inferirColunas(rows);
+    reportGroupBy = (gridConfig && Array.isArray(gridConfig.groupBy)) ? gridConfig.groupBy.slice() : [];
+
+    tabRelatorio.disabled = false;
+    relatorioBadge.style.display = 'inline-block';
+    reportEmpty.style.display = 'none';
+    reportCaption.textContent = texto ? texto.replace(/\n[\s\S]*/, '') : '';
+
+    if (reportTable) {
+      reportTable.destroy();
+      reportTable = null;
+    }
+
+    reportTable = new Tabulator(reportGridEl, {
+      data: rows,
+      // fitColumns (mesmo modo ja usado nas telas admin do IAHub) distribui a
+      // largura disponivel sem medir o conteudo real de cada celula — muito
+      // mais leve que fitDataFill, que fazia essa medicao a cada linha e
+      // deixava a aba Dados lenta/travando com mais dados.
+      layout: 'fitColumns',
+      // height EXPLICITO (nao so via CSS) e obrigatorio para o Tabulator
+      // ativar o virtual DOM — sem isso ele desenha TODAS as linhas no DOM de
+      // uma vez, mesmo com milhares de registros, causando o travamento e
+      // consumo de memoria relatado. Com virtual DOM, so as linhas visiveis
+      // (+ buffer) sao renderizadas, reciclando elementos ao rolar.
+      // '100%' funciona como altura explicita quando o container pai
+      // (.report-grid-wrap) ja tem altura fixa definida pelo layout flex.
+      height: '100%',
+      columns: montarColunasTabulator(),
+      groupBy: reportGroupBy.length ? reportGroupBy : false,
+      groupStartOpen: true,
+      // groupHeader recebe o valor BRUTO do grupo (nao passa pelo formatter
+      // da coluna) — precisa formatar manualmente aqui, senao data/numero
+      // aparecem crus no cabecalho do grupo mesmo com a coluna formatada
+      // corretamente nas linhas normais (bug real: agrupar por "vencimento"
+      // mostrava "20260424" no cabecalho, mas "24/04/2026" nas linhas).
+      groupHeader: function (value, count, data, group) {
+        const campo = group.getField();
+        const col = reportColunas.find((c) => c.field === campo);
+        let valorFormatado = value;
+        if (col?.data) valorFormatado = formatarDataAAAAMMDD(value);
+        else if (col?.numerico) valorFormatado = formatarNumero(value);
+        return valorFormatado + ' (' + count + ' registros)';
+      },
+      placeholder: 'Sem dados para exibir',
+    });
+
+    reportTable.on('tableBuilt', () => {
+      renderGroupPicker();
+    });
+
+    renderGrandTotal(rows);
+  }
+
+  // Total geral da grade inteira, somando cada coluna numerica sobre TODAS as
+  // linhas (independente de agrupamento) — o bottomCalc de coluna do
+  // Tabulator so soma dentro de cada grupo quando ha groupBy ativo, sem opcao
+  // nativa de total geral, entao calculamos e exibimos isso separadamente.
+  function renderGrandTotal(rows) {
+    const colunasNumericas = reportColunas.filter((c) => c.numerico);
+    if (!colunasNumericas.length) {
+      reportGrandTotal.style.display = 'none';
+      return;
+    }
+    const itens = colunasNumericas.map((col) => {
+      const soma = rows.reduce((acc, r) => acc + (typeof r[col.field] === 'number' ? r[col.field] : 0), 0);
+      return `<div class="total-item"><span class="total-label">${escapeHtml(col.title)}</span><span class="total-valor">${formatarNumero(soma)}</span></div>`;
+    });
+    reportGrandTotal.innerHTML = `<div class="total-item"><span class="total-label">Total geral (${rows.length} registros)</span></div>` + itens.join('');
+    reportGrandTotal.style.display = 'flex';
+  }
+
+  btnExportXlsx.addEventListener('click', () => {
+    if (!reportTable) return;
+    reportTable.download('xlsx', 'dados-ia-command.xlsx', { sheetName: 'Dados' });
+  });
+
+  btnExportPdf.addEventListener('click', () => {
+    if (!reportTable) return;
+    reportTable.download('pdf', 'dados-ia-command.pdf', {
+      orientation: 'landscape',
+      title: 'IA Command — Dados',
+    });
+  });
 
   chatForm.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -542,7 +1121,38 @@
     headerTitle.textContent = 'Nova conversa';
     renderEmptyState();
     renderSessionList();
+    trocarAba('conversa');
+    fecharRelatorio();
     msgInput.focus();
+  });
+
+  // Esquece o contexto da conversa atual (a IA para de considerar perguntas
+  // anteriores ao interpretar a proxima), sem apagar as mensagens da tela nem
+  // trocar de sessao — diferente de "Nova conversa".
+  const btnResetMemoria = document.getElementById('btnResetMemoria');
+  const resetToast = document.getElementById('resetToast');
+  let resetToastTimer = null;
+
+  function mostrarResetToast() {
+    resetToast.classList.add('show');
+    clearTimeout(resetToastTimer);
+    resetToastTimer = setTimeout(() => resetToast.classList.remove('show'), 2200);
+  }
+
+  btnResetMemoria.addEventListener('click', async function () {
+    if (!sessaoAtualId) {
+      mostrarResetToast();
+      return;
+    }
+    btnResetMemoria.classList.remove('spin');
+    void btnResetMemoria.offsetWidth; // reinicia a animacao se clicado em sequencia
+    btnResetMemoria.classList.add('spin');
+    try {
+      await api('/sessoes/' + sessaoAtualId + '/resetar-memoria', { method: 'POST' });
+      mostrarResetToast();
+    } catch (err) {
+      showError('Falha ao reiniciar contexto: ' + err.message);
+    }
   });
 
   document.getElementById('searchInput').addEventListener('input', function (e) {

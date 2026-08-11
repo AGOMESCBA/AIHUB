@@ -8,7 +8,11 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 
-const TTL_MS = 5 * 60 * 1000; // 5 minutos
+// 30 minutos — suficiente para uma sessao de teste manual com varias perguntas
+// seguidas. Em producao (fluxo real via TWebEngine), o token e consumido na
+// mesma fracao de segundo em que e gerado, entao esse TTL maior nao aumenta o
+// risco pratico: so evita expiracao no meio de testes longos.
+const TTL_MS = 30 * 60 * 1000;
 
 // Mesma normalizacao usada pelo canal WhatsApp real (_normalizarNumeroWa em
 // modules/whatsapp/service.js): so digitos. Aplicada aqui, na entrada do celular

@@ -640,6 +640,7 @@
       placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhuma execucao registrada.</div>',
       columns:[
         { formatter:'rowSelection', titleFormatter:'rowSelection', hozAlign:'center', headerHozAlign:'center', width:44, headerSort:false, cellClick:(e,cell)=>{ e.stopPropagation(); cell.getRow().toggleSelect(); } },
+        { title:'Acoes', field:'id', width:60, hozAlign:'center', headerSort:false, formatter:c=>`<button class="btn-icon" title="Ver detalhes" onclick="event.stopPropagation();abrirDetalhe('${esc(c.getValue())}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>` },
         { title:'Data/Hora', field:'criado_em', width:160, sorter:'datetime', headerFilter:'input', headerFilterParams:headerInputAttrs('data'), formatter:c=>esc(fmtData(c.getValue())) },
         { title:'Job', field:'job_nome', minWidth:230, headerFilter:'input', headerFilterParams:headerInputAttrs('job'), formatter:c=>{
           const row = c.getRow().getData();
@@ -659,7 +660,6 @@
           const row = c.getRow().getData();
           return `<div class="text-preview">${esc(row.erro || row.resposta || '-')}</div>`;
         }},
-        { title:'Acoes', field:'id', width:80, hozAlign:'center', headerSort:false, formatter:c=>`<button class="btn-icon" title="Ver detalhes" onclick="event.stopPropagation();abrirDetalhe('${esc(c.getValue())}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>` },
       ],
       rowClick:(_e,row)=>abrirDetalhe(row.getData().id),
     });

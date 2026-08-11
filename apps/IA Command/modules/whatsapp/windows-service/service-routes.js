@@ -107,7 +107,8 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
 
   app.get('/api/ia-command/whatsapp/services/status', requireAuth, requireIaCommand, canMonitor, async (req, res) => {
     try {
-      const todosCanais = channels.listarTodosCanais();
+      const todosCanais = channels.listarTodosCanais()
+        .filter(canal => channels.listarEmpresasDoCanal(canal.id).length > 0);
 
       const resultado = await Promise.all(
         todosCanais.map(async (canal) => {

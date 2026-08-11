@@ -98,4 +98,48 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       res.status(500).json({ error: err.message });
     }
   });
+
+  // ── Ultima resposta tabular da sessao — alimenta a aba Relatorio ──
+  app.get('/api/ia-command/protheus/sessoes/:id/relatorio', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    try {
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+      const relatorio = sessionStore.ultimaMensagemTabular({ sessaoId: req.params.id });
+      res.json(relatorio); // null se nao houver dados tabulares ainda
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Salvar config de grid (agrupamento/filtros) escolhida pelo usuario ──
+  app.put('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/grid-config', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    try {
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+      const ok = sessionStore.salvarGridConfig({
+        mensagemId: req.params.mensagemId,
+        sessaoId: req.params.id,
+        gridConfig: req.body || {},
+      });
+      if (!ok) return res.status(404).json({ error: 'Mensagem nao encontrada.' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Reset de memoria — esquece o contexto da conversa sem apagar o historico ──
+  app.post('/api/ia-command/protheus/sessoes/:id/resetar-memoria', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    try {
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+      const resetadoEm = sessionStore.resetarMemoria({ sessaoId: req.params.id });
+      res.json({ ok: true, resetadoEm });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 };

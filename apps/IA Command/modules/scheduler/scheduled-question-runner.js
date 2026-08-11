@@ -5,6 +5,8 @@ const interpretationLog = require('../ai/interpretation-log');
 const responseFormatter = require('../erp/core/response-formatter');
 const messageTemplates = require('../whatsapp/message-templates');
 const store = require('./scheduled-question-store');
+const crud = require('../database/crud');
+const connectionFactory = require('../erp/providers/connection-factory');
 
 const SQL_HANDLERS = {
   compras: require('../erp/totvs_protheus/compras/ai-sql-handler-v2'),
@@ -200,6 +202,102 @@ function statusExecucaoSql(resultado, resposta) {
   };
 }
 
+// Descobre a qual sistema (erp) pertence o modulo do job, a partir das intentions reais da
+// empresa (mesma fonte usada em modulosDisponiveis(), sem lista fixa por sistema).
+function _erpDoModulo(empresaId, modulo) {
+  const alvo = String(modulo || '').trim().toLowerCase();
+  if (!alvo) return 'protheus';
+  const intencoes = crud.listar('intentions', { empresa_id: empresaId, ativo: 1 });
+  const achada = intencoes.find(i =>
+    String(i.acao || '').toLowerCase() === 'ai_text_to_sql' &&
+    String(i.modulo || '').trim().toLowerCase() === alvo
+  );
+  return String(achada?.erp || 'protheus').trim().toLowerCase() || 'protheus';
+}
+
+const SQL_FIXO_GENERICO_LIMITE_LINHAS = 30;
+
+// Formata o resultado do SQL fixo generico como listagem linha a linha, sem somar colunas
+// (diferente de formatarAiSqlLocal, feito para agregacoes da IA sem GROUP BY explicito).
+// SQL fixo e escrito pelo proprio admin com colunas ja nomeadas para leitura — cada linha do
+// resultado e um registro distinto (ex: um chamado), nao uma metrica a ser consolidada.
+function _formatarSqlFixoGenerico(rows, titulo) {
+  const cabecalho = titulo ? `*${titulo}*\n\n` : '';
+  if (!rows || !rows.length) return `${cabecalho}Nenhum dado encontrado para sua consulta.`;
+  const colunas = Object.keys(rows[0] || {});
+  const limitadas = rows.slice(0, SQL_FIXO_GENERICO_LIMITE_LINHAS);
+  const itens = limitadas.map((row, i) => {
+    const campos = colunas
+      .map(col => `${col.replace(/_/g, ' ')}: ${row[col] ?? '-'}`)
+      .join(' | ');
+    return `${i + 1}. ${campos}`;
+  });
+  const rodape = rows.length > SQL_FIXO_GENERICO_LIMITE_LINHAS
+    ? `\n\n_Mostrando ${SQL_FIXO_GENERICO_LIMITE_LINHAS} de ${rows.length} registro(s). Refine o SQL para reduzir o resultado._`
+    : `\n\n_${rows.length} registro(s)._`;
+  return `${cabecalho}*Resultado*\n\n${itens.join('\n')}${rodape}`;
+}
+
+// Caminho generico de SQL fixo para sistemas sem handler dedicado (ex: SoftExpert): executa
+// o SQL direto na conexao/agente-local do sistema (mesmo mecanismo dos datasets semanticos)
+// e formata a resposta como listagem, sem as regras especificas dos handlers Protheus (que
+// dependem de spec proprio de dominio) nem a logica de soma da IA (formatarAiSqlLocal).
+async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
+  const intent = montarIntentSqlFixo(job);
+  const t0 = Date.now();
+  let resultado;
+  try {
+    const conn = connectionFactory.carregarConexao(Number(empresaId), { sistemaOrigem: erp });
+    conn._pergunta = job.pergunta || job.nome || 'Consulta agendada';
+    conn._modulo = job.modulo || 'agendamento';
+    conn._operacao = intent.intencao;
+    conn._empresa_id = String(empresaId || '');
+    const rows = await connectionFactory.executar(conn, sql, {});
+    const titulo = job.pergunta || job.nome || null;
+    resultado = {
+      tipo: 'sucesso_ai_sql',
+      resposta_direta: _formatarSqlFixoGenerico(rows, titulo),
+      rows: rows || [],
+      sql_gerado: sql,
+      duracao_ms: Date.now() - t0,
+    };
+  } catch (e) {
+    resultado = {
+      tipo: 'erro',
+      subtipo: /conex|timeout|agente/i.test(e.message || '') ? 'sem_conexao' : 'erro_erp',
+      resposta_direta: `Nao consegui executar o SQL fixo: ${e.message}`,
+      sql_gerado: `${sql}\n\n-- ERRO: ${e.message}`,
+      duracao_ms: Date.now() - t0,
+    };
+  }
+
+  const resposta = resultado.resposta_direta;
+  const status = statusExecucaoSql(resultado, resposta);
+  const log = interpretationLog.registrar({
+    empresa_id: Number(empresaId),
+    usuario: 'agendamento',
+    numero_wa: null,
+    texto_original: job.pergunta || job.nome || 'Consulta agendada',
+    intent,
+    resultado,
+    resposta_entregue: resposta,
+    origem: 'agendamento_sql_fixo',
+    duracao_ms: resultado.duracao_ms,
+    sql_gerado: sql,
+    sql_canonico_original: sqlOriginal,
+    sql_final_executado: sql,
+    pipeline_origem: 'agendamento_sql_fixo',
+  });
+
+  return {
+    resposta,
+    ok: status.ok,
+    error_detail: status.error_detail,
+    interpretation_log_id: log.id,
+    duration_ms: resultado.duracao_ms,
+  };
+}
+
 async function executarSqlFixoUmaVez(empresaId, job) {
   const sqlOriginal = sqlFixo(job);
   const sql = garantirSetRowcountSqlFixo(aplicarMacrosSql(sqlOriginal, job));
@@ -208,7 +306,11 @@ async function executarSqlFixoUmaVez(empresaId, job) {
   const modulo = String(job.modulo || '').toLowerCase();
   const handler = SQL_HANDLERS[modulo];
   if (!handler) {
-    throw Object.assign(new Error('Informe um modulo valido para executar SQL fixo.'), { statusCode: 400 });
+    const erp = _erpDoModulo(empresaId, modulo);
+    if (erp === 'protheus') {
+      throw Object.assign(new Error('Informe um modulo valido para executar SQL fixo.'), { statusCode: 400 });
+    }
+    return _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal);
   }
 
   const intent = montarIntentSqlFixo(job);
@@ -247,6 +349,7 @@ async function executarPerguntaUmaVez(svc, empresaId, job, destinatarios) {
     empresaId,
     numero: destinatarios[0]?.numero,
     pergunta: job.pergunta,
+    modulo: job.modulo || null,
   });
 }
 
@@ -277,8 +380,8 @@ function _postWorker(workerPort, path, payload, timeoutMs = 330000) {
   });
 }
 
-function _executarViaWorker(workerPort, empresaId, numero, pergunta, jobNome) {
-  return _postWorker(workerPort, '/scheduled-question', { empresaId, numero, pergunta, jobNome });
+function _executarViaWorker(workerPort, empresaId, numero, pergunta, jobNome, modulo) {
+  return _postWorker(workerPort, '/scheduled-question', { empresaId, numero, pergunta, jobNome, modulo });
 }
 
 function _enviarViaWorker(workerPort, empresaId, numero, resposta, ok, jobNome) {
@@ -323,7 +426,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         }
       } else {
         // Pergunta IA: worker executa e envia em uma chamada (apenas primeiro destinatário)
-        resultado = await _executarViaWorker(canal.worker_port, empresaId, destinatarios[0]?.numero, job.pergunta, job.nome);
+        resultado = await _executarViaWorker(canal.worker_port, empresaId, destinatarios[0]?.numero, job.pergunta, job.nome, job.modulo || null);
         const { dest, deliveryId } = entregas[0];
         if (resultado.ok === false) falhas++;
         else sucessos++;
@@ -442,5 +545,7 @@ module.exports = {
     validarSqlFixoBasico,
     macrosDataSql,
     resolverMacroDataSql,
+    executarSqlFixoUmaVez,
+    _erpDoModulo,
   },
 };

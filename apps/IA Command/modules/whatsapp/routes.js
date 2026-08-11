@@ -101,12 +101,16 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   app.get('/api/ia-command/admin/canais-whatsapp', requireAuth, requireIaCommand, canAdminCanais, (req, res) => {
     const empresaId = eid(req);
     const rows = channels.listarPorEmpresa(empresaId);
-    res.json(rows.length ? rows : [channels.ensureDefaultForEmpresa(empresaId)]);
+    const orfaos = channels.listarOrfaosAtivos();
+    res.json(rows.length || orfaos.length ? [...rows, ...orfaos] : [channels.ensureDefaultForEmpresa(empresaId)]);
   });
 
   app.get('/api/ia-command/admin/canais-whatsapp/:id', requireAuth, requireIaCommand, canAdminCanais, (req, res) => {
-    const channel = channels.buscarCanalDaEmpresa(req.params.id, eid(req));
+    const channel = channels.buscarCanalDaEmpresa(req.params.id, eid(req)) || channels.buscarCanalAdmin(req.params.id);
     if (!channel) return res.status(404).json({ error: 'Canal WhatsApp nao encontrado para esta empresa.' });
+    if (channel.empresas.length && !channel.empresas.some(e => Number(e.empresa_id) === Number(eid(req)))) {
+      return res.status(404).json({ error: 'Canal WhatsApp nao encontrado para esta empresa.' });
+    }
     res.json(channel);
   });
 
@@ -124,8 +128,11 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
 
   app.put('/api/ia-command/admin/canais-whatsapp/:id', requireAuth, requireIaCommand, canAdminCanais, (req, res) => {
     const empresaId = eid(req);
-    const existing = channels.buscarCanalDaEmpresa(req.params.id, empresaId);
+    const existing = channels.buscarCanalDaEmpresa(req.params.id, empresaId) || channels.buscarCanalAdmin(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Canal WhatsApp nao encontrado para esta empresa.' });
+    if (existing.empresas.length && !existing.empresas.some(e => Number(e.empresa_id) === Number(empresaId))) {
+      return res.status(404).json({ error: 'Canal WhatsApp nao encontrado para esta empresa.' });
+    }
     if (req.body?.nome !== undefined && !String(req.body.nome || '').trim()) {
       return res.status(400).json({ error: 'Campo obrigatorio: nome.' });
     }
@@ -134,19 +141,23 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
       numero: req.body?.numero,
       ativo: req.body?.ativo,
     });
-    channels.vincularEmpresa(req.params.id, empresaId, {
-      aliases: req.body?.aliases ?? existing.aliases,
-      padrao: req.body?.padrao !== undefined ? Number(req.body.padrao) : existing.padrao,
-      ativo: 1,
-    });
-    res.json(channels.buscarCanalDaEmpresa(req.params.id, empresaId));
+    if (existing.empresas.some(e => Number(e.empresa_id) === Number(empresaId))) {
+      channels.vincularEmpresa(req.params.id, empresaId, {
+        aliases: req.body?.aliases ?? existing.aliases,
+        padrao: req.body?.padrao !== undefined ? Number(req.body.padrao) : existing.padrao,
+        ativo: 1,
+      });
+      return res.json(channels.buscarCanalDaEmpresa(req.params.id, empresaId));
+    }
+    res.json(channels.buscarCanalAdmin(req.params.id));
   });
 
   app.delete('/api/ia-command/admin/canais-whatsapp/:id', requireAuth, requireIaCommand, canAdminCanais, (req, res) => {
     const empresaId = eid(req);
-    const channel = channels.buscarCanalDaEmpresa(req.params.id, empresaId);
+    const channel = channels.buscarCanalDaEmpresa(req.params.id, empresaId) || channels.buscarCanalAdmin(req.params.id);
     if (!channel) return res.status(404).json({ error: 'Canal WhatsApp nao encontrado para esta empresa.' });
-    if (channel.empresas.length <= 1) channels.desativarCanal(channel.id);
+    if (!channel.empresas.length) channels.desativarCanal(channel.id);
+    else if (channel.empresas.length <= 1) channels.desativarCanal(channel.id);
     else channels.desvincularEmpresa(channel.id, empresaId);
     res.json({ ok: true });
   });
@@ -189,12 +200,11 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     const targetEmpresaId = Number(req.params.empresaId || 0);
     const channel = channels.buscarCanalDaEmpresa(req.params.id, origemEmpresaId);
     if (!channel) return res.status(404).json({ error: 'Canal WhatsApp nao encontrado para esta empresa.' });
-    if (channel.empresas.length <= 1) return res.status(400).json({ error: 'Nao e possivel remover o ultimo vinculo do canal. Exclua o canal.' });
     if (!userCanAccessEmpresa(req, targetEmpresaId, 'iac-admin-canais-whatsapp')) {
       return res.status(403).json({ error: 'Usuario sem permissao para administrar canais na empresa de destino.' });
     }
     channels.desvincularEmpresa(channel.id, targetEmpresaId);
-    res.json(channels.buscarCanalDaEmpresa(channel.id, origemEmpresaId));
+    res.json(channels.buscarCanalDaEmpresa(channel.id, origemEmpresaId) || channels.buscarCanalAdmin(channel.id));
   });
 
   app.post('/api/ia-command/whatsapp/channels', requireAuth, requireIaCommand, canAdminCanais, (req, res) => {

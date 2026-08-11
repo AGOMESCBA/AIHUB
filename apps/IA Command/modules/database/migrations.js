@@ -1223,6 +1223,20 @@ const MIGRATIONS = [
       ALTER TABLE intentions ADD COLUMN erp TEXT DEFAULT 'protheus';
     `,
   },
+  {
+    version: 70,
+    descricao: 'IA Command - protheus_whatsapp: marca de reset de memoria (esquecer contexto sem apagar historico)',
+    sql: `
+      ALTER TABLE protheus_chat_sessions ADD COLUMN memoria_resetada_em TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 71,
+    descricao: 'IA Command - protheus_whatsapp: config de grid (agrupamento/filtros) persistida por mensagem, para a aba Relatorio',
+    sql: `
+      ALTER TABLE protheus_chat_messages ADD COLUMN grid_config_json TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

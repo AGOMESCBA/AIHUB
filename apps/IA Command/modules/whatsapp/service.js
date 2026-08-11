@@ -3623,7 +3623,7 @@ class IACWhatsAppService extends EventEmitter {
     return status;
   }
 
-  async executeScheduledQuestionOnce({ empresaId, numero, pergunta } = {}) {
+  async executeScheduledQuestionOnce({ empresaId, numero, pergunta, modulo = null } = {}) {
     if (!this.client || this.status !== 'connected') {
       throw new Error('WhatsApp nao esta conectado.');
     }
@@ -3652,6 +3652,7 @@ class IACWhatsAppService extends EventEmitter {
       _empresaIdFixa: empresaExecucao,
       _skipChannelTenantResolution: true,
       _systemOrigin: 'agendamento',
+      _agendamentoModulo: modulo || null,
     });
     const statusExecucao = this._scheduledExecutionStatus(empresaExecucao, timingCtx.logId, resposta);
     return {
@@ -4126,6 +4127,8 @@ class IACWhatsAppService extends EventEmitter {
       contextoAnterior,
       historicoResumido: this._buildHistoricoResumido(sender, empresaId, this._historicoTurnosConfig(empresaId)),
       tenantAliases,
+      _systemOrigin: opts._systemOrigin || null,
+      _agendamentoModulo: opts._agendamentoModulo || null,
     });
     _timings.intent = Date.now();
     intent._mensagemOriginal = textoExecucao;

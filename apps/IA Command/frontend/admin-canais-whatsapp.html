@@ -301,7 +301,10 @@
       columns:[
         { title:'Nome', field:'nome', minWidth:180, headerFilter:true, formatter:c=>`<strong style="color:var(--text-hi)">${esc(c.getValue())}</strong>` },
         { title:'Numero', field:'numero', width:150, headerFilter:true, formatter:c=>`<span style="font-family:monospace">${esc(fmtNumero(c.getValue()))}</span>` },
-        { title:'Empresas', field:'empresas', minWidth:220, headerFilter:true, headerFilterFunc:(hv,rv)=>!hv||(rv||[]).some(e=>e.nome?.toLowerCase().includes(hv.toLowerCase())), formatter:c=>esc((c.getValue() || []).map(e => e.nome).join(', ') || '-') },
+        { title:'Empresas', field:'empresas', minWidth:220, headerFilter:true, headerFilterFunc:(hv,rv)=>!hv||(rv||[]).some(e=>e.nome?.toLowerCase().includes(hv.toLowerCase())), formatter:c=>{
+          const nomes = (c.getValue() || []).map(e => e.nome).join(', ');
+          return nomes ? esc(nomes) : '<span class="badge-inativo">Sem empresas</span>';
+        } },
         { title:'Padrao', field:'padrao', width:90, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Sim','0':'Nao'}}, headerFilterFunc:(hv,rv)=>hv===''||(hv==='1'?!!rv:!rv), formatter:c=>c.getValue()?'<span class="badge-ativo">Sim</span>':'<span class="badge-inativo">Nao</span>' },
         { title:'Status', field:'ativo', width:95, headerFilter:'select', headerFilterParams:{values:{'':'Todos','1':'Ativo','0':'Inativo'}}, formatter:c=>c.getValue()?'<span class="badge-ativo">Ativo</span>':'<span class="badge-inativo">Inativo</span>' },
         { title:'Acoes', field:'id', width:95, hozAlign:'right', headerFilter:false, groupable:false, formatter:c=>`<button class="btn-icon" onclick="event.stopPropagation();abrirFormulario('${esc(c.getValue())}')" title="Editar">✏️</button><button class="btn-icon" onclick="event.stopPropagation();excluir('${esc(c.getValue())}')" title="Excluir" style="color:#dc2626">🗑</button>` },

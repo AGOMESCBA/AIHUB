@@ -149,6 +149,17 @@ function buscarCanal(channelId) {
   return _channelFromRow(getDB().prepare('SELECT * FROM whatsapp_channels WHERE id = ?').get(channelId));
 }
 
+function buscarCanalAdmin(channelId) {
+  const canal = buscarCanal(channelId);
+  if (!canal) return null;
+  return {
+    ...canal,
+    empresas: listarEmpresasDoCanal(canal.id),
+    padrao: 0,
+    aliases: '',
+  };
+}
+
 function listarAtivosComSessao() {
   return getDB().prepare(`
     SELECT * FROM whatsapp_channels
@@ -171,6 +182,27 @@ function listarPorEmpresa(empresaId) {
     padrao: row.padrao,
     aliases: row.aliases || '',
     empresas: listarEmpresasDoCanal(row.id),
+  }));
+}
+
+function listarOrfaosAtivos() {
+  return getDB().prepare(`
+    SELECT c.*
+    FROM whatsapp_channels c
+    WHERE c.ativo = 1
+      AND NOT EXISTS (
+        SELECT 1
+        FROM whatsapp_channel_companies l
+        WHERE l.channel_id = c.id
+          AND l.ativo = 1
+      )
+    ORDER BY c.nome COLLATE NOCASE ASC
+  `).all().map(row => ({
+    ..._channelFromRow(row),
+    padrao: 0,
+    aliases: '',
+    empresas: [],
+    orfao: 1,
   }));
 }
 
@@ -342,7 +374,9 @@ module.exports = {
   buscarCanal,
   listarAtivosComSessao,
   listarPorEmpresa,
+  listarOrfaosAtivos,
   buscarCanalDaEmpresa,
+  buscarCanalAdmin,
   getDefaultForEmpresa,
   ensureDefaultForEmpresa,
   listarEmpresasDoCanal,

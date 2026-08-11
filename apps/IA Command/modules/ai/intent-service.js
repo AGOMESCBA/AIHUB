@@ -868,7 +868,22 @@ async function classificar(mensagem, empresaId, opts = {}) {
   // (o caso comum hoje), retorna esse sistema sem nenhum calculo extra e o fluxo segue 100%
   // igual ao anterior a esta checagem.
   const systemRouter = require('./system-router');
-  const sistemaAlvo = systemRouter.resolverSistema(mensagem, intencoes, sinonimos, normalizacoes);
+  let sistemaAlvo = systemRouter.resolverSistema(mensagem, intencoes, sinonimos, normalizacoes);
+
+  // Agendamento não tem usuário no loop para responder a um pedido de confirmação — o job já
+  // declara seu modulo no cadastro (ex: "chamados", "faturamento"), entao usamos esse dado,
+  // que o proprio usuario forneceu ao criar o agendamento, para desempatar em vez de bloquear.
+  // Generico para qualquer sistema/modulo cadastrado, sem lista fixa por sistema.
+  if (sistemaAlvo.ambiguo && opts._systemOrigin === 'agendamento' && opts._agendamentoModulo) {
+    const moduloJob = String(opts._agendamentoModulo).trim().toLowerCase();
+    const candidatoPorModulo = sistemaAlvo.candidatos.find(
+      c => String(c.modulo || '').trim().toLowerCase() === moduloJob
+    );
+    if (candidatoPorModulo) {
+      sistemaAlvo = { sistema: candidatoPorModulo.sistema, ambiguo: false, candidatos: [] };
+    }
+  }
+
   if (sistemaAlvo.ambiguo) {
     const opcoes = sistemaAlvo.candidatos
       .map(c => `${c.modulo || c.sistema} (${c.sistema})`)

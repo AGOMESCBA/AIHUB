@@ -50,7 +50,7 @@ function _carregarConnectionRow(db, empresaId, opts = {}) {
   }
   if (opts.sistemaOrigem) {
     let row = db.prepare(
-      "SELECT * FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = ? ORDER BY padrao DESC, criado_em DESC LIMIT 1"
+      "SELECT * FROM connections WHERE empresa_id = ? AND ativo = 1 AND LOWER(erp) = LOWER(?) ORDER BY padrao DESC, criado_em DESC LIMIT 1"
     ).get(empresaId, opts.sistemaOrigem);
     if (row) return row;
     return null;

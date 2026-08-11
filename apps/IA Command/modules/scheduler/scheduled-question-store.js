@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
+const usuariosDb = require('../../../../modules/usuarios/database');
+const sistemasDb = require('../../../../modules/sistemas/database');
 
 function uuid() {
   return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -11,6 +13,60 @@ function agora() {
 
 function normalizarNumero(numero) {
   return String(numero || '').replace(/\D/g, '');
+}
+
+function variantesNumeroUsuario(numero) {
+  const base = normalizarNumero(numero);
+  const out = new Set();
+  if (base) out.add(base);
+  if (base.startsWith('55') && base.length > 11) {
+    out.add(base.slice(2));
+    if (base.length === 13) out.add(base.slice(0, 4) + base.slice(5));
+    if (base.length === 12) out.add(base.slice(0, 4) + '9' + base.slice(4));
+  }
+  if (!base.startsWith('55') && (base.length === 10 || base.length === 11)) {
+    out.add(`55${base}`);
+    if (base.length === 11) out.add(base.slice(0, 2) + base.slice(3));
+    if (base.length === 10) out.add(base.slice(0, 2) + '9' + base.slice(2));
+  }
+  return out;
+}
+
+function usuariosPorNumero() {
+  const mapa = new Map();
+  for (const usuario of usuariosDb.listar()) {
+    for (const numero of variantesNumeroUsuario(usuario.celular)) {
+      if (!mapa.has(numero)) mapa.set(numero, []);
+      mapa.get(numero).push(usuario);
+    }
+  }
+  return mapa;
+}
+
+function usuarioTemEmpresa(usuario, empresaId) {
+  if (!usuario?.ativo) return false;
+  if (usuario.role === 'admin' || usuario.empresas === 'all') return true;
+  return Array.isArray(usuario.empresas) && usuario.empresas.map(Number).includes(Number(empresaId));
+}
+
+function numeroElegivelParaEmpresa(row, empresaId, mapaUsuarios = usuariosPorNumero()) {
+  const usuarios = [];
+  for (const numero of variantesNumeroUsuario(row.numero)) {
+    for (const usuario of mapaUsuarios.get(numero) || []) usuarios.push(usuario);
+  }
+  if (!usuarios.length) return true;
+  const vistos = new Set();
+  return usuarios
+    .filter(usuario => usuario?.id && !vistos.has(usuario.id) && (vistos.add(usuario.id), true))
+    .some(usuario =>
+      usuarioTemEmpresa(usuario, empresaId) &&
+      sistemasDb.hasUserSystem(usuario.id, empresaId, 'ia-command')
+    );
+}
+
+function filtrarNumerosElegiveis(rows, empresaId) {
+  const mapa = usuariosPorNumero();
+  return rows.filter(row => numeroElegivelParaEmpresa(row, Number(empresaId), mapa));
 }
 
 function parseJson(valor, fallback) {
@@ -149,12 +205,17 @@ function buscarJob(empresaId, id) {
 }
 
 function listarDestinatarios(empresaId, jobId) {
-  return getDB().prepare(`
-    SELECT *
-    FROM scheduled_question_recipients
-    WHERE empresa_id = ? AND job_id = ? AND ativo = 1
+  const rows = getDB().prepare(`
+    SELECT r.*
+    FROM scheduled_question_recipients r
+    JOIN whatsapp_allowed_numbers n
+      ON n.id = r.numero_id
+     AND n.empresa_id = r.empresa_id
+     AND n.ativo = 1
+    WHERE r.empresa_id = ? AND r.job_id = ? AND r.ativo = 1
     ORDER BY nome COLLATE NOCASE ASC
   `).all(Number(empresaId), jobId).map(recipientFromRow);
+  return filtrarNumerosElegiveis(rows, empresaId);
 }
 
 function listarRuns(empresaId, jobId, limit = 50) {
@@ -375,25 +436,27 @@ function atualizarDelivery(id, campos = {}) {
 }
 
 function listarNumerosAutorizados(empresaId) {
-  return getDB().prepare(`
+  const rows = getDB().prepare(`
     SELECT id, nome, numero, observacoes, modulo_financeiro, modulo_compras,
            modulo_faturamento, modulo_comissao, erp_tipo, erp_id
     FROM whatsapp_allowed_numbers
     WHERE empresa_id = ? AND ativo = 1
     ORDER BY nome COLLATE NOCASE ASC, numero ASC
   `).all(Number(empresaId)).map(row => ({ ...row, numero: normalizarNumero(row.numero) }));
+  return filtrarNumerosElegiveis(rows, empresaId);
 }
 
 function buscarNumerosAutorizadosPorIds(empresaId, ids = []) {
   const lista = [...new Set((ids || []).map(String).filter(Boolean))];
   if (!lista.length) return [];
   const placeholders = lista.map(() => '?').join(',');
-  return getDB().prepare(`
+  const rows = getDB().prepare(`
     SELECT id, nome, numero
     FROM whatsapp_allowed_numbers
     WHERE empresa_id = ? AND ativo = 1 AND id IN (${placeholders})
     ORDER BY nome COLLATE NOCASE ASC
   `).all(Number(empresaId), ...lista).map(row => ({ ...row, numero: normalizarNumero(row.numero) }));
+  return filtrarNumerosElegiveis(rows, empresaId);
 }
 
 function payloadJob(dados, empresaId, usuario, existing = {}) {

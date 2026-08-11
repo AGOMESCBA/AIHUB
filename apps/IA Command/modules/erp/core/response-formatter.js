@@ -265,7 +265,7 @@ function _extrairDia(row) {
 
 function _somarNumericos(rows) {
   // Retorna { coluna: total } para todas as colunas numéricas do resultado
-  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const firstRow = rows[0] || {};
   const cols = Object.keys(firstRow).filter(k => {
     const kl = k.toLowerCase();
@@ -514,7 +514,7 @@ function _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, limite, 
   }
 
   // Detecta colunas numéricas para somar (ignora IDs, datas e a própria coluna de grupo)
-  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const numColsTodas = Object.keys(firstRow).filter(k => {
     if (k === colunaGrupo) return false;
     if (_DETECTORES.data(k)) return false;
@@ -620,7 +620,7 @@ function _formatarAgrupamentoComposto(rows, dimensoes, periodoStr, filtrosStr, l
     return `Atenção: não foi possível agrupar por "${dims[faltanteIdx]}". Tente reformular a pergunta.`;
   }
 
-  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const colunasDimensao = new Set(resolvers.filter(r => r.tipo === 'coluna').map(r => r.coluna));
   const numColsTodas = Object.keys(firstRow).filter(k => {
     if (colunasDimensao.has(k)) return false;
@@ -739,7 +739,7 @@ function _formatarAgrupamentoTemporal(rows, agruparPor, periodoStr, filtrosStr, 
 
   const extrairChave = dimensao === 'ano' ? _extrairAno : dimensao === 'dia' ? _extrairDia : _extrairMes;
   const firstRow = rows[0] || {};
-  const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const numColsTodas = Object.keys(firstRow).filter(k => {
     if (_DETECTORES.data(k)) return false;
     const kl = k.toLowerCase();
@@ -843,7 +843,7 @@ function _formatarOperacaoAnalitica(rows, intent, periodo, periodoStr, filtrosSt
   if (!divisor?.valor) return null;
 
   const firstRow = rows[0] || {};
-  const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const numColsTodas = Object.keys(firstRow).filter(k => {
     const kl = k.toLowerCase();
     if (SKIP_PREFIXES.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;
@@ -1029,7 +1029,7 @@ function formatar(resultado, intent, opts = {}) {
     }
 
     default: {
-      const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+      const SKIP_PREFIXES = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
       const firstRow = rows[0] || {};
       const numColsTodas = Object.keys(firstRow).filter(k => {
         const kl = k.toLowerCase();
@@ -1073,7 +1073,7 @@ function formatarAiSqlLocal(rows, intent) {
     return _formatarAgrupamento(rows, agruparPor, periodoStr, filtrosStr, intent?.limite, intent);
   }
   const firstRow = rows[0] || {};
-  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia'];
+  const SKIP = ['id', 'cod', 'codigo', 'num', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const numColsTodas = Object.keys(firstRow).filter(k => {
     const kl = k.toLowerCase();
     if (SKIP.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;

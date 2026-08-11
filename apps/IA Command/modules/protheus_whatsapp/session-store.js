@@ -59,9 +59,12 @@ function listarSessoes({ empresaId, celular, limite = 30 }) {
   });
 }
 
+// Retorna o id da mensagem de resposta ('in') criada — usado pelo frontend
+// para referenciar essa mensagem especifica ao salvar config de grid.
 function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipoResultado = null, intent = null }) {
   const db = getDB();
   const agora = new Date().toISOString();
+  const respostaId = crypto.randomUUID();
 
   const insert = db.prepare(`
     INSERT INTO protheus_chat_messages (id, sessao_id, direcao, texto, rows_json, tipo_resultado, intent_json, criado_em)
@@ -70,7 +73,7 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
 
   insert.run(crypto.randomUUID(), sessaoId, 'out', perguntaTexto, null, null, null, agora);
   insert.run(
-    crypto.randomUUID(), sessaoId, 'in', respostaTexto,
+    respostaId, sessaoId, 'in', respostaTexto,
     rows ? JSON.stringify(rows) : null,
     tipoResultado,
     intent ? JSON.stringify(intent) : null,
@@ -84,19 +87,21 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
     db.prepare(`UPDATE protheus_chat_sessions SET titulo = ? WHERE id = ?`)
       .run(truncarTitulo(perguntaTexto), sessaoId);
   }
+
+  return respostaId;
 }
 
 function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
   const db = getDB();
   const rows = cursor
     ? db.prepare(`
-        SELECT id, direcao, texto, rows_json, tipo_resultado, criado_em
+        SELECT id, direcao, texto, rows_json, tipo_resultado, grid_config_json, criado_em
         FROM protheus_chat_messages
         WHERE sessao_id = ? AND criado_em < ?
         ORDER BY criado_em DESC LIMIT ?
       `).all(sessaoId, cursor, limite)
     : db.prepare(`
-        SELECT id, direcao, texto, rows_json, tipo_resultado, criado_em
+        SELECT id, direcao, texto, rows_json, tipo_resultado, grid_config_json, criado_em
         FROM protheus_chat_messages
         WHERE sessao_id = ?
         ORDER BY criado_em DESC LIMIT ?
@@ -108,6 +113,7 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
     texto: r.texto,
     rows: r.rows_json ? JSON.parse(r.rows_json) : null,
     tipo: r.tipo_resultado,
+    gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
     criadoEm: r.criado_em,
   }));
 
@@ -117,13 +123,71 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
   };
 }
 
-function ultimoIntent({ sessaoId }) {
+// Ultima mensagem 'in' da sessao que tenha dados tabulares (rows com pelo
+// menos 1 linha) — usada para popular a aba Relatorio ao carregar a conversa.
+function ultimaMensagemTabular({ sessaoId }) {
   const row = getDB().prepare(`
-    SELECT intent_json FROM protheus_chat_messages
-    WHERE sessao_id = ? AND direcao = 'in' AND intent_json IS NOT NULL
+    SELECT id, texto, rows_json, tipo_resultado, grid_config_json, criado_em
+    FROM protheus_chat_messages
+    WHERE sessao_id = ? AND direcao = 'in' AND rows_json IS NOT NULL
     ORDER BY criado_em DESC LIMIT 1
   `).get(sessaoId);
+  if (!row) return null;
+  const rows = JSON.parse(row.rows_json);
+  if (!Array.isArray(rows) || !rows.length) return null;
+  return {
+    id: row.id,
+    texto: row.texto,
+    rows,
+    tipo: row.tipo_resultado,
+    gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    criadoEm: row.criado_em,
+  };
+}
+
+// Salva a configuracao de grid (agrupamento/filtros escolhidos pelo usuario)
+// de uma mensagem especifica, restaurada da proxima vez que a sessao/mensagem
+// for reaberta. gridConfig e um objeto livre definido pelo frontend
+// (ex.: { groupBy: ['vendedor'], filters: [...] }) — o backend so persiste.
+function salvarGridConfig({ mensagemId, sessaoId, gridConfig }) {
+  const info = getDB().prepare(`
+    UPDATE protheus_chat_messages SET grid_config_json = ?
+    WHERE id = ? AND sessao_id = ?
+  `).run(JSON.stringify(gridConfig || {}), mensagemId, sessaoId);
+  return info.changes > 0;
+}
+
+// Le o ultimo intent da sessao para servir de contexto ao intent-merger.
+// Respeita memoria_resetada_em: mensagens anteriores ao reset sao ignoradas,
+// mesmo que continuem visiveis no historico (resetarMemoria() nao apaga nada).
+function ultimoIntent({ sessaoId }) {
+  const db = getDB();
+  const sessao = db.prepare(`SELECT memoria_resetada_em FROM protheus_chat_sessions WHERE id = ?`).get(sessaoId);
+  const corte = sessao?.memoria_resetada_em || null;
+
+  const row = corte
+    ? db.prepare(`
+        SELECT intent_json FROM protheus_chat_messages
+        WHERE sessao_id = ? AND direcao = 'in' AND intent_json IS NOT NULL AND criado_em > ?
+        ORDER BY criado_em DESC LIMIT 1
+      `).get(sessaoId, corte)
+    : db.prepare(`
+        SELECT intent_json FROM protheus_chat_messages
+        WHERE sessao_id = ? AND direcao = 'in' AND intent_json IS NOT NULL
+        ORDER BY criado_em DESC LIMIT 1
+      `).get(sessaoId);
+
   return row ? JSON.parse(row.intent_json) : null;
+}
+
+// Marca o momento atual como fronteira de memoria da sessao — ultimoIntent()
+// passa a ignorar tudo antes disso. Nao apaga mensagens; o historico visual
+// (listarMensagens) continua mostrando a conversa completa.
+function resetarMemoria({ sessaoId }) {
+  const agora = new Date().toISOString();
+  getDB().prepare(`UPDATE protheus_chat_sessions SET memoria_resetada_em = ? WHERE id = ?`)
+    .run(agora, sessaoId);
+  return agora;
 }
 
 module.exports = {
@@ -133,4 +197,7 @@ module.exports = {
   salvarTurno,
   listarMensagens,
   ultimoIntent,
+  resetarMemoria,
+  ultimaMensagemTabular,
+  salvarGridConfig,
 };

@@ -6,7 +6,11 @@ const store = require('./scheduled-question-store');
 const runner = require('./scheduled-question-runner');
 const executor = require('./scheduled-question-executor');
 
-const MODULOS = new Set(['compras', 'financeiro', 'faturamento', 'comissao']);
+// Módulos Protheus com autorização granular por número (whatsapp_allowed_numbers) e com
+// handler dedicado (SQL_HANDLERS em scheduled-question-runner.js). SQL fixo em módulos fora
+// desta lista (ex: SoftExpert) roda pelo caminho genérico (_executarSqlFixoGenerico), que usa
+// a conexão do próprio sistema em vez de handler especializado, sem autorização por número.
+const MODULOS_SQL_FIXO = new Set(['compras', 'financeiro', 'faturamento', 'comissao']);
 const COLUNA_MODULO = {
   compras: 'modulo_compras',
   financeiro: 'modulo_financeiro',
@@ -30,9 +34,38 @@ function audit(req, acao, detalhes) {
   } catch (_) {}
 }
 
-function normalizarModulo(valor) {
+// Módulo do agendamento agora é qualquer módulo com intenção ai_text_to_sql ativa cadastrada
+// para a empresa (Protheus ou não) — mesmo catálogo dinâmico usado no roteamento de sistema
+// (system-router.js), evitando lista fixa por sistema que precisaria crescer a cada dataset novo.
+function modulosDisponiveis(empresaId) {
+  const intencoes = crud.listar('intentions', { empresa_id: empresaId, ativo: 1 });
+  const modulos = new Set();
+  for (const i of intencoes) {
+    if (String(i.acao || '').toLowerCase() !== 'ai_text_to_sql') continue;
+    if (i.modulo) modulos.add(String(i.modulo).trim().toLowerCase());
+  }
+  return modulos;
+}
+
+// Mesma fonte de modulosDisponiveis(), mas preservando o sistema (erp) de cada modulo, para o
+// formulario de agendamento agrupar "Sistema" -> "Modulo" em cascata.
+function modulosComErp(empresaId) {
+  const intencoes = crud.listar('intentions', { empresa_id: empresaId, ativo: 1 });
+  const porModulo = new Map();
+  for (const i of intencoes) {
+    if (String(i.acao || '').toLowerCase() !== 'ai_text_to_sql') continue;
+    if (!i.modulo) continue;
+    const modulo = String(i.modulo).trim().toLowerCase();
+    const erp = String(i.erp || 'protheus').trim().toLowerCase() || 'protheus';
+    if (!porModulo.has(modulo)) porModulo.set(modulo, erp);
+  }
+  return [...porModulo.entries()].map(([modulo, erp]) => ({ modulo, erp }));
+}
+
+function normalizarModulo(valor, empresaId) {
   const modulo = String(valor || '').trim().toLowerCase();
-  return MODULOS.has(modulo) ? modulo : null;
+  if (!modulo) return null;
+  return modulosDisponiveis(empresaId).has(modulo) ? modulo : null;
 }
 
 function validarIsoOuNull(valor, campo) {
@@ -66,9 +99,10 @@ function validarPayload(req, { parcial = false } = {}) {
     if (!out.channel_id) throw Object.assign(new Error('Campo obrigatorio: channel_id.'), { statusCode: 400 });
   }
 
-  out.modulo = body.modulo === undefined ? undefined : normalizarModulo(body.modulo);
+  const empresaIdPayload = getEmpresaId(req);
+  out.modulo = body.modulo === undefined ? undefined : normalizarModulo(body.modulo, empresaIdPayload);
   if (body.modulo && !out.modulo) {
-    throw Object.assign(new Error('Modulo invalido. Use compras, financeiro, faturamento ou comissao.'), { statusCode: 400 });
+    throw Object.assign(new Error('Modulo invalido. Cadastre uma intencao ai_text_to_sql com esse modulo antes de usa-lo no agendamento.'), { statusCode: 400 });
   }
   if (!parcial || body.sql_fixo !== undefined) {
     out.sql_fixo = String(body.sql_fixo || '').trim() || null;
@@ -115,7 +149,10 @@ function validarDestinatarios(empresaId, destinatarioIds, modulo = null) {
     throw Object.assign(new Error('Um ou mais destinatarios nao pertencem aos numeros autorizados desta empresa.'), { statusCode: 400 });
   }
 
-  if (modulo) {
+  // Autorização granular por número (whatsapp_allowed_numbers.modulo_*) só existe para os
+  // módulos Protheus legados. Módulos de outros sistemas (ex: chamados/SoftExpert) não têm
+  // essa coluna — qualquer destinatário autorizado da empresa pode recebê-los.
+  if (modulo && MODULOS_SQL_FIXO.has(modulo)) {
     const autorizadosComModulo = store.listarNumerosAutorizados(empresaId)
       .filter(row => ids.includes(String(row.id)))
       .filter(row => Number(row[COLUNA_MODULO[modulo]] || 0) === 1);
@@ -148,6 +185,12 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
     const job = store.buscarJob(getEmpresaId(req), req.params.id);
     if (!job) return res.status(404).json({ error: 'Job nao encontrado.' });
     res.json(job);
+  }));
+
+  app.get('/api/ia-command/admin/agendamento/modulos-disponiveis', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
+    const empresaId = getEmpresaId(req);
+    const modulos = modulosComErp(empresaId).sort((a, b) => a.modulo.localeCompare(b.modulo));
+    res.json(modulos.map((m) => ({ modulo: m.modulo, erp: m.erp, sql_fixo: MODULOS_SQL_FIXO.has(m.modulo) })));
   }));
 
   app.post('/api/ia-command/admin/agendamento/jobs', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
@@ -311,7 +354,11 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
   }));
 
   app.get('/api/ia-command/admin/agendamento/destinatarios', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
-    const modulo = normalizarModulo(req.query.modulo);
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    // Filtro por autorização de módulo só existe para os 4 módulos Protheus (whatsapp_allowed_numbers
+    // não tem coluna de autorização por módulo de outros sistemas); para os demais, lista todos.
+    const moduloBruto = String(req.query.modulo || '').trim().toLowerCase();
+    const modulo = MODULOS_SQL_FIXO.has(moduloBruto) ? moduloBruto : null;
     let rows = store.listarNumerosAutorizados(getEmpresaId(req));
     if (modulo) rows = rows.filter(row => Number(row[COLUNA_MODULO[modulo]] || 0) === 1);
     res.json(rows);

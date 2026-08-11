@@ -101,7 +101,13 @@
     .form-label { display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:5px; }
     .form-help { font-size:12px;color:var(--text-lo);line-height:1.45;margin-top:5px; }
     textarea.form-control { min-height:92px;resize:vertical;line-height:1.45; }
-    .sql-textarea { min-height:150px;font-family:Consolas,'Courier New',monospace;font-size:12px; }
+    .sql-textarea { min-height:420px;font-family:Consolas,'Courier New',monospace;font-size:12px;resize:vertical; }
+    .job-subtabs { display:flex;gap:0;border-bottom:1px solid var(--border);margin:-16px -16px 16px;padding:0 16px;overflow:auto; }
+    .job-subtab { background:none;border:none;color:var(--text-md);cursor:pointer;font-size:12px;font-weight:700;padding:12px 14px;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap; }
+    .job-subtab:hover { color:var(--accent); }
+    .job-subtab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .job-subpanel { display:none; }
+    .job-subpanel.active { display:block; }
     .recipient-list { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg-base); }
     .recipient-item { display:flex;align-items:flex-start;gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px;background:var(--bg-card);cursor:pointer; }
     .recipient-item:hover { border-color:var(--accent-light); }
@@ -263,54 +269,64 @@
         <div class="form-grid" style="margin-top:16px">
           <main>
             <section class="form-section">
-              <div class="form-section-header">
-                <div class="form-section-title">Pergunta</div>
-                <div class="form-section-subtitle">Use uma pergunta completa, sem depender de complementos conversacionais.</div>
-              </div>
               <div class="form-section-body">
-                <div class="form-row">
-                  <div class="form-group">
-                    <label class="form-label">Nome do job</label>
-                    <input id="f-nome" class="form-control" placeholder="Ex: Faturamento diario por vendedor" oninput="atualizarResumo()">
+                <div class="job-subtabs">
+                  <button class="job-subtab active" type="button" data-job-subtab-btn="pergunta" onclick="trocarAbaJob('pergunta')">Pergunta</button>
+                  <button class="job-subtab" type="button" data-job-subtab-btn="sql-fixo" onclick="trocarAbaJob('sql-fixo')">SQL Fixo</button>
+                </div>
+
+                <div class="job-subpanel active" id="job-subpanel-pergunta" data-job-subpanel="pergunta">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Nome do job</label>
+                      <input id="f-nome" class="form-control" placeholder="Ex: Faturamento diario por vendedor" oninput="atualizarResumo()">
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Sistema</label>
+                      <select id="f-sistema" class="form-control" onchange="onSistemaChange()">
+                        <option value="">Detectar automaticamente</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Modulo esperado</label>
+                      <select id="f-modulo" class="form-control" onchange="onModuloChange()">
+                        <option value="">Detectar automaticamente</option>
+                      </select>
+                      <div class="form-help">Quando informado, os destinatarios tambem precisam ter este modulo liberado.</div>
+                    </div>
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Modulo esperado</label>
-                    <select id="f-modulo" class="form-control" onchange="onModuloChange()">
-                      <option value="">Detectar automaticamente</option>
-                      <option value="compras">Compras</option>
-                      <option value="financeiro">Financeiro</option>
-                      <option value="faturamento">Faturamento</option>
-                      <option value="comissao">Comissao</option>
-                    </select>
-                    <div class="form-help">Quando informado, os destinatarios tambem precisam ter este modulo liberado.</div>
+                    <label class="form-label">Pergunta</label>
+                    <textarea id="f-pergunta" class="form-control" placeholder="Ex: Qual foi o faturamento de ontem por vendedor?" oninput="atualizarResumo()"></textarea>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Canal WhatsApp</label>
+                      <select id="f-channel" class="form-control" onchange="atualizarResumo()"></select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Status</label>
+                      <select id="f-ativo" class="form-control" onchange="atualizarResumo()">
+                        <option value="1">Ativo</option>
+                        <option value="0">Pausado</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Pergunta</label>
-                  <textarea id="f-pergunta" class="form-control" placeholder="Ex: Qual foi o faturamento de ontem por vendedor?" oninput="atualizarResumo()"></textarea>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">SQL fixo opcional</label>
-                  <textarea id="f-sql-fixo" class="form-control sql-textarea" placeholder="Ex: WITH dados AS (...) SELECT ... WHERE F2_EMISSAO = '{{HOJE}}'" oninput="atualizarResumo()"></textarea>
-                  <div class="form-help">Quando preenchido, o job executa este SQL uma unica vez e entrega a mesma resposta para todos. Use macros Protheus ({{HOJE}} = 20260731) ou ISO ({{HOJE_ISO}} = 2026-07-31), inclusive com deslocamentos como {{INICIO_ANO_ISO:-1}}. O modulo esperado passa a ser obrigatorio.</div>
-                </div>
-                <div class="form-row">
+
+                <div class="job-subpanel" id="job-subpanel-sql-fixo" data-job-subpanel="sql-fixo">
                   <div class="form-group">
-                    <label class="form-label">Canal WhatsApp</label>
-                    <select id="f-channel" class="form-control" onchange="atualizarResumo()"></select>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Status</label>
-                    <select id="f-ativo" class="form-control" onchange="atualizarResumo()">
-                      <option value="1">Ativo</option>
-                      <option value="0">Pausado</option>
-                    </select>
+                    <label class="form-label">SQL fixo opcional</label>
+                    <textarea id="f-sql-fixo" class="form-control sql-textarea" placeholder="Ex: WITH dados AS (...) SELECT ... WHERE F2_EMISSAO = '{{HOJE}}'" oninput="atualizarResumo()"></textarea>
+                    <div class="form-help">Quando preenchido, o job executa este SQL uma unica vez e entrega a mesma resposta para todos. Use macros Protheus ({{HOJE}} = 20260731) ou ISO ({{HOJE_ISO}} = 2026-07-31), inclusive com deslocamentos como {{INICIO_ANO_ISO:-1}}. O modulo esperado passa a ser obrigatorio.</div>
                   </div>
                 </div>
               </div>
             </section>
 
-            <section class="form-section">
+            <section class="form-section job-subpanel active" data-job-subpanel="pergunta">
               <div class="form-section-header">
                 <div class="form-section-title">Agenda</div>
                 <div class="form-section-subtitle">O executor interno dispara os jobs ativos conforme a proxima execucao.</div>
@@ -378,7 +394,7 @@
               </div>
             </section>
 
-            <section class="form-section">
+            <section class="form-section job-subpanel active" data-job-subpanel="pergunta">
               <div class="form-section-header">
                 <div class="form-section-title">Destinatarios</div>
                 <div class="form-section-subtitle">A lista vem dos numeros autorizados da empresa ativa. A validacao tambem acontece no backend.</div>
@@ -451,7 +467,9 @@
     <section class="help-section">
       <div class="help-section-title">SQL fixo opcional</div>
       <div class="help-item"><div class="help-item-label">Campo vazio</div><div class="help-item-desc">O IA Command interpreta a pergunta e gera o SQL dinamicamente, como acontece nas mensagens normais.</div></div>
-      <div class="help-item"><div class="help-item-label">Campo preenchido</div><div class="help-item-desc">O sistema pula a etapa de geracao por IA, executa o SQL informado, formata o resultado e envia a resposta. O modulo esperado deve ser informado para aplicar o handler e as regras de seguranca corretas.</div></div>
+      <div class="help-item"><div class="help-item-label">Campo preenchido</div><div class="help-item-desc">O sistema pula a etapa de geracao por IA, executa o SQL informado, formata o resultado e envia a resposta. O modulo esperado deve ser informado para escolher a conexao correta.</div></div>
+      <div class="help-item"><div class="help-item-label">Modulos Protheus (Compras, Financeiro, Faturamento, Comissao)</div><div class="help-item-desc">Usam handler dedicado, com as mesmas regras de seguranca e autorizacao por numero das perguntas em linguagem natural.</div></div>
+      <div class="help-item"><div class="help-item-label">Outros sistemas (ex: SoftExpert)</div><div class="help-item-desc">O SQL roda diretamente na conexao do sistema, sem handler especializado nem autorizacao granular por numero. Escreva o SQL com cuidado, como um administrador de confianca.</div></div>
       <div class="help-tip">Use SQL fixo para relatorios estaveis e recorrentes. Evite datas literais, como 20260731, porque elas deixam o job preso em um periodo antigo.</div>
     </section>
 
@@ -529,6 +547,7 @@ SELECT * FROM dados;</code></div>
 <script>
   let jobs = [];
   let canais = [];
+  let modulosDisponiveis = [];
   let destinatarios = [];
   let executorStatus = null;
   let editId = null;
@@ -600,7 +619,10 @@ SELECT * FROM dados;</code></div>
   }
   function fmtNumero(n) { const v = String(n || '').replace(/\D/g,''); return v ? `+${v}` : '-'; }
   function moduloLabel(m) {
-    return { compras:'Compras', financeiro:'Financeiro', faturamento:'Faturamento', comissao:'Comissao' }[m] || 'Automatico';
+    if (!m) return 'Automatico';
+    const fixo = { compras:'Compras', financeiro:'Financeiro', faturamento:'Faturamento', comissao:'Comissao' }[m];
+    if (fixo) return fixo;
+    return String(m).charAt(0).toUpperCase() + String(m).slice(1);
   }
   function scheduleLabel(job) {
     const tipo = job?.schedule_tipo || document.getElementById('f-schedule-tipo')?.value || 'manual';
@@ -733,11 +755,14 @@ SELECT * FROM dados;</code></div>
 
   async function carregarTudo() {
     try {
-      [jobs, canais, executorStatus] = await Promise.all([
+      [jobs, canais, executorStatus, modulosDisponiveis] = await Promise.all([
         api('/api/ia-command/admin/agendamento/jobs'),
         api('/api/ia-command/admin/agendamento/canais'),
         api('/api/ia-command/admin/agendamento/executor/status').catch(() => null),
+        api('/api/ia-command/admin/agendamento/modulos-disponiveis').catch(() => []),
       ]);
+      preencherSistemas();
+      preencherModulos();
       renderMetricas();
       renderExecutorStatus();
       renderJobs();
@@ -918,7 +943,7 @@ SELECT * FROM dados;</code></div>
           if (value === 'Executando') return '<span class="badge badge-run">Executando</span>';
           return value === 'Ativo' ? '<span class="badge badge-ok">Ativo</span>' : '<span class="badge badge-paused">Pausado</span>';
         } },
-        { title:'Modulo', field:'modulo_label', width:135, headerFilter:'select', headerFilterParams:{values:{'':'Todos','Automatico':'Automatico','Compras':'Compras','Financeiro':'Financeiro','Faturamento':'Faturamento','Comissao':'Comissao'}}, formatter:c=>`<span class="badge badge-mod">${esc(c.getValue())}</span>` },
+        { title:'Modulo', field:'modulo_label', width:135, headerFilter:'select', headerFilterParams:{values: filtroModuloValues()}, formatter:c=>`<span class="badge badge-mod">${esc(c.getValue())}</span>` },
         { title:'Agenda', field:'agenda_label', width:170, headerFilter:true },
         { title:'Proxima execucao', field:'next_run_at', width:160, sorter:'datetime', headerFilter:true, formatter:c=>esc(fmtData(c.getValue())) },
         { title:'Destinatarios', field:'destinatarios_count', width:125, hozAlign:'right', headerFilter:true, formatter:c=>`${Number(c.getValue() || 0)} numero(s)` },
@@ -968,12 +993,18 @@ SELECT * FROM dados;</code></div>
     document.getElementById('save-feedback').textContent = '';
     document.getElementById('btn-run-now-form').classList.toggle('d-none', !id);
     preencherCanais();
+    preencherSistemas();
+    preencherModulos();
     resetForm();
     if (id) {
       const job = await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}`);
       preencherForm(job);
       await carregarDestinatarios(job.modulo || '');
-      (job.destinatarios || []).forEach(r => selectedRecipients.add(String(r.numero_id)));
+      const validos = new Set(destinatarios.map(d => String(d.id)));
+      (job.destinatarios || [])
+        .map(r => String(r.numero_id))
+        .filter(numeroId => validos.has(numeroId))
+        .forEach(numeroId => selectedRecipients.add(numeroId));
       renderDestinatarios();
       carregarRuns(id);
     } else {
@@ -1007,9 +1038,50 @@ SELECT * FROM dados;</code></div>
     }
   }
 
+  const SQL_FIXO_ALTURA_KEY = 'iac_agendamento_sql_fixo_altura';
+
+  function trocarAbaJob(aba) {
+    salvarAlturaSqlFixoAtual();
+    document.querySelectorAll('.job-subtab').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.jobSubtabBtn === aba);
+    });
+    document.querySelectorAll('.job-subpanel').forEach(panel => {
+      panel.classList.toggle('active', panel.dataset.jobSubpanel === aba);
+    });
+  }
+
+  const SQL_FIXO_ALTURA_MINIMA = 420;
+
+  function aplicarAlturaSqlFixo() {
+    const altura = parseInt(localStorage.getItem(SQL_FIXO_ALTURA_KEY), 10);
+    if (Number.isFinite(altura) && altura >= SQL_FIXO_ALTURA_MINIMA) {
+      document.getElementById('f-sql-fixo').style.height = `${altura}px`;
+    } else {
+      localStorage.removeItem(SQL_FIXO_ALTURA_KEY);
+    }
+  }
+
+  function salvarAlturaSqlFixoAtual() {
+    const el = document.getElementById('f-sql-fixo');
+    if (!el) return;
+    const atual = el.offsetHeight;
+    if (atual >= SQL_FIXO_ALTURA_MINIMA) localStorage.setItem(SQL_FIXO_ALTURA_KEY, String(atual));
+  }
+
+  function observarAlturaSqlFixo() {
+    const el = document.getElementById('f-sql-fixo');
+    if (!el) return;
+    // resize:vertical do textarea nao dispara 'change'/'input' — mouseup/touchend apos o
+    // arraste da alca e o gatilho confiavel entre browsers para capturar o novo tamanho.
+    el.addEventListener('mouseup', salvarAlturaSqlFixoAtual);
+    el.addEventListener('touchend', salvarAlturaSqlFixoAtual);
+  }
+
   function resetForm() {
     document.getElementById('form-title').textContent = 'Novo Job';
     document.getElementById('f-nome').value = '';
+    document.getElementById('f-sistema').value = '';
+    preencherModulos();
     document.getElementById('f-modulo').value = '';
     document.getElementById('f-pergunta').value = '';
     document.getElementById('f-sql-fixo').value = '';
@@ -1022,12 +1094,17 @@ SELECT * FROM dados;</code></div>
     document.getElementById('f-dia-mes').value = '1';
     document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = false);
     document.getElementById('q-dest').value = '';
+    trocarAbaJob('pergunta');
+    aplicarAlturaSqlFixo();
     onAgendaChange();
   }
 
   function preencherForm(job) {
     document.getElementById('form-title').textContent = job.nome || 'Editar Job';
     document.getElementById('f-nome').value = job.nome || '';
+    const erpDoModulo = modulosDisponiveis.find(m => m.modulo === String(job.modulo || '').toLowerCase())?.erp || '';
+    document.getElementById('f-sistema').value = erpDoModulo;
+    preencherModulos();
     document.getElementById('f-modulo').value = job.modulo || '';
     document.getElementById('f-pergunta').value = job.pergunta || '';
     document.getElementById('f-sql-fixo').value = job.sql_fixo || '';
@@ -1048,6 +1125,8 @@ SELECT * FROM dados;</code></div>
     }
     const dias = new Set((sj.weekdays || []).map(String));
     document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = dias.has(c.value));
+    trocarAbaJob('pergunta');
+    aplicarAlturaSqlFixo();
     onAgendaChange();
   }
 
@@ -1058,9 +1137,46 @@ SELECT * FROM dados;</code></div>
       : '<option value="">Nenhum canal vinculado</option>';
   }
 
+  function filtroModuloValues() {
+    const values = { '': 'Todos', 'Automatico': 'Automatico' };
+    modulosDisponiveis.forEach(m => { const label = moduloLabel(m.modulo); values[label] = label; });
+    return values;
+  }
+
+  function sistemaLabel(erp) {
+    return { protheus: 'Protheus', softexpert: 'SoftExpert' }[String(erp || '').toLowerCase()]
+      || (erp ? String(erp).charAt(0).toUpperCase() + String(erp).slice(1) : '');
+  }
+
+  function preencherSistemas() {
+    const sel = document.getElementById('f-sistema');
+    const atual = sel.value;
+    const erps = [...new Set(modulosDisponiveis.map(m => m.erp))];
+    const opcoes = erps.map(erp => `<option value="${esc(erp)}">${esc(sistemaLabel(erp))}</option>`).join('');
+    sel.innerHTML = '<option value="">Detectar automaticamente</option>' + opcoes;
+    sel.value = atual;
+  }
+
+  function preencherModulos() {
+    const sel = document.getElementById('f-modulo');
+    const atual = sel.value;
+    const sistema = document.getElementById('f-sistema')?.value || '';
+    const filtrados = sistema ? modulosDisponiveis.filter(m => m.erp === sistema) : modulosDisponiveis;
+    const opcoes = filtrados.map(m => `<option value="${esc(m.modulo)}">${esc(moduloLabel(m.modulo))}</option>`).join('');
+    sel.innerHTML = '<option value="">Detectar automaticamente</option>' + opcoes;
+    sel.value = filtrados.some(m => m.modulo === atual) ? atual : '';
+  }
+
+  function onSistemaChange() {
+    preencherModulos();
+    onModuloChange();
+  }
+
   async function carregarDestinatarios(modulo) {
-    const qs = modulo ? `?modulo=${encodeURIComponent(modulo)}` : '';
-    destinatarios = await api(`/api/ia-command/admin/agendamento/destinatarios${qs}`);
+    const qs = new URLSearchParams();
+    if (modulo) qs.set('modulo', modulo);
+    qs.set('_', String(Date.now()));
+    destinatarios = await api(`/api/ia-command/admin/agendamento/destinatarios?${qs.toString()}`, { cache: 'no-store' });
   }
 
   async function onModuloChange() {
@@ -1142,6 +1258,7 @@ SELECT * FROM dados;</code></div>
   }
 
   async function salvarJob() {
+    salvarAlturaSqlFixoAtual();
     try {
       const nome = document.getElementById('f-nome').value.trim();
       const pergunta = document.getElementById('f-pergunta').value.trim();
@@ -1277,6 +1394,7 @@ SELECT * FROM dados;</code></div>
   }
 
   function fecharFormulario() {
+    salvarAlturaSqlFixoAtual();
     mostrarLista();
     carregarTudo();
   }
@@ -1311,6 +1429,7 @@ SELECT * FROM dados;</code></div>
 
   lerEstadoAgrupamento();
   inicializarPainelAgrupamento();
+  observarAlturaSqlFixo();
   const boot = () => carregarTudo().finally(iniciarAtualizacaoAutomatica);
   window._iahubAuthReady?.then(boot) ?? boot();
 </script>

@@ -29,6 +29,16 @@
     .stat-label{ font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600; }
     .stat-value{ font-size:22px;font-weight:800;color:var(--text-hi);margin:4px 0 2px;line-height:1; }
     .stat-sub  { font-size:11px;color:var(--text-lo); }
+    .stat-list { display:flex;flex-direction:column;gap:6px;margin-top:8px; }
+    .stat-list-row { display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding-top:6px;border-top:1px solid var(--border); }
+    .stat-list-row:first-child { border-top:none;padding-top:0; }
+    .stat-list-main { min-width:0;color:var(--text-md);line-height:1.35; }
+    .stat-list-main strong { display:block;color:var(--text-hi);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .stat-list-meta { color:var(--text-lo);font-size:10px; }
+    .stat-mini-badge { flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;white-space:nowrap; }
+    .stat-mini-ok { background:#dcfce7;color:#15803d; }
+    .stat-mini-warn { background:#fef9c3;color:#92400e; }
+    .stat-mini-off { background:var(--bg-hover);color:var(--text-lo); }
     .stat-card.accent { border-color:#7c3aed;background:rgba(124,58,237,.04); }
 
     /* Card IA — lista de provedores */
@@ -364,6 +374,81 @@
   ];
 
   // ── Coleta de dados das APIs ────────────────────────────────────────────────
+  function renderIaConfiguradaCard(ia) {
+    const configurados = TODOS_PROVEDORES.filter(p => ia[`${p.id}_api_key`]);
+    const primario = ia.provedor_primario || configurados[0]?.id || 'groq';
+    const primarioNome = TODOS_PROVEDORES.find(p => p.id === primario)?.nome || primario;
+    const statEl = document.getElementById('stat-ia');
+    const listEl = document.getElementById('stat-ia-prov');
+
+    if (!configurados.length) {
+      statEl.innerHTML = '<span class="status-badge status-stopped">Não configurada</span>';
+      listEl.textContent = '';
+      return { ok: false, extra: '' };
+    }
+
+    statEl.innerHTML = `<span class="status-badge status-connected">● ${configurados.length} configurada(s)</span>`;
+    listEl.innerHTML = `<div class="stat-list">${configurados.map(p => {
+      const modelo = ia[`${p.id}_modelo`] || '';
+      const ehPrimario = p.id === primario;
+      return `<div class="stat-list-row">
+        <span class="stat-list-main">
+          <strong>${esc(p.nome)}</strong>
+          <span class="stat-list-meta">${esc(modelo || p.id)}</span>
+        </span>
+        <span class="stat-mini-badge ${ehPrimario ? 'stat-mini-ok' : 'stat-mini-off'}">${ehPrimario ? 'Primária' : 'Fallback'}</span>
+      </div>`;
+    }).join('')}</div>`;
+
+    return { ok: true, extra: `Primário: ${primarioNome}` };
+  }
+
+  function renderConexoesErpCard(conns) {
+    const statEl = document.getElementById('stat-erp');
+    const listEl = document.getElementById('stat-erp-nome');
+
+    if (!Array.isArray(conns) || conns.length === 0) {
+      statEl.innerHTML = '<span class="status-badge status-stopped">Não configurada</span>';
+      listEl.textContent = '';
+      return { ok: false, testar: false, extra: '' };
+    }
+
+    const ativas = conns.filter(c => c.ativo);
+    const rows = [...conns].sort((a, b) =>
+      Number(b.ativo || 0) - Number(a.ativo || 0)
+      || Number(b.padrao || 0) - Number(a.padrao || 0)
+      || String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
+    );
+
+    statEl.innerHTML = ativas.length
+      ? `<span class="status-badge status-connected">● ${ativas.length} ativa(s)</span>`
+      : `<span class="status-badge status-starting">○ ${conns.length} cadastrada(s)</span>`;
+
+    listEl.innerHTML = `<div class="stat-list">${rows.map(c => {
+      const sistema = [c.erp || c.tipo || 'ERP', c.connection_key ? `rota ${c.connection_key}` : ''].filter(Boolean).join(' • ');
+      const testeOk = c.agente_teste_ok === 1 || c.teste_ok === 1;
+      const testeFalhou = c.agente_teste_ok === 0 || c.teste_ok === 0;
+      const badgeCls = c.ativo ? 'stat-mini-ok' : 'stat-mini-off';
+      const badgeTxt = c.padrao ? 'Padrão' : (c.ativo ? 'Ativa' : 'Inativa');
+      const testeTxt = testeOk ? 'Teste OK' : (testeFalhou ? 'Teste falhou' : 'Aguardando teste');
+      return `<div class="stat-list-row">
+        <span class="stat-list-main">
+          <strong>${esc(c.nome || c.connection_key || 'Conexão')}</strong>
+          <span class="stat-list-meta">${esc(sistema)} · ${esc(testeTxt)}</span>
+        </span>
+        <span class="stat-mini-badge ${badgeCls}">${esc(badgeTxt)}</span>
+      </div>`;
+    }).join('')}</div>`;
+
+    return {
+      ok: true,
+      testar: ativas.some(c => c.agente_teste_ok === 1 || c.teste_ok === 1),
+      extra: ativas.length
+        ? `${ativas.length} conexão(ões) ativa(s) de ${conns.length} cadastrada(s)`
+        : `${conns.length} conexão(ões) cadastrada(s), nenhuma ativa`,
+    };
+  }
+
   async function coletarStatus() {
     const status = {
       ia: false,
@@ -381,30 +466,18 @@
 
     try {
       const ia = await fetch('/api/ia-command/ai-config').then(r => r.json());
-      if (ia.groq_api_key || ia.openai_api_key || ia.gemini_api_key || ia.deepseek_api_key || ia.claude_api_key) {
-        status.ia = true;
-        extra.ia  = `Primário: ${ia.provedor_primario || 'groq'}`;
-        // Stats card
-        document.getElementById('stat-ia').innerHTML = `<span class="status-badge status-connected">● Configurada</span>`;
-        document.getElementById('stat-ia-prov').textContent = extra.ia;
-      }
+      const iaCard = renderIaConfiguradaCard(ia || {});
+      status.ia = iaCard.ok;
+      if (iaCard.extra) extra.ia = iaCard.extra;
     } catch (_) {}
 
     try {
       const conns = await fetch('/api/ia-command/connections').then(r => r.json());
-      if (Array.isArray(conns) && conns.length > 0) {
-        status.conexao = true;
-        const ativa = conns.find(c => c.ativo);
-        if (ativa) {
-          status.testar = ativa.teste_ok === 1;
-          extra.conexao = `${ativa.nome} (${ativa.erp || ativa.tipo})`;
-          extra.testar  = ativa.teste_ok === 1 ? 'Teste OK' : 'Aguardando teste';
-          document.getElementById('stat-erp').innerHTML = `<span class="status-badge status-connected">● Ativa</span>`;
-          document.getElementById('stat-erp-nome').textContent = extra.conexao;
-        } else {
-          extra.conexao = `${conns.length} conexão(ões) cadastrada(s), nenhuma ativa`;
-        }
-      }
+      const conexoesCard = renderConexoesErpCard(conns);
+      status.conexao = conexoesCard.ok;
+      status.testar = conexoesCard.testar;
+      if (conexoesCard.extra) extra.conexao = conexoesCard.extra;
+      extra.testar = conexoesCard.testar ? 'Teste OK em pelo menos uma conexão' : 'Aguardando teste';
     } catch (_) {}
 
     try {

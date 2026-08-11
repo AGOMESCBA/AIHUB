@@ -154,7 +154,7 @@ function _isCompanionByValue(scanRows, k) {
   const sample = scanRows.map(r => String(r[k] || '').trim()).filter(Boolean);
   return sample.length >= 2 && sample.every(v => /^[A-Z]{1,6}$/.test(v));
 }
-const _RE_SKIP_NUM  = /^(id|cod|codigo|código|num|seq|ano|mes|dia|dt|data|serie|série|doc|loja|tipo|status|cfop|cst|filial|uf|estado|vencimento|vencto|emissao|emissão)/i;
+const _RE_SKIP_NUM  = /^(id|cod|codigo|código|num|seq|ano|mes|dia|dt|data|serie|série|doc|loja|tipo|status|cfop|cst|filial|uf|estado|vencimento|vencto|emissao|emissão|titulo|título|prefixo)/i;
 // Colunas auxiliares de cálculo (ex: faturamento_ano_anterior) — excluídas do output
 const _RE_SKIP_CALC = /_anterior$/i;
 
