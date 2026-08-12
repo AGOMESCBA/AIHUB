@@ -210,6 +210,35 @@
   .session-delete-btn:hover, .session-delete-btn:focus-visible { background: rgba(214, 69, 69, 0.14); color: #d64545; outline: none; }
   .session-delete-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+  /* Mesmo padrao visual/comportamento do session-delete-btn (sempre visivel
+     com opacidade reduzida, 100% no hover) — cor de destaque em vez de
+     vermelho, ja que renomear nao e uma acao destrutiva. */
+  .session-rename-btn {
+    flex: none;
+    align-self: center;
+    width: 26px; height: 26px;
+    border: none; border-radius: 6px;
+    background: transparent;
+    color: var(--wa-text-tertiary);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+  .session-item:hover .session-rename-btn,
+  .session-rename-btn:focus-visible { opacity: 1; }
+  .session-rename-btn:hover, .session-rename-btn:focus-visible { background: var(--wa-accent-soft-bg); color: var(--wa-accent); outline: none; }
+  .session-rename-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Input de edicao inline do titulo — substitui o <span class="session-title">
+     no lugar exato dele (mesma posicao/tamanho de fonte), sem abrir modal. */
+  .session-title-input {
+    font-size: 13.5px; font-weight: 600; color: var(--wa-text);
+    background: var(--wa-input-bg); border: 1px solid var(--wa-accent);
+    border-radius: 4px; padding: 1px 5px; width: 100%; min-width: 0;
+    font-family: inherit; outline: none;
+  }
+
   .session-avatar {
     width: 34px; height: 34px; border-radius: 50%;
     background: linear-gradient(135deg, #00a884, #008069);
@@ -219,7 +248,7 @@
 
   .session-meta { min-width: 0; flex: 1; }
   .session-top { display: flex; justify-content: space-between; gap: 6px; }
-  .session-title { font-size: 13.5px; font-weight: 600; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session-title { font-size: 13.5px; font-weight: 600; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .session-time { font-size: 10.5px; color: var(--wa-text-tertiary); flex: none; }
   .session-preview { font-size: 12px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 
@@ -242,7 +271,6 @@
   .header-name { font-size: 15.5px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .header-sub { font-size: 12px; color: rgba(255, 255, 255, 0.82); display: flex; align-items: center; gap: 5px; }
   .header-sub .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15); flex: none; }
-  .header-badge { font-size: 9.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 4px; padding: 2px 6px; flex: none; }
 
   /* Botao discreto de resetar memoria: visivel mas quieto, nao compete com o
      restante do cabecalho — contraste suficiente pra ser encontrado sem gritar */
@@ -269,42 +297,48 @@
   @keyframes reset-spin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
 
   /* ========================= SELECAO DE MENSAGENS (excluir) ========================= */
-  /* Barra estilo WhatsApp Web: substitui visualmente o espaco entre header e
-     abas quando o modo selecao esta ativo (ver JS: toggleModoSelecao). */
+  /* [AJUSTADO apos usuario reportar cor "apagada"/pouco legivel] Fundo verde
+     solido trocado por --wa-panel (mesmo tom neutro usado em outras barras
+     do app, ex.: chat-footer) — "menos e mais": a barra nao precisa competir
+     visualmente, so o botao Excluir (acao real) precisa se destacar. Cor
+     vermelha no Excluir tambem é mais apropriada semanticamente (exclusao é
+     destrutiva) do que o verde neutro de antes, que se misturava com o
+     resto da UI em vez de chamar atencao. */
   .selecao-bar {
     flex: none;
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 9px 16px;
-    background: var(--wa-accent);
-    color: #fff;
+    background: var(--wa-panel);
+    border-bottom: 1px solid var(--wa-border);
+    color: var(--wa-text);
   }
   .selecao-cancelar {
     flex: none;
     width: 28px; height: 28px;
     border: none; border-radius: 50%;
-    background: rgba(255,255,255,0.14);
-    color: #fff;
+    background: transparent;
+    color: var(--wa-text-secondary);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
   }
-  .selecao-cancelar:hover { background: rgba(255,255,255,0.24); }
+  .selecao-cancelar:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); }
   .selecao-cancelar svg { width: 14px; height: 14px; }
-  .selecao-contagem { flex: 1; font-size: 13.5px; font-weight: 600; }
+  .selecao-contagem { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--wa-text-secondary); }
   .selecao-excluir {
     flex: none;
     display: flex; align-items: center; gap: 6px;
     padding: 7px 12px;
     border: none; border-radius: 7px;
-    background: rgba(255,255,255,0.16);
-    color: #fff;
-    font-size: 12.5px; font-weight: 600;
+    background: rgba(214, 69, 69, 0.14);
+    color: #e35b5b;
+    font-size: 12.5px; font-weight: 700;
     cursor: pointer;
     transition: background 0.12s ease, opacity 0.12s ease;
   }
-  .selecao-excluir:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
-  .selecao-excluir:disabled { opacity: 0.45; cursor: default; }
+  .selecao-excluir:hover:not(:disabled) { background: rgba(214, 69, 69, 0.24); }
+  .selecao-excluir:disabled { opacity: 0.4; cursor: default; color: var(--wa-text-tertiary); background: transparent; }
   .selecao-excluir svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   /* Checkbox de cada bolha — so existe/visivel quando .selecao-ativa esta na
@@ -380,6 +414,13 @@
   }
 
   .row { display: flex; align-items: center; margin-bottom: 3px; animation: rise 0.22s ease both; }
+  /* Espaco extra entre o fim de uma resposta e o inicio da proxima pergunta
+     (transicao de "turno" da conversa) — a pedido do usuario, para separar
+     visualmente pergunta/resposta anteriores da pergunta nova, sem inflar o
+     espacamento entre pergunta e sua propria resposta (que continua justo,
+     3px, ja que sao parte do mesmo turno). */
+  .row.out + .row.out,
+  .row.in + .row.out { margin-top: 14px; }
   .row.out { justify-content: flex-end; }
   .row.in { justify-content: flex-start; }
 
@@ -495,6 +536,16 @@
   .result-table-link { background: none; border: none; padding: 0; color: var(--wa-accent); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; font-family: inherit; }
   .result-table-link:hover { opacity: 0.85; }
 
+  /* Bolha em modo Resumo (toggle no rodape) — largura padrao de bolha de
+     texto (max-width global de .bubble), nao a largura ampliada de
+     .bubble-grid, ja que nao ha tabela/colunas pra caber aqui. */
+  .bubble.bubble-resumo { white-space: normal; }
+  .resumo-bolha { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 4px 0 2px; }
+  .resumo-total-item { display: flex; flex-direction: column; gap: 1px; }
+  .resumo-total-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--wa-text-tertiary); }
+  .resumo-total-valor { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .resumo-total-vazio { font-size: 12.5px; color: var(--wa-text-tertiary); font-style: italic; }
+
   .typing-row .bubble { display: flex; align-items: center; gap: 4px; padding: 11px 14px; }
   .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-text-tertiary); animation: bounce 1.2s infinite ease-in-out; }
   .typing-dot:nth-child(2) { animation-delay: 0.15s; }
@@ -513,8 +564,37 @@
   .send-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
   .send-btn svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
 
-  .protheus-strip { flex: none; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 5px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
-  .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); }
+  /* justify-content:center -> space-between: com o toggle de Resumo do lado
+     direito, a faixa precisa dos dois extremos ocupados (texto a esquerda,
+     toggle a direita) em vez de tudo centralizado como antes. */
+  .protheus-strip { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 12px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
+  .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); flex: none; }
+  .protheus-strip > span:first-of-type { display: flex; align-items: center; gap: 6px; }
+
+  /* Toggle "Resumo" — liga/desliga se respostas com dados vem resumidas
+     (titulo + totais + link pra aba Dados) ou com a tabela completa na
+     bolha. Estado persistido em localStorage (ver JS), padrao ligado. */
+  .resumo-toggle { flex: none; display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: normal; font-size: 11px; }
+  .resumo-toggle-switch {
+    position: relative;
+    width: 30px; height: 17px;
+    border-radius: 10px;
+    background: var(--wa-scrollbar);
+    transition: background 0.15s ease;
+    flex: none;
+  }
+  .resumo-toggle-switch[aria-checked="true"] { background: var(--wa-accent); }
+  .resumo-toggle-knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .resumo-toggle-switch[aria-checked="true"] .resumo-toggle-knob { transform: translateX(13px); }
+  .resumo-toggle-switch:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
 
   .error-banner { background: #d64545; color: #fff; font-size: 12.5px; padding: 8px 16px; text-align: center; }
 
@@ -688,7 +768,6 @@
         <div class="header-name" id="headerTitle">IA Command</div>
         <div class="header-sub"><span class="dot"></span> online · respondendo em tempo real</div>
       </div>
-      <div class="header-badge">Protheus</div>
       <button class="reset-memoria-btn" id="btnSelecionarMensagens" type="button" title="Selecionar mensagens para excluir" aria-label="Selecionar mensagens para excluir">
         <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
       </button>
@@ -739,7 +818,13 @@
 
       <div class="protheus-strip">
         <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
-        Integrado ao ERP Protheus · dados em tempo real
+        <span>Integrado ao ERP Protheus · dados em tempo real</span>
+        <label class="resumo-toggle" id="resumoToggleWrap" title="Quando ligado, respostas com dados mostram um resumo totalizado na bolha em vez da tabela completa. A tabela completa continua sempre disponivel na aba Dados.">
+          <span>Resumo</span>
+          <span class="resumo-toggle-switch" id="resumoToggle" role="switch" aria-checked="true" tabindex="0">
+            <span class="resumo-toggle-knob"></span>
+          </span>
+        </label>
       </div>
     </div>
 
@@ -881,6 +966,14 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // title (tooltip nativo do navegador) sempre acompanha o texto — o nome do
+  // cabecalho trunca com ellipsis em telas estreitas/titulos longos, sem
+  // isso o usuario nao conseguia ver o nome completo da conversa (reportado).
+  function definirHeaderTitle(texto) {
+    headerTitle.textContent = texto;
+    headerTitle.title = texto;
+  }
+
   // Maximo de 3 casas decimais, formato pt-BR (virgula decimal, ponto de
   // milhar) — evita ruido de ponto flutuante (ex.: 925273.1000000004) tanto na
   // mini-tabela da bolha do chat quanto na grid da aba Dados (ver formatarNumero).
@@ -911,6 +1004,38 @@
   function extrairTituloResposta(texto) {
     const primeiraLinha = String(texto || '').split('\n')[0].trim();
     return primeiraLinha || 'Resultado da consulta';
+  }
+
+  // ── Toggle "Resumo" (rodape do chat) ──────────────────────────────────
+  // Liga/desliga se respostas com dados tabulares vem como resumo (titulo +
+  // totais + link "Ver na aba Dados") ou como a mini-grid detalhada linha a
+  // linha. Decisao do usuario apos a mini-grid deixar a conversa "poluida"
+  // quando a mesma informacao ja aparece completa na aba Dados. Padrao
+  // ligado (resumo); estado persistido em localStorage — so afeta respostas
+  // NOVAS a partir da troca, nao re-renderiza bolhas ja desenhadas na tela.
+  const RESUMO_STORAGE_KEY = 'iac_protheus_chat_resumo_ativo';
+
+  function resumoAtivo() {
+    const v = localStorage.getItem(RESUMO_STORAGE_KEY);
+    return v === null ? true : v === '1'; // null = nunca configurado -> padrao ligado
+  }
+
+  function definirResumoAtivo(ativo) {
+    localStorage.setItem(RESUMO_STORAGE_KEY, ativo ? '1' : '0');
+  }
+
+  // Resumo totalizado: titulo + total de registros + soma de cada coluna
+  // numerica (mesmo criterio de linhaTotaisHtml, usada na mini-grid) — sem
+  // nenhuma linha de dado individual. O botao "Ver na aba Dados" (mesmo
+  // elemento/handler da mini-grid) continua sendo o caminho para o detalhe.
+  function montarResumoBolha(rows) {
+    const colunas = inferirColunas(rows);
+    const colunasNumericas = colunas.filter((c) => c.numerico);
+    const itens = colunasNumericas.map((c) => {
+      const soma = rows.reduce((acc, r) => acc + (typeof r[c.field] === 'number' ? r[c.field] : 0), 0);
+      return `<div class="resumo-total-item"><span class="resumo-total-label">${escapeHtml(c.title)}</span><span class="resumo-total-valor">${escapeHtml(formatarNumeroExibicao(soma))}</span></div>`;
+    }).join('');
+    return `<div class="resumo-bolha">${itens || '<span class="resumo-total-vazio">Sem colunas numericas para totalizar</span>'}</div>`;
   }
 
   // Virtual scroll simples (sem lib): com milhares de linhas (ex.: 10.000
@@ -952,11 +1077,17 @@
     return typeof v === 'string' ? v.trim() : v;
   }
 
+  // Mede o texto FORMATADO (mesma logica de exibicao usada nas celulas), nao
+  // o valor bruto — necessario desde que "competencia" passou a exibir
+  // "Janeiro/2026" (12 chars) em vez do bruto "202601" (6 chars); medir o
+  // bruto deixava a coluna estreita demais para o texto formatado real.
   function calcularLarguraColuna(coluna, rows) {
     let maiorTexto = String(coluna.title || '').length;
     const amostra = rows.length > 40 ? rows.slice(0, 40) : rows;
     for (const r of amostra) {
-      const v = trimSeTexto(r[coluna.field]);
+      let v = trimSeTexto(r[coluna.field]);
+      if (coluna.data) v = formatarDataAAAAMMDD(r[coluna.field]);
+      else if (coluna.competencia) v = formatarCompetenciaAAAAMM(r[coluna.field]);
       const len = v == null ? 0 : String(v).length;
       if (len > maiorTexto) maiorTexto = len;
     }
@@ -967,6 +1098,7 @@
   function celulaHtml(coluna, largura, valor) {
     let exibicao = trimSeTexto(valor);
     if (coluna.data) exibicao = formatarDataAAAAMMDD(valor);
+    else if (coluna.competencia) exibicao = formatarCompetenciaAAAAMM(valor);
     else if (coluna.numerico) exibicao = formatarNumeroExibicao(valor);
     const classe = 'result-grid-cell' + (coluna.numerico ? ' num' : '');
     return `<div class="${classe}" style="width:${largura}px">${escapeHtml(exibicao == null ? '' : exibicao)}</div>`;
@@ -1077,11 +1209,31 @@
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
     const temGrid = !isFalha && Array.isArray(rows) && rows.length > 0;
-    const bubbleClass = isFalha ? 'bubble bubble-falha' : (temGrid ? 'bubble bubble-grid' : 'bubble');
     const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
 
+    // Modo Resumo (toggle no rodape do chat, ver resumoAtivo()) — decide
+    // AQUI, no momento de desenhar a bolha, nao no momento em que a resposta
+    // chegou do backend. Isso implementa a decisao "so afeta respostas novas
+    // dai pra frente, mas reabrir o historico aplica o modo atual a todas as
+    // mensagens carregadas" (mesma pergunta, escopo confirmado com o
+    // usuario): nao ha estado persistido por mensagem, so o estado global
+    // do toggle no momento da renderizacao.
+    const usarResumo = temGrid && resumoAtivo();
+    // bubble-grid (largura maior, ver CSS) so faz sentido na mini-grid
+    // detalhada — o resumo e curto o bastante para caber na largura normal
+    // de bolha de texto, entao usa bubble-resumo (largura padrao + leve
+    // destaque visual) em vez de ocupar quase a tela toda a toa.
+    const bubbleClass = isFalha
+      ? 'bubble bubble-falha'
+      : (usarResumo ? 'bubble bubble-resumo' : (temGrid ? 'bubble bubble-grid' : 'bubble'));
+
     let conteudo;
-    if (temGrid) {
+    if (usarResumo) {
+      conteudo = `<div class="bubble-grid-titulo">${escapeHtml(extrairTituloResposta(texto))}</div>`
+        + montarResumoBolha(rows)
+        + `<div class="result-table-rodape"><span>${rows.length} registro${rows.length === 1 ? '' : 's'}</span>`
+        + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`;
+    } else if (temGrid) {
       const colunasOmitidas = Object.keys(rows[0]).length > MAX_COLUNAS_MINI_TABELA;
       conteudo = `<div class="bubble-grid-titulo">${escapeHtml(extrairTituloResposta(texto))}</div>`
         + montarMiniTabela(rows)
@@ -1106,9 +1258,12 @@
         if (chatBody.classList.contains('selecao-ativa')) return; // nao abre aba durante selecao
         trocarAba('relatorio');
       });
-      // So ativa virtual scroll quando montarMiniTabela optou por ele (tbody
-      // com display:block — ver limite de 150 linhas la dentro).
-      if (rows.length > 150) ativarVirtualScroll(row, rows);
+      // Virtual scroll so existe na mini-grid detalhada (montarMiniTabela) —
+      // o resumo nao tem linhas/scroll interno, entao nao ha nada pra
+      // ativar quando usarResumo=true. So ativa quando montarMiniTabela
+      // tambem optou pelo virtual scroll (tbody com display:block — ver
+      // limite de 150 linhas la dentro).
+      if (!usarResumo && rows.length > 150) ativarVirtualScroll(row, rows);
     }
     if (id) {
       row.addEventListener('click', (e) => {
@@ -1289,23 +1444,86 @@
         <div class="session-avatar">IC</div>
         <div class="session-meta">
           <div class="session-top">
-            <span class="session-title">${escapeHtml(s.titulo)}</span>
+            <span class="session-title" data-session-title="1" title="${escapeHtml(s.titulo)}">${escapeHtml(s.titulo)}</span>
             <span class="session-time">${nowLabel(s.atualizadoEm)}</span>
           </div>
-          <div class="session-preview">${escapeHtml(s.ultimaMensagem || '')}</div>
+          <div class="session-preview" title="${escapeHtml(s.ultimaMensagem || '')}">${escapeHtml(s.ultimaMensagem || '')}</div>
         </div>
+        <button type="button" class="session-rename-btn" title="Renomear conversa" aria-label="Renomear conversa">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </button>
         <button type="button" class="session-delete-btn" title="Excluir conversa" aria-label="Excluir conversa">
           <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
         </button>`;
       item.addEventListener('click', () => {
-        headerTitle.textContent = s.titulo;
+        definirHeaderTitle(s.titulo);
         carregarMensagens(s.sessaoId);
+      });
+      item.querySelector('.session-rename-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        iniciarRenomeioSessao(item, s);
+      });
+      item.querySelector('.session-title').addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        iniciarRenomeioSessao(item, s);
       });
       item.querySelector('.session-delete-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         excluirSessao(s.sessaoId, s.titulo);
       });
       sessionList.appendChild(item);
+    });
+  }
+
+  // Edicao inline do titulo da conversa — troca o <span> por um <input>
+  // dentro do proprio item da sidebar (sem modal), com Enter/blur salvando e
+  // Esc cancelando. stopPropagation nos eventos do input evita que clicar
+  // dentro do campo de texto dispare o listener de "abrir esta conversa" do
+  // item pai.
+  function iniciarRenomeioSessao(item, sessao) {
+    const spanEl = item.querySelector('[data-session-title]');
+    if (!spanEl || item.querySelector('.session-title-input')) return; // ja em edicao
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'session-title-input';
+    input.value = sessao.titulo;
+    input.maxLength = 60;
+    spanEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let concluido = false;
+    async function salvar() {
+      if (concluido) return;
+      concluido = true;
+      const novoTitulo = input.value.trim();
+      if (!novoTitulo || novoTitulo === sessao.titulo) {
+        renderSessionList(); // sem mudanca real (vazio ou igual) — so redesenha
+        return;
+      }
+      try {
+        await api('/sessoes/' + sessao.sessaoId, { method: 'PUT', body: JSON.stringify({ titulo: novoTitulo }) });
+        sessao.titulo = novoTitulo;
+        if (sessao.sessaoId === sessaoAtualId) definirHeaderTitle(novoTitulo);
+        renderSessionList();
+      } catch (err) {
+        showError('Falha ao renomear conversa: ' + err.message);
+        renderSessionList();
+      }
+    }
+    function cancelar() {
+      if (concluido) return;
+      concluido = true;
+      renderSessionList();
+    }
+
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('blur', salvar);
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); salvar(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancelar(); }
     });
   }
 
@@ -1318,7 +1536,7 @@
       await carregarSessoes({ selecionarPrimeira: eraAtual });
       if (eraAtual && !sessoesCache.length) {
         sessaoAtualId = null;
-        headerTitle.textContent = 'Nova conversa';
+        definirHeaderTitle('Nova conversa');
         renderEmptyState();
         fecharRelatorio();
       } else if (!eraAtual) {
@@ -1334,7 +1552,7 @@
       sessoesCache = await api('/sessoes');
       renderSessionList();
       if (selecionarPrimeira && sessoesCache.length) {
-        headerTitle.textContent = sessoesCache[0].titulo;
+        definirHeaderTitle(sessoesCache[0].titulo);
         await carregarMensagens(sessoesCache[0].sessaoId);
       } else if (!sessoesCache.length) {
         renderEmptyState();
@@ -1464,6 +1682,37 @@
     return `${m[3]}/${m[2]}/${m[1]}`;
   }
 
+  // [ADICIONADO a pedido do usuario] Competencia (AAAAMM, 6 digitos, ex.:
+  // "202601") e o padrao que a IA usa para "faturamento por mes" — chegava
+  // sem formatacao ("202601" na tela). Diferente de AAAAMMDD, 6 digitos
+  // SOZINHOS sao ambiguos demais para detectar so pelo valor (colidiria com
+  // codigo de produto/cliente de 6 digitos) — por isso a deteccao aqui exige
+  // tambem o NOME do campo ser literalmente "competencia" (ou variacoes
+  // comuns), nao so o formato do valor. Formato de saida ("Janeiro/2026")
+  // igual ao ja usado no canal WhatsApp (ver _formatarLabelGrupo em
+  // modules/erp/core/whatsapp-format-prompt.js) — mesma lista de meses,
+  // copiada aqui porque o frontend nao tem acesso a esse modulo Node.
+  const REGEX_COMPETENCIA_AAAAMM = /^(\d{4})(\d{2})$/;
+  const NOMES_CAMPO_COMPETENCIA = new Set(['competencia', 'competência', 'mes_ano', 'ano_mes']);
+  const MESES_COMPETENCIA = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+    'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  function pareceCompetenciaAAAAMM(campo, valor) {
+    if (!NOMES_CAMPO_COMPETENCIA.has(String(campo || '').toLowerCase())) return false;
+    if (typeof valor !== 'string') return false;
+    const m = valor.match(REGEX_COMPETENCIA_AAAAMM);
+    if (!m) return false;
+    const mes = Number(m[2]);
+    return mes >= 1 && mes <= 12;
+  }
+
+  function formatarCompetenciaAAAAMM(valor) {
+    const m = String(valor).match(REGEX_COMPETENCIA_AAAAMM);
+    if (!m) return valor;
+    const mes = Number(m[2]);
+    return `${MESES_COMPETENCIA[mes - 1]}/${m[1]}`;
+  }
+
   function inferirColunas(rows) {
     const nomes = Object.keys(rows[0] || {});
     return nomes.map((campo) => {
@@ -1471,7 +1720,9 @@
       const todosParecemData = rows.every((r) => r[campo] == null || pareceDataAAAAMMDD(r[campo]));
       const algumValorPreenchido = rows.some((r) => r[campo] != null && r[campo] !== '');
       const ehData = !algumNumero && todosParecemData && algumValorPreenchido;
-      return { field: campo, title: campo, numerico: algumNumero, data: ehData };
+      const todosParecemCompetencia = !ehData && rows.every((r) => r[campo] == null || pareceCompetenciaAAAAMM(campo, r[campo]));
+      const ehCompetencia = !algumNumero && todosParecemCompetencia && algumValorPreenchido;
+      return { field: campo, title: campo, numerico: algumNumero, data: ehData, competencia: ehCompetencia };
     });
   }
 
@@ -1541,6 +1792,12 @@
   // por travar com muitos dados, ver comentario em abrirRelatorio) — o
   // Tabulator respeita width fixo em layout:fitColumns sem precisar remedir,
   // entao a otimizacao de performance anterior continua valendo.
+  // [AJUSTADO apos usuario reportar tabela "espremida"] width sozinho travava
+  // a largura da coluna no minimo calculado, deixando sobrar uma faixa vazia
+  // a direita quando ha poucas colunas/tela larga (antes, sem width, cada
+  // coluna esticava para preencher tudo). widthGrow:1 reintroduz esse
+  // crescimento proporcional SEM abrir mao do width minimo — a coluna nunca
+  // fica menor que o conteudo, mas cresce para ocupar o espaco sobrando.
   function montarColunasTabulator(rows) {
     return reportColunas.map((col) => {
       // accessorDownload controla o valor usado no export (Excel/PDF) —
@@ -1550,16 +1807,24 @@
       // relatado no PDF gerado.
       const accessorDownload = col.numerico
         ? (value) => formatarNumero(value)
-        : (col.data ? (value) => formatarDataAAAAMMDD(value) : trimSeTexto);
+        : (col.data ? (value) => formatarDataAAAAMMDD(value)
+          : (col.competencia ? (value) => formatarCompetenciaAAAAMM(value) : trimSeTexto));
       return {
         field: col.field,
         title: col.title,
-        width: calcularLarguraColuna(col, rows),
+        // [CORRIGIDO apos testar visualmente] width (fixo) + widthGrow juntos
+        // nao funcionavam — confirmado via pesquisa: widthGrow so tem efeito
+        // em colunas SEM width definido. minWidth (piso, nunca menor que o
+        // conteudo) + widthGrow (cresce livremente alem disso) e a
+        // combinacao correta para "ajusta ao conteudo mas preenche a tela".
+        minWidth: calcularLarguraColuna(col, rows),
+        widthGrow: 1,
         headerFilter: true,
-        hozAlign: col.numerico ? 'right' : (col.data ? 'center' : 'left'),
+        hozAlign: col.numerico ? 'right' : ((col.data || col.competencia) ? 'center' : 'left'),
         formatter: col.numerico
           ? (cell) => formatarNumero(cell.getValue())
-          : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue()) : (cell) => trimSeTexto(cell.getValue())),
+          : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue())
+            : (col.competencia ? (cell) => formatarCompetenciaAAAAMM(cell.getValue()) : (cell) => trimSeTexto(cell.getValue()))),
         accessorDownload,
         bottomCalc: col.numerico ? somaColuna : undefined,
         bottomCalcFormatter: col.numerico ? (cell) => formatarNumero(cell.getValue()) : undefined,
@@ -1612,6 +1877,7 @@
         const col = reportColunas.find((c) => c.field === campo);
         let valorFormatado = value;
         if (col?.data) valorFormatado = formatarDataAAAAMMDD(value);
+        else if (col?.competencia) valorFormatado = formatarCompetenciaAAAAMM(value);
         else if (col?.numerico) valorFormatado = formatarNumero(value);
         return valorFormatado + ' (' + count + ' registros)';
       },
@@ -1666,7 +1932,7 @@
 
   btnNovaConversa.addEventListener('click', function () {
     sessaoAtualId = null;
-    headerTitle.textContent = 'Nova conversa';
+    definirHeaderTitle('Nova conversa');
     renderEmptyState();
     renderSessionList();
     trocarAba('conversa');
@@ -1702,6 +1968,31 @@
       showError('Falha ao reiniciar contexto: ' + err.message);
     }
   });
+
+  // Toggle "Resumo" (rodape do chat) — liga/desliga se respostas com dados
+  // vem resumidas ou com a mini-grid detalhada (ver resumoAtivo()/addBubble).
+  // So muda o estado global + persiste em localStorage; nao redesenha
+  // bolhas ja na tela (decisao confirmada com o usuario).
+  const resumoToggle = document.getElementById('resumoToggle');
+
+  function aplicarEstadoResumoToggle() {
+    const ativo = resumoAtivo();
+    resumoToggle.setAttribute('aria-checked', ativo ? 'true' : 'false');
+  }
+
+  function alternarResumoToggle() {
+    definirResumoAtivo(!resumoAtivo());
+    aplicarEstadoResumoToggle();
+  }
+
+  resumoToggle.addEventListener('click', alternarResumoToggle);
+  resumoToggle.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      alternarResumoToggle();
+    }
+  });
+  aplicarEstadoResumoToggle();
 
   document.getElementById('searchInput').addEventListener('input', function (e) {
     const termo = e.target.value.toLowerCase();

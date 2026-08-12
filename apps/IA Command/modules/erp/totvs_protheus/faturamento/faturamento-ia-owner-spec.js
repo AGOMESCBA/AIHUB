@@ -148,6 +148,14 @@ function prepararIntent({ intent, empresaId, mensagem }) {
   return {};
 }
 
+// [AJUSTADO apos erro repetido em producao 4x seguidas — 13/08/2026] Cada
+// template abaixo agora inclui, no proprio exemplo de JOIN, os filtros
+// D_E_L_E_T_ (nas duas tabelas) e F2_TIPO = 'N' (SF2). O prompt-builder
+// instrui a IA a "copiar a estrutura completa do template" para esses
+// JOINs — sem os filtros aqui, a IA os tratava como algo a lembrar
+// separadamente e os esquecia (confirmado: SD2.D_E_L_E_T_ e SF2.F2_TIPO
+// faltando em 4 tentativas seguidas da mesma pergunta). Colocar os filtros
+// dentro do proprio template que a IA copia literalmente remove essa lacuna.
 const contratosTecnicosPrioritarios = `
 - SD1 -> SF1:
   SD1.D1_FILIAL = SF1.F1_FILIAL
@@ -155,12 +163,16 @@ const contratosTecnicosPrioritarios = `
   AND SD1.D1_SERIE = SF1.F1_SERIE
   AND SD1.D1_FORNECE = SF1.F1_FORNECE
   AND SD1.D1_LOJA = SF1.F1_LOJA
+  AND SF1.D_E_L_E_T_ = ' '
+  WHERE SD1.D_E_L_E_T_ = ' '
 - SD2 -> SF2:
   SD2.D2_FILIAL = SF2.F2_FILIAL
   AND SD2.D2_DOC = SF2.F2_DOC
   AND SD2.D2_SERIE = SF2.F2_SERIE
   AND SD2.D2_CLIENTE = SF2.F2_CLIENTE
   AND SD2.D2_LOJA = SF2.F2_LOJA
+  AND SF2.D_E_L_E_T_ = ' '
+  WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
 `.trim();
 
 function validarMediaMensalProduto(sql = '') {

@@ -98,6 +98,22 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  // ── Renomear conversa ──
+  app.put('/api/ia-command/protheus/sessoes/:id', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    const { titulo } = req.body || {};
+    if (!titulo || !String(titulo).trim()) {
+      return res.status(400).json({ error: 'titulo e obrigatorio.' });
+    }
+    try {
+      const renomeada = sessionStore.renomearSessao({ sessaoId: req.params.id, empresaId, celular, titulo });
+      if (!renomeada) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Exclusao de mensagens especificas (selecao multipla, estilo WhatsApp) ──
   app.post('/api/ia-command/protheus/sessoes/:id/mensagens/excluir', requireTokenSessao, (req, res) => {
     const { empresaId, celular } = req.protheusChat;

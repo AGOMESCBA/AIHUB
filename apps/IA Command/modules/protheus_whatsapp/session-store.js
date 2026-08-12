@@ -207,6 +207,21 @@ function excluirSessao({ sessaoId, empresaId, celular }) {
   return info.changes > 0;
 }
 
+// Renomeia uma conversa (titulo customizado pelo usuario). Mesmo escopo de
+// posse de excluirSessao/resetarMemoria — so renomeia se a sessao pertencer
+// a empresaId/celular informados. truncarTitulo() reaproveita o mesmo limite
+// (60 chars) ja usado no titulo automatico gerado por salvarTurno.
+function renomearSessao({ sessaoId, empresaId, celular, titulo }) {
+  const tituloLimpo = truncarTitulo(titulo);
+  if (!tituloLimpo) return false;
+  const db = getDB();
+  const sessao = buscarSessao({ id: sessaoId, empresaId, celular });
+  if (!sessao) return false;
+  const info = db.prepare(`UPDATE protheus_chat_sessions SET titulo = ? WHERE id = ?`)
+    .run(tituloLimpo, sessaoId);
+  return info.changes > 0;
+}
+
 // Apaga uma ou mais mensagens especificas de uma conversa (selecao multipla,
 // estilo WhatsApp Web) — nao apaga a sessao. Valida a posse da sessao
 // (empresaId/celular) antes de apagar, mesmo padrao de excluirSessao; o
@@ -233,6 +248,7 @@ module.exports = {
   ultimoIntent,
   resetarMemoria,
   excluirSessao,
+  renomearSessao,
   excluirMensagens,
   ultimaMensagemTabular,
   salvarGridConfig,
