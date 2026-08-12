@@ -98,7 +98,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
   const rowsBrutas = Array.isArray(resultado?.rows) ? resultado.rows : null;
   const rows = rowsBrutas ? traduzirNomesCruesViaSx3(rowsBrutas, empresaId) : null;
 
-  const mensagemId = sessionStore.salvarTurno({
+  const { perguntaId, respostaId } = sessionStore.salvarTurno({
     sessaoId,
     perguntaTexto: texto,
     respostaTexto,
@@ -122,12 +122,15 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
       resposta_entregue: respostaTexto,
       duracao_ms: Date.now() - t0,
     });
-  } catch (_) {
-    // Falha ao logar nao pode derrubar a resposta ja calculada ao usuario.
+  } catch (e) {
+    // Falha ao logar nao pode derrubar a resposta ja calculada ao usuario, mas precisa ficar
+    // visivel — antes esse erro era engolido em silencio, escondendo falhas de gravacao.
+    console.error('[protheus_whatsapp] Falha ao registrar interpretation_log:', e.message);
   }
 
   return {
-    mensagemId,
+    mensagemId: respostaId,
+    perguntaId,
     texto: respostaTexto,
     rows,
     tipo: resultado?.tipo || null,

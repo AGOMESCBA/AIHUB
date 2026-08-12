@@ -151,12 +151,19 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
   const camposSx3 = _camposSx3Presentes(campos);
   const campoDataSql = campoData || 'EMISSAO';
   const dataTextoProtheus = _campoTemporalEhTextoProtheus(campoDataSql);
-  const instrucaoFiltroMes = dataTextoProtheus
+  // "Sem periodo informado = mes atual" e um padrao de negocio do Protheus (faturamento,
+  // compras etc. sao sempre um recorte temporal). Nao vale para outros sistemas: uma consulta
+  // como "chamados em aberto e em atraso" e sobre estado atual, nao um periodo — aplicar essa
+  // instrucao la faz a IA inventar um filtro de data que o usuario nunca pediu.
+  const datasetEhProtheusPrompt = String(dataset.erp || 'protheus').trim().toLowerCase() === 'protheus';
+  const instrucaoFiltroMes = !datasetEhProtheusPrompt
+    ? `- Nao aplique filtro de periodo por padrao. So filtre ${campoDataSql} por data quando a pergunta mencionar explicitamente um periodo (ex: "em julho", "este mes", "ultimos 7 dias").`
+    : dataTextoProtheus
     ? `- Quando a pergunta mencionar "do mes", "este mes", "mes atual" ou nao informar outro periodo, filtre ${campoDataSql} entre YYYYMM01 e YYYYMMDD final do mes. Exemplo: ${campoDataSql} BETWEEN '20260701' AND '20260731'.`
     : `- Quando a pergunta mencionar "do mes", "este mes", "mes atual" ou nao informar outro periodo, filtre ${campoDataSql} usando BETWEEN com datas no formato YYYY-MM-DD (ex: ${campoDataSql} BETWEEN '2026-07-01' AND '2026-07-31'), ou YEAR(${campoDataSql})/MONTH(${campoDataSql}) quando o agrupamento for mensal.`;
   const instrucaoAgrupamentoMes = dataTextoProtheus
-    ? `- Para agrupamento mensal use SUBSTRING(${campoDataSql}, 1, 6) AS competencia e o mesmo SUBSTRING no GROUP BY.`
-    : `- Para agrupamento mensal use CONVERT(char(7), ${campoDataSql}, 120) AS competencia ou YEAR(${campoDataSql})/MONTH(${campoDataSql}).`;
+    ? `- Para agrupamento mensal use SUBSTRING(${campoDataSql}, 1, 6) AS competencia e o mesmo SUBSTRING no GROUP BY. EXCECAO OBRIGATORIA: se a pergunta nomear explicitamente uma coluna de data no agrupamento (ex: "agrupado por data de emissao", "por data do documento"), NAO use competencia/SUBSTRING — agrupe por ${campoDataSql} completo (o dia exato), mesmo que a palavra "mes" apareca em outro trecho da pergunta. Exemplo CORRETO para "por mes agrupado por data de emissao, cliente": SELECT ${campoDataSql} AS data_emissao, cliente, ... GROUP BY ${campoDataSql}, cliente. Exemplo INCORRETO (nao faça): SELECT SUBSTRING(${campoDataSql},1,6) AS competencia, cliente, ... GROUP BY SUBSTRING(${campoDataSql},1,6), cliente.`
+    : `- Para agrupamento mensal use CONVERT(char(7), ${campoDataSql}, 120) AS competencia ou YEAR(${campoDataSql})/MONTH(${campoDataSql}). EXCECAO OBRIGATORIA: se a pergunta nomear explicitamente uma coluna de data no agrupamento (ex: "agrupado por data de emissao"), NAO resuma para competencia — agrupe por ${campoDataSql} completo (o dia exato), mesmo que a palavra "mes" apareca em outro trecho da pergunta.`;
   const contratoSx3Texto = camposSx3.length ? [
     'Contrato SX3/Protheus da base:',
     '- A base pode expor campos com nome SX3, como F2_EMISSAO, F2_VALBRUT, D2_TOTAL, D2_QUANT, D2_TES, D2_CF, B1_GRUPO, B1_DESC, A1_NREDUZ, A3_COD, A3_NOME, F4_ESTOQUE e F4_DUPLIC.',
@@ -379,6 +386,44 @@ function _corrigirGroupBySubstringIncompleto(sql) {
       /(\bGROUP\s+BY\s+CONVERT\s*\(\s*char\s*\(\s*6\s*\)\s*,\s*(?:base\s*\.\s*)?\[?[A-Za-z_][A-Za-z0-9_]*\]?\s*,\s*112)(\s+(?:UNION\b|HAVING\b|ORDER\b|$))/gi,
       '$1)$2',
     );
+}
+
+// A instrucao de prompt "sem periodo = mes atual" as vezes faz a IA resumir para competencia
+// (SUBSTRING/CONVERT) mesmo quando o usuario nomeou explicitamente a coluna de data no
+// agrupamento (ex: "agrupado por data de emissao"). Prompt e orientacao, nao garantia — esta
+// correcao deterministica troca a expressao de competencia pela coluna de data completa
+// quando a mensagem original nomeia explicitamente essa coluna, sem depender da IA obedecer.
+const _PALAVRAS_DATA_COMPLETA = /\bdata\s+(de\s+)?(emiss[aã]o|documento|abertura|cadastro|movimento|lan[cç]amento)\b/i;
+
+function _mencionaColunaDataExplicita(mensagem) {
+  return _PALAVRAS_DATA_COMPLETA.test(String(mensagem || ''));
+}
+
+function _forcarDataCompletaNoAgrupamento(sql, campoDataSql, mensagem) {
+  if (!campoDataSql || !_mencionaColunaDataExplicita(mensagem)) return sql;
+  const campo = String(campoDataSql).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let out = String(sql || '');
+  // SELECT ... SUBSTRING(campo, 1, 6) AS alias  -> SELECT ... campo AS alias
+  out = out.replace(
+    new RegExp(`SUBSTRING\\s*\\(\\s*(?:base\\s*\\.\\s*)?\\[?${campo}\\]?\\s*,\\s*1\\s*,\\s*6\\s*\\)(\\s+AS\\s+\\[?\\w+\\]?)?`, 'gi'),
+    (match, asAlias) => `${campoDataSql}${asAlias || ''}`,
+  );
+  // SELECT ... CONVERT(char(7), campo, 120) AS alias -> SELECT ... campo AS alias
+  out = out.replace(
+    new RegExp(`CONVERT\\s*\\(\\s*char\\s*\\(\\s*7\\s*\\)\\s*,\\s*(?:base\\s*\\.\\s*)?\\[?${campo}\\]?\\s*,\\s*120\\s*\\)(\\s+AS\\s+\\[?\\w+\\]?)?`, 'gi'),
+    (match, asAlias) => `${campoDataSql}${asAlias || ''}`,
+  );
+  // GROUP BY SUBSTRING(campo, 1, 6) -> GROUP BY campo
+  out = out.replace(
+    new RegExp(`SUBSTRING\\s*\\(\\s*(?:base\\s*\\.\\s*)?\\[?${campo}\\]?\\s*,\\s*1\\s*,\\s*6\\s*\\)`, 'gi'),
+    campoDataSql,
+  );
+  // GROUP BY CONVERT(char(7), campo, 120) -> GROUP BY campo
+  out = out.replace(
+    new RegExp(`CONVERT\\s*\\(\\s*char\\s*\\(\\s*7\\s*\\)\\s*,\\s*(?:base\\s*\\.\\s*)?\\[?${campo}\\]?\\s*,\\s*120\\s*\\)`, 'gi'),
+    campoDataSql,
+  );
+  return out;
 }
 
 function _posicaoFromPrincipal(sql, inicioBusca = 0) {
@@ -1187,7 +1232,12 @@ async function executar(dataset, intent, empresaId, opts = {}) {
 
   let entidadeSeguranca = null;
   const remetente = intent._remetente || null;
-  if (remetente) {
+  // Seguranca por vendedor/cliente fixo e um conceito especifico do Protheus (RLS por
+  // codigo de vendedor/cliente do ERP). Datasets de outros sistemas (ex: SoftExpert) nao tem
+  // esse tipo de restricao — aplicar essa checagem la bloquearia qualquer usuario cadastrado
+  // como vendedor Protheus mesmo perguntando sobre um sistema sem esse conceito.
+  const datasetEhProtheus = String(dataset.erp || 'protheus').trim().toLowerCase() === 'protheus';
+  if (remetente && datasetEhProtheus) {
     const resolucao = resolverVendedorFixoPorEmpresa(remetente, empresaId);
     if (resolucao.estado === 'nao_cadastrado') {
       return {
@@ -1299,6 +1349,7 @@ async function executar(dataset, intent, empresaId, opts = {}) {
       camposPermitidos,
     );
     sqlSelect = _aplicarTopPergunta(estruturaModelo.sql, mensagem, intent);
+    sqlSelect = _forcarDataCompletaNoAgrupamento(sqlSelect, campoData, mensagem);
     const validacaoSintaxe = _validarSintaxeBasicaSqlDataset(sqlSelect);
     const validacaoBase = _validarSelectBase(sqlSelect, camposPermitidos);
     const validacaoPeriodo = _validarPeriodoDataset(sqlSelect, campoData, intent, plano);
@@ -1392,6 +1443,7 @@ async function executar(dataset, intent, empresaId, opts = {}) {
 
 module.exports = {
   executar,
+  formatarRespostaSemantica: _formatarRespostaSemantica,
   _test: {
     _validarSelectBase,
     _buildSystemPrompt,

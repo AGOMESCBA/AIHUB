@@ -8,6 +8,9 @@
 <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
 <style>
   :root {
+    /* [REVERTIDO a pedido do usuario] Voltou a paleta verde original do
+       WhatsApp — a tentativa de azul Protheus (cabecalho + accent) nao
+       agradou. Usuario quer o visual "igual ao WhatsApp mesmo". */
     --wa-header: #008069;
     --wa-bg: #efeae2;
     --wa-bg-pattern-opacity: 0.055;
@@ -57,31 +60,36 @@
     --wa-app-bg: #02070a;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --wa-header: #202c33;
-      --wa-bg: #0b141a;
-      --wa-bg-pattern-opacity: 0.035;
-      --wa-bubble-in: #202c33;
-      --wa-bubble-out: #005c4b;
-      --wa-text: #e9edef;
-      --wa-text-secondary: #aebac1;
-      --wa-text-tertiary: #8696a0;
-      --wa-accent: #00d9a3;
-      --wa-accent-soft-bg: rgba(0, 217, 163, 0.14);
-      --wa-accent-soft-bg-hover: rgba(0, 217, 163, 0.22);
-      --wa-accent-soft-border: rgba(0, 217, 163, 0.35);
-      --wa-panel: #111b21;
-      --wa-sidebar: #111b21;
-      --wa-sidebar-hover: #182229;
-      --wa-sidebar-active: #202c33;
-      --wa-border: rgba(255, 255, 255, 0.07);
-      --wa-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.4);
-      --wa-input-bg: #2a3942;
-      --wa-scrollbar: rgba(255, 255, 255, 0.15);
-      --wa-check: #53bdeb;
-      --wa-app-bg: #02070a;
-    }
+  /* [AJUSTADO a pedido do usuario] Tema escuro como PADRAO — antes so
+     ativava com prefers-color-scheme:dark (preferencia do SO/navegador) ou
+     com data-theme="dark" explicito. Usuario quer o chat sempre abrindo
+     escuro, igual ao WhatsApp Web da captura de tela que ele mandou como
+     referencia, independente da preferencia do sistema. data-theme="light"
+     ainda funciona como escape hatch caso um toggle de tema seja adicionado
+     no futuro — ver seletor :not([data-theme="light"]) abaixo. */
+  :root:not([data-theme="light"]) {
+    --wa-header: #202c33;
+    --wa-bg: #0b141a;
+    --wa-bg-pattern-opacity: 0.035;
+    --wa-bubble-in: #202c33;
+    --wa-bubble-out: #005c4b;
+    --wa-text: #e9edef;
+    --wa-text-secondary: #aebac1;
+    --wa-text-tertiary: #8696a0;
+    --wa-accent: #00d9a3;
+    --wa-accent-soft-bg: rgba(0, 217, 163, 0.14);
+    --wa-accent-soft-bg-hover: rgba(0, 217, 163, 0.22);
+    --wa-accent-soft-border: rgba(0, 217, 163, 0.35);
+    --wa-panel: #111b21;
+    --wa-sidebar: #111b21;
+    --wa-sidebar-hover: #182229;
+    --wa-sidebar-active: #202c33;
+    --wa-border: rgba(255, 255, 255, 0.07);
+    --wa-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.4);
+    --wa-input-bg: #2a3942;
+    --wa-scrollbar: rgba(255, 255, 255, 0.15);
+    --wa-check: #53bdeb;
+    --wa-app-bg: #02070a;
   }
 
   * { box-sizing: border-box; }
@@ -181,6 +189,27 @@
   .session-item.active { background: var(--wa-sidebar-active); }
   .session-item.active::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--wa-accent); }
 
+  /* [CORRIGIDO apos usuario nao encontrar o botao] opacity:0 por padrao (so
+     hover) tornava o botao praticamente invisivel/nao descoberto — trocado
+     para sempre visivel com opacidade reduzida (0.45), ficando 100% opaco
+     so no hover/foco. Mantem a lista limpa sem esconder o recurso. */
+  .session-delete-btn {
+    flex: none;
+    align-self: center;
+    width: 26px; height: 26px;
+    border: none; border-radius: 6px;
+    background: transparent;
+    color: var(--wa-text-tertiary);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  }
+  .session-item:hover .session-delete-btn,
+  .session-delete-btn:focus-visible { opacity: 1; }
+  .session-delete-btn:hover, .session-delete-btn:focus-visible { background: rgba(214, 69, 69, 0.14); color: #d64545; outline: none; }
+  .session-delete-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
   .session-avatar {
     width: 34px; height: 34px; border-radius: 50%;
     background: linear-gradient(135deg, #00a884, #008069);
@@ -239,6 +268,71 @@
   .reset-memoria-btn.spin svg { animation: reset-spin 0.5s ease; }
   @keyframes reset-spin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
 
+  /* ========================= SELECAO DE MENSAGENS (excluir) ========================= */
+  /* Barra estilo WhatsApp Web: substitui visualmente o espaco entre header e
+     abas quando o modo selecao esta ativo (ver JS: toggleModoSelecao). */
+  .selecao-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    background: var(--wa-accent);
+    color: #fff;
+  }
+  .selecao-cancelar {
+    flex: none;
+    width: 28px; height: 28px;
+    border: none; border-radius: 50%;
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .selecao-cancelar:hover { background: rgba(255,255,255,0.24); }
+  .selecao-cancelar svg { width: 14px; height: 14px; }
+  .selecao-contagem { flex: 1; font-size: 13.5px; font-weight: 600; }
+  .selecao-excluir {
+    flex: none;
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border: none; border-radius: 7px;
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+    font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease, opacity 0.12s ease;
+  }
+  .selecao-excluir:hover:not(:disabled) { background: rgba(255,255,255,0.28); }
+  .selecao-excluir:disabled { opacity: 0.45; cursor: default; }
+  .selecao-excluir svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Checkbox de cada bolha — so existe/visivel quando .selecao-ativa esta na
+     .chat-body (ver JS). Fica a esquerda da bolha, alinhado verticalmente
+     ao centro dela; clicar em qualquer lugar da linha marca/desmarca
+     (ver listener em enviarMensagem/addBubble). */
+  .row-select-checkbox {
+    display: none;
+    flex: none;
+    align-self: center;
+    width: 20px; height: 20px;
+    margin: 0 4px;
+    border-radius: 50%;
+    border: 2px solid var(--wa-text-tertiary);
+    cursor: pointer;
+    position: relative;
+  }
+  .chat-body.selecao-ativa .row-select-checkbox { display: block; }
+  .chat-body.selecao-ativa .row { cursor: pointer; }
+  .row-select-checkbox.marcado { background: var(--wa-accent); border-color: var(--wa-accent); }
+  .row-select-checkbox.marcado::after {
+    content: "";
+    position: absolute; left: 6px; top: 2px;
+    width: 5px; height: 10px;
+    border: solid #fff; border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
   .reset-toast {
     position: fixed;
     left: 50%;
@@ -258,7 +352,11 @@
   .reset-toast.show { opacity: 1; transform: translate(-50%, 0); }
 
   .chat-body {
-    flex: 1; min-height: 0; overflow-y: auto; padding: 16px 8% 10px;
+    /* Padding lateral reduzido de 8% para 3% — a pedido do usuario, para
+       bolhas com grid de dados aproveitarem mais largura de tela (o
+       "espacinho" sobrando nas laterais). Ainda deixa uma margem visual
+       minima para bolhas de texto simples nao colarem na borda. */
+    flex: 1; min-height: 0; overflow-y: auto; padding: 16px 3% 10px;
     background-color: var(--wa-bg);
     background-image:
       radial-gradient(circle at 10% 15%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 45%),
@@ -281,7 +379,7 @@
     :root:not([data-theme="light"]) .system-note span { background: rgba(255, 213, 79, 0.12); color: #e2c675; }
   }
 
-  .row { display: flex; margin-bottom: 3px; animation: rise 0.22s ease both; }
+  .row { display: flex; align-items: center; margin-bottom: 3px; animation: rise 0.22s ease both; }
   .row.out { justify-content: flex-end; }
   .row.in { justify-content: flex-start; }
 
@@ -295,7 +393,7 @@
      66% fica apertado demais para colunas tabulares (documento/fornecedor/
      produto/quantidade), então essa variante usa quase toda a largura do
      painel de chat quando a resposta tem rows. */
-  .bubble.bubble-grid { max-width: 92%; white-space: normal; }
+  .bubble.bubble-grid { max-width: 98%; white-space: normal; }
   .bubble-grid-titulo { font-weight: 600; margin-bottom: 6px; }
 
   /* Falha real de comunicacao (rede/servidor fora do ar) — visualmente distinta
@@ -308,16 +406,90 @@
   .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; float: right; margin: 3px -2px -3px 8px; transform: translateY(4px); }
   .bubble .time { font-size: 10.5px; color: var(--wa-text-tertiary); white-space: nowrap; }
 
+  /* Grid baseada em <div>+flex, NAO <table>/<tr>/<td> — tentativas anteriores
+     com table real quebravam de duas formas: (1) table-layout:auto media
+     largura de coluna pelo conteudo de CADA <tr> virtualizado, desalinhando
+     colunas entre linhas diferentes; (2) com scroll horizontal, cada <tr>
+     virtualizado (uma display:table separada, truque do virtual scroll) nao
+     compartilhava o deslocamento horizontal do thead, entao cabecalho e
+     dados rolavam dessincronizados. <div> com largura em px explicita (JS,
+     ver calcularLarguraColuna) nao tem nenhuma dessas regras especiais de
+     table, entao nao sofre nenhum dos dois problemas. */
   .result-table { margin-top: 2px; border-radius: 6px; border: 1px solid var(--wa-border); font-size: 12.8px; }
-  /* max-height + overflow: so a area da tabela rola (nao a bolha inteira) —
-     necessario porque respostas de compras/financeiro podem trazer dezenas de
-     linhas e a bolha nao pode crescer alem da altura util do chat-body. */
+  /* overflow: area rola nos dois eixos — vertical (linhas, ver virtual scroll
+     em ativarVirtualScroll) e horizontal (quando a soma das colunas passa da
+     largura da bolha, em vez de cortar texto). */
   .result-table-scroll { max-height: 340px; overflow: auto; border-radius: 6px; }
-  .result-table table { width: 100%; border-collapse: collapse; }
-  .result-table th, .result-table td { text-align: left; padding: 6px 8px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .result-table th { background: var(--wa-accent-soft-bg); color: var(--wa-text); font-weight: 600; font-size: 11.5px; position: sticky; top: 0; }
-  .result-table td.num { text-align: right; }
-  .result-table tr + tr td { border-top: 1px solid var(--wa-border); }
+  .result-grid-row { display: flex; }
+  .result-grid-cell {
+    flex: none;
+    padding: 6px 8px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+  }
+  .result-grid-cell.num { text-align: right; }
+  .result-grid-row + .result-grid-row .result-grid-cell { border-top: 1px solid var(--wa-border); }
+  /* Fundo OPACO obrigatorio no cabecalho fixo — 2a tentativa. A 1a usava
+     color-mix(--wa-accent-soft-bg, --wa-bubble-in): verificado via teste
+     automatizado (Playwright) que o resultado NAO fica opaco — color-mix
+     preserva o canal alpha proporcionalmente, entao misturar uma cor
+     translucida (--wa-accent-soft-bg e um rgba com alpha ~0.12) ainda produz
+     alpha final ~0.5, mesmo combinada com uma cor solida. A linha de dados
+     por baixo continuava parcialmente visivel atraves do cabecalho fixo
+     (bug reportado 2x). Correcao: --wa-sidebar usado PURO, sem color-mix —
+     e uma cor solida (sem alpha) em todos os temas, garantindo opacidade
+     real. position:sticky (so top, nao left): o cabecalho fica fixo ao
+     rolar verticalmente; ao rolar horizontalmente ele rola junto com as
+     colunas (mesma largura fixa por coluna), mantendo cabecalho e dados
+     sempre alinhados nos dois eixos. */
+  /* [CORRIGIDO apos 3o teste em producao] Investigacao completa (Playwright:
+     elementFromPoint em toda a faixa "sobreposta" confirmou que o DOM logico
+     SEMPRE retorna o cabecalho, nunca a linha de dados por baixo — ou seja,
+     durante o scroll real via mouse wheel, o Chromium as vezes pinta um frame
+     intermediario onde a camada composta do sticky ainda nao cobriu
+     visualmente a camada das linhas absolutas rolando por baixo, mesmo com
+     o DOM/z-index corretos. E um artefato de repaint conhecido do Chromium
+     ao combinar position:sticky com conteudo position:absolute que rola por
+     baixo dele (nao um bug de logica deste codigo). will-change forca o
+     cabecalho para sua propria camada de composicao com antecedencia (antes
+     do scroll comecar), eliminando a janela onde esse frame intermediario
+     mal-pintado pode aparecer. */
+  .result-grid-header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--wa-sidebar);
+    box-shadow: 0 1px 0 var(--wa-border);
+    will-change: transform;
+  }
+  .result-grid-header .result-grid-cell { color: var(--wa-text); font-weight: 600; font-size: 11.5px; }
+  /* Corpo virtualizado (rows.length > 150, ver ativarVirtualScroll): container
+     com altura TOTAL simulada (todas as linhas, mesmo as nao renderizadas) via
+     min-height, para a barra de scroll vertical refletir o tamanho real dos
+     dados. As linhas visiveis sao posicionadas com transform:translateY na
+     posicao exata que teriam se todas estivessem no DOM — nenhuma regra
+     especial de table envolvida, diferente das tentativas anteriores.
+     Classe .virtualizado (so presente quando rows.length > 150, ver
+     montarMiniTabela) restringe o position:absolute a esse caso — sem ela,
+     tabelas pequenas (linhas SEM transform, todas em top:0) empilhariam
+     todas as linhas umas sobre as outras. */
+  .result-grid-body.virtualizado { position: relative; }
+  .result-grid-body.virtualizado .result-grid-row { position: absolute; left: 0; top: 0; }
+
+  /* Linha de totais (soma de cada coluna numerica, sobre TODAS as linhas —
+     nao so as visiveis no viewport do virtual scroll) — fixa no rodape da
+     area de scroll (sticky bottom), mesmo padrao visual do cabecalho fixo. */
+  .result-grid-totais {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: var(--wa-sidebar);
+    box-shadow: 0 -1px 0 var(--wa-border);
+  }
+  .result-grid-totais .result-grid-cell { font-weight: 700; }
 
   .result-table-rodape { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px 2px; font-size: 12px; color: var(--wa-text-secondary); }
   .result-table-link { background: none; border: none; padding: 0; color: var(--wa-accent); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; font-family: inherit; }
@@ -517,10 +689,26 @@
         <div class="header-sub"><span class="dot"></span> online · respondendo em tempo real</div>
       </div>
       <div class="header-badge">Protheus</div>
+      <button class="reset-memoria-btn" id="btnSelecionarMensagens" type="button" title="Selecionar mensagens para excluir" aria-label="Selecionar mensagens para excluir">
+        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      </button>
       <button class="reset-memoria-btn" id="btnResetMemoria" type="button" title="Esquecer contexto da conversa" aria-label="Esquecer contexto da conversa">
         <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
       </button>
     </header>
+
+    <!-- Barra de acoes do modo selecao (estilo WhatsApp Web) — so aparece
+         com selecaoAtiva=true, ver JS. Fica entre o header e as abas. -->
+    <div class="selecao-bar" id="selecaoBar" style="display:none;">
+      <button type="button" class="selecao-cancelar" id="btnCancelarSelecao" aria-label="Cancelar selecao">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <span class="selecao-contagem" id="selecaoContagem">0 selecionada(s)</span>
+      <button type="button" class="selecao-excluir" id="btnExcluirSelecionadas" disabled>
+        <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        Excluir
+      </button>
+    </div>
 
     <div class="view-tabs" role="tablist">
       <button class="view-tab active" id="tabConversa" type="button" role="tab" aria-selected="true">
@@ -625,6 +813,11 @@
   const userName = document.getElementById('userName');
   const userAvatar = document.getElementById('userAvatar');
   const btnNovaConversa = document.getElementById('btnNovaConversa');
+  const btnSelecionarMensagens = document.getElementById('btnSelecionarMensagens');
+  const selecaoBar = document.getElementById('selecaoBar');
+  const selecaoContagem = document.getElementById('selecaoContagem');
+  const btnCancelarSelecao = document.getElementById('btnCancelarSelecao');
+  const btnExcluirSelecionadas = document.getElementById('btnExcluirSelecionadas');
 
   // Elementos e estado da aba Relatorio — declarados aqui (nao mais abaixo,
   // junto das funcoes) porque carregarMensagens() chama fecharRelatorio() e
@@ -702,7 +895,15 @@
   // pedidos de compra). Um cabecalho curto + botao "Ver na aba Dados" substitui
   // o texto completo; a aba Dados continua disponivel para agrupar/exportar.
   // Sem rows (resposta simples, erro, sem_dados etc.) o texto segue como antes.
-  const MAX_COLUNAS_MINI_TABELA = 5;
+  // [AJUSTADO apos reclamacao em producao] Era 5 — pequeno demais para
+  // perguntas comuns como "faturamento agrupado por data, cliente, nota
+  // fiscal e produto" (6 colunas: 4 de agrupamento + valor + quantidade),
+  // que cortava a ultima coluna pedida mesmo ela existindo em `rows` (a IA
+  // ja trazia certo — so a exibicao da bolha cortava; a aba Dados sempre
+  // mostrou tudo, sem esse limite). Ainda finito (nao ilimitado) porque a
+  // bolha tem largura de chat, nao de planilha — 8 cobre a maioria das
+  // perguntas de agrupamento sem virar tabela larga demais para o formato.
+  const MAX_COLUNAS_MINI_TABELA = 8;
 
   // Extrai a primeira linha do texto (titulo/cabecalho da resposta, ex.:
   // "📊 Compras --> Pedidos em aberto...") para usar como titulo curto da
@@ -712,29 +913,169 @@
     return primeiraLinha || 'Resultado da consulta';
   }
 
+  // Virtual scroll simples (sem lib): com milhares de linhas (ex.: 10.000
+  // registros), renderizar um <tr> real por linha deixava o scroll da bolha
+  // lento (reflow de milhares de elementos) — reportado pelo usuario. Em vez
+  // disso, so as linhas dentro da janela visivel (+ buffer de 4 linhas acima/
+  // abaixo, ver atualizar() em ativarVirtualScroll) viram elementos reais; as
+  // demais nao existem no DOM — a altura total e simulada via min-height no
+  // container (.result-grid-body) e cada linha visivel e posicionada com
+  // transform:translateY na posicao exata que teria se todas estivessem la.
+  const ALTURA_LINHA_PX = 31; // ~ 6px+6px padding + 1 linha de texto 12.8px, medido no result-grid-cell
+
+  // Largura em PIXELS FIXOS por coluna, calculada uma vez a partir do maior
+  // texto entre titulo da coluna e uma amostra de valores (ate 40 linhas) —
+  // aplicada igualmente ao cabecalho e a toda linha de dado (mesmo array de
+  // larguras, ver montarMiniTabela/ativarVirtualScroll), garantindo que
+  // coluna N do cabecalho sempre bata com coluna N dos dados.
+  // [AJUSTADO a pedido do usuario] Largura reduzida para caber "exatamente"
+  // no conteudo — COL_PADDING_PX menor (12, so o padding real da celula) e
+  // trim() aplicado tanto no calculo quanto na exibicao (ver trimSeTexto),
+  // pois campos CHAR fixos do Protheus costumam vir preenchidos com espacos
+  // em branco a direita (ex.: "ABBOTT ENGA...LTDA   " com espacos ate o
+  // tamanho da coluna do banco), inflando a largura calculada sem que esse
+  // espaco aparecesse visualmente no texto exibido.
+  const COL_MIN_PX = 60;
+  const COL_MAX_PX = 260;
+  // 7.2 causava truncamento ocasional (ex.: "PEDRISCO (GROSSO)" cortado na
+  // mini-grid do chat, que usa 12.8px de fonte vs. o padrao do Tabulator na
+  // aba Dados) — a mesma largura calculada nao tem folga suficiente para os
+  // dois contextos. 7.6 cobre ambos sem re-medir DOM (que seria a alternativa
+  // mais precisa, mas cara o suficiente pra ja ter sido descartada antes).
+  const PX_POR_CHAR = 7.6;
+  const COL_PADDING_PX = 12;
+
+  // So aplica trim em string (nao mexe em number/null) — datas e numeros ja
+  // passam por formatarDataAAAAMMDD/formatarNumeroExibicao, que nao deixam
+  // espaco sobrando.
+  function trimSeTexto(v) {
+    return typeof v === 'string' ? v.trim() : v;
+  }
+
+  function calcularLarguraColuna(coluna, rows) {
+    let maiorTexto = String(coluna.title || '').length;
+    const amostra = rows.length > 40 ? rows.slice(0, 40) : rows;
+    for (const r of amostra) {
+      const v = trimSeTexto(r[coluna.field]);
+      const len = v == null ? 0 : String(v).length;
+      if (len > maiorTexto) maiorTexto = len;
+    }
+    const px = Math.round(maiorTexto * PX_POR_CHAR + COL_PADDING_PX);
+    return Math.max(COL_MIN_PX, Math.min(COL_MAX_PX, px));
+  }
+
+  function celulaHtml(coluna, largura, valor) {
+    let exibicao = trimSeTexto(valor);
+    if (coluna.data) exibicao = formatarDataAAAAMMDD(valor);
+    else if (coluna.numerico) exibicao = formatarNumeroExibicao(valor);
+    const classe = 'result-grid-cell' + (coluna.numerico ? ' num' : '');
+    return `<div class="${classe}" style="width:${largura}px">${escapeHtml(exibicao == null ? '' : exibicao)}</div>`;
+  }
+
+  function linhaHtml(row, colunas, larguras, top) {
+    const celulas = colunas.map((c, i) => celulaHtml(c, larguras[i], row[c.field])).join('');
+    const style = top == null ? '' : ` style="transform:translateY(${top}px)"`;
+    return `<div class="result-grid-row"${style}>${celulas}</div>`;
+  }
+
+  // Soma cada coluna numerica sobre TODAS as linhas (nao so a fatia visivel
+  // do virtual scroll) — pedido do usuario para ver o total rapido na propria
+  // bolha, sem precisar abrir a aba Dados so para somar. Colunas nao
+  // numericas ficam com a celula vazia (mantem alinhamento com o cabecalho).
+  function linhaTotaisHtml(rows, colunas, larguras) {
+    const temNumerica = colunas.some((c) => c.numerico);
+    if (!temNumerica) return '';
+    const celulas = colunas.map((c, i) => {
+      if (!c.numerico) return `<div class="result-grid-cell" style="width:${larguras[i]}px"></div>`;
+      const soma = rows.reduce((acc, r) => acc + (typeof r[c.field] === 'number' ? r[c.field] : 0), 0);
+      return `<div class="result-grid-cell num" style="width:${larguras[i]}px">${escapeHtml(formatarNumeroExibicao(soma))}</div>`;
+    }).join('');
+    return `<div class="result-grid-row result-grid-totais">${celulas}</div>`;
+  }
+
   function montarMiniTabela(rows) {
     const colunas = inferirColunas(rows).slice(0, MAX_COLUNAS_MINI_TABELA);
-    const thead = colunas.map((c) => `<th>${escapeHtml(c.title)}</th>`).join('');
-    const tbody = rows.map((r) => {
-      const tds = colunas.map((c) => {
-        const bruto = r[c.field];
-        let exibicao = bruto;
-        if (c.data) exibicao = formatarDataAAAAMMDD(bruto);
-        else if (c.numerico) exibicao = formatarNumeroExibicao(bruto);
-        const classe = c.numerico ? ' class="num"' : '';
-        return `<td${classe}>${escapeHtml(exibicao == null ? '' : exibicao)}</td>`;
-      }).join('');
-      return `<tr>${tds}</tr>`;
-    }).join('');
-    return `<div class="result-table"><div class="result-table-scroll"><table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table></div></div>`;
+    const larguras = colunas.map((c) => calcularLarguraColuna(c, rows));
+    const larguraTotal = larguras.reduce((a, b) => a + b, 0);
+    const cabecalho = `<div class="result-grid-row result-grid-header" style="width:${larguraTotal}px">`
+      + colunas.map((c, i) => `<div class="result-grid-cell" style="width:${larguras[i]}px">${escapeHtml(c.title)}</div>`).join('')
+      + `</div>`;
+    const totais = linhaTotaisHtml(rows, colunas, larguras);
+
+    // Tabela pequena: sem custo de virtualizacao, renderiza tudo direto.
+    if (rows.length <= 150) {
+      const linhas = rows.map((r) => linhaHtml(r, colunas, larguras, null)).join('');
+      return `<div class="result-table"><div class="result-table-scroll">`
+        + `<div style="width:${larguraTotal}px">${cabecalho}<div class="result-grid-body">${linhas}</div>${totais}</div>`
+        + `</div></div>`;
+    }
+
+    const alturaTotal = rows.length * ALTURA_LINHA_PX;
+    return `<div class="result-table"><div class="result-table-scroll">`
+      + `<div style="width:${larguraTotal}px">${cabecalho}`
+      + `<div class="result-grid-body virtualizado" style="min-height:${alturaTotal}px"></div>${totais}</div>`
+      + `</div></div>`;
+  }
+
+  // Chamada apos o innerHTML da bolha ser inserido no DOM (rows.length > 150).
+  // Recicla as linhas conforme o scroll, em vez de manter milhares de
+  // elementos permanentemente no DOM.
+  function ativarVirtualScroll(rowEl, rows) {
+    const wrap = rowEl.querySelector('.result-table');
+    if (!wrap) return;
+    const scrollEl = wrap.querySelector('.result-table-scroll');
+    const body = wrap.querySelector('.result-grid-body');
+    const colunas = inferirColunas(rows).slice(0, MAX_COLUNAS_MINI_TABELA);
+    // Mesmo calculo de largura usado no cabecalho (montarMiniTabela) — precisa
+    // ser identico, senao as colunas do corpo virtualizado desalinham das
+    // colunas do cabecalho ja renderizado.
+    const larguras = colunas.map((c) => calcularLarguraColuna(c, rows));
+
+    function atualizar() {
+      const scrollTop = scrollEl.scrollTop;
+      const viewportPx = scrollEl.clientHeight;
+      // [CORRIGIDO apos bug reportado em producao] Buffer de linhas ANTES da
+      // janela visivel foi removido. Motivo confirmado via teste automatizado
+      // (Playwright, scroll incremental real via mouse.wheel — scrollTop
+      // atribuido direto nao reproduzia): "overflow" (auto/hidden) NAO recorta
+      // elementos filhos com position:absolute (comportamento documentado do
+      // CSS, nao um bug deste codigo) — as linhas do buffer, posicionadas
+      // ACIMA do scrollTop atual via translateY, ficavam visiveis "escapando"
+      // do clipping do .result-table-scroll e apareciam sobrepostas ao
+      // cabecalho sticky (bug: texto de linha de dados colado sobre o
+      // cabecalho, so durante/apos scroll ativo). Sem buffer negativo, so
+      // linhas DENTRO ou ABAIXO da janela visivel sao renderizadas — nunca
+      // escapam para cima do scrollTop, entao nunca ficam na regiao do
+      // cabecalho. Buffer para BAIXO (+8) mantido — nao causa o bug, pois
+      // fica dentro/abaixo da area visivel.
+      const linhasVisiveis = Math.ceil(viewportPx / ALTURA_LINHA_PX) + 8;
+      const primeiraVisivel = Math.max(0, Math.min(
+        rows.length - linhasVisiveis,
+        Math.floor(scrollTop / ALTURA_LINHA_PX),
+      ));
+      const ultimaVisivel = Math.min(rows.length, primeiraVisivel + linhasVisiveis);
+
+      const fatia = rows.slice(primeiraVisivel, ultimaVisivel);
+      body.innerHTML = fatia.map((r, i) => linhaHtml(r, colunas, larguras, (primeiraVisivel + i) * ALTURA_LINHA_PX)).join('');
+    }
+
+    let ticking = false;
+    scrollEl.addEventListener('scroll', () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => { atualizar(); ticking = false; });
+    });
+
+    atualizar();
   }
 
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
-  function addBubble({ texto, direcao, rows, criadoEm, isFalha = false }) {
+  function addBubble({ id, texto, direcao, rows, criadoEm, isFalha = false }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
+    if (id) row.dataset.mensagemId = id;
     const temGrid = !isFalha && Array.isArray(rows) && rows.length > 0;
     const bubbleClass = isFalha ? 'bubble bubble-falha' : (temGrid ? 'bubble bubble-grid' : 'bubble');
     const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
@@ -750,11 +1091,35 @@
       conteudo = escapeHtml(texto);
     }
 
-    row.innerHTML = `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`;
+    // Checkbox de selecao — sempre no DOM (nao so quando o modo esta ativo),
+    // controlado via CSS (.chat-body.selecao-ativa .row-select-checkbox) para
+    // nao ter que recriar todas as bolhas ao entrar/sair do modo selecao.
+    const checkbox = id ? `<span class="row-select-checkbox" data-checkbox="1"></span>` : '';
+    const ordemCheckbox = direcao === 'out' ? '' : checkbox; // esquerda p/ bolhas 'in'
+    const ordemCheckboxFim = direcao === 'out' ? checkbox : ''; // direita p/ bolhas 'out'
+
+    row.innerHTML = ordemCheckbox
+      + `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`
+      + ordemCheckboxFim;
     if (temGrid) {
-      row.querySelector('[data-abrir-dados]').addEventListener('click', () => trocarAba('relatorio'));
+      row.querySelector('[data-abrir-dados]').addEventListener('click', (e) => {
+        if (chatBody.classList.contains('selecao-ativa')) return; // nao abre aba durante selecao
+        trocarAba('relatorio');
+      });
+      // So ativa virtual scroll quando montarMiniTabela optou por ele (tbody
+      // com display:block — ver limite de 150 linhas la dentro).
+      if (rows.length > 150) ativarVirtualScroll(row, rows);
+    }
+    if (id) {
+      row.addEventListener('click', (e) => {
+        if (!chatBody.classList.contains('selecao-ativa')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSelecaoMensagem(id, row);
+      });
     }
     chatBody.appendChild(row);
+    return row;
   }
 
   function scrollToBottom() { chatBody.scrollTop = chatBody.scrollHeight; }
@@ -772,6 +1137,74 @@
     if (typingRow) { typingRow.remove(); typingRow = null; }
   }
 
+  // =====================================================================
+  // SELECAO DE MENSAGENS (excluir individualmente, estilo WhatsApp Web)
+  // Estado reiniciado a cada troca de sessao (ver carregarMensagens) —
+  // nao faz sentido manter selecao ao trocar de conversa.
+  // =====================================================================
+  const mensagensSelecionadas = new Set();
+
+  function atualizarBarraSelecao() {
+    const qtd = mensagensSelecionadas.size;
+    selecaoContagem.textContent = qtd + ' selecionada' + (qtd === 1 ? '' : 's');
+    btnExcluirSelecionadas.disabled = qtd === 0;
+  }
+
+  function toggleSelecaoMensagem(id, rowEl) {
+    const checkboxEl = rowEl.querySelector('[data-checkbox]');
+    if (mensagensSelecionadas.has(id)) {
+      mensagensSelecionadas.delete(id);
+      if (checkboxEl) checkboxEl.classList.remove('marcado');
+    } else {
+      mensagensSelecionadas.add(id);
+      if (checkboxEl) checkboxEl.classList.add('marcado');
+    }
+    atualizarBarraSelecao();
+  }
+
+  function entrarModoSelecao() {
+    chatBody.classList.add('selecao-ativa');
+    selecaoBar.style.display = 'flex';
+    mensagensSelecionadas.clear();
+    atualizarBarraSelecao();
+  }
+
+  function sairModoSelecao() {
+    chatBody.classList.remove('selecao-ativa');
+    selecaoBar.style.display = 'none';
+    mensagensSelecionadas.forEach((id) => {
+      const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
+      const checkboxEl = rowEl ? rowEl.querySelector('[data-checkbox]') : null;
+      if (checkboxEl) checkboxEl.classList.remove('marcado');
+    });
+    mensagensSelecionadas.clear();
+  }
+
+  btnSelecionarMensagens.addEventListener('click', entrarModoSelecao);
+  btnCancelarSelecao.addEventListener('click', sairModoSelecao);
+
+  btnExcluirSelecionadas.addEventListener('click', async () => {
+    if (!mensagensSelecionadas.size || !sessaoAtualId) return;
+    const qtd = mensagensSelecionadas.size;
+    if (!window.confirm('Excluir ' + qtd + ' mensagem' + (qtd === 1 ? '' : 'ns') + ' selecionada' + (qtd === 1 ? '' : 's') + '? Essa acao nao pode ser desfeita.')) return;
+    const ids = [...mensagensSelecionadas];
+    try {
+      await api('/sessoes/' + sessaoAtualId + '/mensagens/excluir', {
+        method: 'POST',
+        body: JSON.stringify({ mensagemIds: ids }),
+      });
+      ids.forEach((id) => {
+        const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
+        if (rowEl) rowEl.remove();
+      });
+      sairModoSelecao();
+      await carregarSessoes();
+      if (!chatBody.querySelector('.row')) renderEmptyState();
+    } catch (err) {
+      showError('Falha ao excluir mensagens: ' + err.message);
+    }
+  });
+
   function renderEmptyState() {
     chatBody.innerHTML = `
       <div class="empty-state">
@@ -782,6 +1215,7 @@
 
   async function carregarMensagens(sessaoId) {
     sessaoAtualId = sessaoId;
+    sairModoSelecao();
     chatBody.innerHTML = '';
     try {
       const data = await api('/sessoes/' + sessaoId + '/mensagens');
@@ -859,13 +1293,40 @@
             <span class="session-time">${nowLabel(s.atualizadoEm)}</span>
           </div>
           <div class="session-preview">${escapeHtml(s.ultimaMensagem || '')}</div>
-        </div>`;
+        </div>
+        <button type="button" class="session-delete-btn" title="Excluir conversa" aria-label="Excluir conversa">
+          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>`;
       item.addEventListener('click', () => {
         headerTitle.textContent = s.titulo;
         carregarMensagens(s.sessaoId);
       });
+      item.querySelector('.session-delete-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        excluirSessao(s.sessaoId, s.titulo);
+      });
       sessionList.appendChild(item);
     });
+  }
+
+  async function excluirSessao(sessaoId, titulo) {
+    if (!window.confirm('Excluir a conversa "' + titulo + '"? Essa acao nao pode ser desfeita.')) return;
+    try {
+      await api('/sessoes/' + sessaoId, { method: 'DELETE' });
+      relatorioCachePorSessao.delete(sessaoId);
+      const eraAtual = sessaoId === sessaoAtualId;
+      await carregarSessoes({ selecionarPrimeira: eraAtual });
+      if (eraAtual && !sessoesCache.length) {
+        sessaoAtualId = null;
+        headerTitle.textContent = 'Nova conversa';
+        renderEmptyState();
+        fecharRelatorio();
+      } else if (!eraAtual) {
+        renderSessionList();
+      }
+    } catch (err) {
+      showError('Falha ao excluir conversa: ' + err.message);
+    }
   }
 
   async function carregarSessoes({ selecionarPrimeira = false } = {}) {
@@ -883,8 +1344,29 @@
     }
   }
 
+  // Associa um id de mensagem a uma bolha ja renderizada (usado para a
+  // bolha 'out' — ela e desenhada ANTES da chamada a API, entao ainda nao
+  // tem id nesse momento; so ganha id quando a resposta chega). Adiciona o
+  // checkbox de selecao dinamicamente, que a bolha nao tinha por nao ter id
+  // no momento em que addBubble() a criou.
+  function atribuirIdABolha(rowEl, id) {
+    if (!rowEl || !id) return;
+    rowEl.dataset.mensagemId = id;
+    if (rowEl.querySelector('[data-checkbox]')) return; // ja tem (nao deveria, mas defensivo)
+    const checkbox = document.createElement('span');
+    checkbox.className = 'row-select-checkbox';
+    checkbox.dataset.checkbox = '1';
+    rowEl.appendChild(checkbox); // bolha 'out': checkbox fica a direita (ordem visual via flex)
+    rowEl.addEventListener('click', (e) => {
+      if (!chatBody.classList.contains('selecao-ativa')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSelecaoMensagem(id, rowEl);
+    });
+  }
+
   async function enviarMensagem(texto) {
-    addBubble({ texto, direcao: 'out', criadoEm: new Date().toISOString() });
+    const rowPergunta = addBubble({ texto, direcao: 'out', criadoEm: new Date().toISOString() });
     scrollToBottom();
     showTyping();
     sendBtn.disabled = true;
@@ -897,7 +1379,8 @@
       });
       sessaoAtualId = data.sessaoId;
       hideTyping();
-      addBubble({ texto: data.resposta.texto, rows: data.resposta.rows, direcao: 'in', criadoEm: data.criadoEm });
+      atribuirIdABolha(rowPergunta, data.resposta.perguntaId);
+      addBubble({ id: data.resposta.mensagemId, texto: data.resposta.texto, rows: data.resposta.rows, direcao: 'in', criadoEm: data.criadoEm });
       scrollToBottom();
       await carregarSessoes();
 
@@ -1051,7 +1534,14 @@
     }, 600);
   }
 
-  function montarColunasTabulator() {
+  // width explicito por coluna (mesma funcao/criterio da mini-grid do chat —
+  // ver calcularLarguraColuna) — a pedido do usuario, para a aba Dados nao
+  // desperdicar tela com colunas mais largas que o conteudo. NAO usa
+  // fitDataFill (que mede o DOM real de cada celula e foi descartado antes
+  // por travar com muitos dados, ver comentario em abrirRelatorio) — o
+  // Tabulator respeita width fixo em layout:fitColumns sem precisar remedir,
+  // entao a otimizacao de performance anterior continua valendo.
+  function montarColunasTabulator(rows) {
     return reportColunas.map((col) => {
       // accessorDownload controla o valor usado no export (Excel/PDF) —
       // SEPARADO do formatter visual da grid. Sem isso, o Tabulator exporta o
@@ -1060,15 +1550,16 @@
       // relatado no PDF gerado.
       const accessorDownload = col.numerico
         ? (value) => formatarNumero(value)
-        : (col.data ? (value) => formatarDataAAAAMMDD(value) : undefined);
+        : (col.data ? (value) => formatarDataAAAAMMDD(value) : trimSeTexto);
       return {
         field: col.field,
         title: col.title,
+        width: calcularLarguraColuna(col, rows),
         headerFilter: true,
         hozAlign: col.numerico ? 'right' : (col.data ? 'center' : 'left'),
         formatter: col.numerico
           ? (cell) => formatarNumero(cell.getValue())
-          : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue()) : undefined),
+          : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue()) : (cell) => trimSeTexto(cell.getValue())),
         accessorDownload,
         bottomCalc: col.numerico ? somaColuna : undefined,
         bottomCalcFormatter: col.numerico ? (cell) => formatarNumero(cell.getValue()) : undefined,
@@ -1108,7 +1599,7 @@
       // '100%' funciona como altura explicita quando o container pai
       // (.report-grid-wrap) ja tem altura fixa definida pelo layout flex.
       height: '100%',
-      columns: montarColunasTabulator(),
+      columns: montarColunasTabulator(rows),
       groupBy: reportGroupBy.length ? reportGroupBy : false,
       groupStartOpen: true,
       // groupHeader recebe o valor BRUTO do grupo (nao passa pelo formatter

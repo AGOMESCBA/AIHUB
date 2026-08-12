@@ -87,6 +87,34 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  app.delete('/api/ia-command/protheus/sessoes/:id', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    try {
+      const excluida = sessionStore.excluirSessao({ sessaoId: req.params.id, empresaId, celular });
+      if (!excluida) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── Exclusao de mensagens especificas (selecao multipla, estilo WhatsApp) ──
+  app.post('/api/ia-command/protheus/sessoes/:id/mensagens/excluir', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    const { mensagemIds } = req.body || {};
+    if (!Array.isArray(mensagemIds) || !mensagemIds.length) {
+      return res.status(400).json({ error: 'mensagemIds e obrigatorio (array nao vazio).' });
+    }
+    try {
+      const removidas = sessionStore.excluirMensagens({
+        sessaoId: req.params.id, empresaId, celular, mensagemIds,
+      });
+      res.json({ ok: true, removidas });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/ia-command/protheus/sessoes/:id/mensagens', requireTokenSessao, (req, res) => {
     const { empresaId, celular } = req.protheusChat;
     const cursor = req.query.cursor || null;

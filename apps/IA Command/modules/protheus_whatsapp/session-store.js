@@ -59,11 +59,14 @@ function listarSessoes({ empresaId, celular, limite = 30 }) {
   });
 }
 
-// Retorna o id da mensagem de resposta ('in') criada — usado pelo frontend
-// para referenciar essa mensagem especifica ao salvar config de grid.
+// Retorna os ids das duas mensagens criadas (pergunta 'out' e resposta 'in')
+// — usados pelo frontend para referenciar essas mensagens especificas ao
+// salvar config de grid ou ao excluir mensagens individuais (selecao
+// multipla) sem precisar recarregar o historico da sessao.
 function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipoResultado = null, intent = null }) {
   const db = getDB();
   const agora = new Date().toISOString();
+  const perguntaId = crypto.randomUUID();
   const respostaId = crypto.randomUUID();
 
   const insert = db.prepare(`
@@ -71,7 +74,7 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  insert.run(crypto.randomUUID(), sessaoId, 'out', perguntaTexto, null, null, null, agora);
+  insert.run(perguntaId, sessaoId, 'out', perguntaTexto, null, null, null, agora);
   insert.run(
     respostaId, sessaoId, 'in', respostaTexto,
     rows ? JSON.stringify(rows) : null,
@@ -88,7 +91,7 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
       .run(truncarTitulo(perguntaTexto), sessaoId);
   }
 
-  return respostaId;
+  return { perguntaId, respostaId };
 }
 
 function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
@@ -190,6 +193,37 @@ function resetarMemoria({ sessaoId }) {
   return agora;
 }
 
+// Apaga permanentemente uma conversa (sessao + todas as mensagens). Escopada
+// por empresaId/celular — mesmo padrao de buscarSessao/listarSessoes — para
+// que um usuario nao consiga apagar sessao de outro celular/empresa so
+// adivinhando o id. Mensagens sao apagadas primeiro por causa da FK
+// (protheus_chat_messages.sessao_id -> protheus_chat_sessions.id).
+function excluirSessao({ sessaoId, empresaId, celular }) {
+  const db = getDB();
+  const sessao = buscarSessao({ id: sessaoId, empresaId, celular });
+  if (!sessao) return false;
+  db.prepare(`DELETE FROM protheus_chat_messages WHERE sessao_id = ?`).run(sessaoId);
+  const info = db.prepare(`DELETE FROM protheus_chat_sessions WHERE id = ?`).run(sessaoId);
+  return info.changes > 0;
+}
+
+// Apaga uma ou mais mensagens especificas de uma conversa (selecao multipla,
+// estilo WhatsApp Web) — nao apaga a sessao. Valida a posse da sessao
+// (empresaId/celular) antes de apagar, mesmo padrao de excluirSessao; o
+// WHERE sessao_id = ? garante que so mensagens DAQUELA sessao sao afetadas,
+// mesmo que mensagemIds contenha ids de outra sessao/empresa por engano.
+function excluirMensagens({ sessaoId, empresaId, celular, mensagemIds }) {
+  if (!Array.isArray(mensagemIds) || !mensagemIds.length) return 0;
+  const db = getDB();
+  const sessao = buscarSessao({ id: sessaoId, empresaId, celular });
+  if (!sessao) return 0;
+  const placeholders = mensagemIds.map(() => '?').join(',');
+  const info = db.prepare(
+    `DELETE FROM protheus_chat_messages WHERE sessao_id = ? AND id IN (${placeholders})`
+  ).run(sessaoId, ...mensagemIds);
+  return info.changes || 0;
+}
+
 module.exports = {
   criarSessao,
   buscarSessao,
@@ -198,6 +232,8 @@ module.exports = {
   listarMensagens,
   ultimoIntent,
   resetarMemoria,
+  excluirSessao,
+  excluirMensagens,
   ultimaMensagemTabular,
   salvarGridConfig,
 };

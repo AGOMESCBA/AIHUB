@@ -7,6 +7,7 @@ const messageTemplates = require('../whatsapp/message-templates');
 const store = require('./scheduled-question-store');
 const crud = require('../database/crud');
 const connectionFactory = require('../erp/providers/connection-factory');
+const semanticDatasetRunner = require('../erp/core/semantic-dataset-ai-runner');
 
 const SQL_HANDLERS = {
   compras: require('../erp/totvs_protheus/compras/ai-sql-handler-v2'),
@@ -222,6 +223,10 @@ const SQL_FIXO_GENERICO_LIMITE_LINHAS = 30;
 // SQL fixo e escrito pelo proprio admin com colunas ja nomeadas para leitura — cada linha do
 // resultado e um registro distinto (ex: um chamado), nao uma metrica a ser consolidada.
 function _formatarSqlFixoGenerico(rows, titulo) {
+  try {
+    return semanticDatasetRunner.formatarRespostaSemantica(rows, titulo);
+  } catch (_) {}
+
   const cabecalho = titulo ? `*${titulo}*\n\n` : '';
   if (!rows || !rows.length) return `${cabecalho}Nenhum dado encontrado para sua consulta.`;
   const colunas = Object.keys(rows[0] || {});
