@@ -108,7 +108,7 @@ ${fileLines.join('\r\n')}
 Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -File ""{app}\\instalar-gui.ps1"" -SkipCopy -Destino ""{app}"""; Flags: waituntilterminated; StatusMsg: "Configurando ambiente Python e servico Windows..."
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-Command ""& {{ $s='IA Hub - IACommand_AgenteLocal_API'; if (Get-Service $s -ErrorAction SilentlyContinue) {{ Stop-Service $s -Force; sc.exe delete $s }} }}"""; Flags: runhidden waituntilterminated
+Filename: "powershell.exe"; Parameters: "-Command ""& {{ $s='IA Hub - IACommand_AgenteLocal_API'; if (Get-Service $s -ErrorAction SilentlyContinue) {{ Stop-Service $s -Force; sc.exe delete $s }} }}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveIACommandAgenteLocalService"
 
 `;
 }
@@ -135,6 +135,20 @@ function gerarZip(versao, outputPath) {
   const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', ps], { timeout: 60000 });
 
   fs.rmSync(tmpStage, { recursive: true, force: true });
+
+  if (result.status !== 0) {
+    throw new Error(`Falha ao criar ZIP: ${result.stderr?.toString()}`);
+  }
+
+  return zipPath;
+}
+
+function compactarArquivo(filePath, outputPath, zipName) {
+  const zipPath = path.join(outputPath, zipName);
+  const safeFile = filePath.replace(/'/g, "''");
+  const safeZip = zipPath.replace(/'/g, "''");
+  const ps = `Compress-Archive -LiteralPath '${safeFile}' -DestinationPath '${safeZip}' -Force`;
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', ps], { timeout: 60000 });
 
   if (result.status !== 0) {
     throw new Error(`Falha ao criar ZIP: ${result.stderr?.toString()}`);
@@ -184,6 +198,7 @@ module.exports = function registrarRotasInstalador(app, { requireAuth, requireIa
     requireAuth, requireIaCommand, canInstall,
     (req, res) => {
       const versao = String(req.body?.versao || '1.0.0').replace(/[^0-9.]/g, '') || '1.0.0';
+      const formato = req.body?.formato === 'zip' ? 'zip' : 'exe';
 
       fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -227,6 +242,23 @@ module.exports = function registrarRotasInstalador(app, { requireAuth, requireIa
         }
 
         const exeName = `IACommand-AgenteLocal-Setup-v${versao}.exe`;
+        const exePath = path.join(OUTPUT_DIR, exeName);
+        if (formato === 'zip') {
+          try {
+            const zipName = `IACommand-AgenteLocal-Setup-v${versao}.zip`;
+            const zipPath = compactarArquivo(exePath, OUTPUT_DIR, zipName);
+            return res.json({
+              ok:      true,
+              tipo:    'zip',
+              arquivo: path.basename(zipPath),
+              saida:   fullOutput.slice(-1200),
+              aviso:   'Gerado como ZIP contendo o instalador .exe para reduzir bloqueios no download.',
+            });
+          } catch (err) {
+            return res.status(500).json({ ok: false, erro: err.message });
+          }
+        }
+
         return res.json({
           ok:      true,
           tipo:    'exe',

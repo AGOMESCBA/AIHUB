@@ -161,9 +161,12 @@
             <input type="text" class="form-control" id="inputVersao" value="1.0.0"
               placeholder="ex: 1.2.0" style="max-width:180px">
           </div>
-          <div class="form-group">
-            <button class="btn btn-primary" id="btnGerar" onclick="gerarInstalador()">
-              📦 Gerar Instalador
+          <div class="form-group" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" id="btnGerarExe" onclick="gerarInstalador('exe')">
+              📦 Gerar EXE
+            </button>
+            <button class="btn btn-secondary" id="btnGerarZip" onclick="gerarInstalador('zip')">
+              🗜 Gerar ZIP
             </button>
           </div>
         </div>
@@ -287,16 +290,20 @@
   }
 
   // ── Gerar instalador ─────────────────────────────────────────────────────────
-  async function gerarInstalador() {
+  async function gerarInstalador(formato) {
     const versao = document.getElementById('inputVersao').value.trim();
     if (!versao || !/^\d+\.\d+/.test(versao)) {
       alert('Informe uma versão válida (ex: 1.0.0).');
       return;
     }
 
-    const btn = document.getElementById('btnGerar');
-    btn.disabled = true;
-    btn.textContent = '⏳ Gerando...';
+    const btnExe = document.getElementById('btnGerarExe');
+    const btnZip = document.getElementById('btnGerarZip');
+    btnExe.disabled = true;
+    btnZip.disabled = true;
+    const btn = formato === 'zip' ? btnZip : btnExe;
+    const originalText = btn.textContent;
+    btn.textContent = formato === 'zip' ? '⏳ Gerando ZIP...' : '⏳ Gerando EXE...';
 
     // Reset UI
     document.getElementById('logBox').innerHTML     = '';
@@ -305,17 +312,17 @@
     document.getElementById('progressWrap').classList.remove('show');
     document.getElementById('progressBar').style.background = 'var(--accent)';
 
-    log('Iniciando geração do instalador v' + versao + '...');
+    log('Iniciando geração do instalador v' + versao + ' em ' + formato.toUpperCase() + '...');
     setProgress(15, 'Empacotando arquivos do Agente Local...');
 
     try {
       const r = await fetch('/api/ia-command/admin/instalador-agente/gerar', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ versao }),
+        body:    JSON.stringify({ versao, formato }),
       });
 
-      setProgress(75, 'Compilando instalador...');
+      setProgress(75, formato === 'zip' ? 'Compactando instalador...' : 'Compilando instalador...');
 
       const data = await r.json();
 
@@ -344,7 +351,7 @@
       document.getElementById('rdNome').textContent = data.arquivo;
       document.getElementById('rdSize').textContent  = isExe
         ? 'Instalador Windows (.exe) — wizard com seleção de diretório'
-        : 'Pacote de instalação (.zip) — extraia e execute instalar-gui.bat';
+        : 'Pacote compactado (.zip) — extraia e execute o instalador';
       document.getElementById('resultDownload').classList.add('show');
 
       // Atualizar "último gerado"
@@ -356,8 +363,9 @@
       setProgress(100, '✗ Erro');
       document.getElementById('progressBar').style.background = '#ef4444';
     } finally {
-      btn.disabled    = false;
-      btn.textContent = '📦 Gerar Instalador';
+      btnExe.disabled = false;
+      btnZip.disabled = false;
+      btn.textContent = originalText;
     }
   }
 
