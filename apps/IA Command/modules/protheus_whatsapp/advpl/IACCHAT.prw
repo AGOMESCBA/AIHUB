@@ -68,6 +68,19 @@
         neste arquivo via StrTran() (mesma tecnica ja usada em
         IACEscapeJson() abaixo), sem depender de nenhuma funcao Fw* do
         framework cuja existencia nao esteja confirmada.
+     e) [CORRIGIDO 11/08/2026] SYS_USR existe nesta instalacao (a suposicao
+        anterior de que a TABELA nao existia estava errada) — o que nao
+        existe e um CAMPO de celular dentro dela. Criado cadastro proprio
+        (tabela ZCH, ver advpl/ZCHCAD.prw neste mesmo diretorio) para o
+        vinculo usuario Protheus -> celular. IACLerCelularUsuario() foi
+        reescrita para ler ZCH primeiro (por RetCodUsr()), no lugar do antigo
+        SYS_USR->USR_CELULAR (que nunca existiu). IAC_CELULAR_TESTE_PADRAO
+        foi MANTIDO (decisao explicita do usuario), agora como FALLBACK: so
+        e usado se a tabela ZCH ainda nao existir ou nao houver registro
+        ativo para o usuario logado — evita bloquear o piloto enquanto o
+        cadastro ZCH nao tem cobertura completa. Ver ressalvas de nomes de
+        campo/indice de SYS_USR em ZCHCAD.prw (usadas la para o F3 de
+        selecao de usuario, nao usadas aqui).
 
    Todo valor de configuracao especifico de ambiente (URL do IAHub, timeout,
    empresa_id, segredo) e lido via parametro SX6 (GetMV) — ver bloco
@@ -123,13 +136,14 @@
 // remover/esvaziar esta linha (empresa_id muda por empresa-cliente real).
 #DEFINE IAC_EMPRESA_ID_PADRAO  3
 
-// !!! CELULAR DE TESTE CHUMBADO !!!
-// IACLerCelularUsuario() foi comentada (ver funcao abaixo) porque a tabela
-// SYS_USR nao existe neste ambiente Protheus (erro real em producao: "Alias
-// does not exist: SYS_USR"). Ate confirmar com o dicionario de dados real
-// qual e a tabela/alias correto do cadastro de usuarios com o campo de
-// celular, a rotina usa este valor fixo. TODO: descobrir o alias certo,
-// reativar IACLerCelularUsuario() com o nome correto, e remover esta linha.
+// !!! CELULAR DE TESTE CHUMBADO — USADO SO COMO FALLBACK !!!
+// IACLerCelularUsuario() busca primeiro na tabela ZCH (ver ZCHCAD.prw); se a
+// tabela ZCH ainda nao existir (ambiente sem o cadastro rodado uma vez) OU
+// nao houver registro ativo para o usuario logado, cai neste valor fixo em
+// vez de bloquear o chat — decisao explicita do usuario, para nao quebrar o
+// piloto enquanto o cadastro ZCH ainda nao foi populado para todo mundo.
+// TODO: remover este fallback quando o cadastro ZCH estiver com cobertura
+// completa dos usuarios do piloto (usar so ZCH, sem excecao).
 #DEFINE IAC_CELULAR_TESTE_PADRAO  "55 65 99987-5116"
 
 // !!! SEGREDO DE TESTE CHUMBADO — RISCO DE SEGURANCA ACEITO TEMPORARIAMENTE !!!
@@ -163,15 +177,12 @@ User Function IACChat()
         Return
     EndIf
 
-    // IACLerCelularUsuario() DESATIVADA — tabela SYS_USR nao existe neste
-    // ambiente (erro real: "Alias does not exist: SYS_USR"). Usando celular
-    // fixo de teste ate confirmar o alias correto do cadastro de usuarios.
-    // Ver ressalva e TODO junto de IAC_CELULAR_TESTE_PADRAO no topo do arquivo.
-    cCelular := IAC_CELULAR_TESTE_PADRAO
+    cCelular := IACLerCelularUsuario()
 
     If Empty(cCelular)
-        MsgAlert("Celular de teste nao configurado (IAC_CELULAR_TESTE_PADRAO)." + CRLF + ;
-                  "Procure o administrador do sistema.", "IA Command")
+        MsgAlert("Celular nao cadastrado para o usuario " + RetCodUsr() + "." + CRLF + ;
+                  "Cadastre em Configurador > Celular por Usuario - IA Command " + ;
+                  "(ZCHCadUsr) antes de usar o chat.", "IA Command")
         Return
     EndIf
 
@@ -217,44 +228,68 @@ User Function IACChat()
 Return
 
 /* ----------------------------------------------------------------------------
-   IACLerCelularUsuario — DESATIVADA, NAO CHAMADA POR IACChat() ATUALMENTE.
+   IACLerCelularUsuario
+   Le o celular do usuario Protheus LOGADO na tabela ZCH (ver ZCHCAD.prw),
+   pelo codigo retornado por RetCodUsr() — mesma funcao ja usada em IACChat()
+   para o nome (UsrFullName(RetCodUsr())), aqui usada tambem para a chave de
+   busca. So considera registro com ZCH_ATIVO = "S".
 
-   Erro real confirmado em producao (10/08/2026): "Alias does not exist:
-   SYS_USR" — a tabela SYS_USR nao existe neste ambiente Protheus. IACChat()
-   usa IAC_CELULAR_TESTE_PADRAO (celular chumbado) enquanto isso nao e
-   resolvido — ver ressalva no topo do arquivo.
+   Fallback (decisao explicita do usuario): se a tabela ZCH ainda nao existir
+   (SX2 sem registro — ambiente onde ZCHCadUsr() nunca foi aberta, ver
+   ZCHCriaEstrutura() em ZCHCAD.prw) OU nao houver registro ativo para o
+   usuario logado, usa IAC_CELULAR_TESTE_PADRAO em vez de bloquear o chat.
+   TODO: remover o fallback quando o cadastro ZCH tiver cobertura completa
+   dos usuarios do piloto — ver ressalva junto do #DEFINE no topo do arquivo.
 
-   Antes de reativar, e necessario:
-     1. Confirmar com o dicionario de dados real (SX3/SIGACFG) qual e o
-        alias/tabela correto do cadastro de usuarios com campo de celular
-        (SYS_USR era suposicao nao validada, ja provou estar errada).
-     2. Trocar "SYS_USR" e o indice de DbSetOrder abaixo (IAC_ORDEM_SYS_USR,
-        tambem um chute nao validado) pelos valores corretos.
-     3. Remover a linha "cCelular := IAC_CELULAR_TESTE_PADRAO" em IACChat() e
-        voltar a chamar IACLerCelularUsuario() no lugar.
-
-   Normalizacao (remover mascara) e feita no backend (token-service.js), nao
-   e necessaria aqui — a rotina pode enviar o valor como estiver gravado.
+   Normalizacao (remover mascara "+55 (65) 99901-0275" -> "556599..." etc.) e
+   feita no backend (token-service.js normalizarCelular), nao aqui — a
+   rotina envia o valor exatamente como gravado em ZCH_CEL (ou o fallback).
 ---------------------------------------------------------------------------- */
-#DEFINE IAC_ORDEM_SYS_USR  1  // TODO: confirmar indice real da tabela de usuarios
-
-/*
 Static Function IACLerCelularUsuario()
-    Local cCelular := ""
-    Local cAliasAtu := Alias()
+    Local cCelular   := ""
+    Local cAliasAtu  := Alias()
 
-    DbSelectArea("SYS_USR")
-    SYS_USR->(DbSetOrder(IAC_ORDEM_SYS_USR))
-    If SYS_USR->(MsSeek(xFilial("SYS_USR") + RetCodUsr()))
-        cCelular := Alltrim(SYS_USR->USR_CELULAR)
+    If IACTabelaExiste("ZCH")
+        DbSelectArea("ZCH")
+        ZCH->(DbSetOrder(1)) // ZCH_FILIAL+ZCH_USER, ver ZCHCriarSIX() em ZCHCAD.prw
+        If ZCH->(MsSeek(xFilial("ZCH") + RetCodUsr()))
+            If ZCH->ZCH_ATIVO == "S"
+                cCelular := Alltrim(ZCH->ZCH_CEL)
+            EndIf
+        EndIf
+        ZCH->(DbCloseArea())
     EndIf
 
     If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
         DbSelectArea(cAliasAtu)
     EndIf
 
+    If Empty(cCelular)
+        cCelular := IAC_CELULAR_TESTE_PADRAO // ver ressalva de fallback acima
+    EndIf
+
 Return cCelular
-*/
+
+/* ----------------------------------------------------------------------------
+   IACTabelaExiste
+   Confirma, via SX2 (dicionario de dados), se a tabela informada ja foi
+   criada — sem tentar abrir a area diretamente (DbSelectArea em tabela
+   inexistente gera erro fatal "Alias does not exist", nao um retorno .F.
+   tratavel). Usada para decidir se tenta ler ZCH ou vai direto ao fallback.
+---------------------------------------------------------------------------- */
+Static Function IACTabelaExiste(cTabela)
+    Local lExiste   := .F.
+    Local cAliasAtu := Alias()
+
+    DbSelectArea("SX2")
+    SX2->(DbSetOrder(1)) // X2_TABELA
+    lExiste := SX2->(MsSeek(cTabela))
+
+    If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
+        DbSelectArea(cAliasAtu)
+    EndIf
+
+Return lExiste
 
 /* ----------------------------------------------------------------------------
    IACSolicitarToken

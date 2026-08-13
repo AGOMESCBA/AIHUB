@@ -317,22 +317,22 @@
     color: var(--wa-text);
   }
   /* [AJUSTADO a pedido do usuario] Contagem agora fica a esquerda (flex:1
-     empurra os botoes para a direita); Limpar Chat, X (cancelar) e Excluir
-     ficam agrupados a direita, nessa ordem — X junto do Excluir em vez de
-     isolado do lado oposto da barra. */
+     empurra os botoes para a direita); Limpar Chat, Cancelar Selecao e
+     Excluir ficam agrupados a direita. */
   .selecao-contagem { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--wa-text-secondary); }
 
   .selecao-cancelar {
     flex: none;
-    width: 28px; height: 28px;
-    border: none; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid var(--wa-border); border-radius: 7px;
     background: transparent;
     color: var(--wa-text-secondary);
-    display: flex; align-items: center; justify-content: center;
+    font-size: 12.5px; font-weight: 600;
     cursor: pointer;
   }
-  .selecao-cancelar:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); }
-  .selecao-cancelar svg { width: 14px; height: 14px; }
+  .selecao-cancelar:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); border-color: var(--wa-text-tertiary); }
+  .selecao-cancelar svg { width: 14px; height: 14px; flex: none; }
 
   /* Limpar Chat: mesma paleta neutra do botao Cancelar (nao e destrutivo o
      bastante pra ganhar vermelho como Excluir, mas ainda apaga dados —
@@ -430,6 +430,7 @@
   .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--wa-text-tertiary); text-align: center; padding: 20px; }
   .empty-state svg { width: 46px; height: 46px; fill: var(--wa-text-tertiary); opacity: 0.5; margin-bottom: 10px; }
   .empty-state p { font-size: 13.5px; max-width: 260px; line-height: 1.5; margin: 0; }
+  .empty-state.loading svg { animation: typing-bubble-pulse 1.2s infinite ease-in-out; border-radius: 12px; }
 
   .system-note { display: flex; justify-content: center; margin: 4px 0 18px; }
   .system-note span { background: rgba(255, 213, 79, 0.18); color: #8a6d1a; font-size: 12.5px; padding: 8px 14px; border-radius: 8px; text-align: center; max-width: 88%; line-height: 1.4; }
@@ -542,16 +543,37 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    transition: background 0.15s ease, color 0.15s ease;
   }
   .view-tab:hover { background: rgba(255, 255, 255, 0.24); color: #fff; }
   .view-tab.active { background: var(--wa-bg); color: var(--wa-text); border-color: var(--wa-border); }
-  .view-tab .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-accent); flex: none; }
+  .view-tab .badge-dot { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--wa-accent); flex: none; }
+  .view-tab.active .badge-dot { display: inline-block; }
   .view-tab:disabled { opacity: 0.5; cursor: default; }
   .view-tab:disabled:hover { background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.92); }
 
-  .view-panel { display: none; flex: 1; min-height: 0; flex-direction: column; }
-  .view-panel.active { display: flex; }
+  .view-stack {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .view-panel {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .view-panel.active {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+  }
 
   /* ========================= ABA RELATORIO ========================= */
   .report-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; background: var(--wa-panel); }
@@ -756,17 +778,17 @@
 
     <!-- Barra de acoes do modo selecao (estilo WhatsApp Web) — so aparece
          com selecaoAtiva=true, ver JS. Fica entre o header e as abas.
-         Ordem a pedido do usuario: contagem a esquerda; Limpar Chat, X
-         (cancelar) e Excluir agrupados a direita, todos com icone
-         auto-explicativo + texto. -->
+         Ordem a pedido do usuario: contagem a esquerda; Limpar Chat,
+         Cancelar Selecao e Excluir agrupados a direita. -->
     <div class="selecao-bar" id="selecaoBar" style="display:none;">
       <span class="selecao-contagem" id="selecaoContagem">0 selecionada(s)</span>
       <button type="button" class="selecao-limpar" id="btnLimparChat" title="Apagar todas as mensagens desta conversa">
         <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         Limpar Chat
       </button>
-      <button type="button" class="selecao-cancelar" id="btnCancelarSelecao" title="Cancelar selecao" aria-label="Cancelar selecao">
+      <button type="button" class="selecao-cancelar" id="btnCancelarSelecao" title="Cancelar Seleção" aria-label="Cancelar Seleção">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        Cancelar Seleção
       </button>
       <button type="button" class="selecao-excluir" id="btnExcluirSelecionadas" title="Excluir mensagens selecionadas" disabled>
         <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
@@ -776,18 +798,20 @@
 
     <div class="view-tabs" role="tablist">
       <button class="view-tab active" id="tabConversa" type="button" role="tab" aria-selected="true">
+        <span class="badge-dot" aria-hidden="true"></span>
         Conversa
       </button>
       <button class="view-tab" id="tabRelatorio" type="button" role="tab" aria-selected="false" disabled>
-        <span class="badge-dot" id="relatorioBadge" style="display:none;"></span>
+        <span class="badge-dot" aria-hidden="true"></span>
         Dados
       </button>
     </div>
 
     <div id="errorBanner" class="error-banner" style="display:none;"></div>
 
-    <!-- ================= PAINEL: CONVERSA ================= -->
-    <div class="view-panel active" id="panelConversa">
+    <div class="view-stack">
+      <!-- ================= PAINEL: CONVERSA ================= -->
+      <div class="view-panel active" id="panelConversa">
       <div class="chat-body" id="chatBody"></div>
 
       <div class="reset-toast" id="resetToast">Contexto da conversa reiniciado</div>
@@ -807,8 +831,8 @@
       </div>
     </div>
 
-    <!-- ================= PAINEL: RELATORIO ================= -->
-    <div class="view-panel" id="panelRelatorio">
+      <!-- ================= PAINEL: RELATORIO ================= -->
+      <div class="view-panel" id="panelRelatorio">
       <div class="report-panel">
         <div class="report-toolbar">
           <span class="toolbar-label">Agrupar por</span>
@@ -847,6 +871,7 @@
           <div class="report-grand-total" id="reportGrandTotal" style="display:none;"></div>
         </div>
         <div class="report-caption" id="reportCaption"></div>
+      </div>
       </div>
     </div>
   </section>
@@ -901,7 +926,6 @@
   // hoisting como function, entao precisam existir antes de qualquer chamada.
   const tabConversa = document.getElementById('tabConversa');
   const tabRelatorio = document.getElementById('tabRelatorio');
-  const relatorioBadge = document.getElementById('relatorioBadge');
   const panelConversa = document.getElementById('panelConversa');
   const panelRelatorio = document.getElementById('panelRelatorio');
   const groupPicker = document.getElementById('groupPicker');
@@ -932,6 +956,8 @@
   let reportMountFrame = null;
   let reportMountTimer = null;
   let reportGlobalFilterActive = false;
+  let reportRedrawFrame = null;
+  let reportLastGridWidth = 0;
 
   // Cache em memoria do relatorio por sessao — evita rebuscar via rede e
   // recriar a grid do zero ao voltar para uma sessao ja visitada nesta janela
@@ -1007,7 +1033,7 @@
   const COL_PADDING_PX = 12;
 
   // So aplica trim em string (nao mexe em number/null) — datas e numeros ja
-  // passam por formatarDataAAAAMMDD/formatarNumeroExibicao, que nao deixam
+  // passam por formatarData/formatarNumeroExibicao, que nao deixam
   // espaco sobrando.
   function trimSeTexto(v) {
     return typeof v === 'string' ? v.trim() : v;
@@ -1022,7 +1048,7 @@
     const amostra = rows.length > 40 ? rows.slice(0, 40) : rows;
     for (const r of amostra) {
       let v = trimSeTexto(r[coluna.field]);
-      if (coluna.data) v = formatarDataAAAAMMDD(r[coluna.field]);
+      if (coluna.data) v = formatarData(r[coluna.field]);
       else if (coluna.competencia) v = formatarCompetenciaAAAAMM(r[coluna.field]);
       const len = v == null ? 0 : String(v).length;
       if (len > maiorTexto) maiorTexto = len;
@@ -1188,20 +1214,29 @@
     }
   });
 
-  function renderEmptyState() {
+  function renderEmptyState(mensagem = 'Pergunte algo sobre vendas, faturamento, títulos ou clientes.') {
     chatBody.innerHTML = `
       <div class="empty-state">
         <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 015 5c0 2.1-1.3 3.9-3.1 4.6.1.4.1.9.1 1.4 3.4.5 6 3.4 6 6.9v1H4v-1c0-3.5 2.6-6.4 6-6.9 0-.5 0-1 .1-1.4C8.3 10.9 7 9.1 7 7a5 5 0 015-5z"/></svg>
-        <p>Pergunte algo sobre vendas, faturamento, títulos ou clientes.</p>
+        <p>${escapeHtml(mensagem)}</p>
+      </div>`;
+  }
+
+  function renderLoadingState(mensagem = 'Carregando mensagens...') {
+    chatBody.innerHTML = `
+      <div class="empty-state loading">
+        <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 015 5c0 2.1-1.3 3.9-3.1 4.6.1.4.1.9.1 1.4 3.4.5 6 3.4 6 6.9v1H4v-1c0-3.5 2.6-6.4 6-6.9 0-.5 0-1 .1-1.4C8.3 10.9 7 9.1 7 7a5 5 0 015-5z"/></svg>
+        <p>${escapeHtml(mensagem)}</p>
       </div>`;
   }
 
   async function carregarMensagens(sessaoId) {
     sessaoAtualId = sessaoId;
     sairModoSelecao();
-    chatBody.innerHTML = '';
+    renderLoadingState('Carregando mensagens...');
     try {
       const data = await api('/sessoes/' + sessaoId + '/mensagens');
+      if (sessaoAtualId !== sessaoId) return;
       if (!data.mensagens.length) {
         renderEmptyState();
       } else {
@@ -1209,6 +1244,7 @@
         scrollToBottom();
       }
     } catch (err) {
+      if (sessaoAtualId !== sessaoId) return;
       showError('Falha ao carregar mensagens: ' + err.message);
     }
     renderSessionList();
@@ -1220,9 +1256,9 @@
   function fecharRelatorio() {
     if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
     if (reportMountTimer) { clearTimeout(reportMountTimer); reportMountTimer = null; }
+    if (reportRedrawFrame) { cancelAnimationFrame(reportRedrawFrame); reportRedrawFrame = null; }
     if (reportTable) { reportTable.destroy(); reportTable = null; }
     tabRelatorio.disabled = true;
-    relatorioBadge.style.display = 'none';
     reportEmpty.style.display = 'flex';
     reportEmpty.classList.remove('preparing');
     reportEmpty.querySelector('p').textContent = 'Faça uma pergunta que retorne uma lista de dados para abrir os dados aqui.';
@@ -1242,10 +1278,12 @@
     reportColumnWidths = {};
     reportGlobalTerm = '';
     reportGlobalFilterActive = false;
+    reportLastGridWidth = 0;
   }
 
   async function carregarRelatorioDaSessao(sessaoId) {
     const cache = relatorioCachePorSessao.get(sessaoId);
+    if (sessaoAtualId !== sessaoId) return;
     if (cache) {
       prepararRelatorio(cache);
       return;
@@ -1253,6 +1291,7 @@
 
     try {
       const relatorio = await api('/sessoes/' + sessaoId + '/relatorio');
+      if (sessaoAtualId !== sessaoId) return;
       if (relatorio && Array.isArray(relatorio.rows) && relatorio.rows.length) {
         const dados = {
           mensagemId: relatorio.id,
@@ -1393,6 +1432,10 @@
         await carregarMensagens(sessoesCache[0].sessaoId);
       } else if (!sessoesCache.length) {
         renderEmptyState();
+      } else if (!sessaoAtualId) {
+        definirHeaderTitle('Nova conversa');
+        renderEmptyState('Selecione uma conversa na lista ou envie uma nova pergunta.');
+        fecharRelatorio();
       }
     } catch (err) {
       showError('Falha ao carregar conversas: ' + err.message);
@@ -1525,7 +1568,6 @@
 
     if (reportTable) { reportTable.destroy(); reportTable = null; }
     tabRelatorio.disabled = false;
-    relatorioBadge.style.display = 'inline-block';
     reportEmpty.style.display = 'flex';
     reportEmpty.classList.remove('preparing');
     reportEmpty.querySelector('p').textContent = 'Dados prontos para visualizacao.';
@@ -1556,9 +1598,26 @@
     abrirRelatorio(reportDadosAtuais);
   }
 
+  function depoisDaPintura(callback) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setTimeout(callback, 0));
+    });
+  }
+
+  function agendarRedrawRelatorioSePreciso() {
+    if (!reportTable || reportRedrawFrame) return;
+    reportRedrawFrame = requestAnimationFrame(() => {
+      reportRedrawFrame = null;
+      const largura = Math.round(reportGridEl.getBoundingClientRect().width || 0);
+      if (!largura || Math.abs(largura - reportLastGridWidth) <= 2) return;
+      reportLastGridWidth = largura;
+      reportTable.redraw(false);
+    });
+  }
+
   function valorFormatadoParaBusca(col, valor) {
     if (col.numerico) return formatarNumero(valor);
-    if (col.data) return formatarDataAAAAMMDD(valor);
+    if (col.data) return formatarData(valor);
     if (col.competencia) return formatarCompetenciaAAAAMM(valor);
     return trimSeTexto(valor);
   }
@@ -1603,6 +1662,11 @@
 
   function trocarAba(aba) {
     const paraRelatorio = aba === 'relatorio';
+    const jaEstaNaAba = panelRelatorio.classList.contains('active') === paraRelatorio;
+    if (jaEstaNaAba) {
+      if (paraRelatorio) garantirRelatorioMontado();
+      return;
+    }
     if (!paraRelatorio && (reportMountFrame || reportMountTimer)) {
       if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
       clearTimeout(reportMountTimer);
@@ -1622,14 +1686,12 @@
     // clicar em Conversa — nao esconde nada permanentemente, so reorganiza
     // espaco conforme o contexto.
     appFrame.classList.toggle('sidebar-collapsed', paraRelatorio);
-    if (paraRelatorio) garantirRelatorioMontado();
-    if (paraRelatorio && reportTable) {
-      // redraw(false) recalcula so o layout das linhas ja visiveis (o painel
-      // estava display:none, entao a largura das colunas precisa reajustar) —
-      // redraw(true) forcaria re-renderizar TODAS as milhares de linhas do
-      // dataset a cada troca de aba, sendo a causa principal do travamento
-      // relatado ao clicar em Dados e voltar.
-      requestAnimationFrame(() => reportTable && reportTable.redraw(false));
+    if (paraRelatorio) {
+      depoisDaPintura(() => {
+        if (!panelRelatorio.classList.contains('active')) return;
+        garantirRelatorioMontado();
+        if (reportTable) agendarRedrawRelatorioSePreciso();
+      });
     }
   }
 
@@ -1638,26 +1700,42 @@
 
   // Numero vs texto decidido pelo dado real (typeof), nao por metadado do
   // backend — decisao tomada para nao mudar o contrato do pipeline de IA.
-  // Datas do Protheus costumam chegar como string "AAAAMMDD" (8 digitos, sem
-  // separador) — formato de campo data ADVPL serializado, nao texto livre.
-  // Deteccao pelo VALOR (nao pelo nome do campo, que varia entre modulos) —
-  // regex estrita evita falso positivo com codigos numericos de 8 digitos que
-  // nao sejam data (o mes/dia sao validados no range correto).
+  // Datas podem chegar como "AAAAMMDD" (campo data Protheus serializado) ou
+  // ja formatadas como "DD/MM/AAAA" pelo backend/IA. A exibicao fica sempre
+  // em DD/MM/AAAA, mas a ordenacao usa uma chave AAAAMMDD numerica.
   const REGEX_DATA_AAAAMMDD = /^(\d{4})(\d{2})(\d{2})$/;
+  const REGEX_DATA_DD_MM_AAAA = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 
-  function pareceDataAAAAMMDD(valor) {
+  function partesData(valor) {
     if (typeof valor !== 'string') return false;
-    const m = valor.match(REGEX_DATA_AAAAMMDD);
-    if (!m) return false;
-    const mes = Number(m[2]);
-    const dia = Number(m[3]);
-    return mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31;
+    const texto = valor.trim();
+    let m = texto.match(REGEX_DATA_AAAAMMDD);
+    if (m) return { ano: Number(m[1]), mes: Number(m[2]), dia: Number(m[3]) };
+    m = texto.match(REGEX_DATA_DD_MM_AAAA);
+    if (m) return { ano: Number(m[3]), mes: Number(m[2]), dia: Number(m[1]) };
+    return null;
   }
 
-  function formatarDataAAAAMMDD(valor) {
-    const m = String(valor).match(REGEX_DATA_AAAAMMDD);
-    if (!m) return valor;
-    return `${m[3]}/${m[2]}/${m[1]}`;
+  function dataValida(partes) {
+    if (!partes || partes.mes < 1 || partes.mes > 12 || partes.dia < 1 || partes.dia > 31) return false;
+    const d = new Date(partes.ano, partes.mes - 1, partes.dia);
+    return d.getFullYear() === partes.ano && d.getMonth() === partes.mes - 1 && d.getDate() === partes.dia;
+  }
+
+  function pareceData(valor) {
+    return dataValida(partesData(valor));
+  }
+
+  function formatarData(valor) {
+    const p = partesData(String(valor));
+    if (!dataValida(p)) return valor;
+    return `${String(p.dia).padStart(2, '0')}/${String(p.mes).padStart(2, '0')}/${p.ano}`;
+  }
+
+  function chaveData(valor) {
+    const p = partesData(String(valor));
+    if (!dataValida(p)) return null;
+    return Number(`${p.ano}${String(p.mes).padStart(2, '0')}${String(p.dia).padStart(2, '0')}`);
   }
 
   // [ADICIONADO a pedido do usuario] Competencia (AAAAMM, 6 digitos, ex.:
@@ -1678,24 +1756,28 @@
   function pareceCompetenciaAAAAMM(campo, valor) {
     if (!NOMES_CAMPO_COMPETENCIA.has(String(campo || '').toLowerCase())) return false;
     if (typeof valor !== 'string') return false;
-    const m = valor.match(REGEX_COMPETENCIA_AAAAMM);
+    const m = valor.trim().match(REGEX_COMPETENCIA_AAAAMM);
     if (!m) return false;
     const mes = Number(m[2]);
     return mes >= 1 && mes <= 12;
   }
 
   function formatarCompetenciaAAAAMM(valor) {
-    const m = String(valor).match(REGEX_COMPETENCIA_AAAAMM);
+    const m = String(valor).trim().match(REGEX_COMPETENCIA_AAAAMM);
     if (!m) return valor;
     const mes = Number(m[2]);
     return `${MESES_COMPETENCIA[mes - 1]}/${m[1]}`;
+  }
+
+  function chaveCompetenciaAAAAMM(campo, valor) {
+    return pareceCompetenciaAAAAMM(campo, valor) ? Number(String(valor).trim()) : null;
   }
 
   function inferirColunas(rows) {
     const nomes = Object.keys(rows[0] || {});
     return nomes.map((campo) => {
       const algumNumero = rows.some((r) => typeof r[campo] === 'number');
-      const todosParecemData = rows.every((r) => r[campo] == null || pareceDataAAAAMMDD(r[campo]));
+      const todosParecemData = rows.every((r) => r[campo] == null || pareceData(r[campo]));
       const algumValorPreenchido = rows.some((r) => r[campo] != null && r[campo] !== '');
       const ehData = !algumNumero && todosParecemData && algumValorPreenchido;
       const todosParecemCompetencia = !ehData && rows.every((r) => r[campo] == null || pareceCompetenciaAAAAMM(campo, r[campo]));
@@ -1766,6 +1848,7 @@
   function aplicarAgrupamento() {
     if (!reportTable) return;
     reportTable.setGroupBy(reportGroupBy.length ? reportGroupBy : false);
+    reportTable.setSort(sortersParaTabulator(sortersComAgrupamento()));
     renderGroupPicker();
     agendarSalvarGridConfig();
   }
@@ -1792,6 +1875,44 @@
     }, 600);
   }
 
+  function compararChavesOrdenacao(a, b) {
+    const aVazio = a == null || a === '';
+    const bVazio = b == null || b === '';
+    if (aVazio && bVazio) return 0;
+    if (aVazio) return 1;
+    if (bVazio) return -1;
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  }
+
+  function sorterParaColuna(col) {
+    if (col.numerico) return 'number';
+    if (col.data) {
+      return (a, b) => compararChavesOrdenacao(chaveData(a), chaveData(b));
+    }
+    if (col.competencia) {
+      return (a, b) => compararChavesOrdenacao(chaveCompetenciaAAAAMM(col.field, a), chaveCompetenciaAAAAMM(col.field, b));
+    }
+    return (a, b) => String(trimSeTexto(a) ?? '').localeCompare(String(trimSeTexto(b) ?? ''), 'pt-BR', {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }
+
+  function sortersComAgrupamento() {
+    const sorters = reportSorters.filter((s) => s && reportColunas.some((c) => c.field === s.field));
+    for (let i = reportGroupBy.length - 1; i >= 0; i -= 1) {
+      const field = reportGroupBy[i];
+      if (!sorters.some((s) => s.field === field)) sorters.unshift({ field, dir: 'asc' });
+    }
+    return sorters;
+  }
+
+  function sortersParaTabulator(sorters) {
+    return sorters.map((s) => ({ column: s.field || s.column, dir: s.dir || 'asc' }));
+  }
+
   // width explicito por coluna (ver calcularLarguraColuna) — a pedido do
   // usuario, para a aba Dados nao desperdiçar tela com colunas mais largas
   // que o conteudo. NAO usa
@@ -1814,7 +1935,7 @@
       // relatado no PDF gerado.
       const accessorDownload = col.numerico
         ? (value) => formatarNumero(value)
-        : (col.data ? (value) => formatarDataAAAAMMDD(value)
+        : (col.data ? (value) => formatarData(value)
           : (col.competencia ? (value) => formatarCompetenciaAAAAMM(value) : trimSeTexto));
       const larguraSalva = Number(reportColumnWidths[col.field] || 0);
       const def = {
@@ -1829,10 +1950,11 @@
         visible: !reportHiddenColumns.includes(col.field),
         ...(larguraSalva > 0 ? { width: larguraSalva } : { widthGrow: 1 }),
         headerFilter: true,
+        sorter: sorterParaColuna(col),
         hozAlign: col.numerico ? 'right' : ((col.data || col.competencia) ? 'center' : 'left'),
         formatter: col.numerico
           ? (cell) => formatarNumero(cell.getValue())
-          : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue())
+          : (col.data ? (cell) => formatarData(cell.getValue())
             : (col.competencia ? (cell) => formatarCompetenciaAAAAMM(cell.getValue()) : (cell) => trimSeTexto(cell.getValue()))),
         accessorDownload,
       };
@@ -1850,7 +1972,6 @@
     reportGroupBy = reportGroupBy.filter((field) => reportColunas.some((c) => c.field === field));
 
     tabRelatorio.disabled = false;
-    relatorioBadge.style.display = 'inline-block';
     reportEmpty.style.display = 'none';
     reportCaption.textContent = texto ? texto.replace(/\n[\s\S]*/, '') : '';
 
@@ -1879,7 +2000,7 @@
       groupBy: reportGroupBy.length ? reportGroupBy : false,
       groupStartOpen: true,
       movableColumns: true,
-      initialSort: reportSorters,
+      initialSort: sortersParaTabulator(sortersComAgrupamento()),
       initialHeaderFilter: reportHeaderFilters,
       // groupHeader recebe o valor BRUTO do grupo (nao passa pelo formatter
       // da coluna) — precisa formatar manualmente aqui, senao data/numero
@@ -1890,7 +2011,7 @@
         const campo = group.getField();
         const col = reportColunas.find((c) => c.field === campo);
         let valorFormatado = value;
-        if (col?.data) valorFormatado = formatarDataAAAAMMDD(value);
+        if (col?.data) valorFormatado = formatarData(value);
         else if (col?.competencia) valorFormatado = formatarCompetenciaAAAAMM(value);
         else if (col?.numerico) valorFormatado = formatarNumero(value);
         return valorFormatado + ' (' + count + ' registros)';
@@ -2051,7 +2172,8 @@
       userName.textContent = 'Usuário Protheus';
       userAvatar.textContent = 'PT';
     }
-    carregarSessoes({ selecionarPrimeira: true });
+    renderEmptyState('Carregando conversas...');
+    carregarSessoes();
   }
 })();
 </script>
