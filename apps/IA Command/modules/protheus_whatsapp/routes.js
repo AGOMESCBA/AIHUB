@@ -131,6 +131,17 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  // ── "Limpar Chat" — apaga TODAS as mensagens da conversa, mantem a sessao ──
+  app.post('/api/ia-command/protheus/sessoes/:id/mensagens/limpar', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    try {
+      const removidas = sessionStore.limparMensagens({ sessaoId: req.params.id, empresaId, celular });
+      res.json({ ok: true, removidas });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/ia-command/protheus/sessoes/:id/mensagens', requireTokenSessao, (req, res) => {
     const { empresaId, celular } = req.protheusChat;
     const cursor = req.query.cursor || null;

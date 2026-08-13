@@ -1237,6 +1237,56 @@ const MIGRATIONS = [
       ALTER TABLE protheus_chat_messages ADD COLUMN grid_config_json TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 72,
+    descricao: 'IA Command - modulos liberados por numero WhatsApp, dinamico por sistema (erp), com backfill dos 5 modulos Protheus fixos existentes. Colunas modulo_* de whatsapp_allowed_numbers permanecem como estao (nao removidas) para nao quebrar leitores existentes.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS whatsapp_numero_modulos (
+        id                TEXT PRIMARY KEY,
+        numero_id         TEXT NOT NULL,
+        empresa_id        INTEGER NOT NULL,
+        erp               TEXT NOT NULL,
+        modulo            TEXT NOT NULL,
+        liberado          INTEGER NOT NULL DEFAULT 1,
+        papel             TEXT DEFAULT NULL,
+        codigo_identidade TEXT DEFAULT NULL,
+        criado_em         TEXT NOT NULL,
+        atualizado_em     TEXT NOT NULL,
+        UNIQUE(numero_id, erp, modulo)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_numero_modulos_numero
+        ON whatsapp_numero_modulos (numero_id);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_numero_modulos_empresa
+        ON whatsapp_numero_modulos (empresa_id, erp, modulo);
+
+      INSERT INTO whatsapp_numero_modulos (id, numero_id, empresa_id, erp, modulo, liberado, criado_em, atualizado_em)
+      SELECT lower(hex(randomblob(16))), id, empresa_id, 'protheus', 'financeiro', 1, atualizado_em, atualizado_em
+        FROM whatsapp_allowed_numbers w WHERE modulo_financeiro = 1
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_numero_modulos m WHERE m.numero_id = w.id AND m.erp='protheus' AND m.modulo='financeiro');
+
+      INSERT INTO whatsapp_numero_modulos (id, numero_id, empresa_id, erp, modulo, liberado, criado_em, atualizado_em)
+      SELECT lower(hex(randomblob(16))), id, empresa_id, 'protheus', 'compras', 1, atualizado_em, atualizado_em
+        FROM whatsapp_allowed_numbers w WHERE modulo_compras = 1
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_numero_modulos m WHERE m.numero_id = w.id AND m.erp='protheus' AND m.modulo='compras');
+
+      INSERT INTO whatsapp_numero_modulos (id, numero_id, empresa_id, erp, modulo, liberado, criado_em, atualizado_em)
+      SELECT lower(hex(randomblob(16))), id, empresa_id, 'protheus', 'faturamento', 1, atualizado_em, atualizado_em
+        FROM whatsapp_allowed_numbers w WHERE modulo_faturamento = 1
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_numero_modulos m WHERE m.numero_id = w.id AND m.erp='protheus' AND m.modulo='faturamento');
+
+      INSERT INTO whatsapp_numero_modulos (id, numero_id, empresa_id, erp, modulo, liberado, criado_em, atualizado_em)
+      SELECT lower(hex(randomblob(16))), id, empresa_id, 'protheus', 'comissao', 1, atualizado_em, atualizado_em
+        FROM whatsapp_allowed_numbers w WHERE modulo_comissao = 1
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_numero_modulos m WHERE m.numero_id = w.id AND m.erp='protheus' AND m.modulo='comissao');
+
+      INSERT INTO whatsapp_numero_modulos (id, numero_id, empresa_id, erp, modulo, liberado, criado_em, atualizado_em)
+      SELECT lower(hex(randomblob(16))), id, empresa_id, 'protheus', 'estoque', 1, atualizado_em, atualizado_em
+        FROM whatsapp_allowed_numbers w WHERE modulo_estoque = 1
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_numero_modulos m WHERE m.numero_id = w.id AND m.erp='protheus' AND m.modulo='estoque');
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

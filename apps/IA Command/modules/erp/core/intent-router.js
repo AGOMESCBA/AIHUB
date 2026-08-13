@@ -124,6 +124,59 @@ function _verificarAlgumModuloAutorizado(intent, empresaId, modulos = Object.key
   }
 }
 
+// Autorizacao por modulo para sistemas fora do Protheus (ex: SoftExpert), lida da tabela
+// whatsapp_numero_modulos — equivalente a _verificarAutorizacaoModulo, mas para o modelo
+// dinamico por sistema (erp) em vez das 5 colunas fixas modulo_* da tabela principal.
+function _verificarAutorizacaoModuloDinamico(intent, empresaId, erp, modulo) {
+  const remetente = intent._remetente;
+  if (!remetente || !erp || !modulo) return null; // sem restrição para intents sem remetente
+
+  try {
+    const db = getDB();
+    const eid = Number(empresaId);
+
+    const total = db.prepare(
+      `SELECT COUNT(*) AS total FROM whatsapp_allowed_numbers WHERE empresa_id = ? AND ativo = 1`
+    ).get(eid)?.total || 0;
+    if (!total) return null;
+
+    const variantes = channelStore.variantesNumeroBrasil(remetente);
+    const lid = channelStore.extrairLid(remetente);
+    const placeholders = variantes.map(() => '?').join(',');
+    const numero = db.prepare(
+      `SELECT id FROM whatsapp_allowed_numbers
+        WHERE empresa_id = ? AND ativo = 1
+          AND (numero IN (${placeholders}) OR wa_lid = ?)
+        LIMIT 1`
+    ).get(eid, ...variantes, lid);
+    if (!numero) return null; // número não está na lista — _isSenderAuthorized já teria bloqueado antes
+
+    const liberado = db.prepare(
+      `SELECT liberado FROM whatsapp_numero_modulos
+        WHERE numero_id = ? AND LOWER(erp) = LOWER(?) AND LOWER(modulo) = LOWER(?)
+        LIMIT 1`
+    ).get(numero.id, erp, modulo);
+    if (liberado?.liberado) return null; // módulo habilitado — libera
+
+    return {
+      tipo: 'erro',
+      subtipo: 'modulo_nao_autorizado',
+      resposta_direta: `Ainda não consigo consultar o módulo *${moduloLabel(modulo)}* (${sistemaLabel(erp)}) para o seu número. Peça ao gestor do IA Command para liberar esse módulo no seu cadastro de WhatsApp e tente novamente.`,
+    };
+  } catch (e) {
+    return null; // falha silenciosa: não bloqueia por erro técnico
+  }
+}
+
+function moduloLabel(m) {
+  return m ? String(m).charAt(0).toUpperCase() + String(m).slice(1) : '';
+}
+
+function sistemaLabel(erp) {
+  return { protheus: 'Protheus', softexpert: 'SoftExpert' }[String(erp || '').toLowerCase()]
+    || (erp ? String(erp).charAt(0).toUpperCase() + String(erp).slice(1) : '');
+}
+
 const SPEC_LOADERS = {
   faturamento: () => require('../totvs_protheus/faturamento/faturamento-ia-owner-spec'),
   compras:     () => require('../totvs_protheus/compras/compras-ia-owner-spec'),
@@ -377,14 +430,23 @@ async function rotear(intent, empresaId) {
     };
   }
 
-  const erroSemModulo = _verificarAlgumModuloAutorizado(intent, empresaId);
-  if (erroSemModulo) return erroSemModulo;
-
+  // A checagem de autorizacao por modulo depende do sistema (erp) da intencao: Protheus
+  // usa as 5 colunas fixas modulo_* (whatsapp_allowed_numbers); outros sistemas (ex:
+  // SoftExpert) usam a tabela dinamica whatsapp_numero_modulos. Resolver erpIntencao ANTES
+  // da checagem evita bloquear um numero que tem acesso legitimo a um sistema nao-Protheus
+  // mas nenhum dos 5 modulos Protheus (ex: numero so autorizado para Chamados/SoftExpert).
   const erpIntencao = String(registro.erp || 'protheus').toLowerCase();
+  if (erpIntencao === 'protheus') {
+    const erroSemModulo = _verificarAlgumModuloAutorizado(intent, empresaId);
+    if (erroSemModulo) return erroSemModulo;
+  }
+
   if (erpIntencao !== 'protheus' && (registro.acao === 'ai_text_to_sql' || _pareceAiSqlDinamico(registro))) {
     // Intenções de sistemas fora do Protheus não passam pelos AI_SQL_HANDLERS (specs SX2/SX3
     // Protheus). Resolvem sempre por dataset semântico (view_semantica) do próprio sistema/módulo.
     const modulo = _resolverModuloDinamico(intent, registro);
+    const erroModuloDinamico = _verificarAutorizacaoModuloDinamico(intent, empresaId, erpIntencao, modulo);
+    if (erroModuloDinamico) return erroModuloDinamico;
     console.log(`[IACommandAI] Intencao multi-sistema: erp=${erpIntencao} | modulo=${modulo} | intencao=${intent.intencao} | empresa=${empresaId}`);
     _tracePipeline('router_multi_sistema_inicio', { empresa_id: empresaId, erp: erpIntencao, modulo, intencao: intent?.intencao || null });
 

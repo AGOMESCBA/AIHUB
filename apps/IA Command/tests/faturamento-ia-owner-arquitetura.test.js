@@ -100,6 +100,12 @@ const validacaoJunhoVariosAnosErrado = runner._test.validarSqlIaOwnerBasico(sqlJ
 }, perguntaJunhoVariosAnos);
 assert.strictEqual(validacaoJunhoVariosAnosErrado.ok, false, 'SQL com BETWEEN de junho/2025 deve ser rejeitado quando pergunta pede 2025 e 2026');
 assert(validacaoJunhoVariosAnosErrado.erros.some(e => e.includes('Nao use um unico intervalo continuo de datas')), 'erro deve orientar filtro separado de mes e anos');
+const retryMesRecorrente = runner._test.buildRetryTecnicoIaOwner({
+  erro: Object.assign(new Error(validacaoJunhoVariosAnosErrado.erros.join(' | ')), { _tipo: 'contrato_ia_owner_invalido' }),
+});
+assert(retryMesRecorrente.includes('dataInicio/dataFim sao apenas o envelope'), 'retry deve explicar que dataInicio/dataFim nao sao intervalo continuo no caso recorrente');
+assert(retryMesRecorrente.includes('Filtro temporal obrigatorio nesta nova tentativa'), 'retry deve levar o filtro mes+ano sugerido para a IA');
+assert(!retryMesRecorrente.includes('Use somente dataInicio/dataFim'), 'retry de mes recorrente nao pode cair no bloco generico que reforca BETWEEN');
 
 const sqlJunhoVariosAnosCorreto = sqlJunhoVariosAnosErrado
   .replace("SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'", "SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '06'\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')");
@@ -204,6 +210,41 @@ assert.strictEqual(validacaoSemanticaErrado.ok, false, 'guardrail semantico deve
 const sqlMesAnoSeparadoCorreto = `SELECT SUBSTRING(SF2.F2_EMISSAO,1,4) AS ano, SUM(SF2.F2_VALBRUT) AS f FROM SF2010 SF2 WHERE SF2.D_E_L_E_T_=' ' AND SF2.F2_TIPO='N' AND SUBSTRING(SF2.F2_EMISSAO,5,2) BETWEEN '01' AND '06' AND SUBSTRING(SF2.F2_EMISSAO,1,4) IN ('2025','2026') GROUP BY SUBSTRING(SF2.F2_EMISSAO,1,4);`;
 const validacaoSemanticaCorreto = runner._test.validarPeriodoDeclaradoNoSql(sqlMesAnoSeparadoCorreto, faturamentoSpec, periodoDeclaradoRealIA);
 assert.strictEqual(validacaoSemanticaCorreto.ok, true, `guardrail semantico deve aceitar SQL com mes+ano separados batendo com periodo declarado: ${validacaoSemanticaCorreto.erros.join(' | ')}`);
+
+const periodoJaneiro2025E2026 = {
+  tipo: 'mes_recorrente_anos', dataInicio: '20250101', dataFim: '20260131',
+  meses: [1], anos: [2025, 2026],
+};
+const periodoAutoritativoJaneiro2025E2026 = runner._test.periodoAutoritativoParaSql(
+  { _periodoCanonicoResolvido: { tipo: 'mes', dataInicio: '20250101', dataFim: '20250131' } },
+  { periodo: periodoJaneiro2025E2026 },
+);
+assert.deepStrictEqual(
+  periodoAutoritativoJaneiro2025E2026,
+  periodoJaneiro2025E2026,
+  'periodo declarado pela IA-OWNER deve prevalecer sobre periodo deterministico estreito do intent',
+);
+const sqlJaneiro2025E2026 = `
+SET ROWCOUNT 50000;
+SELECT CONVERT(VARCHAR(10), CAST(SF2.F2_EMISSAO AS DATE), 103) AS dia,
+       SA1.A1_NOME AS cliente,
+       SF2.F2_DOC AS nota_fiscal,
+       SB1.B1_DESC AS produto,
+       COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_total,
+       COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
+FROM SF2010 SF2
+JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SD2.D_E_L_E_T_ = ' '
+JOIN SA1010 SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '
+JOIN SB1010 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+WHERE SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '01'
+  AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')
+  AND SF2.D_E_L_E_T_ = ' '
+  AND SF2.F2_TIPO = 'N'
+GROUP BY SF2.F2_EMISSAO, SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME, SF2.F2_DOC, SB1.B1_COD, SB1.B1_DESC
+ORDER BY dia, cliente, nota_fiscal, produto;
+`;
+const validacaoJaneiro2025E2026 = runner._test.validarPeriodoDeclaradoNoSql(sqlJaneiro2025E2026, faturamentoSpec, periodoJaneiro2025E2026);
+assert.strictEqual(validacaoJaneiro2025E2026.ok, true, `guardrail deve aceitar janeiro/2025 e janeiro/2026 quando a IA declarou periodo.meses/anos: ${validacaoJaneiro2025E2026.erros.join(' | ')}`);
 
 // Sem meses/anos declarados (comportamento legado): guardrail semantico nao interfere,
 // so a checagem de presenca de filtro (validarPeriodoDeclaradoNoSql original) roda.

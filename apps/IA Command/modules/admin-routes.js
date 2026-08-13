@@ -192,9 +192,109 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.get('/api/ia-command/admin/numeros-whatsapp', requireAuth, requireIaCommand, canNumeros, (req, res) => {
     // Traz apenas números com acesso ativo nesta empresa — números pré-cadastrados
     // em outras empresas (ativo=0 aqui) não são listados nem editáveis por esta tela.
-    const rows = crud.listar('whatsapp_allowed_numbers', { empresa_id: eid(req), ativo: 1 });
-    res.json(rows);
+    const empresaId = eid(req);
+    const rows = crud.listar('whatsapp_allowed_numbers', { empresa_id: empresaId, ativo: 1 });
+    const modulosPorNumero = _listarModulosDinamicosPorEmpresa(empresaId);
+    res.json(rows.map(row => ({ ...row, modulos_dinamicos: modulosPorNumero.get(row.id) || [] })));
   });
+
+  app.get('/api/ia-command/admin/numeros-whatsapp/modulos-disponiveis', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    res.json(_modulosDisponiveisPorEmpresa(eid(req)));
+  });
+
+  // Modulos dinamicos disponiveis por empresa, agrupados por sistema (erp) — mesma fonte
+  // usada em scheduled-question-routes.js (intentions ativas com acao=ai_text_to_sql),
+  // reaproveitada aqui para popular a lista de modulos que um numero pode ter liberado,
+  // incluindo sistemas fora do Protheus (ex: SoftExpert).
+  function _modulosDisponiveisPorEmpresa(empresaId) {
+    const intencoes = crud.listar('intentions', { empresa_id: empresaId, ativo: 1 });
+    const porModulo = new Map();
+    for (const i of intencoes) {
+      if (String(i.acao || '').toLowerCase() !== 'ai_text_to_sql') continue;
+      if (!i.modulo) continue;
+      const modulo = String(i.modulo).trim().toLowerCase();
+      const erp = String(i.erp || 'protheus').trim().toLowerCase() || 'protheus';
+      if (!porModulo.has(modulo)) porModulo.set(modulo, erp);
+    }
+    return [...porModulo.entries()].map(([modulo, erp]) => ({ modulo, erp }));
+  }
+
+  function _listarModulosDinamicosNumero(numeroId) {
+    return getDB().prepare(`
+      SELECT erp, modulo, liberado, papel, codigo_identidade
+        FROM whatsapp_numero_modulos
+       WHERE numero_id = ?
+       ORDER BY erp, modulo
+    `).all(numeroId);
+  }
+
+  // Busca modulos dinamicos de todos os numeros de uma empresa numa unica query (evita N+1
+  // ao listar a grid inteira). Retorna um Map numero_id -> [{erp,modulo,liberado,papel,codigo_identidade}].
+  function _listarModulosDinamicosPorEmpresa(empresaId) {
+    const rows = getDB().prepare(`
+      SELECT numero_id, erp, modulo, liberado, papel, codigo_identidade
+        FROM whatsapp_numero_modulos
+       WHERE empresa_id = ? AND liberado = 1
+       ORDER BY erp, modulo
+    `).all(empresaId);
+    const porNumero = new Map();
+    for (const r of rows) {
+      if (!porNumero.has(r.numero_id)) porNumero.set(r.numero_id, []);
+      porNumero.get(r.numero_id).push(r);
+    }
+    return porNumero;
+  }
+
+  const MODULOS_PROTHEUS_LEGADO = { financeiro: 'modulo_financeiro', compras: 'modulo_compras', faturamento: 'modulo_faturamento', comissao: 'modulo_comissao', estoque: 'modulo_estoque' };
+
+  // Papeis validos para o campo "papel" da tabela dinamica (whatsapp_numero_modulos), por
+  // sistema (erp). Nao confundir com erp_tipo (usuario/gestor), que e exclusivo do Protheus
+  // legado e permanece intocado na tabela whatsapp_allowed_numbers. Cada sistema novo define
+  // seu proprio conjunto — adicionar aqui quando um sistema novo precisar de papeis diferentes.
+  const PAPEIS_VALIDOS_POR_ERP = {
+    softexpert: ['cliente', 'cliente_gestor', 'analista', 'gestor'],
+  };
+  function _papelValido(erp, papel) {
+    const lista = PAPEIS_VALIDOS_POR_ERP[erp];
+    if (!lista) return false;
+    return lista.includes(String(papel || '').trim().toLowerCase());
+  }
+
+  // Grava os modulos dinamicos de um numero (upsert por erp+modulo), sem abrir transacao
+  // propria — chamar sempre de dentro de uma transacao ja ativa (ex: _salvarAcessosNumero),
+  // ja que better-sqlite3 nao suporta transacoes aninhadas. Espelha os 5 modulos Protheus
+  // tambem nas colunas antigas de whatsapp_allowed_numbers (modulo_financeiro etc.) para nao
+  // quebrar leitores que ainda nao migraram (ex: scheduled-question-store.js) — remover esse
+  // espelho e migrar os demais leitores fica para uma proxima etapa.
+  function _salvarModulosDinamicosNumeroTx(db, numeroId, empresaId, modulosPayload, agora) {
+    const upsert = db.prepare(`
+      INSERT INTO whatsapp_numero_modulos (id, numero_id, empresa_id, erp, modulo, liberado, papel, codigo_identidade, criado_em, atualizado_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(numero_id, erp, modulo) DO UPDATE SET
+        liberado = excluded.liberado,
+        papel = excluded.papel,
+        codigo_identidade = excluded.codigo_identidade,
+        atualizado_em = excluded.atualizado_em
+    `);
+    const espelhoLegado = {};
+    for (const item of (modulosPayload || [])) {
+      const erp = String(item.erp || '').trim().toLowerCase();
+      const modulo = String(item.modulo || '').trim().toLowerCase();
+      if (!erp || !modulo) continue;
+      const liberado = item.liberado ? 1 : 0;
+      const papel = _papelValido(erp, item.papel) ? String(item.papel).trim().toLowerCase() : null;
+      const codigoIdentidade = String(item.codigo_identidade || '').trim().toUpperCase() || null;
+      upsert.run(require('crypto').randomUUID(), numeroId, empresaId, erp, modulo, liberado, papel, codigoIdentidade, agora, agora);
+      if (erp === 'protheus' && MODULOS_PROTHEUS_LEGADO[modulo]) {
+        espelhoLegado[MODULOS_PROTHEUS_LEGADO[modulo]] = liberado;
+      }
+    }
+    if (Object.keys(espelhoLegado).length) {
+      const sets = Object.keys(espelhoLegado).map(c => `${c} = ?`).join(', ');
+      db.prepare(`UPDATE whatsapp_allowed_numbers SET ${sets}, atualizado_em = ? WHERE id = ?`)
+        .run(...Object.values(espelhoLegado), agora, numeroId);
+    }
+  }
 
   function _listarAcessosNumero(numero, empresas) {
     const ids = empresas.map(e => Number(e.id)).filter(Boolean);
@@ -214,6 +314,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       acessos: rows.map(row => ({
         ...row,
         empresa_nome: empresasPorId.get(Number(row.empresa_id))?.nome || `Empresa #${row.empresa_id}`,
+        modulos_dinamicos: _listarModulosDinamicosNumero(row.id),
       })),
     };
   }
@@ -268,6 +369,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         const erpId = 'erp_id' in campos ? campos.erp_id : (existente?.erp_id ?? null);
         const codAprovErp = 'cod_aprov_erp' in campos ? campos.cod_aprov_erp : (existente?.cod_aprov_erp ?? null);
         const codClienteErp = 'cod_cliente_erp' in campos ? campos.cod_cliente_erp : (existente?.cod_cliente_erp ?? null);
+        let numeroId = existente?.id || null;
         if (existente) {
           update.run(
             nome,
@@ -287,9 +389,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
           );
           atualizados.push(existente.id);
         } else if (autorizado) {
-          const id = require('crypto').randomUUID();
+          numeroId = require('crypto').randomUUID();
           insert.run(
-            id,
+            numeroId,
             empresaId,
             nome,
             numero,
@@ -307,7 +409,13 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
             agora,
             agora
           );
-          atualizados.push(id);
+          atualizados.push(numeroId);
+        }
+        // Modulos dinamicos (fora dos 5 fixos Protheus, ex: SoftExpert) — payload opcional
+        // por empresa: item.modulos_dinamicos = [{erp, modulo, liberado, papel, codigo_identidade}].
+        // Roda dentro da mesma transacao, apos garantir que numeroId existe.
+        if (numeroId && Array.isArray(item.modulos_dinamicos)) {
+          _salvarModulosDinamicosNumeroTx(db, numeroId, empresaId, item.modulos_dinamicos, agora);
         }
       }
       return atualizados;

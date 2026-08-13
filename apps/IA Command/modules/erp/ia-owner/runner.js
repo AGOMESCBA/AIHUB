@@ -440,6 +440,24 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Gere novo SQL a partir da pergunta original e do query_plan atual.',
       '- Preserve periodo, metrica, entidades resolvidas e agrupamentos solicitados.',
     ];
+  } else if (/Nao use um unico intervalo continuo|mes\(es\) repetidos em varios anos|Filtre mes e ano separadamente/i.test(mensagem)) {
+    const filtroSugerido = String(mensagem || '').match(/Filtre mes e ano separadamente:\s*([^|.]+(?:\([^)]*\))?[^|.]*)/i)?.[1]?.trim();
+    bloco = [
+      'Contrato obrigatorio:',
+      '- A pergunta pede o mesmo mes (ou conjunto/range de meses) em varios anos.',
+      '- Nesse caso, dataInicio/dataFim sao apenas o envelope do periodo declarado; NAO use BETWEEN, >= ou <= com datas completas para representar o periodo.',
+      '- O SQL deve filtrar o campo temporal por mes e ano separadamente, usando SUBSTRING(campo, 5, 2) para mes e SUBSTRING(campo, 1, 4) para ano.',
+      ...(filtroSugerido ? [`- Filtro temporal obrigatorio nesta nova tentativa: ${filtroSugerido}.`] : []),
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve metrica, entidades resolvidas, agrupamentos, joins e filtros nao temporais.',
+      '- Substitua o BETWEEN/>=/<= temporal anterior pelo filtro separado de mes e ano.',
+      '',
+      'Nao fazer:',
+      "- Nao use SF2.F2_EMISSAO BETWEEN '20250101' AND '20250131' quando a pergunta tambem cita 2026.",
+      '- Nao trate dataInicio/dataFim como periodo continuo real neste caso recorrente.',
+    ];
   } else if (subtipo === 'periodo_sql_inconsistente' || /periodo|temporal|data/i.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio:',
@@ -2832,6 +2850,12 @@ function _numerosValidos(lista, min, max) {
   return nums.length ? [...new Set(nums)] : null;
 }
 
+function _periodoTemMesesAnosDeclarados(periodo = {}) {
+  const meses = _numerosValidos(periodo?.meses, 1, 12);
+  const anos = _numerosValidos(periodo?.anos, 1900, 2999);
+  return !!(meses && anos && anos.length >= 2);
+}
+
 function validarMesesAnosDeclaradosNoSql(sql, spec = {}, periodo = null) {
   // Guardrail semantico: compara periodo.meses/periodo.anos — DECLARADOS PELA PROPRIA IA no
   // JSON de resposta — contra o SQL gerado, em vez de reinterpretar a pergunta em portugues
@@ -2906,6 +2930,9 @@ function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null, opts = {})
       ],
     };
   }
+  if (_periodoTemMesesAnosDeclarados(periodo)) {
+    return validarMesesAnosDeclaradosNoSql(sql, spec, periodo);
+  }
   if (periodosPermitidos.length > 1) {
     const contradicoes = filtrosTemporaisContraditorios(sql, campos, dataInicio, dataFim, periodosPermitidos);
     if (contradicoes.length) {
@@ -2937,9 +2964,9 @@ function periodoComDatas(periodo = {}) {
 }
 
 function periodoAutoritativoParaSql(intent = {}, planoObj = {}) {
-  return periodoComDatas(intent?._periodoCanonicoResolvido)
+  return periodoComDatas(planoObj?.periodo)
+    || periodoComDatas(intent?._periodoCanonicoResolvido)
     || periodoComDatas(intent?.periodo)
-    || periodoComDatas(planoObj?.periodo)
     || planoObj?.periodo
     || intent?.periodo
     || null;
@@ -4623,6 +4650,7 @@ module.exports = {
     normalizarAliasesBaseAusentes,
     validarPeriodoDeclaradoNoSql,
     validarPeriodosComparativosNoSql,
+    periodoAutoritativoParaSql,
     periodoDeterministicoMensagem,
     podeParametrizarTemplateSql,
     validarMesesAnosDeclaradosNoSql,

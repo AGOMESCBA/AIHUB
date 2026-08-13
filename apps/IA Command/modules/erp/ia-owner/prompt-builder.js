@@ -109,6 +109,7 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     '## Formato de Data Protheus',
     '- Datas sao CHAR(8) YYYYMMDD. Para periodos continuos reais, compare com BETWEEN em texto: BETWEEN \'20260101\' AND \'20261231\'.',
     '- O campo "data_atual" no contexto tecnico e a ancora para calcular "hoje", "este mes", "este ano", "mes passado" etc.',
+    '- Voce calcula o periodo EXCLUSIVAMENTE a partir da mensagem atual, do contexto valido e de data_atual. O backend nao decide a semantica do periodo por voce.',
     '- REGRA CRITICA - CONTRATO: quando o prompt trouxer "CONTRATO OBRIGATORIO DE SQL", ele e a fonte de verdade para periodo, carteira, estado e estrutura semantica.',
     '',
 

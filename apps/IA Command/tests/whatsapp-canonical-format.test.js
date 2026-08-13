@@ -749,6 +749,30 @@ ok('etapa 4: consolidado preserva detalhe por documento', () => {
   assert.ok(texto.includes('*Total Geral*: Valor Total: *R$'), texto);
 });
 
+ok('faturamento detalhado por dia cliente nota fiscal e produto nao cai em amostra da IA', () => {
+  const rows = [
+    { dia: '02/01/2025', cliente: 'AGAPE CONSTRUTORA LTDA', nota_fiscal: '553040', produto: 'BRITA 1', valor_total: 1078.49, quantidade_faturada: 15.19 },
+    { dia: '03/01/2025', cliente: 'CONCREMAX CONCRETO LTDA', nota_fiscal: '2765620', produto: 'AREIA MEDIA', valor_total: 8095.50, quantidade_faturada: 129.44 },
+    { dia: '31/01/2025', cliente: 'CLIENTE FIM 2025', nota_fiscal: '559999', produto: 'PEDRISCO', valor_total: 500, quantidade_faturada: 8 },
+    { dia: '02/01/2026', cliente: 'CLIENTE 2026', nota_fiscal: '660001', produto: 'BRITA 0', valor_total: 2000, quantidade_faturada: 30 },
+    { dia: '31/01/2026', cliente: 'CLIENTE FIM 2026', nota_fiscal: '669999', produto: 'PO DE PEDRA', valor_total: 3000, quantidade_faturada: 40 },
+  ];
+  const shape = canonical.detectarShape(rows);
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'Faturamento do mes de janeiro de 2025 e 2026 agrupado por dia, cliente, nota fiscal e produto',
+  });
+
+  assert.strictEqual(shape.tipo, 'detalhe_temporal_multidimensional');
+  assert.deepStrictEqual(shape.dimensoes, ['dia', 'cliente', 'nota_fiscal', 'produto']);
+  assert.ok(texto.includes('31/01/2026'), texto);
+  assert.ok(texto.includes('CLIENTE 2026'), texto);
+  assert.ok(texto.includes('Nota Fiscal: 660001'), texto);
+  assert.ok(texto.includes('Produto: BRITA 0'), texto);
+  assert.ok(!texto.includes('mostrando 50 de'), texto);
+  assert.ok(/\*Total Geral\*: Valor Total: \*R\$\s*14\.673,99\* \| Quantidade Faturada: \*222,63\*/.test(texto), texto);
+});
+
 ok('multidimensional: formata saldo bancario por banco agencia e conta', () => {
   const rows = [
     { E8_BANCO: '077', E8_AGENCIA: '0001', E8_CONTA: '4263046', saldo: '37158,8' },

@@ -239,6 +239,19 @@ function excluirMensagens({ sessaoId, empresaId, celular, mensagemIds }) {
   return info.changes || 0;
 }
 
+// "Limpar Chat" — apaga TODAS as mensagens da conversa, mas mantem a sessao
+// (continua na sidebar, so fica vazia). Diferente de excluirSessao (que
+// apaga a conversa inteira) e de excluirMensagens (que exige lista de ids
+// especificos vinda do modo selecao) — aqui o escopo e sempre "tudo desta
+// sessao", sem precisar que o frontend descubra os ids primeiro.
+function limparMensagens({ sessaoId, empresaId, celular }) {
+  const db = getDB();
+  const sessao = buscarSessao({ id: sessaoId, empresaId, celular });
+  if (!sessao) return 0;
+  const info = db.prepare(`DELETE FROM protheus_chat_messages WHERE sessao_id = ?`).run(sessaoId);
+  return info.changes || 0;
+}
+
 module.exports = {
   criarSessao,
   buscarSessao,
@@ -250,6 +263,7 @@ module.exports = {
   excluirSessao,
   renomearSessao,
   excluirMensagens,
+  limparMensagens,
   ultimaMensagemTabular,
   salvarGridConfig,
 };

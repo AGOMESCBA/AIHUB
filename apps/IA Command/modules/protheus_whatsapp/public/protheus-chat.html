@@ -109,7 +109,9 @@
        .sidebar-collapsed no .app-frame — ver JS em trocarAba(). Transicao
        suave, sidebar continua acessivel ao voltar pra aba Conversa. */
     grid-template-columns: 300px 1fr;
-    transition: grid-template-columns 0.2s ease;
+    /* Sem transicao aqui: alternar Conversa/Dados ja dispara recalculo pesado
+       de layout no Tabulator. Animar a largura junto deixa a navegacao entre
+       abas parecendo travada em bases maiores. */
     height: 100vh;
     /* Sem limite de largura: usa todo o espaco disponivel da janela do
        Protheus/TWebEngine, em vez de travar em 1180px e sobrar espaco vazio
@@ -314,6 +316,12 @@
     border-bottom: 1px solid var(--wa-border);
     color: var(--wa-text);
   }
+  /* [AJUSTADO a pedido do usuario] Contagem agora fica a esquerda (flex:1
+     empurra os botoes para a direita); Limpar Chat, X (cancelar) e Excluir
+     ficam agrupados a direita, nessa ordem — X junto do Excluir em vez de
+     isolado do lado oposto da barra. */
+  .selecao-contagem { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--wa-text-secondary); }
+
   .selecao-cancelar {
     flex: none;
     width: 28px; height: 28px;
@@ -325,7 +333,24 @@
   }
   .selecao-cancelar:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); }
   .selecao-cancelar svg { width: 14px; height: 14px; }
-  .selecao-contagem { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--wa-text-secondary); }
+
+  /* Limpar Chat: mesma paleta neutra do botao Cancelar (nao e destrutivo o
+     bastante pra ganhar vermelho como Excluir, mas ainda apaga dados —
+     border sutil o diferencia visualmente de um botao "de passagem"). */
+  .selecao-limpar {
+    flex: none;
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid var(--wa-border); border-radius: 7px;
+    background: transparent;
+    color: var(--wa-text-secondary);
+    font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  }
+  .selecao-limpar:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); border-color: var(--wa-text-tertiary); }
+  .selecao-limpar svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
   .selecao-excluir {
     flex: none;
     display: flex; align-items: center; gap: 6px;
@@ -430,13 +455,6 @@
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
 
-  /* Bolha com grid de dados precisa de mais largura que uma bolha de texto —
-     66% fica apertado demais para colunas tabulares (documento/fornecedor/
-     produto/quantidade), então essa variante usa quase toda a largura do
-     painel de chat quando a resposta tem rows. */
-  .bubble.bubble-grid { max-width: 98%; white-space: normal; }
-  .bubble-grid-titulo { font-weight: 600; margin-bottom: 6px; }
-
   /* Falha real de comunicacao (rede/servidor fora do ar) — visualmente distinta
      de uma resposta normal do backend, mesmo quando essa resposta e negativa
      (ex.: "nao encontrei dados", que NAO usa este estilo). */
@@ -447,110 +465,41 @@
   .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; float: right; margin: 3px -2px -3px 8px; transform: translateY(4px); }
   .bubble .time { font-size: 10.5px; color: var(--wa-text-tertiary); white-space: nowrap; }
 
-  /* Grid baseada em <div>+flex, NAO <table>/<tr>/<td> — tentativas anteriores
-     com table real quebravam de duas formas: (1) table-layout:auto media
-     largura de coluna pelo conteudo de CADA <tr> virtualizado, desalinhando
-     colunas entre linhas diferentes; (2) com scroll horizontal, cada <tr>
-     virtualizado (uma display:table separada, truque do virtual scroll) nao
-     compartilhava o deslocamento horizontal do thead, entao cabecalho e
-     dados rolavam dessincronizados. <div> com largura em px explicita (JS,
-     ver calcularLarguraColuna) nao tem nenhuma dessas regras especiais de
-     table, entao nao sofre nenhum dos dois problemas. */
-  .result-table { margin-top: 2px; border-radius: 6px; border: 1px solid var(--wa-border); font-size: 12.8px; }
-  /* overflow: area rola nos dois eixos — vertical (linhas, ver virtual scroll
-     em ativarVirtualScroll) e horizontal (quando a soma das colunas passa da
-     largura da bolha, em vez de cortar texto). */
-  .result-table-scroll { max-height: 340px; overflow: auto; border-radius: 6px; }
-  .result-grid-row { display: flex; }
-  .result-grid-cell {
-    flex: none;
-    padding: 6px 8px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    box-sizing: border-box;
-  }
-  .result-grid-cell.num { text-align: right; }
-  .result-grid-row + .result-grid-row .result-grid-cell { border-top: 1px solid var(--wa-border); }
-  /* Fundo OPACO obrigatorio no cabecalho fixo — 2a tentativa. A 1a usava
-     color-mix(--wa-accent-soft-bg, --wa-bubble-in): verificado via teste
-     automatizado (Playwright) que o resultado NAO fica opaco — color-mix
-     preserva o canal alpha proporcionalmente, entao misturar uma cor
-     translucida (--wa-accent-soft-bg e um rgba com alpha ~0.12) ainda produz
-     alpha final ~0.5, mesmo combinada com uma cor solida. A linha de dados
-     por baixo continuava parcialmente visivel atraves do cabecalho fixo
-     (bug reportado 2x). Correcao: --wa-sidebar usado PURO, sem color-mix —
-     e uma cor solida (sem alpha) em todos os temas, garantindo opacidade
-     real. position:sticky (so top, nao left): o cabecalho fica fixo ao
-     rolar verticalmente; ao rolar horizontalmente ele rola junto com as
-     colunas (mesma largura fixa por coluna), mantendo cabecalho e dados
-     sempre alinhados nos dois eixos. */
-  /* [CORRIGIDO apos 3o teste em producao] Investigacao completa (Playwright:
-     elementFromPoint em toda a faixa "sobreposta" confirmou que o DOM logico
-     SEMPRE retorna o cabecalho, nunca a linha de dados por baixo — ou seja,
-     durante o scroll real via mouse wheel, o Chromium as vezes pinta um frame
-     intermediario onde a camada composta do sticky ainda nao cobriu
-     visualmente a camada das linhas absolutas rolando por baixo, mesmo com
-     o DOM/z-index corretos. E um artefato de repaint conhecido do Chromium
-     ao combinar position:sticky com conteudo position:absolute que rola por
-     baixo dele (nao um bug de logica deste codigo). will-change forca o
-     cabecalho para sua propria camada de composicao com antecedencia (antes
-     do scroll comecar), eliminando a janela onde esse frame intermediario
-     mal-pintado pode aparecer. */
-  .result-grid-header {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: var(--wa-sidebar);
-    box-shadow: 0 1px 0 var(--wa-border);
-    will-change: transform;
-  }
-  .result-grid-header .result-grid-cell { color: var(--wa-text); font-weight: 600; font-size: 11.5px; }
-  /* Corpo virtualizado (rows.length > 150, ver ativarVirtualScroll): container
-     com altura TOTAL simulada (todas as linhas, mesmo as nao renderizadas) via
-     min-height, para a barra de scroll vertical refletir o tamanho real dos
-     dados. As linhas visiveis sao posicionadas com transform:translateY na
-     posicao exata que teriam se todas estivessem no DOM — nenhuma regra
-     especial de table envolvida, diferente das tentativas anteriores.
-     Classe .virtualizado (so presente quando rows.length > 150, ver
-     montarMiniTabela) restringe o position:absolute a esse caso — sem ela,
-     tabelas pequenas (linhas SEM transform, todas em top:0) empilhariam
-     todas as linhas umas sobre as outras. */
-  .result-grid-body.virtualizado { position: relative; }
-  .result-grid-body.virtualizado .result-grid-row { position: absolute; left: 0; top: 0; }
-
-  /* Linha de totais (soma de cada coluna numerica, sobre TODAS as linhas —
-     nao so as visiveis no viewport do virtual scroll) — fixa no rodape da
-     area de scroll (sticky bottom), mesmo padrao visual do cabecalho fixo. */
-  .result-grid-totais {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-    background: var(--wa-sidebar);
-    box-shadow: 0 -1px 0 var(--wa-border);
-  }
-  .result-grid-totais .result-grid-cell { font-weight: 700; }
-
+  /* Link "Ver na aba Dados →" no rodape da bolha, quando a resposta tem rows
+     — unica ligacao visual da bolha (texto puro, igual WhatsApp) com a aba
+     Dados (Tabulator), que continua sendo a unica forma de visualizar os
+     dados tabulares completos neste canal. */
   .result-table-rodape { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px 2px; font-size: 12px; color: var(--wa-text-secondary); }
   .result-table-link { background: none; border: none; padding: 0; color: var(--wa-accent); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; font-family: inherit; }
   .result-table-link:hover { opacity: 0.85; }
 
-  /* Bolha em modo Resumo (toggle no rodape) — largura padrao de bolha de
-     texto (max-width global de .bubble), nao a largura ampliada de
-     .bubble-grid, ja que nao ha tabela/colunas pra caber aqui. */
-  .bubble.bubble-resumo { white-space: normal; }
-  .resumo-bolha { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 4px 0 2px; }
-  .resumo-total-item { display: flex; flex-direction: column; gap: 1px; }
-  .resumo-total-label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--wa-text-tertiary); }
-  .resumo-total-valor { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .resumo-total-vazio { font-size: 12.5px; color: var(--wa-text-tertiary); font-style: italic; }
-
-  .typing-row .bubble { display: flex; align-items: center; gap: 4px; padding: 11px 14px; }
-  .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--wa-text-tertiary); animation: bounce 1.2s infinite ease-in-out; }
-  .typing-dot:nth-child(2) { animation-delay: 0.15s; }
-  .typing-dot:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
+  .typing-row .bubble {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 11px 14px;
+    min-width: 68px;
+    justify-content: center;
+    animation: typing-bubble-pulse 1.6s infinite ease-in-out;
+  }
+  .typing-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--wa-text-tertiary);
+    animation: typing-dot-wave 1.05s infinite ease-in-out;
+    will-change: transform, opacity;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.14s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.28s; }
+  @keyframes typing-dot-wave {
+    0%, 70%, 100% { transform: translateY(0) scale(0.78); opacity: 0.42; }
+    35% { transform: translateY(-5px) scale(1.12); opacity: 1; }
+  }
+  @keyframes typing-bubble-pulse {
+    0%, 100% { box-shadow: var(--wa-shadow); }
+    50% { box-shadow: 0 0 0 1px var(--wa-accent-soft-border), var(--wa-shadow); }
+  }
 
   .chat-footer { flex: none; display: flex; align-items: flex-end; gap: 8px; padding: 10px 20px; background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
   .input-wrap { flex: 1; display: flex; align-items: center; background: var(--wa-input-bg); border-radius: 20px; padding: 9px 15px; box-shadow: var(--wa-shadow); }
@@ -564,37 +513,11 @@
   .send-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
   .send-btn svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
 
-  /* justify-content:center -> space-between: com o toggle de Resumo do lado
-     direito, a faixa precisa dos dois extremos ocupados (texto a esquerda,
-     toggle a direita) em vez de tudo centralizado como antes. */
+  /* Faixa discreta de status do canal Protheus no rodape da conversa. */
   .protheus-strip { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 12px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
   .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); flex: none; }
   .protheus-strip > span:first-of-type { display: flex; align-items: center; gap: 6px; }
 
-  /* Toggle "Resumo" — liga/desliga se respostas com dados vem resumidas
-     (titulo + totais + link pra aba Dados) ou com a tabela completa na
-     bolha. Estado persistido em localStorage (ver JS), padrao ligado. */
-  .resumo-toggle { flex: none; display: flex; align-items: center; gap: 6px; cursor: pointer; text-transform: none; letter-spacing: normal; font-size: 11px; }
-  .resumo-toggle-switch {
-    position: relative;
-    width: 30px; height: 17px;
-    border-radius: 10px;
-    background: var(--wa-scrollbar);
-    transition: background 0.15s ease;
-    flex: none;
-  }
-  .resumo-toggle-switch[aria-checked="true"] { background: var(--wa-accent); }
-  .resumo-toggle-knob {
-    position: absolute;
-    top: 2px; left: 2px;
-    width: 13px; height: 13px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.15s ease;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
-  }
-  .resumo-toggle-switch[aria-checked="true"] .resumo-toggle-knob { transform: translateX(13px); }
-  .resumo-toggle-switch:focus-visible { outline: 2px solid var(--wa-accent); outline-offset: 2px; }
 
   .error-banner { background: #d64545; color: #fff; font-size: 12.5px; padding: 8px 16px; text-align: center; }
 
@@ -664,6 +587,30 @@
   .group-chip .chip-order { font-size: 10px; opacity: 0.85; }
 
   .report-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+  .report-search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 190px;
+    max-width: 260px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--wa-border);
+    background: var(--wa-sidebar);
+    color: var(--wa-text-secondary);
+  }
+  .report-search svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
+  .report-search input {
+    min-width: 0;
+    width: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    color: var(--wa-text);
+    font: inherit;
+    font-size: 12px;
+  }
+  .report-search input::placeholder { color: var(--wa-text-tertiary); }
   .report-btn {
     display: inline-flex;
     align-items: center;
@@ -681,6 +628,37 @@
   .report-btn:hover { border-color: var(--wa-accent); background: var(--wa-accent-soft-bg); }
   .report-btn svg { width: 14px; height: 14px; fill: currentColor; }
   .report-btn.ghost { background: transparent; }
+  .report-columns { position: relative; }
+  .report-columns-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 12;
+    display: none;
+    width: min(320px, 78vw);
+    max-height: 320px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid var(--wa-border);
+    border-radius: 8px;
+    background: var(--wa-sidebar);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+  }
+  .report-columns.open .report-columns-popover { display: block; }
+  .column-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 6px;
+    border-radius: 6px;
+    color: var(--wa-text);
+    font-size: 12.5px;
+    cursor: pointer;
+  }
+  .column-toggle:hover { background: var(--wa-sidebar-hover); }
+  .column-toggle input { flex: none; }
+  .column-toggle span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .report-body { flex: 1; min-height: 0; padding: 12px 16px 16px; overflow: hidden; display: flex; flex-direction: column; }
   .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); }
@@ -689,12 +667,12 @@
   .report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--wa-text-tertiary); text-align: center; padding: 30px; gap: 8px; }
   .report-empty svg { width: 42px; height: 42px; fill: var(--wa-text-tertiary); opacity: 0.4; }
   .report-empty p { font-size: 13px; max-width: 280px; line-height: 1.5; margin: 0; }
+  .report-empty.preparing svg { animation: typing-bubble-pulse 1.2s infinite ease-in-out; border-radius: 8px; }
 
   .report-caption { flex: none; font-size: 12px; color: var(--wa-text-secondary); padding: 0 16px 10px; }
 
-  /* Total geral da tabela inteira — Tabulator nao gera isso sozinho quando ha
-     agrupamento ativo (bottomCalc de coluna so soma dentro de cada grupo),
-     entao e calculado e exibido aqui, fora da grid. */
+  /* Total geral da tabela inteira — calculado fora do Tabulator para nao
+     depender do estado visual da grid (filtros, agrupamentos ou virtual DOM). */
   .report-grand-total {
     flex: none;
     display: flex;
@@ -718,7 +696,7 @@
   .tabulator .tabulator-cell.num { font-variant-numeric: tabular-nums; }
 
   @media (max-width: 760px) { .app-frame { grid-template-columns: 1fr; } .sidebar { display: none; } }
-  @media (prefers-reduced-motion: reduce) { .row, .typing-dot, .send-btn { animation: none !important; transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .row, .typing-row .bubble, .typing-dot, .send-btn { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
@@ -777,13 +755,20 @@
     </header>
 
     <!-- Barra de acoes do modo selecao (estilo WhatsApp Web) — so aparece
-         com selecaoAtiva=true, ver JS. Fica entre o header e as abas. -->
+         com selecaoAtiva=true, ver JS. Fica entre o header e as abas.
+         Ordem a pedido do usuario: contagem a esquerda; Limpar Chat, X
+         (cancelar) e Excluir agrupados a direita, todos com icone
+         auto-explicativo + texto. -->
     <div class="selecao-bar" id="selecaoBar" style="display:none;">
-      <button type="button" class="selecao-cancelar" id="btnCancelarSelecao" aria-label="Cancelar selecao">
+      <span class="selecao-contagem" id="selecaoContagem">0 selecionada(s)</span>
+      <button type="button" class="selecao-limpar" id="btnLimparChat" title="Apagar todas as mensagens desta conversa">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        Limpar Chat
+      </button>
+      <button type="button" class="selecao-cancelar" id="btnCancelarSelecao" title="Cancelar selecao" aria-label="Cancelar selecao">
         <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
       </button>
-      <span class="selecao-contagem" id="selecaoContagem">0 selecionada(s)</span>
-      <button type="button" class="selecao-excluir" id="btnExcluirSelecionadas" disabled>
+      <button type="button" class="selecao-excluir" id="btnExcluirSelecionadas" title="Excluir mensagens selecionadas" disabled>
         <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
         Excluir
       </button>
@@ -819,12 +804,6 @@
       <div class="protheus-strip">
         <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
         <span>Integrado ao ERP Protheus · dados em tempo real</span>
-        <label class="resumo-toggle" id="resumoToggleWrap" title="Quando ligado, respostas com dados mostram um resumo totalizado na bolha em vez da tabela completa. A tabela completa continua sempre disponivel na aba Dados.">
-          <span>Resumo</span>
-          <span class="resumo-toggle-switch" id="resumoToggle" role="switch" aria-checked="true" tabindex="0">
-            <span class="resumo-toggle-knob"></span>
-          </span>
-        </label>
       </div>
     </div>
 
@@ -835,7 +814,18 @@
           <span class="toolbar-label">Agrupar por</span>
           <div class="group-picker" id="groupPicker"></div>
           <div class="report-actions">
+            <label class="report-search" title="Buscar em todas as colunas">
+              <svg viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 015.2 10.4l4 4-1.4 1.4-4-4A6.5 6.5 0 119.5 3zm0 2a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/></svg>
+              <input type="search" id="reportGlobalSearch" placeholder="Buscar dados" autocomplete="off">
+            </label>
             <button class="report-btn ghost" id="btnLimparAgrupamento" type="button">Limpar</button>
+            <div class="report-columns" id="reportColumnsMenu">
+              <button class="report-btn" id="btnReportColumns" type="button" aria-expanded="false">
+                <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4V5zm2 2v10h3V7H6zm5 0v10h3V7h-3zm5 0v10h2V7h-2z"/></svg>
+                Colunas
+              </button>
+              <div class="report-columns-popover" id="reportColumnsPopover"></div>
+            </div>
             <button class="report-btn" id="btnExportXlsx" type="button">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM8 18v-2h2v2H8zm0-4v-2h2v2H8zm0-4V8h2v2H8zm4 8v-2h4v2h-4zm0-4v-2h4v2h-4zm0-4V8h4v2h-4z"/></svg>
               Excel
@@ -903,6 +893,7 @@
   const selecaoContagem = document.getElementById('selecaoContagem');
   const btnCancelarSelecao = document.getElementById('btnCancelarSelecao');
   const btnExcluirSelecionadas = document.getElementById('btnExcluirSelecionadas');
+  const btnLimparChat = document.getElementById('btnLimparChat');
 
   // Elementos e estado da aba Relatorio — declarados aqui (nao mais abaixo,
   // junto das funcoes) porque carregarMensagens() chama fecharRelatorio() e
@@ -919,6 +910,10 @@
   const reportCaption = document.getElementById('reportCaption');
   const reportGrandTotal = document.getElementById('reportGrandTotal');
   const btnLimparAgrupamento = document.getElementById('btnLimparAgrupamento');
+  const reportGlobalSearch = document.getElementById('reportGlobalSearch');
+  const reportColumnsMenu = document.getElementById('reportColumnsMenu');
+  const btnReportColumns = document.getElementById('btnReportColumns');
+  const reportColumnsPopover = document.getElementById('reportColumnsPopover');
   const btnExportXlsx = document.getElementById('btnExportXlsx');
   const btnExportPdf = document.getElementById('btnExportPdf');
 
@@ -926,7 +921,17 @@
   let reportColunas = [];
   let reportGroupBy = [];
   let reportMensagemId = null;
+  let reportDadosAtuais = null;
+  let reportGridMontada = false;
+  let reportGlobalTerm = '';
+  let reportHiddenColumns = [];
+  let reportSorters = [];
+  let reportHeaderFilters = [];
+  let reportColumnWidths = {};
   let gridConfigSaveTimer = null;
+  let reportMountFrame = null;
+  let reportMountTimer = null;
+  let reportGlobalFilterActive = false;
 
   // Cache em memoria do relatorio por sessao — evita rebuscar via rede e
   // recriar a grid do zero ao voltar para uma sessao ja visitada nesta janela
@@ -975,84 +980,17 @@
   }
 
   // Maximo de 3 casas decimais, formato pt-BR (virgula decimal, ponto de
-  // milhar) — evita ruido de ponto flutuante (ex.: 925273.1000000004) tanto na
-  // mini-tabela da bolha do chat quanto na grid da aba Dados (ver formatarNumero).
+  // milhar) — evita ruido de ponto flutuante (ex.: 925273.1000000004) na
+  // grid da aba Dados (ver formatarNumero).
   function formatarNumeroExibicao(valor) {
     if (typeof valor !== 'number') return valor;
     return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
   }
 
-  // Decisao do usuario: quando a resposta tem dados tabulares (rows), a bolha
-  // mostra uma grid (mesma deteccao de coluna numerica/data da aba Dados) em
-  // vez do texto corrido — mais legivel para listas longas (ex.: dezenas de
-  // pedidos de compra). Um cabecalho curto + botao "Ver na aba Dados" substitui
-  // o texto completo; a aba Dados continua disponivel para agrupar/exportar.
-  // Sem rows (resposta simples, erro, sem_dados etc.) o texto segue como antes.
-  // [AJUSTADO apos reclamacao em producao] Era 5 — pequeno demais para
-  // perguntas comuns como "faturamento agrupado por data, cliente, nota
-  // fiscal e produto" (6 colunas: 4 de agrupamento + valor + quantidade),
-  // que cortava a ultima coluna pedida mesmo ela existindo em `rows` (a IA
-  // ja trazia certo — so a exibicao da bolha cortava; a aba Dados sempre
-  // mostrou tudo, sem esse limite). Ainda finito (nao ilimitado) porque a
-  // bolha tem largura de chat, nao de planilha — 8 cobre a maioria das
-  // perguntas de agrupamento sem virar tabela larga demais para o formato.
-  const MAX_COLUNAS_MINI_TABELA = 8;
-
-  // Extrai a primeira linha do texto (titulo/cabecalho da resposta, ex.:
-  // "📊 Compras --> Pedidos em aberto...") para usar como titulo curto da
-  // bolha-grid, sem repetir o corpo do texto que a tabela ja substitui.
-  function extrairTituloResposta(texto) {
-    const primeiraLinha = String(texto || '').split('\n')[0].trim();
-    return primeiraLinha || 'Resultado da consulta';
-  }
-
-  // ── Toggle "Resumo" (rodape do chat) ──────────────────────────────────
-  // Liga/desliga se respostas com dados tabulares vem como resumo (titulo +
-  // totais + link "Ver na aba Dados") ou como a mini-grid detalhada linha a
-  // linha. Decisao do usuario apos a mini-grid deixar a conversa "poluida"
-  // quando a mesma informacao ja aparece completa na aba Dados. Padrao
-  // ligado (resumo); estado persistido em localStorage — so afeta respostas
-  // NOVAS a partir da troca, nao re-renderiza bolhas ja desenhadas na tela.
-  const RESUMO_STORAGE_KEY = 'iac_protheus_chat_resumo_ativo';
-
-  function resumoAtivo() {
-    const v = localStorage.getItem(RESUMO_STORAGE_KEY);
-    return v === null ? true : v === '1'; // null = nunca configurado -> padrao ligado
-  }
-
-  function definirResumoAtivo(ativo) {
-    localStorage.setItem(RESUMO_STORAGE_KEY, ativo ? '1' : '0');
-  }
-
-  // Resumo totalizado: titulo + total de registros + soma de cada coluna
-  // numerica (mesmo criterio de linhaTotaisHtml, usada na mini-grid) — sem
-  // nenhuma linha de dado individual. O botao "Ver na aba Dados" (mesmo
-  // elemento/handler da mini-grid) continua sendo o caminho para o detalhe.
-  function montarResumoBolha(rows) {
-    const colunas = inferirColunas(rows);
-    const colunasNumericas = colunas.filter((c) => c.numerico);
-    const itens = colunasNumericas.map((c) => {
-      const soma = rows.reduce((acc, r) => acc + (typeof r[c.field] === 'number' ? r[c.field] : 0), 0);
-      return `<div class="resumo-total-item"><span class="resumo-total-label">${escapeHtml(c.title)}</span><span class="resumo-total-valor">${escapeHtml(formatarNumeroExibicao(soma))}</span></div>`;
-    }).join('');
-    return `<div class="resumo-bolha">${itens || '<span class="resumo-total-vazio">Sem colunas numericas para totalizar</span>'}</div>`;
-  }
-
-  // Virtual scroll simples (sem lib): com milhares de linhas (ex.: 10.000
-  // registros), renderizar um <tr> real por linha deixava o scroll da bolha
-  // lento (reflow de milhares de elementos) — reportado pelo usuario. Em vez
-  // disso, so as linhas dentro da janela visivel (+ buffer de 4 linhas acima/
-  // abaixo, ver atualizar() em ativarVirtualScroll) viram elementos reais; as
-  // demais nao existem no DOM — a altura total e simulada via min-height no
-  // container (.result-grid-body) e cada linha visivel e posicionada com
-  // transform:translateY na posicao exata que teria se todas estivessem la.
-  const ALTURA_LINHA_PX = 31; // ~ 6px+6px padding + 1 linha de texto 12.8px, medido no result-grid-cell
-
   // Largura em PIXELS FIXOS por coluna, calculada uma vez a partir do maior
   // texto entre titulo da coluna e uma amostra de valores (ate 40 linhas) —
-  // aplicada igualmente ao cabecalho e a toda linha de dado (mesmo array de
-  // larguras, ver montarMiniTabela/ativarVirtualScroll), garantindo que
-  // coluna N do cabecalho sempre bata com coluna N dos dados.
+  // usada como minWidth de cada coluna da aba Dados (Tabulator, ver
+  // montarColunasTabulator).
   // [AJUSTADO a pedido do usuario] Largura reduzida para caber "exatamente"
   // no conteudo — COL_PADDING_PX menor (12, so o padding real da celula) e
   // trim() aplicado tanto no calculo quanto na exibicao (ver trimSeTexto),
@@ -1063,10 +1001,8 @@
   const COL_MIN_PX = 60;
   const COL_MAX_PX = 260;
   // 7.2 causava truncamento ocasional (ex.: "PEDRISCO (GROSSO)" cortado na
-  // mini-grid do chat, que usa 12.8px de fonte vs. o padrao do Tabulator na
-  // aba Dados) — a mesma largura calculada nao tem folga suficiente para os
-  // dois contextos. 7.6 cobre ambos sem re-medir DOM (que seria a alternativa
-  // mais precisa, mas cara o suficiente pra ja ter sido descartada antes).
+  // Estimativa de largura para colunas da aba Dados sem medir DOM real (que
+  // seria mais preciso, mas caro demais em respostas com muitos registros).
   const PX_POR_CHAR = 7.6;
   const COL_PADDING_PX = 12;
 
@@ -1095,112 +1031,15 @@
     return Math.max(COL_MIN_PX, Math.min(COL_MAX_PX, px));
   }
 
-  function celulaHtml(coluna, largura, valor) {
-    let exibicao = trimSeTexto(valor);
-    if (coluna.data) exibicao = formatarDataAAAAMMDD(valor);
-    else if (coluna.competencia) exibicao = formatarCompetenciaAAAAMM(valor);
-    else if (coluna.numerico) exibicao = formatarNumeroExibicao(valor);
-    const classe = 'result-grid-cell' + (coluna.numerico ? ' num' : '');
-    return `<div class="${classe}" style="width:${largura}px">${escapeHtml(exibicao == null ? '' : exibicao)}</div>`;
-  }
-
-  function linhaHtml(row, colunas, larguras, top) {
-    const celulas = colunas.map((c, i) => celulaHtml(c, larguras[i], row[c.field])).join('');
-    const style = top == null ? '' : ` style="transform:translateY(${top}px)"`;
-    return `<div class="result-grid-row"${style}>${celulas}</div>`;
-  }
-
-  // Soma cada coluna numerica sobre TODAS as linhas (nao so a fatia visivel
-  // do virtual scroll) — pedido do usuario para ver o total rapido na propria
-  // bolha, sem precisar abrir a aba Dados so para somar. Colunas nao
-  // numericas ficam com a celula vazia (mantem alinhamento com o cabecalho).
-  function linhaTotaisHtml(rows, colunas, larguras) {
-    const temNumerica = colunas.some((c) => c.numerico);
-    if (!temNumerica) return '';
-    const celulas = colunas.map((c, i) => {
-      if (!c.numerico) return `<div class="result-grid-cell" style="width:${larguras[i]}px"></div>`;
-      const soma = rows.reduce((acc, r) => acc + (typeof r[c.field] === 'number' ? r[c.field] : 0), 0);
-      return `<div class="result-grid-cell num" style="width:${larguras[i]}px">${escapeHtml(formatarNumeroExibicao(soma))}</div>`;
-    }).join('');
-    return `<div class="result-grid-row result-grid-totais">${celulas}</div>`;
-  }
-
-  function montarMiniTabela(rows) {
-    const colunas = inferirColunas(rows).slice(0, MAX_COLUNAS_MINI_TABELA);
-    const larguras = colunas.map((c) => calcularLarguraColuna(c, rows));
-    const larguraTotal = larguras.reduce((a, b) => a + b, 0);
-    const cabecalho = `<div class="result-grid-row result-grid-header" style="width:${larguraTotal}px">`
-      + colunas.map((c, i) => `<div class="result-grid-cell" style="width:${larguras[i]}px">${escapeHtml(c.title)}</div>`).join('')
-      + `</div>`;
-    const totais = linhaTotaisHtml(rows, colunas, larguras);
-
-    // Tabela pequena: sem custo de virtualizacao, renderiza tudo direto.
-    if (rows.length <= 150) {
-      const linhas = rows.map((r) => linhaHtml(r, colunas, larguras, null)).join('');
-      return `<div class="result-table"><div class="result-table-scroll">`
-        + `<div style="width:${larguraTotal}px">${cabecalho}<div class="result-grid-body">${linhas}</div>${totais}</div>`
-        + `</div></div>`;
-    }
-
-    const alturaTotal = rows.length * ALTURA_LINHA_PX;
-    return `<div class="result-table"><div class="result-table-scroll">`
-      + `<div style="width:${larguraTotal}px">${cabecalho}`
-      + `<div class="result-grid-body virtualizado" style="min-height:${alturaTotal}px"></div>${totais}</div>`
-      + `</div></div>`;
-  }
-
-  // Chamada apos o innerHTML da bolha ser inserido no DOM (rows.length > 150).
-  // Recicla as linhas conforme o scroll, em vez de manter milhares de
-  // elementos permanentemente no DOM.
-  function ativarVirtualScroll(rowEl, rows) {
-    const wrap = rowEl.querySelector('.result-table');
-    if (!wrap) return;
-    const scrollEl = wrap.querySelector('.result-table-scroll');
-    const body = wrap.querySelector('.result-grid-body');
-    const colunas = inferirColunas(rows).slice(0, MAX_COLUNAS_MINI_TABELA);
-    // Mesmo calculo de largura usado no cabecalho (montarMiniTabela) — precisa
-    // ser identico, senao as colunas do corpo virtualizado desalinham das
-    // colunas do cabecalho ja renderizado.
-    const larguras = colunas.map((c) => calcularLarguraColuna(c, rows));
-
-    function atualizar() {
-      const scrollTop = scrollEl.scrollTop;
-      const viewportPx = scrollEl.clientHeight;
-      // [CORRIGIDO apos bug reportado em producao] Buffer de linhas ANTES da
-      // janela visivel foi removido. Motivo confirmado via teste automatizado
-      // (Playwright, scroll incremental real via mouse.wheel — scrollTop
-      // atribuido direto nao reproduzia): "overflow" (auto/hidden) NAO recorta
-      // elementos filhos com position:absolute (comportamento documentado do
-      // CSS, nao um bug deste codigo) — as linhas do buffer, posicionadas
-      // ACIMA do scrollTop atual via translateY, ficavam visiveis "escapando"
-      // do clipping do .result-table-scroll e apareciam sobrepostas ao
-      // cabecalho sticky (bug: texto de linha de dados colado sobre o
-      // cabecalho, so durante/apos scroll ativo). Sem buffer negativo, so
-      // linhas DENTRO ou ABAIXO da janela visivel sao renderizadas — nunca
-      // escapam para cima do scrollTop, entao nunca ficam na regiao do
-      // cabecalho. Buffer para BAIXO (+8) mantido — nao causa o bug, pois
-      // fica dentro/abaixo da area visivel.
-      const linhasVisiveis = Math.ceil(viewportPx / ALTURA_LINHA_PX) + 8;
-      const primeiraVisivel = Math.max(0, Math.min(
-        rows.length - linhasVisiveis,
-        Math.floor(scrollTop / ALTURA_LINHA_PX),
-      ));
-      const ultimaVisivel = Math.min(rows.length, primeiraVisivel + linhasVisiveis);
-
-      const fatia = rows.slice(primeiraVisivel, ultimaVisivel);
-      body.innerHTML = fatia.map((r, i) => linhaHtml(r, colunas, larguras, (primeiraVisivel + i) * ALTURA_LINHA_PX)).join('');
-    }
-
-    let ticking = false;
-    scrollEl.addEventListener('scroll', () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => { atualizar(); ticking = false; });
-    });
-
-    atualizar();
-  }
-
+  // [REVERTIDO 13/08/2026 a pedido do usuario] Bolha volta a mostrar o
+  // TEXTO COMPLETO vindo do backend — igual ao canal WhatsApp real, sem
+  // resumo nem mini-grid proprios deste canal. Decisao: manter os dois
+  // canais com o mesmo "motor de mensageria" ate a formatacao final da
+  // mensagem (response-formatter.js/runner.js, ja compartilhados — ver
+  // interpretation-pipeline.js para o log). A UNICA diferenca visual deste
+  // canal para o WhatsApp e a aba Dados, que continua existindo para
+  // manipular/exportar os dados tabulares — daqui so sai um link pra ela.
+  //
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
@@ -1208,40 +1047,16 @@
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
-    const temGrid = !isFalha && Array.isArray(rows) && rows.length > 0;
+    const temDados = !isFalha && Array.isArray(rows) && rows.length > 0;
+    const bubbleClass = isFalha ? 'bubble bubble-falha' : 'bubble';
     const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
 
-    // Modo Resumo (toggle no rodape do chat, ver resumoAtivo()) — decide
-    // AQUI, no momento de desenhar a bolha, nao no momento em que a resposta
-    // chegou do backend. Isso implementa a decisao "so afeta respostas novas
-    // dai pra frente, mas reabrir o historico aplica o modo atual a todas as
-    // mensagens carregadas" (mesma pergunta, escopo confirmado com o
-    // usuario): nao ha estado persistido por mensagem, so o estado global
-    // do toggle no momento da renderizacao.
-    const usarResumo = temGrid && resumoAtivo();
-    // bubble-grid (largura maior, ver CSS) so faz sentido na mini-grid
-    // detalhada — o resumo e curto o bastante para caber na largura normal
-    // de bolha de texto, entao usa bubble-resumo (largura padrao + leve
-    // destaque visual) em vez de ocupar quase a tela toda a toa.
-    const bubbleClass = isFalha
-      ? 'bubble bubble-falha'
-      : (usarResumo ? 'bubble bubble-resumo' : (temGrid ? 'bubble bubble-grid' : 'bubble'));
-
-    let conteudo;
-    if (usarResumo) {
-      conteudo = `<div class="bubble-grid-titulo">${escapeHtml(extrairTituloResposta(texto))}</div>`
-        + montarResumoBolha(rows)
-        + `<div class="result-table-rodape"><span>${rows.length} registro${rows.length === 1 ? '' : 's'}</span>`
-        + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`;
-    } else if (temGrid) {
-      const colunasOmitidas = Object.keys(rows[0]).length > MAX_COLUNAS_MINI_TABELA;
-      conteudo = `<div class="bubble-grid-titulo">${escapeHtml(extrairTituloResposta(texto))}</div>`
-        + montarMiniTabela(rows)
-        + `<div class="result-table-rodape"><span>${rows.length} registro${rows.length === 1 ? '' : 's'}${colunasOmitidas ? ' · mais colunas na aba Dados' : ''}</span>`
-        + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`;
-    } else {
-      conteudo = escapeHtml(texto);
-    }
+    // Texto completo sempre — link para a aba Dados so quando ha rows.
+    const linkDados = temDados
+      ? `<div class="result-table-rodape"><span>${rows.length} registro${rows.length === 1 ? '' : 's'}</span>`
+        + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`
+      : '';
+    const conteudo = escapeHtml(texto) + linkDados;
 
     // Checkbox de selecao — sempre no DOM (nao so quando o modo esta ativo),
     // controlado via CSS (.chat-body.selecao-ativa .row-select-checkbox) para
@@ -1253,17 +1068,11 @@
     row.innerHTML = ordemCheckbox
       + `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`
       + ordemCheckboxFim;
-    if (temGrid) {
+    if (temDados) {
       row.querySelector('[data-abrir-dados]').addEventListener('click', (e) => {
         if (chatBody.classList.contains('selecao-ativa')) return; // nao abre aba durante selecao
         trocarAba('relatorio');
       });
-      // Virtual scroll so existe na mini-grid detalhada (montarMiniTabela) —
-      // o resumo nao tem linhas/scroll interno, entao nao ha nada pra
-      // ativar quando usarResumo=true. So ativa quando montarMiniTabela
-      // tambem optou pelo virtual scroll (tbody com display:block — ver
-      // limite de 150 linhas la dentro).
-      if (!usarResumo && rows.length > 150) ativarVirtualScroll(row, rows);
     }
     if (id) {
       row.addEventListener('click', (e) => {
@@ -1360,6 +1169,25 @@
     }
   });
 
+  // "Limpar Chat" — apaga TODAS as mensagens da conversa atual (mantem a
+  // sessao na sidebar, so fica vazia). Diferente de excluir mensagens
+  // selecionadas: nao depende de mensagensSelecionadas, sempre limpa tudo.
+  btnLimparChat.addEventListener('click', async () => {
+    if (!sessaoAtualId) return;
+    if (!window.confirm('Apagar todas as mensagens desta conversa? Essa acao nao pode ser desfeita.')) return;
+    try {
+      await api('/sessoes/' + sessaoAtualId + '/mensagens/limpar', { method: 'POST' });
+      relatorioCachePorSessao.delete(sessaoAtualId);
+      sairModoSelecao();
+      chatBody.innerHTML = '';
+      renderEmptyState();
+      fecharRelatorio();
+      await carregarSessoes();
+    } catch (err) {
+      showError('Falha ao limpar o chat: ' + err.message);
+    }
+  });
+
   function renderEmptyState() {
     chatBody.innerHTML = `
       <div class="empty-state">
@@ -1389,28 +1217,37 @@
     carregarRelatorioDaSessao(sessaoId);
   }
 
-  // So desmonta a INSTANCIA visual do Tabulator (exigencia da propria lib ao
-  // trocar de contexto) — NAO mexe em relatorioCachePorSessao. Os dados
-  // continuam em cache; ao reabrir a sessao, abrirRelatorio() reconstroi a
-  // grid a partir do cache, sem nova chamada de rede.
   function fecharRelatorio() {
+    if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
+    if (reportMountTimer) { clearTimeout(reportMountTimer); reportMountTimer = null; }
     if (reportTable) { reportTable.destroy(); reportTable = null; }
     tabRelatorio.disabled = true;
     relatorioBadge.style.display = 'none';
     reportEmpty.style.display = 'flex';
+    reportEmpty.classList.remove('preparing');
+    reportEmpty.querySelector('p').textContent = 'Faça uma pergunta que retorne uma lista de dados para abrir os dados aqui.';
     reportCaption.textContent = '';
     reportGrandTotal.style.display = 'none';
+    reportColumnsPopover.innerHTML = '';
+    reportColumnsMenu.classList.remove('open');
+    btnReportColumns.setAttribute('aria-expanded', 'false');
+    reportGlobalSearch.value = '';
+    reportDadosAtuais = null;
+    reportGridMontada = false;
     reportMensagemId = null;
     reportGroupBy = [];
+    reportHiddenColumns = [];
+    reportSorters = [];
+    reportHeaderFilters = [];
+    reportColumnWidths = {};
+    reportGlobalTerm = '';
+    reportGlobalFilterActive = false;
   }
 
   async function carregarRelatorioDaSessao(sessaoId) {
-    // Cache primeiro: se ja visitamos esta sessao nesta janela do navegador,
-    // reusa os dados em memoria — sem chamada de rede, sem reconstruir a grid
-    // do zero. So busca no servidor na primeira vez que a sessao e aberta.
     const cache = relatorioCachePorSessao.get(sessaoId);
     if (cache) {
-      abrirRelatorio(cache);
+      prepararRelatorio(cache);
       return;
     }
 
@@ -1424,7 +1261,7 @@
           texto: relatorio.texto,
         };
         relatorioCachePorSessao.set(sessaoId, dados);
-        abrirRelatorio(dados);
+        prepararRelatorio(dados);
       }
     } catch (err) {
       // Silencioso: ausencia de relatorio para a sessao nao e um erro do usuario.
@@ -1610,11 +1447,11 @@
           gridConfig: null,
           texto: data.resposta.texto,
         };
-        // Pergunta nova = dado novo: substitui o cache desta sessao (a grid
-        // so e reconstruida aqui, nunca por troca de aba/sessao — ver
-        // carregarRelatorioDaSessao).
+        // Pergunta nova = dado novo: substitui o cache desta sessao. A grid
+        // so sera montada quando o usuario entrar na aba Dados; aqui so
+        // preparamos metadados leves e habilitamos a aba.
         relatorioCachePorSessao.set(sessaoAtualId, dadosRelatorio);
-        abrirRelatorio(dadosRelatorio);
+        prepararRelatorio(dadosRelatorio);
       }
     } catch (err) {
       hideTyping();
@@ -1633,8 +1470,148 @@
   // (elementos e estado declarados no topo do arquivo — ver comentario la)
   // =====================================================================
 
+  function gridConfigNormalizada(gridConfig) {
+    const cfg = gridConfig && typeof gridConfig === 'object' ? gridConfig : {};
+    return {
+      groupBy: Array.isArray(cfg.groupBy) ? cfg.groupBy.slice() : [],
+      hiddenColumns: Array.isArray(cfg.hiddenColumns) ? cfg.hiddenColumns.slice() : [],
+      sorters: Array.isArray(cfg.sorters) ? cfg.sorters.slice() : [],
+      headerFilters: Array.isArray(cfg.headerFilters) ? cfg.headerFilters.slice() : [],
+      columnOrder: Array.isArray(cfg.columnOrder) ? cfg.columnOrder.slice() : [],
+      columnWidths: cfg.columnWidths && typeof cfg.columnWidths === 'object' ? { ...cfg.columnWidths } : {},
+    };
+  }
+
+  function ordenarColunasPorConfig(colunas, columnOrder) {
+    if (!Array.isArray(columnOrder) || !columnOrder.length) return colunas;
+    const ordem = new Map(columnOrder.map((field, idx) => [field, idx]));
+    return colunas.slice().sort((a, b) => {
+      const ia = ordem.has(a.field) ? ordem.get(a.field) : Number.MAX_SAFE_INTEGER;
+      const ib = ordem.has(b.field) ? ordem.get(b.field) : Number.MAX_SAFE_INTEGER;
+      return ia === ib ? colunas.indexOf(a) - colunas.indexOf(b) : ia - ib;
+    });
+  }
+
+  function modeloRelatorio(dados) {
+    if (dados._modelo) return dados._modelo;
+    const cfg = gridConfigNormalizada(dados.gridConfig);
+    const colunas = ordenarColunasPorConfig(inferirColunas(dados.rows), cfg.columnOrder);
+    const colunasNumericas = colunas.filter((c) => c.numerico);
+    const totais = colunasNumericas.map((col) => ({
+      field: col.field,
+      title: col.title,
+      valor: dados.rows.reduce((acc, r) => acc + (typeof r[col.field] === 'number' ? r[col.field] : 0), 0),
+    }));
+    dados._modelo = { cfg, colunas, totais, totalRegistros: dados.rows.length };
+    return dados._modelo;
+  }
+
+  function prepararRelatorio(dados) {
+    if (!dados || !Array.isArray(dados.rows) || !dados.rows.length) return;
+    if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
+    if (reportMountTimer) { clearTimeout(reportMountTimer); reportMountTimer = null; }
+    const modelo = modeloRelatorio(dados);
+    reportDadosAtuais = dados;
+    reportGridMontada = false;
+    reportMensagemId = dados.mensagemId || null;
+    reportColunas = modelo.colunas;
+    reportGroupBy = modelo.cfg.groupBy.filter((field) => reportColunas.some((c) => c.field === field));
+    reportHiddenColumns = modelo.cfg.hiddenColumns.filter((field) => reportColunas.some((c) => c.field === field));
+    reportSorters = modelo.cfg.sorters.filter((s) => s && reportColunas.some((c) => c.field === s.field));
+    reportHeaderFilters = modelo.cfg.headerFilters.filter((f) => f && reportColunas.some((c) => c.field === f.field));
+    reportColumnWidths = { ...modelo.cfg.columnWidths };
+    reportGlobalTerm = '';
+    reportGlobalSearch.value = '';
+
+    if (reportTable) { reportTable.destroy(); reportTable = null; }
+    tabRelatorio.disabled = false;
+    relatorioBadge.style.display = 'inline-block';
+    reportEmpty.style.display = 'flex';
+    reportEmpty.classList.remove('preparing');
+    reportEmpty.querySelector('p').textContent = 'Dados prontos para visualizacao.';
+    reportCaption.textContent = dados.texto ? dados.texto.replace(/\n[\s\S]*/, '') : '';
+    renderGroupPicker();
+    renderColumnPicker();
+    renderGrandTotal(dados.rows, modelo);
+  }
+
+  function garantirRelatorioMontado() {
+    if (!reportDadosAtuais || reportGridMontada || reportMountFrame || reportMountTimer) return;
+    reportEmpty.style.display = 'flex';
+    reportEmpty.classList.add('preparing');
+    reportEmpty.querySelector('p').textContent = 'Preparando dados...';
+    reportMountFrame = requestAnimationFrame(() => {
+      reportMountFrame = null;
+      reportMountTimer = setTimeout(() => {
+        reportMountTimer = null;
+        abrirRelatorio(reportDadosAtuais);
+      }, 0);
+    });
+  }
+
+  function montarRelatorioAgora() {
+    if (!reportDadosAtuais || reportGridMontada) return;
+    if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
+    if (reportMountTimer) { clearTimeout(reportMountTimer); reportMountTimer = null; }
+    abrirRelatorio(reportDadosAtuais);
+  }
+
+  function valorFormatadoParaBusca(col, valor) {
+    if (col.numerico) return formatarNumero(valor);
+    if (col.data) return formatarDataAAAAMMDD(valor);
+    if (col.competencia) return formatarCompetenciaAAAAMM(valor);
+    return trimSeTexto(valor);
+  }
+
+  function aplicarBuscaGlobal() {
+    if (!reportTable) return;
+    const termo = reportGlobalTerm.trim().toLowerCase();
+    if (!termo) {
+      if (reportGlobalFilterActive) {
+        reportTable.clearFilter();
+        reportGlobalFilterActive = false;
+      }
+      return;
+    }
+    const colunasVisiveis = reportColunas.filter((c) => !reportHiddenColumns.includes(c.field));
+    reportGlobalFilterActive = true;
+    reportTable.setFilter((data) => colunasVisiveis.some((col) => {
+      const valor = valorFormatadoParaBusca(col, data[col.field]);
+      return String(valor == null ? '' : valor).toLowerCase().includes(termo);
+    }));
+  }
+
+  function obterGridConfigAtual() {
+    const columnOrder = reportTable
+      ? reportTable.getColumns().map((col) => col.getField()).filter(Boolean)
+      : reportColunas.map((col) => col.field);
+    return {
+      groupBy: reportGroupBy.slice(),
+      hiddenColumns: reportHiddenColumns.slice(),
+      sorters: reportSorters.slice(),
+      headerFilters: reportHeaderFilters.slice(),
+      columnOrder,
+      columnWidths: { ...reportColumnWidths },
+    };
+  }
+
+  function atualizarGridConfigEmMemoria(cfg) {
+    if (!reportDadosAtuais) return;
+    reportDadosAtuais.gridConfig = cfg;
+    delete reportDadosAtuais._modelo;
+  }
+
   function trocarAba(aba) {
     const paraRelatorio = aba === 'relatorio';
+    if (!paraRelatorio && (reportMountFrame || reportMountTimer)) {
+      if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
+      clearTimeout(reportMountTimer);
+      reportMountTimer = null;
+      reportEmpty.classList.remove('preparing');
+      if (reportDadosAtuais && !reportGridMontada) {
+        reportEmpty.querySelector('p').textContent = 'Dados prontos para visualizacao.';
+      }
+    }
     tabConversa.classList.toggle('active', !paraRelatorio);
     tabRelatorio.classList.toggle('active', paraRelatorio);
     tabConversa.setAttribute('aria-selected', String(!paraRelatorio));
@@ -1645,13 +1622,14 @@
     // clicar em Conversa — nao esconde nada permanentemente, so reorganiza
     // espaco conforme o contexto.
     appFrame.classList.toggle('sidebar-collapsed', paraRelatorio);
+    if (paraRelatorio) garantirRelatorioMontado();
     if (paraRelatorio && reportTable) {
       // redraw(false) recalcula so o layout das linhas ja visiveis (o painel
       // estava display:none, entao a largura das colunas precisa reajustar) —
       // redraw(true) forcaria re-renderizar TODAS as milhares de linhas do
       // dataset a cada troca de aba, sendo a causa principal do travamento
       // relatado ao clicar em Dados e voltar.
-      setTimeout(() => reportTable.redraw(false), 0);
+      requestAnimationFrame(() => reportTable && reportTable.redraw(false));
     }
   }
 
@@ -1726,16 +1704,10 @@
     });
   }
 
-  // Mesma regra de formatarNumeroExibicao (mini-tabela do chat): maximo 3
-  // casas decimais, formato pt-BR — usada nas celulas e na linha de totais
-  // (bottomCalc) da grid.
+  // Mesma regra de formatarNumeroExibicao: maximo 3 casas decimais, formato
+  // pt-BR — usada nas celulas da grid e no total geral externo.
   function formatarNumero(valor) {
     return formatarNumeroExibicao(valor);
-  }
-
-  function somaColuna(values, data, calcParams) {
-    const soma = values.reduce((acc, v) => acc + (typeof v === 'number' ? v : 0), 0);
-    return formatarNumero(soma);
   }
 
   function renderGroupPicker() {
@@ -1748,6 +1720,39 @@
       chip.innerHTML = escapeHtml(col.title) + (idx > -1 && reportGroupBy.length > 1 ? ` <span class="chip-order">${idx + 1}</span>` : '');
       chip.addEventListener('click', () => toggleAgrupamento(col.field));
       groupPicker.appendChild(chip);
+    });
+  }
+
+  function renderColumnPicker() {
+    reportColumnsPopover.innerHTML = '';
+    reportColunas.forEach((col) => {
+      const label = document.createElement('label');
+      label.className = 'column-toggle';
+      label.title = col.title;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = !reportHiddenColumns.includes(col.field);
+      input.addEventListener('change', () => {
+        const visiveis = reportColunas.filter((c) => !reportHiddenColumns.includes(c.field));
+        if (!input.checked && visiveis.length <= 1) {
+          input.checked = true;
+          return;
+        }
+        if (input.checked) {
+          reportHiddenColumns = reportHiddenColumns.filter((field) => field !== col.field);
+          if (reportTable) reportTable.showColumn(col.field);
+        } else {
+          if (!reportHiddenColumns.includes(col.field)) reportHiddenColumns.push(col.field);
+          if (reportTable) reportTable.hideColumn(col.field);
+        }
+        aplicarBuscaGlobal();
+        agendarSalvarGridConfig();
+      });
+      const span = document.createElement('span');
+      span.textContent = col.title;
+      label.appendChild(input);
+      label.appendChild(span);
+      reportColumnsPopover.appendChild(label);
     });
   }
 
@@ -1775,9 +1780,11 @@
     clearTimeout(gridConfigSaveTimer);
     gridConfigSaveTimer = setTimeout(async () => {
       try {
+        const cfg = obterGridConfigAtual();
+        atualizarGridConfigEmMemoria(cfg);
         await api('/sessoes/' + sessaoAtualId + '/mensagens/' + reportMensagemId + '/grid-config', {
           method: 'PUT',
-          body: JSON.stringify({ groupBy: reportGroupBy }),
+          body: JSON.stringify(cfg),
         });
       } catch (err) {
         // Falha ao salvar preferencia de grid nao deve interromper o uso da tela.
@@ -1785,9 +1792,9 @@
     }, 600);
   }
 
-  // width explicito por coluna (mesma funcao/criterio da mini-grid do chat —
-  // ver calcularLarguraColuna) — a pedido do usuario, para a aba Dados nao
-  // desperdicar tela com colunas mais largas que o conteudo. NAO usa
+  // width explicito por coluna (ver calcularLarguraColuna) — a pedido do
+  // usuario, para a aba Dados nao desperdiçar tela com colunas mais largas
+  // que o conteudo. NAO usa
   // fitDataFill (que mede o DOM real de cada celula e foi descartado antes
   // por travar com muitos dados, ver comentario em abrirRelatorio) — o
   // Tabulator respeita width fixo em layout:fitColumns sem precisar remedir,
@@ -1809,7 +1816,8 @@
         ? (value) => formatarNumero(value)
         : (col.data ? (value) => formatarDataAAAAMMDD(value)
           : (col.competencia ? (value) => formatarCompetenciaAAAAMM(value) : trimSeTexto));
-      return {
+      const larguraSalva = Number(reportColumnWidths[col.field] || 0);
+      const def = {
         field: col.field,
         title: col.title,
         // [CORRIGIDO apos testar visualmente] width (fixo) + widthGrow juntos
@@ -1818,7 +1826,8 @@
         // conteudo) + widthGrow (cresce livremente alem disso) e a
         // combinacao correta para "ajusta ao conteudo mas preenche a tela".
         minWidth: calcularLarguraColuna(col, rows),
-        widthGrow: 1,
+        visible: !reportHiddenColumns.includes(col.field),
+        ...(larguraSalva > 0 ? { width: larguraSalva } : { widthGrow: 1 }),
         headerFilter: true,
         hozAlign: col.numerico ? 'right' : ((col.data || col.competencia) ? 'center' : 'left'),
         formatter: col.numerico
@@ -1826,18 +1835,19 @@
           : (col.data ? (cell) => formatarDataAAAAMMDD(cell.getValue())
             : (col.competencia ? (cell) => formatarCompetenciaAAAAMM(cell.getValue()) : (cell) => trimSeTexto(cell.getValue()))),
         accessorDownload,
-        bottomCalc: col.numerico ? somaColuna : undefined,
-        bottomCalcFormatter: col.numerico ? (cell) => formatarNumero(cell.getValue()) : undefined,
       };
+      return def;
     });
   }
 
-  function abrirRelatorio({ mensagemId, rows, gridConfig, texto }) {
+  function abrirRelatorio(dados) {
+    const { mensagemId, rows, gridConfig, texto } = dados;
     if (!Array.isArray(rows) || !rows.length) return;
 
+    const modelo = modeloRelatorio(dados);
     reportMensagemId = mensagemId || null;
-    reportColunas = inferirColunas(rows);
-    reportGroupBy = (gridConfig && Array.isArray(gridConfig.groupBy)) ? gridConfig.groupBy.slice() : [];
+    reportColunas = modelo.colunas;
+    reportGroupBy = reportGroupBy.filter((field) => reportColunas.some((c) => c.field === field));
 
     tabRelatorio.disabled = false;
     relatorioBadge.style.display = 'inline-block';
@@ -1848,6 +1858,7 @@
       reportTable.destroy();
       reportTable = null;
     }
+    reportGlobalFilterActive = false;
 
     reportTable = new Tabulator(reportGridEl, {
       data: rows,
@@ -1867,6 +1878,9 @@
       columns: montarColunasTabulator(rows),
       groupBy: reportGroupBy.length ? reportGroupBy : false,
       groupStartOpen: true,
+      movableColumns: true,
+      initialSort: reportSorters,
+      initialHeaderFilter: reportHeaderFilters,
       // groupHeader recebe o valor BRUTO do grupo (nao passa pelo formatter
       // da coluna) — precisa formatar manualmente aqui, senao data/numero
       // aparecem crus no cabecalho do grupo mesmo com a coluna formatada
@@ -1886,35 +1900,82 @@
 
     reportTable.on('tableBuilt', () => {
       renderGroupPicker();
+      renderColumnPicker();
+      aplicarBuscaGlobal();
+      reportEmpty.classList.remove('preparing');
+      reportEmpty.style.display = 'none';
+    });
+    reportTable.on('dataSorted', (sorters) => {
+      reportSorters = sorters.map((s) => ({ field: s.field, dir: s.dir }));
+      agendarSalvarGridConfig();
+    });
+    reportTable.on('dataFiltered', () => {
+      reportHeaderFilters = reportTable.getHeaderFilters ? reportTable.getHeaderFilters() : reportHeaderFilters;
+      agendarSalvarGridConfig();
+    });
+    reportTable.on('columnResized', (column) => {
+      const field = column.getField();
+      if (!field) return;
+      reportColumnWidths[field] = column.getWidth();
+      agendarSalvarGridConfig();
+    });
+    reportTable.on('columnMoved', () => {
+      agendarSalvarGridConfig();
+    });
+    reportTable.on('columnVisibilityChanged', (column, visible) => {
+      const field = column.getField();
+      if (!field) return;
+      if (visible) reportHiddenColumns = reportHiddenColumns.filter((f) => f !== field);
+      else if (!reportHiddenColumns.includes(field)) reportHiddenColumns.push(field);
+      renderColumnPicker();
+      agendarSalvarGridConfig();
     });
 
-    renderGrandTotal(rows);
+    renderGrandTotal(rows, modelo);
+    reportGridMontada = true;
   }
 
   // Total geral da grade inteira, somando cada coluna numerica sobre TODAS as
-  // linhas (independente de agrupamento) — o bottomCalc de coluna do
-  // Tabulator so soma dentro de cada grupo quando ha groupBy ativo, sem opcao
-  // nativa de total geral, entao calculamos e exibimos isso separadamente.
-  function renderGrandTotal(rows) {
-    const colunasNumericas = reportColunas.filter((c) => c.numerico);
-    if (!colunasNumericas.length) {
+  // linhas (independente de filtro, agrupamento ou linhas renderizadas).
+  function renderGrandTotal(rows, modelo = null) {
+    const m = modelo || (reportDadosAtuais ? modeloRelatorio(reportDadosAtuais) : null);
+    const totais = m ? m.totais : [];
+    if (!Array.isArray(rows) || !rows.length) {
       reportGrandTotal.style.display = 'none';
       return;
     }
-    const itens = colunasNumericas.map((col) => {
-      const soma = rows.reduce((acc, r) => acc + (typeof r[col.field] === 'number' ? r[col.field] : 0), 0);
-      return `<div class="total-item"><span class="total-label">${escapeHtml(col.title)}</span><span class="total-valor">${formatarNumero(soma)}</span></div>`;
-    });
+    const itens = totais.map((total) => `<div class="total-item"><span class="total-label">${escapeHtml(total.title)}</span><span class="total-valor">${formatarNumero(total.valor)}</span></div>`);
     reportGrandTotal.innerHTML = `<div class="total-item"><span class="total-label">Total geral (${rows.length} registros)</span></div>` + itens.join('');
     reportGrandTotal.style.display = 'flex';
   }
 
+  reportGlobalSearch.addEventListener('input', () => {
+    reportGlobalTerm = reportGlobalSearch.value;
+    aplicarBuscaGlobal();
+  });
+
+  btnReportColumns.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const aberto = !reportColumnsMenu.classList.contains('open');
+    reportColumnsMenu.classList.toggle('open', aberto);
+    btnReportColumns.setAttribute('aria-expanded', String(aberto));
+  });
+
+  reportColumnsPopover.addEventListener('click', (e) => e.stopPropagation());
+
+  document.addEventListener('click', () => {
+    reportColumnsMenu.classList.remove('open');
+    btnReportColumns.setAttribute('aria-expanded', 'false');
+  });
+
   btnExportXlsx.addEventListener('click', () => {
+    montarRelatorioAgora();
     if (!reportTable) return;
     reportTable.download('xlsx', 'dados-ia-command.xlsx', { sheetName: 'Dados' });
   });
 
   btnExportPdf.addEventListener('click', () => {
+    montarRelatorioAgora();
     if (!reportTable) return;
     reportTable.download('pdf', 'dados-ia-command.pdf', {
       orientation: 'landscape',
@@ -1968,31 +2029,6 @@
       showError('Falha ao reiniciar contexto: ' + err.message);
     }
   });
-
-  // Toggle "Resumo" (rodape do chat) — liga/desliga se respostas com dados
-  // vem resumidas ou com a mini-grid detalhada (ver resumoAtivo()/addBubble).
-  // So muda o estado global + persiste em localStorage; nao redesenha
-  // bolhas ja na tela (decisao confirmada com o usuario).
-  const resumoToggle = document.getElementById('resumoToggle');
-
-  function aplicarEstadoResumoToggle() {
-    const ativo = resumoAtivo();
-    resumoToggle.setAttribute('aria-checked', ativo ? 'true' : 'false');
-  }
-
-  function alternarResumoToggle() {
-    definirResumoAtivo(!resumoAtivo());
-    aplicarEstadoResumoToggle();
-  }
-
-  resumoToggle.addEventListener('click', alternarResumoToggle);
-  resumoToggle.addEventListener('keydown', (e) => {
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      alternarResumoToggle();
-    }
-  });
-  aplicarEstadoResumoToggle();
 
   document.getElementById('searchInput').addEventListener('input', function (e) {
     const termo = e.target.value.toLowerCase();

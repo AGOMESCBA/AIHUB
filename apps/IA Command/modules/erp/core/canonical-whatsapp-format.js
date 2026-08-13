@@ -295,6 +295,7 @@ function labelDimensao(col) {
   const k = keyNorm(col);
   const doSx3 = labelSx3(col);
   if (doSx3) return doSx3;
+  if (/^(nota_fiscal|nf|nfe|f2_doc|d2_doc)$/.test(k)) return 'Nota Fiscal';
   const doContrato = presentation.labelDimension(col);
   if (doContrato) return doContrato;
   if (/^vendedor/.test(k)) return 'Vendedor';
@@ -498,7 +499,14 @@ function detectarShape(rows, opts = {}) {
   let dimensoesNormalizadas = compactarDimensoesBancarias(dimensoes);
   dimensoesNormalizadas = reduzirDimensoesFinanceirasDetalhe(dimensoesNormalizadas, metricas, opts);
 
-  if (dimensoesNormalizadas.length > 3) return null;
+  if (dimensoesNormalizadas.length > 3) {
+    const temporal = dimensoesNormalizadas.find(isTemporal);
+    if (temporal) {
+      const ordenadas = ordenarDetalheTemporalDimensoes(dimensoesNormalizadas);
+      return { tipo: 'detalhe_temporal_multidimensional', dimensao: temporal, dimensoes: ordenadas, metricas };
+    }
+    return null;
+  }
   if (dimensoesNormalizadas.length === 0) return { tipo: 'metricas_simples', dimensao: null, dimensoes: [], metricas };
   if (dimensoesNormalizadas.length === 1 && metricas.length === 1 && isCategoriaSemantica(dimensoesNormalizadas[0])) {
     return { tipo: 'categoria_metrica_unica', dimensao: dimensoesNormalizadas[0], dimensoes: dimensoesNormalizadas, metricas };
@@ -552,6 +560,12 @@ function ordenarMultiplasDimensoes(dimensoes) {
   const temporal = dimensoes.filter(isTemporal);
   const outras = dimensoes.filter(d => !isTemporal(d));
   return [...temporal, ...outras].slice(0, 3);
+}
+
+function ordenarDetalheTemporalDimensoes(dimensoes) {
+  const temporal = dimensoes.filter(isTemporal);
+  const outras = dimensoes.filter(d => !isTemporal(d));
+  return [...temporal, ...outras];
 }
 
 function somarMetricas(rows, metricas) {
@@ -1305,6 +1319,68 @@ function montarMultiplasDimensoes(rows, shape) {
   return { grupos, totalGeral };
 }
 
+function montarDetalheTemporalMultidimensional(rows, shape) {
+  const temporalDim = shape.dimensoes.find(isTemporal) || shape.dimensoes[0];
+  const detalheDims = shape.dimensoes.filter(dim => dim !== temporalDim);
+  const grupos = new Map();
+  const totalGeral = totalVazio(shape.metricas);
+
+  for (const row of rows || []) {
+    const periodo = String(row[temporalDim] ?? '').trim() || '(sem identificacao)';
+    if (!grupos.has(periodo)) grupos.set(periodo, { total: totalVazio(shape.metricas), itens: new Map() });
+    const grupo = grupos.get(periodo);
+    const detalhe = detalheDims.map(dim => String(row[dim] ?? '').trim() || '(sem identificacao)');
+    const chave = JSON.stringify(detalhe);
+    if (!grupo.itens.has(chave)) grupo.itens.set(chave, { detalhe, total: totalVazio(shape.metricas) });
+    const item = grupo.itens.get(chave);
+
+    for (const col of shape.metricas) {
+      const v = toNumber(row[col]);
+      item.total[col] += v;
+      grupo.total[col] += v;
+      totalGeral[col] += v;
+    }
+  }
+
+  return { temporalDim, detalheDims, grupos, totalGeral };
+}
+
+function labelItemDetalheTemporal(detalheDims, detalhe) {
+  return detalheDims.map((dim, idx) => {
+    const valor = labelValorDimensao(dim, detalhe[idx]);
+    if (idx === 0 && !isDocumento(dim)) return valor;
+    return `${labelDimensao(dim)}: ${valor}`;
+  }).join(' - ');
+}
+
+function renderDetalheTemporalMultidimensional(rows, shape, linhas) {
+  const { temporalDim, detalheDims, grupos, totalGeral } = montarDetalheTemporalMultidimensional(rows, shape);
+  const titulo = `Detalhamento por ${[temporalDim, ...detalheDims].map(labelDimensao).join(', ')}`;
+  const MAX_ITENS_POR_GRUPO = 200;
+
+  linhas.push(`\u{1F4CB} *${titulo}*`);
+
+  const gruposOrdenados = [...grupos.entries()]
+    .sort(([a], [b]) => sortValorDimensao(temporalDim, a).localeCompare(sortValorDimensao(temporalDim, b)));
+
+  gruposOrdenados.forEach(([periodo, grupo], idxGrupo) => {
+    if (idxGrupo > 0) linhas.push('');
+    linhas.push(`\u{1F5D3} *${labelValorDimensao(temporalDim, periodo)}*`);
+
+    const itens = [...grupo.itens.values()];
+    itens.slice(0, MAX_ITENS_POR_GRUPO).forEach((item, idxItem) => {
+      linhas.push(`  ${idxItem + 1}. *${labelItemDetalheTemporal(detalheDims, item.detalhe)}*: ${valsMetricas(item.total, shape.metricas)}`);
+    });
+    if (itens.length > MAX_ITENS_POR_GRUPO) {
+      linhas.push(`  ... e mais ${itens.length - MAX_ITENS_POR_GRUPO} neste periodo`);
+    }
+    linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricas(grupo.total, shape.metricas)}`);
+  });
+
+  linhas.push('');
+  linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
+}
+
 function renderMultiplasDimensoes(rows, shape, linhas) {
   const { grupos, totalGeral } = montarMultiplasDimensoes(rows, shape);
   const primary = shape.metricas[0];
@@ -1440,6 +1516,11 @@ function renderSingle(rows, opts = {}) {
 
   if (shape.tipo === 'duas_dimensoes' || shape.tipo === 'detalhe_documento') {
     renderDuasDimensoes(rows, shape, linhas);
+    return linhas.join('\n');
+  }
+
+  if (shape.tipo === 'detalhe_temporal_multidimensional') {
+    renderDetalheTemporalMultidimensional(rows, shape, linhas);
     return linhas.join('\n');
   }
 
@@ -1590,6 +1671,12 @@ function renderAll(sucessos, opts = {}) {
   if (shape.tipo === 'duas_dimensoes' || shape.tipo === 'detalhe_documento') {
     const rows = sucessos.flatMap(s => s.rows || []);
     renderDuasDimensoes(rows, shape, linhas);
+    return linhas.join('\n');
+  }
+
+  if (shape.tipo === 'detalhe_temporal_multidimensional') {
+    const rows = sucessos.flatMap(s => s.rows || []);
+    renderDetalheTemporalMultidimensional(rows, shape, linhas);
     return linhas.join('\n');
   }
 

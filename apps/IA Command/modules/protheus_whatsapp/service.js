@@ -16,7 +16,7 @@ const intentMerger = require('../ai/intent-merger');
 const intentRouter = require('../erp/core/intent-router');
 const responseFormatter = require('../erp/core/response-formatter');
 const sessionStore = require('./session-store');
-const interpretationLog = require('../ai/interpretation-log');
+const interpretationPipeline = require('../ai/interpretation-pipeline');
 const { getDB } = require('../database');
 
 // Nome de campo cru do Protheus: prefixo de tabela (letra + ate 2 letras/digitos,
@@ -107,25 +107,33 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
     intent,
   });
 
-  // Mesmo registro usado pelo canal WhatsApp (interpretation-log.js) — alimenta
-  // as telas de historico/auditoria de interpretacoes (admin-interpretacoes*.html).
-  // Sem isso, conversas deste canal ficavam persistidas so em session-store.js
-  // (sessao local do chat), invisiveis ao historico administrativo.
+  // [UNIFICADO 13/08/2026] Mesmo pipeline de registro usado pelo canal
+  // WhatsApp real (modules/ai/interpretation-pipeline.js, extraido de
+  // modules/whatsapp/service.js#_registrarInterpretacao) — antes este canal
+  // chamava interpretation-log.js direto com so 7 campos (sem timing, trace,
+  // canal_id) e NUNCA gravava em execution_log, ficando invisivel para o
+  // cache/aprendizado de SQL canonico que o WhatsApp usa. canalId fica null
+  // (este canal nao tem conceito de canal multi-empresa como o WhatsApp).
   try {
-    interpretationLog.registrar({
-      empresa_id: empresaId,
-      usuario: celular,
-      numero_wa: celular,
-      texto_original: texto,
+    interpretationPipeline.registrarInterpretacao({
+      empresaId,
+      sender: celular,
+      texto,
       intent,
       resultado,
-      resposta_entregue: respostaTexto,
-      duracao_ms: Date.now() - t0,
+      resposta: respostaTexto,
+      duracaoMs: Date.now() - t0,
+      canalId: null,
+      tipoMensagem: 'texto',
+      onLog: (msg, nivel) => {
+        const fn = nivel === 'warning' || nivel === 'warn' ? console.warn : console.log;
+        fn('[protheus_whatsapp]', msg);
+      },
     });
   } catch (e) {
     // Falha ao logar nao pode derrubar a resposta ja calculada ao usuario, mas precisa ficar
     // visivel — antes esse erro era engolido em silencio, escondendo falhas de gravacao.
-    console.error('[protheus_whatsapp] Falha ao registrar interpretation_log:', e.message);
+    console.error('[protheus_whatsapp] Falha ao registrar interpretacao:', e.message);
   }
 
   return {

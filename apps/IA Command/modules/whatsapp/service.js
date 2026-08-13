@@ -14,6 +14,7 @@ const responseFormatter   = require('../erp/core/response-formatter');
 const { _extrairMes, _extrairAno, detectarDimensaoCategorica } = responseFormatter;
 const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
 const interpretationLog   = require('../ai/interpretation-log');
+const interpretationPipeline = require('../ai/interpretation-pipeline');
 const channelStore        = require('./channel-store');
 const messageTemplates    = require('./message-templates');
 const dialogResolver      = require('../ai/dialog-resolver');
@@ -2778,113 +2779,19 @@ class IACWhatsAppService extends EventEmitter {
     };
   }
 
+  // [EXTRAIDO 13/08/2026] Corpo movido para modules/ai/interpretation-pipeline.js
+  // (compartilhado com o canal protheus_whatsapp) — este metodo agora e um
+  // wrapper fino que so repassa os mesmos parametros de sempre mais o que
+  // antes vinha de `this` (channelId, tipoMensagem, this.log). Comportamento
+  // observavel identico ao anterior; nenhuma logica de negocio mudou aqui.
   _registrarInterpretacao({ empresaId, sender, texto, intent, resultado, resposta, duracaoMs, timingJson = null, formatacaoCaminho = null, recebidoEm = null, pipelineMs = null, entregueMs = null }) {
-    let logId = null;
-    try {
-      const trace = this._traceInterpretacao({ intent, resultado });
-      const row = interpretationLog.registrar({
-        empresa_id: empresaId,
-        usuario: sender,
-        numero_wa: this._normalizarNumeroWa(sender),
-        canal_id: this._channelId,
-        texto_original: texto,
-        intent,
-        resultado,
-        resposta_entregue: resposta,
-        sql_gerado: resultado?.sql_gerado || null,
-        escopo_execucao: resultado?._escopoExecucao || intent?._escopoExecucao || null,
-        sql_canonico_origem: resultado?._sql_canonico_origem || null,
-        sql_canonico_empresa_origem: resultado?._sql_canonico_empresa_origem || null,
-        sql_canonico_original: resultado?._sql_canonico_original || null,
-        sql_canonico_adaptado: resultado?._sql_canonico || null,
-        sql_auditoria: resultado?._sql_auditoria || null,
-        sql_canonico_parametros: resultado?._sql_canonico_parametros || [],
-        sql_canonico_parametrizado: !!resultado?._sql_canonico_parametrizado,
-        sql_canonico_reuso_motivo: resultado?._sql_canonico_reuso_motivo || null,
-        sql_canonico_reuso_permitido: resultado?._sql_canonico_reuso_permitido,
-        timing_json: timingJson,
-        formatacao_caminho: formatacaoCaminho || intent?._formatacaoCaminho || null,
-        duracao_ms: duracaoMs ?? null,
-        recebido_em: recebidoEm ?? null,
-        pipeline_ms: pipelineMs ?? null,
-        entregue_ms: entregueMs ?? null,
-        trace,
-      });
-      logId = row?.id || null;
-    } catch (err) {
-      this.log(`Falha ao registrar interpretacao: ${err.message}`, 'warning');
-    }
-
-    try {
-      const { getDB } = require('../database');
-      const STATUS_MAP = { sucesso: 'sucesso', sucesso_ai_sql: 'sucesso', erro: 'erro', sem_dados: 'sem_dados', dialogo: 'dialogo', desconhecido: 'desconhecido' };
-      const numeroWa = this._normalizarNumeroWa(sender);
-      this._promoverExecutionLogConfiavelCache(empresaId, numeroWa);
-      const intentCanonico = resultado?._intent_canonico || intent?._intentCanonico || null;
-      const ehConsolidadoSemIntentCache = resultado?._pipeline_origem === 'consolidado'
-        && !intentCanonico
-        && !(resultado?._chave_cache || intent?._chaveCacheIntent);
-      if (ehConsolidadoSemIntentCache) return logId;
-      const statusExecucao = STATUS_MAP[resultado?.tipo] ?? resultado?.tipo ?? 'desconhecido';
-      const sqlFinalExecutado = resultado?._sql_auditoria?.sql_final_executado || resultado?.sql_gerado || null;
-      const sqlTemplate = resultado?._sql_template || resultado?._sql_auditoria?.sql_template || resultado?._sql_canonico || null;
-      const chaveCache = resultado?._chave_cache || intent?._chaveCacheIntent || null;
-      const cacheavel = _resultadoSqlCacheavel({ resultado, statusExecucao, sqlFinalExecutado, sqlTemplate, chaveCache });
-      const chaveCacheAprendizado = cacheavel.ok ? chaveCache : null;
-      const sqlTemplateAprendizado = cacheavel.ok ? sqlTemplate : null;
-      const detalhesExecucao = JSON.stringify({
-        escopo_execucao: intent?._escopoExecucao || null,
-        modulo: this._moduloMonitorIntent(intent, resultado) || null,
-        intent_canonico_hash: resultado?._intent_canonico_hash || intent?._intentCanonicoHash || null,
-        chave_cache: chaveCache,
-        cache_aprendizado_bloqueado: !cacheavel.ok,
-        cache_aprendizado_motivo: cacheavel.cacheStatus,
-        intent_canonico_validation: intentCanonico?.validation || null,
-        sql_template_parametros: resultado?._sql_template_parametros || resultado?._sql_auditoria?.sql_template_parametros || [],
-        sql_canonico_origem: resultado?._sql_canonico_origem || null,
-        sql_canonico_empresa_origem: resultado?._sql_canonico_empresa_origem || null,
-        sql_canonico_parametrizado: !!resultado?._sql_canonico_parametrizado,
-        sql_canonico_reuso_motivo: resultado?._sql_canonico_reuso_motivo || null,
-        sql_canonico_reuso_permitido: resultado?._sql_canonico_reuso_permitido ?? null,
-        sql_auditoria: resultado?._sql_auditoria || null,
-        rows_count: Array.isArray(resultado?.rows) ? resultado.rows.length : null,
-        subtipo: resultado?.subtipo || null,
-      });
-      getDB().prepare(
-        `INSERT OR IGNORE INTO execution_log
-           (correlation_id, empresa_id, usuario, numero_wa, intencao, status, duracao_ms, tipo_mensagem,
-            detalhes_json, texto_original, intent_canonico_json, intent_canonico_hash, chave_cache,
-            sql_final_executado, sql_template, prompt_version, spec_version, schema_version, model,
-            confiavel_cache, cache_status, criado_em)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        require('crypto').randomUUID(),
-        empresaId,
-        sender,
-        numeroWa,
-        intent?.intencao || 'desconhecido',
-        statusExecucao,
-        duracaoMs ?? null,
-        this._tipoMensagemAtual || 'texto',
-        detalhesExecucao,
-        texto || null,
-        intentCanonico ? JSON.stringify(intentCanonico) : null,
-        resultado?._intent_canonico_hash || intent?._intentCanonicoHash || null,
-        chaveCacheAprendizado,
-        sqlFinalExecutado,
-        sqlTemplateAprendizado,
-        intentCanonico?.prompt_version || null,
-        intentCanonico?.spec_version || null,
-        intentCanonico?.schema_version || null,
-        intentCanonico?.model || null,
-        0,
-        cacheavel.cacheStatus,
-        new Date().toISOString(),
-      );
-    } catch (err) {
-      this.log(`Falha ao registrar execucao: ${err.message}`, 'warning');
-    }
-    return logId;
+    return interpretationPipeline.registrarInterpretacao({
+      empresaId, sender, texto, intent, resultado, resposta, duracaoMs,
+      timingJson, formatacaoCaminho, recebidoEm, pipelineMs, entregueMs,
+      canalId: this._channelId,
+      tipoMensagem: this._tipoMensagemAtual || 'texto',
+      onLog: (msg, nivel) => this.log(msg, nivel),
+    });
   }
 
   async _responderDialogoComIA({ empresaId, sender, texto, dialogo, t0 }) {
