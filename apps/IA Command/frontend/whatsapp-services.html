@@ -62,6 +62,7 @@
     .ws-panel-btn.danger  { border-color:#fca5a5; color:#b91c1c; }
     .ws-panel-btn.danger:hover  { background:#fee2e2; border-color:#ef4444; }
     .ws-panel-btn.sm { height:30px; font-size:12px; }
+    .ws-mobile-actions { display:none; }
 
     /* ── Card de canal ── */
     .ws-channel-card { border:1px solid var(--border); border-radius:var(--radius); padding:12px 13px; cursor:pointer; transition:border-color .15s, background .15s, box-shadow .15s; position:relative; background:var(--bg-card); }
@@ -212,6 +213,338 @@
     .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
     .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
     .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+
+    @media (max-width: 760px) {
+      html, body {
+        height: auto;
+        min-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      .layout,
+      .main {
+        min-height: 100vh;
+        min-height: 100dvh;
+        height: auto;
+        overflow: visible;
+      }
+
+      .main,
+      .layout.sidebar-pinned .main {
+        margin-left: 0;
+      }
+
+      .sidebar {
+        transform: translateX(-102%);
+        width: min(300px, calc(100vw - 28px));
+        box-shadow: var(--shadow-md);
+      }
+
+      .sidebar.drawer-open,
+      .sidebar:hover,
+      .sidebar.pinned {
+        transform: translateX(0);
+        width: min(300px, calc(100vw - 28px));
+      }
+
+      .sidebar .logo-text,
+      .sidebar .nav-label,
+      .sidebar .nav-arrow,
+      .sidebar .nav-section-title,
+      .sidebar .sidebar-userinfo .user-info-text,
+      .sidebar .btn-logout .btn-logout-text {
+        opacity: 1;
+      }
+
+      .topbar {
+        min-height: 52px;
+        height: auto;
+        padding: 8px 10px;
+        gap: 8px;
+      }
+
+      .topbar-title {
+        font-size: 13px;
+        line-height: 1.25;
+        white-space: normal;
+      }
+
+      .topbar .btn {
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+
+      .topbar .btn svg {
+        width: 17px;
+        height: 17px;
+      }
+
+      .topbar .btn {
+        font-size: 0 !important;
+        gap: 0 !important;
+      }
+
+      #topbar-poll {
+        display: none !important;
+      }
+
+      .page-content {
+        height: calc(100vh - 52px);
+        height: calc(100dvh - 52px);
+        min-height: calc(100vh - 52px);
+        min-height: calc(100dvh - 52px);
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 0 !important;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .ws-tabs {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 0 8px;
+        scrollbar-width: none;
+        background: var(--bg-card);
+      }
+
+      .ws-tabs::-webkit-scrollbar {
+        display: none;
+      }
+
+      .ws-tab {
+        flex: 0 0 auto;
+        padding: 10px 12px;
+        font-size: 12px;
+      }
+
+      .ws-body {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+      }
+
+      .ws-sidebar {
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        height: auto;
+        max-height: 32vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+        overflow: hidden;
+        background: var(--bg-base);
+      }
+
+      .ws-sidebar-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        padding: 8px 10px;
+        background: var(--bg-card);
+      }
+
+      .ws-channel-list {
+        max-height: calc(32vh - 49px);
+        overflow-y: auto;
+        padding: 8px 10px 10px;
+      }
+
+      .ws-channel-card {
+        padding: 10px 11px;
+      }
+
+      .ws-card-head {
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .ws-card-name {
+        font-size: 13px;
+        overflow-wrap: anywhere;
+      }
+
+      .ws-card-num {
+        font-size: 11px;
+      }
+
+      .ws-card-badge {
+        max-width: 122px;
+        justify-content: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .ws-card-stats {
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .ws-main {
+        order: 2;
+        min-height: 280px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-base);
+      }
+
+      #main-channel {
+        min-height: 280px;
+        overflow: visible !important;
+      }
+
+      .ws-terminal {
+        min-height: 280px;
+        max-height: 44vh;
+        padding: 10px 12px 14px;
+        font-size: 11px;
+        line-height: 1.65;
+      }
+
+      .log-line {
+        gap: 7px;
+        align-items: flex-start;
+      }
+
+      .log-msg {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      .ws-empty-state {
+        min-height: 230px;
+        padding: 24px 18px;
+      }
+
+      .ws-panel {
+        order: 3;
+        width: 100%;
+        min-width: 0;
+        max-height: none;
+        border-left: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 12px 10px;
+        overflow: visible;
+      }
+
+      .ws-mobile-actions {
+        order: 2;
+        display: block;
+        padding: 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-card);
+      }
+
+      .ws-mobile-actions-title {
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--text-lo);
+        margin-bottom: 7px;
+      }
+
+      .ws-mobile-actions-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .ws-mobile-actions-grid .ws-panel-btn {
+        height: 40px;
+      }
+
+      .ws-mobile-actions-grid .ws-panel-btn:only-child,
+      .ws-mobile-actions-grid .ws-panel-btn:nth-child(3) {
+        grid-column: 1 / -1;
+      }
+
+      .ws-panel-section {
+        gap: 8px;
+      }
+
+      #ctrl-canal-actions,
+      .ws-log-actions,
+      .ws-all-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .ws-log-actions .ws-panel-lbl,
+      .ws-all-actions .ws-panel-lbl {
+        grid-column: 1 / -1;
+      }
+
+      .ws-log-actions > div {
+        display: contents !important;
+      }
+
+      #btn-save-selected,
+      #btn-refresh-selected,
+      .ws-all-actions .ws-panel-btn:last-child {
+        grid-column: 1 / -1;
+      }
+
+      .ws-panel-btn {
+        min-width: 0;
+        height: 38px;
+        padding: 0 8px;
+        font-size: 12px;
+      }
+
+      .ws-panel-stat {
+        align-items: flex-start;
+      }
+
+      .ws-panel-stat strong {
+        max-width: 62%;
+        overflow-wrap: anywhere;
+      }
+
+      .ws-panel-qr-img {
+        width: min(260px, 76vw);
+        margin: 0 auto;
+      }
+
+      .ws-config-body {
+        overflow: visible;
+        padding: 18px 12px 28px;
+      }
+
+      .ws-config-body > div:first-child {
+        align-items: flex-start !important;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px !important;
+      }
+
+      .setup-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        max-width: none;
+      }
+
+      .progress-card {
+        position: static;
+        order: -1;
+      }
+
+      .toast {
+        min-width: 0;
+        width: calc(100vw - 24px);
+      }
+
+      #ws-toast {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -273,6 +606,13 @@
           </div>
           <div class="ws-channel-list" id="channel-list">
             <!-- preenchido pelo JS -->
+          </div>
+        </div>
+
+        <div class="ws-mobile-actions" id="mobile-channel-actions">
+          <div class="ws-mobile-actions-title">Ações do canal</div>
+          <div class="ws-mobile-actions-grid">
+            <button class="ws-panel-btn primary" disabled>Selecione um canal</button>
           </div>
         </div>
 
@@ -338,7 +678,7 @@
           <div class="ws-panel-sep"></div>
 
           <!-- Log: utilidades -->
-          <div class="ws-panel-section">
+          <div class="ws-panel-section ws-log-actions">
             <div class="ws-panel-lbl">Log</div>
             <div style="display:flex;gap:6px;">
               <button class="ws-panel-btn sm" id="btn-clear-selected"  onclick="limparLog()"  disabled title="Limpar log">🗑 Limpar</button>
@@ -355,7 +695,7 @@
           <div class="ws-panel-sep"></div>
 
           <!-- Todos os canais -->
-          <div class="ws-panel-section">
+          <div class="ws-panel-section ws-all-actions">
             <div class="ws-panel-lbl">Todos os canais</div>
             <button class="ws-panel-btn primary" onclick="iniciarTodos()">▶ Iniciar todos</button>
             <button class="ws-panel-btn warning" onclick="confirmarPararTodos()">■ Parar todos</button>
@@ -956,6 +1296,7 @@ function selecionarCanal(id) {
 
   // Botões de ação
   document.getElementById('ctrl-canal-actions').innerHTML = botoesCtrlCanal(canal);
+  renderMobileAcoesCanal(canal);
   setBotoesTenantSelecionado(true);
 
   renderLog(id);
@@ -988,6 +1329,14 @@ function botoesCtrlCanal(canal) {
       <button class="ws-panel-btn danger"   onclick="confirmar('remover','${id}')">🗑 Remover serviço</button>`;
   }
   return '';
+}
+
+function renderMobileAcoesCanal(canal) {
+  const el = document.getElementById('mobile-channel-actions');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="ws-mobile-actions-title">Ações do canal</div>
+    <div class="ws-mobile-actions-grid">${botoesCtrlCanal(canal)}</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -147,10 +147,52 @@ function resolverMacroDataSql(nome, deslocamento, job, referencia = new Date()) 
   return macros[chave];
 }
 
-function aplicarMacrosSql(sql, job, referencia = new Date()) {
+// Macros de identidade (seguranca por papel dinamico, ex: SoftExpert) — resolvem o codigo,
+// papel e sistema cadastrados em whatsapp_numero_modulos para o UNICO destinatario do job.
+// So fazem sentido quando o job tem exatamente 1 destinatario: SQL fixo executa uma unica
+// vez e manda a mesma resposta para todos, entao um codigo por pessoa so e correto se so
+// houver uma pessoa. Retorna undefined (macro nao resolvida, permanece {{...}} no SQL) se
+// nao houver destinatario, houver mais de um, ou o cadastro nao tiver modulo/papel/codigo.
+function _identidadeDoDestinatarioUnico(job, destinatarios) {
+  if (!Array.isArray(destinatarios) || destinatarios.length !== 1) return null;
+  const numeroId = destinatarios[0]?.id || destinatarios[0]?.numero_id;
+  const erp = _erpDoModulo(job.empresa_id, job.modulo);
+  if (!numeroId || !erp) return null;
+  try {
+    const row = crud.listar('whatsapp_numero_modulos', {})
+      .find(m => m.numero_id === numeroId && String(m.erp || '').toLowerCase() === erp && String(m.modulo || '').toLowerCase() === String(job.modulo || '').toLowerCase());
+    if (!row) return null;
+    return {
+      codigo: row.codigo_identidade || null,
+      papel: row.papel || null,
+      sistema: erp,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function resolverMacroIdentidadeSql(nome, job, destinatarios) {
+  const chave = String(nome || '').toUpperCase();
+  if (!['CODIGO_IDENTIDADE', 'PAPEL_IDENTIDADE', 'SISTEMA_IDENTIDADE'].includes(chave)) return undefined;
+  const identidade = _identidadeDoDestinatarioUnico(job, destinatarios);
+  if (!identidade) return undefined;
+  if (chave === 'CODIGO_IDENTIDADE') return identidade.codigo || undefined;
+  if (chave === 'PAPEL_IDENTIDADE') return identidade.papel || undefined;
+  if (chave === 'SISTEMA_IDENTIDADE') return identidade.sistema || undefined;
+  return undefined;
+}
+
+function aplicarMacrosSql(sql, job, referencia = new Date(), destinatarios = null) {
   return String(sql || '').replace(/\{\{\s*([A-Z0-9_]+)(?::\s*([+-]?\d+))?\s*\}\}/gi, (match, nome, deslocamento) => {
-    const valor = resolverMacroDataSql(nome, deslocamento, job, referencia);
-    return valor === undefined ? match : valor;
+    const valorData = resolverMacroDataSql(nome, deslocamento, job, referencia);
+    if (valorData !== undefined) return valorData;
+    const valorIdentidade = resolverMacroIdentidadeSql(nome, job, destinatarios);
+    if (valorIdentidade !== undefined) {
+      // Escapa aspas simples: o valor entra direto no SQL (ex: WHERE campo = '{{CODIGO_IDENTIDADE}}').
+      return String(valorIdentidade).replace(/'/g, "''");
+    }
+    return match;
   });
 }
 
@@ -303,9 +345,9 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
   };
 }
 
-async function executarSqlFixoUmaVez(empresaId, job) {
+async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
   const sqlOriginal = sqlFixo(job);
-  const sql = garantirSetRowcountSqlFixo(aplicarMacrosSql(sqlOriginal, job));
+  const sql = garantirSetRowcountSqlFixo(aplicarMacrosSql(sqlOriginal, { ...job, empresa_id: empresaId }, new Date(), destinatarios));
   validarSqlFixoBasico(sql);
 
   const modulo = String(job.modulo || '').toLowerCase();
@@ -349,7 +391,7 @@ async function executarSqlFixoUmaVez(empresaId, job) {
 }
 
 async function executarPerguntaUmaVez(svc, empresaId, job, destinatarios) {
-  if (sqlFixo(job)) return executarSqlFixoUmaVez(empresaId, job);
+  if (sqlFixo(job)) return executarSqlFixoUmaVez(empresaId, job, destinatarios);
   return svc.executeScheduledQuestionOnce({
     empresaId,
     numero: destinatarios[0]?.numero,
@@ -415,7 +457,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
       let resultado;
       if (sqlFixo(job)) {
         // SQL fixo: executa localmente e envia para cada destinatário via worker
-        resultado = await executarSqlFixoUmaVez(empresaId, job);
+        resultado = await executarSqlFixoUmaVez(empresaId, job, destinatarios);
         for (const { dest, deliveryId } of entregas) {
           try {
             await _enviarViaWorker(canal.worker_port, empresaId, dest.numero, resultado.resposta, resultado.ok, job.nome);

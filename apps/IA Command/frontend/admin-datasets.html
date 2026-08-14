@@ -79,7 +79,8 @@
     .semantic-subtab.active { color:var(--accent);border-bottom-color:var(--accent); }
     #panel-semantica[data-sem-tab="uso"] .editor-main > section:not(:nth-of-type(1)),
     #panel-semantica[data-sem-tab="view"] .editor-main > section:not(:nth-of-type(2)),
-    #panel-semantica[data-sem-tab="campos"] .editor-main > section:not(:nth-of-type(3)) { display:none; }
+    #panel-semantica[data-sem-tab="campos"] .editor-main > section:not(:nth-of-type(3)),
+    #panel-semantica[data-sem-tab="seguranca"] .editor-main > section:not(:nth-of-type(4)) { display:none; }
 
     .summary-grid  { display:grid;gap:10px; }
     .summary-item  { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:12px; }
@@ -372,6 +373,7 @@
                   <button class="semantic-subtab active" type="button" data-sem-tab-btn="uso" onclick="trocarAbaSemantica('uso')">Uso</button>
                   <button class="semantic-subtab" type="button" data-sem-tab-btn="view" onclick="trocarAbaSemantica('view')">SQL/View</button>
                   <button class="semantic-subtab" type="button" data-sem-tab-btn="campos" onclick="trocarAbaSemantica('campos')">Campos</button>
+                  <button class="semantic-subtab" type="button" data-sem-tab-btn="seguranca" onclick="trocarAbaSemantica('seguranca')">Segurança</button>
                 </div>
                 <section class="form-section">
                   <div class="form-section-header">
@@ -467,6 +469,17 @@
                         <tbody id="semantic-fields-body"></tbody>
                       </table>
                     </div>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <div class="form-section-header">
+                    <div class="form-section-title">Segurança por Papel</div>
+                    <div class="form-section-subtitle">Para cada papel cadastrado nos Números WhatsApp deste sistema, escolha a coluna usada para filtrar os dados (RLS). Deixe em branco para não filtrar (ex: Gestor sempre vê tudo).</div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="summary-note" id="seguranca-papeis-empty" style="display:none">Este dataset é do Protheus — a segurança por vendedor/cliente/aprovador já é aplicada automaticamente pelos guards do sistema, sem precisar de configuração aqui.</div>
+                    <div id="seguranca-papeis-body"></div>
                   </div>
                 </section>
 
@@ -580,6 +593,22 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   let _conexoesCarregadas = false;
   let _previewColumns = [];
   let _previewRows = [];
+  // Mapa papel -> coluna de seguranca do dataset atual, ex: {analista:'matricula_analista'}.
+  // Mantido em memoria (nao lido do DOM a cada digitacao) para nao perder selecao do usuario
+  // quando atualizarResumo() roda a cada input de qualquer campo do formulario.
+  let _segurancaPapeisAtual = {};
+  let _segurancaPapeisErpRenderizado = null;
+
+  // Papeis validos por sistema (erp) para seguranca por papel — espelha PAPEIS_VALIDOS_POR_ERP
+  // em admin-routes.js e PAPEIS_POR_ERP em admin-numeros-whatsapp.html. Adicionar aqui quando
+  // um sistema novo precisar de papeis diferentes dos existentes.
+  const SEGURANCA_PAPEIS_POR_ERP = {
+    softexpert: [
+      { value: 'analista', label: 'Analista' },
+      { value: 'cliente_gestor', label: 'Cliente Gestor' },
+      { value: 'cliente', label: 'Cliente' },
+    ],
+  };
 
   function valorCampo(id) {
     return document.getElementById(id)?.value?.trim() || '';
@@ -823,10 +852,18 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
   function trocarAbaSemantica(aba) {
     const panel = document.getElementById('panel-semantica');
     if (!panel) return;
+    // Antes de trocar de aba, captura selecoes atuais da secao Seguranca (se estava visivel)
+    // para nao perde-las, e garante que a lista de colunas disponiveis esta atualizada ao
+    // entrar na aba Seguranca (usuario pode ter editado Campos antes de trocar de aba).
+    _capturarSegurancaPapeisDoDom();
     panel.dataset.semTab = aba;
     panel.querySelectorAll('.semantic-subtab').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.semTabBtn === aba);
     });
+    if (aba === 'seguranca') {
+      _segurancaPapeisErpRenderizado = null; // força re-render com colunas atualizadas
+      atualizarResumo();
+    }
   }
 
   // ── Abrir / Fechar formulário ───────────────────────────────────────────────
@@ -875,6 +912,8 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     definirCampo('f-limitacoes', '');
     _previewColumns = [];
     _carregarCamposSemanticos(null);
+    _segurancaPapeisAtual = {};
+    _segurancaPapeisErpRenderizado = null;
     document.getElementById('save-feedback').textContent = '';
     document.getElementById('save-feedback').className = 'save-feedback';
     document.getElementById('preview-wrap').style.display  = 'none';
@@ -927,6 +966,64 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     const hintGerar = document.getElementById('gerar-intencao-hint');
     if (btnGerar) btnGerar.style.display = podeGerarIntencao ? '' : 'none';
     if (hintGerar) hintGerar.style.display = (!podeGerarIntencao && tipo === 'view_semantica') ? '' : 'none';
+
+    renderSegurancaPapeis(erp, campos);
+  }
+
+  // Le os selects atuais da secao Seguranca por Papel e atualiza _segurancaPapeisAtual antes
+  // de qualquer re-render, para nao perder a selecao do usuario quando o erp nao mudou.
+  function _capturarSegurancaPapeisDoDom() {
+    document.querySelectorAll('#seguranca-papeis-body [data-seg-papel]').forEach(sel => {
+      const papel = sel.dataset.segPapel;
+      const coluna = sel.value || null;
+      if (coluna) _segurancaPapeisAtual[papel] = coluna;
+      else delete _segurancaPapeisAtual[papel];
+    });
+  }
+
+  // Renderiza a secao "Seguranca por Papel": um select por papel valido do erp atual, com as
+  // colunas ja documentadas na aba Campos como opcoes. So re-renderiza quando o erp muda (ou
+  // na primeira vez) para nao perder a selecao do usuario a cada digitacao em outro campo.
+  function renderSegurancaPapeis(erp, camposSemanticos) {
+    const erpNorm = String(erp || 'protheus').trim().toLowerCase();
+    const body = document.getElementById('seguranca-papeis-body');
+    const empty = document.getElementById('seguranca-papeis-empty');
+    if (!body || !empty) return;
+
+    if (erpNorm === _segurancaPapeisErpRenderizado) {
+      // erp nao mudou desde o ultimo render — so garante que as opcoes de coluna estao
+      // atualizadas (usuario pode ter adicionado/removido campo semantico), preservando
+      // a selecao atual de cada select.
+      _capturarSegurancaPapeisDoDom();
+    }
+
+    const papeis = SEGURANCA_PAPEIS_POR_ERP[erpNorm] || [];
+    if (erpNorm === 'protheus' || !papeis.length) {
+      body.innerHTML = '';
+      empty.style.display = '';
+      _segurancaPapeisErpRenderizado = erpNorm;
+      return;
+    }
+    empty.style.display = 'none';
+
+    const colunas = (camposSemanticos || []).map(c => c.coluna).filter(Boolean);
+    body.innerHTML = papeis.map(p => `
+      <div class="form-row" style="align-items:end">
+        <div class="form-group">
+          <label class="form-label">${esc(p.label)}</label>
+          <select data-seg-papel="${esc(p.value)}" class="form-control" onchange="_capturarSegurancaPapeisDoDom()">
+            <option value="">Nenhum filtro (nao recomendado)</option>
+            ${colunas.map(c => `<option value="${esc(c)}" ${_segurancaPapeisAtual[p.value] === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `).join('');
+    _segurancaPapeisErpRenderizado = erpNorm;
+  }
+
+  function _coletarSegurancaPapeisJson() {
+    _capturarSegurancaPapeisDoDom();
+    return Object.keys(_segurancaPapeisAtual).length ? JSON.stringify(_segurancaPapeisAtual) : null;
   }
 
   // ── Conexões para preview SQL ───────────────────────────────────────────────
@@ -972,6 +1069,9 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
     definirCampo('f-exemplos-perguntas', row.exemplos_perguntas);
     definirCampo('f-limitacoes', row.limitacoes);
     _carregarCamposSemanticos(row.campos_semanticos_json);
+    try { _segurancaPapeisAtual = row.seguranca_papeis_json ? JSON.parse(row.seguranca_papeis_json) : {}; }
+    catch (_) { _segurancaPapeisAtual = {}; }
+    _segurancaPapeisErpRenderizado = null; // força re-render com os valores recem-carregados
 
     document.getElementById('meta-id').textContent = row.id.slice(0, 8) + '…';
     document.getElementById('form-title').textContent = row.nome || 'Editar Dataset';
@@ -1038,6 +1138,7 @@ GROUP BY F2_EMISSAO, A1_NOME"></textarea>
       regras_semanticas:      valorCampo('f-regras-semanticas') || null,
       exemplos_perguntas:     valorCampo('f-exemplos-perguntas') || null,
       limitacoes:             valorCampo('f-limitacoes') || null,
+      seguranca_papeis_json:  _coletarSegurancaPapeisJson(),
     };
 
     const url    = _editId ? `/api/ia-command/admin/datasets/${_editId}` : '/api/ia-command/admin/datasets';

@@ -147,6 +147,58 @@ function _garantirColunasCompatibilidade() {
   try {
     _adicionarColunaSeFaltar('scheduled_question_jobs', 'sql_fixo', 'TEXT DEFAULT NULL');
   } catch (_) {}
+  try {
+    _db.exec(`
+      CREATE TABLE IF NOT EXISTS whatsapp_recipient_groups (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        nome          TEXT NOT NULL,
+        descricao     TEXT DEFAULT NULL,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_groups_nome
+        ON whatsapp_recipient_groups (empresa_id, nome);
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_groups_empresa
+        ON whatsapp_recipient_groups (empresa_id, ativo);
+
+      CREATE TABLE IF NOT EXISTS whatsapp_recipient_group_members (
+        id            TEXT PRIMARY KEY,
+        grupo_id      TEXT NOT NULL REFERENCES whatsapp_recipient_groups(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        numero_id     TEXT NOT NULL REFERENCES whatsapp_allowed_numbers(id) ON DELETE CASCADE,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_group_members_unique
+        ON whatsapp_recipient_group_members (grupo_id, numero_id);
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_group_members_numero
+        ON whatsapp_recipient_group_members (empresa_id, numero_id, ativo);
+
+      CREATE TABLE IF NOT EXISTS scheduled_question_job_groups (
+        id            TEXT PRIMARY KEY,
+        job_id        TEXT NOT NULL REFERENCES scheduled_question_jobs(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        grupo_id      TEXT NOT NULL REFERENCES whatsapp_recipient_groups(id) ON DELETE CASCADE,
+        nome          TEXT NOT NULL,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_question_job_groups_unique
+        ON scheduled_question_job_groups (job_id, grupo_id);
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_job_groups_empresa
+        ON scheduled_question_job_groups (empresa_id, ativo);
+    `);
+    _adicionarColunaSeFaltar('scheduled_question_recipients', 'origem', "TEXT DEFAULT 'direto'");
+    _adicionarColunaSeFaltar('scheduled_question_recipients', 'grupo_id', 'TEXT DEFAULT NULL');
+    _db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_recipients_origem
+        ON scheduled_question_recipients (job_id, origem, ativo);
+    `);
+  } catch (_) {}
 
   _db.exec(`
     CREATE INDEX IF NOT EXISTS idx_iac_interpretation_fase_execucao

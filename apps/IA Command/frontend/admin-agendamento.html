@@ -114,6 +114,9 @@
     .recipient-item input { margin-top:2px;flex-shrink:0; }
     .recipient-name { color:var(--text-hi);font-weight:800;font-size:13px;line-height:1.25; }
     .recipient-num { color:var(--text-lo);font-size:12px;font-family:Consolas,monospace;margin-top:2px; }
+    .recipient-block-title { display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 8px;color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em; }
+    .recipient-list.compact { max-height:170px; }
+    .recipient-meta { color:var(--text-lo);font-size:12px;margin-top:2px; }
     .summary-list { display:grid;gap:10px; }
     .summary-item { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:11px; }
     .summary-label { color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px; }
@@ -402,6 +405,10 @@
               <div class="form-section-body">
                 <div class="quick-row" style="margin-bottom:10px">
                   <input id="q-dest" class="form-control" placeholder="Filtrar destinatarios..." oninput="renderDestinatarios()">
+                  <button class="btn btn-ghost" id="btn-criar-grupo-dest" type="button" onclick="criarGrupoComMarcados()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
+                    <span>Criar grupo</span>
+                  </button>
                   <button class="btn btn-ghost" type="button" onclick="marcarDestinatarios(true)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                     <span>Marcar todos</span>
@@ -411,6 +418,12 @@
                     <span>Limpar</span>
                   </button>
                 </div>
+                <div class="recipient-block-title">
+                  <span>Grupos</span>
+                  <button class="btn btn-ghost" type="button" onclick="atualizarGruposDestinatarios()">Atualizar grupos</button>
+                </div>
+                <div id="grupos-destinatarios" class="recipient-list compact"></div>
+                <div class="recipient-block-title"><span>Numeros individuais</span></div>
                 <div id="destinatarios" class="recipient-list"></div>
               </div>
             </section>
@@ -549,9 +562,11 @@ SELECT * FROM dados;</code></div>
   let canais = [];
   let modulosDisponiveis = [];
   let destinatarios = [];
+  let gruposDestinatarios = [];
   let executorStatus = null;
   let editId = null;
   let selectedRecipients = new Set();
+  let selectedGroups = new Set();
   let table = null;
   let empresasCache = null;
   let executorAutoTimer = null;
@@ -988,10 +1003,12 @@ SELECT * FROM dados;</code></div>
   async function abrirFormulario(id = null) {
     editId = id;
     selectedRecipients = new Set();
+    selectedGroups = new Set();
     document.getElementById('sec-lista').classList.add('d-none');
     document.getElementById('sec-form').classList.remove('d-none');
     document.getElementById('save-feedback').textContent = '';
     document.getElementById('btn-run-now-form').classList.toggle('d-none', !id);
+    document.getElementById('btn-criar-grupo-dest')?.classList.toggle('d-none', !usuarioPodeCriarGrupo());
     preencherCanais();
     preencherSistemas();
     preencherModulos();
@@ -999,16 +1016,24 @@ SELECT * FROM dados;</code></div>
     if (id) {
       const job = await api(`/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(id)}`);
       preencherForm(job);
-      await carregarDestinatarios(job.modulo || '');
+      await Promise.all([carregarDestinatarios(job.modulo || ''), carregarGrupos()]);
       const validos = new Set(destinatarios.map(d => String(d.id)));
       (job.destinatarios || [])
+        .filter(r => String(r.origem || 'direto') === 'direto')
         .map(r => String(r.numero_id))
         .filter(numeroId => validos.has(numeroId))
         .forEach(numeroId => selectedRecipients.add(numeroId));
+      const gruposValidos = new Set(gruposDestinatarios.map(g => String(g.id)));
+      (job.grupos || [])
+        .map(g => String(g.grupo_id || g.id))
+        .filter(grupoId => gruposValidos.has(grupoId))
+        .forEach(grupoId => selectedGroups.add(grupoId));
+      renderGrupos();
       renderDestinatarios();
       carregarRuns(id);
     } else {
-      await carregarDestinatarios('');
+      await Promise.all([carregarDestinatarios(''), carregarGrupos()]);
+      renderGrupos();
       renderDestinatarios();
       renderRuns([]);
     }
@@ -1179,12 +1204,49 @@ SELECT * FROM dados;</code></div>
     destinatarios = await api(`/api/ia-command/admin/agendamento/destinatarios?${qs.toString()}`, { cache: 'no-store' });
   }
 
+  async function carregarGrupos() {
+    gruposDestinatarios = await api('/api/ia-command/admin/agendamento/grupos?ativos=1', { cache: 'no-store' }).catch(() => []);
+  }
+
+  function usuarioPodeCriarGrupo() {
+    return window._iahubRotinas === null || (Array.isArray(window._iahubRotinas) && window._iahubRotinas.includes('iac-admin-grupos-whatsapp'));
+  }
+
+  async function atualizarGruposDestinatarios() {
+    await carregarGrupos();
+    selectedGroups = new Set([...selectedGroups].filter(id => gruposDestinatarios.some(g => String(g.id) === id)));
+    renderGrupos();
+  }
+
   async function onModuloChange() {
     const anteriores = new Set(selectedRecipients);
-    await carregarDestinatarios(document.getElementById('f-modulo').value);
+    await Promise.all([carregarDestinatarios(document.getElementById('f-modulo').value), carregarGrupos()]);
     const validos = new Set(destinatarios.map(d => String(d.id)));
     selectedRecipients = new Set([...anteriores].filter(id => validos.has(id)));
+    selectedGroups = new Set([...selectedGroups].filter(id => gruposDestinatarios.some(g => String(g.id) === id)));
+    renderGrupos();
     renderDestinatarios();
+    atualizarResumo();
+  }
+
+  function renderGrupos() {
+    const el = document.getElementById('grupos-destinatarios');
+    if (!el) return;
+    if (!gruposDestinatarios.length) {
+      el.innerHTML = `<div class="form-help">${usuarioPodeCriarGrupo()
+        ? 'Nenhum grupo cadastrado. Marque numeros individuais e use Criar grupo.'
+        : 'Nenhum grupo cadastrado para a empresa ativa.'}</div>`;
+      atualizarResumo();
+      return;
+    }
+    el.innerHTML = gruposDestinatarios.map(g => `
+      <label class="recipient-item">
+        <input type="checkbox" value="${esc(g.id)}" ${selectedGroups.has(String(g.id)) ? 'checked' : ''} onchange="toggleGrupoDestinatario(this)">
+        <span>
+          <span class="recipient-name">${esc(g.nome)}</span>
+          <span class="recipient-meta">${Number(g.membros_count || 0)} membro(s) ativo(s)</span>
+        </span>
+      </label>`).join('');
     atualizarResumo();
   }
 
@@ -1212,6 +1274,40 @@ SELECT * FROM dados;</code></div>
     if (el.checked) selectedRecipients.add(String(el.value));
     else selectedRecipients.delete(String(el.value));
     atualizarResumo();
+  }
+
+  function toggleGrupoDestinatario(el) {
+    if (el.checked) selectedGroups.add(String(el.value));
+    else selectedGroups.delete(String(el.value));
+    atualizarResumo();
+  }
+
+  async function criarGrupoComMarcados() {
+    const ids = [...selectedRecipients];
+    if (!ids.length) {
+      feedback('Marque ao menos um numero individual para criar o grupo.', false);
+      return;
+    }
+    const nome = prompt('Nome do novo grupo de destinatarios:');
+    if (!nome || !nome.trim()) return;
+    try {
+      const grupo = await api('/api/ia-command/admin/agendamento/grupos', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ nome: nome.trim(), ativo: true }),
+      });
+      await api(`/api/ia-command/admin/agendamento/grupos/${encodeURIComponent(grupo.id)}/membros`, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ membros: ids }),
+      });
+      await carregarGrupos();
+      selectedGroups.add(String(grupo.id));
+      renderGrupos();
+      feedback('Grupo criado e selecionado.', true);
+    } catch (err) {
+      feedback(err.message || 'Falha ao criar grupo.', false);
+    }
   }
 
   function marcarDestinatarios(marcar) {
@@ -1254,7 +1350,8 @@ SELECT * FROM dados;</code></div>
     document.getElementById('s-nome').textContent = nome;
     document.getElementById('s-canal').textContent = canal ? canal.nome : '-';
     document.getElementById('s-agenda').textContent = `${tipo === 'manual' ? 'Manual' : `${labels[tipo] || tipo} as ${hora}`}${sqlFixo ? ' | SQL fixo' : ''}`;
-    document.getElementById('s-dest').textContent = String(selectedRecipients.size);
+    const gruposInfo = selectedGroups.size ? ` + ${selectedGroups.size} grupo(s)` : '';
+    document.getElementById('s-dest').textContent = `${selectedRecipients.size}${gruposInfo}`;
   }
 
   async function salvarJob() {
@@ -1269,7 +1366,7 @@ SELECT * FROM dados;</code></div>
       if (!pergunta) throw new Error('Informe a pergunta.');
       if (sql_fixo && !modulo) throw new Error('Informe o modulo esperado para usar SQL fixo.');
       if (!channel_id) throw new Error('Selecione um canal WhatsApp.');
-      if (!selectedRecipients.size) throw new Error('Selecione ao menos um destinatario.');
+      if (!selectedRecipients.size && !selectedGroups.size) throw new Error('Selecione ao menos um destinatario ou grupo.');
       const agenda = montarAgenda();
       const body = {
         nome,
@@ -1283,6 +1380,7 @@ SELECT * FROM dados;</code></div>
         timezone: document.getElementById('f-timezone').value || 'America/Manaus',
         ativo: document.getElementById('f-ativo').value === '1',
         destinatarios: [...selectedRecipients],
+        grupos: [...selectedGroups],
       };
       const url = editId
         ? `/api/ia-command/admin/agendamento/jobs/${encodeURIComponent(editId)}`

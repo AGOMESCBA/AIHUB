@@ -3,7 +3,7 @@
 #INCLUDE "TOTVS.CH"
 
 /* ============================================================================
-   ZCHCAD.PRW — Cadastro de celular por usuario Protheus (tabela ZCH)
+   IACadUsr.PRW — Cadastro de celular por usuario Protheus (tabela ZCH)
 
    ============================================================================
    ATENCAO: fonte de REFERENCIA, escrito fora de um ambiente Protheus e NUNCA
@@ -11,15 +11,11 @@
    de IACCHAT.prw. Antes de subir para homologacao, um desenvolvedor ADVPL do
    time precisa validar contra o TDN/Include real da versao em uso:
 
-     a) Assinatura de MVC (MPFormDef/AxCadastro), SX2/SX3/SIX via linha de
-        codigo (AutoGrLog / estrutura manual abaixo) — usada conforme padrao
-        documentado da TOTVS (ex.: rotinas de auto-criacao de tabela custom
-        via U_xxxCria chamada no Job/Loader), sem validacao local.
-     b) Tamanho e tipo real do campo codigo de usuario em SYS_USR (aqui
+     a) Tamanho e tipo real do campo codigo de usuario em SYS_USR (aqui
         assumido C(10), padrao mais comum de RetCodUsr()/USR_ID) — CONFIRMAR
         contra o dicionario de dados real antes de compilar. Se divergir,
         ajustar o tamanho de ZCH_USER (e do indice) para bater exatamente.
-     c) Alias e campos de SYS_USR usados no F3/pesquisa (USR_ID, USR_NOME) —
+     b) Alias e campos de SYS_USR usados no F3/pesquisa (USR_ID, USR_NOME) —
         nomes usados por convencao do dicionario padrao SIGACFG; CONFIRMAR
         contra SX3 real antes de compilar (nomes de campo podem variar por
         versao/instalacao).
@@ -32,32 +28,55 @@
    consultada por IACCHAT.prw no lugar do antigo SYS_USR->USR_CELULAR
    (que nunca existiu).
 
-   Criacao automatica de estrutura: ZCHCriaEstrutura() (chamada no rodape
-   deste arquivo, no Job de compilacao/primeiro acesso — ver instrucoes na
-   funcao) cria os registros SX2 (tabela), SX3 (campos) e SIX (indices) via
-   codigo, para NAO depender de acesso ao Configurador (SIGACFG > Base de
-   Dados > Dicionarios) neste ambiente. Se a tabela ja existir (reexecucao),
-   a funcao NAO recria nem altera nada — apenas confirma e sai.
+   [ALTERADO apos ciclo de erros em producao 13/08/2026] A criacao automatica
+   da TABELA FISICA e do INDICE FISICO via codigo (DbCreate()/OrdCreate()) foi
+   REMOVIDA deste fonte. Motivo: tres tentativas sucessivas de gerar a
+   estrutura fisica via linha de codigo falharam neste ambiente (TOPCONN,
+   Framework 20251006) por divergencias de assinatura/comportamento que so
+   apareciam em runtime, cada uma exigindo um ciclo completo de
+   compilar-testar-reportar-corrigir sem qualquer forma de validar localmente
+   antes (este repositorio e Node.js, sem acesso a um ambiente Protheus real).
+   Decisao explicita do usuario: usar o caminho garantido — o proprio
+   Configurador (SIGACFG > Base de Dados > Dicionarios) gera a tabela fisica
+   e o indice fisico a partir do SX2/SX3/SIX quando o usuario abre o
+   dicionario e confirma ("OK") a inclusao da tabela ZCH.
+
+   Fluxo atual, em duas etapas:
+     1. ZCHMonta() (chamada automaticamente por IACadUsr(), ver abaixo) grava
+        SOMENTE os registros de DICIONARIO (SX2, SX3, SIX) via codigo — isso
+        SEMPRE funcionou nos testes (confirmado pelos dumps de erro: os
+        registros gravados batem exatamente com o que foi lido de volta).
+        Idempotente: se o registro em SX2 ja existe, nao faz nada.
+     2. Um desenvolvedor ADVPL PRECISA, uma unica vez por ambiente, abrir
+        Configurador (SIGACFG) > Base de Dados > Dicionarios > Base de Dados,
+        localizar a tabela ZCH (ja aparece no dicionario gracas ao passo 1) e
+        confirmar/gerar a estrutura fisica pela tela — isso cria a tabela e o
+        indice fisico de forma garantida, sem depender de nenhuma API de
+        codigo cujo comportamento nao pudemos validar neste ambiente.
+
+   Ate o passo 2 ser feito, abrir IACadUsr() vai falhar ao tentar exibir o
+   browse (tabela/indice fisico ainda nao existem) — erro esperado, nao um
+   bug: e exatamente o sinal de que o passo 2 ainda precisa ser feito.
    ============================================================================ */
 
 /* ----------------------------------------------------------------------------
-   ZCHCadUsr
+   IACadUsr
    Tela de cadastro (MVC/AxCadastro padrao) do vinculo usuario Protheus ->
    celular. Registrar no menu do Configurador (SIGACFG), conforme decidido.
 ---------------------------------------------------------------------------- */
-User Function ZCHCadUsr()
+User Function IACadUsr()
     Local oBrowse
 
-    // Garante a estrutura antes de abrir a tela — idempotente, ver comentario
-    // na funcao abaixo. Nao deveria custar nada em uso normal (SX2 ja existe
-    // apos o primeiro acesso), mas evita depender de rodar isso manualmente
-    // uma vez "por fora" antes do primeiro uso.
-    ZCHCriaEstrutura()
+    // Garante os registros de DICIONARIO (SX2/SX3/SIX) antes de abrir a tela
+    // — idempotente, ver comentario em ZCHMonta(). NAO cria mais tabela nem
+    // indice fisico (ver ressalva no cabecalho do arquivo) — isso e feito
+    // uma unica vez pelo Configurador, por um desenvolvedor ADVPL.
+    ZCHMonta()
 
     oBrowse := FWMBrowse():New()
     oBrowse:SetAlias("ZCH")
     oBrowse:SetDescription("Celular por usuario - IA Command")
-    oBrowse:SetMenuDef("ZCHCADUSR")
+    oBrowse:SetMenuDef("IACADUSR")
     oBrowse:Activate()
 
 Return
@@ -69,10 +88,10 @@ Return
 Static Function MenuDef()
     Local aRotina := {}
 
-    ADD OPTION aRotina TITLE "Visualizar" ACTION "VIEWDEF.ZCHCADUSR"    OPERATION 2 ACCESS 0
-    ADD OPTION aRotina TITLE "Incluir"    ACTION "VIEWDEF.ZCHCADUSR"    OPERATION 3 ACCESS 0
-    ADD OPTION aRotina TITLE "Alterar"    ACTION "VIEWDEF.ZCHCADUSR"    OPERATION 4 ACCESS 0
-    ADD OPTION aRotina TITLE "Excluir"    ACTION "VIEWDEF.ZCHCADUSR"    OPERATION 5 ACCESS 0
+    ADD OPTION aRotina TITLE "Visualizar" ACTION "VIEWDEF.IACADUSR"    OPERATION 2 ACCESS 0
+    ADD OPTION aRotina TITLE "Incluir"    ACTION "VIEWDEF.IACADUSR"    OPERATION 3 ACCESS 0
+    ADD OPTION aRotina TITLE "Alterar"    ACTION "VIEWDEF.IACADUSR"    OPERATION 4 ACCESS 0
+    ADD OPTION aRotina TITLE "Excluir"    ACTION "VIEWDEF.IACADUSR"    OPERATION 5 ACCESS 0
 
 Return aRotina
 
@@ -80,7 +99,7 @@ Return aRotina
    ModelDef — modelo de dados MVC (1 unica tabela, sem grid/relacionamento).
 ---------------------------------------------------------------------------- */
 Static Function ModelDef()
-    Local oModel := MPFormModel():New("ZCHCADUSR_M")
+    Local oModel := MPFormModel():New("IACADUSR_M")
     Local oStruZCH := FWFormStruct(1, "ZCH")
 
     oModel:AddFields("ZCHMASTER", , oStruZCH)
@@ -107,113 +126,75 @@ Static Function ViewDef()
 Return oView
 
 /* ============================================================================
-   CRIACAO AUTOMATICA DE ESTRUTURA (SX2/SX3/SIX) — SEM CONFIGURADOR
-
-   ZCHCriaEstrutura() e idempotente: verifica se a tabela ZCH ja existe no
-   SX2 antes de criar qualquer coisa. Se ja existe, sai sem alterar nada —
-   NAO tenta corrigir/migrar estrutura existente (fora de escopo; se o
-   schema precisar mudar depois, isso e uma migracao a parte, deliberada).
-
-   Chamar esta funcao:
-     1. Automaticamente no inicio de ZCHCadUsr() (ja feito acima) — garante
-        que o primeiro usuario a abrir a tela cria a estrutura sob demanda.
-     2. Opcionalmente no RPO/Job de inicializacao do ambiente, se o time
-        Protheus preferir criar a estrutura no deploy em vez de no primeiro
-        acesso — chamar U_ZCHCriaEstrutura() a partir de um Job customizado
-        (fora do escopo deste arquivo).
+   REGISTRO NO DICIONARIO (SX2/SX3/SIX) — SOMENTE DICIONARIO, SEM ESTRUTURA
+   FISICA (ver ressalva extensa no cabecalho do arquivo sobre por que a
+   criacao fisica foi removida deste fonte).
    ============================================================================ */
-User Function ZCHCriaEstrutura()
-Return ZCHCriaEstrutura()
+User Function ZCHCriaEs()
+Return ZCHMonta()
 
-Static Function ZCHCriaEstrutura()
+Static Function ZCHMonta()
     Local lJaExiste := .F.
 
     DbSelectArea("SX2")
-    SX2->(DbSetOrder(1)) // ordem 1 = SX2_TABELA, padrao do dicionario
+    // Campo real de nome de tabela e X2_ARQUIVO (nao X2_TABELA); indice
+    // correspondente e ordem 2 (**SX20101=X2_CHAVE, SX20102=X2_ARQUIVO) —
+    // confirmado contra dump de erro real desta instalacao.
+    SX2->(DbSetOrder(2)) // ordem 2 = X2_ARQUIVO
     lJaExiste := SX2->(MsSeek("ZCH"))
 
     If lJaExiste
-        Return .T. // idempotente — estrutura ja criada, nada a fazer
+        Return .T. // idempotente — registro de dicionario ja existe
     EndIf
 
-    ZCHCriarSX2()
-    ZCHCriarSX3()
-    ZCHCriarSIX()
-    ZCHCriarTabelaFisica()
+    CRIASX2()
+    CRIASX3()
+    CRIASIX()
 
 Return .T.
 
 /* ----------------------------------------------------------------------------
-   ZCHCriarTabelaFisica — cria o arquivo fisico da tabela ZCH via DbCreate(),
-   como fallback explicito e garantido — NAO depende de o DBAccess criar a
-   tabela implicitamente ao detectar SX2 novo (comportamento que varia por
-   instalacao/versao e nao pode ser confirmado sem acesso ao ambiente real).
-
-   Monta aStruct diretamente dos DEFINEs de campo abaixo (mesma fonte de
-   verdade usada em ZCHCriarSX3, para as duas nunca ficarem dessincronizadas)
-   e chama DbCreate() no path/alias padrao da instalacao.
-
-   CONFIRMAR contra o Include desta versao: assinatura exata de DbCreate()
-   (aqui usada na forma classica 4 parametros — nome, estrutura, driver,
-   alias — documentada publicamente) e se o driver informado (RddSetDefault())
-   e o mesmo configurado no appserver.ini deste ambiente (TOPCONN e o mais
-   comum em instalacoes atuais; se divergir, ajustar cDriver abaixo).
+   CRIASX2 — registro da tabela no dicionario (SX2). Campos confirmados
+   contra dump de erro real desta instalacao (X2_ARQUIVO, nao X2_TABELA;
+   sem X2_MULTIREG/X2_MODUCPO, que nao existem aqui).
 ---------------------------------------------------------------------------- */
-Static Function ZCHCriarTabelaFisica()
-    Local aStruct  := {}
-    Local cDriver  := RddSetDefault() // usa o driver ja configurado no ambiente (ex: TOPCONN)
-
-    AAdd(aStruct, {"ZCH_FILIAL", "C", 02, 0})
-    AAdd(aStruct, {"ZCH_USER",   "C", 10, 0})
-    AAdd(aStruct, {"ZCH_NOME",   "C", 60, 0})
-    AAdd(aStruct, {"ZCH_CEL",    "C", 20, 0})
-    AAdd(aStruct, {"ZCH_ATIVO",  "C", 01, 0})
-
-    DbCreate("ZCH", aStruct, cDriver, , "ZCH")
-
-Return
-
-/* ----------------------------------------------------------------------------
-   ZCHCriarSX2 — registro da tabela no dicionario (SX2).
----------------------------------------------------------------------------- */
-Static Function ZCHCriarSX2()
+Static Function CRIASX2()
     DbSelectArea("SX2")
     RecLock("SX2", .T.)
-        SX2->X2_TABELA   := "ZCH"
+        SX2->X2_ARQUIVO  := "ZCH"
+        SX2->X2_CHAVE    := "ZCH_FILIAL+ZCH_USER"
         SX2->X2_NOME     := "Celular por Usuario - IA Command"
         SX2->X2_NOMESPA  := "Celular por Usuario - IA Command"
+        SX2->X2_NOMEENG  := "Cellphone by User - IA Command"
         SX2->X2_MODO     := "C"    // Compartilhada entre empresas/filiais
         SX2->X2_PATH     := "SYS"
-        SX2->X2_ARQUIVO  := "ZCH"
-        SX2->X2_MULTIREG := "S"
-        SX2->X2_MODUCPO  := "SIGACFG"
     SX2->(MsUnlock())
 
 Return
 
 /* ----------------------------------------------------------------------------
-   ZCHCriarSX3 — registro dos campos no dicionario (SX3).
+   CRIASX3 — registro dos campos no dicionario (SX3).
    Ordem dos campos: ZCH_FILIAL (padrao Protheus, sempre 1o campo), ZCH_USER,
    ZCH_NOME, ZCH_CEL, ZCH_ATIVO.
 ---------------------------------------------------------------------------- */
-Static Function ZCHCriarSX3()
-    ZCHAddCampo("ZCH_FILIAL", "Filial",         "Filial",         "C", 02, 0, "C", "MV_PAR01=='1'", "",  "", "S", "S")
-    ZCHAddCampo("ZCH_USER",   "Cod. Usuario",   "Codigo Usuario", "C", 10, 0, "C", "", "SYS_USR", "U_ZCHVldUsr()", "S", "S")
-    ZCHAddCampo("ZCH_NOME",   "Nome Usuario",   "Nome do Usuario","C", 60, 0, "V", "", "", "", "S", "N")
-    ZCHAddCampo("ZCH_CEL",    "Celular",        "Celular (DDI)",  "C", 20, 0, "C", "", "", "U_ZCHVldCel()", "S", "S")
-    ZCHAddCampo("ZCH_ATIVO",  "Ativo",          "Ativo (S/N)",    "C", 01, 0, "C", "", "", "", "S", "S")
+Static Function CRIASX3()
+    ZCHAddCpo("ZCH_FILIAL", "Filial",         "Filial",         "C", 02, 0, "C", "MV_PAR01=='1'", "",  "", "S", "S")
+    ZCHAddCpo("ZCH_USER",   "Cod. Usuario",   "Codigo Usuario", "C", 10, 0, "C", "", "SYS_USR", "U_ZCHVldUsr()", "S", "S")
+    ZCHAddCpo("ZCH_NOME",   "Nome Usuario",   "Nome do Usuario","C", 60, 0, "V", "", "", "", "S", "N")
+    ZCHAddCpo("ZCH_CEL",    "Celular",        "Celular (DDI)",  "C", 20, 0, "C", "", "", "U_ZCHVldCel()", "S", "S")
+    ZCHAddCpo("ZCH_ATIVO",  "Ativo",          "Ativo (S/N)",    "C", 01, 0, "C", "", "", "", "S", "S")
 
 Return
 
 /* ----------------------------------------------------------------------------
-   ZCHAddCampo — grava 1 linha de SX3 para o campo informado. Isolado em
-   funcao auxiliar para nao repetir RecLock/MsUnlock 5 vezes em ZCHCriarSX3.
+   ZCHAddCpo — grava 1 linha de SX3 para o campo informado. Isolado em
+   funcao auxiliar para nao repetir RecLock/MsUnlock 5 vezes em CRIASX3.
 
    cPictInput: mascara de entrada do campo (usada em ZCH_CEL para forcar o
    formato "+DDI (DD) NNNNN-NNNN" na digitacao, ex: "@R +99 (99) 99999-9999").
    ---------------------------------------------------------------------------- */
-Static Function ZCHAddCampo(cCampo, cTitulo, cDescricao, cTipo, nTam, nDec, cContext, cValid, cF3, cValidUser, cVisual, cObriga)
-    Local nOrdem := ZCHProximaOrdem()
+Static Function ZCHAddCpo(cCampo, cTitulo, cDescricao, cTipo, nTam, nDec, cContext, cValid, cF3, cValidUser, cVisual, cObriga)
+    Local nOrdem := ZCHProxOrd()
 
     DbSelectArea("SX3")
     RecLock("SX3", .T.)
@@ -233,7 +214,7 @@ Static Function ZCHAddCampo(cCampo, cTitulo, cDescricao, cTipo, nTam, nDec, cCon
         SX3->X3_VALID    := cValid
         SX3->X3_PICTURE  := IIf(cCampo == "ZCH_CEL", "@R +99 (99) 99999-9999", "")
         SX3->X3_PICTVAR  := ""
-        SX3->X3_RESERVA  := ""
+        SX3->X3_RESERV   := "" // nome real e X3_RESERV, nao X3_RESERVA
         SX3->X3_GRPSXG   := ""
         SX3->X3_RELACAO  := ""
         SX3->X3_CBOX     := IIf(cCampo == "ZCH_ATIVO", "S=Sim;N=Nao", "")
@@ -242,15 +223,15 @@ Static Function ZCHAddCampo(cCampo, cTitulo, cDescricao, cTipo, nTam, nDec, cCon
 Return
 
 /* ----------------------------------------------------------------------------
-   ZCHProximaOrdem — calcula a proxima ordem sequencial de campo para a
+   ZCHProxOrd — calcula a proxima ordem sequencial de campo para a
    tabela ZCH (SX3->X3_ORDEM), evitando colisao entre chamadas sucessivas de
-   ZCHAddCampo.
+   ZCHAddCpo.
 ---------------------------------------------------------------------------- */
-Static Function ZCHProximaOrdem()
+Static Function ZCHProxOrd()
     Local nMaior := 0
 
     DbSelectArea("SX3")
-    SX3->(DbSetOrder(1)) // ordem 1 = X3_ARQUIVO+X3_CAMPO, padrao do dicionario
+    SX3->(DbSetOrder(1)) // ordem 1 = X3_ARQUIVO+X3_ORDEM, padrao do dicionario
     SX3->(MsSeek("ZCH"))
     While !SX3->(Eof()) .And. SX3->X3_ARQUIVO == "ZCH"
         If Val(SX3->X3_ORDEM) > nMaior
@@ -262,34 +243,36 @@ Static Function ZCHProximaOrdem()
 Return nMaior + 1
 
 /* ----------------------------------------------------------------------------
-   ZCHCriarSIX — registro dos indices no dicionario (SIX).
+   CRIASIX — registro dos indices no dicionario (SIX).
    Indice 1: ZCH_FILIAL + ZCH_USER — UNICO (1 celular por usuario, decisao
    confirmada). Indice 2: ZCH_FILIAL + ZCH_CEL — busca reversa por celular
    (usada futuramente se precisarmos ir de celular -> usuario).
+   Nomes de campo confirmados contra dump de erro real desta instalacao
+   (DESCRICAO, nao DESCRICO; PROPRI, nao PROPRIETARIO).
 ---------------------------------------------------------------------------- */
-Static Function ZCHCriarSIX()
+Static Function CRIASIX()
     DbSelectArea("SIX")
     RecLock("SIX", .T.)
-        SIX->INDICE   := "1"
-        SIX->ORDEM    := "1"
-        SIX->CHAVE    := "ZCH_FILIAL+ZCH_USER"
-        SIX->DESCRICO := "Usuario"
-        SIX->PROPRIETARIO := "ZCH"
-        SIX->NICKNAME := "ZCH"
+        SIX->INDICE    := "1"
+        SIX->ORDEM     := "1"
+        SIX->CHAVE     := "ZCH_FILIAL+ZCH_USER"
+        SIX->DESCRICAO := "Usuario"
+        SIX->PROPRI    := "S"
+        SIX->NICKNAME  := "ZCH"
     SIX->(MsUnlock())
 
     RecLock("SIX", .T.)
-        SIX->INDICE   := "1"
-        SIX->ORDEM    := "2"
-        SIX->CHAVE    := "ZCH_FILIAL+ZCH_CEL"
-        SIX->DESCRICO := "Celular"
-        SIX->PROPRIETARIO := "ZCH"
-        SIX->NICKNAME := "ZCH"
+        SIX->INDICE    := "1"
+        SIX->ORDEM     := "2"
+        SIX->CHAVE     := "ZCH_FILIAL+ZCH_CEL"
+        SIX->DESCRICAO := "Celular"
+        SIX->PROPRI    := "S"
+        SIX->NICKNAME  := "ZCH"
     SIX->(MsUnlock())
 
     // Unicidade do indice 1 (ZCH_FILIAL+ZCH_USER): a validacao de duplicidade
     // e feita em U_ZCHVldUsr() (chamada no X3_VALID do campo ZCH_USER, ver
-    // ZCHCriarSX3 acima) via MsSeek contra o proprio indice — SIX por si so
+    // CRIASX3 acima) via MsSeek contra o proprio indice — SIX por si so
     // nao impede duplicidade no Protheus (diferente de UNIQUE INDEX em SQL
     // puro), a validacao de negocio precisa estar explicita na rotina.
 
@@ -300,7 +283,7 @@ Return
    e (b) que nao ha OUTRO registro ZCH para o mesmo usuario (unicidade,
    decisao confirmada: 1 celular por usuario). Tambem preenche ZCH_NOME
    automaticamente a partir do nome encontrado em SYS_USR — campo so-leitura
-   na tela (View, ver ZCHAddCampo), preenchido por este validador.
+   na tela (View, ver ZCHAddCpo), preenchido por este validador.
 
    CONFIRMAR contra o dicionario real: nomes de campo USR_ID/USR_NOME em
    SYS_USR (usados aqui por convencao do cadastro padrao SIGACFG) e o indice
@@ -347,7 +330,7 @@ Return .T.
    ZCHVldCel — Validacao basica do celular: exige ao menos DDI + DDD + numero
    (minimo de digitos), sem validar operadora/formato regional especifico.
    Mascara de digitacao (+DDI (DD) NNNNN-NNNN) ja e aplicada pelo X3_PICTURE
-   do campo (ver ZCHCriarSX3) — esta validacao e so uma checagem de
+   do campo (ver CRIASX3) — esta validacao e so uma checagem de
    quantidade minima de digitos, para pegar celular incompleto.
 ---------------------------------------------------------------------------- */
 User Function ZCHVldCel()

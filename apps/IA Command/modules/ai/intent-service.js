@@ -582,11 +582,15 @@ function _mensagemPareceComprasAiSql(mensagem, sinonimos = [], normalizacoes = [
 function _intentAiSqlDireto(intencao, mensagem, normalizacoes = []) {
   const periodo = identificarPeriodoTexto(mensagem, { normalizacoes });
   const dominio = _dominioIntentAiSql(intencao);
+  // "Sem periodo = mes atual" e um padrao de negocio do Protheus (faturamento, compras etc.
+  // sao sempre um recorte temporal). Sistemas fora do Protheus (ex: SoftExpert/ITSM) tratam
+  // perguntas de estado atual ("chamados em aberto e em atraso") sem periodo implicito.
+  const erp = String(intencao?.erp || 'protheus').trim().toLowerCase();
   return {
     intencao:            intencao?.nome || 'compras_dinamico',
     periodo:             periodo?.tipo && periodo.tipo !== 'nenhum'
       ? periodo
-      : { tipo: dominio === 'financeiro' ? 'nenhum' : 'mes_atual' },
+      : { tipo: (dominio === 'financeiro' || erp !== 'protheus') ? 'nenhum' : 'mes_atual' },
     filtros:             {},
     agrupar_por:         null,
     ordenar_por:         null,

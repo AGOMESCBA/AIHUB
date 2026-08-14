@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
+const recipientGroups = require('../whatsapp/recipient-group-store');
 const usuariosDb = require('../../../../modules/usuarios/database');
 const sistemasDb = require('../../../../modules/sistemas/database');
 
@@ -84,6 +85,7 @@ function jobFromRow(row) {
     retry_interval_min: Number(row.retry_interval_min || 0),
     schedule_json: parseJson(row.schedule_json, {}),
     destinatarios_count: Number(row.destinatarios_count || 0),
+    grupos_count: Number(row.grupos_count || 0),
     runs_count: Number(row.runs_count || 0),
   };
 }
@@ -117,9 +119,11 @@ function runFromRow(row) {
 }
 
 function listarJobs(empresaId) {
+  materializarGruposPendentesEmpresa(empresaId);
   return getDB().prepare(`
     SELECT j.*,
       (SELECT COUNT(*) FROM scheduled_question_recipients r WHERE r.job_id = j.id AND r.ativo = 1) AS destinatarios_count,
+      (SELECT COUNT(*) FROM scheduled_question_job_groups g WHERE g.job_id = j.id AND g.ativo = 1) AS grupos_count,
       (SELECT COUNT(*) FROM scheduled_question_runs ru WHERE ru.job_id = j.id) AS runs_count,
       (SELECT CASE WHEN ru.status = 'sucesso' AND i.resultado_tipo = 'erro' THEN 'erro' ELSE ru.status END
          FROM scheduled_question_runs ru
@@ -136,9 +140,11 @@ function listarJobs(empresaId) {
 }
 
 function listarJobsVencidos(limit = 10, nowIso = agora()) {
+  materializarGruposPendentesEmpresa(null);
   return getDB().prepare(`
     SELECT j.*,
       (SELECT COUNT(*) FROM scheduled_question_recipients r WHERE r.job_id = j.id AND r.ativo = 1) AS destinatarios_count,
+      (SELECT COUNT(*) FROM scheduled_question_job_groups g WHERE g.job_id = j.id AND g.ativo = 1) AS grupos_count,
       (SELECT COUNT(*) FROM scheduled_question_runs ru WHERE ru.job_id = j.id) AS runs_count
     FROM scheduled_question_jobs j
     WHERE j.ativo = 1
@@ -192,19 +198,23 @@ function finalizarJobBloqueado(empresaId, id, token, campos = {}) {
 }
 
 function buscarJob(empresaId, id) {
+  materializarGruposJob(empresaId, id);
   const job = jobFromRow(getDB().prepare(`
     SELECT j.*,
       (SELECT COUNT(*) FROM scheduled_question_recipients r WHERE r.job_id = j.id AND r.ativo = 1) AS destinatarios_count,
+      (SELECT COUNT(*) FROM scheduled_question_job_groups g WHERE g.job_id = j.id AND g.ativo = 1) AS grupos_count,
       (SELECT COUNT(*) FROM scheduled_question_runs ru WHERE ru.job_id = j.id) AS runs_count
     FROM scheduled_question_jobs j
     WHERE j.empresa_id = ? AND j.id = ? AND j.status <> 'excluido'
   `).get(Number(empresaId), id));
   if (!job) return null;
   job.destinatarios = listarDestinatarios(empresaId, id);
+  job.grupos = listarGruposDoJob(empresaId, id);
   return job;
 }
 
 function listarDestinatarios(empresaId, jobId) {
+  materializarGruposJob(empresaId, jobId);
   const rows = getDB().prepare(`
     SELECT r.*
     FROM scheduled_question_recipients r
@@ -216,6 +226,26 @@ function listarDestinatarios(empresaId, jobId) {
     ORDER BY nome COLLATE NOCASE ASC
   `).all(Number(empresaId), jobId).map(recipientFromRow);
   return filtrarNumerosElegiveis(rows, empresaId);
+}
+
+function listarGruposDoJob(empresaId, jobId) {
+  return getDB().prepare(`
+    SELECT jg.*, g.descricao, g.ativo AS grupo_ativo,
+      (SELECT COUNT(*)
+         FROM whatsapp_recipient_group_members m
+         JOIN whatsapp_allowed_numbers n ON n.id = m.numero_id AND n.empresa_id = m.empresa_id AND n.ativo = 1
+        WHERE m.grupo_id = jg.grupo_id AND m.ativo = 1) AS membros_count
+    FROM scheduled_question_job_groups jg
+    JOIN whatsapp_recipient_groups g ON g.id = jg.grupo_id AND g.empresa_id = jg.empresa_id
+    WHERE jg.empresa_id = ? AND jg.job_id = ? AND jg.ativo = 1
+    ORDER BY jg.nome COLLATE NOCASE ASC
+  `).all(Number(empresaId), String(jobId)).map(row => ({
+    ...row,
+    empresa_id: Number(row.empresa_id),
+    ativo: row.ativo ? 1 : 0,
+    grupo_ativo: row.grupo_ativo ? 1 : 0,
+    membros_count: Number(row.membros_count || 0),
+  }));
 }
 
 function listarRuns(empresaId, jobId, limit = 50) {
@@ -483,7 +513,7 @@ function payloadJob(dados, empresaId, usuario, existing = {}) {
   };
 }
 
-function criarJob(empresaId, dados, destinatarios, usuario) {
+function criarJob(empresaId, dados, destinatarios, usuario, grupos = []) {
   const db = getDB();
   const tx = db.transaction(() => {
     const id = uuid();
@@ -506,16 +536,18 @@ function criarJob(empresaId, dados, destinatarios, usuario) {
       )
     `).run(job);
     substituirDestinatariosTx(db, empresaId, id, destinatarios);
-    return buscarJob(empresaId, id);
+    substituirGruposTx(db, empresaId, id, grupos);
+    materializarGruposJobTx(db, empresaId, id);
+    return id;
   });
-  return tx();
+  return buscarJob(empresaId, tx());
 }
 
-function atualizarJob(empresaId, id, dados, destinatarios, usuario) {
+function atualizarJob(empresaId, id, dados, destinatarios, usuario, grupos) {
+  const existing = buscarJob(empresaId, id);
+  if (!existing) return null;
   const db = getDB();
   const tx = db.transaction(() => {
-    const existing = buscarJob(empresaId, id);
-    if (!existing) return null;
     const job = payloadJob(dados, empresaId, usuario, existing);
     db.prepare(`
       UPDATE scheduled_question_jobs
@@ -538,22 +570,27 @@ function atualizarJob(empresaId, id, dados, destinatarios, usuario) {
       WHERE id = @id AND empresa_id = @empresa_id
     `).run({ ...job, id });
     if (Array.isArray(destinatarios)) substituirDestinatariosTx(db, empresaId, id, destinatarios);
-    return buscarJob(empresaId, id);
+    if (Array.isArray(grupos)) substituirGruposTx(db, empresaId, id, grupos);
+    materializarGruposJobTx(db, empresaId, id);
+    return id;
   });
-  return tx();
+  const atualizadoId = tx();
+  return atualizadoId ? buscarJob(empresaId, atualizadoId) : null;
 }
 
 function substituirDestinatariosTx(db, empresaId, jobId, destinatarios = []) {
   const now = agora();
-  db.prepare('UPDATE scheduled_question_recipients SET ativo = 0, atualizado_em = ? WHERE job_id = ? AND empresa_id = ?')
+  db.prepare("UPDATE scheduled_question_recipients SET ativo = 0, atualizado_em = ? WHERE job_id = ? AND empresa_id = ? AND COALESCE(origem, 'direto') = 'direto'")
     .run(now, jobId, Number(empresaId));
 
   const upsert = db.prepare(`
-    INSERT INTO scheduled_question_recipients (id, job_id, empresa_id, numero_id, nome, numero, ativo, criado_em, atualizado_em)
-    VALUES (@id, @job_id, @empresa_id, @numero_id, @nome, @numero, 1, @criado_em, @atualizado_em)
+    INSERT INTO scheduled_question_recipients (id, job_id, empresa_id, numero_id, nome, numero, origem, grupo_id, ativo, criado_em, atualizado_em)
+    VALUES (@id, @job_id, @empresa_id, @numero_id, @nome, @numero, 'direto', NULL, 1, @criado_em, @atualizado_em)
     ON CONFLICT(job_id, numero_id) DO UPDATE SET
       nome = excluded.nome,
       numero = excluded.numero,
+      origem = 'direto',
+      grupo_id = NULL,
       ativo = 1,
       atualizado_em = excluded.atualizado_em
   `);
@@ -566,6 +603,96 @@ function substituirDestinatariosTx(db, empresaId, jobId, destinatarios = []) {
       numero_id: String(item.id || item.numero_id),
       nome: String(item.nome || '').trim(),
       numero: normalizarNumero(item.numero),
+      criado_em: now,
+      atualizado_em: now,
+    });
+  }
+}
+
+function substituirGruposTx(db, empresaId, jobId, grupos = []) {
+  const ids = [...new Set((grupos || [])
+    .map(item => typeof item === 'object' && item ? (item.id || item.grupo_id) : item)
+    .map(String)
+    .filter(Boolean))];
+  const now = agora();
+  db.prepare('UPDATE scheduled_question_job_groups SET ativo = 0, atualizado_em = ? WHERE job_id = ? AND empresa_id = ?')
+    .run(now, String(jobId), Number(empresaId));
+  if (!ids.length) return;
+  const rows = recipientGroups.buscarGruposPorIds(empresaId, ids);
+  if (rows.length !== ids.length) {
+    throw Object.assign(new Error('Um ou mais grupos nao pertencem aos grupos ativos desta empresa.'), { statusCode: 400 });
+  }
+  const upsert = db.prepare(`
+    INSERT INTO scheduled_question_job_groups (id, job_id, empresa_id, grupo_id, nome, ativo, criado_em, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    ON CONFLICT(job_id, grupo_id) DO UPDATE SET
+      nome = excluded.nome,
+      ativo = 1,
+      atualizado_em = excluded.atualizado_em
+  `);
+  for (const grupo of rows) upsert.run(uuid(), String(jobId), Number(empresaId), String(grupo.id), String(grupo.nome || '').trim(), now, now);
+}
+
+function materializarGruposPendentesEmpresa(empresaId = null) {
+  try {
+    const db = getDB();
+    const params = [];
+    const whereEmpresa = empresaId ? 'AND empresa_id = ?' : '';
+    if (empresaId) params.push(Number(empresaId));
+    const rows = db.prepare(`
+      SELECT DISTINCT job_id, empresa_id
+      FROM scheduled_question_job_groups
+      WHERE ativo = 1 ${whereEmpresa}
+    `).all(...params);
+    const tx = db.transaction(() => {
+      for (const row of rows) materializarGruposJobTx(db, row.empresa_id, row.job_id);
+    });
+    tx();
+  } catch (_) {}
+}
+
+function materializarGruposJob(empresaId, jobId) {
+  try {
+    const db = getDB();
+    const tx = db.transaction(() => materializarGruposJobTx(db, empresaId, jobId));
+    tx();
+  } catch (_) {}
+}
+
+function materializarGruposJobTx(db, empresaId, jobId) {
+  const grupos = db.prepare(`
+    SELECT grupo_id
+    FROM scheduled_question_job_groups
+    WHERE empresa_id = ? AND job_id = ? AND ativo = 1
+  `).all(Number(empresaId), String(jobId)).map(row => String(row.grupo_id));
+  const now = agora();
+  db.prepare("UPDATE scheduled_question_recipients SET ativo = 0, atualizado_em = ? WHERE empresa_id = ? AND job_id = ? AND origem = 'grupo'")
+    .run(now, Number(empresaId), String(jobId));
+  if (!grupos.length) return;
+  const membros = recipientGroups.listarMembrosAtivosDosGrupos(empresaId, grupos);
+  const upsert = db.prepare(`
+    INSERT INTO scheduled_question_recipients (id, job_id, empresa_id, numero_id, nome, numero, origem, grupo_id, ativo, criado_em, atualizado_em)
+    VALUES (@id, @job_id, @empresa_id, @numero_id, @nome, @numero, 'grupo', @grupo_id, 1, @criado_em, @atualizado_em)
+    ON CONFLICT(job_id, numero_id) DO UPDATE SET
+      nome = excluded.nome,
+      numero = excluded.numero,
+      origem = CASE
+        WHEN scheduled_question_recipients.ativo = 1 AND COALESCE(scheduled_question_recipients.origem, 'direto') = 'direto' THEN 'direto'
+        ELSE 'grupo'
+      END,
+      grupo_id = excluded.grupo_id,
+      ativo = 1,
+      atualizado_em = excluded.atualizado_em
+  `);
+  for (const membro of membros) {
+    upsert.run({
+      id: uuid(),
+      job_id: String(jobId),
+      empresa_id: Number(empresaId),
+      numero_id: String(membro.id || membro.numero_id),
+      nome: String(membro.nome || '').trim(),
+      numero: normalizarNumero(membro.numero),
+      grupo_id: null,
       criado_em: now,
       atualizado_em: now,
     });
@@ -632,6 +759,7 @@ module.exports = {
   finalizarJobBloqueado,
   buscarJob,
   listarDestinatarios,
+  listarGruposDoJob,
   listarRuns,
   listarRunsGerais,
   listarEntregas,
@@ -644,6 +772,7 @@ module.exports = {
   atualizarDelivery,
   listarNumerosAutorizados,
   buscarNumerosAutorizadosPorIds,
+  materializarGruposJob,
   criarJob,
   atualizarJob,
   alterarStatus,

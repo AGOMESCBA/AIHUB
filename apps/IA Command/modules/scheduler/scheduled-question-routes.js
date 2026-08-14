@@ -1,7 +1,8 @@
 const crud = require('../database/crud');
-const { requireRotina } = require('../permissions');
+const { requireRotina, requireAnyRotina } = require('../permissions');
 const { getEmpresaId } = require('../empresa-context');
 const channels = require('../whatsapp/channel-store');
+const recipientGroups = require('../whatsapp/recipient-group-store');
 const store = require('./scheduled-question-store');
 const runner = require('./scheduled-question-runner');
 const executor = require('./scheduled-question-executor');
@@ -164,6 +165,51 @@ function validarDestinatarios(empresaId, destinatarioIds, modulo = null) {
   return rows;
 }
 
+function validarGrupos(empresaId, grupoIds, modulo = null) {
+  const ids = [...new Set((grupoIds || [])
+    .map(item => typeof item === 'object' && item ? (item.id || item.grupo_id) : item)
+    .map(String)
+    .filter(Boolean))];
+  if (!ids.length) return [];
+
+  const rows = recipientGroups.buscarGruposPorIds(empresaId, ids);
+  if (rows.length !== ids.length) {
+    throw Object.assign(new Error('Um ou mais grupos nao pertencem aos grupos ativos desta empresa.'), { statusCode: 400 });
+  }
+
+  if (modulo && MODULOS_SQL_FIXO.has(modulo)) {
+    const coluna = COLUNA_MODULO[modulo];
+    for (const grupo of rows) {
+      const membros = recipientGroups.listarMembros(empresaId, grupo.id)
+        .filter(m => Number(m.numero_ativo || 0) === 1);
+      const semPermissao = membros.filter(m => Number(m[coluna] || 0) !== 1);
+      if (semPermissao.length) {
+        throw Object.assign(new Error(`Grupo ${grupo.nome} possui destinatario sem permissao para o modulo ${modulo}.`), { statusCode: 400 });
+      }
+    }
+  }
+
+  return rows;
+}
+
+function validarSelecaoDestinatarios(empresaId, body = {}, modulo = null, { exigir = true } = {}) {
+  const destinatarios = validarDestinatariosOpcional(empresaId, body.destinatarios || body.destinatario_ids, modulo);
+  const grupos = validarGrupos(empresaId, body.grupos || body.grupo_ids, modulo);
+  if (exigir && !destinatarios.length && !grupos.length) {
+    throw Object.assign(new Error('Informe ao menos um destinatario autorizado ou grupo.'), { statusCode: 400 });
+  }
+  return { destinatarios, grupos };
+}
+
+function validarDestinatariosOpcional(empresaId, destinatarioIds, modulo = null) {
+  const ids = [...new Set((destinatarioIds || [])
+    .map(item => typeof item === 'object' && item ? (item.id || item.numero_id) : item)
+    .map(String)
+    .filter(Boolean))];
+  if (!ids.length) return [];
+  return validarDestinatarios(empresaId, ids, modulo);
+}
+
 function handleRoute(fn) {
   return async (req, res) => {
     try {
@@ -176,6 +222,8 @@ function handleRoute(fn) {
 
 module.exports = function registrarRotasAgendamento(app, { requireAuth, requireIaCommand }) {
   const canAgendamento = requireRotina('iac-admin-agendamento');
+  const canGrupos = requireRotina('iac-admin-grupos-whatsapp');
+  const canLerGruposOuAgendar = requireAnyRotina(['iac-admin-grupos-whatsapp', 'iac-admin-agendamento']);
 
   app.get('/api/ia-command/admin/agendamento/jobs', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
     res.json(store.listarJobs(getEmpresaId(req)));
@@ -193,13 +241,91 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
     res.json(modulos.map((m) => ({ modulo: m.modulo, erp: m.erp, sql_fixo: MODULOS_SQL_FIXO.has(m.modulo) })));
   }));
 
+  app.get('/api/ia-command/admin/agendamento/grupos', requireAuth, requireIaCommand, canLerGruposOuAgendar, handleRoute((req, res) => {
+    res.json(recipientGroups.listarGrupos(getEmpresaId(req), { somenteAtivos: req.query.ativos !== '0' }));
+  }));
+
+  app.get('/api/ia-command/admin/grupos-whatsapp', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    res.json(recipientGroups.listarGrupos(getEmpresaId(req), { somenteAtivos: req.query.ativos === '1' }));
+  }));
+
+  app.get('/api/ia-command/admin/grupos-whatsapp/numeros-autorizados', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.json(store.listarNumerosAutorizados(getEmpresaId(req)));
+  }));
+
+  app.get('/api/ia-command/admin/grupos-whatsapp/:id', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.buscarGrupo(getEmpresaId(req), req.params.id);
+    if (!row) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    res.json(row);
+  }));
+
+  app.post('/api/ia-command/admin/agendamento/grupos', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.criarGrupo(getEmpresaId(req), req.body || {});
+    audit(req, 'criar_grupo_destinatarios_whatsapp', { id: row.id, nome: row.nome });
+    res.status(201).json(row);
+  }));
+  app.post('/api/ia-command/admin/grupos-whatsapp', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.criarGrupo(getEmpresaId(req), req.body || {});
+    audit(req, 'criar_grupo_destinatarios_whatsapp', { id: row.id, nome: row.nome });
+    res.status(201).json(row);
+  }));
+
+  app.put('/api/ia-command/admin/agendamento/grupos/:id', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.atualizarGrupo(getEmpresaId(req), req.params.id, req.body || {});
+    if (!row) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    audit(req, 'editar_grupo_destinatarios_whatsapp', { id: row.id, campos: Object.keys(req.body || {}) });
+    res.json(row);
+  }));
+  app.put('/api/ia-command/admin/grupos-whatsapp/:id', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.atualizarGrupo(getEmpresaId(req), req.params.id, req.body || {});
+    if (!row) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    audit(req, 'editar_grupo_destinatarios_whatsapp', { id: row.id, campos: Object.keys(req.body || {}) });
+    res.json(row);
+  }));
+
+  app.delete('/api/ia-command/admin/agendamento/grupos/:id', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.buscarGrupo(getEmpresaId(req), req.params.id);
+    if (!row) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    const result = recipientGroups.excluirGrupo(getEmpresaId(req), req.params.id);
+    audit(req, 'excluir_grupo_destinatarios_whatsapp', { id: req.params.id, nome: row.nome });
+    res.json(result);
+  }));
+  app.delete('/api/ia-command/admin/grupos-whatsapp/:id', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.buscarGrupo(getEmpresaId(req), req.params.id);
+    if (!row) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    const result = recipientGroups.excluirGrupo(getEmpresaId(req), req.params.id);
+    audit(req, 'excluir_grupo_destinatarios_whatsapp', { id: req.params.id, nome: row.nome });
+    res.json(result);
+  }));
+
+  app.get('/api/ia-command/admin/agendamento/grupos/:id/membros', requireAuth, requireIaCommand, canLerGruposOuAgendar, handleRoute((req, res) => {
+    if (!recipientGroups.buscarGrupo(getEmpresaId(req), req.params.id)) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    res.json(recipientGroups.listarMembros(getEmpresaId(req), req.params.id));
+  }));
+  app.get('/api/ia-command/admin/grupos-whatsapp/:id/membros', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    if (!recipientGroups.buscarGrupo(getEmpresaId(req), req.params.id)) return res.status(404).json({ error: 'Grupo nao encontrado.' });
+    res.json(recipientGroups.listarMembros(getEmpresaId(req), req.params.id));
+  }));
+
+  app.put('/api/ia-command/admin/agendamento/grupos/:id/membros', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.substituirMembros(getEmpresaId(req), req.params.id, req.body?.membros || req.body?.numero_ids || []);
+    audit(req, 'editar_membros_grupo_destinatarios_whatsapp', { id: req.params.id, membros: row.membros_count });
+    res.json(row);
+  }));
+  app.put('/api/ia-command/admin/grupos-whatsapp/:id/membros', requireAuth, requireIaCommand, canGrupos, handleRoute((req, res) => {
+    const row = recipientGroups.substituirMembros(getEmpresaId(req), req.params.id, req.body?.membros || req.body?.numero_ids || []);
+    audit(req, 'editar_membros_grupo_destinatarios_whatsapp', { id: req.params.id, membros: row.membros_count });
+    res.json(row);
+  }));
+
   app.post('/api/ia-command/admin/agendamento/jobs', requireAuth, requireIaCommand, canAgendamento, handleRoute((req, res) => {
     const empresaId = getEmpresaId(req);
     const payload = validarPayload(req);
     validarCanalEmpresa(empresaId, payload.channel_id);
-    const destinatarios = validarDestinatarios(empresaId, req.body?.destinatarios || req.body?.destinatario_ids, payload.modulo);
-    const row = store.criarJob(empresaId, payload, destinatarios, usuario(req));
-    audit(req, 'criar_job_agendamento', { id: row.id, nome: row.nome, destinatarios: destinatarios.length });
+    const { destinatarios, grupos } = validarSelecaoDestinatarios(empresaId, req.body, payload.modulo);
+    const row = store.criarJob(empresaId, payload, destinatarios, usuario(req), grupos);
+    audit(req, 'criar_job_agendamento', { id: row.id, nome: row.nome, destinatarios: destinatarios.length, grupos: grupos.length });
     res.status(201).json(row);
   }));
 
@@ -214,10 +340,23 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
     if (sqlFixo && !modulo) {
       throw Object.assign(new Error('Informe o modulo esperado para usar SQL fixo.'), { statusCode: 400 });
     }
-    const destinatarios = (req.body?.destinatarios || req.body?.destinatario_ids)
-      ? validarDestinatarios(empresaId, req.body.destinatarios || req.body.destinatario_ids, modulo)
-      : undefined;
-    const row = store.atualizarJob(empresaId, req.params.id, payload, destinatarios, usuario(req));
+    const alterouDestinatarios = req.body?.destinatarios !== undefined || req.body?.destinatario_ids !== undefined;
+    const alterouGrupos = req.body?.grupos !== undefined || req.body?.grupo_ids !== undefined;
+    let destinatarios;
+    let grupos;
+    if (alterouDestinatarios || alterouGrupos) {
+      const selecao = validarSelecaoDestinatarios(empresaId, {
+        destinatarios: alterouDestinatarios
+          ? (req.body.destinatarios || req.body.destinatario_ids)
+          : (existing.destinatarios || []).map(d => d.numero_id),
+        grupos: alterouGrupos
+          ? (req.body.grupos || req.body.grupo_ids)
+          : (existing.grupos || []).map(g => g.grupo_id),
+      }, modulo);
+      destinatarios = selecao.destinatarios;
+      grupos = selecao.grupos;
+    }
+    const row = store.atualizarJob(empresaId, req.params.id, payload, destinatarios, usuario(req), grupos);
     audit(req, 'editar_job_agendamento', { id: req.params.id, campos: Object.keys(req.body || {}) });
     res.json(row);
   }));

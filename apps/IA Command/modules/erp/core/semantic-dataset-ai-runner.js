@@ -7,6 +7,7 @@ const canonicalWhatsappFormat = require('./canonical-whatsapp-format');
 const { resolverVendedorFixoPorEmpresa } = require('../totvs_protheus/guards/vendedor-seguranca');
 const { resolverClienteFixoPorEmpresa } = require('../totvs_protheus/guards/cliente-seguranca');
 const entitySqlGuard = require('../totvs_protheus/guards/entity-sql-guard');
+const { resolverIdentidadeDinamica } = require('./guards/identidade-dinamica-seguranca');
 
 function _json(raw) {
   if (raw && typeof raw === 'object') return raw;
@@ -265,7 +266,11 @@ function _buildSystemPrompt(dataset, { campos, metricas, campoData, suboperacaoD
   ].filter(Boolean).join('\n');
 }
 
-function _buildContratoTemporalDataset(intent = {}) {
+function _buildContratoTemporalDataset(intent = {}, datasetEhProtheus = true) {
+  // Fora do Protheus, so monta contrato obrigatorio quando o periodo veio de mencao
+  // explicita (dataInicio/dataFim concretas) — nunca para um periodo implicito de sistema
+  // que nao trabalha com recorte temporal por padrao (ver _intentAiSqlDireto).
+  if (!datasetEhProtheus && !_periodoComDatas(intent?.periodo)) return '';
   const atual = _periodoComDatas(intent?.periodo);
   const periodos = _periodosComparativosDataset(intent, {});
   const linhas = [];
@@ -1024,8 +1029,14 @@ function _validarSintaxeBasicaSqlDataset(sql) {
   return { ok: erros.length === 0, erros };
 }
 
-function _validarPeriodoDataset(sql, campoData, intent = {}, plano = {}) {
+function _validarPeriodoDataset(sql, campoData, intent = {}, plano = {}, datasetEhProtheus = true) {
   const erros = [];
+  // Fora do Protheus, so exige filtro de periodo no SQL quando o periodo veio de mencao
+  // explicita do usuario (dataInicio/dataFim concretas) — nao forca filtro para um periodo
+  // implicito que o proprio sistema nao deveria ter aplicado (ver _intentAiSqlDireto).
+  if (!datasetEhProtheus && !_periodoComDatas(intent?.periodo) && !_periodoComDatas(plano?.periodo)) {
+    return { ok: true, erros: [] };
+  }
   const periodosComparativos = _periodosComparativosDataset(intent, plano);
   const periodos = periodosComparativos.length > 1
     ? periodosComparativos
@@ -1203,8 +1214,13 @@ function _normalizarRowsMultiempresa(rows) {
 
 function _sqlBaseSeguro(dataset, entidadeSeguranca, campos) {
   if (!entidadeSeguranca) return dataset.sql_base;
-  const ehCliente = entidadeSeguranca.tipo === 'cliente_fixo_seguranca';
-  const campo = ehCliente ? _campoCliente(campos) : _campoVendedor(campos);
+  // Seguranca dinamica (papel generico, ex: SoftExpert) ja traz o nome da coluna resolvido
+  // via seguranca_papeis_json do dataset — nao precisa da heuristica por regex Protheus.
+  let campo = entidadeSeguranca.campo || null;
+  if (!campo) {
+    const ehCliente = entidadeSeguranca.tipo === 'cliente_fixo_seguranca';
+    campo = ehCliente ? _campoCliente(campos) : _campoVendedor(campos);
+  }
   if (!campo) return dataset.sql_base;
   const codigo = String(entidadeSeguranca.codigo || '').replace(/'/g, "''");
   return [
@@ -1280,6 +1296,51 @@ async function executar(dataset, intent, empresaId, opts = {}) {
         }
       }
     }
+  } else if (remetente && !datasetEhProtheus) {
+    // Seguranca por papel dinamico (ex: SoftExpert): le papel + codigo_identidade de
+    // whatsapp_numero_modulos e o mapa papel->coluna cadastrado no dataset
+    // (seguranca_papeis_json, aba Seguranca em admin-datasets.html). Papel "gestor" libera
+    // acesso total. Sem mapa cadastrado para o dataset, nao ha seguranca para aplicar —
+    // apenas segue sem filtro (dataset ainda nao configurado, nao e motivo pra bloquear).
+    let mapaPapeis = {};
+    try { mapaPapeis = dataset.seguranca_papeis_json ? JSON.parse(dataset.seguranca_papeis_json) : {}; } catch (_) { mapaPapeis = {}; }
+
+    if (Object.keys(mapaPapeis).length) {
+      const erpDataset = String(dataset.erp || '').trim().toLowerCase();
+      const resolucao = resolverIdentidadeDinamica(remetente, empresaId, erpDataset);
+      if (resolucao.estado === 'nao_cadastrado') {
+        return {
+          tipo: 'erro',
+          subtipo: 'nao_cadastrado',
+          resposta_direta: 'Seu numero nao esta cadastrado com acesso a este modulo no IA Command. Solicite ao gestor do IA Command que libere seu perfil.',
+          sql_gerado: `-- erro: numero ${remetente} sem modulo liberado para erp=${erpDataset} empresa_id=${empresaId}`,
+          duracao_ms: Date.now() - t0,
+        };
+      }
+      if (resolucao.estado === 'sem_papel' || resolucao.estado === 'sem_codigo') {
+        return {
+          tipo: 'erro',
+          subtipo: 'papel_sem_codigo_seguranca',
+          resposta_direta: 'Seu cadastro de acesso a este modulo esta incompleto (falta o papel ou o codigo de identidade). Solicite ao gestor do IA Command que complete seu cadastro nos Numeros WhatsApp.',
+          sql_gerado: `-- erro: numero ${remetente} com papel/codigo incompleto para erp=${erpDataset}`,
+          duracao_ms: Date.now() - t0,
+        };
+      }
+      if (resolucao.estado === 'filtrado') {
+        const coluna = mapaPapeis[resolucao.papel] || null;
+        if (!coluna) {
+          return {
+            tipo: 'erro',
+            subtipo: 'dataset_sem_campo_seguranca',
+            resposta_direta: `O dataset nao tem uma coluna de seguranca cadastrada para o papel "${resolucao.papel}". Peca ao gestor do IA Command para configurar isso na aba Seguranca do dataset.`,
+            sql_gerado: `-- erro: dataset sem coluna de seguranca para papel=${resolucao.papel}`,
+            duracao_ms: Date.now() - t0,
+          };
+        }
+        entidadeSeguranca = { tipo: 'papel_dinamico_seguranca', campo: coluna, codigo: resolucao.codigo, nome: resolucao.nome };
+      }
+      // estado 'gestor': acesso total, entidadeSeguranca permanece null (sem filtro)
+    }
   }
 
   let keys, cfg;
@@ -1314,10 +1375,15 @@ async function executar(dataset, intent, empresaId, opts = {}) {
       estadoAnterior: {
         filtros: intent.filtros || {},
         agrupamentos: Array.isArray(intent.group_by) ? intent.group_by : (intent.agrupar_por ? [intent.agrupar_por] : []),
-        periodo: intent.periodo || null,
+        // Fora do Protheus, um periodo sem datas concretas (ex: {tipo:'mes_atual'} implicito)
+        // nao deve ser exposto no prompt: contradiz a instrucao de "nao filtrar por padrao"
+        // (instrucaoFiltroMes) e leva a IA a inventar um BETWEEN que o usuario nao pediu.
+        // Periodo com dataInicio/dataFim concretas (mencao explicita, inclusive de turno
+        // anterior) e sempre preservado.
+        periodo: (datasetEhProtheus || _periodoComDatas(intent.periodo)) ? (intent.periodo || null) : null,
       },
       entidadeSeguranca,
-      contratoTemporal: _buildContratoTemporalDataset(intent),
+      contratoTemporal: _buildContratoTemporalDataset(intent, datasetEhProtheus),
       retryErro,
     });
 
@@ -1352,15 +1418,14 @@ async function executar(dataset, intent, empresaId, opts = {}) {
     sqlSelect = _forcarDataCompletaNoAgrupamento(sqlSelect, campoData, mensagem);
     const validacaoSintaxe = _validarSintaxeBasicaSqlDataset(sqlSelect);
     const validacaoBase = _validarSelectBase(sqlSelect, camposPermitidos);
-    const validacaoPeriodo = _validarPeriodoDataset(sqlSelect, campoData, intent, plano);
+    const validacaoPeriodo = _validarPeriodoDataset(sqlSelect, campoData, intent, plano, datasetEhProtheus);
     // Defesa em profundidade: rejeita SQL que filtre vendedor/cliente por codigo diferente
     // do autenticado, mesmo dentro da query externa da IA (nao so o CTE base injetado pelo
     // sistema) — mesmo padrao estrutural usado no runner.js do IA-OWNER classico.
     let validacaoSeguranca = { ok: true, erros: [] };
     if (entidadeSeguranca) {
-      const campoSeguranca = entidadeSeguranca.tipo === 'cliente_fixo_seguranca'
-        ? _campoCliente(campos)
-        : _campoVendedor(campos);
+      const campoSeguranca = entidadeSeguranca.campo
+        || (entidadeSeguranca.tipo === 'cliente_fixo_seguranca' ? _campoCliente(campos) : _campoVendedor(campos));
       if (campoSeguranca) {
         validacaoSeguranca = entitySqlGuard.validarExclusividadeVendedorSeguranca(sqlSelect, entidadeSeguranca, [campoSeguranca]);
       }

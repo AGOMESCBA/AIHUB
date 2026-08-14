@@ -71,7 +71,7 @@
      e) [CORRIGIDO 11/08/2026] SYS_USR existe nesta instalacao (a suposicao
         anterior de que a TABELA nao existia estava errada) — o que nao
         existe e um CAMPO de celular dentro dela. Criado cadastro proprio
-        (tabela ZCH, ver advpl/ZCHCAD.prw neste mesmo diretorio) para o
+        (tabela ZCH, ver advpl/IACadUsr.prw neste mesmo diretorio) para o
         vinculo usuario Protheus -> celular. IACLerCelularUsuario() foi
         reescrita para ler ZCH primeiro (por RetCodUsr()), no lugar do antigo
         SYS_USR->USR_CELULAR (que nunca existiu). IAC_CELULAR_TESTE_PADRAO
@@ -79,7 +79,7 @@
         e usado se a tabela ZCH ainda nao existir ou nao houver registro
         ativo para o usuario logado — evita bloquear o piloto enquanto o
         cadastro ZCH nao tem cobertura completa. Ver ressalvas de nomes de
-        campo/indice de SYS_USR em ZCHCAD.prw (usadas la para o F3 de
+        campo/indice de SYS_USR em IACadUsr.prw (usadas la para o F3 de
         selecao de usuario, nao usadas aqui).
 
    Todo valor de configuracao especifico de ambiente (URL do IAHub, timeout,
@@ -137,7 +137,7 @@
 #DEFINE IAC_EMPRESA_ID_PADRAO  3
 
 // !!! CELULAR DE TESTE CHUMBADO — USADO SO COMO FALLBACK !!!
-// IACLerCelularUsuario() busca primeiro na tabela ZCH (ver ZCHCAD.prw); se a
+// IACLerCelularUsuario() busca primeiro na tabela ZCH (ver IACadUsr.prw); se a
 // tabela ZCH ainda nao existir (ambiente sem o cadastro rodado uma vez) OU
 // nao houver registro ativo para o usuario logado, cai neste valor fixo em
 // vez de bloquear o chat — decisao explicita do usuario, para nao quebrar o
@@ -182,7 +182,7 @@ User Function IACChat()
     If Empty(cCelular)
         MsgAlert("Celular nao cadastrado para o usuario " + RetCodUsr() + "." + CRLF + ;
                   "Cadastre em Configurador > Celular por Usuario - IA Command " + ;
-                  "(ZCHCadUsr) antes de usar o chat.", "IA Command")
+                  "(IACadUsr) antes de usar o chat.", "IA Command")
         Return
     EndIf
 
@@ -229,14 +229,14 @@ Return
 
 /* ----------------------------------------------------------------------------
    IACLerCelularUsuario
-   Le o celular do usuario Protheus LOGADO na tabela ZCH (ver ZCHCAD.prw),
+   Le o celular do usuario Protheus LOGADO na tabela ZCH (ver IACadUsr.prw),
    pelo codigo retornado por RetCodUsr() — mesma funcao ja usada em IACChat()
    para o nome (UsrFullName(RetCodUsr())), aqui usada tambem para a chave de
    busca. So considera registro com ZCH_ATIVO = "S".
 
    Fallback (decisao explicita do usuario): se a tabela ZCH ainda nao existir
-   (SX2 sem registro — ambiente onde ZCHCadUsr() nunca foi aberta, ver
-   ZCHCriaEstrutura() em ZCHCAD.prw) OU nao houver registro ativo para o
+   (SX2 sem registro — ambiente onde IACadUsr() nunca foi aberta, ver
+   ZCHCriaEs() em IACadUsr.prw) OU nao houver registro ativo para o
    usuario logado, usa IAC_CELULAR_TESTE_PADRAO em vez de bloquear o chat.
    TODO: remover o fallback quando o cadastro ZCH tiver cobertura completa
    dos usuarios do piloto — ver ressalva junto do #DEFINE no topo do arquivo.
@@ -251,7 +251,7 @@ Static Function IACLerCelularUsuario()
 
     If IACTabelaExiste("ZCH")
         DbSelectArea("ZCH")
-        ZCH->(DbSetOrder(1)) // ZCH_FILIAL+ZCH_USER, ver ZCHCriarSIX() em ZCHCAD.prw
+        ZCH->(DbSetOrder(1)) // ZCH_FILIAL+ZCH_USER, ver CRIASIX() em IACadUsr.prw
         If ZCH->(MsSeek(xFilial("ZCH") + RetCodUsr()))
             If ZCH->ZCH_ATIVO == "S"
                 cCelular := Alltrim(ZCH->ZCH_CEL)
@@ -282,7 +282,11 @@ Static Function IACTabelaExiste(cTabela)
     Local cAliasAtu := Alias()
 
     DbSelectArea("SX2")
-    SX2->(DbSetOrder(1)) // X2_TABELA
+    // [CORRIGIDO apos erro em producao 13/08/2026] Ordem 2 = X2_ARQUIVO (nome
+    // real do campo de tabela nesta instalacao) — ordem 1 e X2_CHAVE, nao
+    // serve para buscar por nome de tabela. Ver mesma correcao em CRIASX2/
+    // ZCHMonta (IACadUsr.prw).
+    SX2->(DbSetOrder(2)) // X2_ARQUIVO
     lExiste := SX2->(MsSeek(cTabela))
 
     If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0

@@ -1287,6 +1287,73 @@ const MIGRATIONS = [
           AND NOT EXISTS (SELECT 1 FROM whatsapp_numero_modulos m WHERE m.numero_id = w.id AND m.erp='protheus' AND m.modulo='estoque');
     `,
   },
+  {
+    version: 73,
+    descricao: 'IA Command - mapa papel->coluna de seguranca por dataset (RLS dinamica para sistemas fora do Protheus, ex: SoftExpert). Datasets Protheus ficam com valor NULL, sem efeito — a seguranca deles continua via vendedor/cliente/aprovador-seguranca.js.',
+    sql: `
+      ALTER TABLE datasets ADD COLUMN seguranca_papeis_json TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 74,
+    descricao: 'IA Command - grupos internos de destinatarios WhatsApp para agendamentos',
+    sql: `
+      CREATE TABLE IF NOT EXISTS whatsapp_recipient_groups (
+        id            TEXT PRIMARY KEY,
+        empresa_id    INTEGER NOT NULL,
+        nome          TEXT NOT NULL,
+        descricao     TEXT DEFAULT NULL,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_groups_nome
+        ON whatsapp_recipient_groups (empresa_id, nome);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_groups_empresa
+        ON whatsapp_recipient_groups (empresa_id, ativo);
+
+      CREATE TABLE IF NOT EXISTS whatsapp_recipient_group_members (
+        id            TEXT PRIMARY KEY,
+        grupo_id      TEXT NOT NULL REFERENCES whatsapp_recipient_groups(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        numero_id     TEXT NOT NULL REFERENCES whatsapp_allowed_numbers(id) ON DELETE CASCADE,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_group_members_unique
+        ON whatsapp_recipient_group_members (grupo_id, numero_id);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_recipient_group_members_numero
+        ON whatsapp_recipient_group_members (empresa_id, numero_id, ativo);
+
+      CREATE TABLE IF NOT EXISTS scheduled_question_job_groups (
+        id            TEXT PRIMARY KEY,
+        job_id        TEXT NOT NULL REFERENCES scheduled_question_jobs(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        grupo_id      TEXT NOT NULL REFERENCES whatsapp_recipient_groups(id) ON DELETE CASCADE,
+        nome          TEXT NOT NULL,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_scheduled_question_job_groups_unique
+        ON scheduled_question_job_groups (job_id, grupo_id);
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_job_groups_empresa
+        ON scheduled_question_job_groups (empresa_id, ativo);
+
+      ALTER TABLE scheduled_question_recipients ADD COLUMN origem TEXT DEFAULT 'direto';
+      ALTER TABLE scheduled_question_recipients ADD COLUMN grupo_id TEXT DEFAULT NULL;
+
+      CREATE INDEX IF NOT EXISTS idx_scheduled_question_recipients_origem
+        ON scheduled_question_recipients (job_id, origem, ativo);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

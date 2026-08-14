@@ -1039,7 +1039,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   const _datasetSemanticFields = [
     'tipo', 'modulo', 'spec', 'suboperacao', 'ativo_ia_owner', 'prioridade',
     'view_nome', 'view_descricao', 'view_grao', 'campos_semanticos_json',
-    'regras_semanticas', 'exemplos_perguntas', 'limitacoes',
+    'regras_semanticas', 'exemplos_perguntas', 'limitacoes', 'seguranca_papeis_json',
   ];
 
   function _normalizarDatasetPayload(body = {}) {
@@ -1065,6 +1065,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       exemplos_perguntas: body.exemplos_perguntas ? String(body.exemplos_perguntas).trim() : null,
       limitacoes:         body.limitacoes ? String(body.limitacoes).trim() : null,
       campos_semanticos_json: body.campos_semanticos_json || null,
+      seguranca_papeis_json:  body.seguranca_papeis_json || null,
     };
 
     if (Array.isArray(body.campos_semanticos)) {
@@ -1073,6 +1074,10 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       campos.campos_semanticos_json = JSON.stringify(campos.campos_semanticos_json);
     }
     if (campos.campos_semanticos_json) campos.campos_semanticos_json = String(campos.campos_semanticos_json).trim();
+    if (campos.seguranca_papeis_json && typeof campos.seguranca_papeis_json !== 'string') {
+      campos.seguranca_papeis_json = JSON.stringify(campos.seguranca_papeis_json);
+    }
+    if (campos.seguranca_papeis_json) campos.seguranca_papeis_json = String(campos.seguranca_papeis_json).trim();
     return campos;
   }
 
