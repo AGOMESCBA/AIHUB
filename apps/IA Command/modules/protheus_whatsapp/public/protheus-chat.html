@@ -334,6 +334,23 @@
   .selecao-cancelar:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); border-color: var(--wa-text-tertiary); }
   .selecao-cancelar svg { width: 14px; height: 14px; flex: none; }
 
+  /* Selecionar Todas: pedido do usuario apos reportar que marcar mensagem
+     por mensagem era inviavel em conversas longas antes de excluir tudo.
+     Mesma paleta neutra dos outros botoes da barra (nao e destrutivo). */
+  .selecao-todas {
+    flex: none;
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid var(--wa-border); border-radius: 7px;
+    background: transparent;
+    color: var(--wa-text-secondary);
+    font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  }
+  .selecao-todas:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); border-color: var(--wa-text-tertiary); }
+  .selecao-todas svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
   /* Limpar Chat: mesma paleta neutra do botao Cancelar (nao e destrutivo o
      bastante pra ganhar vermelho como Excluir, mas ainda apaga dados —
      border sutil o diferencia visualmente de um botao "de passagem"). */
@@ -367,19 +384,30 @@
   .selecao-excluir svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   /* Checkbox de cada bolha — so existe/visivel quando .selecao-ativa esta na
-     .chat-body (ver JS). Fica a esquerda da bolha, alinhado verticalmente
-     ao centro dela; clicar em qualquer lugar da linha marca/desmarca
-     (ver listener em enviarMensagem/addBubble). */
+     .chat-body (ver JS). Clicar em qualquer lugar da linha marca/desmarca
+     (ver listener em enviarMensagem/addBubble).
+     [CORRIGIDO apos usuario reportar checkbox "sumindo"] align-self:center
+     centralizava o checkbox na altura TOTAL do .row — em bolhas com resposta
+     longa (dezenas de linhas, ex.: detalhamento de faturamento), a bolha
+     fica muito mais alta que a viewport do chat, entao o checkbox centralizado
+     ficava no meio do texto, fora da area visivel ao rolar para o topo/fim
+     da bolha. position:sticky com top prende o checkbox perto do topo da
+     JANELA DE SCROLL (.chat-body) enquanto a bolha inteira estiver visivel
+     nela, entao ele acompanha a rolagem em vez de ficar preso ao centro
+     geometrico de uma bolha gigante. */
   .row-select-checkbox {
     display: none;
     flex: none;
-    align-self: center;
+    align-self: flex-start;
+    position: sticky;
+    top: 8px;
     width: 20px; height: 20px;
     margin: 0 4px;
     border-radius: 50%;
     border: 2px solid var(--wa-text-tertiary);
+    background: var(--wa-panel);
     cursor: pointer;
-    position: relative;
+    z-index: 1;
   }
   .chat-body.selecao-ativa .row-select-checkbox { display: block; }
   .chat-body.selecao-ativa .row { cursor: pointer; }
@@ -782,6 +810,10 @@
          Cancelar Selecao e Excluir agrupados a direita. -->
     <div class="selecao-bar" id="selecaoBar" style="display:none;">
       <span class="selecao-contagem" id="selecaoContagem">0 selecionada(s)</span>
+      <button type="button" class="selecao-todas" id="btnSelecionarTodas" title="Selecionar todas as mensagens">
+        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Selecionar Todas
+      </button>
       <button type="button" class="selecao-limpar" id="btnLimparChat" title="Apagar todas as mensagens desta conversa">
         <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         Limpar Chat
@@ -916,6 +948,7 @@
   const btnSelecionarMensagens = document.getElementById('btnSelecionarMensagens');
   const selecaoBar = document.getElementById('selecaoBar');
   const selecaoContagem = document.getElementById('selecaoContagem');
+  const btnSelecionarTodas = document.getElementById('btnSelecionarTodas');
   const btnCancelarSelecao = document.getElementById('btnCancelarSelecao');
   const btnExcluirSelecionadas = document.getElementById('btnExcluirSelecionadas');
   const btnLimparChat = document.getElementById('btnLimparChat');
@@ -1134,10 +1167,22 @@
   // =====================================================================
   const mensagensSelecionadas = new Set();
 
+  function todosIdsVisiveis() {
+    return [...chatBody.querySelectorAll('.row[data-mensagem-id]')].map((el) => el.dataset.mensagemId);
+  }
+
   function atualizarBarraSelecao() {
     const qtd = mensagensSelecionadas.size;
     selecaoContagem.textContent = qtd + ' selecionada' + (qtd === 1 ? '' : 's');
     btnExcluirSelecionadas.disabled = qtd === 0;
+
+    // Botao "Selecionar Todas" vira "Desmarcar Todas" quando toda mensagem
+    // com id visivel na conversa atual ja esta selecionada — mesmo padrao de
+    // toggle usado em listas do WhatsApp Web/Gmail.
+    const ids = todosIdsVisiveis();
+    const todasSelecionadas = ids.length > 0 && ids.every((id) => mensagensSelecionadas.has(id));
+    btnSelecionarTodas.lastChild.textContent = todasSelecionadas ? ' Desmarcar Todas' : ' Selecionar Todas';
+    btnSelecionarTodas.title = todasSelecionadas ? 'Desmarcar todas as mensagens' : 'Selecionar todas as mensagens';
   }
 
   function toggleSelecaoMensagem(id, rowEl) {
@@ -1149,6 +1194,26 @@
       mensagensSelecionadas.add(id);
       if (checkboxEl) checkboxEl.classList.add('marcado');
     }
+    atualizarBarraSelecao();
+  }
+
+  // Toggle: se todas as mensagens visiveis ja estao selecionadas, desmarca
+  // tudo; caso contrario seleciona as que faltam (nao mexe nas ja marcadas).
+  function toggleSelecionarTodas() {
+    const ids = todosIdsVisiveis();
+    if (!ids.length) return;
+    const todasSelecionadas = ids.every((id) => mensagensSelecionadas.has(id));
+    ids.forEach((id) => {
+      const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
+      const checkboxEl = rowEl ? rowEl.querySelector('[data-checkbox]') : null;
+      if (todasSelecionadas) {
+        mensagensSelecionadas.delete(id);
+        if (checkboxEl) checkboxEl.classList.remove('marcado');
+      } else {
+        mensagensSelecionadas.add(id);
+        if (checkboxEl) checkboxEl.classList.add('marcado');
+      }
+    });
     atualizarBarraSelecao();
   }
 
@@ -1171,6 +1236,7 @@
   }
 
   btnSelecionarMensagens.addEventListener('click', entrarModoSelecao);
+  btnSelecionarTodas.addEventListener('click', toggleSelecionarTodas);
   btnCancelarSelecao.addEventListener('click', sairModoSelecao);
 
   btnExcluirSelecionadas.addEventListener('click', async () => {
@@ -1957,6 +2023,15 @@
           : (col.data ? (cell) => formatarData(cell.getValue())
             : (col.competencia ? (cell) => formatarCompetenciaAAAAMM(cell.getValue()) : (cell) => trimSeTexto(cell.getValue()))),
         accessorDownload,
+        // bottomCalc nativo do Tabulator: soma a coluna no rodape GERAL da
+        // grid e, quando ha groupBy ativo, tambem no rodape de CADA grupo
+        // (ex.: agrupar por "cliente" mostra o subtotal daquele cliente) —
+        // pedido do usuario apos notar que o total mostrado nao acompanhava
+        // o agrupamento selecionado. Usa o calculo embutido do proprio
+        // Tabulator (sem recalcular ou reconstruir a grid manualmente a cada
+        // troca de agrupamento), entao nao pesa na performance.
+        bottomCalc: col.numerico ? 'sum' : undefined,
+        bottomCalcFormatter: col.numerico ? (cell) => formatarNumero(cell.getValue()) : undefined,
       };
       return def;
     });
@@ -1983,6 +2058,16 @@
 
     reportTable = new Tabulator(reportGridEl, {
       data: rows,
+      // [CORRIGIDO apos usuario reportar coluna vazia] Titulos do SX3 do
+      // Protheus podem conter ponto (ex.: E2_NUM -> "No. Titulo"). Por padrao
+      // o Tabulator interpreta "." em `field` como separador de caminho
+      // aninhado (row["No"]["Titulo"] em vez de row["No. Titulo"]), entao a
+      // coluna aparecia com cabecalho certo mas TODA celula vazia — o campo
+      // "No" nunca existe no objeto. nestedFieldSeparator:false desliga esse
+      // parsing globalmente, tratando qualquer `field` como chave literal do
+      // objeto (que e sempre o caso aqui, ja que rows vem de
+      // traduzirNomesCruesViaSx3() com chaves ja renomeadas e planas).
+      nestedFieldSeparator: false,
       // fitColumns (mesmo modo ja usado nas telas admin do IAHub) distribui a
       // largura disponivel sem medir o conteudo real de cada celula — muito
       // mais leve que fitDataFill, que fazia essa medicao a cada linha e

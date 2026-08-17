@@ -27,6 +27,21 @@ const { getDB } = require('../database');
 // já distingue de alias amigavel gerado pela IA (minusculo, ex: numero_titulo).
 const REGEX_CAMPO_CRU_PROTHEUS = /^[A-Z][A-Z0-9]{0,2}_[A-Z0-9]+$/;
 
+// Mesmo padrao de deteccao de "RESET"/"limpar contexto" usado pelo canal
+// WhatsApp real (ver _textoResetExplicito em modules/whatsapp/service.js) —
+// copiado (nao importado) porque e uma funcao pequena e autocontida, e o
+// arquivo do WhatsApp e critico o bastante para nao ganhar um export novo so
+// para isso. Frase precisa ser curta e ISOLADA (^...$) para nao disparar em
+// perguntas de negocio que mencionem essas palavras de outro jeito.
+function textoResetExplicito(texto) {
+  const t = String(texto || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim();
+  return /^(reset|\/reset|resetar|reiniciar|reinicia|recomecar|\/recomecar|limpar|limpar conversa|limpar tudo|limpar contexto|limpar cache|esquecer tudo|esqueca tudo|esquece tudo|nova conversa|novo inicio|comecar|comecar de novo|comecar novamente)$/.test(t);
+}
+
 // Mesma logica usada pelo canal WhatsApp real para rotular campos sem alias
 // (ver labelsSx3ParaFormatacao em modules/erp/ia-owner/runner.js), mas aplicada
 // diretamente as chaves de `rows` — la, o mapa so rotula texto ja formatado,
@@ -76,6 +91,35 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
 }
 
 async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
+  // Comando "RESET"/"limpar contexto" — mesma deteccao do canal WhatsApp
+  // real (textoResetExplicito acima), mas SEM apagar mensagens do historico
+  // visual: diferente do WhatsApp (onde nao ha tela de conversa persistida),
+  // aqui o usuario ve o historico completo na sidebar/chat, entao apagar
+  // seria destrutivo e nao foi pedido — so o CONTEXTO (ultimoIntent) precisa
+  // esquecer o que veio antes, exatamente o que o botao de reset no
+  // cabecalho ja faz (sessionStore.resetarMemoria, ver routes.js). Retorna
+  // direto, sem passar pelo pipeline de IA nem gravar interpretation_log —
+  // nao e uma pergunta de negocio.
+  if (textoResetExplicito(texto)) {
+    sessionStore.resetarMemoria({ sessaoId });
+    const respostaTextoReset = '🔄 *Contexto reiniciado!*\n\nEsqueci o que conversamos antes. Pode fazer uma nova pergunta.';
+    const { perguntaId, respostaId } = sessionStore.salvarTurno({
+      sessaoId,
+      perguntaTexto: texto,
+      respostaTexto: respostaTextoReset,
+      rows: null,
+      tipoResultado: null,
+      intent: null,
+    });
+    return {
+      mensagemId: respostaId,
+      perguntaId,
+      texto: respostaTextoReset,
+      rows: null,
+      tipo: null,
+    };
+  }
+
   const t0 = Date.now();
   const contextoAnterior = sessionStore.ultimoIntent({ sessaoId });
 
