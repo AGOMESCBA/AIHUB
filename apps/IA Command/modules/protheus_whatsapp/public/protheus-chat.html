@@ -512,6 +512,7 @@
     animation: typing-bubble-pulse 1.6s infinite ease-in-out;
   }
   .typing-dot {
+    display: block;
     width: 7px;
     height: 7px;
     border-radius: 50%;
@@ -522,8 +523,8 @@
   .typing-dot:nth-child(2) { animation-delay: 0.14s; }
   .typing-dot:nth-child(3) { animation-delay: 0.28s; }
   @keyframes typing-dot-wave {
-    0%, 70%, 100% { transform: translateY(0) scale(0.78); opacity: 0.42; }
-    35% { transform: translateY(-5px) scale(1.12); opacity: 1; }
+    0%, 70%, 100% { transform: translate3d(0, 0, 0) scale(0.78); opacity: 0.42; }
+    35% { transform: translate3d(0, -5px, 0) scale(1.12); opacity: 1; }
   }
   @keyframes typing-bubble-pulse {
     0%, 100% { box-shadow: var(--wa-shadow); }
@@ -746,7 +747,7 @@
   .tabulator .tabulator-cell.num { font-variant-numeric: tabular-nums; }
 
   @media (max-width: 760px) { .app-frame { grid-template-columns: 1fr; } .sidebar { display: none; } }
-  @media (prefers-reduced-motion: reduce) { .row, .typing-row .bubble, .typing-dot, .send-btn { animation: none !important; transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .row:not(.typing-row), .send-btn { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
@@ -1677,6 +1678,57 @@
     return dados._modelo;
   }
 
+  function colunasVisiveisRelatorio() {
+    return reportColunas.filter((c) => !reportHiddenColumns.includes(c.field));
+  }
+
+  function chaveValorAgregacao(col, row) {
+    const valor = row[col.field];
+    if (col.data) return chaveData(valor) ?? trimSeTexto(valor) ?? '';
+    if (col.competencia) return chaveCompetenciaAAAAMM(col.field, valor) ?? trimSeTexto(valor) ?? '';
+    return trimSeTexto(valor) ?? '';
+  }
+
+  function somarRowsPorColunasVisiveis(rows) {
+    if (!Array.isArray(rows) || !rows.length) return rows;
+    const visiveis = colunasVisiveisRelatorio();
+    const chaves = visiveis.filter((c) => !c.numerico);
+    const numericas = reportColunas.filter((c) => c.numerico);
+    const houveDetalheOculto = reportColunas.some((c) => !c.numerico && reportHiddenColumns.includes(c.field));
+    if (!houveDetalheOculto || !chaves.length || !numericas.length) return rows;
+
+    const grupos = new Map();
+    rows.forEach((row) => {
+      const key = JSON.stringify(chaves.map((col) => chaveValorAgregacao(col, row)));
+      let atual = grupos.get(key);
+      if (!atual) {
+        atual = {};
+        visiveis.forEach((col) => {
+          if (!col.numerico) atual[col.field] = row[col.field];
+        });
+        numericas.forEach((col) => { atual[col.field] = 0; });
+        grupos.set(key, atual);
+      }
+      numericas.forEach((col) => {
+        if (typeof row[col.field] === 'number') atual[col.field] += row[col.field];
+      });
+    });
+    return [...grupos.values()];
+  }
+
+  function rowsRelatorioAtual() {
+    return somarRowsPorColunasVisiveis(reportDadosAtuais ? reportDadosAtuais.rows : []);
+  }
+
+  function resumoTotaisGrupo(rows) {
+    const numericasVisiveis = colunasVisiveisRelatorio().filter((c) => c.numerico);
+    if (!Array.isArray(rows) || !rows.length || !numericasVisiveis.length) return '';
+    return numericasVisiveis.slice(0, 3).map((col) => {
+      const valor = rows.reduce((acc, row) => acc + (typeof row[col.field] === 'number' ? row[col.field] : 0), 0);
+      return `${escapeHtml(col.title)}: ${escapeHtml(formatarNumero(valor))}`;
+    }).join(' | ');
+  }
+
   function prepararRelatorio(dados) {
     if (!dados || !Array.isArray(dados.rows) || !dados.rows.length) return;
     if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
@@ -1950,12 +2002,11 @@
         }
         if (input.checked) {
           reportHiddenColumns = reportHiddenColumns.filter((field) => field !== col.field);
-          if (reportTable) reportTable.showColumn(col.field);
         } else {
           if (!reportHiddenColumns.includes(col.field)) reportHiddenColumns.push(col.field);
-          if (reportTable) reportTable.hideColumn(col.field);
         }
-        aplicarBuscaGlobal();
+        if (reportTable && reportDadosAtuais) abrirRelatorio(reportDadosAtuais);
+        else aplicarBuscaGlobal();
         agendarSalvarGridConfig();
       });
       const span = document.createElement('span');
@@ -2107,6 +2158,7 @@
     reportMensagemId = mensagemId || null;
     reportColunas = modelo.colunas;
     reportGroupBy = reportGroupBy.filter((field) => reportColunas.some((c) => c.field === field));
+    const rowsGrid = rowsRelatorioAtual();
 
     tabRelatorio.disabled = false;
     reportEmpty.style.display = 'none';
@@ -2119,7 +2171,7 @@
     reportGlobalFilterActive = false;
 
     reportTable = new Tabulator(reportGridEl, {
-      data: rows,
+      data: rowsGrid,
       // [CORRIGIDO apos usuario reportar coluna vazia] Titulos do SX3 do
       // Protheus podem conter ponto (ex.: E2_NUM -> "No. Titulo"). Por padrao
       // o Tabulator interpreta "." em `field` como separador de caminho
@@ -2143,7 +2195,7 @@
       // '100%' funciona como altura explicita quando o container pai
       // (.report-grid-wrap) ja tem altura fixa definida pelo layout flex.
       height: '100%',
-      columns: montarColunasTabulator(rows),
+      columns: montarColunasTabulator(rowsGrid),
       groupBy: reportGroupBy.length ? reportGroupBy : false,
       groupStartOpen: true,
       movableColumns: true,
@@ -2161,7 +2213,8 @@
         if (col?.data) valorFormatado = formatarData(value);
         else if (col?.competencia) valorFormatado = formatarCompetenciaAAAAMM(value);
         else if (col?.numerico) valorFormatado = formatarNumero(value);
-        return valorFormatado + ' (' + count + ' registros)';
+        const totais = resumoTotaisGrupo(data);
+        return valorFormatado + ' (' + count + ' registros)' + (totais ? ' - ' + totais : '');
       },
       placeholder: 'Sem dados para exibir',
     });
@@ -2199,7 +2252,7 @@
       agendarSalvarGridConfig();
     });
 
-    renderGrandTotal(rows, modelo);
+    renderGrandTotal(rowsGrid, modelo);
     reportGridMontada = true;
   }
 

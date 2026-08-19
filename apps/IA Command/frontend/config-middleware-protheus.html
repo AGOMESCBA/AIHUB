@@ -374,8 +374,8 @@
     const statusEl = document.getElementById('status-hierarquia');
     try {
       const [perfil, empresas] = await Promise.all([
-        fetch('/api/ia-command/compras/company-profile').then(r => r.json()).catch(() => null),
-        fetch('/api/ia-command/compras/company-empresas').then(r => r.json()).catch(() => []),
+        fetch('/api/ia-command/compras/company-profile').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/ia-command/compras/company-empresas').then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
       statusEl.textContent = perfil?.validated ? '✓ Hierarquia validada' : (perfil ? '⚠ Não validada — modo assistido' : '');

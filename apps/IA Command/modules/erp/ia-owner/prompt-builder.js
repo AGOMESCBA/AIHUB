@@ -104,6 +104,7 @@ function buildSystemPrompt(spec = {}, { modeloBaixasReceber, modeloBaixasPagar, 
     '- WITH (NOLOCK): PROIBIDO.',
     '- FORMAT() / TRY_CONVERT(): PROIBIDO.',
     '- ORDER BY com alias: REGRA ABSOLUTA — so use um nome simples no ORDER BY (ex: banco, dia, competencia) se esse nome foi declarado com AS no SELECT (ex: SA6.A6_NOME AS banco). Se a coluna nao tiver alias explicito, referencie-a qualificada (ex: ORDER BY SE8.E8_AGENCIA) ou por posicao numerica. NUNCA invente um alias no ORDER BY sem defini-lo com AS no SELECT — o SQL Server rejeitara com "Invalid column name".',
+    '- ORDER BY em query com GROUP BY: REGRA ABSOLUTA — toda coluna no ORDER BY deve ser o ALIAS de saida do SELECT (ex: ORDER BY dia) ou uma funcao agregada (ex: ORDER BY SUM(SD2.D2_TOTAL)). NUNCA use a coluna-base original (ex: SF2.F2_EMISSAO) no ORDER BY quando ela so aparece transformada/agregada no SELECT e no GROUP BY — o SQL Server rejeitara com "Column ... is invalid in the ORDER BY clause because it is not contained in either an aggregate function or the GROUP BY clause".',
     '',
 
     '## Formato de Data Protheus',
