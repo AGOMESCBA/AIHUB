@@ -138,25 +138,52 @@
 
       <div class="tenant-fields" id="tenant-fields">
         <div style="height:18px"></div>
+
+        <!-- Hierarquia organizacional (SYS_COMPANY/SYS_COMPANY_CFG) — mecanismo atual -->
         <div class="info-box">
-          No modelo <strong>LOBO_GUARA</strong>, o middleware adiciona automaticamente a cláusula
-          <code>WHERE [campo_empresa] = '[tenant_id]'</code> em cada SQL gerado pela IA, garantindo
-          que os dados retornados pertençam apenas à empresa configurada.
+          Quando o grupo Protheus desta empresa tem <strong>mais de uma empresa jurídica</strong> compartilhando as
+          mesmas tabelas físicas (ex.: grupo 01 = Plantivo + EMA), importe a hierarquia nas telas
+          <strong>Dicionário SYS_COMPANY</strong> e <strong>Dicionário SYS_COMPANY_CFG</strong> (menu ERP Protheus),
+          depois selecione abaixo qual empresa este cadastro do IAHub representa.
         </div>
-        <div class="form-row three">
+
+        <div class="form-row" style="align-items:end">
           <div class="form-group">
-            <label class="form-label">Tenant ID (código da empresa no ERP)</label>
-            <input type="text" id="f-tenant-id" class="form-control" placeholder="Ex.: 01, T1, MATRIZ">
+            <label class="form-label">Empresa desta conexão (hierarquia importada)</label>
+            <select id="f-empresa-codigo" class="form-control">
+              <option value="">— nenhuma hierarquia importada ainda —</option>
+            </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">Campo empresa na tabela</label>
-            <input type="text" id="f-campo-empresa" class="form-control" placeholder="Ex.: A1_EMP, FILIAL">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Campo filial (opcional)</label>
-            <input type="text" id="f-campo-filial" class="form-control" placeholder="Ex.: A1_FILIAL">
+          <div class="form-group" style="margin-bottom:0">
+            <span id="status-hierarquia" class="save-feedback"></span>
           </div>
         </div>
+
+        <!-- Modo legado — mantido para compatibilidade com empresas já configuradas assim -->
+        <details style="margin-top:14px">
+          <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--text-lo)">Modo legado (filtro simples por campo fixo)</summary>
+          <div style="margin-top:14px;padding:14px 16px;background:var(--bg-base);border:1px solid var(--border);border-radius:var(--radius-sm)">
+            <div class="info-box" style="margin-bottom:14px">
+              Mecanismo antigo: injeta <code>WHERE [campo_empresa] = '[tenant_id]'</code> literalmente no SQL, sem
+              conhecer a hierarquia real. Use apenas se a empresa acima não estiver preenchida. Não recomendado para
+              casos com múltiplas empresas por grupo — nesse caso, use a hierarquia acima.
+            </div>
+            <div class="form-row three">
+              <div class="form-group">
+                <label class="form-label">Tenant ID (código da empresa no ERP)</label>
+                <input type="text" id="f-tenant-id" class="form-control" placeholder="Ex.: 01, T1, MATRIZ">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Campo empresa na tabela</label>
+                <input type="text" id="f-campo-empresa" class="form-control" placeholder="Ex.: A1_EMP, FILIAL">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Campo filial (opcional)</label>
+                <input type="text" id="f-campo-filial" class="form-control" placeholder="Ex.: A1_FILIAL">
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -291,6 +318,7 @@
     document.getElementById('card-TRADICIONAL').classList.toggle('selected', modelo === 'TRADICIONAL');
     document.getElementById('card-LOBO_GUARA').classList.toggle('selected', modelo === 'LOBO_GUARA');
     document.getElementById('tenant-fields').classList.toggle('open', modelo === 'LOBO_GUARA');
+    if (modelo === 'LOBO_GUARA') carregarEmpresasHierarquia();
   }
 
   // ── Mensagens ────────────────────────────────────────────────────────────────
@@ -322,6 +350,7 @@
     document.getElementById('f-campo-filial').value = cfg.campo_filial   || '';
     document.getElementById('f-limite').value       = cfg.limite_registros != null ? cfg.limite_registros : 10000;
     document.getElementById('f-timeout').value      = cfg.timeout_ms      != null ? cfg.timeout_ms        : 30000;
+    empresaCodigoSalvo = cfg.empresa_codigo || '';
 
     tags.tabelas = _parseLista(cfg.tabelas_bloqueadas);
     tags.campos  = _parseLista(cfg.campos_sensiveis);
@@ -336,6 +365,42 @@
     return v.split(',').map(s => s.trim()).filter(Boolean);
   }
 
+  // ── Hierarquia organizacional (SYS_COMPANY/SYS_COMPANY_CFG) ────────────────
+
+  let empresaCodigoSalvo = '';
+
+  async function carregarEmpresasHierarquia() {
+    const sel = document.getElementById('f-empresa-codigo');
+    const statusEl = document.getElementById('status-hierarquia');
+    try {
+      const [perfil, empresas] = await Promise.all([
+        fetch('/api/ia-command/compras/company-profile').then(r => r.json()).catch(() => null),
+        fetch('/api/ia-command/compras/company-empresas').then(r => r.json()).catch(() => []),
+      ]);
+
+      statusEl.textContent = perfil?.validated ? '✓ Hierarquia validada' : (perfil ? '⚠ Não validada — modo assistido' : '');
+      statusEl.className = 'save-feedback ' + (perfil?.validated ? 'ok' : '');
+
+      const vistos = new Set();
+      const opcoes = (empresas || []).filter(e => {
+        if (!e.empresa_codigo || vistos.has(e.empresa_codigo)) return false;
+        vistos.add(e.empresa_codigo);
+        return true;
+      });
+
+      sel.innerHTML = '<option value="">— nenhuma —</option>' + opcoes.map(e =>
+        `<option value="${e.empresa_codigo}">${e.nome ? esc(e.nome) + ' (' + e.empresa_codigo + ')' : e.empresa_codigo}</option>`
+      ).join('');
+      if (!opcoes.length) sel.innerHTML = '<option value="">— nenhuma hierarquia importada ainda —</option>';
+      sel.value = empresaCodigoSalvo || '';
+    } catch (e) {
+      statusEl.textContent = 'Erro ao carregar hierarquia: ' + e.message;
+      statusEl.className = 'save-feedback fail';
+    }
+  }
+
+  function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
   // ── Salvar ───────────────────────────────────────────────────────────────────
 
   async function salvar() {
@@ -344,17 +409,18 @@
       tenant_id:          document.getElementById('f-tenant-id').value.trim(),
       campo_empresa:      document.getElementById('f-campo-empresa').value.trim(),
       campo_filial:       document.getElementById('f-campo-filial').value.trim(),
+      empresa_codigo:     document.getElementById('f-empresa-codigo').value.trim(),
       tabelas_bloqueadas: JSON.stringify(tags.tabelas),
       campos_sensiveis:   JSON.stringify(tags.campos),
       limite_registros:   parseInt(document.getElementById('f-limite').value)  || 10000,
       timeout_ms:         parseInt(document.getElementById('f-timeout').value) || 30000,
     };
 
-    if (modeloSelecionado === 'LOBO_GUARA' && !payload.tenant_id) {
-      mostrarMsg('err', 'Informe o Tenant ID para o modelo LOBO_GUARA.');
-      document.getElementById('f-tenant-id').focus();
-      return;
-    }
+    // Nao bloqueia salvar sem tenant_id/empresa_codigo: no primeiro cadastro LOBO_GUARA
+    // nenhum dos dois existe ainda (empresa_codigo so aparece depois de importar a
+    // hierarquia nas telas de Dicionario SYS_COMPANY/SYS_COMPANY_CFG, que por sua vez
+    // exigem modelo_dados=LOBO_GUARA ja salvo) — so avisa, nao impede salvar.
+    const semHierarquiaAinda = modeloSelecionado === 'LOBO_GUARA' && !payload.tenant_id && !payload.empresa_codigo;
 
     try {
       const res = await fetch('/api/ia-command/compras/middleware-config', {
@@ -364,7 +430,9 @@
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || res.statusText); }
       await carregar();
-      mostrarMsg('ok', 'Configuração salva com sucesso.');
+      mostrarMsg('ok', semHierarquiaAinda
+        ? 'Modelo LOBO_GUARA salvo. Agora importe a hierarquia em Dicionário SYS_COMPANY / SYS_COMPANY_CFG e volte aqui para selecionar a empresa.'
+        : 'Configuração salva com sucesso.');
     } catch (e) {
       mostrarMsg('err', 'Erro ao salvar: ' + e.message);
     }

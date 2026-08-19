@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dicionário SYS_COMPANY_CFG - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-light:#a78bfa; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md);transition:background var(--transition),color var(--transition); }
+    .topbar-menu-btn:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:600;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:700;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow-sm); }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .filter-area { padding-top:12px;border-top:1px solid var(--border);margin-top:12px; }
+    .filter-status { font-size:12px;color:var(--text-lo);flex:1; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control { flex:1;min-width:200px; }
+    .quick-row select.form-control { width:auto;min-width:160px; }
+    .gp-wrap { margin-top:10px; }
+    .gp-chips-row { display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative; }
+    .gp-label { font-size:11px;color:var(--text-lo);white-space:nowrap; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:600;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .badge-filial { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(124,58,237,.12);color:#7c3aed; }
+    .badge-empresa { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(5,150,105,.12);color:#059669; }
+    .badge-unidade { display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(2,132,199,.12);color:#0284c7; }
+    .btn-icon { background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:5px;font-size:13px;transition:background .15s; }
+    .btn-icon:hover { background:var(--bg-hover); }
+    .tabulator { border:none !important;background:transparent !important; }
+    .tabulator .tabulator-header { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important; }
+    .tabulator .tabulator-header .tabulator-col { background:var(--bg-card) !important;border-right:none !important;color:var(--text-lo) !important;font-size:11px !important;font-weight:700 !important;text-transform:uppercase;letter-spacing:.05em; }
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+    .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select { background:var(--bg-base) !important;color:var(--text-hi) !important;border:1px solid var(--border) !important;border-radius:4px !important;font-size:11px !important;padding:3px 6px !important;width:100% !important; }
+    .tabulator .tabulator-row { background:var(--bg-card) !important;border-bottom:1px solid var(--border) !important;cursor:pointer; }
+    .tabulator .tabulator-row:hover { background:var(--bg-hover) !important; }
+    .tabulator .tabulator-row .tabulator-cell { border-right:none !important;color:var(--text-md);font-size:13px;padding:10px 12px !important; }
+    .save-feedback { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .reg-field { margin-bottom:16px; }
+    .reg-label { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:5px; }
+
+    .modal-overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .22s; }
+    .modal-overlay.open { opacity:1;pointer-events:all; }
+    .modal-box { background:var(--bg-card);border:1px solid var(--border);border-radius:12px;width:min(600px,95vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);transform:translateY(10px);transition:transform .22s; }
+    .modal-overlay.open .modal-box { transform:none; }
+    .modal-header { display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border); }
+    .modal-title { font-size:15px;font-weight:700;color:var(--text-hi); }
+    .modal-close { width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition); }
+    .modal-close:hover { background:var(--bg-hover);color:var(--text-hi); }
+    .modal-tabs { display:flex;border-bottom:1px solid var(--border);padding:0 22px;flex-shrink:0; }
+    .modal-tab { padding:10px 14px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-lo);transition:color var(--transition),border-color var(--transition); }
+    .modal-tab.active { color:var(--accent);border-bottom-color:var(--accent); }
+    .modal-panel { display:none; }
+    .modal-panel.active { display:flex;flex-direction:column;flex:1;min-height:0; }
+    .modal-panel-head { padding:22px 22px 0;flex-shrink:0; }
+    .modal-panel-body { padding:0 22px 22px;flex:1;min-height:0;overflow-y:auto; }
+    .modal-footer { display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:14px 22px;border-top:1px solid var(--border);flex-shrink:0; }
+
+    .tabela-item { display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:7px;margin-bottom:6px;cursor:pointer;transition:background var(--transition),border-color var(--transition); }
+    .tabela-item:hover { background:var(--bg-hover); }
+    .tabela-item.selected { border-color:var(--accent);background:var(--accent-glow); }
+    .tabela-item input[type=radio] { accent-color:var(--accent); }
+    .tabela-nome { font-size:13px;font-weight:600;color:var(--text-hi); }
+
+    .info-box { background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:16px; }
+    .warn-box { background:rgba(234,88,12,.08);border-left:3px solid #ea580c;border-radius:0 6px 6px 0;padding:10px 14px;font-size:12px;color:var(--text-md);line-height:1.6;margin-bottom:16px; }
+    .alert-ok { background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:16px; }
+    .alert-err { background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;margin-bottom:16px; }
+    .alert-err ul { margin:6px 0 0 18px;padding:0; }
+    .import-status { font-size:13px;margin-top:10px;color:var(--text-lo); }
+    .import-status.ok { color:#15803d; }
+    .import-status.fail { color:#b91c1c; }
+    .status-pill { display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600; }
+    .status-pill.validado { background:#dcfce7;color:#15803d; }
+    .status-pill.nao-validado { background:#fef3c7;color:#b45309; }
+
+    .help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;opacity:0;pointer-events:none;transition:opacity .25s;}
+    .help-overlay.open{opacity:1;pointer-events:all;}
+    .help-drawer{position:fixed;top:0;right:0;bottom:0;width:min(540px,100vw);background:var(--bg-card);border-left:1px solid var(--border);z-index:301;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+    .help-drawer.open{transform:translateX(0);}
+    .help-drawer-header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);flex-shrink:0;}
+    .help-drawer-title{font-size:15px;font-weight:700;color:var(--text-hi);}
+    .help-drawer-close{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:6px;color:var(--text-lo);display:flex;align-items:center;justify-content:center;transition:background var(--transition),color var(--transition);}
+    .help-drawer-close:hover{background:var(--bg-hover);color:var(--text-hi);}
+    .help-drawer-body{flex:1;overflow-y:auto;padding:22px;}
+    .help-section{margin-bottom:28px;} .help-section:last-child{margin-bottom:0;}
+    .help-section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-bottom:12px;}
+    .help-item{margin-bottom:14px;}
+    .help-item-label{font-size:13px;font-weight:700;color:var(--text-hi);margin-bottom:4px;}
+    .help-item-desc{font-size:13px;color:var(--text-md);line-height:1.65;}
+    .help-tip{background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-top:12px;}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()">
+      <div class="logo-icon">IA</div>
+      <span class="logo-text">IA Command</span>
+    </div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command / Protheus &gt;</span> Dicionário SYS_COMPANY_CFG</span>
+    </div>
+
+    <div class="page-content">
+
+      <!-- ── SEÇÃO LISTA ── -->
+      <div id="sec-lista">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">ERP Protheus</div>
+            <div class="page-title">Dicionário SYS_COMPANY_CFG</div>
+            <div class="page-subtitle">Hierarquia completa (Grupo / Empresa / Unidade / Filial) — distingue formalmente empresas jurídicas diferentes dentro do mesmo grupo Protheus.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-ghost" onclick="abrirAjuda()" title="Ajuda" style="display:flex;align-items:center;gap:6px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ajuda
+            </button>
+            <button class="btn btn-ghost" onclick="abrirPerfil()">⚙ Perfil de campos</button>
+            <button class="btn btn-ghost" onclick="abrirValidar()">✓ Validar</button>
+            <button class="btn btn-ghost" onclick="abrirImportar()">↑ Importar</button>
+          </div>
+        </div>
+
+        <div class="warn-box" id="aviso-nao-lobo" style="display:none">
+          Esta empresa está configurada como <strong>TRADICIONAL</strong> no Middleware SQL. A importação direta do banco só é liberada quando o modelo é <strong>LOBO_GUARA</strong>.
+        </div>
+
+        <div class="quick-panel">
+          <div class="quick-row">
+            <select id="f-conexao-lista" class="form-control" onchange="filtrar(); onTrocarConexaoLista()">
+              <option value="">Todas as conexões</option>
+            </select>
+            <span id="status-perfil"></span>
+            <button class="btn btn-ghost" id="btn-filtros" onclick="toggleFiltros()">+ Mostrar filtros</button>
+            <span class="filter-status" id="filter-status">Sem filtros ativos</span>
+          </div>
+          <div class="filter-area" id="filter-area" style="display:none">
+            <div class="quick-row" style="margin-bottom:10px">
+              <input id="f-busca" type="text" class="form-control" placeholder="Buscar por chave ou nome..." oninput="filtrar()">
+              <select id="f-tipo" class="form-control" onchange="filtrar()">
+                <option value="">Todos os tipos</option>
+                <option value="empresa">Empresa</option>
+                <option value="unidade">Unidade</option>
+                <option value="filial">Filial</option>
+              </select>
+              <input id="f-grupo" type="text" class="form-control" placeholder="Grupo (ex: 01)" style="max-width:140px" oninput="filtrar()">
+              <button class="btn btn-ghost" onclick="limparFiltros()">Limpar</button>
+            </div>
+            <div class="gp-wrap">
+              <div class="gp-chips-row" id="gp-chips-row"><span class="gp-label">Agrupar por:</span></div>
+              <div id="dz"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="grid-toolbar">
+            <div>
+              <div class="grid-title">Hierarquia cadastrada</div>
+              <div id="count" class="grid-meta"></div>
+            </div>
+          </div>
+          <div id="tabela"></div>
+        </div>
+      </div>
+
+      <!-- ── SEÇÃO VALIDAÇÃO ── -->
+      <div id="sec-validar" style="display:none">
+        <div class="editor-shell">
+          <div class="editor-actionbar">
+            <div class="editor-actionbar-title">
+              <strong>Validar correspondência</strong>
+              <span>Confere se a hierarquia importada bate com uma tabela de negócio real.</span>
+            </div>
+            <div class="editor-actions">
+              <button class="btn btn-ghost" onclick="fecharValidar()">Voltar à lista</button>
+            </div>
+          </div>
+          <div class="editor-grid editor-grid-wide" style="margin-top:16px">
+            <main class="editor-main">
+              <section class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Validar correspondência</div>
+                  <div class="form-section-subtitle">Só libera uso automático quando a correspondência é 100% — qualquer divergência mantém o grupo em modo assistido. Isolamento parcial é pior que bloqueio.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="form-group">
+                    <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+                    <select id="val-conexao" class="form-control"></select>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Grupo a validar</label>
+                      <input id="val-grupo" class="form-control" placeholder="01">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Tabela de negócio (com sufixo)</label>
+                      <input id="val-tabela" class="form-control" placeholder="SD2010" style="text-transform:uppercase">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Campo de filial</label>
+                      <input id="val-campo" class="form-control" placeholder="D2_FILIAL" style="text-transform:uppercase">
+                    </div>
+                  </div>
+                  <button class="btn btn-primary" onclick="validar()">Validar</button>
+                  <div id="validar-resultado" style="margin-top:16px"></div>
+                </div>
+              </section>
+            </main>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL DE PERFIL DE CAMPOS ── -->
+<div class="modal-overlay" id="modal-perfil">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">⚙ Perfil de campos (XX8_*)</span>
+      <button class="modal-close" onclick="fecharPerfil()" title="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-panel active" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="modal-panel-head">
+        <div class="info-box">Nomes de campo variam por instalação — confirme contra o schema real (INFORMATION_SCHEMA.COLUMNS) antes de preencher. Nunca presuma que XX8_* é universal.</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="perfil-conexao" class="form-control" onchange="carregarPerfil()"></select>
+        </div>
+      </div>
+      <div class="modal-panel-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Campo empresa</label>
+            <input id="perfil-campo-empresa" class="form-control" placeholder="XX8_EMPR" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Campo unidade</label>
+            <input id="perfil-campo-unidade" class="form-control" placeholder="XX8_UNID" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Campo filial</label>
+            <input id="perfil-campo-filial" class="form-control" placeholder="XX8_CODIGO" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Campo descrição</label>
+            <input id="perfil-campo-descricao" class="form-control" placeholder="XX8_DESCRI" style="text-transform:uppercase">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Campo tipo de nó</label>
+            <input id="perfil-campo-tipo-no" class="form-control" placeholder="XX8_TIPO" style="text-transform:uppercase">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Valor — Empresa</label>
+            <input id="perfil-tipo-empresa" class="form-control" placeholder="1">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Valor — Unidade</label>
+            <input id="perfil-tipo-unidade" class="form-control" placeholder="2">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Valor — Filial</label>
+            <input id="perfil-tipo-filial" class="form-control" placeholder="3">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="save-feedback" id="perfil-feedback" style="margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="fecharPerfil()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPerfil()">Salvar perfil</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL DE IMPORTAÇÃO ── -->
+<div class="modal-overlay" id="modal-importar">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">↑ Importar Dicionário SYS_COMPANY_CFG</span>
+      <button class="modal-close" onclick="fecharImportar()" title="Fechar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-tabs">
+      <div class="modal-tab active" onclick="modalTab(this,'tab-banco')">Do banco de dados</div>
+      <div class="modal-tab" onclick="modalTab(this,'tab-dbf')">De arquivo DBF</div>
+      <div class="modal-tab" onclick="modalTab(this,'tab-sdb')">De arquivo SDB</div>
+    </div>
+
+    <div style="padding:12px 22px;border-bottom:1px solid var(--border);background:var(--bg-base);flex-shrink:0">
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Código do grupo <span style="color:#dc2626">*</span></label>
+        <input type="text" id="imp-grupo-codigo" class="form-control" placeholder="Ex.: 01">
+      </div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:8px">Modo de importação</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-hi)">
+          <input type="radio" name="import-mode-scc" value="adicionar" onchange="modoImport=this.value" style="accent-color:var(--accent)">
+          <span><strong>Importar</strong> — adiciona sem apagar registros existentes</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text-hi)">
+          <input type="radio" name="import-mode-scc" value="apagar" onchange="modoImport=this.value" checked style="accent-color:var(--accent)">
+          <span><strong>Apagar e Importar</strong> — apaga o cadastro deste grupo e reimporta</span>
+        </label>
+      </div>
+    </div>
+
+    <div id="tab-banco" class="modal-panel active">
+      <div class="modal-panel-head">
+        <div class="info-box">Conecta ao banco ERP da conexão selecionada e lista as tabelas SYS_COMPANY_CFG disponíveis. Confirme o Perfil de campos antes de importar.</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="imp-conexao-banco" class="form-control"></select>
+        </div>
+        <button class="btn btn-ghost" onclick="buscarTabelasBanco()" id="btn-buscar-tabelas">Buscar tabelas SYS_COMPANY_CFG...</button>
+      </div>
+      <div class="modal-panel-body">
+        <div id="lista-tabelas-banco" style="margin-top:14px"></div>
+        <div class="import-status" id="status-banco"></div>
+      </div>
+    </div>
+
+    <div id="tab-dbf" class="modal-panel">
+      <div class="modal-panel-head">
+        <div class="info-box">Selecione o arquivo <strong>SYS_COMPANY_CFG.DBF</strong> diretamente do seu computador. Processado localmente.</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="imp-conexao-dbf" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Arquivo DBF</label>
+          <input type="file" id="imp-arquivo-dbf" class="form-control" accept=".dbf" onchange="lerArquivoDBF(this)">
+        </div>
+        <div id="dbf-preview" style="font-size:13px;color:var(--text-md);margin-top:8px"></div>
+        <div class="import-status" id="status-dbf"></div>
+      </div>
+      <div class="modal-panel-body"></div>
+    </div>
+
+    <div id="tab-sdb" class="modal-panel">
+      <div class="modal-panel-head">
+        <div class="info-box">Selecione o arquivo <strong>.SDB</strong> exportado pelo Protheus (opção "SQLite Local").</div>
+        <div class="form-group">
+          <label class="form-label">Conexão <span style="color:#dc2626">*</span></label>
+          <select id="imp-conexao-sdb" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Arquivo SDB</label>
+          <input type="file" id="imp-arquivo-sdb" class="form-control" accept=".sdb" onchange="lerArquivoSDB(this)">
+        </div>
+        <div id="sdb-preview" style="font-size:13px;color:var(--text-md);margin-top:8px"></div>
+        <div class="import-status" id="status-sdb"></div>
+      </div>
+      <div class="modal-panel-body"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharImportar()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-import" onclick="confirmarImportacao()" disabled>Importar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/grid-group-panel.js?v=20260617-grid-guard-v2"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+'use strict';
+let table, gp;
+let dados = [];
+let conexoes = [];
+let filtrosVisiveis = false;
+let quickFilterFn = null;
+let tabelaBancoSelecionada = null;
+let dbfRegistros = null;
+let sdbRegistros = null;
+let abaImportAtiva = 'banco';
+let modoImport = 'apagar';
+
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function label(n) { return n === 1 ? '1 registro' : `${n} registros`; }
+function empresaIdAtiva() { return Number(window._iahubEmpresa?.id || window._empresaId || 0) || null; }
+function apiUrl(path, params = {}) {
+  const url = new URL(path, window.location.origin);
+  const empresaId = empresaIdAtiva();
+  if (empresaId) url.searchParams.set('empresa_id', empresaId);
+  for (const [k, v] of Object.entries(params || {})) {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+  }
+  return url.pathname + url.search;
+}
+function comEmpresa(body = {}) {
+  const empresaId = empresaIdAtiva();
+  return empresaId ? { ...body, empresa_id: empresaId } : body;
+}
+
+// ── Carregamento inicial ─────────────────────────────────────────────────────
+
+async function carregar() {
+  const [conns, cfg, rows] = await Promise.all([
+    fetch('/api/ia-command/connections/available').then(r => r.json()).catch(() => []),
+    fetch(apiUrl('/api/ia-command/compras/middleware-config')).then(r => r.json()).catch(() => ({})),
+    fetch(apiUrl('/api/ia-command/protheus/sys-company-cfg')).then(r => r.json()).catch(() => []),
+  ]);
+  conexoes = conns;
+  dados = rows;
+  document.getElementById('aviso-nao-lobo').style.display = (cfg.modelo_dados === 'LOBO_GUARA') ? 'none' : '';
+  popularSelectConexoes();
+  if (table) { table.replaceData(dados); } else { criarTabela(dados); }
+}
+
+function popularSelectConexoes() {
+  const proteusConns = conexoes.filter(c => (c.erp || '').toLowerCase() === 'protheus');
+  const selects = ['f-conexao-lista', 'imp-conexao-banco', 'imp-conexao-dbf', 'imp-conexao-sdb', 'perfil-conexao', 'val-conexao'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const val = el.value;
+    const extra = id === 'f-conexao-lista' ? '<option value="">Todas as conexões</option>' : '';
+    el.innerHTML = extra + proteusConns.map(c =>
+      `<option value="${c.id}">${esc(c.nome || String(c.id))}</option>`
+    ).join('');
+    if (val) el.value = val;
+  });
+}
+
+function nomeConexao(id) {
+  const c = conexoes.find(x => String(x.id) === String(id));
+  return c ? (c.nome || String(c.id)) : String(id);
+}
+
+async function onTrocarConexaoLista() {
+  const conexaoId = document.getElementById('f-conexao-lista').value;
+  const statusEl = document.getElementById('status-perfil');
+  if (!conexaoId) { statusEl.innerHTML = ''; return; }
+  try {
+    const perfil = await fetch(apiUrl('/api/ia-command/protheus/sys-company-cfg/perfil', { conexao_id: conexaoId })).then(r => r.json());
+    statusEl.innerHTML = perfil?.validated
+      ? '<span class="status-pill validado">✓ Validado</span>'
+      : '<span class="status-pill nao-validado">⚠ Não validado</span>';
+  } catch (_) {
+    statusEl.innerHTML = '';
+  }
+}
+
+// ── Grid ─────────────────────────────────────────────────────────────────────
+
+function criarTabela(data) {
+  gp = createGroupPanel({ chipsRowId:'gp-chips-row', dropZoneId:'dz', storageKey:'iac_admin_sys_company_cfg_group', getTable:()=>table });
+  table = new Tabulator('#tabela', {
+    data, index:'id', layout:'fitColumns', movableColumns:true,
+    height:'calc(100vh - 380px)', groupBy:gp.getActiveFields(), groupStartOpen:true,
+    tableBuilt: function() { gp.refresh(); gp.applyToTable(); },
+    placeholder:'<div style="padding:40px;text-align:center;color:var(--text-lo)">Nenhum registro cadastrado.<br><small>Use "Importar" para começar.</small></div>',
+    columns:[
+      { title:'Conexão', field:'connection_id', minWidth:140, headerFilter:'select',
+        headerFilterParams:{ values: Object.fromEntries([['','Todas'],...conexoes.filter(c=>(c.erp||'').toLowerCase()==='protheus').map(c=>[String(c.id), c.nome||String(c.id)])]) },
+        formatter: c => esc(nomeConexao(c.getValue())) },
+      { title:'Grupo', field:'grupo_codigo', width:80, headerFilter:true },
+      { title:'Empresa', field:'empresa_codigo', width:90, headerFilter:true },
+      { title:'Unidade', field:'unidade_codigo', width:90, headerFilter:true },
+      { title:'Filial', field:'filial_codigo', width:80, headerFilter:true },
+      { title:'Chave', field:'filial_chave', minWidth:130, headerFilter:true,
+        formatter: c => `<strong style="font-family:monospace">${esc(c.getValue())}</strong>` },
+      { title:'Tipo', field:'tipo_no', width:110, headerFilter:'select',
+        headerFilterParams:{values:{'':'Todos','empresa':'Empresa','unidade':'Unidade','filial':'Filial'}},
+        formatter: c => `<span class="badge-${c.getValue()}">${esc(c.getValue())}</span>` },
+      { title:'Nome', field:'nome', minWidth:200, headerFilter:true, formatter: c => esc(c.getValue()) },
+      { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
+        formatter: cell => `<button class="btn-icon" onclick="event.stopPropagation();excluir('${cell.getValue()}')" title="Excluir" style="color:#dc2626">🗑</button>` },
+    ],
+    dataFiltered:(_f, rows)=>{
+      const total = dados.length, qtd = rows?.length ?? total;
+      document.getElementById('count').textContent = qtd === total ? label(qtd) : `${qtd} de ${total} registros`;
+    },
+  });
+  document.getElementById('count').textContent = label(data.length);
+}
+
+// ── Filtros ──────────────────────────────────────────────────────────────────
+
+function toggleFiltros() {
+  filtrosVisiveis = !filtrosVisiveis;
+  document.getElementById('filter-area').style.display = filtrosVisiveis ? '' : 'none';
+  document.getElementById('btn-filtros').textContent = filtrosVisiveis ? '- Ocultar filtros' : '+ Mostrar filtros';
+  if (filtrosVisiveis && gp) setTimeout(() => gp.refresh(), 50);
+}
+
+function filtrar() {
+  if (!table) return;
+  if (quickFilterFn) { table.removeFilter(quickFilterFn); quickFilterFn = null; }
+  const conn  = document.getElementById('f-conexao-lista').value;
+  const busca = (document.getElementById('f-busca')?.value || '').trim().toLowerCase();
+  const tipo  = document.getElementById('f-tipo')?.value || '';
+  const grupo = (document.getElementById('f-grupo')?.value || '').trim();
+  if (conn || busca || tipo || grupo) {
+    quickFilterFn = row => {
+      if (conn && String(row.connection_id) !== conn) return false;
+      if (tipo && row.tipo_no !== tipo) return false;
+      if (grupo && String(row.grupo_codigo||'') !== grupo) return false;
+      if (busca && !(String(row.filial_chave||'') + ' ' + String(row.nome||'')).toLowerCase().includes(busca)) return false;
+      return true;
+    };
+    table.addFilter(quickFilterFn);
+  }
+  const ativos = [conn, busca, tipo, grupo].filter(Boolean).length;
+  document.getElementById('filter-status').textContent = ativos ? `${ativos} filtro(s) ativo(s)` : 'Sem filtros ativos';
+}
+
+function limparFiltros() {
+  ['f-busca','f-tipo','f-grupo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  filtrar();
+}
+
+async function excluir(id) {
+  if (!confirm('Excluir este registro do dicionário SYS_COMPANY_CFG?')) return;
+  await fetch(apiUrl(`/api/ia-command/protheus/sys-company-cfg/${encodeURIComponent(id)}`), { method:'DELETE' });
+  carregar();
+}
+
+// ── Perfil de campos ─────────────────────────────────────────────────────────
+
+function abrirPerfil() {
+  document.getElementById('perfil-feedback').textContent = '';
+  document.getElementById('modal-perfil').classList.add('open');
+  if (document.getElementById('perfil-conexao').value) carregarPerfil();
+}
+function fecharPerfil() { document.getElementById('modal-perfil').classList.remove('open'); }
+
+async function carregarPerfil() {
+  const conexaoId = document.getElementById('perfil-conexao').value;
+  if (!conexaoId) return;
+  try {
+    const perfil = await fetch(apiUrl('/api/ia-command/protheus/sys-company-cfg/perfil', { conexao_id: conexaoId })).then(r => r.json());
+    let fm = {};
+    try { fm = perfil?.field_map_json ? JSON.parse(perfil.field_map_json) : {}; } catch (_) {}
+    document.getElementById('perfil-campo-empresa').value = fm.campo_empresa || '';
+    document.getElementById('perfil-campo-unidade').value = fm.campo_unidade || '';
+    document.getElementById('perfil-campo-filial').value = fm.campo_filial || '';
+    document.getElementById('perfil-campo-descricao').value = fm.campo_descricao || '';
+    document.getElementById('perfil-campo-tipo-no').value = fm.campo_tipo_no || '';
+    document.getElementById('perfil-tipo-empresa').value = fm.tipo_no_empresa ?? '';
+    document.getElementById('perfil-tipo-unidade').value = fm.tipo_no_unidade ?? '';
+    document.getElementById('perfil-tipo-filial').value = fm.tipo_no_filial ?? '';
+  } catch (e) {
+    document.getElementById('perfil-feedback').textContent = 'Erro ao carregar: ' + e.message;
+    document.getElementById('perfil-feedback').className = 'save-feedback fail';
+  }
+}
+
+async function salvarPerfil() {
+  const conexaoId = document.getElementById('perfil-conexao').value;
+  const feedbackEl = document.getElementById('perfil-feedback');
+  if (!conexaoId) { feedbackEl.textContent = 'Selecione uma conexão.'; feedbackEl.className = 'save-feedback fail'; return; }
+  const field_map = {
+    campo_empresa:   document.getElementById('perfil-campo-empresa').value.trim().toUpperCase(),
+    campo_unidade:   document.getElementById('perfil-campo-unidade').value.trim().toUpperCase(),
+    campo_filial:    document.getElementById('perfil-campo-filial').value.trim().toUpperCase(),
+    campo_descricao: document.getElementById('perfil-campo-descricao').value.trim().toUpperCase(),
+    campo_tipo_no:   document.getElementById('perfil-campo-tipo-no').value.trim().toUpperCase(),
+    tipo_no_empresa: document.getElementById('perfil-tipo-empresa').value.trim(),
+    tipo_no_unidade: document.getElementById('perfil-tipo-unidade').value.trim(),
+    tipo_no_filial:  document.getElementById('perfil-tipo-filial').value.trim(),
+  };
+  try {
+    const res = await fetch('/api/ia-command/protheus/sys-company-cfg/perfil', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, field_map })),
+    });
+    const body = await res.json();
+    if (!res.ok) { feedbackEl.textContent = body.error || 'Erro ao salvar.'; feedbackEl.className = 'save-feedback fail'; return; }
+    feedbackEl.textContent = 'Perfil salvo.'; feedbackEl.className = 'save-feedback ok';
+  } catch (e) {
+    feedbackEl.textContent = 'Erro: ' + e.message; feedbackEl.className = 'save-feedback fail';
+  }
+}
+
+// ── Validação ────────────────────────────────────────────────────────────────
+
+function abrirValidar() {
+  document.getElementById('sec-lista').style.display = 'none';
+  document.getElementById('sec-validar').style.display = '';
+}
+function fecharValidar() {
+  document.getElementById('sec-validar').style.display = 'none';
+  document.getElementById('sec-lista').style.display = '';
+}
+
+async function validar() {
+  const conexaoId = document.getElementById('val-conexao').value;
+  const grupo = document.getElementById('val-grupo').value.trim();
+  const tabela = document.getElementById('val-tabela').value.trim().toUpperCase();
+  const campo = document.getElementById('val-campo').value.trim().toUpperCase();
+  const resEl = document.getElementById('validar-resultado');
+  if (!conexaoId || !grupo || !tabela || !campo) { resEl.innerHTML = '<div class="alert-err">Preencha conexão, grupo, tabela e campo.</div>'; return; }
+
+  resEl.innerHTML = 'Validando...';
+  try {
+    const res = await fetch('/api/ia-command/protheus/sys-company-cfg/validar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, grupo_codigo: grupo, tabela_negocio: tabela, campo_filial: campo })),
+    });
+    const body = await res.json();
+    if (!res.ok) { resEl.innerHTML = `<div class="alert-err">${esc(body.error || 'Erro na validação.')}</div>`; return; }
+    if (body.validated) {
+      resEl.innerHTML = `<div class="alert-ok">✓ Validado — ${body.total_filiais_arvore} filial(is) na hierarquia, ${body.total_valores_negocio} valor(es) distintos em ${esc(tabela)}.${esc(campo)}, todos com correspondência.</div>`;
+    } else {
+      resEl.innerHTML = `<div class="alert-err">⚠ Não validado — modo assistido mantido.<ul>${body.erros.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`;
+    }
+    onTrocarConexaoLista();
+  } catch (e) {
+    resEl.innerHTML = `<div class="alert-err">Erro: ${esc(e.message)}</div>`;
+  }
+}
+
+// ── Modal de importação ───────────────────────────────────────────────────────
+
+function abrirImportar() {
+  tabelaBancoSelecionada = null;
+  dbfRegistros = null;
+  sdbRegistros = null;
+  modoImport = 'apagar';
+  document.getElementById('imp-grupo-codigo').value = '';
+  document.querySelectorAll('input[name="import-mode-scc"]').forEach(r => { r.checked = r.value === 'apagar'; });
+  document.getElementById('lista-tabelas-banco').innerHTML = '';
+  document.getElementById('status-banco').textContent = '';
+  document.getElementById('status-dbf').textContent = '';
+  document.getElementById('dbf-preview').textContent = '';
+  document.getElementById('imp-arquivo-dbf').value = '';
+  document.getElementById('status-sdb').textContent = '';
+  document.getElementById('sdb-preview').textContent = '';
+  document.getElementById('imp-arquivo-sdb').value = '';
+  document.getElementById('btn-confirmar-import').disabled = true;
+  document.getElementById('modal-importar').classList.add('open');
+}
+function fecharImportar() { document.getElementById('modal-importar').classList.remove('open'); }
+
+function modalTab(el, id) {
+  el.closest('.modal-box').querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
+  el.closest('.modal-box').querySelectorAll('.modal-panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+  abaImportAtiva = id === 'tab-banco' ? 'banco' : id === 'tab-dbf' ? 'dbf' : 'sdb';
+  document.getElementById('btn-confirmar-import').disabled = true;
+}
+
+async function buscarTabelasBanco() {
+  const conexaoId = document.getElementById('imp-conexao-banco').value;
+  if (!conexaoId) { alert('Selecione uma conexão primeiro.'); return; }
+  const listEl   = document.getElementById('lista-tabelas-banco');
+  const statusEl = document.getElementById('status-banco');
+  const btn      = document.getElementById('btn-buscar-tabelas');
+  btn.disabled = true; btn.textContent = 'Buscando...';
+  listEl.innerHTML = ''; statusEl.textContent = '';
+  tabelaBancoSelecionada = null;
+  document.getElementById('btn-confirmar-import').disabled = true;
+  try {
+    const res  = await fetch(apiUrl('/api/ia-command/protheus/sys-company-cfg/tabelas-disponiveis', { conexao_id: conexaoId }));
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro ao buscar tabelas.'; statusEl.className = 'import-status fail'; return; }
+    if (!body.length) { listEl.innerHTML = '<div style="color:var(--text-lo);font-size:13px">Nenhuma tabela SYS_COMPANY_CFG encontrada no banco.</div>'; return; }
+    listEl.innerHTML = body.map(t =>
+      `<label class="tabela-item" onclick="selecionarTabela(this,'${esc(t)}')">
+        <input type="radio" name="scc-tabela" value="${esc(t)}">
+        <span class="tabela-nome">${esc(t)}</span>
+      </label>`
+    ).join('');
+    statusEl.textContent = `${body.length} tabela(s) encontrada(s).`;
+    statusEl.className = 'import-status ok';
+  } catch (e) {
+    statusEl.textContent = 'Falha na conexão: ' + e.message; statusEl.className = 'import-status fail';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Buscar tabelas SYS_COMPANY_CFG...';
+  }
+}
+
+function selecionarTabela(el, nome) {
+  document.querySelectorAll('.tabela-item').forEach(i => i.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input[type=radio]').checked = true;
+  tabelaBancoSelecionada = nome;
+  document.getElementById('btn-confirmar-import').disabled = false;
+}
+
+function lerArquivoDBF(input) {
+  dbfRegistros = null;
+  document.getElementById('dbf-preview').textContent = '';
+  document.getElementById('btn-confirmar-import').disabled = true;
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      dbfRegistros = parsearDBF(e.target.result);
+      document.getElementById('dbf-preview').textContent = `✔ ${dbfRegistros.length} registros lidos do arquivo.`;
+      document.getElementById('btn-confirmar-import').disabled = !document.getElementById('imp-conexao-dbf').value;
+    } catch (err) {
+      document.getElementById('dbf-preview').textContent = 'Erro ao ler DBF: ' + err.message;
+      document.getElementById('btn-confirmar-import').disabled = true;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parsearDBF(buffer) {
+  const view    = new DataView(buffer);
+  const decoder = new TextDecoder('windows-1252');
+  const numRecs    = view.getUint32(4, true);
+  const headerSize = view.getUint16(8, true);
+  const recSize    = view.getUint16(10, true);
+
+  const campos = [];
+  let offset = 32;
+  while (offset + 32 <= headerSize) {
+    if (view.getUint8(offset) === 0x0D) break;
+    const nome     = decoder.decode(new Uint8Array(buffer, offset, 11)).replace(/\0/g,'').trim();
+    const tamanho  = view.getUint8(offset + 16);
+    campos.push({ nome, tamanho });
+    offset += 32;
+  }
+
+  const registros = [];
+  for (let i = 0; i < numRecs; i++) {
+    const recOffset = headerSize + i * recSize;
+    if (recOffset + recSize > buffer.byteLength) break;
+    if (view.getUint8(recOffset) === 0x2A) continue;
+    const rec = {};
+    let fieldOffset = recOffset + 1;
+    for (const campo of campos) {
+      rec[campo.nome] = decoder.decode(new Uint8Array(buffer, fieldOffset, campo.tamanho)).trimEnd();
+      fieldOffset += campo.tamanho;
+    }
+    registros.push(rec);
+  }
+  return registros;
+}
+
+function lerArquivoSDB(input) {
+  sdbRegistros = null;
+  document.getElementById('sdb-preview').textContent = '';
+  document.getElementById('btn-confirmar-import').disabled = true;
+  const file = input.files?.[0];
+  if (!file) return;
+  sdbRegistros = file;
+  document.getElementById('sdb-preview').textContent = `✔ Arquivo selecionado (${(file.size / 1024 / 1024).toFixed(1)} MB). Clique em Importar para processar.`;
+  document.getElementById('btn-confirmar-import').disabled = !document.getElementById('imp-conexao-sdb').value;
+}
+
+async function confirmarImportacao() {
+  const grupo = document.getElementById('imp-grupo-codigo').value.trim();
+  if (!grupo) { alert('Informe o código do grupo.'); return; }
+  const btn = document.getElementById('btn-confirmar-import');
+  btn.disabled = true; btn.textContent = 'Importando...';
+  try {
+    if (abaImportAtiva === 'banco') await importarDoBanco(grupo);
+    else if (abaImportAtiva === 'dbf') await importarDoDBF(grupo);
+    else await importarDoSDB(grupo);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Importar';
+  }
+}
+
+async function importarDoBanco(grupo) {
+  const conexaoId = document.getElementById('imp-conexao-banco').value;
+  const statusEl  = document.getElementById('status-banco');
+  if (!conexaoId || !tabelaBancoSelecionada) return;
+  try {
+    const res  = await fetch('/api/ia-command/protheus/sys-company-cfg/reload', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, tabela: tabelaBancoSelecionada, grupo_codigo: grupo, limpar: modoImport === 'apagar' })),
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro na importação.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = `✔ ${body.importados} registro(s) importados com sucesso.`;
+    statusEl.className = 'import-status ok';
+    setTimeout(() => { fecharImportar(); carregar(); }, 1200);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+async function importarDoDBF(grupo) {
+  const conexaoId = document.getElementById('imp-conexao-dbf').value;
+  const statusEl  = document.getElementById('status-dbf');
+  if (!conexaoId || !dbfRegistros) return;
+  try {
+    const res  = await fetch('/api/ia-command/protheus/sys-company-cfg/import', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, grupo_codigo: grupo, registros: dbfRegistros, limpar: modoImport === 'apagar' })),
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro na importação.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = `✔ ${body.importados} registro(s) importados com sucesso.`;
+    statusEl.className = 'import-status ok';
+    setTimeout(() => { fecharImportar(); carregar(); }, 1200);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+async function importarDoSDB(grupo) {
+  const conexaoId = document.getElementById('imp-conexao-sdb').value;
+  const statusEl  = document.getElementById('status-sdb');
+  if (!conexaoId || !sdbRegistros) return;
+  statusEl.textContent = 'Enviando arquivo... (pode levar alguns minutos para arquivos grandes)';
+  statusEl.className = 'import-status';
+  try {
+    const empresaId = empresaIdAtiva();
+    const params = new URLSearchParams({ conexao_id: conexaoId, grupo_codigo: grupo, limpar: modoImport === 'apagar' ? 'true' : 'false' });
+    if (empresaId) params.set('empresa_id', empresaId);
+    const res  = await fetch(`/api/ia-command/protheus/sys-company-cfg/import-sdb?${params}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/octet-stream'},
+      body: sdbRegistros,
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro na importação.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = `✔ ${body.importados} registro(s) importados com sucesso.`;
+    statusEl.className = 'import-status ok';
+    setTimeout(() => { fecharImportar(); carregar(); }, 1200);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+// Eventos ─────────────────────────────────────────────────────────────────────
+
+document.getElementById('imp-conexao-dbf')?.addEventListener('change', () => {
+  document.getElementById('btn-confirmar-import').disabled = !dbfRegistros || !document.getElementById('imp-conexao-dbf').value;
+});
+document.getElementById('imp-conexao-sdb')?.addEventListener('change', () => {
+  document.getElementById('btn-confirmar-import').disabled = !sdbRegistros || !document.getElementById('imp-conexao-sdb').value;
+});
+document.getElementById('modal-importar')?.addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-importar')) fecharImportar();
+});
+document.getElementById('modal-perfil')?.addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-perfil')) fecharPerfil();
+});
+
+const init = async () => { await carregar(); };
+window._iahubAuthReady?.then(init) ?? init();
+</script>
+
+<div class="help-overlay" id="help-overlay" onclick="fecharAjuda()"></div>
+<div class="help-drawer" id="help-drawer">
+  <div class="help-drawer-header">
+    <span class="help-drawer-title">Ajuda — Dicionário SYS_COMPANY_CFG</span>
+    <button class="help-drawer-close" onclick="fecharAjuda()" title="Fechar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="help-drawer-body">
+
+    <div class="help-section">
+      <div class="help-section-title">O que é esta tela</div>
+      <div class="help-item-desc">O <strong>Dicionário SYS_COMPANY_CFG</strong> guarda a hierarquia completa (Grupo / Empresa / Unidade / Filial) via um campo de tipo de nó (ex.: <code>XX8_TIPO</code>). É o que permite distinguir formalmente duas empresas jurídicas diferentes dentro do mesmo grupo Protheus — o <strong>Dicionário SYS_COMPANY</strong> sozinho só descreve filiais, sem esse nível de detalhe.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Perfil de campos — por que confirmar antes de importar</div>
+      <div class="help-item-desc">Nomes de campo (<code>XX8_EMPR</code>, <code>XX8_TIPO</code> etc.) e os valores de tipo de nó por nível variam por instalação e versão do Protheus. Antes de importar, use <strong>⚙ Perfil de campos</strong> e confirme contra o schema real da conexão (<code>INFORMATION_SCHEMA.COLUMNS</code>) — nunca presuma que os nomes padrão estão corretos.</div>
+      <div class="help-tip">Exemplo validado numa instalação real: <code>XX8_TIPO</code> 0=Grupo, 1=Empresa, 2=Unidade, 3=Filial. Isso não é garantido em outra instalação.</div>
+    </div>
+
+    <div class="help-section">
+      <div class="help-section-title">Validação — falha fechado</div>
+      <div class="help-item-desc">A validação confere se todo código de filial gravado numa tabela de negócio real existe na hierarquia importada, e se não há chave duplicada dentro do grupo. Só libera uso automático quando a checagem é 100% limpa. Qualquer divergência mantém o grupo em modo assistido — isolamento parcial de dados entre empresas é pior que bloqueio.</div>
+    </div>
+
+  </div>
+</div>
+<script>
+  function abrirAjuda() { document.getElementById('help-overlay').classList.add('open'); document.getElementById('help-drawer').classList.add('open'); }
+  function fecharAjuda() { document.getElementById('help-overlay').classList.remove('open'); document.getElementById('help-drawer').classList.remove('open'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAjuda(); });
+</script>
+</body>
+</html>

@@ -26,6 +26,28 @@ const { getDB } = require('../database');
 // reais que motivaram esta funcao (E2_PREFIXO, E2_NUM). Sempre maiusculo, o que
 // já distingue de alias amigavel gerado pela IA (minusculo, ex: numero_titulo).
 const REGEX_CAMPO_CRU_PROTHEUS = /^[A-Z][A-Z0-9]{0,2}_[A-Z0-9]+$/;
+const SX3_LABEL_CACHE_TTL_MS = 5 * 60 * 1000;
+const SX3_LABEL_CACHE_MAX = 200;
+const sx3LabelCache = new Map();
+
+function sx3CacheGet(key) {
+  const item = sx3LabelCache.get(key);
+  if (!item) return null;
+  if (item.expiraEm <= Date.now()) {
+    sx3LabelCache.delete(key);
+    return null;
+  }
+  return item.valor;
+}
+
+function sx3CacheSet(key, valor) {
+  sx3LabelCache.set(key, { valor, expiraEm: Date.now() + SX3_LABEL_CACHE_TTL_MS });
+  if (sx3LabelCache.size > SX3_LABEL_CACHE_MAX) {
+    const firstKey = sx3LabelCache.keys().next().value;
+    if (firstKey) sx3LabelCache.delete(firstKey);
+  }
+  return valor;
+}
 
 // Mesmo padrao de deteccao de "RESET"/"limpar contexto" usado pelo canal
 // WhatsApp real (ver _textoResetExplicito em modules/whatsapp/service.js) —
@@ -52,6 +74,19 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
   const primeira = rows[0];
   const camposCrus = Object.keys(primeira).filter((k) => REGEX_CAMPO_CRU_PROTHEUS.test(k));
   if (!camposCrus.length) return rows;
+  const camposOrdenados = camposCrus.slice().sort();
+  const cacheKey = `${empresaId}::${camposOrdenados.join(',')}`;
+  const renomeioCache = sx3CacheGet(cacheKey);
+  if (renomeioCache) {
+    if (!Object.keys(renomeioCache).length) return rows;
+    return rows.map((row) => {
+      const nova = {};
+      for (const [chave, valor] of Object.entries(row)) {
+        nova[renomeioCache[chave] || chave] = valor;
+      }
+      return nova;
+    });
+  }
 
   let conexao;
   try {
@@ -59,26 +94,35 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
       "SELECT id FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = 'protheus' ORDER BY padrao DESC, criado_em DESC LIMIT 1"
     ).get(empresaId);
   } catch (_) {
+    sx3CacheSet(cacheKey, {});
     return rows;
   }
-  if (!conexao) return rows;
+  if (!conexao) {
+    sx3CacheSet(cacheKey, {});
+    return rows;
+  }
 
-  const placeholders = camposCrus.map(() => '?').join(',');
+  const placeholders = camposOrdenados.map(() => '?').join(',');
   let titulos;
   try {
     titulos = getDB().prepare(`
       SELECT campo, titulo FROM protheus_sx3
       WHERE connection_id = ? AND empresa_id = ? AND campo IN (${placeholders})
-    `).all(conexao.id, empresaId, ...camposCrus);
+    `).all(conexao.id, empresaId, ...camposOrdenados);
   } catch (_) {
+    sx3CacheSet(cacheKey, {});
     return rows;
   }
-  if (!titulos.length) return rows;
+  if (!titulos.length) {
+    sx3CacheSet(cacheKey, {});
+    return rows;
+  }
 
   const renomeio = {};
   for (const { campo, titulo } of titulos) {
     if (titulo && titulo.trim()) renomeio[campo] = titulo.trim();
   }
+  sx3CacheSet(cacheKey, renomeio);
   if (!Object.keys(renomeio).length) return rows;
 
   return rows.map((row) => {
@@ -88,6 +132,18 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
     }
     return nova;
   });
+}
+
+function registrarInterpretacaoAsync(payload) {
+  const executar = () => {
+    try {
+      interpretationPipeline.registrarInterpretacao(payload);
+    } catch (e) {
+      console.error('[protheus_whatsapp] Falha ao registrar interpretacao:', e.message);
+    }
+  };
+  if (typeof setImmediate === 'function') setImmediate(executar);
+  else setTimeout(executar, 0);
 }
 
 async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
@@ -116,6 +172,8 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
       perguntaId,
       texto: respostaTextoReset,
       rows: null,
+      temDados: false,
+      rowsCount: 0,
       tipo: null,
     };
   }
@@ -159,7 +217,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
   // cache/aprendizado de SQL canonico que o WhatsApp usa. canalId fica null
   // (este canal nao tem conceito de canal multi-empresa como o WhatsApp).
   try {
-    interpretationPipeline.registrarInterpretacao({
+    registrarInterpretacaoAsync({
       empresaId,
       sender: celular,
       texto,
@@ -184,7 +242,9 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
     mensagemId: respostaId,
     perguntaId,
     texto: respostaTexto,
-    rows,
+    rows: null,
+    temDados: Array.isArray(rows) && rows.length > 0,
+    rowsCount: Array.isArray(rows) ? rows.length : 0,
     tipo: resultado?.tipo || null,
   };
 }

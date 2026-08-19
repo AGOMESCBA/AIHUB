@@ -997,6 +997,7 @@
   // do navegador. So e invalidado quando uma pergunta NOVA muda os dados
   // daquela sessao (ver enviarMensagem). Fica vazio ao recarregar a pagina.
   const relatorioCachePorSessao = new Map();
+  const mensagensCachePorSessao = new Map();
 
   let sessaoAtualId = null;
   let sessoesCache = [];
@@ -1102,17 +1103,21 @@
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
-  function addBubble({ id, texto, direcao, rows, criadoEm, isFalha = false }) {
+  function addBubble({ id, texto, direcao, rows, temDados = false, rowsCount = null, criadoEm, isFalha = false }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
-    const temDados = !isFalha && Array.isArray(rows) && rows.length > 0;
+    const qtdRows = Array.isArray(rows) ? rows.length : (Number.isFinite(Number(rowsCount)) ? Number(rowsCount) : null);
+    const temDadosTabulares = !isFalha && (Array.isArray(rows) ? rows.length > 0 : !!temDados);
     const bubbleClass = isFalha ? 'bubble bubble-falha' : 'bubble';
     const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
 
     // Texto completo sempre — link para a aba Dados so quando ha rows.
-    const linkDados = temDados
-      ? `<div class="result-table-rodape"><span>${rows.length} registro${rows.length === 1 ? '' : 's'}</span>`
+    const labelRows = qtdRows == null
+      ? 'Dados disponíveis'
+      : `${qtdRows} registro${qtdRows === 1 ? '' : 's'}`;
+    const linkDados = temDadosTabulares
+      ? `<div class="result-table-rodape"><span>${labelRows}</span>`
         + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`
       : '';
     const conteudo = escapeHtml(texto) + linkDados;
@@ -1127,7 +1132,7 @@
     row.innerHTML = ordemCheckbox
       + `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`
       + ordemCheckboxFim;
-    if (temDados) {
+    if (temDadosTabulares) {
       row.querySelector('[data-abrir-dados]').addEventListener('click', (e) => {
         if (chatBody.classList.contains('selecao-ativa')) return; // nao abre aba durante selecao
         trocarAba('relatorio');
@@ -1253,6 +1258,14 @@
         const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
         if (rowEl) rowEl.remove();
       });
+      const cacheMensagens = mensagensCachePorSessao.get(sessaoAtualId);
+      if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
+        const removidos = new Set(ids);
+        cacheMensagens.mensagens = cacheMensagens.mensagens.filter((m) => !removidos.has(m.id));
+      } else {
+        mensagensCachePorSessao.delete(sessaoAtualId);
+      }
+      relatorioCachePorSessao.delete(sessaoAtualId);
       sairModoSelecao();
       await carregarSessoes();
       if (!chatBody.querySelector('.row')) renderEmptyState();
@@ -1270,6 +1283,7 @@
     try {
       await api('/sessoes/' + sessaoAtualId + '/mensagens/limpar', { method: 'POST' });
       relatorioCachePorSessao.delete(sessaoAtualId);
+      mensagensCachePorSessao.delete(sessaoAtualId);
       sairModoSelecao();
       chatBody.innerHTML = '';
       renderEmptyState();
@@ -1296,18 +1310,31 @@
       </div>`;
   }
 
+  function renderMensagensLista(mensagens) {
+    if (!Array.isArray(mensagens) || !mensagens.length) {
+      renderEmptyState();
+      return;
+    }
+    chatBody.innerHTML = '';
+    mensagens.forEach(addBubble);
+    scrollToBottom();
+  }
+
   async function carregarMensagens(sessaoId) {
     sessaoAtualId = sessaoId;
     sairModoSelecao();
-    renderLoadingState('Carregando mensagens...');
+    const cache = mensagensCachePorSessao.get(sessaoId);
+    if (cache) {
+      renderMensagensLista(cache.mensagens);
+    } else {
+      renderLoadingState('Carregando mensagens...');
+    }
     try {
-      const data = await api('/sessoes/' + sessaoId + '/mensagens');
-      if (sessaoAtualId !== sessaoId) return;
-      if (!data.mensagens.length) {
-        renderEmptyState();
-      } else {
-        data.mensagens.forEach(addBubble);
-        scrollToBottom();
+      if (!cache) {
+        const data = await api('/sessoes/' + sessaoId + '/mensagens');
+        if (sessaoAtualId !== sessaoId) return;
+        mensagensCachePorSessao.set(sessaoId, data);
+        renderMensagensLista(data.mensagens);
       }
     } catch (err) {
       if (sessaoAtualId !== sessaoId) return;
@@ -1474,6 +1501,7 @@
     try {
       await api('/sessoes/' + sessaoId, { method: 'DELETE' });
       relatorioCachePorSessao.delete(sessaoId);
+      mensagensCachePorSessao.delete(sessaoId);
       const eraAtual = sessaoId === sessaoAtualId;
       await carregarSessoes({ selecionarPrimeira: eraAtual });
       if (eraAtual && !sessoesCache.length) {
@@ -1544,23 +1572,57 @@
       sessaoAtualId = data.sessaoId;
       hideTyping();
       atribuirIdABolha(rowPergunta, data.resposta.perguntaId);
-      addBubble({ id: data.resposta.mensagemId, texto: data.resposta.texto, rows: data.resposta.rows, direcao: 'in', criadoEm: data.criadoEm });
+      addBubble({
+        id: data.resposta.mensagemId,
+        texto: data.resposta.texto,
+        rows: data.resposta.rows,
+        temDados: data.resposta.temDados,
+        rowsCount: data.resposta.rowsCount,
+        direcao: 'in',
+        criadoEm: data.criadoEm,
+      });
       scrollToBottom();
-      await carregarSessoes();
+      const cacheMensagens = mensagensCachePorSessao.get(data.sessaoId);
+      if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
+        cacheMensagens.mensagens.push(
+          { id: data.resposta.perguntaId, texto, direcao: 'out', rows: null, temDados: false, rowsCount: 0, criadoEm: data.criadoEm },
+          {
+            id: data.resposta.mensagemId,
+            texto: data.resposta.texto,
+            direcao: 'in',
+            rows: null,
+            temDados: !!data.resposta.temDados,
+            rowsCount: data.resposta.rowsCount ?? null,
+            tipo: data.resposta.tipo || null,
+            criadoEm: data.criadoEm,
+          },
+        );
+      } else {
+        mensagensCachePorSessao.set(data.sessaoId, {
+          mensagens: [
+            { id: data.resposta.perguntaId, texto, direcao: 'out', rows: null, temDados: false, rowsCount: 0, criadoEm: data.criadoEm },
+            {
+              id: data.resposta.mensagemId,
+              texto: data.resposta.texto,
+              direcao: 'in',
+              rows: null,
+              temDados: !!data.resposta.temDados,
+              rowsCount: data.resposta.rowsCount ?? null,
+              tipo: data.resposta.tipo || null,
+              criadoEm: data.criadoEm,
+            },
+          ],
+          proximoCursor: null,
+        });
+      }
+      carregarSessoes().catch((err) => showError('Falha ao carregar conversas: ' + err.message));
 
-      const temDados = Array.isArray(data.resposta.rows) && data.resposta.rows.length;
+      const temDados = Array.isArray(data.resposta.rows)
+        ? data.resposta.rows.length > 0
+        : !!data.resposta.temDados;
       if (temDados) {
-        const dadosRelatorio = {
-          mensagemId: data.resposta.mensagemId,
-          rows: data.resposta.rows,
-          gridConfig: null,
-          texto: data.resposta.texto,
-        };
-        // Pergunta nova = dado novo: substitui o cache desta sessao. A grid
-        // so sera montada quando o usuario entrar na aba Dados; aqui so
-        // preparamos metadados leves e habilitamos a aba.
-        relatorioCachePorSessao.set(sessaoAtualId, dadosRelatorio);
-        prepararRelatorio(dadosRelatorio);
+        relatorioCachePorSessao.delete(sessaoAtualId);
+        carregarRelatorioDaSessao(sessaoAtualId);
       }
     } catch (err) {
       hideTyping();

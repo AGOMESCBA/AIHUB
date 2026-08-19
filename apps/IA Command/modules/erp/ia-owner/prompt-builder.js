@@ -189,9 +189,19 @@ function buildUserPrompt({ mensagem, historico, estadoAnterior, contextoTecnico,
   const empresasIahub = [...new Set([..._empresasIahubCtx, ..._empresasIahubEst])].filter(Boolean);
   const _empresasIahubStr = empresasIahub.length ? empresasIahub : null;
 
+  // Mesmo destaque de topo usado para empresas-tenant IAHub, agora para filial/
+  // empresa organizacional Lobo Guara (ver docs/lobo-guara-consenso-arquitetura.md):
+  // instrucao enterrada dentro do JSON generico de contextoTecnico nao e respeitada
+  // pela IA (confirmado em teste real — a IA reintroduzia o nome como filtro de
+  // cliente/fornecedor mesmo com o campo presente no contexto tecnico).
+  const _instrucaoFilialLoboGuara = contextoTecnico?.instrucao_filial_lobo_guara || null;
+
   return [
     _empresasIahubStr
       ? `⚠️ INSTRUCAO CRITICA DE ESCOPO — LEIA ANTES DE QUALQUER COISA:\nOs seguintes nomes sao EMPRESAS-TENANT do sistema IAHub (nao sao clientes, fornecedores nem entidades cadastrais do ERP): ${_empresasIahubStr.join(', ')}.\nREGRA ABSOLUTA: NUNCA declare nenhum desses nomes em "entidades_necessarias". NUNCA coloque esses nomes em filtros de SA1.A1_NOME, SA2.A2_NOME ou qualquer campo cadastral. Eles definem APENAS qual banco de dados Protheus sera consultado — o escopo do tenant. A consulta e executada diretamente no banco do tenant sem filtro por nome de empresa.\n`
+      : '',
+    _instrucaoFilialLoboGuara
+      ? `⚠️ INSTRUCAO CRITICA DE ESCOPO — LEIA ANTES DE QUALQUER COISA:\n${_instrucaoFilialLoboGuara}\nREGRA ABSOLUTA: NAO declare esse nome em "entidades_necessarias". NAO coloque esse nome em filtros de SA1.A1_NOME, SA2.A2_NOME, F1_LOJA, E2_LOJA ou qualquer outro campo cadastral/loja/fornecedor. O backend aplicara o filtro de filial correto automaticamente depois — ignore esse nome completamente ao montar o SQL.\n`
       : '',
     `Mensagem atual do usuario:\n${mensagem || ''}`,
     '',

@@ -100,7 +100,7 @@ GET /api/ia-command/protheus/chat
 POST /api/ia-command/protheus/mensagem
   auth: Bearer <token>
   body: { texto, sessaoId? }        (sessaoId omitido cria sessão nova)
-  → { sessaoId, resposta: { texto, rows, tipo }, criadoEm }
+  → { sessaoId, resposta: { texto, temDados, rowsCount, tipo }, criadoEm }
 
 GET /api/ia-command/protheus/sessoes
   auth: Bearer <token>
@@ -112,7 +112,11 @@ POST /api/ia-command/protheus/sessoes
 
 GET /api/ia-command/protheus/sessoes/:id/mensagens?cursor=...
   auth: Bearer <token>
-  → { mensagens: [...], proximoCursor }
+  → { mensagens: [{ texto, temDados, rowsCount, tipo, ... }], proximoCursor }
+
+GET /api/ia-command/protheus/sessoes/:id/relatorio
+  auth: Bearer <token>
+  → { id, texto, rows, rowsCount, tipo, gridConfig, criadoEm } | null
 ```
 
 ## Frontend

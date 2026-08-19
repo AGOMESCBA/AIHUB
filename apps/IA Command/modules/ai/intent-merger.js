@@ -667,6 +667,25 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
     merged._contextoIAAnterior = ultimoIntent._contextoIAAnterior;
   }
 
+  // 3b. Filial/empresa organizacional (LOBO_GUARA) — dimensao de primeira classe,
+  // ver docs/lobo-guara-consenso-arquitetura.md. A resolucao contra a mensagem
+  // atual acontece ANTES do merge (whatsapp/service.js chama o resolver e grava
+  // em novoIntent._filialLoboGuara antes de invocar mesclar). Aqui so herdamos
+  // quando o turno atual nao trouxe mencao nova.
+  //
+  // Critico: herdar filial entre EMPRESAS/CONEXOES diferentes e risco de vazamento
+  // (o mesmo codigo pode significar outra coisa, ou nada, na nova empresa) — por
+  // isso a herdanca so vale quando a empresa_id nao mudou entre os dois intents.
+  if (!merged._filialLoboGuara && ultimoIntent._filialLoboGuara) {
+    const mesmaEmpresa = !merged._empresaIdContexto
+      || !ultimoIntent._empresaIdContexto
+      || merged._empresaIdContexto === ultimoIntent._empresaIdContexto;
+    if (mesmaEmpresa) {
+      merged._filialLoboGuara = { ..._clonar(ultimoIntent._filialLoboGuara), origem: 'contexto_herdado' };
+      merged._herdouFilialLoboGuara = true;
+    }
+  }
+
   // 4. Limite e ordenação: herda apenas se ausentes
   if (merged.limite == null && ultimoIntent.limite != null) {
     merged.limite = ultimoIntent.limite;

@@ -1354,6 +1354,56 @@ const MIGRATIONS = [
         ON scheduled_question_recipients (job_id, origem, ativo);
     `,
   },
+  {
+    version: 75,
+    descricao: 'IA Command - cache de hierarquia organizacional Protheus (SYS_COMPANY/SYS_COMPANY_CFG) para conexoes com multiplas empresas por grupo. Tabelas novas, aditivas — nao alteram protheus_sx2/sx3 nem o pipeline TRADICIONAL existente.',
+    sql: `
+      CREATE TABLE IF NOT EXISTS protheus_company_profile (
+        id                    TEXT PRIMARY KEY,
+        connection_id         TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+        empresa_id            INTEGER NOT NULL,
+        company_table         TEXT NOT NULL DEFAULT 'SYS_COMPANY',
+        company_cfg_table     TEXT NOT NULL DEFAULT 'SYS_COMPANY_CFG',
+        field_map_json        TEXT NOT NULL DEFAULT '{}',
+        branch_key_strategy   TEXT NOT NULL DEFAULT 'nao_descoberta',
+        branch_key_detail_json TEXT DEFAULT NULL,
+        validated             INTEGER NOT NULL DEFAULT 0,
+        validation_errors_json TEXT DEFAULT NULL,
+        criado_em             TEXT NOT NULL,
+        atualizado_em         TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_protheus_company_profile_conn
+        ON protheus_company_profile (connection_id);
+
+      CREATE INDEX IF NOT EXISTS idx_protheus_company_profile_empresa
+        ON protheus_company_profile (empresa_id);
+
+      CREATE TABLE IF NOT EXISTS protheus_company_tree (
+        id            TEXT PRIMARY KEY,
+        connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+        empresa_id    INTEGER NOT NULL,
+        grupo_codigo  TEXT NOT NULL,
+        empresa_codigo TEXT DEFAULT NULL,
+        unidade_codigo TEXT DEFAULT NULL,
+        filial_codigo TEXT DEFAULT NULL,
+        filial_chave  TEXT NOT NULL,
+        tipo_no       TEXT NOT NULL,
+        nome          TEXT DEFAULT NULL,
+        cnpj          TEXT DEFAULT NULL,
+        ativo         INTEGER NOT NULL DEFAULT 1,
+        origem        TEXT NOT NULL DEFAULT 'import',
+        criado_em     TEXT NOT NULL,
+        atualizado_em TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_protheus_company_tree_conn_chave
+        ON protheus_company_tree (connection_id, filial_chave);
+
+      CREATE INDEX IF NOT EXISTS idx_protheus_company_tree_empresa
+        ON protheus_company_tree (empresa_id, connection_id, tipo_no);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

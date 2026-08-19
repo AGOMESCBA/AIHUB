@@ -56,6 +56,11 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   require('./erp/totvs_protheus/SX/sx2-routes')(app, { requireAuth, requireIaCommand });
   require('./erp/totvs_protheus/SX/sx3-routes')(app, { requireAuth, requireIaCommand });
 
+  // Rotas dos dicionários SYS_COMPANY / SYS_COMPANY_CFG (hierarquia organizacional
+  // para grupos Protheus com mais de uma empresa jurídica — cenário LOBO_GUARA)
+  require('./erp/totvs_protheus/SX/sys-company-routes')(app, { requireAuth, requireIaCommand });
+  require('./erp/totvs_protheus/SX/sys-company-cfg-routes')(app, { requireAuth, requireIaCommand });
+
   // Rotas do painel administrativo (intenções, datasets, logs)
   require('./admin-routes')(app, { requireAuth, requireIaCommand });
   require('./scheduler/scheduled-question-routes')(app, { requireAuth, requireIaCommand });

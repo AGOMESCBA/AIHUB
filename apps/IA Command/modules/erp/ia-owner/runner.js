@@ -6,6 +6,8 @@ const connectionFactory = require('../providers/connection-factory');
 const aiProviderClient = require('../core/ai-provider-client');
 const sx2SqlNormalizer = require('../totvs_protheus/SX/sx2-sql-normalizer');
 const sx3SqlValidator = require('../totvs_protheus/SX/sx3-sql-validator');
+const loboGuaraFilialResolver = require('../totvs_protheus/SX/lobo-guara-filial-resolver');
+const loboGuaraNormalizer = require('../totvs_protheus/SX/lobo-guara-normalizer');
 const entitySqlGuard = require('../totvs_protheus/guards/entity-sql-guard');
 const responseFormatter = require('../core/response-formatter');
 const channelStore = require('../../whatsapp/channel-store');
@@ -1217,12 +1219,38 @@ async function extrairTermosEntidadesAntesIa(spec, keys, cfg, mensagem, intent, 
       console.warn(`[${spec.logPrefix || 'IAOwner'}] Extracao previa de entidades falhou; usando termos deterministicas:`, e.message);
     }
   }
-  return deduplicarTermosEntidade([...termosAteAgora, ...termosIa], intent, entidadesResolvidas)
+  const termosFinais = deduplicarTermosEntidade([...termosAteAgora, ...termosIa], intent, entidadesResolvidas)
     .map(termo => ({
       ...termo,
       tipo: String(termo.tipo || termo.tipo_sugerido || 'desconhecido').trim().toLowerCase(),
       tipo_sugerido: String(termo.tipo_sugerido || termo.tipo || 'desconhecido').trim().toLowerCase(),
     }));
+
+  // Filial/empresa organizacional (Lobo Guara) tem prioridade sobre entidade de
+  // negocio quando ha correspondencia exata na hierarquia: sem isso, um cliente
+  // cadastrado com nome igual a uma filial/empresa (ex: "Campo Verde", "Plantivo")
+  // intercepta o termo aqui e gera pergunta de ambiguidade de CLIENTE, antes do
+  // lobo-guara-filial-resolver (que so roda depois, dentro de prepararSql) ter
+  // qualquer chance de reconhecer que era filial. Ver docs/lobo-guara-consenso-
+  // arquitetura.md. Falha fechada: so filtra quando ha match exato e a empresa
+  // esta confirmada LOBO_GUARA validada — nunca afeta TRADICIONAL.
+  if (empresaId && termosFinais.length) {
+    try {
+      const { getDB } = require('../../database');
+      const ctxLoboGuaraTermos = loboGuaraFilialResolver.contextoLoboGuara(getDB(), empresaId);
+      if (ctxLoboGuaraTermos) {
+        return termosFinais.filter(termo => {
+          const resolvido = loboGuaraFilialResolver.resolverDaMensagem(getDB(), empresaId, termo.texto);
+          if (resolvido && (resolvido.modo === 'especifica' || resolvido.modo === 'empresa')) return false;
+          return true;
+        });
+      }
+    } catch (e) {
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao filtrar termos por filial Lobo Guara (ignorado): ${e.message}`);
+    }
+  }
+
+  return termosFinais;
 }
 
 // Remove filtros que sao interpretacoes temporais pre-computadas pelo orquestrador sem ancora de data_atual.
@@ -3445,13 +3473,37 @@ function interpolarRespostaPlanejada(template, rows = []) {
   return /\{[a-zA-Z0-9_]+\}/.test(saida) ? null : saida;
 }
 
-async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false }) {
+async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entidades, filial, periodo, planoConsulta, mensagem, permitirSelectTop = false, empresaId = null, filialLoboGuaraState = null }) {
   let sqlEntradaNormalizado = normalizarAliasesBaseAusentes(sql, spec);
   sqlEntradaNormalizado = sx2SqlNormalizer.adaptarSqlCanonicoPorSX2(sqlEntradaNormalizado, sx2, {
     logPrefix: spec.logPrefix,
     sufixoFallback: inferirSufixoSX2(sx2, protheus?.sufixoTabela),
   });
   sqlEntradaNormalizado = sx2SqlNormalizer.sanitizarEspacosKeywords(sqlEntradaNormalizado);
+
+  // Guards Lobo Guara — so quando a empresa e confirmada LOBO_GUARA validada
+  // (TRADICIONAL nunca entra aqui). Roda cedo, sobre o SQL ainda cru da IA,
+  // para rejeitar e disparar retry corretivo antes de qualquer outra
+  // transformacao. Ver docs/lobo-guara-consenso-arquitetura.md, secao "Guards".
+  if (empresaId && spec.aplicarLoboGuaraNormalizer !== false) {
+    try {
+      const { getDB } = require('../../database');
+      const ctxLoboGuaraGuard = loboGuaraFilialResolver.contextoLoboGuara(getDB(), empresaId);
+      if (ctxLoboGuaraGuard) {
+        const guardResult = loboGuaraNormalizer.validarGuardsLoboGuara(sqlEntradaNormalizado);
+        if (!guardResult.ok) {
+          throw Object.assign(
+            new Error(`SQL rejeitado por guard Lobo Guara: ${guardResult.erros.join(' | ')}`),
+            { _tipo: 'lobo_guara_guard_invalido', _sql: sqlEntradaNormalizado }
+          );
+        }
+      }
+    } catch (e) {
+      if (e._tipo === 'lobo_guara_guard_invalido') throw e;
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao checar guards Lobo Guara (ignorado): ${e.message}`);
+    }
+  }
+
   const validacaoBasica = validarSqlIaOwnerBasico(sqlEntradaNormalizado, spec, sx2, mensagem, { permitirSelectTop });
   if (!validacaoBasica.ok) {
     // Acumula também erros do query_plan para que o retry receba todos os problemas de uma vez,
@@ -3581,6 +3633,25 @@ async function prepararSql({ spec, sql, sx2, sx3, protheus, middlewareCfg, entid
   if (spec.sanitizarFiltrosFilialSX2 !== false) {
     out = sx2SqlNormalizer.sanitizarFiltrosFilialSX2(out, sx2, { filialSolicitada: filial && filial !== 'TODAS', logPrefix: spec.logPrefix });
   }
+  // Escopo Lobo Guara — roda DEPOIS do SX2 tradicional (para nao ter seu IN(...)
+  // removido pela sanitizacao de tabela compartilhada/global) e ANTES da
+  // validacao do query_plan (para que o plano ja veja o SQL com o filtro
+  // aplicado). Falha fechada: aplicarEscopoLoboGuara() e um no-op silencioso
+  // quando a empresa nao esta em LOBO_GUARA com perfil validado — nao afeta
+  // TRADICIONAL nem conexoes Lobo Guara ainda nao validadas.
+  if (empresaId && spec.aplicarLoboGuaraNormalizer !== false) {
+    try {
+      const { getDB } = require('../../database');
+      const ctxLoboGuara = loboGuaraFilialResolver.contextoLoboGuara(getDB(), empresaId);
+      if (ctxLoboGuara) {
+        out = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
+          db: getDB(), ctx: ctxLoboGuara, sx2, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
+        });
+      }
+    } catch (e) {
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao aplicar escopo Lobo Guara (ignorado, SQL segue sem o filtro): ${e.message}`);
+    }
+  }
   const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);
   if (!validacaoPlano.ok) {
     throw Object.assign(new Error(`SQL rejeitado pelo query_plan: ${validacaoPlano.erros.join(' | ')}`), { _tipo: 'contrato_query_plan_invalido', _sql: out });
@@ -3625,15 +3696,47 @@ async function executar(spec, intent, empresaId) {
   let intentEfetivo = intent;
   let contextoTecnicoExtra = {};
   let entidadeSeguranca = null;
+  // Aviso minimo (prompt-minimo, ver docs/lobo-guara-consenso-arquitetura.md) de que
+  // um termo da pergunta ja foi absorvido pelo backend como escopo de filial/empresa
+  // organizacional — evita que a IA reintroduza o mesmo termo como filtro de cliente/
+  // entidade (ex: "Plantivo" virar AND F2_CLIENTE = 'Plantivo'), o que gera SQL que
+  // nunca bate com nenhum registro. O backend ja aplica o filtro real depois, via
+  // lobo-guara-normalizer — a IA nao precisa (e nao deve) fazer nada com esse nome.
+  if (intent._filialLoboGuara && ['especifica', 'empresa'].includes(intent._filialLoboGuara.modo)) {
+    const nomesFilial = (intent._filialLoboGuara.nomes || []).join(', ');
+    if (nomesFilial) {
+      contextoTecnicoExtra.instrucao_filial_lobo_guara =
+        `A mencao a "${nomesFilial}" nesta pergunta ja foi identificada como filial/empresa organizacional e o backend ja aplicara o filtro de filial correto automaticamente. NAO use "${nomesFilial}" como filtro de cliente, fornecedor ou qualquer outra entidade de negocio.`;
+    }
+  }
   if (typeof spec.prepararIntent === 'function') {
     const prep = spec.prepararIntent({ intent, empresaId, mensagem });
     if (prep?.retorno) return { ...prep.retorno, duracao_ms: prep.retorno.duracao_ms || (Date.now() - t0) };
     if (prep?.intent) intentEfetivo = prep.intent;
-    if (prep?.contextoTecnicoExtra) contextoTecnicoExtra = prep.contextoTecnicoExtra;
+    if (prep?.contextoTecnicoExtra) contextoTecnicoExtra = { ...contextoTecnicoExtra, ...prep.contextoTecnicoExtra };
     if (prep?.entidadeSeguranca) entidadeSeguranca = prep.entidadeSeguranca;
   }
   intentEfetivo = normalizarFiltroEmpresaComoEntidade(spec, intentEfetivo, mensagem);
   intentEfetivo = limparFiltrosEntidadeHerdadosDaConsultaAtual(spec, intentEfetivo, mensagem);
+  // Reflete o escopo de filial Lobo Guara em intent.filtros ANTES da canonizacao
+  // (canonicalIntent.gerarIntentCanonico so olha intent.filtros; nao conhece
+  // _filialLoboGuara). Sem isso, duas perguntas para filiais DIFERENTES geram a
+  // MESMA cacheKey (filter_keys nao muda), porque a cacheKey usa so os NOMES dos
+  // campos de filtro, nao os valores — mas o SQL template gerado ja carrega o
+  // codigo da filial cravado como literal (aplicado pelo normalizer antes do
+  // template ser extraido). Isso contaminaria nlsql_semantic_examples/reuso com
+  // pares onde o SQL de uma filial seria oferecido para pergunta de outra filial.
+  // Usa as CHAVES resolvidas (nao o texto livre) para manter o hash estavel e
+  // agnostico a como o usuario escreveu o nome.
+  if (intentEfetivo._filialLoboGuara && ['especifica', 'empresa'].includes(intentEfetivo._filialLoboGuara.modo)) {
+    const chavesFilial = (intentEfetivo._filialLoboGuara.chaves || []).filter(Boolean).slice().sort();
+    if (chavesFilial.length) {
+      intentEfetivo = {
+        ...intentEfetivo,
+        filtros: { ...(intentEfetivo.filtros || {}), _lobo_guara_filial: chavesFilial },
+      };
+    }
+  }
   const periodoDeterministico = periodoDeterministicoMensagem(mensagem);
   if (periodoDeterministico) {
     intentEfetivo = {
@@ -4268,7 +4371,7 @@ async function executar(spec, intent, empresaId) {
       auditoriaBase.query_plan = planoConsulta;
       expandirMetadadosParaSql(plano.sql);
       _traceIaOwner('ia_owner_preparar_sql_inicio', { empresa_id: empresaId, tentativa });
-      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intentEfetivo?.limite }, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem });
+      preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intentEfetivo?.limite }, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem, empresaId, filialLoboGuaraState: intentEfetivo?._filialLoboGuara || null });
       _traceIaOwner('ia_owner_preparar_sql_fim', {
         empresa_id: empresaId,
         tentativa,
@@ -4539,7 +4642,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       });
       auditoriaBase.query_plan = planoConsulta;
       const permitirSelectTop = permitirSelectTopPorIntent(intent);
-      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop });
+      preparado = await prepararSql({ spec, sql: sqlCanonico, sx2, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intent?.limite }, entidades, filial: intent.filtros?.filial || 'TODAS', periodo: intent._periodoCanonicoResolvido || intent.periodo, planoConsulta, mensagem, permitirSelectTop, empresaId, filialLoboGuaraState: intent?._filialLoboGuara || null });
       auditoriaBase.sql_apos_sx3 = sx3SqlValidator.normalizarReferenciasAliasSql(sqlCanonico);
       auditoriaBase.sql_apos_contratos_relacionais = preparado.sqlAposContratosRelacionais;
       auditoriaBase.contratos_relacionais_aplicados = preparado.contratosRelacionaisAplicados;

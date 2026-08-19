@@ -49,6 +49,8 @@
             { id: 'iac-admin-logs-consultas', label: 'Log de Consultas', href: '/app/ia-command/admin-logs-consultas.html',        icon: '📋' },
             { id: 'iac-admin-protheus-sx2',   label: 'Dicionário SX2',  href: '/app/ia-command/admin-protheus-sx2.html',          icon: '📖' },
             { id: 'iac-admin-protheus-sx3',   label: 'Dicionário SX3',  href: '/app/ia-command/admin-protheus-sx3.html',          icon: '📑' },
+            { id: 'iac-admin-protheus-sys-company',     label: 'Dicionário SYS_COMPANY',     href: '/app/ia-command/admin-protheus-sys-company.html',     icon: '🏢' },
+            { id: 'iac-admin-protheus-sys-company-cfg', label: 'Dicionário SYS_COMPANY_CFG', href: '/app/ia-command/admin-protheus-sys-company-cfg.html', icon: '🧭' },
           ],
         },
         {

@@ -10,6 +10,20 @@ const { getDB } = require('../database');
 const TITULO_MAX_CHARS = 60;
 const PAGE_SIZE = 30;
 
+function parseRowsMeta(rowsJson) {
+  if (!rowsJson) return { rows: null, temDados: false, rowsCount: 0 };
+  try {
+    const rows = JSON.parse(rowsJson);
+    return {
+      rows: Array.isArray(rows) ? rows : null,
+      temDados: Array.isArray(rows) && rows.length > 0,
+      rowsCount: Array.isArray(rows) ? rows.length : 0,
+    };
+  } catch (_) {
+    return { rows: null, temDados: false, rowsCount: 0 };
+  }
+}
+
 function truncarTitulo(texto) {
   const limpo = String(texto || '').replace(/\s+/g, ' ').trim();
   if (limpo.length <= TITULO_MAX_CHARS) return limpo;
@@ -36,27 +50,27 @@ function buscarSessao({ id, empresaId, celular }) {
 
 function listarSessoes({ empresaId, celular, limite = 30 }) {
   const sessoes = getDB().prepare(`
-    SELECT id, titulo, criado_em, atualizado_em
+    SELECT s.id, s.titulo, s.criado_em, s.atualizado_em,
+           (
+             SELECT m.texto
+             FROM protheus_chat_messages m
+             WHERE m.sessao_id = s.id
+             ORDER BY m.criado_em DESC
+             LIMIT 1
+           ) AS ultima_mensagem
     FROM protheus_chat_sessions
+    s
     WHERE empresa_id = ? AND celular = ?
     ORDER BY atualizado_em DESC
     LIMIT ?
   `).all(empresaId, celular, limite);
 
-  const ultimaMsgStmt = getDB().prepare(`
-    SELECT texto, direcao FROM protheus_chat_messages
-    WHERE sessao_id = ? ORDER BY criado_em DESC LIMIT 1
-  `);
-
-  return sessoes.map(s => {
-    const ultima = ultimaMsgStmt.get(s.id);
-    return {
-      sessaoId: s.id,
-      titulo: s.titulo || 'Nova conversa',
-      ultimaMensagem: ultima ? ultima.texto : null,
-      atualizadoEm: s.atualizado_em,
-    };
-  });
+  return sessoes.map(s => ({
+    sessaoId: s.id,
+    titulo: s.titulo || 'Nova conversa',
+    ultimaMensagem: s.ultima_mensagem || null,
+    atualizadoEm: s.atualizado_em,
+  }));
 }
 
 // Retorna os ids das duas mensagens criadas (pergunta 'out' e resposta 'in')
@@ -98,13 +112,19 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
   const db = getDB();
   const rows = cursor
     ? db.prepare(`
-        SELECT id, direcao, texto, rows_json, tipo_resultado, grid_config_json, criado_em
+        SELECT id, direcao, texto,
+               rows_json IS NOT NULL AS tem_rows,
+               NULL AS rows_count,
+               tipo_resultado, grid_config_json, criado_em
         FROM protheus_chat_messages
         WHERE sessao_id = ? AND criado_em < ?
         ORDER BY criado_em DESC LIMIT ?
       `).all(sessaoId, cursor, limite)
     : db.prepare(`
-        SELECT id, direcao, texto, rows_json, tipo_resultado, grid_config_json, criado_em
+        SELECT id, direcao, texto,
+               rows_json IS NOT NULL AS tem_rows,
+               NULL AS rows_count,
+               tipo_resultado, grid_config_json, criado_em
         FROM protheus_chat_messages
         WHERE sessao_id = ?
         ORDER BY criado_em DESC LIMIT ?
@@ -114,7 +134,9 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
     id: r.id,
     direcao: r.direcao,
     texto: r.texto,
-    rows: r.rows_json ? JSON.parse(r.rows_json) : null,
+    rows: null,
+    temDados: !!r.tem_rows,
+    rowsCount: r.rows_count == null ? null : Number(r.rows_count || 0),
     tipo: r.tipo_resultado,
     gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
     criadoEm: r.criado_em,
@@ -136,12 +158,13 @@ function ultimaMensagemTabular({ sessaoId }) {
     ORDER BY criado_em DESC LIMIT 1
   `).get(sessaoId);
   if (!row) return null;
-  const rows = JSON.parse(row.rows_json);
-  if (!Array.isArray(rows) || !rows.length) return null;
+  const meta = parseRowsMeta(row.rows_json);
+  if (!meta.temDados) return null;
   return {
     id: row.id,
     texto: row.texto,
-    rows,
+    rows: meta.rows,
+    rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
     gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
     criadoEm: row.criado_em,

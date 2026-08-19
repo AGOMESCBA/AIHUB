@@ -4039,9 +4039,21 @@ class IACWhatsAppService extends EventEmitter {
     });
     _timings.intent = Date.now();
     intent._mensagemOriginal = textoExecucao;
+    intent._empresaIdContexto = empresaId;
     if (empresaQualificadaIntent && Number(empresaQualificadaIntent.empresaId) === Number(empresaId)) {
       intent._empresaMencionadaTexto = empresaQualificadaIntent.termo;
       intent._empresaMencionadaId = empresaQualificadaIntent.empresaId;
+    }
+    // Filial/empresa organizacional Lobo Guara — resolve mencao textual desta
+    // mensagem contra protheus_company_tree ANTES do merge, para que uma mencao
+    // nova sempre vença a herdada. Falha fechada: sem perfil validado ou sem
+    // mencao no texto, retorna null e o merge decide herdar/deixar em 'todas'.
+    try {
+      const loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-filial-resolver');
+      const filialResolvida = loboGuaraFilialResolver.resolverDaMensagem(getDB(), empresaId, textoExecucao);
+      if (filialResolvida) intent._filialLoboGuara = filialResolvida;
+    } catch (e) {
+      this.log(`⚠ Falha ao resolver filial Lobo Guara: ${e.message}`, 'warning');
     }
     intent._remetente = sender;
     if (contextoAnterior) {
