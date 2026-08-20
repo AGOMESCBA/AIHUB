@@ -17,6 +17,7 @@ const intentRouter = require('../erp/core/intent-router');
 const responseFormatter = require('../erp/core/response-formatter');
 const sessionStore = require('./session-store');
 const interpretationPipeline = require('../ai/interpretation-pipeline');
+const interpretationLog = require('../ai/interpretation-log');
 const { getDB } = require('../database');
 
 // Nome de campo cru do Protheus: prefixo de tabela (letra + ate 2 letras/digitos,
@@ -136,7 +137,31 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
 
 function registrarInterpretacao(payload) {
   try {
-    return interpretationPipeline.registrarInterpretacao(payload);
+    const logId = interpretationPipeline.registrarInterpretacao(payload);
+    if (logId) {
+      console.log(`[protheus_whatsapp] Interpretacao registrada: id=${logId} empresa=${payload.empresaId} usuario=${payload.sender || ''}`);
+      return logId;
+    }
+
+    // O pipeline compartilhado pode absorver falhas internas para nao derrubar
+    // o WhatsApp. No chat Protheus, o historico e parte da auditoria principal,
+    // entao tentamos a gravacao direta antes de devolver a resposta ao usuario.
+    const trace = interpretationPipeline.traceInterpretacao({ intent: payload.intent, resultado: payload.resultado });
+    const row = interpretationLog.registrar({
+      empresa_id: payload.empresaId,
+      usuario: payload.sender,
+      numero_wa: interpretationPipeline.normalizarNumeroWa(payload.sender),
+      canal_id: payload.canalId ?? null,
+      texto_original: payload.texto,
+      intent: payload.intent,
+      resultado: payload.resultado,
+      resposta_entregue: payload.resposta,
+      sql_gerado: payload.resultado?.sql_gerado || null,
+      duracao_ms: payload.duracaoMs ?? null,
+      trace,
+    });
+    console.log(`[protheus_whatsapp] Interpretacao registrada por fallback direto: id=${row?.id || 'n/a'} empresa=${payload.empresaId} usuario=${payload.sender || ''}`);
+    return row?.id || null;
   } catch (e) {
     console.error('[protheus_whatsapp] Falha ao registrar interpretacao:', e.message);
     return null;
