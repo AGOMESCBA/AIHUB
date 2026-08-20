@@ -483,6 +483,19 @@
   .bubble { position: relative; max-width: 66%; padding: 6px 9px 8px; border-radius: 8px; font-size: 14.3px; line-height: 1.42; box-shadow: var(--wa-shadow); white-space: pre-wrap; word-wrap: break-word; }
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
+  .bubble .structured-response { white-space: normal; display: grid; gap: 9px; min-width: min(420px, 62vw); }
+  .structured-intro { font-size: 14.3px; line-height: 1.42; }
+  .structured-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
+  .structured-metric { min-width: 118px; padding: 6px 8px; border-left: 3px solid var(--wa-accent); background: rgba(0, 0, 0, 0.04); border-radius: 4px; }
+  :root[data-theme="dark"] .structured-metric { background: rgba(255, 255, 255, 0.045); }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .structured-metric { background: rgba(255, 255, 255, 0.045); }
+  }
+  .structured-metric-label { display: block; font-size: 10.5px; color: var(--wa-text-tertiary); text-transform: uppercase; letter-spacing: 0; margin-bottom: 2px; }
+  .structured-metric-value { display: block; font-size: 14px; font-weight: 700; color: var(--wa-text); }
+  .structured-summary { color: var(--wa-text-secondary); font-size: 13.5px; line-height: 1.4; }
+  .structured-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 2px; }
+  .structured-suggestion { color: var(--wa-text-tertiary); font-size: 12.5px; line-height: 1.35; }
 
   /* Falha real de comunicacao (rede/servidor fora do ar) — visualmente distinta
      de uma resposta normal do backend, mesmo quando essa resposta e negativa
@@ -1092,6 +1105,29 @@
     return Math.max(COL_MIN_PX, Math.min(COL_MAX_PX, px));
   }
 
+  function renderApresentacaoHtml(apresentacao, fallbackTexto) {
+    if (!apresentacao || typeof apresentacao !== 'object') return escapeHtml(fallbackTexto || '');
+    const partes = [];
+    const intro = String(apresentacao.introducao || '').trim();
+    const resumo = String(apresentacao.resumo || '').trim();
+    const sugestao = String(apresentacao.sugestao || '').trim();
+    const indicadores = Array.isArray(apresentacao.indicadores) ? apresentacao.indicadores.slice(0, 4) : [];
+
+    if (intro) partes.push(`<div class="structured-intro">${escapeHtml(intro)}</div>`);
+    if (indicadores.length) {
+      partes.push('<div class="structured-metrics">' + indicadores.map((item) => {
+        const label = escapeHtml(item?.label || 'Total');
+        const valor = escapeHtml(item?.valor || '');
+        return `<div class="structured-metric"><span class="structured-metric-label">${label}</span><span class="structured-metric-value">${valor}</span></div>`;
+      }).join('') + '</div>');
+    }
+    if (resumo) partes.push(`<div class="structured-summary">${escapeHtml(resumo)}</div>`);
+    if (sugestao) partes.push(`<div class="structured-suggestion">${escapeHtml(sugestao)}</div>`);
+
+    if (!partes.length) return escapeHtml(fallbackTexto || '');
+    return `<div class="structured-response">${partes.join('')}</div>`;
+  }
+
   // [REVERTIDO 13/08/2026 a pedido do usuario] Bolha volta a mostrar o
   // TEXTO COMPLETO vindo do backend — igual ao canal WhatsApp real, sem
   // resumo nem mini-grid proprios deste canal. Decisao: manter os dois
@@ -1104,7 +1140,7 @@
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
-  function addBubble({ id, texto, direcao, rows, temDados = false, rowsCount = null, criadoEm, isFalha = false }) {
+  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, criadoEm, isFalha = false }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
@@ -1121,7 +1157,9 @@
       ? `<div class="result-table-rodape"><span>${labelRows}</span>`
         + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`
       : '';
-    const conteudo = escapeHtml(texto) + linkDados;
+    const conteudo = (!isFalha && apresentacao)
+      ? renderApresentacaoHtml(apresentacao, texto) + linkDados
+      : escapeHtml(texto) + linkDados;
 
     // Checkbox de selecao — sempre no DOM (nao so quando o modo esta ativo),
     // controlado via CSS (.chat-body.selecao-ativa .row-select-checkbox) para
@@ -1576,6 +1614,7 @@
       addBubble({
         id: data.resposta.mensagemId,
         texto: data.resposta.texto,
+        apresentacao: data.resposta.apresentacao,
         rows: data.resposta.rows,
         temDados: data.resposta.temDados,
         rowsCount: data.resposta.rowsCount,
@@ -1590,6 +1629,7 @@
           {
             id: data.resposta.mensagemId,
             texto: data.resposta.texto,
+            apresentacao: data.resposta.apresentacao || null,
             direcao: 'in',
             rows: null,
             temDados: !!data.resposta.temDados,
@@ -1605,6 +1645,7 @@
             {
               id: data.resposta.mensagemId,
               texto: data.resposta.texto,
+              apresentacao: data.resposta.apresentacao || null,
               direcao: 'in',
               rows: null,
               temDados: !!data.resposta.temDados,

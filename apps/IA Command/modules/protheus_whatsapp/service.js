@@ -195,10 +195,15 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
   }
 
   const resultado = await intentRouter.rotear(intent, empresaId);
-  const respostaTexto = responseFormatter.formatar(resultado, intent, { empresaId });
-
   const rowsBrutas = Array.isArray(resultado?.rows) ? resultado.rows : null;
   const rows = rowsBrutas ? traduzirNomesCruesViaSx3(rowsBrutas, empresaId) : null;
+  const resultadoFormatacao = rows ? { ...resultado, rows } : resultado;
+  const respostaBase = responseFormatter.formatar(resultadoFormatacao, intent, { empresaId });
+  const apresentacao = responseFormatter.montarApresentacaoResposta(respostaBase, resultadoFormatacao, intent, {
+    empresaId,
+    sugerirComparacao: true,
+  });
+  const respostaTexto = responseFormatter.textoApresentacao(apresentacao, respostaBase);
 
   const { perguntaId, respostaId } = sessionStore.salvarTurno({
     sessaoId,
@@ -242,6 +247,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
     mensagemId: respostaId,
     perguntaId,
     texto: respostaTexto,
+    apresentacao,
     rows: null,
     temDados: Array.isArray(rows) && rows.length > 0,
     rowsCount: Array.isArray(rows) ? rows.length : 0,

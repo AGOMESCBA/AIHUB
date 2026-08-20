@@ -16,6 +16,7 @@ const PCT = (v) => {
 };
 
 const LIMITE_PADRAO_AGRUPAMENTO = 20;
+const LIMITE_ROWS_RESUMO_HUMANO = 5000;
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 function _normalizarNome(nome) {
@@ -894,11 +895,165 @@ function normalizarAgrupamentosPais(texto) {
   return normalizadas.join('\n');
 }
 
+function _optsHumanizar(opts) {
+  return opts?.humanizarResposta === true || opts?.humanizar === true;
+}
+
+function _periodoEmLinha(periodo) {
+  return formatarPeriodo(periodo).trim().replace(/\s+/g, ' ').replace(/^periodo:\s*/i, '').trim();
+}
+
+function _nomeAssuntoHumano(resultado, intent) {
+  const fonte = [
+    intent?.modulo,
+    intent?.intencao,
+    resultado?.intencao,
+    intent?.acao,
+    intent?.tipo,
+  ].filter(Boolean).join(' ');
+  const n = _normalizarNome(fonte);
+
+  if (n.includes('fatur')) return 'o faturamento';
+  if (n.includes('financeiro') || n.includes('titulo') || n.includes('saldo') || n.includes('receber') || n.includes('pagar')) return 'as informacoes financeiras';
+  if (n.includes('compra') || n.includes('pedido_compra')) return 'as compras';
+  if (n.includes('comissao')) return 'as comissoes';
+  if (n.includes('estoque')) return 'o estoque';
+  if (n.includes('quantidade')) return 'as quantidades';
+  if (n.includes('ticket')) return 'o ticket medio';
+  return 'as informacoes solicitadas';
+}
+
+function _colunasNumericasResumo(rows, intent) {
+  const firstRow = rows?.[0] || {};
+  const skip = ['id', 'cod', 'codigo', 'num', 'numero', 'nota', 'nf', 'documento', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
+  const cols = Object.keys(firstRow).filter((k) => {
+    const kl = k.toLowerCase();
+    if (skip.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;
+    const v = firstRow[k];
+    return typeof v === 'number' || (typeof v === 'string' && v !== '' && !isNaN(parseFloat(v)) && !/^\d{4}-\d{2}/.test(v));
+  });
+  return _filtrarMetricasSolicitadas(cols, intent).slice(0, 2);
+}
+
+function _primeiraDimensaoResumo(rows, intent) {
+  const firstRow = rows?.[0] || {};
+  const keys = Object.keys(firstRow);
+  const preferidas = _groupByIntent(intent).filter(Boolean);
+  for (const dim of preferidas) {
+    const col = _detectarColuna(firstRow, dim) || keys.find(k => _normalizarNome(k) === _normalizarNome(dim));
+    if (col) return col;
+  }
+  return keys.find((k) => {
+    const v = firstRow[k];
+    if (v == null || v === '') return false;
+    if (typeof v === 'number') return false;
+    if (typeof v === 'string' && !isNaN(parseFloat(v))) return false;
+    return !_DETECTORES.data(k);
+  }) || null;
+}
+
+function _resumoHumanoRows(rows, intent) {
+  if (!Array.isArray(rows) || !rows.length) return '';
+  if (rows.length > LIMITE_ROWS_RESUMO_HUMANO) {
+    return `Leitura rapida: a base retornou ${rows.length} registro(s); os detalhes estao na tabela.`;
+  }
+  const metricas = _colunasNumericasResumo(rows, intent);
+  const partes = [`A base retornou ${rows.length} registro(s)`];
+
+  if (metricas.length) {
+    const totais = metricas.map((col) => {
+      const total = rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0);
+      const label = col.replace(/_/g, ' ').toLowerCase();
+      return `${label}: ${_formatarValorMetrica(col, total)}`;
+    });
+    partes.push(`com ${totais.join(' e ')}`);
+
+    const dimCol = _primeiraDimensaoResumo(rows, intent);
+    const metricaPrincipal = metricas[0];
+    if (dimCol && metricaPrincipal && rows.length > 1) {
+      const agrupados = new Map();
+      for (const row of rows) {
+        const chave = String(row[dimCol] ?? '').trim();
+        if (!chave) continue;
+        agrupados.set(chave, (agrupados.get(chave) || 0) + (parseFloat(row[metricaPrincipal]) || 0));
+      }
+      const maior = [...agrupados.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (maior && maior[0]) {
+        const label = dimCol.replace(/_/g, ' ').toLowerCase();
+        partes.push(`maior ${label}: ${maior[0]} (${_formatarValorMetrica(metricaPrincipal, maior[1])})`);
+      }
+    }
+  }
+
+  return `Leitura rapida: ${partes.join('; ')}.`;
+}
+
+function _indicadoresHumanosRows(rows, intent) {
+  if (!Array.isArray(rows) || !rows.length || rows.length > LIMITE_ROWS_RESUMO_HUMANO) return [];
+  return _colunasNumericasResumo(rows, intent).map((col) => {
+    const total = rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0);
+    return {
+      label: col.replace(/_/g, ' ').toLowerCase(),
+      valor: _formatarValorMetrica(col, total),
+    };
+  });
+}
+
+function _sugestaoComparacaoHumana(resultado, intent, opts) {
+  if (opts?.sugerirComparacao === false) return '';
+  const periodo = resultado?.periodo || intent?.periodo;
+  if (!periodo?.dataInicio || !periodo?.dataFim) return '';
+  if (String(periodo?.tipo || '').includes('comparacao')) return '';
+  const textoIntent = _normalizarNome([intent?.intencao, intent?.acao, intent?.tipo, intent?.comparativo].filter(Boolean).join(' '));
+  if (/compar|evolu|variac|aumento|queda/.test(textoIntent)) return '';
+  return 'Se quiser aprofundar, posso comparar com o periodo anterior ou com o mesmo periodo do ano passado.';
+}
+
+function montarApresentacaoResposta(texto, resultado, intent, opts = {}) {
+  if (typeof texto !== 'string' || !texto.trim()) return null;
+  const rows = Array.isArray(resultado?.rows) ? resultado.rows : [];
+  if (resultado?.tipo !== 'sucesso_ai_sql' || !rows.length) return null;
+
+  const jaHumanizado = /^\s*(entendi|consultei|verifiquei|analisei)\b/i.test(texto);
+  const periodo = _periodoEmLinha(resultado?.periodo || intent?.periodo);
+  const assunto = _nomeAssuntoHumano(resultado, intent);
+  const intro = `Entendi. Consultei ${assunto}${periodo ? ` no periodo de ${periodo.toLowerCase()}` : ''} e encontrei ${rows.length} registro(s).`;
+  const resumo = _resumoHumanoRows(rows, intent);
+  const sugestao = _sugestaoComparacaoHumana(resultado, intent, opts);
+  const indicadores = _indicadoresHumanosRows(rows, intent);
+
+  return {
+    versao: 1,
+    introducao: jaHumanizado ? '' : intro,
+    detalhe: texto.trim(),
+    resumo,
+    sugestao,
+    indicadores,
+    rowsCount: rows.length,
+  };
+}
+
+function textoApresentacao(apresentacao, fallbackTexto = '') {
+  if (!apresentacao || typeof apresentacao !== 'object') return fallbackTexto;
+  return [
+    apresentacao.introducao,
+    apresentacao.detalhe,
+    apresentacao.resumo,
+    apresentacao.sugestao,
+  ].filter(Boolean).join('\n\n') || fallbackTexto;
+}
+
+function humanizarResposta(texto, resultado, intent, opts = {}) {
+  if (!_optsHumanizar(opts) || typeof texto !== 'string' || !texto.trim()) return texto;
+  const apresentacao = montarApresentacaoResposta(texto, resultado, intent, opts);
+  return textoApresentacao(apresentacao, texto);
+}
+
 function formatar(resultado, intent, opts = {}) {
   // Resultado do motor Text-to-SQL dinâmico (ex: módulo de Compras)
   // A resposta já vem formatada pela IA ou pelo fallback interno do handler.
   if (resultado.tipo === 'sucesso_ai_sql') {
-    return resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+    return humanizarResposta(resultado.resposta_direta || 'Não encontrei dados para essa consulta.', resultado, intent, opts);
   }
 
   if (resultado.tipo === 'erro' && resultado.resposta_direta) {
@@ -1106,4 +1261,4 @@ function detectarDimensaoCategorica(firstRow) {
   return null;
 }
 
-module.exports = { formatar, formatarAiSqlLocal, normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica };
+module.exports = { formatar, formatarAiSqlLocal, montarApresentacaoResposta, textoApresentacao, normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica };

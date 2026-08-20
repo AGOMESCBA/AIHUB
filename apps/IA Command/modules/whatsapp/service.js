@@ -2655,7 +2655,12 @@ class IACWhatsAppService extends EventEmitter {
 
   _formatarRespostaResultado(resultado, intent, { empresaId, messageTemplates, escopo = 'single' } = {}) {
     try {
-      const resposta = responseFormatter.formatar(resultado, intent, { empresaId, messageTemplates });
+      const resposta = responseFormatter.formatar(resultado, intent, {
+        empresaId,
+        messageTemplates,
+        humanizarResposta: true,
+        sugerirComparacao: true,
+      });
       this.log(`Resposta formatada: escopo=${escopo} | tipo=${resultado?.tipo || 'n/a'} | chars=${String(resposta || '').length}`, 'info');
       return resposta;
     } catch (err) {
@@ -5162,7 +5167,12 @@ class IACWhatsAppService extends EventEmitter {
               duracao_ms:     resultado.duracao_ms   || null,
             });
             const nomeEmpresa = emp.nome || `Empresa #${emp.empresa_id}`;
-            const respostaAiSql = resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+            const respostaAiSql = responseFormatter.formatar(resultado, intentExecucao, {
+              empresaId: emp.empresa_id,
+              messageTemplates,
+              humanizarResposta: true,
+              sugerirComparacao: true,
+            });
             this._registrarInterpretacao({
               empresaId: emp.empresa_id,
               sender: senderAll,
@@ -5629,7 +5639,12 @@ class IACWhatsAppService extends EventEmitter {
 
         // ── Text-to-SQL dinâmico (compras) — resposta já gerada pela IA ─────────
         if (resultado.tipo === 'sucesso_ai_sql') {
-          const respostaAiSql = resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+          const respostaAiSql = responseFormatter.formatar(resultado, intentExecucao, {
+            empresaId: emp.empresa_id,
+            messageTemplates,
+            humanizarResposta: true,
+            sugerirComparacao: true,
+          });
           this.emit('iac-intent', {
             empresaId:      emp.empresa_id,
             ...this._metaMonitorIntent(intent, resultado),
@@ -5763,6 +5778,8 @@ class IACWhatsAppService extends EventEmitter {
       const resposta = responseFormatter.formatar(resultadoEmpresas, intent, {
         empresaId: empresaLogId,
         messageTemplates,
+        humanizarResposta: true,
+        sugerirComparacao: true,
       });
 
       if (sender && intent.intencao !== 'desconhecido') {
@@ -5849,11 +5866,18 @@ class IACWhatsAppService extends EventEmitter {
         || whatsappFmt.buildFormatAnoMesDireto(todosRows, { contextoConsulta, nomeModulo })
         || whatsappFmt.buildFormatCompetenciaEntidade(todosRows, { contextoConsulta, nomeModulo, anoFirst })
         || whatsappFmt.buildFormatSimplesTemporal(todosRows, { contextoConsulta, nomeModulo, anoFirst })
-        || responseFormatter.formatar(resultadoCombinado, intent, { empresaId: empresaLogId, messageTemplates });
+        || responseFormatter.formatar(resultadoCombinado, intent, {
+          empresaId: empresaLogId,
+          messageTemplates,
+          humanizarResposta: true,
+          sugerirComparacao: true,
+        });
     } else {
       resposta = responseFormatter.formatar(resultadoCombinado, intent, {
         empresaId: empresaLogId,
         messageTemplates,
+        humanizarResposta: true,
+        sugerirComparacao: true,
       });
     }
 

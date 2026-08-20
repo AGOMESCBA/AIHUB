@@ -523,7 +523,7 @@ function _buildListaSimples(subtotais, totalGeral, numCols, ehTemporal) {
       // Métrica única: "label: valor" — sem o nome da coluna para evitar duplicação pela IA
       itemStr = `  ${i + 1}. ${label}: ${vals[numCols[0]]}`;
     } else {
-      const valoresStr = numCols.map(col => `${col}: ${vals[col]}`).join(' | ');
+      const valoresStr = numCols.map(col => `${col}: ${vals[col]}`).join('\n      ');
       itemStr = `  ${i + 1}. ${label} — ${valoresStr}`;
     }
     linhas.push(itemStr);
@@ -536,7 +536,7 @@ function _buildListaSimples(subtotais, totalGeral, numCols, ehTemporal) {
   if (totalGeral) {
     const totStr = numCols.length === 1
       ? String(totalGeral[numCols[0]])
-      : numCols.map(col => `${col}: ${totalGeral[col]}`).join(' | ');
+      : numCols.map(col => `${col}: ${totalGeral[col]}`).join('\n      ');
     linhas.push('');
     linhas.push(`Total Geral (calculado pelo sistema): ${totStr}`);
   }
@@ -583,12 +583,12 @@ function _buildBlocosTexto(dados, subtotais, totalGeral, colTemporal, colEntidad
       const valoresStr = numCols.map(col => {
         const val = item[col];
         return `${col}: ${val}`;
-      }).join(' | ');
+      }).join('\n      ');
       linhas.push(`  ${i + 1}. ${labelItem} — ${valoresStr}`);
     });
 
     if (subtotais && subtotais[chaveGrupo]) {
-      const subStr = numCols.map(col => `${col}: ${subtotais[chaveGrupo][col]}`).join(' | ');
+      const subStr = numCols.map(col => `${col}: ${subtotais[chaveGrupo][col]}`).join('\n      ');
       linhas.push(`  Subtotal (calculado pelo sistema): ${subStr}`);
     }
 
@@ -597,7 +597,7 @@ function _buildBlocosTexto(dados, subtotais, totalGeral, colTemporal, colEntidad
   }
 
   if (totalGeral) {
-    const totStr = numCols.map(col => `${col}: ${totalGeral[col]}`).join(' | ');
+    const totStr = numCols.map(col => `${col}: ${totalGeral[col]}`).join('\n      ');
     linhas.push(`Total Geral (calculado pelo sistema): ${totStr}`);
   }
 
@@ -674,27 +674,27 @@ function _buildBlocosMesAnoEntidade(dados, colTemporal, colEntidade, numCols, to
       let subAno = {}; for (const c of colsValor) subAno[c] = 0;
 
       entradas.forEach(([ent, vals], i) => {
-        const valStr = colsValor.map(c => `${c}: ${vals[c]}`).join(' | ');
+        const valStr = colsValor.map(c => `${c}: ${vals[c]}`).join('\n      ');
         let crescStr = '';
         if (prevPorEnt) {
           const prev = prevPorEnt.get(ent);
           if (prev) {
             const p = _pct(vals[primaryCol] || 0, prev[primaryCol] || 0);
-            crescStr = ` | crescimento: ${p ?? 'N/A'}`;
+            crescStr = `\n      crescimento: ${p ?? 'N/A'}`;
           } else {
-            crescStr = ' | crescimento: N/A (novo)';
+            crescStr = '\n      crescimento: N/A (novo)';
           }
         }
         linhas.push(`    ${i+1}. ${ent} — ${valStr}${crescStr}`);
         for (const c of colsValor) subAno[c] = _arredondar2(subAno[c] + (vals[c] || 0));
       });
 
-      const subStr = colsValor.map(c => `${c}: ${subAno[c]}`).join(' | ');
+      const subStr = colsValor.map(c => `${c}: ${subAno[c]}`).join('\n      ');
       let subCresc = '';
       if (prevPorEnt) {
         const prevTotal = [...prevPorEnt.values()].reduce((s, v) => s + (v[primaryCol] || 0), 0);
         const p = _pct(subAno[primaryCol] || 0, prevTotal);
-        subCresc = ` | crescimento: ${p ?? 'N/A'}`;
+        subCresc = `\n      crescimento: ${p ?? 'N/A'}`;
       }
       linhas.push(`  Subtotal ${anoKey} (calculado pelo sistema): ${subStr}${subCresc}`);
     });
@@ -703,7 +703,7 @@ function _buildBlocosMesAnoEntidade(dados, colTemporal, colEntidade, numCols, to
   }
 
   if (totalGeral) {
-    const totStr = colsValor.map(c => `${c}: ${totalGeral[c] || 0}`).join(' | ');
+    const totStr = colsValor.map(c => `${c}: ${totalGeral[c] || 0}`).join('\n      ');
     linhas.push(`Total Geral (calculado pelo sistema): ${totStr}`);
   }
 
@@ -922,14 +922,14 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoC
         for (const vals of porEnt.values()) {
           for (const c of colsValor) subMes[c] = _arredondar2(subMes[c] + (vals[c] || 0));
         }
-        const subValStr = colsValor.map(c => _fmtValorCol(c, subMes[c])).join(' | ');
+        const subValStr = colsValor.map(c => _fmtValorCol(c, subMes[c])).join('\n      ');
         linhas.push(`  *${labelMes}*: ${subValStr}`);
 
         const entradas = [...porEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
         const visiveis = entradas.slice(0, 20);
         const ocultos  = entradas.length - visiveis.length;
         visiveis.forEach(([ent, vals], i) => {
-          const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join('\n      ');
           linhas.push(`    ${i+1}. *${ent}*: ${valStr}`);
         });
         if (ocultos > 0) linhas.push(`    ... e mais ${ocultos}`);
@@ -942,7 +942,7 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoC
           for (const c of colsValor) subAnoTotal[c] = _arredondar2(subAnoTotal[c] + (vals[c] || 0));
         }
       }
-      const subStr = colsValor.map(c => _fmtValorCol(c, subAnoTotal[c])).join(' | ');
+      const subStr = colsValor.map(c => _fmtValorCol(c, subAnoTotal[c])).join('\n      ');
       linhas.push(`🧾 *Subtotal ${anoKey}*: ${subStr}`);
     }
   } else {
@@ -965,7 +965,7 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoC
           for (const c of colsValor) subAno[c] = _arredondar2(subAno[c] + (vals[c] || 0));
         }
 
-        const subValStr = colsValor.map(c => _fmtValorCol(c, subAno[c])).join(' | ');
+        const subValStr = colsValor.map(c => _fmtValorCol(c, subAno[c])).join('\n      ');
         let anoHeaderSuffix = '';
         if (prevPorEnt) {
           const subPrev = {}; for (const c of colsValor) subPrev[c] = 0;
@@ -973,7 +973,7 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoC
             for (const c of colsValor) subPrev[c] = _arredondar2(subPrev[c] + (vals[c] || 0));
           }
           const p = _pct(subAno[primaryCol] || 0, subPrev[primaryCol] || 0);
-          anoHeaderSuffix = ` | Crescimento: ${p ?? 'N/A'}`;
+          anoHeaderSuffix = `\n      Crescimento: ${p ?? 'N/A'}`;
         }
         linhas.push(`  *Ano ${anoKey}*: ${subValStr}${anoHeaderSuffix}`);
 
@@ -982,15 +982,15 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoC
         const ocultos  = entradas.length - visiveis.length;
 
         visiveis.forEach(([ent, vals], i) => {
-          const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          const valStr = colsValor.map(c => _fmtValorCol(c, vals[c])).join('\n      ');
           let crescStr = '';
           if (prevPorEnt) {
             const prev = prevPorEnt.get(ent);
             if (prev) {
               const p = _pct(vals[primaryCol] || 0, prev[primaryCol] || 0);
-              crescStr = ` | Crescimento: ${p ?? 'N/A'}`;
+              crescStr = `\n      Crescimento: ${p ?? 'N/A'}`;
             } else {
-              crescStr = ' | Crescimento: N/A';
+              crescStr = '\n      Crescimento: N/A';
             }
           }
           linhas.push(`    ${i+1}. *${ent}*: ${valStr}${crescStr}`);
@@ -1001,7 +1001,7 @@ function buildFormatDirect(mensagem, rows, { avisoNaoEncontradas = [], contextoC
   }
 
   if (totalGeral && colsValor.length) {
-    const totStr = colsValor.map(c => _fmtValorCol(c, totalGeral[c] || 0)).join(' | ');
+    const totStr = colsValor.map(c => _fmtValorCol(c, totalGeral[c] || 0)).join('\n      ');
     linhas.push('');
     linhas.push(`*Total Geral*: ${totStr}`);
   }
@@ -1111,17 +1111,17 @@ function buildFormatAnoMesDireto(rows, { contextoConsulta = null, nomeModulo = n
     const ocultos  = entradas.length - visiveis.length;
 
     visiveis.forEach(([ent, vals], i) => {
-      const valStr = numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+      const valStr = numCols.map(c => _fmtValorCol(c, vals[c])).join('\n      ');
       linhas.push(`  ${i + 1}. *${ent}*: ${valStr}`);
     });
     if (ocultos > 0) linhas.push(`  ... e mais ${ocultos}`);
 
-    const subStr = numCols.map(c => _fmtValorCol(c, subBloco[c])).join(' | ');
+    const subStr = numCols.map(c => _fmtValorCol(c, subBloco[c])).join('\n      ');
     linhas.push(`🧾 *Subtotal*: ${subStr}`);
   }
 
   linhas.push('');
-  const totStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ');
+  const totStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join('\n      ');
   linhas.push(`*Total Geral*: ${totStr}`);
 
   return linhas.join('\n');
@@ -1210,12 +1210,12 @@ function buildFormatCompetenciaEntidade(rows, { contextoConsulta = null, nomeMod
         for (const vals of byEnt.values()) {
           for (const c of numCols) { subMes[c] = _arredondar2(subMes[c] + vals[c]); subAno[c] = _arredondar2(subAno[c] + vals[c]); totalGlobal[c] = _arredondar2(totalGlobal[c] + vals[c]); }
         }
-        linhas.push(`  *${labelMes}*: ${numCols.map(c => _fmtValorCol(c, subMes[c])).join(' | ')}`);
+        linhas.push(`  *${labelMes}*:\n      ${numCols.map(c => _fmtValorCol(c, subMes[c])).join('\n      ')}`);
         const entradas = [...byEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
-        entradas.slice(0, 20).forEach(([ent, vals], i) => linhas.push(`    ${i+1}. *${ent}*: ${numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ')}`));
+        entradas.slice(0, 20).forEach(([ent, vals], i) => linhas.push(`    ${i+1}. *${ent}*:\n      ${numCols.map(c => _fmtValorCol(c, vals[c])).join('\n      ')}`));
         if (entradas.length > 20) linhas.push(`    ... e mais ${entradas.length - 20}`);
       }
-      linhas.push(`🧾 *Subtotal ${anoKey}*: ${numCols.map(c => _fmtValorCol(c, subAno[c])).join(' | ')}`);
+      linhas.push(`🧾 *Subtotal ${anoKey}*:\n      ${numCols.map(c => _fmtValorCol(c, subAno[c])).join('\n      ')}`);
     }
   } else {
     // Agrupa por período (mês/ano) → entidades
@@ -1230,14 +1230,14 @@ function buildFormatCompetenciaEntidade(rows, { contextoConsulta = null, nomeMod
         for (const c of numCols) { subBloco[c] = _arredondar2(subBloco[c] + vals[c]); totalGlobal[c] = _arredondar2(totalGlobal[c] + vals[c]); }
       }
       const entradas = [...byEnt.entries()].sort(([,a],[,b]) => (b[primaryCol]||0)-(a[primaryCol]||0));
-      entradas.slice(0, 20).forEach(([ent, vals], i) => linhas.push(`  ${i+1}. *${ent}*: ${numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ')}`));
+      entradas.slice(0, 20).forEach(([ent, vals], i) => linhas.push(`  ${i+1}. *${ent}*:\n      ${numCols.map(c => _fmtValorCol(c, vals[c])).join('\n      ')}`));
       if (entradas.length > 20) linhas.push(`  ... e mais ${entradas.length - 20}`);
-      linhas.push(`🧾 *Subtotal*: ${numCols.map(c => _fmtValorCol(c, subBloco[c])).join(' | ')}`);
+      linhas.push(`🧾 *Subtotal*:\n      ${numCols.map(c => _fmtValorCol(c, subBloco[c])).join('\n      ')}`);
     }
   }
 
   linhas.push('');
-  linhas.push(`*Total Geral*: ${numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ')}`);
+  linhas.push(`*Total Geral*:\n      ${numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join('\n      ')}`);
   return linhas.join('\n');
 }
 
@@ -1364,7 +1364,7 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
         visiveis.forEach(([mesKey, vals], i) => {
           const mesNum   = parseInt(mesKey, 10);
           const labelMes = (mesNum >= 1 && mesNum <= 12) ? MESES_FULL[mesNum - 1] : mesKey;
-          const valStr   = numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          const valStr   = numCols.map(c => _fmtValorCol(c, vals[c])).join('\n      ');
           linhas.push(`  ${i + 1}. *${labelMes}*: ${valStr}`);
         });
         if (ocultos > 0) linhas.push(`  ... e mais ${ocultos}`);
@@ -1374,7 +1374,7 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
         for (const vals of porMes.values()) {
           for (const c of numCols) subAno[c] = _arredondar2(subAno[c] + (vals[c] || 0));
         }
-        const subStr = numCols.map(c => _fmtValorCol(c, subAno[c])).join(' | ');
+        const subStr = numCols.map(c => _fmtValorCol(c, subAno[c])).join('\n      ');
         linhas.push(`🧾 *Subtotal*: ${subStr}`);
       }
     } else {
@@ -1401,7 +1401,7 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
         const ocultos  = anosOrd.length - visiveis.length;
 
         visiveis.forEach(([anoKey, vals], i) => {
-          const valStr = numCols.map(c => _fmtValorCol(c, vals[c])).join(' | ');
+          const valStr = numCols.map(c => _fmtValorCol(c, vals[c])).join('\n      ');
           linhas.push(`  ${i + 1}. *${anoKey}*: ${valStr}`);
         });
         if (ocultos > 0) linhas.push(`  ... e mais ${ocultos}`);
@@ -1411,7 +1411,7 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
         for (const vals of porAno.values()) {
           for (const c of numCols) subMes[c] = _arredondar2(subMes[c] + (vals[c] || 0));
         }
-        const subStr = numCols.map(c => _fmtValorCol(c, subMes[c])).join(' | ');
+        const subStr = numCols.map(c => _fmtValorCol(c, subMes[c])).join('\n      ');
         linhas.push(`🧾 *Subtotal*: ${subStr}`);
       }
     }
@@ -1428,16 +1428,16 @@ function buildFormatSimplesTemporal(rows, { contextoConsulta = null, nomeModulo 
 
     entradas.forEach((chave, i) => {
       const label  = _formatarLabelGrupo(chave);
-      const valStr = numCols.map(c => _fmtValorCol(c, subtotais[chave][c])).join(' | ');
+      const valStr = numCols.map(c => _fmtValorCol(c, subtotais[chave][c])).join('\n      ');
       linhas.push(`  ${i + 1}. ${label}: ${valStr}`);
     });
 
-    const subStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ');
+    const subStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join('\n      ');
     linhas.push(`🧾 *Subtotal*: ${subStr}`);
   }
 
   linhas.push('');
-  const totStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join(' | ');
+  const totStr = numCols.map(c => _fmtValorCol(c, totalGlobal[c])).join('\n      ');
   linhas.push(`*Total Geral*: ${totStr}`);
 
   return linhas.join('\n');
