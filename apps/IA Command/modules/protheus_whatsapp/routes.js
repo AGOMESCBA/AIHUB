@@ -58,11 +58,14 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const { empresaId, celular } = req.protheusChat;
       const sid = sessaoId || sessionStore.criarSessao({ empresaId, celular });
+      console.log(`[protheus_whatsapp] Mensagem recebida: empresa=${empresaId} celular=${celular || ''} sessao=${sid} texto="${String(texto).trim().slice(0, 160)}"`);
       const resultado = await chatService.processarMensagem({
         empresaId, celular, sessaoId: sid, texto: String(texto).trim(),
       });
+      console.log(`[protheus_whatsapp] Mensagem processada: empresa=${empresaId} sessao=${sid} tipo=${resultado?.tipo || 'n/a'} temDados=${resultado?.temDados ? 1 : 0} rows=${resultado?.rowsCount ?? 'n/a'}`);
       res.json({ sessaoId: sid, resposta: resultado, criadoEm: new Date().toISOString() });
     } catch (err) {
+      console.error(`[protheus_whatsapp] Falha ao processar mensagem: ${err.message}`);
       res.status(500).json({ error: err.message });
     }
   });
