@@ -134,16 +134,13 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
   });
 }
 
-function registrarInterpretacaoAsync(payload) {
-  const executar = () => {
-    try {
-      interpretationPipeline.registrarInterpretacao(payload);
-    } catch (e) {
-      console.error('[protheus_whatsapp] Falha ao registrar interpretacao:', e.message);
-    }
-  };
-  if (typeof setImmediate === 'function') setImmediate(executar);
-  else setTimeout(executar, 0);
+function registrarInterpretacao(payload) {
+  try {
+    return interpretationPipeline.registrarInterpretacao(payload);
+  } catch (e) {
+    console.error('[protheus_whatsapp] Falha ao registrar interpretacao:', e.message);
+    return null;
+  }
 }
 
 async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
@@ -222,7 +219,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
   // cache/aprendizado de SQL canonico que o WhatsApp usa. canalId fica null
   // (este canal nao tem conceito de canal multi-empresa como o WhatsApp).
   try {
-    registrarInterpretacaoAsync({
+    registrarInterpretacao({
       empresaId,
       sender: celular,
       texto,
