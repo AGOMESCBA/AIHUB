@@ -1762,9 +1762,9 @@
   }
 
   function resumoTotaisGrupo(rows) {
-    const numericasVisiveis = colunasVisiveisRelatorio().filter((c) => c.numerico);
-    if (!Array.isArray(rows) || !rows.length || !numericasVisiveis.length) return '';
-    return numericasVisiveis.slice(0, 3).map((col) => {
+    const numericas = reportColunas.filter((c) => c.numerico);
+    if (!Array.isArray(rows) || !rows.length || !numericas.length) return '';
+    return numericas.slice(0, 3).map((col) => {
       const valor = rows.reduce((acc, row) => acc + (typeof row[col.field] === 'number' ? row[col.field] : 0), 0);
       return `${escapeHtml(col.title)}: ${escapeHtml(formatarNumero(valor))}`;
     }).join(' | ');
