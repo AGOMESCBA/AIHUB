@@ -86,6 +86,69 @@ function agrupamentosDoContexto(contextoAnterior) {
     .map(item => item.replace(/_/g, ' ').toLowerCase());
 }
 
+function periodoDoContexto(contextoAnterior) {
+  const p = contextoAnterior?.periodo || {};
+  const dataInicio = String(p.dataInicio || p.data_inicio || '').trim();
+  const dataFim = String(p.dataFim || p.data_fim || '').trim();
+  if (!/^\d{8}$/.test(dataInicio) || !/^\d{8}$/.test(dataFim)) return null;
+  return { dataInicio, dataFim };
+}
+
+function dataUtc(yyyymmdd) {
+  const s = String(yyyymmdd || '');
+  return new Date(Date.UTC(
+    parseInt(s.slice(0, 4), 10),
+    parseInt(s.slice(4, 6), 10) - 1,
+    parseInt(s.slice(6, 8), 10)
+  ));
+}
+
+function yyyymmdd(date) {
+  return [
+    String(date.getUTCFullYear()).padStart(4, '0'),
+    String(date.getUTCMonth() + 1).padStart(2, '0'),
+    String(date.getUTCDate()).padStart(2, '0'),
+  ].join('');
+}
+
+function ultimoDiaMes(ano, mes1a12) {
+  return new Date(Date.UTC(ano, mes1a12, 0)).getUTCDate();
+}
+
+function subtrairAnoMantendoDia(data) {
+  const d = dataUtc(data);
+  const ano = d.getUTCFullYear() - 1;
+  const mes = d.getUTCMonth() + 1;
+  const dia = Math.min(d.getUTCDate(), ultimoDiaMes(ano, mes));
+  return `${String(ano).padStart(4, '0')}${String(mes).padStart(2, '0')}${String(dia).padStart(2, '0')}`;
+}
+
+function periodoComparacaoDoContexto(contextoAnterior, tipoComparacao) {
+  const periodo = periodoDoContexto(contextoAnterior);
+  if (!periodo) return null;
+
+  if (tipoComparacao === 'ano_passado') {
+    return {
+      tipo: 'personalizado',
+      data_inicio: subtrairAnoMantendoDia(periodo.dataInicio),
+      data_fim: subtrairAnoMantendoDia(periodo.dataFim),
+    };
+  }
+
+  const inicio = dataUtc(periodo.dataInicio);
+  const fim = dataUtc(periodo.dataFim);
+  const dias = Math.max(1, Math.round((fim - inicio) / 86400000) + 1);
+  const fimAnterior = new Date(inicio);
+  fimAnterior.setUTCDate(fimAnterior.getUTCDate() - 1);
+  const inicioAnterior = new Date(fimAnterior);
+  inicioAnterior.setUTCDate(inicioAnterior.getUTCDate() - (dias - 1));
+  return {
+    tipo: 'personalizado',
+    data_inicio: yyyymmdd(inicioAnterior),
+    data_fim: yyyymmdd(fimAnterior),
+  };
+}
+
 function montarComparacaoPorAceite(texto, contextoAnterior) {
   const t = normalizarTextoCurto(texto);
   if (!t || t.length > 80) return null;
@@ -94,8 +157,7 @@ function montarComparacaoPorAceite(texto, contextoAnterior) {
   const pedePeriodoAnterior = /\b(periodo anterior|mes anterior|anterior)\b/.test(t);
   if (!aceita && !pedeAnoPassado && !pedePeriodoAnterior) return null;
 
-  const periodo = contextoAnterior?.periodo;
-  if (!periodo?.dataInicio || !periodo?.dataFim) return null;
+  if (!periodoDoContexto(contextoAnterior)) return null;
   const perguntaAnterior = String(contextoAnterior?._mensagemOriginal || contextoAnterior?._perguntaOriginal || '').trim();
   if (!perguntaAnterior || perguntaAnterior.length < 8) return null;
   const agrupamentos = agrupamentosDoContexto(contextoAnterior);
@@ -104,9 +166,17 @@ function montarComparacaoPorAceite(texto, contextoAnterior) {
     : ' mantendo os mesmos agrupamentos e campos da pergunta anterior';
 
   if (pedeAnoPassado) {
-    return `Compare com o mesmo periodo do ano passado${manterAgrupamentos}: ${perguntaAnterior}`;
+    return {
+      texto: `Compare com o mesmo periodo do ano passado${manterAgrupamentos}: ${perguntaAnterior}`,
+      tipoComparacao: 'ano_passado',
+      periodo: periodoComparacaoDoContexto(contextoAnterior, 'ano_passado'),
+    };
   }
-  return `Compare com o periodo anterior${manterAgrupamentos}: ${perguntaAnterior}`;
+  return {
+    texto: `Compare com o periodo anterior${manterAgrupamentos}: ${perguntaAnterior}`,
+    tipoComparacao: 'periodo_anterior',
+    periodo: periodoComparacaoDoContexto(contextoAnterior, 'periodo_anterior'),
+  };
 }
 
 // Mesma logica usada pelo canal WhatsApp real para rotular campos sem alias
@@ -246,7 +316,8 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
 
   const t0 = Date.now();
   const contextoAnterior = sessionStore.ultimoIntent({ sessaoId });
-  const textoParaIA = montarComparacaoPorAceite(texto, contextoAnterior) || texto;
+  const comparacaoAceite = montarComparacaoPorAceite(texto, contextoAnterior);
+  const textoParaIA = comparacaoAceite?.texto || texto;
   if (textoParaIA !== texto) {
     console.log(`[protheus_whatsapp] Aceite de comparacao reescrito: "${String(texto).trim()}" -> "${textoParaIA.slice(0, 180)}"`);
   }
@@ -263,6 +334,14 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
 
   if (contextoAnterior) {
     intent = intentMerger.mesclar(intent, contextoAnterior, 0, textoParaIA, {});
+  }
+  if (comparacaoAceite?.periodo) {
+    intent.periodo = comparacaoAceite.periodo;
+    intent._periodoComparacaoAceite = comparacaoAceite.tipoComparacao;
+    intent._periodoCanonicoResolvido = {
+      dataInicio: comparacaoAceite.periodo.data_inicio,
+      dataFim: comparacaoAceite.periodo.data_fim,
+    };
   }
 
   const resultado = await intentRouter.rotear(intent, empresaId);
