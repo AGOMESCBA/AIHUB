@@ -75,6 +75,17 @@ function normalizarTextoCurto(texto) {
     .trim();
 }
 
+function agrupamentosDoContexto(contextoAnterior) {
+  const bruto = contextoAnterior?.agrupar_por;
+  const lista = Array.isArray(bruto)
+    ? bruto
+    : String(bruto || '').split(/[,\|;]/);
+  return lista
+    .map(item => String(item || '').trim())
+    .filter(Boolean)
+    .map(item => item.replace(/_/g, ' ').toLowerCase());
+}
+
 function montarComparacaoPorAceite(texto, contextoAnterior) {
   const t = normalizarTextoCurto(texto);
   if (!t || t.length > 80) return null;
@@ -87,11 +98,15 @@ function montarComparacaoPorAceite(texto, contextoAnterior) {
   if (!periodo?.dataInicio || !periodo?.dataFim) return null;
   const perguntaAnterior = String(contextoAnterior?._mensagemOriginal || contextoAnterior?._perguntaOriginal || '').trim();
   if (!perguntaAnterior || perguntaAnterior.length < 8) return null;
+  const agrupamentos = agrupamentosDoContexto(contextoAnterior);
+  const manterAgrupamentos = agrupamentos.length
+    ? ` mantendo os mesmos agrupamentos (${agrupamentos.join(', ')})`
+    : ' mantendo os mesmos agrupamentos e campos da pergunta anterior';
 
   if (pedeAnoPassado) {
-    return `Compare com o mesmo periodo do ano passado: ${perguntaAnterior}`;
+    return `Compare com o mesmo periodo do ano passado${manterAgrupamentos}: ${perguntaAnterior}`;
   }
-  return `Compare com o periodo anterior: ${perguntaAnterior}`;
+  return `Compare com o periodo anterior${manterAgrupamentos}: ${perguntaAnterior}`;
 }
 
 // Mesma logica usada pelo canal WhatsApp real para rotular campos sem alias
