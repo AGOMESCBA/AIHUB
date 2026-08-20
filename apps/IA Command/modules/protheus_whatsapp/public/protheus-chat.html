@@ -1128,6 +1128,45 @@
     return `<div class="structured-response">${partes.join('')}</div>`;
   }
 
+  function extrairApresentacaoDoTextoSalvo(texto) {
+    const bruto = String(texto || '').trim();
+    if (!bruto || !bruto.startsWith('Entendi. ')) return null;
+
+    const linhas = bruto.split(/\r?\n/).map((linha) => linha.trim()).filter(Boolean);
+    if (!linhas.length) return null;
+
+    const introducao = linhas[0];
+    const indicadores = [];
+    let resumo = '';
+    let sugestao = '';
+
+    for (const linha of linhas) {
+      if (linha.startsWith('Leitura rapida:') || linha.startsWith('Leitura rápida:')) {
+        resumo = linha;
+        continue;
+      }
+      if (linha.startsWith('Posso comparar ') || linha.startsWith('Se quiser aprofundar, ')) {
+        sugestao = linha;
+        continue;
+      }
+
+      const limpa = linha.replace(/^[^\w*]+/, '').replace(/\*/g, '').trim();
+      const match = limpa.match(/^([^:]{2,40}):\s*(.+)$/);
+      if (!match) continue;
+
+      const labelBruto = match[1].trim();
+      const valor = match[2].trim();
+      if (/^(Total Geral|Subtotal)$/i.test(labelBruto)) continue;
+      if (/Cliente|Produto|Dia|Nota|registros?|neste periodo/i.test(labelBruto + ' ' + valor)) continue;
+      if (indicadores.length < 4) {
+        indicadores.push({ label: labelBruto.replace(/_/g, ' ').toUpperCase(), valor });
+      }
+    }
+
+    if (!introducao && !resumo && !sugestao && !indicadores.length) return null;
+    return { introducao, indicadores, resumo, sugestao };
+  }
+
   // [REVERTIDO 13/08/2026 a pedido do usuario] Bolha volta a mostrar o
   // TEXTO COMPLETO vindo do backend — igual ao canal WhatsApp real, sem
   // resumo nem mini-grid proprios deste canal. Decisao: manter os dois
@@ -1157,8 +1196,11 @@
       ? `<div class="result-table-rodape"><span>${labelRows}</span>`
         + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`
       : '';
-    const conteudo = (!isFalha && apresentacao)
-      ? renderApresentacaoHtml(apresentacao, texto) + linkDados
+    const apresentacaoFinal = (!isFalha && direcao === 'in')
+      ? (apresentacao || extrairApresentacaoDoTextoSalvo(texto))
+      : apresentacao;
+    const conteudo = (!isFalha && apresentacaoFinal)
+      ? renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
       : escapeHtml(texto) + linkDados;
 
     // Checkbox de selecao — sempre no DOM (nao so quando o modo esta ativo),
