@@ -203,16 +203,16 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
     });
   }
 
-  let conexao;
+  let conexoes;
   try {
-    conexao = getDB().prepare(
-      "SELECT id FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = 'protheus' ORDER BY padrao DESC, criado_em DESC LIMIT 1"
-    ).get(empresaId);
+    conexoes = getDB().prepare(
+      "SELECT id FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = 'protheus' ORDER BY padrao DESC, criado_em DESC"
+    ).all(empresaId);
   } catch (_) {
     sx3CacheSet(cacheKey, {});
     return rows;
   }
-  if (!conexao) {
+  if (!Array.isArray(conexoes) || !conexoes.length) {
     sx3CacheSet(cacheKey, {});
     return rows;
   }
@@ -220,10 +220,16 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
   const placeholders = camposOrdenados.map(() => '?').join(',');
   let titulos;
   try {
+    const placeholdersConexoes = conexoes.map(() => '?').join(',');
     titulos = getDB().prepare(`
-      SELECT campo, titulo FROM protheus_sx3
-      WHERE connection_id = ? AND empresa_id = ? AND campo IN (${placeholders})
-    `).all(conexao.id, empresaId, ...camposOrdenados);
+      SELECT sx3.campo, sx3.titulo
+      FROM protheus_sx3 sx3
+      JOIN connections c ON c.id = sx3.connection_id
+      WHERE sx3.empresa_id = ?
+        AND sx3.connection_id IN (${placeholdersConexoes})
+        AND sx3.campo IN (${placeholders})
+      ORDER BY c.padrao DESC, c.criado_em DESC, sx3.connection_id DESC
+    `).all(empresaId, ...conexoes.map(c => c.id), ...camposOrdenados);
   } catch (_) {
     sx3CacheSet(cacheKey, {});
     return rows;
@@ -235,7 +241,11 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
 
   const renomeio = {};
   for (const { campo, titulo } of titulos) {
-    if (titulo && titulo.trim()) renomeio[campo] = titulo.trim();
+    const campoKey = String(campo || '').trim().toUpperCase();
+    const tituloLimpo = String(titulo || '').trim();
+    if (campoKey && tituloLimpo && tituloLimpo.toUpperCase() !== campoKey && !renomeio[campoKey]) {
+      renomeio[campoKey] = tituloLimpo;
+    }
   }
   sx3CacheSet(cacheKey, renomeio);
   if (!Object.keys(renomeio).length) return rows;
