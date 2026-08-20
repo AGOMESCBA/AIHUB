@@ -416,14 +416,25 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
     const aliasesFaltantes = aliasesFaltantesMatch
       ? aliasesFaltantesMatch[1].split(',').map(a => a.trim()).filter(Boolean)
       : [];
+    const aliasesExtras = [
+      ...String(mensagem || '').matchAll(/\bdeve\s+filtrar\s+([A-Z][A-Z0-9_]*)\.D_E_L_E_T_/gi),
+      ...String(mensagem || '').matchAll(/\bFROM\s+[A-Z][A-Z0-9_]*\s+([A-Z][A-Z0-9_]*)\s+deve\s+filtrar/gi),
+    ].map(m => String(m[1] || '').trim()).filter(Boolean);
+    const aliasesUnicos = [...new Set([...aliasesFaltantes, ...aliasesExtras])];
+    const linhasAliases = aliasesUnicos.length
+      ? [
+          `- TABELA(S) ESPECIFICA(S) QUE FALTOU O FILTRO NA TENTATIVA ANTERIOR: ${aliasesUnicos.join(', ')}.`,
+          ...aliasesUnicos.map(a => `- Obrigatorio nesta nova tentativa: inclua ${a}.D_E_L_E_T_ = ' ' no SQL final.`),
+        ]
+      : [];
     bloco = [
       'Contrato obrigatorio:',
       "- Toda tabela no FROM/JOIN precisa de D_E_L_E_T_ = ' '.",
       "- Tabela principal: filtro no WHERE.",
       "- Tabelas em JOIN: filtro dentro do ON.",
-      ...(aliasesFaltantes.length
-        ? [`- TABELA(S) ESPECIFICA(S) QUE FALTOU O FILTRO NA TENTATIVA ANTERIOR: ${aliasesFaltantes.join(', ')}. Adicione ${aliasesFaltantes.map(a => `${a}.D_E_L_E_T_ = ' '`).join(' e ')} nesta nova tentativa, sem remover os filtros D_E_L_E_T_ que ja estavam corretos nas outras tabelas.`]
-        : []),
+      ...linhasAliases,
+      "- Se o alias faltante estiver na tabela do FROM principal, o WHERE deve conter esse filtro explicitamente. Exemplo: FROM SD2xxx SD2 ... WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' ' AND ...",
+      "- Nao retorne a mesma SQL sem o filtro faltante. A tentativa sera rejeitada novamente.",
       ...linhasEntidades,
       'Tarefa:',
       '- Gere novo SQL a partir da pergunta original.',
