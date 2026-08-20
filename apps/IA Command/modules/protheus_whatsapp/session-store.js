@@ -171,6 +171,27 @@ function ultimaMensagemTabular({ sessaoId }) {
   };
 }
 
+function mensagemTabular({ sessaoId, mensagemId }) {
+  const row = getDB().prepare(`
+    SELECT id, texto, rows_json, tipo_resultado, grid_config_json, criado_em
+    FROM protheus_chat_messages
+    WHERE sessao_id = ? AND id = ? AND direcao = 'in' AND rows_json IS NOT NULL
+    LIMIT 1
+  `).get(sessaoId, mensagemId);
+  if (!row) return null;
+  const meta = parseRowsMeta(row.rows_json);
+  if (!meta.temDados) return null;
+  return {
+    id: row.id,
+    texto: row.texto,
+    rows: meta.rows,
+    rowsCount: meta.rowsCount,
+    tipo: row.tipo_resultado,
+    gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    criadoEm: row.criado_em,
+  };
+}
+
 // Salva a configuracao de grid (agrupamento/filtros escolhidos pelo usuario)
 // de uma mensagem especifica, restaurada da proxima vez que a sessao/mensagem
 // for reaberta. gridConfig e um objeto livre definido pelo frontend
@@ -288,5 +309,6 @@ module.exports = {
   excluirMensagens,
   limparMensagens,
   ultimaMensagemTabular,
+  mensagemTabular,
   salvarGridConfig,
 };

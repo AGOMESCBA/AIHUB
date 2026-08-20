@@ -170,6 +170,23 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  // Resposta tabular especifica: reabre dados de perguntas antigas sem reprocessar IA/SQL.
+  app.get('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/relatorio', requireTokenSessao, (req, res) => {
+    const { empresaId, celular } = req.protheusChat;
+    try {
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+      const relatorio = sessionStore.mensagemTabular({
+        sessaoId: req.params.id,
+        mensagemId: req.params.mensagemId,
+      });
+      if (!relatorio) return res.status(404).json({ error: 'Mensagem tabular nao encontrada.' });
+      res.json(relatorio);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Salvar config de grid (agrupamento/filtros) escolhida pelo usuario ──
   app.put('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/grid-config', requireTokenSessao, (req, res) => {
     const { empresaId, celular } = req.protheusChat;

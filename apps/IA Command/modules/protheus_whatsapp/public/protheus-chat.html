@@ -1011,6 +1011,7 @@
   // do navegador. So e invalidado quando uma pergunta NOVA muda os dados
   // daquela sessao (ver enviarMensagem). Fica vazio ao recarregar a pagina.
   const relatorioCachePorSessao = new Map();
+  const relatorioCachePorMensagem = new Map();
   const mensagensCachePorSessao = new Map();
 
   let sessaoAtualId = null;
@@ -1183,7 +1184,9 @@
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
-    const qtdRows = Array.isArray(rows) ? rows.length : (Number.isFinite(Number(rowsCount)) ? Number(rowsCount) : null);
+    const qtdRows = Array.isArray(rows)
+      ? rows.length
+      : (rowsCount != null && Number.isFinite(Number(rowsCount)) ? Number(rowsCount) : null);
     const temDadosTabulares = !isFalha && (Array.isArray(rows) ? rows.length > 0 : !!temDados);
     const bubbleClass = isFalha ? 'bubble bubble-falha' : 'bubble';
     const icone = isFalha ? '<svg class="falha-icon" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2 1 21h22L12 2zm0 6v6m0 3h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg> ' : '';
@@ -1203,6 +1206,12 @@
       ? renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
       : escapeHtml(texto) + linkDados;
 
+    if (temDadosTabulares && id && Array.isArray(rows) && rows.length) {
+      const dadosMensagem = { mensagemId: id, rows, gridConfig: null, texto };
+      relatorioCachePorMensagem.set(id, dadosMensagem);
+      if (sessaoAtualId) relatorioCachePorSessao.set(sessaoAtualId, dadosMensagem);
+    }
+
     // Checkbox de selecao — sempre no DOM (nao so quando o modo esta ativo),
     // controlado via CSS (.chat-body.selecao-ativa .row-select-checkbox) para
     // nao ter que recriar todas as bolhas ao entrar/sair do modo selecao.
@@ -1216,7 +1225,7 @@
     if (temDadosTabulares) {
       row.querySelector('[data-abrir-dados]').addEventListener('click', (e) => {
         if (chatBody.classList.contains('selecao-ativa')) return; // nao abre aba durante selecao
-        trocarAba('relatorio');
+        abrirRelatorioDaMensagem(id);
       });
     }
     if (id) {
@@ -1338,6 +1347,7 @@
       ids.forEach((id) => {
         const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
         if (rowEl) rowEl.remove();
+        relatorioCachePorMensagem.delete(id);
       });
       const cacheMensagens = mensagensCachePorSessao.get(sessaoAtualId);
       if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
@@ -1474,10 +1484,42 @@
           texto: relatorio.texto,
         };
         relatorioCachePorSessao.set(sessaoId, dados);
+        relatorioCachePorMensagem.set(relatorio.id, dados);
         prepararRelatorio(dados);
       }
     } catch (err) {
       // Silencioso: ausencia de relatorio para a sessao nao e um erro do usuario.
+    }
+  }
+
+  async function abrirRelatorioDaMensagem(mensagemId) {
+    if (!sessaoAtualId || !mensagemId) {
+      trocarAba('relatorio');
+      return;
+    }
+
+    const cache = relatorioCachePorMensagem.get(mensagemId);
+    if (cache) {
+      prepararRelatorio(cache);
+      trocarAba('relatorio');
+      return;
+    }
+
+    try {
+      const relatorio = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + mensagemId + '/relatorio');
+      if (!relatorio || !Array.isArray(relatorio.rows) || !relatorio.rows.length) return;
+      const dados = {
+        mensagemId: relatorio.id,
+        rows: relatorio.rows,
+        gridConfig: relatorio.gridConfig,
+        texto: relatorio.texto,
+      };
+      relatorioCachePorMensagem.set(mensagemId, dados);
+      relatorioCachePorSessao.set(sessaoAtualId, dados);
+      prepararRelatorio(dados);
+      trocarAba('relatorio');
+    } catch (err) {
+      showError('Falha ao abrir os dados desta resposta: ' + err.message);
     }
   }
 
@@ -1705,8 +1747,14 @@
         ? data.resposta.rows.length > 0
         : !!data.resposta.temDados;
       if (temDados) {
-        relatorioCachePorSessao.delete(sessaoAtualId);
-        carregarRelatorioDaSessao(sessaoAtualId);
+        const dadosMensagem = relatorioCachePorMensagem.get(data.resposta.mensagemId);
+        if (dadosMensagem) {
+          relatorioCachePorSessao.set(sessaoAtualId, dadosMensagem);
+          prepararRelatorio(dadosMensagem);
+        } else {
+          relatorioCachePorSessao.delete(sessaoAtualId);
+          carregarRelatorioDaSessao(sessaoAtualId);
+        }
       }
     } catch (err) {
       hideTyping();
