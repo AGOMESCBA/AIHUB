@@ -50,6 +50,18 @@ function sx3CacheSet(key, valor) {
   return valor;
 }
 
+function aplicarRenomeioRows(rows, renomeio) {
+  if (!renomeio || !Object.keys(renomeio).length) return rows;
+  return rows.map((row) => {
+    const nova = {};
+    for (const [chave, valor] of Object.entries(row)) {
+      const alvo = renomeio[String(chave || '').toUpperCase()] || chave;
+      nova[alvo] = valor;
+    }
+    return nova;
+  });
+}
+
 // Mesmo padrao de deteccao de "RESET"/"limpar contexto" usado pelo canal
 // WhatsApp real (ver _textoResetExplicito em modules/whatsapp/service.js) —
 // copiado (nao importado) porque e uma funcao pequena e autocontida, e o
@@ -193,28 +205,27 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
   const cacheKey = `${empresaId}::${camposOrdenados.join(',')}`;
   const renomeioCache = sx3CacheGet(cacheKey);
   if (renomeioCache) {
-    if (!Object.keys(renomeioCache).length) return rows;
-    return rows.map((row) => {
-      const nova = {};
-      for (const [chave, valor] of Object.entries(row)) {
-        nova[renomeioCache[chave] || chave] = valor;
-      }
-      return nova;
-    });
+    return aplicarRenomeioRows(rows, renomeioCache);
   }
+
+  const renomeio = {};
 
   let conexoes;
   try {
     conexoes = getDB().prepare(
-      "SELECT id FROM connections WHERE empresa_id = ? AND ativo = 1 AND erp = 'protheus' ORDER BY padrao DESC, criado_em DESC"
+      `SELECT DISTINCT c.id, COALESCE(c.ativo, 0) AS ativo, COALESCE(c.padrao, 0) AS padrao, c.criado_em
+         FROM protheus_sx3 sx3
+         JOIN connections c ON c.id = sx3.connection_id
+        WHERE sx3.empresa_id = ?
+        ORDER BY ativo DESC, padrao DESC, c.criado_em DESC`
     ).all(empresaId);
   } catch (_) {
-    sx3CacheSet(cacheKey, {});
-    return rows;
+    sx3CacheSet(cacheKey, renomeio);
+    return aplicarRenomeioRows(rows, renomeio);
   }
   if (!Array.isArray(conexoes) || !conexoes.length) {
-    sx3CacheSet(cacheKey, {});
-    return rows;
+    sx3CacheSet(cacheKey, renomeio);
+    return aplicarRenomeioRows(rows, renomeio);
   }
 
   const placeholders = camposOrdenados.map(() => '?').join(',');
@@ -227,36 +238,26 @@ function traduzirNomesCruesViaSx3(rows, empresaId) {
       JOIN connections c ON c.id = sx3.connection_id
       WHERE sx3.empresa_id = ?
         AND sx3.connection_id IN (${placeholdersConexoes})
-        AND sx3.campo IN (${placeholders})
-      ORDER BY c.padrao DESC, c.criado_em DESC, sx3.connection_id DESC
+        AND UPPER(sx3.campo) IN (${placeholders})
+      ORDER BY COALESCE(c.ativo, 0) DESC, COALESCE(c.padrao, 0) DESC, c.criado_em DESC, sx3.connection_id DESC
     `).all(empresaId, ...conexoes.map(c => c.id), ...camposOrdenados);
   } catch (_) {
-    sx3CacheSet(cacheKey, {});
-    return rows;
+    sx3CacheSet(cacheKey, renomeio);
+    return aplicarRenomeioRows(rows, renomeio);
   }
-  if (!titulos.length) {
-    sx3CacheSet(cacheKey, {});
-    return rows;
-  }
-
-  const renomeio = {};
-  for (const { campo, titulo } of titulos) {
+  for (const { campo, titulo } of titulos || []) {
     const campoKey = String(campo || '').trim().toUpperCase();
     const tituloLimpo = String(titulo || '').trim();
-    if (campoKey && tituloLimpo && tituloLimpo.toUpperCase() !== campoKey && !renomeio[campoKey]) {
+    if (campoKey && tituloLimpo && tituloLimpo.toUpperCase() !== campoKey) {
       renomeio[campoKey] = tituloLimpo;
     }
   }
   sx3CacheSet(cacheKey, renomeio);
-  if (!Object.keys(renomeio).length) return rows;
-
-  return rows.map((row) => {
-    const nova = {};
-    for (const [chave, valor] of Object.entries(row)) {
-      nova[renomeio[chave] || chave] = valor;
-    }
-    return nova;
-  });
+  const faltantes = camposOrdenados.filter(campo => !renomeio[campo]);
+  if (faltantes.length) {
+    console.warn(`[protheus_whatsapp] SX3 sem titulo para campos: empresa=${empresaId} campos=${faltantes.join(',')}`);
+  }
+  return aplicarRenomeioRows(rows, renomeio);
 }
 
 function registrarInterpretacao(payload) {

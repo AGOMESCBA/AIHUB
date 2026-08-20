@@ -30,11 +30,30 @@ Static Function MenuDef()
     Local aRotina := {}
 
     ADD OPTION aRotina TITLE "Visualizar" ACTION "VIEWDEF.IACADUSR" OPERATION 2 ACCESS 0
-    ADD OPTION aRotina TITLE "Incluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 3 ACCESS 0
+    ADD OPTION aRotina TITLE "Incluir"    ACTION "U_IACZInc()" OPERATION 3 ACCESS 0
     ADD OPTION aRotina TITLE "Alterar"    ACTION "VIEWDEF.IACADUSR" OPERATION 4 ACCESS 0
     ADD OPTION aRotina TITLE "Excluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 5 ACCESS 0
 
 Return aRotina
+
+/*/{Protheus.doc} IACZInc
+    Abre a inclusao do cadastro ZCH.
+/*/
+
+User Function IACZInc()
+    Local aArea := FWGetArea()
+    Local cFunBkp := FunName()
+
+    DbSelectArea("ZCH")
+    ZCH->(DbSetOrder(1))
+
+    SetFunName("IACADUSR")
+    FWExecView("Incluir celular por usuario", "IACADUSR", MODEL_OPERATION_INSERT)
+    SetFunName(cFunBkp)
+
+    FWRestArea(aArea)
+
+Return
 
 /*/{Protheus.doc} ModelDef
     Modelo de dados MVC da tabela ZCH.
@@ -106,7 +125,7 @@ Return lRet
 
 User Function ZCHVldCel()
 
-    Local cCel   := M->ZCH_CEL
+    Local cCel   := M->ZCH_CELULA
     Local cDig   := ""
     Local nI     := 0
     Local lRet   := .T.

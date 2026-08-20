@@ -243,18 +243,21 @@ Return
 
    Normalizacao (remover mascara "+55 (65) 99901-0275" -> "556599..." etc.) e
    feita no backend (token-service.js normalizarCelular), nao aqui — a
-   rotina envia o valor exatamente como gravado em ZCH_CEL (ou o fallback).
+   rotina envia o valor exatamente como gravado em ZCH_CELULA (ou o fallback).
 ---------------------------------------------------------------------------- */
 Static Function IACLerCelularUsuario()
     Local cCelular   := ""
     Local cAliasAtu  := Alias()
+    Local cAtivo     := ""
 
     If IACTabelaExiste("ZCH")
         DbSelectArea("ZCH")
-        ZCH->(DbSetOrder(1)) // ZCH_FILIAL+ZCH_USER, ver CRIASIX() em IACadUsr.prw
+        ZCH->(DbSetOrder(1)) // ZCH_FILIAL+ZCH_USER
         If ZCH->(MsSeek(xFilial("ZCH") + RetCodUsr()))
-            If ZCH->ZCH_ATIVO == "S"
-                cCelular := Alltrim(ZCH->ZCH_CEL)
+            cAtivo := IACGetCampo("ZCH_ATIVO")
+
+            If Empty(cAtivo) .Or. cAtivo == "S"
+                cCelular := IACGetCampo("ZCH_CELULA")
             EndIf
         EndIf
         ZCH->(DbCloseArea())
@@ -269,6 +272,21 @@ Static Function IACLerCelularUsuario()
     EndIf
 
 Return cCelular
+
+/* ----------------------------------------------------------------------------
+   IACGetCampo
+   Le um campo do alias atual sem gerar erro fatal caso o dicionario/runtime
+   ainda nao exponha o campo esperado.
+---------------------------------------------------------------------------- */
+Static Function IACGetCampo(cCampo)
+    Local nPos := FieldPos(cCampo)
+    Local cRet := ""
+
+    If nPos > 0
+        cRet := Alltrim(FieldGet(nPos))
+    EndIf
+
+Return cRet
 
 /* ----------------------------------------------------------------------------
    IACTabelaExiste

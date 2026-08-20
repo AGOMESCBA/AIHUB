@@ -923,16 +923,74 @@ function _nomeAssuntoHumano(resultado, intent) {
   return 'as informacoes solicitadas';
 }
 
+function _labelResumo(col) {
+  const nome = _normalizarNome(col);
+  const tokens = nome.split('_').filter(Boolean);
+  if (tokens.includes('saldo')) return 'saldo';
+  if (tokens.includes('valor') || tokens.includes('vlr')) return 'valor';
+  if (tokens.includes('total')) return 'total';
+  if (tokens.includes('faturamento')) return 'faturamento';
+  if (tokens.includes('receita')) return 'receita';
+  if (tokens.includes('quantidade') || tokens.includes('qtd') || tokens.includes('qtde')) return 'quantidade';
+  return String(col || '').replace(/_/g, ' ').toLowerCase();
+}
+
+function _pareceDataOuIdentificadorResumo(col, valor) {
+  const nome = _normalizarNome(col);
+  const tokens = nome.split('_').filter(Boolean);
+  const skip = ['id', 'cod', 'codigo', 'num', 'numero', 'nota', 'nf', 'documento', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie', 'parcela', 'loja'];
+  if (skip.some(p => tokens.includes(p) || nome === p || nome.startsWith(`${p}_`) || nome.endsWith(`_${p}`))) return true;
+  if (_DETECTORES.data(col)) return true;
+  if (tokens.some(t => ['data', 'dt', 'dtdigit', 'emissao', 'emissao1', 'venc', 'vencto', 'vencimento', 'baixa', 'competencia', 'periodo', 'referencia'].includes(t))) return true;
+
+  const s = String(valor ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{2}\/\d{2}\/\d{4}/.test(s)) return true;
+  if (/^(?:19|20)\d{6}$/.test(s) && tokens.some(t => ['data', 'dt', 'venc', 'vencto', 'vencimento', 'emissao'].includes(t))) return true;
+  return false;
+}
+
+function _prioridadeResumo(col) {
+  const nome = _normalizarNome(col);
+  const tokens = nome.split('_').filter(Boolean);
+  if (tokens.includes('saldo') || nome.includes('a_pagar') || nome.includes('a_receber') || nome.includes('em_aberto')) return 0;
+  if (tokens.includes('valor') || tokens.includes('vlr') || tokens.includes('total') || tokens.includes('faturamento') || tokens.includes('receita')) return 1;
+  if (tokens.includes('quantidade') || tokens.includes('qtd') || tokens.includes('qtde')) return 2;
+  if (_tipoMetrica(col) === 'moeda') return 3;
+  return 9;
+}
+
+function _labelDimensaoResumo(col) {
+  const nome = _normalizarNome(col);
+  if (nome.includes('fornecedor')) return 'fornecedor';
+  if (nome.includes('cliente')) return 'cliente';
+  if (nome.includes('produto')) return 'produto';
+  if (nome.includes('vendedor')) return 'vendedor';
+  if (nome.includes('representante')) return 'representante';
+  if (nome.includes('empresa')) return 'empresa';
+  if (nome.includes('filial')) return 'filial';
+  return String(col || '').replace(/_/g, ' ').toLowerCase();
+}
+
+function _dimensaoResumoValida(col, row) {
+  const valor = row?.[col];
+  if (valor == null || valor === '') return false;
+  if (_pareceDataOuIdentificadorResumo(col, valor)) return false;
+  if (typeof valor === 'number') return false;
+  if (typeof valor === 'string' && !isNaN(parseFloat(valor))) return false;
+  return true;
+}
+
 function _colunasNumericasResumo(rows, intent) {
   const firstRow = rows?.[0] || {};
-  const skip = ['id', 'cod', 'codigo', 'num', 'numero', 'nota', 'nf', 'documento', 'seq', 'ano', 'mes', 'dia', 'titulo', 'prefixo', 'filial', 'serie'];
   const cols = Object.keys(firstRow).filter((k) => {
-    const kl = k.toLowerCase();
-    if (skip.some(p => kl === p || kl.startsWith(p + '_') || kl.endsWith('_' + p))) return false;
     const v = firstRow[k];
-    return typeof v === 'number' || (typeof v === 'string' && v !== '' && !isNaN(parseFloat(v)) && !/^\d{4}-\d{2}/.test(v));
+    if (_pareceDataOuIdentificadorResumo(k, v)) return false;
+    if (typeof v !== 'number' && (typeof v !== 'string' || v === '' || isNaN(parseFloat(v)))) return false;
+    return _prioridadeResumo(k) < 9;
   });
-  return _filtrarMetricasSolicitadas(cols, intent).slice(0, 2);
+  return _filtrarMetricasSolicitadas(cols, intent)
+    .sort((a, b) => _prioridadeResumo(a) - _prioridadeResumo(b))
+    .slice(0, 2);
 }
 
 function _primeiraDimensaoResumo(rows, intent) {
@@ -941,14 +999,17 @@ function _primeiraDimensaoResumo(rows, intent) {
   const preferidas = _groupByIntent(intent).filter(Boolean);
   for (const dim of preferidas) {
     const col = _detectarColuna(firstRow, dim) || keys.find(k => _normalizarNome(k) === _normalizarNome(dim));
-    if (col) return col;
+    if (col && _dimensaoResumoValida(col, firstRow)) return col;
   }
+
+  const dimensoesNegocio = ['fornecedor', 'cliente', 'produto', 'vendedor', 'representante', 'empresa'];
+  for (const dim of dimensoesNegocio) {
+    const col = _detectarColuna(firstRow, dim);
+    if (col && _dimensaoResumoValida(col, firstRow)) return col;
+  }
+
   return keys.find((k) => {
-    const v = firstRow[k];
-    if (v == null || v === '') return false;
-    if (typeof v === 'number') return false;
-    if (typeof v === 'string' && !isNaN(parseFloat(v))) return false;
-    return !_DETECTORES.data(k);
+    return _dimensaoResumoValida(k, firstRow);
   }) || null;
 }
 
@@ -963,7 +1024,7 @@ function _resumoHumanoRows(rows, intent) {
   if (metricas.length) {
     const totais = metricas.map((col) => {
       const total = rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0);
-      const label = col.replace(/_/g, ' ').toLowerCase();
+      const label = _labelResumo(col);
       return `${label}: ${_formatarValorMetrica(col, total)}`;
     });
     partes.push(`com ${totais.join(' e ')}`);
@@ -979,7 +1040,7 @@ function _resumoHumanoRows(rows, intent) {
       }
       const maior = [...agrupados.entries()].sort((a, b) => b[1] - a[1])[0];
       if (maior && maior[0]) {
-        const label = dimCol.replace(/_/g, ' ').toLowerCase();
+        const label = _labelDimensaoResumo(dimCol);
         partes.push(`maior ${label}: ${maior[0]} (${_formatarValorMetrica(metricaPrincipal, maior[1])})`);
       }
     }
@@ -993,7 +1054,7 @@ function _indicadoresHumanosRows(rows, intent) {
   return _colunasNumericasResumo(rows, intent).map((col) => {
     const total = rows.reduce((s, r) => s + (parseFloat(r[col]) || 0), 0);
     return {
-      label: col.replace(/_/g, ' ').toLowerCase(),
+      label: _labelResumo(col),
       valor: _formatarValorMetrica(col, total),
     };
   });
