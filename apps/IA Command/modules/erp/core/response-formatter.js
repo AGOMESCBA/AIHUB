@@ -1006,7 +1006,7 @@ function _sugestaoComparacaoHumana(resultado, intent, opts) {
   if (String(periodo?.tipo || '').includes('comparacao')) return '';
   const textoIntent = _normalizarNome([intent?.intencao, intent?.acao, intent?.tipo, intent?.comparativo].filter(Boolean).join(' '));
   if (/compar|evolu|variac|aumento|queda/.test(textoIntent)) return '';
-  return 'Se quiser aprofundar, posso comparar com o periodo anterior ou com o mesmo periodo do ano passado.';
+  return 'Posso comparar com o periodo anterior. Se preferir, peca "comparar com o mesmo periodo do ano passado".';
 }
 
 function montarApresentacaoResposta(texto, resultado, intent, opts = {}) {

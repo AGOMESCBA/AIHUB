@@ -65,6 +65,35 @@ function textoResetExplicito(texto) {
   return /^(reset|\/reset|resetar|reiniciar|reinicia|recomecar|\/recomecar|limpar|limpar conversa|limpar tudo|limpar contexto|limpar cache|esquecer tudo|esqueca tudo|esquece tudo|nova conversa|novo inicio|comecar|comecar de novo|comecar novamente)$/.test(t);
 }
 
+function normalizarTextoCurto(texto) {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function montarComparacaoPorAceite(texto, contextoAnterior) {
+  const t = normalizarTextoCurto(texto);
+  if (!t || t.length > 80) return null;
+  const aceita = /^(sim|sim quero|quero|quero sim|pode|pode sim|ok|isso|isso mesmo|vamos|vamos sim|compare|comparar)$/.test(t);
+  const pedeAnoPassado = /\b(ano passado|mesmo periodo|ano anterior)\b/.test(t);
+  const pedePeriodoAnterior = /\b(periodo anterior|mes anterior|anterior)\b/.test(t);
+  if (!aceita && !pedeAnoPassado && !pedePeriodoAnterior) return null;
+
+  const periodo = contextoAnterior?.periodo;
+  if (!periodo?.dataInicio || !periodo?.dataFim) return null;
+  const perguntaAnterior = String(contextoAnterior?._mensagemOriginal || contextoAnterior?._perguntaOriginal || '').trim();
+  if (!perguntaAnterior || perguntaAnterior.length < 8) return null;
+
+  if (pedeAnoPassado) {
+    return `Compare com o mesmo periodo do ano passado: ${perguntaAnterior}`;
+  }
+  return `Compare com o periodo anterior: ${perguntaAnterior}`;
+}
+
 // Mesma logica usada pelo canal WhatsApp real para rotular campos sem alias
 // (ver labelsSx3ParaFormatacao em modules/erp/ia-owner/runner.js), mas aplicada
 // diretamente as chaves de `rows` — la, o mapa so rotula texto ja formatado,
@@ -202,8 +231,12 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
 
   const t0 = Date.now();
   const contextoAnterior = sessionStore.ultimoIntent({ sessaoId });
+  const textoParaIA = montarComparacaoPorAceite(texto, contextoAnterior) || texto;
+  if (textoParaIA !== texto) {
+    console.log(`[protheus_whatsapp] Aceite de comparacao reescrito: "${String(texto).trim()}" -> "${textoParaIA.slice(0, 180)}"`);
+  }
 
-  let intent = await intentService.classificar(texto, empresaId, {
+  let intent = await intentService.classificar(textoParaIA, empresaId, {
     contextoAnterior,
     historicoResumido: null,
     tenantAliases: [],
@@ -211,9 +244,10 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
 
   intent._remetente = celular;
   intent._mensagemOriginal = texto;
+  if (textoParaIA !== texto) intent._mensagemReescrita = textoParaIA;
 
   if (contextoAnterior) {
-    intent = intentMerger.mesclar(intent, contextoAnterior, 0, texto, {});
+    intent = intentMerger.mesclar(intent, contextoAnterior, 0, textoParaIA, {});
   }
 
   const resultado = await intentRouter.rotear(intent, empresaId);
