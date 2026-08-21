@@ -19,6 +19,7 @@ const sessionStore = require('./session-store');
 const interpretationPipeline = require('../ai/interpretation-pipeline');
 const interpretationLog = require('../ai/interpretation-log');
 const { getDB } = require('../database');
+const IACWhatsAppService = require('../whatsapp/service');
 
 // Nome de campo cru do Protheus: prefixo de tabela (letra + ate 2 letras/digitos,
 // ex: E2, A1, SB1) + underscore + resto (ex: E2_PREFIXO, A1_NOME, SB1_DESC).
@@ -293,7 +294,98 @@ function registrarInterpretacao(payload) {
   }
 }
 
-async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
+function normalizarEmpresasSelecionadas(empresasSelecionadas) {
+  if (!Array.isArray(empresasSelecionadas)) return [];
+  const vistas = new Set();
+  return empresasSelecionadas
+    .map((emp) => {
+      const empresa_id = Number(emp?.empresa_id || emp?.empresaId || emp?.id || 0);
+      if (!empresa_id || vistas.has(empresa_id)) return null;
+      vistas.add(empresa_id);
+      return {
+        ...emp,
+        empresa_id,
+        empresaId: empresa_id,
+        nome: String(emp?.nome || emp?.codigoProtheus || emp?.codigo_protheus || `Empresa ${empresa_id}`).trim(),
+      };
+    })
+    .filter(Boolean);
+}
+
+function gridConfigDoFavorito(favorito) {
+  try {
+    return favorito?.grid_config_json ? JSON.parse(favorito.grid_config_json) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
+  const modulo = String(favorito?.modulo || '').trim().toLowerCase();
+  const sql = String(favorito?.sql_final_executado || '').trim();
+  if (!modulo || !sql) {
+    throw Object.assign(new Error('Favorito sem modulo ou SQL auditado.'), { statusCode: 400 });
+  }
+
+  const job = {
+    empresa_id: empresaId,
+    nome: favorito.titulo,
+    pergunta: favorito.pergunta_texto,
+    modulo,
+    sql_fixo: sql,
+    timezone: process.env.TZ || 'America/Manaus',
+  };
+  const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
+  const resultadoExec = await scheduledQuestionRunner.executarSqlFixoUmaVez(empresaId, job, [
+    { nome: celular, numero: celular },
+  ]);
+  const respostaTexto = resultadoExec.resposta || 'Consulta favorita executada.';
+  const rows = Array.isArray(resultadoExec.rows)
+    ? traduzirNomesCruesViaSx3(resultadoExec.rows, empresaId)
+    : null;
+  const { perguntaId, respostaId } = sessionStore.salvarTurno({
+    sessaoId,
+    perguntaTexto: favorito.pergunta_texto,
+    respostaTexto,
+    rows,
+    tipoResultado: resultadoExec.ok === false ? 'erro' : 'favorito_sql_fixo',
+    intent: {
+      intencao: `${modulo}_dinamico`,
+      origem: 'protheus_chat_favorito',
+      _moduloDinamico: modulo,
+      _remetente: celular,
+      _mensagemOriginal: favorito.pergunta_texto,
+      _skipIaSqlGeneration: true,
+    },
+  });
+  if (resultadoExec.interpretation_log_id) {
+    sessionStore.vincularInterpretacao({
+      mensagemId: respostaId,
+      sessaoId,
+      interpretationLogId: resultadoExec.interpretation_log_id,
+    });
+  }
+  const gridConfig = gridConfigDoFavorito(favorito);
+  if (gridConfig) {
+    sessionStore.salvarGridConfig({ mensagemId: respostaId, sessaoId, gridConfig });
+  }
+  if (favorito.id) {
+    sessionStore.marcarFavoritoUsado({ favoritoId: favorito.id, empresaId, celular });
+  }
+  return {
+    mensagemId: respostaId,
+    perguntaId,
+    texto: respostaTexto,
+    rows,
+    temDados: Array.isArray(rows) && rows.length > 0,
+    rowsCount: Array.isArray(rows) ? rows.length : 0,
+    tipo: resultadoExec.ok === false ? 'erro' : 'favorito_sql_fixo',
+    favoritoId: favorito.id || null,
+    gridConfig,
+  };
+}
+
+async function processarMensagem({ empresaId, celular, sessaoId, texto, empresasSelecionadas = null }) {
   // Comando "RESET"/"limpar contexto" — mesma deteccao do canal WhatsApp
   // real (textoResetExplicito acima), mas SEM apagar mensagens do historico
   // visual: diferente do WhatsApp (onde nao ha tela de conversa persistida),
@@ -322,6 +414,37 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
       temDados: false,
       rowsCount: 0,
       tipo: null,
+    };
+  }
+
+  const empresasMulti = normalizarEmpresasSelecionadas(empresasSelecionadas);
+  if (empresasMulti.length > 1) {
+    const whatsService = new IACWhatsAppService();
+    const respostaTexto = await whatsService._pipelineAll(texto, empresasMulti, celular, {
+      _recebidoEm: new Date().toISOString(),
+    });
+    const { perguntaId, respostaId } = sessionStore.salvarTurno({
+      sessaoId,
+      perguntaTexto: texto,
+      respostaTexto,
+      rows: null,
+      tipoResultado: 'multiempresa',
+      intent: {
+        tipo: 'multiempresa',
+        escopo: 'multiempresa',
+        empresas: empresasMulti.map(emp => emp.empresa_id),
+        _remetente: celular,
+        _mensagemOriginal: texto,
+      },
+    });
+    return {
+      mensagemId: respostaId,
+      perguntaId,
+      texto: respostaTexto,
+      rows: null,
+      temDados: false,
+      rowsCount: 0,
+      tipo: 'multiempresa',
     };
   }
 
@@ -383,7 +506,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
   // cache/aprendizado de SQL canonico que o WhatsApp usa. canalId fica null
   // (este canal nao tem conceito de canal multi-empresa como o WhatsApp).
   try {
-    registrarInterpretacao({
+    const interpretationLogId = registrarInterpretacao({
       empresaId,
       sender: celular,
       texto,
@@ -398,6 +521,13 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
         fn('[protheus_whatsapp]', msg);
       },
     });
+    if (interpretationLogId) {
+      sessionStore.vincularInterpretacao({
+        mensagemId: respostaId,
+        sessaoId,
+        interpretationLogId,
+      });
+    }
   } catch (e) {
     // Falha ao logar nao pode derrubar a resposta ja calculada ao usuario, mas precisa ficar
     // visivel — antes esse erro era engolido em silencio, escondendo falhas de gravacao.
@@ -416,4 +546,4 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto }) {
   };
 }
 
-module.exports = { processarMensagem };
+module.exports = { processarMensagem, executarFavorito };

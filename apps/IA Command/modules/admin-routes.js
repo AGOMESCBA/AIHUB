@@ -21,6 +21,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   const canAuditoria = requireRotina('iac-admin-auditoria');
   const canSpecFeedback = requireRotina('iac-admin-spec-feedback');
   const canLogsConsultas = requireRotina('iac-admin-logs-consultas');
+  const canChatFavoritos = requireRotina('iac-admin-chat-favoritos');
   const canLerModulos = requireAnyRotina(['iac-admin-modulos', 'iac-admin-intencoes', 'iac-admin-datasets']);
   const canDatasetsEIntencoes = requireAnyRotina(['iac-admin-datasets', 'iac-admin-intencoes']);
 
@@ -130,6 +131,177 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       : _empresasPermitidas(req, rotina).filter(e => Number(e.id) === Number(empresaAtual));
     return { canal, empresas: fallback };
   }
+
+  function _sqlFavoritoValido(sql) {
+    const texto = String(sql || '').trim();
+    if (!texto) return { ok: false, error: 'Informe o SQL final executado.' };
+    const normalizado = normalizarTexto(texto).replace(/\s+/g, ' ').trim();
+    if (!/^(select|with)\b/i.test(texto)) {
+      return { ok: false, error: 'Apenas SQL de consulta iniciado por SELECT ou WITH pode ser salvo.' };
+    }
+    if (/\b(insert|update|delete|drop|alter|truncate|merge|exec|execute|create|grant|revoke)\b/i.test(normalizado)) {
+      return { ok: false, error: 'SQL contem comando nao permitido para favorito.' };
+    }
+    return { ok: true };
+  }
+
+  function _rowChatFavorito(row) {
+    if (!row) return null;
+    return {
+      id: row.id,
+      empresa_id: Number(row.empresa_id),
+      celular: row.celular,
+      titulo: row.titulo,
+      pergunta_texto: row.pergunta_texto,
+      resposta_mensagem_id: row.resposta_mensagem_id || null,
+      interpretation_log_id: row.interpretation_log_id || null,
+      modulo: row.modulo || null,
+      sql_final_executado: row.sql_final_executado,
+      sql_template: row.sql_template || null,
+      intent_json: row.intent_json || null,
+      grid_config_json: row.grid_config_json || null,
+      rows_preview_json: row.rows_preview_json || null,
+      ativo: Number(row.ativo) === 1,
+      criado_em: row.criado_em,
+      atualizado_em: row.atualizado_em,
+      ultimo_uso_em: row.ultimo_uso_em || null,
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // CHAT FAVORITOS PROTHEUS
+  // ---------------------------------------------------------------------------
+
+  app.get('/api/ia-command/admin/chat-favoritos', requireAuth, requireIaCommand, canChatFavoritos, (req, res) => {
+    const empresaId = eid(req);
+    const incluirInativos = String(req.query.incluir_inativos || '') === '1';
+    const params = [empresaId];
+    let where = 'empresa_id = ?';
+    if (!incluirInativos) where += ' AND ativo = 1';
+    if (req.query.modulo) {
+      where += ' AND modulo = ?';
+      params.push(String(req.query.modulo).trim().toLowerCase());
+    }
+    if (req.query.celular) {
+      where += ' AND celular LIKE ?';
+      params.push(`%${normalizarNumero(req.query.celular)}%`);
+    }
+    const rows = getDB().prepare(`
+      SELECT id, empresa_id, celular, titulo, pergunta_texto,
+             resposta_mensagem_id, interpretation_log_id, modulo,
+             sql_final_executado, sql_template, intent_json, grid_config_json,
+             rows_preview_json, ativo, criado_em, atualizado_em, ultimo_uso_em
+        FROM protheus_chat_favorites
+       WHERE ${where}
+       ORDER BY ativo DESC, COALESCE(ultimo_uso_em, atualizado_em, criado_em) DESC
+       LIMIT 500
+    `).all(...params).map(_rowChatFavorito);
+    res.json(rows);
+  });
+
+  app.get('/api/ia-command/admin/chat-favoritos/:id', requireAuth, requireIaCommand, canChatFavoritos, (req, res) => {
+    const row = getDB().prepare(`
+      SELECT *
+        FROM protheus_chat_favorites
+       WHERE id = ? AND empresa_id = ?
+       LIMIT 1
+    `).get(req.params.id, eid(req));
+    if (!row) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+    res.json(_rowChatFavorito(row));
+  });
+
+  app.post('/api/ia-command/admin/chat-favoritos', requireAuth, requireIaCommand, canChatFavoritos, (req, res) => {
+    const body = req.body || {};
+    const titulo = String(body.titulo || '').trim();
+    const pergunta = String(body.pergunta_texto || '').trim();
+    const celular = normalizarNumero(body.celular || '');
+    const modulo = String(body.modulo || '').trim().toLowerCase();
+    const sqlFinal = String(body.sql_final_executado || '').trim();
+    const validacao = _sqlFavoritoValido(sqlFinal);
+    if (!titulo) return res.status(400).json({ error: 'Campo obrigatorio: titulo.' });
+    if (!pergunta) return res.status(400).json({ error: 'Campo obrigatorio: pergunta.' });
+    if (!celular) return res.status(400).json({ error: 'Campo obrigatorio: celular.' });
+    if (!modulo) return res.status(400).json({ error: 'Campo obrigatorio: modulo.' });
+    if (!validacao.ok) return res.status(400).json({ error: validacao.error });
+
+    const id = require('crypto').randomUUID();
+    const agora = new Date().toISOString();
+    getDB().prepare(`
+      INSERT INTO protheus_chat_favorites
+        (id, empresa_id, celular, titulo, pergunta_texto, modulo,
+         sql_final_executado, sql_template, intent_json, grid_config_json,
+         rows_preview_json, ativo, criado_em, atualizado_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    `).run(
+      id, eid(req), celular, titulo, pergunta, modulo,
+      sqlFinal, body.sql_template || null, body.intent_json || null,
+      body.grid_config_json || null, body.rows_preview_json || null, agora, agora,
+    );
+    _audit(req, 'criar_chat_favorito', { id, modulo, celular });
+    const row = getDB().prepare('SELECT * FROM protheus_chat_favorites WHERE id = ?').get(id);
+    res.status(201).json(_rowChatFavorito(row));
+  });
+
+  app.put('/api/ia-command/admin/chat-favoritos/:id', requireAuth, requireIaCommand, canChatFavoritos, (req, res) => {
+    const db = getDB();
+    const existing = db.prepare('SELECT * FROM protheus_chat_favorites WHERE id = ? AND empresa_id = ?').get(req.params.id, eid(req));
+    if (!existing) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+    const body = req.body || {};
+    const titulo = String(body.titulo ?? existing.titulo).trim();
+    const pergunta = String(body.pergunta_texto ?? existing.pergunta_texto).trim();
+    const celular = body.celular !== undefined ? normalizarNumero(body.celular) : existing.celular;
+    const modulo = String(body.modulo ?? existing.modulo ?? '').trim().toLowerCase();
+    const sqlFinal = String(body.sql_final_executado ?? existing.sql_final_executado).trim();
+    const validacao = _sqlFavoritoValido(sqlFinal);
+    if (!titulo) return res.status(400).json({ error: 'Campo obrigatorio: titulo.' });
+    if (!pergunta) return res.status(400).json({ error: 'Campo obrigatorio: pergunta.' });
+    if (!celular) return res.status(400).json({ error: 'Campo obrigatorio: celular.' });
+    if (!modulo) return res.status(400).json({ error: 'Campo obrigatorio: modulo.' });
+    if (!validacao.ok) return res.status(400).json({ error: validacao.error });
+
+    db.prepare(`
+      UPDATE protheus_chat_favorites
+         SET titulo = ?, pergunta_texto = ?, celular = ?, modulo = ?,
+             sql_final_executado = ?, sql_template = ?,
+             intent_json = ?, grid_config_json = ?, rows_preview_json = ?,
+             ativo = ?, atualizado_em = ?
+       WHERE id = ? AND empresa_id = ?
+    `).run(
+      titulo, pergunta, celular, modulo, sqlFinal,
+      body.sql_template ?? existing.sql_template,
+      body.intent_json ?? existing.intent_json,
+      body.grid_config_json ?? existing.grid_config_json,
+      body.rows_preview_json ?? existing.rows_preview_json,
+      body.ativo === false || body.ativo === 0 || body.ativo === '0' ? 0 : 1,
+      new Date().toISOString(), req.params.id, eid(req),
+    );
+    _audit(req, 'editar_chat_favorito', { id: req.params.id, modulo });
+    const row = db.prepare('SELECT * FROM protheus_chat_favorites WHERE id = ?').get(req.params.id);
+    res.json(_rowChatFavorito(row));
+  });
+
+  app.post('/api/ia-command/admin/chat-favoritos/:id/status', requireAuth, requireIaCommand, canChatFavoritos, (req, res) => {
+    const ativo = req.body?.ativo === true || req.body?.ativo === 1 ? 1 : 0;
+    const info = getDB().prepare(`
+      UPDATE protheus_chat_favorites
+         SET ativo = ?, atualizado_em = ?
+       WHERE id = ? AND empresa_id = ?
+    `).run(ativo, new Date().toISOString(), req.params.id, eid(req));
+    if (!info.changes) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+    _audit(req, ativo ? 'reativar_chat_favorito' : 'inativar_chat_favorito', { id: req.params.id });
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/ia-command/admin/chat-favoritos/:id', requireAuth, requireIaCommand, canChatFavoritos, (req, res) => {
+    const info = getDB().prepare(`
+      UPDATE protheus_chat_favorites
+         SET ativo = 0, atualizado_em = ?
+       WHERE id = ? AND empresa_id = ?
+    `).run(new Date().toISOString(), req.params.id, eid(req));
+    if (!info.changes) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+    _audit(req, 'inativar_chat_favorito', { id: req.params.id });
+    res.json({ ok: true });
+  });
 
   // ────────────────────────────────────────────────────────────────────────────
   // MÓDULOS DE INTENÇÃO

@@ -228,6 +228,38 @@ function _garantirColunasCompatibilidade() {
     _adicionarColunaSeFaltar('execution_log', coluna, definicao);
   }
 
+  try {
+    _adicionarColunaSeFaltar('protheus_chat_tokens', 'empresas_permitidas_json', 'TEXT DEFAULT NULL');
+  } catch (_) {}
+  try {
+    _adicionarColunaSeFaltar('protheus_chat_messages', 'interpretation_log_id', 'TEXT DEFAULT NULL');
+    _db.exec(`
+      CREATE TABLE IF NOT EXISTS protheus_chat_favorites (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            INTEGER NOT NULL,
+        celular               TEXT NOT NULL,
+        titulo                TEXT NOT NULL,
+        pergunta_texto        TEXT NOT NULL,
+        resposta_mensagem_id  TEXT DEFAULT NULL,
+        interpretation_log_id TEXT DEFAULT NULL,
+        modulo                TEXT DEFAULT NULL,
+        sql_final_executado   TEXT NOT NULL,
+        sql_template          TEXT DEFAULT NULL,
+        intent_json           TEXT DEFAULT NULL,
+        grid_config_json      TEXT DEFAULT NULL,
+        rows_preview_json     TEXT DEFAULT NULL,
+        ativo                 INTEGER NOT NULL DEFAULT 1,
+        criado_em             TEXT NOT NULL,
+        atualizado_em         TEXT NOT NULL,
+        ultimo_uso_em         TEXT DEFAULT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_favorites_usuario
+        ON protheus_chat_favorites (empresa_id, celular, ativo, atualizado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_favorites_msg
+        ON protheus_chat_favorites (resposta_mensagem_id);
+    `);
+  } catch (_) {}
+
   _db.exec(`
     CREATE INDEX IF NOT EXISTS idx_iac_execution_cache_lookup
       ON execution_log (empresa_id, numero_wa, chave_cache, criado_em);

@@ -342,6 +342,7 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
     error_detail: status.error_detail,
     interpretation_log_id: log.id,
     duration_ms: resultado.duracao_ms,
+    rows: resultado.rows || [],
   };
 }
 
@@ -387,6 +388,7 @@ async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
     error_detail: status.error_detail,
     interpretation_log_id: log.id,
     duration_ms: resultado?.duracao_ms ?? (Date.now() - t0),
+    rows: resultado?.rows || [],
   };
 }
 
@@ -436,7 +438,10 @@ function _enviarViaWorker(workerPort, empresaId, numero, resposta, ok, jobNome) 
 }
 
 async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 'sistema' } = {}) {
-  const destinatarios = store.listarDestinatarios(empresaId, job.id);
+  const isRetry = trigger_tipo === 'schedule_retry';
+  const destinatarios = isRetry
+    ? store.listarDestinatariosPendentes(empresaId, job.id, job.retry_recipient_ids)
+    : store.listarDestinatarios(empresaId, job.id);
   if (!destinatarios.length) {
     throw Object.assign(new Error('Job sem destinatarios ativos.'), { statusCode: 400 });
   }
@@ -449,6 +454,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
     const resumo = [];
     let sucessos = 0;
     let falhas = 0;
+    const recipientIdsFalhos = [];
     const entregas = destinatarios.map(dest => ({
       dest,
       deliveryId: store.criarDelivery(empresaId, run.id, job.id, dest),
@@ -467,6 +473,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
             store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
           } catch (err) {
             falhas++;
+            recipientIdsFalhos.push(dest.id);
             resumo.push(`${dest.nome || dest.numero}: ${err.message}`);
             store.atualizarDelivery(deliveryId, { status: 'erro', erro: err.message });
           }
@@ -492,20 +499,30 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         finished_at: new Date().toISOString(),
         duration_ms: Date.now() - started,
       });
+      if (falhas) {
+        throw Object.assign(new Error(`Falha ao enviar para ${falhas} destinatario(s).`), {
+          statusCode: 502,
+          recipientIdsFalhos,
+        });
+      }
       return resultado;
     } catch (err) {
-      for (const { dest, deliveryId } of entregas) {
-        falhas++;
-        resumo.push(`${dest.nome || dest.numero}: ${err.message}`);
-        store.atualizarDelivery(deliveryId, { status: 'erro', erro: err.message });
+      if (!('recipientIdsFalhos' in err)) {
+        for (const { dest, deliveryId } of entregas) {
+          falhas++;
+          recipientIdsFalhos.push(dest.id);
+          resumo.push(`${dest.nome || dest.numero}: ${err.message}`);
+          store.atualizarDelivery(deliveryId, { status: 'erro', erro: err.message });
+        }
+        store.atualizarRun(empresaId, run.id, {
+          status: 'erro',
+          erro: err.message,
+          resposta: resumo.join('\n') || null,
+          finished_at: new Date().toISOString(),
+          duration_ms: Date.now() - started,
+        });
       }
-      store.atualizarRun(empresaId, run.id, {
-        status: 'erro',
-        erro: err.message,
-        resposta: resumo.join('\n') || null,
-        finished_at: new Date().toISOString(),
-        duration_ms: Date.now() - started,
-      });
+      err.recipientIdsFalhos = err.recipientIdsFalhos || recipientIdsFalhos;
       throw err;
     }
   }
@@ -535,12 +552,14 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
     primeiroLogId = resultadoUnico.interpretation_log_id || null;
     primeiraResposta = resultadoUnico.resposta || null;
   } catch (err) {
+    const recipientIdsFalhos = [];
     for (const entrega of entregas) {
       falhas++;
+      recipientIdsFalhos.push(entrega.dest.id);
       resumo.push(`${entrega.dest.nome || entrega.dest.numero}: ${err.message}`);
       store.atualizarDelivery(entrega.deliveryId, { status: 'erro', erro: err.message });
     }
-    return store.atualizarRun(empresaId, run.id, {
+    store.atualizarRun(empresaId, run.id, {
       status: 'erro',
       finished_at: new Date().toISOString(),
       duration_ms: Date.now() - started,
@@ -548,8 +567,10 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
       resposta: resumo.join('\n'),
       erro: resumo.join('\n'),
     });
+    throw Object.assign(err, { recipientIdsFalhos });
   }
 
+  const recipientIdsFalhos = [];
   for (const { dest, deliveryId } of entregas) {
     try {
       await svc.sendScheduledQuestionDelivery({
@@ -564,6 +585,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
       store.atualizarDelivery(deliveryId, { status: 'sucesso', sent_at: new Date().toISOString(), erro: null });
     } catch (err) {
       falhas++;
+      recipientIdsFalhos.push(dest.id);
       resumo.push(`${dest.nome || dest.numero}: ${err.message}`);
       store.atualizarDelivery(deliveryId, { status: 'erro', erro: err.message });
     }
@@ -573,7 +595,7 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
   if (primeiroLogId) {
     try { interpretationLog.atualizarEntregue(primeiroLogId, Date.now() - started); } catch (_) {}
   }
-  return store.atualizarRun(empresaId, run.id, {
+  const run_atualizado = store.atualizarRun(empresaId, run.id, {
     status,
     finished_at: new Date().toISOString(),
     duration_ms: Date.now() - started,
@@ -581,10 +603,18 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
     resposta: primeiraResposta || resumo.join('\n'),
     erro: falhas ? resumo.filter(x => !x.endsWith(': enviado')).join('\n') : null,
   });
+  if (falhas) {
+    throw Object.assign(new Error(`Falha ao enviar para ${falhas} destinatario(s).`), {
+      statusCode: 502,
+      recipientIdsFalhos,
+    });
+  }
+  return run_atualizado;
 }
 
 module.exports = {
   executarJob,
+  executarSqlFixoUmaVez,
   _test: {
     aplicarMacrosSql,
     consultaSemSetRowcount,

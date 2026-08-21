@@ -83,6 +83,8 @@ function jobFromRow(row) {
     ativo: row.ativo ? 1 : 0,
     retry_max: Number(row.retry_max || 0),
     retry_interval_min: Number(row.retry_interval_min || 0),
+    retry_count: Number(row.retry_count || 0),
+    retry_recipient_ids: parseJson(row.retry_recipient_ids, null),
     schedule_json: parseJson(row.schedule_json, {}),
     destinatarios_count: Number(row.destinatarios_count || 0),
     grupos_count: Number(row.grupos_count || 0),
@@ -177,13 +179,15 @@ function bloquearJobVencido(empresaId, id, token, lockUntilIso, nowIso = agora()
 
 function finalizarJobBloqueado(empresaId, id, token, campos = {}) {
   const db = getDB();
-  const allowed = ['next_run_at', 'last_run_at', 'ativo', 'status'];
+  const allowed = ['next_run_at', 'last_run_at', 'ativo', 'status', 'retry_count', 'retry_recipient_ids'];
   const sets = [];
   const values = [];
   for (const key of allowed) {
     if (campos[key] === undefined) continue;
     sets.push(`${key} = ?`);
-    values.push(key === 'ativo' ? (campos[key] ? 1 : 0) : campos[key]);
+    if (key === 'ativo') values.push(campos[key] ? 1 : 0);
+    else if (key === 'retry_recipient_ids') values.push(campos[key] === null ? null : JSON.stringify(campos[key]));
+    else values.push(campos[key]);
   }
   sets.push('lock_until = NULL');
   sets.push('running_token = NULL');
@@ -226,6 +230,14 @@ function listarDestinatarios(empresaId, jobId) {
     ORDER BY nome COLLATE NOCASE ASC
   `).all(Number(empresaId), jobId).map(recipientFromRow);
   return filtrarNumerosElegiveis(rows, empresaId);
+}
+
+function listarDestinatariosPendentes(empresaId, jobId, recipientIds) {
+  const todos = listarDestinatarios(empresaId, jobId);
+  if (!Array.isArray(recipientIds) || !recipientIds.length) return todos;
+  const ids = new Set(recipientIds.map(String));
+  const filtrados = todos.filter(d => ids.has(String(d.id)));
+  return filtrados.length ? filtrados : todos;
 }
 
 function listarGruposDoJob(empresaId, jobId) {
@@ -506,8 +518,8 @@ function payloadJob(dados, empresaId, usuario, existing = {}) {
     ativo: dados.ativo === undefined ? (existing.ativo === undefined ? 1 : Number(existing.ativo) ? 1 : 0) : (dados.ativo ? 1 : 0),
     status: dados.status || existing.status || 'ativo',
     next_run_at: dados.next_run_at === undefined ? (existing.next_run_at || null) : (dados.next_run_at || null),
-    retry_max: Math.max(0, Math.min(10, Number(dados.retry_max ?? existing.retry_max ?? 2) || 0)),
-    retry_interval_min: Math.max(1, Math.min(1440, Number(dados.retry_interval_min ?? existing.retry_interval_min ?? 5) || 5)),
+    retry_max: Math.max(0, Math.min(10, Number(dados.retry_max ?? existing.retry_max ?? 3) || 0)),
+    retry_interval_min: Math.max(1, Math.min(1440, Number(dados.retry_interval_min ?? existing.retry_interval_min ?? 15) || 15)),
     atualizado_por: usuario || 'sistema',
     atualizado_em: now,
   };
@@ -759,6 +771,7 @@ module.exports = {
   finalizarJobBloqueado,
   buscarJob,
   listarDestinatarios,
+  listarDestinatariosPendentes,
   listarGruposDoJob,
   listarRuns,
   listarRunsGerais,

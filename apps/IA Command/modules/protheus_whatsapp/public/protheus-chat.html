@@ -4,8 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IA Command — Chat no Protheus</title>
-<!-- Mesma versao/CDN ja usada nas telas admin do IAHub (ex.: admin-agendamento.html) -->
-<link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css">
+<script>
+  (function () {
+    try {
+      if (localStorage.getItem('iaCommandTema') === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    } catch (_err) {}
+  })();
+</script>
 <style>
   :root {
     /* [REVERTIDO a pedido do usuario] Voltou a paleta verde original do
@@ -123,6 +130,7 @@
   }
   .app-frame.sidebar-collapsed { grid-template-columns: 0px 1fr; }
   .app-frame.sidebar-collapsed .sidebar { overflow: hidden; }
+  .app-frame.focus-mode:not(.sidebar-collapsed) { grid-template-columns: 72px 1fr; }
 
   /* ========================= SIDEBAR ========================= */
   /* min-height: 0 e essencial aqui: sem isso, um item de CSS Grid/Flex tem
@@ -168,6 +176,60 @@
   .new-chat-btn:hover { background: var(--wa-accent-soft-bg-hover); }
   .new-chat-btn svg { width: 15px; height: 15px; fill: currentColor; }
 
+  .favorite-open-btn {
+    margin: 0 14px 10px;
+    flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--wa-border);
+    background: var(--wa-panel);
+    color: var(--wa-text);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+  }
+  .favorite-open-btn:hover { background: var(--wa-sidebar-hover); border-color: var(--wa-accent-soft-border); }
+  .favorite-open-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .favorite-open-main svg { width: 15px; height: 15px; fill: var(--wa-accent); flex: none; }
+  .favorite-count { min-width: 24px; height: 20px; padding: 0 7px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--wa-accent-soft-bg); color: var(--wa-accent); font-size: 11px; font-weight: 800; }
+  .favorites-modal-backdrop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; padding: 22px; background: rgba(0, 0, 0, 0.46); z-index: 80; }
+  .favorites-modal-backdrop.active { display: flex; }
+  .favorites-modal { width: min(760px, 94vw); max-height: min(720px, 88vh); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--wa-border); border-radius: 10px; background: var(--wa-sidebar); color: var(--wa-text); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42); }
+  .favorites-modal-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px 12px; border-bottom: 1px solid var(--wa-border); background: var(--wa-header); color: #fff; }
+  .favorites-modal-title { min-width: 0; }
+  .favorites-modal-title strong { display: block; font-size: 16px; line-height: 1.2; }
+  .favorites-modal-title span { display: block; margin-top: 3px; color: rgba(255, 255, 255, 0.76); font-size: 12px; }
+  .favorites-modal-actions { flex: none; display: flex; align-items: center; gap: 6px; }
+  .favorites-refresh { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .favorites-modal-head .favorites-refresh,
+  .favorites-close { width: 32px; height: 32px; border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 8px; color: rgba(255,255,255,0.86); }
+  .favorites-refresh:hover,
+  .favorites-close:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+  .favorites-close { background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .favorites-refresh svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .favorites-close svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  .favorites-modal-search { flex: none; display: flex; align-items: center; gap: 8px; margin: 12px 14px 6px; padding: 9px 11px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text-secondary); }
+  .favorites-modal-search svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
+  .favorites-modal-search input { width: 100%; min-width: 0; border: none; outline: none; background: transparent; color: var(--wa-text); font: inherit; font-size: 13px; }
+  .favorites-modal-search input::placeholder { color: var(--wa-text-tertiary); }
+        .favorites-list { display: grid; gap: 6px; min-height: 0; overflow-y: auto; padding: 8px 14px 14px; }
+  .favorites-list::-webkit-scrollbar { width: 5px; }
+  .favorites-list::-webkit-scrollbar-thumb { background: var(--wa-scrollbar); border-radius: 5px; }
+  .favorite-empty { color: var(--wa-text-tertiary); font-size: 12px; padding: 18px 8px; text-align: center; }
+        .favorite-item { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; width: 100%; min-height: 52px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 10px; cursor: pointer; text-align: left; }
+  .favorite-item:hover { background: var(--wa-sidebar-hover); }
+  .favorite-main { min-width: 0; }
+  .favorite-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.2px; font-weight: 700; }
+  .favorite-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wa-text-tertiary); font-size: 11.5px; margin-top: 3px; }
+  .favorite-run { border: none; border-radius: 7px; padding: 7px 11px; background: var(--wa-accent); color: #06251e; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .favorite-run:hover { filter: brightness(1.07); }
+  .favorite-delete { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .favorite-delete:hover { background: rgba(214, 69, 69, 0.14); color: #d64545; }
+  .favorite-delete svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
   .sidebar-search {
     flex: none;
     margin: 2px 14px 10px;
@@ -180,7 +242,7 @@
   .sidebar-search input { border: none; outline: none; background: transparent; font-size: 13px; color: var(--wa-text); width: 100%; font-family: inherit; }
   .sidebar-search input::placeholder { color: var(--wa-text-tertiary); }
 
-  .session-list { flex: 1; overflow-y: auto; padding: 2px 8px 10px; }
+        .session-list { flex: 1 1 160px; min-height: 120px; overflow-y: auto; padding: 2px 8px 10px; }
   .session-list::-webkit-scrollbar { width: 5px; }
   .session-list::-webkit-scrollbar-thumb { background: var(--wa-scrollbar); border-radius: 4px; }
 
@@ -260,6 +322,49 @@
   .sidebar-footer .user-name { font-size: 12.5px; font-weight: 600; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sidebar-footer .user-role { font-size: 10.5px; color: var(--wa-text-tertiary); }
 
+  /* Modo Foco: mantem a navegacao acessivel por icones e devolve a maior
+     parte da largura para conversa/digitacao. */
+  .app-frame.focus-mode .sidebar { background: var(--wa-sidebar); }
+  .app-frame.focus-mode .sidebar-header { justify-content: center; padding: 14px 10px; min-height: 74px; }
+  .app-frame.focus-mode .sidebar-header .brand-icon { width: 42px; height: 42px; border-radius: 10px; }
+  .app-frame.focus-mode .sidebar-header .brand-text,
+  .app-frame.focus-mode .sidebar-search,
+  .app-frame.focus-mode .sidebar-footer .user-info,
+  .app-frame.focus-mode .session-meta,
+  .app-frame.focus-mode .session-rename-btn,
+  .app-frame.focus-mode .session-delete-btn,
+  .app-frame.focus-mode .favorite-open-btn .favorite-label,
+  .app-frame.focus-mode .favorite-open-btn .favorite-count,
+  .app-frame.focus-mode .new-chat-btn span { display: none; }
+  .app-frame.focus-mode .new-chat-btn,
+  .app-frame.focus-mode .favorite-open-btn {
+    width: 46px;
+    height: 46px;
+    margin: 12px auto 16px;
+    padding: 0;
+    border-radius: 10px;
+    border-style: solid;
+    font-size: 0;
+    gap: 0;
+  }
+  .app-frame.focus-mode .new-chat-btn svg { width: 20px; height: 20px; }
+  .app-frame.focus-mode .favorite-open-btn { justify-content: center; }
+  .app-frame.focus-mode .favorite-open-main svg { width: 20px; height: 20px; }
+  .app-frame.focus-mode .session-list { padding: 4px 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .app-frame.focus-mode .session-item {
+    width: 48px;
+    min-height: 48px;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    gap: 0;
+    border-radius: 12px;
+  }
+  .app-frame.focus-mode .session-avatar { width: 36px; height: 36px; }
+  .app-frame.focus-mode .session-item.active::before { left: -4px; }
+  .app-frame.focus-mode .sidebar-footer { justify-content: center; padding: 12px 8px; min-height: 64px; }
+  .app-frame.focus-mode .sidebar-footer .user-avatar { width: 36px; height: 36px; }
+
   /* ========================= PAINEL DE CHAT ========================= */
   /* min-height: 0 pelo mesmo motivo do .sidebar acima — sem isso, uma resposta
      grande no chat-body faria este painel (e o app-frame inteiro) crescer
@@ -273,6 +378,62 @@
   .header-name { font-size: 15.5px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .header-sub { font-size: 12px; color: rgba(255, 255, 255, 0.82); display: flex; align-items: center; gap: 5px; }
   .header-sub .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15); flex: none; }
+  .empresa-select-wrap { flex: none; position: relative; display: none; max-width: min(460px, 44vw); }
+  .empresa-select-wrap.visible { display: block; }
+  .empresa-select {
+    min-width: 240px;
+    max-width: 100%;
+    height: 32px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 0 30px 0 10px;
+    outline: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .empresa-select:hover,
+  .empresa-select:focus-visible { background: rgba(255, 255, 255, 0.18); outline: none; }
+  .empresa-select .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empresa-select .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; }
+  .empresa-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(420px, 86vw);
+    max-height: min(360px, 70vh);
+    overflow-y: auto;
+    padding: 7px;
+    border: 1px solid var(--wa-border);
+    border-radius: 8px;
+    background: var(--wa-sidebar);
+    color: var(--wa-text);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+    display: none;
+    z-index: 20;
+  }
+  .empresa-select-wrap.open .empresa-menu { display: block; }
+  .empresa-option {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 8px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 12.5px;
+    line-height: 1.25;
+  }
+  .empresa-option:hover { background: var(--wa-sidebar-hover); }
+  .empresa-option input { width: 15px; height: 15px; flex: none; accent-color: var(--wa-accent); }
+  .empresa-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empresa-option.all { border-bottom: 1px solid var(--wa-border); border-radius: 7px 7px 0 0; margin-bottom: 5px; font-weight: 700; }
 
   /* Botao discreto de resetar memoria: visivel mas quieto, nao compete com o
      restante do cabecalho — contraste suficiente pra ser encontrado sem gritar */
@@ -293,10 +454,50 @@
   }
   .reset-memoria-btn:hover,
   .reset-memoria-btn:focus-visible { background: rgba(255, 255, 255, 0.22); color: #fff; outline: none; }
+  .reset-memoria-btn.active { background: var(--wa-accent-soft-bg); border-color: var(--wa-accent); color: #fff; }
   .reset-memoria-btn:active svg { transform: rotate(-50deg); }
   .reset-memoria-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.35s ease; }
   .reset-memoria-btn.spin svg { animation: reset-spin 0.5s ease; }
   @keyframes reset-spin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+
+  .header-actions { position: relative; flex: none; }
+  .header-menu-toggle svg { width: 17px; height: 17px; }
+  .header-actions-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 230px;
+    display: none;
+    gap: 4px;
+    padding: 7px;
+    border: 1px solid var(--wa-border);
+    border-radius: 8px;
+    background: var(--wa-sidebar);
+    color: var(--wa-text);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+    z-index: 30;
+  }
+  .header-actions.open .header-actions-menu { display: grid; }
+  .header-actions-menu .reset-memoria-btn {
+    width: 100%;
+    height: 36px;
+    margin-left: 0;
+    justify-content: flex-start;
+    gap: 9px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--wa-text);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+  }
+  .header-actions-menu .reset-memoria-btn:hover,
+  .header-actions-menu .reset-memoria-btn:focus-visible { background: var(--wa-sidebar-hover); color: var(--wa-text); }
+  .header-actions-menu .reset-memoria-btn.active { background: var(--wa-accent-soft-bg); color: var(--wa-accent); }
+  .header-actions-menu .reset-memoria-btn span { display: block; }
+  .header-actions-menu .reset-memoria-btn svg { width: 15px; height: 15px; flex: none; }
 
   /* ========================= SELECAO DE MENSAGENS (excluir) ========================= */
   /* [AJUSTADO apos usuario reportar cor "apagada"/pouco legivel] Fundo verde
@@ -481,6 +682,8 @@
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
   .bubble { position: relative; max-width: 66%; padding: 6px 9px 8px; border-radius: 8px; font-size: 14.3px; line-height: 1.42; box-shadow: var(--wa-shadow); white-space: pre-wrap; word-wrap: break-word; }
+  .app-frame.focus-mode .bubble { max-width: 78%; }
+  .app-frame.focus-mode .bubble .structured-response { min-width: min(520px, 72vw); }
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
   .bubble .structured-response { white-space: normal; display: grid; gap: 9px; min-width: min(420px, 62vw); }
@@ -506,6 +709,11 @@
 
   .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; float: right; margin: 3px -2px -3px 8px; transform: translateY(4px); }
   .bubble .time { font-size: 10.5px; color: var(--wa-text-tertiary); white-space: nowrap; }
+  .favorite-message-btn { float: right; width: 22px; height: 22px; margin: -2px -2px 2px 7px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .favorite-message-btn:hover { background: rgba(0, 168, 132, 0.12); color: var(--wa-accent); }
+  .favorite-message-btn.active { color: #c99a12; }
+  .favorite-message-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+  .favorite-message-btn.active svg { fill: currentColor; }
 
   /* Link "Ver na aba Dados →" no rodape da bolha, quando a resposta tem rows
      — unica ligacao visual da bolha (texto puro, igual WhatsApp) com a aba
@@ -549,6 +757,30 @@
   .input-wrap input { flex: 1; border: none; outline: none; background: transparent; font-size: 14.5px; color: var(--wa-text); font-family: inherit; }
   .input-wrap input::placeholder { color: var(--wa-text-tertiary); }
   .input-wrap input:disabled { opacity: 0.6; }
+  .input-wrap textarea {
+    flex: 1;
+    min-height: 22px;
+    max-height: 126px;
+    border: none;
+    outline: none;
+    background: transparent;
+    resize: none;
+    overflow-y: auto;
+    font-size: 14.5px;
+    line-height: 1.45;
+    color: var(--wa-text);
+    font-family: inherit;
+  }
+  .input-wrap textarea::placeholder { color: var(--wa-text-tertiary); }
+  .input-wrap textarea:disabled { opacity: 0.6; }
+  .app-frame.focus-mode .chat-footer { padding: 14px 28px 12px; gap: 12px; }
+  .app-frame.focus-mode .input-wrap {
+    align-items: flex-start;
+    min-height: 86px;
+    border-radius: 16px;
+    padding: 13px 18px;
+  }
+  .app-frame.focus-mode .input-wrap textarea { min-height: 66px; max-height: 168px; }
 
   .send-btn { flex: none; width: 42px; height: 42px; border-radius: 50%; background: var(--wa-header); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.12s ease; }
   .send-btn:hover { transform: scale(1.04); }
@@ -560,6 +792,8 @@
   .protheus-strip { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 12px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
   .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); flex: none; }
   .protheus-strip > span:first-of-type { display: flex; align-items: center; gap: 6px; }
+  .app-frame.focus-mode .protheus-strip { justify-content: flex-end; min-height: 18px; padding: 3px 24px; font-size: 9.5px; }
+  .app-frame.focus-mode .protheus-strip svg { display: none; }
 
 
   .error-banner { background: #d64545; color: #fff; font-size: 12.5px; padding: 8px 16px; text-align: center; }
@@ -722,7 +956,23 @@
   }
   .column-toggle:hover { background: var(--wa-sidebar-hover); }
   .column-toggle input { flex: none; }
-  .column-toggle span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .column-toggle span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .column-rename-btn {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--wa-text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .column-rename-btn:hover,
+  .column-rename-btn:focus-visible { background: var(--wa-accent-soft-bg); color: var(--wa-accent); outline: none; }
+  .column-rename-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .report-body { flex: 1; min-height: 0; padding: 12px 16px 16px; overflow: hidden; display: flex; flex-direction: column; }
   .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); }
@@ -759,7 +1009,15 @@
   .tabulator { font-family: inherit; font-size: 12.8px; }
   .tabulator .tabulator-cell.num { font-variant-numeric: tabular-nums; }
 
-  @media (max-width: 760px) { .app-frame { grid-template-columns: 1fr; } .sidebar { display: none; } }
+  @media (max-width: 760px) {
+    .app-frame { grid-template-columns: 1fr; }
+    .app-frame.focus-mode:not(.sidebar-collapsed) { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .empresa-select-wrap { max-width: min(260px, 46vw); }
+    .empresa-select { min-width: 150px; }
+    .app-frame.focus-mode .chat-footer { padding: 10px 12px; }
+    .app-frame.focus-mode .input-wrap { min-height: 78px; }
+  }
   @media (prefers-reduced-motion: reduce) { .row:not(.typing-row), .send-btn { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -778,9 +1036,17 @@
       </div>
     </div>
 
-    <button class="new-chat-btn" type="button" id="btnNovaConversa">
+    <button class="new-chat-btn" type="button" id="btnNovaConversa" title="Nova conversa" aria-label="Nova conversa">
       <svg viewBox="0 0 24 24"><path d="M12 4v16m-8-8h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
-      Nova conversa
+      <span>Nova conversa</span>
+    </button>
+
+    <button class="favorite-open-btn" type="button" id="btnAbrirFavoritos" title="Favoritos do chat" aria-label="Favoritos do chat">
+      <span class="favorite-open-main">
+        <svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.78 6.8 19.52l.99-5.8-4.21-4.1 5.82-.85L12 3.5z"/></svg>
+        <span class="favorite-label">Favoritos</span>
+      </span>
+      <span class="favorite-count" id="favoriteCount">...</span>
     </button>
 
     <div class="sidebar-search">
@@ -810,12 +1076,36 @@
         <div class="header-name" id="headerTitle">IA Command</div>
         <div class="header-sub"><span class="dot"></span> online · respondendo em tempo real</div>
       </div>
-      <button class="reset-memoria-btn" id="btnSelecionarMensagens" type="button" title="Selecionar mensagens para excluir" aria-label="Selecionar mensagens para excluir">
-        <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-      </button>
-      <button class="reset-memoria-btn" id="btnResetMemoria" type="button" title="Esquecer contexto da conversa" aria-label="Esquecer contexto da conversa">
-        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-      </button>
+      <div class="empresa-select-wrap" id="empresaSelectWrap" title="Empresas consultadas">
+        <button class="empresa-select" id="empresaSelect" type="button" aria-label="Empresas consultadas" aria-haspopup="true" aria-expanded="false">
+          <span class="label" id="empresaSelectLabel">Empresa</span>
+          <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="empresa-menu" id="empresaMenu" role="menu"></div>
+      </div>
+      <div class="header-actions" id="headerActions">
+        <button class="reset-memoria-btn header-menu-toggle" id="btnHeaderMenu" type="button" title="Mais opcoes" aria-label="Mais opcoes" aria-haspopup="true" aria-expanded="false">
+          <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 100-4 2 2 0 000 4zM12 14a2 2 0 100-4 2 2 0 000 4zM12 20a2 2 0 100-4 2 2 0 000 4z"/></svg>
+        </button>
+        <div class="header-actions-menu" id="headerActionsMenu">
+          <button class="reset-memoria-btn" id="btnModoFoco" type="button" title="Modo foco" aria-label="Ativar modo foco" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>
+            <span>Modo foco</span>
+          </button>
+          <button class="reset-memoria-btn" id="btnTema" type="button" title="Tema claro" aria-label="Usar tema claro" aria-pressed="false">
+            <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 100 12 6 6 0 000-12z"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            <span>Tema claro</span>
+          </button>
+          <button class="reset-memoria-btn" id="btnSelecionarMensagens" type="button" title="Selecionar mensagens para excluir" aria-label="Selecionar mensagens para excluir">
+            <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            <span>Selecionar mensagens</span>
+          </button>
+          <button class="reset-memoria-btn" id="btnResetMemoria" type="button" title="Esquecer contexto da conversa" aria-label="Esquecer contexto da conversa">
+            <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            <span>Esquecer contexto</span>
+          </button>
+        </div>
+      </div>
     </header>
 
     <!-- Barra de acoes do modo selecao (estilo WhatsApp Web) — so aparece
@@ -864,7 +1154,7 @@
 
       <form class="chat-footer" id="chatForm">
         <div class="input-wrap">
-          <input type="text" id="msgInput" placeholder="Pergunte algo sobre o ERP..." autocomplete="off" aria-label="Mensagem" />
+          <textarea id="msgInput" rows="1" placeholder="Pergunte algo sobre o ERP..." autocomplete="off" aria-label="Mensagem"></textarea>
         </div>
         <button type="submit" class="send-btn" id="sendBtn" aria-label="Enviar">
           <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -923,17 +1213,37 @@
   </section>
 </div>
 
-<!-- Mesma versao/CDN ja usada nas telas admin do IAHub -->
-<script src="https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
-<!-- Dependencias oficiais do modulo download do Tabulator 6.x para xlsx/pdf (tabulator.info/docs/6.3/download) -->
-<script src="https://oss.sheetjs.com/sheetjs/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js"></script>
+<div class="favorites-modal-backdrop" id="favoritesModal" aria-hidden="true">
+  <div class="favorites-modal" role="dialog" aria-modal="true" aria-labelledby="favoritesModalTitle">
+    <div class="favorites-modal-head">
+      <div class="favorites-modal-title">
+        <strong id="favoritesModalTitle">Favoritos do chat</strong>
+        <span>Escolha uma pergunta salva para executar novamente.</span>
+      </div>
+      <div class="favorites-modal-actions">
+        <button class="favorites-refresh" type="button" id="btnReloadFavoritos" title="Atualizar favoritos" aria-label="Atualizar favoritos">
+          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        </button>
+        <button class="favorites-close" type="button" id="btnFecharFavoritos" title="Fechar favoritos" aria-label="Fechar favoritos">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <label class="favorites-modal-search">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/></svg>
+      <input type="text" id="favoritesSearch" placeholder="Buscar favorito" autocomplete="off" />
+    </label>
+    <div class="favorites-list" id="favoritesList">
+      <div class="favorite-empty">Carregando...</div>
+    </div>
+  </div>
+</div>
 
 <script>
 (function () {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('token');
+  let token = params.get('token');
+  const launchTicket = params.get('launchTicket') || params.get('ticket') || '';
   const usuarioLabel = params.get('usuario') || '';
 
   // Remove o token da barra de enderecos e do historico do navegador assim que
@@ -954,6 +1264,13 @@
   const msgInput = document.getElementById('msgInput');
   const sendBtn = document.getElementById('sendBtn');
   const sessionList = document.getElementById('sessionList');
+  const btnAbrirFavoritos = document.getElementById('btnAbrirFavoritos');
+  const favoriteCount = document.getElementById('favoriteCount');
+  const favoritesModal = document.getElementById('favoritesModal');
+  const btnFecharFavoritos = document.getElementById('btnFecharFavoritos');
+  const favoritesSearch = document.getElementById('favoritesSearch');
+  const favoritesList = document.getElementById('favoritesList');
+  const btnReloadFavoritos = document.getElementById('btnReloadFavoritos');
   const headerTitle = document.getElementById('headerTitle');
   const errorBanner = document.getElementById('errorBanner');
   const userName = document.getElementById('userName');
@@ -966,6 +1283,15 @@
   const btnCancelarSelecao = document.getElementById('btnCancelarSelecao');
   const btnExcluirSelecionadas = document.getElementById('btnExcluirSelecionadas');
   const btnLimparChat = document.getElementById('btnLimparChat');
+  const empresaSelectWrap = document.getElementById('empresaSelectWrap');
+  const empresaSelect = document.getElementById('empresaSelect');
+  const empresaSelectLabel = document.getElementById('empresaSelectLabel');
+  const empresaMenu = document.getElementById('empresaMenu');
+  const btnModoFoco = document.getElementById('btnModoFoco');
+  const btnTema = document.getElementById('btnTema');
+  const headerActions = document.getElementById('headerActions');
+  const btnHeaderMenu = document.getElementById('btnHeaderMenu');
+  const headerActionsMenu = document.getElementById('headerActionsMenu');
 
   // Elementos e estado da aba Relatorio — declarados aqui (nao mais abaixo,
   // junto das funcoes) porque carregarMensagens() chama fecharRelatorio() e
@@ -999,12 +1325,16 @@
   let reportSorters = [];
   let reportHeaderFilters = [];
   let reportColumnWidths = {};
+  let reportColumnTitles = {};
   let gridConfigSaveTimer = null;
   let reportMountFrame = null;
   let reportMountTimer = null;
   let reportGlobalFilterActive = false;
   let reportRedrawFrame = null;
   let reportLastGridWidth = 0;
+  let reportTabulatorPromise = null;
+  let reportXlsxPromise = null;
+  let reportPdfPromise = null;
 
   // Cache em memoria do relatorio por sessao — evita rebuscar via rede e
   // recriar a grid do zero ao voltar para uma sessao ja visitada nesta janela
@@ -1013,17 +1343,141 @@
   const relatorioCachePorSessao = new Map();
   const relatorioCachePorMensagem = new Map();
   const mensagensCachePorSessao = new Map();
+  let favoritosCache = [];
+  let favoritosCarregados = false;
 
   let sessaoAtualId = null;
   let sessoesCache = [];
+  let empresasDisponiveis = [];
+  let empresaAtualId = null;
+  let empresasSelecionadasIds = [];
+  const bootInicioMs = performance.now();
+
+  function bootLog(etapa, dados = {}) {
+    const decorrido = Math.round(performance.now() - bootInicioMs);
+    console.info('[IA Command][boot]', etapa, { ms: decorrido, ...dados });
+  }
+
+  function ajustarAlturaInput() {
+    if (!msgInput) return;
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, appFrame.classList.contains('focus-mode') ? 168 : 126) + 'px';
+  }
+
+  function aplicarModoFoco(ativo, salvar = true) {
+    appFrame.classList.toggle('focus-mode', ativo);
+    btnModoFoco.classList.toggle('active', ativo);
+    btnModoFoco.setAttribute('aria-pressed', String(ativo));
+    btnModoFoco.setAttribute('aria-label', ativo ? 'Desativar modo foco' : 'Ativar modo foco');
+    btnModoFoco.title = ativo ? 'Sair do modo foco' : 'Modo foco';
+    if (salvar) {
+      try { localStorage.setItem('iaCommandModoFoco', ativo ? '1' : '0'); } catch (_err) {}
+    }
+    ajustarAlturaInput();
+  }
+
+  function aplicarTemaClaro(ativo, salvar = true) {
+    if (ativo) document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+    btnTema.classList.toggle('active', ativo);
+    btnTema.setAttribute('aria-pressed', String(ativo));
+    btnTema.setAttribute('aria-label', ativo ? 'Usar tema escuro' : 'Usar tema claro');
+    btnTema.title = ativo ? 'Tema escuro' : 'Tema claro';
+    btnTema.innerHTML = ativo
+      ? '<svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1111.2 3a6.8 6.8 0 009.8 9.8z"/></svg><span>Tema escuro</span>'
+      : '<svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 100 12 6 6 0 000-12z"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>Tema claro</span>';
+    if (salvar) {
+      try { localStorage.setItem('iaCommandTema', ativo ? 'light' : 'dark'); } catch (_err) {}
+    }
+  }
 
   function showError(msg) {
     errorBanner.textContent = msg;
     errorBanner.style.display = 'block';
   }
 
+  function carregarScriptUmaVez(src, testeDisponivel) {
+    if (testeDisponivel && testeDisponivel()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const existente = document.querySelector('script[data-lazy-src="' + src + '"]');
+      if (existente) {
+        existente.addEventListener('load', resolve, { once: true });
+        existente.addEventListener('error', () => reject(new Error('Falha ao carregar biblioteca.')), { once: true });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.dataset.lazySrc = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Falha ao carregar biblioteca.'));
+      document.head.appendChild(script);
+    }).then(() => {
+      if (testeDisponivel && !testeDisponivel()) throw new Error('Biblioteca indisponivel apos carregamento.');
+    });
+  }
+
+  function carregarCssUmaVez(href) {
+    if (document.querySelector('link[data-lazy-href="' + href + '"]')) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      link.dataset.lazyHref = href;
+      link.onload = resolve;
+      link.onerror = () => reject(new Error('Falha ao carregar estilo da grade.'));
+      document.head.appendChild(link);
+    });
+  }
+
+  function garantirTabulator() {
+    if (!reportTabulatorPromise) {
+      reportTabulatorPromise = Promise.all([
+        carregarCssUmaVez('https://unpkg.com/tabulator-tables@6.3.1/dist/css/tabulator.min.css'),
+        carregarScriptUmaVez(
+          'https://unpkg.com/tabulator-tables@6.3.1/dist/js/tabulator.min.js',
+          () => !!window.Tabulator,
+        ),
+      ]);
+    }
+    return reportTabulatorPromise;
+  }
+
+  function garantirExportXlsx() {
+    if (!reportXlsxPromise) {
+      reportXlsxPromise = garantirTabulator().then(() => carregarScriptUmaVez(
+        'https://oss.sheetjs.com/sheetjs/xlsx.full.min.js',
+        () => !!window.XLSX,
+      ));
+    }
+    return reportXlsxPromise;
+  }
+
+  function garantirExportPdf() {
+    if (!reportPdfPromise) {
+      reportPdfPromise = garantirTabulator()
+        .then(() => carregarScriptUmaVez(
+          'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js',
+          () => !!(window.jspdf && window.jspdf.jsPDF),
+        ))
+        .then(() => carregarScriptUmaVez(
+          'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.20/jspdf.plugin.autotable.min.js',
+          () => !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable),
+        ));
+    }
+    return reportPdfPromise;
+  }
+
   function api(path, options = {}) {
-    return fetch('/api/ia-command/protheus' + path, {
+    let url = '/api/ia-command/protheus' + path;
+    if (empresaAtualId && !path.startsWith('/empresas')) {
+      url += (url.includes('?') ? '&' : '?') + 'empresaId=' + encodeURIComponent(empresaAtualId);
+      if (empresasSelecionadasIds.length > 1) {
+        url += '&empresaIds=' + encodeURIComponent(empresasSelecionadasIds.join(','));
+      }
+    }
+    const inicio = performance.now();
+    return fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -1031,10 +1485,147 @@
         ...(options.headers || {}),
       },
     }).then(async (r) => {
+      bootLog('api:' + path, { status: r.status, duracaoMs: Math.round(performance.now() - inicio) });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.error || ('Erro ' + r.status));
+      if (!r.ok) {
+        const err = new Error(body.error || ('Erro ' + r.status));
+        err.status = r.status;
+        throw err;
+      }
       return body;
     });
+  }
+
+  function labelEmpresa(emp) {
+    const id = Number(emp?.empresaId || emp?.empresa_id || emp?.id || 0);
+    const codigo = String(emp?.codigoProtheus || emp?.codigo_protheus || '').trim();
+    const nome = String(emp?.nome || '').trim();
+    const base = nome || codigo || `Empresa ${id}`;
+    return id ? `Id ${id} - ${base}` : base;
+  }
+
+  function idsEmpresasDisponiveis() {
+    return empresasDisponiveis
+      .map(emp => Number(emp?.empresaId || emp?.empresa_id || emp?.id || 0))
+      .filter(Boolean);
+  }
+
+  function atualizarEmpresaAtualPorSelecao() {
+    empresaAtualId = Number(empresasSelecionadasIds[0] || empresasDisponiveis[0]?.empresaId || empresasDisponiveis[0]?.empresa_id || 0) || null;
+  }
+
+  function atualizarLabelEmpresaSelect() {
+    const total = idsEmpresasDisponiveis().length;
+    if (!empresasSelecionadasIds.length) {
+      empresaSelectLabel.textContent = 'Selecione empresa';
+    } else if (total > 1 && empresasSelecionadasIds.length === total) {
+      empresaSelectLabel.textContent = 'Todas as empresas';
+    } else if (empresasSelecionadasIds.length === 1) {
+      const emp = empresasDisponiveis.find(item => Number(item?.empresaId || item?.empresa_id || item?.id || 0) === empresasSelecionadasIds[0]);
+      empresaSelectLabel.textContent = labelEmpresa(emp);
+    } else {
+      empresaSelectLabel.textContent = `${empresasSelecionadasIds.length} empresas`;
+    }
+    empresaSelect.title = empresaSelectLabel.textContent;
+  }
+
+  function renderEmpresaSelect() {
+    empresaMenu.innerHTML = '';
+    const ids = idsEmpresasDisponiveis();
+    if (!empresasSelecionadasIds.length && empresaAtualId) empresasSelecionadasIds = [empresaAtualId];
+    empresasSelecionadasIds = empresasSelecionadasIds.filter(id => ids.includes(id));
+    if (!empresasSelecionadasIds.length && ids.length) empresasSelecionadasIds = [ids[0]];
+    atualizarEmpresaAtualPorSelecao();
+
+    if (ids.length > 1) {
+      const allLabel = document.createElement('label');
+      allLabel.className = 'empresa-option all';
+      const allInput = document.createElement('input');
+      allInput.type = 'checkbox';
+      allInput.checked = empresasSelecionadasIds.length === ids.length;
+      allInput.addEventListener('change', async () => {
+        empresasSelecionadasIds = allInput.checked ? ids.slice() : [ids[0]];
+        atualizarEmpresaAtualPorSelecao();
+        renderEmpresaSelect();
+        await trocarEscopoEmpresa();
+      });
+      const allText = document.createElement('span');
+      allText.textContent = 'Todas as empresas';
+      allLabel.appendChild(allInput);
+      allLabel.appendChild(allText);
+      empresaMenu.appendChild(allLabel);
+    }
+
+    empresasDisponiveis.forEach((emp) => {
+      const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
+      if (!id) return;
+      const item = document.createElement('label');
+      item.className = 'empresa-option';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.value = String(id);
+      input.checked = empresasSelecionadasIds.includes(id);
+      input.addEventListener('change', async () => {
+        if (input.checked) {
+          if (!empresasSelecionadasIds.includes(id)) empresasSelecionadasIds.push(id);
+        } else {
+          empresasSelecionadasIds = empresasSelecionadasIds.filter(itemId => itemId !== id);
+          if (!empresasSelecionadasIds.length) empresasSelecionadasIds = [id];
+        }
+        atualizarEmpresaAtualPorSelecao();
+        renderEmpresaSelect();
+        await trocarEscopoEmpresa();
+      });
+      const span = document.createElement('span');
+      span.textContent = labelEmpresa(emp);
+      item.appendChild(input);
+      item.appendChild(span);
+      empresaMenu.appendChild(item);
+    });
+    atualizarLabelEmpresaSelect();
+    empresaSelectWrap.classList.toggle('visible', empresasDisponiveis.length > 0);
+  }
+
+  async function carregarEmpresasDisponiveis() {
+    bootLog('empresas:inicio');
+    const data = await api('/empresas');
+    empresasDisponiveis = Array.isArray(data.empresas) ? data.empresas : [];
+    empresaAtualId = Number(data.empresaId || empresasDisponiveis[0]?.empresaId || 0) || null;
+    if (!empresasDisponiveis.length && empresaAtualId) {
+      empresasDisponiveis = [{ empresaId: empresaAtualId, nome: `Empresa ${empresaAtualId}` }];
+    }
+    empresasSelecionadasIds = empresaAtualId ? [empresaAtualId] : [];
+    renderEmpresaSelect();
+    bootLog('empresas:fim', { total: empresasDisponiveis.length, empresaAtualId });
+  }
+
+  async function trocarEscopoEmpresa() {
+    empresaSelectWrap.classList.remove('open');
+    empresaSelect.setAttribute('aria-expanded', 'false');
+    limparEstadoDaEmpresaAtual();
+    try {
+      if (favoritesModal.classList.contains('active')) {
+        await carregarFavoritos();
+      }
+      await carregarSessoes();
+    } catch (err) {
+      showError('Falha ao trocar empresa: ' + err.message);
+    }
+    msgInput.focus();
+  }
+
+  function limparEstadoDaEmpresaAtual() {
+    sessaoAtualId = null;
+    sessoesCache = [];
+    favoritosCache = [];
+    favoritosCarregados = false;
+    relatorioCachePorSessao.clear();
+    relatorioCachePorMensagem.clear();
+    mensagensCachePorSessao.clear();
+    renderFavoritos();
+    fecharRelatorio();
+    definirHeaderTitle('Nova conversa');
+    renderEmptyState('Carregando conversas...');
   }
 
   function nowLabel(iso) {
@@ -1044,6 +1635,186 @@
 
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function starSvg() {
+    return '<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.78 6.8 19.52l.99-5.8-4.21-4.1 5.82-.85L12 3.5z"/></svg>';
+  }
+
+  function trashSvg() {
+    return '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>';
+  }
+
+  function renderFavoritos() {
+    if (favoriteCount) favoriteCount.textContent = favoritosCarregados ? String(favoritosCache.length) : '...';
+    if (!favoritesList) return;
+    if (!favoritosCarregados) {
+      favoritesList.innerHTML = '<div class="favorite-empty">Abra para carregar seus favoritos.</div>';
+      return;
+    }
+    const termo = (favoritesSearch?.value || '').trim().toLowerCase();
+    const lista = termo
+      ? favoritosCache.filter((fav) => [
+          fav.titulo,
+          fav.perguntaTexto,
+          fav.modulo,
+        ].some((valor) => String(valor || '').toLowerCase().includes(termo)))
+      : favoritosCache;
+    if (!lista.length) {
+      favoritesList.innerHTML = '<div class="favorite-empty">' + (favoritosCache.length ? 'Nenhum favorito encontrado.' : 'Nenhuma pergunta favorita.') + '</div>';
+      return;
+    }
+    favoritesList.innerHTML = '';
+    lista.forEach((fav) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'favorite-item';
+      item.title = fav.perguntaTexto || fav.titulo || '';
+      item.innerHTML = `
+        <span class="favorite-main">
+          <span class="favorite-title">${escapeHtml(fav.titulo || 'Pergunta favorita')}</span>
+          <span class="favorite-meta">${escapeHtml(fav.modulo || '')}${fav.ultimoUsoEm ? ' · usado ' + escapeHtml(nowLabel(fav.ultimoUsoEm)) : ''}</span>
+        </span>
+        <span class="favorite-run">Executar</span>
+        <span class="favorite-delete" title="Remover favorito" aria-label="Remover favorito">${trashSvg()}</span>
+      `;
+      item.addEventListener('click', () => executarFavorito(fav.id));
+      item.querySelector('.favorite-delete').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removerFavorito(fav.id);
+      });
+      favoritesList.appendChild(item);
+    });
+  }
+
+  async function carregarFavoritos() {
+    try {
+      bootLog('favoritos:inicio');
+      const data = await api('/favoritos');
+      favoritosCache = Array.isArray(data.favoritos) ? data.favoritos : [];
+      favoritosCarregados = true;
+      renderFavoritos();
+      bootLog('favoritos:fim', { total: favoritosCache.length });
+    } catch (err) {
+      favoritosCache = [];
+      favoritosCarregados = true;
+      renderFavoritos();
+      if (err.status === 404) return;
+      showError('Falha ao carregar favoritos: ' + err.message);
+    }
+  }
+
+  async function abrirFavoritos() {
+    if (!favoritesModal) return;
+    favoritesModal.classList.add('active');
+    favoritesModal.setAttribute('aria-hidden', 'false');
+    if (favoritesSearch) {
+      favoritesSearch.value = '';
+      setTimeout(() => favoritesSearch.focus(), 0);
+    }
+    renderFavoritos();
+    if (!favoritosCarregados) {
+      await carregarFavoritos();
+    }
+  }
+
+  function fecharFavoritos() {
+    if (!favoritesModal) return;
+    favoritesModal.classList.remove('active');
+    favoritesModal.setAttribute('aria-hidden', 'true');
+    if (btnAbrirFavoritos) btnAbrirFavoritos.focus();
+  }
+
+  async function removerFavorito(favoritoId) {
+    if (!favoritoId) return;
+    try {
+      await api('/favoritos/' + favoritoId, { method: 'DELETE' });
+      favoritosCache = favoritosCache.filter(f => f.id !== favoritoId);
+      renderFavoritos();
+      document.querySelectorAll(`[data-favorito-id="${favoritoId}"]`).forEach((btn) => {
+        btn.classList.remove('active');
+        btn.removeAttribute('data-favorito-id');
+        btn.title = 'Favoritar pergunta';
+      });
+    } catch (err) {
+      showError('Falha ao remover favorito: ' + err.message);
+    }
+  }
+
+  async function favoritarMensagem(mensagemId, btn) {
+    if (!sessaoAtualId || !mensagemId || !btn) return;
+    if (btn.dataset.favoritoId) {
+      removerFavorito(btn.dataset.favoritoId);
+      return;
+    }
+    try {
+      const data = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + mensagemId + '/favorito', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const fav = data.favorito;
+      if (!fav?.id) return;
+      btn.classList.add('active');
+      btn.dataset.favoritoId = fav.id;
+      btn.title = 'Remover favorito';
+      if (favoritosCarregados) {
+        favoritosCache = [fav, ...favoritosCache.filter(f => f.id !== fav.id)];
+      }
+      renderFavoritos();
+    } catch (err) {
+      showError('Falha ao favoritar: ' + err.message);
+    }
+  }
+
+  async function executarFavorito(favoritoId) {
+    if (!favoritoId) return;
+    const fav = favoritosCache.find(f => f.id === favoritoId);
+    showTyping();
+    sendBtn.disabled = true;
+    msgInput.disabled = true;
+    try {
+      const data = await api('/favoritos/' + favoritoId + '/executar', {
+        method: 'POST',
+        body: JSON.stringify({ sessaoId: sessaoAtualId || null }),
+      });
+      sessaoAtualId = data.sessaoId;
+      hideTyping();
+      fecharFavoritos();
+      addBubble({
+        id: data.resposta.perguntaId,
+        texto: fav?.perguntaTexto || 'Pergunta favorita',
+        direcao: 'out',
+        criadoEm: data.criadoEm,
+      });
+      addBubble({
+        id: data.resposta.mensagemId,
+        texto: data.resposta.texto,
+        direcao: 'in',
+        rows: data.resposta.rows || null,
+        temDados: !!data.resposta.temDados,
+        rowsCount: data.resposta.rowsCount ?? null,
+        tipo: data.resposta.tipo || null,
+        favoritoId: data.resposta.favoritoId || favoritoId,
+        criadoEm: data.criadoEm,
+      });
+      if (data.resposta.gridConfig && data.resposta.mensagemId) {
+        const dados = relatorioCachePorMensagem.get(data.resposta.mensagemId);
+        if (dados) dados.gridConfig = data.resposta.gridConfig;
+      }
+      carregarSessoes().catch((err) => showError('Falha ao carregar conversas: ' + err.message));
+      carregarFavoritos().catch(() => {});
+      if (data.resposta.temDados) carregarRelatorioDaSessao(sessaoAtualId);
+      scrollToBottom();
+    } catch (err) {
+      hideTyping();
+      addBubble({ texto: 'Não foi possível executar o favorito: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+      scrollToBottom();
+    } finally {
+      sendBtn.disabled = false;
+      msgInput.disabled = false;
+      msgInput.focus();
+    }
   }
 
   // title (tooltip nativo do navegador) sempre acompanha o texto — o nome do
@@ -1180,7 +1951,7 @@
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
-  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, criadoEm, isFalha = false }) {
+  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, favoritoId = null, criadoEm, isFalha = false }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
@@ -1202,9 +1973,12 @@
     const apresentacaoFinal = (!isFalha && direcao === 'in')
       ? (apresentacao || extrairApresentacaoDoTextoSalvo(texto))
       : apresentacao;
+    const botaoFavorito = (!isFalha && direcao === 'in' && id)
+      ? `<button type="button" class="favorite-message-btn${favoritoId ? ' active' : ''}" data-favoritar-msg="${escapeHtml(id)}"${favoritoId ? ` data-favorito-id="${escapeHtml(favoritoId)}"` : ''} title="${favoritoId ? 'Remover favorito' : 'Favoritar pergunta'}" aria-label="${favoritoId ? 'Remover favorito' : 'Favoritar pergunta'}">${starSvg()}</button>`
+      : '';
     const conteudo = (!isFalha && apresentacaoFinal)
-      ? renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
-      : escapeHtml(texto) + linkDados;
+      ? botaoFavorito + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
+      : botaoFavorito + escapeHtml(texto) + linkDados;
 
     if (temDadosTabulares && id && Array.isArray(rows) && rows.length) {
       const dadosMensagem = { mensagemId: id, rows, gridConfig: null, texto };
@@ -1226,6 +2000,14 @@
       row.querySelector('[data-abrir-dados]').addEventListener('click', (e) => {
         if (chatBody.classList.contains('selecao-ativa')) return; // nao abre aba durante selecao
         abrirRelatorioDaMensagem(id);
+      });
+    }
+    const btnFav = row.querySelector('[data-favoritar-msg]');
+    if (btnFav) {
+      btnFav.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        favoritarMensagem(id, btnFav);
       });
     }
     if (id) {
@@ -1460,6 +2242,7 @@
     reportSorters = [];
     reportHeaderFilters = [];
     reportColumnWidths = {};
+    reportColumnTitles = {};
     reportGlobalTerm = '';
     reportGlobalFilterActive = false;
     reportLastGridWidth = 0;
@@ -1642,8 +2425,10 @@
 
   async function carregarSessoes({ selecionarPrimeira = false } = {}) {
     try {
+      bootLog('sessoes:inicio');
       sessoesCache = await api('/sessoes');
       renderSessionList();
+      bootLog('sessoes:fim', { total: sessoesCache.length, selecionarPrimeira });
       if (selecionarPrimeira && sessoesCache.length) {
         definirHeaderTitle(sessoesCache[0].titulo);
         await carregarMensagens(sessoesCache[0].sessaoId);
@@ -1690,7 +2475,7 @@
     try {
       const data = await api('/mensagem', {
         method: 'POST',
-        body: JSON.stringify({ texto, sessaoId: sessaoAtualId }),
+        body: JSON.stringify({ texto, sessaoId: sessaoAtualId, empresaIds: empresasSelecionadasIds }),
       });
       sessaoAtualId = data.sessaoId;
       hideTyping();
@@ -1703,6 +2488,7 @@
         temDados: data.resposta.temDados,
         rowsCount: data.resposta.rowsCount,
         direcao: 'in',
+        favoritoId: data.resposta.favoritoId || null,
         criadoEm: data.criadoEm,
       });
       scrollToBottom();
@@ -1719,6 +2505,7 @@
             temDados: !!data.resposta.temDados,
             rowsCount: data.resposta.rowsCount ?? null,
             tipo: data.resposta.tipo || null,
+            favoritoId: data.resposta.favoritoId || null,
             criadoEm: data.criadoEm,
           },
         );
@@ -1735,6 +2522,7 @@
               temDados: !!data.resposta.temDados,
               rowsCount: data.resposta.rowsCount ?? null,
               tipo: data.resposta.tipo || null,
+              favoritoId: data.resposta.favoritoId || null,
               criadoEm: data.criadoEm,
             },
           ],
@@ -1782,6 +2570,7 @@
       headerFilters: Array.isArray(cfg.headerFilters) ? cfg.headerFilters.slice() : [],
       columnOrder: Array.isArray(cfg.columnOrder) ? cfg.columnOrder.slice() : [],
       columnWidths: cfg.columnWidths && typeof cfg.columnWidths === 'object' ? { ...cfg.columnWidths } : {},
+      columnTitles: cfg.columnTitles && typeof cfg.columnTitles === 'object' ? { ...cfg.columnTitles } : {},
     };
   }
 
@@ -1798,7 +2587,11 @@
   function modeloRelatorio(dados) {
     if (dados._modelo) return dados._modelo;
     const cfg = gridConfigNormalizada(dados.gridConfig);
-    const colunas = ordenarColunasPorConfig(inferirColunas(dados.rows), cfg.columnOrder);
+    const colunasInferidas = inferirColunas(dados.rows).map((col) => {
+      const tituloCustomizado = String(cfg.columnTitles?.[col.field] || '').trim();
+      return tituloCustomizado ? { ...col, title: tituloCustomizado, titleOriginal: col.title } : col;
+    });
+    const colunas = ordenarColunasPorConfig(colunasInferidas, cfg.columnOrder);
     const colunasNumericas = colunas.filter((c) => c.numerico);
     const totais = colunasNumericas.map((col) => ({
       field: col.field,
@@ -1874,6 +2667,7 @@
     reportSorters = modelo.cfg.sorters.filter((s) => s && reportColunas.some((c) => c.field === s.field));
     reportHeaderFilters = modelo.cfg.headerFilters.filter((f) => f && reportColunas.some((c) => c.field === f.field));
     reportColumnWidths = { ...modelo.cfg.columnWidths };
+    reportColumnTitles = { ...modelo.cfg.columnTitles };
     reportGlobalTerm = '';
     reportGlobalSearch.value = '';
 
@@ -1897,16 +2691,16 @@
       reportMountFrame = null;
       reportMountTimer = setTimeout(() => {
         reportMountTimer = null;
-        abrirRelatorio(reportDadosAtuais);
+        abrirRelatorio(reportDadosAtuais).catch((err) => showError('Falha ao preparar dados: ' + err.message));
       }, 0);
     });
   }
 
-  function montarRelatorioAgora() {
+  async function montarRelatorioAgora() {
     if (!reportDadosAtuais || reportGridMontada) return;
     if (reportMountFrame) { cancelAnimationFrame(reportMountFrame); reportMountFrame = null; }
     if (reportMountTimer) { clearTimeout(reportMountTimer); reportMountTimer = null; }
-    abrirRelatorio(reportDadosAtuais);
+    await abrirRelatorio(reportDadosAtuais);
   }
 
   function depoisDaPintura(callback) {
@@ -1962,6 +2756,7 @@
       headerFilters: reportHeaderFilters.slice(),
       columnOrder,
       columnWidths: { ...reportColumnWidths },
+      columnTitles: { ...reportColumnTitles },
     };
   }
 
@@ -2008,6 +2803,16 @@
 
   tabConversa.addEventListener('click', () => trocarAba('conversa'));
   tabRelatorio.addEventListener('click', () => { if (!tabRelatorio.disabled) trocarAba('relatorio'); });
+  btnAbrirFavoritos.addEventListener('click', () => abrirFavoritos());
+  btnFecharFavoritos.addEventListener('click', () => fecharFavoritos());
+  btnReloadFavoritos.addEventListener('click', () => carregarFavoritos());
+  favoritesSearch.addEventListener('input', () => renderFavoritos());
+  favoritesModal.addEventListener('click', (e) => {
+    if (e.target === favoritesModal) fecharFavoritos();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && favoritesModal.classList.contains('active')) fecharFavoritos();
+  });
 
   // Numero vs texto decidido pelo dado real (typeof), nao por metadado do
   // backend — decisao tomada para nao mudar o contrato do pipeline de IA.
@@ -2121,7 +2926,7 @@
     reportColunas.forEach((col) => {
       const label = document.createElement('label');
       label.className = 'column-toggle';
-      label.title = col.title;
+      label.title = `${col.title}${col.titleOriginal ? ` (${col.titleOriginal})` : ''}`;
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.checked = !reportHiddenColumns.includes(col.field);
@@ -2136,16 +2941,50 @@
         } else {
           if (!reportHiddenColumns.includes(col.field)) reportHiddenColumns.push(col.field);
         }
-        if (reportTable && reportDadosAtuais) abrirRelatorio(reportDadosAtuais);
+        if (reportTable && reportDadosAtuais) abrirRelatorio(reportDadosAtuais).catch((err) => showError('Falha ao preparar dados: ' + err.message));
         else aplicarBuscaGlobal();
         agendarSalvarGridConfig();
       });
       const span = document.createElement('span');
       span.textContent = col.title;
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'column-rename-btn';
+      renameBtn.title = 'Renomear coluna';
+      renameBtn.setAttribute('aria-label', 'Renomear coluna');
+      renameBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+      renameBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        renomearColunaRelatorio(col.field);
+      });
       label.appendChild(input);
       label.appendChild(span);
+      label.appendChild(renameBtn);
       reportColumnsPopover.appendChild(label);
     });
+  }
+
+  function renomearColunaRelatorio(field) {
+    const col = reportColunas.find((c) => c.field === field);
+    if (!col) return;
+    const tituloOriginal = col.titleOriginal || field;
+    const atual = col.title || tituloOriginal;
+    const novo = window.prompt('Nome da coluna:', atual);
+    if (novo === null) return;
+    const limpo = novo.trim();
+    if (!limpo || limpo === tituloOriginal) {
+      delete reportColumnTitles[field];
+    } else {
+      reportColumnTitles[field] = limpo;
+    }
+    if (reportDadosAtuais) {
+      const cfg = obterGridConfigAtual();
+      cfg.columnTitles = { ...reportColumnTitles };
+      atualizarGridConfigEmMemoria(cfg);
+      abrirRelatorio(reportDadosAtuais).catch((err) => showError('Falha ao preparar dados: ' + err.message));
+      agendarSalvarGridConfig();
+    }
   }
 
   function toggleAgrupamento(field) {
@@ -2260,6 +3099,10 @@
         visible: !reportHiddenColumns.includes(col.field),
         ...(larguraSalva > 0 ? { width: larguraSalva } : { widthGrow: 1 }),
         headerFilter: true,
+        headerDblClick: function (_e, column) {
+          const field = column.getField();
+          if (field) renomearColunaRelatorio(field);
+        },
         sorter: sorterParaColuna(col),
         hozAlign: col.numerico ? 'right' : ((col.data || col.competencia) ? 'center' : 'left'),
         formatter: col.numerico
@@ -2281,9 +3124,11 @@
     });
   }
 
-  function abrirRelatorio(dados) {
+  async function abrirRelatorio(dados) {
     const { mensagemId, rows, gridConfig, texto } = dados;
     if (!Array.isArray(rows) || !rows.length) return;
+
+    await garantirTabulator();
 
     const modelo = modeloRelatorio(dados);
     reportMensagemId = mensagemId || null;
@@ -2420,19 +3265,29 @@
     btnReportColumns.setAttribute('aria-expanded', 'false');
   });
 
-  btnExportXlsx.addEventListener('click', () => {
-    montarRelatorioAgora();
-    if (!reportTable) return;
-    reportTable.download('xlsx', 'dados-ia-command.xlsx', { sheetName: 'Dados' });
+  btnExportXlsx.addEventListener('click', async () => {
+    try {
+      await montarRelatorioAgora();
+      if (!reportTable) return;
+      await garantirExportXlsx();
+      reportTable.download('xlsx', 'dados-ia-command.xlsx', { sheetName: 'Dados' });
+    } catch (err) {
+      showError('Falha ao exportar Excel: ' + err.message);
+    }
   });
 
-  btnExportPdf.addEventListener('click', () => {
-    montarRelatorioAgora();
-    if (!reportTable) return;
-    reportTable.download('pdf', 'dados-ia-command.pdf', {
-      orientation: 'landscape',
-      title: 'IA Command — Dados',
-    });
+  btnExportPdf.addEventListener('click', async () => {
+    try {
+      await montarRelatorioAgora();
+      if (!reportTable) return;
+      await garantirExportPdf();
+      reportTable.download('pdf', 'dados-ia-command.pdf', {
+        orientation: 'landscape',
+        title: 'IA Command — Dados',
+      });
+    } catch (err) {
+      showError('Falha ao exportar PDF: ' + err.message);
+    }
   });
 
   chatForm.addEventListener('submit', function (e) {
@@ -2440,7 +3295,41 @@
     const text = msgInput.value.trim();
     if (!text) return;
     msgInput.value = '';
+    ajustarAlturaInput();
     enviarMensagem(text);
+  });
+
+  msgInput.addEventListener('input', ajustarAlturaInput);
+  msgInput.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
+    e.preventDefault();
+    if (sendBtn.disabled) return;
+    chatForm.requestSubmit();
+  });
+
+  btnModoFoco.addEventListener('click', function () {
+    aplicarModoFoco(!appFrame.classList.contains('focus-mode'));
+    msgInput.focus();
+  });
+
+  btnTema.addEventListener('click', function () {
+    aplicarTemaClaro(document.documentElement.getAttribute('data-theme') !== 'light');
+    msgInput.focus();
+  });
+
+  btnHeaderMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const aberto = !headerActions.classList.contains('open');
+    headerActions.classList.toggle('open', aberto);
+    btnHeaderMenu.setAttribute('aria-expanded', String(aberto));
+  });
+
+  headerActionsMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (e.target.closest('button')) {
+      headerActions.classList.remove('open');
+      btnHeaderMenu.setAttribute('aria-expanded', 'false');
+    }
   });
 
   btnNovaConversa.addEventListener('click', function () {
@@ -2451,6 +3340,24 @@
     trocarAba('conversa');
     fecharRelatorio();
     msgInput.focus();
+  });
+
+  empresaSelect.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const aberto = !empresaSelectWrap.classList.contains('open');
+    empresaSelectWrap.classList.toggle('open', aberto);
+    empresaSelect.setAttribute('aria-expanded', String(aberto));
+  });
+
+  empresaMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+  });
+
+  document.addEventListener('click', function () {
+    empresaSelectWrap.classList.remove('open');
+    empresaSelect.setAttribute('aria-expanded', 'false');
+    headerActions.classList.remove('open');
+    btnHeaderMenu.setAttribute('aria-expanded', 'false');
   });
 
   // Esquece o contexto da conversa atual (a IA para de considerar perguntas
@@ -2491,11 +3398,49 @@
     });
   });
 
-  if (!token) {
-    showError('Sessão inválida: token ausente na URL.');
-    msgInput.disabled = true;
-    sendBtn.disabled = true;
-  } else {
+  try {
+    const modoFocoSalvo = localStorage.getItem('iaCommandModoFoco');
+    aplicarModoFoco(modoFocoSalvo === null ? true : modoFocoSalvo === '1', false);
+  } catch (_err) {
+    aplicarModoFoco(true, false);
+  }
+
+  try {
+    aplicarTemaClaro(localStorage.getItem('iaCommandTema') === 'light', false);
+  } catch (_err) {
+    aplicarTemaClaro(false, false);
+  }
+
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function aguardarTokenLaunch(ticket) {
+    bootLog('launch-token:inicio', { ticket: ticket ? 'informado' : 'vazio' });
+    for (let tentativa = 0; tentativa < 90; tentativa += 1) {
+      const inicioTentativa = performance.now();
+      const r = await fetch('/api/ia-command/protheus/launch-token?ticket=' + encodeURIComponent(ticket), {
+        cache: 'no-store',
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || ('Erro ' + r.status));
+      bootLog('launch-token:tentativa', {
+        tentativa: tentativa + 1,
+        status: r.status,
+        pending: !body.token,
+        duracaoMs: Math.round(performance.now() - inicioTentativa),
+      });
+      if (body.token) {
+        bootLog('launch-token:fim', { tentativas: tentativa + 1 });
+        return body.token;
+      }
+      await delay(tentativa < 40 ? 150 : 500);
+    }
+    throw new Error('tempo esgotado aguardando token.');
+  }
+
+  function iniciarChatComToken() {
+    bootLog('chat-token:recebido');
     if (usuarioLabel) {
       userName.textContent = usuarioLabel;
       userAvatar.textContent = usuarioLabel.slice(0, 2).toUpperCase();
@@ -2503,8 +3448,51 @@
       userName.textContent = 'Usuário Protheus';
       userAvatar.textContent = 'PT';
     }
+    msgInput.disabled = false;
+    sendBtn.disabled = false;
+    bootLog('input:liberado');
     renderEmptyState('Carregando conversas...');
-    carregarSessoes();
+    carregarEmpresasDisponiveis()
+      .then(() => carregarSessoes())
+      .then(() => bootLog('boot:fim', {
+        empresas: empresasDisponiveis.length,
+        favoritos: favoritosCache.length,
+        sessoes: sessoesCache.length,
+      }))
+      .catch((err) => {
+        showError('Falha ao carregar empresas do usuario: ' + err.message);
+        renderEmptyState('Envie uma nova pergunta ou atualize a pagina para recarregar conversas.');
+      });
+  }
+
+  if (!token && launchTicket) {
+    bootLog('pagina:aberta-com-launch-ticket');
+    userName.textContent = 'Usuário Protheus';
+    userAvatar.textContent = 'PT';
+    renderEmptyState('Preparando sessão...');
+    msgInput.disabled = true;
+    sendBtn.disabled = true;
+    aguardarTokenLaunch(launchTicket)
+      .then((tk) => {
+        token = tk;
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        iniciarChatComToken();
+      })
+      .catch((err) => {
+        showError('Falha ao preparar sessão: ' + err.message);
+        msgInput.disabled = true;
+        sendBtn.disabled = true;
+      });
+  } else if (!token) {
+    bootLog('pagina:sem-token');
+    showError('Sessão inválida: token ausente na URL.');
+    msgInput.disabled = true;
+    sendBtn.disabled = true;
+  } else {
+    bootLog('pagina:aberta-com-token-direto');
+    iniciarChatComToken();
   }
 })();
 </script>

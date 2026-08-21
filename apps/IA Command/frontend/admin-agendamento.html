@@ -395,6 +395,18 @@
                   <input id="f-dia-mes" type="number" class="form-control" min="1" max="31" value="1" onchange="atualizarResumo()">
                   <div class="form-hint">Se o dia nao existir no mes, o job sera executado no ultimo dia valido.</div>
                 </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Tentativas de reenvio</label>
+                    <input id="f-retry-max" type="number" class="form-control" min="0" max="10" value="3">
+                    <div class="form-hint">Se o envio falhar (ex: instabilidade momentanea), quantas vezes tentar de novo antes de desistir. 0 desativa o reenvio automatico.</div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Intervalo entre tentativas (min)</label>
+                    <input id="f-retry-interval" type="number" class="form-control" min="1" max="1440" value="15">
+                    <div class="form-hint">Tempo de espera entre uma tentativa e outra.</div>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -1118,6 +1130,8 @@ SELECT * FROM dados;</code></div>
     document.getElementById('f-data').value = hojeIsoDate();
     document.getElementById('f-timezone').value = 'America/Manaus';
     document.getElementById('f-dia-mes').value = '1';
+    document.getElementById('f-retry-max').value = '3';
+    document.getElementById('f-retry-interval').value = '15';
     document.querySelectorAll('input[name="dias"]').forEach(c => c.checked = false);
     document.getElementById('q-dest').value = '';
     trocarAbaJob('pergunta');
@@ -1141,6 +1155,8 @@ SELECT * FROM dados;</code></div>
     const sj = job.schedule_json || {};
     document.getElementById('f-hora').value = sj.time || '08:00';
     document.getElementById('f-dia-mes').value = sj.month_day || '1';
+    document.getElementById('f-retry-max').value = job.retry_max ?? 3;
+    document.getElementById('f-retry-interval').value = job.retry_interval_min ?? 15;
     if (job.next_run_at) {
       const d = new Date(job.next_run_at);
       if (!Number.isNaN(d.getTime())) {
@@ -1379,6 +1395,8 @@ SELECT * FROM dados;</code></div>
         schedule_json: agenda.schedule_json,
         next_run_at: agenda.next_run_at,
         timezone: document.getElementById('f-timezone').value || 'America/Manaus',
+        retry_max: Number(document.getElementById('f-retry-max').value || 3),
+        retry_interval_min: Number(document.getElementById('f-retry-interval').value || 15),
         ativo: document.getElementById('f-ativo').value === '1',
         destinatarios: [...selectedRecipients],
         grupos: [...selectedGroups],

@@ -168,9 +168,11 @@ async function processarJob(job) {
   );
   if (!locked) return null;
 
+  const emRetry = Number(locked.retry_count || 0) > 0;
+
   try {
     const run = await runner.executarJob(locked.empresa_id, locked, {
-      trigger_tipo: 'schedule',
+      trigger_tipo: emRetry ? 'schedule_retry' : 'schedule',
       usuario: 'scheduler',
     });
     totalExecutions++;
@@ -182,13 +184,46 @@ async function processarJob(job) {
       next_run_at: once ? null : next,
       ativo: once ? 0 : 1,
       status: once ? 'pausado' : 'ativo',
+      retry_count: 0,
+      retry_recipient_ids: null,
     });
     return run;
   } catch (err) {
     lastError = { at: new Date().toISOString(), job_id: locked.id, message: err.message };
+    const retryMax = Math.max(0, Number(locked.retry_max || 0));
+    const retryCountAtual = Number(locked.retry_count || 0);
+    const temDestinatariosFalhos = Array.isArray(err.recipientIdsFalhos) && err.recipientIdsFalhos.length > 0;
+
+    if (!temDestinatariosFalhos) {
+      // Erro "duro" fora do fluxo de envio (ex: canal desconectado, job sem destinatarios) —
+      // mantem o retry indefinido por tempo fixo, como ja funcionava, sem consumir retry_max.
+      store.finalizarJobBloqueado(locked.empresa_id, locked.id, lockToken, {
+        next_run_at: retryAt(locked),
+        status: 'ativo',
+      });
+      return null;
+    }
+
+    if (retryCountAtual >= retryMax) {
+      // Excedeu as tentativas configuradas: registra o job para revisao manual e retoma o
+      // schedule normal (nao fica tentando de novo indefinidamente por causa de 1 destinatario).
+      const next = calcularProximaExecucao(locked, new Date());
+      const once = String(locked.schedule_tipo || '').toLowerCase() === 'once';
+      store.finalizarJobBloqueado(locked.empresa_id, locked.id, lockToken, {
+        next_run_at: once ? null : next,
+        ativo: once ? 0 : 1,
+        status: once ? 'pausado' : 'ativo',
+        retry_count: 0,
+        retry_recipient_ids: null,
+      });
+      return null;
+    }
+
     store.finalizarJobBloqueado(locked.empresa_id, locked.id, lockToken, {
       next_run_at: retryAt(locked),
       status: 'ativo',
+      retry_count: retryCountAtual + 1,
+      retry_recipient_ids: err.recipientIdsFalhos || null,
     });
     return null;
   }

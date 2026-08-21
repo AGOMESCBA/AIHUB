@@ -87,6 +87,7 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-mensagens-whatsapp.html':    'iac-admin-mensagens-whatsapp',
   '/app/ia-command/admin-agendamento.html':           'iac-admin-agendamento',
   '/app/ia-command/admin-agendamento-historico.html': 'iac-admin-agendamento',
+  '/app/ia-command/admin-chat-favoritos.html':        'iac-admin-chat-favoritos',
   // ── IAHub / IA Recruit
   '/dashboard.html':        'dashboard',
   '/monitores.html':        'monitores',
@@ -147,6 +148,7 @@ const _ROTINA_LABELS = {
   'iac-agente-local-cargas':    'IA Command - Cargas Agente Local',
   'iac-admin-instalador-agente': 'IA Command - Instalador Agente Local',
   'iac-admin-agendamento':      'IA Command - Agendamento',
+  'iac-admin-chat-favoritos':   'IA Command - Chat Favoritos',
   'iac-admin-grupos-whatsapp':  'IA Command - Grupos WhatsApp',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',

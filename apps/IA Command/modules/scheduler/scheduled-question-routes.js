@@ -378,7 +378,19 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
     const job = store.buscarJob(empresaId, req.params.id);
     if (!job) return res.status(404).json({ error: 'Job nao encontrado.' });
     validarCanalEmpresa(empresaId, job.channel_id);
-    const run = await runner.executarJob(empresaId, job, { trigger_tipo: 'manual', usuario: usuario(req) });
+    let run;
+    try {
+      run = await runner.executarJob(empresaId, job, { trigger_tipo: 'manual', usuario: usuario(req) });
+    } catch (err) {
+      // Execucao manual: falha parcial/total de envio ja foi registrada no run pelo runner —
+      // devolve o historico ao usuario em vez de 500, mesmo com a excecao usada p/ retry automatico.
+      if (err.recipientIdsFalhos !== undefined) {
+        run = store.listarRuns(empresaId, req.params.id, 1)[0] || null;
+        audit(req, 'executar_job_agendamento_agora', { id: req.params.id, run_id: run?.id, status: run?.status, erro: err.message });
+        return res.json(run);
+      }
+      throw err;
+    }
     audit(req, 'executar_job_agendamento_agora', { id: req.params.id, run_id: run?.id, status: run?.status });
     res.json(run);
   }));

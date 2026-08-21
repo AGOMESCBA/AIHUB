@@ -24,7 +24,30 @@ function normalizarCelular(valor) {
   return String(valor || '').replace(/\D/g, '');
 }
 
-function emitir({ empresaId, celular, filial = null }) {
+function normalizarEmpresasPermitidas(empresasPermitidas, empresaIdAtual) {
+  const vistas = new Set();
+  const lista = [];
+
+  const add = (item = {}) => {
+    const id = Number(item.empresaId || item.empresa_id || item.id || 0);
+    if (!id || vistas.has(id)) return;
+    vistas.add(id);
+    lista.push({
+      empresaId: id,
+      codigoProtheus: String(item.codigoProtheus || item.codigo_protheus || '').trim(),
+      nomeProtheus: String(item.nomeProtheus || item.nome_protheus || item.nome || '').trim(),
+    });
+  };
+
+  if (Array.isArray(empresasPermitidas)) {
+    for (const item of empresasPermitidas) add(item);
+  }
+
+  add({ empresaId: empresaIdAtual, codigoProtheus: '', nomeProtheus: '' });
+  return lista;
+}
+
+function emitir({ empresaId, celular, filial = null, empresasPermitidas = [] }) {
   if (!empresaId) throw new Error('empresaId obrigatorio.');
   const celularNormalizado = normalizarCelular(celular);
   if (!celularNormalizado) throw new Error('celular obrigatorio.');
@@ -32,11 +55,12 @@ function emitir({ empresaId, celular, filial = null }) {
   const token = crypto.randomBytes(32).toString('hex');
   const agora = new Date();
   const expiraEm = new Date(agora.getTime() + TTL_MS);
+  const empresas = normalizarEmpresasPermitidas(empresasPermitidas, empresaId);
 
   getDB().prepare(`
-    INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(token, empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString());
+    INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(token, empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas));
 
   return { token, expiraEm: expiraEm.toISOString() };
 }
@@ -45,7 +69,7 @@ function validar(token) {
   if (!token) return null;
 
   const row = getDB().prepare(`
-    SELECT token, empresa_id, celular, filial, expira_em
+    SELECT token, empresa_id, celular, filial, expira_em, empresas_permitidas_json
     FROM protheus_chat_tokens
     WHERE token = ?
   `).get(token);
@@ -56,7 +80,20 @@ function validar(token) {
   getDB().prepare(`UPDATE protheus_chat_tokens SET usado_em = ? WHERE token = ?`)
     .run(new Date().toISOString(), token);
 
-  return { empresaId: row.empresa_id, celular: row.celular, filial: row.filial };
+  let empresasPermitidas = [];
+  try {
+    empresasPermitidas = JSON.parse(row.empresas_permitidas_json || '[]');
+  } catch (_) {
+    empresasPermitidas = [];
+  }
+  empresasPermitidas = normalizarEmpresasPermitidas(empresasPermitidas, row.empresa_id);
+
+  return {
+    empresaId: row.empresa_id,
+    celular: row.celular,
+    filial: row.filial,
+    empresasPermitidas,
+  };
 }
 
 function limparExpirados() {
@@ -64,4 +101,19 @@ function limparExpirados() {
     .run(new Date().toISOString());
 }
 
-module.exports = { emitir, validar, limparExpirados, normalizarCelular, TTL_MS };
+function empresaPermitida(sessao, empresaId) {
+  const id = Number(empresaId || 0);
+  if (!id) return false;
+  return normalizarEmpresasPermitidas(sessao?.empresasPermitidas, sessao?.empresaId)
+    .some(e => Number(e.empresaId) === id);
+}
+
+module.exports = {
+  emitir,
+  validar,
+  limparExpirados,
+  normalizarCelular,
+  normalizarEmpresasPermitidas,
+  empresaPermitida,
+  TTL_MS,
+};

@@ -42,6 +42,26 @@ const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR
 // LOGOUT nao entra aqui: significa que o vinculo foi revogado no celular e a sessao salva fica invalida.
 const WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS = Math.max(0, Number(process.env.IAC_WA_AUTO_RECONNECT_MAX_TENTATIVAS ?? 5));
 const WHATSAPP_AUTO_RECONNECT_BASE_DELAY_MS = Math.max(1000, Number(process.env.IAC_WA_AUTO_RECONNECT_BASE_DELAY_MS || 5000));
+// Alerta operacional via Telegram (canal fora do WhatsApp, nao depende de QR/sessao) para os
+// casos em que reconexao automatica nao resolve: LOGOUT ou limite de tentativas esgotado.
+const TELEGRAM_ALERT_BOT_TOKEN = String(process.env.IAC_TELEGRAM_BOT_TOKEN || '').trim();
+const TELEGRAM_ALERT_CHAT_ID = String(process.env.IAC_TELEGRAM_ALERT_CHAT_ID || '').trim();
+
+async function alertarOperacionalTelegram(mensagem) {
+  if (!TELEGRAM_ALERT_BOT_TOKEN || !TELEGRAM_ALERT_CHAT_ID) return;
+  try {
+    const resp = await fetch(`https://api.telegram.org/bot${TELEGRAM_ALERT_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: TELEGRAM_ALERT_CHAT_ID, text: mensagem }),
+    });
+    if (!resp.ok) {
+      process.stdout.write(`[${new Date().toISOString()}] [WARN] Alerta Telegram falhou: HTTP ${resp.status}\n`);
+    }
+  } catch (err) {
+    process.stdout.write(`[${new Date().toISOString()}] [WARN] Alerta Telegram falhou: ${err.message}\n`);
+  }
+}
 const NOMES_MODULOS_WHATSAPP = {
   compras:     'Compras',
   financeiro:  'Financeiro',
@@ -631,6 +651,11 @@ class IACWhatsAppService extends EventEmitter {
           'Reconexão automática não resolve neste caso. Escaneie um novo QR Code o quanto antes para retomar o atendimento.',
           'error'
         );
+        alertarOperacionalTelegram(
+          `🔴 IAHub — WhatsApp desconectado (LOGOUT)\n` +
+          `Canal: ${this._channelName || this._channelId}\n` +
+          `O vínculo com o celular foi revogado. Escaneie um novo QR Code no painel para retomar o atendimento.`
+        );
         return;
       }
 
@@ -664,6 +689,11 @@ class IACWhatsAppService extends EventEmitter {
         `🔴 Limite de ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} tentativas de reconexão automática atingido. ` +
         'Verifique a conexão/celular e reconecte manualmente pelo painel.',
         'error'
+      );
+      alertarOperacionalTelegram(
+        `🔴 IAHub — WhatsApp fora do ar\n` +
+        `Canal: ${this._channelName || this._channelId}\n` +
+        `Reconexão automática esgotou ${WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS} tentativas. Verifique o painel — pode ser necessário escanear um novo QR Code.`
       );
       return;
     }

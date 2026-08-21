@@ -65,6 +65,7 @@
       id: 'agendamento', label: 'Agendamento', icon: '⏱', defaultOpen: false,
       items: [
         { id: 'iac-admin-agendamento', label: 'Perguntas Agendadas', href: '/app/ia-command/admin-agendamento.html', icon: '⏱' },
+        { id: 'iac-admin-chat-favoritos', label: 'Chat Favoritos', href: '/app/ia-command/admin-chat-favoritos.html', icon: '★' },
       ],
     },
     {

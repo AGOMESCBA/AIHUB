@@ -1404,6 +1404,54 @@ const MIGRATIONS = [
         ON protheus_company_tree (empresa_id, connection_id, tipo_no);
     `,
   },
+  {
+    version: 76,
+    descricao: 'IA Command - protheus_whatsapp: lista de empresas permitidas no token emitido pelo ADVPL',
+    sql: `
+      ALTER TABLE protheus_chat_tokens ADD COLUMN empresas_permitidas_json TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 77,
+    descricao: 'IA Command - favoritos do chat Protheus com SQL auditado',
+    sql: `
+      ALTER TABLE protheus_chat_messages ADD COLUMN interpretation_log_id TEXT DEFAULT NULL;
+
+      CREATE TABLE IF NOT EXISTS protheus_chat_favorites (
+        id                    TEXT PRIMARY KEY,
+        empresa_id            INTEGER NOT NULL,
+        celular               TEXT NOT NULL,
+        titulo                TEXT NOT NULL,
+        pergunta_texto        TEXT NOT NULL,
+        resposta_mensagem_id  TEXT DEFAULT NULL,
+        interpretation_log_id TEXT DEFAULT NULL,
+        modulo                TEXT DEFAULT NULL,
+        sql_final_executado   TEXT NOT NULL,
+        sql_template          TEXT DEFAULT NULL,
+        intent_json           TEXT DEFAULT NULL,
+        grid_config_json      TEXT DEFAULT NULL,
+        rows_preview_json     TEXT DEFAULT NULL,
+        ativo                 INTEGER NOT NULL DEFAULT 1,
+        criado_em             TEXT NOT NULL,
+        atualizado_em         TEXT NOT NULL,
+        ultimo_uso_em         TEXT DEFAULT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_favorites_usuario
+        ON protheus_chat_favorites (empresa_id, celular, ativo, atualizado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_favorites_msg
+        ON protheus_chat_favorites (resposta_mensagem_id);
+    `,
+  },
+  {
+    version: 78,
+    descricao: 'IA Command - agendamento: retry automatico de envio parcial (retry_count + destinatarios pendentes)',
+    sql: `
+      ALTER TABLE scheduled_question_jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE scheduled_question_jobs ADD COLUMN retry_recipient_ids TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

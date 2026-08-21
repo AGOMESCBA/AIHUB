@@ -35,11 +35,10 @@
      a) [OBSOLETO apos remocao do TWebEngine em 11/08/2026 — ver acima] Assi-
         natura de TWebChannel():New() / TWebEngine():New(...) nao se aplica
         mais a este fonte.
-     a.1) ShellExecute("open", cUrl, "", "", 1) — retorno esperado nRet > 32
-        para sucesso, conforme documentacao/exemplos ADVPL consultados; NAO
-        confirmado contra o Include real desta instalacao. Se o retorno real
-        divergir, o fallback (MsgInfo com link) dispara incorretamente mesmo
-        com a aba tendo aberto — ajustar o limiar de comparacao se confirmado.
+     a.1) ShellExecute("open", cUrl, "", "", 1) — em SmartClient HTML/WebApp
+        desta instalacao foi observado retorno 32 MESMO COM a aba abrindo
+        corretamente. Por isso o fallback visual so dispara para retorno < 32.
+        Retorno 32 fica tratado como sucesso pragmatico neste ambiente.
      b) [CORRIGIDO apos erro em producao 10/08/2026] FWRest():GetLastError()
         apos Post() malsucedido NAO retorna numero nesta versao (erro
         "argument #0 error, expected N->C, function str" ao tentar Str()
@@ -130,11 +129,9 @@
 // TODO antes de producao: cadastrar MV_IACURL e remover/esvaziar esta linha.
 #DEFINE IAC_HUB_URL_PADRAO  "http://200.106.188.87:3000"
 
-// VALOR DE TESTE — empresa "J2A TESTE" (empresa_id=3 no cadastro do IA Command
-// / IAHub). So e usado enquanto o parametro MV_IACEMID nao estiver cadastrado.
-// TODO antes de producao/mais usuarios: cadastrar MV_IACEMID por instalacao e
-// remover/esvaziar esta linha (empresa_id muda por empresa-cliente real).
-#DEFINE IAC_EMPRESA_ID_PADRAO  3
+// Sem fallback para empresa_id: se MV_IACEMID nao for encontrado, o chat deve
+// bloquear a abertura em vez de consultar uma empresa incorreta no IA Command.
+#DEFINE IAC_EMPRESA_ID_PADRAO  0
 
 // !!! CELULAR DE TESTE CHUMBADO — USADO SO COMO FALLBACK !!!
 // IACLerCel() busca primeiro na tabela ZCH (ver IACadUsr.prw); se a
@@ -167,8 +164,11 @@ User Function IACChat()
     Local cNomeUser   := Alltrim(UsrFullName(RetCodUsr()))
     Local cUrlChatBase := ""
     Local cUrlChat    := ""
+    Local cUrlFallback := ""
+    Local cLaunchTk   := ""
     Local lOk         := .T.
     Local cErro       := ""
+    Local nShellRet   := 0
 
     cUrlChatBase := IACUrlChat()
     If Empty(cUrlChatBase)
@@ -186,7 +186,17 @@ User Function IACChat()
         Return
     EndIf
 
-    lOk := IACToken(cCelular, @cToken, @cErro)
+    cLaunchTk := IACLaunchTk()
+    cUrlChat  := cUrlChatBase + "?launchTicket=" + cLaunchTk + ;
+                 "&usuario=" + FWURLEncode(IACRmAcent(cNomeUser))
+
+    // Abre uma pagina leve antes do processamento multiempresa/token. No
+    // SmartClient HTML/WebApp, ShellExecute pode retornar 32 quando chamado
+    // depois de FWUsrEmp/FWLoadSM0/SX6/FWRest. A pagina aberta aguarda o token
+    // pelo launchTicket gravado no IAHub.
+    nShellRet := ShellExecute("open", cUrlChat, "", "", 1)
+
+    lOk := IACToken(cCelular, @cToken, @cErro, cLaunchTk)
 
     If !lOk
         MsgAlert("Nao foi possivel iniciar a sessao do IA Command:" + CRLF + cErro, "IA Command")
@@ -198,7 +208,7 @@ User Function IACChat()
     // especiais de cadastro). Token ja e hexadecimal puro (token-service.js),
     // sem necessidade de encode. Confirmar disponibilidade de FWURLEncode no
     // Include desta versao — se indisponivel, alternativa e Escape().
-    cUrlChat := cUrlChatBase + "?token=" + cToken + "&usuario=" + FWURLEncode(IACRmAcent(cNomeUser))
+    cUrlFallback := cUrlChatBase + "?token=" + cToken + "&usuario=" + FWURLEncode(IACRmAcent(cNomeUser))
 
     // [CORRIGIDO apos teste em producao 11/08/2026] TWebEngine/TWebChannel
     // (Chromium embarcado no SmartClient Desktop) removido — esta instalacao
@@ -215,14 +225,18 @@ User Function IACChat()
     // do usuario) — decisao do usuario testar mesmo assim. Se nao abrir a
     // aba, cai no fallback abaixo (MsgInfo com o link para copiar).
     //
-    // Retorno de ShellExecute (fonte: documentacao/exemplos ADVPL): nRet > 32
-    // indica sucesso; nRet == -1 quando chamado fora de contexto SmartClient
-    // (ex.: Job); nRet == 2 quando o "arquivo"/protocolo nao e encontrado.
-    // Portanto sucesso e nRet > 32, nao apenas nRet != 0.
-    If ShellExecute("open", cUrlChat, "", "", 1) <= 32
+    // Retorno documentado de ShellExecute normalmente considera sucesso como
+    // nRet > 32. Porem, no SmartClient HTML/WebApp desta instalacao, foi
+    // observado nRet == 32 mesmo com a nova aba aberta normalmente. Para nao
+    // assustar o usuario com um popup de "falha" apos sucesso real, tratamos
+    // 32 como sucesso pragmatico e exibimos o fallback so para retornos
+    // claramente abaixo desse limiar.
+    If nShellRet < 32
+        ConOut("[IA Command] Falha ShellExecute retorno=" + cValToChar(nShellRet) + " url=" + cUrlFallback)
         MsgInfo("Nao foi possivel abrir o IA Command automaticamente." + CRLF + ;
+                 "Retorno ShellExecute: " + cValToChar(nShellRet) + CRLF + ;
                  "Copie o link abaixo e abra em uma nova aba do navegador:" + CRLF + CRLF + ;
-                 cUrlChat, "IA Command")
+                 cUrlFallback, "IA Command")
     EndIf
 
 Return
@@ -323,14 +337,16 @@ Return lExiste
    empresasPermitidas: lista calculada no Protheus com FWUsrEmp()/FWLoadSM0()
    e GetNewPar() para localizar o MV_IACEMID de cada empresa permitida.
 ---------------------------------------------------------------------------- */
-Static Function IACToken(cCelular, cToken, cErro)
+Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     Local oRest
     Local aHeader     := {}
     Local cBody       := ""
     Local cRespo      := ""
     Local lOk         := .F.
     Local oJsonRes
-    Local nEmpresaId  := IACEmpId() // ver comentario acima
+    Local aCodigos    := IACEmpUsr()
+    Local aParamEmp   := IACSX6Lista("MV_IACEMID")
+    Local nEmpresaId  := IACEmpAt(aCodigos, aParamEmp) // ver comentario acima
     Local cEmpPermit  := ""
     Local cUrlToken   := IACUrlTok()
     Local nTimeout    := IACTimeout()
@@ -351,12 +367,18 @@ Static Function IACToken(cCelular, cToken, cErro)
     // manualmente — protege contra quebra de payload se o campo de cadastro
     // tiver algum caractere inesperado. Preferir JsonObject():ToJson() se
     // disponivel nesta versao, em vez de concatenacao manual de string.
-    cEmpPermit := IACEmpJs(nEmpresaId)
+    cEmpPermit := IACEmpJs(nEmpresaId, aCodigos, aParamEmp)
 
     cBody := '{"empresaId":' + cValToChar(nEmpresaId) + ;
               ',"celular":"' + IACEscJs(cCelular) + '"' + ;
               ',"filial":"' + IACEscJs(xFilial()) + '"' + ;
-              ',"empresasPermitidas":' + cEmpPermit + '}'
+              ',"empresasPermitidas":' + cEmpPermit
+
+    If ValType(cLaunchTk) == "C" .And. !Empty(cLaunchTk)
+        cBody += ',"launchTicket":"' + IACEscJs(cLaunchTk) + '"'
+    EndIf
+
+    cBody += '}'
 
     // Headers passados como array local no metodo Post(), NAO como propriedade
     // do objeto — FWRest nesta versao (Framework 20251006) nao expoe
@@ -409,6 +431,21 @@ Static Function IACToken(cCelular, cToken, cErro)
 Return .T.
 
 /* ----------------------------------------------------------------------------
+   IACLaunchTk
+   Gera um identificador simples para amarrar a aba aberta antes do token com o
+   token emitido logo depois. Nao e credencial; serve so como correlacao curta
+   entre a pagina de espera e o POST /token.
+---------------------------------------------------------------------------- */
+Static Function IACLaunchTk()
+    Local cTk := DTOS(Date()) + StrTran(Time(), ":", "") + RetCodUsr()
+    cTk := StrTran(cTk, " ", "")
+    cTk := StrTran(cTk, ".", "")
+    cTk := StrTran(cTk, ",", "")
+    cTk := StrTran(cTk, "-", "")
+    cTk := StrTran(cTk, "/", "")
+Return cTk
+
+/* ----------------------------------------------------------------------------
    IACEmpJs
    Monta a lista multiempresa enviada ao IAHub. A permissao vem do Protheus:
    FWUsrEmp(RetCodUsr()) retorna as empresas do usuario; quando retornar @@@@,
@@ -418,22 +455,28 @@ Return .T.
    MV_IACEMID via GetNewPar(). Nao usa RpcSetEnv/RpcClearEnv aqui porque esta
    rotina roda pelo menu e o Framework ja entrega o ambiente aberto.
 ---------------------------------------------------------------------------- */
-Static Function IACEmpJs(nEmpresaAtual)
-    Local aCodigos   := IACEmpUsr()
+Static Function IACEmpJs(nEmpresaAtual, aCodigos, aParamEmp)
+    Local aListaCod  := {}
     Local aEmpresas  := {}
     Local cJson      := "["
     Local nI         := 0
     Local nEmpresaId := 0
 
-    For nI := 1 To Len(aCodigos)
-        nEmpresaId := IACEmpIdC(aCodigos[nI, 1], aCodigos[nI, 2])
+    If ValType(aCodigos) == "A"
+        aListaCod := aCodigos
+    Else
+        aListaCod := IACEmpUsr()
+    EndIf
+
+    For nI := 1 To Len(aListaCod)
+        nEmpresaId := IACEmpIdC(aListaCod[nI, 1], aListaCod[nI, 2], aParamEmp)
         If nEmpresaId > 0
-            IACAddEmp(@aEmpresas, nEmpresaId, aCodigos[nI, 1])
+            IACAddEmp(@aEmpresas, nEmpresaId, aListaCod[nI, 1], aListaCod[nI, 3])
         EndIf
     Next nI
 
     If nEmpresaAtual > 0
-        IACAddEmp(@aEmpresas, nEmpresaAtual, "")
+        IACAddEmp(@aEmpresas, nEmpresaAtual, "", "")
     EndIf
 
     For nI := 1 To Len(aEmpresas)
@@ -441,7 +484,8 @@ Static Function IACEmpJs(nEmpresaAtual)
             cJson += ","
         EndIf
         cJson += '{"empresaId":' + cValToChar(aEmpresas[nI, 1]) + ;
-                 ',"codigoProtheus":"' + IACEscJs(aEmpresas[nI, 2]) + '"}'
+                 ',"codigoProtheus":"' + IACEscJs(aEmpresas[nI, 2]) + '"' + ;
+                 ',"nomeProtheus":"' + IACEscJs(aEmpresas[nI, 3]) + '"}'
     Next nI
 
     cJson += "]"
@@ -462,6 +506,8 @@ Static Function IACEmpUsr()
     Local cGrp    := ""
     Local cFil    := ""
     Local cEmp    := ""
+    Local cEmpSM0 := ""
+    Local cNome   := ""
 
     // [CORRIGIDO apos erro "type mismatch on compare" em producao] FWUsrEmp()
     // pode devolver aEmpUsr[1] como algo que nao e string (ex.: array
@@ -478,24 +524,75 @@ Static Function IACEmpUsr()
             Loop
         EndIf
 
+        // MV_IACEMID e por EMPRESA dentro do mesmo grupo, usando X6_FIL com
+        // codigo de empresa ("01", "02"...). A rotina tolera ambientes
+        // tradicionais e Lobo Guara: deriva o codigo pela filial completa
+        // quando possivel, ou pelo campo de empresa da SM0 quando ele vier
+        // realmente como codigo.
         cGrp := Alltrim(cValToChar(aSM0[nI, 1])) // SM0_GRPEMP
         cFil := Alltrim(cValToChar(aSM0[nI, 2])) // SM0_CODFIL completo
-        cEmp := Alltrim(cValToChar(aSM0[nI, 3])) // SM0_EMPRESA
-        If Empty(cEmp)
-            cEmp := cGrp
+        If Len(aSM0[nI]) >= 3
+            cEmpSM0 := Alltrim(cValToChar(aSM0[nI, 3])) // SM0_EMPRESA ou nome, conforme ambiente
+        Else
+            cEmpSM0 := ""
+        EndIf
+        cEmp := IACCodEmp(cGrp, cFil, cEmpSM0)
+        // Preferencia por descricao/nome comercial da EMPRESA, depois nome
+        // reduzido/nome da filial. Posicoes conforme FWLoadSM0/TOTVS:
+        // 19=SM0_DESCEMP, 17=SM0_NOMECOM, 7=SM0_NOMRED, 6=SM0_NOME.
+        cNome := ""
+        If Len(aSM0[nI]) >= 19
+            cNome := Alltrim(cValToChar(aSM0[nI, 19]))
+        EndIf
+        If Empty(cNome) .And. Len(aSM0[nI]) >= 17
+            cNome := Alltrim(cValToChar(aSM0[nI, 17]))
+        EndIf
+        If Empty(cNome) .And. Len(aSM0[nI]) >= 7
+            cNome := Alltrim(cValToChar(aSM0[nI, 7]))
+        EndIf
+        If Empty(cNome) .And. Len(aSM0[nI]) >= 6
+            cNome := Alltrim(cValToChar(aSM0[nI, 6]))
+        EndIf
+        If Empty(cNome)
+            cNome := cEmp
         EndIf
 
         If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
-            IACAddCod(@aRet, cEmp, cFil)
+            IACAddCod(@aRet, cEmp, cFil, cNome)
         EndIf
     Next nI
 
 Return aRet
 
 /* ----------------------------------------------------------------------------
+   IACCodEmp
+   Resolve o codigo de empresa usado em X6_FIL para buscar MV_IACEMID. Suporta
+   Protheus tradicional e Lobo Guara, onde FWLoadSM0()/SM0 podem expor campos
+   em formatos diferentes.
+---------------------------------------------------------------------------- */
+Static Function IACCodEmp(cGrp, cFil, cEmpSM0)
+    Local cRet := ""
+    Local cEmp := Alltrim(cEmpSM0)
+
+    If !Empty(cFil)
+        cRet := Left(Alltrim(cFil), 2)
+    EndIf
+
+    If (Empty(cRet) .Or. Len(cRet) < 2) .And. !Empty(cEmp) .And. Len(cEmp) <= 2
+        cRet := cEmp
+    EndIf
+
+    If Empty(cRet)
+        cRet := Left(Alltrim(cGrp), 2)
+    EndIf
+
+Return cRet
+
+/* ----------------------------------------------------------------------------
    IACEmpIdC
-   Le MV_IACEMID com GetNewPar() usando o CODIGO DE EMPRESA (2 digitos) como
-   referencia — nao a filial completa da SM0.
+   Le MV_IACEMID direto da SX6 usando o CODIGO DE EMPRESA (2 digitos) como
+   referencia — nao usa GetNewPar() para evitar popup "Help: MV_IACEMID"
+   quando o parametro nao existir naquele escopo.
    [CORRIGIDO apos usuario reportar popup "Help: MV_IACEMID" em producao]
    MV_IACEMID e cadastrado UMA VEZ POR EMPRESA no X6 (confirmado pelo
    usuario: X6_FIL="01" -> conteudo 5, X6_FIL="02" -> conteudo 6 — X6_FIL
@@ -509,7 +606,7 @@ Return aRet
    (cCodigoProtheus, o mesmo valor ja usado como chave logica da empresa em
    todo o resto deste fonte), que e como o parametro foi de fato cadastrado.
 ---------------------------------------------------------------------------- */
-Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia)
+Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia, aParamEmp)
     Local nRet     := 0
     Local cValor   := ""
     Local cCodEmp  := ""
@@ -519,8 +616,138 @@ Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia)
     EndIf
 
     cCodEmp := Left(Alltrim(cCodigoProtheus), 2)
-    cValor  := Alltrim(cValToChar(GetNewPar("MV_IACEMID", "", cCodEmp)))
+    If ValType(aParamEmp) == "A"
+        cValor := IACSX6Busca(aParamEmp, cCodEmp)
+    Else
+        cValor := IACSX6Par("MV_IACEMID", cCodEmp)
+    EndIf
     nRet    := Val(cValor)
+
+Return nRet
+
+/* ----------------------------------------------------------------------------
+   IACSX6Lista
+   Carrega de uma vez todos os valores de um parametro por X6_FIL. Evita varrer
+   SX6 repetidamente durante a abertura do chat multiempresa, mantendo o
+   ShellExecute mais perto do clique original do usuario.
+---------------------------------------------------------------------------- */
+Static Function IACSX6Lista(cParam)
+    Local cAliasAtu := Alias()
+    Local aRet      := {}
+    Local cVar      := Alltrim(cParam)
+    Local cDel      := ""
+    Local cFil      := ""
+    Local cValor    := ""
+
+    DbSelectArea("SX6")
+    SX6->(DbGoTop())
+
+    While !SX6->(Eof())
+        cDel := IACCampo("D_E_L_E_T_")
+        If Empty(cDel) .And. IACCampo("X6_VAR") == cVar
+            cFil   := Alltrim(IACCampo("X6_FIL"))
+            cValor := IACCampo("X6_CONTEUD")
+            If !Empty(cFil) .And. !Empty(cValor)
+                AAdd(aRet, { cFil, cValor })
+            EndIf
+        EndIf
+        SX6->(DbSkip())
+    EndDo
+
+    If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
+        DbSelectArea(cAliasAtu)
+    EndIf
+
+Return aRet
+
+/* ----------------------------------------------------------------------------
+   IACSX6Busca
+   Busca em memoria o valor carregado por IACSX6Lista().
+---------------------------------------------------------------------------- */
+Static Function IACSX6Busca(aLista, cFil)
+    Local cFilBus := Alltrim(cFil)
+    Local nI      := 0
+
+    For nI := 1 To Len(aLista)
+        If ValType(aLista[nI]) == "A" .And. Len(aLista[nI]) >= 2 .And. ;
+           Alltrim(aLista[nI, 1]) == cFilBus
+            Return Alltrim(aLista[nI, 2])
+        EndIf
+    Next nI
+
+Return ""
+
+/* ----------------------------------------------------------------------------
+   IACSX6Par
+   Busca um parametro direto na SX6 por X6_VAR + X6_FIL sem acionar Help do
+   Protheus. Usada para MV_IACEMID porque GetNewPar()/SuperGetMV pode abrir
+   popup quando nao encontra o parametro para a referencia informada.
+---------------------------------------------------------------------------- */
+Static Function IACSX6Par(cParam, cFil)
+    Local cAliasAtu := Alias()
+    Local cRet      := ""
+    Local cVar      := Alltrim(cParam)
+    Local cFilBus   := Alltrim(cFil)
+    Local cDel      := ""
+
+    DbSelectArea("SX6")
+    SX6->(DbGoTop())
+
+    While !SX6->(Eof())
+        cDel := IACCampo("D_E_L_E_T_")
+        If Empty(cDel) .And. IACCampo("X6_VAR") == cVar .And. Alltrim(IACCampo("X6_FIL")) == cFilBus
+            cRet := IACCampo("X6_CONTEUD")
+            Exit
+        EndIf
+        SX6->(DbSkip())
+    EndDo
+
+    If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
+        DbSelectArea(cAliasAtu)
+    EndIf
+
+Return cRet
+
+/* ----------------------------------------------------------------------------
+   IACEmpAt
+   Descobre o empresa_id do IA Command para a empresa Protheus atualmente
+   logada, cruzando cEmpAnt/cFilAnt com a lista carregada da SM0. E um reforco
+   para os ambientes em que GetNewPar() com cEmpAnt sozinho nao encontra o
+   MV_IACEMID no escopo esperado.
+---------------------------------------------------------------------------- */
+Static Function IACEmpAt(aCodigos, aParamEmp)
+    Local aListaCod := {}
+    Local cEmpAtu  := Alltrim(cEmpAnt)
+    Local cFilAtu  := Alltrim(cFilAnt)
+    Local cCod     := ""
+    Local cFil     := ""
+    Local nI       := 0
+    Local nRet     := 0
+
+    If ValType(aCodigos) == "A"
+        aListaCod := aCodigos
+    Else
+        aListaCod := IACEmpUsr()
+    EndIf
+
+    For nI := 1 To Len(aListaCod)
+        cCod := Alltrim(aListaCod[nI, 1])
+        cFil := Alltrim(aListaCod[nI, 2])
+
+        If (!Empty(cEmpAtu) .And. cCod == cEmpAtu) .Or. ;
+           (!Empty(cFilAtu) .And. cFil == cFilAtu) .Or. ;
+           (!Empty(cCod) .And. !Empty(cFilAtu) .And. Left(cFilAtu, Len(cCod)) == cCod) .Or. ;
+           (!Empty(cFilAtu) .And. !Empty(cFil) .And. Left(cFil, Len(cFilAtu)) == cFilAtu)
+            nRet := IACEmpIdC(cCod, cFil, aParamEmp)
+            If nRet > 0
+                Return nRet
+            EndIf
+        EndIf
+    Next nI
+
+    If Len(aListaCod) == 1
+        nRet := IACEmpIdC(aListaCod[1, 1], aListaCod[1, 2], aParamEmp)
+    EndIf
 
 Return nRet
 
@@ -554,10 +781,10 @@ Return .F.
 /* ----------------------------------------------------------------------------
    IACAddCod
    Adiciona na lista temporaria um codigo Protheus de empresa/grupo com uma
-   filial de referencia da SM0. Evita duplicidade para nao ler MV_IACEMID mais
-   de uma vez para a mesma empresa.
+   filial de referencia da SM0 e um nome amigavel da empresa. Evita duplicidade
+   para nao ler MV_IACEMID mais de uma vez para a mesma empresa.
 ---------------------------------------------------------------------------- */
-Static Function IACAddCod(aLista, cCodigo, cFilReferencia)
+Static Function IACAddCod(aLista, cCodigo, cFilReferencia, cNome)
     Local cCod := Alltrim(cCodigo)
     Local nI   := 0
 
@@ -571,7 +798,7 @@ Static Function IACAddCod(aLista, cCodigo, cFilReferencia)
         EndIf
     Next nI
 
-    AAdd(aLista, { cCod, Alltrim(cFilReferencia) })
+    AAdd(aLista, { cCod, Alltrim(cFilReferencia), Alltrim(cNome) })
 
 Return
 
@@ -579,9 +806,10 @@ Return
    IACAddEmp
    Adiciona uma empresa permitida no formato usado pelo JSON enviado ao IAHub.
    Evita repetir o mesmo empresa_id do IA Command quando mais de um codigo
-   Protheus apontar para o mesmo MV_IACEMID.
+   Protheus apontar para o mesmo MV_IACEMID. Tambem leva o nome Protheus para
+   exibicao no seletor do chat.
 ---------------------------------------------------------------------------- */
-Static Function IACAddEmp(aEmpresas, nEmpresaId, cCodigoProtheus)
+Static Function IACAddEmp(aEmpresas, nEmpresaId, cCodigoProtheus, cNomeProtheus)
     Local nI := 0
 
     For nI := 1 To Len(aEmpresas)
@@ -590,7 +818,7 @@ Static Function IACAddEmp(aEmpresas, nEmpresaId, cCodigoProtheus)
         EndIf
     Next nI
 
-    AAdd(aEmpresas, { nEmpresaId, Alltrim(cCodigoProtheus) })
+    AAdd(aEmpresas, { nEmpresaId, Alltrim(cCodigoProtheus), Alltrim(cNomeProtheus) })
 
 Return
 
@@ -755,11 +983,19 @@ Return IACParNum("MV_IACTOUT", IAC_HTTP_TIMEOUT_PADRAO)
    Le MV_IACEMID da empresa logada para descobrir o empresa_id correspondente
    no IA Command. Esse valor continua sendo enviado como empresa principal do
    token; a lista multiempresa e montada separadamente por IACEmpJs().
-   Usa cEmpAnt como referencia porque neste ambiente MV_IACEMID foi cadastrado
-   por empresa no X6_FIL ("01", "02"...), conforme validado em producao.
+   [CORRIGIDO apos usuario reportar popup "Help: MV_IACEMID" persistindo]
+   A versao anterior tentava 4 referencias diferentes via GetNewPar()
+   (Left(cEmpAnt,2), cEmpAnt inteiro, Left(cFilAnt,2), cFilAnt inteiro) antes
+   de cair em IACEmpAt() — cada tentativa que nao batesse com um X6_FIL
+   cadastrado disparava o popup de ajuda do parametro (comportamento nativo
+   do GetNewPar/SuperGetMV quando o parametro nao existe para a referencia
+   pesquisada). Confirmado por SQL direto em producao que X6_FIL guarda
+   M0_CODIGO puro ("01"/"02", codigo de empresa) — IACEmpAt() (via
+   IACEmpUsr()+IACEmpIdC()) ja resolve isso corretamente usando essa mesma
+   fonte, entao vai direto pra la, sem as tentativas que so geravam popup.
 ---------------------------------------------------------------------------- */
 Static Function IACEmpId()
-Return IACParNum("MV_IACEMID", IAC_EMPRESA_ID_PADRAO, Left(Alltrim(cEmpAnt), 2))
+Return IACEmpAt()
 
 /* ----------------------------------------------------------------------------
    IACSecret

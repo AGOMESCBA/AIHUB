@@ -115,7 +115,14 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
         SELECT id, direcao, texto,
                rows_json IS NOT NULL AS tem_rows,
                NULL AS rows_count,
-               tipo_resultado, grid_config_json, criado_em
+               tipo_resultado, grid_config_json, criado_em,
+               (
+                 SELECT f.id
+                 FROM protheus_chat_favorites f
+                 WHERE f.resposta_mensagem_id = protheus_chat_messages.id
+                   AND f.ativo = 1
+                 LIMIT 1
+               ) AS favorito_id
         FROM protheus_chat_messages
         WHERE sessao_id = ? AND criado_em < ?
         ORDER BY criado_em DESC LIMIT ?
@@ -124,7 +131,14 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
         SELECT id, direcao, texto,
                rows_json IS NOT NULL AS tem_rows,
                NULL AS rows_count,
-               tipo_resultado, grid_config_json, criado_em
+               tipo_resultado, grid_config_json, criado_em,
+               (
+                 SELECT f.id
+                 FROM protheus_chat_favorites f
+                 WHERE f.resposta_mensagem_id = protheus_chat_messages.id
+                   AND f.ativo = 1
+                 LIMIT 1
+               ) AS favorito_id
         FROM protheus_chat_messages
         WHERE sessao_id = ?
         ORDER BY criado_em DESC LIMIT ?
@@ -139,6 +153,7 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
     rowsCount: r.rows_count == null ? null : Number(r.rows_count || 0),
     tipo: r.tipo_resultado,
     gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
+    favoritoId: r.favorito_id || null,
     criadoEm: r.criado_em,
   }));
 
@@ -202,6 +217,191 @@ function salvarGridConfig({ mensagemId, sessaoId, gridConfig }) {
     WHERE id = ? AND sessao_id = ?
   `).run(JSON.stringify(gridConfig || {}), mensagemId, sessaoId);
   return info.changes > 0;
+}
+
+function vincularInterpretacao({ mensagemId, sessaoId, interpretationLogId }) {
+  if (!mensagemId || !sessaoId || !interpretationLogId) return false;
+  const info = getDB().prepare(`
+    UPDATE protheus_chat_messages
+       SET interpretation_log_id = ?
+     WHERE id = ? AND sessao_id = ? AND direcao = 'in'
+  `).run(interpretationLogId, mensagemId, sessaoId);
+  return info.changes > 0;
+}
+
+function moduloDoIntentJson(intentJson) {
+  try {
+    const intent = JSON.parse(intentJson || '{}');
+    return String(intent._moduloDinamico || intent.modulo || intent.module || '').trim().toLowerCase();
+  } catch (_) {
+    return '';
+  }
+}
+
+function tituloFavorito(texto) {
+  return truncarTitulo(texto || 'Pergunta favorita');
+}
+
+function buscarLogParaFavorito({ empresaId, celular, mensagem, perguntaTexto }) {
+  const db = getDB();
+  if (mensagem.interpretation_log_id) {
+    const row = db.prepare(`
+      SELECT *
+      FROM interpretation_log
+      WHERE id = ? AND empresa_id = ?
+      LIMIT 1
+    `).get(mensagem.interpretation_log_id, empresaId);
+    if (row) return row;
+  }
+
+  const numero = String(celular || '').replace(/\D/g, '');
+  return db.prepare(`
+    SELECT *
+    FROM interpretation_log
+    WHERE empresa_id = ?
+      AND numero_wa = ?
+      AND texto_original = ?
+      AND sql_final_executado IS NOT NULL
+    ORDER BY criado_em DESC
+    LIMIT 1
+  `).get(empresaId, numero, perguntaTexto) || null;
+}
+
+function listarFavoritos({ empresaId, celular, limite = 80 }) {
+  const rows = getDB().prepare(`
+    SELECT id, empresa_id, titulo, pergunta_texto, resposta_mensagem_id,
+           interpretation_log_id, modulo, grid_config_json, ultimo_uso_em,
+           criado_em, atualizado_em
+    FROM protheus_chat_favorites
+    WHERE empresa_id = ? AND celular = ? AND ativo = 1
+    ORDER BY COALESCE(ultimo_uso_em, atualizado_em, criado_em) DESC
+    LIMIT ?
+  `).all(empresaId, celular, limite);
+  return rows.map(row => ({
+    id: row.id,
+    empresaId: Number(row.empresa_id),
+    titulo: row.titulo,
+    perguntaTexto: row.pergunta_texto,
+    respostaMensagemId: row.resposta_mensagem_id || null,
+    interpretationLogId: row.interpretation_log_id || null,
+    modulo: row.modulo || null,
+    gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    ultimoUsoEm: row.ultimo_uso_em || null,
+    criadoEm: row.criado_em,
+    atualizadoEm: row.atualizado_em,
+  }));
+}
+
+function obterFavorito({ favoritoId, empresaId, celular }) {
+  return getDB().prepare(`
+    SELECT *
+    FROM protheus_chat_favorites
+    WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
+    LIMIT 1
+  `).get(favoritoId, empresaId, celular) || null;
+}
+
+function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = null }) {
+  const db = getDB();
+  const sessao = buscarSessao({ id: sessaoId, empresaId, celular });
+  if (!sessao) return null;
+
+  const mensagem = db.prepare(`
+    SELECT id, sessao_id, texto, rows_json, tipo_resultado, intent_json,
+           grid_config_json, interpretation_log_id, criado_em
+    FROM protheus_chat_messages
+    WHERE id = ? AND sessao_id = ? AND direcao = 'in'
+    LIMIT 1
+  `).get(mensagemId, sessaoId);
+  if (!mensagem) return null;
+
+  const pergunta = db.prepare(`
+    SELECT texto
+    FROM protheus_chat_messages
+    WHERE sessao_id = ? AND direcao = 'out' AND criado_em <= ?
+    ORDER BY criado_em DESC
+    LIMIT 1
+  `).get(sessaoId, mensagem.criado_em);
+  const perguntaTexto = String(pergunta?.texto || '').trim();
+  if (!perguntaTexto) {
+    throw Object.assign(new Error('Nao encontrei a pergunta original desta resposta.'), { statusCode: 400 });
+  }
+
+  const log = buscarLogParaFavorito({ empresaId, celular, mensagem, perguntaTexto });
+  const sqlFinal = String(log?.sql_final_executado || log?.sql_gerado || '').trim();
+  if (!sqlFinal) {
+    throw Object.assign(new Error('Esta resposta ainda nao possui SQL auditado para favoritar.'), { statusCode: 400 });
+  }
+
+  const modulo = String(log?.modulo || moduloDoIntentJson(mensagem.intent_json) || '').trim().toLowerCase();
+  if (!modulo) {
+    throw Object.assign(new Error('Nao foi possivel identificar o modulo desta pergunta.'), { statusCode: 400 });
+  }
+
+  const existente = db.prepare(`
+    SELECT id
+    FROM protheus_chat_favorites
+    WHERE empresa_id = ? AND celular = ? AND resposta_mensagem_id = ? AND ativo = 1
+    LIMIT 1
+  `).get(empresaId, celular, mensagemId);
+  const agora = new Date().toISOString();
+  const nome = tituloFavorito(titulo || perguntaTexto);
+  let preview = null;
+  try {
+    const rowsPreview = mensagem.rows_json ? JSON.parse(mensagem.rows_json) : null;
+    preview = Array.isArray(rowsPreview) ? JSON.stringify(rowsPreview.slice(0, 20)) : null;
+  } catch (_) {
+    preview = null;
+  }
+
+  if (existente?.id) {
+    db.prepare(`
+      UPDATE protheus_chat_favorites
+         SET titulo = ?, pergunta_texto = ?, interpretation_log_id = ?,
+             modulo = ?, sql_final_executado = ?, sql_template = ?,
+             intent_json = ?, grid_config_json = ?, rows_preview_json = ?,
+             atualizado_em = ?
+       WHERE id = ?
+    `).run(
+      nome, perguntaTexto, log?.id || mensagem.interpretation_log_id || null,
+      modulo, sqlFinal, log?.sql_template || null,
+      mensagem.intent_json || log?.intent_json || null, mensagem.grid_config_json || null,
+      preview, agora, existente.id,
+    );
+    return obterFavorito({ favoritoId: existente.id, empresaId, celular });
+  }
+
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO protheus_chat_favorites
+      (id, empresa_id, celular, titulo, pergunta_texto, resposta_mensagem_id,
+       interpretation_log_id, modulo, sql_final_executado, sql_template,
+       intent_json, grid_config_json, rows_preview_json, ativo, criado_em, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(
+    id, empresaId, celular, nome, perguntaTexto, mensagemId,
+    log?.id || mensagem.interpretation_log_id || null, modulo, sqlFinal, log?.sql_template || null,
+    mensagem.intent_json || log?.intent_json || null, mensagem.grid_config_json || null,
+    preview, agora, agora,
+  );
+  return obterFavorito({ favoritoId: id, empresaId, celular });
+}
+
+function removerFavorito({ favoritoId, empresaId, celular }) {
+  const info = getDB().prepare(`
+    UPDATE protheus_chat_favorites
+       SET ativo = 0, atualizado_em = ?
+     WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
+  `).run(new Date().toISOString(), favoritoId, empresaId, celular);
+  return info.changes > 0;
+}
+
+function marcarFavoritoUsado({ favoritoId, empresaId, celular }) {
+  getDB().prepare(`
+    UPDATE protheus_chat_favorites
+       SET ultimo_uso_em = ?, atualizado_em = ?
+     WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
+  `).run(new Date().toISOString(), new Date().toISOString(), favoritoId, empresaId, celular);
 }
 
 // Le o ultimo intent da sessao para servir de contexto ao intent-merger.
@@ -311,4 +511,10 @@ module.exports = {
   ultimaMensagemTabular,
   mensagemTabular,
   salvarGridConfig,
+  vincularInterpretacao,
+  listarFavoritos,
+  obterFavorito,
+  favoritarMensagem,
+  removerFavorito,
+  marcarFavoritoUsado,
 };
