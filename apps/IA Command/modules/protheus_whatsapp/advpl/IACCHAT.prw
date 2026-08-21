@@ -64,15 +64,15 @@
         nesta instalacao (erro em runtime: "Help: NOFUNCW ... Funcao:
         FWNOACENTOCalled By U_IACCHAT" — funcao nao encontrada, apesar do
         fonte compilar normalmente, pois ADVPL resolve chamada de funcao em
-        runtime). Trocado por IACRemoverAcentos(), implementada localmente
+        runtime). Trocado por IACRmAcent(), implementada localmente
         neste arquivo via StrTran() (mesma tecnica ja usada em
-        IACEscapeJson() abaixo), sem depender de nenhuma funcao Fw* do
+        IACEscJs() abaixo), sem depender de nenhuma funcao Fw* do
         framework cuja existencia nao esteja confirmada.
      e) [CORRIGIDO 11/08/2026] SYS_USR existe nesta instalacao (a suposicao
         anterior de que a TABELA nao existia estava errada) — o que nao
         existe e um CAMPO de celular dentro dela. Criado cadastro proprio
         (tabela ZCH, ver advpl/IACadUsr.prw neste mesmo diretorio) para o
-        vinculo usuario Protheus -> celular. IACLerCelularUsuario() foi
+        vinculo usuario Protheus -> celular. IACLerCel() foi
         reescrita para ler ZCH primeiro (por RetCodUsr()), no lugar do antigo
         SYS_USR->USR_CELULAR (que nunca existiu). IAC_CELULAR_TESTE_PADRAO
         foi MANTIDO (decisao explicita do usuario), agora como FALLBACK: so
@@ -126,7 +126,7 @@
 
 // VALOR DE TESTE/DESENVOLVIMENTO — endereco do IA Command informado para o
 // piloto. So e usado enquanto o parametro MV_IACURL nao estiver cadastrado
-// (ver IACUrlToken()/IACUrlChat() e instrucoes no cabecalho do arquivo acima).
+// (ver IACUrlTok()/IACUrlChat() e instrucoes no cabecalho do arquivo acima).
 // TODO antes de producao: cadastrar MV_IACURL e remover/esvaziar esta linha.
 #DEFINE IAC_HUB_URL_PADRAO  "http://200.106.188.87:3000"
 
@@ -137,7 +137,7 @@
 #DEFINE IAC_EMPRESA_ID_PADRAO  3
 
 // !!! CELULAR DE TESTE CHUMBADO — USADO SO COMO FALLBACK !!!
-// IACLerCelularUsuario() busca primeiro na tabela ZCH (ver IACadUsr.prw); se a
+// IACLerCel() busca primeiro na tabela ZCH (ver IACadUsr.prw); se a
 // tabela ZCH ainda nao existir (ambiente sem o cadastro rodado uma vez) OU
 // nao houver registro ativo para o usuario logado, cai neste valor fixo em
 // vez de bloquear o chat — decisao explicita do usuario, para nao quebrar o
@@ -177,7 +177,7 @@ User Function IACChat()
         Return
     EndIf
 
-    cCelular := IACLerCelularUsuario()
+    cCelular := IACLerCel()
 
     If Empty(cCelular)
         MsgAlert("Celular nao cadastrado para o usuario " + RetCodUsr() + "." + CRLF + ;
@@ -186,7 +186,7 @@ User Function IACChat()
         Return
     EndIf
 
-    lOk := IACSolicitarToken(cCelular, @cToken, @cErro)
+    lOk := IACToken(cCelular, @cToken, @cErro)
 
     If !lOk
         MsgAlert("Nao foi possivel iniciar a sessao do IA Command:" + CRLF + cErro, "IA Command")
@@ -198,7 +198,7 @@ User Function IACChat()
     // especiais de cadastro). Token ja e hexadecimal puro (token-service.js),
     // sem necessidade de encode. Confirmar disponibilidade de FWURLEncode no
     // Include desta versao — se indisponivel, alternativa e Escape().
-    cUrlChat := cUrlChatBase + "?token=" + cToken + "&usuario=" + FWURLEncode(IACRemoverAcentos(cNomeUser))
+    cUrlChat := cUrlChatBase + "?token=" + cToken + "&usuario=" + FWURLEncode(IACRmAcent(cNomeUser))
 
     // [CORRIGIDO apos teste em producao 11/08/2026] TWebEngine/TWebChannel
     // (Chromium embarcado no SmartClient Desktop) removido — esta instalacao
@@ -228,7 +228,7 @@ User Function IACChat()
 Return
 
 /* ----------------------------------------------------------------------------
-   IACLerCelularUsuario
+   IACLerCel
    Le o celular do usuario Protheus LOGADO na tabela ZCH (ver IACadUsr.prw),
    pelo codigo retornado por RetCodUsr() — mesma funcao ja usada em IACChat()
    para o nome (UsrFullName(RetCodUsr())), aqui usada tambem para a chave de
@@ -245,19 +245,19 @@ Return
    feita no backend (token-service.js normalizarCelular), nao aqui — a
    rotina envia o valor exatamente como gravado em ZCH_CELULA (ou o fallback).
 ---------------------------------------------------------------------------- */
-Static Function IACLerCelularUsuario()
+Static Function IACLerCel()
     Local cCelular   := ""
     Local cAliasAtu  := Alias()
     Local cAtivo     := ""
 
-    If IACTabelaExiste("ZCH")
+    If IACTabEx("ZCH")
         DbSelectArea("ZCH")
         ZCH->(DbSetOrder(1)) // ZCH_FILIAL+ZCH_USER
         If ZCH->(MsSeek(xFilial("ZCH") + RetCodUsr()))
-            cAtivo := IACGetCampo("ZCH_ATIVO")
+            cAtivo := IACCampo("ZCH_ATIVO")
 
             If Empty(cAtivo) .Or. cAtivo == "S"
-                cCelular := IACGetCampo("ZCH_CELULA")
+                cCelular := IACCampo("ZCH_CELULA")
             EndIf
         EndIf
         ZCH->(DbCloseArea())
@@ -274,11 +274,11 @@ Static Function IACLerCelularUsuario()
 Return cCelular
 
 /* ----------------------------------------------------------------------------
-   IACGetCampo
+   IACCampo
    Le um campo do alias atual sem gerar erro fatal caso o dicionario/runtime
    ainda nao exponha o campo esperado.
 ---------------------------------------------------------------------------- */
-Static Function IACGetCampo(cCampo)
+Static Function IACCampo(cCampo)
     Local nPos := FieldPos(cCampo)
     Local cRet := ""
 
@@ -289,13 +289,13 @@ Static Function IACGetCampo(cCampo)
 Return cRet
 
 /* ----------------------------------------------------------------------------
-   IACTabelaExiste
+   IACTabEx
    Confirma, via SX2 (dicionario de dados), se a tabela informada ja foi
    criada — sem tentar abrir a area diretamente (DbSelectArea em tabela
    inexistente gera erro fatal "Alias does not exist", nao um retorno .F.
    tratavel). Usada para decidir se tenta ler ZCH ou vai direto ao fallback.
 ---------------------------------------------------------------------------- */
-Static Function IACTabelaExiste(cTabela)
+Static Function IACTabEx(cTabela)
     Local lExiste   := .F.
     Local cAliasAtu := Alias()
 
@@ -314,29 +314,26 @@ Static Function IACTabelaExiste(cTabela)
 Return lExiste
 
 /* ----------------------------------------------------------------------------
-   IACSolicitarToken
+   IACToken
    Chama POST /api/ia-command/protheus/token no IAHub para obter o token curto
    de sessao do chat. Retorna .T./.F. e preenche cToken ou cErro por referencia.
 
-   empresaId: NAO existe hoje nenhuma traducao automatica entre codigo de
-   empresa/filial Protheus (cEmpresaAnt/cFilAnt) e o empresa_id interno do
-   IA Command (inteiro gerado pelo cadastro de empresas do IAHub). Decisao
-   confirmada: parametro fixo por instalacao, configurado manualmente uma vez
-   por empresa-cliente via SX6 MV_IACEMID (ver IACEmpresaIdIaCommand abaixo).
-   Nao inferir esse valor automaticamente a partir de cEmpresaAnt/cFilAnt —
-   sao namespaces diferentes (codigo ADVPL vs. id sequencial do IAHub) sem
-   relacao implicita entre si.
+   empresaId: por compatibilidade, continua enviando o MV_IACEMID da empresa
+   logada como empresa principal do token. Alem disso, envia
+   empresasPermitidas: lista calculada no Protheus com FWUsrEmp()/FWLoadSM0()
+   e GetNewPar() para localizar o MV_IACEMID de cada empresa permitida.
 ---------------------------------------------------------------------------- */
-Static Function IACSolicitarToken(cCelular, cToken, cErro)
+Static Function IACToken(cCelular, cToken, cErro)
     Local oRest
     Local aHeader     := {}
     Local cBody       := ""
     Local cRespo      := ""
     Local lOk         := .F.
     Local oJsonRes
-    Local nEmpresaId  := IACEmpresaIdIaCommand() // ver comentario acima
-    Local cUrlToken   := IACUrlToken()
-    Local nTimeout    := IACHttpTimeout()
+    Local nEmpresaId  := IACEmpId() // ver comentario acima
+    Local cEmpPermit  := ""
+    Local cUrlToken   := IACUrlTok()
+    Local nTimeout    := IACTimeout()
 
     If nEmpresaId <= 0
         cErro := "Parametro MV_IACEMID nao configurado. Cadastre-o em Configurador (SIGACFG) > " + ;
@@ -354,16 +351,19 @@ Static Function IACSolicitarToken(cCelular, cToken, cErro)
     // manualmente — protege contra quebra de payload se o campo de cadastro
     // tiver algum caractere inesperado. Preferir JsonObject():ToJson() se
     // disponivel nesta versao, em vez de concatenacao manual de string.
+    cEmpPermit := IACEmpJs(nEmpresaId)
+
     cBody := '{"empresaId":' + cValToChar(nEmpresaId) + ;
-              ',"celular":"' + IACEscapeJson(cCelular) + '"' + ;
-              ',"filial":"' + IACEscapeJson(xFilial()) + '"}'
+              ',"celular":"' + IACEscJs(cCelular) + '"' + ;
+              ',"filial":"' + IACEscJs(xFilial()) + '"' + ;
+              ',"empresasPermitidas":' + cEmpPermit + '}'
 
     // Headers passados como array local no metodo Post(), NAO como propriedade
     // do objeto — FWRest nesta versao (Framework 20251006) nao expoe
     // oRest:xHeaders. Padrao confirmado: aHeader montado via AAdd() e passado
     // como parametro de Get()/Post(). Ver TDN FWRest / exemplos TOTVS.
     AAdd(aHeader, "Content-Type: application/json")
-    AAdd(aHeader, "X-Protheus-Secret: " + IACSegredoProtheusChat())
+    AAdd(aHeader, "X-Protheus-Secret: " + IACSecret())
 
     oRest := FWRest():New(cUrlToken)
     oRest:SetPath("")
@@ -409,26 +409,199 @@ Static Function IACSolicitarToken(cCelular, cToken, cErro)
 Return .T.
 
 /* ----------------------------------------------------------------------------
-   IACEscapeJson
+   IACEmpJs
+   Monta a lista multiempresa enviada ao IAHub. A permissao vem do Protheus:
+   FWUsrEmp(RetCodUsr()) retorna as empresas do usuario; quando retornar @@@@,
+   FWLoadSM0() expande para todas as empresas disponiveis no ambiente.
+
+   Para cada empresa Protheus, usa uma filial de referencia vinda da SM0 e le
+   MV_IACEMID via GetNewPar(). Nao usa RpcSetEnv/RpcClearEnv aqui porque esta
+   rotina roda pelo menu e o Framework ja entrega o ambiente aberto.
+---------------------------------------------------------------------------- */
+Static Function IACEmpJs(nEmpresaAtual)
+    Local aCodigos   := IACEmpUsr()
+    Local aEmpresas  := {}
+    Local cJson      := "["
+    Local nI         := 0
+    Local nEmpresaId := 0
+
+    For nI := 1 To Len(aCodigos)
+        nEmpresaId := IACEmpIdC(aCodigos[nI, 1], aCodigos[nI, 2])
+        If nEmpresaId > 0
+            IACAddEmp(@aEmpresas, nEmpresaId, aCodigos[nI, 1])
+        EndIf
+    Next nI
+
+    If nEmpresaAtual > 0
+        IACAddEmp(@aEmpresas, nEmpresaAtual, "")
+    EndIf
+
+    For nI := 1 To Len(aEmpresas)
+        If nI > 1
+            cJson += ","
+        EndIf
+        cJson += '{"empresaId":' + cValToChar(aEmpresas[nI, 1]) + ;
+                 ',"codigoProtheus":"' + IACEscJs(aEmpresas[nI, 2]) + '"}'
+    Next nI
+
+    cJson += "]"
+
+Return cJson
+
+/* ----------------------------------------------------------------------------
+   IACEmpUsr
+   Retorna codigos de grupo/empresa Protheus acessiveis ao usuario logado.
+   Se FWUsrEmp() retornar @@@@, expande com FWLoadSM0().
+---------------------------------------------------------------------------- */
+Static Function IACEmpUsr()
+    Local aEmpUsr := FWUsrEmp(RetCodUsr())
+    Local aSM0    := FWLoadSM0()
+    Local aRet    := {}
+    Local nI      := 0
+    Local lTodas  := .F.
+    Local cGrp    := ""
+    Local cFil    := ""
+    Local cEmp    := ""
+
+    // [CORRIGIDO apos erro "type mismatch on compare" em producao] FWUsrEmp()
+    // pode devolver aEmpUsr[1] como algo que nao e string (ex.: array
+    // aninhado, dependendo da config de acesso multiempresa do usuario) —
+    // comparar direto com "@@@@" quebrava com type mismatch quando o tipo nao
+    // batia. ValType() antes da comparacao evita comparar tipos diferentes,
+    // mesmo padrao de blindagem ja usado no loop de aSM0 logo abaixo.
+    If Len(aEmpUsr) == 1 .And. ValType(aEmpUsr[1]) == "C"
+        lTodas := aEmpUsr[1] == "@@@@"
+    EndIf
+
+    For nI := 1 To Len(aSM0)
+        If ValType(aSM0[nI]) != "A" .Or. Len(aSM0[nI]) < 3
+            Loop
+        EndIf
+
+        cGrp := Alltrim(cValToChar(aSM0[nI, 1])) // SM0_GRPEMP
+        cFil := Alltrim(cValToChar(aSM0[nI, 2])) // SM0_CODFIL completo
+        cEmp := Alltrim(cValToChar(aSM0[nI, 3])) // SM0_EMPRESA
+        If Empty(cEmp)
+            cEmp := cGrp
+        EndIf
+
+        If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
+            IACAddCod(@aRet, cEmp, cFil)
+        EndIf
+    Next nI
+
+Return aRet
+
+/* ----------------------------------------------------------------------------
+   IACEmpIdC
+   Le MV_IACEMID com GetNewPar usando a filial completa de referencia da SM0.
+   O Framework de parametros aplica a hierarquia de filial/empresa/grupo e
+   evita leitura direta da SX6.
+---------------------------------------------------------------------------- */
+Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia)
+    Local nRet   := 0
+    Local cValor := ""
+
+    If Empty(cCodigoProtheus) .Or. Empty(cFilReferencia)
+        Return 0
+    EndIf
+
+    cValor := Alltrim(cValToChar(GetNewPar("MV_IACEMID", "", cFilReferencia)))
+    nRet   := Val(cValor)
+
+Return nRet
+
+/* ----------------------------------------------------------------------------
+   IACEmpOk
+   Verifica se uma empresa/filial carregada da SM0 esta dentro da lista de
+   empresas retornada por FWUsrEmp() para o usuario logado. A comparacao aceita
+   grupo, empresa ou filial completa porque o retorno pode variar conforme a
+   configuracao de acesso do Protheus.
+---------------------------------------------------------------------------- */
+Static Function IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
+    Local nI   := 0
+    Local cVal := ""
+
+    For nI := 1 To Len(aEmpUsr)
+        // Pula elementos que FWUsrEmp() eventualmente devolva em formato
+        // diferente de string (ex.: array aninhado) — mesma causa do type
+        // mismatch corrigido em IACEmpUsr logo acima; cValToChar() de um
+        // array nao e uma conversao valida.
+        If ValType(aEmpUsr[nI]) != "C"
+            Loop
+        EndIf
+        cVal := Alltrim(cValToChar(aEmpUsr[nI]))
+        If cVal == cEmp .Or. cVal == cGrp .Or. cVal == cFil
+            Return .T.
+        EndIf
+    Next nI
+
+Return .F.
+
+/* ----------------------------------------------------------------------------
+   IACAddCod
+   Adiciona na lista temporaria um codigo Protheus de empresa/grupo com uma
+   filial de referencia da SM0. Evita duplicidade para nao ler MV_IACEMID mais
+   de uma vez para a mesma empresa.
+---------------------------------------------------------------------------- */
+Static Function IACAddCod(aLista, cCodigo, cFilReferencia)
+    Local cCod := Alltrim(cCodigo)
+    Local nI   := 0
+
+    If Empty(cCod)
+        Return
+    EndIf
+
+    For nI := 1 To Len(aLista)
+        If aLista[nI, 1] == cCod
+            Return
+        EndIf
+    Next nI
+
+    AAdd(aLista, { cCod, Alltrim(cFilReferencia) })
+
+Return
+
+/* ----------------------------------------------------------------------------
+   IACAddEmp
+   Adiciona uma empresa permitida no formato usado pelo JSON enviado ao IAHub.
+   Evita repetir o mesmo empresa_id do IA Command quando mais de um codigo
+   Protheus apontar para o mesmo MV_IACEMID.
+---------------------------------------------------------------------------- */
+Static Function IACAddEmp(aEmpresas, nEmpresaId, cCodigoProtheus)
+    Local nI := 0
+
+    For nI := 1 To Len(aEmpresas)
+        If aEmpresas[nI, 1] == nEmpresaId
+            Return
+        EndIf
+    Next nI
+
+    AAdd(aEmpresas, { nEmpresaId, Alltrim(cCodigoProtheus) })
+
+Return
+
+/* ----------------------------------------------------------------------------
+   IACEscJs
    Escapa aspas duplas e barra invertida para uso seguro dentro de string JSON
    montada manualmente. Nao trata unicode/controle especial — suficiente para
    os campos usados aqui (celular, codigo de filial), que sao alfanumericos
    simples, mas nao um encoder JSON completo.
 ---------------------------------------------------------------------------- */
-Static Function IACEscapeJson(cTexto)
+Static Function IACEscJs(cTexto)
     Local cSaida := StrTran(cTexto, '\', '\\')
     cSaida := StrTran(cSaida, '"', '\"')
 Return cSaida
 
 /* ----------------------------------------------------------------------------
-   IACRemoverAcentos
+   IACRmAcent
    Substitui acentos/cedilha (maiusculo e minusculo) por seu equivalente sem
    acento, via StrTran() — sem depender de FwNoAcento() (nao existe nesta
    instalacao, ver ressalva no cabecalho do arquivo). Cobre apenas os
    caracteres acentuados do portugues; suficiente para nome de usuario usado
    em querystring (o valor real ainda passa por FWURLEncode() depois).
 ---------------------------------------------------------------------------- */
-Static Function IACRemoverAcentos(cTexto)
+Static Function IACRmAcent(cTexto)
     Local aDe   := {"á","à","â","ã","ä","é","è","ê","ë","í","ì","î","ï",;
                      "ó","ò","ô","õ","ö","ú","ù","û","ü","ç","ñ",;
                      "Á","À","Â","Ã","Ä","É","È","Ê","Ë","Í","Ì","Î","Ï",;
@@ -458,12 +631,12 @@ Return cSaida
    MV_IACURL   (caractere, ex. "https://iahub.suaempresa.com.br")
      Host base do IAHub, SEM path. As duas URLs usadas pela rotina
      (endpoint de token e pagina do chat) sao montadas a partir deste valor
-     em IACUrlToken()/IACUrlChat() — trocar de ambiente (homologacao/producao)
+     em IACUrlTok()/IACUrlChat() — trocar de ambiente (homologacao/producao)
      exige so reconfigurar este parametro, nao recompilar o fonte.
    MV_IACEMID  (numerico) — empresa_id do IA Command correspondente a esta
      empresa/filial Protheus. Obter na tela de administracao do IA Command
      (cadastro de empresas do IAHub) ANTES de configurar este parametro —
-     nao existe lookup automatico (ver comentario em IACSolicitarToken).
+     nao existe lookup automatico (ver comentario em IACToken).
      Valor 0 (padrao/nao configurado) bloqueia o uso.
    MV_IACSECR  (caractere) — mesmo valor de IAC_PROTHEUS_CHAT_SECRET
      configurado no ambiente do IAHub (.env). Repassar por canal seguro entre
@@ -473,8 +646,50 @@ Return cSaida
      Se nao configurado (0 ou vazio), usa IAC_HTTP_TIMEOUT_PADRAO (8000ms).
    ============================================================================ */
 
-// IACUrlBase centraliza o fallback para IAC_HUB_URL_PADRAO — ver TODO no
-// cabecalho do arquivo sobre remover esse fallback antes de producao.
+/* ----------------------------------------------------------------------------
+   IACParamNum
+   Le um parametro SX6 (GetMV) que deve ser tratado como numero, mas SEM
+   confiar no tipo em que foi cadastrado no dicionario. Motivo: MV_IACEMID
+   estava cadastrado como Caracter (confirmado pelo usuario em producao) e o
+   codigo antigo lia com GetMV(cParam, , 0) esperando N — GetMV() devolve o
+   valor no TIPO REAL do parametro, entao nValor virava uma STRING e qualquer
+   comparacao numerica ("nValor <= 0") quebrava com "type mismatch on
+   compare". Esta funcao centraliza a defesa: pega o retorno de GetMV() em
+   uma variavel U (tipo livre), confere ValType() e so converte quando
+   necessario — cobre C (Val), N (usa direto) e qualquer outro tipo
+   inesperado (cai no default) sem precisar saber de antemao como o
+   parametro foi cadastrado. Usar esta funcao (nao GetMV cru) para QUALQUER
+   parametro numerico novo deste fonte.
+   [CORRIGIDO apos usuario reportar popup "Help: MV_..." em producao] O 3o
+   parametro de GetMV() e o default devolvido quando o parametro NAO existe
+   no SX6 — passar Nil ali faz o Protheus tratar como "sem default definido"
+   e abrir o popup de ajuda do parametro em vez de so devolver silenciosamente.
+   Passa "" (vazio, tipo Caracter) como default: sempre um valor real, nunca
+   aciona o popup, e o ValType()/conversao abaixo funciona igual para
+   parametro inexistente (GetMV devolve "") ou cadastrado como C ou N.
+---------------------------------------------------------------------------- */
+Static Function IACParamNum(cParam, nPadrao)
+    Local uValor := GetMV(cParam, , "")
+    Local nRet   := nPadrao
+
+    If ValType(uValor) == "N"
+        nRet := uValor
+    ElseIf ValType(uValor) == "C" .And. !Empty(Alltrim(uValor))
+        nRet := Val(Alltrim(uValor))
+    EndIf
+
+    If nRet <= 0
+        nRet := nPadrao
+    EndIf
+
+Return nRet
+
+/* ----------------------------------------------------------------------------
+   IACUrlBase
+   Le MV_IACURL e devolve a URL base do IAHub/IA Command, sem path. Enquanto o
+   parametro nao estiver cadastrado, usa o fallback IAC_HUB_URL_PADRAO definido
+   no topo do fonte (apenas para piloto/desenvolvimento).
+---------------------------------------------------------------------------- */
 Static Function IACUrlBase()
     Local cBase := Alltrim(GetMV("MV_IACURL", , ""))
     If Empty(cBase)
@@ -482,13 +697,23 @@ Static Function IACUrlBase()
     EndIf
 Return cBase
 
-Static Function IACUrlToken()
+/* ----------------------------------------------------------------------------
+   IACUrlTok
+   Monta a URL completa do endpoint que emite o token curto do chat Protheus.
+   Esse endpoint recebe empresaId, celular, filial e empresasPermitidas.
+---------------------------------------------------------------------------- */
+Static Function IACUrlTok()
     Local cBase := IACUrlBase()
     If Empty(cBase)
         Return ""
     EndIf
 Return cBase + "/api/ia-command/protheus/token"
 
+/* ----------------------------------------------------------------------------
+   IACUrlChat
+   Monta a URL da pagina HTML do chat. O token e o nome do usuario sao anexados
+   depois em IACChat(), na querystring aberta pelo navegador.
+---------------------------------------------------------------------------- */
 Static Function IACUrlChat()
     Local cBase := IACUrlBase()
     If Empty(cBase)
@@ -496,25 +721,30 @@ Static Function IACUrlChat()
     EndIf
 Return cBase + "/api/ia-command/protheus/chat"
 
-Static Function IACHttpTimeout()
-    Local nValor := GetMV("MV_IACTOUT", , 0)
-    If nValor <= 0
-        Return IAC_HTTP_TIMEOUT_PADRAO
-    EndIf
-Return nValor
+/* ----------------------------------------------------------------------------
+   IACTimeout
+   Le MV_IACTOUT para definir o timeout HTTP da chamada FWRest ao IAHub. Quando
+   o parametro nao existe ou esta zerado, usa IAC_HTTP_TIMEOUT_PADRAO.
+---------------------------------------------------------------------------- */
+Static Function IACTimeout()
+Return IACParamNum("MV_IACTOUT", IAC_HTTP_TIMEOUT_PADRAO)
 
-// Fallback para IAC_EMPRESA_ID_PADRAO (empresa "J2A TESTE", id=3) — ver
-// ressalva forte no cabecalho do arquivo sobre remover antes de producao.
-Static Function IACEmpresaIdIaCommand()
-    Local nValor := GetMV("MV_IACEMID", , 0)
-    If nValor <= 0
-        nValor := IAC_EMPRESA_ID_PADRAO
-    EndIf
-Return nValor
+/* ----------------------------------------------------------------------------
+   IACEmpId
+   Le MV_IACEMID da empresa logada para descobrir o empresa_id correspondente
+   no IA Command. Esse valor continua sendo enviado como empresa principal do
+   token; a lista multiempresa e montada separadamente por IACEmpJs().
+---------------------------------------------------------------------------- */
+Static Function IACEmpId()
+Return IACParamNum("MV_IACEMID", IAC_EMPRESA_ID_PADRAO)
 
-// Fallback para IAC_SEGREDO_PADRAO — RISCO DE SEGURANCA, ver ressalva forte
-// no cabecalho do arquivo antes de manter isso alem do teste inicial.
-Static Function IACSegredoProtheusChat()
+/* ----------------------------------------------------------------------------
+   IACSecret
+   Le MV_IACSECR e devolve o segredo compartilhado enviado no header
+   X-Protheus-Secret. O backend usa esse valor para aceitar/rejeitar a emissao
+   de token do chat.
+---------------------------------------------------------------------------- */
+Static Function IACSecret()
     Local cValor := Alltrim(GetMV("MV_IACSECR", , ""))
     If Empty(cValor)
         cValor := IAC_SEGREDO_PADRAO
