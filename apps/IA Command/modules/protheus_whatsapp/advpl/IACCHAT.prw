@@ -494,20 +494,33 @@ Return aRet
 
 /* ----------------------------------------------------------------------------
    IACEmpIdC
-   Le MV_IACEMID com GetNewPar usando a filial completa de referencia da SM0.
-   O Framework de parametros aplica a hierarquia de filial/empresa/grupo e
-   evita leitura direta da SX6.
+   Le MV_IACEMID com GetNewPar() usando o CODIGO DE EMPRESA (2 digitos) como
+   referencia — nao a filial completa da SM0.
+   [CORRIGIDO apos usuario reportar popup "Help: MV_IACEMID" em producao]
+   MV_IACEMID e cadastrado UMA VEZ POR EMPRESA no X6 (confirmado pelo
+   usuario: X6_FIL="01" -> conteudo 5, X6_FIL="02" -> conteudo 6 — X6_FIL
+   aqui guarda o codigo de empresa de 2 digitos, nao a filial completa).
+   A versao anterior passava cFilReferencia (SM0_CODFIL completo, ex.:
+   "010101", 6 digitos) como 3o parametro de GetNewPar() — como isso nunca
+   bate com um X6_FIL de 2 digitos, o parametro nunca era encontrado para
+   NENHUMA filial, e o Protheus abria o popup de ajuda do parametro a cada
+   chamada (uma por filial/empresa do usuario, via loop em IACEmpJs()).
+   Corrigido para usar so os 2 primeiros caracteres do codigo de empresa
+   (cCodigoProtheus, o mesmo valor ja usado como chave logica da empresa em
+   todo o resto deste fonte), que e como o parametro foi de fato cadastrado.
 ---------------------------------------------------------------------------- */
 Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia)
-    Local nRet   := 0
-    Local cValor := ""
+    Local nRet     := 0
+    Local cValor   := ""
+    Local cCodEmp  := ""
 
-    If Empty(cCodigoProtheus) .Or. Empty(cFilReferencia)
+    If Empty(cCodigoProtheus)
         Return 0
     EndIf
 
-    cValor := Alltrim(cValToChar(GetNewPar("MV_IACEMID", "", cFilReferencia)))
-    nRet   := Val(cValor)
+    cCodEmp := Left(Alltrim(cCodigoProtheus), 2)
+    cValor  := Alltrim(cValToChar(GetNewPar("MV_IACEMID", "", cCodEmp)))
+    nRet    := Val(cValor)
 
 Return nRet
 
@@ -647,9 +660,11 @@ Return cSaida
    ============================================================================ */
 
 /* ----------------------------------------------------------------------------
-   IACParamNum
-   Le um parametro SX6 (GetMV) que deve ser tratado como numero, mas SEM
-   confiar no tipo em que foi cadastrado no dicionario. Motivo: MV_IACEMID
+   IACParNum
+   Le um parametro SX6 que deve ser tratado como numero, mas SEM confiar no
+   tipo em que foi cadastrado no dicionario. Quando recebe cRef, usa
+   GetNewPar() com o codigo de empresa/filial informado; sem cRef, usa GetMV()
+   no ambiente atual. Motivo: MV_IACEMID
    estava cadastrado como Caracter (confirmado pelo usuario em producao) e o
    codigo antigo lia com GetMV(cParam, , 0) esperando N — GetMV() devolve o
    valor no TIPO REAL do parametro, entao nValor virava uma STRING e qualquer
@@ -668,9 +683,15 @@ Return cSaida
    aciona o popup, e o ValType()/conversao abaixo funciona igual para
    parametro inexistente (GetMV devolve "") ou cadastrado como C ou N.
 ---------------------------------------------------------------------------- */
-Static Function IACParamNum(cParam, nPadrao)
-    Local uValor := GetMV(cParam, , "")
+Static Function IACParNum(cParam, nPadrao, cRef)
+    Local uValor := ""
     Local nRet   := nPadrao
+
+    If ValType(cRef) == "C" .And. !Empty(Alltrim(cRef))
+        uValor := GetNewPar(cParam, "", Alltrim(cRef))
+    Else
+        uValor := GetMV(cParam, , "")
+    EndIf
 
     If ValType(uValor) == "N"
         nRet := uValor
@@ -727,16 +748,18 @@ Return cBase + "/api/ia-command/protheus/chat"
    o parametro nao existe ou esta zerado, usa IAC_HTTP_TIMEOUT_PADRAO.
 ---------------------------------------------------------------------------- */
 Static Function IACTimeout()
-Return IACParamNum("MV_IACTOUT", IAC_HTTP_TIMEOUT_PADRAO)
+Return IACParNum("MV_IACTOUT", IAC_HTTP_TIMEOUT_PADRAO)
 
 /* ----------------------------------------------------------------------------
    IACEmpId
    Le MV_IACEMID da empresa logada para descobrir o empresa_id correspondente
    no IA Command. Esse valor continua sendo enviado como empresa principal do
    token; a lista multiempresa e montada separadamente por IACEmpJs().
+   Usa cEmpAnt como referencia porque neste ambiente MV_IACEMID foi cadastrado
+   por empresa no X6_FIL ("01", "02"...), conforme validado em producao.
 ---------------------------------------------------------------------------- */
 Static Function IACEmpId()
-Return IACParamNum("MV_IACEMID", IAC_EMPRESA_ID_PADRAO)
+Return IACParNum("MV_IACEMID", IAC_EMPRESA_ID_PADRAO, Left(Alltrim(cEmpAnt), 2))
 
 /* ----------------------------------------------------------------------------
    IACSecret
