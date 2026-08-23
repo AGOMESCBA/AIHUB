@@ -531,12 +531,30 @@ WHERE SE2.D_E_L_E_T_ = ' '
   }
 
   async function copiarSql() {
-    const sql = document.getElementById('f-sql-final').value;
+    const campo = document.getElementById('f-sql-final');
+    const sql = campo.value;
+
     try {
+      if (!navigator.clipboard || !window.isSecureContext) {
+        throw new Error('clipboard_indisponivel');
+      }
+
       await navigator.clipboard.writeText(sql);
       setFeedback('SQL copiado.', true);
     } catch (_) {
-      setFeedback('Nao foi possivel copiar automaticamente.', false);
+      try {
+        campo.focus();
+        campo.select();
+        campo.setSelectionRange(0, campo.value.length);
+
+        if (!document.execCommand('copy')) {
+          throw new Error('copy_falhou');
+        }
+
+        setFeedback('SQL copiado.', true);
+      } catch (_) {
+        setFeedback('Nao foi possivel copiar automaticamente. O SQL ficou selecionado para copiar com Ctrl+C.', false);
+      }
     }
   }
 
