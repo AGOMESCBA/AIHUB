@@ -3685,16 +3685,13 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
     try {
       const { getDB } = require('../../database');
       const ctxLoboGuara = loboGuaraFilialResolver.contextoLoboGuara(getDB(), empresaId);
-      console.log(`[${spec.logPrefix || 'IAOwner'}] [DIAG-LOBOGUARA] empresaId=${empresaId} ctx=${JSON.stringify(ctxLoboGuara)} sx2Empresa=${JSON.stringify(sx2Empresa)} filialState=${JSON.stringify(filialLoboGuaraState)}`);
       if (ctxLoboGuara) {
-        const outAntes = out;
         out = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
           db: getDB(), ctx: ctxLoboGuara, sx2, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
         });
-        console.log(`[${spec.logPrefix || 'IAOwner'}] [DIAG-LOBOGUARA] alterou_sql=${out !== outAntes}`);
       }
     } catch (e) {
-      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao aplicar escopo Lobo Guara (ignorado, SQL segue sem o filtro): ${e.message}`, e.stack);
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao aplicar escopo Lobo Guara (ignorado, SQL segue sem o filtro): ${e.message}`);
     }
   }
   const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);

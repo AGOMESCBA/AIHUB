@@ -462,32 +462,25 @@
 
   .focus-toggle-btn {
     flex: none;
-    width: 36px;
+    width: 32px;
     height: 32px;
     padding: 0;
-    border-radius: 7px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
     display: flex;
     align-items: center;
-    gap: 7px;
+    justify-content: center;
     cursor: pointer;
     font: inherit;
-    font-size: 12.5px;
-    font-weight: 700;
-    letter-spacing: 0;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: color 0.15s ease;
   }
   .focus-toggle-btn:hover,
   .focus-toggle-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.18);
     color: #fff;
     outline: none;
   }
   .focus-toggle-btn.active {
-    background: var(--wa-accent-soft-bg);
-    border-color: var(--wa-accent);
     color: var(--wa-accent);
   }
   .focus-toggle-btn svg {
@@ -1124,7 +1117,7 @@
         </button>
         <div class="empresa-menu" id="empresaMenu" role="menu"></div>
       </div>
-      <button class="focus-toggle-btn" id="btnModoFoco" type="button" title="Modo foco" aria-label="Ativar modo foco" aria-pressed="false">
+      <button class="focus-toggle-btn" id="btnModoFoco" type="button" title="Maximizar tela de conversa" aria-label="Maximizar tela de conversa" aria-pressed="false">
         <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>
       </button>
       <div class="header-actions" id="headerActions">
@@ -1408,8 +1401,8 @@
     appFrame.classList.toggle('focus-mode', ativo);
     btnModoFoco.classList.toggle('active', ativo);
     btnModoFoco.setAttribute('aria-pressed', String(ativo));
-    btnModoFoco.setAttribute('aria-label', ativo ? 'Desativar modo foco' : 'Ativar modo foco');
-    btnModoFoco.title = ativo ? 'Sair do modo foco' : 'Modo foco';
+    btnModoFoco.setAttribute('aria-label', ativo ? 'Voltar ao modo normal' : 'Maximizar tela de conversa');
+    btnModoFoco.title = ativo ? 'Voltar ao modo normal' : 'Maximizar tela de conversa';
     if (salvar) {
       try { localStorage.setItem('iaCommandModoFoco', ativo ? '1' : '0'); } catch (_err) {}
     }

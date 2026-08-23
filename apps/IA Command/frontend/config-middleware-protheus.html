@@ -378,8 +378,16 @@
         fetch('/api/ia-command/compras/company-empresas').then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
-      statusEl.textContent = perfil?.validated ? '✓ Hierarquia validada' : (perfil ? '⚠ Não validada — modo assistido' : '');
-      statusEl.className = 'save-feedback ' + (perfil?.validated ? 'ok' : '');
+      if (perfil?.validated) {
+        statusEl.textContent = '✓ Hierarquia validada';
+        statusEl.className = 'save-feedback ok';
+      } else if (perfil) {
+        statusEl.innerHTML = '⚠ Hierarquia importada mas NÃO validada — o Lobo Guará não aplica nenhum filtro até validar. <a href="/app/ia-command/admin-protheus-sys-company-cfg.html" style="text-decoration:underline">Validar agora</a>';
+        statusEl.className = 'save-feedback fail';
+      } else {
+        statusEl.textContent = '';
+        statusEl.className = 'save-feedback';
+      }
 
       const vistos = new Set();
       const opcoes = (empresas || []).filter(e => {

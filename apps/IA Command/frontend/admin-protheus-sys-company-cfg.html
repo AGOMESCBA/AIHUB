@@ -604,9 +604,31 @@ async function salvarPerfil() {
 
 // ── Validação ────────────────────────────────────────────────────────────────
 
-function abrirValidar() {
+async function abrirValidar() {
   document.getElementById('sec-lista').style.display = 'none';
   document.getElementById('sec-validar').style.display = '';
+  await preencherSugestaoValidar();
+}
+
+// Pré-preenche grupo/tabela/campo com sugestão baseada no que já foi
+// importado (arvore + SX2) — nunca decide sozinho, so sugere; o usuario
+// confirma ou ajusta antes de clicar em Validar. Reduz o atrito de precisar
+// descobrir manualmente esses valores toda vez.
+async function preencherSugestaoValidar() {
+  try {
+    const perfil = await fetch(apiUrl('/api/ia-command/compras/company-profile')).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (!perfil) return;
+    const grupoEl = document.getElementById('val-grupo');
+    const tabelaEl = document.getElementById('val-tabela');
+    const campoEl = document.getElementById('val-campo');
+    if (grupoEl && !grupoEl.value && perfil.grupo_sugerido) grupoEl.value = perfil.grupo_sugerido;
+    if (perfil.sugestao_validacao) {
+      if (tabelaEl && !tabelaEl.value) tabelaEl.value = perfil.sugestao_validacao.tabela || '';
+      if (campoEl && !campoEl.value) campoEl.value = perfil.sugestao_validacao.campo_filial || '';
+    }
+  } catch (_) {
+    // Sugestão é best-effort — falha aqui não deve impedir o uso manual da tela.
+  }
 }
 function fecharValidar() {
   document.getElementById('sec-validar').style.display = 'none';

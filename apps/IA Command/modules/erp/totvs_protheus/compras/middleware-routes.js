@@ -4,6 +4,7 @@ const { getDB }        = require('../../../database');
 const { requireRotina } = require('../../../permissions');
 const { getEmpresaId } = require('../../../empresa-context');
 const connectionFactory = require('../../providers/connection-factory');
+const { baseTabelaSX2, campoFilialBase } = require('../SX/sx2-sql-normalizer');
 
 // connectionFactory.carregarConexao retorna a linha real de `connections` (campo
 // `id`) quando a conexão é direta, mas monta um objeto sintético sem `id` quando
@@ -138,6 +139,50 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
           `).all(connectionId);
         }
         res.json(rows);
+      } catch (e) {
+        res.status(400).json({ error: e.message });
+      }
+    }
+  );
+
+  // GET — status do perfil de validacao (protheus_company_profile) desta
+  // conexao, mais dados para PRE-PREENCHER a tela de Validar (grupo_codigo ja
+  // conhecido pela arvore importada + sugestao de tabela/campo a partir do
+  // primeiro registro SX2 com modo Exclusivo). Nunca decide sozinho, so
+  // sugere — quem confirma a validacao continua sendo o usuario na tela
+  // dedicada (SYS_COMPANY_CFG > Validar). Ver lobo-guara-filial-resolver.js::
+  // contextoLoboGuara — e essa mesma linha de protheus_company_profile que
+  // decide se o Lobo Guara aplica filtro (falha fechada sem ela).
+  app.get('/api/ia-command/compras/company-profile',
+    requireAuth, requireIaCommand, canMiddleware,
+    (req, res) => {
+      try {
+        const connectionId = _resolverConnectionIdProtheus(eid(req));
+        const db = getDB();
+        const perfil = db.prepare('SELECT * FROM protheus_company_profile WHERE connection_id = ?').get(connectionId);
+
+        const grupos = db.prepare(`
+          SELECT DISTINCT grupo_codigo FROM protheus_company_tree
+           WHERE connection_id = ? AND grupo_codigo IS NOT NULL
+           ORDER BY grupo_codigo
+        `).all(connectionId).map(r => r.grupo_codigo);
+
+        const sx2Exclusiva = db.prepare(`
+          SELECT arquivo FROM protheus_sx2
+           WHERE connection_id = ? AND modo = 'E'
+           ORDER BY chave LIMIT 1
+        `).get(connectionId);
+        const sugestao = sx2Exclusiva
+          ? { tabela: sx2Exclusiva.arquivo, campo_filial: campoFilialBase(baseTabelaSX2(sx2Exclusiva.arquivo)) }
+          : null;
+
+        res.json({
+          validated: Boolean(perfil?.validated),
+          connection_id: connectionId,
+          grupos_disponiveis: grupos,
+          grupo_sugerido: grupos.length === 1 ? grupos[0] : null,
+          sugestao_validacao: sugestao,
+        });
       } catch (e) {
         res.status(400).json({ error: e.message });
       }
