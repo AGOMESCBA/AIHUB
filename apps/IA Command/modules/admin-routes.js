@@ -3,6 +3,7 @@ const { getDB } = require('./database');
 const { requireRotina, requireAnyRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 const { normalizarTexto } = require('./ai/local-intent-resolver');
+const periodResolver = require('./ai/period-resolver');
 const messageTemplates = require('./whatsapp/message-templates');
 const usageDb = require('./ai/usage-db');
 const empresasDb = require('../../../modules/empresas/database');
@@ -136,13 +137,78 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const texto = String(sql || '').trim();
     if (!texto) return { ok: false, error: 'Informe o SQL final executado.' };
     const normalizado = normalizarTexto(texto).replace(/\s+/g, ' ').trim();
-    if (!/^(select|with)\b/i.test(texto)) {
-      return { ok: false, error: 'Apenas SQL de consulta iniciado por SELECT ou WITH pode ser salvo.' };
+    const consulta = texto.replace(/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '').trim();
+    if (!/^(select|with)\b/i.test(consulta)) {
+      return { ok: false, error: 'Apenas SQL de consulta iniciado por SELECT, WITH ou SET ROWCOUNT seguido de SELECT/WITH pode ser salvo.' };
+    }
+    const semPontoFinal = consulta.replace(/;\s*$/, '');
+    if (/;\s*\S/.test(semPontoFinal)) {
+      return { ok: false, error: 'SQL deve conter apenas uma consulta de leitura.' };
     }
     if (/\b(insert|update|delete|drop|alter|truncate|merge|exec|execute|create|grant|revoke)\b/i.test(normalizado)) {
       return { ok: false, error: 'SQL contem comando nao permitido para favorito.' };
     }
     return { ok: true };
+  }
+
+  function _macroPeriodoAgendamento(perguntaTexto) {
+    const periodo = periodResolver.identificarPeriodoTexto(perguntaTexto);
+    if (!periodo || !periodo.tipo || periodo.tipo === 'nenhum') return null;
+
+    switch (periodo.tipo) {
+      case 'hoje':
+        return { start: '{{HOJE}}', end: '{{HOJE}}' };
+      case 'ontem':
+        return { start: '{{ONTEM}}', end: '{{ONTEM}}' };
+      case 'mes_atual':
+        return { start: '{{INICIO_MES}}', end: '{{FIM_MES}}' };
+      case 'mes_anterior':
+        return { start: '{{INICIO_MES_ANTERIOR}}', end: '{{FIM_MES_ANTERIOR}}' };
+      case 'ano_atual':
+        return { start: '{{INICIO_ANO}}', end: '{{FIM_ANO}}' };
+      case 'ano_anterior':
+        return { start: '{{INICIO_ANO_ANTERIOR}}', end: '{{FIM_ANO_ANTERIOR}}' };
+      case 'ultimos_N_dias': {
+        const dias = Math.max(Number(periodo.dias || 0), 1);
+        return { start: `{{HOJE:-${dias - 1}}}`, end: '{{HOJE}}' };
+      }
+      default:
+        return null;
+    }
+  }
+
+  function _escapeRegexLiteral(valor) {
+    return String(valor || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function _substituirLiteralData(sql, valor, macro) {
+    const compacto = String(valor || '').replace(/\D/g, '');
+    if (!/^\d{8}$/.test(compacto)) return sql;
+    const iso = `${compacto.slice(0, 4)}-${compacto.slice(4, 6)}-${compacto.slice(6, 8)}`;
+    let out = String(sql || '');
+    for (const v of [compacto, iso]) {
+      out = out.replace(new RegExp(`'${_escapeRegexLiteral(v)}'`, 'g'), `'${macro}'`);
+    }
+    return out;
+  }
+
+  function _sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto) {
+    const macros = _macroPeriodoAgendamento(perguntaTexto);
+    if (!macros) return sqlFinal;
+
+    const template = String(sqlTemplate || '');
+    if (template.includes('{{iac:period:start}}') || template.includes('{{iac:period:end}}')) {
+      const convertido = template
+        .split('{{iac:period:start}}').join(macros.start)
+        .split('{{iac:period:end}}').join(macros.end);
+      if (!/\{\{\s*iac:/i.test(convertido)) return convertido;
+    }
+
+    const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto));
+    let out = String(sqlFinal || '');
+    out = _substituirLiteralData(out, resolvido?.dataInicio, macros.start);
+    out = _substituirLiteralData(out, resolvido?.dataFim, macros.end);
+    return out;
   }
 
   function _rowChatFavorito(row) {
@@ -216,7 +282,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const pergunta = String(body.pergunta_texto || '').trim();
     const celular = normalizarNumero(body.celular || '');
     const modulo = String(body.modulo || '').trim().toLowerCase();
-    const sqlFinal = String(body.sql_final_executado || '').trim();
+    const sqlTemplate = body.sql_template || null;
+    const sqlFinalOriginal = String(body.sql_final_executado || '').trim();
+    const sqlFinal = _sqlFavoritoComMacrosAgendamento(sqlFinalOriginal, sqlTemplate, pergunta).trim();
     const validacao = _sqlFavoritoValido(sqlFinal);
     if (!titulo) return res.status(400).json({ error: 'Campo obrigatorio: titulo.' });
     if (!pergunta) return res.status(400).json({ error: 'Campo obrigatorio: pergunta.' });
@@ -234,7 +302,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).run(
       id, eid(req), celular, titulo, pergunta, modulo,
-      sqlFinal, body.sql_template || null, body.intent_json || null,
+      sqlFinal, sqlTemplate, body.intent_json || null,
       body.grid_config_json || null, body.rows_preview_json || null, agora, agora,
     );
     _audit(req, 'criar_chat_favorito', { id, modulo, celular });
@@ -251,7 +319,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const pergunta = String(body.pergunta_texto ?? existing.pergunta_texto).trim();
     const celular = body.celular !== undefined ? normalizarNumero(body.celular) : existing.celular;
     const modulo = String(body.modulo ?? existing.modulo ?? '').trim().toLowerCase();
-    const sqlFinal = String(body.sql_final_executado ?? existing.sql_final_executado).trim();
+    const sqlTemplate = body.sql_template ?? existing.sql_template;
+    const sqlFinalOriginal = String(body.sql_final_executado ?? existing.sql_final_executado).trim();
+    const sqlFinal = _sqlFavoritoComMacrosAgendamento(sqlFinalOriginal, sqlTemplate, pergunta).trim();
     const validacao = _sqlFavoritoValido(sqlFinal);
     if (!titulo) return res.status(400).json({ error: 'Campo obrigatorio: titulo.' });
     if (!pergunta) return res.status(400).json({ error: 'Campo obrigatorio: pergunta.' });
@@ -268,7 +338,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
        WHERE id = ? AND empresa_id = ?
     `).run(
       titulo, pergunta, celular, modulo, sqlFinal,
-      body.sql_template ?? existing.sql_template,
+      sqlTemplate,
       body.intent_json ?? existing.intent_json,
       body.grid_config_json ?? existing.grid_config_json,
       body.rows_preview_json ?? existing.rows_preview_json,

@@ -220,6 +220,13 @@ function buscarContatoAutorizado({ empresaId, numeroId }) {
   `).get(String(numeroId), Number(empresaId)) || null;
 }
 
+function buscarContatosAutorizados({ empresaId, numeroIds }) {
+  const ids = [...new Set((Array.isArray(numeroIds) ? numeroIds : [numeroIds])
+    .map(id => String(id || '').trim())
+    .filter(Boolean))];
+  return ids.map(numeroId => buscarContatoAutorizado({ empresaId, numeroId })).filter(Boolean);
+}
+
 function listarContatosAutorizados(empresaId) {
   return getDB().prepare(`
     SELECT id, nome, numero
@@ -288,15 +295,15 @@ function montarMensagemEncaminhamento({ pergunta, resumo, rows }) {
   return linhas.join('\n');
 }
 
-function criarAuditoriaEncaminhamento({ empresaId, sessaoId, mensagemId, remetenteCelular, remetenteUsuario, contato, formato, pergunta, resumo, rowsCount, status = 'pendente', erro = null }) {
+function criarAuditoriaEncaminhamento({ empresaId, sessaoId, mensagemId, remetenteCelular, remetenteUsuario, contato, formato, pergunta, resumo, rowsCount, arquivoNome = null, status = 'pendente', erro = null }) {
   const id = require('crypto').randomUUID();
   const agora = new Date().toISOString();
   getDB().prepare(`
     INSERT INTO protheus_chat_forwardings (
       id, empresa_id, sessao_id, mensagem_id, remetente_celular, remetente_usuario,
       destinatario_numero_id, destinatario_celular, destinatario_nome, formato, status,
-      pergunta_snapshot, resumo_snapshot, rows_count, erro, criado_em, atualizado_em
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      pergunta_snapshot, resumo_snapshot, rows_count, arquivo_nome, erro, criado_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     Number(empresaId),
@@ -312,6 +319,7 @@ function criarAuditoriaEncaminhamento({ empresaId, sessaoId, mensagemId, remeten
     pergunta || null,
     resumo || null,
     Number(rowsCount || 0),
+    arquivoNome || null,
     erro || null,
     agora,
     agora,
@@ -331,14 +339,62 @@ function atualizarAuditoriaEncaminhamento({ id, empresaId, status, erro = null }
   `).run(status, erro || null, status, agora, agora, id, Number(empresaId));
 }
 
+function resolverCanalWhatsAppConectado(empresaId) {
+  const canais = whatsappChannels.listarPorEmpresa(Number(empresaId));
+  if (!canais.length) return { canal: null, svc: null, totalCanais: 0 };
+
+  for (const canal of canais) {
+    const svc = whatsappManager.get(canal.id);
+    if (svc && svc.getStatus() === 'connected') {
+      return { canal, svc, totalCanais: canais.length };
+    }
+  }
+
+  const vinculados = new Set(canais.map(canal => String(canal.id)));
+  for (const svc of whatsappManager.getAll().values()) {
+    if (!svc || svc.getStatus() !== 'connected') continue;
+    const channelId = String(svc.getChannelId?.() || '');
+    if (vinculados.has(channelId)) {
+      const canal = canais.find(item => String(item.id) === channelId) || null;
+      return { canal, svc, totalCanais: canais.length };
+    }
+  }
+
+  return { canal: canais[0], svc: null, totalCanais: canais.length };
+}
+
 async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
-  const canal = whatsappChannels.getDefaultForEmpresa(Number(empresaId));
-  if (!canal) throw new Error('Nenhum canal WhatsApp padrao vinculado a esta empresa.');
-  const svc = whatsappManager.get(canal.id);
-  if (!svc || svc.getStatus() !== 'connected') {
-    throw new Error('WhatsApp nao esta conectado para o canal padrao desta empresa.');
+  const { canal, svc, totalCanais } = resolverCanalWhatsAppConectado(empresaId);
+  if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
+  if (!svc) {
+    throw new Error(totalCanais > 1
+      ? 'Nenhum dos canais WhatsApp vinculados a esta empresa esta conectado.'
+      : 'WhatsApp nao esta conectado para o canal vinculado a esta empresa.');
   }
   await svc.sendMessage(numero, texto);
+  return { canalId: canal.id };
+}
+
+async function enviarArquivoWhatsApp({ empresaId, numero, texto, arquivo }) {
+  const { canal, svc, totalCanais } = resolverCanalWhatsAppConectado(empresaId);
+  if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
+  if (!svc) {
+    throw new Error(totalCanais > 1
+      ? 'Nenhum dos canais WhatsApp vinculados a esta empresa esta conectado.'
+      : 'WhatsApp nao esta conectado para o canal vinculado a esta empresa.');
+  }
+  if (!arquivo || !arquivo.data || !arquivo.mimetype || !arquivo.filename) {
+    throw new Error('Arquivo invalido para encaminhamento.');
+  }
+  if (typeof svc.sendMediaMessage !== 'function') {
+    throw new Error('Motor WhatsApp ainda nao suporta envio de anexos nesta versao carregada.');
+  }
+  await svc.sendMediaMessage(numero, {
+    data: arquivo.data,
+    mimetype: arquivo.mimetype,
+    filename: arquivo.filename,
+    caption: texto,
+  });
   return { canalId: canal.id };
 }
 
@@ -468,17 +524,105 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  app.post('/api/ia-command/protheus/encaminhamentos/anexo', requireTokenSessao, async (req, res) => {
+    const inicio = Date.now();
+    const { celular } = req.protheusChat;
+    const numeroIds = [
+      ...(Array.isArray(req.body?.destinatarioNumeroIds) ? req.body.destinatarioNumeroIds : []),
+      ...(Array.isArray(req.body?.numeroIds) ? req.body.numeroIds : []),
+      req.body?.destinatarioNumeroId,
+      req.body?.numeroId,
+    ].map(id => String(id || '').trim()).filter(Boolean);
+    const arquivo = req.body?.arquivo && typeof req.body.arquivo === 'object' ? req.body.arquivo : null;
+    const legenda = String(req.body?.legenda || '').trim();
+
+    if (!numeroIds.length) {
+      return res.status(400).json({ error: 'Selecione ao menos um contato autorizado para encaminhar.' });
+    }
+    if (!arquivo?.data || !arquivo?.mimetype || !arquivo?.filename) {
+      return res.status(400).json({ error: 'Selecione um arquivo para encaminhar.' });
+    }
+    if (String(arquivo.data).length > 15 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Arquivo muito grande para encaminhamento pelo WhatsApp.' });
+    }
+
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+
+      const contatos = buscarContatosAutorizados({ empresaId, numeroIds });
+      if (!contatos.length) return res.status(404).json({ error: 'Nenhum contato autorizado encontrado nesta empresa.' });
+      if (contatos.length !== [...new Set(numeroIds)].length) {
+        return res.status(404).json({ error: 'Um ou mais contatos selecionados nao estao autorizados nesta empresa.' });
+      }
+
+      const pergunta = 'Encaminhamento de anexo local';
+      const resumo = legenda || arquivo.filename;
+      const texto = legenda || `Anexo enviado pelo IA Command: ${arquivo.filename}`;
+      const resultados = [];
+
+      for (const contato of contatos) {
+        const auditoriaId = criarAuditoriaEncaminhamento({
+          empresaId,
+          sessaoId: null,
+          mensagemId: null,
+          remetenteCelular: celular,
+          remetenteUsuario: req.query?.usuario || null,
+          contato,
+          formato: 'anexo',
+          pergunta,
+          resumo,
+          rowsCount: 0,
+          arquivoNome: arquivo.filename,
+        });
+
+        try {
+          const envio = await enviarArquivoWhatsApp({ empresaId, numero: contato.numero, texto, arquivo });
+          atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'enviado' });
+          resultados.push({ id: auditoriaId, contatoId: contato.id, status: 'enviado', canalId: envio.canalId });
+        } catch (errEnvio) {
+          atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'erro', erro: errEnvio.message });
+          resultados.push({ id: auditoriaId, contatoId: contato.id, status: 'erro', erro: errEnvio.message });
+        }
+      }
+
+      const enviados = resultados.filter(item => item.status === 'enviado').length;
+      perfLog('POST /encaminhamentos/anexo', inicio, { status: enviados ? 200 : 502, empresaId, total: resultados.length, enviados });
+      if (!enviados) {
+        return res.status(502).json({ error: resultados[0]?.erro || 'Falha ao encaminhar anexo.', resultados, status: 'erro' });
+      }
+      res.json({ ok: true, status: enviados === resultados.length ? 'enviado' : 'parcial', enviados, total: resultados.length, resultados });
+    } catch (err) {
+      perfLog('POST /encaminhamentos/anexo', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/encaminhar', requireTokenSessao, async (req, res) => {
     const inicio = Date.now();
     const { celular } = req.protheusChat;
     const formato = String(req.body?.formato || 'texto').trim().toLowerCase();
-    const numeroId = String(req.body?.destinatarioNumeroId || req.body?.numeroId || '').trim();
+    const numeroIds = [
+      ...(Array.isArray(req.body?.destinatarioNumeroIds) ? req.body.destinatarioNumeroIds : []),
+      ...(Array.isArray(req.body?.numeroIds) ? req.body.numeroIds : []),
+      req.body?.destinatarioNumeroId,
+      req.body?.numeroId,
+    ].map(id => String(id || '').trim()).filter(Boolean);
+    const arquivo = req.body?.arquivo && typeof req.body.arquivo === 'object' ? req.body.arquivo : null;
 
-    if (formato !== 'texto') {
-      return res.status(400).json({ error: 'Nesta primeira versao, o encaminhamento envia a grade em texto pelo WhatsApp.' });
+    if (!['texto', 'pdf', 'excel'].includes(formato)) {
+      return res.status(400).json({ error: 'Formato de encaminhamento invalido.' });
     }
-    if (!numeroId) {
-      return res.status(400).json({ error: 'Selecione um contato autorizado para encaminhar.' });
+    if (!numeroIds.length) {
+      return res.status(400).json({ error: 'Selecione ao menos um contato autorizado para encaminhar.' });
+    }
+    if (formato !== 'texto') {
+      if (!arquivo?.data || !arquivo?.mimetype || !arquivo?.filename) {
+        return res.status(400).json({ error: 'Arquivo PDF/Excel nao foi gerado para o encaminhamento.' });
+      }
+      if (String(arquivo.data).length > 15 * 1024 * 1024) {
+        return res.status(400).json({ error: 'Arquivo muito grande para encaminhamento pelo WhatsApp.' });
+      }
     }
 
     try {
@@ -487,8 +631,11 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
       if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
 
-      const contato = buscarContatoAutorizado({ empresaId, numeroId });
-      if (!contato) return res.status(404).json({ error: 'Contato autorizado nao encontrado nesta empresa.' });
+      const contatos = buscarContatosAutorizados({ empresaId, numeroIds });
+      if (!contatos.length) return res.status(404).json({ error: 'Nenhum contato autorizado encontrado nesta empresa.' });
+      if (contatos.length !== [...new Set(numeroIds)].length) {
+        return res.status(404).json({ error: 'Um ou mais contatos selecionados nao estao autorizados nesta empresa.' });
+      }
 
       const relatorio = sessionStore.mensagemTabular({
         sessaoId: req.params.id,
@@ -498,30 +645,42 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
       const pergunta = perguntaDaResposta({ sessaoId: req.params.id, respostaCriadaEm: relatorio.criadoEm });
       const resumo = resumoDaResposta(relatorio.texto);
-      const auditoriaId = criarAuditoriaEncaminhamento({
-        empresaId,
-        sessaoId: req.params.id,
-        mensagemId: req.params.mensagemId,
-        remetenteCelular: celular,
-        remetenteUsuario: req.query?.usuario || null,
-        contato,
-        formato,
-        pergunta,
-        resumo,
-        rowsCount: relatorio.rowsCount,
-      });
-
       const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows });
-      try {
-        const envio = await enviarTextoWhatsApp({ empresaId, numero: contato.numero, texto });
-        atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'enviado' });
-        perfLog('POST /encaminhar', inicio, { status: 200, empresaId, auditoriaId, canalId: envio.canalId });
-        res.json({ ok: true, id: auditoriaId, status: 'enviado' });
-      } catch (errEnvio) {
-        atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'erro', erro: errEnvio.message });
-        perfLog('POST /encaminhar', inicio, { status: 502, empresaId, auditoriaId, erro: errEnvio.message });
-        res.status(502).json({ error: errEnvio.message, id: auditoriaId, status: 'erro' });
+
+      const resultados = [];
+      for (const contato of contatos) {
+        const auditoriaId = criarAuditoriaEncaminhamento({
+          empresaId,
+          sessaoId: req.params.id,
+          mensagemId: req.params.mensagemId,
+          remetenteCelular: celular,
+          remetenteUsuario: req.query?.usuario || null,
+          contato,
+          formato,
+          pergunta,
+          resumo,
+          rowsCount: relatorio.rowsCount,
+          arquivoNome: arquivo?.filename || null,
+        });
+
+        try {
+          const envio = formato === 'texto'
+            ? await enviarTextoWhatsApp({ empresaId, numero: contato.numero, texto })
+            : await enviarArquivoWhatsApp({ empresaId, numero: contato.numero, texto, arquivo });
+          atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'enviado' });
+          resultados.push({ id: auditoriaId, contatoId: contato.id, status: 'enviado', canalId: envio.canalId });
+        } catch (errEnvio) {
+          atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'erro', erro: errEnvio.message });
+          resultados.push({ id: auditoriaId, contatoId: contato.id, status: 'erro', erro: errEnvio.message });
+        }
       }
+
+      const enviados = resultados.filter(item => item.status === 'enviado').length;
+      perfLog('POST /encaminhar', inicio, { status: enviados ? 200 : 502, empresaId, total: resultados.length, enviados });
+      if (!enviados) {
+        return res.status(502).json({ error: resultados[0]?.erro || 'Falha ao encaminhar.', resultados, status: 'erro' });
+      }
+      res.json({ ok: true, status: enviados === resultados.length ? 'enviado' : 'parcial', enviados, total: resultados.length, resultados });
     } catch (err) {
       perfLog('POST /encaminhar', inicio, { status: 500, erro: err.message });
       res.status(500).json({ error: err.message });

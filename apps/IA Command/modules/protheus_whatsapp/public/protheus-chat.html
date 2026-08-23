@@ -776,24 +776,85 @@
 
   .bubble .meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; float: right; margin: 3px -2px -3px 8px; transform: translateY(4px); }
   .bubble .time { font-size: 10.5px; color: var(--wa-text-tertiary); white-space: nowrap; }
-  .favorite-message-btn { float: right; width: 22px; height: 22px; margin: -2px -2px 2px 7px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-  .favorite-message-btn:hover { background: rgba(0, 168, 132, 0.12); color: var(--wa-accent); }
-  .favorite-message-btn.active { color: #c99a12; }
-  .favorite-message-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
-  .favorite-message-btn.active svg { fill: currentColor; }
-  .forward-message-btn { float: right; width: 22px; height: 22px; margin: -2px 3px 2px 4px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-  .forward-message-btn:hover { background: rgba(0, 168, 132, 0.12); color: var(--wa-accent); }
-  .forward-message-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .message-menu-trigger {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--wa-bubble-in) 82%, transparent);
+    color: var(--wa-text-tertiary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.12s ease, transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+    z-index: 2;
+  }
+  .row.out .message-menu-trigger { background: color-mix(in srgb, var(--wa-bubble-out) 82%, transparent); }
+  .bubble:hover .message-menu-trigger,
+  .message-menu-trigger:focus-visible,
+  .message-menu-trigger.open { opacity: 1; transform: translateY(0); }
+  .message-menu-trigger:hover,
+  .message-menu-trigger.open { background: var(--wa-accent-soft-bg); color: var(--wa-accent); }
+  .message-menu-trigger svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .message-context-menu {
+    position: fixed;
+    min-width: 220px;
+    padding: 6px 0;
+    border: 1px solid var(--wa-border);
+    border-radius: 10px;
+    background: var(--wa-sidebar);
+    color: var(--wa-text);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.38);
+    z-index: 120;
+    display: none;
+  }
+  .message-context-menu.open { display: block; }
+  .message-context-item {
+    width: 100%;
+    min-height: 40px;
+    padding: 9px 14px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font: inherit;
+    font-size: 13.5px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .message-context-item:hover:not(:disabled) { background: var(--wa-sidebar-hover); }
+  .message-context-item:disabled { opacity: 0.42; cursor: default; }
+  .message-context-item.danger { color: #ff8a8a; }
+  .message-context-item svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
   .forward-list { display: grid; gap: 6px; min-height: 0; overflow-y: auto; padding: 8px 14px 14px; }
-  .forward-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; min-height: 50px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 10px; cursor: pointer; text-align: left; }
+  .forward-item { display: grid; grid-template-columns: 28px 1fr; align-items: center; gap: 10px; min-height: 56px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 12px; cursor: pointer; text-align: left; }
   .forward-item:hover { background: var(--wa-sidebar-hover); }
   .forward-item.active { border-color: var(--wa-accent); box-shadow: 0 0 0 1px var(--wa-accent-soft-border); }
+  .forward-check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--wa-text-tertiary); display: inline-flex; align-items: center; justify-content: center; color: transparent; }
+  .forward-item.active .forward-check { background: var(--wa-accent); border-color: var(--wa-accent); color: #05241e; }
+  .forward-check svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
   .forward-main { min-width: 0; }
   .forward-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.2px; font-weight: 700; }
   .forward-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wa-text-tertiary); font-size: 11.5px; margin-top: 3px; }
   .forward-empty { color: var(--wa-text-tertiary); font-size: 12px; padding: 18px 8px; text-align: center; }
   .forward-format-row { display: flex; align-items: center; gap: 8px; margin: 12px 14px 4px; color: var(--wa-text-secondary); font-size: 12px; }
   .forward-format-row select { border: 1px solid var(--wa-border); border-radius: 7px; background: var(--wa-panel); color: var(--wa-text); padding: 6px 8px; }
+  .forward-file-row { display: grid; gap: 8px; margin: 12px 14px 4px; }
+  .forward-file-picker input { display: none; }
+  .forward-file-picker span { width: max-content; max-width: 100%; display: inline-flex; align-items: center; gap: 8px; padding: 8px 11px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .forward-file-picker span:hover { background: var(--wa-sidebar-hover); border-color: var(--wa-accent-soft-border); }
+  .forward-file-picker svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .forward-file-name { color: var(--wa-text-tertiary); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .forward-file-row textarea { width: 100%; min-height: 54px; resize: vertical; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 10px; font: inherit; font-size: 13px; outline: none; }
+  .forward-file-row textarea:focus { border-color: var(--wa-accent-soft-border); box-shadow: 0 0 0 1px var(--wa-accent-soft-border); }
   .forward-status { min-height: 18px; margin: 0 14px 10px; color: var(--wa-text-tertiary); font-size: 12px; }
   .forward-status.error { color: #ff8a8a; }
   .forward-status.ok { color: var(--wa-accent); }
@@ -1321,12 +1382,31 @@
   </div>
 </div>
 
+<div class="message-context-menu" id="messageContextMenu" role="menu" aria-hidden="true">
+  <button type="button" class="message-context-item" data-menu-action="favorite" role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.78 6.8 19.52l.99-5.8-4.21-4.1 5.82-.85L12 3.5z"/></svg>
+    <span>Favoritar</span>
+  </button>
+  <button type="button" class="message-context-item" data-menu-action="forward-response" role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg>
+    <span>Encaminhar resposta</span>
+  </button>
+  <button type="button" class="message-context-item" data-menu-action="forward-attachment" role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M21.4 11.6l-8.5 8.5a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.8l8.5-8.5"/></svg>
+    <span>Encaminhar anexo</span>
+  </button>
+  <button type="button" class="message-context-item danger" data-menu-action="delete" role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/></svg>
+    <span>Apagar</span>
+  </button>
+</div>
+
 <div class="favorites-modal-backdrop" id="forwardModal" aria-hidden="true">
   <div class="favorites-modal" role="dialog" aria-modal="true" aria-labelledby="forwardModalTitle">
     <div class="favorites-modal-head">
       <div class="favorites-modal-title">
         <strong id="forwardModalTitle">Encaminhar para WhatsApp</strong>
-        <span>Selecione um contato autorizado desta empresa.</span>
+        <span id="forwardModalSubtitle">Selecione um ou mais contatos autorizados desta empresa.</span>
       </div>
       <div class="favorites-modal-actions">
         <button class="favorites-refresh" type="button" id="btnReloadForwardContacts" title="Atualizar contatos" aria-label="Atualizar contatos">
@@ -1345,7 +1425,20 @@
       <span>Formato</span>
       <select id="forwardFormat">
         <option value="texto">Texto WhatsApp</option>
+        <option value="pdf">PDF</option>
+        <option value="excel">Excel</option>
       </select>
+    </div>
+    <div class="forward-file-row" id="forwardFileRow" style="display:none">
+      <label class="forward-file-picker">
+        <input type="file" id="forwardFileInput" />
+        <span>
+          <svg viewBox="0 0 24 24"><path d="M21.4 11.6l-8.5 8.5a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.8l8.5-8.5"/></svg>
+          Escolher arquivo
+        </span>
+      </label>
+      <div class="forward-file-name" id="forwardFileName">Nenhum arquivo selecionado.</div>
+      <textarea id="forwardAttachmentCaption" rows="2" placeholder="Legenda opcional"></textarea>
     </div>
     <div class="forward-status" id="forwardStatus"></div>
     <div class="forward-list" id="forwardContactsList">
@@ -1396,7 +1489,14 @@
   const forwardContactsList = document.getElementById('forwardContactsList');
   const forwardStatus = document.getElementById('forwardStatus');
   const forwardFormat = document.getElementById('forwardFormat');
+  const forwardModalTitle = document.getElementById('forwardModalTitle');
+  const forwardModalSubtitle = document.getElementById('forwardModalSubtitle');
+  const forwardFileRow = document.getElementById('forwardFileRow');
+  const forwardFileInput = document.getElementById('forwardFileInput');
+  const forwardFileName = document.getElementById('forwardFileName');
+  const forwardAttachmentCaption = document.getElementById('forwardAttachmentCaption');
   const btnConfirmForward = document.getElementById('btnConfirmForward');
+  const messageContextMenu = document.getElementById('messageContextMenu');
   const headerTitle = document.getElementById('headerTitle');
   const errorBanner = document.getElementById('errorBanner');
   const userName = document.getElementById('userName');
@@ -1474,7 +1574,10 @@
   let forwardContactsCache = [];
   let forwardContactsCarregados = false;
   let forwardMensagemAtualId = null;
-  let forwardContatoSelecionadoId = null;
+  let forwardContatoSelecionados = new Set();
+  let forwardModo = 'resposta';
+  let messageContextMensagemId = null;
+  let messageContextTrigger = null;
 
   let sessaoAtualId = null;
   let sessoesCache = [];
@@ -1774,7 +1877,7 @@
     forwardContactsCache = [];
     forwardContactsCarregados = false;
     forwardMensagemAtualId = null;
-    forwardContatoSelecionadoId = null;
+    forwardContatoSelecionados.clear();
     relatorioCachePorSessao.clear();
     relatorioCachePorMensagem.clear();
     mensagensCachePorSessao.clear();
@@ -1811,6 +1914,10 @@
 
   function chevronSvg() {
     return '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>';
+  }
+
+  function chevronDownSvg() {
+    return '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';
   }
 
   // Modulos com o grupo expandido — populado na primeira renderizacao (ver
@@ -1960,6 +2067,10 @@
 
   function renderForwardContacts() {
     if (!forwardContactsList) return;
+    if (btnConfirmForward) {
+      const qtdSelecionados = forwardContatoSelecionados.size;
+      btnConfirmForward.textContent = qtdSelecionados > 1 ? `Encaminhar para ${qtdSelecionados} contatos` : 'Encaminhar';
+    }
     if (!forwardContactsCarregados) {
       forwardContactsList.innerHTML = '<div class="forward-empty">Abra para carregar os contatos.</div>';
       return;
@@ -1979,23 +2090,44 @@
 
     forwardContactsList.innerHTML = '';
     lista.forEach((contato) => {
+      const selecionado = forwardContatoSelecionados.has(String(contato.id));
       const item = document.createElement('button');
       item.type = 'button';
-      item.className = 'forward-item' + (String(contato.id) === String(forwardContatoSelecionadoId) ? ' active' : '');
+      item.className = 'forward-item' + (selecionado ? ' active' : '');
       item.dataset.contatoId = contato.id;
       item.innerHTML = `
+        <span class="forward-check" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.3 4.3L19 7.2"/></svg>
+        </span>
         <span class="forward-main">
           <span class="forward-title">${escapeHtml(contato.nome || contato.numero || 'Contato')}</span>
           <span class="forward-meta">${escapeHtml(contato.numero || '')}</span>
         </span>
-        <span>${String(contato.id) === String(forwardContatoSelecionadoId) ? 'Selecionado' : 'Selecionar'}</span>
       `;
       item.addEventListener('click', () => {
-        forwardContatoSelecionadoId = contato.id;
+        const id = String(contato.id);
+        if (forwardContatoSelecionados.has(id)) forwardContatoSelecionados.delete(id);
+        else forwardContatoSelecionados.add(id);
         renderForwardContacts();
       });
       forwardContactsList.appendChild(item);
     });
+  }
+
+  function atualizarForwardModo() {
+    const anexo = forwardModo === 'anexo';
+    if (forwardModalTitle) forwardModalTitle.textContent = anexo ? 'Encaminhar anexo' : 'Encaminhar resposta';
+    if (forwardModalSubtitle) {
+      forwardModalSubtitle.textContent = anexo
+        ? 'Escolha um arquivo e selecione um ou mais contatos autorizados.'
+        : 'Selecione um ou mais contatos autorizados desta empresa.';
+    }
+    const formatoRow = forwardFormat ? forwardFormat.closest('.forward-format-row') : null;
+    if (formatoRow) formatoRow.style.display = anexo ? 'none' : 'flex';
+    if (forwardFileRow) forwardFileRow.style.display = anexo ? 'grid' : 'none';
+    if (btnConfirmForward) btnConfirmForward.textContent = forwardContatoSelecionados.size > 1
+      ? `Encaminhar para ${forwardContatoSelecionados.size} contatos`
+      : 'Encaminhar';
   }
 
   async function carregarForwardContacts() {
@@ -2005,9 +2137,8 @@
       const data = await api('/encaminhamentos/contatos');
       forwardContactsCache = Array.isArray(data.contatos) ? data.contatos : [];
       forwardContactsCarregados = true;
-      if (forwardContatoSelecionadoId && !forwardContactsCache.some(c => String(c.id) === String(forwardContatoSelecionadoId))) {
-        forwardContatoSelecionadoId = null;
-      }
+      const idsValidos = new Set(forwardContactsCache.map(c => String(c.id)));
+      forwardContatoSelecionados = new Set([...forwardContatoSelecionados].filter(id => idsValidos.has(id)));
       forwardStatus.textContent = '';
       renderForwardContacts();
     } catch (err) {
@@ -2019,12 +2150,19 @@
     }
   }
 
-  async function abrirForwardModal(mensagemId) {
-    if (!forwardModal || !mensagemId) return;
+  async function abrirForwardModal(mensagemId, modo = 'resposta') {
+    if (!forwardModal) return;
+    if (modo === 'resposta' && !mensagemId) return;
+    forwardModo = modo === 'anexo' ? 'anexo' : 'resposta';
     forwardMensagemAtualId = mensagemId;
-    forwardContatoSelecionadoId = null;
+    forwardContatoSelecionados.clear();
     forwardStatus.textContent = '';
     forwardStatus.className = 'forward-status';
+    if (forwardFormat) forwardFormat.value = 'texto';
+    if (forwardFileInput) forwardFileInput.value = '';
+    if (forwardFileName) forwardFileName.textContent = 'Nenhum arquivo selecionado.';
+    if (forwardAttachmentCaption) forwardAttachmentCaption.value = '';
+    atualizarForwardModo();
     if (forwardSearch) forwardSearch.value = '';
     forwardModal.classList.add('active');
     forwardModal.setAttribute('aria-hidden', 'false');
@@ -2040,28 +2178,44 @@
     forwardModal.classList.remove('active');
     forwardModal.setAttribute('aria-hidden', 'true');
     forwardMensagemAtualId = null;
-    forwardContatoSelecionadoId = null;
+    forwardContatoSelecionados.clear();
+    forwardModo = 'resposta';
   }
 
   async function confirmarForward() {
-    if (!sessaoAtualId || !forwardMensagemAtualId) return;
-    if (!forwardContatoSelecionadoId) {
-      forwardStatus.textContent = 'Selecione um contato autorizado.';
+    if (forwardModo === 'resposta' && (!sessaoAtualId || !forwardMensagemAtualId)) return;
+    if (!forwardContatoSelecionados.size) {
+      forwardStatus.textContent = 'Selecione pelo menos um contato autorizado.';
       forwardStatus.className = 'forward-status error';
       return;
     }
     btnConfirmForward.disabled = true;
-    forwardStatus.textContent = 'Encaminhando...';
+    const formato = forwardModo === 'anexo' ? 'anexo' : (forwardFormat?.value || 'texto');
+    forwardStatus.textContent = formato === 'texto' ? 'Encaminhando...' : 'Gerando arquivo...';
     forwardStatus.className = 'forward-status';
     try {
-      const data = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + forwardMensagemAtualId + '/encaminhar', {
-        method: 'POST',
-        body: JSON.stringify({
-          destinatarioNumeroId: forwardContatoSelecionadoId,
-          formato: forwardFormat?.value || 'texto',
-        }),
-      });
-      forwardStatus.textContent = data.status === 'enviado' ? 'Encaminhado com sucesso.' : 'Registro criado.';
+      const arquivo = forwardModo === 'anexo'
+        ? await gerarArquivoAnexoLocal()
+        : await gerarArquivoForward(formato, forwardMensagemAtualId);
+      if (arquivo) forwardStatus.textContent = 'Encaminhando arquivo...';
+      const payload = {
+        destinatarioNumeroIds: [...forwardContatoSelecionados],
+        formato,
+        arquivo,
+      };
+      if (forwardModo === 'anexo') payload.legenda = forwardAttachmentCaption?.value || '';
+      const data = await api(
+        forwardModo === 'anexo'
+          ? '/encaminhamentos/anexo'
+          : '/sessoes/' + sessaoAtualId + '/mensagens/' + forwardMensagemAtualId + '/encaminhar',
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        },
+      );
+      forwardStatus.textContent = data.status === 'parcial'
+        ? `Encaminhado para ${data.enviados || 0} de ${data.total || forwardContatoSelecionados.size} contato(s).`
+        : 'Encaminhado com sucesso.';
       forwardStatus.className = 'forward-status ok';
       setTimeout(fecharForwardModal, 650);
     } catch (err) {
@@ -2070,6 +2224,130 @@
     } finally {
       btnConfirmForward.disabled = false;
     }
+  }
+
+  async function gerarArquivoAnexoLocal() {
+    const file = forwardFileInput?.files?.[0];
+    if (!file) throw new Error('Selecione um arquivo para encaminhar.');
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('Arquivo muito grande para encaminhamento pelo WhatsApp.');
+    }
+    return {
+      filename: file.name || 'anexo',
+      mimetype: file.type || 'application/octet-stream',
+      data: await blobToBase64(file),
+    };
+  }
+
+  function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const valor = String(reader.result || '');
+        resolve(valor.includes(',') ? valor.split(',').pop() : valor);
+      };
+      reader.onerror = () => reject(new Error('Falha ao preparar arquivo para envio.'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function gerarArquivoForward(formato, mensagemId) {
+    if (formato === 'texto') return null;
+
+    const dados = await obterDadosRelatorioMensagem(mensagemId);
+    if (!dados || !Array.isArray(dados.rows) || !dados.rows.length) {
+      throw new Error('Esta mensagem nao possui grade disponivel para gerar arquivo.');
+    }
+
+    prepararRelatorio(dados);
+
+    if (formato === 'pdf') {
+      await garantirExportPdf();
+      const blob = exportarRelatorioPdf({ retornaBlob: true });
+      return {
+        filename: 'ia-command-dados.pdf',
+        mimetype: 'application/pdf',
+        data: await blobToBase64(blob),
+      };
+    }
+
+    if (formato === 'excel') {
+      await garantirExportXlsx();
+      const blob = exportarRelatorioXlsx({ retornaBlob: true });
+      return {
+        filename: 'ia-command-dados.xlsx',
+        mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        data: await blobToBase64(blob),
+      };
+    }
+
+    throw new Error('Formato de encaminhamento invalido.');
+  }
+
+  function fecharMenuMensagem() {
+    if (!messageContextMenu) return;
+    messageContextMenu.classList.remove('open');
+    messageContextMenu.setAttribute('aria-hidden', 'true');
+    if (messageContextTrigger) messageContextTrigger.classList.remove('open');
+    messageContextMensagemId = null;
+    messageContextTrigger = null;
+  }
+
+  function abrirMenuMensagem(trigger, mensagemId) {
+    if (!messageContextMenu || !trigger || !mensagemId) return;
+    fecharMenuMensagem();
+    messageContextMensagemId = mensagemId;
+    messageContextTrigger = trigger;
+    trigger.classList.add('open');
+
+    const favoritoId = trigger.dataset.favoritoId || '';
+    const temDados = trigger.dataset.temDadosTabulares === '1';
+    const favoritable = trigger.dataset.favoritable === '1';
+    const itemFavorito = messageContextMenu.querySelector('[data-menu-action="favorite"]');
+    const itemForward = messageContextMenu.querySelector('[data-menu-action="forward-response"]');
+    if (itemFavorito) {
+      itemFavorito.querySelector('span').textContent = favoritoId ? 'Remover favorito' : 'Favoritar';
+      itemFavorito.disabled = !favoritable;
+      itemFavorito.title = favoritable ? '' : 'Somente respostas da IA podem ser favoritadas';
+    }
+    if (itemForward) {
+      itemForward.disabled = !temDados;
+      itemForward.title = temDados ? 'Encaminhar resposta para WhatsApp' : 'Esta mensagem nao possui grade para encaminhar';
+    }
+
+    const rect = trigger.getBoundingClientRect();
+    messageContextMenu.classList.add('open');
+    messageContextMenu.setAttribute('aria-hidden', 'false');
+    const menuRect = messageContextMenu.getBoundingClientRect();
+    const margem = 8;
+    const left = Math.min(window.innerWidth - menuRect.width - margem, Math.max(margem, rect.right - menuRect.width));
+    const top = Math.min(window.innerHeight - menuRect.height - margem, Math.max(margem, rect.bottom + 4));
+    messageContextMenu.style.left = left + 'px';
+    messageContextMenu.style.top = top + 'px';
+  }
+
+  async function excluirMensagensPorIds(ids) {
+    if (!sessaoAtualId || !Array.isArray(ids) || !ids.length) return;
+    await api('/sessoes/' + sessaoAtualId + '/mensagens/excluir', {
+      method: 'POST',
+      body: JSON.stringify({ mensagemIds: ids }),
+    });
+    ids.forEach((id) => {
+      const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
+      if (rowEl) rowEl.remove();
+      relatorioCachePorMensagem.delete(id);
+      mensagensSelecionadas.delete(id);
+    });
+    const cacheMensagens = mensagensCachePorSessao.get(sessaoAtualId);
+    if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
+      const removidos = new Set(ids);
+      cacheMensagens.mensagens = cacheMensagens.mensagens.filter((m) => !removidos.has(m.id));
+    } else {
+      mensagensCachePorSessao.delete(sessaoAtualId);
+    }
+    relatorioCachePorSessao.delete(sessaoAtualId);
+    await carregarSessoes();
+    if (!chatBody.querySelector('.row')) renderEmptyState();
   }
 
   async function removerFavorito(favoritoId) {
@@ -2081,7 +2359,7 @@
       document.querySelectorAll(`[data-favorito-id="${favoritoId}"]`).forEach((btn) => {
         btn.classList.remove('active');
         btn.removeAttribute('data-favorito-id');
-        btn.title = 'Favoritar pergunta';
+        btn.title = btn.dataset.menuMsg ? 'Opcoes da mensagem' : 'Favoritar pergunta';
       });
     } catch (err) {
       showError('Falha ao remover favorito: ' + err.message);
@@ -2110,7 +2388,7 @@
   async function favoritarMensagem(mensagemId, btn) {
     if (!sessaoAtualId || !mensagemId || !btn) return;
     if (btn.dataset.favoritoId) {
-      removerFavorito(btn.dataset.favoritoId);
+      await removerFavorito(btn.dataset.favoritoId);
       return;
     }
     try {
@@ -2123,6 +2401,7 @@
       btn.classList.add('active');
       btn.dataset.favoritoId = fav.id;
       btn.title = 'Remover favorito';
+      btn.setAttribute('aria-label', 'Opcoes da mensagem');
       if (favoritosCarregados) {
         favoritosCache = [fav, ...favoritosCache.filter(f => f.id !== fav.id)];
       }
@@ -2338,15 +2617,12 @@
     const apresentacaoFinal = (!isFalha && direcao === 'in')
       ? (apresentacao || extrairApresentacaoDoTextoSalvo(texto))
       : apresentacao;
-    const botaoFavorito = (!isFalha && direcao === 'in' && id)
-      ? `<button type="button" class="favorite-message-btn${favoritoId ? ' active' : ''}" data-favoritar-msg="${escapeHtml(id)}"${favoritoId ? ` data-favorito-id="${escapeHtml(favoritoId)}"` : ''} title="${favoritoId ? 'Remover favorito' : 'Favoritar pergunta'}" aria-label="${favoritoId ? 'Remover favorito' : 'Favoritar pergunta'}">${starSvg()}</button>`
-      : '';
-    const botaoForward = (temDadosTabulares && id)
-      ? `<button type="button" class="forward-message-btn" data-encaminhar-msg="${escapeHtml(id)}" title="Encaminhar grade para WhatsApp" aria-label="Encaminhar grade para WhatsApp">${forwardSvg()}</button>`
+    const botaoMenu = (!isFalha && id)
+      ? `<button type="button" class="message-menu-trigger${favoritoId ? ' active' : ''}" data-menu-msg="${escapeHtml(id)}" data-favoritable="${direcao === 'in' ? '1' : '0'}" data-tem-dados-tabulares="${temDadosTabulares ? '1' : '0'}"${favoritoId ? ` data-favorito-id="${escapeHtml(favoritoId)}"` : ''} title="Opcoes da mensagem" aria-label="Opcoes da mensagem">${chevronDownSvg()}</button>`
       : '';
     const conteudo = (!isFalha && apresentacaoFinal)
-      ? botaoFavorito + botaoForward + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
-      : botaoFavorito + botaoForward + escapeHtml(texto) + linkDados;
+      ? botaoMenu + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
+      : botaoMenu + escapeHtml(texto) + linkDados;
 
     if (temDadosTabulares && id && Array.isArray(rows) && rows.length) {
       const dadosMensagem = { mensagemId: id, rows, gridConfig: null, texto };
@@ -2370,20 +2646,12 @@
         abrirRelatorioDaMensagem(id);
       });
     }
-    const btnFav = row.querySelector('[data-favoritar-msg]');
-    if (btnFav) {
-      btnFav.addEventListener('click', (e) => {
+    const btnMenu = row.querySelector('[data-menu-msg]');
+    if (btnMenu) {
+      btnMenu.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        favoritarMensagem(id, btnFav);
-      });
-    }
-    const btnForward = row.querySelector('[data-encaminhar-msg]');
-    if (btnForward) {
-      btnForward.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        abrirForwardModal(id).catch(err => showError('Falha ao abrir encaminhamento: ' + err.message));
+        abrirMenuMensagem(btnMenu, id);
       });
     }
     if (id) {
@@ -2498,26 +2766,8 @@
     if (!window.confirm('Excluir ' + qtd + ' mensagem' + (qtd === 1 ? '' : 'ns') + ' selecionada' + (qtd === 1 ? '' : 's') + '? Essa acao nao pode ser desfeita.')) return;
     const ids = [...mensagensSelecionadas];
     try {
-      await api('/sessoes/' + sessaoAtualId + '/mensagens/excluir', {
-        method: 'POST',
-        body: JSON.stringify({ mensagemIds: ids }),
-      });
-      ids.forEach((id) => {
-        const rowEl = chatBody.querySelector(`[data-mensagem-id="${id}"]`);
-        if (rowEl) rowEl.remove();
-        relatorioCachePorMensagem.delete(id);
-      });
-      const cacheMensagens = mensagensCachePorSessao.get(sessaoAtualId);
-      if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
-        const removidos = new Set(ids);
-        cacheMensagens.mensagens = cacheMensagens.mensagens.filter((m) => !removidos.has(m.id));
-      } else {
-        mensagensCachePorSessao.delete(sessaoAtualId);
-      }
-      relatorioCachePorSessao.delete(sessaoAtualId);
+      await excluirMensagensPorIds(ids);
       sairModoSelecao();
-      await carregarSessoes();
-      if (!chatBody.querySelector('.row')) renderEmptyState();
     } catch (err) {
       showError('Falha ao excluir mensagens: ' + err.message);
     }
@@ -2680,6 +2930,24 @@
     } catch (err) {
       showError('Falha ao abrir os dados desta resposta: ' + err.message);
     }
+  }
+
+  async function obterDadosRelatorioMensagem(mensagemId) {
+    if (!sessaoAtualId || !mensagemId) return null;
+    const cache = relatorioCachePorMensagem.get(mensagemId);
+    if (cache) return cache;
+
+    const relatorio = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + mensagemId + '/relatorio');
+    if (!relatorio || !Array.isArray(relatorio.rows) || !relatorio.rows.length) return null;
+    const dados = {
+      mensagemId: relatorio.id,
+      rows: relatorio.rows,
+      gridConfig: relatorio.gridConfig,
+      texto: relatorio.texto,
+    };
+    relatorioCachePorMensagem.set(mensagemId, dados);
+    relatorioCachePorSessao.set(sessaoAtualId, dados);
+    return dados;
   }
 
   function renderSessionList() {
@@ -3189,13 +3457,48 @@
   btnFecharForward.addEventListener('click', () => fecharForwardModal());
   btnReloadForwardContacts.addEventListener('click', () => carregarForwardContacts());
   forwardSearch.addEventListener('input', () => renderForwardContacts());
+  forwardFileInput.addEventListener('change', () => {
+    const file = forwardFileInput.files?.[0];
+    forwardFileName.textContent = file ? `${file.name} (${Math.ceil(file.size / 1024)} KB)` : 'Nenhum arquivo selecionado.';
+  });
   btnConfirmForward.addEventListener('click', () => confirmarForward().catch(err => showError('Falha ao encaminhar: ' + err.message)));
   forwardModal.addEventListener('click', (e) => {
     if (e.target === forwardModal) fecharForwardModal();
   });
+  messageContextMenu.addEventListener('click', async (e) => {
+    const item = e.target.closest('[data-menu-action]');
+    if (!item || !messageContextMensagemId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const acao = item.dataset.menuAction;
+    const mensagemId = messageContextMensagemId;
+    const trigger = messageContextTrigger;
+    fecharMenuMensagem();
+    try {
+      if (acao === 'favorite') {
+        await favoritarMensagem(mensagemId, trigger);
+      } else if (acao === 'forward-response') {
+        await abrirForwardModal(mensagemId, 'resposta');
+      } else if (acao === 'forward-attachment') {
+        await abrirForwardModal(mensagemId, 'anexo');
+      } else if (acao === 'delete') {
+        if (!window.confirm('Apagar esta mensagem? Essa acao nao pode ser desfeita.')) return;
+        await excluirMensagensPorIds([mensagemId]);
+      }
+    } catch (err) {
+      showError('Falha ao executar acao da mensagem: ' + err.message);
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!messageContextMenu.classList.contains('open')) return;
+    if (messageContextMenu.contains(e.target)) return;
+    if (e.target.closest('[data-menu-msg]')) return;
+    fecharMenuMensagem();
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && favoritesModal.classList.contains('active')) fecharFavoritos();
     if (e.key === 'Escape' && forwardModal.classList.contains('active')) fecharForwardModal();
+    if (e.key === 'Escape') fecharMenuMensagem();
   });
 
   // Numero vs texto decidido pelo dado real (typeof), nao por metadado do
@@ -3657,7 +3960,7 @@
   // "114.975,00") para o usuario poder somar/usar em formula no proprio
   // Excel — pedido explicito de "poder usar para fazer qualquer coisa".
   // Datas tambem viram Date real do Excel (formatadas dd/mm/aaaa), nao texto.
-  function exportarRelatorioXlsx() {
+  function exportarRelatorioXlsx(opcoes = {}) {
     const colunas = colunasVisiveisRelatorio();
     const modelo = modeloRelatorio(reportDadosAtuais);
     const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
@@ -3722,7 +4025,12 @@
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+    if (opcoes.retornaBlob) {
+      const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    }
     XLSX.writeFile(wb, 'dados-ia-command.xlsx');
+    return null;
   }
 
   btnExportXlsx.addEventListener('click', async () => {
@@ -3758,7 +4066,7 @@
   // acrescenta a linha TOTAL GERAL usando os mesmos totais ja calculados por
   // modeloRelatorio() (fonte unica de verdade, compartilhada com
   // renderGrandTotal — nunca diverge do que a tela mostra).
-  function exportarRelatorioPdf() {
+  function exportarRelatorioPdf(opcoes = {}) {
     const colunas = colunasVisiveisRelatorio();
     const modelo = modeloRelatorio(reportDadosAtuais);
     const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
@@ -3804,7 +4112,9 @@
       headStyles: { fillColor: [41, 128, 185] },
     });
 
+    if (opcoes.retornaBlob) return doc.output('blob');
     doc.save('dados-ia-command.pdf');
+    return null;
   }
 
   btnExportPdf.addEventListener('click', async () => {

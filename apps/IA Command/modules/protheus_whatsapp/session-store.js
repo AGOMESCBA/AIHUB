@@ -6,6 +6,7 @@
 
 const crypto = require('crypto');
 const { getDB } = require('../database');
+const periodResolver = require('../ai/period-resolver');
 
 const TITULO_MAX_CHARS = 60;
 const PAGE_SIZE = 30;
@@ -267,6 +268,66 @@ function buscarLogParaFavorito({ empresaId, celular, mensagem, perguntaTexto }) 
   `).get(empresaId, numero, perguntaTexto) || null;
 }
 
+function macroPeriodoAgendamento(perguntaTexto) {
+  const periodo = periodResolver.identificarPeriodoTexto(perguntaTexto);
+  if (!periodo || !periodo.tipo || periodo.tipo === 'nenhum') return null;
+
+  switch (periodo.tipo) {
+    case 'hoje':
+      return { start: '{{HOJE}}', end: '{{HOJE}}' };
+    case 'ontem':
+      return { start: '{{ONTEM}}', end: '{{ONTEM}}' };
+    case 'mes_atual':
+      return { start: '{{INICIO_MES}}', end: '{{FIM_MES}}' };
+    case 'mes_anterior':
+      return { start: '{{INICIO_MES_ANTERIOR}}', end: '{{FIM_MES_ANTERIOR}}' };
+    case 'ano_atual':
+      return { start: '{{INICIO_ANO}}', end: '{{FIM_ANO}}' };
+    case 'ano_anterior':
+      return { start: '{{INICIO_ANO_ANTERIOR}}', end: '{{FIM_ANO_ANTERIOR}}' };
+    case 'ultimos_N_dias': {
+      const dias = Math.max(Number(periodo.dias || 0), 1);
+      return { start: `{{HOJE:-${dias - 1}}}`, end: '{{HOJE}}' };
+    }
+    default:
+      return null;
+  }
+}
+
+function escapeRegexLiteral(valor) {
+  return String(valor || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function substituirLiteralData(sql, valor, macro) {
+  const compacto = String(valor || '').replace(/\D/g, '');
+  if (!/^\d{8}$/.test(compacto)) return sql;
+  const iso = `${compacto.slice(0, 4)}-${compacto.slice(4, 6)}-${compacto.slice(6, 8)}`;
+  let out = String(sql || '');
+  for (const v of [compacto, iso]) {
+    out = out.replace(new RegExp(`'${escapeRegexLiteral(v)}'`, 'g'), `'${macro}'`);
+  }
+  return out;
+}
+
+function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, referencia = new Date()) {
+  const macros = macroPeriodoAgendamento(perguntaTexto);
+  if (!macros) return sqlFinal;
+
+  const template = String(sqlTemplate || '');
+  if (template.includes('{{iac:period:start}}') || template.includes('{{iac:period:end}}')) {
+    const convertido = template
+      .split('{{iac:period:start}}').join(macros.start)
+      .split('{{iac:period:end}}').join(macros.end);
+    if (!/\{\{\s*iac:/i.test(convertido)) return convertido;
+  }
+
+  const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto), { hoje: referencia });
+  let out = String(sqlFinal || '');
+  out = substituirLiteralData(out, resolvido?.dataInicio, macros.start);
+  out = substituirLiteralData(out, resolvido?.dataFim, macros.end);
+  return out;
+}
+
 function listarFavoritos({ empresaId, celular, limite = 80 }) {
   const rows = getDB().prepare(`
     SELECT id, empresa_id, titulo, pergunta_texto, resposta_mensagem_id,
@@ -328,7 +389,8 @@ function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = 
   }
 
   const log = buscarLogParaFavorito({ empresaId, celular, mensagem, perguntaTexto });
-  const sqlFinal = String(log?.sql_final_executado || log?.sql_gerado || '').trim();
+  const sqlFinalOriginal = String(log?.sql_final_executado || log?.sql_gerado || '').trim();
+  const sqlFinal = sqlFavoritoComMacrosAgendamento(sqlFinalOriginal, log?.sql_template || null, perguntaTexto).trim();
   if (!sqlFinal) {
     throw Object.assign(new Error('Esta resposta ainda nao possui SQL auditado para favoritar.'), { statusCode: 400 });
   }

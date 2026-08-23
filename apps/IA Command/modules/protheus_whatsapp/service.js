@@ -20,6 +20,9 @@ const interpretationPipeline = require('../ai/interpretation-pipeline');
 const interpretationLog = require('../ai/interpretation-log');
 const { getDB } = require('../database');
 const IACWhatsAppService = require('../whatsapp/service');
+const periodResolver = require('../ai/period-resolver');
+const canonicalIntent = require('../erp/nlsql-cache/canonical-intent');
+const sqlTemplate = require('../erp/nlsql-cache/sql-template');
 
 // Nome de campo cru do Protheus: prefixo de tabela (letra + ate 2 letras/digitos,
 // ex: E2, A1, SB1) + underscore + resto (ex: E2_PREFIXO, A1_NOME, SB1_DESC).
@@ -320,9 +323,68 @@ function gridConfigDoFavorito(favorito) {
   }
 }
 
+function intentDoFavorito(favorito, empresaId, celular, modulo) {
+  let intent = {};
+  try {
+    intent = favorito?.intent_json ? JSON.parse(favorito.intent_json) : {};
+  } catch (_) {
+    intent = {};
+  }
+
+  const pergunta = String(favorito?.pergunta_texto || favorito?.titulo || '').trim();
+  const detectado = periodResolver.identificarPeriodoTexto(pergunta);
+  const resolvido = periodResolver.resolverPeriodo(detectado);
+  const periodo = resolvido?.dataInicio && resolvido?.dataFim
+    ? {
+        ...detectado,
+        dataInicio: resolvido.dataInicio,
+        dataFim: resolvido.dataFim,
+        data_inicio: resolvido.dataInicio,
+        data_fim: resolvido.dataFim,
+        start: resolvido.dataInicio,
+        end: resolvido.dataFim,
+      }
+    : (intent._periodoCanonicoResolvido || intent.periodo || {});
+
+  return {
+    ...intent,
+    intencao: intent.intencao || `${modulo}_dinamico`,
+    periodo,
+    _periodoCanonicoResolvido: periodo,
+    _moduloDinamico: modulo,
+    _remetente: celular,
+    _mensagemOriginal: pergunta,
+    _empresaIdFixa: Number(empresaId || 0) || null,
+    _skipIaSqlGeneration: true,
+  };
+}
+
+function sqlExecucaoDoFavorito(favorito, empresaId, celular, modulo) {
+  const sqlFixo = String(favorito?.sql_final_executado || '').trim();
+  const template = String(favorito?.sql_template || '').trim();
+  if (/\{\{\s*(?!iac:)[A-Z0-9_]+(?::\s*[+-]?\d+)?\s*\}\}/i.test(sqlFixo)) {
+    return { sql: sqlFixo, origem: 'sql_fixo_macro_agendamento', intent: null, aplicados: [] };
+  }
+  if (!template) return { sql: sqlFixo, origem: 'sql_fixo', intent: null, aplicados: [] };
+
+  const intent = intentDoFavorito(favorito, empresaId, celular, modulo);
+  const canonico = canonicalIntent.gerarIntentCanonico({
+    spec: { nome: modulo },
+    intent,
+    empresaId,
+    mensagem: favorito?.pergunta_texto || favorito?.titulo || '',
+  }).canonical;
+  const aplicado = sqlTemplate.aplicarSqlTemplate(template, canonico);
+  if (!aplicado.ok) {
+    return { sql: sqlFixo, origem: 'sql_fixo_template_pendente', intent, aplicados: aplicado.aplicados || [] };
+  }
+  return { sql: aplicado.sql, origem: 'sql_template', intent, aplicados: aplicado.aplicados || [] };
+}
+
 async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
   const modulo = String(favorito?.modulo || '').trim().toLowerCase();
-  const sql = String(favorito?.sql_final_executado || '').trim();
+  const sqlExec = sqlExecucaoDoFavorito(favorito, empresaId, celular, modulo);
+  const sql = String(sqlExec.sql || '').trim();
   if (!modulo || !sql) {
     throw Object.assign(new Error('Favorito sem modulo ou SQL auditado.'), { statusCode: 400 });
   }
@@ -333,6 +395,8 @@ async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
     pergunta: favorito.pergunta_texto,
     modulo,
     sql_fixo: sql,
+    sql_template: favorito.sql_template || null,
+    sql_template_parametros: sqlExec.aplicados || [],
     timezone: process.env.TZ || 'America/Manaus',
   };
   const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
@@ -351,10 +415,12 @@ async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
     tipoResultado: resultadoExec.ok === false ? 'erro' : 'favorito_sql_fixo',
     intent: {
       intencao: `${modulo}_dinamico`,
-      origem: 'protheus_chat_favorito',
+      origem: sqlExec.origem === 'sql_template' ? 'protheus_chat_favorito_template' : 'protheus_chat_favorito',
       _moduloDinamico: modulo,
       _remetente: celular,
       _mensagemOriginal: favorito.pergunta_texto,
+      _sqlTemplateAplicado: sqlExec.origem === 'sql_template',
+      _sqlTemplateParametros: sqlExec.aplicados || [],
       _skipIaSqlGeneration: true,
     },
   });

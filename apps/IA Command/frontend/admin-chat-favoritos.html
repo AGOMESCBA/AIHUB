@@ -74,6 +74,11 @@
     .summary-label { color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px; }
     .summary-value { color:var(--text-hi);font-size:13px;font-weight:800;line-height:1.35;word-break:break-word; }
     .readonly-note { background:var(--accent-glow);border-left:3px solid var(--accent);border-radius:0 6px 6px 0;padding:10px 14px;font-size:13px;color:var(--text-md);line-height:1.6;margin-bottom:14px; }
+    .macro-help { display:grid;gap:10px;font-size:12px;color:var(--text-md);line-height:1.55; }
+    .macro-help p { margin:0; }
+    .macro-help code { display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:5px;background:var(--bg-base);color:var(--text-hi);padding:1px 5px;font-family:Consolas,'Courier New',monospace;font-size:11px; }
+    .macro-grid { display:grid;grid-template-columns:1fr 1fr;gap:6px; }
+    .macro-example { margin:0;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-base);color:var(--text-hi);font-family:Consolas,'Courier New',monospace;font-size:11px;line-height:1.5;white-space:pre-wrap;overflow:auto; }
     .d-none { display:none !important; }
     @media (max-width: 980px) { .page-head { flex-direction:column;align-items:flex-start; } .form-grid { grid-template-columns:1fr; } }
     @media (max-width: 620px) { .form-row { grid-template-columns:1fr; } }
@@ -205,7 +210,7 @@
                 <div class="form-group">
                   <label class="form-label" for="f-sql-final">SQL final executado</label>
                   <textarea class="form-control sql-textarea" id="f-sql-final" spellcheck="false"></textarea>
-                  <div class="form-help">Por seguranca, a tela aceita somente consultas iniciadas por SELECT ou WITH e bloqueia comandos de escrita.</div>
+                  <div class="form-help">Aceita SELECT/WITH e tambem SET ROWCOUNT antes da consulta. Use macros de data para favoritos recorrentes.</div>
                 </div>
               </div>
             </section>
@@ -226,6 +231,39 @@
                   <div class="summary-item"><div class="summary-label">Criado</div><div class="summary-value" id="s-criado">-</div></div>
                   <div class="summary-item"><div class="summary-label">Atualizado</div><div class="summary-value" id="s-atualizado">-</div></div>
                   <div class="summary-item"><div class="summary-label">Ultimo uso</div><div class="summary-value" id="s-uso">-</div></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="form-section-header">
+                <div class="form-section-title">Ajuda: macros e execucao</div>
+                <div class="form-section-subtitle">Use estas variaveis no SQL final para evitar datas fixas em favoritos recorrentes.</div>
+              </div>
+              <div class="form-section-body">
+                <div class="macro-help">
+                  <p>Ao executar um favorito no chat, o IA Command usa o SQL salvo diretamente, sem chamar IA e sem consumir token. Antes de consultar o ERP, o executor troca as macros abaixo pela data atual do servidor.</p>
+                  <div class="macro-grid">
+                    <code>{{HOJE}}</code>
+                    <code>{{ONTEM}}</code>
+                    <code>{{AMANHA}}</code>
+                    <code>{{HOJE:-7}}</code>
+                    <code>{{INICIO_MES}}</code>
+                    <code>{{FIM_MES}}</code>
+                    <code>{{INICIO_MES_ANTERIOR}}</code>
+                    <code>{{FIM_MES_ANTERIOR}}</code>
+                    <code>{{INICIO_ANO}}</code>
+                    <code>{{FIM_ANO}}</code>
+                    <code>{{INICIO_ANO_ANTERIOR}}</code>
+                    <code>{{FIM_ANO_ANTERIOR}}</code>
+                  </div>
+                  <p>Campos Protheus em AAAAMMDD usam as macros acima. Para campos em YYYY-MM-DD, use a versao <code>_ISO</code>, como <code>{{ONTEM_ISO}}</code>.</p>
+                  <pre class="macro-example">SET ROWCOUNT 10000;
+SELECT *
+FROM SE2010 SE2
+WHERE SE2.D_E_L_E_T_ = ' '
+  AND SE2.E2_VENCREA = '{{ONTEM}}';</pre>
+                  <p>Novos favoritos criados pelo chat tentam gravar macro automaticamente quando a pergunta tem periodo relativo claro, como hoje, ontem, mes atual ou mes anterior. Favoritos antigos podem ser ajustados manualmente aqui.</p>
                 </div>
               </div>
             </section>

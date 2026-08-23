@@ -1,4 +1,4 @@
-﻿const { Client, LocalAuth } = require('whatsapp-web.js');
+﻿const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode               = require('qrcode');
 const { EventEmitter }     = require('events');
 const path                 = require('path');
@@ -820,6 +820,17 @@ class IACWhatsAppService extends EventEmitter {
     const id = await this.client.getNumberId(numero.replace(/\D/g, ''));
     if (!id) throw new Error(`Número ${numero} não encontrado no WhatsApp.`);
     await this.client.sendMessage(id._serialized, texto);
+  }
+
+  async sendMediaMessage(numero, { data, mimetype, filename, caption = '' }) {
+    if (!this.client || this.status !== 'connected')
+      throw new Error('WhatsApp não está conectado.');
+    const digits = String(numero || '').replace(/\D/g, '');
+    const id = await this.client.getNumberId(digits);
+    if (!id) throw new Error(`Número ${numero} não encontrado no WhatsApp.`);
+    if (!data || !mimetype || !filename) throw new Error('Arquivo inválido para envio.');
+    const media = new MessageMedia(mimetype, data, filename);
+    await this.client.sendMessage(id._serialized, media, caption ? { caption } : undefined);
   }
 
   async _sendChatMessageSafe(chat, texto) {
