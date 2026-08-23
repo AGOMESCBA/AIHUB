@@ -47,7 +47,8 @@ function _resolverConnectionId(empresaId) {
   try {
     const conn = connectionFactory.carregarConexao(empresaId, { sistemaOrigem: 'protheus' });
     return conn.id || conn._connection_id || null;
-  } catch (_) {
+  } catch (e) {
+    console.warn(`[LoboGuara][DIAG] _resolverConnectionId(${empresaId}) falhou: ${e.message}`);
     return null;
   }
 }
@@ -56,12 +57,15 @@ function _resolverConnectionId(empresaId) {
 // perfil validado. Falha fechada — qualquer coisa fora disso retorna null.
 function contextoLoboGuara(db, empresaId) {
   const cfg = _modeloDadosEmpresa(db, empresaId);
+  console.log(`[LoboGuara][DIAG] contextoLoboGuara(${empresaId}) cfg.modelo_dados=${cfg.modelo_dados}`);
   if (cfg.modelo_dados !== 'LOBO_GUARA') return null;
 
   const connectionId = _resolverConnectionId(empresaId);
+  console.log(`[LoboGuara][DIAG] contextoLoboGuara(${empresaId}) connectionId=${connectionId}`);
   if (!connectionId) return null;
 
   const perfil = db.prepare('SELECT * FROM protheus_company_profile WHERE connection_id = ?').get(connectionId);
+  console.log(`[LoboGuara][DIAG] contextoLoboGuara(${empresaId}) perfil=${JSON.stringify(perfil)}`);
   if (!perfil || !perfil.validated) return null;
 
   return { connectionId, empresaCodigoPadrao: String(cfg.empresa_codigo || '').trim() || null };
