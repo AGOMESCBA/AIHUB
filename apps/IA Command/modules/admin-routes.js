@@ -160,6 +160,12 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         return { start: '{{HOJE}}', end: '{{HOJE}}' };
       case 'ontem':
         return { start: '{{ONTEM}}', end: '{{ONTEM}}' };
+      case 'esta_semana':
+        return { start: '{{INICIO_SEMANA}}', end: '{{FIM_SEMANA}}' };
+      case 'semana_anterior':
+        return { start: '{{INICIO_SEMANA_ANTERIOR}}', end: '{{FIM_SEMANA_ANTERIOR}}' };
+      case 'proxima_semana':
+        return { start: '{{INICIO_PROXIMA_SEMANA}}', end: '{{FIM_PROXIMA_SEMANA}}' };
       case 'mes_atual':
         return { start: '{{INICIO_MES}}', end: '{{FIM_MES}}' };
       case 'mes_anterior':
@@ -194,13 +200,13 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   }
 
   function _macrosDataComoTexto(sql) {
-    const macroData = /\{\{(?:HOJE|ONTEM|DATA_EXECUCAO|INICIO_MES|FIM_MES|INICIO_MES_ANTERIOR|FIM_MES_ANTERIOR|INICIO_ANO|FIM_ANO|INICIO_ANO_ANTERIOR|FIM_ANO_ANTERIOR)(?::[-+]?\d+)?\}\}/g;
+    const macroData = /\{\{(?:HOJE|HOJE_ISO|ONTEM|ONTEM_ISO|DATA_EXECUCAO|DATA_EXECUCAO_ISO|INICIO_SEMANA|INICIO_SEMANA_ISO|FIM_SEMANA|FIM_SEMANA_ISO|INICIO_SEMANA_ANTERIOR|INICIO_SEMANA_ANTERIOR_ISO|FIM_SEMANA_ANTERIOR|FIM_SEMANA_ANTERIOR_ISO|INICIO_PROXIMA_SEMANA|INICIO_PROXIMA_SEMANA_ISO|FIM_PROXIMA_SEMANA|FIM_PROXIMA_SEMANA_ISO|INICIO_MES|INICIO_MES_ISO|FIM_MES|FIM_MES_ISO|INICIO_MES_ANTERIOR|INICIO_MES_ANTERIOR_ISO|FIM_MES_ANTERIOR|FIM_MES_ANTERIOR_ISO|INICIO_ANO|INICIO_ANO_ISO|FIM_ANO|FIM_ANO_ISO|INICIO_ANO_ANTERIOR|INICIO_ANO_ANTERIOR_ISO|FIM_ANO_ANTERIOR|FIM_ANO_ANTERIOR_ISO)(?::[-+]?\d+)?\}\}/g;
     return String(sql || '').replace(new RegExp(`(^|[^'])(${macroData.source})(?!')`, 'g'), "$1'$2'");
   }
 
   function _sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto) {
     const macros = _macroPeriodoAgendamento(perguntaTexto);
-    if (!macros) return sqlFinal;
+    if (!macros) return _macrosDataComoTexto(sqlFinal);
 
     const template = String(sqlTemplate || '');
     if (template.includes('{{iac:period:start}}') || template.includes('{{iac:period:end}}')) {

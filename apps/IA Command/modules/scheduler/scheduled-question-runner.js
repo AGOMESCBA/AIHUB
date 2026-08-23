@@ -81,11 +81,26 @@ function periodoAno(base, anos = 0) {
   };
 }
 
+function inicioDaSemana(base) {
+  const date = new Date(Date.UTC(Number(base.ano), Number(base.mes) - 1, Number(base.dia)));
+  const day = date.getUTCDay();
+  return deslocarDia(base, -(day === 0 ? 6 : day - 1));
+}
+
+function periodoSemana(base, semanas = 0) {
+  const inicio = deslocarDia(inicioDaSemana(base), Number(semanas || 0) * 7);
+  const fim = Number(semanas || 0) === 0 ? base : deslocarDia(inicio, 6);
+  return { inicio, fim };
+}
+
 function macrosDataSql(job, referencia = new Date()) {
   const timezone = job?.timezone || 'America/Manaus';
   const hoje = partesData(referencia, timezone);
   const ontem = deslocarDia(hoje, -1);
   const amanha = deslocarDia(hoje, 1);
+  const semanaAtual = periodoSemana(hoje, 0);
+  const semanaAnterior = periodoSemana(hoje, -1);
+  const proximaSemana = periodoSemana(hoje, 1);
   const mesAtual = periodoMes(hoje, 0);
   const mesAnterior = periodoMes(hoje, -1);
   const anoAtual = periodoAno(hoje, 0);
@@ -99,6 +114,18 @@ function macrosDataSql(job, referencia = new Date()) {
     ONTEM_ISO: ontem.iso,
     AMANHA: amanha.yyyymmdd,
     AMANHA_ISO: amanha.iso,
+    INICIO_SEMANA: semanaAtual.inicio.yyyymmdd,
+    INICIO_SEMANA_ISO: semanaAtual.inicio.iso,
+    FIM_SEMANA: semanaAtual.fim.yyyymmdd,
+    FIM_SEMANA_ISO: semanaAtual.fim.iso,
+    INICIO_SEMANA_ANTERIOR: semanaAnterior.inicio.yyyymmdd,
+    INICIO_SEMANA_ANTERIOR_ISO: semanaAnterior.inicio.iso,
+    FIM_SEMANA_ANTERIOR: semanaAnterior.fim.yyyymmdd,
+    FIM_SEMANA_ANTERIOR_ISO: semanaAnterior.fim.iso,
+    INICIO_PROXIMA_SEMANA: proximaSemana.inicio.yyyymmdd,
+    INICIO_PROXIMA_SEMANA_ISO: proximaSemana.inicio.iso,
+    FIM_PROXIMA_SEMANA: proximaSemana.fim.yyyymmdd,
+    FIM_PROXIMA_SEMANA_ISO: proximaSemana.fim.iso,
     INICIO_MES: mesAtual.inicio.yyyymmdd,
     INICIO_MES_ISO: mesAtual.inicio.iso,
     FIM_MES: mesAtual.fim.yyyymmdd,
@@ -131,6 +158,10 @@ function resolverMacroDataSql(nome, deslocamento, job, referencia = new Date()) 
   if (offset !== null) {
     if (chave === 'HOJE' || chave === 'DATA_EXECUCAO') return deslocarDia(hoje, offset).yyyymmdd;
     if (chave === 'HOJE_ISO' || chave === 'DATA_EXECUCAO_ISO') return deslocarDia(hoje, offset).iso;
+    if (chave === 'INICIO_SEMANA') return periodoSemana(hoje, offset).inicio.yyyymmdd;
+    if (chave === 'INICIO_SEMANA_ISO') return periodoSemana(hoje, offset).inicio.iso;
+    if (chave === 'FIM_SEMANA') return periodoSemana(hoje, offset).fim.yyyymmdd;
+    if (chave === 'FIM_SEMANA_ISO') return periodoSemana(hoje, offset).fim.iso;
     if (chave === 'INICIO_MES') return periodoMes(hoje, offset).inicio.yyyymmdd;
     if (chave === 'INICIO_MES_ISO') return periodoMes(hoje, offset).inicio.iso;
     if (chave === 'FIM_MES') return periodoMes(hoje, offset).fim.yyyymmdd;
@@ -193,6 +224,25 @@ function aplicarMacrosSql(sql, job, referencia = new Date(), destinatarios = nul
       return String(valorIdentidade).replace(/'/g, "''");
     }
     return match;
+  });
+}
+
+function macrosPendentesSql(sql) {
+  const pendentes = new Set();
+  String(sql || '').replace(/\{\{\s*([A-Z0-9_]+)(?::\s*([+-]?\d+))?\s*\}\}/gi, (match) => {
+    pendentes.add(match);
+    return match;
+  });
+  return Array.from(pendentes);
+}
+
+function validarMacrosResolvidasSql(sql) {
+  const pendentes = macrosPendentesSql(sql);
+  if (!pendentes.length) return;
+  const detalhe = pendentes.slice(0, 5).join(', ');
+  throw Object.assign(new Error(`Macro SQL nao reconhecida ou sem contexto para substituicao: ${detalhe}.`), {
+    statusCode: 400,
+    macrosPendentes: pendentes,
   });
 }
 
@@ -348,7 +398,9 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
 
 async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
   const sqlOriginal = sqlFixo(job);
-  const sql = garantirSetRowcountSqlFixo(aplicarMacrosSql(sqlOriginal, { ...job, empresa_id: empresaId }, new Date(), destinatarios));
+  const sqlComMacros = aplicarMacrosSql(sqlOriginal, { ...job, empresa_id: empresaId }, new Date(), destinatarios);
+  validarMacrosResolvidasSql(sqlComMacros);
+  const sql = garantirSetRowcountSqlFixo(sqlComMacros);
   validarSqlFixoBasico(sql);
 
   const modulo = String(job.modulo || '').toLowerCase();
@@ -617,6 +669,8 @@ module.exports = {
   executarSqlFixoUmaVez,
   _test: {
     aplicarMacrosSql,
+    macrosPendentesSql,
+    validarMacrosResolvidasSql,
     consultaSemSetRowcount,
     garantirSetRowcountSqlFixo,
     validarSqlFixoBasico,

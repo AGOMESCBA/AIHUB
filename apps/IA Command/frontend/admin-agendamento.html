@@ -506,6 +506,12 @@
       <code class="help-code">{{HOJE}}                  20260731
 {{ONTEM}}                 20260730
 {{AMANHA}}                20260801
+{{INICIO_SEMANA}}         20260727
+{{FIM_SEMANA}}            20260731
+{{INICIO_SEMANA_ANTERIOR}} 20260720
+{{FIM_SEMANA_ANTERIOR}}   20260726
+{{INICIO_PROXIMA_SEMANA}} 20260803
+{{FIM_PROXIMA_SEMANA}}    20260809
 {{INICIO_MES}}            20260701
 {{FIM_MES}}               20260731
 {{INICIO_MES_ANTERIOR}}   20260601
@@ -518,6 +524,12 @@
       <code class="help-code">{{HOJE_ISO}}                  2026-07-31
 {{ONTEM_ISO}}                 2026-07-30
 {{AMANHA_ISO}}                2026-08-01
+{{INICIO_SEMANA_ISO}}         2026-07-27
+{{FIM_SEMANA_ISO}}            2026-07-31
+{{INICIO_SEMANA_ANTERIOR_ISO}} 2026-07-20
+{{FIM_SEMANA_ANTERIOR_ISO}}   2026-07-26
+{{INICIO_PROXIMA_SEMANA_ISO}} 2026-08-03
+{{FIM_PROXIMA_SEMANA_ISO}}    2026-08-09
 {{INICIO_MES_ISO}}            2026-07-01
 {{FIM_MES_ISO}}               2026-07-31
 {{INICIO_MES_ANTERIOR_ISO}}   2026-06-01
@@ -531,8 +543,11 @@
 
     <section class="help-section">
       <div class="help-section-title">Deslocamentos</div>
-      <div class="help-item-desc">Use dois pontos e um numero para voltar ou avancar periodos. Em macros de mes, o numero representa meses. Em macros de ano, representa anos. Em {{HOJE}}, representa dias.</div>
-      <code class="help-code">{{INICIO_MES:-1}}       inicio do mes anterior em Protheus
+      <div class="help-item-desc">Use dois pontos e um numero para voltar ou avancar periodos. Em macros de semana, o numero representa semanas. Em macros de mes, meses. Em macros de ano, anos. Em {{HOJE}}, dias.</div>
+      <code class="help-code">{{INICIO_SEMANA:-1}}    inicio da semana anterior em Protheus
+{{FIM_SEMANA:-1}}       fim da semana anterior em Protheus
+{{INICIO_SEMANA_ISO:1}} inicio da proxima semana em ISO
+{{INICIO_MES:-1}}       inicio do mes anterior em Protheus
 {{INICIO_MES_ISO:-1}}   inicio do mes anterior em ISO
 {{FIM_MES:-12}}         fim do mesmo mes do ano passado em Protheus
 {{FIM_MES_ISO:-12}}     fim do mesmo mes do ano passado em ISO
@@ -547,6 +562,9 @@
     <section class="help-section">
       <div class="help-section-title">Exemplos</div>
       <div class="help-item"><div class="help-item-label">Consulta do dia</div><code class="help-code">WHERE SF2.F2_EMISSAO = '{{HOJE}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Consulta da semana</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_SEMANA}}' AND '{{FIM_SEMANA}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Semana passada</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_SEMANA_ANTERIOR}}' AND '{{FIM_SEMANA_ANTERIOR}}'</code></div>
+      <div class="help-item"><div class="help-item-label">Proxima semana</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_PROXIMA_SEMANA}}' AND '{{FIM_PROXIMA_SEMANA}}'</code></div>
       <div class="help-item"><div class="help-item-label">Consulta do mes atual</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_MES}}' AND '{{FIM_MES}}'</code></div>
       <div class="help-item"><div class="help-item-label">Campo DATE/DATETIME no SQL Server</div><code class="help-code">WHERE CAST(DATA_EMISSAO AS DATE) BETWEEN '{{INICIO_MES_ISO}}' AND '{{FIM_MES_ISO}}'</code></div>
       <div class="help-item"><div class="help-item-label">Mes anterior</div><code class="help-code">WHERE SF2.F2_EMISSAO BETWEEN '{{INICIO_MES:-1}}' AND '{{FIM_MES:-1}}'</code></div>

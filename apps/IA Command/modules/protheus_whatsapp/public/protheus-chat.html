@@ -2434,6 +2434,7 @@
       addBubble({
         id: data.resposta.mensagemId,
         texto: data.resposta.texto,
+        apresentacao: data.resposta.apresentacao || null,
         direcao: 'in',
         rows: data.resposta.rows || null,
         temDados: !!data.resposta.temDados,

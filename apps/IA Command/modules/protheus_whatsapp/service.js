@@ -407,22 +407,38 @@ async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
   const rows = Array.isArray(resultadoExec.rows)
     ? traduzirNomesCruesViaSx3(resultadoExec.rows, empresaId)
     : null;
+  const intentFavorito = {
+    intencao: `${modulo}_dinamico`,
+    origem: sqlExec.origem === 'sql_template' ? 'protheus_chat_favorito_template' : 'protheus_chat_favorito',
+    _moduloDinamico: modulo,
+    _remetente: celular,
+    _mensagemOriginal: favorito.pergunta_texto,
+    _sqlTemplateAplicado: sqlExec.origem === 'sql_template',
+    _sqlTemplateParametros: sqlExec.aplicados || [],
+    _skipIaSqlGeneration: true,
+  };
+  const resultadoFormatacao = {
+    ...resultadoExec,
+    tipo: resultadoExec.ok === false ? 'erro' : 'sucesso_ai_sql',
+    rows: rows || [],
+  };
+  const apresentacao = resultadoExec.ok === false
+    ? null
+    : responseFormatter.montarApresentacaoResposta(respostaTexto, resultadoFormatacao, intentFavorito, {
+        empresaId,
+        sugerirComparacao: true,
+      });
+  const respostaFinal = apresentacao
+    ? responseFormatter.textoApresentacao(apresentacao, respostaTexto)
+    : respostaTexto;
+
   const { perguntaId, respostaId } = sessionStore.salvarTurno({
     sessaoId,
     perguntaTexto: favorito.pergunta_texto,
-    respostaTexto,
+    respostaTexto: respostaFinal,
     rows,
     tipoResultado: resultadoExec.ok === false ? 'erro' : 'favorito_sql_fixo',
-    intent: {
-      intencao: `${modulo}_dinamico`,
-      origem: sqlExec.origem === 'sql_template' ? 'protheus_chat_favorito_template' : 'protheus_chat_favorito',
-      _moduloDinamico: modulo,
-      _remetente: celular,
-      _mensagemOriginal: favorito.pergunta_texto,
-      _sqlTemplateAplicado: sqlExec.origem === 'sql_template',
-      _sqlTemplateParametros: sqlExec.aplicados || [],
-      _skipIaSqlGeneration: true,
-    },
+    intent: intentFavorito,
   });
   if (resultadoExec.interpretation_log_id) {
     sessionStore.vincularInterpretacao({
@@ -441,7 +457,8 @@ async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
   return {
     mensagemId: respostaId,
     perguntaId,
-    texto: respostaTexto,
+    texto: respostaFinal,
+    apresentacao,
     rows,
     temDados: Array.isArray(rows) && rows.length > 0,
     rowsCount: Array.isArray(rows) ? rows.length : 0,
