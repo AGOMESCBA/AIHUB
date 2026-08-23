@@ -58,6 +58,18 @@ function modoTabelaSX2(sx2 = {}, tabelaOuBase) {
   return entrada ? String(entrada[1] || '').trim().toUpperCase() : null;
 }
 
+// Modo de compartilhamento por EMPRESA (X2_MODOEMP) — dimensao independente do
+// modo de filial (X2_MODO). Uma tabela pode ser compartilhada entre filiais
+// (modoTabelaSX2 = C) e ainda assim ser exclusiva por empresa (modoEmpresaSX2
+// = E) — caso real confirmado: SA1 na Plantivo (Lobo Guara). Mapa separado
+// (`sx2Empresa`), nunca misturado ao mapa `sx2` original, para nao alterar o
+// formato ja consumido pelo caminho TRADICIONAL.
+function modoEmpresaSX2(sx2Empresa = {}, tabelaOuBase) {
+  const base = baseTabelaSX2(tabelaOuBase);
+  const entrada = Object.entries(sx2Empresa || {}).find(([nome]) => baseTabelaSX2(nome) === base);
+  return entrada ? String(entrada[1] || '').trim().toUpperCase() : null;
+}
+
 function aliasTabelaSql(sql) {
   const aliases = {};
   const re = /\b(?:FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(?:[ \t]+(?:AS[ \t]+)?([A-Z_][A-Z0-9_]*))?/gi;
@@ -339,6 +351,7 @@ module.exports = {
   baseTabelaSX2,
   tabelaFisicaSX2,
   modoTabelaSX2,
+  modoEmpresaSX2,
   sufixoTabelaSX2,
   aliasTabelaSql,
   campoFilialBase,

@@ -460,6 +460,46 @@
   .reset-memoria-btn.spin svg { animation: reset-spin 0.5s ease; }
   @keyframes reset-spin { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
 
+  .focus-toggle-btn {
+    flex: none;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+  .focus-toggle-btn:hover,
+  .focus-toggle-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    outline: none;
+  }
+  .focus-toggle-btn.active {
+    background: var(--wa-accent-soft-bg);
+    border-color: var(--wa-accent);
+    color: var(--wa-accent);
+  }
+  .focus-toggle-btn svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
   .header-actions { position: relative; flex: none; }
   .header-menu-toggle svg { width: 17px; height: 17px; }
   .header-actions-menu {
@@ -1083,15 +1123,15 @@
         </button>
         <div class="empresa-menu" id="empresaMenu" role="menu"></div>
       </div>
+      <button class="focus-toggle-btn" id="btnModoFoco" type="button" title="Modo foco" aria-label="Ativar modo foco" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>
+        <span>FOCO</span>
+      </button>
       <div class="header-actions" id="headerActions">
         <button class="reset-memoria-btn header-menu-toggle" id="btnHeaderMenu" type="button" title="Mais opcoes" aria-label="Mais opcoes" aria-haspopup="true" aria-expanded="false">
           <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 100-4 2 2 0 000 4zM12 14a2 2 0 100-4 2 2 0 000 4zM12 20a2 2 0 100-4 2 2 0 000 4z"/></svg>
         </button>
         <div class="header-actions-menu" id="headerActionsMenu">
-          <button class="reset-memoria-btn" id="btnModoFoco" type="button" title="Modo foco" aria-label="Ativar modo foco" aria-pressed="false">
-            <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>
-            <span>Modo foco</span>
-          </button>
           <button class="reset-memoria-btn" id="btnTema" type="button" title="Tema claro" aria-label="Usar tema claro" aria-pressed="false">
             <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 100 12 6 6 0 000-12z"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
             <span>Tema claro</span>
@@ -1597,6 +1637,25 @@
     empresasSelecionadasIds = empresaAtualId ? [empresaAtualId] : [];
     renderEmpresaSelect();
     bootLog('empresas:fim', { total: empresasDisponiveis.length, empresaAtualId });
+  }
+
+  async function carregarBootstrapInicial() {
+    bootLog('bootstrap:inicio');
+    const data = await api('/bootstrap');
+    empresasDisponiveis = Array.isArray(data.empresas) ? data.empresas : [];
+    empresaAtualId = Number(data.empresaId || empresasDisponiveis[0]?.empresaId || 0) || null;
+    if (!empresasDisponiveis.length && empresaAtualId) {
+      empresasDisponiveis = [{ empresaId: empresaAtualId, nome: `Empresa ${empresaAtualId}` }];
+    }
+    empresasSelecionadasIds = empresaAtualId ? [empresaAtualId] : [];
+    sessoesCache = Array.isArray(data.sessoes) ? data.sessoes : [];
+    renderEmpresaSelect();
+    renderSessionList();
+    bootLog('bootstrap:fim', {
+      empresas: empresasDisponiveis.length,
+      empresaAtualId,
+      sessoes: sessoesCache.length,
+    });
   }
 
   async function trocarEscopoEmpresa() {
@@ -3452,8 +3511,7 @@
     sendBtn.disabled = false;
     bootLog('input:liberado');
     renderEmptyState('Carregando conversas...');
-    carregarEmpresasDisponiveis()
-      .then(() => carregarSessoes())
+    carregarBootstrapInicial()
       .then(() => bootLog('boot:fim', {
         empresas: empresasDisponiveis.length,
         favoritos: favoritosCache.length,

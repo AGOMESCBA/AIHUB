@@ -8,7 +8,7 @@
     A estrutura fisica e o dicionario ja devem existir no ambiente.
 /*/
 
-User Function IACadUsr()
+User Function IACADUSR()
 
     Private oBrowse := FWMBrowse():New()
     Private aRotina := {}
@@ -30,30 +30,11 @@ Static Function MenuDef()
     Local aRotina := {}
 
     ADD OPTION aRotina TITLE "Visualizar" ACTION "VIEWDEF.IACADUSR" OPERATION 2 ACCESS 0
-    ADD OPTION aRotina TITLE "Incluir"    ACTION "U_IACZInc()" OPERATION 3 ACCESS 0
+    ADD OPTION aRotina TITLE "Incluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 3 ACCESS 0
     ADD OPTION aRotina TITLE "Alterar"    ACTION "VIEWDEF.IACADUSR" OPERATION 4 ACCESS 0
     ADD OPTION aRotina TITLE "Excluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 5 ACCESS 0
 
 Return aRotina
-
-/*/{Protheus.doc} IACZInc
-    Abre a inclusao do cadastro ZCH.
-/*/
-
-User Function IACZInc()
-    Local aArea := FWGetArea()
-    Local cFunBkp := FunName()
-
-    DbSelectArea("ZCH")
-    ZCH->(DbSetOrder(1))
-
-    SetFunName("IACADUSR")
-    FWExecView("Incluir celular por usuario", "IACADUSR", MODEL_OPERATION_INSERT)
-    SetFunName(cFunBkp)
-
-    FWRestArea(aArea)
-
-Return
 
 /*/{Protheus.doc} ModelDef
     Modelo de dados MVC da tabela ZCH.
@@ -64,7 +45,7 @@ Static Function ModelDef()
     Local oModel   := Nil
     Local oStruZCH := FWFormStruct(1, "ZCH")
 
-    oModel := MPFormModel():New("IACADUSRM")
+    oModel := MPFormModel():New("IACDSRM")
 
     oModel:AddFields("ZCH_MASTER", , oStruZCH)
     oModel:SetPrimaryKey({"ZCH_FILIAL", "ZCH_USER"})

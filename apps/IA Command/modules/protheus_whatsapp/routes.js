@@ -275,6 +275,31 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     });
   });
 
+  app.get('/api/ia-command/protheus/bootstrap', requireTokenSessao, (req, res) => {
+    const inicio = Date.now();
+    const { celular } = req.protheusChat;
+    try {
+      const empresas = empresasPermitidasDaSessao(req.protheusChat);
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const sessoes = sessionStore.listarSessoes({ empresaId, celular });
+      perfLog('GET /bootstrap', inicio, {
+        status: 200,
+        empresaId,
+        empresas: empresas.length,
+        sessoes: sessoes.length,
+      });
+      res.json({
+        empresaId: Number(req.protheusChat.empresaId),
+        empresas,
+        sessoes,
+      });
+    } catch (err) {
+      perfLog('GET /bootstrap', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/ia-command/protheus/favoritos', requireTokenSessao, (req, res) => {
     const inicio = Date.now();
     const { celular } = req.protheusChat;

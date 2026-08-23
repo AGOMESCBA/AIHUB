@@ -1452,6 +1452,14 @@ const MIGRATIONS = [
       ALTER TABLE scheduled_question_jobs ADD COLUMN retry_recipient_ids TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 79,
+    descricao: 'Lobo Guara - captura X2_MODOUN/X2_MODOEMP do SX2 (compartilhamento por unidade/empresa, alem de filial)',
+    sql: `
+      ALTER TABLE protheus_sx2 ADD COLUMN modo_unidade TEXT DEFAULT NULL;
+      ALTER TABLE protheus_sx2 ADD COLUMN modo_empresa TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

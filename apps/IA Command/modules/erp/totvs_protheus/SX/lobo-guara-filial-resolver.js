@@ -182,10 +182,42 @@ function expandirFiliaisDaEmpresa(db, connectionId, empresaCodigo) {
   return rows.map(r => r.filial_chave).filter(Boolean);
 }
 
+// Caso real confirmado com dado de producao (Plantivo/SA1, ver
+// docs/lobo-guara-consenso-arquitetura.md): uma tabela pode ser EXCLUSIVA por
+// empresa (X2_MODOEMP=E) mesmo sendo compartilhada entre filiais (X2_MODO=C).
+//
+// Quando isso ocorre, o campo de filial gravado nessa tabela NAO tem o mesmo
+// tamanho/formato de filial_chave (M0_CODFIL, mascara completa do M0_LEIAUTE
+// do grupo — ex.: 6 digitos 'EEUUFF'). Confirmado com dado real da Plantivo:
+// M0_LEIAUTE='EEUUFF', F2_FILIAL (exclusiva) tem 6 digitos e bate com
+// filial_chave ('010101'), mas A1_FILIAL (exclusiva so por empresa) tem
+// APENAS 2 digitos ('01') — o Protheus grava so o segmento de empresa (EE) da
+// mascara quando os demais niveis sao compartilhados, entao o valor real
+// nunca bate com filial_chave completa.
+//
+// Por isso o filtro correto para essas tabelas usa `empresa_codigo` (2
+// digitos, ja confiavel e gravado na arvore) — nunca filial_chave completa,
+// e nunca decompor via SUBSTRING/mascara (variavel por instalacao, fragil).
+// Recebe a lista de filial_chave ja resolvida para o SQL (de qualquer modo:
+// especifica/empresa) e devolve os codigos de empresa donas (nao filiais).
+function empresasDonasDasFiliais(db, connectionId, filiaisChave) {
+  const chaves = [...new Set((filiaisChave || []).filter(Boolean))];
+  if (!chaves.length) return [];
+
+  const placeholders = chaves.map(() => '?').join(',');
+  const rows = db.prepare(`
+    SELECT DISTINCT empresa_codigo FROM protheus_company_tree
+     WHERE connection_id = ? AND ativo = 1 AND tipo_no = 'filial' AND filial_chave IN (${placeholders})
+  `).all(connectionId, ...chaves);
+
+  return rows.map(r => r.empresa_codigo).filter(Boolean);
+}
+
 module.exports = {
   contextoLoboGuara,
   resolverDaMensagem,
   expandirFiliaisDaEmpresa,
+  empresasDonasDasFiliais,
   _normalizar,
   _clonar,
   _contemPalavra,

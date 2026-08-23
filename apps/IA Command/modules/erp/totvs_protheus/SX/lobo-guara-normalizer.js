@@ -1,6 +1,6 @@
 'use strict';
 
-console.log('[IA Command] LoboGuaraNormalizer v20260818a — aplica escopo de filial/empresa organizacional pos-SX2');
+console.log('[IA Command] LoboGuaraNormalizer v20260821a — considera X2_MODOEMP (compartilhamento por empresa, alem de filial)');
 
 // Normalizer Lobo Guara — ver docs/lobo-guara-consenso-arquitetura.md.
 //
@@ -10,11 +10,17 @@ console.log('[IA Command] LoboGuaraNormalizer v20260818a — aplica escopo de fi
 // SQL existir). Injeta `alias.campoFilial IN (...)` nas tabelas de negocio
 // presentes no SQL, quando ha escopo de filial definido.
 //
+// Cada tabela pode ter um nivel de compartilhamento DIFERENTE (X2_MODO para
+// filial, X2_MODOEMP para empresa — caso real confirmado: SA1 compartilhada
+// entre filiais mas exclusiva por empresa na Plantivo). O filtro por tabela
+// usa o campo/tamanho certo para cada nivel — nunca mistura filial_chave
+// completa com codigo de empresa.
+//
 // Nao decide QUAL filial — so aplica o que ja foi decidido. Nao le
 // SYS_COMPANY_CFG, nao faz JOIN, nao decompoe filial via SUBSTRING.
 
 const sx2SqlNormalizer = require('./sx2-sql-normalizer');
-const { aliasTabelaSql, campoFilialBase, modoTabelaSX2 } = sx2SqlNormalizer;
+const { aliasTabelaSql, campoFilialBase, modoTabelaSX2, modoEmpresaSX2 } = sx2SqlNormalizer;
 
 function _escaparRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -51,17 +57,49 @@ function _resolverChavesEscopo(filialState, db, connectionId) {
 // Injeta `alias.campo IN ('a','b',...)` em cada tabela de negocio do SQL cujo
 // modo SX2 nao seja compartilhado/global (mesmo raciocinio do SX2: cadastros
 // compartilhados entre filiais nao tem filial significativa).
-function _injetarFiltroFilial(sql, aliases, sx2, chaves, opts = {}) {
+//
+// Cada tabela pode exigir um VALOR e TAMANHO de filtro diferentes do escopo
+// original: quando X2_MODOEMP='E' (exclusiva por empresa, mesmo com
+// X2_MODO='C' — caso real confirmado: SA1/Plantivo, ver
+// docs/lobo-guara-consenso-arquitetura.md), o campo de filial gravado nessa
+// tabela nao tem o mesmo tamanho de filial_chave (mascara completa do
+// M0_LEIAUTE do grupo, ex.: 6 digitos 'EEUUFF') — o Protheus grava so o
+// segmento de empresa (ex.: 2 digitos). Confirmado com dado real: F2_FILIAL
+// (exclusiva) tem 6 digitos, A1_FILIAL (exclusiva so por empresa) tem 2.
+// `codigosEmpresa` traz o codigo de empresa (curto, 2 digitos), nunca
+// filial_chave completa nem decomposicao via SUBSTRING/mascara.
+function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, opts = {}) {
   if (!chaves || !chaves.length) return { sql, aplicado: false, avisos: [] };
 
-  const listaSql = chaves.map(c => `'${_escaparSqlLiteral(c)}'`).join(', ');
   const avisos = [];
   let alterado = false;
   let texto = String(sql || '');
 
   for (const [alias, base] of Object.entries(aliases)) {
     const modo = sx2 ? modoTabelaSX2(sx2, base) : null;
-    if (modo === 'C' || modo === 'G') continue; // compartilhada/global — sem filial significativa
+    const modoEmp = sx2Empresa ? modoEmpresaSX2(sx2Empresa, base) : null;
+
+    // Precedencia: X2_MODO='E' (exclusiva por filial) e a granularidade mais
+    // fina possivel e SEMPRE vence — usa a filial pontual do escopo, igual ao
+    // comportamento anterior (bug real encontrado em teste: SF2, que e
+    // X2_MODO=E E X2_MODOEMP=E ao mesmo tempo, estava sendo filtrada pelo
+    // codigo de empresa curto em vez da filial completa, quebrando a query).
+    // So quando a tabela NAO for exclusiva por filial (compartilhada/global
+    // nesse nivel) e que X2_MODOEMP='E' decide o filtro — caso real SA1:
+    // X2_MODO=C (compartilhada em filial) mas X2_MODOEMP=E (exclusiva por
+    // empresa), onde o campo de filial gravado tem tamanho/formato diferente
+    // (codigo de empresa curto, nao filial_chave completa).
+    let valoresTabela = chaves;
+    let escopoEmpresa = false;
+    if (modo === 'E') {
+      // segue com valoresTabela = chaves (filial pontual) — nada a fazer aqui.
+    } else if (modoEmp === 'E') {
+      if (!codigosEmpresa || !codigosEmpresa.length) continue; // sem empresa dona identificada -- nao filtra às cegas
+      valoresTabela = codigosEmpresa;
+      escopoEmpresa = true;
+    } else if (modo === 'C' || modo === 'G') {
+      continue; // compartilhada/global em todos os niveis relevantes — sem filial significativa
+    }
 
     const campo = campoFilialBase(base);
     const aliasEsc = _escaparRegex(alias);
@@ -76,6 +114,7 @@ function _injetarFiltroFilial(sql, aliases, sx2, chaves, opts = {}) {
     const jaTemFiltroLiteral = new RegExp(`${aliasEsc}\\s*\\.\\s*${campoEsc}\\s*(?:=\\s*'|IN\\s*\\(\\s*')`, 'i').test(texto);
     if (jaTemFiltroLiteral) continue;
 
+    const listaSql = valoresTabela.map(c => `'${_escaparSqlLiteral(c)}'`).join(', ');
     const predicado = `${alias}.${campo} IN (${listaSql})`;
     const antes = texto;
 
@@ -90,7 +129,7 @@ function _injetarFiltroFilial(sql, aliases, sx2, chaves, opts = {}) {
 
     if (texto !== antes) {
       alterado = true;
-      avisos.push(`${alias}.${campo} IN (...) aplicado — ${chaves.length} filial(is)`);
+      avisos.push(`${alias}.${campo} IN (...) aplicado — ${valoresTabela.length} ${escopoEmpresa ? 'empresa(s)' : 'filial(is)'}`);
     }
   }
 
@@ -105,7 +144,7 @@ function _injetarFiltroFilial(sql, aliases, sx2, chaves, opts = {}) {
 // lobo-guara-filial-resolver.contextoLoboGuara(db, empresaId) — já confirma
 // modelo LOBO_GUARA + perfil validado. Se `ctx` for null, o normalizer não
 // faz nada (não é uma conexão LOBO_GUARA validada — falha fechado).
-function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, filialState, logPrefix } = {}) {
+function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix } = {}) {
   if (!ctx || !db) return sql;
 
   const chaves = _resolverChavesEscopo(filialState, db, ctx.connectionId);
@@ -114,7 +153,17 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, filialState, logPrefix } = 
   const aliases = aliasTabelaSql(sql);
   if (!Object.keys(aliases).length) return sql;
 
-  const { sql: sqlFinal } = _injetarFiltroFilial(sql, aliases, sx2, chaves, { logPrefix });
+  // Só precisa resolver a empresa dona se alguma tabela do SQL de fato
+  // tiver X2_MODOEMP='E' — evita consulta desnecessária à árvore no caminho comum.
+  const precisaEscopoEmpresa = sx2Empresa && Object.values(aliases).some(
+    base => modoEmpresaSX2(sx2Empresa, base) === 'E'
+  );
+  const resolver = require('./lobo-guara-filial-resolver');
+  const codigosEmpresa = precisaEscopoEmpresa
+    ? resolver.empresasDonasDasFiliais(db, ctx.connectionId, chaves)
+    : null;
+
+  const { sql: sqlFinal } = _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix });
   return sqlFinal;
 }
 

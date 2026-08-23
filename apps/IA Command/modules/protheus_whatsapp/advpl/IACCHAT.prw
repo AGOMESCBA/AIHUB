@@ -1,6 +1,7 @@
 #INCLUDE "PROTHEUS.CH"
 #INCLUDE "FWMVCDEF.CH"
 #INCLUDE "TOTVS.CH"
+#INCLUDE "TOPCONN.CH"
 
 /* ============================================================================
    IACCHAT.PRW — Chat IA Command aberto em nova aba do navegador a partir do
@@ -169,6 +170,10 @@ User Function IACChat()
     Local lOk         := .T.
     Local cErro       := ""
     Local nShellRet   := 0
+    Local nBoot       := Seconds()
+    Local nStep       := nBoot
+
+    IACPerf("IACChat inicio", nBoot)
 
     cUrlChatBase := IACUrlChat()
     If Empty(cUrlChatBase)
@@ -177,7 +182,9 @@ User Function IACChat()
         Return
     EndIf
 
+    nStep   := Seconds()
     cCelular := IACLerCel()
+    IACPerf("IACLerCel", nStep)
 
     If Empty(cCelular)
         MsgAlert("Celular nao cadastrado para o usuario " + RetCodUsr() + "." + CRLF + ;
@@ -186,7 +193,7 @@ User Function IACChat()
         Return
     EndIf
 
-    cLaunchTk := IACLaunchTk()
+    cLaunchTk := IACLchTk()
     cUrlChat  := cUrlChatBase + "?launchTicket=" + cLaunchTk + ;
                  "&usuario=" + FWURLEncode(IACRmAcent(cNomeUser))
 
@@ -194,9 +201,13 @@ User Function IACChat()
     // SmartClient HTML/WebApp, ShellExecute pode retornar 32 quando chamado
     // depois de FWUsrEmp/FWLoadSM0/SX6/FWRest. A pagina aberta aguarda o token
     // pelo launchTicket gravado no IAHub.
+    nStep     := Seconds()
     nShellRet := ShellExecute("open", cUrlChat, "", "", 1)
+    IACPerf("ShellExecute retorno=" + cValToChar(nShellRet), nStep)
 
+    nStep := Seconds()
     lOk := IACToken(cCelular, @cToken, @cErro, cLaunchTk)
+    IACPerf("IACToken total", nStep)
 
     If !lOk
         MsgAlert("Nao foi possivel iniciar a sessao do IA Command:" + CRLF + cErro, "IA Command")
@@ -238,6 +249,8 @@ User Function IACChat()
                  "Copie o link abaixo e abra em uma nova aba do navegador:" + CRLF + CRLF + ;
                  cUrlFallback, "IA Command")
     EndIf
+
+    IACPerf("IACChat total", nBoot)
 
 Return
 
@@ -344,12 +357,29 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     Local cRespo      := ""
     Local lOk         := .F.
     Local oJsonRes
-    Local aCodigos    := IACEmpUsr()
-    Local aParamEmp   := IACSX6Lista("MV_IACEMID")
-    Local nEmpresaId  := IACEmpAt(aCodigos, aParamEmp) // ver comentario acima
+    Local aCodigos    := {}
+    Local aParamEmp   := {}
+    Local nEmpresaId  := 0
     Local cEmpPermit  := ""
-    Local cUrlToken   := IACUrlTok()
-    Local nTimeout    := IACTimeout()
+    Local cUrlToken   := ""
+    Local nTimeout    := 0
+    Local nStep       := Seconds()
+
+    aCodigos := IACEmpUsr()
+    IACPerf("IACToken IACEmpUsr empresas=" + cValToChar(Len(aCodigos)), nStep)
+
+    nStep     := Seconds()
+    aParamEmp := IACSX6Lst("MV_IACEMID", aCodigos)
+    IACPerf("IACToken IACSX6Lst itens=" + cValToChar(Len(aParamEmp)), nStep)
+
+    nStep      := Seconds()
+    nEmpresaId := IACEmpAt(aCodigos, aParamEmp) // ver comentario acima
+    IACPerf("IACToken IACEmpAt empresaId=" + cValToChar(nEmpresaId), nStep)
+
+    nStep     := Seconds()
+    cUrlToken := IACUrlTok()
+    nTimeout  := IACTimeout()
+    IACPerf("IACToken config", nStep)
 
     If nEmpresaId <= 0
         cErro := "Parametro MV_IACEMID nao configurado. Cadastre-o em Configurador (SIGACFG) > " + ;
@@ -367,7 +397,9 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     // manualmente — protege contra quebra de payload se o campo de cadastro
     // tiver algum caractere inesperado. Preferir JsonObject():ToJson() se
     // disponivel nesta versao, em vez de concatenacao manual de string.
+    nStep     := Seconds()
     cEmpPermit := IACEmpJs(nEmpresaId, aCodigos, aParamEmp)
+    IACPerf("IACToken IACEmpJs", nStep)
 
     cBody := '{"empresaId":' + cValToChar(nEmpresaId) + ;
               ',"celular":"' + IACEscJs(cCelular) + '"' + ;
@@ -396,7 +428,9 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     // de chamar Post(aHeader), ou se Post() aceita o body como 1o parametro
     // (Post(cBody, aHeader)) — nao confirmado nos exemplos publicos consultados.
     oRest:SetPostParams(cBody)
+    nStep := Seconds()
     lOk := oRest:Post(aHeader)
+    IACPerf("IACToken FWRest Post ok=" + cValToChar(lOk), nStep)
 
     If !lOk
         // [CORRIGIDO apos erro em producao 10/08/2026] oRest:GetLastError()
@@ -410,11 +444,13 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
 
     cRespo := oRest:GetResult()
 
+    nStep   := Seconds()
     oJsonRes := JsonObject():New()
     If oJsonRes:FromJson(cRespo) != Nil
         cErro := "Resposta invalida do servidor: " + cRespo
         Return .F.
     EndIf
+    IACPerf("IACToken parse resposta", nStep)
 
     If !Empty(oJsonRes:GetJsonObject("error"))
         cErro := oJsonRes:GetJsonObject("error")
@@ -431,12 +467,12 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
 Return .T.
 
 /* ----------------------------------------------------------------------------
-   IACLaunchTk
+   IACLchTk
    Gera um identificador simples para amarrar a aba aberta antes do token com o
    token emitido logo depois. Nao e credencial; serve so como correlacao curta
    entre a pagina de espera e o POST /token.
 ---------------------------------------------------------------------------- */
-Static Function IACLaunchTk()
+Static Function IACLchTk()
     Local cTk := DTOS(Date()) + StrTran(Time(), ":", "") + RetCodUsr()
     cTk := StrTran(cTk, " ", "")
     cTk := StrTran(cTk, ".", "")
@@ -444,6 +480,22 @@ Static Function IACLaunchTk()
     cTk := StrTran(cTk, "-", "")
     cTk := StrTran(cTk, "/", "")
 Return cTk
+
+/* ----------------------------------------------------------------------------
+   IACPerf
+   Log simples de performance no console/log do AppServer. Usado para medir o
+   tempo entre o clique no menu Protheus e o token ficar disponivel no IAHub.
+---------------------------------------------------------------------------- */
+Static Function IACPerf(cEtapa, nInicio)
+    Local nMs := (Seconds() - nInicio) * 1000
+
+    If nMs < 0
+        nMs += 86400000
+    EndIf
+
+    ConOut("[IA Command][perf] " + cEtapa + " " + cValToChar(Int(nMs)) + "ms")
+
+Return Nil
 
 /* ----------------------------------------------------------------------------
    IACEmpJs
@@ -617,7 +669,7 @@ Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia, aParamEmp)
 
     cCodEmp := Left(Alltrim(cCodigoProtheus), 2)
     If ValType(aParamEmp) == "A"
-        cValor := IACSX6Busca(aParamEmp, cCodEmp)
+        cValor := IACSX6Bus(aParamEmp, cCodEmp)
     Else
         cValor := IACSX6Par("MV_IACEMID", cCodEmp)
     EndIf
@@ -626,20 +678,113 @@ Static Function IACEmpIdC(cCodigoProtheus, cFilReferencia, aParamEmp)
 Return nRet
 
 /* ----------------------------------------------------------------------------
-   IACSX6Lista
-   Carrega de uma vez todos os valores de um parametro por X6_FIL. Evita varrer
-   SX6 repetidamente durante a abertura do chat multiempresa, mantendo o
-   ShellExecute mais perto do clique original do usuario.
+   IACSX6Lst
+   Carrega os valores de um parametro por X6_FIL. Quando recebe a lista de
+   empresas do usuario, tenta primeiro buscar as chaves pelo indice da SX6 e,
+   por ultimo, usa a varredura completa antiga como fallback conservador.
 ---------------------------------------------------------------------------- */
-Static Function IACSX6Lista(cParam)
+Static Function IACSX6Lst(cParam, aCodigos)
     Local cAliasAtu := Alias()
     Local aRet      := {}
+    Local aFiltros  := {}
     Local cVar      := Alltrim(cParam)
     Local cDel      := ""
     Local cFil      := ""
     Local cValor    := ""
+    Local nI        := 0
+    Local nStep     := Seconds()
 
     DbSelectArea("SX6")
+
+    If ValType(aCodigos) == "A"
+        For nI := 1 To Len(aCodigos)
+            If ValType(aCodigos[nI]) == "A" .And. Len(aCodigos[nI]) >= 1
+                cFil := Left(Alltrim(cValToChar(aCodigos[nI, 1])), 2)
+                If !Empty(cFil)
+                    AAdd(aFiltros, cFil)
+                EndIf
+            EndIf
+        Next nI
+    EndIf
+
+    cFil := Left(Alltrim(cEmpAnt), 2)
+    If Empty(cFil)
+        cFil := Left(Alltrim(cFilAnt), 2)
+    EndIf
+    If !Empty(cFil)
+        AAdd(aFiltros, cFil)
+    EndIf
+
+    If Len(aFiltros) > 0
+        nStep := Seconds()
+        aRet := IACSX6Qry(cVar, aFiltros)
+        IACPerf("IACSX6Lst SQL itens=" + cValToChar(Len(aRet)), nStep)
+    EndIf
+
+    If Len(aRet) > 0
+        If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
+            DbSelectArea(cAliasAtu)
+        EndIf
+        Return aRet
+    EndIf
+
+    If ValType(aCodigos) == "A"
+        nStep := Seconds()
+        For nI := 1 To Len(aCodigos)
+            If ValType(aCodigos[nI]) == "A" .And. Len(aCodigos[nI]) >= 1
+                cFil := Left(Alltrim(cValToChar(aCodigos[nI, 1])), 2)
+
+                If !Empty(cFil)
+                    SX6->(DbSetOrder(1)) // normalmente X6_FIL+X6_VAR
+                    If SX6->(MsSeek(cFil + cVar))
+                        cDel := IACCampo("D_E_L_E_T_")
+                        If Empty(cDel) .And. Alltrim(IACCampo("X6_FIL")) == cFil .And. ;
+                           IACCampo("X6_VAR") == cVar
+                            cValor := IACCampo("X6_CONTEUD")
+                            If !Empty(cValor)
+                                AAdd(aRet, { cFil, cValor })
+                            EndIf
+                        EndIf
+                    EndIf
+                EndIf
+            EndIf
+        Next nI
+        IACPerf("IACSX6Lst seek itens=" + cValToChar(Len(aRet)), nStep)
+    EndIf
+
+    If Len(aRet) == 0
+        nStep := Seconds()
+        cFil := Left(Alltrim(cEmpAnt), 2)
+        If Empty(cFil)
+            cFil := Left(Alltrim(cFilAnt), 2)
+        EndIf
+
+        If !Empty(cFil)
+            SX6->(DbSetOrder(1)) // normalmente X6_FIL+X6_VAR
+            If SX6->(MsSeek(cFil + cVar))
+                cDel := IACCampo("D_E_L_E_T_")
+                If Empty(cDel) .And. Alltrim(IACCampo("X6_FIL")) == cFil .And. ;
+                   IACCampo("X6_VAR") == cVar
+                    cValor := IACCampo("X6_CONTEUD")
+                    If !Empty(cValor)
+                        AAdd(aRet, { cFil, cValor })
+                    EndIf
+                EndIf
+            EndIf
+        EndIf
+        IACPerf("IACSX6Lst atual itens=" + cValToChar(Len(aRet)), nStep)
+    EndIf
+
+    If Len(aRet) > 0
+        If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
+            DbSelectArea(cAliasAtu)
+        EndIf
+        Return aRet
+    EndIf
+
+    // Fallback conservador: mantem o comportamento anterior caso o indice da
+    // SX6 nao esteja em X6_FIL+X6_VAR neste ambiente.
+    nStep := Seconds()
     SX6->(DbGoTop())
 
     While !SX6->(Eof())
@@ -653,6 +798,7 @@ Static Function IACSX6Lista(cParam)
         EndIf
         SX6->(DbSkip())
     EndDo
+    IACPerf("IACSX6Lst fallback scan itens=" + cValToChar(Len(aRet)), nStep)
 
     If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
         DbSelectArea(cAliasAtu)
@@ -661,10 +807,76 @@ Static Function IACSX6Lista(cParam)
 Return aRet
 
 /* ----------------------------------------------------------------------------
-   IACSX6Busca
-   Busca em memoria o valor carregado por IACSX6Lista().
+   IACSX6Qry
+   Busca MV_IACEMID na SX6 via SQL/TOPCONN para evitar varredura DBF quando o
+   dicionario estiver grande. Os fallbacks por MsSeek/scan ficam no chamador.
 ---------------------------------------------------------------------------- */
-Static Function IACSX6Busca(aLista, cFil)
+Static Function IACSX6Qry(cParam, aFiltros)
+    Local aRet      := {}
+    Local cAliasAtu := Alias()
+    Local cAliasQry := GetNextAlias()
+    Local cQuery    := ""
+    Local cIn       := ""
+    Local cFil      := ""
+    Local cValor    := ""
+    Local nI        := 0
+
+    For nI := 1 To Len(aFiltros)
+        cFil := Alltrim(cValToChar(aFiltros[nI]))
+        If Empty(cFil)
+            Loop
+        EndIf
+        If !Empty(cIn)
+            cIn += ","
+        EndIf
+        cIn += IACLit(cFil)
+    Next nI
+
+    If Empty(cIn)
+        Return aRet
+    EndIf
+
+    cQuery := " SELECT X6_FIL, X6_CONTEUD " + ;
+              " FROM " + RetSqlName("SX6") + ;
+              " WHERE D_E_L_E_T_ = ' ' " + ;
+              " AND X6_VAR = " + IACLit(cParam) + ;
+              " AND X6_FIL IN (" + cIn + ") "
+
+    cQuery := ChangeQuery(cQuery)
+
+    DbUseArea(.T., "TOPCONN", TCGenQry(,,cQuery), cAliasQry, .F., .T.)
+    DbSelectArea(cAliasQry)
+
+    While !Eof()
+        cFil   := Alltrim(IACCampo("X6_FIL"))
+        cValor := IACCampo("X6_CONTEUD")
+        If !Empty(cFil) .And. !Empty(cValor)
+            AAdd(aRet, { cFil, cValor })
+        EndIf
+        DbSkip()
+    EndDo
+
+    DbCloseArea()
+
+    If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
+        DbSelectArea(cAliasAtu)
+    EndIf
+
+Return aRet
+
+/* ----------------------------------------------------------------------------
+   IACLit
+   Escapa literal simples para uso no SQL montado manualmente.
+---------------------------------------------------------------------------- */
+Static Function IACLit(cTexto)
+    Local cAspa := Chr(39)
+Return cAspa + StrTran(Alltrim(cTexto), cAspa, cAspa + cAspa) + cAspa
+
+/* ----------------------------------------------------------------------------
+   IACSX6Bus
+   Busca em memoria o valor carregado por IACSX6Lst().
+---------------------------------------------------------------------------- */
+Static Function IACSX6Bus(aLista, cFil)
     Local cFilBus := Alltrim(cFil)
     Local nI      := 0
 
@@ -843,22 +1055,7 @@ Return cSaida
    em querystring (o valor real ainda passa por FWURLEncode() depois).
 ---------------------------------------------------------------------------- */
 Static Function IACRmAcent(cTexto)
-    Local aDe   := {"á","à","â","ã","ä","é","è","ê","ë","í","ì","î","ï",;
-                     "ó","ò","ô","õ","ö","ú","ù","û","ü","ç","ñ",;
-                     "Á","À","Â","Ã","Ä","É","È","Ê","Ë","Í","Ì","Î","Ï",;
-                     "Ó","Ò","Ô","Õ","Ö","Ú","Ù","Û","Ü","Ç","Ñ"}
-    Local aPara := {"a","a","a","a","a","e","e","e","e","i","i","i","i",;
-                     "o","o","o","o","o","u","u","u","u","c","n",;
-                     "A","A","A","A","A","E","E","E","E","I","I","I","I",;
-                     "O","O","O","O","O","U","U","U","U","C","N"}
-    Local cSaida := cTexto
-    Local nI
-
-    For nI := 1 To Len(aDe)
-        cSaida := StrTran(cSaida, aDe[nI], aPara[nI])
-    Next nI
-
-Return cSaida
+Return cTexto
 
 /* ============================================================================
    CONFIGURACAO VIA PARAMETROS SX6 — NADA ABAIXO E CHUMBADO NO FONTE

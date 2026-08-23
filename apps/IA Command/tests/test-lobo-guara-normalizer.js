@@ -258,6 +258,90 @@ assert(outMisto.includes('SD2.D2_FILIAL IN'), 'Em SQL misto, tabela modo E (SD2)
 assert(!outMisto.includes('SA1.A1_FILIAL'), 'Em SQL misto, tabela modo C (SA1) não recebe filtro');
 
 // ─────────────────────────────────────────────────────────────
+// CENÁRIO 7b — X2_MODOEMP='E': tabela compartilhada por filial mas exclusiva
+// por empresa (caso real confirmado: SA1 na Plantivo — X2_MODO=C,
+// X2_MODOUN=C, X2_MODOEMP=E). O campo de filial gravado (A1_FILIAL) tem
+// tamanho DIFERENTE de filial_chave (2 dígitos vs 6) — dado real confirmado
+// via M0_LEIAUTE='EEUUFF'. O filtro correto usa empresa_codigo (2 dígitos),
+// nunca filial_chave completa.
+// ─────────────────────────────────────────────────────────────
+titulo('CENÁRIO 7b — X2_MODOEMP=E aplica filtro por empresa_codigo, não por filial_chave');
+
+// Mapas fieis ao dado real confirmado no SSMS da Plantivo:
+// SX2_CHAVE  X2_MODO  X2_MODOUN  X2_MODOEMP
+// SA1        C        C          E
+// SF2        E        E          E
+const sx2FilialReal   = { SA1: 'C', SF2: 'E' };
+const sx2EmpresaSA1 = { SA1: 'E', SF2: 'E' }; // modo_empresa (mapa PARALELO ao sx2 de filial)
+
+// Filial pontual (Cuiaba, empresa 01) -> deve expandir para empresa_codigo '01',
+// não para as 5 filial_chave da Plantivo nem para a filial_chave '010103' crua.
+const sqlSA1Isolado = `SELECT SA1.A1_NOME FROM SA1010 SA1 WHERE SA1.D_E_L_E_T_ = ' '`;
+const outSA1Empresa = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+  db, ctx: ctxTeste(), sx2: sx2FilialReal, sx2Empresa: sx2EmpresaSA1,
+  filialState: { modo: 'especifica', chaves: ['010103'], nomes: ['PLANTIVO CUIABA'] },
+});
+assert(outSA1Empresa.includes("SA1.A1_FILIAL IN ('01')"), 'SA1 filtrada pelo codigo de empresa (01), não pela filial_chave completa', outSA1Empresa);
+assert(!outSA1Empresa.includes('010103'), 'filial_chave completa (6 dígitos) não aparece no filtro de SA1', outSA1Empresa);
+
+// Filial da EMA (empresa 02) -> deve isolar '02', nunca misturar com '01'.
+const outSA1Ema = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+  db, ctx: ctxTeste(), sx2: sx2FilialReal, sx2Empresa: sx2EmpresaSA1,
+  filialState: { modo: 'especifica', chaves: ['020101'], nomes: ['EMA COMERCIO DE INSUMOS AGRICOLAS LTDA'] },
+});
+assert(outSA1Ema.includes("SA1.A1_FILIAL IN ('02')"), 'SA1 com escopo EMA filtra pelo código de empresa 02', outSA1Ema);
+assert(!outSA1Ema.includes("'01'"), 'SA1 com escopo EMA não vaza para o código de empresa 01', outSA1Ema);
+
+// REGRESSÃO — bug real encontrado em teste ao vivo: SF2 é X2_MODO=E *e*
+// X2_MODOEMP=E ao mesmo tempo (tabela ja exclusiva por filial). A precedencia
+// errada (checar modoEmp antes de modo) filtrava SF2 pelo codigo de empresa
+// curto ('01') em vez da filial completa ('010103'), zerando os resultados.
+const sqlSF2Isolado = `SELECT SF2.F2_DOC FROM SF2010 SF2 WHERE SF2.D_E_L_E_T_ = ' '`;
+const outSF2ExclusivaEAmbos = normalizer.aplicarEscopoLoboGuara(sqlSF2Isolado, {
+  db, ctx: ctxTeste(), sx2: sx2FilialReal, sx2Empresa: sx2EmpresaSA1,
+  filialState: { modo: 'especifica', chaves: ['010103'], nomes: ['PLANTIVO CUIABA'] },
+});
+assert(outSF2ExclusivaEAmbos.includes("SF2.F2_FILIAL IN ('010103')"), 'REGRESSÃO: SF2 (X2_MODO=E e X2_MODOEMP=E) usa a filial_chave completa, não o código de empresa', outSF2ExclusivaEAmbos);
+assert(!outSF2ExclusivaEAmbos.includes("IN ('01')"), 'REGRESSÃO: SF2 não é filtrada pelo código de empresa curto', outSF2ExclusivaEAmbos);
+
+// SQL misto: SF2/SD2 (X2_MODO=E — vence mesmo com X2_MODOEMP=E, ver
+// regressão acima) usam filial_chave completa; SA1 (X2_MODO=C,
+// X2_MODOEMP=E) usa empresa_codigo — tamanhos diferentes no mesmo SQL, cada
+// tabela com o campo certo. Mapas fieis ao dado real (SF2/SD2 e SA1 todas com
+// X2_MODOEMP=E na Plantivo).
+const sx2MistoFilial = { SF2: 'E', SD2: 'E', SA1: 'C' };
+const sx2MistoEmpresa = { SF2: 'E', SD2: 'E', SA1: 'E' };
+const sqlVendasPorCliente = `SET ROWCOUNT 10000;
+SELECT SA1.A1_NOME AS cliente, SUM(SD2.D2_TOTAL) AS faturamento_total
+FROM SF2010 SF2
+JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SD2.D_E_L_E_T_ = ' '
+JOIN SA1010 SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '
+WHERE SF2.F2_EMISSAO = '20260822' AND SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
+GROUP BY SA1.A1_NOME`;
+const outVendasPorCliente = normalizer.aplicarEscopoLoboGuara(sqlVendasPorCliente, {
+  db, ctx: ctxTeste(), sx2: sx2MistoFilial, sx2Empresa: sx2MistoEmpresa,
+  filialState: { modo: 'especifica', chaves: ['010101'], nomes: ['PLANTIVO CAMPO VERDE'] },
+});
+assert(outVendasPorCliente.includes("SF2.F2_FILIAL IN ('010101')"), 'SQL misto: SF2 filtra pela filial_chave completa (6 dígitos)', outVendasPorCliente);
+assert(outVendasPorCliente.includes("SA1.A1_FILIAL IN ('01')"), 'SQL misto: SA1 filtra pelo código de empresa (2 dígitos)', outVendasPorCliente);
+
+// Sem sx2Empresa (contexto TRADICIONAL ou tabela sem modo_empresa cadastrado):
+// comportamento igual ao Cenário 7 — não filtra às cegas, não quebra.
+const outSemSx2Empresa = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+  db, ctx: ctxTeste(), sx2: { SA1: 'C' }, sx2Empresa: null,
+  filialState: { modo: 'especifica', chaves: ['010103'] },
+});
+assert(outSemSx2Empresa === sqlSA1Isolado, 'Sem sx2Empresa informado, SA1 (modo C) não recebe filtro — comportamento anterior preservado', outSemSx2Empresa);
+
+// modoEmp='E' mas empresa dona não identificada (filial_chave desconhecida na
+// árvore) -> não filtra às cegas, mesma postura de falha fechada do resto do módulo.
+const outEmpresaDesconhecida = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+  db, ctx: ctxTeste(), sx2: {}, sx2Empresa: sx2EmpresaSA1,
+  filialState: { modo: 'especifica', chaves: ['999999'] },
+});
+assert(outEmpresaDesconhecida === sqlSA1Isolado, 'Filial_chave sem correspondência na árvore não gera filtro às cegas em tabela X2_MODOEMP=E', outEmpresaDesconhecida);
+
+// ─────────────────────────────────────────────────────────────
 // CENÁRIO 8 — guards: rejeita SUBSTRING, SYS_COMPANY manual, CNPJ como filial
 // ─────────────────────────────────────────────────────────────
 titulo('CENÁRIO 8 — guards Lobo Guara');

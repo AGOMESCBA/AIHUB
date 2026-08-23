@@ -76,10 +76,12 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
       }
 
       const total = _salvarRegistros(conexao_id, eid(req), rows.map(r => ({
-        chave:    (r.X2_CHAVE   || r.x2_chave   || '').toString().trim(),
-        arquivo:  (r.X2_ARQUIVO || r.x2_arquivo || r.X2_CHAVE || r.x2_chave || '').toString().trim(),
-        modo:     (r.X2_MODO    || r.x2_modo    || 'E').toString().trim() || 'E',
-        descricao:(r.X2_NOME    || r.x2_nome    || r.X2_DESCRI || r.x2_descri || '').toString().trim(),
+        chave:       (r.X2_CHAVE    || r.x2_chave    || '').toString().trim(),
+        arquivo:     (r.X2_ARQUIVO  || r.x2_arquivo  || r.X2_CHAVE || r.x2_chave || '').toString().trim(),
+        modo:        (r.X2_MODO     || r.x2_modo     || 'E').toString().trim() || 'E',
+        modoUnidade: (r.X2_MODOUN   || r.x2_modoun   || '').toString().trim() || null,
+        modoEmpresa: (r.X2_MODOEMP  || r.x2_modoemp  || '').toString().trim() || null,
+        descricao:   (r.X2_NOME     || r.x2_nome     || r.X2_DESCRI || r.x2_descri || '').toString().trim(),
       })), limpar !== false);
 
       _invalidarMetaSX2(eid(req));
@@ -118,10 +120,12 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
             return res.json({ importados: 0, aviso: 'O arquivo SDB não contém registros na tabela localfile.' });
           }
           const registros = rows.map(r => ({
-            chave:    (r.X2_CHAVE   || '').toString().trim(),
-            arquivo:  (r.X2_ARQUIVO || r.X2_CHAVE || '').toString().trim(),
-            modo:     (r.X2_MODO    || 'E').toString().trim() || 'E',
-            descricao:(r.X2_NOME    || '').toString().trim(),
+            chave:       (r.X2_CHAVE   || '').toString().trim(),
+            arquivo:     (r.X2_ARQUIVO || r.X2_CHAVE || '').toString().trim(),
+            modo:        (r.X2_MODO    || 'E').toString().trim() || 'E',
+            modoUnidade: (r.X2_MODOUN  || '').toString().trim() || null,
+            modoEmpresa: (r.X2_MODOEMP || '').toString().trim() || null,
+            descricao:   (r.X2_NOME    || '').toString().trim(),
           }));
           const total = _salvarRegistros(conexaoId, eid(req), registros, limpar);
           _invalidarMetaSX2(eid(req));
@@ -251,20 +255,23 @@ function _salvarRegistros(conexaoId, empresaId, registros, limpar = true) {
   const agora = new Date().toISOString();
   const del   = db.prepare('DELETE FROM protheus_sx2 WHERE connection_id = ?');
   const ins   = limpar
-    ? db.prepare('INSERT OR IGNORE INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)')
-    : db.prepare(`INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)
+    ? db.prepare('INSERT OR IGNORE INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, modo_unidade, modo_empresa, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?,?)')
+    : db.prepare(`INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, modo_unidade, modo_empresa, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(connection_id, chave) DO UPDATE SET
-          arquivo=excluded.arquivo, modo=excluded.modo, descricao=excluded.descricao, atualizado_em=excluded.atualizado_em`);
+          arquivo=excluded.arquivo, modo=excluded.modo, modo_unidade=excluded.modo_unidade, modo_empresa=excluded.modo_empresa,
+          descricao=excluded.descricao, atualizado_em=excluded.atualizado_em`);
 
   db.transaction((recs) => {
     if (limpar) del.run(conexaoId);
     for (const r of recs) {
-      const chave   = (r.chave   || '').toString().trim().toUpperCase();
-      const arquivo = (r.arquivo || chave).toString().trim().toUpperCase();
-      const modo    = (r.modo    || 'E').toString().trim() || 'E';
-      const desc    = (r.descricao || '').toString().trim();
+      const chave       = (r.chave   || '').toString().trim().toUpperCase();
+      const arquivo     = (r.arquivo || chave).toString().trim().toUpperCase();
+      const modo        = (r.modo    || 'E').toString().trim() || 'E';
+      const modoUnidade = r.modoUnidade ? r.modoUnidade.toString().trim().toUpperCase() || null : null;
+      const modoEmpresa = r.modoEmpresa ? r.modoEmpresa.toString().trim().toUpperCase() || null : null;
+      const desc        = (r.descricao || '').toString().trim();
       if (!chave) continue;
-      ins.run(conexaoId, empresaId, chave, arquivo, modo, desc, agora, agora);
+      ins.run(conexaoId, empresaId, chave, arquivo, modo, modoUnidade, modoEmpresa, desc, agora, agora);
     }
   })(registros);
 

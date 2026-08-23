@@ -258,42 +258,41 @@ function aprovacaoPedidoCompra({ temNomeAprovador } = {}) {
 - Join SCR -> SC7 (pedido de compra): SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.D_E_L_E_T_ = ' '. E relacionamento de CABECALHO (SCR nao tem C7_ITEM) — nao junte por item.
 ${joinAprovador}
 - SCR.CR_STATUS (controle da aprovacao, valores fixos do Protheus):
-  '01' = pendente em niveis anteriores (aguardando aprovador de nivel anterior).
+  '01' = aguardando nivel anterior.
   '02' = pendente no nivel atual (aguardando ESTE aprovador).
-  '03' = aprovado.
+  '03' = liberado.
   '04' = bloqueado.
-  '05' = aprovado/rejeitado pelo nivel.
+  '05' = liberado por outro aprovador (do mesmo nivel).
   '06' = rejeitado.
-  '07' = documento rejeitado ou bloqueado por outro usuario.
-- "Pendente de liberacao/aprovacao" ou "aguardando aprovacao": SCR.CR_STATUS IN ('01', '02'). NUNCA use apenas '02' para "pendente" a menos que o usuario peca explicitamente "pendente no nivel atual" ou "minha alcada" — o padrao "pendente" cobre ambos os niveis (01 e 02).
-- "Aprovado" ou "liberado" (via SCR): SCR.CR_STATUS = '03'. "Rejeitado": SCR.CR_STATUS IN ('06', '07'). "Bloqueado": SCR.CR_STATUS = '04'.
+  '07' = rejeitado ou bloqueado por outro aprovador.
+- REGRA CRITICA — "aguardando aprovacao", "pendente de liberacao", "bloqueado" ou "nao apto a ser comprado" (linguagem de negocio do usuario) identifica o PEDIDO sempre por SC7.C7_CONAPRO = 'B' — o campo CONSOLIDADO e definitivo (diferente de 'B', ou seja vazio/'A' aprovado/'R' rejeitado, significa que nao ha bloqueio de aprovacao pendente). NUNCA use SCR.CR_STATUS sozinho para decidir SE um pedido esta bloqueado — SCR tem uma linha por NIVEL, entao um pedido pode ter niveis ja liberados ('03') e ainda assim estar bloqueado no nivel seguinte; so o campo consolidado do proprio pedido (C7_CONAPRO) resolve isso sem ambiguidade.
+- Pergunta SEM "por aprovador" (ex: "quantos pedidos estao bloqueados", "pedidos aguardando aprovacao"): responda direto com SC7.C7_CONAPRO = 'B', SEM JOIN com SCR — nao ha necessidade de tocar a tabela de fluxo so para contar/listar pedidos.
+- Pergunta COM "por aprovador" (agrupar por quem precisa liberar): alem de C7_CONAPRO = 'B' no pedido, filtre tambem SCR.CR_STATUS IN ('01','02','04') no WHERE — isso traz TODOS os niveis/aprovadores que ainda impedem a liberacao do pedido (aguardando nivel anterior, pendente no nivel atual, ou bloqueado), propositalmente EXCLUINDO niveis ja liberados ('03') do mesmo pedido. Se o pedido estiver pendente para mais de um aprovador/nivel simultaneamente, ele aparece uma vez PARA CADA aprovador — isso e o comportamento correto (cada aprovador precisa ver o pedido na propria fila), nao e duplicacao indevida.
 - SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
 - Quando o usuario pedir "por aprovador", agrupe pelo aprovador (SCR.CR_APROV ou SAK.AK_NOME conforme disponibilidade) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
-- Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado para ATENDIMENTO (resultado final de recebimento). SCR detalha o FLUXO de aprovacao por ALCADA (quem, em que nivel, em que status) que levou (ou nao) a essa liberacao. Para perguntas "por aprovador" ou sobre o fluxo/alcada, use SCR — nao tente derivar aprovador a partir de SC7.
-- Diferenca entre SC7.C7_CONAPRO e SCR.CR_STATUS: SC7.C7_CONAPRO = 'B' e o resultado CONSOLIDADO de bloqueio no pedido (nao exige JOIN, use para "quantos pedidos estao bloqueados"). SCR.CR_STATUS = '04' identifica o bloqueio no nivel de UM aprovador especifico dentro do fluxo (use para "quem esta bloqueando" ou "por aprovador"). Nao junte SCR so para responder "esta bloqueado" — isso o campo SC7.C7_CONAPRO ja responde sozinho.
+- Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado para ATENDIMENTO (resultado final de recebimento). SCR detalha o FLUXO de aprovacao por ALCADA (quem, em que nivel, em que status) — use SCR apenas para identificar QUEM esta no caminho do bloqueio, nunca para decidir SE o pedido esta bloqueado (isso e sempre C7_CONAPRO).
 - REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido (SUM(SC7.C7_TOTAL)) na projecao, mesmo que o usuario nao peca valor explicitamente. SCR e cabecalho, mas SC7 e tabela de ITEM (varias linhas por pedido) — para nao duplicar o numero do pedido em N linhas, agrupe por SCR.CR_NUM (e demais colunas de identificacao) com SUM(SC7.C7_TOTAL) AS valor_pedido. Uma listagem de pedidos SEM nenhuma coluna de valor monetario e uma listagem incompleta — sempre agregue e exiba o valor.
 
 ### Linguagem de posse do proprio aprovador (remetente do WhatsApp)
 - SCR tem UMA LINHA POR NIVEL de aprovacao (chave real: CR_FILIAL + CR_NUM + CR_TIPO + CR_NIVEL). CR_APROV identifica o aprovador responsavel APENAS por aquele nivel especifico — nao o pedido inteiro.
-- "O que tenho que aprovar", "pedidos bloqueados/pendentes para eu aprovar", "minha alcada", "aguardando minha aprovacao": filtre SCR.CR_APROV = '<codigo do aprovador>' AND SCR.CR_STATUS IN ('01','02'). Isso cobre tanto o que ja chegou no seu nivel (02) quanto o que esta em nivel anterior mas vai chegar a voce (01) — nao filtre so '02'.
-- "O que eu ja aprovei" (hoje, ontem, na semana, no mes): filtre SCR.CR_APROV = '<codigo do aprovador>' AND SCR.CR_STATUS = '03'. Para o periodo (hoje/mes/semana), use SCR.CR_DATALIB (data em que a liberacao de fato ocorreu) — NUNCA SCR.CR_EMISSAO (que e a emissao do documento original, nao a data da aprovacao).
+- "O que tenho que aprovar", "pedidos bloqueados/pendentes para eu aprovar", "minha alcada", "aguardando minha aprovacao": e uma variacao de "por aprovador" restrita ao proprio remetente — filtre SCR.CR_APROV = '<codigo do aprovador>' AND SC7.C7_CONAPRO = 'B' AND SCR.CR_STATUS IN ('01','02','04') (mesma logica da secao "por aprovador" acima: bloqueio consolidado no pedido + niveis nao liberados no fluxo).
+- "O que eu ja aprovei" (hoje, ontem, na semana, no mes): este caso NAO e sobre bloqueio, e sim sobre o HISTORICO de liberacao no fluxo — aqui sim use SCR.CR_STATUS = '03' (liberado), pois C7_CONAPRO nao guarda quem/quando aprovou em cada nivel. Filtre SCR.CR_APROV = '<codigo do aprovador>' AND SCR.CR_STATUS = '03'. Para o periodo (hoje/mes/semana), use SCR.CR_DATALIB (data em que a liberacao de fato ocorreu) — NUNCA SCR.CR_EMISSAO (que e a emissao do documento original, nao a data da aprovacao).
 - O codigo do aprovador vem do contexto tecnico (aprovadorFixo.codigo) quando a pergunta usa linguagem de posse referente ao proprio remetente — nunca peca o codigo ao usuario nem invente um.
 - Se o usuario pedir "com os itens" ou "detalhado por item", nao agregue por SCR.CR_NUM: junte SC7 (1 linha por item, chave C7_FILIAL+C7_NUM+C7_ITEM) e exiba SC7.C7_ITEM, SC7.C7_PRODUTO e SC7.C7_TOTAL por linha, sem SUM nem GROUP BY. Sem pedido explicito de itens, mantenha o padrao agregado por pedido (SUM(SC7.C7_TOTAL) AS valor_pedido, agrupado por SCR.CR_NUM).
 - REGRA ABSOLUTA — em linguagem de posse, SCR.CR_APROV = '<codigo do aprovador>' e OBRIGATORIO no WHERE em TODA variacao da query, inclusive quando o usuario pede "com os itens"/detalhamento por produto e o SQL ganha JOINs adicionais com SC7/SB1/SA2. Adicionar JOINs de item NUNCA e motivo para remover ou esquecer o filtro de CR_APROV do cabecalho SCR — ele continua valendo mesmo com mais tabelas na query.
 
-### EXEMPLO CORRETO — pedidos de compra pendentes de liberacao, agrupados por aprovador
+### EXEMPLO CORRETO — pedidos de compra bloqueados/aguardando aprovacao, agrupados por aprovador
 SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
        CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
        SCR.CR_NUM AS numero_pedido,
-       SCR.CR_STATUS AS status_aprovacao,
        SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SCRxxx SCR
-JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.D_E_L_E_T_ = ' '
+JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.C7_CONAPRO = 'B' AND SC7.D_E_L_E_T_ = ' '
 ${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
   AND SCR.CR_TIPO = 'PC'
-  AND SCR.CR_STATUS IN ('01', '02')
+  AND SCR.CR_STATUS IN ('01', '02', '04')
   AND SCR.CR_EMISSAO BETWEEN '20260701' AND '20260731'
-GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM, SCR.CR_STATUS
+GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM
 ORDER BY ${temNomeAprovador ? 'SAK.AK_NOME' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM;
 `;
 }
