@@ -391,6 +391,76 @@ const filtrosSemMencao = simularReflexaoEmFiltros(null);
 assert(Object.keys(filtrosSemMencao).length === 0, 'Sem menção de filial, nada é adicionado aos filtros (não polui cache de perguntas sem filial)');
 
 // ─────────────────────────────────────────────────────────────
+// CENÁRIO 10 — amarração de JOIN por empresa (bug crítico real)
+//
+// Sem escopo de filial/empresa na pergunta ("vendas do dia de ontem"), o
+// filtro WHERE nunca roda — mas o JOIN entre SF2 (exclusiva por filial) e
+// SA1 (X2_MODOEMP=E) é AMBÍGUO: confirmado com dado real da Plantivo que
+// existem milhares de A1_COD+A1_LOJA duplicados entre a empresa 01 e a
+// empresa 02. Sem amarração, o SQL Server pode casar SF2.F2_CLIENTE com a
+// linha de SA1 da empresa ERRADA, trazendo nome de cliente trocado numa
+// venda legítima. A correção deve rodar SEMPRE que a combinação de tabelas
+// existir no SQL, independente de haver escopo de pergunta ou não.
+// ─────────────────────────────────────────────────────────────
+titulo('CENÁRIO 10 — amarração de JOIN por empresa (SA1 X2_MODOEMP=E ambígua sem filtro)');
+
+const sx2Real = { SF2: 'E', SD2: 'E', SA1: 'C' };
+const sx2EmpresaReal = { SF2: 'E', SD2: 'E', SA1: 'E' }; // fiel ao dado real: SF2/SD2/SA1 todas com X2_MODOEMP=E
+
+const sqlVendasSemEscopo = `SET ROWCOUNT 10000;
+SELECT SA1.A1_NOME AS cliente, SUM(SD2.D2_TOTAL) AS total_faturamento
+FROM SF2010 SF2
+JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA AND SD2.D_E_L_E_T_ = ' '
+JOIN SA1010 SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '
+WHERE SF2.F2_EMISSAO = '20260822' AND SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
+GROUP BY SA1.A1_NOME`;
+
+// SEM filialState (o caso real que causou o bug — pergunta ampla, sem menção
+// de filial/empresa). A amarração deve acontecer mesmo assim.
+const outAmarracaoSemEscopo = normalizer.aplicarEscopoLoboGuara(sqlVendasSemEscopo, {
+  db, ctx: ctxTeste(), sx2: sx2Real, sx2Empresa: sx2EmpresaReal, filialState: null,
+});
+assert(
+  /SA1\.A1_FILIAL\s*=\s*LEFT\(\s*SF2\.F2_FILIAL\s*,\s*2\s*\)/i.test(outAmarracaoSemEscopo),
+  'REGRESSÃO CRÍTICA: sem escopo de pergunta, JOIN de SA1 é amarrado a SF2 por LEFT(F2_FILIAL,2) mesmo assim',
+  outAmarracaoSemEscopo
+);
+assert(!/SUBSTRING/i.test(outAmarracaoSemEscopo), 'Amarração usa LEFT(), nunca SUBSTRING (guard da IA continua intacto)', outAmarracaoSemEscopo);
+
+// A amarração fica dentro da cláusula ON do JOIN de SA1, não em WHERE — a
+// condição deve aparecer antes do WHERE, junto do restante do ON de SA1.
+const posOnSA1 = outAmarracaoSemEscopo.indexOf('JOIN SA1010 SA1 ON');
+const posWhere = outAmarracaoSemEscopo.indexOf('WHERE');
+const posLeft  = outAmarracaoSemEscopo.indexOf('LEFT(SF2.F2_FILIAL');
+assert(posLeft > posOnSA1 && posLeft < posWhere, 'Amarração fica dentro da cláusula ON do JOIN de SA1, antes do WHERE', outAmarracaoSemEscopo);
+
+// COM escopo de filial específica: amarração de JOIN + filtro WHERE devem
+// coexistir (não são mutuamente exclusivos).
+const outAmarracaoComEscopo = normalizer.aplicarEscopoLoboGuara(sqlVendasSemEscopo, {
+  db, ctx: ctxTeste(), sx2: sx2Real, sx2Empresa: sx2EmpresaReal,
+  filialState: { modo: 'especifica', chaves: ['010101'], nomes: ['PLANTIVO CAMPO VERDE'] },
+});
+assert(/LEFT\(\s*SF2\.F2_FILIAL\s*,\s*2\s*\)/i.test(outAmarracaoComEscopo), 'Com escopo de filial, JOIN de SA1 continua amarrado a SF2', outAmarracaoComEscopo);
+assert(outAmarracaoComEscopo.includes("SA1.A1_FILIAL IN ('01')"), 'Com escopo de filial, filtro WHERE por código de empresa também é aplicado (coexistem)', outAmarracaoComEscopo);
+assert(outAmarracaoComEscopo.includes("SF2.F2_FILIAL IN ('010101')"), 'Com escopo de filial, filtro WHERE em SF2 pela filial completa continua aplicado', outAmarracaoComEscopo);
+
+// Tabela SEM X2_MODOEMP=E (ex.: cadastro puramente compartilhado/global, sem
+// exclusividade por empresa) não deve receber amarração — não há ambiguidade
+// a resolver, amarrar seria mudar comportamento sem necessidade.
+const sqlComSA2Global = `SELECT SE2.E2_NUM FROM SE2010 SE2 JOIN SA2010 SA2 ON SE2.E2_FORNECE = SA2.A2_COD WHERE SE2.D_E_L_E_T_ = ' '`;
+const outSemModoEmpresa = normalizer.aplicarEscopoLoboGuara(sqlComSA2Global, {
+  db, ctx: ctxTeste(), sx2: { SE2: 'E', SA2: 'C' }, sx2Empresa: null, filialState: null,
+});
+assert(outSemModoEmpresa === sqlComSA2Global, 'Sem sx2Empresa informado (tabela sem X2_MODOEMP cadastrado), nenhuma amarração é aplicada', outSemModoEmpresa);
+
+// Chamada direta em _amarrarJoinPorEmpresa: idempotência — rodar duas vezes
+// não deve duplicar a condição.
+const primeiraPassagem = normalizer._amarrarJoinPorEmpresa(sqlVendasSemEscopo, { SF2: 'SF2', SD2: 'SD2', SA1: 'SA1' }, sx2Real, sx2EmpresaReal, {});
+const segundaPassagem = normalizer._amarrarJoinPorEmpresa(primeiraPassagem.sql, { SF2: 'SF2', SD2: 'SD2', SA1: 'SA1' }, sx2Real, sx2EmpresaReal, {});
+const ocorrencias = (segundaPassagem.sql.match(/LEFT\(SF2\.F2_FILIAL/gi) || []).length;
+assert(ocorrencias === 1, 'Idempotência: aplicar a amarração duas vezes não duplica a condição no SQL', `${ocorrencias} ocorrências`);
+
+// ─────────────────────────────────────────────────────────────
 // Resultado final
 // ─────────────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(60)}`);

@@ -30,6 +30,31 @@ function _escaparSqlLiteral(s) {
   return String(s).replace(/'/g, "''");
 }
 
+// Localiza a proxima ocorrencia de `keyword` fora de parenteses (nivel 0) a
+// partir de `inicio` — usado para achar o fim da clausula ON de um JOIN sem
+// confundir com JOINs/WHERE dentro de subqueries. Copia local equivalente a
+// runner.js::localizarKeywordNivelZero (nao exportada de la, e pequena o
+// suficiente para nao justificar acoplamento entre os dois modulos).
+function _localizarKeywordNivelZero(sql, keyword, inicio = 0) {
+  const texto = String(sql || '');
+  const alvo = String(keyword || '').toUpperCase();
+  let nivel = 0;
+  let aspas = false;
+  for (let i = Math.max(0, inicio); i <= texto.length - alvo.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') aspas = !aspas;
+    if (aspas) continue;
+    if (c === '(') { nivel++; continue; }
+    if (c === ')') { nivel = Math.max(0, nivel - 1); continue; }
+    if (nivel !== 0) continue;
+    if (texto.slice(i, i + alvo.length).toUpperCase() !== alvo) continue;
+    const antes = i > 0 ? texto[i - 1] : ' ';
+    const depois = texto[i + alvo.length] || ' ';
+    if (!/[A-Z0-9_]/i.test(antes) && !/[A-Z0-9_]/i.test(depois)) return i;
+  }
+  return -1;
+}
+
 // Resolve a lista final de filial_chave a aplicar, dado o estado estruturado
 // e a arvore local (para expandir modo 'empresa' -> todas as filiais dela).
 function _resolverChavesEscopo(filialState, db, connectionId) {
@@ -140,6 +165,78 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
   return { sql: texto, aplicado: alterado, avisos };
 }
 
+// Bug real critico encontrado em teste ao vivo (Plantivo): quando a pergunta
+// NAO tem escopo de filial/empresa ("vendas do dia de ontem"), o filtro WHERE
+// acima nunca roda (chaves vazio -> aplicarEscopoLoboGuara retorna cedo). Mas
+// o JOIN entre uma tabela exclusiva por filial (SF2, granularidade fina) e
+// uma tabela exclusiva so por empresa (SA1, X2_MODOEMP=E) fica AMBIGUO: o
+// mesmo A1_COD+A1_LOJA existe em mais de uma empresa (confirmado com dado
+// real — milhares de codigos duplicados entre filial '01' e '02' na
+// Plantivo), entao "SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA"
+// pode casar com a linha de SA1 da empresa ERRADA, trazendo nome de cliente
+// de outra empresa numa venda legitima.
+//
+// Correcao: SEMPRE que uma tabela X2_MODOEMP=E aparecer em JOIN com uma
+// tabela ancora exclusiva por filial (X2_MODO=E) no mesmo SQL, amarra a
+// clausula ON delas com o codigo de empresa — nao depende de haver escopo de
+// pergunta, roda sempre que a ambiguidade estrutural existir. Usa LEFT() com
+// o tamanho REAL do codigo de empresa (2 digitos, confirmado via dado real —
+// nao adivinhado), nunca SUBSTRING livre feito pela IA (guard continua
+// proibindo isso na IA; aqui e o backend aplicando regra fixa e
+// deterministica, equivalente ao que aliasTabelaSql/campoFilialBase ja fazem).
+function _amarrarJoinPorEmpresa(sql, aliases, sx2, sx2Empresa, opts = {}) {
+  if (!sx2 || !sx2Empresa) return { sql, aplicado: false, avisos: [] };
+
+  const aliasAncora = Object.entries(aliases).find(([, base]) => modoTabelaSX2(sx2, base) === 'E');
+  if (!aliasAncora) return { sql, aplicado: false, avisos: [] }; // sem tabela exclusiva por filial no SQL -- nada para amarrar
+
+  const [aliasAncoraNome, baseAncora] = aliasAncora;
+  const campoAncora = campoFilialBase(baseAncora);
+
+  const avisos = [];
+  let alterado = false;
+  let texto = String(sql || '');
+
+  for (const [alias, base] of Object.entries(aliases)) {
+    if (alias === aliasAncoraNome) continue;
+    if (modoTabelaSX2(sx2, base) === 'E') continue; // ja exclusiva por filial -- sem ambiguidade
+    if (modoEmpresaSX2(sx2Empresa, base) !== 'E') continue; // so tabelas exclusivas por empresa precisam de amarração
+
+    const campo = campoFilialBase(base);
+    const aliasEsc = _escaparRegex(alias);
+    const campoEsc = _escaparRegex(campo);
+
+    // Já amarrada a esta mesma âncora (literal ou via LEFT já presente)?
+    const jaAmarrada = new RegExp(`${aliasEsc}\\s*\\.\\s*${campoEsc}\\s*=\\s*(?:LEFT\\s*\\(\\s*)?${_escaparRegex(aliasAncoraNome)}\\s*\\.\\s*${_escaparRegex(campoAncora)}\\b`, 'i').test(texto)
+      || new RegExp(`(?:LEFT\\s*\\(\\s*)?${_escaparRegex(aliasAncoraNome)}\\s*\\.\\s*${_escaparRegex(campoAncora)}\\b[^=]*=\\s*${aliasEsc}\\s*\\.\\s*${campoEsc}\\b`, 'i').test(texto);
+    if (jaAmarrada) continue;
+
+    // Localiza a clausula ON do JOIN desta tabela (alias) especificamente.
+    const reJoin = new RegExp(`\\bJOIN\\s+[A-Z_][A-Z0-9_]*\\s+(?:AS\\s+)?${aliasEsc}\\b\\s+ON\\s+`, 'i');
+    const mJoin = reJoin.exec(texto);
+    if (!mJoin) continue; // tabela nao esta em JOIN (ex.: e a FROM principal) -- nada a amarrar aqui
+
+    const inicioOn = mJoin.index + mJoin[0].length;
+    const fins = ['JOIN', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'UNION']
+      .map(k => _localizarKeywordNivelZero(texto, k, inicioOn))
+      .filter(pos => pos >= 0);
+    const fimOn = fins.length ? Math.min(...fins) : texto.length;
+
+    const tamanhoEmpresa = 2; // confirmado com dado real (M0_LEIAUTE='EEUUFF' -> segmento de empresa = 2 digitos)
+    const condicao = ` AND ${alias}.${campo} = LEFT(${aliasAncoraNome}.${campoAncora}, ${tamanhoEmpresa})\n`;
+    texto = texto.slice(0, fimOn) + condicao + texto.slice(fimOn);
+
+    alterado = true;
+    avisos.push(`JOIN ${alias} amarrado a ${aliasAncoraNome} por codigo de empresa (LEFT ${tamanhoEmpresa})`);
+  }
+
+  if (alterado && opts.logPrefix) {
+    console.warn(`[${opts.logPrefix}] Amarracao de JOIN por empresa aplicada: ${avisos.join(' | ')}`);
+  }
+
+  return { sql: texto, aplicado: alterado, avisos };
+}
+
 // Ponto de entrada principal. `ctx` é o resultado de
 // lobo-guara-filial-resolver.contextoLoboGuara(db, empresaId) — já confirma
 // modelo LOBO_GUARA + perfil validado. Se `ctx` for null, o normalizer não
@@ -147,11 +244,18 @@ function _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpr
 function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix } = {}) {
   if (!ctx || !db) return sql;
 
-  const chaves = _resolverChavesEscopo(filialState, db, ctx.connectionId);
-  if (!chaves || !chaves.length) return sql;
-
   const aliases = aliasTabelaSql(sql);
   if (!Object.keys(aliases).length) return sql;
+
+  // Amarração de JOIN por empresa roda SEMPRE que houver a combinação
+  // ambígua no SQL (âncora exclusiva por filial + tabela exclusiva por
+  // empresa) — independe de a pergunta ter escopo de filial/empresa ou não.
+  // Precisa rodar ANTES do filtro WHERE abaixo, para o filtro (quando houver)
+  // enxergar o SQL já com os aliases corretos.
+  let out = _amarrarJoinPorEmpresa(sql, aliases, sx2, sx2Empresa, { logPrefix }).sql;
+
+  const chaves = _resolverChavesEscopo(filialState, db, ctx.connectionId);
+  if (!chaves || !chaves.length) return out;
 
   // Só precisa resolver a empresa dona se alguma tabela do SQL de fato
   // tiver X2_MODOEMP='E' — evita consulta desnecessária à árvore no caminho comum.
@@ -163,7 +267,7 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
     ? resolver.empresasDonasDasFiliais(db, ctx.connectionId, chaves)
     : null;
 
-  const { sql: sqlFinal } = _injetarFiltroFilial(sql, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix });
+  const { sql: sqlFinal } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix });
   return sqlFinal;
 }
 
@@ -217,4 +321,5 @@ module.exports = {
   validarGuardsLoboGuara,
   _resolverChavesEscopo,
   _injetarFiltroFilial,
+  _amarrarJoinPorEmpresa,
 };
