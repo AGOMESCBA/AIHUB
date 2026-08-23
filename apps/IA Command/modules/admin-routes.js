@@ -1930,7 +1930,7 @@ Responda SOMENTE com JSON válido, sem markdown:
       destinatario_numero_id: String(b.destinatario_numero_id || '').trim() || null,
       destinatario_celular: String(b.destinatario_celular || '').trim() || null,
       destinatario_nome: String(b.destinatario_nome || '').trim() || null,
-      formato: String(b.formato || 'pdf').trim() || 'pdf',
+      formato: String(b.formato || 'texto').trim() || 'texto',
       status: String(b.status || 'pendente').trim() || 'pendente',
       pergunta_snapshot: String(b.pergunta_snapshot || '').trim() || null,
       resumo_snapshot: String(b.resumo_snapshot || '').trim() || null,

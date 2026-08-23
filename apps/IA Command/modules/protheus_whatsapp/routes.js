@@ -15,6 +15,8 @@ const tokenService = require('./token-service');
 const sessionStore = require('./session-store');
 const chatService = require('./service');
 const { getDB } = require('../database');
+const whatsappManager = require('../whatsapp/service-manager');
+const whatsappChannels = require('../whatsapp/channel-store');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -208,6 +210,138 @@ function validarModuloFavorito(req, res, favorito) {
   return true;
 }
 
+function buscarContatoAutorizado({ empresaId, numeroId }) {
+  if (!empresaId || !numeroId) return null;
+  return getDB().prepare(`
+    SELECT id, nome, numero
+    FROM whatsapp_allowed_numbers
+    WHERE id = ? AND empresa_id = ? AND COALESCE(ativo, 1) = 1
+    LIMIT 1
+  `).get(String(numeroId), Number(empresaId)) || null;
+}
+
+function listarContatosAutorizados(empresaId) {
+  return getDB().prepare(`
+    SELECT id, nome, numero
+    FROM whatsapp_allowed_numbers
+    WHERE empresa_id = ? AND COALESCE(ativo, 1) = 1
+    ORDER BY nome, numero
+  `).all(Number(empresaId));
+}
+
+function perguntaDaResposta({ sessaoId, respostaCriadaEm }) {
+  const row = getDB().prepare(`
+    SELECT texto
+    FROM protheus_chat_messages
+    WHERE sessao_id = ? AND direcao = 'out' AND criado_em <= ?
+    ORDER BY criado_em DESC
+    LIMIT 1
+  `).get(sessaoId, respostaCriadaEm);
+  return String(row?.texto || '').trim();
+}
+
+function resumoDaResposta(texto) {
+  const linhas = String(texto || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const resumo = linhas.find(l => /^Leitura r[áa]pida:/i.test(l));
+  if (resumo) return resumo;
+  return linhas.slice(0, 3).join('\n').slice(0, 900);
+}
+
+function formatarValorGrade(valor) {
+  if (valor == null) return '';
+  if (typeof valor === 'number') return Number.isFinite(valor) ? String(valor) : '';
+  if (typeof valor === 'object') return JSON.stringify(valor);
+  return String(valor);
+}
+
+function montarGradeTexto(rows, limiteLinhas = 12) {
+  const lista = Array.isArray(rows) ? rows : [];
+  if (!lista.length) return 'Sem linhas de grade no snapshot.';
+  const colunas = Object.keys(lista[0] || {}).slice(0, 6);
+  const linhas = [];
+  linhas.push(colunas.join(' | '));
+  linhas.push(colunas.map(() => '---').join(' | '));
+  for (const row of lista.slice(0, limiteLinhas)) {
+    linhas.push(colunas.map(col => formatarValorGrade(row[col]).replace(/\s+/g, ' ').slice(0, 48)).join(' | '));
+  }
+  if (lista.length > limiteLinhas) {
+    linhas.push(`... mais ${lista.length - limiteLinhas} linha(s).`);
+  }
+  return linhas.join('\n');
+}
+
+function montarMensagemEncaminhamento({ pergunta, resumo, rows }) {
+  const linhas = [
+    '*IA Command - Encaminhamento*',
+    '',
+    '*Pergunta:*',
+    String(pergunta || '(sem pergunta registrada)').trim(),
+    '',
+    '*Resumo:*',
+    String(resumo || '(sem resumo registrado)').trim(),
+    '',
+    '*Grade:*',
+    '```',
+    montarGradeTexto(rows),
+    '```',
+  ];
+  return linhas.join('\n');
+}
+
+function criarAuditoriaEncaminhamento({ empresaId, sessaoId, mensagemId, remetenteCelular, remetenteUsuario, contato, formato, pergunta, resumo, rowsCount, status = 'pendente', erro = null }) {
+  const id = require('crypto').randomUUID();
+  const agora = new Date().toISOString();
+  getDB().prepare(`
+    INSERT INTO protheus_chat_forwardings (
+      id, empresa_id, sessao_id, mensagem_id, remetente_celular, remetente_usuario,
+      destinatario_numero_id, destinatario_celular, destinatario_nome, formato, status,
+      pergunta_snapshot, resumo_snapshot, rows_count, erro, criado_em, atualizado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    Number(empresaId),
+    sessaoId || null,
+    mensagemId || null,
+    remetenteCelular || null,
+    remetenteUsuario || null,
+    contato?.id || null,
+    contato?.numero || null,
+    contato?.nome || null,
+    formato || 'texto',
+    status,
+    pergunta || null,
+    resumo || null,
+    Number(rowsCount || 0),
+    erro || null,
+    agora,
+    agora,
+  );
+  return id;
+}
+
+function atualizarAuditoriaEncaminhamento({ id, empresaId, status, erro = null }) {
+  const agora = new Date().toISOString();
+  getDB().prepare(`
+    UPDATE protheus_chat_forwardings
+       SET status = ?,
+           erro = ?,
+           enviado_em = CASE WHEN ? = 'enviado' THEN ? ELSE enviado_em END,
+           atualizado_em = ?
+     WHERE id = ? AND empresa_id = ?
+  `).run(status, erro || null, status, agora, agora, id, Number(empresaId));
+}
+
+async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
+  const canal = whatsappChannels.getDefaultForEmpresa(Number(empresaId));
+  if (!canal) throw new Error('Nenhum canal WhatsApp padrao vinculado a esta empresa.');
+  const svc = whatsappManager.get(canal.id);
+  if (!svc || svc.getStatus() !== 'connected') {
+    throw new Error('WhatsApp nao esta conectado para o canal padrao desta empresa.');
+  }
+  await svc.sendMessage(numero, texto);
+  return { canalId: canal.id };
+}
+
 module.exports = function registrarRotasProtheusWhatsApp(app) {
   // ── Emissao de token (chamada pelo Protheus/ADVPL, sem sessao de usuario) ──
   app.post('/api/ia-command/protheus/token', (req, res) => {
@@ -312,6 +446,84 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       res.json({ favoritos });
     } catch (err) {
       perfLog('GET /favoritos', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/api/ia-command/protheus/encaminhamentos/contatos', requireTokenSessao, (req, res) => {
+    const inicio = Date.now();
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const contatos = listarContatosAutorizados(empresaId).map(row => ({
+        id: row.id,
+        nome: row.nome,
+        numero: row.numero,
+      }));
+      perfLog('GET /encaminhamentos/contatos', inicio, { status: 200, empresaId, total: contatos.length });
+      res.json({ contatos });
+    } catch (err) {
+      perfLog('GET /encaminhamentos/contatos', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/encaminhar', requireTokenSessao, async (req, res) => {
+    const inicio = Date.now();
+    const { celular } = req.protheusChat;
+    const formato = String(req.body?.formato || 'texto').trim().toLowerCase();
+    const numeroId = String(req.body?.destinatarioNumeroId || req.body?.numeroId || '').trim();
+
+    if (formato !== 'texto') {
+      return res.status(400).json({ error: 'Nesta primeira versao, o encaminhamento envia a grade em texto pelo WhatsApp.' });
+    }
+    if (!numeroId) {
+      return res.status(400).json({ error: 'Selecione um contato autorizado para encaminhar.' });
+    }
+
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+
+      const contato = buscarContatoAutorizado({ empresaId, numeroId });
+      if (!contato) return res.status(404).json({ error: 'Contato autorizado nao encontrado nesta empresa.' });
+
+      const relatorio = sessionStore.mensagemTabular({
+        sessaoId: req.params.id,
+        mensagemId: req.params.mensagemId,
+      });
+      if (!relatorio) return res.status(404).json({ error: 'Mensagem tabular nao encontrada.' });
+
+      const pergunta = perguntaDaResposta({ sessaoId: req.params.id, respostaCriadaEm: relatorio.criadoEm });
+      const resumo = resumoDaResposta(relatorio.texto);
+      const auditoriaId = criarAuditoriaEncaminhamento({
+        empresaId,
+        sessaoId: req.params.id,
+        mensagemId: req.params.mensagemId,
+        remetenteCelular: celular,
+        remetenteUsuario: req.query?.usuario || null,
+        contato,
+        formato,
+        pergunta,
+        resumo,
+        rowsCount: relatorio.rowsCount,
+      });
+
+      const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows });
+      try {
+        const envio = await enviarTextoWhatsApp({ empresaId, numero: contato.numero, texto });
+        atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'enviado' });
+        perfLog('POST /encaminhar', inicio, { status: 200, empresaId, auditoriaId, canalId: envio.canalId });
+        res.json({ ok: true, id: auditoriaId, status: 'enviado' });
+      } catch (errEnvio) {
+        atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'erro', erro: errEnvio.message });
+        perfLog('POST /encaminhar', inicio, { status: 502, empresaId, auditoriaId, erro: errEnvio.message });
+        res.status(502).json({ error: errEnvio.message, id: auditoriaId, status: 'erro' });
+      }
+    } catch (err) {
+      perfLog('POST /encaminhar', inicio, { status: 500, erro: err.message });
       res.status(500).json({ error: err.message });
     }
   });

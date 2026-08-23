@@ -1474,7 +1474,7 @@ const MIGRATIONS = [
         destinatario_numero_id   TEXT DEFAULT NULL,
         destinatario_celular     TEXT DEFAULT NULL,
         destinatario_nome        TEXT DEFAULT NULL,
-        formato                  TEXT NOT NULL DEFAULT 'pdf',
+        formato                  TEXT NOT NULL DEFAULT 'texto',
         status                   TEXT NOT NULL DEFAULT 'pendente',
         pergunta_snapshot        TEXT DEFAULT NULL,
         resumo_snapshot          TEXT DEFAULT NULL,

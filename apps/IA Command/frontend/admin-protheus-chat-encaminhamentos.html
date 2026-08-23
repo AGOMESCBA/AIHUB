@@ -140,6 +140,7 @@
             <label for="filter-formato">Formato</label>
             <select id="filter-formato">
               <option value="">Todos</option>
+              <option value="texto">Texto</option>
               <option value="pdf">PDF</option>
               <option value="excel">Excel</option>
               <option value="imagem">Imagem</option>
@@ -227,6 +228,7 @@
         <div class="field">
           <label for="form-formato">Formato</label>
           <select id="form-formato">
+            <option value="texto">Texto</option>
             <option value="pdf">PDF</option>
             <option value="excel">Excel</option>
             <option value="imagem">Imagem</option>
@@ -439,7 +441,7 @@
     $('form-title').textContent = r.id ? 'Editar encaminhamento' : 'Novo encaminhamento';
     $('form-id').value = r.id || '';
     $('form-status').value = r.status || 'pendente';
-    $('form-formato').value = r.formato || 'pdf';
+    $('form-formato').value = r.formato || 'texto';
     $('form-dest-nome').value = r.destinatario_nome || '';
     $('form-dest-cel').value = r.destinatario_celular || '';
     $('form-rem-user').value = r.remetente_usuario || '';
@@ -460,7 +462,7 @@
   function formPayload() {
     return {
       status: $('form-status').value,
-      formato: $('form-formato').value,
+      formato: $('form-formato').value || 'texto',
       destinatario_nome: $('form-dest-nome').value,
       destinatario_celular: $('form-dest-cel').value,
       remetente_usuario: $('form-rem-user').value,

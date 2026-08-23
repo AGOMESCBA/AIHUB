@@ -781,6 +781,22 @@
   .favorite-message-btn.active { color: #c99a12; }
   .favorite-message-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
   .favorite-message-btn.active svg { fill: currentColor; }
+  .forward-message-btn { float: right; width: 22px; height: 22px; margin: -2px 3px 2px 4px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .forward-message-btn:hover { background: rgba(0, 168, 132, 0.12); color: var(--wa-accent); }
+  .forward-message-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .forward-list { display: grid; gap: 6px; min-height: 0; overflow-y: auto; padding: 8px 14px 14px; }
+  .forward-item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; min-height: 50px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 10px; cursor: pointer; text-align: left; }
+  .forward-item:hover { background: var(--wa-sidebar-hover); }
+  .forward-item.active { border-color: var(--wa-accent); box-shadow: 0 0 0 1px var(--wa-accent-soft-border); }
+  .forward-main { min-width: 0; }
+  .forward-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.2px; font-weight: 700; }
+  .forward-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wa-text-tertiary); font-size: 11.5px; margin-top: 3px; }
+  .forward-empty { color: var(--wa-text-tertiary); font-size: 12px; padding: 18px 8px; text-align: center; }
+  .forward-format-row { display: flex; align-items: center; gap: 8px; margin: 12px 14px 4px; color: var(--wa-text-secondary); font-size: 12px; }
+  .forward-format-row select { border: 1px solid var(--wa-border); border-radius: 7px; background: var(--wa-panel); color: var(--wa-text); padding: 6px 8px; }
+  .forward-status { min-height: 18px; margin: 0 14px 10px; color: var(--wa-text-tertiary); font-size: 12px; }
+  .forward-status.error { color: #ff8a8a; }
+  .forward-status.ok { color: var(--wa-accent); }
 
   /* Link "Ver na aba Dados →" no rodape da bolha, quando a resposta tem rows
      — unica ligacao visual da bolha (texto puro, igual WhatsApp) com a aba
@@ -1305,6 +1321,42 @@
   </div>
 </div>
 
+<div class="favorites-modal-backdrop" id="forwardModal" aria-hidden="true">
+  <div class="favorites-modal" role="dialog" aria-modal="true" aria-labelledby="forwardModalTitle">
+    <div class="favorites-modal-head">
+      <div class="favorites-modal-title">
+        <strong id="forwardModalTitle">Encaminhar para WhatsApp</strong>
+        <span>Selecione um contato autorizado desta empresa.</span>
+      </div>
+      <div class="favorites-modal-actions">
+        <button class="favorites-refresh" type="button" id="btnReloadForwardContacts" title="Atualizar contatos" aria-label="Atualizar contatos">
+          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 11-2.64-6.36M21 3v6h-6"/></svg>
+        </button>
+        <button class="favorites-close" type="button" id="btnFecharForward" title="Fechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <label class="favorites-modal-search">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/></svg>
+      <input type="text" id="forwardSearch" placeholder="Buscar contato autorizado" autocomplete="off" />
+    </label>
+    <div class="forward-format-row">
+      <span>Formato</span>
+      <select id="forwardFormat">
+        <option value="texto">Texto WhatsApp</option>
+      </select>
+    </div>
+    <div class="forward-status" id="forwardStatus"></div>
+    <div class="forward-list" id="forwardContactsList">
+      <div class="forward-empty">Carregando...</div>
+    </div>
+    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+      <button class="favorite-run" type="button" id="btnConfirmForward">Encaminhar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   const params = new URLSearchParams(window.location.search);
@@ -1337,6 +1389,14 @@
   const favoritesSearch = document.getElementById('favoritesSearch');
   const favoritesList = document.getElementById('favoritesList');
   const btnReloadFavoritos = document.getElementById('btnReloadFavoritos');
+  const forwardModal = document.getElementById('forwardModal');
+  const btnFecharForward = document.getElementById('btnFecharForward');
+  const btnReloadForwardContacts = document.getElementById('btnReloadForwardContacts');
+  const forwardSearch = document.getElementById('forwardSearch');
+  const forwardContactsList = document.getElementById('forwardContactsList');
+  const forwardStatus = document.getElementById('forwardStatus');
+  const forwardFormat = document.getElementById('forwardFormat');
+  const btnConfirmForward = document.getElementById('btnConfirmForward');
   const headerTitle = document.getElementById('headerTitle');
   const errorBanner = document.getElementById('errorBanner');
   const userName = document.getElementById('userName');
@@ -1411,6 +1471,10 @@
   const mensagensCachePorSessao = new Map();
   let favoritosCache = [];
   let favoritosCarregados = false;
+  let forwardContactsCache = [];
+  let forwardContactsCarregados = false;
+  let forwardMensagemAtualId = null;
+  let forwardContatoSelecionadoId = null;
 
   let sessaoAtualId = null;
   let sessoesCache = [];
@@ -1693,6 +1757,9 @@
         await carregarFavoritos();
       }
       await carregarSessoes();
+      if (!favoritesModal.classList.contains('active')) {
+        carregarFavoritos().catch((err) => bootLog('favoritos:troca-empresa-falha', { erro: err.message }));
+      }
     } catch (err) {
       showError('Falha ao trocar empresa: ' + err.message);
     }
@@ -1704,6 +1771,10 @@
     sessoesCache = [];
     favoritosCache = [];
     favoritosCarregados = false;
+    forwardContactsCache = [];
+    forwardContactsCarregados = false;
+    forwardMensagemAtualId = null;
+    forwardContatoSelecionadoId = null;
     relatorioCachePorSessao.clear();
     relatorioCachePorMensagem.clear();
     mensagensCachePorSessao.clear();
@@ -1724,6 +1795,10 @@
 
   function starSvg() {
     return '<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.78 6.8 19.52l.99-5.8-4.21-4.1 5.82-.85L12 3.5z"/></svg>';
+  }
+
+  function forwardSvg() {
+    return '<svg viewBox="0 0 24 24"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg>';
   }
 
   function trashSvg() {
@@ -1881,6 +1956,120 @@
     favoritesModal.classList.remove('active');
     favoritesModal.setAttribute('aria-hidden', 'true');
     if (btnAbrirFavoritos) btnAbrirFavoritos.focus();
+  }
+
+  function renderForwardContacts() {
+    if (!forwardContactsList) return;
+    if (!forwardContactsCarregados) {
+      forwardContactsList.innerHTML = '<div class="forward-empty">Abra para carregar os contatos.</div>';
+      return;
+    }
+    const termo = (forwardSearch?.value || '').trim().toLowerCase();
+    const lista = termo
+      ? forwardContactsCache.filter((contato) => [
+          contato.nome,
+          contato.numero,
+        ].some((valor) => String(valor || '').toLowerCase().includes(termo)))
+      : forwardContactsCache;
+
+    if (!lista.length) {
+      forwardContactsList.innerHTML = '<div class="forward-empty">' + (forwardContactsCache.length ? 'Nenhum contato encontrado.' : 'Nenhum contato autorizado nesta empresa.') + '</div>';
+      return;
+    }
+
+    forwardContactsList.innerHTML = '';
+    lista.forEach((contato) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'forward-item' + (String(contato.id) === String(forwardContatoSelecionadoId) ? ' active' : '');
+      item.dataset.contatoId = contato.id;
+      item.innerHTML = `
+        <span class="forward-main">
+          <span class="forward-title">${escapeHtml(contato.nome || contato.numero || 'Contato')}</span>
+          <span class="forward-meta">${escapeHtml(contato.numero || '')}</span>
+        </span>
+        <span>${String(contato.id) === String(forwardContatoSelecionadoId) ? 'Selecionado' : 'Selecionar'}</span>
+      `;
+      item.addEventListener('click', () => {
+        forwardContatoSelecionadoId = contato.id;
+        renderForwardContacts();
+      });
+      forwardContactsList.appendChild(item);
+    });
+  }
+
+  async function carregarForwardContacts() {
+    try {
+      forwardStatus.textContent = 'Carregando contatos...';
+      forwardStatus.className = 'forward-status';
+      const data = await api('/encaminhamentos/contatos');
+      forwardContactsCache = Array.isArray(data.contatos) ? data.contatos : [];
+      forwardContactsCarregados = true;
+      if (forwardContatoSelecionadoId && !forwardContactsCache.some(c => String(c.id) === String(forwardContatoSelecionadoId))) {
+        forwardContatoSelecionadoId = null;
+      }
+      forwardStatus.textContent = '';
+      renderForwardContacts();
+    } catch (err) {
+      forwardContactsCache = [];
+      forwardContactsCarregados = true;
+      forwardStatus.textContent = 'Falha ao carregar contatos: ' + err.message;
+      forwardStatus.className = 'forward-status error';
+      renderForwardContacts();
+    }
+  }
+
+  async function abrirForwardModal(mensagemId) {
+    if (!forwardModal || !mensagemId) return;
+    forwardMensagemAtualId = mensagemId;
+    forwardContatoSelecionadoId = null;
+    forwardStatus.textContent = '';
+    forwardStatus.className = 'forward-status';
+    if (forwardSearch) forwardSearch.value = '';
+    forwardModal.classList.add('active');
+    forwardModal.setAttribute('aria-hidden', 'false');
+    renderForwardContacts();
+    if (!forwardContactsCarregados) {
+      await carregarForwardContacts();
+    }
+    setTimeout(() => forwardSearch?.focus(), 0);
+  }
+
+  function fecharForwardModal() {
+    if (!forwardModal) return;
+    forwardModal.classList.remove('active');
+    forwardModal.setAttribute('aria-hidden', 'true');
+    forwardMensagemAtualId = null;
+    forwardContatoSelecionadoId = null;
+  }
+
+  async function confirmarForward() {
+    if (!sessaoAtualId || !forwardMensagemAtualId) return;
+    if (!forwardContatoSelecionadoId) {
+      forwardStatus.textContent = 'Selecione um contato autorizado.';
+      forwardStatus.className = 'forward-status error';
+      return;
+    }
+    btnConfirmForward.disabled = true;
+    forwardStatus.textContent = 'Encaminhando...';
+    forwardStatus.className = 'forward-status';
+    try {
+      const data = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + forwardMensagemAtualId + '/encaminhar', {
+        method: 'POST',
+        body: JSON.stringify({
+          destinatarioNumeroId: forwardContatoSelecionadoId,
+          formato: forwardFormat?.value || 'texto',
+        }),
+      });
+      forwardStatus.textContent = data.status === 'enviado' ? 'Encaminhado com sucesso.' : 'Registro criado.';
+      forwardStatus.className = 'forward-status ok';
+      setTimeout(fecharForwardModal, 650);
+    } catch (err) {
+      forwardStatus.textContent = err.message;
+      forwardStatus.className = 'forward-status error';
+    } finally {
+      btnConfirmForward.disabled = false;
+    }
   }
 
   async function removerFavorito(favoritoId) {
@@ -2152,9 +2341,12 @@
     const botaoFavorito = (!isFalha && direcao === 'in' && id)
       ? `<button type="button" class="favorite-message-btn${favoritoId ? ' active' : ''}" data-favoritar-msg="${escapeHtml(id)}"${favoritoId ? ` data-favorito-id="${escapeHtml(favoritoId)}"` : ''} title="${favoritoId ? 'Remover favorito' : 'Favoritar pergunta'}" aria-label="${favoritoId ? 'Remover favorito' : 'Favoritar pergunta'}">${starSvg()}</button>`
       : '';
+    const botaoForward = (temDadosTabulares && id)
+      ? `<button type="button" class="forward-message-btn" data-encaminhar-msg="${escapeHtml(id)}" title="Encaminhar grade para WhatsApp" aria-label="Encaminhar grade para WhatsApp">${forwardSvg()}</button>`
+      : '';
     const conteudo = (!isFalha && apresentacaoFinal)
-      ? botaoFavorito + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
-      : botaoFavorito + escapeHtml(texto) + linkDados;
+      ? botaoFavorito + botaoForward + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
+      : botaoFavorito + botaoForward + escapeHtml(texto) + linkDados;
 
     if (temDadosTabulares && id && Array.isArray(rows) && rows.length) {
       const dadosMensagem = { mensagemId: id, rows, gridConfig: null, texto };
@@ -2184,6 +2376,14 @@
         e.preventDefault();
         e.stopPropagation();
         favoritarMensagem(id, btnFav);
+      });
+    }
+    const btnForward = row.querySelector('[data-encaminhar-msg]');
+    if (btnForward) {
+      btnForward.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        abrirForwardModal(id).catch(err => showError('Falha ao abrir encaminhamento: ' + err.message));
       });
     }
     if (id) {
@@ -2986,8 +3186,16 @@
   favoritesModal.addEventListener('click', (e) => {
     if (e.target === favoritesModal) fecharFavoritos();
   });
+  btnFecharForward.addEventListener('click', () => fecharForwardModal());
+  btnReloadForwardContacts.addEventListener('click', () => carregarForwardContacts());
+  forwardSearch.addEventListener('input', () => renderForwardContacts());
+  btnConfirmForward.addEventListener('click', () => confirmarForward().catch(err => showError('Falha ao encaminhar: ' + err.message)));
+  forwardModal.addEventListener('click', (e) => {
+    if (e.target === forwardModal) fecharForwardModal();
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && favoritesModal.classList.contains('active')) fecharFavoritos();
+    if (e.key === 'Escape' && forwardModal.classList.contains('active')) fecharForwardModal();
   });
 
   // Numero vs texto decidido pelo dado real (typeof), nao por metadado do
@@ -3773,6 +3981,9 @@
     bootLog('input:liberado');
     renderEmptyState('Selecione uma conversa ou inicie uma nova.');
     carregarBootstrapInicial()
+      .then(() => carregarFavoritos().catch((err) => {
+        bootLog('favoritos:boot-falha', { erro: err.message });
+      }))
       .then(() => bootLog('boot:fim', {
         empresas: empresasDisponiveis.length,
         favoritos: favoritosCache.length,
