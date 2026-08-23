@@ -113,9 +113,7 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
   const db = getDB();
   const rows = cursor
     ? db.prepare(`
-        SELECT id, direcao, texto,
-               rows_json IS NOT NULL AS tem_rows,
-               NULL AS rows_count,
+        SELECT id, direcao, texto, rows_json,
                tipo_resultado, grid_config_json, criado_em,
                (
                  SELECT f.id
@@ -129,9 +127,7 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
         ORDER BY criado_em DESC LIMIT ?
       `).all(sessaoId, cursor, limite)
     : db.prepare(`
-        SELECT id, direcao, texto,
-               rows_json IS NOT NULL AS tem_rows,
-               NULL AS rows_count,
+        SELECT id, direcao, texto, rows_json,
                tipo_resultado, grid_config_json, criado_em,
                (
                  SELECT f.id
@@ -145,18 +141,21 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
         ORDER BY criado_em DESC LIMIT ?
       `).all(sessaoId, limite);
 
-  const mensagens = rows.reverse().map(r => ({
-    id: r.id,
-    direcao: r.direcao,
-    texto: r.texto,
-    rows: null,
-    temDados: !!r.tem_rows,
-    rowsCount: r.rows_count == null ? null : Number(r.rows_count || 0),
-    tipo: r.tipo_resultado,
-    gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
-    favoritoId: r.favorito_id || null,
-    criadoEm: r.criado_em,
-  }));
+  const mensagens = rows.reverse().map((r) => {
+    const metaRows = parseRowsMeta(r.rows_json);
+    return {
+      id: r.id,
+      direcao: r.direcao,
+      texto: r.texto,
+      rows: null,
+      temDados: metaRows.temDados,
+      rowsCount: metaRows.temDados ? metaRows.rowsCount : 0,
+      tipo: r.tipo_resultado,
+      gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
+      favoritoId: r.favorito_id || null,
+      criadoEm: r.criado_em,
+    };
+  });
 
   return {
     mensagens,
@@ -340,17 +339,8 @@ function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, r
   return macrosDataComoTexto(out);
 }
 
-function listarFavoritos({ empresaId, celular, limite = 80 }) {
-  const rows = getDB().prepare(`
-    SELECT id, empresa_id, titulo, pergunta_texto, resposta_mensagem_id,
-           interpretation_log_id, modulo, grid_config_json, ultimo_uso_em,
-           criado_em, atualizado_em
-    FROM protheus_chat_favorites
-    WHERE empresa_id = ? AND celular = ? AND ativo = 1
-    ORDER BY COALESCE(ultimo_uso_em, atualizado_em, criado_em) DESC
-    LIMIT ?
-  `).all(empresaId, celular, limite);
-  return rows.map(row => ({
+function mapFavoritoRow(row, { incluirSql = false } = {}) {
+  const favorito = {
     id: row.id,
     empresaId: Number(row.empresa_id),
     titulo: row.titulo,
@@ -362,7 +352,23 @@ function listarFavoritos({ empresaId, celular, limite = 80 }) {
     ultimoUsoEm: row.ultimo_uso_em || null,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
-  }));
+  };
+  if (incluirSql) favorito.sqlFinalExecutado = row.sql_final_executado || '';
+  return favorito;
+}
+
+function listarFavoritos({ empresaId, celular, limite = 80, incluirSql = false }) {
+  const sqlFinalCol = incluirSql ? ', sql_final_executado' : '';
+  const rows = getDB().prepare(`
+    SELECT id, empresa_id, titulo, pergunta_texto, resposta_mensagem_id,
+           interpretation_log_id, modulo, grid_config_json, ultimo_uso_em,
+           criado_em, atualizado_em${sqlFinalCol}
+    FROM protheus_chat_favorites
+    WHERE empresa_id = ? AND celular = ? AND ativo = 1
+    ORDER BY COALESCE(ultimo_uso_em, atualizado_em, criado_em) DESC
+    LIMIT ?
+  `).all(empresaId, celular, limite);
+  return rows.map(row => mapFavoritoRow(row, { incluirSql }));
 }
 
 function obterFavorito({ favoritoId, empresaId, celular }) {
@@ -479,6 +485,18 @@ function renomearFavorito({ favoritoId, empresaId, celular, titulo }) {
      WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
   `).run(tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular);
   return info.changes > 0;
+}
+
+function atualizarSqlFavorito({ favoritoId, empresaId, celular, sqlFinal }) {
+  const sqlLimpo = macrosDataComoTexto(String(sqlFinal || '').trim());
+  if (!sqlLimpo) return null;
+  const info = getDB().prepare(`
+    UPDATE protheus_chat_favorites
+       SET sql_final_executado = ?, atualizado_em = ?
+     WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
+  `).run(sqlLimpo, new Date().toISOString(), favoritoId, empresaId, celular);
+  if (!info.changes) return null;
+  return obterFavorito({ favoritoId, empresaId, celular });
 }
 
 function marcarFavoritoUsado({ favoritoId, empresaId, celular }) {
@@ -602,5 +620,6 @@ module.exports = {
   favoritarMensagem,
   removerFavorito,
   renomearFavorito,
+  atualizarSqlFavorito,
   marcarFavoritoUsado,
 };

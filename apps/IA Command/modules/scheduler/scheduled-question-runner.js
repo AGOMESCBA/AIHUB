@@ -246,6 +246,16 @@ function validarMacrosResolvidasSql(sql) {
   });
 }
 
+function avaliarMacrosSql(sql, job, referencia = new Date(), destinatarios = null) {
+  const sqlResolvido = aplicarMacrosSql(sql, job, referencia, destinatarios);
+  const macrosPendentes = macrosPendentesSql(sqlResolvido);
+  return {
+    ok: macrosPendentes.length === 0,
+    sqlResolvido,
+    macrosPendentes,
+  };
+}
+
 function consultaSemSetRowcount(sql) {
   return String(sql || '').replace(/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '').trim();
 }
@@ -398,9 +408,9 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
 
 async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
   const sqlOriginal = sqlFixo(job);
-  const sqlComMacros = aplicarMacrosSql(sqlOriginal, { ...job, empresa_id: empresaId }, new Date(), destinatarios);
-  validarMacrosResolvidasSql(sqlComMacros);
-  const sql = garantirSetRowcountSqlFixo(sqlComMacros);
+  const avaliacaoMacros = avaliarMacrosSql(sqlOriginal, { ...job, empresa_id: empresaId }, new Date(), destinatarios);
+  validarMacrosResolvidasSql(avaliacaoMacros.sqlResolvido);
+  const sql = garantirSetRowcountSqlFixo(avaliacaoMacros.sqlResolvido);
   validarSqlFixoBasico(sql);
 
   const modulo = String(job.modulo || '').toLowerCase();
@@ -667,10 +677,12 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
 module.exports = {
   executarJob,
   executarSqlFixoUmaVez,
+  avaliarMacrosSql,
   _test: {
     aplicarMacrosSql,
     macrosPendentesSql,
     validarMacrosResolvidasSql,
+    avaliarMacrosSql,
     consultaSemSetRowcount,
     garantirSetRowcountSqlFixo,
     validarSqlFixoBasico,

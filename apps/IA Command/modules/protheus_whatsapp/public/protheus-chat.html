@@ -226,6 +226,9 @@
   .favorite-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wa-text-tertiary); font-size: 11.5px; margin-top: 3px; }
   .favorite-run { border: none; border-radius: 7px; padding: 7px 11px; background: var(--wa-accent); color: #06251e; font-size: 12px; font-weight: 800; cursor: pointer; }
   .favorite-run:hover { filter: brightness(1.07); }
+  .favorite-item.needs-adjust { border-color: rgba(255, 196, 87, 0.5); background: rgba(255, 196, 87, 0.06); }
+  .favorite-adjust-badge { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; margin-top: 4px; padding: 2px 6px; border-radius: 999px; background: rgba(255, 196, 87, 0.14); color: #ffc457; font-size: 10.5px; font-weight: 800; }
+  .favorite-item.needs-adjust .favorite-run { background: #ffc457; color: #2b1e04; }
   .favorite-delete, .favorite-rename { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
   .favorite-delete:hover { background: rgba(214, 69, 69, 0.14); color: #d64545; }
   .favorite-rename:hover { background: var(--wa-accent-soft-bg); color: var(--wa-accent); }
@@ -244,6 +247,29 @@
   .favorite-group-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--wa-accent-soft-bg); color: var(--wa-accent); font-size: 10.5px; font-weight: 800; }
   .favorite-group-body { display: none; flex-direction: column; gap: 6px; padding: 4px 0 6px; }
   .favorite-group.open .favorite-group-body { display: flex; }
+  .macro-adjust-modal { width: min(980px, 96vw); }
+  .macro-adjust-body { min-height: 0; overflow: auto; padding: 13px 14px; display: grid; gap: 12px; }
+  .macro-adjust-status { min-height: 18px; color: var(--wa-text-tertiary); font-size: 12px; }
+  .macro-adjust-status.error { color: #ff8a8a; }
+  .macro-adjust-status.ok { color: var(--wa-accent); }
+  .macro-adjust-alert { border: 1px solid rgba(255, 196, 87, 0.35); border-radius: 8px; padding: 10px 11px; background: rgba(255, 196, 87, 0.08); color: var(--wa-text-secondary); font-size: 12.5px; line-height: 1.45; }
+  .macro-adjust-list { display: grid; gap: 8px; }
+  .macro-adjust-row { display: grid; grid-template-columns: minmax(130px, 0.9fr) minmax(180px, 1.1fr) minmax(180px, 1.1fr) auto; gap: 8px; align-items: center; }
+  .macro-chip { display: inline-flex; align-items: center; min-height: 30px; padding: 6px 8px; border-radius: 999px; background: var(--wa-panel); color: #ffc457; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+  .macro-adjust-row select,
+  .macro-adjust-row input,
+  .macro-adjust-sql { width: 100%; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); outline: none; }
+  .macro-adjust-row select,
+  .macro-adjust-row input { min-height: 34px; padding: 7px 9px; font: inherit; font-size: 12.5px; }
+  .macro-adjust-apply { border: 1px solid var(--wa-border); border-radius: 8px; min-height: 34px; padding: 0 11px; background: transparent; color: var(--wa-text-secondary); font-weight: 800; cursor: pointer; }
+  .macro-adjust-apply:hover { border-color: var(--wa-accent); color: var(--wa-accent); }
+  .macro-adjust-sql { min-height: 230px; resize: vertical; padding: 11px; font: 12.5px/1.45 Consolas, ui-monospace, monospace; }
+  .macro-help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+  .macro-help-item { border: 1px solid var(--wa-border); border-radius: 8px; padding: 7px 8px; background: rgba(0, 0, 0, 0.08); color: var(--wa-text-secondary); font-size: 11.5px; }
+  .macro-help-item code { display: block; color: var(--wa-accent); font-size: 11px; margin-bottom: 2px; }
+  @media (max-width: 760px) {
+    .macro-adjust-row { grid-template-columns: 1fr; }
+  }
 
   .sidebar-search {
     flex: none;
@@ -1382,6 +1408,34 @@
   </div>
 </div>
 
+<div class="favorites-modal-backdrop" id="macroAdjustModal" aria-hidden="true">
+  <div class="favorites-modal macro-adjust-modal" role="dialog" aria-modal="true" aria-labelledby="macroAdjustTitle">
+    <div class="favorites-modal-head">
+      <div class="favorites-modal-title">
+        <strong id="macroAdjustTitle">Ajustar variáveis do favorito</strong>
+        <span id="macroAdjustSubtitle">Revise as variáveis antes de executar novamente.</span>
+      </div>
+      <div class="favorites-modal-actions">
+        <button class="favorites-close" type="button" id="btnFecharMacroAdjust" title="Fechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="macro-adjust-body">
+      <div class="macro-adjust-alert">
+        O IA Command encontrou uma variável que não conseguiu resolver automaticamente. Escolha uma macro conhecida ou ajuste a data diretamente no SQL e salve.
+      </div>
+      <div class="macro-adjust-status" id="macroAdjustStatus"></div>
+      <div class="macro-adjust-list" id="macroAdjustList"></div>
+      <textarea class="macro-adjust-sql" id="macroAdjustSql" spellcheck="false"></textarea>
+      <div class="macro-help-grid" id="macroHelpGrid"></div>
+    </div>
+    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+      <button class="favorite-run" type="button" id="btnSalvarMacroAdjust">Salvar ajuste</button>
+    </div>
+  </div>
+</div>
+
 <div class="message-context-menu" id="messageContextMenu" role="menu" aria-hidden="true">
   <button type="button" class="message-context-item" data-menu-action="favorite" role="menuitem">
     <svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.27 5.82.85-4.21 4.1.99 5.8L12 16.78 6.8 19.52l.99-5.8-4.21-4.1 5.82-.85L12 3.5z"/></svg>
@@ -1482,6 +1536,14 @@
   const favoritesSearch = document.getElementById('favoritesSearch');
   const favoritesList = document.getElementById('favoritesList');
   const btnReloadFavoritos = document.getElementById('btnReloadFavoritos');
+  const macroAdjustModal = document.getElementById('macroAdjustModal');
+  const btnFecharMacroAdjust = document.getElementById('btnFecharMacroAdjust');
+  const btnSalvarMacroAdjust = document.getElementById('btnSalvarMacroAdjust');
+  const macroAdjustSubtitle = document.getElementById('macroAdjustSubtitle');
+  const macroAdjustStatus = document.getElementById('macroAdjustStatus');
+  const macroAdjustList = document.getElementById('macroAdjustList');
+  const macroAdjustSql = document.getElementById('macroAdjustSql');
+  const macroHelpGrid = document.getElementById('macroHelpGrid');
   const forwardModal = document.getElementById('forwardModal');
   const btnFecharForward = document.getElementById('btnFecharForward');
   const btnReloadForwardContacts = document.getElementById('btnReloadForwardContacts');
@@ -1578,6 +1640,25 @@
   let forwardModo = 'resposta';
   let messageContextMensagemId = null;
   let messageContextTrigger = null;
+  let macroAdjustFavoritoId = null;
+
+  const macrosSqlDisponiveis = [
+    ['{{HOJE}}', 'Data de hoje'],
+    ['{{ONTEM}}', 'Data de ontem'],
+    ['{{HOJE:-7}}', 'Hoje menos 7 dias'],
+    ['{{INICIO_SEMANA}}', 'Inicio desta semana'],
+    ['{{FIM_SEMANA}}', 'Fim desta semana'],
+    ['{{INICIO_SEMANA_ANTERIOR}}', 'Inicio da semana passada'],
+    ['{{FIM_SEMANA_ANTERIOR}}', 'Fim da semana passada'],
+    ['{{INICIO_PROXIMA_SEMANA}}', 'Inicio da proxima semana'],
+    ['{{FIM_PROXIMA_SEMANA}}', 'Fim da proxima semana'],
+    ['{{INICIO_MES}}', 'Inicio do mes atual'],
+    ['{{FIM_MES}}', 'Fim do mes atual'],
+    ['{{INICIO_MES_ANTERIOR}}', 'Inicio do mes passado'],
+    ['{{FIM_MES_ANTERIOR}}', 'Fim do mes passado'],
+    ['{{INICIO_ANO}}', 'Inicio do ano atual'],
+    ['{{FIM_ANO}}', 'Fim do ano atual'],
+  ];
 
   let sessaoAtualId = null;
   let sessoesCache = [];
@@ -1723,6 +1804,7 @@
       if (!r.ok) {
         const err = new Error(body.error || ('Erro ' + r.status));
         err.status = r.status;
+        Object.assign(err, body || {});
         throw err;
       }
       return body;
@@ -1930,18 +2012,23 @@
   function criarItemFavorito(fav) {
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = 'favorite-item';
+    const precisaAjuste = !!fav.precisaAjuste;
+    item.className = 'favorite-item' + (precisaAjuste ? ' needs-adjust' : '');
     item.title = fav.perguntaTexto || fav.titulo || '';
     item.innerHTML = `
       <span class="favorite-main">
         <span class="favorite-title">${escapeHtml(fav.titulo || 'Pergunta favorita')}</span>
         <span class="favorite-meta">${fav.ultimoUsoEm ? 'usado ' + escapeHtml(nowLabel(fav.ultimoUsoEm)) : ''}</span>
+        ${precisaAjuste ? '<span class="favorite-adjust-badge">Precisa ajustar variaveis</span>' : ''}
       </span>
-      <span class="favorite-run">Executar</span>
+      <span class="favorite-run">${precisaAjuste ? 'Ajustar' : 'Executar'}</span>
       <span class="favorite-rename" title="Renomear favorito" aria-label="Renomear favorito">${renameSvg()}</span>
       <span class="favorite-delete" title="Remover favorito" aria-label="Remover favorito">${trashSvg()}</span>
     `;
-    item.addEventListener('click', () => executarFavorito(fav.id));
+    item.addEventListener('click', () => {
+      if (fav.precisaAjuste) abrirAjusteMacroFavorito(fav.id, fav.macrosPendentes).catch((err) => showError('Falha ao abrir ajuste: ' + err.message));
+      else executarFavorito(fav.id);
+    });
     item.querySelector('.favorite-rename').addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -2063,6 +2150,97 @@
     favoritesModal.classList.remove('active');
     favoritesModal.setAttribute('aria-hidden', 'true');
     if (btnAbrirFavoritos) btnAbrirFavoritos.focus();
+  }
+
+  function renderMacroHelp() {
+    if (!macroHelpGrid) return;
+    macroHelpGrid.innerHTML = macrosSqlDisponiveis.map(([macro, desc]) => (
+      `<div class="macro-help-item"><code>${escapeHtml(macro)}</code>${escapeHtml(desc)}</div>`
+    )).join('');
+  }
+
+  function renderMacroAdjustRows(macrosPendentes = []) {
+    if (!macroAdjustList) return;
+    const macros = Array.isArray(macrosPendentes) ? macrosPendentes.filter(Boolean) : [];
+    if (!macros.length) {
+      macroAdjustList.innerHTML = '<div class="favorite-empty">Nenhuma variável pendente encontrada. Você ainda pode revisar o SQL antes de salvar.</div>';
+      return;
+    }
+    const options = '<option value="">Escolher macro conhecida</option>' + macrosSqlDisponiveis
+      .map(([macro, desc]) => `<option value="${escapeHtml(macro)}">${escapeHtml(macro + ' - ' + desc)}</option>`)
+      .join('');
+    macroAdjustList.innerHTML = macros.map((macro) => `
+      <div class="macro-adjust-row" data-macro-pendente="${escapeHtml(macro)}">
+        <span class="macro-chip">${escapeHtml(macro)}</span>
+        <select data-macro-select>${options}</select>
+        <input type="text" data-macro-manual placeholder="Valor manual, ex: '20260822'" />
+        <button type="button" class="macro-adjust-apply" data-macro-apply>Aplicar</button>
+      </div>
+    `).join('');
+  }
+
+  function fecharAjusteMacro() {
+    if (!macroAdjustModal) return;
+    macroAdjustModal.classList.remove('active');
+    macroAdjustModal.setAttribute('aria-hidden', 'true');
+    macroAdjustFavoritoId = null;
+  }
+
+  async function abrirAjusteMacroFavorito(favoritoId, macrosPendentes = []) {
+    if (!macroAdjustModal || !macroAdjustSql) return;
+    macroAdjustFavoritoId = favoritoId;
+    macroAdjustStatus.textContent = 'Carregando favorito...';
+    macroAdjustStatus.className = 'macro-adjust-status';
+    macroAdjustSql.value = '';
+    renderMacroAdjustRows(macrosPendentes);
+    renderMacroHelp();
+    macroAdjustModal.classList.add('active');
+    macroAdjustModal.setAttribute('aria-hidden', 'false');
+    const data = await api('/favoritos/' + favoritoId + '/ajuste');
+    const fav = data.favorito || {};
+    macroAdjustFavoritoId = fav.id || favoritoId;
+    if (macroAdjustSubtitle) macroAdjustSubtitle.textContent = fav.titulo || fav.perguntaTexto || 'Favorito';
+    macroAdjustSql.value = fav.sqlFinalExecutado || '';
+    renderMacroAdjustRows(fav.macrosPendentes?.length ? fav.macrosPendentes : macrosPendentes);
+    macroAdjustStatus.textContent = fav.precisaAjuste
+      ? 'Substitua as variáveis pendentes ou edite o SQL manualmente.'
+      : 'SQL sem variáveis pendentes. Revise e salve se necessário.';
+    macroAdjustStatus.className = 'macro-adjust-status';
+    setTimeout(() => macroAdjustSql.focus(), 0);
+  }
+
+  async function salvarAjusteMacroFavorito() {
+    if (!macroAdjustFavoritoId || !macroAdjustSql) return;
+    const sql = macroAdjustSql.value.trim();
+    if (!sql) {
+      macroAdjustStatus.textContent = 'Informe o SQL do favorito.';
+      macroAdjustStatus.className = 'macro-adjust-status error';
+      return;
+    }
+    btnSalvarMacroAdjust.disabled = true;
+    macroAdjustStatus.textContent = 'Salvando ajuste...';
+    macroAdjustStatus.className = 'macro-adjust-status';
+    try {
+      const data = await api('/favoritos/' + macroAdjustFavoritoId + '/sql', {
+        method: 'PUT',
+        body: JSON.stringify({ sql_final_executado: sql }),
+      });
+      const favAtualizado = data.favorito;
+      if (favAtualizado?.id) {
+        favoritosCache = favoritosCache.map((fav) => fav.id === favAtualizado.id ? { ...fav, ...favAtualizado } : fav);
+      }
+      renderFavoritos();
+      macroAdjustStatus.textContent = favAtualizado?.precisaAjuste
+        ? 'Salvo, mas ainda existe variável pendente.'
+        : 'Ajuste salvo. O favorito já pode ser executado.';
+      macroAdjustStatus.className = favAtualizado?.precisaAjuste ? 'macro-adjust-status error' : 'macro-adjust-status ok';
+      if (!favAtualizado?.precisaAjuste) setTimeout(fecharAjusteMacro, 650);
+    } catch (err) {
+      macroAdjustStatus.textContent = err.message;
+      macroAdjustStatus.className = 'macro-adjust-status error';
+    } finally {
+      btnSalvarMacroAdjust.disabled = false;
+    }
   }
 
   function renderForwardContacts() {
@@ -2453,7 +2631,18 @@
       scrollToBottom();
     } catch (err) {
       hideTyping();
-      addBubble({ texto: 'Não foi possível executar o favorito: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+      if (Array.isArray(err.macrosPendentes) && err.macrosPendentes.length) {
+        if (fav) {
+          fav.precisaAjuste = true;
+          fav.macrosPendentes = err.macrosPendentes;
+          renderFavoritos();
+        }
+        abrirAjusteMacroFavorito(favoritoId, err.macrosPendentes).catch((erroAjuste) => {
+          addBubble({ texto: 'Não foi possível abrir o ajuste do favorito: ' + erroAjuste.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+        });
+      } else {
+        addBubble({ texto: 'Não foi possível executar o favorito: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+      }
       scrollToBottom();
     } finally {
       sendBtn.disabled = false;
@@ -3455,6 +3644,28 @@
   favoritesModal.addEventListener('click', (e) => {
     if (e.target === favoritesModal) fecharFavoritos();
   });
+  btnFecharMacroAdjust.addEventListener('click', () => fecharAjusteMacro());
+  btnSalvarMacroAdjust.addEventListener('click', () => salvarAjusteMacroFavorito());
+  macroAdjustModal.addEventListener('click', (e) => {
+    if (e.target === macroAdjustModal) fecharAjusteMacro();
+  });
+  macroAdjustList.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-macro-apply]');
+    if (!btn || !macroAdjustSql) return;
+    const row = btn.closest('[data-macro-pendente]');
+    const macroPendente = row?.dataset?.macroPendente || '';
+    const select = row?.querySelector('[data-macro-select]');
+    const manual = row?.querySelector('[data-macro-manual]');
+    const substituto = String(manual?.value || select?.value || '').trim();
+    if (!macroPendente || !substituto) {
+      macroAdjustStatus.textContent = 'Escolha uma macro ou informe um valor manual.';
+      macroAdjustStatus.className = 'macro-adjust-status error';
+      return;
+    }
+    macroAdjustSql.value = macroAdjustSql.value.split(macroPendente).join(substituto);
+    macroAdjustStatus.textContent = 'Substituição aplicada no SQL. Revise e salve.';
+    macroAdjustStatus.className = 'macro-adjust-status ok';
+  });
   btnFecharForward.addEventListener('click', () => fecharForwardModal());
   btnReloadForwardContacts.addEventListener('click', () => carregarForwardContacts());
   forwardSearch.addEventListener('input', () => renderForwardContacts());
@@ -3498,6 +3709,7 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && favoritesModal.classList.contains('active')) fecharFavoritos();
+    if (e.key === 'Escape' && macroAdjustModal.classList.contains('active')) fecharAjusteMacro();
     if (e.key === 'Escape' && forwardModal.classList.contains('active')) fecharForwardModal();
     if (e.key === 'Escape') fecharMenuMensagem();
   });

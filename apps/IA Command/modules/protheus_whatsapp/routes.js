@@ -17,6 +17,7 @@ const chatService = require('./service');
 const { getDB } = require('../database');
 const whatsappManager = require('../whatsapp/service-manager');
 const whatsappChannels = require('../whatsapp/channel-store');
+const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -208,6 +209,68 @@ function validarModuloFavorito(req, res, favorito) {
     return false;
   }
   return true;
+}
+
+function sqlFavoritoValido(sql) {
+  const texto = String(sql || '').trim();
+  if (!texto) return { ok: false, error: 'Informe o SQL final executado.' };
+  const normalizado = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const consulta = texto.replace(/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '').trim();
+  if (!/^(select|with)\b/i.test(consulta)) {
+    return { ok: false, error: 'Apenas SQL de consulta iniciado por SELECT, WITH ou SET ROWCOUNT seguido de SELECT/WITH pode ser salvo.' };
+  }
+  const semPontoFinal = consulta.replace(/;\s*$/, '');
+  if (/;\s*\S/.test(semPontoFinal)) {
+    return { ok: false, error: 'SQL deve conter apenas uma consulta de leitura.' };
+  }
+  if (/\b(insert|update|delete|drop|alter|truncate|merge|exec|execute|create|grant|revoke)\b/i.test(normalizado)) {
+    return { ok: false, error: 'SQL contem comando nao permitido para favorito.' };
+  }
+  return { ok: true };
+}
+
+function avaliarMacrosFavorito(favorito, empresaId, celular) {
+  const sql = String(favorito?.sql_final_executado || favorito?.sqlFinalExecutado || '').trim();
+  if (!sql) return { precisaAjuste: false, macrosPendentes: [] };
+  try {
+    const avaliacao = scheduledQuestionRunner.avaliarMacrosSql(sql, {
+      empresa_id: empresaId,
+      nome: favorito?.titulo || favorito?.pergunta_texto || favorito?.perguntaTexto || '',
+      pergunta: favorito?.pergunta_texto || favorito?.perguntaTexto || '',
+      modulo: favorito?.modulo || '',
+      sql_fixo: sql,
+    }, new Date(), [{ nome: celular, numero: celular }]);
+    return {
+      precisaAjuste: !avaliacao.ok,
+      macrosPendentes: avaliacao.macrosPendentes || [],
+    };
+  } catch (err) {
+    return {
+      precisaAjuste: true,
+      macrosPendentes: err.macrosPendentes || [],
+    };
+  }
+}
+
+function serializarFavoritoParaChat(favorito, { empresaId, celular, incluirSql = false } = {}) {
+  const statusMacro = avaliarMacrosFavorito(favorito, empresaId, celular);
+  const out = {
+    id: favorito.id,
+    empresaId: Number(favorito.empresaId || favorito.empresa_id || empresaId || 0),
+    titulo: favorito.titulo,
+    perguntaTexto: favorito.perguntaTexto || favorito.pergunta_texto || '',
+    respostaMensagemId: favorito.respostaMensagemId || favorito.resposta_mensagem_id || null,
+    interpretationLogId: favorito.interpretationLogId || favorito.interpretation_log_id || null,
+    modulo: favorito.modulo || null,
+    gridConfig: favorito.gridConfig || (favorito.grid_config_json ? JSON.parse(favorito.grid_config_json) : null),
+    ultimoUsoEm: favorito.ultimoUsoEm || favorito.ultimo_uso_em || null,
+    criadoEm: favorito.criadoEm || favorito.criado_em || null,
+    atualizadoEm: favorito.atualizadoEm || favorito.atualizado_em || null,
+    precisaAjuste: statusMacro.precisaAjuste,
+    macrosPendentes: statusMacro.macrosPendentes,
+  };
+  if (incluirSql) out.sqlFinalExecutado = favorito.sqlFinalExecutado || favorito.sql_final_executado || '';
+  return out;
 }
 
 function buscarContatoAutorizado({ empresaId, numeroId }) {
@@ -496,8 +559,9 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const empresaId = resolverEmpresaSelecionada(req, res);
       if (!empresaId) return;
-      const favoritos = sessionStore.listarFavoritos({ empresaId, celular })
-        .filter(fav => moduloPermitidoParaCelular({ empresaId, celular, modulo: fav.modulo }));
+      const favoritos = sessionStore.listarFavoritos({ empresaId, celular, incluirSql: true })
+        .filter(fav => moduloPermitidoParaCelular({ empresaId, celular, modulo: fav.modulo }))
+        .map(fav => serializarFavoritoParaChat(fav, { empresaId, celular }));
       perfLog('GET /favoritos', inicio, { status: 200, empresaId, total: favoritos.length });
       res.json({ favoritos });
     } catch (err) {
@@ -893,6 +957,22 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  app.get('/api/ia-command/protheus/favoritos/:favoritoId/ajuste', requireTokenSessao, (req, res) => {
+    const { celular } = req.protheusChat;
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const favorito = sessionStore.obterFavorito({ favoritoId: req.params.favoritoId, empresaId, celular });
+      if (!favorito) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+      if (!validarModuloFavorito(req, res, favorito)) return;
+      res.json({
+        favorito: serializarFavoritoParaChat(favorito, { empresaId, celular, incluirSql: true }),
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.put('/api/ia-command/protheus/favoritos/:favoritoId', requireTokenSessao, (req, res) => {
     const { celular } = req.protheusChat;
     const { titulo } = req.body || {};
@@ -905,6 +985,33 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       const ok = sessionStore.renomearFavorito({ favoritoId: req.params.favoritoId, empresaId, celular, titulo });
       if (!ok) return res.status(404).json({ error: 'Favorito nao encontrado.' });
       res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put('/api/ia-command/protheus/favoritos/:favoritoId/sql', requireTokenSessao, (req, res) => {
+    const { celular } = req.protheusChat;
+    const sqlFinal = String(req.body?.sql_final_executado || req.body?.sqlFinalExecutado || '').trim();
+    const validacao = sqlFavoritoValido(sqlFinal);
+    if (!validacao.ok) return res.status(400).json({ error: validacao.error });
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const favoritoAtual = sessionStore.obterFavorito({ favoritoId: req.params.favoritoId, empresaId, celular });
+      if (!favoritoAtual) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+      if (!validarModuloFavorito(req, res, favoritoAtual)) return;
+      const favorito = sessionStore.atualizarSqlFavorito({
+        favoritoId: req.params.favoritoId,
+        empresaId,
+        celular,
+        sqlFinal,
+      });
+      if (!favorito) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+      res.json({
+        ok: true,
+        favorito: serializarFavoritoParaChat(favorito, { empresaId, celular }),
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -931,7 +1038,11 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       });
       res.json({ sessaoId: sid, resposta: resultado, criadoEm: new Date().toISOString() });
     } catch (err) {
-      res.status(err.statusCode || 500).json({ error: err.message });
+      res.status(err.statusCode || 500).json({
+        error: err.message,
+        macrosPendentes: err.macrosPendentes || [],
+        precisaAjuste: Array.isArray(err.macrosPendentes) && err.macrosPendentes.length > 0,
+      });
     }
   });
 
