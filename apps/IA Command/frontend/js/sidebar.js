@@ -104,6 +104,14 @@
       icon: '$',
     });
   }
+  if (administracao && !administracao.items.some(i => i.href === '/app/ia-command/admin-protheus-chat-encaminhamentos.html')) {
+    administracao.items.splice(2, 0, {
+      id: 'iac-admin-auditoria',
+      label: 'Encaminhamentos',
+      href: '/app/ia-command/admin-protheus-chat-encaminhamentos.html',
+      icon: '->',
+    });
+  }
 
   const curPath = location.pathname;
 

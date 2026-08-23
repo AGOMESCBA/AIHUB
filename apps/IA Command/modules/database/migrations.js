@@ -1460,6 +1460,43 @@ const MIGRATIONS = [
       ALTER TABLE protheus_sx2 ADD COLUMN modo_empresa TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 80,
+    descricao: 'IA Command - auditoria de encaminhamentos do chat Protheus para WhatsApp',
+    sql: `
+      CREATE TABLE IF NOT EXISTS protheus_chat_forwardings (
+        id                       TEXT PRIMARY KEY,
+        empresa_id               INTEGER NOT NULL,
+        sessao_id                TEXT DEFAULT NULL,
+        mensagem_id              TEXT DEFAULT NULL,
+        remetente_celular        TEXT DEFAULT NULL,
+        remetente_usuario        TEXT DEFAULT NULL,
+        destinatario_numero_id   TEXT DEFAULT NULL,
+        destinatario_celular     TEXT DEFAULT NULL,
+        destinatario_nome        TEXT DEFAULT NULL,
+        formato                  TEXT NOT NULL DEFAULT 'pdf',
+        status                   TEXT NOT NULL DEFAULT 'pendente',
+        pergunta_snapshot        TEXT DEFAULT NULL,
+        resumo_snapshot          TEXT DEFAULT NULL,
+        rows_count               INTEGER NOT NULL DEFAULT 0,
+        arquivo_nome             TEXT DEFAULT NULL,
+        arquivo_path             TEXT DEFAULT NULL,
+        erro                     TEXT DEFAULT NULL,
+        criado_em                TEXT NOT NULL,
+        enviado_em               TEXT DEFAULT NULL,
+        atualizado_em            TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_forwardings_empresa
+        ON protheus_chat_forwardings (empresa_id, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_forwardings_status
+        ON protheus_chat_forwardings (empresa_id, status, criado_em);
+
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_chat_forwardings_mensagem
+        ON protheus_chat_forwardings (mensagem_id);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

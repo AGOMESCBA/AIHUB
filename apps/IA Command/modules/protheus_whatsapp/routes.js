@@ -522,6 +522,23 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  app.put('/api/ia-command/protheus/favoritos/:favoritoId', requireTokenSessao, (req, res) => {
+    const { celular } = req.protheusChat;
+    const { titulo } = req.body || {};
+    if (!titulo || !String(titulo).trim()) {
+      return res.status(400).json({ error: 'titulo obrigatorio.' });
+    }
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const ok = sessionStore.renomearFavorito({ favoritoId: req.params.favoritoId, empresaId, celular, titulo });
+      if (!ok) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/ia-command/protheus/favoritos/:favoritoId/executar', requireTokenSessao, async (req, res) => {
     const { celular } = req.protheusChat;
     try {

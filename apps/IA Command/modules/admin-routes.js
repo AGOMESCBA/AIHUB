@@ -1859,6 +1859,193 @@ Responda SOMENTE com JSON válido, sem markdown:
     res.json(row);
   });
 
+  app.get('/api/ia-command/admin/protheus-chat-encaminhamentos', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    const empId = eid(req);
+    const wheres = ['empresa_id = ?'];
+    const params = [empId];
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 500);
+    const status = String(req.query.status || '').trim();
+    const formato = String(req.query.formato || '').trim();
+    const q = String(req.query.q || '').trim();
+
+    if (status) {
+      wheres.push('status = ?');
+      params.push(status);
+    }
+    if (formato) {
+      wheres.push('formato = ?');
+      params.push(formato);
+    }
+    if (q) {
+      wheres.push(`(
+        destinatario_nome LIKE ?
+        OR destinatario_celular LIKE ?
+        OR remetente_usuario LIKE ?
+        OR remetente_celular LIKE ?
+        OR pergunta_snapshot LIKE ?
+        OR resumo_snapshot LIKE ?
+      )`);
+      const like = `%${q}%`;
+      params.push(like, like, like, like, like, like);
+    }
+
+    params.push(limit);
+    const rows = db.prepare(`
+      SELECT id, empresa_id, sessao_id, mensagem_id, remetente_celular, remetente_usuario,
+             destinatario_numero_id, destinatario_celular, destinatario_nome, formato, status,
+             pergunta_snapshot, resumo_snapshot, rows_count, arquivo_nome, erro,
+             criado_em, enviado_em, atualizado_em
+      FROM protheus_chat_forwardings
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY criado_em DESC
+      LIMIT ?
+    `).all(...params);
+
+    res.json(rows);
+  });
+
+  app.get('/api/ia-command/admin/protheus-chat-encaminhamentos/:id', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const row = getDB().prepare(`
+      SELECT *
+      FROM protheus_chat_forwardings
+      WHERE id = ? AND empresa_id = ?
+    `).get(req.params.id, eid(req));
+    if (!row) return res.status(404).json({ error: 'Encaminhamento nao encontrado.' });
+    res.json(row);
+  });
+
+  app.post('/api/ia-command/admin/protheus-chat-encaminhamentos', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const db = getDB();
+    const agora = new Date().toISOString();
+    const id = require('crypto').randomUUID();
+    const b = req.body || {};
+    const row = {
+      id,
+      empresa_id: eid(req),
+      sessao_id: String(b.sessao_id || '').trim() || null,
+      mensagem_id: String(b.mensagem_id || '').trim() || null,
+      remetente_celular: String(b.remetente_celular || '').trim() || null,
+      remetente_usuario: String(b.remetente_usuario || req.session.username || req.session.user || '').trim() || null,
+      destinatario_numero_id: String(b.destinatario_numero_id || '').trim() || null,
+      destinatario_celular: String(b.destinatario_celular || '').trim() || null,
+      destinatario_nome: String(b.destinatario_nome || '').trim() || null,
+      formato: String(b.formato || 'pdf').trim() || 'pdf',
+      status: String(b.status || 'pendente').trim() || 'pendente',
+      pergunta_snapshot: String(b.pergunta_snapshot || '').trim() || null,
+      resumo_snapshot: String(b.resumo_snapshot || '').trim() || null,
+      rows_count: Math.max(parseInt(b.rows_count, 10) || 0, 0),
+      arquivo_nome: String(b.arquivo_nome || '').trim() || null,
+      arquivo_path: String(b.arquivo_path || '').trim() || null,
+      erro: String(b.erro || '').trim() || null,
+      criado_em: agora,
+      enviado_em: String(b.enviado_em || '').trim() || null,
+      atualizado_em: agora,
+    };
+
+    db.prepare(`
+      INSERT INTO protheus_chat_forwardings (
+        id, empresa_id, sessao_id, mensagem_id, remetente_celular, remetente_usuario,
+        destinatario_numero_id, destinatario_celular, destinatario_nome, formato, status,
+        pergunta_snapshot, resumo_snapshot, rows_count, arquivo_nome, arquivo_path, erro,
+        criado_em, enviado_em, atualizado_em
+      ) VALUES (
+        @id, @empresa_id, @sessao_id, @mensagem_id, @remetente_celular, @remetente_usuario,
+        @destinatario_numero_id, @destinatario_celular, @destinatario_nome, @formato, @status,
+        @pergunta_snapshot, @resumo_snapshot, @rows_count, @arquivo_nome, @arquivo_path, @erro,
+        @criado_em, @enviado_em, @atualizado_em
+      )
+    `).run(row);
+
+    _audit(req, 'criar_encaminhamento_chat_protheus', { id, destinatario: row.destinatario_celular, status: row.status });
+    res.json(row);
+  });
+
+  app.put('/api/ia-command/admin/protheus-chat-encaminhamentos/:id', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const b = req.body || {};
+    const agora = new Date().toISOString();
+    const info = getDB().prepare(`
+      UPDATE protheus_chat_forwardings
+         SET status = COALESCE(?, status),
+             formato = COALESCE(?, formato),
+             remetente_usuario = COALESCE(?, remetente_usuario),
+             remetente_celular = COALESCE(?, remetente_celular),
+             destinatario_nome = COALESCE(?, destinatario_nome),
+             destinatario_celular = COALESCE(?, destinatario_celular),
+             pergunta_snapshot = COALESCE(?, pergunta_snapshot),
+             resumo_snapshot = COALESCE(?, resumo_snapshot),
+             rows_count = COALESCE(?, rows_count),
+             arquivo_nome = COALESCE(?, arquivo_nome),
+             arquivo_path = COALESCE(?, arquivo_path),
+             erro = COALESCE(?, erro),
+             enviado_em = COALESCE(?, enviado_em),
+             atualizado_em = ?
+       WHERE id = ? AND empresa_id = ?
+    `).run(
+      b.status == null ? null : String(b.status).trim(),
+      b.formato == null ? null : String(b.formato).trim(),
+      b.remetente_usuario == null ? null : String(b.remetente_usuario).trim(),
+      b.remetente_celular == null ? null : String(b.remetente_celular).trim(),
+      b.destinatario_nome == null ? null : String(b.destinatario_nome).trim(),
+      b.destinatario_celular == null ? null : String(b.destinatario_celular).trim(),
+      b.pergunta_snapshot == null ? null : String(b.pergunta_snapshot).trim(),
+      b.resumo_snapshot == null ? null : String(b.resumo_snapshot).trim(),
+      b.rows_count == null ? null : Math.max(parseInt(b.rows_count, 10) || 0, 0),
+      b.arquivo_nome == null ? null : String(b.arquivo_nome).trim(),
+      b.arquivo_path == null ? null : String(b.arquivo_path).trim(),
+      b.erro == null ? null : String(b.erro).trim(),
+      b.enviado_em == null ? null : String(b.enviado_em).trim(),
+      agora,
+      req.params.id,
+      eid(req),
+    );
+    if (!info.changes) return res.status(404).json({ error: 'Encaminhamento nao encontrado.' });
+    _audit(req, 'atualizar_encaminhamento_chat_protheus', { id: req.params.id, campos: Object.keys(b) });
+    res.json({ ok: true });
+  });
+
+  app.post('/api/ia-command/admin/protheus-chat-encaminhamentos/excluir-selecionados', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'Informe ao menos um ID para excluir.' });
+    }
+    if (ids.length > 200) {
+      return res.status(400).json({ error: 'Maximo de 200 registros por operacao.' });
+    }
+    const stmt = getDB().prepare('DELETE FROM protheus_chat_forwardings WHERE empresa_id = ? AND id = ?');
+    const tx = getDB().transaction(lista => {
+      let removidos = 0;
+      for (const id of lista) removidos += stmt.run(eid(req), String(id)).changes;
+      return removidos;
+    });
+    const removidos = tx(ids);
+    _audit(req, 'excluir_encaminhamentos_chat_protheus', { ids, removidos });
+    res.json({ ok: true, removidos });
+  });
+
+  app.post('/api/ia-command/admin/protheus-chat-encaminhamentos/limpar', requireAuth, requireIaCommand, canAuditoria, (req, res) => {
+    const modo = String(req.body?.modo || 'periodo');
+    const dataInicio = String(req.body?.data_inicio || '').trim();
+    const dataFim = String(req.body?.data_fim || '').trim();
+    const params = [eid(req)];
+    let where = 'empresa_id = ?';
+
+    if (modo !== 'total') {
+      if (!dataInicio || !dataFim) {
+        return res.status(400).json({ error: 'Informe data inicial e data final.' });
+      }
+      if (dataInicio > dataFim) {
+        return res.status(400).json({ error: 'Data inicial nao pode ser maior que a data final.' });
+      }
+      where += ' AND criado_em BETWEEN ? AND ?';
+      params.push(`${dataInicio}T00:00:00.000`, `${dataFim}T23:59:59.999`);
+    }
+
+    const info = getDB().prepare(`DELETE FROM protheus_chat_forwardings WHERE ${where}`).run(...params);
+    _audit(req, 'limpar_encaminhamentos_chat_protheus', { modo, data_inicio: dataInicio || null, data_fim: dataFim || null, removidos: info.changes });
+    res.json({ ok: true, removidos: info.changes });
+  });
+
   // ────────────────────────────────────────────────────────────────────────────
   // PROPOSTAS DE CORRECAO DE SPEC (feedback tecnico via WhatsApp)
   // ────────────────────────────────────────────────────────────────────────────

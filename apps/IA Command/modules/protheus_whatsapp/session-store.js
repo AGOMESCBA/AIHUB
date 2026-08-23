@@ -396,6 +396,17 @@ function removerFavorito({ favoritoId, empresaId, celular }) {
   return info.changes > 0;
 }
 
+function renomearFavorito({ favoritoId, empresaId, celular, titulo }) {
+  const tituloLimpo = String(titulo || '').trim();
+  if (!tituloLimpo) return false;
+  const info = getDB().prepare(`
+    UPDATE protheus_chat_favorites
+       SET titulo = ?, atualizado_em = ?
+     WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
+  `).run(tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular);
+  return info.changes > 0;
+}
+
 function marcarFavoritoUsado({ favoritoId, empresaId, celular }) {
   getDB().prepare(`
     UPDATE protheus_chat_favorites
@@ -516,5 +527,6 @@ module.exports = {
   obterFavorito,
   favoritarMensagem,
   removerFavorito,
+  renomearFavorito,
   marcarFavoritoUsado,
 };

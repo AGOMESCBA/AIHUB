@@ -219,16 +219,31 @@
   .favorites-list::-webkit-scrollbar { width: 5px; }
   .favorites-list::-webkit-scrollbar-thumb { background: var(--wa-scrollbar); border-radius: 5px; }
   .favorite-empty { color: var(--wa-text-tertiary); font-size: 12px; padding: 18px 8px; text-align: center; }
-        .favorite-item { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 8px; width: 100%; min-height: 52px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 10px; cursor: pointer; text-align: left; }
+        .favorite-item { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px; width: 100%; min-height: 52px; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 9px 10px; cursor: pointer; text-align: left; }
   .favorite-item:hover { background: var(--wa-sidebar-hover); }
   .favorite-main { min-width: 0; }
   .favorite-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.2px; font-weight: 700; }
   .favorite-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wa-text-tertiary); font-size: 11.5px; margin-top: 3px; }
   .favorite-run { border: none; border-radius: 7px; padding: 7px 11px; background: var(--wa-accent); color: #06251e; font-size: 12px; font-weight: 800; cursor: pointer; }
   .favorite-run:hover { filter: brightness(1.07); }
-  .favorite-delete { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .favorite-delete, .favorite-rename { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
   .favorite-delete:hover { background: rgba(214, 69, 69, 0.14); color: #d64545; }
-  .favorite-delete svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .favorite-rename:hover { background: var(--wa-accent-soft-bg); color: var(--wa-accent); }
+  .favorite-delete svg, .favorite-rename svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Agrupamento por modulo — colapsavel. So aparece quando ha mais de um
+     modulo entre os favoritos (ver renderFavoritos); com um unico modulo a
+     lista fica plana, sem cabecalho de grupo (nada a organizar). */
+  .favorite-group { border: 1px solid transparent; border-radius: 8px; }
+  .favorite-group-header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 6px; border: none; background: transparent; color: var(--wa-text-secondary); font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; cursor: pointer; text-align: left; border-radius: 6px; }
+  .favorite-group-header:hover { background: var(--wa-sidebar-hover); }
+  .favorite-group-chevron { width: 14px; height: 14px; display: flex; flex: none; transition: transform 0.15s ease; color: var(--wa-text-tertiary); }
+  .favorite-group-chevron svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  .favorite-group.open .favorite-group-chevron { transform: rotate(90deg); }
+  .favorite-group-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .favorite-group-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--wa-accent-soft-bg); color: var(--wa-accent); font-size: 10.5px; font-weight: 800; }
+  .favorite-group-body { display: none; flex-direction: column; gap: 6px; padding: 4px 0 6px; }
+  .favorite-group.open .favorite-group-body { display: flex; }
 
   .sidebar-search {
     flex: none;
@@ -346,10 +361,28 @@
     border-style: solid;
     font-size: 0;
     gap: 0;
+    position: relative;
   }
   .app-frame.focus-mode .new-chat-btn svg { width: 20px; height: 20px; }
   .app-frame.focus-mode .favorite-open-btn { justify-content: center; }
   .app-frame.focus-mode .favorite-open-main svg { width: 20px; height: 20px; }
+  /* Badge compacto sobreposto ao icone quando a sidebar esta colapsada — o
+     texto some (font-size:0 acima), mas a contagem continua visivel como um
+     selo no canto, igual ao padrao de notificacao de apps de mensagem. */
+  .app-frame.focus-mode .favorite-open-btn .favorite-count {
+    display: inline-flex;
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9.5px;
+    border-radius: 8px;
+    background: var(--wa-accent);
+    color: #fff;
+    border: 2px solid var(--wa-panel);
+  }
   .app-frame.focus-mode .session-list { padding: 4px 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .app-frame.focus-mode .session-item {
     width: 48px;
@@ -1697,6 +1730,49 @@
     return '<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>';
   }
 
+  function renameSvg() {
+    return '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
+  }
+
+  function chevronSvg() {
+    return '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>';
+  }
+
+  // Modulos com o grupo expandido — populado na primeira renderizacao (ver
+  // renderFavoritos): 1 modulo so -> abre expandido; mais de um -> comeca
+  // colapsado, usuario expande o que quiser. Mantido em memoria (nao
+  // persistido) para o estado sobreviver a buscas/renomeacoes na mesma
+  // sessao de uso, sem precisar salvar preferencia no servidor.
+  let favoritosGruposAbertos = null;
+
+  function criarItemFavorito(fav) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'favorite-item';
+    item.title = fav.perguntaTexto || fav.titulo || '';
+    item.innerHTML = `
+      <span class="favorite-main">
+        <span class="favorite-title">${escapeHtml(fav.titulo || 'Pergunta favorita')}</span>
+        <span class="favorite-meta">${fav.ultimoUsoEm ? 'usado ' + escapeHtml(nowLabel(fav.ultimoUsoEm)) : ''}</span>
+      </span>
+      <span class="favorite-run">Executar</span>
+      <span class="favorite-rename" title="Renomear favorito" aria-label="Renomear favorito">${renameSvg()}</span>
+      <span class="favorite-delete" title="Remover favorito" aria-label="Remover favorito">${trashSvg()}</span>
+    `;
+    item.addEventListener('click', () => executarFavorito(fav.id));
+    item.querySelector('.favorite-rename').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      renomearFavorito(fav.id);
+    });
+    item.querySelector('.favorite-delete').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removerFavorito(fav.id);
+    });
+    return item;
+  }
+
   function renderFavoritos() {
     if (favoriteCount) favoriteCount.textContent = favoritosCarregados ? String(favoritosCache.length) : '...';
     if (!favoritesList) return;
@@ -1716,28 +1792,57 @@
       favoritesList.innerHTML = '<div class="favorite-empty">' + (favoritosCache.length ? 'Nenhum favorito encontrado.' : 'Nenhuma pergunta favorita.') + '</div>';
       return;
     }
-    favoritesList.innerHTML = '';
+
+    const grupos = new Map();
     lista.forEach((fav) => {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'favorite-item';
-      item.title = fav.perguntaTexto || fav.titulo || '';
-      item.innerHTML = `
-        <span class="favorite-main">
-          <span class="favorite-title">${escapeHtml(fav.titulo || 'Pergunta favorita')}</span>
-          <span class="favorite-meta">${escapeHtml(fav.modulo || '')}${fav.ultimoUsoEm ? ' · usado ' + escapeHtml(nowLabel(fav.ultimoUsoEm)) : ''}</span>
-        </span>
-        <span class="favorite-run">Executar</span>
-        <span class="favorite-delete" title="Remover favorito" aria-label="Remover favorito">${trashSvg()}</span>
-      `;
-      item.addEventListener('click', () => executarFavorito(fav.id));
-      item.querySelector('.favorite-delete').addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        removerFavorito(fav.id);
-      });
-      favoritesList.appendChild(item);
+      const chave = fav.modulo || 'Outros';
+      if (!grupos.has(chave)) grupos.set(chave, []);
+      grupos.get(chave).push(fav);
     });
+
+    // Primeira renderizacao com dado carregado: decide o estado inicial.
+    // So um modulo -> ja abre expandido (nao ha nada para organizar).
+    // Mais de um -> comeca tudo colapsado, foco em achar o modulo certo primeiro.
+    if (favoritosGruposAbertos === null) {
+      favoritosGruposAbertos = new Set(grupos.size <= 1 ? grupos.keys() : []);
+    }
+
+    favoritesList.innerHTML = '';
+
+    if (grupos.size <= 1) {
+      lista.forEach((fav) => favoritesList.appendChild(criarItemFavorito(fav)));
+      return;
+    }
+
+    [...grupos.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+      .forEach(([modulo, favs]) => {
+        const aberto = favoritosGruposAbertos.has(modulo);
+        const grupoEl = document.createElement('div');
+        grupoEl.className = 'favorite-group' + (aberto ? ' open' : '');
+
+        const header = document.createElement('button');
+        header.type = 'button';
+        header.className = 'favorite-group-header';
+        header.innerHTML = `
+          <span class="favorite-group-chevron">${chevronSvg()}</span>
+          <span class="favorite-group-title">${escapeHtml(modulo)}</span>
+          <span class="favorite-group-count">${favs.length}</span>
+        `;
+        header.addEventListener('click', () => {
+          if (favoritosGruposAbertos.has(modulo)) favoritosGruposAbertos.delete(modulo);
+          else favoritosGruposAbertos.add(modulo);
+          renderFavoritos();
+        });
+
+        const body = document.createElement('div');
+        body.className = 'favorite-group-body';
+        favs.forEach((fav) => body.appendChild(criarItemFavorito(fav)));
+
+        grupoEl.appendChild(header);
+        grupoEl.appendChild(body);
+        favoritesList.appendChild(grupoEl);
+      });
   }
 
   async function carregarFavoritos() {
@@ -1791,6 +1896,25 @@
       });
     } catch (err) {
       showError('Falha ao remover favorito: ' + err.message);
+    }
+  }
+
+  // Mesmo padrao simples ja usado para renomear coluna do relatorio
+  // (window.prompt) — consistente com o resto da tela, sem modal novo.
+  async function renomearFavorito(favoritoId) {
+    const fav = favoritosCache.find((f) => f.id === favoritoId);
+    if (!fav) return;
+    const atual = fav.titulo || fav.perguntaTexto || '';
+    const novo = window.prompt('Novo nome do favorito:', atual);
+    if (novo === null) return;
+    const limpo = novo.trim();
+    if (!limpo || limpo === atual) return;
+    try {
+      await api('/favoritos/' + favoritoId, { method: 'PUT', body: JSON.stringify({ titulo: limpo }) });
+      fav.titulo = limpo;
+      renderFavoritos();
+    } catch (err) {
+      showError('Falha ao renomear favorito: ' + err.message);
     }
   }
 
@@ -3317,26 +3441,170 @@
     btnReportColumns.setAttribute('aria-expanded', 'false');
   });
 
+  // Exportacao XLSX construida manualmente com SheetJS (nao via
+  // reportTable.download('xlsx', ...)) — mesma limitacao confirmada do PDF
+  // (teste isolado antes desta mudanca): o modulo de export do Tabulator
+  // nunca inclui o total GERAL da tabela, so os subtotais de cada grupo.
+  // Valores numericos vao como NUMERO real na celula (nao string formatada
+  // "114.975,00") para o usuario poder somar/usar em formula no proprio
+  // Excel — pedido explicito de "poder usar para fazer qualquer coisa".
+  // Datas tambem viram Date real do Excel (formatadas dd/mm/aaaa), nao texto.
+  function exportarRelatorioXlsx() {
+    const colunas = colunasVisiveisRelatorio();
+    const modelo = modeloRelatorio(reportDadosAtuais);
+    const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
+
+    const valorCelula = (col, valor) => {
+      if (valor == null || valor === '') return null;
+      if (col.numerico) return typeof valor === 'number' ? valor : Number(valor) || null;
+      if (col.data) {
+        const partes = partesData(String(valor));
+        return dataValida(partes) ? new Date(partes.ano, partes.mes - 1, partes.dia) : trimSeTexto(valor);
+      }
+      if (col.competencia) return formatarCompetenciaAAAAMM(valor);
+      return trimSeTexto(valor);
+    };
+
+    const aoa = [colunas.map((c) => c.title)];
+    const linhaDados = (row) => colunas.map((col) => valorCelula(col, row[col.field]));
+    const linhaSubtotal = (rows) => colunas.map((col) => {
+      if (!col.numerico) return null;
+      return rows.reduce((acc, r) => acc + (typeof r[col.field] === 'number' ? r[col.field] : 0), 0);
+    });
+
+    if (reportGroupBy.length && reportTable) {
+      reportTable.getGroups().forEach((group) => {
+        aoa.push([String(group.getKey() ?? '')]);
+        const rowsDoGrupo = group.getRows().map((r) => r.getData());
+        rowsDoGrupo.forEach((row) => aoa.push(linhaDados(row)));
+        if (colunas.some((c) => c.numerico)) aoa.push(linhaSubtotal(rowsDoGrupo));
+      });
+    } else {
+      rowsRelatorioAtual().forEach((row) => aoa.push(linhaDados(row)));
+    }
+
+    aoa.push([]);
+    aoa.push(colunas.map((col, idx) => {
+      if (idx === 0) return 'TOTAL GERAL';
+      if (!col.numerico) return null;
+      return totaisPorField.get(col.field) ?? 0;
+    }));
+
+    // cellDates:true e OBRIGATORIO para objetos Date virarem celula tipo 'd'
+    // no sheet — sem essa opcao o SheetJS converte silenciosamente para
+    // numero serial puro (tipo 'n'), e o passo de formatacao abaixo (que
+    // checa ws[ref].t === 'd') nunca encontra nada para formatar. Confirmado
+    // empiricamente (teste isolado antes desta mudanca): sem cellDates, a
+    // celula vira numero serial com formato generico "m/d/yy" do SheetJS.
+    const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+    // Largura de coluna proporcional ao maior conteudo (cap em 45 — coluna
+    // gigante deixa a planilha ilegivel, usuario redimensiona se precisar).
+    ws['!cols'] = colunas.map((col) => ({
+      wch: Math.max(10, Math.min(45, (col.title || '').length + 4)),
+    }));
+    // Formato de data nativo do Excel (dd/mm/aaaa) para colunas marcadas
+    // como data — sem isso o Excel usa o formato padrao americano.
+    colunas.forEach((col, colIdx) => {
+      if (!col.data) return;
+      for (let r = 1; r < aoa.length; r++) {
+        const ref = XLSX.utils.encode_cell({ r, c: colIdx });
+        if (ws[ref] && ws[ref].t === 'd') ws[ref].z = 'dd/mm/yyyy';
+      }
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+    XLSX.writeFile(wb, 'dados-ia-command.xlsx');
+  }
+
   btnExportXlsx.addEventListener('click', async () => {
     try {
       await montarRelatorioAgora();
       if (!reportTable) return;
       await garantirExportXlsx();
-      reportTable.download('xlsx', 'dados-ia-command.xlsx', { sheetName: 'Dados' });
+      exportarRelatorioXlsx();
     } catch (err) {
       showError('Falha ao exportar Excel: ' + err.message);
     }
   });
+
+  // Valor de uma celula formatado igual a grid/Excel (mesma logica do
+  // accessorDownload usado em montarColunasTabulator, sem o formatter de PDF
+  // dedicado do Tabulator porque a exportacao aqui e manual — ver comentario
+  // em exportarRelatorioPdf sobre o total geral).
+  function valorFormatadoParaPdf(col, valor) {
+    if (col.numerico) return formatarNumero(valor);
+    if (col.data) return formatarData(valor);
+    if (col.competencia) return formatarCompetenciaAAAAMM(valor);
+    return trimSeTexto(valor) ?? '';
+  }
+
+  // Exportacao PDF construida manualmente com jspdf-autotable (nao via
+  // reportTable.download('pdf', ...)) — confirmado empiricamente (teste
+  // isolado antes desta mudanca) que o modulo de PDF do Tabulator NUNCA
+  // inclui o bottomCalc de nivel de TABELA (so os subtotais de cada grupo,
+  // via rowGroups:true), mesmo com bottomCalc configurado nas colunas —
+  // limitacao da lib, nao bug nosso. Usuario reportou o PDF sem a linha de
+  // total geral que ja aparecia corretamente na tela (#reportGrandTotal).
+  // Replica a mesma estrutura visual (grupo -> linhas -> subtotal) e
+  // acrescenta a linha TOTAL GERAL usando os mesmos totais ja calculados por
+  // modeloRelatorio() (fonte unica de verdade, compartilhada com
+  // renderGrandTotal — nunca diverge do que a tela mostra).
+  function exportarRelatorioPdf() {
+    const colunas = colunasVisiveisRelatorio();
+    const modelo = modeloRelatorio(reportDadosAtuais);
+    const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
+
+    const doc = new window.jspdf.jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(14);
+    doc.text('IA Command — Dados', 14, 15);
+
+    const head = [colunas.map((c) => c.title)];
+    const body = [];
+
+    const linhaDados = (row) => colunas.map((col) => valorFormatadoParaPdf(col, row[col.field]));
+    const linhaSubtotal = (rows) => colunas.map((col, idx) => {
+      if (!col.numerico) return idx === 0 ? { content: '', styles: { fillColor: [235, 235, 235] } } : '';
+      const soma = rows.reduce((acc, r) => acc + (typeof r[col.field] === 'number' ? r[col.field] : 0), 0);
+      return { content: formatarNumero(soma), styles: { fontStyle: 'bold', fillColor: [235, 235, 235] } };
+    });
+
+    if (reportGroupBy.length && reportTable) {
+      reportTable.getGroups().forEach((group) => {
+        body.push([{ content: String(group.getKey() ?? ''), colSpan: colunas.length, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }]);
+        const rowsDoGrupo = group.getRows().map((r) => r.getData());
+        rowsDoGrupo.forEach((row) => body.push(linhaDados(row)));
+        if (colunas.some((c) => c.numerico)) body.push(linhaSubtotal(rowsDoGrupo));
+      });
+    } else {
+      rowsRelatorioAtual().forEach((row) => body.push(linhaDados(row)));
+    }
+
+    const foot = colunas.map((col, idx) => {
+      if (idx === 0) return { content: 'TOTAL GERAL', styles: { fontStyle: 'bold' } };
+      if (!col.numerico) return '';
+      return { content: formatarNumero(totaisPorField.get(col.field) ?? 0), styles: { fontStyle: 'bold' } };
+    });
+
+    doc.autoTable({
+      startY: 20,
+      head,
+      body,
+      foot: [foot],
+      footStyles: { fillColor: [200, 220, 245], textColor: [20, 20, 20] },
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.save('dados-ia-command.pdf');
+  }
 
   btnExportPdf.addEventListener('click', async () => {
     try {
       await montarRelatorioAgora();
       if (!reportTable) return;
       await garantirExportPdf();
-      reportTable.download('pdf', 'dados-ia-command.pdf', {
-        orientation: 'landscape',
-        title: 'IA Command — Dados',
-      });
+      exportarRelatorioPdf();
     } catch (err) {
       showError('Falha ao exportar PDF: ' + err.message);
     }
