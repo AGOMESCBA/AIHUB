@@ -20,6 +20,18 @@ function sqlFixo(job) {
   return String(job?.sql_fixo || '').trim();
 }
 
+function normalizarNumeroWa(valor) {
+  const numero = String(valor || '').replace(/\D/g, '');
+  return numero || null;
+}
+
+function numeroWaSqlFixo(job, destinatarios) {
+  const direto = normalizarNumeroWa(job?.numero_wa || job?.numeroWa || job?.celular);
+  if (direto) return direto;
+  const primeiro = Array.isArray(destinatarios) ? destinatarios.find(Boolean) : null;
+  return normalizarNumeroWa(primeiro?.numero || primeiro?.celular || primeiro?.telefone || primeiro?.wa);
+}
+
 function partesData(date, timezone) {
   const fmt = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone || 'America/Manaus',
@@ -349,7 +361,7 @@ function _formatarSqlFixoGenerico(rows, titulo) {
 // o SQL direto na conexao/agente-local do sistema (mesmo mecanismo dos datasets semanticos)
 // e formata a resposta como listagem, sem as regras especificas dos handlers Protheus (que
 // dependem de spec proprio de dominio) nem a logica de soma da IA (formatarAiSqlLocal).
-async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
+async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal, destinatarios = null) {
   const intent = montarIntentSqlFixo(job);
   const t0 = Date.now();
   let resultado;
@@ -383,7 +395,7 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal) {
   const log = interpretationLog.registrar({
     empresa_id: Number(empresaId),
     usuario: 'agendamento',
-    numero_wa: null,
+    numero_wa: numeroWaSqlFixo(job, destinatarios),
     texto_original: job.pergunta || job.nome || 'Consulta agendada',
     intent,
     resultado,
@@ -420,7 +432,7 @@ async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
     if (erp === 'protheus') {
       throw Object.assign(new Error('Informe um modulo valido para executar SQL fixo.'), { statusCode: 400 });
     }
-    return _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal);
+    return _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal, destinatarios);
   }
 
   const intent = montarIntentSqlFixo(job);
@@ -431,7 +443,7 @@ async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
   const log = interpretationLog.registrar({
     empresa_id: Number(empresaId),
     usuario: 'agendamento',
-    numero_wa: null,
+    numero_wa: numeroWaSqlFixo(job, destinatarios),
     texto_original: job.pergunta || job.nome || 'Consulta agendada',
     intent,
     resultado,
