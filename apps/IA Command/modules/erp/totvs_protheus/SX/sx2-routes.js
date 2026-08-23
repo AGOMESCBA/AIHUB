@@ -162,7 +162,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
     requireAuth, requireIaCommand, canSX2,
     (req, res) => {
       try {
-        const { conexao_id, chave, arquivo, modo, descricao } = req.body || {};
+        const { conexao_id, chave, arquivo, modo, modo_unidade, modo_empresa, descricao } = req.body || {};
         if (!conexao_id || !chave) return res.status(400).json({ error: 'conexao_id e chave são obrigatórios.' });
 
         const conn = _verificarConexao(conexao_id, eid(req));
@@ -170,6 +170,8 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
 
         const chaveFmt   = chave.toUpperCase().trim();
         const arquivoFmt = (arquivo || chave).toUpperCase().trim();
+        const modoUnidadeFmt = modo_unidade ? String(modo_unidade).toUpperCase().trim() || null : null;
+        const modoEmpresaFmt = modo_empresa ? String(modo_empresa).toUpperCase().trim() || null : null;
         const db = getDB();
         const agora = new Date().toISOString();
 
@@ -178,8 +180,8 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         }
 
         const info = db.prepare(
-          'INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?)'
-        ).run(conexao_id, eid(req), chaveFmt, arquivoFmt, (modo || 'E').trim(), descricao || '', agora, agora);
+          'INSERT INTO protheus_sx2 (connection_id, empresa_id, chave, arquivo, modo, modo_unidade, modo_empresa, descricao, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?,?,?)'
+        ).run(conexao_id, eid(req), chaveFmt, arquivoFmt, (modo || 'E').trim(), modoUnidadeFmt, modoEmpresaFmt, descricao || '', agora, agora);
 
         _invalidarMetaSX2(eid(req));
         res.status(201).json(db.prepare('SELECT * FROM protheus_sx2 WHERE id = ?').get(info.lastInsertRowid));
@@ -198,13 +200,16 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         const row = db.prepare('SELECT * FROM protheus_sx2 WHERE id = ?').get(req.params.id);
         if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
 
-        const { chave, arquivo, modo, descricao } = req.body || {};
+        const { chave, arquivo, modo, modo_unidade, modo_empresa, descricao } = req.body || {};
         const agora      = new Date().toISOString();
         const chaveFmt   = (chave   || row.chave).toUpperCase().trim();
         const arquivoFmt = (arquivo || row.arquivo || chaveFmt).toUpperCase().trim();
-        db.prepare('UPDATE protheus_sx2 SET chave=?, arquivo=?, modo=?, descricao=?, atualizado_em=? WHERE id=?').run(
+        const modoUnidadeFmt = modo_unidade !== undefined ? (modo_unidade ? String(modo_unidade).toUpperCase().trim() || null : null) : row.modo_unidade;
+        const modoEmpresaFmt = modo_empresa !== undefined ? (modo_empresa ? String(modo_empresa).toUpperCase().trim() || null : null) : row.modo_empresa;
+        db.prepare('UPDATE protheus_sx2 SET chave=?, arquivo=?, modo=?, modo_unidade=?, modo_empresa=?, descricao=?, atualizado_em=? WHERE id=?').run(
           chaveFmt, arquivoFmt,
           (modo || row.modo).trim(),
+          modoUnidadeFmt, modoEmpresaFmt,
           descricao !== undefined ? descricao : row.descricao,
           agora, row.id
         );

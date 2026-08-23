@@ -201,7 +201,7 @@
                     <select id="f-conexao-form" class="form-control"></select>
                     <div class="form-hint">Conexão ERP à qual esta tabela pertence.</div>
                   </div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
                     <div class="form-group" style="margin-bottom:0">
                       <label class="form-label">Chave (X2_CHAVE) <span style="color:#dc2626">*</span></label>
                       <input id="f-chave" class="form-control" placeholder="ex: SD1" style="text-transform:uppercase">
@@ -212,13 +212,34 @@
                       <input id="f-arquivo" class="form-control" placeholder="ex: SD1010" style="text-transform:uppercase">
                       <div class="form-hint">Nome real da tabela no banco</div>
                     </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
                     <div class="form-group" style="margin-bottom:0">
-                      <label class="form-label">Modo (X2_MODO) <span style="color:#dc2626">*</span></label>
+                      <label class="form-label">Modo Filial (X2_MODO) <span style="color:#dc2626">*</span></label>
                       <select id="f-modo-form" class="form-control">
                         <option value="E">E — Exclusivo (filtra pela filial)</option>
                         <option value="C">C — Compartilhado (filtra por dois espaços)</option>
                         <option value="G">G — Global (filtra por dois espaços)</option>
                       </select>
+                      <div class="form-hint">Compartilhamento entre filiais</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Modo Unidade (X2_MODOUN)</label>
+                      <select id="f-modo-unidade-form" class="form-control">
+                        <option value="">(não informado)</option>
+                        <option value="E">E — Exclusivo</option>
+                        <option value="C">C — Compartilhado</option>
+                      </select>
+                      <div class="form-hint">Compartilhamento entre unidades de negócio</div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                      <label class="form-label">Modo Empresa (X2_MODOEMP)</label>
+                      <select id="f-modo-empresa-form" class="form-control">
+                        <option value="">(não informado)</option>
+                        <option value="E">E — Exclusivo</option>
+                        <option value="C">C — Compartilhado</option>
+                      </select>
+                      <div class="form-hint">Compartilhamento entre empresas do grupo (Lobo Guará)</div>
                     </div>
                   </div>
                   <div class="form-group">
@@ -432,9 +453,15 @@ function criarTabela(data) {
         formatter: c => `<strong style="color:var(--text-hi);font-family:monospace">${esc(c.getValue())}</strong>` },
       { title:'Arquivo (X2_ARQUIVO)', field:'arquivo', minWidth:110, headerFilter:true,
         formatter: c => `<span style="font-family:monospace;font-size:12px">${esc(c.getValue())}</span>` },
-      { title:'Modo', field:'modo', width:120, headerFilter:'select',
+      { title:'Modo Filial', field:'modo', width:110, headerFilter:'select',
         headerFilterParams:{values:{'':'Todos','E':'E — Exclusivo','C':'C — Compartilhado','G':'G — Global'}},
         formatter: c => { const v = c.getValue() || 'E'; return `<span class="badge-${v}">${esc(v)}</span>`; }},
+      { title:'Modo Unidade', field:'modo_unidade', width:110, headerFilter:'select',
+        headerFilterParams:{values:{'':'Todos','E':'E — Exclusivo','C':'C — Compartilhado'}},
+        formatter: c => { const v = c.getValue(); return v ? `<span class="badge-${v}">${esc(v)}</span>` : `<span style="color:var(--text-lo)">—</span>`; }},
+      { title:'Modo Empresa', field:'modo_empresa', width:110, headerFilter:'select',
+        headerFilterParams:{values:{'':'Todos','E':'E — Exclusivo','C':'C — Compartilhado'}},
+        formatter: c => { const v = c.getValue(); return v ? `<span class="badge-${v}">${esc(v)}</span>` : `<span style="color:var(--text-lo)">—</span>`; }},
       { title:'Descrição', field:'descricao', minWidth:200, headerFilter:true, formatter: c => esc(c.getValue()) },
       { title:'Ações', field:'id', width:110, headerFilter:false, groupable:false, hozAlign:'right',
         formatter: cell => {
@@ -509,6 +536,8 @@ function resetForm() {
   document.getElementById('f-arquivo').value = '';
   document.getElementById('f-descricao').value = '';
   document.getElementById('f-modo-form').value = 'E';
+  document.getElementById('f-modo-unidade-form').value = '';
+  document.getElementById('f-modo-empresa-form').value = '';
   document.getElementById('save-feedback').textContent = '';
   document.getElementById('save-feedback').className = 'save-feedback';
 }
@@ -521,6 +550,8 @@ function carregarForm(id) {
   document.getElementById('f-chave').value = row.chave || '';
   document.getElementById('f-arquivo').value = row.arquivo || row.chave || '';
   document.getElementById('f-modo-form').value = row.modo || 'E';
+  document.getElementById('f-modo-unidade-form').value = row.modo_unidade || '';
+  document.getElementById('f-modo-empresa-form').value = row.modo_empresa || '';
   document.getElementById('f-descricao').value = row.descricao || '';
   document.getElementById('form-title').textContent = `"${row.chave}"`;
   atualizarExplicacao();
@@ -538,15 +569,17 @@ function atualizarExplicacao() {
 }
 
 async function salvar() {
-  const conexao_id = document.getElementById('f-conexao-form').value;
-  const chave      = document.getElementById('f-chave').value.trim().toUpperCase();
-  const arquivo    = document.getElementById('f-arquivo').value.trim().toUpperCase() || chave;
-  const modo       = document.getElementById('f-modo-form').value;
-  const descricao  = document.getElementById('f-descricao').value.trim();
+  const conexao_id   = document.getElementById('f-conexao-form').value;
+  const chave        = document.getElementById('f-chave').value.trim().toUpperCase();
+  const arquivo      = document.getElementById('f-arquivo').value.trim().toUpperCase() || chave;
+  const modo         = document.getElementById('f-modo-form').value;
+  const modo_unidade = document.getElementById('f-modo-unidade-form').value || null;
+  const modo_empresa = document.getElementById('f-modo-empresa-form').value || null;
+  const descricao    = document.getElementById('f-descricao').value.trim();
   if (!conexao_id) return feedback('Selecione uma conexão.', false);
   if (!chave)      return feedback('Informe a chave da tabela.', false);
   if (!arquivo)    return feedback('Informe o arquivo da tabela (X2_ARQUIVO).', false);
-  const body = comEmpresa({ conexao_id, chave, arquivo, modo, descricao });
+  const body = comEmpresa({ conexao_id, chave, arquivo, modo, modo_unidade, modo_empresa, descricao });
   const url    = editId ? apiUrl(`/api/ia-command/protheus/sx2/${encodeURIComponent(editId)}`) : apiUrl('/api/ia-command/protheus/sx2');
   const method = editId ? 'PUT' : 'POST';
   const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
