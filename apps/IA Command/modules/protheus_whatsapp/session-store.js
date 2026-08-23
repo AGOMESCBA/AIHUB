@@ -305,8 +305,14 @@ function substituirLiteralData(sql, valor, macro) {
   let out = String(sql || '');
   for (const v of [compacto, iso]) {
     out = out.replace(new RegExp(`'${escapeRegexLiteral(v)}'`, 'g'), `'${macro}'`);
+    out = out.replace(new RegExp(`(^|[^'\\d])${escapeRegexLiteral(v)}(?=[^\\d]|$)`, 'g'), `$1'${macro}'`);
   }
   return out;
+}
+
+function macrosDataComoTexto(sql) {
+  const macroData = /\{\{(?:HOJE|ONTEM|DATA_EXECUCAO|INICIO_MES|FIM_MES|INICIO_MES_ANTERIOR|FIM_MES_ANTERIOR|INICIO_ANO|FIM_ANO|INICIO_ANO_ANTERIOR|FIM_ANO_ANTERIOR)(?::[-+]?\d+)?\}\}/g;
+  return String(sql || '').replace(new RegExp(`(^|[^'])(${macroData.source})(?!')`, 'g'), "$1'$2'");
 }
 
 function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, referencia = new Date()) {
@@ -318,14 +324,14 @@ function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, r
     const convertido = template
       .split('{{iac:period:start}}').join(macros.start)
       .split('{{iac:period:end}}').join(macros.end);
-    if (!/\{\{\s*iac:/i.test(convertido)) return convertido;
+    if (!/\{\{\s*iac:/i.test(convertido)) return macrosDataComoTexto(convertido);
   }
 
   const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto), { hoje: referencia });
   let out = String(sqlFinal || '');
   out = substituirLiteralData(out, resolvido?.dataInicio, macros.start);
   out = substituirLiteralData(out, resolvido?.dataFim, macros.end);
-  return out;
+  return macrosDataComoTexto(out);
 }
 
 function listarFavoritos({ empresaId, celular, limite = 80 }) {

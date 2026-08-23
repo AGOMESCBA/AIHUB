@@ -188,8 +188,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     let out = String(sql || '');
     for (const v of [compacto, iso]) {
       out = out.replace(new RegExp(`'${_escapeRegexLiteral(v)}'`, 'g'), `'${macro}'`);
+      out = out.replace(new RegExp(`(^|[^'\\d])${_escapeRegexLiteral(v)}(?=[^\\d]|$)`, 'g'), `$1'${macro}'`);
     }
     return out;
+  }
+
+  function _macrosDataComoTexto(sql) {
+    const macroData = /\{\{(?:HOJE|ONTEM|DATA_EXECUCAO|INICIO_MES|FIM_MES|INICIO_MES_ANTERIOR|FIM_MES_ANTERIOR|INICIO_ANO|FIM_ANO|INICIO_ANO_ANTERIOR|FIM_ANO_ANTERIOR)(?::[-+]?\d+)?\}\}/g;
+    return String(sql || '').replace(new RegExp(`(^|[^'])(${macroData.source})(?!')`, 'g'), "$1'$2'");
   }
 
   function _sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto) {
@@ -201,14 +207,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       const convertido = template
         .split('{{iac:period:start}}').join(macros.start)
         .split('{{iac:period:end}}').join(macros.end);
-      if (!/\{\{\s*iac:/i.test(convertido)) return convertido;
+      if (!/\{\{\s*iac:/i.test(convertido)) return _macrosDataComoTexto(convertido);
     }
 
     const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto));
     let out = String(sqlFinal || '');
     out = _substituirLiteralData(out, resolvido?.dataInicio, macros.start);
     out = _substituirLiteralData(out, resolvido?.dataFim, macros.end);
-    return out;
+    return _macrosDataComoTexto(out);
   }
 
   function _rowChatFavorito(row) {
