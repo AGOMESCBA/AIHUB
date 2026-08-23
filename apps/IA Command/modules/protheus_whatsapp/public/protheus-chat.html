@@ -1684,7 +1684,7 @@
     renderFavoritos();
     fecharRelatorio();
     definirHeaderTitle('Nova conversa');
-    renderEmptyState('Carregando conversas...');
+    renderEmptyState('Selecione uma conversa ou inicie uma nova.');
   }
 
   function nowLabel(iso) {
@@ -2226,7 +2226,7 @@
     }
   });
 
-  function renderEmptyState(mensagem = 'Pergunte algo sobre vendas, faturamento, títulos ou clientes.') {
+  function renderEmptyState(mensagem = 'Selecione uma conversa ou inicie uma nova.') {
     chatBody.innerHTML = `
       <div class="empty-state">
         <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 015 5c0 2.1-1.3 3.9-3.1 4.6.1.4.1.9.1 1.4 3.4.5 6 3.4 6 6.9v1H4v-1c0-3.5 2.6-6.4 6-6.9 0-.5 0-1 .1-1.4C8.3 10.9 7 9.1 7 7a5 5 0 015-5z"/></svg>
@@ -2495,7 +2495,7 @@
         renderEmptyState();
       } else if (!sessaoAtualId) {
         definirHeaderTitle('Nova conversa');
-        renderEmptyState('Selecione uma conversa na lista ou envie uma nova pergunta.');
+        renderEmptyState('Selecione uma conversa ou inicie uma nova.');
         fecharRelatorio();
       }
     } catch (err) {
@@ -3510,7 +3510,7 @@
     msgInput.disabled = false;
     sendBtn.disabled = false;
     bootLog('input:liberado');
-    renderEmptyState('Carregando conversas...');
+    renderEmptyState('Selecione uma conversa ou inicie uma nova.');
     carregarBootstrapInicial()
       .then(() => bootLog('boot:fim', {
         empresas: empresasDisponiveis.length,
