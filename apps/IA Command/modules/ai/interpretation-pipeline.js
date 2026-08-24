@@ -59,6 +59,20 @@ function normalizarNumeroWa(valor) {
   return String(valor || '').split('@')[0].replace(/\D/g, '');
 }
 
+function canalOrigemPadrao({ canalOrigem = null, canalId = null, tipoMensagem = null, intent = {}, resultado = {} } = {}) {
+  const explicito = String(canalOrigem || '').trim().toLowerCase();
+  if (explicito) return explicito;
+  const tipo = String(tipoMensagem || '').trim().toLowerCase();
+  const origemIntent = String(intent?.origem || '').trim().toLowerCase();
+  const systemOrigin = String(intent?._systemOrigin || '').trim().toLowerCase();
+  const pipelineOrigem = String(resultado?._pipeline_origem || '').trim().toLowerCase();
+  if (tipo === 'agendamento' || systemOrigin === 'agendamento' || origemIntent === 'agendamento_sql_fixo' || pipelineOrigem === 'agendamento_sql_fixo') {
+    return 'agendamento';
+  }
+  if (canalId) return 'whatsapp';
+  return null;
+}
+
 function moduloMonitorIntent(intent = {}, resultado = null) {
   const conhecidos = new Set(['compras', 'financeiro', 'faturamento', 'comissao', 'estoque']);
   const candidatos = [
@@ -157,6 +171,7 @@ function registrarInterpretacao({
   empresaId, sender, texto, intent, resultado, resposta, duracaoMs,
   timingJson = null, formatacaoCaminho = null, recebidoEm = null,
   pipelineMs = null, entregueMs = null, canalId = null, tipoMensagem = 'texto',
+  canalOrigem = null,
   onLog = null,
 }) {
   let logId = null;
@@ -167,6 +182,7 @@ function registrarInterpretacao({
       usuario: sender,
       numero_wa: normalizarNumeroWa(sender),
       canal_id: canalId,
+      canal_origem: canalOrigemPadrao({ canalOrigem, canalId, tipoMensagem, intent, resultado }),
       texto_original: texto,
       intent,
       resultado,
@@ -271,6 +287,7 @@ module.exports = {
   traceInterpretacao,
   moduloMonitorIntent,
   normalizarNumeroWa,
+  canalOrigemPadrao,
   promoverExecutionLogConfiavelCache,
   resultadoSqlCacheavel,
 };

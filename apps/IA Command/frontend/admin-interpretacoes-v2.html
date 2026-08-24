@@ -38,7 +38,7 @@
 
     .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
     .table-wrap { height:calc(100vh - 235px);min-height:360px;overflow:auto;background:var(--bg-card); }
-    .history-table { width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    .history-table { width:100%;min-width:1650px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
     .history-table thead th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap; }
     .history-table thead th.sortable { cursor:pointer;user-select:none; }
     .history-table thead th.sortable:hover { color:var(--accent);background:var(--bg-hover); }
@@ -60,6 +60,7 @@
     .col-action { width:42px;text-align:center; }
     .col-date { width:155px; }
     .col-phone { width:150px; }
+    .col-channel { width:120px; }
     .col-question { width:260px; }
     .col-answer { width:320px; }
     .col-intent { width:170px; }
@@ -189,7 +190,7 @@
             <button class="group-chip" type="button" draggable="true" data-group-field="motor">Motor</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="numero_wa">Celular</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="dataset_nome">Dataset</button>
-            <button class="group-chip" type="button" draggable="true" data-group-field="origem">Origem</button>
+            <button class="group-chip" type="button" draggable="true" data-group-field="canal_origem">Canal</button>
             <button class="group-chip" type="button" draggable="true" data-group-field="escopo_execucao">Execucao via</button>
             <div class="group-target-row">
               <button class="btn btn-ghost" id="group-clear" type="button">Limpar agrupamento</button>
@@ -207,6 +208,7 @@
                   <th class="col-action"></th>
                   <th class="col-date sortable" draggable="true" data-group-field="criado_data" data-sort="criado_em">Data/Hora</th>
                   <th class="col-phone sortable" draggable="true" data-group-field="numero_wa" data-sort="numero_wa">Celular</th>
+                  <th class="col-channel sortable" draggable="true" data-group-field="canal_origem" data-sort="canal_origem">Canal</th>
                   <th class="col-question sortable" draggable="true" data-group-field="texto_original" data-sort="texto_original">Pergunta</th>
                   <th class="col-answer sortable" data-sort="resposta_entregue">Resposta</th>
                   <th class="col-intent sortable" draggable="true" data-group-field="intencao" data-sort="intencao">Intencao</th>
@@ -219,6 +221,7 @@
                   <th></th>
                   <th></th>
                   <th><input data-filter="numero_wa" autocomplete="off" spellcheck="false"></th>
+                  <th><select data-filter="canal_origem" autocomplete="off"><option value="">Todos</option><option value="whatsapp">WhatsApp</option><option value="chat">Chat</option><option value="agendamento">Agendamento</option></select></th>
                   <th><input data-filter="texto_original" autocomplete="off" spellcheck="false"></th>
                   <th><input data-filter="resposta_entregue" autocomplete="off" spellcheck="false"></th>
                   <th><input data-filter="intencao" autocomplete="off" spellcheck="false"></th>
@@ -493,6 +496,35 @@
     return badge(value || '-', 'badge-muted');
   }
 
+  function channelValue(row) {
+    const raw = String(row.canal_origem || '').trim().toLowerCase();
+    if (raw) return raw;
+    const intent = parseJson(row.intent_json, {}) || {};
+    const pipeline = String(row.pipeline_origem || '').trim().toLowerCase();
+    const origem = String(row.origem || intent.origem || '').trim().toLowerCase();
+    const usuario = String(row.usuario || '').trim().toLowerCase();
+    if (usuario === 'agendamento' || origem === 'agendamento_sql_fixo' || pipeline === 'agendamento_sql_fixo' || intent._systemOrigin === 'agendamento') return 'agendamento';
+    if (row.canal_id) return 'whatsapp';
+    return '';
+  }
+
+  function channelLabel(rowOrValue) {
+    const value = typeof rowOrValue === 'string' ? rowOrValue : channelValue(rowOrValue || {});
+    return {
+      whatsapp: 'WhatsApp',
+      chat: 'Chat',
+      agendamento: 'Agendamento',
+    }[value] || value || '-';
+  }
+
+  function channelBadge(row) {
+    const value = channelValue(row);
+    if (value === 'whatsapp') return badge('WhatsApp', 'badge-teal');
+    if (value === 'chat') return badge('Chat', 'badge-purple');
+    if (value === 'agendamento') return badge('Agendamento', 'badge-blue');
+    return badge('-', 'badge-muted');
+  }
+
   function phaseBadge(value) {
     if (value === 'execucao_normal') return badge('Normal', 'badge-ok');
     if (value === 'pre_execucao_tecnica') return badge('Tecnico antes', 'badge-warn');
@@ -504,6 +536,7 @@
     if (field === 'criado_data') return fmtDateOnly(row.criado_em);
     if (field === 'criado_hora') return fmtTimeOnly(row.criado_em);
     if (field === 'modulo') return modulo(row);
+    if (field === 'canal_origem') return channelLabel(row);
     if (field === 'pipeline_origem') return pipelineLabel(row.pipeline_origem);
     if (field === 'fase_execucao') return phaseLabel(row.fase_execucao);
     if (field === 'motor') return motor(row);
@@ -547,6 +580,7 @@
         </button></td>
         <td>${esc(fmtDate(row.criado_em))}</td>
         <td>${esc(fmtPhone(row.numero_wa))}</td>
+        <td>${channelBadge(row)}</td>
         <td><div class="text-preview question" title="${esc(row.texto_original || '')}">${esc(row.texto_original || '-')}</div></td>
         <td><div class="text-preview" title="${esc(row.resposta_entregue || '')}">${esc(row.resposta_entregue || '(sem resposta)')}</div></td>
         <td>${esc(row.intencao || '-')}</td>
@@ -594,7 +628,7 @@
       const nextPath = path.concat([[field, label]]);
       const key = groupKey(nextPath);
       const collapsed = state.collapsedGroups.has(key);
-      parts.push(`<tr class="group-row level-${Math.min(level, 3)}" data-group-key="${esc(key)}"><td colspan="10"><button class="group-toggle-btn" type="button" data-group-toggle="${esc(key)}" aria-label="${collapsed ? 'Expandir agrupamento' : 'Recolher agrupamento'}">${collapsed ? '+' : '-'}</button><span class="group-row-label">${esc(title)} (${items.length})</span></td></tr>`);
+      parts.push(`<tr class="group-row level-${Math.min(level, 3)}" data-group-key="${esc(key)}"><td colspan="11"><button class="group-toggle-btn" type="button" data-group-toggle="${esc(key)}" aria-label="${collapsed ? 'Expandir agrupamento' : 'Recolher agrupamento'}">${collapsed ? '+' : '-'}</button><span class="group-row-label">${esc(title)} (${items.length})</span></td></tr>`);
       if (collapsed) return;
       if (level + 1 < groups.length) renderGroupedRows(parts, items, groups, level + 1, nextPath);
       else items.forEach(row => parts.push(renderDataRow(row)));
@@ -625,6 +659,7 @@
       numero_wa: 'Celular',
       intencao: 'Intencao',
       modulo: 'Modulo',
+      canal_origem: 'Canal',
       pipeline_origem: 'Pipeline',
       fase_execucao: 'Fase',
       resultado_tipo: 'Resultado',
@@ -788,6 +823,7 @@
     const meta = [
       ['Data/Hora', fmtDate(row.criado_em)],
       ['Celular', fmtPhone(row.numero_wa)],
+      ['Canal', channelLabel(row)],
       ['Motor', motor(row)],
       ['Pipeline', pipelineLabel(row.pipeline_origem)],
       ['Turno chat', row.chat_turno != null ? `Turno ${row.chat_turno}` : '-'],

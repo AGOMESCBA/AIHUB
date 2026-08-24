@@ -3024,6 +3024,7 @@ class IACWhatsAppService extends EventEmitter {
       timingJson, formatacaoCaminho, recebidoEm, pipelineMs, entregueMs,
       canalId: this._channelId,
       tipoMensagem: this._tipoMensagemAtual || 'texto',
+      canalOrigem: this._tipoMensagemAtual === 'agendamento' ? 'agendamento' : 'whatsapp',
       onLog: (msg, nivel) => this.log(msg, nivel),
     });
   }

@@ -1535,6 +1535,28 @@ const MIGRATIONS = [
       );
     `,
   },
+  {
+    version: 82,
+    descricao: 'IA Command - origem do canal no historico de interpretacoes',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN canal_origem TEXT DEFAULT NULL;
+
+      UPDATE interpretation_log
+         SET canal_origem = CASE
+           WHEN usuario = 'agendamento'
+             OR origem = 'agendamento_sql_fixo'
+             OR pipeline_origem = 'agendamento_sql_fixo'
+             THEN 'agendamento'
+           WHEN canal_id IS NOT NULL AND TRIM(canal_id) <> ''
+             THEN 'whatsapp'
+           ELSE canal_origem
+         END
+       WHERE canal_origem IS NULL OR TRIM(canal_origem) = '';
+
+      CREATE INDEX IF NOT EXISTS idx_interpretation_log_canal_origem
+        ON interpretation_log (empresa_id, canal_origem, criado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -30,6 +30,24 @@ function json(value) {
   try { return JSON.stringify(value ?? null); } catch (_) { return null; }
 }
 
+const _columnCache = new Map();
+
+function colunaExiste(tabela, coluna) {
+  const key = `${tabela}.${coluna}`;
+  if (_columnCache.has(key)) return _columnCache.get(key);
+  try {
+    const exists = getDB()
+      .prepare(`PRAGMA table_info(${tabela})`)
+      .all()
+      .some(c => c.name === coluna);
+    _columnCache.set(key, exists);
+    return exists;
+  } catch (_) {
+    _columnCache.set(key, false);
+    return false;
+  }
+}
+
 function camposInferidos(intent = {}) {
   if (intent._resolvidoLocalmente || intent._provedor === 'deterministico') return [];
   const campos = [];
@@ -93,6 +111,7 @@ function registrar(payload = {}) {
     usuario: payload.usuario || null,
     numero_wa: payload.numero_wa || null,
     canal_id: payload.canal_id || null,
+    canal_origem: payload.canal_origem || null,
     texto_original: payload.texto_original || '',
     intent_json: json(intent),
     intencao: intencaoPersistida,
@@ -155,6 +174,10 @@ function registrar(payload = {}) {
     atualizado_em: now,
   };
 
+  if (!colunaExiste('interpretation_log', 'canal_origem')) {
+    delete row.canal_origem;
+  }
+
   const cols = Object.keys(row);
   const placeholders = cols.map(() => '?').join(', ');
   db.prepare(`INSERT INTO interpretation_log (${cols.join(', ')}) VALUES (${placeholders})`)
@@ -186,6 +209,9 @@ function listarResumo(empresaId, opts = {}) {
   const fase = String(opts.fase_execucao || '').trim();
   const params = [empresaId];
   const where = ['empresa_id = ?'];
+  const canalOrigemSelect = colunaExiste('interpretation_log', 'canal_origem')
+    ? 'canal_origem'
+    : 'NULL AS canal_origem';
   if (fase) {
     where.push('fase_execucao = ?');
     params.push(fase);
@@ -195,7 +221,11 @@ function listarResumo(empresaId, opts = {}) {
     SELECT
       id,
       criado_em,
+      usuario,
       numero_wa,
+      canal_id,
+      ${canalOrigemSelect},
+      origem,
       substr(texto_original, 1, 240) AS texto_original,
       substr(resposta_entregue, 1, 360) AS resposta_entregue,
       intencao,

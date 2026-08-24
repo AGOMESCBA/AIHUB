@@ -281,6 +281,7 @@ function registrarInterpretacao(payload) {
       usuario: payload.sender,
       numero_wa: interpretationPipeline.normalizarNumeroWa(payload.sender),
       canal_id: payload.canalId ?? null,
+      canal_origem: payload.canalOrigem || 'chat',
       texto_original: payload.texto,
       intent: payload.intent,
       resultado: payload.resultado,
@@ -599,6 +600,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
       duracaoMs: Date.now() - t0,
       canalId: null,
       tipoMensagem: 'texto',
+      canalOrigem: 'chat',
       onLog: (msg, nivel) => {
         const fn = nivel === 'warning' || nivel === 'warn' ? console.warn : console.log;
         fn('[protheus_whatsapp]', msg);

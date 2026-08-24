@@ -322,6 +322,7 @@
             <div class="meta-grid">
               <div class="meta-item"><span>Data/Hora</span><strong id="d-data">-</strong></div>
               <div class="meta-item"><span>Celular</span><strong id="d-celular">-</strong></div>
+              <div class="meta-item"><span>Canal</span><strong id="d-canal">-</strong></div>
               <div class="meta-item"><span>Motor</span><strong id="d-motor">-</strong></div>
               <div class="meta-item"><span>Pipeline</span><strong id="d-pipeline">-</strong></div>
               <div class="meta-item"><span>Turno chat</span><strong id="d-turno">-</strong></div>
@@ -657,6 +658,26 @@
     return `IA externa (${provedor})`;
   }
 
+  function canalValor(row) {
+    const raw = String(row?.canal_origem || '').trim().toLowerCase();
+    if (raw) return raw;
+    const intent = intentObj(row);
+    const pipeline = String(row?.pipeline_origem || '').trim().toLowerCase();
+    const origem = String(row?.origem || intent.origem || '').trim().toLowerCase();
+    const usuario = String(row?.usuario || '').trim().toLowerCase();
+    if (usuario === 'agendamento' || origem === 'agendamento_sql_fixo' || pipeline === 'agendamento_sql_fixo' || intent._systemOrigin === 'agendamento') return 'agendamento';
+    if (row?.canal_id) return 'whatsapp';
+    return '';
+  }
+
+  function canalLabel(row) {
+    const value = canalValor(row);
+    if (value === 'whatsapp') return 'WhatsApp';
+    if (value === 'chat') return 'Chat';
+    if (value === 'agendamento') return 'Agendamento';
+    return value || '-';
+  }
+
   function escopoExecucaoBadge(escopo) {
     if (!escopo) return '<span style="color:var(--text-lo)">—</span>';
     if (escopo === 'agente_local')   return '<span style="background:rgba(124,58,237,.1);color:#7c3aed;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600">⚡ Agente Local</span>';
@@ -786,6 +807,7 @@
     // Aba 1
     document.getElementById('d-data').textContent = fmtData(row.criado_em);
     document.getElementById('d-celular').textContent = fmtFone(row.numero_wa);
+    document.getElementById('d-canal').textContent = canalLabel(row);
     document.getElementById('d-motor').textContent = motor(row);
     document.getElementById('d-pipeline').innerHTML = pipelineBadgeHtml(row.pipeline_origem);
     document.getElementById('d-turno').textContent = row.chat_turno != null ? `Turno ${row.chat_turno}` : '—';
@@ -1082,6 +1104,13 @@
           formatter: c => fmtData(c.getValue()) },
         { title: 'Celular', field: '_celular', width: 150, headerFilter: true,
           formatter: c => esc(c.getValue()) },
+        { title: 'Canal', field: '_canal', width: 125,
+          headerFilter: 'select', headerFilterParams: { values: { '': 'Todos', WhatsApp: 'WhatsApp', Chat: 'Chat', Agendamento: 'Agendamento' } },
+          formatter: c => {
+            const canal = c.getValue() || '-';
+            const cls = canal === 'WhatsApp' ? 'badge-consolidado' : canal === 'Chat' ? 'badge-chat' : canal === 'Agendamento' ? 'badge-reuso' : 'badge-neutro';
+            return `<span class="badge ${cls}">${esc(canal)}</span>`;
+          } },
         { title: 'Pergunta', field: 'texto_original', minWidth: 220, headerFilter: true, groupable: false,
           formatter: c => `<div class="grid-text-preview question" title="${esc(c.getValue() || '')}">${esc(c.getValue() || '-')}</div>` },
         { title: 'Resposta', field: 'resposta_entregue', minWidth: 280, headerFilter: true, groupable: false,
@@ -1141,6 +1170,7 @@
       _modulo:  moduloIntent(r),
       _motor:   motor(r),
       _origem:  origemIntent(r),
+      _canal:   canalLabel(r),
       _celular: fmtFone(r.numero_wa),
     }));
   }
