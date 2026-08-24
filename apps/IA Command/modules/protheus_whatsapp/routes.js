@@ -11,6 +11,7 @@
 // sessao de usuario do IAHub, entao ficam no mesmo grupo "publico" deste arquivo.
 
 const path = require('path');
+const http = require('http');
 const tokenService = require('./token-service');
 const sessionStore = require('./session-store');
 const chatService = require('./service');
@@ -402,7 +403,41 @@ function atualizarAuditoriaEncaminhamento({ id, empresaId, status, erro = null }
   `).run(status, erro || null, status, agora, agora, id, Number(empresaId));
 }
 
-function resolverCanalWhatsAppConectado(empresaId) {
+function workerJson(workerPort, rota, payload = null, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const body = payload ? JSON.stringify(payload) : '';
+    const req = http.request(
+      {
+        hostname: '127.0.0.1',
+        port: workerPort,
+        path: rota,
+        method: payload ? 'POST' : 'GET',
+        headers: payload
+          ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+          : undefined,
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let resposta = '';
+        res.on('data', d => { resposta += d; });
+        res.on('end', () => {
+          let json = {};
+          try { json = JSON.parse(resposta || '{}'); } catch (_) {}
+          if (res.statusCode >= 400) {
+            return reject(new Error(json.erro || json.error || `Worker WhatsApp retornou HTTP ${res.statusCode}`));
+          }
+          resolve(json);
+        });
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout ao comunicar com o worker WhatsApp.')); });
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function resolverCanalWhatsAppConectado(empresaId) {
   const canais = whatsappChannels.listarPorEmpresa(Number(empresaId));
   if (!canais.length) return { canal: null, svc: null, totalCanais: 0 };
 
@@ -423,12 +458,26 @@ function resolverCanalWhatsAppConectado(empresaId) {
     }
   }
 
-  return { canal: canais[0], svc: null, totalCanais: canais.length };
+  for (const canal of canais) {
+    if (!canal.is_windows_service || !canal.worker_port) continue;
+    try {
+      const health = await workerJson(canal.worker_port, '/health', null, 2500);
+      if (String(health?.status || '').toLowerCase() === 'connected') {
+        return { canal, svc: null, workerPort: canal.worker_port, totalCanais: canais.length };
+      }
+    } catch (_) {}
+  }
+
+  return { canal: canais[0], svc: null, workerPort: null, totalCanais: canais.length };
 }
 
 async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
-  const { canal, svc, totalCanais } = resolverCanalWhatsAppConectado(empresaId);
+  const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
+  if (workerPort) {
+    await workerJson(workerPort, '/send-direct-message', { empresaId, numero, texto }, 30000);
+    return { canalId: canal.id };
+  }
   if (!svc) {
     throw new Error(totalCanais > 1
       ? 'Nenhum dos canais WhatsApp vinculados a esta empresa esta conectado.'
@@ -439,15 +488,19 @@ async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
 }
 
 async function enviarArquivoWhatsApp({ empresaId, numero, texto, arquivo }) {
-  const { canal, svc, totalCanais } = resolverCanalWhatsAppConectado(empresaId);
+  const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
+  if (!arquivo || !arquivo.data || !arquivo.mimetype || !arquivo.filename) {
+    throw new Error('Arquivo invalido para encaminhamento.');
+  }
+  if (workerPort) {
+    await workerJson(workerPort, '/send-media-message', { empresaId, numero, texto, arquivo }, 60000);
+    return { canalId: canal.id };
+  }
   if (!svc) {
     throw new Error(totalCanais > 1
       ? 'Nenhum dos canais WhatsApp vinculados a esta empresa esta conectado.'
       : 'WhatsApp nao esta conectado para o canal vinculado a esta empresa.');
-  }
-  if (!arquivo || !arquivo.data || !arquivo.mimetype || !arquivo.filename) {
-    throw new Error('Arquivo invalido para encaminhamento.');
   }
   if (typeof svc.sendMediaMessage !== 'function') {
     throw new Error('Motor WhatsApp ainda nao suporta envio de anexos nesta versao carregada.');

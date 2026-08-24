@@ -265,6 +265,73 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/send-direct-message') {
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', async () => {
+      try {
+        const { empresaId, numero, texto } = JSON.parse(body || '{}');
+        if (!empresaId || !numero || !texto) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ erro: 'empresaId, numero e texto sao obrigatorios.' }));
+        }
+        const digits = String(numero || '').replace(/\D/g, '');
+        if (!digits) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ erro: 'Numero do destinatario invalido.' }));
+        }
+        if (!channelStore.senderAutorizadoEmpresa(Number(empresaId), `${digits}@c.us`)) {
+          res.writeHead(403);
+          return res.end(JSON.stringify({ erro: 'Numero nao autorizado para esta empresa.' }));
+        }
+        await svc.sendMessage(digits, texto);
+        _enfileirar('iac-log', { tipo: 'success', msg: `Encaminhamento enviado -> ${digits}` });
+        res.writeHead(200);
+        res.end(JSON.stringify({ enviado: true }));
+      } catch (err) {
+        res.writeHead(err.message?.includes('conectado') ? 409 : 500);
+        res.end(JSON.stringify({ erro: err.message }));
+      }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/send-media-message') {
+    let body = '';
+    req.on('data', d => { body += d; });
+    req.on('end', async () => {
+      try {
+        const { empresaId, numero, texto, arquivo } = JSON.parse(body || '{}');
+        if (!empresaId || !numero || !arquivo?.data || !arquivo?.mimetype || !arquivo?.filename) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ erro: 'empresaId, numero e arquivo sao obrigatorios.' }));
+        }
+        const digits = String(numero || '').replace(/\D/g, '');
+        if (!digits) {
+          res.writeHead(400);
+          return res.end(JSON.stringify({ erro: 'Numero do destinatario invalido.' }));
+        }
+        if (!channelStore.senderAutorizadoEmpresa(Number(empresaId), `${digits}@c.us`)) {
+          res.writeHead(403);
+          return res.end(JSON.stringify({ erro: 'Numero nao autorizado para esta empresa.' }));
+        }
+        await svc.sendMediaMessage(digits, {
+          data: arquivo.data,
+          mimetype: arquivo.mimetype,
+          filename: arquivo.filename,
+          caption: texto || '',
+        });
+        _enfileirar('iac-log', { tipo: 'success', msg: `Anexo encaminhado -> ${digits}` });
+        res.writeHead(200);
+        res.end(JSON.stringify({ enviado: true }));
+      } catch (err) {
+        res.writeHead(err.message?.includes('conectado') ? 409 : 500);
+        res.end(JSON.stringify({ erro: err.message }));
+      }
+    });
+    return;
+  }
+
   res.writeHead(404);
   res.end(JSON.stringify({ erro: 'Não encontrado.' }));
 });
