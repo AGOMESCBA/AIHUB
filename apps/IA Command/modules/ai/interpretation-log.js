@@ -62,17 +62,36 @@ function temVinculoChatProtheus(logId) {
   }
 }
 
+function temVinculoAgendamento(logId) {
+  if (!logId || !colunaExiste('scheduled_question_runs', 'interpretation_log_id')) return false;
+  try {
+    return !!getDB().prepare(`
+      SELECT 1
+        FROM scheduled_question_runs
+       WHERE interpretation_log_id = ?
+       LIMIT 1
+    `).get(logId);
+  } catch (_) {
+    return false;
+  }
+}
+
 function canalOrigemDoRegistro(row = {}) {
   if (!row) return row;
   if (temVinculoChatProtheus(row.id)) {
     row.canal_origem = 'chat';
     return row;
   }
-  if (row.canal_origem) return row;
+  if (temVinculoAgendamento(row.id)) {
+    row.canal_origem = 'agendamento';
+    return row;
+  }
+  if (row.canal_origem && row.canal_origem !== 'agendamento') return row;
+  if (row.canal_origem === 'agendamento') row.canal_origem = null;
   const origem = String(row.origem || '').trim().toLowerCase();
   const pipelineOrigem = String(row.pipeline_origem || '').trim().toLowerCase();
   const usuario = String(row.usuario || '').trim().toLowerCase();
-  if (usuario === 'agendamento' || origem === 'agendamento_sql_fixo' || pipelineOrigem === 'agendamento_sql_fixo') {
+  if (usuario === 'agendamento' && origem !== 'agendamento_sql_fixo' && pipelineOrigem !== 'agendamento_sql_fixo') {
     row.canal_origem = 'agendamento';
   } else if (row.canal_id) {
     row.canal_origem = 'whatsapp';
