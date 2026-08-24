@@ -861,6 +861,39 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  app.get('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/whatsapp-preview', requireTokenSessao, async (req, res) => {
+    const inicio = Date.now();
+    const { celular } = req.protheusChat;
+
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+
+      const relatorio = sessionStore.mensagemTabular({
+        sessaoId: req.params.id,
+        mensagemId: req.params.mensagemId,
+      });
+      if (!relatorio) return res.status(404).json({ error: 'Mensagem tabular nao encontrada.' });
+
+      const pergunta = perguntaDaResposta({ sessaoId: req.params.id, respostaCriadaEm: relatorio.criadoEm });
+      const resumo = resumoDaResposta(relatorio.texto);
+      const texto = montarMensagemEncaminhamento({ pergunta, resumo, rows: relatorio.rows });
+
+      perfLog('GET /whatsapp-preview', inicio, { status: 200, empresaId, rows: relatorio.rows?.length || 0 });
+      res.json({
+        pergunta,
+        resumo,
+        texto,
+        rowsCount: Array.isArray(relatorio.rows) ? relatorio.rows.length : 0,
+      });
+    } catch (err) {
+      perfLog('GET /whatsapp-preview', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/encaminhar', requireTokenSessao, async (req, res) => {
     const inicio = Date.now();
     const { celular } = req.protheusChat;

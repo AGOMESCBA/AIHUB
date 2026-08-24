@@ -316,12 +316,15 @@
   .session-item.active { background: var(--wa-sidebar-active); }
   .session-item.active::before { content: ""; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--wa-accent); }
 
-  /* Acoes da conversa aparecem no hover/foco, como no WhatsApp Web. */
-  .session-delete-btn {
+  /* Acoes da conversa ficam agrupadas para liberar espaco ao titulo. */
+  .session-actions {
     flex: none;
     align-self: center;
-    width: 26px; height: 26px;
-    border: none; border-radius: 6px;
+    position: relative;
+  }
+  .session-menu-btn {
+    width: 30px; height: 30px;
+    border: none; border-radius: 50%;
     background: transparent;
     color: var(--wa-text-tertiary);
     display: flex; align-items: center; justify-content: center;
@@ -329,29 +332,57 @@
     opacity: 0;
     transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
   }
-  .session-item:hover .session-delete-btn,
-  .session-delete-btn:focus-visible { opacity: 1; }
-  .session-delete-btn:hover, .session-delete-btn:focus-visible { background: rgba(214, 69, 69, 0.14); color: #d64545; outline: none; }
-  .session-delete-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-
-  /* Mesmo padrao visual/comportamento do session-delete-btn — cor de destaque
-     em vez de vermelho, ja que renomear nao e uma acao destrutiva. */
-  .session-rename-btn {
-    flex: none;
-    align-self: center;
-    width: 26px; height: 26px;
-    border: none; border-radius: 6px;
-    background: transparent;
-    color: var(--wa-text-tertiary);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  .session-item:hover .session-menu-btn,
+  .session-menu-btn:focus-visible,
+  .session-actions.open .session-menu-btn {
+    opacity: 1;
   }
-  .session-item:hover .session-rename-btn,
-  .session-rename-btn:focus-visible { opacity: 1; }
-  .session-rename-btn:hover, .session-rename-btn:focus-visible { background: var(--wa-accent-soft-bg); color: var(--wa-accent); outline: none; }
-  .session-rename-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .session-menu-btn:hover,
+  .session-menu-btn:focus-visible,
+  .session-actions.open .session-menu-btn {
+    background: var(--wa-select-bg-hover);
+    color: var(--wa-text);
+    outline: none;
+  }
+  .session-menu-btn svg { width: 17px; height: 17px; fill: currentColor; }
+  .session-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 178px;
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid var(--wa-border);
+    background: var(--wa-panel);
+    color: var(--wa-text);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+    z-index: 20;
+    display: none;
+  }
+  .session-actions.open .session-menu { display: block; }
+  .session-menu-item {
+    width: 100%;
+    min-height: 38px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--wa-text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .session-menu-item:hover,
+  .session-menu-item:focus-visible {
+    background: var(--wa-select-bg-hover);
+    outline: none;
+  }
+  .session-menu-item.danger { color: #ff7b7b; }
+  .session-menu-item svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
   /* Input de edicao inline do titulo — substitui o <span class="session-title">
      no lugar exato dele (mesma posicao/tamanho de fonte), sem abrir modal. */
@@ -370,10 +401,11 @@
   }
 
   .session-meta { min-width: 0; flex: 1; }
-  .session-top { display: flex; justify-content: space-between; gap: 6px; }
+  .session-top { display: flex; min-width: 0; }
   .session-title { font-size: 15px; font-weight: 650; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .session-time { font-size: 12px; color: var(--wa-text-tertiary); flex: none; }
-  .session-preview { font-size: 13.2px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
+  .session-bottom { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
+  .session-preview { font-size: 13.2px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 
   .sidebar-footer { flex: none; display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-top: 1px solid var(--wa-border); }
   .sidebar-footer .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: #0b5b4e; color: #fff; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
@@ -390,8 +422,7 @@
   .app-frame.focus-mode .sidebar-search,
   .app-frame.focus-mode .sidebar-footer .user-info,
   .app-frame.focus-mode .session-meta,
-  .app-frame.focus-mode .session-rename-btn,
-  .app-frame.focus-mode .session-delete-btn,
+  .app-frame.focus-mode .session-actions,
   .app-frame.focus-mode .favorite-open-btn .favorite-label,
   .app-frame.focus-mode .favorite-open-btn .favorite-count,
   .app-frame.focus-mode .new-chat-btn span { display: none; }
@@ -936,6 +967,14 @@
   .forward-status { min-height: 18px; margin: 0 14px 10px; color: var(--wa-text-tertiary); font-size: 12px; }
   .forward-status.error { color: #ff8a8a; }
   .forward-status.ok { color: var(--wa-accent); }
+  .whatsapp-preview-modal { width: min(880px, 96vw); }
+  .whatsapp-preview-body { min-height: 0; overflow: auto; padding: 13px 14px; display: grid; gap: 10px; }
+  .whatsapp-preview-question { border-left: 3px solid var(--wa-accent); padding: 8px 10px; background: var(--wa-panel); border-radius: 8px; color: var(--wa-text-secondary); font-size: 12.5px; line-height: 1.45; }
+  .whatsapp-preview-question strong { display: block; color: var(--wa-accent); font-size: 11px; text-transform: uppercase; margin-bottom: 3px; }
+  .whatsapp-preview-text { width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 12px; font: 12.5px/1.45 Consolas, ui-monospace, SFMono-Regular, monospace; outline: none; white-space: pre; }
+  .whatsapp-preview-status { min-height: 18px; color: var(--wa-text-tertiary); font-size: 12px; }
+  .whatsapp-preview-status.error { color: #ff8a8a; }
+  .whatsapp-preview-status.ok { color: var(--wa-accent); }
 
   /* Link "Ver na aba Dados →" no rodape da bolha, quando a resposta tem rows
      — unica ligacao visual da bolha (texto puro, igual WhatsApp) com a aba
@@ -1505,6 +1544,10 @@
     <svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg>
     <span>Encaminhar resposta</span>
   </button>
+  <button type="button" class="message-context-item" data-menu-action="whatsapp-preview" role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M4 5h16v10H7l-3 3V5z"/><path d="M8 9h8M8 12h5"/></svg>
+    <span>Ver formato WhatsApp</span>
+  </button>
   <button type="button" class="message-context-item danger" data-menu-action="delete" role="menuitem">
     <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/></svg>
     <span>Apagar</span>
@@ -1556,6 +1599,31 @@
     </div>
     <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
       <button class="favorite-run" type="button" id="btnConfirmForward">Encaminhar</button>
+    </div>
+  </div>
+</div>
+
+<div class="favorites-modal-backdrop" id="whatsappPreviewModal" aria-hidden="true">
+  <div class="favorites-modal whatsapp-preview-modal" role="dialog" aria-modal="true" aria-labelledby="whatsappPreviewTitle">
+    <div class="favorites-modal-head">
+      <div class="favorites-modal-title">
+        <strong id="whatsappPreviewTitle">Ver formato WhatsApp</strong>
+        <span>Pré-visualização textual da resposta para consulta ou cópia.</span>
+      </div>
+      <div class="favorites-modal-actions">
+        <button class="favorites-close" type="button" id="btnFecharWhatsappPreviewTop" title="Fechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="whatsapp-preview-body">
+      <div class="whatsapp-preview-question" id="whatsappPreviewQuestion" style="display:none"></div>
+      <div class="whatsapp-preview-status" id="whatsappPreviewStatus"></div>
+      <textarea class="whatsapp-preview-text" id="whatsappPreviewText" readonly spellcheck="false"></textarea>
+    </div>
+    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+      <button class="report-btn" type="button" id="btnCopiarWhatsappPreview">Copiar</button>
+      <button class="favorite-run" type="button" id="btnFecharWhatsappPreview">Fechar</button>
     </div>
   </div>
 </div>
@@ -1638,6 +1706,13 @@
   const forwardAttachmentCaption = document.getElementById('forwardAttachmentCaption');
   const btnConfirmForward = document.getElementById('btnConfirmForward');
   const messageContextMenu = document.getElementById('messageContextMenu');
+  const whatsappPreviewModal = document.getElementById('whatsappPreviewModal');
+  const btnFecharWhatsappPreviewTop = document.getElementById('btnFecharWhatsappPreviewTop');
+  const btnFecharWhatsappPreview = document.getElementById('btnFecharWhatsappPreview');
+  const btnCopiarWhatsappPreview = document.getElementById('btnCopiarWhatsappPreview');
+  const whatsappPreviewQuestion = document.getElementById('whatsappPreviewQuestion');
+  const whatsappPreviewStatus = document.getElementById('whatsappPreviewStatus');
+  const whatsappPreviewText = document.getElementById('whatsappPreviewText');
   const headerTitle = document.getElementById('headerTitle');
   const errorBanner = document.getElementById('errorBanner');
   const userName = document.getElementById('userName');
@@ -1721,6 +1796,7 @@
   let messageContextMensagemId = null;
   let messageContextTrigger = null;
   let macroAdjustFavoritoId = null;
+  let whatsappPreviewMensagemId = null;
 
   const macrosSqlDisponiveis = [
     ['{{HOJE}}', 'Data de hoje'],
@@ -2446,6 +2522,95 @@
     forwardModo = 'resposta';
   }
 
+  function fecharWhatsappPreview() {
+    if (!whatsappPreviewModal) return;
+    whatsappPreviewModal.classList.remove('active');
+    whatsappPreviewModal.setAttribute('aria-hidden', 'true');
+    whatsappPreviewMensagemId = null;
+    if (whatsappPreviewText) whatsappPreviewText.value = '';
+    if (whatsappPreviewStatus) {
+      whatsappPreviewStatus.textContent = '';
+      whatsappPreviewStatus.className = 'whatsapp-preview-status';
+    }
+    if (whatsappPreviewQuestion) {
+      whatsappPreviewQuestion.style.display = 'none';
+      whatsappPreviewQuestion.innerHTML = '';
+    }
+  }
+
+  async function abrirWhatsappPreview(mensagemId) {
+    if (!whatsappPreviewModal || !sessaoAtualId || !mensagemId) return;
+    whatsappPreviewMensagemId = mensagemId;
+    whatsappPreviewModal.classList.add('active');
+    whatsappPreviewModal.setAttribute('aria-hidden', 'false');
+    if (whatsappPreviewText) whatsappPreviewText.value = '';
+    if (whatsappPreviewQuestion) {
+      whatsappPreviewQuestion.style.display = 'none';
+      whatsappPreviewQuestion.innerHTML = '';
+    }
+    if (whatsappPreviewStatus) {
+      whatsappPreviewStatus.textContent = 'Carregando formato WhatsApp...';
+      whatsappPreviewStatus.className = 'whatsapp-preview-status';
+    }
+
+    try {
+      const data = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + mensagemId + '/whatsapp-preview');
+      if (whatsappPreviewMensagemId !== mensagemId) return;
+      const pergunta = String(data.pergunta || perguntaParaMensagem(mensagemId) || '').trim();
+      const texto = String(data.texto || '').trim();
+      if (whatsappPreviewQuestion && pergunta) {
+        whatsappPreviewQuestion.innerHTML = '<strong>Pergunta</strong>' + escapeHtml(pergunta);
+        whatsappPreviewQuestion.style.display = 'block';
+      }
+      if (whatsappPreviewText) whatsappPreviewText.value = texto;
+      if (whatsappPreviewStatus) {
+        whatsappPreviewStatus.textContent = texto ? 'Texto pronto para consulta ou cópia.' : 'Nenhum texto disponível para esta mensagem.';
+        whatsappPreviewStatus.className = texto ? 'whatsapp-preview-status ok' : 'whatsapp-preview-status error';
+      }
+      setTimeout(() => whatsappPreviewText?.focus(), 0);
+    } catch (err) {
+      if (whatsappPreviewStatus) {
+        whatsappPreviewStatus.textContent = err.message;
+        whatsappPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+    }
+  }
+
+  async function copiarWhatsappPreview() {
+    const texto = whatsappPreviewText?.value || '';
+    if (!texto) {
+      if (whatsappPreviewStatus) {
+        whatsappPreviewStatus.textContent = 'Não há texto para copiar.';
+        whatsappPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        whatsappPreviewText.focus();
+        whatsappPreviewText.select();
+        const ok = document.execCommand('copy');
+        if (!ok) throw new Error('copy retornou falso');
+      }
+      if (whatsappPreviewStatus) {
+        whatsappPreviewStatus.textContent = 'Texto copiado.';
+        whatsappPreviewStatus.className = 'whatsapp-preview-status ok';
+      }
+    } catch (_err) {
+      if (whatsappPreviewText) {
+        whatsappPreviewText.focus();
+        whatsappPreviewText.select();
+      }
+      if (whatsappPreviewStatus) {
+        whatsappPreviewStatus.textContent = 'Não foi possível copiar automaticamente. O texto foi selecionado para copiar manualmente.';
+        whatsappPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+    }
+  }
+
   async function confirmarForward() {
     if (forwardModo === 'resposta' && (!sessaoAtualId || !forwardMensagemAtualId)) return;
     if (!forwardContatoSelecionados.size) {
@@ -2608,6 +2773,7 @@
     const favoritable = trigger.dataset.favoritable === '1';
     const itemFavorito = messageContextMenu.querySelector('[data-menu-action="favorite"]');
     const itemForward = messageContextMenu.querySelector('[data-menu-action="forward-response"]');
+    const itemPreview = messageContextMenu.querySelector('[data-menu-action="whatsapp-preview"]');
     if (itemFavorito) {
       itemFavorito.querySelector('span').textContent = favoritoId ? 'Remover favorito' : 'Favoritar';
       itemFavorito.disabled = !favoritable;
@@ -2616,6 +2782,10 @@
     if (itemForward) {
       itemForward.disabled = !temDados;
       itemForward.title = temDados ? 'Encaminhar resposta para WhatsApp' : 'Esta mensagem nao possui grade para encaminhar';
+    }
+    if (itemPreview) {
+      itemPreview.disabled = !temDados;
+      itemPreview.title = temDados ? 'Visualizar o texto no formato WhatsApp' : 'Esta mensagem nao possui grade para visualizar no formato WhatsApp';
     }
 
     const rect = trigger.getBoundingClientRect();
@@ -3280,6 +3450,14 @@
     return dados;
   }
 
+  function fecharMenusSessao() {
+    document.querySelectorAll('.session-actions.open').forEach((el) => {
+      el.classList.remove('open');
+      const btn = el.querySelector('.session-menu-btn');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
   function renderSessionList() {
     if (!sessoesCache.length) {
       sessionList.innerHTML = '<div class="session-empty">Nenhuma conversa ainda.<br>Envie sua primeira pergunta.</div>';
@@ -3294,35 +3472,61 @@
         <div class="session-meta">
           <div class="session-top">
             <span class="session-title" data-session-title="1" title="${escapeHtml(s.titulo)}">${escapeHtml(s.titulo)}</span>
+          </div>
+          <div class="session-bottom">
+            <div class="session-preview" title="${escapeHtml(s.ultimaMensagem || '')}">${escapeHtml(s.ultimaMensagem || '')}</div>
             <span class="session-time">${nowLabel(s.atualizadoEm)}</span>
           </div>
-          <div class="session-preview" title="${escapeHtml(s.ultimaMensagem || '')}">${escapeHtml(s.ultimaMensagem || '')}</div>
         </div>
-        <button type="button" class="session-rename-btn" title="Renomear conversa" aria-label="Renomear conversa">
-          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-        </button>
-        <button type="button" class="session-delete-btn" title="Excluir conversa" aria-label="Excluir conversa">
-          <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-        </button>`;
+        <div class="session-actions">
+          <button type="button" class="session-menu-btn" title="Mais opções" aria-label="Mais opções da conversa" aria-haspopup="menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+          </button>
+          <div class="session-menu" role="menu">
+            <button type="button" class="session-menu-item" data-session-action="rename" role="menuitem">
+              <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              <span>Renomear conversa</span>
+            </button>
+            <button type="button" class="session-menu-item danger" data-session-action="delete" role="menuitem">
+              <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+              <span>Excluir conversa</span>
+            </button>
+          </div>
+        </div>`;
       item.addEventListener('click', () => {
+        fecharMenusSessao();
         definirHeaderTitle(s.titulo);
         carregarMensagens(s.sessaoId);
-      });
-      item.querySelector('.session-rename-btn').addEventListener('click', (e) => {
-        e.stopPropagation();
-        iniciarRenomeioSessao(item, s);
       });
       item.querySelector('.session-title').addEventListener('dblclick', (e) => {
         e.stopPropagation();
         iniciarRenomeioSessao(item, s);
       });
-      item.querySelector('.session-delete-btn').addEventListener('click', (e) => {
+      const actions = item.querySelector('.session-actions');
+      const menuBtn = item.querySelector('.session-menu-btn');
+      menuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        excluirSessao(s.sessaoId, s.titulo);
+        const abrir = !actions.classList.contains('open');
+        fecharMenusSessao();
+        actions.classList.toggle('open', abrir);
+        menuBtn.setAttribute('aria-expanded', String(abrir));
+      });
+      item.querySelectorAll('[data-session-action]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fecharMenusSessao();
+          const acao = btn.dataset.sessionAction;
+          if (acao === 'rename') iniciarRenomeioSessao(item, s);
+          if (acao === 'delete') excluirSessao(s.sessaoId, s.titulo);
+        });
       });
       sessionList.appendChild(item);
     });
   }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.session-actions')) fecharMenusSessao();
+  });
 
   // Edicao inline do titulo da conversa — troca o <span> por um <input>
   // dentro do proprio item da sidebar (sem modal), com Enter/blur salvando e
@@ -3822,6 +4026,12 @@
   forwardModal.addEventListener('click', (e) => {
     if (e.target === forwardModal) fecharForwardModal();
   });
+  btnFecharWhatsappPreviewTop.addEventListener('click', () => fecharWhatsappPreview());
+  btnFecharWhatsappPreview.addEventListener('click', () => fecharWhatsappPreview());
+  btnCopiarWhatsappPreview.addEventListener('click', () => copiarWhatsappPreview());
+  whatsappPreviewModal.addEventListener('click', (e) => {
+    if (e.target === whatsappPreviewModal) fecharWhatsappPreview();
+  });
   messageContextMenu.addEventListener('click', async (e) => {
     const item = e.target.closest('[data-menu-action]');
     if (!item || !messageContextMensagemId) return;
@@ -3836,6 +4046,8 @@
         await favoritarMensagem(mensagemId, trigger);
       } else if (acao === 'forward-response') {
         await abrirForwardModal(mensagemId, 'resposta');
+      } else if (acao === 'whatsapp-preview') {
+        await abrirWhatsappPreview(mensagemId);
       } else if (acao === 'delete') {
         if (!window.confirm('Apagar esta mensagem? Essa acao nao pode ser desfeita.')) return;
         await excluirMensagensPorIds([mensagemId]);
@@ -3854,6 +4066,7 @@
     if (e.key === 'Escape' && favoritesModal.classList.contains('active')) fecharFavoritos();
     if (e.key === 'Escape' && macroAdjustModal.classList.contains('active')) fecharAjusteMacro();
     if (e.key === 'Escape' && forwardModal.classList.contains('active')) fecharForwardModal();
+    if (e.key === 'Escape' && whatsappPreviewModal.classList.contains('active')) fecharWhatsappPreview();
     if (e.key === 'Escape') fecharMenuMensagem();
   });
 
