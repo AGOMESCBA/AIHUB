@@ -398,6 +398,7 @@ async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
     sql_fixo: sql,
     sql_template: favorito.sql_template || null,
     sql_template_parametros: sqlExec.aplicados || [],
+    canal_origem: 'chat',
     timezone: process.env.TZ || 'America/Manaus',
   };
   const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');

@@ -48,6 +48,38 @@ function colunaExiste(tabela, coluna) {
   }
 }
 
+function temVinculoChatProtheus(logId) {
+  if (!logId || !colunaExiste('protheus_chat_messages', 'interpretation_log_id')) return false;
+  try {
+    return !!getDB().prepare(`
+      SELECT 1
+        FROM protheus_chat_messages
+       WHERE interpretation_log_id = ?
+       LIMIT 1
+    `).get(logId);
+  } catch (_) {
+    return false;
+  }
+}
+
+function canalOrigemDoRegistro(row = {}) {
+  if (!row) return row;
+  if (temVinculoChatProtheus(row.id)) {
+    row.canal_origem = 'chat';
+    return row;
+  }
+  if (row.canal_origem) return row;
+  const origem = String(row.origem || '').trim().toLowerCase();
+  const pipelineOrigem = String(row.pipeline_origem || '').trim().toLowerCase();
+  const usuario = String(row.usuario || '').trim().toLowerCase();
+  if (usuario === 'agendamento' || origem === 'agendamento_sql_fixo' || pipelineOrigem === 'agendamento_sql_fixo') {
+    row.canal_origem = 'agendamento';
+  } else if (row.canal_id) {
+    row.canal_origem = 'whatsapp';
+  }
+  return row;
+}
+
 function camposInferidos(intent = {}) {
   if (intent._resolvidoLocalmente || intent._provedor === 'deterministico') return [];
   const campos = [];
@@ -201,7 +233,7 @@ function listar(empresaId, opts = {}) {
     WHERE ${where.join(' AND ')}
     ORDER BY criado_em DESC
     LIMIT ?
-  `).all(...params);
+  `).all(...params).map(canalOrigemDoRegistro);
 }
 
 function listarResumo(empresaId, opts = {}) {
@@ -245,17 +277,19 @@ function listarResumo(empresaId, opts = {}) {
     WHERE ${where.join(' AND ')}
     ORDER BY criado_em DESC
     LIMIT ?
-  `).all(...params);
+  `).all(...params).map(canalOrigemDoRegistro);
 }
 
 function obterPorId(id, empresaId) {
   if (!id || !empresaId) return null;
-  return getDB().prepare(`
+  const row = getDB().prepare(`
     SELECT *
     FROM interpretation_log
     WHERE id = ? AND empresa_id = ?
     LIMIT 1
   `).get(id, empresaId) || null;
+  if (row && row.canal_origem === undefined) row.canal_origem = null;
+  return canalOrigemDoRegistro(row);
 }
 
 // Busca a ultima interpretacao de sucesso (com SQL gerado) deste remetente, usada pelos
