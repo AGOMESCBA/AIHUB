@@ -2,6 +2,7 @@ const { getDB } = require('./database');
 const { requireRotina } = require('./permissions');
 const { requireEmpresaContext } = require('./empresa-context');
 const channels = require('./whatsapp/channel-store');
+const { alertarEventoWorkerWhatsapp } = require('./whatsapp/operational-alerts');
 
 const WORKER_TOKEN = process.env.IAC_HUB_INTERNAL_TOKEN || '';
 
@@ -19,9 +20,13 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
     if (!channelId || !event) return res.status(400).json({ error: 'channelId e event obrigatórios.' });
     try {
       const enriched = payload && typeof payload === 'object' ? { ...payload, channelId } : payload;
+      const canal = channels.buscarCanal(channelId);
       const empresas = channels.listarEmpresasDoCanal(channelId);
       for (const emp of empresas) io.to(`emp_${emp.empresa_id}`).emit(event, enriched);
       io.to(`channel_${channelId}`).emit(event, enriched);
+      alertarEventoWorkerWhatsapp({ channelId, event, payload: enriched, canal }).catch(err => {
+        process.stdout.write(`[${new Date().toISOString()}] [WARN] Alerta worker WhatsApp falhou: ${err.message}\n`);
+      });
       res.json({ ok: true });
     } catch (err) {
       res.status(500).json({ error: err.message });
