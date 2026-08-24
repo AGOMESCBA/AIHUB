@@ -1603,6 +1603,41 @@ const MIGRATIONS = [
          AND canal_id IS NULL
          AND numero_wa IS NOT NULL
          AND TRIM(numero_wa) <> '';
+
+      UPDATE interpretation_log
+         SET canal_origem = 'chat'
+       WHERE (canal_origem IS NULL OR TRIM(canal_origem) = '' OR canal_origem = 'agendamento')
+         AND NOT EXISTS (
+           SELECT 1
+             FROM scheduled_question_runs r
+            WHERE r.interpretation_log_id = interpretation_log.id
+            LIMIT 1
+         )
+         AND canal_id IS NULL
+         AND (
+           origem = 'agendamento_sql_fixo'
+           OR pipeline_origem = 'agendamento_sql_fixo'
+         );
+    `,
+  },
+  {
+    version: 84,
+    descricao: 'IA Command - identifica SQL fixo legado sem run de agendamento como chat',
+    sql: `
+      UPDATE interpretation_log
+         SET canal_origem = 'chat'
+       WHERE (canal_origem IS NULL OR TRIM(canal_origem) = '' OR canal_origem = 'agendamento')
+         AND NOT EXISTS (
+           SELECT 1
+             FROM scheduled_question_runs r
+            WHERE r.interpretation_log_id = interpretation_log.id
+            LIMIT 1
+         )
+         AND canal_id IS NULL
+         AND (
+           origem = 'agendamento_sql_fixo'
+           OR pipeline_origem = 'agendamento_sql_fixo'
+         );
     `,
   },
 ];

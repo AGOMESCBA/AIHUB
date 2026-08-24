@@ -91,10 +91,13 @@ function canalOrigemDoRegistro(row = {}) {
   const origem = String(row.origem || '').trim().toLowerCase();
   const pipelineOrigem = String(row.pipeline_origem || '').trim().toLowerCase();
   const usuario = String(row.usuario || '').trim().toLowerCase();
-  if (usuario === 'agendamento' && origem !== 'agendamento_sql_fixo' && pipelineOrigem !== 'agendamento_sql_fixo') {
+  const sqlFixoSemRun = origem === 'agendamento_sql_fixo' || pipelineOrigem === 'agendamento_sql_fixo';
+  if (usuario === 'agendamento' && !sqlFixoSemRun) {
     row.canal_origem = 'agendamento';
   } else if (row.canal_id) {
     row.canal_origem = 'whatsapp';
+  } else if (sqlFixoSemRun) {
+    row.canal_origem = 'chat';
   } else if (row.numero_wa) {
     row.canal_origem = 'chat';
   }
