@@ -323,6 +323,7 @@ const MESES = ['Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho', 'Julho
 function labelValorDimensao(col, valor) {
   const k = keyNorm(col);
   const s = String(valor ?? '').trim();
+  if (/^(filial|empresa|loja|codigo|cod_|.*_codigo|.*_cod|e1_filial|e2_filial|f2_filial|d2_filial)$/.test(k)) return s || '(sem identificacao)';
   // Documento (numero de pedido/nota/titulo) nunca deve ser reinterpretado como data, mesmo
   // quando o valor tem 6 ou 8 digitos por coincidencia — CR_NUM, C7_NUM etc. sao identificadores,
   // nao datas. Sem esta guarda, um numero de pedido como "16506462" virava "62/64/1650".
@@ -1250,10 +1251,46 @@ function ordenarEntradasDimensao(entries, dim, primary) {
     : (gb[primary] || gb.total?.[primary] || 0) - (ga[primary] || ga.total?.[primary] || 0));
 }
 
+function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto) {
+  const dimItem = shape.dimensoes.find(dim => dim !== contexto.dim);
+  if (!dimItem) return false;
+
+  const porItem = new Map();
+  const totalGeral = totalVazio(shape.metricas);
+  for (const row of rows || []) {
+    const item = String(row?.[dimItem] ?? '').trim() || '(sem identificacao)';
+    if (!porItem.has(item)) porItem.set(item, totalVazio(shape.metricas));
+    const totais = porItem.get(item);
+    for (const col of shape.metricas) {
+      const v = toNumber(row[col]);
+      totais[col] += v;
+      totalGeral[col] += v;
+    }
+  }
+
+  const primary = shape.metricas[0];
+  const entradas = ordenarEntradasDimensao([...porItem.entries()], dimItem, primary);
+
+  linhas.push(`\u{1F4CB} *Por ${labelDimensao(dimItem)}*`);
+  linhas.push(`\u{1F5D3} *${labelDimensao(contexto.dim)}: ${labelValorDimensao(contexto.dim, contexto.valor)}*`);
+  entradas.slice(0, 80).forEach(([item, totais], idx) => {
+    linhas.push(`  ${idx + 1}. ${labelDimensao(dimItem)} ${labelValorDimensao(dimItem, item)}: ${valsMetricas(totais, shape.metricas)}`);
+  });
+  if (entradas.length > 80) linhas.push(`  ... e mais ${entradas.length - 80}`);
+
+  linhas.push('');
+  linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricas(totalGeral, shape.metricas)}`);
+  linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
+  return true;
+}
+
 function renderDuasDimensoes(rows, shape, linhas) {
+  const detalheDoc = shape.tipo === 'detalhe_documento';
+  const temporalUnico = !detalheDoc ? contextoTemporalUnico(rows, shape.dimensoes) : null;
+  if (temporalUnico && renderDuasDimensoesComTemporalUnico(rows, shape, linhas, temporalUnico)) return;
+
   const { outerDim, innerDim, grupos, totalGeral } = montarDuasDimensoes(rows, shape);
   const primary = shape.metricas[0];
-  const detalheDoc = shape.tipo === 'detalhe_documento';
   const outerEhCategoria = isCategoriaSemantica(outerDim);
   const innerEhCategoria = isCategoriaSemantica(innerDim);
   const titulo = detalheDoc
@@ -1307,15 +1344,19 @@ function renderDuasDimensoes(rows, shape, linhas) {
 }
 
 function montarMultiplasDimensoes(rows, shape) {
+  return montarMultiplasDimensoesPorDims(rows, shape.dimensoes, shape.metricas);
+}
+
+function montarMultiplasDimensoesPorDims(rows, dimensoes, metricas) {
   const grupos = new Map();
-  const totalGeral = totalVazio(shape.metricas);
+  const totalGeral = totalVazio(metricas);
 
   for (const row of rows || []) {
-    const chave = shape.dimensoes.map(dim => String(row[dim] ?? '').trim() || '(sem identificacao)');
+    const chave = dimensoes.map(dim => String(row[dim] ?? '').trim() || '(sem identificacao)');
     const key = JSON.stringify(chave);
-    if (!grupos.has(key)) grupos.set(key, { chave, total: totalVazio(shape.metricas) });
+    if (!grupos.has(key)) grupos.set(key, { chave, total: totalVazio(metricas) });
     const grupo = grupos.get(key);
-    for (const col of shape.metricas) {
+    for (const col of metricas) {
       const v = toNumber(row[col]);
       grupo.total[col] += v;
       totalGeral[col] += v;
@@ -1323,6 +1364,55 @@ function montarMultiplasDimensoes(rows, shape) {
   }
 
   return { grupos, totalGeral };
+}
+
+function valoresUnicosDimensao(rows, dim) {
+  const vals = new Set();
+  for (const row of rows || []) {
+    const val = String(row?.[dim] ?? '').trim();
+    if (val) vals.add(val);
+    if (vals.size > 1) break;
+  }
+  return [...vals];
+}
+
+function dimensaoTemNomeLegivel(rows, dim) {
+  return sampleRows(rows).some(row => {
+    const val = String(row?.[dim] ?? '').trim();
+    return /[A-Za-zÀ-ÿ]/.test(val) && val.replace(/[^A-Za-zÀ-ÿ]+/g, '').length >= 3;
+  });
+}
+
+function melhorDimensaoDuplicada(a, b, rows) {
+  const aNome = dimensaoTemNomeLegivel(rows, a);
+  const bNome = dimensaoTemNomeLegivel(rows, b);
+  if (aNome !== bNome) return bNome ? b : a;
+  return a;
+}
+
+function compactarDimensoesDuplicadasParaExibicao(rows, dimensoes) {
+  const porCanon = new Map();
+  const ordem = [];
+
+  for (const dim of dimensoes || []) {
+    const canon = chaveDimensaoCanonica(dim);
+    if (!porCanon.has(canon)) {
+      porCanon.set(canon, dim);
+      ordem.push(canon);
+      continue;
+    }
+    porCanon.set(canon, melhorDimensaoDuplicada(porCanon.get(canon), dim, rows));
+  }
+
+  return ordem.map(canon => porCanon.get(canon)).filter(Boolean);
+}
+
+function contextoTemporalUnico(rows, dimensoes) {
+  const temporal = (dimensoes || []).find(isTemporal);
+  if (!temporal) return null;
+  const valores = valoresUnicosDimensao(rows, temporal);
+  if (valores.length !== 1) return null;
+  return { dim: temporal, valor: valores[0] };
 }
 
 function montarDetalheTemporalMultidimensional(rows, shape) {
@@ -1388,12 +1478,22 @@ function renderDetalheTemporalMultidimensional(rows, shape, linhas) {
 }
 
 function renderMultiplasDimensoes(rows, shape, linhas) {
-  const { grupos, totalGeral } = montarMultiplasDimensoes(rows, shape);
+  const temporalUnico = contextoTemporalUnico(rows, shape.dimensoes);
+  let dimensoesExibicao = temporalUnico
+    ? shape.dimensoes.filter(dim => dim !== temporalUnico.dim)
+    : shape.dimensoes.slice();
+  dimensoesExibicao = compactarDimensoesDuplicadasParaExibicao(rows, dimensoesExibicao);
+  if (!dimensoesExibicao.length) dimensoesExibicao = shape.dimensoes.slice();
+
+  const { grupos, totalGeral } = montarMultiplasDimensoesPorDims(rows, dimensoesExibicao, shape.metricas);
   const primary = shape.metricas[0];
-  const titulo = `Por ${shape.dimensoes.map(labelDimensao).join(', ')}`;
-  const ordenarPorChave = shape.dimensoes.every(isBancario) || shape.dimensoes.some(isTemporal);
+  const titulo = `Por ${dimensoesExibicao.map(labelDimensao).join(', ')}`;
+  const ordenarPorChave = dimensoesExibicao.every(isBancario) || dimensoesExibicao.some(isTemporal);
 
   linhas.push(`\u{1F4CB} *${titulo}*`);
+  if (temporalUnico) {
+    linhas.push(`\u{1F5D3} *${labelDimensao(temporalUnico.dim)}: ${labelValorDimensao(temporalUnico.dim, temporalUnico.valor)}*`);
+  }
   const entradas = [...grupos.values()].sort((a, b) => {
     if (ordenarPorChave) return a.chave.join('|').localeCompare(b.chave.join('|'));
     const diff = (b.total[primary] || 0) - (a.total[primary] || 0);
@@ -1402,7 +1502,7 @@ function renderMultiplasDimensoes(rows, shape, linhas) {
   });
 
   entradas.slice(0, 80).forEach((grupo, idx) => {
-    const dims = shape.dimensoes
+    const dims = dimensoesExibicao
       .map((dim, i) => `${labelDimensao(dim)} ${labelValorDimensao(dim, grupo.chave[i])}`)
       .join('\n      ');
     linhas.push(`  ${idx + 1}. ${dims}: ${valsMetricas(grupo.total, shape.metricas)}`);
