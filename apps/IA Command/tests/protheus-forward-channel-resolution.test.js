@@ -10,10 +10,11 @@ function managerVazio() {
   };
 }
 
-function channelStoreFake({ porEmpresa = {}, globais = [], empresasPorCanal = {} }) {
+function channelStoreFake({ porEmpresa = {}, globais = [], todos = [], empresasPorCanal = {} }) {
   return {
     listarPorEmpresa: (empresaId) => porEmpresa[Number(empresaId)] || [],
     listarAtivosComSessao: () => globais,
+    listarTodosCanais: () => todos,
     listarEmpresasDoCanal: (channelId) => empresasPorCanal[String(channelId)] || [],
   };
 }
@@ -74,6 +75,18 @@ function canal(id, porta) {
       workerJsonFn: workerConectado([3101]),
     });
     assert.strictEqual(ret.canal.id, 'j2a');
+    assert.strictEqual(ret.origem, 'unico-global');
+  }
+
+  {
+    const unico = canal('j2a', 3101);
+    const ret = await resolverCanalWhatsAppConectado(5, {
+      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [], todos: [unico] }),
+      manager: managerVazio(),
+      workerJsonFn: workerConectado([3101]),
+    });
+    assert.strictEqual(ret.canal.id, 'j2a');
+    assert.strictEqual(ret.workerPort, 3101);
     assert.strictEqual(ret.origem, 'unico-global');
   }
 

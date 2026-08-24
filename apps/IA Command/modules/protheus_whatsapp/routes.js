@@ -28,6 +28,10 @@ function perfLog(etapa, inicio, dados = {}) {
   console.log(`[protheus_whatsapp][perf] ${new Date().toISOString()} ${etapa} ${duracaoMs}ms ${JSON.stringify(dados)}`);
 }
 
+function forwardDebug(etapa, dados = {}) {
+  console.log(`[protheus_whatsapp][forward-debug] ${new Date().toISOString()} ${etapa} ${JSON.stringify(dados)}`);
+}
+
 function garantirTabelaLaunchTickets() {
   getDB().prepare(`
     CREATE TABLE IF NOT EXISTS protheus_chat_launch_tokens (
@@ -441,8 +445,20 @@ async function canalWorkerConectado(canal, workerJsonFn = workerJson) {
   if (!canal?.is_windows_service || !canal?.worker_port) return false;
   try {
     const health = await workerJsonFn(canal.worker_port, '/health', null, 2500);
-    return String(health?.status || '').toLowerCase() === 'connected';
-  } catch (_) {
+    const status = String(health?.status || '').toLowerCase();
+    forwardDebug('worker-health', {
+      canalId: canal.id,
+      workerPort: canal.worker_port,
+      status,
+      pid: health?.pid || null,
+    });
+    return status === 'connected';
+  } catch (err) {
+    forwardDebug('worker-health-erro', {
+      canalId: canal.id,
+      workerPort: canal.worker_port,
+      erro: err.message,
+    });
     return false;
   }
 }
@@ -474,11 +490,44 @@ async function primeiroCanalConectado(canais, { manager = whatsappManager, worke
   return null;
 }
 
-async function canaisGlobaisConectados({ manager = whatsappManager, workerJsonFn = workerJson, channelStore = whatsappChannels } = {}) {
-  const canaisAtivos = channelStore.listarAtivosComSessao().map(canal => ({
+function canalCandidatoEncaminhamento(canal) {
+  if (!canal || canal.ativo === 0) return false;
+  if (canal.is_windows_service && canal.worker_port) return true;
+  if (String(canal.auth_client_id || '').trim()) return true;
+  return false;
+}
+
+function canaisGlobaisCandidatos(channelStore = whatsappChannels) {
+  const porSessao = typeof channelStore.listarAtivosComSessao === 'function'
+    ? channelStore.listarAtivosComSessao()
+    : [];
+  const todosAtivos = typeof channelStore.listarTodosCanais === 'function'
+    ? channelStore.listarTodosCanais().filter(canalCandidatoEncaminhamento)
+    : [];
+  const porId = new Map();
+
+  for (const canal of [...porSessao, ...todosAtivos]) {
+    if (canal?.id && !porId.has(String(canal.id))) porId.set(String(canal.id), canal);
+  }
+
+  const canais = [...porId.values()].map(canal => ({
     ...canal,
     empresas: Array.isArray(canal.empresas) ? canal.empresas : channelStore.listarEmpresasDoCanal(canal.id),
   }));
+  forwardDebug('canais-globais-candidatos', {
+    total: canais.length,
+    canais: canais.map(canal => ({
+      id: canal.id,
+      workerPort: canal.worker_port || null,
+      isWindowsService: canal.is_windows_service ? 1 : 0,
+      empresas: (canal.empresas || []).map(emp => Number(emp.empresa_id)),
+    })),
+  });
+  return canais;
+}
+
+async function canaisGlobaisConectados({ manager = whatsappManager, workerJsonFn = workerJson, channelStore = whatsappChannels } = {}) {
+  const canaisAtivos = canaisGlobaisCandidatos(channelStore);
   const conectados = [];
 
   for (const canal of canaisAtivos) {
@@ -499,8 +548,24 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
   const channelStore = deps.channelStore || whatsappChannels;
   const canaisEmpresa = channelStore.listarPorEmpresa(Number(empresaId));
   const totalCanaisEmpresa = canaisEmpresa.length;
+  forwardDebug('resolver-inicio', {
+    empresaId: Number(empresaId),
+    canaisEmpresa: canaisEmpresa.map(canal => ({
+      id: canal.id,
+      workerPort: canal.worker_port || null,
+      isWindowsService: canal.is_windows_service ? 1 : 0,
+      padrao: canal.padrao ? 1 : 0,
+    })),
+  });
   const conectadoDaEmpresa = await primeiroCanalConectado(canaisEmpresa, deps);
   if (conectadoDaEmpresa) {
+    forwardDebug('resolver-escolhido', {
+      empresaId: Number(empresaId),
+      origem: 'empresa',
+      canalId: conectadoDaEmpresa.canal?.id || null,
+      workerPort: conectadoDaEmpresa.workerPort || null,
+      via: conectadoDaEmpresa.workerPort ? 'worker' : 'service-manager',
+    });
     return { ...conectadoDaEmpresa, totalCanais: totalCanaisEmpresa, origem: 'empresa' };
   }
 
@@ -513,6 +578,13 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
   });
 
   if (compartilhados.length === 1) {
+    forwardDebug('resolver-escolhido', {
+      empresaId: Number(empresaId),
+      origem: 'compartilhado',
+      canalId: compartilhados[0].canal?.id || null,
+      workerPort: compartilhados[0].workerPort || null,
+      via: compartilhados[0].workerPort ? 'worker' : 'service-manager',
+    });
     return { ...compartilhados[0], totalCanais: totalCanaisEmpresa || 1, origem: 'compartilhado' };
   }
 
@@ -520,6 +592,13 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
   // servindo varias empresas do IA Command. Se houver mais de um, nao escolhe
   // automaticamente para evitar enviar pelo canal errado.
   if (!compartilhados.length && globais.length === 1) {
+    forwardDebug('resolver-escolhido', {
+      empresaId: Number(empresaId),
+      origem: 'unico-global',
+      canalId: globais[0].canal?.id || null,
+      workerPort: globais[0].workerPort || null,
+      via: globais[0].workerPort ? 'worker' : 'service-manager',
+    });
     return { ...globais[0], totalCanais: totalCanaisEmpresa || 1, origem: 'unico-global' };
   }
 
@@ -531,6 +610,12 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
     });
   }
 
+  forwardDebug('resolver-sem-canal-conectado', {
+    empresaId: Number(empresaId),
+    totalCanaisEmpresa,
+    totalGlobaisConectados: globais.length,
+    totalCompartilhadosConectados: compartilhados.length,
+  });
   return { canal: canaisEmpresa[0] || null, svc: null, workerPort: null, totalCanais: totalCanaisEmpresa };
 }
 
