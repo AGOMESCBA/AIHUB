@@ -779,6 +779,27 @@
   .app-frame.focus-mode .bubble .structured-response { min-width: min(520px, 72vw); }
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
+  .bubble-question-context {
+    display: block;
+    margin: -1px 0 7px;
+    padding: 0 0 6px 9px;
+    border-left: 3px solid var(--wa-accent);
+    color: var(--wa-text-secondary);
+    font-size: 12.6px;
+    font-weight: 650;
+    line-height: 1.32;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--wa-border);
+  }
+  .bubble-question-context span {
+    display: block;
+    color: var(--wa-accent);
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
   .bubble .structured-response { white-space: normal; display: grid; gap: 9px; min-width: min(420px, 62vw); }
   .structured-intro { font-size: 14.3px; line-height: 1.42; }
   .structured-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -2619,6 +2640,7 @@
         rowsCount: data.resposta.rowsCount ?? null,
         tipo: data.resposta.tipo || null,
         favoritoId: data.resposta.favoritoId || favoritoId,
+        perguntaContexto: fav?.perguntaTexto || 'Pergunta favorita',
         criadoEm: data.criadoEm,
       });
       if (data.resposta.gridConfig && data.resposta.mensagemId) {
@@ -2785,7 +2807,7 @@
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
-  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, favoritoId = null, criadoEm, isFalha = false }) {
+  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, favoritoId = null, criadoEm, isFalha = false, perguntaContexto = null }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
@@ -2810,9 +2832,12 @@
     const botaoMenu = (!isFalha && id)
       ? `<button type="button" class="message-menu-trigger${favoritoId ? ' active' : ''}" data-menu-msg="${escapeHtml(id)}" data-favoritable="${direcao === 'in' ? '1' : '0'}" data-tem-dados-tabulares="${temDadosTabulares ? '1' : '0'}"${favoritoId ? ` data-favorito-id="${escapeHtml(favoritoId)}"` : ''} title="Opcoes da mensagem" aria-label="Opcoes da mensagem">${chevronDownSvg()}</button>`
       : '';
+    const cabecalhoPergunta = (!isFalha && direcao === 'in' && String(perguntaContexto || '').trim())
+      ? `<div class="bubble-question-context"><span>Pergunta</span>${escapeHtml(String(perguntaContexto).trim())}</div>`
+      : '';
     const conteudo = (!isFalha && apresentacaoFinal)
-      ? botaoMenu + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
-      : botaoMenu + escapeHtml(texto) + linkDados;
+      ? botaoMenu + cabecalhoPergunta + renderApresentacaoHtml(apresentacaoFinal, texto) + linkDados
+      : botaoMenu + cabecalhoPergunta + escapeHtml(texto) + linkDados;
 
     if (temDadosTabulares && id && Array.isArray(rows) && rows.length) {
       const dadosMensagem = { mensagemId: id, rows, gridConfig: null, texto };
@@ -3005,7 +3030,18 @@
       return;
     }
     chatBody.innerHTML = '';
-    mensagens.forEach(addBubble);
+    let perguntaAtual = '';
+    mensagens.forEach((mensagem) => {
+      if (mensagem?.direcao === 'out') {
+        perguntaAtual = String(mensagem.texto || '').trim();
+        addBubble(mensagem);
+        return;
+      }
+      addBubble({
+        ...mensagem,
+        perguntaContexto: perguntaAtual,
+      });
+    });
     scrollToBottom();
   }
 
@@ -3323,6 +3359,7 @@
         rowsCount: data.resposta.rowsCount,
         direcao: 'in',
         favoritoId: data.resposta.favoritoId || null,
+        perguntaContexto: texto,
         criadoEm: data.criadoEm,
       });
       scrollToBottom();
