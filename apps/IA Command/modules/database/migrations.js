@@ -1543,18 +1543,66 @@ const MIGRATIONS = [
 
       UPDATE interpretation_log
          SET canal_origem = CASE
-           WHEN usuario = 'agendamento'
-             OR origem = 'agendamento_sql_fixo'
-             OR pipeline_origem = 'agendamento_sql_fixo'
+           WHEN EXISTS (
+             SELECT 1
+               FROM scheduled_question_runs r
+              WHERE r.interpretation_log_id = interpretation_log.id
+              LIMIT 1
+           )
              THEN 'agendamento'
+           WHEN EXISTS (
+             SELECT 1
+               FROM protheus_chat_messages m
+              WHERE m.interpretation_log_id = interpretation_log.id
+              LIMIT 1
+           )
+             THEN 'chat'
            WHEN canal_id IS NOT NULL AND TRIM(canal_id) <> ''
              THEN 'whatsapp'
+           WHEN numero_wa IS NOT NULL AND TRIM(numero_wa) <> ''
+             THEN 'chat'
            ELSE canal_origem
          END
        WHERE canal_origem IS NULL OR TRIM(canal_origem) = '';
 
       CREATE INDEX IF NOT EXISTS idx_interpretation_log_canal_origem
         ON interpretation_log (empresa_id, canal_origem, criado_em);
+    `,
+  },
+  {
+    version: 83,
+    descricao: 'IA Command - corrige canal legado do historico sem confundir SQL fixo de favorito com agendamento',
+    sql: `
+      UPDATE interpretation_log
+         SET canal_origem = 'chat'
+       WHERE EXISTS (
+         SELECT 1
+           FROM protheus_chat_messages m
+          WHERE m.interpretation_log_id = interpretation_log.id
+          LIMIT 1
+       );
+
+      UPDATE interpretation_log
+         SET canal_origem = 'agendamento'
+       WHERE EXISTS (
+         SELECT 1
+           FROM scheduled_question_runs r
+          WHERE r.interpretation_log_id = interpretation_log.id
+          LIMIT 1
+       );
+
+      UPDATE interpretation_log
+         SET canal_origem = 'chat'
+       WHERE (canal_origem IS NULL OR TRIM(canal_origem) = '' OR canal_origem = 'agendamento')
+         AND NOT EXISTS (
+           SELECT 1
+             FROM scheduled_question_runs r
+            WHERE r.interpretation_log_id = interpretation_log.id
+            LIMIT 1
+         )
+         AND canal_id IS NULL
+         AND numero_wa IS NOT NULL
+         AND TRIM(numero_wa) <> '';
     `,
   },
 ];

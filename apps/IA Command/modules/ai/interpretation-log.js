@@ -95,6 +95,8 @@ function canalOrigemDoRegistro(row = {}) {
     row.canal_origem = 'agendamento';
   } else if (row.canal_id) {
     row.canal_origem = 'whatsapp';
+  } else if (row.numero_wa) {
+    row.canal_origem = 'chat';
   }
   return row;
 }

@@ -660,14 +660,7 @@
 
   function canalValor(row) {
     const raw = String(row?.canal_origem || '').trim().toLowerCase();
-    if (raw) return raw;
-    const intent = intentObj(row);
-    const pipeline = String(row?.pipeline_origem || '').trim().toLowerCase();
-    const origem = String(row?.origem || intent.origem || '').trim().toLowerCase();
-    const usuario = String(row?.usuario || '').trim().toLowerCase();
-    if (usuario === 'agendamento' || origem === 'agendamento_sql_fixo' || pipeline === 'agendamento_sql_fixo' || intent._systemOrigin === 'agendamento') return 'agendamento';
-    if (row?.canal_id) return 'whatsapp';
-    return '';
+    return raw;
   }
 
   function canalLabel(row) {
