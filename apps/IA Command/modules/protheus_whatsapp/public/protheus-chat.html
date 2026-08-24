@@ -34,9 +34,16 @@
     --wa-sidebar: #ffffff;
     --wa-sidebar-hover: #f5f6f6;
     --wa-sidebar-active: #f0f2f5;
+    --wa-chrome: #f0f2f5;
+    --wa-chrome-text: #111b21;
+    --wa-chrome-sub: #667781;
+    --wa-select-bg: rgba(0, 0, 0, 0.025);
+    --wa-select-bg-hover: rgba(0, 0, 0, 0.055);
+    --wa-tab-muted: #667781;
     --wa-border: rgba(0, 0, 0, 0.09);
     --wa-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
     --wa-input-bg: #ffffff;
+    --wa-chat-footer: #f0f2f5;
     --wa-scrollbar: rgba(0, 0, 0, 0.18);
     --wa-check: #53bdeb;
     --wa-app-bg: #dcdfe1;
@@ -45,7 +52,7 @@
   :root[data-theme="dark"] {
     --wa-header: #202c33;
     --wa-bg: #0b141a;
-    --wa-bg-pattern-opacity: 0.035;
+    --wa-bg-pattern-opacity: 0.05;
     --wa-bubble-in: #202c33;
     --wa-bubble-out: #005c4b;
     --wa-text: #e9edef;
@@ -59,9 +66,16 @@
     --wa-sidebar: #111b21;
     --wa-sidebar-hover: #182229;
     --wa-sidebar-active: #202c33;
+    --wa-chrome: #111b21;
+    --wa-chrome-text: #e9edef;
+    --wa-chrome-sub: #aebac1;
+    --wa-select-bg: rgba(255, 255, 255, 0.08);
+    --wa-select-bg-hover: rgba(255, 255, 255, 0.16);
+    --wa-tab-muted: #aebac1;
     --wa-border: rgba(255, 255, 255, 0.07);
     --wa-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.4);
     --wa-input-bg: #2a3942;
+    --wa-chat-footer: #202c33;
     --wa-scrollbar: rgba(255, 255, 255, 0.15);
     --wa-check: #53bdeb;
     --wa-app-bg: #02070a;
@@ -77,7 +91,7 @@
   :root:not([data-theme="light"]) {
     --wa-header: #202c33;
     --wa-bg: #0b141a;
-    --wa-bg-pattern-opacity: 0.035;
+    --wa-bg-pattern-opacity: 0.05;
     --wa-bubble-in: #202c33;
     --wa-bubble-out: #005c4b;
     --wa-text: #e9edef;
@@ -91,9 +105,16 @@
     --wa-sidebar: #111b21;
     --wa-sidebar-hover: #182229;
     --wa-sidebar-active: #202c33;
+    --wa-chrome: #111b21;
+    --wa-chrome-text: #e9edef;
+    --wa-chrome-sub: #aebac1;
+    --wa-select-bg: rgba(255, 255, 255, 0.08);
+    --wa-select-bg-hover: rgba(255, 255, 255, 0.16);
+    --wa-tab-muted: #aebac1;
     --wa-border: rgba(255, 255, 255, 0.07);
     --wa-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.4);
     --wa-input-bg: #2a3942;
+    --wa-chat-footer: #202c33;
     --wa-scrollbar: rgba(255, 255, 255, 0.15);
     --wa-check: #53bdeb;
     --wa-app-bg: #02070a;
@@ -115,7 +136,7 @@
     /* Sidebar recolhe (0px) quando a aba Dados esta ativa, via classe
        .sidebar-collapsed no .app-frame — ver JS em trocarAba(). Transicao
        suave, sidebar continua acessivel ao voltar pra aba Conversa. */
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 344px 1fr;
     /* Sem transicao aqui: alternar Conversa/Dados ja dispara recalculo pesado
        de layout no Tabulator. Animar a largura junto deixa a navegacao entre
        abas parecendo travada em bases maiores. */
@@ -145,28 +166,29 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 14px 16px;
-    background: var(--wa-header);
-    color: #fff;
+    min-height: 72px;
+    padding: 14px 24px;
+    background: var(--wa-chrome);
+    color: var(--wa-chrome-text);
   }
   .sidebar-header .brand-icon {
-    width: 34px; height: 34px; border-radius: 9px;
-    background: rgba(255, 255, 255, 0.16);
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #374248;
     display: flex; align-items: center; justify-content: center; flex: none;
   }
   .sidebar-header .brand-icon svg { width: 19px; height: 19px; fill: #fff; }
   .sidebar-header .brand-text { display: flex; flex-direction: column; min-width: 0; }
-  .sidebar-header .brand-name { font-size: 15px; font-weight: 700; line-height: 1.2; }
-  .sidebar-header .brand-sub { font-size: 10.5px; letter-spacing: 0.3px; text-transform: uppercase; color: rgba(255, 255, 255, 0.75); }
+  .sidebar-header .brand-name { font-size: 16px; font-weight: 700; line-height: 1.2; }
+  .sidebar-header .brand-sub { font-size: 10.5px; letter-spacing: 0.3px; text-transform: uppercase; color: var(--wa-chrome-sub); }
 
   .new-chat-btn {
-    margin: 12px 14px 8px;
+    margin: 14px 14px 10px;
     flex: none;
     display: flex; align-items: center; justify-content: center; gap: 7px;
     padding: 9px 12px;
-    border-radius: 8px;
-    border: 1px dashed var(--wa-accent-soft-border);
-    background: var(--wa-accent-soft-bg);
+    border-radius: 999px;
+    border: 1px solid var(--wa-accent-soft-border);
+    background: rgba(0, 168, 132, 0.13);
     color: var(--wa-accent);
     font-size: 13px;
     font-weight: 600;
@@ -177,12 +199,12 @@
   .new-chat-btn svg { width: 15px; height: 15px; fill: currentColor; }
 
   .favorite-open-btn {
-    margin: 0 14px 10px;
+    margin: 0 14px 12px;
     flex: none;
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     min-height: 40px;
     padding: 8px 10px;
-    border-radius: 8px;
+    border-radius: 999px;
     border: 1px solid var(--wa-border);
     background: var(--wa-panel);
     color: var(--wa-text);
@@ -275,29 +297,26 @@
     flex: none;
     margin: 2px 14px 10px;
     display: flex; align-items: center; gap: 8px;
-    background: var(--wa-panel);
-    border-radius: 8px;
-    padding: 7px 10px;
+    background: var(--wa-input-bg);
+    border-radius: 999px;
+    padding: 10px 18px;
   }
   .sidebar-search svg { width: 15px; height: 15px; fill: var(--wa-text-tertiary); flex: none; }
   .sidebar-search input { border: none; outline: none; background: transparent; font-size: 13px; color: var(--wa-text); width: 100%; font-family: inherit; }
   .sidebar-search input::placeholder { color: var(--wa-text-tertiary); }
 
-        .session-list { flex: 1 1 160px; min-height: 120px; overflow-y: auto; padding: 2px 8px 10px; }
+        .session-list { flex: 1 1 160px; min-height: 120px; overflow-y: auto; padding: 2px 12px 10px; }
   .session-list::-webkit-scrollbar { width: 5px; }
   .session-list::-webkit-scrollbar-thumb { background: var(--wa-scrollbar); border-radius: 4px; }
 
   .session-empty { padding: 24px 12px; text-align: center; color: var(--wa-text-tertiary); font-size: 12.5px; line-height: 1.5; }
 
-  .session-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 8px; border-radius: 9px; cursor: pointer; position: relative; }
+  .session-item { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 10px 12px; border-radius: 12px; cursor: pointer; position: relative; }
   .session-item:hover { background: var(--wa-sidebar-hover); }
   .session-item.active { background: var(--wa-sidebar-active); }
-  .session-item.active::before { content: ""; position: absolute; left: -8px; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--wa-accent); }
+  .session-item.active::before { content: ""; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--wa-accent); }
 
-  /* [CORRIGIDO apos usuario nao encontrar o botao] opacity:0 por padrao (so
-     hover) tornava o botao praticamente invisivel/nao descoberto — trocado
-     para sempre visivel com opacidade reduzida (0.45), ficando 100% opaco
-     so no hover/foco. Mantem a lista limpa sem esconder o recurso. */
+  /* Acoes da conversa aparecem no hover/foco, como no WhatsApp Web. */
   .session-delete-btn {
     flex: none;
     align-self: center;
@@ -307,7 +326,7 @@
     color: var(--wa-text-tertiary);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
-    opacity: 0.45;
+    opacity: 0;
     transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
   }
   .session-item:hover .session-delete-btn,
@@ -315,9 +334,8 @@
   .session-delete-btn:hover, .session-delete-btn:focus-visible { background: rgba(214, 69, 69, 0.14); color: #d64545; outline: none; }
   .session-delete-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-  /* Mesmo padrao visual/comportamento do session-delete-btn (sempre visivel
-     com opacidade reduzida, 100% no hover) — cor de destaque em vez de
-     vermelho, ja que renomear nao e uma acao destrutiva. */
+  /* Mesmo padrao visual/comportamento do session-delete-btn — cor de destaque
+     em vez de vermelho, ja que renomear nao e uma acao destrutiva. */
   .session-rename-btn {
     flex: none;
     align-self: center;
@@ -327,7 +345,7 @@
     color: var(--wa-text-tertiary);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
-    opacity: 0.45;
+    opacity: 0;
     transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
   }
   .session-item:hover .session-rename-btn,
@@ -345,17 +363,17 @@
   }
 
   .session-avatar {
-    width: 34px; height: 34px; border-radius: 50%;
+    width: 46px; height: 46px; border-radius: 50%;
     background: linear-gradient(135deg, #00a884, #008069);
     flex: none; display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: 700; color: #fff;
+    font-size: 13px; font-weight: 700; color: #fff;
   }
 
   .session-meta { min-width: 0; flex: 1; }
   .session-top { display: flex; justify-content: space-between; gap: 6px; }
-  .session-title { font-size: 13.5px; font-weight: 600; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .session-time { font-size: 10.5px; color: var(--wa-text-tertiary); flex: none; }
-  .session-preview { font-size: 12px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .session-title { font-size: 15px; font-weight: 650; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .session-time { font-size: 12px; color: var(--wa-text-tertiary); flex: none; }
+  .session-preview { font-size: 13.2px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
 
   .sidebar-footer { flex: none; display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-top: 1px solid var(--wa-border); }
   .sidebar-footer .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: #0b5b4e; color: #fff; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
@@ -430,23 +448,23 @@
      alem da tela em vez de manter o scroll interno. */
   .chat-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 
-  .chat-header { flex: none; display: flex; align-items: center; gap: 12px; padding: 11px 20px; background: var(--wa-header); color: #fff; box-shadow: var(--wa-shadow); z-index: 5; }
+  .chat-header { flex: none; display: flex; align-items: center; gap: 14px; min-height: 74px; padding: 10px 24px; background: var(--wa-chrome); color: var(--wa-chrome-text); box-shadow: var(--wa-shadow); z-index: 5; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #00a884, #008069); display: flex; align-items: center; justify-content: center; flex: none; }
   .avatar svg { width: 22px; height: 22px; fill: #fff; }
   .header-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
   .header-name { font-size: 15.5px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .header-sub { font-size: 12px; color: rgba(255, 255, 255, 0.82); display: flex; align-items: center; gap: 5px; }
-  .header-sub .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15); flex: none; }
+  .header-sub { font-size: 12px; color: var(--wa-chrome-sub); display: flex; align-items: center; gap: 5px; }
+  .header-sub .dot { width: 6px; height: 6px; border-radius: 50%; background: #25d366; box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.16); flex: none; }
   .empresa-select-wrap { flex: none; position: relative; display: none; max-width: min(460px, 44vw); }
   .empresa-select-wrap.visible { display: block; }
   .empresa-select {
     min-width: 240px;
     max-width: 100%;
-    height: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    height: 40px;
+    border: 1px solid var(--wa-border);
+    border-radius: 8px;
+    background: var(--wa-select-bg);
+    color: var(--wa-chrome-text);
     font: inherit;
     font-size: 12.5px;
     font-weight: 600;
@@ -459,7 +477,7 @@
     gap: 8px;
   }
   .empresa-select:hover,
-  .empresa-select:focus-visible { background: rgba(255, 255, 255, 0.18); outline: none; }
+  .empresa-select:focus-visible { background: var(--wa-select-bg-hover); outline: none; }
   .empresa-select .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .empresa-select .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; }
   .empresa-menu {
@@ -501,10 +519,10 @@
     width: 30px;
     height: 30px;
     margin-left: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid var(--wa-border);
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.85);
+    background: var(--wa-select-bg);
+    color: var(--wa-chrome-sub);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -512,8 +530,8 @@
     transition: background 0.15s ease, color 0.15s ease, transform 0.4s ease;
   }
   .reset-memoria-btn:hover,
-  .reset-memoria-btn:focus-visible { background: rgba(255, 255, 255, 0.22); color: #fff; outline: none; }
-  .reset-memoria-btn.active { background: var(--wa-accent-soft-bg); border-color: var(--wa-accent); color: #fff; }
+  .reset-memoria-btn:focus-visible { background: var(--wa-select-bg-hover); color: var(--wa-chrome-text); outline: none; }
+  .reset-memoria-btn.active { background: var(--wa-accent-soft-bg); border-color: var(--wa-accent); color: var(--wa-chrome-text); }
   .reset-memoria-btn:active svg { transform: rotate(-50deg); }
   .reset-memoria-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.35s ease; }
   .reset-memoria-btn.spin svg { animation: reset-spin 0.5s ease; }
@@ -526,7 +544,7 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: rgba(255, 255, 255, 0.72);
+    color: var(--wa-chrome-sub);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -536,7 +554,7 @@
   }
   .focus-toggle-btn:hover,
   .focus-toggle-btn:focus-visible {
-    color: #fff;
+    color: var(--wa-chrome-text);
     outline: none;
   }
   .focus-toggle-btn.active {
@@ -554,7 +572,7 @@
   }
 
   .header-actions { position: relative; flex: none; }
-  .header-menu-toggle svg { width: 17px; height: 17px; }
+  .header-menu-toggle svg { width: 22px; height: 22px; fill: currentColor; stroke: none; }
   .header-actions-menu {
     position: absolute;
     top: calc(100% + 8px);
@@ -737,14 +755,11 @@
        bolhas com grid de dados aproveitarem mais largura de tela (o
        "espacinho" sobrando nas laterais). Ainda deixa uma margem visual
        minima para bolhas de texto simples nao colarem na borda. */
-    flex: 1; min-height: 0; overflow-y: auto; padding: 16px 3% 10px;
+    flex: 1; min-height: 0; overflow-y: auto; padding: 16px clamp(26px, 4.6vw, 76px) 10px;
     background-color: var(--wa-bg);
-    background-image:
-      radial-gradient(circle at 10% 15%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 45%),
-      radial-gradient(circle at 85% 30%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 40%),
-      radial-gradient(circle at 30% 65%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 42%),
-      radial-gradient(circle at 70% 85%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 38%),
-      radial-gradient(circle at 95% 8%, rgba(0, 0, 0, var(--wa-bg-pattern-opacity)) 0, transparent 35%);
+    background-image: url("data:image/svg+xml,%3Csvg width='360' height='240' viewBox='0 0 360 240' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%238696a0' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' opacity='.18'%3E%3Cpath d='M32 48h34v24H32zM38 42v6m22-6v6M38 72v6m22-6v6M26 54h6m34 0h6M26 66h6m34 0h6'/%3E%3Cpath d='M202 34h48v30h-48zM210 44h24M210 54h32M252 49h18m-9-9v18'/%3E%3Cpath d='M111 129c14-18 46-16 58 3M121 146c10-10 28-10 38 0M138 162h4'/%3E%3Cpath d='M292 126h28v28h-28zM306 112v14m0 28v14m-14-28h-14m42 0h14M298 134h16M298 146h10'/%3E%3Cpath d='M42 181h52M42 197h36M42 213h46M98 187l12 10-12 10'/%3E%3Cpath d='M207 178h46l12 13-12 13h-46l-12-13zM215 191h30'/%3E%3Ccircle cx='312' cy='55' r='15'/%3E%3Cpath d='M312 40v-9m0 39v9m15-24h9m-48 0h9m26-11 7-7m-36 36 7-7m0-22-7-7m36 36-7-7'/%3E%3C/g%3E%3Cg fill='%238696a0' opacity='.13' font-family='Segoe UI, Arial, sans-serif' font-size='14' font-weight='700'%3E%3Ctext x='118' y='58'%3EIA%3C/text%3E%3Ctext x='278' y='205'%3EERP%3C/text%3E%3C/g%3E%3C/svg%3E");
+    background-size: 360px 240px;
+    background-position: center top;
   }
   .chat-body::-webkit-scrollbar { width: 6px; }
   .chat-body::-webkit-scrollbar-thumb { background: var(--wa-scrollbar); border-radius: 4px; }
@@ -761,24 +776,40 @@
     :root:not([data-theme="light"]) .system-note span { background: rgba(255, 213, 79, 0.12); color: #e2c675; }
   }
 
-  .row { display: flex; align-items: center; margin-bottom: 3px; animation: rise 0.22s ease both; }
+  .row { display: flex; align-items: center; margin-bottom: 2px; animation: rise 0.22s ease both; }
   /* Espaco extra entre o fim de uma resposta e o inicio da proxima pergunta
      (transicao de "turno" da conversa) — a pedido do usuario, para separar
      visualmente pergunta/resposta anteriores da pergunta nova, sem inflar o
      espacamento entre pergunta e sua propria resposta (que continua justo,
      3px, ja que sao parte do mesmo turno). */
   .row.out + .row.out,
-  .row.in + .row.out { margin-top: 14px; }
+  .row.in + .row.out { margin-top: 12px; }
   .row.out { justify-content: flex-end; }
   .row.in { justify-content: flex-start; }
 
   @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-  .bubble { position: relative; max-width: 66%; padding: 6px 9px 8px; border-radius: 8px; font-size: 14.3px; line-height: 1.42; box-shadow: var(--wa-shadow); white-space: pre-wrap; word-wrap: break-word; }
-  .app-frame.focus-mode .bubble { max-width: 78%; }
+  .bubble { position: relative; max-width: min(64%, 760px); padding: 7px 10px 8px; border-radius: 8px; font-size: 14.3px; line-height: 1.42; box-shadow: var(--wa-shadow); white-space: pre-wrap; word-wrap: break-word; }
+  .app-frame.focus-mode .bubble { max-width: min(74%, 980px); }
   .app-frame.focus-mode .bubble .structured-response { min-width: min(520px, 72vw); }
   .row.in .bubble { background: var(--wa-bubble-in); color: var(--wa-text); border-top-left-radius: 2px; }
   .row.out .bubble { background: var(--wa-bubble-out); color: var(--wa-text); border-top-right-radius: 2px; }
+  .row.in .bubble::before,
+  .row.out .bubble::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 10px;
+    height: 13px;
+  }
+  .row.in .bubble::before {
+    left: -8px;
+    background: linear-gradient(225deg, var(--wa-bubble-in) 0 50%, transparent 50% 100%);
+  }
+  .row.out .bubble::before {
+    right: -8px;
+    background: linear-gradient(135deg, var(--wa-bubble-out) 0 50%, transparent 50% 100%);
+  }
   .bubble-question-context {
     display: block;
     margin: -1px 0 7px;
@@ -803,7 +834,7 @@
   .bubble .structured-response { white-space: normal; display: grid; gap: 9px; min-width: min(420px, 62vw); }
   .structured-intro { font-size: 14.3px; line-height: 1.42; }
   .structured-metrics { display: flex; flex-wrap: wrap; gap: 6px; }
-  .structured-metric { min-width: 118px; padding: 6px 8px; border-left: 3px solid var(--wa-accent); background: rgba(0, 0, 0, 0.04); border-radius: 4px; }
+  .structured-metric { min-width: 118px; padding: 8px 10px; border-left: 3px solid var(--wa-accent); background: rgba(255, 255, 255, 0.055); border-radius: 6px; }
   :root[data-theme="dark"] .structured-metric { background: rgba(255, 255, 255, 0.045); }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .structured-metric { background: rgba(255, 255, 255, 0.045); }
@@ -943,8 +974,8 @@
     50% { box-shadow: 0 0 0 1px var(--wa-accent-soft-border), var(--wa-shadow); }
   }
 
-  .chat-footer { flex: none; display: flex; align-items: flex-end; gap: 8px; padding: 10px 20px; background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
-  .input-wrap { flex: 1; display: flex; align-items: center; background: var(--wa-input-bg); border-radius: 20px; padding: 9px 15px; box-shadow: var(--wa-shadow); }
+  .chat-footer { flex: none; display: flex; align-items: flex-end; gap: 10px; padding: 10px 18px; background: var(--wa-chat-footer, var(--wa-panel)); border-top: 1px solid var(--wa-border); }
+  .input-wrap { flex: 1; display: flex; align-items: center; background: var(--wa-input-bg); border-radius: 999px; padding: 10px 18px; box-shadow: none; }
   .input-wrap input { flex: 1; border: none; outline: none; background: transparent; font-size: 14.5px; color: var(--wa-text); font-family: inherit; }
   .input-wrap input::placeholder { color: var(--wa-text-tertiary); }
   .input-wrap input:disabled { opacity: 0.6; }
@@ -973,16 +1004,17 @@
   }
   .app-frame.focus-mode .input-wrap textarea { min-height: 66px; max-height: 168px; }
 
-  .send-btn { flex: none; width: 42px; height: 42px; border-radius: 50%; background: var(--wa-header); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.12s ease; }
+  .send-btn { flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--wa-header); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.12s ease; }
   .send-btn:hover { transform: scale(1.04); }
   .send-btn:active { transform: scale(0.96); }
   .send-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
   .send-btn svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
 
   /* Faixa discreta de status do canal Protheus no rodape da conversa. */
-  .protheus-strip { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 12px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-panel); border-top: 1px solid var(--wa-border); }
+  .protheus-strip { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 16px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-chat-footer, var(--wa-panel)); border-top: 1px solid var(--wa-border); }
   .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); flex: none; }
-  .protheus-strip > span:first-of-type { display: flex; align-items: center; gap: 6px; }
+  .protheus-strip > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .protheus-strip-status { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
   .app-frame.focus-mode .protheus-strip { justify-content: flex-end; min-height: 18px; padding: 3px 24px; font-size: 9.5px; }
   .app-frame.focus-mode .protheus-strip svg { display: none; }
 
@@ -993,30 +1025,30 @@
   .view-tabs {
     flex: none;
     display: flex;
-    gap: 2px;
-    padding: 8px 20px 0;
-    background: var(--wa-header);
+    gap: 10px;
+    padding: 0 24px;
+    background: var(--wa-chrome);
   }
   .view-tab {
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-bottom: none;
-    background: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.92);
+    border: none;
+    border-bottom: 3px solid transparent;
+    background: transparent;
+    color: var(--wa-tab-muted);
     font-size: 12.5px;
     font-weight: 600;
-    padding: 8px 16px;
-    border-radius: 8px 8px 0 0;
+    padding: 10px 14px 9px;
+    border-radius: 0;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 6px;
   }
-  .view-tab:hover { background: rgba(255, 255, 255, 0.24); color: #fff; }
-  .view-tab.active { background: var(--wa-bg); color: var(--wa-text); border-color: var(--wa-border); }
+  .view-tab:hover { background: transparent; color: var(--wa-chrome-text); border-color: var(--wa-border); }
+  .view-tab.active { background: transparent; color: var(--wa-chrome-text); border-color: var(--wa-accent); }
   .view-tab .badge-dot { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--wa-accent); flex: none; }
   .view-tab.active .badge-dot { display: inline-block; }
   .view-tab:disabled { opacity: 0.5; cursor: default; }
-  .view-tab:disabled:hover { background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.92); }
+  .view-tab:disabled:hover { background: transparent; color: var(--wa-tab-muted); border-color: transparent; }
 
   .view-stack {
     flex: 1;
@@ -1356,8 +1388,11 @@
       </form>
 
       <div class="protheus-strip">
-        <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
-        <span>Integrado ao ERP Protheus · dados em tempo real</span>
+        <span>Desenvolvido pela J2A Consultoria</span>
+        <span class="protheus-strip-status">
+          <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
+          <span>Integrado ao ERP Protheus · dados em tempo real</span>
+        </span>
       </div>
     </div>
 
@@ -1530,17 +1565,40 @@
   const params = new URLSearchParams(window.location.search);
   let token = params.get('token');
   const launchTicket = params.get('launchTicket') || params.get('ticket') || '';
-  const usuarioLabel = params.get('usuario') || '';
+  const usuarioLabelParam = params.get('usuario') || '';
+  const sessionTokenKey = 'iaCommandProtheusChatToken';
+  const sessionUserKey = 'iaCommandProtheusChatUsuario';
+  const usuarioLabel = usuarioLabelParam || lerSessaoNavegador(sessionUserKey) || '';
 
-  // Remove o token da barra de enderecos e do historico do navegador assim que
-  // a pagina carrega. O token ja foi lido acima (fica em memoria JS, no fecho
-  // desta funcao) — a troca de URL nao afeta o funcionamento, so evita que o
-  // valor fique exposto em prints, historico do navegador ou compartilhamento
-  // acidental do link. O servidor tambem nao grava a querystring em log (ver
-  // routes.js) — a janela em que o token trafega visivel e so esta primeira
-  // carga de pagina, sobre HTTPS.
+  function lerSessaoNavegador(chave) {
+    try { return sessionStorage.getItem(chave) || ''; } catch (_err) { return ''; }
+  }
+
+  function salvarSessaoNavegador(novoToken, usuario) {
+    try {
+      if (novoToken) sessionStorage.setItem(sessionTokenKey, novoToken);
+      if (usuario) sessionStorage.setItem(sessionUserKey, usuario);
+    } catch (_err) {}
+  }
+
+  function limparSessaoNavegador() {
+    try {
+      sessionStorage.removeItem(sessionTokenKey);
+      sessionStorage.removeItem(sessionUserKey);
+    } catch (_err) {}
+  }
+
+  if (!token && !launchTicket) {
+    token = lerSessaoNavegador(sessionTokenKey);
+  }
+
+  // Remove o token da barra de enderecos e do historico assim que a pagina
+  // carrega. Para permitir F5 na mesma aba sem expor o token na URL, mantemos
+  // uma copia em sessionStorage (escopo da aba) e limpamos quando a API retorna
+  // 401. O servidor tambem nao grava a querystring em log (ver routes.js).
   if (token && window.history && window.history.replaceState) {
-    const urlLimpa = window.location.pathname + (usuarioLabel ? '?usuario=' + encodeURIComponent(usuarioLabel) : '');
+    salvarSessaoNavegador(token, usuarioLabelParam);
+    const urlLimpa = window.location.pathname + (usuarioLabelParam ? '?usuario=' + encodeURIComponent(usuarioLabelParam) : '');
     window.history.replaceState({}, document.title, urlLimpa);
   }
 
@@ -1829,6 +1887,7 @@
       bootLog('api:' + path, { status: r.status, duracaoMs: Math.round(performance.now() - inicio) });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
+        if (r.status === 401) limparSessaoNavegador();
         const err = new Error(body.error || ('Erro ' + r.status));
         err.status = r.status;
         Object.assign(err, body || {});
@@ -2515,6 +2574,17 @@
   function nomeArquivoPorPergunta(dados, extensao) {
     const pergunta = perguntaParaMensagem(dados?.mensagemId) || dados?.titulo || dados?.texto || 'ia-command-dados';
     return slugArquivo(pergunta) + '.' + extensao;
+  }
+
+  function perguntaRelatorioAtual() {
+    return perguntaParaMensagem(reportMensagemId)
+      || reportDadosAtuais?.pergunta
+      || reportDadosAtuais?.titulo
+      || '';
+  }
+
+  function nomeArquivoRelatorioAtual(extensao) {
+    return slugArquivo(perguntaRelatorioAtual() || 'dados-ia-command') + '.' + extensao;
   }
 
   function fecharMenuMensagem() {
@@ -4250,8 +4320,10 @@
     const colunas = colunasVisiveisRelatorio();
     const modelo = modeloRelatorio(reportDadosAtuais);
     const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
+    const perguntaRelatorio = perguntaRelatorioAtual();
     const linhasGrupo = new Set();
     const linhasSubtotal = new Set();
+    const headerRow = 3;
 
     const valorCelula = (col, valor) => {
       if (valor == null || valor === '') return null;
@@ -4264,7 +4336,12 @@
       return trimSeTexto(valor);
     };
 
-    const aoa = [colunas.map((c) => c.title)];
+    const aoa = [
+      ['IA Command - Dados'],
+      [perguntaRelatorio ? `Pergunta: ${perguntaRelatorio}` : ''],
+      [],
+      colunas.map((c) => c.title),
+    ];
     const linhaDados = (row) => colunas.map((col) => valorCelula(col, row[col.field]));
     const linhaSubtotal = (rows) => colunas.map((col) => {
       if (!col.numerico) return null;
@@ -4303,11 +4380,17 @@
     const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
     ws['!autofilter'] = {
       ref: XLSX.utils.encode_range({
-        s: { r: 0, c: 0 },
+        s: { r: headerRow, c: 0 },
         e: { r: Math.max(0, aoa.length - 1), c: Math.max(0, colunas.length - 1) },
       }),
     };
-    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    ws['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
+    if (colunas.length > 1) {
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: colunas.length - 1 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: colunas.length - 1 } },
+      ];
+    }
     // Largura de coluna proporcional ao maior conteudo (cap em 45 — coluna
     // gigante deixa a planilha ilegivel, usuario redimensiona se precisar).
     ws['!cols'] = colunas.map((col, colIdx) => {
@@ -4333,8 +4416,19 @@
       fill: { fgColor: { rgb: 'D9EAD3' } },
     };
 
+    const refTitulo = XLSX.utils.encode_cell({ r: 0, c: 0 });
+    if (ws[refTitulo]) ws[refTitulo].s = {
+      font: { bold: true, sz: 15, color: { rgb: '0F172A' } },
+      alignment: { horizontal: 'left', vertical: 'center' },
+    };
+    const refPergunta = XLSX.utils.encode_cell({ r: 1, c: 0 });
+    if (ws[refPergunta]) ws[refPergunta].s = {
+      font: { italic: true, color: { rgb: '475569' } },
+      alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+    };
+
     for (let c = 0; c < colunas.length; c++) {
-      const ref = XLSX.utils.encode_cell({ r: 0, c });
+      const ref = XLSX.utils.encode_cell({ r: headerRow, c });
       if (ws[ref]) ws[ref].s = estiloHeader;
     }
 
@@ -4355,7 +4449,7 @@
     // Formato de data nativo do Excel (dd/mm/aaaa) para colunas marcadas
     // como data — sem isso o Excel usa o formato padrao americano.
     colunas.forEach((col, colIdx) => {
-      for (let r = 1; r < aoa.length; r++) {
+      for (let r = headerRow + 1; r < aoa.length; r++) {
         const ref = XLSX.utils.encode_cell({ r, c: colIdx });
         if (!ws[ref]) continue;
         if (col.data && ws[ref].t === 'd') ws[ref].z = 'dd/mm/yyyy';
@@ -4369,7 +4463,7 @@
       const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
       return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     }
-    XLSX.writeFile(wb, 'dados-ia-command.xlsx');
+    XLSX.writeFile(wb, nomeArquivoRelatorioAtual('xlsx'));
     return null;
   }
 
@@ -4410,10 +4504,19 @@
     const colunas = colunasVisiveisRelatorio();
     const modelo = modeloRelatorio(reportDadosAtuais);
     const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
+    const perguntaRelatorio = perguntaRelatorioAtual();
 
     const doc = new window.jspdf.jsPDF({ orientation: 'landscape' });
     doc.setFontSize(14);
     doc.text('IA Command — Dados', 14, 15);
+
+    let startY = 20;
+    if (perguntaRelatorio) {
+      doc.setFontSize(9);
+      const linhasPergunta = doc.splitTextToSize(`Pergunta: ${perguntaRelatorio}`, 260);
+      doc.text(linhasPergunta, 14, 22);
+      startY = 22 + (linhasPergunta.length * 5) + 3;
+    }
 
     const head = [colunas.map((c) => c.title)];
     const body = [];
@@ -4443,7 +4546,7 @@
     });
 
     doc.autoTable({
-      startY: 20,
+      startY,
       head,
       body,
       foot: [foot],
@@ -4453,7 +4556,7 @@
     });
 
     if (opcoes.retornaBlob) return doc.output('blob');
-    doc.save('dados-ia-command.pdf');
+    doc.save(nomeArquivoRelatorioAtual('pdf'));
     return null;
   }
 
@@ -4655,8 +4758,10 @@
     aguardarTokenLaunch(launchTicket)
       .then((tk) => {
         token = tk;
+        salvarSessaoNavegador(token, usuarioLabelParam);
         if (window.history && window.history.replaceState) {
-          window.history.replaceState({}, document.title, window.location.pathname);
+          const urlLimpa = window.location.pathname + (usuarioLabelParam ? '?usuario=' + encodeURIComponent(usuarioLabelParam) : '');
+          window.history.replaceState({}, document.title, urlLimpa);
         }
         iniciarChatComToken();
       })

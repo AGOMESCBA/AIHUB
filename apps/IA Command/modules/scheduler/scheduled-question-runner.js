@@ -415,6 +415,7 @@ async function _executarSqlFixoGenerico(empresaId, job, erp, sql, sqlOriginal, d
     interpretation_log_id: log.id,
     duration_ms: resultado.duracao_ms,
     rows: resultado.rows || [],
+    intent,
   };
 }
 
@@ -463,9 +464,15 @@ async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
     interpretation_log_id: log.id,
     duration_ms: resultado?.duracao_ms ?? (Date.now() - t0),
     rows: resultado?.rows || [],
+    intent,
   };
 }
 
+// Nota: anexo automatico de agendamento (rows/intent) so esta disponivel hoje para o
+// caminho de SQL fixo (executarSqlFixoUmaVez) — executeScheduledQuestionOnce passa pelo
+// _pipeline do WhatsApp, que retorna so a string final ja formatada, sem expor rows/intent
+// para fora. Estender isso exigiria mudar o contrato de retorno de _pipeline, fora do
+// escopo desta entrega (ver plano: mudanca de contrato minima).
 async function executarPerguntaUmaVez(svc, empresaId, job, destinatarios) {
   if (sqlFixo(job)) return executarSqlFixoUmaVez(empresaId, job, destinatarios);
   return svc.executeScheduledQuestionOnce({
@@ -652,6 +659,8 @@ async function executarJob(empresaId, job, { trigger_tipo = 'manual', usuario = 
         numero: dest.numero,
         resposta: resultadoUnico.resposta,
         ok: resultadoUnico.ok,
+        rows: resultadoUnico.rows || null,
+        intent: resultadoUnico.intent || null,
       });
       if (resultadoUnico.ok === false) falhas++;
       else sucessos++;

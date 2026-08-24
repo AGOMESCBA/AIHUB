@@ -68,6 +68,7 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
 
   // Rotas do painel administrativo (intenções, datasets, logs)
   require('./admin-routes')(app, { requireAuth, requireIaCommand });
+  require('./whatsapp/whatsapp-response-config-routes')(app, { requireAuth, requireIaCommand });
   require('./scheduler/scheduled-question-routes')(app, { requireAuth, requireIaCommand });
   require('./scheduler/scheduled-question-executor').start();
 

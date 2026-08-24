@@ -30,6 +30,11 @@ const comprasEntityCatalog     = require('../erp/totvs_protheus/compras/entity-c
 const faturamentoEntityCatalog = require('../erp/totvs_protheus/faturamento/entity-catalog');
 const comissaoEntityCatalog    = require('../erp/totvs_protheus/comissao/entity-catalog');
 const comissaoIAOwnerSpec      = require('../erp/totvs_protheus/comissao/comissao-ia-owner-spec');
+const whatsappQueryCache      = require('./whatsapp-query-cache');
+const whatsappResponseConfig  = require('./whatsapp-response-config');
+const attachmentBuilder       = require('./whatsapp-attachment-builder');
+const excelBuilder            = require('./whatsapp-excel-builder');
+const pdfBuilder               = require('./whatsapp-pdf-builder');
 
 const AUTH_BASE = path.join(__dirname, '..', '..', '..', '..', '.wwebjs_auth');
 const TEMP_DIR  = path.join(__dirname, '..', '..', 'temp');
@@ -2696,6 +2701,208 @@ class IACWhatsAppService extends EventEmitter {
     }
   }
 
+  // Monta o cabecalho tipo "card" (pergunta original + resumo/leitura rapida) que aparece
+  // no chat HTML, para reaproveitar no WhatsApp como cabecalho fixo antes do detalhamento
+  // completo. A pergunta aparece sempre que ha rows (independente de como a resposta foi
+  // formatada); o resumo/leitura-rapida so aparece quando resultado.tipo='sucesso_ai_sql'
+  // (unico caminho suportado por montarApresentacaoResposta, response-formatter.js — mesma
+  // logica de calculo de total/maior-item ja usada no chat HTML, sem duplicar regra de
+  // negocio). Nos demais tipos (ex: agrupamento deterministico) o texto ja vem com seu
+  // proprio resumo interno, entao so a pergunta e acrescentada.
+  //
+  // Retorna { cabecalho, corpo } — `corpo` e o respostaTexto SEM a linha de resumo (que
+  // textoApresentacao/humanizarResposta ja concatena ao final do texto original), para nao
+  // aparecer duas vezes (uma no cabecalho, outra no fim do detalhamento).
+  _montarCabecalhoPergunta(resultado, intent, respostaTexto) {
+    const pergunta = intent?._mensagemOriginal;
+    const apresentacao = responseFormatter.montarApresentacaoResposta(respostaTexto, resultado, intent, { sugerirComparacao: false });
+    const partes = [];
+    if (pergunta) partes.push(`❓ *Pergunta:* ${pergunta}`);
+
+    let corpo = respostaTexto;
+    if (apresentacao?.resumo) {
+      partes.push(apresentacao.resumo);
+      // O resumo aparece ao final do texto original (textoApresentacao concatena
+      // introducao+detalhe+resumo+sugestao) — remove essa ocorrencia final para nao duplicar.
+      if (corpo.endsWith(apresentacao.resumo)) {
+        corpo = corpo.slice(0, corpo.length - apresentacao.resumo.length).replace(/\n+$/, '');
+      }
+    }
+    return { cabecalho: partes.join('\n\n'), corpo };
+  }
+
+  // Decide como a resposta deve ser entregue no WhatsApp real (fluxo single): o texto
+  // COMPLETO nunca e cortado/resumido — sempre e enviado por inteiro, dividido em partes
+  // quando necessario (mesmo _quebrarMensagemWhatsapp usado hoje). A unica coisa que muda
+  // com o tamanho e SE o sistema oferece (ou anexa automaticamente) PDF/Excel ao final.
+  // Persiste as rows completas no cache (whatsapp-query-cache) sempre que a resposta
+  // ultrapassar o limite de oferta de anexo, para gerar o arquivo sob demanda depois.
+  async _decidirFormatoResposta(resultado, intent, respostaTexto, { empresaId, sender, origem = null } = {}) {
+    const rows = Array.isArray(resultado?.rows) ? resultado.rows : [];
+    const cfg = whatsappResponseConfig.obterConfigWhatsapp(empresaId);
+
+    // Cabecalho (pergunta + resumo tipo card, igual ao chat HTML) so se aplica ao fluxo
+    // interativo (uma pergunta = uma resposta). Agendamento dispara varias perguntas em
+    // sequencia — repetir cabecalho em cada uma deixaria pesado de ler — entao mantem o
+    // texto exatamente como sempre foi (sem cabecalho, sem mudanca alguma alem do anexo
+    // automatico ja combinado anteriormente).
+    let textoCompleto = respostaTexto;
+    if (rows.length && origem !== 'agendamento') {
+      const { cabecalho, corpo } = this._montarCabecalhoPergunta(resultado, intent, respostaTexto);
+      if (cabecalho) textoCompleto = `${cabecalho}\n\n${corpo}`;
+    }
+    const tamanho = textoCompleto.length;
+
+    const formatoAuto = (cfg.anexar_pdf_automatico_acima_de > 0 && rows.length >= cfg.anexar_pdf_automatico_acima_de) ? 'pdf'
+      : (cfg.anexar_excel_automatico_acima_de > 0 && rows.length >= cfg.anexar_excel_automatico_acima_de) ? 'excel'
+      : null;
+
+    // Agendamento: nunca oferece anexo interativo (fire-and-forget, ninguem responde).
+    // So gera/anexa automaticamente se a empresa tiver configurado o limiar — do contrario
+    // segue 100% como era antes desta entrega (so o texto, dividido em partes se preciso).
+    if (origem === 'agendamento') {
+      if (!formatoAuto) return { texto: textoCompleto, anexoBuffer: null };
+      // cai adiante so para gerar o anexo automatico; nunca monta oferta/cache de resposta pendente
+    } else if (tamanho <= cfg.limite_pergunta_anexo_caracteres) {
+      return { texto: textoCompleto, anexoBuffer: null };
+    }
+
+    let anexoBuffer = null;
+    let anexoFormato = null;
+    let textoFinal = textoCompleto;
+
+    if (formatoAuto) {
+      // Anexo automatico usa rows/intent diretamente — nao depende do cache (relevante
+      // sobretudo para agendamento, que nunca monta oferta interativa nem precisa do cache).
+      try {
+        const estrutura = attachmentBuilder.prepararEstruturaTabular(rows, intent);
+        anexoBuffer = formatoAuto === 'pdf'
+          ? await pdfBuilder.gerarPdf(estrutura, { pergunta: intent?._mensagemOriginal })
+          : await excelBuilder.gerarExcel(estrutura, { pergunta: intent?._mensagemOriginal });
+        anexoFormato = formatoAuto;
+      } catch (err) {
+        this.log(`Falha ao gerar anexo automatico (${formatoAuto}): ${err.message}`, 'error');
+        anexoBuffer = null;
+      }
+    } else if (origem !== 'agendamento') {
+      // Oferta interativa só faz sentido em conversa (alguém vai ler e responder "1"/"2"/"3").
+      // Agendamentos são fire-and-forget — ninguém está esperando para responder — e já
+      // retornaram mais acima quando não há formatoAuto configurado.
+      const cacheId = whatsappQueryCache.salvarResultadoTabular({
+        empresaId, sender,
+        pergunta: intent?._mensagemOriginal || null,
+        rows, intent,
+        resumoTexto: respostaTexto,
+      });
+      if (cacheId) {
+        textoFinal += '\n\nEssa consulta ficou grande para leitura no WhatsApp.\n\nQuer receber a grade completa em arquivo?\nResponda:\n1 - PDF\n2 - Excel\n3 - Não precisa';
+        this._setSenderContext(sender, { _aguardandoRespostaAnexo: true, _anexoQueryCacheId: cacheId, _anexoEmpresaId: empresaId });
+      }
+    }
+
+    return {
+      texto: textoFinal,
+      anexoBuffer,
+      anexoFormato,
+    };
+  }
+
+  // Envia o anexo (Buffer) de uma decisao de _decidirFormatoResposta, se houver.
+  // Falha de envio e logada mas nunca derruba o pipeline — o texto ja foi/sera entregue
+  // independente do anexo.
+  async _enviarAnexoDecisao(decisao, sender) {
+    if (!decisao?.anexoBuffer) return;
+    try {
+      const ext = decisao.anexoFormato === 'pdf' ? 'pdf' : 'xlsx';
+      const mimetype = decisao.anexoFormato === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      await this.sendMediaMessage(sender, {
+        data: decisao.anexoBuffer.toString('base64'),
+        mimetype,
+        filename: `consulta-${Date.now()}.${ext}`,
+      });
+    } catch (err) {
+      this.log(`Falha ao enviar anexo automatico: ${err.message}`, 'error');
+    }
+  }
+
+  // Gera o arquivo (PDF/Excel) a partir de um resultado tabular ja cacheado e envia via
+  // WhatsApp. NUNCA chama IA/classificador de intencao — so le o cache e formata.
+  async _gerarEEnviarAnexo({ formato, empresaId, sender, cache }) {
+    try {
+      const estrutura = attachmentBuilder.prepararEstruturaTabular(cache.rows, cache.intent || {});
+      const buffer = formato === 'pdf'
+        ? await pdfBuilder.gerarPdf(estrutura, { pergunta: cache.pergunta })
+        : await excelBuilder.gerarExcel(estrutura, { pergunta: cache.pergunta });
+      await this._enviarAnexoDecisao({ anexoBuffer: buffer, anexoFormato: formato }, sender);
+      return true;
+    } catch (err) {
+      this.log(`Falha ao gerar/enviar anexo sob demanda (${formato}): ${err.message}`, 'error');
+      await this._sendReplyMessageSafe(null, sender, 'Não consegui gerar o arquivo agora. Tente novamente em instantes.').catch(() => {});
+      return false;
+    }
+  }
+
+  // Detecta pedido de anexo (explicito: "manda em excel"/"quero o pdf"...; ou resposta
+  // numerica a uma oferta pendente: "1"/"2"/"3") e, se identificado, responde diretamente
+  // sem passar pelo pipeline de IA. Retorna string (ja respondida) ou null (segue fluxo normal).
+  async _tentarResponderPedidoAnexo(texto, sender, empresaId) {
+    const t = String(texto || '')
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .trim();
+    if (!t) return null;
+
+    const ctx = this._getSenderContext(sender);
+
+    // Resposta a uma oferta pendente ("1"/"2"/"3" ou "pdf"/"excel"/"nao precisa") — só
+    // ativa se NAO houver outra pendencia mais antiga concorrente (entidade/filial), que
+    // deve vencer sobre a oferta de anexo.
+    if (ctx?._aguardandoRespostaAnexo && !ctx._perguntaEntidadePendente && !ctx._perguntaFilialPendente) {
+      const ehPdf = /^(1|pdf)$/.test(t);
+      const ehExcel = /^(2|excel|planilha|xlsx)$/.test(t);
+      const ehDispensa = /^(3|nao precisa|nao|n)$/.test(t);
+
+      if (ehPdf || ehExcel) {
+        const cacheId = ctx._anexoQueryCacheId;
+        const empresaCache = ctx._anexoEmpresaId || empresaId;
+        this._setSenderContext(sender, { _aguardandoRespostaAnexo: false, _anexoQueryCacheId: null, _anexoEmpresaId: null });
+        const cache = cacheId ? whatsappQueryCache.obterPorId({ empresaId: empresaCache, id: cacheId }) : null;
+        if (!cache) {
+          return 'Não encontrei uma resposta com grade nesta conversa para gerar arquivo. Faça uma consulta primeiro.';
+        }
+        await this._gerarEEnviarAnexo({ formato: ehPdf ? 'pdf' : 'excel', empresaId: empresaCache, sender, cache });
+        return `Arquivo ${ehPdf ? 'PDF' : 'Excel'} enviado.`;
+      }
+      if (ehDispensa) {
+        this._setSenderContext(sender, { _aguardandoRespostaAnexo: false, _anexoQueryCacheId: null, _anexoEmpresaId: null });
+        return 'Combinado, sem arquivo. Se precisar depois é só pedir.';
+      }
+      // Não bateu com nenhuma resposta esperada — cai no fluxo normal (a pendência
+      // continua marcada, permitindo o usuário responder corretamente depois).
+    }
+
+    // Pedido explícito de anexo, a qualquer momento da conversa.
+    const pedeAnexo = /\b(manda|manda-me|envia|gera|quero|preciso|me manda|me envia|mande|envie)\b.*\b(excel|planilha|xlsx|pdf|arquivo)\b/.test(t)
+      || /\b(excel|planilha|xlsx|pdf)\b.*\b(dessa consulta|desse resultado|dessa resposta|disso)\b/.test(t);
+    if (!pedeAnexo) return null;
+
+    let formato;
+    if (/\bpdf\b/.test(t)) formato = 'pdf';
+    else if (/\b(excel|planilha|xlsx)\b/.test(t)) formato = 'excel';
+    else formato = whatsappResponseConfig.obterConfigWhatsapp(empresaId).formato_padrao_anexo;
+
+    const cache = whatsappQueryCache.obterUltimoResultadoTabular({ empresaId, sender });
+    if (!cache) {
+      return 'Não encontrei uma resposta com grade nesta conversa para gerar arquivo. Faça uma consulta primeiro.';
+    }
+    this._setSenderContext(sender, { _aguardandoRespostaAnexo: false, _anexoQueryCacheId: null, _anexoEmpresaId: null });
+    await this._gerarEEnviarAnexo({ formato, empresaId, sender, cache });
+    return `Arquivo ${formato === 'pdf' ? 'PDF' : 'Excel'} enviado.`;
+  }
+
   _normalizarTraceIntent(trace = []) {
     if (!Array.isArray(trace)) return [];
     return trace
@@ -3598,7 +3805,10 @@ class IACWhatsAppService extends EventEmitter {
     };
   }
 
-  async sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok = true } = {}) {
+  // rows/intent (opcionais): quando presentes, permitem anexar PDF/Excel automaticamente
+  // conforme anexar_pdf_automatico_acima_de/anexar_excel_automatico_acima_de da empresa —
+  // SEM oferta interativa (agendamento e fire-and-forget, ninguem responde a pergunta).
+  async sendScheduledQuestionDelivery({ empresaId, numero, resposta, ok = true, rows = null, intent = null } = {}) {
     if (!this.client || this.status !== 'connected') {
       throw new Error('WhatsApp nao esta conectado.');
     }
@@ -3614,6 +3824,25 @@ class IACWhatsAppService extends EventEmitter {
 
     const t0 = Date.now();
     await this.sendMessage(digits, this._formatScheduledDeliveryMessage({ resposta, ok }));
+
+    if (Array.isArray(rows) && rows.length) {
+      try {
+        const cfg = whatsappResponseConfig.obterConfigWhatsapp(empresaExecucao);
+        const formato = (cfg.anexar_pdf_automatico_acima_de > 0 && rows.length >= cfg.anexar_pdf_automatico_acima_de) ? 'pdf'
+          : (cfg.anexar_excel_automatico_acima_de > 0 && rows.length >= cfg.anexar_excel_automatico_acima_de) ? 'excel'
+          : null;
+        if (formato) {
+          const estrutura = attachmentBuilder.prepararEstruturaTabular(rows, intent || {});
+          const buffer = formato === 'pdf'
+            ? await pdfBuilder.gerarPdf(estrutura)
+            : await excelBuilder.gerarExcel(estrutura);
+          await this._enviarAnexoDecisao({ anexoBuffer: buffer, anexoFormato: formato }, digits);
+        }
+      } catch (err) {
+        this.log(`Falha ao gerar/enviar anexo automatico de agendamento: ${err.message}`, 'error');
+      }
+    }
+
     return { entregue_ms: Date.now() - t0 };
   }
 
@@ -3673,6 +3902,9 @@ class IACWhatsAppService extends EventEmitter {
 
     const respostaFilialPendente = await this._responderFilialPendente(sender, textoExecucao, empresaId, _t0);
     if (respostaFilialPendente) return respostaFilialPendente;
+
+    const respostaPedidoAnexo = await this._tentarResponderPedidoAnexo(textoExecucao, sender, empresaId);
+    if (respostaPedidoAnexo) return respostaPedidoAnexo;
 
     // Reset explícito de conversa — limpa todo o contexto do sender
     {
@@ -4319,6 +4551,9 @@ class IACWhatsAppService extends EventEmitter {
       escopo: 'single',
     });
 
+    const _decisaoFormato = await this._decidirFormatoResposta(resultado, intentComPeriodoResolvido, resposta, { empresaId, sender, origem: opts._systemOrigin || null });
+    const respostaDecidida = _decisaoFormato.texto;
+
     // Persiste o intent na sessão para uso como contexto no próximo turno.
     // Salva apenas quando a execução produziu um resultado real (não erro ou desconhecido).
     if (resultado.tipo !== 'erro' && resultado.tipo !== 'desconhecido' && intent.intencao !== 'desconhecido') {
@@ -4340,20 +4575,22 @@ class IACWhatsAppService extends EventEmitter {
       const respostaFinal = (_prefixoReset || '') + messageTemplates.render(empresaId, 'resposta_empresa_prefixo', {
         empresa_nome: empresaResolvida.nome,
         empresa_id: empresaId,
-        resposta,
+        resposta: respostaDecidida,
         canal_nome: this._channelName || '',
       });
       this.log(`Registrando interpretacao: escopo=single | empresa=${empresaId} | chars=${String(respostaFinal || '').length}`, 'info');
       const _lid = this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: _now - _t0, timingJson: _timingLog, formatacaoCaminho: _formatacaoCaminho, recebidoEm: _recebidoEm, pipelineMs: _pipelineMs });
       if (_timingCtx) { _timingCtx.logId = _lid; _timingCtx.recebidoEm = _recebidoEm; }
       this.log(`Interpretacao registrada: escopo=single | empresa=${empresaId}`, 'info');
+      await this._enviarAnexoDecisao(_decisaoFormato, sender);
       return respostaFinal;
     }
-    const respostaFinal = (_prefixoReset || '') + resposta;
+    const respostaFinal = (_prefixoReset || '') + respostaDecidida;
     this.log(`Registrando interpretacao: escopo=single | empresa=${empresaId} | chars=${String(respostaFinal || '').length}`, 'info');
     const _lid = this._registrarInterpretacao({ empresaId, sender, texto: textoExecucao, intent, resultado, resposta: respostaFinal, duracaoMs: _now - _t0, timingJson: _timingLog, formatacaoCaminho: _formatacaoCaminho, recebidoEm: _recebidoEm, pipelineMs: _pipelineMs });
     if (_timingCtx) { _timingCtx.logId = _lid; _timingCtx.recebidoEm = _recebidoEm; }
     this.log(`Interpretacao registrada: escopo=single | empresa=${empresaId}`, 'info');
+    await this._enviarAnexoDecisao(_decisaoFormato, sender);
     return respostaFinal;
   }
 

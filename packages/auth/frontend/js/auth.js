@@ -85,6 +85,7 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-numeros-whatsapp.html':      'iac-admin-numeros-whatsapp',
   '/app/ia-command/admin-grupos-whatsapp.html':       'iac-admin-grupos-whatsapp',
   '/app/ia-command/admin-mensagens-whatsapp.html':    'iac-admin-mensagens-whatsapp',
+  '/app/ia-command/admin-whatsapp-response-config.html': 'iac-admin-whatsapp-response-config',
   '/app/ia-command/admin-agendamento.html':           'iac-admin-agendamento',
   '/app/ia-command/admin-agendamento-historico.html': 'iac-admin-agendamento',
   '/app/ia-command/admin-chat-favoritos.html':        'iac-admin-chat-favoritos',

@@ -1497,6 +1497,44 @@ const MIGRATIONS = [
         ON protheus_chat_forwardings (mensagem_id);
     `,
   },
+  {
+    version: 81,
+    descricao: 'IA Command - cache de resultados tabulares do WhatsApp real e config de resposta por empresa',
+    sql: `
+      CREATE TABLE IF NOT EXISTS whatsapp_query_cache (
+        id             TEXT PRIMARY KEY,
+        empresa_id     INTEGER NOT NULL,
+        sender         TEXT    NOT NULL,
+        pergunta       TEXT    DEFAULT NULL,
+        resumo_texto   TEXT    DEFAULT NULL,
+        rows_json      TEXT    NOT NULL,
+        rows_count     INTEGER NOT NULL DEFAULT 0,
+        intent_json    TEXT    DEFAULT NULL,
+        periodo_json   TEXT    DEFAULT NULL,
+        filtros_json   TEXT    DEFAULT NULL,
+        agrupar_por    TEXT    DEFAULT NULL,
+        criado_em      TEXT    NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_iac_whatsapp_query_cache_lookup
+        ON whatsapp_query_cache (empresa_id, sender, criado_em);
+
+      CREATE TABLE IF NOT EXISTS whatsapp_response_config (
+        id                                    INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id                            INTEGER NOT NULL UNIQUE,
+        top_destaques_whatsapp                INTEGER DEFAULT NULL,
+        limite_parte_whatsapp                 INTEGER DEFAULT NULL,
+        limite_pergunta_anexo_caracteres      INTEGER DEFAULT NULL,
+        limite_resumo_forcado_caracteres      INTEGER DEFAULT NULL,
+        limite_linhas_resumo_forcado          INTEGER DEFAULT NULL,
+        anexar_pdf_automatico_acima_de        INTEGER DEFAULT NULL,
+        anexar_excel_automatico_acima_de      INTEGER DEFAULT NULL,
+        formato_padrao_anexo                  TEXT    DEFAULT NULL,
+        criado_em                             TEXT    NOT NULL,
+        atualizado_em                         TEXT    NOT NULL
+      );
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

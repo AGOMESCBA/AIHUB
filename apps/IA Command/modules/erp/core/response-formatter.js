@@ -1322,4 +1322,11 @@ function detectarDimensaoCategorica(firstRow) {
   return null;
 }
 
-module.exports = { formatar, formatarAiSqlLocal, montarApresentacaoResposta, textoApresentacao, normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica };
+module.exports = {
+  formatar, formatarAiSqlLocal, montarApresentacaoResposta, textoApresentacao,
+  normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica,
+  // Usados tambem por modules/whatsapp/whatsapp-attachment-builder.js (geracao de PDF/Excel) —
+  // nao alterar assinatura sem checar esse consumidor.
+  _formatarValorMetrica, _groupByIntent, _labelDimensao, _resolverDimensao,
+  _chaveDimensao, _tipoMetrica, _somarNumericos, _extrairDia,
+};
