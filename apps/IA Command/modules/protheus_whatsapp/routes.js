@@ -145,15 +145,6 @@ function empresasPermitidasDaSessao(sessao) {
   return empresas;
 }
 
-function idsEmpresasPermitidasDaSessao(sessao, empresaIdAtual) {
-  const ids = new Set(normalizarListaIds(empresaIdAtual || sessao?.empresaId));
-  for (const emp of tokenService.normalizarEmpresasPermitidas(sessao?.empresasPermitidas, sessao?.empresaId)) {
-    const id = Number(emp?.empresaId || emp?.empresa_id || emp?.id || 0);
-    if (id) ids.add(id);
-  }
-  return [...ids];
-}
-
 function resolverEmpresasSelecionadas(req, res) {
   const sessao = req.protheusChat || {};
   const permitidas = empresasPermitidasDaSessao(sessao);
@@ -555,15 +546,10 @@ async function canaisGlobaisConectados({ manager = whatsappManager, workerJsonFn
 
 async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
   const channelStore = deps.channelStore || whatsappChannels;
-  const empresasPermitidasIds = new Set(normalizarListaIds([
-    Number(empresaId),
-    ...(Array.isArray(deps.empresasPermitidasIds) ? deps.empresasPermitidasIds : []),
-  ]));
   const canaisEmpresa = channelStore.listarPorEmpresa(Number(empresaId));
   const totalCanaisEmpresa = canaisEmpresa.length;
   forwardDebug('resolver-inicio', {
     empresaId: Number(empresaId),
-    empresasPermitidasIds: [...empresasPermitidasIds],
     canaisEmpresa: canaisEmpresa.map(canal => ({
       id: canal.id,
       workerPort: canal.worker_port || null,
@@ -602,38 +588,6 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
     return { ...compartilhados[0], totalCanais: totalCanaisEmpresa || 1, origem: 'compartilhado' };
   }
 
-  const canaisDasEmpresasPermitidas = globais.filter(item => {
-    if (!Array.isArray(item.canal.empresas)) return false;
-    return item.canal.empresas.some(emp => empresasPermitidasIds.has(Number(emp?.empresa_id)));
-  });
-
-  if (!compartilhados.length && canaisDasEmpresasPermitidas.length === 1) {
-    forwardDebug('resolver-escolhido', {
-      empresaId: Number(empresaId),
-      origem: 'empresa-permitida',
-      canalId: canaisDasEmpresasPermitidas[0].canal?.id || null,
-      workerPort: canaisDasEmpresasPermitidas[0].workerPort || null,
-      via: canaisDasEmpresasPermitidas[0].workerPort ? 'worker' : 'service-manager',
-      empresasPermitidasIds: [...empresasPermitidasIds],
-      empresasCanal: (canaisDasEmpresasPermitidas[0].canal?.empresas || []).map(emp => Number(emp?.empresa_id)),
-    });
-    return { ...canaisDasEmpresasPermitidas[0], totalCanais: totalCanaisEmpresa || 1, origem: 'empresa-permitida' };
-  }
-
-  // Fallback pragmatico para ambientes com um unico canal WhatsApp conectado
-  // servindo varias empresas do IA Command. Se houver mais de um, nao escolhe
-  // automaticamente para evitar enviar pelo canal errado.
-  if (!compartilhados.length && globais.length === 1) {
-    forwardDebug('resolver-escolhido', {
-      empresaId: Number(empresaId),
-      origem: 'unico-global',
-      canalId: globais[0].canal?.id || null,
-      workerPort: globais[0].workerPort || null,
-      via: globais[0].workerPort ? 'worker' : 'service-manager',
-    });
-    return { ...globais[0], totalCanais: totalCanaisEmpresa || 1, origem: 'unico-global' };
-  }
-
   if (globais.length > 1) {
     console.warn('[protheus_whatsapp][forward] Mais de um canal WhatsApp conectado; empresa sem canal inequivoco.', {
       empresaId: Number(empresaId),
@@ -647,14 +601,12 @@ async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
     totalCanaisEmpresa,
     totalGlobaisConectados: globais.length,
     totalCompartilhadosConectados: compartilhados.length,
-    totalPermitidosConectados: canaisDasEmpresasPermitidas.length,
-    empresasPermitidasIds: [...empresasPermitidasIds],
   });
   return { canal: canaisEmpresa[0] || null, svc: null, workerPort: null, totalCanais: totalCanaisEmpresa };
 }
 
-async function enviarTextoWhatsApp({ empresaId, numero, texto, empresasPermitidasIds = [] }) {
-  const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId, { empresasPermitidasIds });
+async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
+  const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
   if (workerPort) {
     await workerJson(workerPort, '/send-direct-message', { empresaId, numero, texto }, 30000);
@@ -669,8 +621,8 @@ async function enviarTextoWhatsApp({ empresaId, numero, texto, empresasPermitida
   return { canalId: canal.id };
 }
 
-async function enviarArquivoWhatsApp({ empresaId, numero, texto, arquivo, empresasPermitidasIds = [] }) {
-  const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId, { empresasPermitidasIds });
+async function enviarArquivoWhatsApp({ empresaId, numero, texto, arquivo }) {
+  const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
   if (!arquivo || !arquivo.data || !arquivo.mimetype || !arquivo.filename) {
     throw new Error('Arquivo invalido para encaminhamento.');
@@ -848,7 +800,6 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const empresaId = resolverEmpresaSelecionada(req, res);
       if (!empresaId) return;
-      const empresasPermitidasIds = idsEmpresasPermitidasDaSessao(req.protheusChat, empresaId);
 
       const contatos = buscarContatosAutorizados({ empresaId, numeroIds });
       if (!contatos.length) return res.status(404).json({ error: 'Nenhum contato autorizado encontrado nesta empresa.' });
@@ -877,7 +828,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         });
 
         try {
-          const envio = await enviarArquivoWhatsApp({ empresaId, numero: contato.numero, texto, arquivo, empresasPermitidasIds });
+          const envio = await enviarArquivoWhatsApp({ empresaId, numero: contato.numero, texto, arquivo });
           atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'enviado' });
           resultados.push({ id: auditoriaId, contatoId: contato.id, status: 'enviado', canalId: envio.canalId });
         } catch (errEnvio) {
@@ -928,7 +879,6 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const empresaId = resolverEmpresaSelecionada(req, res);
       if (!empresaId) return;
-      const empresasPermitidasIds = idsEmpresasPermitidasDaSessao(req.protheusChat, empresaId);
       const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
       if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
 
@@ -966,8 +916,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
         try {
           const envio = formato === 'texto'
-            ? await enviarTextoWhatsApp({ empresaId, numero: contato.numero, texto, empresasPermitidasIds })
-            : await enviarArquivoWhatsApp({ empresaId, numero: contato.numero, texto, arquivo, empresasPermitidasIds });
+            ? await enviarTextoWhatsApp({ empresaId, numero: contato.numero, texto })
+            : await enviarArquivoWhatsApp({ empresaId, numero: contato.numero, texto, arquivo });
           atualizarAuditoriaEncaminhamento({ id: auditoriaId, empresaId, status: 'enviado' });
           resultados.push({ id: auditoriaId, contatoId: contato.id, status: 'enviado', canalId: envio.canalId });
         } catch (errEnvio) {

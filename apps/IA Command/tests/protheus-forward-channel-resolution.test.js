@@ -68,6 +68,40 @@ function canal(id, porta) {
   }
 
   {
+    const unico = canal('j2a', 3101);
+    const ret = await resolverCanalWhatsAppConectado(5, {
+      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [unico] }),
+      manager: managerVazio(),
+      workerJsonFn: workerConectado([3101]),
+    });
+    assert.strictEqual(ret.canal, null);
+    assert.strictEqual(ret.workerPort, null);
+  }
+
+  {
+    const unico = canal('j2a', 3101);
+    const ret = await resolverCanalWhatsAppConectado(5, {
+      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [], todos: [unico] }),
+      manager: managerVazio(),
+      workerJsonFn: workerConectado([3101]),
+    });
+    assert.strictEqual(ret.canal, null);
+    assert.strictEqual(ret.workerPort, null);
+  }
+
+  {
+    const j2a = canal('j2a', 3101);
+    const outro = canal('outro', 3102);
+    const ret = await resolverCanalWhatsAppConectado(5, {
+      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [j2a, outro] }),
+      manager: managerVazio(),
+      workerJsonFn: workerConectado([3101, 3102]),
+    });
+    assert.strictEqual(ret.canal, null);
+    assert.strictEqual(ret.workerPort, null);
+  }
+
+  {
     const j2a = canal('j2a', 3101);
     const outro = canal('outro', 3102);
     const ret = await resolverCanalWhatsAppConectado(5, {
@@ -79,42 +113,6 @@ function canal(id, porta) {
           outro: [{ empresa_id: 9 }],
         },
       }),
-      manager: managerVazio(),
-      workerJsonFn: workerConectado([3101, 3102]),
-      empresasPermitidasIds: [1, 5],
-    });
-    assert.strictEqual(ret.canal.id, 'j2a');
-    assert.strictEqual(ret.origem, 'empresa-permitida');
-  }
-
-  {
-    const unico = canal('j2a', 3101);
-    const ret = await resolverCanalWhatsAppConectado(5, {
-      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [unico] }),
-      manager: managerVazio(),
-      workerJsonFn: workerConectado([3101]),
-    });
-    assert.strictEqual(ret.canal.id, 'j2a');
-    assert.strictEqual(ret.origem, 'unico-global');
-  }
-
-  {
-    const unico = canal('j2a', 3101);
-    const ret = await resolverCanalWhatsAppConectado(5, {
-      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [], todos: [unico] }),
-      manager: managerVazio(),
-      workerJsonFn: workerConectado([3101]),
-    });
-    assert.strictEqual(ret.canal.id, 'j2a');
-    assert.strictEqual(ret.workerPort, 3101);
-    assert.strictEqual(ret.origem, 'unico-global');
-  }
-
-  {
-    const j2a = canal('j2a', 3101);
-    const outro = canal('outro', 3102);
-    const ret = await resolverCanalWhatsAppConectado(5, {
-      channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [j2a, outro] }),
       manager: managerVazio(),
       workerJsonFn: workerConectado([3101, 3102]),
     });
