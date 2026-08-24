@@ -437,38 +437,101 @@ function workerJson(workerPort, rota, payload = null, timeoutMs = 30000) {
   });
 }
 
-async function resolverCanalWhatsAppConectado(empresaId) {
-  const canais = whatsappChannels.listarPorEmpresa(Number(empresaId));
-  if (!canais.length) return { canal: null, svc: null, totalCanais: 0 };
-
-  for (const canal of canais) {
-    const svc = whatsappManager.get(canal.id);
-    if (svc && svc.getStatus() === 'connected') {
-      return { canal, svc, totalCanais: canais.length };
-    }
+async function canalWorkerConectado(canal, workerJsonFn = workerJson) {
+  if (!canal?.is_windows_service || !canal?.worker_port) return false;
+  try {
+    const health = await workerJsonFn(canal.worker_port, '/health', null, 2500);
+    return String(health?.status || '').toLowerCase() === 'connected';
+  } catch (_) {
+    return false;
   }
+}
 
-  const vinculados = new Set(canais.map(canal => String(canal.id)));
-  for (const svc of whatsappManager.getAll().values()) {
+function canalServiceConectado(canal, manager = whatsappManager) {
+  const svcDireto = manager.get(canal.id);
+  if (svcDireto && svcDireto.getStatus() === 'connected') return svcDireto;
+
+  for (const svc of manager.getAll().values()) {
     if (!svc || svc.getStatus() !== 'connected') continue;
     const channelId = String(svc.getChannelId?.() || '');
-    if (vinculados.has(channelId)) {
-      const canal = canais.find(item => String(item.id) === channelId) || null;
-      return { canal, svc, totalCanais: canais.length };
-    }
+    if (channelId && channelId === String(canal.id)) return svc;
+  }
+  return null;
+}
+
+async function primeiroCanalConectado(canais, { manager = whatsappManager, workerJsonFn = workerJson } = {}) {
+  for (const canal of canais) {
+    const svc = canalServiceConectado(canal, manager);
+    if (svc) return { canal, svc };
   }
 
   for (const canal of canais) {
-    if (!canal.is_windows_service || !canal.worker_port) continue;
-    try {
-      const health = await workerJson(canal.worker_port, '/health', null, 2500);
-      if (String(health?.status || '').toLowerCase() === 'connected') {
-        return { canal, svc: null, workerPort: canal.worker_port, totalCanais: canais.length };
-      }
-    } catch (_) {}
+    if (await canalWorkerConectado(canal, workerJsonFn)) {
+      return { canal, svc: null, workerPort: canal.worker_port };
+    }
   }
 
-  return { canal: canais[0], svc: null, workerPort: null, totalCanais: canais.length };
+  return null;
+}
+
+async function canaisGlobaisConectados({ manager = whatsappManager, workerJsonFn = workerJson, channelStore = whatsappChannels } = {}) {
+  const canaisAtivos = channelStore.listarAtivosComSessao().map(canal => ({
+    ...canal,
+    empresas: Array.isArray(canal.empresas) ? canal.empresas : channelStore.listarEmpresasDoCanal(canal.id),
+  }));
+  const conectados = [];
+
+  for (const canal of canaisAtivos) {
+    const svc = canalServiceConectado(canal, manager);
+    if (svc) {
+      conectados.push({ canal, svc });
+      continue;
+    }
+    if (await canalWorkerConectado(canal, workerJsonFn)) {
+      conectados.push({ canal, svc: null, workerPort: canal.worker_port });
+    }
+  }
+
+  return conectados;
+}
+
+async function resolverCanalWhatsAppConectado(empresaId, deps = {}) {
+  const channelStore = deps.channelStore || whatsappChannels;
+  const canaisEmpresa = channelStore.listarPorEmpresa(Number(empresaId));
+  const totalCanaisEmpresa = canaisEmpresa.length;
+  const conectadoDaEmpresa = await primeiroCanalConectado(canaisEmpresa, deps);
+  if (conectadoDaEmpresa) {
+    return { ...conectadoDaEmpresa, totalCanais: totalCanaisEmpresa, origem: 'empresa' };
+  }
+
+  const globais = await canaisGlobaisConectados(deps);
+  const idsEmpresa = new Set(canaisEmpresa.map(canal => String(canal.id)));
+  const compartilhados = globais.filter(item => {
+    if (idsEmpresa.has(String(item.canal.id))) return true;
+    return Array.isArray(item.canal.empresas)
+      && item.canal.empresas.some(emp => Number(emp?.empresa_id) === Number(empresaId));
+  });
+
+  if (compartilhados.length === 1) {
+    return { ...compartilhados[0], totalCanais: totalCanaisEmpresa || 1, origem: 'compartilhado' };
+  }
+
+  // Fallback pragmatico para ambientes com um unico canal WhatsApp conectado
+  // servindo varias empresas do IA Command. Se houver mais de um, nao escolhe
+  // automaticamente para evitar enviar pelo canal errado.
+  if (!compartilhados.length && globais.length === 1) {
+    return { ...globais[0], totalCanais: totalCanaisEmpresa || 1, origem: 'unico-global' };
+  }
+
+  if (globais.length > 1) {
+    console.warn('[protheus_whatsapp][forward] Mais de um canal WhatsApp conectado; empresa sem canal inequivoco.', {
+      empresaId: Number(empresaId),
+      canaisEmpresa: canaisEmpresa.map(c => c.id),
+      canaisConectados: globais.map(item => item.canal.id),
+    });
+  }
+
+  return { canal: canaisEmpresa[0] || null, svc: null, workerPort: null, totalCanais: totalCanaisEmpresa };
 }
 
 async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
@@ -1133,4 +1196,10 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       res.status(500).json({ error: err.message });
     }
   });
+};
+
+module.exports._test = {
+  resolverCanalWhatsAppConectado,
+  primeiroCanalConectado,
+  canaisGlobaisConectados,
 };
