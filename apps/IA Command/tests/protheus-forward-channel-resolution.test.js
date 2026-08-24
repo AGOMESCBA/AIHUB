@@ -68,6 +68,26 @@ function canal(id, porta) {
   }
 
   {
+    const j2a = canal('j2a', 3101);
+    const outro = canal('outro', 3102);
+    const ret = await resolverCanalWhatsAppConectado(5, {
+      channelStore: channelStoreFake({
+        porEmpresa: { 5: [] },
+        globais: [j2a, outro],
+        empresasPorCanal: {
+          j2a: [{ empresa_id: 1 }],
+          outro: [{ empresa_id: 9 }],
+        },
+      }),
+      manager: managerVazio(),
+      workerJsonFn: workerConectado([3101, 3102]),
+      empresasPermitidasIds: [1, 5],
+    });
+    assert.strictEqual(ret.canal.id, 'j2a');
+    assert.strictEqual(ret.origem, 'empresa-permitida');
+  }
+
+  {
     const unico = canal('j2a', 3101);
     const ret = await resolverCanalWhatsAppConectado(5, {
       channelStore: channelStoreFake({ porEmpresa: { 5: [] }, globais: [unico] }),
