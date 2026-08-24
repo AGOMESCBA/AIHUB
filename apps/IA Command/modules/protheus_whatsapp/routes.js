@@ -19,6 +19,7 @@ const { getDB } = require('../database');
 const whatsappManager = require('../whatsapp/service-manager');
 const whatsappChannels = require('../whatsapp/channel-store');
 const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
+const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -346,19 +347,30 @@ function montarGradeTexto(rows, limiteLinhas = 12) {
 }
 
 function montarMensagemEncaminhamento({ pergunta, resumo, rows }) {
+  const perguntaTxt = String(pergunta || '(sem pergunta registrada)').trim();
+  const rowsLista = Array.isArray(rows) ? rows : [];
+  const textoCanonico = rowsLista.length
+    ? canonicalWhatsappFormat.renderSingle(rowsLista, {
+        contextoConsulta: perguntaTxt,
+        nomeModulo: 'IA Command',
+      })
+    : null;
+
+  if (textoCanonico) {
+    return [
+      '*Encaminhamento IA Command*',
+      '',
+      textoCanonico,
+    ].join('\n');
+  }
+
   const linhas = [
-    '*IA Command - Encaminhamento*',
+    '*Encaminhamento IA Command*',
     '',
     '*Pergunta:*',
-    String(pergunta || '(sem pergunta registrada)').trim(),
+    perguntaTxt,
     '',
-    '*Resumo:*',
     String(resumo || '(sem resumo registrado)').trim(),
-    '',
-    '*Grade:*',
-    '```',
-    montarGradeTexto(rows),
-    '```',
   ];
   return linhas.join('\n');
 }

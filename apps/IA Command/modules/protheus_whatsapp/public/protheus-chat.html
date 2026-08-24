@@ -1290,6 +1290,10 @@
             <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
             <span>Selecionar mensagens</span>
           </button>
+          <button class="reset-memoria-btn" id="btnForwardAttachmentTop" type="button" title="Encaminhar arquivo local para WhatsApp" aria-label="Encaminhar arquivo local para WhatsApp">
+            <svg viewBox="0 0 24 24"><path d="M21.4 11.6l-8.5 8.5a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.8l8.5-8.5"/></svg>
+            <span>Encaminhar anexo</span>
+          </button>
           <button class="reset-memoria-btn" id="btnResetMemoria" type="button" title="Esquecer contexto da conversa" aria-label="Esquecer contexto da conversa">
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
             <span>Esquecer contexto</span>
@@ -1466,10 +1470,6 @@
     <svg viewBox="0 0 24 24"><path d="M5 12h12M13 6l6 6-6 6"/></svg>
     <span>Encaminhar resposta</span>
   </button>
-  <button type="button" class="message-context-item" data-menu-action="forward-attachment" role="menuitem">
-    <svg viewBox="0 0 24 24"><path d="M21.4 11.6l-8.5 8.5a6 6 0 01-8.5-8.5l9.2-9.2a4 4 0 015.7 5.7l-9.2 9.2a2 2 0 01-2.8-2.8l8.5-8.5"/></svg>
-    <span>Encaminhar anexo</span>
-  </button>
   <button type="button" class="message-context-item danger" data-menu-action="delete" role="menuitem">
     <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/></svg>
     <span>Apagar</span>
@@ -1586,6 +1586,7 @@
   const userAvatar = document.getElementById('userAvatar');
   const btnNovaConversa = document.getElementById('btnNovaConversa');
   const btnSelecionarMensagens = document.getElementById('btnSelecionarMensagens');
+  const btnForwardAttachmentTop = document.getElementById('btnForwardAttachmentTop');
   const selecaoBar = document.getElementById('selecaoBar');
   const selecaoContagem = document.getElementById('selecaoContagem');
   const btnSelecionarTodas = document.getElementById('btnSelecionarTodas');
@@ -1780,9 +1781,14 @@
 
   function garantirExportXlsx() {
     if (!reportXlsxPromise) {
-      reportXlsxPromise = garantirTabulator().then(() => carregarScriptUmaVez(
-        'https://oss.sheetjs.com/sheetjs/xlsx.full.min.js',
-        () => !!window.XLSX,
+      reportXlsxPromise = garantirTabulator().then(() => (
+        carregarScriptUmaVez(
+          'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
+          () => !!window.XLSX,
+        ).catch(() => carregarScriptUmaVez(
+          'https://oss.sheetjs.com/sheetjs/xlsx.full.min.js',
+          () => !!window.XLSX,
+        ))
       ));
     }
     return reportXlsxPromise;
@@ -2459,12 +2465,13 @@
     }
 
     prepararRelatorio(dados);
+    const nomeBase = nomeArquivoPorPergunta(dados, formato === 'pdf' ? 'pdf' : 'xlsx');
 
     if (formato === 'pdf') {
       await garantirExportPdf();
       const blob = exportarRelatorioPdf({ retornaBlob: true });
       return {
-        filename: 'ia-command-dados.pdf',
+        filename: nomeBase,
         mimetype: 'application/pdf',
         data: await blobToBase64(blob),
       };
@@ -2474,13 +2481,40 @@
       await garantirExportXlsx();
       const blob = exportarRelatorioXlsx({ retornaBlob: true });
       return {
-        filename: 'ia-command-dados.xlsx',
+        filename: nomeBase,
         mimetype: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         data: await blobToBase64(blob),
       };
     }
 
     throw new Error('Formato de encaminhamento invalido.');
+  }
+
+  function perguntaParaMensagem(mensagemId) {
+    const mensagens = sessaoAtualId ? mensagensCachePorSessao.get(sessaoAtualId)?.mensagens : null;
+    if (!mensagemId || !Array.isArray(mensagens)) return '';
+    const idx = mensagens.findIndex((m) => String(m.id || '') === String(mensagemId));
+    for (let i = idx - 1; i >= 0; i--) {
+      const msg = mensagens[i];
+      if (msg && msg.direcao === 'out' && String(msg.texto || '').trim()) return String(msg.texto).trim();
+    }
+    const sessao = sessoesCache.find((s) => s.sessaoId === sessaoAtualId);
+    return sessao?.titulo || 'ia-command-dados';
+  }
+
+  function slugArquivo(texto) {
+    return String(texto || 'ia-command-dados')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 70) || 'ia-command-dados';
+  }
+
+  function nomeArquivoPorPergunta(dados, extensao) {
+    const pergunta = perguntaParaMensagem(dados?.mensagemId) || dados?.titulo || dados?.texto || 'ia-command-dados';
+    return slugArquivo(pergunta) + '.' + extensao;
   }
 
   function fecharMenuMensagem() {
@@ -3675,6 +3709,10 @@
   tabConversa.addEventListener('click', () => trocarAba('conversa'));
   tabRelatorio.addEventListener('click', () => { if (!tabRelatorio.disabled) trocarAba('relatorio'); });
   btnAbrirFavoritos.addEventListener('click', () => abrirFavoritos());
+  btnForwardAttachmentTop.addEventListener('click', () => {
+    fecharHeaderMenu();
+    abrirForwardModal(null, 'anexo');
+  });
   btnFecharFavoritos.addEventListener('click', () => fecharFavoritos());
   btnReloadFavoritos.addEventListener('click', () => carregarFavoritos());
   favoritesSearch.addEventListener('input', () => renderFavoritos());
@@ -3728,8 +3766,6 @@
         await favoritarMensagem(mensagemId, trigger);
       } else if (acao === 'forward-response') {
         await abrirForwardModal(mensagemId, 'resposta');
-      } else if (acao === 'forward-attachment') {
-        await abrirForwardModal(mensagemId, 'anexo');
       } else if (acao === 'delete') {
         if (!window.confirm('Apagar esta mensagem? Essa acao nao pode ser desfeita.')) return;
         await excluirMensagensPorIds([mensagemId]);
@@ -4214,6 +4250,8 @@
     const colunas = colunasVisiveisRelatorio();
     const modelo = modeloRelatorio(reportDadosAtuais);
     const totaisPorField = new Map(modelo.totais.map((t) => [t.field, t.valor]));
+    const linhasGrupo = new Set();
+    const linhasSubtotal = new Set();
 
     const valorCelula = (col, valor) => {
       if (valor == null || valor === '') return null;
@@ -4235,16 +4273,21 @@
 
     if (reportGroupBy.length && reportTable) {
       reportTable.getGroups().forEach((group) => {
+        linhasGrupo.add(aoa.length);
         aoa.push([String(group.getKey() ?? '')]);
         const rowsDoGrupo = group.getRows().map((r) => r.getData());
         rowsDoGrupo.forEach((row) => aoa.push(linhaDados(row)));
-        if (colunas.some((c) => c.numerico)) aoa.push(linhaSubtotal(rowsDoGrupo));
+        if (colunas.some((c) => c.numerico)) {
+          linhasSubtotal.add(aoa.length);
+          aoa.push(linhaSubtotal(rowsDoGrupo));
+        }
       });
     } else {
       rowsRelatorioAtual().forEach((row) => aoa.push(linhaDados(row)));
     }
 
     aoa.push([]);
+    const linhaTotalGeral = aoa.length;
     aoa.push(colunas.map((col, idx) => {
       if (idx === 0) return 'TOTAL GERAL';
       if (!col.numerico) return null;
@@ -4258,18 +4301,65 @@
     // empiricamente (teste isolado antes desta mudanca): sem cellDates, a
     // celula vira numero serial com formato generico "m/d/yy" do SheetJS.
     const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+    ws['!autofilter'] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: Math.max(0, aoa.length - 1), c: Math.max(0, colunas.length - 1) },
+      }),
+    };
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
     // Largura de coluna proporcional ao maior conteudo (cap em 45 — coluna
     // gigante deixa a planilha ilegivel, usuario redimensiona se precisar).
-    ws['!cols'] = colunas.map((col) => ({
-      wch: Math.max(10, Math.min(45, (col.title || '').length + 4)),
-    }));
+    ws['!cols'] = colunas.map((col, colIdx) => {
+      const maxConteudo = aoa.reduce((max, linha) => {
+        const valor = linha[colIdx];
+        const texto = valor instanceof Date ? '00/00/0000' : String(valor ?? '');
+        return Math.max(max, texto.length);
+      }, String(col.title || '').length);
+      return { wch: Math.max(12, Math.min(52, maxConteudo + 3)) };
+    });
+
+    const estiloHeader = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '156082' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+    };
+    const estiloGrupo = {
+      font: { bold: true, color: { rgb: '0F3A4A' } },
+      fill: { fgColor: { rgb: 'DDEBF7' } },
+    };
+    const estiloTotal = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: 'D9EAD3' } },
+    };
+
+    for (let c = 0; c < colunas.length; c++) {
+      const ref = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[ref]) ws[ref].s = estiloHeader;
+    }
+
+    linhasGrupo.forEach((r) => {
+      for (let c = 0; c < colunas.length; c++) {
+        const ref = XLSX.utils.encode_cell({ r, c });
+        if (!ws[ref]) ws[ref] = { t: 's', v: c === 0 ? String(aoa[r][0] || '') : '' };
+        ws[ref].s = estiloGrupo;
+      }
+    });
+
+    [...linhasSubtotal, linhaTotalGeral].forEach((r) => {
+      for (let c = 0; c < colunas.length; c++) {
+        const ref = XLSX.utils.encode_cell({ r, c });
+        if (ws[ref]) ws[ref].s = estiloTotal;
+      }
+    });
     // Formato de data nativo do Excel (dd/mm/aaaa) para colunas marcadas
     // como data — sem isso o Excel usa o formato padrao americano.
     colunas.forEach((col, colIdx) => {
-      if (!col.data) return;
       for (let r = 1; r < aoa.length; r++) {
         const ref = XLSX.utils.encode_cell({ r, c: colIdx });
-        if (ws[ref] && ws[ref].t === 'd') ws[ref].z = 'dd/mm/yyyy';
+        if (!ws[ref]) continue;
+        if (col.data && ws[ref].t === 'd') ws[ref].z = 'dd/mm/yyyy';
+        if (col.numerico && ws[ref].t === 'n') ws[ref].z = '#,##0.00';
       }
     });
 
