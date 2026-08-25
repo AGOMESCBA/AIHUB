@@ -1732,7 +1732,7 @@
           Escolher arquivo
         </span>
       </label>
-      <div class="forward-file-name" id="forwardFileName">Nenhum arquivo selecionado.</div>
+      <div class="forward-file-name" id="forwardFileName">Nenhum arquivo selecionado. Limite: 10 MB por anexo.</div>
       <textarea id="forwardAttachmentCaption" rows="2" placeholder="Legenda opcional"></textarea>
     </div>
     <div class="forward-status" id="forwardStatus"></div>
@@ -1964,6 +1964,7 @@
   let reportLastGridWidth = 0;
   let reportTabulatorPromise = null;
   const REPORT_GROUPS_AUTO_COLLAPSE_MIN = 5;
+  let reportGroupsOpenPreference = null;
   let reportXlsxPromise = null;
   let reportPdfPromise = null;
 
@@ -3077,7 +3078,7 @@
     forwardStatus.className = 'forward-status';
     if (forwardFormat) forwardFormat.value = 'texto';
     if (forwardFileInput) forwardFileInput.value = '';
-    if (forwardFileName) forwardFileName.textContent = 'Nenhum arquivo selecionado.';
+    if (forwardFileName) forwardFileName.textContent = 'Nenhum arquivo selecionado. Limite: 10 MB por anexo.';
     if (forwardAttachmentCaption) forwardAttachmentCaption.value = '';
     atualizarForwardModo();
     if (forwardSearch) forwardSearch.value = '';
@@ -3359,7 +3360,7 @@
     const file = forwardFileInput?.files?.[0];
     if (!file) throw new Error('Selecione um arquivo para encaminhar.');
     if (file.size > 10 * 1024 * 1024) {
-      throw new Error('Arquivo muito grande para encaminhamento pelo WhatsApp.');
+      throw new Error('Arquivo muito grande para encaminhamento pelo WhatsApp. Limite: 10 MB por anexo.');
     }
     return {
       filename: file.name || 'anexo',
@@ -3442,7 +3443,13 @@
   }
 
   function perguntaRelatorioAtual() {
-    return perguntaParaMensagem(reportMensagemId)
+    // perguntaTexto vem do backend (session-store.js: mensagem 'out' imediatamente
+    // anterior aquela resposta, por criado_em) — fonte confiavel que nao depende do
+    // cache local de mensagens do frontend. Prioridade sobre o fallback antigo
+    // (perguntaParaMensagem via cache local, que cai no titulo da SESSAO — sempre a
+    // PRIMEIRA pergunta da conversa — quando a mensagem nao esta no cache local).
+    return reportDadosAtuais?.perguntaTexto
+      || perguntaParaMensagem(reportMensagemId)
       || reportDadosAtuais?.pergunta
       || reportDadosAtuais?.titulo
       || '';
@@ -3555,9 +3562,18 @@
     const limpo = novo.trim();
     if (!limpo || limpo === atual) return;
     try {
-      await api('/favoritos/' + favoritoId, { method: 'PUT', body: JSON.stringify({ titulo: limpo }) });
-      fav.titulo = limpo;
+      const data = await api('/favoritos/' + favoritoId, { method: 'PUT', body: JSON.stringify({ titulo: limpo }) });
+      const atualizado = data?.favorito || null;
+      if (atualizado?.id) {
+        favoritosCache = favoritosCache.map((item) => item.id === atualizado.id ? { ...item, ...atualizado } : item);
+      } else {
+        fav.titulo = limpo;
+        fav.perguntaTexto = limpo;
+      }
       renderFavoritos();
+      try {
+        localStorage.setItem('iaCommandChatFavoritoAtualizado', String(Date.now()));
+      } catch (_err) {}
     } catch (err) {
       showError('Falha ao renomear favorito: ' + err.message);
     }
@@ -4194,6 +4210,7 @@
           rows: relatorio.rows,
           gridConfig: relatorio.gridConfig,
           texto: relatorio.texto,
+          perguntaTexto: relatorio.perguntaTexto || null,
           filial_escopo_json: relatorio.filial_escopo_json || null,
         };
         relatorioCachePorSessao.set(sessaoId, dados);
@@ -4226,6 +4243,7 @@
         rows: relatorio.rows,
         gridConfig: relatorio.gridConfig,
         texto: relatorio.texto,
+        perguntaTexto: relatorio.perguntaTexto || null,
         filial_escopo_json: relatorio.filial_escopo_json || null,
       };
       relatorioCachePorMensagem.set(mensagemId, dados);
@@ -4659,6 +4677,7 @@
     reportHeaderFilters = modelo.cfg.headerFilters.filter((f) => f && reportColunas.some((c) => c.field === f.field));
     reportColumnWidths = { ...modelo.cfg.columnWidths };
     reportColumnTitles = { ...modelo.cfg.columnTitles };
+    reportGroupsOpenPreference = null;
     reportGlobalTerm = '';
     reportGlobalSearch.value = '';
 
@@ -4739,9 +4758,7 @@
   }
 
   function obterGridConfigAtual() {
-    const columnOrder = reportTable
-      ? reportTable.getColumns().map((col) => col.getField()).filter(Boolean)
-      : reportColunas.map((col) => col.field);
+    const columnOrder = obterOrdemColunasTabulator();
     return {
       groupBy: reportGroupBy.slice(),
       hiddenColumns: reportHiddenColumns.slice(),
@@ -4751,6 +4768,18 @@
       columnWidths: { ...reportColumnWidths },
       columnTitles: { ...reportColumnTitles },
     };
+  }
+
+  function obterOrdemColunasTabulator() {
+    return reportTable
+      ? reportTable.getColumns().map((col) => col.getField()).filter(Boolean)
+      : reportColunas.map((col) => col.field);
+  }
+
+  function sincronizarOrdemColunasRelatorio() {
+    const columnOrder = obterOrdemColunasTabulator();
+    reportColunas = ordenarColunasPorConfig(reportColunas, columnOrder);
+    if (reportDadosAtuais?._modelo) reportDadosAtuais._modelo.colunas = reportColunas;
   }
 
   function atualizarGridConfigEmMemoria(cfg) {
@@ -4798,7 +4827,8 @@
   tabRelatorio.addEventListener('click', () => { if (!tabRelatorio.disabled) trocarAba('relatorio'); });
   btnAbrirFavoritos.addEventListener('click', () => abrirFavoritos());
   btnForwardAttachmentTop.addEventListener('click', () => {
-    fecharHeaderMenu();
+    headerActions.classList.remove('open');
+    btnHeaderMenu.setAttribute('aria-expanded', 'false');
     abrirForwardModal(null, 'anexo');
   });
   btnFecharFavoritos.addEventListener('click', () => fecharFavoritos());
@@ -4836,7 +4866,9 @@
   forwardSearch.addEventListener('input', () => renderForwardContacts());
   forwardFileInput.addEventListener('change', () => {
     const file = forwardFileInput.files?.[0];
-    forwardFileName.textContent = file ? `${file.name} (${Math.ceil(file.size / 1024)} KB)` : 'Nenhum arquivo selecionado.';
+    forwardFileName.textContent = file
+      ? `${file.name} (${Math.ceil(file.size / 1024)} KB) - limite: 10 MB`
+      : 'Nenhum arquivo selecionado. Limite: 10 MB por anexo.';
   });
   btnConfirmForward.addEventListener('click', () => confirmarForward().catch(err => showError('Falha ao encaminhar: ' + err.message)));
   forwardModal.addEventListener('click', (e) => {
@@ -4973,7 +5005,7 @@
 
   function inferirColunas(rows) {
     const nomes = Object.keys(rows[0] || {});
-    return nomes.map((campo) => {
+    const colunas = nomes.map((campo) => {
       const algumNumero = rows.some((r) => typeof r[campo] === 'number');
       const todosParecemData = rows.every((r) => r[campo] == null || pareceData(r[campo]));
       const algumValorPreenchido = rows.some((r) => r[campo] != null && r[campo] !== '');
@@ -4982,6 +5014,12 @@
       const ehCompetencia = !algumNumero && todosParecemCompetencia && algumValorPreenchido;
       return { field: campo, title: campo, numerico: algumNumero, data: ehData, competencia: ehCompetencia };
     });
+    // Ordem padrao: dimensoes (texto/data) primeiro, metricas numericas por
+    // ultimo — o SELECT do SQL costuma trazer as metricas primeiro, mas na
+    // grid/export e mais legivel ver o agrupamento (produto, dia, etc.) antes
+    // dos valores. So afeta a ordem PADRAO; config de coluna ja salva (drag
+    // manual do usuario) continua prevalecendo via ordenarColunasPorConfig.
+    return [...colunas].sort((a, b) => (a.numerico === b.numerico ? 0 : a.numerico ? 1 : -1));
   }
 
   // Mesma regra de formatarNumeroExibicao: maximo 3 casas decimais, formato
@@ -5055,8 +5093,9 @@
     });
   }
 
-  function alternarVisibilidadeGrupos(abrir) {
+  function alternarVisibilidadeGrupos(abrir, guardarPreferencia = true) {
     if (!reportTable || !reportGroupBy.length || typeof reportTable.getGroups !== 'function') return;
+    if (guardarPreferencia) reportGroupsOpenPreference = !!abrir;
     reconstruirAgrupamentoComEstado(abrir);
     reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
     if (!abrir) {
@@ -5071,8 +5110,10 @@
   function aplicarAberturaPadraoGrupos() {
     atualizarBotoesGrupos();
     if (!reportTable || !reportGroupBy.length) return;
-    const abrir = gruposAbertosPorPadrao(reportDadosAtuais?.rows || [], reportGroupBy);
-    requestAnimationFrame(() => alternarVisibilidadeGrupos(abrir));
+    const abrir = typeof reportGroupsOpenPreference === 'boolean'
+      ? reportGroupsOpenPreference
+      : gruposAbertosPorPadrao(reportDadosAtuais?.rows || [], reportGroupBy);
+    requestAnimationFrame(() => alternarVisibilidadeGrupos(abrir, false));
   }
 
   function renderColumnPicker() {
@@ -5332,7 +5373,9 @@
       height: '100%',
       columns: montarColunasTabulator(rowsGrid),
       groupBy: reportGroupBy.length ? reportGroupBy : false,
-      groupStartOpen: gruposAbertosPorPadrao(rowsGrid, reportGroupBy),
+      groupStartOpen: typeof reportGroupsOpenPreference === 'boolean'
+        ? reportGroupsOpenPreference
+        : gruposAbertosPorPadrao(rowsGrid, reportGroupBy),
       movableColumns: true,
       initialSort: sortersParaTabulator(sortersComAgrupamento()),
       initialHeaderFilter: reportHeaderFilters,
@@ -5377,6 +5420,8 @@
       agendarSalvarGridConfig();
     });
     reportTable.on('columnMoved', () => {
+      sincronizarOrdemColunasRelatorio();
+      renderColumnPicker();
       agendarSalvarGridConfig();
     });
     reportTable.on('columnVisibilityChanged', (column, visible) => {
@@ -5425,6 +5470,27 @@
     btnReportColumns.setAttribute('aria-expanded', 'false');
   });
 
+  // Percorre a arvore de grupos do Tabulator ate as FOLHAS. Com agrupamento
+  // multi-nivel (ex: grupo_produto + produto), group.getRows() dos niveis
+  // intermediarios/raiz vem VAZIO — as rows so existem no ultimo nivel
+  // (getSubGroups().length === 0). Sem essa recursao, o export ficava com 1
+  // linha por grupo raiz sem nenhum detalhe e subtotal calculado sobre array
+  // vazio (0,00) — bug corrigido aqui. Retorna [{ chave, rows }] na ordem de
+  // visita, chave sendo o caminho completo (ex: "AEREM » AEREM GRANEL").
+  function _gruposFolhaComRows(grupos, prefixo = '') {
+    const resultado = [];
+    (grupos || []).forEach((grupo) => {
+      const chaveAtual = prefixo ? `${prefixo} » ${String(grupo.getKey() ?? '')}` : String(grupo.getKey() ?? '');
+      const subGrupos = typeof grupo.getSubGroups === 'function' ? grupo.getSubGroups() : [];
+      if (subGrupos.length) {
+        resultado.push(..._gruposFolhaComRows(subGrupos, chaveAtual));
+      } else {
+        resultado.push({ chave: chaveAtual, rows: grupo.getRows().map((r) => r.getData()) });
+      }
+    });
+    return resultado;
+  }
+
   // Exportacao XLSX construida manualmente com SheetJS (nao via
   // reportTable.download('xlsx', ...)) — mesma limitacao confirmada do PDF
   // (teste isolado antes desta mudanca): o modulo de export do Tabulator
@@ -5466,10 +5532,9 @@
     });
 
     if (reportGroupBy.length && reportTable) {
-      reportTable.getGroups().forEach((group) => {
+      _gruposFolhaComRows(reportTable.getGroups()).forEach(({ chave, rows: rowsDoGrupo }) => {
         linhasGrupo.add(aoa.length);
-        aoa.push([String(group.getKey() ?? '')]);
-        const rowsDoGrupo = group.getRows().map((r) => r.getData());
+        aoa.push([chave]);
         rowsDoGrupo.forEach((row) => aoa.push(linhaDados(row)));
         if (colunas.some((c) => c.numerico)) {
           linhasSubtotal.add(aoa.length);
@@ -5646,9 +5711,8 @@
     });
 
     if (reportGroupBy.length && reportTable) {
-      reportTable.getGroups().forEach((group) => {
-        body.push([{ content: String(group.getKey() ?? ''), colSpan: colunas.length, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }]);
-        const rowsDoGrupo = group.getRows().map((r) => r.getData());
+      _gruposFolhaComRows(reportTable.getGroups()).forEach(({ chave, rows: rowsDoGrupo }) => {
+        body.push([{ content: chave, colSpan: colunas.length, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }]);
         rowsDoGrupo.forEach((row) => body.push(linhaDados(row)));
         if (colunas.some((c) => c.numerico)) body.push(linhaSubtotal(rowsDoGrupo));
       });

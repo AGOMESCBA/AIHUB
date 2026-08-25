@@ -22,6 +22,21 @@ function _containsAny(texto, termos) {
   return termos.some(termo => _containsTerm(texto, termo));
 }
 
+function _normalizarAgrupamentos(grupos = []) {
+  const normalizados = [...new Set((Array.isArray(grupos) ? grupos : [])
+    .map(g => String(g || '').toLowerCase())
+    .filter(Boolean))];
+
+  // "grupo de produto" contem a palavra "produto", mas a granularidade pedida
+  // e grupo_produto. Manter produto junto forca a defesa a exigir detalhe por
+  // item, rejeitando consultas corretas agrupadas somente por SBM.
+  if (normalizados.includes('grupo_produto')) {
+    return normalizados.filter(g => g !== 'produto');
+  }
+
+  return normalizados;
+}
+
 function _periodoTemDatas(periodo = {}) {
   return !!(periodo.dataInicio || periodo.data_inicio || periodo.dataFim || periodo.data_fim);
 }
@@ -85,7 +100,7 @@ function _inferirAgrupamentos(texto) {
   for (const [grupo, termos] of defs) {
     if (_containsAny(texto, termos)) grupos.push(grupo);
   }
-  return [...new Set(grupos)];
+  return _normalizarAgrupamentos(grupos);
 }
 
 function _inferirPlanoFinanceiro(texto, periodo) {
@@ -380,7 +395,7 @@ function reconciliarPlanoComMensagem(plano = {}, mensagem = '') {
   if (_containsAny(texto, ['por mes', 'por meses', 'mes a mes', 'mensal'])) grupos.add('mes');
   if (_containsAny(texto, ['por banco', 'por bancos'])) grupos.add('banco');
   if (_containsAny(texto, ['por conta', 'por contas', 'conta bancaria', 'contas bancarias'])) grupos.add('conta');
-  ajustado.agrupamentos = [...grupos];
+  ajustado.agrupamentos = _normalizarAgrupamentos([...grupos]);
 
   if (ajustado.modulo === 'financeiro') {
     // Passa ajusteAntecipacao existente (pode vir do plano da IA) para preservar temporal
@@ -472,7 +487,7 @@ function normalizarPlanoIA(raw, fallbackPlan = {}) {
   if (!Array.isArray(plano.regras)) plano.regras = fallbackPlan.regras || [];
 
   if (Array.isArray(obj.agrupamentos)) {
-    plano.agrupamentos = [...new Set(obj.agrupamentos.map(g => normalizarTexto(g).replace(/\s+/g, '_')).filter(Boolean))];
+    plano.agrupamentos = _normalizarAgrupamentos(obj.agrupamentos.map(g => normalizarTexto(g).replace(/\s+/g, '_')).filter(Boolean));
   }
   if (Array.isArray(obj.regras)) {
     plano.regras = [...new Set([...(fallbackPlan.regras || []), ...obj.regras.map(r => normalizarTexto(r).replace(/\s+/g, '_')).filter(Boolean)])];
@@ -702,6 +717,7 @@ function validarSqlContraPlano(sql, plano = {}) {
   if (plano.modulo === 'faturamento') {
     exigeAgrupamento('cliente', ['A1_NOME', 'A1_NREDUZ', 'F2_CLIENTE', 'D2_CLIENTE'], 'cliente');
     exigeAgrupamento('produto', ['B1_DESC', 'D2_COD'], 'produto');
+    exigeAgrupamento('grupo_produto', ['BM_GRUPO', 'BM_DESC', 'B1_GRUPO'], 'grupo de produto');
     exigeAgrupamento('vendedor', ['A3_NOME', 'F2_VEND1'], 'vendedor');
   }
 

@@ -11,8 +11,9 @@ const intentService = require(path.join(ROOT, 'modules/ai/intent-service'));
 
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
 
-assert(systemPrompt.includes('NAO aplique NENHUM filtro de D2_CF'), 'quantidade/valor faturado NAO deve mais aplicar filtro de CF por padrao');
-assert(!systemPrompt.includes("SD2.D2_CF NOT LIKE '59%' AND SD2.D2_CF NOT LIKE '69%' AND SD2.D2_CF NOT IN"), 'filtro antigo de faturada (excluir remessa/transferencia) nao deve mais existir no prompt');
+assert(systemPrompt.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'quantidade/valor faturado deve aplicar regra nacional de receita por padrao');
+assert(systemPrompt.includes("AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%')"), 'faturamento/vendas deve excluir remessas por padrao');
+assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'faturamento/vendas deve excluir transferencias por padrao');
 assert(systemPrompt.includes("Quantidade carregada: SUM(SD2.D2_QUANT), com JOIN adicional SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'"), 'quantidade carregada deve usar JOIN SF4/F4_ESTOQUE=S em vez de filtro de CF');
 assert(systemPrompt.includes("Entrega futura, venda para entrega futura ou nota mae: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF IN ('5117', '6117')"), 'entrega futura/nota mae deve filtrar CF 5117 e 6117 (estadual e interestadual)');
 assert(systemPrompt.includes('SUM(SD2.D2_QUANT) sem filtro em SD2.D2_CF'), 'movimentacao total deve permitir consulta sem filtro fiscal');
@@ -44,7 +45,7 @@ for (const pergunta of perguntasFaturamento) {
 
 const sx2 = { SD2990: 'E', SF2990: 'E' };
 
-const sqlQuantidadeFaturada = `
+const sqlQuantidadeFaturadaSemFiltroCfop = `
 SET ROWCOUNT 50000;
 SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
 FROM SD2990 SD2
@@ -54,9 +55,26 @@ WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' '
   AND SF2.F2_EMISSAO = '20260613'
 `;
 assert.strictEqual(
+  runner._test.validarSqlIaOwnerBasico(sqlQuantidadeFaturadaSemFiltroCfop, faturamentoSpec, sx2, 'quantidade faturada no mes').ok,
+  false,
+  'SQL de quantidade faturada sem exclusao de remessa/transferencia deve ser rejeitado',
+);
+
+const sqlQuantidadeFaturada = `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
+FROM SD2990 SD2
+INNER JOIN SF2990 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' '
+  AND SF2.F2_TIPO = 'N'
+  AND SF2.F2_EMISSAO = '20260613'
+  AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%')
+  AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')
+`;
+assert.strictEqual(
   runner._test.validarSqlIaOwnerBasico(sqlQuantidadeFaturada, faturamentoSpec, sx2, 'quantidade faturada no mes').ok,
   true,
-  'SQL de quantidade faturada sem filtro de CF deve ser aceito (regra removida)',
+  'SQL de quantidade faturada com exclusao de remessa/transferencia deve ser aceito',
 );
 
 const sqlQuantidadeCarregada = `
@@ -118,9 +136,28 @@ WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' '
 `;
 assert(!/D2_CF/i.test(sqlMovimentacaoTotal), 'movimentacao total de saida nao deve aplicar filtro em D2_CF');
 assert.strictEqual(
-  runner._test.validarSqlIaOwnerBasico(sqlMovimentacaoTotal, faturamentoSpec, sx2).ok,
+  runner._test.validarSqlIaOwnerBasico(sqlMovimentacaoTotal, faturamentoSpec, sx2, 'movimentacao total de saida hoje').ok,
   true,
   'SQL de movimentacao total sem filtro fiscal deve ser aceito',
 );
+
+const sqlFaturamentoSemFiltroCfop = sqlQuantidadeFaturadaSemFiltroCfop.replace('quantidade_faturada', 'faturamento').replace('SD2.D2_QUANT', 'SD2.D2_TOTAL');
+assert.strictEqual(
+  faturamentoSpec._test.validarExclusaoCfopReceita(sqlFaturamentoSemFiltroCfop, 'qual o faturamento do mes?') === null,
+  false,
+  'validador direto deve rejeitar faturamento sem exclusao de CFOP sem receita',
+);
+assert.strictEqual(
+  faturamentoSpec._test.validarExclusaoCfopReceita(sqlFaturamentoSemFiltroCfop, 'todas as saidas do mes incluindo remessa e transferencia'),
+  null,
+  'validador direto deve aceitar todas as saidas sem exclusao fiscal',
+);
+const erroCfopReceita = Object.assign(
+  new Error(faturamentoSpec._test.validarExclusaoCfopReceita(sqlFaturamentoSemFiltroCfop, 'qual o faturamento do mes?')),
+  { _tipo: 'contrato_ia_owner_invalido' },
+);
+const retryCfopReceita = runner._test.buildRetryTecnicoIaOwner({ erro: erroCfopReceita });
+assert(retryCfopReceita.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'retry deve devolver a regra fiscal brasileira de CFOP para a IA');
+assert(retryCfopReceita.includes("SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'retry deve orientar exclusao de transferencias');
 
 console.log('faturamento-quantidade-fiscal.test.js: ok');

@@ -15,6 +15,7 @@ const http = require('http');
 const tokenService = require('./token-service');
 const sessionStore = require('./session-store');
 const chatService = require('./service');
+const userPermissionsStore = require('./user-permissions-store');
 const { getDB } = require('../database');
 const whatsappManager = require('../whatsapp/service-manager');
 const whatsappChannels = require('../whatsapp/channel-store');
@@ -471,6 +472,19 @@ function workerJson(workerPort, rota, payload = null, timeoutMs = 30000) {
   });
 }
 
+function normalizarArquivoEncaminhamento(arquivo) {
+  if (!arquivo || typeof arquivo !== 'object') return null;
+  const filename = String(arquivo.filename || arquivo.fileName || arquivo.name || '').trim();
+  const mimetype = String(arquivo.mimetype || arquivo.mimeType || arquivo.type || 'application/octet-stream').trim();
+  let data = String(arquivo.data || arquivo.base64 || '').trim();
+  const dataUrl = data.match(/^data:([^;,]+)?;base64,(.*)$/i);
+  if (dataUrl) {
+    data = dataUrl[2] || '';
+  }
+  if (!filename || !mimetype || !data) return null;
+  return { filename, mimetype, data };
+}
+
 async function canalWorkerConectado(canal, workerJsonFn = workerJson) {
   if (!canal?.is_windows_service || !canal?.worker_port) return false;
   try {
@@ -654,11 +668,19 @@ async function enviarTextoWhatsApp({ empresaId, numero, texto }) {
 async function enviarArquivoWhatsApp({ empresaId, numero, texto, arquivo }) {
   const { canal, svc, workerPort, totalCanais } = await resolverCanalWhatsAppConectado(empresaId);
   if (!canal) throw new Error('Nenhum canal WhatsApp vinculado a esta empresa.');
-  if (!arquivo || !arquivo.data || !arquivo.mimetype || !arquivo.filename) {
+  const arquivoNormalizado = normalizarArquivoEncaminhamento(arquivo);
+  if (!arquivoNormalizado) {
     throw new Error('Arquivo invalido para encaminhamento.');
   }
   if (workerPort) {
-    await workerJson(workerPort, '/send-media-message', { empresaId, numero, texto, arquivo }, 60000);
+    try {
+      await workerJson(workerPort, '/send-media-message', { empresaId, numero, texto, arquivo: arquivoNormalizado }, 60000);
+    } catch (err) {
+      if (/nao encontrado|não encontrado|http 404/i.test(String(err.message || ''))) {
+        throw new Error('O servico Windows do WhatsApp esta carregado sem suporte a anexos. Atualize os arquivos do worker e reinicie o servico.');
+      }
+      throw err;
+    }
     return { canalId: canal.id };
   }
   if (!svc) {
@@ -670,9 +692,9 @@ async function enviarArquivoWhatsApp({ empresaId, numero, texto, arquivo }) {
     throw new Error('Motor WhatsApp ainda nao suporta envio de anexos nesta versao carregada.');
   }
   await svc.sendMediaMessage(numero, {
-    data: arquivo.data,
-    mimetype: arquivo.mimetype,
-    filename: arquivo.filename,
+    data: arquivoNormalizado.data,
+    mimetype: arquivoNormalizado.mimetype,
+    filename: arquivoNormalizado.filename,
     caption: texto,
   });
   return { canalId: canal.id };
@@ -686,13 +708,27 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       perfLog('POST /token', inicio, { status: 401 });
       return res.status(401).json({ error: 'Credencial invalida.' });
     }
-    const { empresaId, celular, filial, empresasPermitidas, filiaisPermitidas, launchTicket } = req.body || {};
+    const { empresaId, celular, filial, empresasPermitidas, filiaisPermitidas, launchTicket, usuarioId, usuarioNome } = req.body || {};
     if (!empresaId || !celular) {
       perfLog('POST /token', inicio, { status: 400 });
       return res.status(400).json({ error: 'empresaId e celular sao obrigatorios.' });
     }
     try {
       const { token, expiraEm } = tokenService.emitir({ empresaId, celular, filial, empresasPermitidas, filiaisPermitidas });
+      try {
+        userPermissionsStore.salvarSync({
+          empresaId,
+          celular,
+          filialAtual: filial,
+          usuarioId,
+          usuarioNome,
+          empresasPermitidas,
+          filiaisPermitidas,
+          origem: 'protheus_token',
+        });
+      } catch (syncErr) {
+        console.warn(`[protheus_whatsapp] Falha ao sincronizar permissoes do usuario: ${syncErr.message}`);
+      }
       const ticket = String(launchTicket || '').trim();
       if (ticket) {
         salvarLaunchTicket(ticket, token, expiraEm);
@@ -708,6 +744,33 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     } catch (err) {
       perfLog('POST /token', inicio, { status: 500, erro: err.message });
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/ia-command/protheus/user-permissions/sync', (req, res) => {
+    const inicio = Date.now();
+    if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
+      perfLog('POST /user-permissions/sync', inicio, { status: 401 });
+      return res.status(401).json({ error: 'Credencial invalida.' });
+    }
+    try {
+      const body = req.body || {};
+      const usuarios = Array.isArray(body.usuarios) ? body.usuarios : [body];
+      const rows = usuarios.map(item => userPermissionsStore.salvarSync({
+        empresaId: item.empresaId || item.empresa_id || body.empresaId || body.empresa_id,
+        celular: item.celular || item.numero,
+        filialAtual: item.filial || item.filialAtual || item.filial_atual || null,
+        usuarioId: item.usuarioId || item.usuario_id || item.userId,
+        usuarioNome: item.usuarioNome || item.usuario_nome || item.nome,
+        empresasPermitidas: item.empresasPermitidas || item.empresas_permitidas || [],
+        filiaisPermitidas: item.filiaisPermitidas || item.filiais_permitidas || [],
+        origem: 'protheus_sync',
+      }));
+      perfLog('POST /user-permissions/sync', inicio, { status: 200, total: rows.length });
+      res.json({ ok: true, total: rows.length, usuarios: rows });
+    } catch (err) {
+      perfLog('POST /user-permissions/sync', inicio, { status: 400, erro: err.message });
+      res.status(400).json({ error: err.message });
     }
   });
 
@@ -857,17 +920,17 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       req.body?.destinatarioNumeroId,
       req.body?.numeroId,
     ].map(id => String(id || '').trim()).filter(Boolean);
-    const arquivo = req.body?.arquivo && typeof req.body.arquivo === 'object' ? req.body.arquivo : null;
+    const arquivo = normalizarArquivoEncaminhamento(req.body?.arquivo);
     const legenda = String(req.body?.legenda || '').trim();
 
     if (!numeroIds.length) {
       return res.status(400).json({ error: 'Selecione ao menos um contato autorizado para encaminhar.' });
     }
-    if (!arquivo?.data || !arquivo?.mimetype || !arquivo?.filename) {
+    if (!arquivo) {
       return res.status(400).json({ error: 'Selecione um arquivo para encaminhar.' });
     }
     if (String(arquivo.data).length > 15 * 1024 * 1024) {
-      return res.status(400).json({ error: 'Arquivo muito grande para encaminhamento pelo WhatsApp.' });
+      return res.status(400).json({ error: 'Arquivo muito grande para encaminhamento pelo WhatsApp. Limite: 10 MB por anexo.' });
     }
 
     try {
@@ -999,7 +1062,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       req.body?.destinatarioNumeroId,
       req.body?.numeroId,
     ].map(id => String(id || '').trim()).filter(Boolean);
-    const arquivo = req.body?.arquivo && typeof req.body.arquivo === 'object' ? req.body.arquivo : null;
+    const arquivo = normalizarArquivoEncaminhamento(req.body?.arquivo);
 
     if (!['texto', 'pdf', 'excel'].includes(formato)) {
       return res.status(400).json({ error: 'Formato de encaminhamento invalido.' });
@@ -1008,11 +1071,11 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       return res.status(400).json({ error: 'Selecione ao menos um contato autorizado para encaminhar.' });
     }
     if (formato !== 'texto') {
-      if (!arquivo?.data || !arquivo?.mimetype || !arquivo?.filename) {
+      if (!arquivo) {
         return res.status(400).json({ error: 'Arquivo PDF/Excel nao foi gerado para o encaminhamento.' });
       }
       if (String(arquivo.data).length > 15 * 1024 * 1024) {
-        return res.status(400).json({ error: 'Arquivo muito grande para encaminhamento pelo WhatsApp.' });
+        return res.status(400).json({ error: 'Arquivo muito grande para encaminhamento pelo WhatsApp. Limite: 10 MB por anexo.' });
       }
     }
 
@@ -1311,9 +1374,12 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     try {
       const empresaId = resolverEmpresaSelecionada(req, res);
       if (!empresaId) return;
-      const ok = sessionStore.renomearFavorito({ favoritoId: req.params.favoritoId, empresaId, celular, titulo });
-      if (!ok) return res.status(404).json({ error: 'Favorito nao encontrado.' });
-      res.json({ ok: true });
+      const favorito = sessionStore.renomearFavorito({ favoritoId: req.params.favoritoId, empresaId, celular, titulo });
+      if (!favorito) return res.status(404).json({ error: 'Favorito nao encontrado.' });
+      res.json({
+        ok: true,
+        favorito: serializarFavoritoParaChat(favorito, { empresaId, celular }),
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

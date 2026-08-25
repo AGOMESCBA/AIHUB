@@ -202,6 +202,71 @@ function validarFiltroTipoSF2(sql = '') {
   return "SF2 usada sem filtro SF2.F2_TIPO. REGRA OBRIGATORIA: toda query de faturamento que use SF2 deve filtrar SF2.F2_TIPO = 'N' no WHERE. Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Adicione AND SF2.F2_TIPO = 'N' ao WHERE.";
 }
 
+const CFOPS_TRANSFERENCIA_SEM_RECEITA = ['5151', '6151', '5152', '6152', '5155', '6155', '5156', '6156'];
+
+function _normalizarTextoFiscal(texto = '') {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function _mensagemPedeReceitaPadrao(mensagem = '') {
+  const texto = _normalizarTextoFiscal(mensagem);
+  if (!texto.trim()) return false;
+  const pedeReceita = /\b(faturamento|faturad[oa]s?|vendas?|vendid[oa]s?|receita)\b/.test(texto)
+    || /\bquanto\s+vendemos\b/.test(texto);
+  if (!pedeReceita) return false;
+
+  // Estes termos indicam modo fiscal explicito ou saidas totais; nesses casos
+  // a IA deve decidir o filtro/estrutura conforme a pergunta, nao o validador.
+  const pedeModoFiscalExplicito = /\b(remessa|remessas|transferencia|transferencias|carregad[oa]s?|carregamento|carregamentos|carga|entrega\s+futura|nota\s+mae|todas?\s+as?\s+saidas?|movimentacao\s+total|incluindo\s+remessas?|incluindo\s+transferencias?)\b/.test(texto)
+    || /(?:venda|faturamento|receita)[\s+,&/]+(?:remessa|transferencia)/.test(texto)
+    || /(?:remessa|transferencia)[\s+,&/]+(?:venda|faturamento|receita)/.test(texto);
+  return !pedeModoFiscalExplicito;
+}
+
+function _sqlUsaSD2Receita(sql = '') {
+  const texto = String(sql || '');
+  return /\b(?:FROM|JOIN)\s+\w*SD2\w*\s+SD2\b/i.test(texto)
+    && /\bSD2\s*\.\s*D2_(?:TOTAL|VALDEV|QUANT|QTDEDEV|CF)\b/i.test(texto);
+}
+
+function _temExclusaoRemessa(sql = '') {
+  const texto = String(sql || '');
+  const notLike59 = /\bSD2\s*\.\s*D2_CF\s+NOT\s+LIKE\s*'59%'/i.test(texto);
+  const notLike69 = /\bSD2\s*\.\s*D2_CF\s+NOT\s+LIKE\s*'69%'/i.test(texto);
+  const notGrupoLike = /\bNOT\s*\([\s\S]{0,160}\bSD2\s*\.\s*D2_CF\s+LIKE\s*'59%'[\s\S]{0,80}\bOR\b[\s\S]{0,80}\bSD2\s*\.\s*D2_CF\s+LIKE\s*'69%'[\s\S]{0,160}\)/i.test(texto);
+  return (notLike59 && notLike69) || notGrupoLike;
+}
+
+function _temExclusaoTransferencia(sql = '') {
+  const texto = String(sql || '');
+  const notIn = /\bSD2\s*\.\s*D2_CF\s+NOT\s+IN\s*\(([^)]*)\)/i.exec(texto);
+  if (notIn) {
+    const lista = notIn[1];
+    return CFOPS_TRANSFERENCIA_SEM_RECEITA.every(cfop => new RegExp(`'${cfop}'`).test(lista));
+  }
+  const notInInvertido = /\bNOT\s*\(\s*SD2\s*\.\s*D2_CF\s+IN\s*\(([^)]*)\)\s*\)/i.exec(texto);
+  if (notInInvertido) {
+    const lista = notInInvertido[1];
+    return CFOPS_TRANSFERENCIA_SEM_RECEITA.every(cfop => new RegExp(`'${cfop}'`).test(lista));
+  }
+  return false;
+}
+
+function validarExclusaoCfopReceita(sql = '', mensagem = '') {
+  if (!_mensagemPedeReceitaPadrao(mensagem)) return null;
+  if (!_sqlUsaSD2Receita(sql)) return null;
+  if (_temExclusaoRemessa(sql) && _temExclusaoTransferencia(sql)) return null;
+  return [
+    'Regra fiscal brasileira de CFOP: faturamento/vendas/receita representam somente operacoes que geram receita.',
+    'CFOP de remessa ou transferencia nao representa receita no entendimento fiscal nacional, independentemente do ERP.',
+    "Exclua remessas e transferencias por padrao usando: AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
+    'So remova essa exclusao quando o usuario pedir explicitamente remessas, transferencias, todas as saidas ou movimentacao total.',
+  ].join(' ');
+}
+
 function validarGrupoCliente(sql = '', mensagem = '') {
   // Detecta quando a pergunta pede agrupamento por grupo de cliente
   // mas o SQL não contém JOIN ACY — a IA ignorou a dimensão e gerou escalar ou agrupou por outro campo.
@@ -487,6 +552,9 @@ module.exports = {
       validar: validarFiltroTipoSF2,
     },
     {
+      validar: validarExclusaoCfopReceita,
+    },
+    {
       validar: validarFiltroProdutoAusente,
     },
     {
@@ -551,5 +619,7 @@ module.exports = {
     prepararIntent,
     buscarEntidade,
     resolverEntidades,
+    validarExclusaoCfopReceita,
+    _mensagemPedeReceitaPadrao,
   },
 };

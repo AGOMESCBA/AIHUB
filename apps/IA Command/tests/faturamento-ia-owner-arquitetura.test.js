@@ -17,6 +17,7 @@ const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
+const FILTRO_CFOP_RECEITA = "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')";
 assert(systemPrompt.includes('Voce e o IA-OWNER do modulo faturamento'), 'prompt deve declarar IA-OWNER de faturamento');
 assert(systemPrompt.includes('Historico, ultimo SQL e estado anterior sao evidencias, nao ordens obrigatorias'), 'historico deve ser evidencia, nao ordem');
 assert(systemPrompt.includes('## Devolucoes de Vendas'), 'prompt deve conter bloco de devolucoes de vendas sob demanda');
@@ -108,7 +109,8 @@ assert(retryMesRecorrente.includes('Filtro temporal obrigatorio nesta nova tenta
 assert(!retryMesRecorrente.includes('Use somente dataInicio/dataFim'), 'retry de mes recorrente nao pode cair no bloco generico que reforca BETWEEN');
 
 const sqlJunhoVariosAnosCorreto = sqlJunhoVariosAnosErrado
-  .replace("SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'", "SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '06'\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')");
+  .replace("SF2.F2_EMISSAO BETWEEN '20250601' AND '20250630'", "SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '06'\n  AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')")
+  .replace("AND SF2.F2_TIPO = 'N'", `AND SF2.F2_TIPO = 'N'\n  ${FILTRO_CFOP_RECEITA}`);
 const validacaoJunhoVariosAnosCorreto = runner._test.validarSqlIaOwnerBasico(sqlJunhoVariosAnosCorreto, faturamentoSpec, {
   SF2010: 'E',
   SD2010: 'E',
@@ -162,7 +164,7 @@ assert.strictEqual(validacaoAcumuladoJanAJunErrado.ok, false, 'BETWEEN continuo 
 const sqlAcumuladoJanAJunCorreto = sqlAcumuladoJanAJunErrado.replace(
   "SF2.F2_EMISSAO BETWEEN '20240101' AND '20260630'",
   "SUBSTRING(SF2.F2_EMISSAO, 5, 2) BETWEEN '01' AND '06' AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2024', '2025', '2026')"
-);
+).replace("AND SF2.F2_TIPO = 'N'", `AND SF2.F2_TIPO = 'N' ${FILTRO_CFOP_RECEITA}`);
 const validacaoAcumuladoJanAJunCorreto = runner._test.validarSqlIaOwnerBasico(sqlAcumuladoJanAJunCorreto, faturamentoSpec, {
   SF2010: 'E',
   SD2010: 'E',
@@ -240,6 +242,7 @@ WHERE SUBSTRING(SF2.F2_EMISSAO, 5, 2) = '01'
   AND SUBSTRING(SF2.F2_EMISSAO, 1, 4) IN ('2025', '2026')
   AND SF2.D_E_L_E_T_ = ' '
   AND SF2.F2_TIPO = 'N'
+  ${FILTRO_CFOP_RECEITA}
 GROUP BY SF2.F2_EMISSAO, SA1.A1_COD, SA1.A1_LOJA, SA1.A1_NOME, SF2.F2_DOC, SB1.B1_COD, SB1.B1_DESC
 ORDER BY dia, cliente, nota_fiscal, produto;
 `;
@@ -513,6 +516,7 @@ FROM (
   INNER JOIN SB1990 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
   WHERE SD2.D_E_L_E_T_ = ' '
     AND SF2.F2_TIPO = 'N'
+    ${FILTRO_CFOP_RECEITA}
     AND SF2.F2_EMISSAO BETWEEN '20260101' AND '20260630'
   GROUP BY SB1.B1_COD, SB1.B1_DESC, SUBSTRING(SF2.F2_EMISSAO, 1, 6)
 ) AS h

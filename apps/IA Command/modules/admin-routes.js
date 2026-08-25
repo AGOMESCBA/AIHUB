@@ -160,6 +160,8 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         return { start: '{{HOJE}}', end: '{{HOJE}}' };
       case 'ontem':
         return { start: '{{ONTEM}}', end: '{{ONTEM}}' };
+      case 'amanha':
+        return { start: '{{AMANHA}}', end: '{{AMANHA}}' };
       case 'esta_semana':
         return { start: '{{INICIO_SEMANA}}', end: '{{FIM_SEMANA}}' };
       case 'semana_anterior':
@@ -170,10 +172,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         return { start: '{{INICIO_MES}}', end: '{{FIM_MES}}' };
       case 'mes_anterior':
         return { start: '{{INICIO_MES_ANTERIOR}}', end: '{{FIM_MES_ANTERIOR}}' };
+      case 'proximo_mes':
+        return { start: '{{INICIO_MES:1}}', end: '{{FIM_MES:1}}' };
       case 'ano_atual':
         return { start: '{{INICIO_ANO}}', end: '{{FIM_ANO}}' };
       case 'ano_anterior':
         return { start: '{{INICIO_ANO_ANTERIOR}}', end: '{{FIM_ANO_ANTERIOR}}' };
+      case 'proximo_ano':
+        return { start: '{{INICIO_ANO:1}}', end: '{{FIM_ANO:1}}' };
       case 'ultimos_N_dias': {
         const dias = Math.max(Number(periodo.dias || 0), 1);
         return { start: `{{HOJE:-${dias - 1}}}`, end: '{{HOJE}}' };
@@ -199,6 +205,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     return out;
   }
 
+  function _substituirBetweenDatasPorMacros(sql, macros) {
+    if (!macros?.start || !macros?.end) return sql;
+    return String(sql || '').replace(
+      /\bBETWEEN\s+'?(\d{8}|\d{4}-\d{2}-\d{2})'?\s+AND\s+'?(\d{8}|\d{4}-\d{2}-\d{2})'?/i,
+      `BETWEEN '${macros.start}' AND '${macros.end}'`
+    );
+  }
+
   function _macrosDataComoTexto(sql) {
     const macroData = /\{\{(?:HOJE|HOJE_ISO|ONTEM|ONTEM_ISO|DATA_EXECUCAO|DATA_EXECUCAO_ISO|INICIO_SEMANA|INICIO_SEMANA_ISO|FIM_SEMANA|FIM_SEMANA_ISO|INICIO_SEMANA_ANTERIOR|INICIO_SEMANA_ANTERIOR_ISO|FIM_SEMANA_ANTERIOR|FIM_SEMANA_ANTERIOR_ISO|INICIO_PROXIMA_SEMANA|INICIO_PROXIMA_SEMANA_ISO|FIM_PROXIMA_SEMANA|FIM_PROXIMA_SEMANA_ISO|INICIO_MES|INICIO_MES_ISO|FIM_MES|FIM_MES_ISO|INICIO_MES_ANTERIOR|INICIO_MES_ANTERIOR_ISO|FIM_MES_ANTERIOR|FIM_MES_ANTERIOR_ISO|INICIO_ANO|INICIO_ANO_ISO|FIM_ANO|FIM_ANO_ISO|INICIO_ANO_ANTERIOR|INICIO_ANO_ANTERIOR_ISO|FIM_ANO_ANTERIOR|FIM_ANO_ANTERIOR_ISO)(?::[-+]?\d+)?\}\}/g;
     return String(sql || '').replace(new RegExp(`(^|[^'])(${macroData.source})(?!')`, 'g'), "$1'$2'");
@@ -218,6 +232,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
     const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto));
     let out = String(sqlFinal || '');
+    if (macros.start !== macros.end && /\bBETWEEN\b/i.test(out)) {
+      out = _substituirBetweenDatasPorMacros(out, macros);
+    }
     out = _substituirLiteralData(out, resolvido?.dataInicio, macros.start);
     out = _substituirLiteralData(out, resolvido?.dataFim, macros.end);
     return _macrosDataComoTexto(out);
@@ -450,6 +467,81 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const rows = crud.listar('whatsapp_allowed_numbers', { empresa_id: empresaId, ativo: 1 });
     const modulosPorNumero = _listarModulosDinamicosPorEmpresa(empresaId);
     res.json(rows.map(row => ({ ...row, modulos_dinamicos: modulosPorNumero.get(row.id) || [] })));
+  });
+
+  app.get('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
+    const nomes = new Map(empresas.map(e => [Number(e.id), e.nome]));
+    const ids = empresas.map(e => Number(e.id)).filter(Boolean);
+    const arvoreRows = ids.length ? getDB().prepare(`
+      SELECT empresa_id, empresa_codigo, filial_chave, tipo_no, nome
+        FROM protheus_company_tree
+       WHERE empresa_id IN (${ids.map(() => '?').join(',')})
+         AND ativo = 1
+    `).all(...ids) : [];
+    const nomesEmpProtheus = new Map();
+    const nomesFiliais = new Map();
+    for (const item of arvoreRows) {
+      if (item.tipo_no === 'empresa' && item.empresa_codigo) {
+        nomesEmpProtheus.set(`${item.empresa_id}:${item.empresa_codigo}`, item.nome || item.empresa_codigo);
+      }
+      if (item.tipo_no === 'filial' && item.filial_chave) {
+        nomesFiliais.set(`${item.empresa_id}:${item.filial_chave}`, item.nome || item.filial_chave);
+      }
+    }
+    const rows = store.listar({
+      empresaIds: empresas.map(e => e.id),
+      incluirInativos: req.query.inativos === '1' || req.query.incluirInativos === '1',
+    }).map(row => ({
+      ...row,
+      empresa_nome: nomes.get(Number(row.empresa_id)) || `Empresa #${row.empresa_id}`,
+      empresas_resumo: (row.empresasPermitidas || []).map(emp => {
+        const codigo = String(emp.codigoProtheus || '').trim();
+        return emp.nomeProtheus || nomesEmpProtheus.get(`${row.empresa_id}:${codigo}`) || codigo || `Empresa ${emp.empresaId}`;
+      }).filter(Boolean).join(', '),
+      filiais_resumo: (row.filiaisPermitidas || []).flatMap(emp => (
+        Array.isArray(emp.filiais) ? emp.filiais : []
+      ).map(filial => nomesFiliais.get(`${row.empresa_id}:${filial}`) || filial)).slice(0, 8).join(', '),
+      qtd_empresas: Array.isArray(row.empresasPermitidas) ? row.empresasPermitidas.length : 0,
+      qtd_filiais: Array.isArray(row.filiaisPermitidas)
+        ? row.filiaisPermitidas.reduce((s, item) => s + (Array.isArray(item.filiais) ? item.filiais.length : 0), 0)
+        : 0,
+    }));
+    res.json({ rows, empresas });
+  });
+
+  app.get('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const row = store.buscarPorId(req.params.id);
+    if (!row || !_empresaPermitida(req, Number(row.empresa_id), 'iac-admin-numeros-whatsapp')) {
+      return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
+    }
+    const emp = empresasDb.buscarPorId(Number(row.empresa_id)) || {};
+    res.json({ ...row, empresa_nome: emp.nome || emp.razao_social || `Empresa #${row.empresa_id}` });
+  });
+
+  app.put('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const existing = store.buscarPorId(req.params.id);
+    if (!existing || !_empresaPermitida(req, Number(existing.empresa_id), 'iac-admin-numeros-whatsapp')) {
+      return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
+    }
+    try {
+      const row = store.atualizar(req.params.id, {
+        usuario_id: req.body?.usuario_id,
+        usuario_nome: req.body?.usuario_nome,
+        celular: req.body?.celular,
+        observacoes: req.body?.observacoes,
+        ativo: req.body?.ativo,
+        empresasPermitidas: req.body?.empresasPermitidas,
+        filiaisPermitidas: req.body?.filiaisPermitidas,
+      });
+      _audit(req, 'editar_usuario_protheus_web', { id: req.params.id, usuario_id: row?.usuario_id, celular: row?.celular });
+      res.json(row);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
   });
 
   app.get('/api/ia-command/admin/numeros-whatsapp/modulos-disponiveis', requireAuth, requireIaCommand, canNumeros, (req, res) => {

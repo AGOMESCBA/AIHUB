@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuarios Protheus Web - IA Command</title>
+  <link rel="stylesheet" href="/css/iahub.css">
+  <style>
+    :root { --accent:#7c3aed; --accent-glow:rgba(124,58,237,.1); }
+    .sidebar-logo .logo-icon { background:#7c3aed !important; }
+    .topbar-menu-btn { flex-shrink:0;background:none;border:none;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:var(--text-md); }
+    .topbar-title { flex:1;min-width:0;font-weight:700; }
+    .page-head { display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px; }
+    .page-kicker { font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:3px; }
+    .page-title { font-size:20px;font-weight:800;color:var(--text-hi);line-height:1.25; }
+    .page-subtitle { font-size:13px;color:var(--text-md);margin-top:4px; }
+    .quick-panel { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:12px 14px;margin-bottom:12px; }
+    .quick-row { display:flex;align-items:center;gap:10px;flex-wrap:wrap; }
+    .quick-row .form-control { height:36px;font-size:13px; }
+    .quick-row input.form-control { flex:1;min-width:220px; }
+    .quick-row select.form-control { width:auto;min-width:145px; }
+    .filter-status { font-size:12px;color:var(--text-lo); }
+    .table-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden; }
+    .grid-toolbar { display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg-card); }
+    .grid-title { font-size:13px;font-weight:700;color:var(--text-hi); }
+    .grid-meta { font-size:12px;color:var(--text-lo);margin-top:1px; }
+    .table-wrap { height:calc(100vh - 245px);min-height:360px;overflow:auto; }
+    table { width:100%;min-width:1250px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px; }
+    th { position:sticky;top:0;z-index:2;background:var(--bg-card);border-bottom:1px solid var(--border);color:var(--text-lo);font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:9px 10px;white-space:nowrap;cursor:pointer; }
+    td { border-bottom:1px solid var(--border);color:var(--text-md);padding:10px;vertical-align:top;background:var(--bg-card); }
+    tr.data-row { cursor:pointer; }
+    tr.data-row:hover td { background:var(--bg-hover); }
+    .col-user { width:190px; }
+    .col-phone { width:145px; }
+    .col-company { width:180px; }
+    .col-summary { width:230px; }
+    .col-count { width:90px; }
+    .col-status { width:100px; }
+    .col-date { width:165px; }
+    .badge { display:inline-flex;align-items:center;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:800;white-space:nowrap; }
+    .badge-ok { background:#dcfce7;color:#15803d; }
+    .badge-muted { background:var(--bg-base);color:var(--text-md);border:1px solid var(--border); }
+    .text-cut { white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+    .detail-shell { display:none; }
+    .detail-shell.open { display:block; }
+    .editor-bar { display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow-sm); }
+    .editor-title strong { display:block;color:var(--text-hi);font-size:16px; }
+    .editor-title span { color:var(--text-lo);font-size:12px; }
+    .detail-card { background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px; }
+    .form-grid { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px; }
+    .form-label { display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:5px; }
+    .json-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px; }
+    textarea.json { min-height:260px;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;resize:vertical; }
+    .save-feedback { font-size:13px;color:var(--text-lo); }
+    .save-feedback.ok { color:#15803d; }
+    .save-feedback.fail { color:#b91c1c; }
+    .empty-state { height:280px;display:flex;align-items:center;justify-content:center;color:var(--text-lo);font-size:18px;font-weight:800; }
+    @media(max-width:900px){ .page-head,.editor-bar{flex-direction:column;align-items:flex-start}.form-grid,.json-grid{grid-template-columns:1fr}.table-wrap{height:calc(100vh - 310px)} }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo" onclick="toggleSidebar()"><div class="logo-icon">IA</div><span class="logo-text">IA Command</span></div>
+    <div class="sidebar-nav"></div>
+    <div class="sidebar-footer"></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <button class="topbar-menu-btn" onclick="toggleSidebar()" title="Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <span class="topbar-title"><span style="color:var(--text-lo);font-weight:400">IA Command &rsaquo;</span> Usuarios Protheus Web</span>
+    </div>
+
+    <div class="page-content">
+      <section id="list-view">
+        <div class="page-head">
+          <div>
+            <div class="page-kicker">WhatsApp Web</div>
+            <div class="page-title">Usuarios Protheus sincronizados</div>
+            <div class="page-subtitle">Espelho de telefone, empresas e filiais usado pelo futuro login web via WhatsApp.</div>
+          </div>
+          <button class="btn btn-primary" id="refresh-btn" type="button">Atualizar</button>
+        </div>
+
+        <div class="quick-panel">
+          <div class="quick-row">
+            <input id="q" class="form-control" type="search" placeholder="Buscar por usuario, nome, telefone ou empresa..." autocomplete="off">
+            <select id="status" class="form-control">
+              <option value="ativos">Ativos</option>
+              <option value="todos">Todos</option>
+              <option value="inativos">Inativos</option>
+            </select>
+            <span class="filter-status" id="filter-status">Sem filtros ativos</span>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="grid-toolbar">
+            <div><div class="grid-title">Permissoes sincronizadas</div><div class="grid-meta" id="count">carregando...</div></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-user" data-sort="usuario_id">Usuario</th>
+                  <th class="col-user" data-sort="usuario_nome">Nome</th>
+                  <th class="col-phone" data-sort="celular">Telefone</th>
+                  <th class="col-company" data-sort="empresa_nome">Empresa IAHub</th>
+                  <th class="col-summary" data-sort="empresas_resumo">Empresas Protheus</th>
+                  <th class="col-summary" data-sort="filiais_resumo">Filiais</th>
+                  <th class="col-count" data-sort="qtd_empresas">Empresas</th>
+                  <th class="col-count" data-sort="qtd_filiais">Filiais</th>
+                  <th class="col-status" data-sort="ativo">Status</th>
+                  <th class="col-date" data-sort="ultimo_sync_em">Ultimo sync</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+            <div class="empty-state" id="empty" style="display:none">Nenhum usuario sincronizado</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="detail-view" class="detail-shell">
+        <div class="editor-bar">
+          <div class="editor-title"><strong id="detail-title">Usuario</strong><span id="detail-subtitle">-</span></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="save-feedback" id="save-feedback"></span>
+            <button class="btn btn-ghost" id="back-btn" type="button">Voltar</button>
+            <button class="btn btn-primary" id="save-btn" type="button">Salvar</button>
+          </div>
+        </div>
+        <div class="detail-card">
+          <div class="form-grid">
+            <div><label class="form-label">Usuario Protheus</label><input class="form-control" id="f-usuario-id"></div>
+            <div><label class="form-label">Nome</label><input class="form-control" id="f-usuario-nome"></div>
+            <div><label class="form-label">Telefone</label><input class="form-control" id="f-celular"></div>
+            <div><label class="form-label">Status</label><select class="form-control" id="f-ativo"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
+            <div><label class="form-label">Empresa IAHub</label><input class="form-control" id="f-empresa" disabled></div>
+            <div><label class="form-label">Ultimo sync</label><input class="form-control" id="f-sync" disabled></div>
+          </div>
+          <div style="margin-top:14px">
+            <label class="form-label">Observacoes</label>
+            <textarea class="form-control" id="f-observacoes" rows="3"></textarea>
+          </div>
+          <div class="json-grid">
+            <div><label class="form-label">Empresas permitidas JSON</label><textarea class="form-control json" id="f-empresas"></textarea></div>
+            <div><label class="form-label">Filiais permitidas JSON</label><textarea class="form-control json" id="f-filiais"></textarea></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/app/ia-command/js/sidebar.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let rows = [];
+  let sortField = 'usuario_nome';
+  let sortDir = 'asc';
+  let atual = null;
+
+  function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function dataFmt(v){ if(!v) return '-'; const d = new Date(v); return Number.isNaN(d.getTime()) ? v : d.toLocaleString('pt-BR'); }
+  function jsonFmt(v){ return JSON.stringify(v || [], null, 2); }
+  function match(row, termo){
+    if(!termo) return true;
+    const texto = [row.usuario_id,row.usuario_nome,row.celular,row.empresa_nome,row.empresas_resumo,row.filiais_resumo,row.origem].join(' ').toLowerCase();
+    return texto.includes(termo);
+  }
+  function filtradas(){
+    const termo = $('q').value.trim().toLowerCase();
+    const status = $('status').value;
+    return rows.filter(r => {
+      if(status === 'ativos' && !Number(r.ativo)) return false;
+      if(status === 'inativos' && Number(r.ativo)) return false;
+      return match(r, termo);
+    }).sort((a,b) => {
+      const av = a[sortField] ?? '';
+      const bv = b[sortField] ?? '';
+      const cmp = typeof av === 'number' || typeof bv === 'number' ? Number(av) - Number(bv) : String(av).localeCompare(String(bv), 'pt-BR');
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+  function render(){
+    const lista = filtradas();
+    $('count').textContent = lista.length + ' de ' + rows.length + ' usuarios';
+    $('filter-status').textContent = ($('q').value || $('status').value !== 'ativos') ? 'Filtros ativos' : 'Sem filtros ativos';
+    $('tbody').innerHTML = lista.map(r => `
+      <tr class="data-row" data-id="${esc(r.id)}">
+        <td class="text-cut" title="${esc(r.usuario_id || '')}">${esc(r.usuario_id || '-')}</td>
+        <td class="text-cut" title="${esc(r.usuario_nome || '')}">${esc(r.usuario_nome || '-')}</td>
+        <td>${esc(r.celular || '-')}</td>
+        <td class="text-cut" title="${esc(r.empresa_nome || '')}">${esc(r.empresa_nome || '-')}</td>
+        <td class="text-cut" title="${esc(r.empresas_resumo || '')}">${esc(r.empresas_resumo || '-')}</td>
+        <td class="text-cut" title="${esc(r.filiais_resumo || '')}">${esc(r.filiais_resumo || '-')}</td>
+        <td>${Number(r.qtd_empresas || 0)}</td>
+        <td>${Number(r.qtd_filiais || 0)}</td>
+        <td>${Number(r.ativo) ? '<span class="badge badge-ok">Ativo</span>' : '<span class="badge badge-muted">Inativo</span>'}</td>
+        <td>${esc(dataFmt(r.ultimo_sync_em || r.atualizado_em))}</td>
+      </tr>`).join('');
+    $('empty').style.display = lista.length ? 'none' : 'flex';
+  }
+  async function api(path, opts){
+    const r = await fetch('/api/ia-command/admin/protheus-web-users' + path, {
+      headers: { 'Content-Type':'application/json' },
+      ...opts,
+    });
+    const body = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(body.error || 'Erro ' + r.status);
+    return body;
+  }
+  async function carregar(){
+    const data = await api('?inativos=1');
+    rows = Array.isArray(data.rows) ? data.rows : [];
+    render();
+  }
+  async function abrir(id){
+    atual = await api('/' + encodeURIComponent(id));
+    $('detail-title').textContent = atual.usuario_nome || atual.usuario_id || atual.celular;
+    $('detail-subtitle').textContent = (atual.empresa_nome || 'Empresa') + ' - ' + (atual.celular || '');
+    $('f-usuario-id').value = atual.usuario_id || '';
+    $('f-usuario-nome').value = atual.usuario_nome || '';
+    $('f-celular').value = atual.celular || '';
+    $('f-ativo').value = Number(atual.ativo) ? '1' : '0';
+    $('f-empresa').value = atual.empresa_nome || atual.empresa_id || '';
+    $('f-sync').value = dataFmt(atual.ultimo_sync_em || atual.atualizado_em);
+    $('f-observacoes').value = atual.observacoes || '';
+    $('f-empresas').value = jsonFmt(atual.empresasPermitidas);
+    $('f-filiais').value = jsonFmt(atual.filiaisPermitidas);
+    $('list-view').style.display = 'none';
+    $('detail-view').classList.add('open');
+  }
+  async function salvar(){
+    try {
+      const payload = {
+        usuario_id: $('f-usuario-id').value.trim(),
+        usuario_nome: $('f-usuario-nome').value.trim(),
+        celular: $('f-celular').value.trim(),
+        ativo: $('f-ativo').value === '1',
+        observacoes: $('f-observacoes').value.trim() || null,
+        empresasPermitidas: JSON.parse($('f-empresas').value || '[]'),
+        filiaisPermitidas: JSON.parse($('f-filiais').value || '[]'),
+      };
+      atual = await api('/' + encodeURIComponent(atual.id), { method:'PUT', body: JSON.stringify(payload) });
+      $('save-feedback').textContent = 'Salvo';
+      $('save-feedback').className = 'save-feedback ok';
+      await carregar();
+    } catch (err) {
+      $('save-feedback').textContent = err.message;
+      $('save-feedback').className = 'save-feedback fail';
+    }
+  }
+  function voltar(){ $('detail-view').classList.remove('open'); $('list-view').style.display = ''; $('save-feedback').textContent = ''; }
+
+  document.querySelectorAll('th[data-sort]').forEach(th => th.addEventListener('click', () => {
+    const field = th.dataset.sort;
+    if(sortField === field) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    else { sortField = field; sortDir = 'asc'; }
+    render();
+  }));
+  $('tbody').addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if(tr) abrir(tr.dataset.id); });
+  $('q').addEventListener('input', render);
+  $('status').addEventListener('change', render);
+  $('refresh-btn').addEventListener('click', carregar);
+  $('back-btn').addEventListener('click', voltar);
+  $('save-btn').addEventListener('click', salvar);
+  carregar().catch(err => { $('count').textContent = err.message; });
+</script>
+</body>
+</html>

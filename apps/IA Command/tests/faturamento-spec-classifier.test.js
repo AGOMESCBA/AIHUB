@@ -36,6 +36,16 @@ ok('"faturamento do mes" aciona metrica_valor_total', () => {
   assert.ok(contemTodos(r, ['metrica_valor_total']), `obteve: ${JSON.stringify(r)}`);
 });
 
+ok('"faturamento do dia por cliente, nota fiscal e produto" mantem metrica de valor', () => {
+  const r = classificarFragmentos('Faturamento do dia por cliente, nota fiscal e produto');
+  assert.ok(contemTodos(r, ['metrica_valor_total', 'metrica_quantidade_item']), `obteve: ${JSON.stringify(r)}`);
+});
+
+ok('"total faturado ... valor e quantidade" aciona valor e quantidade', () => {
+  const r = classificarFragmentos('Total faturado no dia por cliente, nota fiscal e produto trazendo valor e quantidade');
+  assert.ok(contemTodos(r, ['metrica_valor_total', 'metrica_quantidade_item']), `obteve: ${JSON.stringify(r)}`);
+});
+
 ok('"quantidade faturada" aciona metrica_quantidade_item', () => {
   const r = classificarFragmentos('qual a quantidade faturada em maio?');
   assert.ok(contemTodos(r, ['metrica_quantidade_item']), `obteve: ${JSON.stringify(r)}`);

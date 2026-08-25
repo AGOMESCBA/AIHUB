@@ -111,12 +111,34 @@ function _metricasPedidas(intent) {
   return [...metricas].filter(Boolean);
 }
 
+function _textoIntentNormalizado(intent) {
+  return _normalizarNome([
+    intent?._mensagemOriginal,
+    intent?.intencao,
+    intent?.acao,
+    intent?.tipo,
+  ].filter(Boolean).join(' '));
+}
+
+function _pediuValorEQuantidade(intent) {
+  const texto = _textoIntentNormalizado(intent);
+  if (!texto) return false;
+  const tokens = texto.split('_').filter(Boolean);
+  const pediuQuantidade = tokens.some(t => ['quantidade', 'qtd', 'qtde', 'volume', 'peca', 'pecas', 'item', 'itens'].includes(t));
+  const pediuValor = tokens.some(t => ['faturamento', 'faturado', 'faturada', 'valor', 'vlr', 'receita', 'total'].includes(t));
+  return pediuValor && pediuQuantidade;
+}
+
 function _filtrarMetricasSolicitadas(cols, intent) {
   const pedidas = _metricasPedidas(intent);
   if (!pedidas.length) return cols;
+  const manterValorComQuantidade = _pediuValorEQuantidade(intent) && pedidas.some(m => (
+    m.includes('quantidade') || m.includes('qtd') || m.includes('qtde') || m.includes('volume')
+  ));
   const filtradas = cols.filter(col => {
     const nome = _normalizarNome(col);
-    return pedidas.some(m => nome === m || nome.includes(m) || m.includes(nome));
+    if (pedidas.some(m => nome === m || nome.includes(m) || m.includes(nome))) return true;
+    return manterValorComQuantidade && _tipoMetrica(col) === 'moeda';
   });
   return filtradas.length ? filtradas : cols;
 }

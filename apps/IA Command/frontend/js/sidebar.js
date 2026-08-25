@@ -17,6 +17,7 @@
       items: [
         { id: 'iac-admin-canais-whatsapp',        label: 'Canais',              href: '/app/ia-command/admin-canais-whatsapp.html',        icon: '📡' },
         { id: 'iac-admin-numeros-whatsapp',       label: 'Números Autorizados', href: '/app/ia-command/admin-numeros-whatsapp.html',       icon: '📱' },
+        { id: 'iac-admin-numeros-whatsapp',       label: 'Usuários Protheus',    href: '/app/ia-command/admin-protheus-web-users.html',     icon: '🏭' },
         { id: 'iac-admin-grupos-whatsapp',        label: 'Grupos',              href: '/app/ia-command/admin-grupos-whatsapp.html',        icon: '👥' },
         { id: 'iac-admin-mensagens-whatsapp',     label: 'Mensagens',           href: '/app/ia-command/admin-mensagens-whatsapp.html',     icon: '✉️' },
         { id: 'iac-admin-whatsapp-response-config', label: 'Respostas',         href: '/app/ia-command/admin-whatsapp-response-config.html', icon: '📎' },

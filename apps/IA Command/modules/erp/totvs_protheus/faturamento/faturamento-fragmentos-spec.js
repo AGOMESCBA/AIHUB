@@ -102,6 +102,7 @@ Para cliente SEM LOJA ou todos os registros do mesmo codigo, filtre apenas o cod
 - "por vendedor": agrupe por SA3.A3_COD, SA3.A3_NOME.
 - "por vendedor": use somente o vendedor principal da nota: JOIN SA3<sufixo> SA3 ON SF2.F2_VEND1 = SA3.A3_COD AND SA3.D_E_L_E_T_ = ' '. PROIBIDO usar OR com SF2.F2_VEND2..F2_VEND5, pois duplica o valor quando a nota possui mais de um vendedor.
 - "por produto": agrupe por SB1.B1_COD, SB1.B1_DESC.
+- "por grupo de produto": faca JOIN SB1 e JOIN SBM, exiba SBM.BM_DESC AS grupo_produto e agrupe SOMENTE por SBM.BM_GRUPO, SBM.BM_DESC. NAO inclua SB1.B1_COD/produto no SELECT/GROUP BY salvo se o usuario pedir tambem "por produto".
 - REGRA CRITICA SQL Server — GROUP BY com SA1: Sempre que SA1 estiver no JOIN e qualquer campo de SA1 aparecer no SELECT ou GROUP BY, inclua SA1.A1_COD e SA1.A1_LOJA obrigatoriamente no GROUP BY. O SQL Server nao aceita referenciar SA1.A1_COD ou SA1.A1_LOJA em subqueries correlacionadas se eles nao estiverem no GROUP BY da query externa (erro 8120).
 - REGRA CRITICA — subquery correlacionada com SA1: NUNCA use SA1.A1_COD ou SA1.A1_LOJA como correlacao em subquery se SA1 esta na query externa com GROUP BY. Use UNION ALL com subqueries escalares conforme o padrao de devolucoes.
 `;
@@ -155,8 +156,10 @@ Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FR
 - Metrica escalar obrigatoria: COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento. NUNCA use SUM(SF2.F2_VALBRUT) — SD2.D2_TOTAL e a metrica de item, correta para agregacao por nota (SF2.F2_VALBRUT somado com JOIN em SD2 duplicaria o valor pela quantidade de itens da nota).
 - EXCECAO — pergunta pede "faturamento considerando devolucoes", "com devolucoes", "abatendo devolucoes" ou "liquido": use COALESCE(SUM(SD2.D2_TOTAL - SD2.D2_VALDEV), 0) AS faturamento_liquido — SD2.D2_VALDEV e o valor de devolucao ja vinculado ao item, dispensando UNION ALL com SD1/SF1.
 - FILTRO OBRIGATORIO: inclua SEMPRE SF2.F2_TIPO = 'N' no WHERE junto com D_E_L_E_T_ = ' ' (em SD2 e SF2). Isso exclui devolucoes de compras (tipo 'D'), complementos e outros tipos que nao representam receita de venda. Exemplo: WHERE SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO BETWEEN '...' AND '...'.
+- REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA: venda/faturamento/receita significa somente operacoes que geram receita. CFOP de remessa ou transferencia nao representa receita no entendimento fiscal nacional, independentemente do ERP. No Protheus, aplique isso pelo campo SD2.D2_CF: AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156'). Esta regra tambem vale para faturamento liquido, medias, rankings, comparativos e agrupamentos por cliente/produto/vendedor.
+- Excecao ao padrao de receita: se o usuario pedir explicitamente "todas as saidas", "movimentacao total", "venda + remessa + transferencia", "incluindo remessas e transferencias" ou equivalente, nao aplique a exclusao de CFOP.
 - Agrupamentos por cliente, vendedor ou natureza: faca JOIN adicional com SA1 (via Joins padrao SF2->SA1), SA3 ou SED conforme o agrupamento pedido.
-- Exemplo completo de "faturamento do mes": SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento FROM SD2... JOIN SF2... WHERE SF2.F2_TIPO = 'N' AND [demais filtros D_E_L_E_T_/periodo].
+- Exemplo completo de "faturamento do mes": SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento FROM SD2... JOIN SF2... WHERE SF2.F2_TIPO = 'N' AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND [demais filtros D_E_L_E_T_/periodo].
 `;
 }
 
@@ -166,17 +169,18 @@ function metricaQuantidadeItem() {
 - Quando o usuario pedir "Quantidade faturada", "Volume de vendas", "Total de pecas vendidas" (mesmo que seja total escalar de uma unica linha), ou quando citar produtos e grupos de produtos, use OBRIGATORIAMENTE a tabela de itens SD2 fazendo JOIN com SF2 (para validar periodo de emissao e F2_TIPO = 'N').
 - Metrica de quantidade escalar obrigatoria: COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada.
 - NUNCA use SF2 sozinha quando a pergunta contiver "Quantidade": o cabecalho nao armazena volume de itens vendidos.
+- Citar produto/grupo de produto define a GRANULARIDADE e a base SD2; isso NAO significa que a metrica principal seja quantidade. Se a pergunta falar "faturamento", "total faturado", "valor" ou "vendas" por produto/cliente/nota, inclua obrigatoriamente COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_total. Inclua quantidade_faturada somente quando o usuario pedir quantidade/volume/itens junto.
 - Quando o agrupamento ou filtro for por produto, grupo de produto, TES ou centro de custo: use SD2 JOIN SF2 e adote SUM(SD2.D2_TOTAL) como metrica de valor.
 - REGRA DE EXCLUSIVIDADE DE METRICA: SD2 e F2_VALBRUT sao mutuamente exclusivos. Quando SD2 estiver no FROM ou em qualquer JOIN, use OBRIGATORIAMENTE SUM(SD2.D2_TOTAL) para valor e SUM(SD2.D2_QUANT) para quantidade. Nunca use SUM(SF2.F2_VALBRUT) quando SD2 estiver presente — a multiplicidade da relacao 1-para-N inflaria todos os valores.
 - Quando o usuario pedir SIMULTANEAMENTE "por valor" e "por quantidade" com agrupamento por produto/grupo/mes/cliente: ambas as metricas devem vir de SD2. Exemplo: SELECT ..., COALESCE(SUM(SD2.D2_TOTAL),0) AS valor_total, COALESCE(SUM(SD2.D2_QUANT),0) AS quantidade_faturada FROM SD2... JOIN SF2...
-- REGRA CRITICA — duas metricas com regras fiscais DIFERENTES na mesma pergunta (ex: "quantidade carregada e valor faturado", "faturamento e carregamento do mes", com ou sem devolucao): cada metrica tem seu proprio JOIN/filtro. "Carregada"/"carregamento" exige JOIN SF4/F4_ESTOQUE='S' e NUNCA filtro de D2_CF. "Faturada"/"faturamento"/valor NUNCA usa JOIN SF4 e NUNCA usa filtro de D2_CF. NUNCA junte as duas metricas em um UNICO SELECT com um UNICO FROM/WHERE — isso aplicaria o JOIN SF4 (exclusivo de carregada) tambem sobre faturada, contaminando o resultado mesmo que cada COALESCE(SUM(...)) pareca correto isoladamente. ESTE ERRO E FACIL DE COMETER: nao gera erro de sintaxe, so um numero errado. SEMPRE use DUAS subqueries/CTEs 100% independentes (cada uma com seu proprio FROM/JOIN/WHERE completo, sem compartilhar nada), combinadas via CROSS JOIN no SELECT externo. Quando a pergunta tambem pedir devolucao (ex: "faturamento e carregamento do mes considerando devolucao"), aplique a formula de devolucao (D2_VALDEV/D2_QTDEDEV) DENTRO DE CADA subquery — nunca esqueca de aplicar em AMBAS.
+- REGRA CRITICA — duas metricas com regras fiscais DIFERENTES na mesma pergunta (ex: "quantidade carregada e valor faturado", "faturamento e carregamento do mes", com ou sem devolucao): cada metrica tem seu proprio JOIN/filtro. "Carregada"/"carregamento" exige JOIN SF4/F4_ESTOQUE='S' e NAO usa filtro de D2_CF. "Faturada"/"faturamento"/valor usa a regra nacional de receita: excluir remessas e transferencias por CFOP, salvo pedido explicito de todas as saidas. NUNCA junte as duas metricas em um UNICO SELECT com um UNICO FROM/WHERE — isso aplicaria o JOIN SF4 (exclusivo de carregada) tambem sobre faturada, contaminando o resultado mesmo que cada COALESCE(SUM(...)) pareca correto isoladamente. ESTE ERRO E FACIL DE COMETER: nao gera erro de sintaxe, so um numero errado. SEMPRE use DUAS subqueries/CTEs 100% independentes (cada uma com seu proprio FROM/JOIN/WHERE completo, sem compartilhar nada), combinadas via CROSS JOIN no SELECT externo. Quando a pergunta tambem pedir devolucao (ex: "faturamento e carregamento do mes considerando devolucao"), aplique a formula de devolucao (D2_VALDEV/D2_QTDEDEV) DENTRO DE CADA subquery — nunca esqueca de aplicar em AMBAS.
 
 EXEMPLO OBRIGATORIO — "faturamento e carregamento do mes considerando devolucao" (copie esta estrutura, so trocando o periodo):
 WITH faturamento AS (
   SELECT COALESCE(SUM(SD2.D2_TOTAL - SD2.D2_VALDEV), 0) AS valor_liquido
   FROM SD2xxx SD2
   JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
-  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N'
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N' AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')
 ),
 carregamento AS (
   SELECT COALESCE(SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), 0) AS quantidade_carregada_liquida
@@ -187,12 +191,12 @@ carregamento AS (
 )
 SELECT f.valor_liquido, c.quantidade_carregada_liquida FROM faturamento f CROSS JOIN carregamento c;
 
-EXEMPLO OBRIGATORIO — "quantidade faturada e carregada no mes" (SEM devolucao — repare que "faturada" NAO tem JOIN SF4 nem filtro de D2_CF):
+EXEMPLO OBRIGATORIO — "quantidade faturada e carregada no mes" (SEM devolucao — repare que "faturada" NAO tem JOIN SF4, mas exclui remessa/transferencia por CFOP):
 WITH faturamento AS (
   SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada
   FROM SD2xxx SD2
   JOIN SF2xxx SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
-  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N'
+  WHERE SF2.D_E_L_E_T_ = ' ' AND SD2.D_E_L_E_T_ = ' ' AND SF2.F2_EMISSAO BETWEEN '20260701' AND '20260731' AND SF2.F2_TIPO = 'N' AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')
 ),
 carregamento AS (
   SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_carregada
@@ -205,9 +209,11 @@ SELECT f.quantidade_faturada, c.quantidade_carregada FROM faturamento f CROSS JO
 - 3 GRUPOS FISCAIS DE SD2.D2_CF (mutuamente exclusivos, nunca misture, NUNCA omita quando a pergunta cair em um destes casos):
   REMESSA = (LIKE '59%' OR LIKE '69%') | TRANSFERENCIA = IN ('5151','6151','5152','6152','5155','6155','5156','6156') | ENTREGA_FUTURA/NOTA_MAE = IN ('5117','6117')
 - REMESSA tem 2 condicoes com OR: SEMPRE escreva entre parenteses no WHERE — (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') — nunca solto, senao o AND seguinte quebra a precedencia logica do filtro.
-- "faturada"/"faturado" SEM mencionar carregada/carga/entrega futura/nota mae/remessa/transferencia: NAO aplique NENHUM filtro de D2_CF. Quantidade/valor faturado e o total bruto de SD2, sem exclusao fiscal. Exemplo completo de "quantidade faturada no mes": SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_faturada FROM SD2... JOIN SF2... WHERE SF2.F2_TIPO = 'N' AND [demais filtros D_E_L_E_T_/periodo] — sem D2_CF no WHERE.
+- "faturada"/"faturado"/"faturamento"/"vendas"/"receita" SEM mencionar carregada/carga/entrega futura/nota mae/remessa/transferencia/todas as saidas: aplique a regra nacional de receita e exclua remessa/transferencia: AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').
 - pergunta pede remessa especificamente: use SOMENTE o filtro REMESSA, entre parenteses: (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%').
 - pergunta pede transferencia especificamente: use SOMENTE o filtro TRANSFERENCIA (IN de 8 codigos acima). Nunca troque por REMESSA.
+- pergunta pede remessa E transferencia especificamente, sem pedir venda/receita junto: use filtro combinado com OR entre os dois grupos fiscais: ((SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5151','6151','5152','6152','5155','6155','5156','6156')).
+- pergunta pede venda/faturamento/receita JUNTO com remessa e/ou transferencia: use subqueries/CTEs separadas por modo fiscal e retorne colunas separadas (ex: receita, remessa, transferencia) ou totalize no SELECT externo quando o usuario pedir total combinado.
 - pergunta usa "carregada"/"carregado"/"carga"/"carregamento" (sinonimos, mesmo conceito — ex: "carregamento do dia" = "quantidade carregada do dia"): NAO use filtro de D2_CF (nenhum dos 3 grupos fiscais acima). Em vez disso, faca OBRIGATORIAMENTE JOIN adicional com SF4 (TES) exigindo F4_ESTOQUE = 'S' — isso identifica exatamente as saidas que geraram movimentacao fisica de estoque (o que "carregada" significa de fato), sem depender de decorar codigos fiscais. JOIN: SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'. Exemplo completo de "quantidade carregada no mes": SELECT COALESCE(SUM(SD2.D2_QUANT), 0) AS quantidade_carregada FROM SD2... JOIN SF2... JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' WHERE SF2.F2_TIPO = 'N' AND [demais filtros D_E_L_E_T_/periodo]. OBRIGATORIO, nunca omita o JOIN com SF4/F4_ESTOQUE='S' nesse caso.
 - pergunta pede entrega futura/nota mae: use SOMENTE SD2.D2_CF IN ('5117', '6117').
 - DEVOLUCAO — quando SD2 ja estiver no FROM (quantidade faturada, quantidade carregada, valor por item) e a pergunta pedir "considerando devolucoes", "com devolucoes", "abatendo devolucoes" ou "liquido": NAO use o padrao UNION ALL com SD1/SF1 (esse padrao e exclusivo para consultas SOMENTE de devolucao, sem SD2 no FROM — ver bloco DEVOLUCOES abaixo). Em vez disso, use os campos de devolucao ja disponiveis na propria SD2, por item da nota: quantidade liquida = SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), valor liquido = SUM(SD2.D2_TOTAL - SD2.D2_VALDEV). Exemplo: "quantidade carregada no mes considerando devolucoes" = SELECT COALESCE(SUM(SD2.D2_QUANT - SD2.D2_QTDEDEV), 0) AS quantidade_carregada_liquida FROM SD2... JOIN SF2... JOIN SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' WHERE SF2.F2_TIPO = 'N' AND [demais filtros].
@@ -221,7 +227,7 @@ function cfopTesCentroCusto() {
 ## Codigo Fiscal (CF/CFOP), TES e modos fiscais de quantidade — Faturamento
 - Sinonimos para nota fiscal de saida/faturamento: nota de saida, nota fiscal de saida, NF de saida, faturamento, venda.
 - CF, CFOP, codigo fiscal e codigo fiscal de operacao sao sinonimos — referem-se ao campo SD2.D2_CF.
-- Quantidade/valor faturado NAO tem filtro de CF por padrao. Filtros especificos de remessa/transferencia (quando a pergunta pedir explicitamente): ver regras no bloco de QUANTIDADE/PRODUTO acima — aplicam-se igualmente aqui sempre que SD2 estiver envolvido.
+- Quantidade/valor faturado segue a regra nacional de receita por padrao: exclua CFOPs de remessa e transferencia. Filtros especificos de remessa/transferencia/todas as saidas (quando a pergunta pedir explicitamente): ver regras no bloco de QUANTIDADE/PRODUTO acima — aplicam-se igualmente aqui sempre que SD2 estiver envolvido.
 - Modos fiscais de quantidade adicionais (5117 = entrega futura/nota mae estadual, 6117 = a mesma operacao interestadual — ver REGRA DE PREFIXO CFOP no bloco de QUANTIDADE/PRODUTO):
   - Quantidade carregada: SUM(SD2.D2_QUANT), com JOIN adicional SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S' (NAO filtra por D2_CF — ver regra completa no bloco de QUANTIDADE/PRODUTO acima).
   - Entrega futura, venda para entrega futura ou nota mae: SUM(SD2.D2_QUANT), filtrando SD2.D2_CF IN ('5117', '6117').
@@ -404,8 +410,7 @@ const FRAGMENTOS = {
   },
   metrica_valor_total: {
     texto: metricaValorTotal,
-    keywords: [/\bfaturamento\s+(do|de|no)\s+(mes|ano|periodo)\b/i, /\btotal\s+de\s+faturamento\b/i],
-    excluiSe: [/\bquantidade\b/i, /\bvolume\b/i, /\bpeças?\b|\bpecas?\b/i, /\bproduto\w*\b/i, /\bgrupo\b/i],
+    keywords: [/\b(faturamento|vendas?|receita)\s+(do|de|no)\s+(dia|mes|ano|periodo)\b/i, /\btotal\s+(?:de\s+)?(?:faturad[oa]|vendid[oa]|vendas?)\b/i, /\btotal\s+de\s+(faturamento|vendas?|receita)\b/i, /\bquanto\s+vendemos\b/i],
   },
   metrica_quantidade_item: {
     texto: metricaQuantidadeItem,
@@ -413,7 +418,7 @@ const FRAGMENTOS = {
   },
   cfop_tes_centro_custo: {
     texto: cfopTesCentroCusto,
-    keywords: [/\bCFOP\b/i, /\bCF\b/, /\bTES\b/, /\bcarregad[ao]s?\b/i, /\bcarregamentos?\b/i, /\bentrega\s+futura\b/i, /\bnota\s+mae\b/i, /\bestoque\b/i, /\bcentro\s+de\s+custo\b/i],
+    keywords: [/\bCFOP\b/i, /\bCF\b/, /\bTES\b/, /\bremessa\b/i, /\btransfer[eÃª]ncia\b/i, /\bcarregad[ao]s?\b/i, /\bcarregamentos?\b/i, /\bentrega\s+futura\b/i, /\bnota\s+mae\b/i, /\bestoque\b/i, /\bcentro\s+de\s+custo\b/i],
   },
   grupo_produto: {
     texto: grupoProduto,

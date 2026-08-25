@@ -172,12 +172,49 @@ ok('contas a pagar SE2: ignora colunas tecnicas e totaliza saldo', () => {
   assert.ok(shape, 'shape deveria ser detectado');
   assert.strictEqual(shape.tipo, 'multiplas_dimensoes');
   assert.deepStrictEqual(shape.metricas, ['E2_SALDO']);
-  assert.ok(texto.includes('*Por Vencimento, Documento, Fornecedor*'), texto);
-  assert.ok(/Vencimento 16\/07\/2026 \| Documento 2273261 \| Fornecedor 1088079: A pagar: \*R\$\s*87\.155,85\*/.test(texto), texto);
+  assert.ok(texto.includes('*Por Documento, Fornecedor*'), texto);
+  assert.ok(texto.includes('*Vencimento: 16/07/2026*'), texto);
+  assert.ok(/Documento 2273261.*Fornecedor 1088079: A pagar: \*R\$\s*87\.155,85\*/.test(texto), texto);
   assert.ok(/\*Total Geral\*: A pagar: \*R\$\s*87\.155,85\*/.test(texto), texto);
   assert.ok(!texto.includes('2.273.261,00'), texto);
   assert.ok(!texto.includes('3.594.118,00'), texto);
   assert.ok(!texto.includes('E2 VALOR'), texto);
+});
+
+ok('contas a pagar do dia: usa vencimento unico como contexto e agrupa por fornecedor', () => {
+  const rows = [
+    { vencimento: '20260824', cod_fornecedor: '000010', fornecedor: 'TOTVS SA', vlr_titulo: 627.31, saldo: 627.31 },
+    { vencimento: '20260824', cod_fornecedor: '000022', fornecedor: 'SOUTES E CIA LTDA', vlr_titulo: 74.60, saldo: 74.60 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Financeiro',
+    contextoConsulta: 'Contas a pagar do dia',
+  });
+
+  assert.ok(texto.includes('*Por Fornecedor*'), texto);
+  assert.ok(texto.includes('*Vencimento: 24/08/2026*'), texto);
+  assert.ok(!texto.includes('*Por Vencimento, Fornecedor, Fornecedor*'), texto);
+  assert.ok(!/Vencimento 24\/08\/2026[\s\S]*Vencimento 24\/08\/2026/.test(texto), texto);
+  assert.ok(/Fornecedor TOTVS SA: Vlr Titulo: \*R\$\s*627,31\*/.test(texto), texto);
+  assert.ok(/\*Total Geral\*: Vlr Titulo: \*R\$\s*701,91\*/.test(texto), texto);
+});
+
+ok('faturamento do dia: usa emissao unica como contexto e nao interpreta filial como mes', () => {
+  const rows = [
+    { emissao: '20260824', filial: '010101', cliente: 'AGRICOLA D S F LTDA', vlr_total: 6635 },
+    { emissao: '20260824', filial: '010104', cliente: 'POSTO ALDO INDUSTRIAL LTDA', vlr_total: 10900 },
+  ];
+  const texto = canonical.renderSingle(rows, {
+    nomeModulo: 'Faturamento',
+    contextoConsulta: 'FATURAMENTO DO DIA',
+  });
+
+  assert.ok(texto.includes('*Por Filial, Cliente*'), texto);
+  assert.ok(texto.includes('*Emissao: 24/08/2026*'), texto);
+  assert.ok(texto.includes('Filial 010101'), texto);
+  assert.ok(texto.includes('Filial 010104'), texto);
+  assert.ok(!texto.includes('Janeiro/0101'), texto);
+  assert.ok(!texto.includes('Abril/0101'), texto);
 });
 
 ok('contas a receber SE1: ignora colunas tecnicas e totaliza saldo', () => {
@@ -205,8 +242,9 @@ ok('contas a receber SE1: ignora colunas tecnicas e totaliza saldo', () => {
   assert.ok(shape, 'shape deveria ser detectado');
   assert.strictEqual(shape.tipo, 'multiplas_dimensoes');
   assert.deepStrictEqual(shape.metricas, ['E1_SALDO']);
-  assert.ok(texto.includes('*Por Vencimento, Documento, Cliente*'), texto);
-  assert.ok(/Vencimento 16\/07\/2026 \| Documento 4588 \| Cliente 102030: A receber: \*R\$\s*1\.234,56\*/.test(texto), texto);
+  assert.ok(texto.includes('*Por Documento, Cliente*'), texto);
+  assert.ok(texto.includes('*Vencimento: 16/07/2026*'), texto);
+  assert.ok(/Documento 4588.*Cliente 102030: A receber: \*R\$\s*1\.234,56\*/.test(texto), texto);
   assert.ok(/\*Total Geral\*: A receber: \*R\$\s*1\.234,56\*/.test(texto), texto);
   assert.ok(!texto.includes('4.588,00'), texto);
   assert.ok(!texto.includes('E1 VALOR'), texto);

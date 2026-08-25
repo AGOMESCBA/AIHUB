@@ -16,7 +16,8 @@ assert(systemPrompt.includes('Para cliente SEM LOJA ou todos os registros do mes
 assert(systemPrompt.includes('faturamento_liquido'), 'prompt deve orientar regras de devolucao/liquido quando solicitado');
 assert(systemPrompt.includes('data_atual') && systemPrompt.includes('CONTRATO OBRIGATORIO DE SQL'), 'prompt deve manter ancora cronologica e respeitar contrato autoritativo');
 assert(systemPrompt.includes('DIRETRIZ DE SELECAO DE TABELAS') && systemPrompt.includes('Consultas por QUANTIDADE ou filtros de Produto/Item'), 'prompt deve diferenciar consulta geral de item');
-assert(systemPrompt.includes('NAO aplique NENHUM filtro de D2_CF'), 'prompt deve definir quantidade/valor faturado sem filtro de CF por padrao');
+assert(systemPrompt.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'prompt deve definir receita excluindo remessa/transferencia por padrao');
+assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'prompt deve excluir transferencia do faturamento/vendas por padrao');
 assert(systemPrompt.includes("LIKE '59%' OR LIKE '69%'"), 'prompt deve permitir filtro invertido quando a pergunta pedir simples remessa especificamente');
 assert(systemPrompt.includes("IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'prompt deve permitir filtro de lista fixa quando a pergunta pedir transferencia especificamente');
 assert(systemPrompt.includes("Quantidade carregada: SUM(SD2.D2_QUANT), com JOIN adicional SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'"), 'prompt deve definir quantidade carregada usando JOIN SF4/F4_ESTOQUE=S em vez de filtro de CF');
@@ -24,6 +25,7 @@ assert(systemPrompt.includes("Entrega futura, venda para entrega futura ou nota 
 assert(systemPrompt.includes('Movimentacao total, todas as saidas, volume total, sem filtro fiscal ou incluindo remessa/transferencia'), 'prompt deve permitir movimentacao total sem filtro fiscal');
 assert(systemPrompt.includes('Continuidade e Periodo no Faturamento'), 'prompt deve conter regra modular de continuidade/periodo');
 assert(systemPrompt.includes('periodo_base e periodo_comparacao'), 'prompt deve exigir dois periodos em comparativo de continuidade');
+assert(systemPrompt.includes('"por grupo de produto"') && systemPrompt.includes('NAO inclua SB1.B1_COD/produto'), 'prompt deve orientar grupo de produto sem granularidade extra por produto');
 
 const periodoDiretoJunhoJulho = runner._test.periodoDeterministicoMensagem(
   'Compare o faturamento de junho do ano passado com julho do ano passado'
@@ -102,6 +104,32 @@ const planoComparativoClienteViaIntent = runner._test.prepararPlanoConsultaTecni
 const planoComparativoClienteViaIntentTexto = queryPlan.formatQueryPlanForPrompt(planoComparativoClienteViaIntent);
 assert(planoComparativoClienteViaIntentTexto.includes('agrupamentos_obrigatorios: cliente'), 'runner deve propagar group_by do Intent Canonico para o query_plan');
 assert(Array.isArray(planoComparativoClienteViaIntent.periodos_comparativos) && planoComparativoClienteViaIntent.periodos_comparativos.length === 2, 'runner deve manter periodos comparativos junto com agrupamento do intent');
+
+const planoGrupoProdutoDia = queryPlan.buildQueryPlan({
+  modulo: 'faturamento',
+  mensagem: 'Faturamento do dia por grupo de produto',
+  periodo: { tipo: 'hoje', dataInicio: '20260824', dataFim: '20260824' },
+});
+assert.deepStrictEqual(
+  planoGrupoProdutoDia.agrupamentos,
+  ['grupo_produto'],
+  'query_plan nao deve transformar "grupo de produto" em agrupamento adicional por produto',
+);
+const sqlGrupoProdutoDia = `
+SET ROWCOUNT 50000;
+WITH faturamento AS (
+  SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_total, SBM.BM_DESC AS grupo_produto
+  FROM SD2010 SD2
+  JOIN SF2010 SF2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND SD2.D2_SERIE = SF2.F2_SERIE AND SD2.D2_CLIENTE = SF2.F2_CLIENTE AND SD2.D2_LOJA = SF2.F2_LOJA
+  JOIN SB1010 SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+  JOIN SBM010 SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '
+  WHERE SF2.F2_TIPO = 'N' AND SF2.F2_EMISSAO = '20260824' AND SD2.D_E_L_E_T_ = ' ' AND SF2.D_E_L_E_T_ = ' '
+  GROUP BY SBM.BM_GRUPO, SBM.BM_DESC
+)
+SELECT * FROM faturamento;
+`;
+const validacaoGrupoProdutoDia = queryPlan.validarSqlContraPlano(sqlGrupoProdutoDia, planoGrupoProdutoDia);
+assert.strictEqual(validacaoGrupoProdutoDia.ok, true, `query_plan deve aceitar faturamento por grupo de produto sem exigir produto: ${validacaoGrupoProdutoDia.erros.join(' | ')}`);
 
 const validacaoComparativoIncompleto = runner._test.validarPeriodosComparativosNoSql(
   sqlPeriodoCorretoFaturamento,

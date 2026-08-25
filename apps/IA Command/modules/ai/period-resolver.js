@@ -37,6 +37,11 @@ function resolverPeriodo(periodo, opts = {}) {
       fim = inicio;
       break;
 
+    case 'amanha':
+      inicio = _addDays(hoje, 1);
+      fim = inicio;
+      break;
+
     case 'esta_semana':
       inicio = _startOfWeek(hoje);
       fim = hoje;
@@ -92,6 +97,11 @@ function resolverPeriodo(periodo, opts = {}) {
       fim = _endOfMonth(ano, mes - 1);
       break;
 
+    case 'proximo_mes':
+      inicio = _startOfMonth(ano, mes + 1);
+      fim = _endOfMonth(ano, mes + 1);
+      break;
+
     case 'ano_atual':
       inicio = new Date(ano, 0, 1);
       fim = new Date(ano, 11, 31);
@@ -100,6 +110,11 @@ function resolverPeriodo(periodo, opts = {}) {
     case 'ano_anterior':
       inicio = new Date(ano - 1, 0, 1);
       fim = new Date(ano - 1, 11, 31);
+      break;
+
+    case 'proximo_ano':
+      inicio = new Date(ano + 1, 0, 1);
+      fim = new Date(ano + 1, 11, 31);
       break;
 
     case 'comparacao_anual': {
@@ -268,8 +283,9 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
     return { tipo: 'personalizado', data_inicio: `${ano}0101`, data_fim: `${ano}1231` };
   }
 
-  if (_containsAny(texto, ['hoje', 'hj'])) return { tipo: 'hoje' };
-  if (_containsTerm(texto, 'ontem')) return { tipo: 'ontem' };
+  if (_containsAny(texto, ['ontem', 'dia anterior', 'data anterior', 'dia de ontem', 'data de ontem', 'vespera'])) return { tipo: 'ontem' };
+  if (_containsAny(texto, ['amanha', 'dia seguinte', 'proximo dia'])) return { tipo: 'amanha' };
+  if (_containsAny(texto, ['hoje', 'hj', 'do dia', 'no dia', 'nesse dia', 'neste dia', 'data de hoje', 'dia de hoje', 'dia atual', 'dia corrente', 'data atual', 'data corrente', 'dia vigente', 'data vigente'])) return { tipo: 'hoje' };
 
   const ultimosDias = texto.match(/\bultim[oa]s?\s+(\d{1,3})\s+dias?\b/);
   if (ultimosDias) return { tipo: 'ultimos_N_dias', dias: parseInt(ultimosDias[1], 10) };
@@ -283,9 +299,9 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   const ultimosMeses = _matchUltimosQuantidade(texto, 'mes(?:es)?');
   if (ultimosMeses) return _ultimosMeses(hoje, ultimosMeses);
 
-  if (_containsAny(texto, ['semana passada', 'semana anterior'])) return { tipo: 'semana_anterior' };
+  if (_containsAny(texto, ['semana passada', 'semana anterior', 'ultima semana'])) return { tipo: 'semana_anterior' };
   if (_containsAny(texto, ['semana que vem', 'proxima semana', 'semana seguinte', 'semana que vira'])) return { tipo: 'proxima_semana' };
-  if (_containsAny(texto, ['esta semana', 'essa semana', 'semana atual', 'da semana'])) return { tipo: 'esta_semana' };
+  if (_containsAny(texto, ['esta semana', 'essa semana', 'semana atual', 'semana corrente', 'semana vigente', 'da semana'])) return { tipo: 'esta_semana' };
 
   if (_containsAny(texto, ['q1', 'primeiro trimestre'])) return { tipo: 'primeiro_trimestre', ano_ref: _anoRefTexto(texto) };
   if (_containsAny(texto, ['q2', 'segundo trimestre'])) return { tipo: 'segundo_trimestre', ano_ref: _anoRefTexto(texto) };
@@ -299,10 +315,12 @@ function identificarPeriodoTexto(mensagem, opts = {}) {
   const textoPeriodo = _removerAgrupamentosTemporais(texto);
 
   if (_containsAny(textoPeriodo, ['mes passado', 'mes anterior', 'ultimo mes'])) return { tipo: 'mes_anterior' };
-  if (_containsAny(textoPeriodo, ['este mes', 'esse mes', 'mes atual', 'do mes', 'no mes', 'mes'])) return { tipo: 'mes_atual' };
+  if (_containsAny(textoPeriodo, ['mes que vem', 'proximo mes', 'mes seguinte', 'mes que vira'])) return { tipo: 'proximo_mes' };
+  if (_containsAny(textoPeriodo, ['este mes', 'esse mes', 'mes atual', 'mes corrente', 'mes vigente', 'do mes', 'no mes', 'mes'])) return { tipo: 'mes_atual' };
 
   if (_containsAny(textoPeriodo, ['ano passado', 'ano anterior', 'ultimo ano'])) return { tipo: 'ano_anterior' };
-  if (_containsAny(textoPeriodo, ['este ano', 'esse ano', 'ano atual', 'do ano', 'no ano', 'ano'])) return { tipo: 'ano_atual' };
+  if (_containsAny(textoPeriodo, ['ano que vem', 'proximo ano', 'ano seguinte', 'ano que vira'])) return { tipo: 'proximo_ano' };
+  if (_containsAny(textoPeriodo, ['este ano', 'esse ano', 'ano atual', 'ano corrente', 'ano vigente', 'exercicio atual', 'exercicio corrente', 'do ano', 'no ano', 'ano'])) return { tipo: 'ano_atual' };
 
   return { tipo: 'nenhum' };
 }

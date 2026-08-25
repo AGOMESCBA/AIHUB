@@ -217,7 +217,7 @@ User Function IACChat()
     IACPerf("ShellExecute retorno=" + cValToChar(nShellRet), nStep)
 
     nStep := Seconds()
-    lOk := IACToken(cCelular, @cToken, @cErro, cLaunchTk)
+    lOk := IACToken(cCelular, @cToken, @cErro, cLaunchTk, RetCodUsr(), cNomeUser)
     IACPerf("IACToken total", nStep)
 
     If !lOk
@@ -370,7 +370,7 @@ Return lExiste
    — ver ressalva em token-service.js::filiaisPermitidasDaEmpresa), nunca
    bloqueia a abertura do chat por causa disso.
 ---------------------------------------------------------------------------- */
-Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
+Static Function IACToken(cCelular, cToken, cErro, cLaunchTk, cUsuarioId, cUsuarioNome)
     Local oRest
     Local aHeader     := {}
     Local cBody       := ""
@@ -450,6 +450,8 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
 
     cBody := '{"empresaId":' + cValToChar(nEmpresaId) + ;
               ',"celular":"' + IACEscJs(cCelular) + '"' + ;
+              ',"usuarioId":"' + IACEscJs(cUsuarioId) + '"' + ;
+              ',"usuarioNome":"' + IACEscJs(IACRmAcent(cUsuarioNome)) + '"' + ;
               ',"filial":"' + IACEscJs(cFilialAtual) + '"' + ;
               ',"empresasPermitidas":' + cEmpPermit + ;
               ',"filiaisPermitidas":' + cFilPermit

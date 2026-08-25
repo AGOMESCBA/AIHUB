@@ -53,4 +53,26 @@ assert.strictEqual(
   'lista simples por mes nao deve ganhar linhas extras',
 );
 
+const apresentacaoValorQuantidade = formatter.montarApresentacaoResposta(
+  'Detalhamento por cliente, nota fiscal e produto',
+  {
+    tipo: 'sucesso_ai_sql',
+    rows: [
+      { cliente: 'Cliente A', nota_fiscal: '0001', produto: 'Produto 1', valor_total: 1000, quantidade_faturada: 10 },
+      { cliente: 'Cliente B', nota_fiscal: '0002', produto: 'Produto 2', valor_total: 2500, quantidade_faturada: 20 },
+    ],
+  },
+  {
+    _mensagemOriginal: 'Total faturado no dia por cliente, nota fiscal e produto trazendo valor e quantidade',
+    _metricasDetectadas: ['quantidade_faturada'],
+    ordenar_por: 'quantidade_faturada:desc',
+  },
+  { sugerirComparacao: false },
+);
+
+assert(apresentacaoValorQuantidade.resumo.includes('valor: R$'), `resumo deve manter valor_total: ${apresentacaoValorQuantidade.resumo}`);
+assert(apresentacaoValorQuantidade.resumo.includes('quantidade:'), `resumo deve manter quantidade: ${apresentacaoValorQuantidade.resumo}`);
+assert.strictEqual(apresentacaoValorQuantidade.indicadores[0].label, 'valor', 'card principal deve priorizar valor antes de quantidade');
+assert.strictEqual(apresentacaoValorQuantidade.indicadores[1].label, 'quantidade', 'segundo card deve mostrar quantidade');
+
 console.log('response-formatter-agrupamento-pais.test.js: ok');

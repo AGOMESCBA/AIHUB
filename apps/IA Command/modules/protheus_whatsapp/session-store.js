@@ -218,6 +218,20 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
 
 // Ultima mensagem 'in' da sessao que tenha dados tabulares (rows com pelo
 // menos 1 linha) — usada para popular a aba Relatorio ao carregar a conversa.
+// Pergunta (mensagem 'out') imediatamente anterior a uma mensagem de resposta
+// especifica, por ordem cronologica — usada para nomear o arquivo exportado
+// (Excel/PDF) com a pergunta REAL daquela resposta, em vez de depender do
+// cache de mensagens do frontend (que pode nao ter a pergunta carregada,
+// caindo no fallback do titulo da sessao — sempre a PRIMEIRA pergunta feita).
+function _perguntaAnteriorMensagem({ sessaoId, criadoEm }) {
+  const row = getDB().prepare(`
+    SELECT texto FROM protheus_chat_messages
+    WHERE sessao_id = ? AND direcao = 'out' AND criado_em <= ?
+    ORDER BY criado_em DESC LIMIT 1
+  `).get(sessaoId, criadoEm);
+  return row?.texto || null;
+}
+
 function ultimaMensagemTabular({ sessaoId }) {
   const cFilialEscopoCol = temFilialEscopoChatMessages() ? 'filial_escopo_json' : 'NULL AS filial_escopo_json';
   const row = getDB().prepare(`
@@ -232,6 +246,7 @@ function ultimaMensagemTabular({ sessaoId }) {
   return {
     id: row.id,
     texto: row.texto,
+    perguntaTexto: _perguntaAnteriorMensagem({ sessaoId, criadoEm: row.criado_em }),
     rows: meta.rows,
     rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
@@ -255,6 +270,7 @@ function mensagemTabular({ sessaoId, mensagemId }) {
   return {
     id: row.id,
     texto: row.texto,
+    perguntaTexto: _perguntaAnteriorMensagem({ sessaoId, criadoEm: row.criado_em }),
     rows: meta.rows,
     rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
@@ -593,13 +609,21 @@ function removerFavorito({ favoritoId, empresaId, celular }) {
 
 function renomearFavorito({ favoritoId, empresaId, celular, titulo }) {
   const tituloLimpo = String(titulo || '').trim();
-  if (!tituloLimpo) return false;
+  if (!tituloLimpo) return null;
+  const atualizaPerguntaTexto = tabelaTemColuna('protheus_chat_favorites', 'pergunta_texto');
   const info = getDB().prepare(`
     UPDATE protheus_chat_favorites
-       SET titulo = ?, atualizado_em = ?
+       SET titulo = ?,
+           ${atualizaPerguntaTexto ? 'pergunta_texto = ?,' : ''}
+           atualizado_em = ?
      WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
-  `).run(tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular);
-  return info.changes > 0;
+  `).run(
+    ...(atualizaPerguntaTexto
+      ? [tituloLimpo, tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular]
+      : [tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular])
+  );
+  if (!info.changes) return null;
+  return obterFavorito({ favoritoId, empresaId, celular });
 }
 
 function atualizarSqlFavorito({ favoritoId, empresaId, celular, sqlFinal }) {

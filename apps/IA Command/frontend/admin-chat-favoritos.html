@@ -568,6 +568,10 @@ WHERE SE2.D_E_L_E_T_ = ' '
     carregarFavoritos().catch(err => {
       document.getElementById('count').textContent = err.message || 'Falha ao carregar favoritos.';
     });
+    window.addEventListener('storage', (event) => {
+      if (event.key !== 'iaCommandChatFavoritoAtualizado') return;
+      carregarFavoritos().catch(() => {});
+    });
   });
 </script>
 </body>

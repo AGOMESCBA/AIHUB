@@ -132,6 +132,17 @@ function _postHub(item) {
   });
 }
 
+function _normalizarArquivoWhatsApp(arquivo) {
+  if (!arquivo || typeof arquivo !== 'object') return null;
+  const filename = String(arquivo.filename || arquivo.fileName || arquivo.name || '').trim();
+  const mimetype = String(arquivo.mimetype || arquivo.mimeType || arquivo.type || 'application/octet-stream').trim();
+  let data = String(arquivo.data || arquivo.base64 || '').trim();
+  const dataUrl = data.match(/^data:([^;,]+)?;base64,(.*)$/i);
+  if (dataUrl) data = dataUrl[2] || '';
+  if (!filename || !mimetype || !data) return null;
+  return { filename, mimetype, data };
+}
+
 // ── Servidor HTTP local do worker ─────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -301,8 +312,10 @@ const server = http.createServer((req, res) => {
     req.on('data', d => { body += d; });
     req.on('end', async () => {
       try {
-        const { empresaId, numero, texto, arquivo } = JSON.parse(body || '{}');
-        if (!empresaId || !numero || !arquivo?.data || !arquivo?.mimetype || !arquivo?.filename) {
+        const payload = JSON.parse(body || '{}');
+        const { empresaId, numero, texto } = payload;
+        const arquivo = _normalizarArquivoWhatsApp(payload.arquivo);
+        if (!empresaId || !numero || !arquivo) {
           res.writeHead(400);
           return res.end(JSON.stringify({ erro: 'empresaId, numero e arquivo sao obrigatorios.' }));
         }

@@ -1655,6 +1655,35 @@ const MIGRATIONS = [
       ALTER TABLE protheus_chat_tokens ADD COLUMN filiais_permitidas_json TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 87,
+    descricao: 'IA Command - espelho de permissoes Protheus por usuario para acesso web via WhatsApp',
+    sql: `
+      CREATE TABLE IF NOT EXISTS protheus_web_user_permissions (
+        id                        TEXT PRIMARY KEY,
+        empresa_id                INTEGER NOT NULL,
+        usuario_id                TEXT DEFAULT NULL,
+        usuario_nome              TEXT DEFAULT NULL,
+        celular                   TEXT NOT NULL,
+        filial_atual              TEXT DEFAULT NULL,
+        empresas_permitidas_json  TEXT DEFAULT NULL,
+        filiais_permitidas_json   TEXT DEFAULT NULL,
+        origem                    TEXT DEFAULT 'protheus_token',
+        ativo                     INTEGER DEFAULT 1,
+        observacoes               TEXT DEFAULT NULL,
+        ultimo_sync_em            TEXT DEFAULT NULL,
+        criado_em                 TEXT NOT NULL,
+        atualizado_em             TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_iac_protheus_web_users_empresa_usuario
+        ON protheus_web_user_permissions (empresa_id, usuario_id)
+        WHERE usuario_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_web_users_celular
+        ON protheus_web_user_permissions (celular, ativo);
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_web_users_empresa
+        ON protheus_web_user_permissions (empresa_id, ativo, atualizado_em);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;
