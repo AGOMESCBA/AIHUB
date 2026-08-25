@@ -25,6 +25,25 @@ function agora() {
   return new Date().toISOString();
 }
 
+// Monta o shape de auditoria do escopo de filial Lobo Guara (IA Command,
+// arvore de filiais do chat embutido) a partir de duas fontes: a intencao
+// estruturada da UI (intent._filialEscopoAuditoria, setada pelo chat embutido
+// antes de rotear) e o resultado real da aplicacao do filtro no SQL
+// (resultado._filial_escopo_resultado, setado por ia-owner/runner.js). Sem
+// nenhuma das duas, retorna null (nao grava a coluna) — mensagem sem escopo
+// de filial nenhum (WhatsApp real, ou empresa TRADICIONAL) nao precisa deste
+// campo.
+function _montarFilialEscopoAuditoria(intent, resultado) {
+  const selecaoUi = intent?._filialEscopoAuditoria || null;
+  const filialResultado = resultado?._filial_escopo_resultado || null;
+  if (!selecaoUi && !filialResultado) return null;
+  return {
+    selecao_ui: selecaoUi?.selecaoUi || null,
+    resolvido: selecaoUi?.resolvido || null,
+    resultado: filialResultado || selecaoUi?.resultado || null,
+  };
+}
+
 function json(value) {
   if (value === undefined) return null;
   try { return JSON.stringify(value ?? null); } catch (_) { return null; }
@@ -219,6 +238,7 @@ function registrar(payload = {}) {
     pipeline_origem: resultado._pipeline_origem || payload.pipeline_origem || null,
     chat_turno: resultado._chat_turno ?? payload.chat_turno ?? null,
     sql_validacao_erro: resultado._sql_validacao_erro || payload.sql_validacao_erro || null,
+    filial_escopo_json: json(_montarFilialEscopoAuditoria(intent, resultado) || null),
     timing_json: json(payload.timing_json || null),
     formatacao_caminho: payload.formatacao_caminho || null,
     recebido_em: payload.recebido_em || null,

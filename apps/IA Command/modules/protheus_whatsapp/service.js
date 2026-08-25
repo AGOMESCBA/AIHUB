@@ -23,6 +23,70 @@ const IACWhatsAppService = require('../whatsapp/service');
 const periodResolver = require('../ai/period-resolver');
 const canonicalIntent = require('../erp/nlsql-cache/canonical-intent');
 const sqlTemplate = require('../erp/nlsql-cache/sql-template');
+const loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-filial-resolver');
+const { consolidarEscopoFilial } = require('./filial-scope-consolidator');
+
+// Resolve o escopo de filial Lobo Guara para UMA empresa: prioridade e da
+// selecao explicita da arvore (UI) — se o usuario ja tocou o componente
+// nesta conversa (selecaoUi.uiTouched), o texto livre da mensagem NUNCA
+// sobrescreve, mesmo que mencione outra filial (regra de precedencia UI >
+// texto). Sem selecao da UI, o texto livre resolve normalmente — mesmo
+// comportamento ja usado em producao pelo WhatsApp real
+// (modules/whatsapp/service.js:4307-4317), habilitado aqui pela primeira vez
+// para o chat embutido (antes, este canal nunca chamava resolverDaMensagem).
+function resolverEscopoFilialLoboGuara({ db, empresaId, textoParaIA, selecaoUi, filiaisPermitidasSessao }) {
+  const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, empresaId);
+  const uiTouched = !!selecaoUi?.uiTouched;
+
+  if (uiTouched) {
+    const consolidado = consolidarEscopoFilial({ db, ctx, selecaoUi, filiaisPermitidasSessao });
+    return {
+      filialLoboGuara: consolidado.execucao,
+      auditoria: {
+        selecaoUi: {
+          empresas_inteiras: consolidado.selecaoUiValidada.empresasInteiras,
+          filiais_avulsas: consolidado.selecaoUiValidada.filiaisAvulsas,
+          origem: 'selecao_ui',
+          ui_touched: true,
+          texto: null,
+        },
+        // Traduz o contrato interno do consolidador (filiaisChave, camelCase)
+        // para o padrao snake_case usado no restante do shape de auditoria
+        // persistido (empresas_inteiras, filiais_avulsas, ui_touched) — o
+        // caminho de texto livre abaixo ja usa filiais_chave diretamente;
+        // sem essa traducao aqui, a coluna filial_escopo_json gravava dois
+        // formatos diferentes de "resolvido" dependendo da origem do escopo.
+        resolvido: { filiais_chave: consolidado.resolvido.filiaisChave },
+        resultado: consolidado.resultado,
+      },
+    };
+  }
+
+  if (!ctx) return { filialLoboGuara: null, auditoria: null };
+
+  let filialResolvida = null;
+  try {
+    filialResolvida = loboGuaraFilialResolver.resolverDaMensagem(db, empresaId, textoParaIA);
+  } catch (e) {
+    console.warn(`[protheus_whatsapp] Falha ao resolver filial Lobo Guara por texto: ${e.message}`);
+  }
+  if (!filialResolvida) return { filialLoboGuara: null, auditoria: null };
+
+  return {
+    filialLoboGuara: filialResolvida,
+    auditoria: {
+      selecaoUi: {
+        empresas_inteiras: [],
+        filiais_avulsas: [],
+        origem: filialResolvida.origem || 'mensagem_atual',
+        ui_touched: false,
+        texto: filialResolvida.texto || null,
+      },
+      resolvido: { filiais_chave: filialResolvida.modo === 'especifica' ? (filialResolvida.chaves || []) : [] },
+      resultado: { solicitado: true, aplicado: filialResolvida.modo !== 'ambigua', erro: filialResolvida.modo === 'ambigua' ? 'mencao_ambigua' : null },
+    },
+  };
+}
 
 // Nome de campo cru do Protheus: prefixo de tabela (letra + ate 2 letras/digitos,
 // ex: E2, A1, SB1) + underscore + resto (ex: E2_PREFIXO, A1_NOME, SB1_DESC).
@@ -470,7 +534,7 @@ async function executarFavorito({ empresaId, celular, sessaoId, favorito }) {
   };
 }
 
-async function processarMensagem({ empresaId, celular, sessaoId, texto, empresasSelecionadas = null }) {
+async function processarMensagem({ empresaId, celular, sessaoId, texto, empresasSelecionadas = null, filialSelecaoUi = null, filiaisPermitidasSessao = null }) {
   // Comando "RESET"/"limpar contexto" — mesma deteccao do canal WhatsApp
   // real (textoResetExplicito acima), mas SEM apagar mensagens do historico
   // visual: diferente do WhatsApp (onde nao ha tela de conversa persistida),
@@ -504,23 +568,64 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
 
   const empresasMulti = normalizarEmpresasSelecionadas(empresasSelecionadas);
   if (empresasMulti.length > 1) {
+    const db = getDB();
+    const contextoAnteriorMulti = sessionStore.ultimoIntent({ sessaoId });
+    const selecaoUiMulti = filialSelecaoUi || contextoAnteriorMulti?._filialSelecaoUi || null;
+
+    // Escopo de filial por empresa (arvore de selecao) — cada empresa do lote
+    // pode ter escopo LOBO_GUARA proprio (ex.: Empresa A com 2 filiais +
+    // Empresa B inteira). So resolve quando a UI foi tocada nesta conversa;
+    // sem UI tocada, este caminho multiempresa nao tenta resolver texto livre
+    // por empresa (resolverDaMensagem so roda no caminho de 1 empresa — ver
+    // resolverEscopoFilialLoboGuara), mantendo o comportamento textual atual
+    // do WhatsApp real intacto para os proprios 6 pontos de chamada dele.
+    const escopoFilialPorEmpresa = {};
+    const auditoriaPorEmpresa = {};
+    if (selecaoUiMulti?.uiTouched) {
+      for (const emp of empresasMulti) {
+        const ctxEmp = loboGuaraFilialResolver.contextoLoboGuara(db, emp.empresa_id);
+        if (!ctxEmp) continue;
+        const consolidado = consolidarEscopoFilial({ db, ctx: ctxEmp, selecaoUi: selecaoUiMulti, filiaisPermitidasSessao });
+        if (consolidado.execucao) escopoFilialPorEmpresa[emp.empresa_id] = consolidado.execucao;
+        auditoriaPorEmpresa[emp.empresa_id] = {
+          selecao_ui: {
+            empresas_inteiras: consolidado.selecaoUiValidada.empresasInteiras,
+            filiais_avulsas: consolidado.selecaoUiValidada.filiaisAvulsas,
+            origem: 'selecao_ui',
+            ui_touched: true,
+            texto: null,
+          },
+          // Mesma traducao de contrato interno (filiaisChave) para o padrao
+          // snake_case do shape de auditoria — ver comentario em
+          // resolverEscopoFilialLoboGuara acima.
+          resolvido: { filiais_chave: consolidado.resolvido.filiaisChave },
+          resultado: consolidado.resultado,
+        };
+      }
+    }
+
     const whatsService = new IACWhatsAppService();
     const respostaTexto = await whatsService._pipelineAll(texto, empresasMulti, celular, {
       _recebidoEm: new Date().toISOString(),
+      escopoFilialPorEmpresa,
     });
+    const intentMulti = {
+      tipo: 'multiempresa',
+      escopo: 'multiempresa',
+      empresas: empresasMulti.map(emp => emp.empresa_id),
+      _remetente: celular,
+      _mensagemOriginal: texto,
+      _filialSelecaoUi: selecaoUiMulti,
+    };
+    const filialEscopoMulti = Object.keys(auditoriaPorEmpresa).length ? { por_empresa: auditoriaPorEmpresa } : null;
     const { perguntaId, respostaId } = sessionStore.salvarTurno({
       sessaoId,
       perguntaTexto: texto,
       respostaTexto,
       rows: null,
       tipoResultado: 'multiempresa',
-      intent: {
-        tipo: 'multiempresa',
-        escopo: 'multiempresa',
-        empresas: empresasMulti.map(emp => emp.empresa_id),
-        _remetente: celular,
-        _mensagemOriginal: texto,
-      },
+      intent: intentMulti,
+      filialEscopo: filialEscopoMulti,
     });
     return {
       mensagemId: respostaId,
@@ -530,6 +635,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
       temDados: false,
       rowsCount: 0,
       tipo: 'multiempresa',
+      filial_escopo_json: filialEscopoMulti,
     };
   }
 
@@ -550,6 +656,30 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
   intent._remetente = celular;
   intent._mensagemOriginal = texto;
   if (textoParaIA !== texto) intent._mensagemReescrita = textoParaIA;
+
+  // Escopo de filial Lobo Guara — resolve ANTES do merge com o contexto
+  // herdado, para que uma selecao/mencao desta mensagem sempre vença a
+  // herdada (mesmo raciocinio do WhatsApp real, modules/whatsapp/service.js
+  // linha ~4307). Sem selecaoUi nova no payload, herda a ultima tocada da UI
+  // (contextoAnterior._filialSelecaoUi) — senao a arvore "esqueceria" a
+  // escolha do usuario a cada novo turno.
+  const selecaoUiTurno = filialSelecaoUi || contextoAnterior?._filialSelecaoUi || null;
+  const { filialLoboGuara, auditoria: filialEscopoAuditoria } = resolverEscopoFilialLoboGuara({
+    db: getDB(), empresaId, textoParaIA, selecaoUi: selecaoUiTurno, filiaisPermitidasSessao,
+  });
+  if (filialLoboGuara) intent._filialLoboGuara = filialLoboGuara;
+  if (selecaoUiTurno) intent._filialSelecaoUi = selecaoUiTurno;
+  if (filialEscopoAuditoria) intent._filialEscopoAuditoria = filialEscopoAuditoria;
+  // Usuario tocou a UI e marcou "Todas" DE PROPOSITO nesta mensagem (arrays
+  // vazios, uiTouched true) — sem este marcador, intentMerger nao consegue
+  // distinguir isso de "usuario nao mencionou filial" e reaplicaria
+  // silenciosamente o filtro herdado do turno anterior (ver comentario em
+  // intent-merger.js, bloco 3b). So marca quando a UI foi de fato tocada
+  // nesta mensagem (filialSelecaoUi, nao a herdada de contextoAnterior) —
+  // reset e uma acao do turno atual, nao algo que se propaga sozinho.
+  if (filialSelecaoUi?.uiTouched && !filialLoboGuara) {
+    intent._filialLoboGuaraResetado = true;
+  }
 
   if (contextoAnterior) {
     intent = intentMerger.mesclar(intent, contextoAnterior, 0, textoParaIA, {});
@@ -574,6 +704,14 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
   });
   const respostaTexto = responseFormatter.textoApresentacao(apresentacao, respostaBase);
 
+  // resultado._filial_escopo_resultado (ia-owner/runner.js) e a fonte de
+  // verdade sobre o que de fato rodou no SQL daquele turno — sobrescreve o
+  // "resultado" provisorio calculado antes de rotear (intent._filialEscopoAuditoria),
+  // que so sabia se a selecao era valida, nao se o normalizer conseguiu aplicar.
+  const filialEscopoParaAuditoria = intent._filialEscopoAuditoria
+    ? { ...intent._filialEscopoAuditoria, resultado: resultado?._filial_escopo_resultado || intent._filialEscopoAuditoria.resultado }
+    : null;
+
   const { perguntaId, respostaId } = sessionStore.salvarTurno({
     sessaoId,
     perguntaTexto: texto,
@@ -581,6 +719,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
     rows,
     tipoResultado: resultado?.tipo || null,
     intent,
+    filialEscopo: filialEscopoParaAuditoria,
   });
 
   // [UNIFICADO 13/08/2026] Mesmo pipeline de registro usado pelo canal
@@ -629,6 +768,7 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
     temDados: Array.isArray(rows) && rows.length > 0,
     rowsCount: Array.isArray(rows) ? rows.length : 0,
     tipo: resultado?.tipo || null,
+    filial_escopo_json: filialEscopoParaAuditoria,
   };
 }
 

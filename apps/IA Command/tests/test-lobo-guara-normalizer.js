@@ -187,7 +187,7 @@ WHERE SF2.D_E_L_E_T_ = ' '
 
 const sx2Teste = { SF2: 'E', SA2: 'C', SA1: 'C' }; // modos reais confirmados na Plantivo
 
-const outEspecifica = normalizer.aplicarEscopoLoboGuara(sqlBase, {
+const { sql: outEspecifica } = normalizer.aplicarEscopoLoboGuara(sqlBase, {
   db, ctx: ctxTeste(), sx2: sx2Teste,
   filialState: { modo: 'especifica', chaves: ['010101'], nomes: ['PLANTIVO CAMPO VERDE'] },
 });
@@ -198,7 +198,7 @@ assert(outEspecifica.includes("SF2.F2_FILIAL IN ('010101')"), 'Filtro IN aplicad
 // ─────────────────────────────────────────────────────────────
 titulo('CENÁRIO 5 — normalizer expande empresa inteira');
 
-const outEmpresa = normalizer.aplicarEscopoLoboGuara(sqlBase, {
+const { sql: outEmpresa } = normalizer.aplicarEscopoLoboGuara(sqlBase, {
   db, ctx: ctxTeste(), sx2: sx2Teste,
   filialState: { modo: 'empresa', chaves: ['01'], nomes: ['PLANTIVO'] },
 });
@@ -213,17 +213,17 @@ assert(
 // ─────────────────────────────────────────────────────────────
 titulo('CENÁRIO 6 — modo todas e ausência de filialState não alteram o SQL');
 
-const outTodas = normalizer.aplicarEscopoLoboGuara(sqlBase, {
+const { sql: outTodas } = normalizer.aplicarEscopoLoboGuara(sqlBase, {
   db, ctx: ctxTeste(), sx2: sx2Teste, filialState: { modo: 'todas' },
 });
 assert(outTodas === sqlBase, 'modo=todas não modifica o SQL');
 
-const outNull = normalizer.aplicarEscopoLoboGuara(sqlBase, {
+const { sql: outNull } = normalizer.aplicarEscopoLoboGuara(sqlBase, {
   db, ctx: ctxTeste(), sx2: sx2Teste, filialState: null,
 });
 assert(outNull === sqlBase, 'filialState=null não modifica o SQL');
 
-const outAmbigua = normalizer.aplicarEscopoLoboGuara(sqlBase, {
+const { sql: outAmbigua } = normalizer.aplicarEscopoLoboGuara(sqlBase, {
   db, ctx: ctxTeste(), sx2: sx2Teste, filialState: { modo: 'ambigua', chaves: ['010101', '010103'] },
 });
 assert(outAmbigua === sqlBase, 'modo=ambigua não aplica filtro às cegas (pipeline deveria ter perguntado antes)');
@@ -241,15 +241,22 @@ WHERE SE2.D_E_L_E_T_ = ' '`;
 
 // SE2 modo C confirmado real na Plantivo (financeiro compartilhado nesta base)
 const sx2Financeiro = { SE2: 'C', SA2: 'C' };
-const outFinanceiro = normalizer.aplicarEscopoLoboGuara(sqlComCadastroCompartilhado, {
+const resultadoFinanceiro = normalizer.aplicarEscopoLoboGuara(sqlComCadastroCompartilhado, {
   db, ctx: ctxTeste(), sx2: sx2Financeiro,
   filialState: { modo: 'especifica', chaves: ['010101'], nomes: ['PLANTIVO CAMPO VERDE'] },
 });
-assert(outFinanceiro === sqlComCadastroCompartilhado, 'Tabela modo C (compartilhada) não recebe filtro — mesmo com filialState presente', outFinanceiro);
+assert(resultadoFinanceiro.sql === sqlComCadastroCompartilhado, 'Tabela modo C (compartilhada) não recebe filtro — mesmo com filialState presente', resultadoFinanceiro.sql);
+// Achado de revisão de código: mesmo com filialState presente e todas as
+// tabelas sendo modo C (nenhum predicado injetado), o normalizer precisa
+// reportar aplicado=false — antes o chamador (runner.js) so verificava "a
+// funcao rodou sem excecao", entao esse cenario exato registrava badge de
+// sucesso na auditoria mesmo sem nenhum WHERE de filial ter sido injetado.
+assert(resultadoFinanceiro.aplicado === false, 'Tabela modo C (compartilhada): aplicado=false explicitamente, mesmo com filialState presente', JSON.stringify(resultadoFinanceiro));
+assert(resultadoFinanceiro.motivo === 'nenhuma_tabela_aceitou_filtro', 'motivo reflete que nenhuma tabela do SQL aceitou o filtro', resultadoFinanceiro.motivo);
 
 const sx2Misto = { SF2: 'E', SD2: 'E', SA1: 'C' };
 const sqlMisto = `SELECT * FROM SF2010 SF2 JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL JOIN SA1010 SA1 ON SF2.F2_CLIENTE = SA1.A1_COD WHERE SF2.D_E_L_E_T_ = ' '`;
-const outMisto = normalizer.aplicarEscopoLoboGuara(sqlMisto, {
+const { sql: outMisto } = normalizer.aplicarEscopoLoboGuara(sqlMisto, {
   db, ctx: ctxTeste(), sx2: sx2Misto,
   filialState: { modo: 'especifica', chaves: ['010101'] },
 });
@@ -277,7 +284,7 @@ const sx2EmpresaSA1 = { SA1: 'E', SF2: 'E' }; // modo_empresa (mapa PARALELO ao 
 // Filial pontual (Cuiaba, empresa 01) -> deve expandir para empresa_codigo '01',
 // não para as 5 filial_chave da Plantivo nem para a filial_chave '010103' crua.
 const sqlSA1Isolado = `SELECT SA1.A1_NOME FROM SA1010 SA1 WHERE SA1.D_E_L_E_T_ = ' '`;
-const outSA1Empresa = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+const { sql: outSA1Empresa } = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
   db, ctx: ctxTeste(), sx2: sx2FilialReal, sx2Empresa: sx2EmpresaSA1,
   filialState: { modo: 'especifica', chaves: ['010103'], nomes: ['PLANTIVO CUIABA'] },
 });
@@ -285,7 +292,7 @@ assert(outSA1Empresa.includes("SA1.A1_FILIAL IN ('01')"), 'SA1 filtrada pelo cod
 assert(!outSA1Empresa.includes('010103'), 'filial_chave completa (6 dígitos) não aparece no filtro de SA1', outSA1Empresa);
 
 // Filial da EMA (empresa 02) -> deve isolar '02', nunca misturar com '01'.
-const outSA1Ema = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+const { sql: outSA1Ema } = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
   db, ctx: ctxTeste(), sx2: sx2FilialReal, sx2Empresa: sx2EmpresaSA1,
   filialState: { modo: 'especifica', chaves: ['020101'], nomes: ['EMA COMERCIO DE INSUMOS AGRICOLAS LTDA'] },
 });
@@ -297,7 +304,7 @@ assert(!outSA1Ema.includes("'01'"), 'SA1 com escopo EMA não vaza para o código
 // errada (checar modoEmp antes de modo) filtrava SF2 pelo codigo de empresa
 // curto ('01') em vez da filial completa ('010103'), zerando os resultados.
 const sqlSF2Isolado = `SELECT SF2.F2_DOC FROM SF2010 SF2 WHERE SF2.D_E_L_E_T_ = ' '`;
-const outSF2ExclusivaEAmbos = normalizer.aplicarEscopoLoboGuara(sqlSF2Isolado, {
+const { sql: outSF2ExclusivaEAmbos } = normalizer.aplicarEscopoLoboGuara(sqlSF2Isolado, {
   db, ctx: ctxTeste(), sx2: sx2FilialReal, sx2Empresa: sx2EmpresaSA1,
   filialState: { modo: 'especifica', chaves: ['010103'], nomes: ['PLANTIVO CUIABA'] },
 });
@@ -318,7 +325,7 @@ JOIN SD2010 SD2 ON SD2.D2_FILIAL = SF2.F2_FILIAL AND SD2.D2_DOC = SF2.F2_DOC AND
 JOIN SA1010 SA1 ON SF2.F2_CLIENTE = SA1.A1_COD AND SF2.F2_LOJA = SA1.A1_LOJA AND SA1.D_E_L_E_T_ = ' '
 WHERE SF2.F2_EMISSAO = '20260822' AND SF2.D_E_L_E_T_ = ' ' AND SF2.F2_TIPO = 'N'
 GROUP BY SA1.A1_NOME`;
-const outVendasPorCliente = normalizer.aplicarEscopoLoboGuara(sqlVendasPorCliente, {
+const { sql: outVendasPorCliente } = normalizer.aplicarEscopoLoboGuara(sqlVendasPorCliente, {
   db, ctx: ctxTeste(), sx2: sx2MistoFilial, sx2Empresa: sx2MistoEmpresa,
   filialState: { modo: 'especifica', chaves: ['010101'], nomes: ['PLANTIVO CAMPO VERDE'] },
 });
@@ -327,7 +334,7 @@ assert(outVendasPorCliente.includes("SA1.A1_FILIAL IN ('01')"), 'SQL misto: SA1 
 
 // Sem sx2Empresa (contexto TRADICIONAL ou tabela sem modo_empresa cadastrado):
 // comportamento igual ao Cenário 7 — não filtra às cegas, não quebra.
-const outSemSx2Empresa = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+const { sql: outSemSx2Empresa } = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
   db, ctx: ctxTeste(), sx2: { SA1: 'C' }, sx2Empresa: null,
   filialState: { modo: 'especifica', chaves: ['010103'] },
 });
@@ -335,7 +342,7 @@ assert(outSemSx2Empresa === sqlSA1Isolado, 'Sem sx2Empresa informado, SA1 (modo 
 
 // modoEmp='E' mas empresa dona não identificada (filial_chave desconhecida na
 // árvore) -> não filtra às cegas, mesma postura de falha fechada do resto do módulo.
-const outEmpresaDesconhecida = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
+const { sql: outEmpresaDesconhecida } = normalizer.aplicarEscopoLoboGuara(sqlSA1Isolado, {
   db, ctx: ctxTeste(), sx2: {}, sx2Empresa: sx2EmpresaSA1,
   filialState: { modo: 'especifica', chaves: ['999999'] },
 });
@@ -417,7 +424,7 @@ GROUP BY SA1.A1_NOME`;
 
 // SEM filialState (o caso real que causou o bug — pergunta ampla, sem menção
 // de filial/empresa). A amarração deve acontecer mesmo assim.
-const outAmarracaoSemEscopo = normalizer.aplicarEscopoLoboGuara(sqlVendasSemEscopo, {
+const { sql: outAmarracaoSemEscopo } = normalizer.aplicarEscopoLoboGuara(sqlVendasSemEscopo, {
   db, ctx: ctxTeste(), sx2: sx2Real, sx2Empresa: sx2EmpresaReal, filialState: null,
 });
 assert(
@@ -436,7 +443,7 @@ assert(posLeft > posOnSA1 && posLeft < posWhere, 'Amarração fica dentro da cl�
 
 // COM escopo de filial específica: amarração de JOIN + filtro WHERE devem
 // coexistir (não são mutuamente exclusivos).
-const outAmarracaoComEscopo = normalizer.aplicarEscopoLoboGuara(sqlVendasSemEscopo, {
+const { sql: outAmarracaoComEscopo } = normalizer.aplicarEscopoLoboGuara(sqlVendasSemEscopo, {
   db, ctx: ctxTeste(), sx2: sx2Real, sx2Empresa: sx2EmpresaReal,
   filialState: { modo: 'especifica', chaves: ['010101'], nomes: ['PLANTIVO CAMPO VERDE'] },
 });
@@ -448,7 +455,7 @@ assert(outAmarracaoComEscopo.includes("SF2.F2_FILIAL IN ('010101')"), 'Com escop
 // exclusividade por empresa) não deve receber amarração — não há ambiguidade
 // a resolver, amarrar seria mudar comportamento sem necessidade.
 const sqlComSA2Global = `SELECT SE2.E2_NUM FROM SE2010 SE2 JOIN SA2010 SA2 ON SE2.E2_FORNECE = SA2.A2_COD WHERE SE2.D_E_L_E_T_ = ' '`;
-const outSemModoEmpresa = normalizer.aplicarEscopoLoboGuara(sqlComSA2Global, {
+const { sql: outSemModoEmpresa } = normalizer.aplicarEscopoLoboGuara(sqlComSA2Global, {
   db, ctx: ctxTeste(), sx2: { SE2: 'E', SA2: 'C' }, sx2Empresa: null, filialState: null,
 });
 assert(outSemModoEmpresa === sqlComSA2Global, 'Sem sx2Empresa informado (tabela sem X2_MODOEMP cadastrado), nenhuma amarração é aplicada', outSemModoEmpresa);

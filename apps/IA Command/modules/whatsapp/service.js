@@ -5310,6 +5310,13 @@ class IACWhatsAppService extends EventEmitter {
             _remetente: sender,
             _escopoExecucao: 'whatsapp_all',
             _historicoResumido: _historicoEmp,
+            // Escopo de filial Lobo Guara por empresa (IA Command, chat embutido —
+            // arvore de selecao). opts.escopoFilialPorEmpresa so e populado pelo
+            // caminho multiempresa do chat embutido (protheus_whatsapp/service.js);
+            // os demais chamadores de _pipelineAll (WhatsApp real, texto livre)
+            // nunca preenchem este campo em opts, entao este spread e sempre {}
+            // pra eles — comportamento identico ao anterior a esta mudanca.
+            ...(opts.escopoFilialPorEmpresa?.[emp.empresa_id] ? { _filialLoboGuara: opts.escopoFilialPorEmpresa[emp.empresa_id] } : {}),
             ...(sqlCanonicoDinamico
               ? {
                   _usarSqlCanonicoWhatsappAll: true,

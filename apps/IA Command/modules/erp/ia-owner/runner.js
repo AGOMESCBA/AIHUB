@@ -408,6 +408,24 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Nao filtrar por nome, descricao ou LIKE.',
       '- Nao remover periodo, metrica ou demais filtros ja corretos.',
     ];
+  } else if (/fiscal brasileira de CFOP|Faturamento\/vendas\/receita representam somente operacoes que geram receita|REGRA (?:NACIONAL|FISCAL BRASILEIRA) DE CFOP PARA RECEITA|Exclua remessas e transferencias por padrao/i.test(mensagem)) {
+    bloco = [
+      'Contrato obrigatorio — REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA:',
+      '- Quando a pergunta pedir faturamento, vendas, vendido/faturado ou receita, retorne somente operacoes que geram receita.',
+      '- Essa e uma regra fiscal nacional de interpretacao de CFOP, nao uma regra especifica do ERP.',
+      "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%').",
+      "- Transferencias nao geram receita: exclua AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
+      '- So nao aplique essa exclusao se a pergunta pedir explicitamente remessas, transferencias, todas as saidas ou movimentacao total.',
+      ...linhasEntidades,
+      'Tarefa:',
+      '- Gere novo SQL a partir da pergunta original.',
+      '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
+      '- Adicione os dois filtros de exclusao de CFOP no bloco de receita que usa SD2.',
+      '',
+      'Nao fazer:',
+      '- Nao retornar remessas ou transferencias dentro de faturamento/vendas/receita padrao.',
+      '- Nao remover filtros de periodo, seguranca ou D_E_L_E_T_ ja corretos.',
+    ];
   } else if (/D_E_L_E_T_|deletad/i.test(mensagem)) {
     // Extrai os aliases faltantes da propria mensagem de erro (ex: "sem filtro D_E_L_E_T_: SF2, SB1")
     // para citar cada tabela pelo nome no retry — em queries com 3+ JOINs a IA tende a
@@ -3681,18 +3699,43 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
   // aplicado). Falha fechada: aplicarEscopoLoboGuara() e um no-op silencioso
   // quando a empresa nao esta em LOBO_GUARA com perfil validado — nao afeta
   // TRADICIONAL nem conexoes Lobo Guara ainda nao validadas.
+  //
+  // filialEscopoResultado registra 3 estados para auditoria estruturada (IA
+  // Command, arvore de filiais do chat embutido — tambem vale para o WhatsApp
+  // real quando ha _filialLoboGuara, mesmo sem UI la): (a) nenhum escopo
+  // solicitado, (b) solicitado e aplicado, (c) solicitado mas nao confirmado
+  // por falha interna. So metadado novo — nao muda o fail-open ja existente
+  // (SQL sempre segue sem filtro em caso de excecao, nunca bloqueia a resposta).
+  let filialEscopoResultado = { solicitado: !!filialLoboGuaraState, aplicado: false, erro: null };
   if (empresaId && spec.aplicarLoboGuaraNormalizer !== false) {
     try {
       const { getDB } = require('../../database');
       const ctxLoboGuara = loboGuaraFilialResolver.contextoLoboGuara(getDB(), empresaId);
       if (ctxLoboGuara) {
-        out = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
+        // [CORRIGIDO apos revisao de codigo] aplicarEscopoLoboGuara() devolve
+        // { sql, aplicado, motivo } — aplicado reflete se algum predicado de
+        // filial FOI DE FATO injetado no SQL, nao so "a chamada nao lancou
+        // excecao e havia contexto Lobo Guara". Antes, uma pergunta que
+        // gerasse SQL contra tabela global/compartilhada (nenhuma tabela
+        // aceita filtro de filial) registrava "aplicado com sucesso" na
+        // auditoria mesmo sem nenhum WHERE de filial ter entrado.
+        const resultadoNormalizer = loboGuaraNormalizer.aplicarEscopoLoboGuara(out, {
           db: getDB(), ctx: ctxLoboGuara, sx2, sx2Empresa, filialState: filialLoboGuaraState, logPrefix: spec.logPrefix,
         });
+        out = resultadoNormalizer.sql;
+        if (filialLoboGuaraState) {
+          filialEscopoResultado.aplicado = !!resultadoNormalizer.aplicado;
+          if (!resultadoNormalizer.aplicado) filialEscopoResultado.erro = resultadoNormalizer.motivo || 'nao_aplicado';
+        }
+      } else if (filialLoboGuaraState) {
+        filialEscopoResultado.erro = 'lobo_guara_indisponivel';
       }
     } catch (e) {
       console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao aplicar escopo Lobo Guara (ignorado, SQL segue sem o filtro): ${e.message}`);
+      if (filialLoboGuaraState) filialEscopoResultado.erro = e.message || 'falha_interna';
     }
+  } else if (filialLoboGuaraState) {
+    filialEscopoResultado.erro = 'normalizer_desabilitado';
   }
   const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);
   if (!validacaoPlano.ok) {
@@ -3706,6 +3749,7 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
     parametros: params.aplicados || [],
     sqlAposContratosRelacionais,
     contratosRelacionaisAplicados: contratosRelacionais.contratosAplicados || [],
+    filialEscopoResultado,
   };
 }
 
@@ -4508,6 +4552,7 @@ async function executar(spec, intent, empresaId) {
         _sql_canonico_original: sqlOriginalIa,
         _sql_canonico_empresa_origem: empresaId,
         _sql_canonico_parametros: preparado.parametros,
+        _filial_escopo_resultado: preparado.filialEscopoResultado || null,
         _intent_canonico: intentCanonicoInfo?.canonical || null,
         _intent_canonico_hash: intentCanonicoInfo?.canonicalHash || null,
         _intent_canonico_estrutural: intentCanonicoInfo?.structural || null,
@@ -4735,6 +4780,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         _sql_canonico_original: sqlCanonico,
         _sql_canonico_empresa_origem: empresaId,
         _sql_canonico_parametros: preparado.parametros,
+        _filial_escopo_resultado: preparado.filialEscopoResultado || null,
         _sql_auditoria: auditoriaBase,
         _entidadesResolvidas: entidades,
         duracao_ms: Date.now() - t0,

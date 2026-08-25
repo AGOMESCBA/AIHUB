@@ -241,11 +241,22 @@ function _amarrarJoinPorEmpresa(sql, aliases, sx2, sx2Empresa, opts = {}) {
 // lobo-guara-filial-resolver.contextoLoboGuara(db, empresaId) — já confirma
 // modelo LOBO_GUARA + perfil validado. Se `ctx` for null, o normalizer não
 // faz nada (não é uma conexão LOBO_GUARA validada — falha fechado).
+//
+// Retorno: { sql, aplicado, motivo }. `aplicado` reflete se algum predicado
+// de filial FOI DE FATO injetado no SQL — nao apenas "a funcao rodou sem
+// excecao e havia contexto Lobo Guara". Antes desta mudanca (ver revisao de
+// codigo), o chamador (ia-owner/runner.js) so verificava a segunda condicao,
+// entao uma pergunta que gerasse SQL contra tabela global/compartilhada
+// (nenhuma tabela aceita filtro de filial) registrava "aplicado com
+// sucesso" na auditoria, mesmo sem nenhum WHERE de filial ter entrado.
+// `motivo` e null quando aplicado=true, ou uma string curta explicando por
+// que nao aplicou (usado so para log/diagnostico, nao e para exibir ao
+// usuario final).
 function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, logPrefix } = {}) {
-  if (!ctx || !db) return sql;
+  if (!ctx || !db) return { sql, aplicado: false, motivo: 'sem_contexto_lobo_guara' };
 
   const aliases = aliasTabelaSql(sql);
-  if (!Object.keys(aliases).length) return sql;
+  if (!Object.keys(aliases).length) return { sql, aplicado: false, motivo: 'sem_aliases_no_sql' };
 
   // Amarração de JOIN por empresa roda SEMPRE que houver a combinação
   // ambígua no SQL (âncora exclusiva por filial + tabela exclusiva por
@@ -255,7 +266,9 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
   let out = _amarrarJoinPorEmpresa(sql, aliases, sx2, sx2Empresa, { logPrefix }).sql;
 
   const chaves = _resolverChavesEscopo(filialState, db, ctx.connectionId);
-  if (!chaves || !chaves.length) return out;
+  if (!chaves || !chaves.length) {
+    return { sql: out, aplicado: false, motivo: filialState ? 'nenhuma_chave_resolvida' : 'sem_escopo_solicitado' };
+  }
 
   // Só precisa resolver a empresa dona se alguma tabela do SQL de fato
   // tiver X2_MODOEMP='E' — evita consulta desnecessária à árvore no caminho comum.
@@ -267,8 +280,8 @@ function aplicarEscopoLoboGuara(sql, { db, ctx, sx2, sx2Empresa, filialState, lo
     ? resolver.empresasDonasDasFiliais(db, ctx.connectionId, chaves)
     : null;
 
-  const { sql: sqlFinal } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix });
-  return sqlFinal;
+  const { sql: sqlFinal, aplicado } = _injetarFiltroFilial(out, aliases, sx2, sx2Empresa, chaves, codigosEmpresa, { logPrefix });
+  return { sql: sqlFinal, aplicado, motivo: aplicado ? null : 'nenhuma_tabela_aceitou_filtro' };
 }
 
 // ── Guards (docs/lobo-guara-consenso-arquitetura.md, secao "Guards") ────────

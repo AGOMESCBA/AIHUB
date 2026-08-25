@@ -673,10 +673,21 @@ function mesclar(novoIntent, ultimoIntent, ultimoIntentTs = 0, mensagem = '', op
   // em novoIntent._filialLoboGuara antes de invocar mesclar). Aqui so herdamos
   // quando o turno atual nao trouxe mencao nova.
   //
+  // _filialLoboGuaraResetado: marcador explicito (chat embutido, IA Command —
+  // ver protheus_whatsapp/service.js) para o caso em que o usuario tocou a
+  // arvore de selecao e marcou "Todas as filiais" DE PROPOSITO nesta
+  // mensagem. Sem esse marcador, `!merged._filialLoboGuara` sozinho nao
+  // distingue "usuario nao mencionou filial" (deve herdar) de "usuario
+  // escolheu explicitamente nenhum filtro" (NAO deve herdar) — os dois casos
+  // produzem o mesmo _filialLoboGuara ausente/undefined no turno atual. Sem
+  // essa distincao, marcar "Todas" na UI nao limpava o filtro herdado do
+  // turno anterior (bug real: resposta continuava filtrada pela filial
+  // antiga, silenciosamente, mesmo com a UI mostrando "Todas").
+  //
   // Critico: herdar filial entre EMPRESAS/CONEXOES diferentes e risco de vazamento
   // (o mesmo codigo pode significar outra coisa, ou nada, na nova empresa) — por
   // isso a herdanca so vale quando a empresa_id nao mudou entre os dois intents.
-  if (!merged._filialLoboGuara && ultimoIntent._filialLoboGuara) {
+  if (!merged._filialLoboGuara && !merged._filialLoboGuaraResetado && ultimoIntent._filialLoboGuara) {
     const mesmaEmpresa = !merged._empresaIdContexto
       || !ultimoIntent._empresaIdContexto
       || merged._empresaIdContexto === ultimoIntent._empresaIdContexto;

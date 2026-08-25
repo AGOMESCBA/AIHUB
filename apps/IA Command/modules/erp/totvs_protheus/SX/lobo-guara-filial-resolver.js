@@ -182,6 +182,30 @@ function expandirFiliaisDaEmpresa(db, connectionId, empresaCodigo) {
   return rows.map(r => r.filial_chave).filter(Boolean);
 }
 
+// Arvore agrupada (empresa -> filiais) para a UI de selecao do chat embutido
+// (arvore com checkboxes, IA Command). Reaproveita _carregarArvore (mesma
+// query usada pela resolucao textual) — mesma fonte de verdade, sem duplicar
+// leitura da protheus_company_tree.
+function arvoreAgrupadaParaSelecao(db, connectionId) {
+  const nos = _carregarArvore(db, connectionId);
+  const empresasPorCodigo = new Map();
+  for (const no of nos) {
+    if (no.tipo_no !== 'empresa') continue;
+    empresasPorCodigo.set(no.empresa_codigo, {
+      empresaProtheusCodigo: no.empresa_codigo,
+      nome: no.nome,
+      filiais: [],
+    });
+  }
+  for (const no of nos) {
+    if (no.tipo_no !== 'filial') continue;
+    const empresa = empresasPorCodigo.get(no.empresa_codigo);
+    if (!empresa) continue; // filial orfa (sem no de empresa ativo) — nao exibida
+    empresa.filiais.push({ filialChave: no.filial_chave, nome: no.nome });
+  }
+  return [...empresasPorCodigo.values()];
+}
+
 // Caso real confirmado com dado de producao (Plantivo/SA1, ver
 // docs/lobo-guara-consenso-arquitetura.md): uma tabela pode ser EXCLUSIVA por
 // empresa (X2_MODOEMP=E) mesmo sendo compartilhada entre filiais (X2_MODO=C).
@@ -218,6 +242,7 @@ module.exports = {
   resolverDaMensagem,
   expandirFiliaisDaEmpresa,
   empresasDonasDasFiliais,
+  arvoreAgrupadaParaSelecao,
   _normalizar,
   _clonar,
   _contemPalavra,

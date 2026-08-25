@@ -1640,6 +1640,21 @@ const MIGRATIONS = [
          );
     `,
   },
+  {
+    version: 85,
+    descricao: 'IA Command - filtro de filial Lobo Guara no chat embutido: escopo auditavel por mensagem',
+    sql: `
+      ALTER TABLE interpretation_log ADD COLUMN filial_escopo_json TEXT DEFAULT NULL;
+      ALTER TABLE protheus_chat_messages ADD COLUMN filial_escopo_json TEXT DEFAULT NULL;
+    `,
+  },
+  {
+    version: 86,
+    descricao: 'IA Command - protheus_whatsapp: filiais permitidas por usuario (FWUsrEmp/LoadFils) no token do chat',
+    sql: `
+      ALTER TABLE protheus_chat_tokens ADD COLUMN filiais_permitidas_json TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

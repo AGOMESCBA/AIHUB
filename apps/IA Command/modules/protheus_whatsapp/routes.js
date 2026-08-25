@@ -20,6 +20,7 @@ const whatsappManager = require('../whatsapp/service-manager');
 const whatsappChannels = require('../whatsapp/channel-store');
 const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
 const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
+const loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-filial-resolver');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -103,6 +104,23 @@ function resolverEmpresaSelecionada(req, res) {
   }
 
   return empresaId;
+}
+
+// Normaliza o payload da arvore de selecao de filial (frontend) para o shape
+// minimo esperado por resolverEscopoFilialLoboGuara/consolidarEscopoFilial —
+// nunca confia no formato vindo do browser (arrays podem vir ausentes, com
+// tipos errados, ou nem existir se o cliente for uma versao antiga da tela).
+function normalizarFilialSelecaoUi(valor) {
+  if (!valor || typeof valor !== 'object') return null;
+  const empresasInteiras = Array.isArray(valor.empresasInteiras)
+    ? valor.empresasInteiras.map(v => String(v || '').trim()).filter(Boolean)
+    : [];
+  const filiaisAvulsas = Array.isArray(valor.filiaisAvulsas)
+    ? valor.filiaisAvulsas.map(v => String(v || '').trim()).filter(Boolean)
+    : [];
+  const uiTouched = !!valor.uiTouched;
+  if (!uiTouched && !empresasInteiras.length && !filiaisAvulsas.length) return null;
+  return { empresasInteiras, filiaisAvulsas, uiTouched };
 }
 
 function normalizarListaIds(valor) {
@@ -668,13 +686,13 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       perfLog('POST /token', inicio, { status: 401 });
       return res.status(401).json({ error: 'Credencial invalida.' });
     }
-    const { empresaId, celular, filial, empresasPermitidas, launchTicket } = req.body || {};
+    const { empresaId, celular, filial, empresasPermitidas, filiaisPermitidas, launchTicket } = req.body || {};
     if (!empresaId || !celular) {
       perfLog('POST /token', inicio, { status: 400 });
       return res.status(400).json({ error: 'empresaId e celular sao obrigatorios.' });
     }
     try {
-      const { token, expiraEm } = tokenService.emitir({ empresaId, celular, filial, empresasPermitidas });
+      const { token, expiraEm } = tokenService.emitir({ empresaId, celular, filial, empresasPermitidas, filiaisPermitidas });
       const ticket = String(launchTicket || '').trim();
       if (ticket) {
         salvarLaunchTicket(ticket, token, expiraEm);
@@ -683,6 +701,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         status: 200,
         empresaId: Number(empresaId),
         empresasPermitidas: Array.isArray(empresasPermitidas) ? empresasPermitidas.length : 0,
+        filiaisPermitidas: Array.isArray(filiaisPermitidas) ? filiaisPermitidas.length : 0,
         launchTicket: ticket ? 1 : 0,
       });
       res.json({ token, expiraEm });
@@ -725,6 +744,48 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       empresaId: Number(req.protheusChat.empresaId),
       empresas,
     });
+  });
+
+  // ── Arvore de filiais Lobo Guara (selecao manual de escopo no chat) ──
+  app.get('/api/ia-command/protheus/filial-tree', requireTokenSessao, (req, res) => {
+    const inicio = Date.now();
+    try {
+      const empresasSelecionadas = resolverEmpresasSelecionadas(req, res);
+      if (!empresasSelecionadas) return;
+
+      const db = getDB();
+      const empresas = [];
+      for (const emp of empresasSelecionadas) {
+        const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, emp.empresa_id);
+        if (!ctx) continue; // nao LOBO_GUARA validada — nao aparece na arvore
+        const arvoreEmpresa = loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId);
+        // Filtra pelo acesso real do usuario no ERP (FWUsrEmp/LoadFils,
+        // capturado no .prw na abertura do chat) — a arvore cadastrada
+        // (protheus_company_tree) representa o universo, nao o que este
+        // usuario especifico pode ver. Sem essa informacao na sessao
+        // (compatibilidade: .prw anterior a esta mudanca, ou LoadFils falhou
+        // para essa empresa), mantem o comportamento anterior (mostra tudo
+        // que esta cadastrado).
+        for (const empArvore of arvoreEmpresa) {
+          const filiaisErp = tokenService.filiaisPermitidasDaEmpresa(req.protheusChat, empArvore.empresaProtheusCodigo);
+          if (filiaisErp === null) {
+            empresas.push(empArvore);
+            continue;
+          }
+          const filiaisFiltradas = empArvore.filiais.filter(f => filiaisErp.includes(f.filialChave));
+          if (filiaisFiltradas.length) {
+            empresas.push({ ...empArvore, filiais: filiaisFiltradas });
+          }
+        }
+      }
+
+      perfLog('GET /filial-tree', inicio, { status: 200, empresas: empresas.length });
+      if (!empresas.length) return res.json({ disponivel: false });
+      res.json({ disponivel: true, empresas });
+    } catch (err) {
+      perfLog('GET /filial-tree', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/ia-command/protheus/bootstrap', requireTokenSessao, (req, res) => {
@@ -894,6 +955,40 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  app.get('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/sql', requireTokenSessao, (req, res) => {
+    const inicio = Date.now();
+    const { celular } = req.protheusChat;
+
+    try {
+      const empresaId = resolverEmpresaSelecionada(req, res);
+      if (!empresaId) return;
+      const sessao = sessionStore.buscarSessao({ id: req.params.id, empresaId, celular });
+      if (!sessao) return res.status(404).json({ error: 'Sessao nao encontrada.' });
+
+      const info = sessionStore.sqlDaMensagem({
+        sessaoId: req.params.id,
+        mensagemId: req.params.mensagemId,
+      });
+      if (!info) return res.status(404).json({ error: 'Mensagem nao encontrada.' });
+      if (!info.temSql) return res.status(404).json({ error: 'Esta mensagem ainda nao possui SQL auditado.' });
+
+      const pergunta = perguntaDaResposta({ sessaoId: req.params.id, respostaCriadaEm: info.criadoEm });
+      perfLog('GET /mensagem/sql', inicio, { status: 200, empresaId, modulo: info.modulo || 'n/a' });
+      res.json({
+        pergunta,
+        sql: info.sql,
+        sqlFonte: info.sqlFonte,
+        sqlTemplate: info.sqlTemplate,
+        modulo: info.modulo,
+        interpretationLogId: info.interpretationLogId,
+        favoritoId: info.favoritoId,
+      });
+    } catch (err) {
+      perfLog('GET /mensagem/sql', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/ia-command/protheus/sessoes/:id/mensagens/:mensagemId/encaminhar', requireTokenSessao, async (req, res) => {
     const inicio = Date.now();
     const { celular } = req.protheusChat;
@@ -985,7 +1080,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
   // ── Envio de mensagem ──
   app.post('/api/ia-command/protheus/mensagem', requireTokenSessao, async (req, res) => {
-    const { texto, sessaoId } = req.body || {};
+    const { texto, sessaoId, filialSelecaoUi } = req.body || {};
     if (!texto || !String(texto).trim()) {
       return res.status(400).json({ error: 'texto obrigatorio.' });
     }
@@ -1005,6 +1100,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         celular,
         sessaoId: sid,
         texto: String(texto).trim(),
+        filialSelecaoUi: normalizarFilialSelecaoUi(filialSelecaoUi),
+        filiaisPermitidasSessao: req.protheusChat.filiaisPermitidas || null,
       });
       console.log(`[protheus_whatsapp] Mensagem processada: empresa=${empresaId} sessao=${sid} tipo=${resultado?.tipo || 'n/a'} temDados=${resultado?.temDados ? 1 : 0} rows=${resultado?.rowsCount ?? 'n/a'}`);
       res.json({ sessaoId: sid, resposta: resultado, criadoEm: new Date().toISOString() });

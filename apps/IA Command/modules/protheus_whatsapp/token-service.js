@@ -47,7 +47,28 @@ function normalizarEmpresasPermitidas(empresasPermitidas, empresaIdAtual) {
   return lista;
 }
 
-function emitir({ empresaId, celular, filial = null, empresasPermitidas = [] }) {
+// Normaliza a lista de filiais que o usuario Protheus efetivamente acessa,
+// por codigo de empresa — enviada pelo .prw (IACFilJs/IACCHAT.prw), resolvida
+// la via FWUsrEmp()+LoadFils() (com RpcSetEnv por empresa). Formato de
+// entrada: [{ codigoProtheus, filiais: [filialChave, ...] }, ...]. Ausente ou
+// vazio e um estado VALIDO (compatibilidade com .prw anterior a esta mudanca,
+// ou falha ao coletar LoadFils para alguma empresa) — nesse caso o chamador
+// deve tratar como "sem filtro adicional de filial", nunca bloquear.
+function normalizarFiliaisPermitidas(filiaisPermitidas) {
+  if (!Array.isArray(filiaisPermitidas)) return [];
+  const porCodigo = new Map();
+  for (const item of filiaisPermitidas) {
+    const codigo = String(item?.codigoProtheus || item?.codigo_protheus || '').trim();
+    if (!codigo) continue;
+    const filiais = Array.isArray(item?.filiais)
+      ? [...new Set(item.filiais.map(f => String(f || '').trim()).filter(Boolean))]
+      : [];
+    porCodigo.set(codigo, filiais);
+  }
+  return [...porCodigo.entries()].map(([codigoProtheus, filiais]) => ({ codigoProtheus, filiais }));
+}
+
+function emitir({ empresaId, celular, filial = null, empresasPermitidas = [], filiaisPermitidas = [] }) {
   if (!empresaId) throw new Error('empresaId obrigatorio.');
   const celularNormalizado = normalizarCelular(celular);
   if (!celularNormalizado) throw new Error('celular obrigatorio.');
@@ -56,11 +77,12 @@ function emitir({ empresaId, celular, filial = null, empresasPermitidas = [] }) 
   const agora = new Date();
   const expiraEm = new Date(agora.getTime() + TTL_MS);
   const empresas = normalizarEmpresasPermitidas(empresasPermitidas, empresaId);
+  const filiais = normalizarFiliaisPermitidas(filiaisPermitidas);
 
   getDB().prepare(`
-    INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(token, empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas));
+    INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(token, empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas), JSON.stringify(filiais));
 
   return { token, expiraEm: expiraEm.toISOString() };
 }
@@ -69,7 +91,7 @@ function validar(token) {
   if (!token) return null;
 
   const row = getDB().prepare(`
-    SELECT token, empresa_id, celular, filial, expira_em, empresas_permitidas_json
+    SELECT token, empresa_id, celular, filial, expira_em, empresas_permitidas_json, filiais_permitidas_json
     FROM protheus_chat_tokens
     WHERE token = ?
   `).get(token);
@@ -88,12 +110,36 @@ function validar(token) {
   }
   empresasPermitidas = normalizarEmpresasPermitidas(empresasPermitidas, row.empresa_id);
 
+  let filiaisPermitidas = [];
+  try {
+    filiaisPermitidas = JSON.parse(row.filiais_permitidas_json || '[]');
+  } catch (_) {
+    filiaisPermitidas = [];
+  }
+  filiaisPermitidas = normalizarFiliaisPermitidas(filiaisPermitidas);
+
   return {
     empresaId: row.empresa_id,
     celular: row.celular,
     filial: row.filial,
     empresasPermitidas,
+    filiaisPermitidas,
   };
+}
+
+// Devolve a lista de filialChave que a sessao autoriza para um codigo de
+// empresa Protheus especifico, ou null se a sessao nao tem essa informacao
+// para essa empresa (token emitido por .prw anterior a esta mudanca, ou
+// LoadFils falhou para essa empresa no momento da abertura do chat) — null
+// e distinto de array vazio: null significa "sem informacao, nao filtrar
+// adicionalmente"; array vazio significa "usuario nao acessa filial nenhuma
+// nesta empresa" (bloqueio real).
+function filiaisPermitidasDaEmpresa(sessao, codigoProtheusEmpresa) {
+  const codigo = String(codigoProtheusEmpresa || '').trim();
+  if (!codigo) return null;
+  const lista = Array.isArray(sessao?.filiaisPermitidas) ? sessao.filiaisPermitidas : [];
+  const item = lista.find(i => i.codigoProtheus === codigo);
+  return item ? item.filiais : null;
 }
 
 function limparExpirados() {
@@ -114,6 +160,8 @@ module.exports = {
   limparExpirados,
   normalizarCelular,
   normalizarEmpresasPermitidas,
+  normalizarFiliaisPermitidas,
   empresaPermitida,
+  filiaisPermitidasDaEmpresa,
   TTL_MS,
 };

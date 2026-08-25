@@ -543,6 +543,122 @@
   .empresa-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .empresa-option.all { border-bottom: 1px solid var(--wa-border); border-radius: 7px 7px 0 0; margin-bottom: 5px; font-weight: 700; }
 
+  /* Arvore de selecao de filial/empresa Protheus (LOBO_GUARA) — mesmo padrao
+     visual do empresa-select (dropdown + checkboxes), mas hierarquico
+     (empresa Protheus -> filiais) e escondido quando nenhuma empresa
+     selecionada e LOBO_GUARA validada (ver carregarFilialTree). */
+  .filial-select-wrap { position: relative; display: none; }
+  .filial-select-wrap.visible { display: block; }
+  .filial-select {
+    height: 40px;
+    border: 1px solid var(--wa-border);
+    border-radius: 8px;
+    background: var(--wa-select-bg);
+    color: var(--wa-chrome-text);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 0 12px;
+    outline: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 220px;
+    transition: background .12s ease, border-color .12s ease;
+  }
+  .filial-select:hover, .filial-select:focus-visible { background: var(--wa-select-bg-hover); outline: none; }
+  .filial-select-wrap.open .filial-select { border-color: var(--wa-accent); background: var(--wa-select-bg-hover); }
+  .filial-select .icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
+  .filial-select .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .filial-select .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; transition: transform .12s ease; }
+  .filial-select-wrap.open .filial-select .chevron { transform: rotate(180deg); }
+  .filial-menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: min(400px, 86vw);
+    max-height: min(440px, 70vh);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 0;
+    border: 1px solid var(--wa-border);
+    border-radius: 10px;
+    background: var(--wa-sidebar);
+    color: var(--wa-text);
+    box-shadow: 0 -14px 32px rgba(0, 0, 0, 0.32);
+    display: none;
+    z-index: 20;
+  }
+  .filial-select-wrap.open .filial-menu { display: flex; }
+  .filial-menu-header {
+    flex: none;
+    padding: 9px 9px 7px;
+    border-bottom: 1px solid var(--wa-border);
+    background: var(--wa-sidebar);
+  }
+  .filial-menu-search {
+    width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--wa-border);
+    border-radius: 7px; background: var(--wa-select-bg); color: var(--wa-chrome-text); font: inherit;
+    font-size: 12.5px; transition: border-color .12s ease;
+  }
+  .filial-menu-search:focus { outline: none; border-color: var(--wa-accent); }
+  .filial-menu-body { flex: 1; overflow-y: auto; padding: 6px; }
+  .filial-option-todas {
+    display: flex; align-items: center; gap: 9px; padding: 8px 9px; margin: 0 6px 4px;
+    border-radius: 7px; cursor: pointer; font-size: 12.5px; font-weight: 700;
+  }
+  .filial-option-todas:hover { background: var(--wa-sidebar-hover); }
+  .filial-option-todas input { width: 15px; height: 15px; flex: none; accent-color: var(--wa-accent); }
+  .filial-empresa-grupo { margin-bottom: 3px; }
+  .filial-empresa-grupo + .filial-empresa-grupo { border-top: 1px solid var(--wa-border); padding-top: 3px; }
+  .filial-empresa-row {
+    display: flex; align-items: center; gap: 7px; padding: 8px 9px; border-radius: 7px;
+    cursor: pointer; font-size: 12.5px; font-weight: 600;
+  }
+  .filial-empresa-row:hover { background: var(--wa-sidebar-hover); }
+  .filial-empresa-row input[type=checkbox] {
+    width: 16px; height: 16px; flex: none; accent-color: var(--wa-accent); cursor: pointer;
+  }
+  /* Estado indeterminate (recorte parcial): o accent-color nativo do browser
+     nao diferencia bem "indeterminate" de "unchecked" em alguns temas
+     escuros — reforca com um leve halo na propria linha, alem do tracinho
+     nativo do input, para o estado ficar inconfundivel. */
+  .filial-empresa-row input[type=checkbox]:indeterminate {
+    outline: 2px solid color-mix(in srgb, var(--wa-accent) 55%, transparent);
+    outline-offset: 1px;
+    border-radius: 3px;
+  }
+  .filial-empresa-row .filial-toggle {
+    flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; opacity: 0.65; border-radius: 5px; transition: opacity .12s ease, background .12s ease;
+  }
+  .filial-empresa-row .filial-toggle:hover { opacity: 1; background: var(--wa-select-bg); }
+  .filial-empresa-row .filial-toggle svg { width: 12px; height: 12px; transition: transform .12s ease; }
+  .filial-empresa-row.expandido .filial-toggle svg { transform: rotate(90deg); }
+  .filial-empresa-row .nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .filial-empresa-row .contagem {
+    flex: none; font-size: 11px; font-weight: 600; opacity: 0.6; padding: 1px 6px;
+    border-radius: 999px; background: var(--wa-select-bg);
+  }
+  .filial-lista-filiais {
+    display: none; margin: 2px 0 4px 19px; padding-left: 12px;
+    border-left: 2px solid var(--wa-border);
+  }
+  .filial-empresa-row.expandido + .filial-lista-filiais { display: block; }
+  .filial-option { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 7px; cursor: pointer; font-size: 12px; }
+  .filial-option:hover { background: var(--wa-sidebar-hover); }
+  .filial-option input { width: 14px; height: 14px; flex: none; accent-color: var(--wa-accent); cursor: pointer; }
+  .filial-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.92; }
+  .filial-menu-empty { padding: 16px 12px; font-size: 12px; opacity: 0.65; text-align: center; }
+
+  /* Badge de escopo de filial na bolha de mensagem e no cabecalho do grid */
+  .bubble-filial-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; opacity: 0.75; margin-left: 6px; }
+  .bubble-filial-badge.aviso { opacity: 0.95; color: var(--wa-warning, #b98900); }
+  .report-scope { padding: 2px 4px 6px; font-size: 12px; opacity: 0.75; }
+  .report-scope.aviso { opacity: 0.95; color: var(--wa-warning, #b98900); }
+
   /* Botao discreto de resetar memoria: visivel mas quieto, nao compete com o
      restante do cabecalho — contraste suficiente pra ser encontrado sem gritar */
   .reset-memoria-btn {
@@ -1151,8 +1267,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    min-width: 190px;
-    max-width: 260px;
+    min-width: 255px;
+    max-width: 350px;
     padding: 7px 10px;
     border-radius: 7px;
     border: 1px solid var(--wa-border);
@@ -1418,6 +1534,25 @@
       <div class="reset-toast" id="resetToast">Contexto da conversa reiniciado</div>
 
       <form class="chat-footer" id="chatForm">
+        <div class="filial-select-wrap" id="filialSelectWrap" title="Filiais consultadas">
+          <button class="filial-select" id="filialSelect" type="button" aria-label="Filiais consultadas" aria-haspopup="true" aria-expanded="false">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+            <span class="label" id="filialSelectLabel">Todas as filiais</span>
+            <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="filial-menu" id="filialMenu" role="menu">
+            <div class="filial-menu-header">
+              <input type="search" class="filial-menu-search" id="filialMenuSearch" placeholder="Buscar empresa ou filial" autocomplete="off">
+            </div>
+            <div class="filial-menu-body">
+              <label class="filial-option-todas">
+                <input type="checkbox" id="filialOptionTodas">
+                <span>Todas as filiais</span>
+              </label>
+              <div id="filialMenuArvore"></div>
+            </div>
+          </div>
+        </div>
         <div class="input-wrap">
           <textarea id="msgInput" rows="1" placeholder="Pergunte algo sobre o ERP..." autocomplete="off" aria-label="Mensagem"></textarea>
         </div>
@@ -1446,6 +1581,8 @@
               <svg viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 015.2 10.4l4 4-1.4 1.4-4-4A6.5 6.5 0 119.5 3zm0 2a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/></svg>
               <input type="search" id="reportGlobalSearch" placeholder="Buscar dados" autocomplete="off">
             </label>
+            <button class="report-btn ghost" id="btnExpandirGrupos" type="button" title="Expandir grupos" style="display:none">Expandir</button>
+            <button class="report-btn ghost" id="btnRecolherGrupos" type="button" title="Recolher grupos" style="display:none">Recolher</button>
             <button class="report-btn ghost" id="btnLimparAgrupamento" type="button">Limpar</button>
             <div class="report-columns" id="reportColumnsMenu">
               <button class="report-btn" id="btnReportColumns" type="button" aria-expanded="false">
@@ -1475,6 +1612,7 @@
           <div class="report-grand-total" id="reportGrandTotal" style="display:none;"></div>
         </div>
         <div class="report-caption" id="reportCaption"></div>
+        <div class="report-scope" id="reportScope"></div>
       </div>
       </div>
     </div>
@@ -1521,8 +1659,8 @@
       </div>
     </div>
     <div class="macro-adjust-body">
-      <div class="macro-adjust-alert">
-        O IA Command encontrou uma variável que não conseguiu resolver automaticamente. Escolha uma macro conhecida ou ajuste a data diretamente no SQL e salve.
+      <div class="macro-adjust-alert" id="macroAdjustAlert">
+        Revise o SQL salvo no favorito. Você pode trocar datas fixas por macros conhecidas e salvar a versão ajustada no servidor.
       </div>
       <div class="macro-adjust-status" id="macroAdjustStatus"></div>
       <div class="macro-adjust-list" id="macroAdjustList"></div>
@@ -1547,6 +1685,10 @@
   <button type="button" class="message-context-item" data-menu-action="whatsapp-preview" role="menuitem">
     <svg viewBox="0 0 24 24"><path d="M4 5h16v10H7l-3 3V5z"/><path d="M8 9h8M8 12h5"/></svg>
     <span>Ver formato WhatsApp</span>
+  </button>
+  <button type="button" class="message-context-item" data-menu-action="sql-preview" role="menuitem">
+    <svg viewBox="0 0 24 24"><path d="M8 9l-3 3 3 3M16 9l3 3-3 3M14 5l-4 14"/></svg>
+    <span>Ver SQL gerado</span>
   </button>
   <button type="button" class="message-context-item danger" data-menu-action="delete" role="menuitem">
     <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/></svg>
@@ -1628,6 +1770,32 @@
   </div>
 </div>
 
+<div class="favorites-modal-backdrop" id="sqlPreviewModal" aria-hidden="true">
+  <div class="favorites-modal whatsapp-preview-modal" role="dialog" aria-modal="true" aria-labelledby="sqlPreviewTitle">
+    <div class="favorites-modal-head">
+      <div class="favorites-modal-title">
+        <strong id="sqlPreviewTitle">SQL gerado</strong>
+        <span>Consulta auditada que gerou esta resposta.</span>
+      </div>
+      <div class="favorites-modal-actions">
+        <button class="favorites-close" type="button" id="btnFecharSqlPreviewTop" title="Fechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="whatsapp-preview-body">
+      <div class="whatsapp-preview-question" id="sqlPreviewQuestion" style="display:none"></div>
+      <div class="whatsapp-preview-status" id="sqlPreviewStatus"></div>
+      <textarea class="whatsapp-preview-text" id="sqlPreviewText" readonly spellcheck="false"></textarea>
+    </div>
+    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+      <button class="report-btn" type="button" id="btnAjustarMacrosSqlPreview">Substituir macros</button>
+      <button class="report-btn" type="button" id="btnCopiarSqlPreview">Copiar SQL</button>
+      <button class="favorite-run" type="button" id="btnFecharSqlPreview">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   const params = new URLSearchParams(window.location.search);
@@ -1687,6 +1855,7 @@
   const btnFecharMacroAdjust = document.getElementById('btnFecharMacroAdjust');
   const btnSalvarMacroAdjust = document.getElementById('btnSalvarMacroAdjust');
   const macroAdjustSubtitle = document.getElementById('macroAdjustSubtitle');
+  const macroAdjustAlert = document.getElementById('macroAdjustAlert');
   const macroAdjustStatus = document.getElementById('macroAdjustStatus');
   const macroAdjustList = document.getElementById('macroAdjustList');
   const macroAdjustSql = document.getElementById('macroAdjustSql');
@@ -1713,6 +1882,14 @@
   const whatsappPreviewQuestion = document.getElementById('whatsappPreviewQuestion');
   const whatsappPreviewStatus = document.getElementById('whatsappPreviewStatus');
   const whatsappPreviewText = document.getElementById('whatsappPreviewText');
+  const sqlPreviewModal = document.getElementById('sqlPreviewModal');
+  const btnFecharSqlPreviewTop = document.getElementById('btnFecharSqlPreviewTop');
+  const btnFecharSqlPreview = document.getElementById('btnFecharSqlPreview');
+  const btnAjustarMacrosSqlPreview = document.getElementById('btnAjustarMacrosSqlPreview');
+  const btnCopiarSqlPreview = document.getElementById('btnCopiarSqlPreview');
+  const sqlPreviewQuestion = document.getElementById('sqlPreviewQuestion');
+  const sqlPreviewStatus = document.getElementById('sqlPreviewStatus');
+  const sqlPreviewText = document.getElementById('sqlPreviewText');
   const headerTitle = document.getElementById('headerTitle');
   const errorBanner = document.getElementById('errorBanner');
   const userName = document.getElementById('userName');
@@ -1730,6 +1907,13 @@
   const empresaSelect = document.getElementById('empresaSelect');
   const empresaSelectLabel = document.getElementById('empresaSelectLabel');
   const empresaMenu = document.getElementById('empresaMenu');
+  const filialSelectWrap = document.getElementById('filialSelectWrap');
+  const filialSelect = document.getElementById('filialSelect');
+  const filialSelectLabel = document.getElementById('filialSelectLabel');
+  const filialMenu = document.getElementById('filialMenu');
+  const filialMenuSearch = document.getElementById('filialMenuSearch');
+  const filialOptionTodas = document.getElementById('filialOptionTodas');
+  const filialMenuArvore = document.getElementById('filialMenuArvore');
   const btnModoFoco = document.getElementById('btnModoFoco');
   const btnTema = document.getElementById('btnTema');
   const headerActions = document.getElementById('headerActions');
@@ -1748,8 +1932,11 @@
   const reportEmpty = document.getElementById('reportEmpty');
   const reportGridEl = document.getElementById('reportGrid');
   const reportCaption = document.getElementById('reportCaption');
+  const reportScope = document.getElementById('reportScope');
   const reportGrandTotal = document.getElementById('reportGrandTotal');
   const btnLimparAgrupamento = document.getElementById('btnLimparAgrupamento');
+  const btnExpandirGrupos = document.getElementById('btnExpandirGrupos');
+  const btnRecolherGrupos = document.getElementById('btnRecolherGrupos');
   const reportGlobalSearch = document.getElementById('reportGlobalSearch');
   const reportColumnsMenu = document.getElementById('reportColumnsMenu');
   const btnReportColumns = document.getElementById('btnReportColumns');
@@ -1776,6 +1963,7 @@
   let reportRedrawFrame = null;
   let reportLastGridWidth = 0;
   let reportTabulatorPromise = null;
+  const REPORT_GROUPS_AUTO_COLLAPSE_MIN = 5;
   let reportXlsxPromise = null;
   let reportPdfPromise = null;
 
@@ -1797,10 +1985,13 @@
   let messageContextTrigger = null;
   let macroAdjustFavoritoId = null;
   let whatsappPreviewMensagemId = null;
+  let sqlPreviewMensagemId = null;
+  let sqlPreviewFavoritoId = null;
 
   const macrosSqlDisponiveis = [
     ['{{HOJE}}', 'Data de hoje'],
     ['{{ONTEM}}', 'Data de ontem'],
+    ['{{AMANHA}}', 'Data de amanha'],
     ['{{HOJE:-7}}', 'Hoje menos 7 dias'],
     ['{{INICIO_SEMANA}}', 'Inicio desta semana'],
     ['{{FIM_SEMANA}}', 'Fim desta semana'],
@@ -1812,8 +2003,14 @@
     ['{{FIM_MES}}', 'Fim do mes atual'],
     ['{{INICIO_MES_ANTERIOR}}', 'Inicio do mes passado'],
     ['{{FIM_MES_ANTERIOR}}', 'Fim do mes passado'],
+    ['{{INICIO_MES:1}}', 'Inicio do proximo mes'],
+    ['{{FIM_MES:1}}', 'Fim do proximo mes'],
     ['{{INICIO_ANO}}', 'Inicio do ano atual'],
     ['{{FIM_ANO}}', 'Fim do ano atual'],
+    ['{{INICIO_ANO_ANTERIOR}}', 'Inicio do ano passado'],
+    ['{{FIM_ANO_ANTERIOR}}', 'Fim do ano passado'],
+    ['{{INICIO_ANO:1}}', 'Inicio do proximo ano'],
+    ['{{FIM_ANO:1}}', 'Fim do proximo ano'],
   ];
 
   let sessaoAtualId = null;
@@ -2093,12 +2290,14 @@
       empresaAtualId,
       sessoes: sessoesCache.length,
     });
+    carregarFilialTree().catch((err) => bootLog('filial-tree:boot-falha', { erro: err.message }));
   }
 
   async function trocarEscopoEmpresa() {
     empresaSelectWrap.classList.remove('open');
     empresaSelect.setAttribute('aria-expanded', 'false');
     limparEstadoDaEmpresaAtual();
+    resetarSelecaoFilial();
     try {
       if (favoritesModal.classList.contains('active')) {
         await carregarFavoritos();
@@ -2107,10 +2306,255 @@
       if (!favoritesModal.classList.contains('active')) {
         carregarFavoritos().catch((err) => bootLog('favoritos:troca-empresa-falha', { erro: err.message }));
       }
+      await carregarFilialTree();
     } catch (err) {
       showError('Falha ao trocar empresa: ' + err.message);
     }
     msgInput.focus();
+  }
+
+  // ── Arvore de selecao de filial/empresa Protheus (LOBO_GUARA) ──────────
+  // Selecao estruturada: separa empresas marcadas "inteira" de filiais
+  // avulsas marcadas dentro de uma empresa (nunca colapsa os dois num so
+  // array) — o backend depende dessa separacao para recalcular corretamente
+  // a cada turno quando a arvore mudar (ver filial-scope-consolidator.js).
+  let filialArvoreDisponivel = [];              // [{ empresaProtheusCodigo, nome, filiais:[{filialChave,nome}] }]
+  let filialEmpresasInteiras = new Set();        // empresaProtheusCodigo marcados "inteira"
+  let filialFiliaisAvulsas = new Set();          // filialChave marcadas avulsas (empresa nao esta inteira)
+  let filialEmpresasExpandidas = new Set();      // empresaProtheusCodigo com a lista de filiais aberta na UI
+  let filialUiTouched = false;                   // usuario ja interagiu com o componente nesta conversa
+
+  function resetarSelecaoFilial() {
+    filialArvoreDisponivel = [];
+    filialEmpresasInteiras = new Set();
+    filialFiliaisAvulsas = new Set();
+    filialEmpresasExpandidas = new Set();
+    filialUiTouched = false;
+    filialSelectWrap.classList.remove('visible', 'open');
+  }
+
+  async function carregarFilialTree() {
+    if (!empresasSelecionadasIds.length) { filialSelectWrap.classList.remove('visible'); return; }
+    const data = await api('/filial-tree');
+    filialArvoreDisponivel = data && data.disponivel && Array.isArray(data.empresas) ? data.empresas : [];
+    // Poda selecoes que nao existem mais na arvore atual (empresa/filial
+    // desativada ou removida) — evita enviar chave morta ao backend.
+    const empresasValidas = new Set(filialArvoreDisponivel.map(e => e.empresaProtheusCodigo));
+    const filiaisValidas = new Set(filialArvoreDisponivel.flatMap(e => e.filiais.map(f => f.filialChave)));
+    filialEmpresasInteiras = new Set([...filialEmpresasInteiras].filter(cod => empresasValidas.has(cod)));
+    filialFiliaisAvulsas = new Set([...filialFiliaisAvulsas].filter(chave => filiaisValidas.has(chave)));
+    filialSelectWrap.classList.toggle('visible', filialArvoreDisponivel.length > 0);
+    renderFilialMenu();
+    atualizarLabelFilialSelect();
+  }
+
+  function selecaoFilialVazia() {
+    return !filialEmpresasInteiras.size && !filialFiliaisAvulsas.size;
+  }
+
+  function atualizarLabelFilialSelect() {
+    if (selecaoFilialVazia()) {
+      filialSelectLabel.textContent = 'Todas as filiais';
+    } else {
+      const totalEmpresas = filialEmpresasInteiras.size;
+      const totalFiliais = filialFiliaisAvulsas.size;
+      const partes = [];
+      if (totalEmpresas) partes.push(`${totalEmpresas} empresa(s)`);
+      if (totalFiliais) partes.push(`${totalFiliais} filial(is)`);
+      filialSelectLabel.textContent = partes.join(' + ');
+    }
+    filialSelect.title = filialSelectLabel.textContent;
+    filialOptionTodas.checked = selecaoFilialVazia();
+  }
+
+  function marcarEmpresaInteira(empresaProtheusCodigo, marcado) {
+    filialUiTouched = true;
+    if (marcado) {
+      filialEmpresasInteiras.add(empresaProtheusCodigo);
+      const emp = filialArvoreDisponivel.find(e => e.empresaProtheusCodigo === empresaProtheusCodigo);
+      // Marcar empresa inteira sempre sobrescreve/reseta os filhos para
+      // "tudo marcado" (regra ja fechada do plano) — remove filiais avulsas
+      // dessa empresa do set separado, pois agora estao implicitas no modo
+      // "inteira" (evita redundancia/confusao de estado).
+      if (emp) emp.filiais.forEach(f => filialFiliaisAvulsas.delete(f.filialChave));
+    } else {
+      filialEmpresasInteiras.delete(empresaProtheusCodigo);
+    }
+  }
+
+  function marcarFilialAvulsa(empresaProtheusCodigo, filialChave, marcado) {
+    filialUiTouched = true;
+    if (marcado) {
+      filialFiliaisAvulsas.add(filialChave);
+      // Desmarcar qualquer filho sempre rebaixa a empresa de "inteira" para
+      // "recorte parcial" — se a empresa estava marcada inteira, ao marcar
+      // manualmente uma filial especifica saimos do modo inteira e passamos
+      // a expressar so as filiais marcadas explicitamente (todas, exceto
+      // que o usuario ainda pode marcar as demais uma a uma).
+      if (filialEmpresasInteiras.has(empresaProtheusCodigo)) {
+        filialEmpresasInteiras.delete(empresaProtheusCodigo);
+        const emp = filialArvoreDisponivel.find(e => e.empresaProtheusCodigo === empresaProtheusCodigo);
+        if (emp) emp.filiais.forEach(f => filialFiliaisAvulsas.add(f.filialChave));
+      }
+    } else {
+      filialFiliaisAvulsas.delete(filialChave);
+      filialEmpresasInteiras.delete(empresaProtheusCodigo);
+    }
+  }
+
+  function estadoEmpresaNaArvore(emp) {
+    if (filialEmpresasInteiras.has(emp.empresaProtheusCodigo)) return 'inteira';
+    const marcadas = emp.filiais.filter(f => filialFiliaisAvulsas.has(f.filialChave)).length;
+    if (!marcadas) return 'nenhuma';
+    if (marcadas === emp.filiais.length) return 'inteira-implicita';
+    return 'parcial';
+  }
+
+  function renderFilialMenu(filtroTexto = '') {
+    filialMenuArvore.innerHTML = '';
+    const termo = String(filtroTexto || '').trim().toLowerCase();
+
+    if (!filialArvoreDisponivel.length) {
+      const vazio = document.createElement('div');
+      vazio.className = 'filial-menu-empty';
+      vazio.textContent = 'Nenhuma empresa com filtro de filial disponivel.';
+      filialMenuArvore.appendChild(vazio);
+      return;
+    }
+
+    filialArvoreDisponivel.forEach((emp) => {
+      const nomeEmpresaNorm = String(emp.nome || '').toLowerCase();
+      const filiaisFiltradas = emp.filiais.filter(f => {
+        if (!termo) return true;
+        const jaSelecionada = filialFiliaisAvulsas.has(f.filialChave);
+        // Busca nunca esconde um no ja selecionado, mesmo que nao bata com o termo.
+        return jaSelecionada || String(f.nome || '').toLowerCase().includes(termo);
+      });
+      const empresaBate = !termo || nomeEmpresaNorm.includes(termo);
+      const empresaSelecionada = estadoEmpresaNaArvore(emp) !== 'nenhuma';
+      if (termo && !empresaBate && !filiaisFiltradas.length && !empresaSelecionada) return;
+
+      const grupo = document.createElement('div');
+      grupo.className = 'filial-empresa-grupo';
+
+      const estado = estadoEmpresaNaArvore(emp);
+      const expandido = filialEmpresasExpandidas.has(emp.empresaProtheusCodigo) || (termo && filiaisFiltradas.length > 0 && !empresaBate);
+
+      const row = document.createElement('div');
+      row.className = 'filial-empresa-row' + (expandido ? ' expandido' : '');
+
+      const toggle = document.createElement('span');
+      toggle.className = 'filial-toggle';
+      toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
+        else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
+        renderFilialMenu(filialMenuSearch.value);
+      });
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = estado === 'inteira' || estado === 'inteira-implicita';
+      input.indeterminate = estado === 'parcial';
+      input.addEventListener('change', () => {
+        marcarEmpresaInteira(emp.empresaProtheusCodigo, input.checked);
+        renderFilialMenu(filialMenuSearch.value);
+        atualizarLabelFilialSelect();
+      });
+      input.addEventListener('click', (e) => e.stopPropagation());
+
+      const nome = document.createElement('span');
+      nome.className = 'nome';
+      nome.textContent = emp.nome || emp.empresaProtheusCodigo;
+
+      row.appendChild(toggle);
+      row.appendChild(input);
+      row.appendChild(nome);
+      if (estado === 'parcial') {
+        const marcadas = emp.filiais.filter(f => filialFiliaisAvulsas.has(f.filialChave)).length;
+        const contagem = document.createElement('span');
+        contagem.className = 'contagem';
+        contagem.textContent = `${marcadas}/${emp.filiais.length}`;
+        row.appendChild(contagem);
+      }
+      row.addEventListener('click', () => {
+        if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
+        else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
+        renderFilialMenu(filialMenuSearch.value);
+      });
+
+      const listaFiliais = document.createElement('div');
+      listaFiliais.className = 'filial-lista-filiais';
+      (termo ? filiaisFiltradas : emp.filiais).forEach((fil) => {
+        const optFilial = document.createElement('label');
+        optFilial.className = 'filial-option';
+        const inputFilial = document.createElement('input');
+        inputFilial.type = 'checkbox';
+        inputFilial.checked = filialFiliaisAvulsas.has(fil.filialChave) || filialEmpresasInteiras.has(emp.empresaProtheusCodigo);
+        inputFilial.addEventListener('change', () => {
+          marcarFilialAvulsa(emp.empresaProtheusCodigo, fil.filialChave, inputFilial.checked);
+          renderFilialMenu(filialMenuSearch.value);
+          atualizarLabelFilialSelect();
+        });
+        const spanFilial = document.createElement('span');
+        spanFilial.textContent = fil.nome || fil.filialChave;
+        optFilial.appendChild(inputFilial);
+        optFilial.appendChild(spanFilial);
+        listaFiliais.appendChild(optFilial);
+      });
+
+      grupo.appendChild(row);
+      grupo.appendChild(listaFiliais);
+      filialMenuArvore.appendChild(grupo);
+    });
+  }
+
+  // Reidrata o estado visual da arvore a partir do que o backend realmente
+  // tem herdado PARA ESTA SESSAO especifica — sem isso, trocar de conversa
+  // deixava o combo com o estado "grudado" da sessao anterior (ou sempre
+  // "Todas as filiais" ao reabrir uma sessao que na verdade tinha filtro
+  // ativo herdado), mostrando um filtro invisivel ao usuario. Le do ultimo
+  // intent_json 'in' da sessao (mesmo dado que o backend usa para herdar,
+  // ver session-store.js::ultimoIntent) — nao do filial_escopo_json (esse e
+  // so a mensagem que gerou o filtro, nao necessariamente a mais recente).
+  function hidratarSelecaoFilialDaSessao(mensagens) {
+    filialEmpresasInteiras = new Set();
+    filialFiliaisAvulsas = new Set();
+    filialUiTouched = false;
+
+    const ultimaComIntent = Array.isArray(mensagens)
+      ? [...mensagens].reverse().find(m => m.direcao === 'in' && m.intent_json)
+      : null;
+    if (!ultimaComIntent) { renderFilialMenu(); atualizarLabelFilialSelect(); return; }
+
+    let intent = null;
+    try {
+      intent = typeof ultimaComIntent.intent_json === 'string'
+        ? JSON.parse(ultimaComIntent.intent_json)
+        : ultimaComIntent.intent_json;
+    } catch (_) { intent = null; }
+
+    const selecaoUi = intent?._filialSelecaoUi;
+    if (selecaoUi?.uiTouched) {
+      filialEmpresasInteiras = new Set(selecaoUi.empresasInteiras || []);
+      filialFiliaisAvulsas = new Set(selecaoUi.filiaisAvulsas || []);
+      filialUiTouched = true;
+    }
+    renderFilialMenu();
+    atualizarLabelFilialSelect();
+  }
+
+  function payloadFilialSelecaoUi() {
+    // 'Todas' nunca tocado (usuario nao interagiu com o componente nesta
+    // conversa) nao e enviado como selecao explicita — nesse caso o texto
+    // livre da mensagem ainda pode resolver filial (gate no backend).
+    if (!filialUiTouched) return null;
+    return {
+      empresasInteiras: [...filialEmpresasInteiras],
+      filiaisAvulsas: [...filialFiliaisAvulsas],
+      uiTouched: true,
+    };
   }
 
   function limparEstadoDaEmpresaAtual() {
@@ -2321,21 +2765,152 @@
     )).join('');
   }
 
-  function renderMacroAdjustRows(macrosPendentes = []) {
+  function pad2(valor) {
+    return String(valor).padStart(2, '0');
+  }
+
+  function ymdLocal(data) {
+    return `${data.getFullYear()}${pad2(data.getMonth() + 1)}${pad2(data.getDate())}`;
+  }
+
+  function addDiasLocal(data, dias) {
+    const out = new Date(data.getFullYear(), data.getMonth(), data.getDate());
+    out.setDate(out.getDate() + Number(dias || 0));
+    return out;
+  }
+
+  function inicioSemanaLocal(data) {
+    const out = new Date(data.getFullYear(), data.getMonth(), data.getDate());
+    const dia = out.getDay() || 7;
+    out.setDate(out.getDate() - dia + 1);
+    return out;
+  }
+
+  function fimMesLocal(data, deslocamento = 0) {
+    return new Date(data.getFullYear(), data.getMonth() + 1 + Number(deslocamento || 0), 0);
+  }
+
+  function normalizarDataLiteralSql(valor) {
+    const texto = String(valor || '').replace(/^'+|'+$/g, '').trim();
+    if (/^\d{8}$/.test(texto)) return texto;
+    const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return iso ? `${iso[1]}${iso[2]}${iso[3]}` : '';
+  }
+
+  function macroSugeridaParaDataLiteral(valor) {
+    const alvo = normalizarDataLiteralSql(valor);
+    if (!alvo) return '';
+    const hoje = new Date();
+    const inicioSemana = inicioSemanaLocal(hoje);
+    const inicioSemanaAnterior = addDiasLocal(inicioSemana, -7);
+    const inicioProximaSemana = addDiasLocal(inicioSemana, 7);
+    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const inicioProximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    const inicioAno = new Date(hoje.getFullYear(), 0, 1);
+    const inicioAnoAnterior = new Date(hoje.getFullYear() - 1, 0, 1);
+    const inicioProximoAno = new Date(hoje.getFullYear() + 1, 0, 1);
+    const pares = [
+      [ymdLocal(hoje), '{{HOJE}}'],
+      [ymdLocal(addDiasLocal(hoje, -1)), '{{ONTEM}}'],
+      [ymdLocal(addDiasLocal(hoje, 1)), '{{AMANHA}}'],
+      [ymdLocal(addDiasLocal(hoje, -7)), '{{HOJE:-7}}'],
+      [ymdLocal(inicioSemana), '{{INICIO_SEMANA}}'],
+      [ymdLocal(hoje), '{{FIM_SEMANA}}'],
+      [ymdLocal(inicioSemanaAnterior), '{{INICIO_SEMANA_ANTERIOR}}'],
+      [ymdLocal(addDiasLocal(inicioSemana, -1)), '{{FIM_SEMANA_ANTERIOR}}'],
+      [ymdLocal(inicioProximaSemana), '{{INICIO_PROXIMA_SEMANA}}'],
+      [ymdLocal(addDiasLocal(inicioProximaSemana, 6)), '{{FIM_PROXIMA_SEMANA}}'],
+      [ymdLocal(inicioMes), '{{INICIO_MES}}'],
+      [ymdLocal(fimMesLocal(hoje)), '{{FIM_MES}}'],
+      [ymdLocal(inicioMesAnterior), '{{INICIO_MES_ANTERIOR}}'],
+      [ymdLocal(fimMesLocal(hoje, -1)), '{{FIM_MES_ANTERIOR}}'],
+      [ymdLocal(inicioProximoMes), '{{INICIO_MES:1}}'],
+      [ymdLocal(fimMesLocal(hoje, 1)), '{{FIM_MES:1}}'],
+      [ymdLocal(inicioAno), '{{INICIO_ANO}}'],
+      [ymdLocal(new Date(hoje.getFullYear(), 11, 31)), '{{FIM_ANO}}'],
+      [ymdLocal(inicioAnoAnterior), '{{INICIO_ANO_ANTERIOR}}'],
+      [ymdLocal(new Date(hoje.getFullYear() - 1, 11, 31)), '{{FIM_ANO_ANTERIOR}}'],
+      [ymdLocal(inicioProximoAno), '{{INICIO_ANO:1}}'],
+      [ymdLocal(new Date(hoje.getFullYear() + 1, 11, 31)), '{{FIM_ANO:1}}'],
+    ];
+    const mapa = new Map();
+    for (const [data, macro] of pares) {
+      if (!mapa.has(data)) mapa.set(data, macro);
+    }
+    return mapa.get(alvo) || '';
+  }
+
+  function datasLiteraisSql(sql) {
+    const texto = String(sql || '');
+    const vistos = new Set();
+    const out = [];
+    for (const match of texto.matchAll(/'(\d{8}|\d{4}-\d{2}-\d{2})'/g)) {
+      const literal = match[0];
+      if (!vistos.has(literal)) {
+        vistos.add(literal);
+        out.push(literal);
+      }
+    }
+    return out;
+  }
+
+  function sqlContemMacroConhecida(sql) {
+    const texto = String(sql || '');
+    return macrosSqlDisponiveis.some(([macro]) => texto.includes(macro));
+  }
+
+  function atualizarTextoAjusteMacro({ precisaAjuste = false, macrosPendentes = [], sql = '' } = {}) {
+    const qtdDatas = datasLiteraisSql(sql).length;
+    const temMacro = sqlContemMacroConhecida(sql);
+    if (macroAdjustAlert) {
+      if (precisaAjuste || macrosPendentes.length) {
+        macroAdjustAlert.textContent = 'O IA Command encontrou uma variável que não conseguiu resolver automaticamente. Escolha uma macro conhecida ou ajuste a data diretamente no SQL e salve.';
+      } else if (qtdDatas) {
+        macroAdjustAlert.textContent = 'Encontramos datas fixas no SQL. Você pode trocar cada data por uma macro conhecida e salvar a versão ajustada no servidor.';
+      } else if (temMacro) {
+        macroAdjustAlert.textContent = 'O SQL já contém macro conhecida. Revise a consulta e salve somente se fizer algum ajuste.';
+      } else {
+        macroAdjustAlert.textContent = 'Revise o SQL salvo no favorito. Você pode trocar datas fixas por macros conhecidas e salvar a versão ajustada no servidor.';
+      }
+    }
+    if (macroAdjustStatus) {
+      if (precisaAjuste || macrosPendentes.length) {
+        macroAdjustStatus.textContent = 'Substitua as variáveis pendentes ou edite o SQL manualmente.';
+      } else if (qtdDatas) {
+        macroAdjustStatus.textContent = `${qtdDatas} data(s) fixa(s) encontrada(s). Escolha a macro correspondente, aplique e salve.`;
+      } else if (temMacro) {
+        macroAdjustStatus.textContent = 'SQL com macro válida. Nenhuma pendência encontrada.';
+      } else {
+        macroAdjustStatus.textContent = 'Nenhuma variável pendente ou data fixa encontrada. Revise e salve se necessário.';
+      }
+      macroAdjustStatus.className = 'macro-adjust-status';
+    }
+  }
+
+  function macroOptionsHtml(selecionada = '') {
+    return '<option value="">Escolher macro conhecida</option>' + macrosSqlDisponiveis
+      .map(([macro, desc]) => `<option value="${escapeHtml(macro)}"${macro === selecionada ? ' selected' : ''}>${escapeHtml(macro + ' - ' + desc)}</option>`)
+      .join('');
+  }
+
+  function renderMacroAdjustRows(macrosPendentes = [], sql = '') {
     if (!macroAdjustList) return;
-    const macros = Array.isArray(macrosPendentes) ? macrosPendentes.filter(Boolean) : [];
-    if (!macros.length) {
-      macroAdjustList.innerHTML = '<div class="favorite-empty">Nenhuma variável pendente encontrada. Você ainda pode revisar o SQL antes de salvar.</div>';
+    const pendentes = Array.isArray(macrosPendentes) ? macrosPendentes.filter(Boolean) : [];
+    const datas = datasLiteraisSql(sql);
+    const linhas = [
+      ...pendentes.map((macro) => ({ alvo: macro, tipo: 'pendente', sugestao: '', manual: 'Valor manual, ex: 20260822' })),
+      ...datas.map((literal) => ({ alvo: literal, tipo: 'data', sugestao: macroSugeridaParaDataLiteral(literal), manual: "Valor manual, ex: '{{HOJE}}'" })),
+    ];
+    if (!linhas.length) {
+      macroAdjustList.innerHTML = '<div class="favorite-empty">Nenhuma variável pendente ou data fixa encontrada. Você ainda pode revisar o SQL antes de salvar.</div>';
       return;
     }
-    const options = '<option value="">Escolher macro conhecida</option>' + macrosSqlDisponiveis
-      .map(([macro, desc]) => `<option value="${escapeHtml(macro)}">${escapeHtml(macro + ' - ' + desc)}</option>`)
-      .join('');
-    macroAdjustList.innerHTML = macros.map((macro) => `
-      <div class="macro-adjust-row" data-macro-pendente="${escapeHtml(macro)}">
-        <span class="macro-chip">${escapeHtml(macro)}</span>
-        <select data-macro-select>${options}</select>
-        <input type="text" data-macro-manual placeholder="Valor manual, ex: '20260822'" />
+    macroAdjustList.innerHTML = linhas.map((linha) => `
+      <div class="macro-adjust-row" data-macro-pendente="${escapeHtml(linha.alvo)}" data-macro-tipo="${escapeHtml(linha.tipo)}">
+        <span class="macro-chip">${escapeHtml(linha.alvo)}</span>
+        <select data-macro-select>${macroOptionsHtml(linha.sugestao)}</select>
+        <input type="text" data-macro-manual placeholder="${escapeHtml(linha.manual)}" />
         <button type="button" class="macro-adjust-apply" data-macro-apply>Aplicar</button>
       </div>
     `).join('');
@@ -2354,7 +2929,7 @@
     macroAdjustStatus.textContent = 'Carregando favorito...';
     macroAdjustStatus.className = 'macro-adjust-status';
     macroAdjustSql.value = '';
-    renderMacroAdjustRows(macrosPendentes);
+    renderMacroAdjustRows(macrosPendentes, '');
     renderMacroHelp();
     macroAdjustModal.classList.add('active');
     macroAdjustModal.setAttribute('aria-hidden', 'false');
@@ -2363,11 +2938,13 @@
     macroAdjustFavoritoId = fav.id || favoritoId;
     if (macroAdjustSubtitle) macroAdjustSubtitle.textContent = fav.titulo || fav.perguntaTexto || 'Favorito';
     macroAdjustSql.value = fav.sqlFinalExecutado || '';
-    renderMacroAdjustRows(fav.macrosPendentes?.length ? fav.macrosPendentes : macrosPendentes);
-    macroAdjustStatus.textContent = fav.precisaAjuste
-      ? 'Substitua as variáveis pendentes ou edite o SQL manualmente.'
-      : 'SQL sem variáveis pendentes. Revise e salve se necessário.';
-    macroAdjustStatus.className = 'macro-adjust-status';
+    const pendentes = fav.macrosPendentes?.length ? fav.macrosPendentes : macrosPendentes;
+    renderMacroAdjustRows(pendentes, fav.sqlFinalExecutado || '');
+    atualizarTextoAjusteMacro({
+      precisaAjuste: !!fav.precisaAjuste,
+      macrosPendentes: pendentes,
+      sql: fav.sqlFinalExecutado || '',
+    });
     setTimeout(() => macroAdjustSql.focus(), 0);
   }
 
@@ -2611,6 +3188,129 @@
     }
   }
 
+  function fecharSqlPreview() {
+    if (!sqlPreviewModal) return;
+    sqlPreviewModal.classList.remove('active');
+    sqlPreviewModal.setAttribute('aria-hidden', 'true');
+    sqlPreviewMensagemId = null;
+    sqlPreviewFavoritoId = null;
+    if (sqlPreviewText) sqlPreviewText.value = '';
+    if (btnAjustarMacrosSqlPreview) {
+      btnAjustarMacrosSqlPreview.disabled = true;
+      btnAjustarMacrosSqlPreview.title = '';
+    }
+    if (sqlPreviewStatus) {
+      sqlPreviewStatus.textContent = '';
+      sqlPreviewStatus.className = 'whatsapp-preview-status';
+    }
+    if (sqlPreviewQuestion) {
+      sqlPreviewQuestion.style.display = 'none';
+      sqlPreviewQuestion.innerHTML = '';
+    }
+  }
+
+  async function abrirSqlPreview(mensagemId) {
+    if (!sqlPreviewModal || !sessaoAtualId || !mensagemId) return;
+    sqlPreviewMensagemId = mensagemId;
+    sqlPreviewFavoritoId = null;
+    sqlPreviewModal.classList.add('active');
+    sqlPreviewModal.setAttribute('aria-hidden', 'false');
+    if (sqlPreviewText) sqlPreviewText.value = '';
+    if (btnAjustarMacrosSqlPreview) {
+      btnAjustarMacrosSqlPreview.disabled = true;
+      btnAjustarMacrosSqlPreview.title = 'Carregando favorito vinculado...';
+    }
+    if (sqlPreviewQuestion) {
+      sqlPreviewQuestion.style.display = 'none';
+      sqlPreviewQuestion.innerHTML = '';
+    }
+    if (sqlPreviewStatus) {
+      sqlPreviewStatus.textContent = 'Carregando SQL gerado...';
+      sqlPreviewStatus.className = 'whatsapp-preview-status';
+    }
+
+    try {
+      const data = await api('/sessoes/' + sessaoAtualId + '/mensagens/' + mensagemId + '/sql');
+      if (sqlPreviewMensagemId !== mensagemId) return;
+      const pergunta = String(data.pergunta || perguntaParaMensagem(mensagemId) || '').trim();
+      const sql = String(data.sql || '').trim();
+      sqlPreviewFavoritoId = data.favoritoId || null;
+      if (sqlPreviewQuestion && pergunta) {
+        sqlPreviewQuestion.innerHTML = '<strong>Pergunta</strong>' + escapeHtml(pergunta);
+        sqlPreviewQuestion.style.display = 'block';
+      }
+      if (sqlPreviewText) sqlPreviewText.value = sql;
+      if (btnAjustarMacrosSqlPreview) {
+        btnAjustarMacrosSqlPreview.disabled = !sqlPreviewFavoritoId;
+        btnAjustarMacrosSqlPreview.title = sqlPreviewFavoritoId
+          ? 'Abrir editor para substituir macros e salvar no favorito'
+          : 'Favorite esta resposta antes de salvar macros no servidor';
+      }
+      if (sqlPreviewStatus) {
+        sqlPreviewStatus.textContent = sql
+          ? (sqlPreviewFavoritoId
+              ? (data.sqlFonte === 'favorito' ? 'Exibindo SQL salvo no favorito. Pronto para consulta, cópia ou ajuste de macros.' : 'SQL pronto para consulta, cópia ou ajuste de macros.')
+              : 'SQL pronto para consulta ou cópia. Favorite a resposta para salvar ajustes de macro.')
+          : 'Nenhum SQL disponível para esta mensagem.';
+        sqlPreviewStatus.className = sql ? 'whatsapp-preview-status ok' : 'whatsapp-preview-status error';
+      }
+      setTimeout(() => sqlPreviewText?.focus(), 0);
+    } catch (err) {
+      if (sqlPreviewStatus) {
+        sqlPreviewStatus.textContent = err.message;
+        sqlPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+    }
+  }
+
+  async function abrirAjusteMacrosDoSqlPreview() {
+    if (!sqlPreviewFavoritoId) {
+      if (sqlPreviewStatus) {
+        sqlPreviewStatus.textContent = 'Favorite esta resposta antes de salvar macros no servidor.';
+        sqlPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+      return;
+    }
+    const favoritoId = sqlPreviewFavoritoId;
+    fecharSqlPreview();
+    await abrirAjusteMacroFavorito(favoritoId, []);
+  }
+
+  async function copiarSqlPreview() {
+    const texto = sqlPreviewText?.value || '';
+    if (!texto) {
+      if (sqlPreviewStatus) {
+        sqlPreviewStatus.textContent = 'NÃ£o hÃ¡ SQL para copiar.';
+        sqlPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(texto);
+      } else {
+        sqlPreviewText.focus();
+        sqlPreviewText.select();
+        const ok = document.execCommand('copy');
+        if (!ok) throw new Error('copy retornou falso');
+      }
+      if (sqlPreviewStatus) {
+        sqlPreviewStatus.textContent = 'SQL copiado.';
+        sqlPreviewStatus.className = 'whatsapp-preview-status ok';
+      }
+    } catch (_err) {
+      if (sqlPreviewText) {
+        sqlPreviewText.focus();
+        sqlPreviewText.select();
+      }
+      if (sqlPreviewStatus) {
+        sqlPreviewStatus.textContent = 'NÃ£o foi possÃ­vel copiar automaticamente. O SQL foi selecionado para copiar manualmente.';
+        sqlPreviewStatus.className = 'whatsapp-preview-status error';
+      }
+    }
+  }
+
   async function confirmarForward() {
     if (forwardModo === 'resposta' && (!sessaoAtualId || !forwardMensagemAtualId)) return;
     if (!forwardContatoSelecionados.size) {
@@ -2774,6 +3474,7 @@
     const itemFavorito = messageContextMenu.querySelector('[data-menu-action="favorite"]');
     const itemForward = messageContextMenu.querySelector('[data-menu-action="forward-response"]');
     const itemPreview = messageContextMenu.querySelector('[data-menu-action="whatsapp-preview"]');
+    const itemSql = messageContextMenu.querySelector('[data-menu-action="sql-preview"]');
     if (itemFavorito) {
       itemFavorito.querySelector('span').textContent = favoritoId ? 'Remover favorito' : 'Favoritar';
       itemFavorito.disabled = !favoritable;
@@ -2786,6 +3487,10 @@
     if (itemPreview) {
       itemPreview.disabled = !temDados;
       itemPreview.title = temDados ? 'Visualizar o texto no formato WhatsApp' : 'Esta mensagem nao possui grade para visualizar no formato WhatsApp';
+    }
+    if (itemSql) {
+      itemSql.disabled = !favoritable;
+      itemSql.title = favoritable ? 'Visualizar o SQL auditado desta resposta' : 'Somente respostas da IA podem ter SQL gerado';
     }
 
     const rect = trigger.getBoundingClientRect();
@@ -3007,13 +3712,45 @@
     return Math.max(COL_MIN_PX, Math.min(COL_MAX_PX, px));
   }
 
+  function normalizarLabelIndicador(label) {
+    return String(label || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  function indicadoresResumoConfiaveis(indicadores) {
+    if (!Array.isArray(indicadores)) return [];
+    const vistos = new Set();
+    const limpos = [];
+
+    for (const item of indicadores) {
+      const label = String(item?.label || '').trim();
+      const valor = String(item?.valor || '').trim();
+      const chave = normalizarLabelIndicador(label);
+
+      if (!label || !valor || !chave) continue;
+      // Label repetida aqui quase sempre e linha da grade interpretada como
+      // card. Melhor perder o card do que mostrar quatro totais iguais/errados.
+      if (vistos.has(chave)) return [];
+
+      vistos.add(chave);
+      limpos.push({ label, valor });
+      if (limpos.length >= 4) break;
+    }
+
+    return limpos;
+  }
+
   function renderApresentacaoHtml(apresentacao, fallbackTexto) {
     if (!apresentacao || typeof apresentacao !== 'object') return escapeHtml(fallbackTexto || '');
     const partes = [];
     const intro = String(apresentacao.introducao || '').trim();
     const resumo = String(apresentacao.resumo || '').trim();
     const sugestao = String(apresentacao.sugestao || '').trim();
-    const indicadores = Array.isArray(apresentacao.indicadores) ? apresentacao.indicadores.slice(0, 4) : [];
+    const indicadores = indicadoresResumoConfiaveis(apresentacao.indicadores);
 
     if (intro) partes.push(`<div class="structured-intro">${escapeHtml(intro)}</div>`);
     if (indicadores.length) {
@@ -3051,18 +3788,6 @@
         sugestao = linha;
         continue;
       }
-
-      const limpa = linha.replace(/^[^\w*]+/, '').replace(/\*/g, '').trim();
-      const match = limpa.match(/^([^:]{2,40}):\s*(.+)$/);
-      if (!match) continue;
-
-      const labelBruto = match[1].trim();
-      const valor = match[2].trim();
-      if (/^(Total Geral|Subtotal)$/i.test(labelBruto)) continue;
-      if (/Cliente|Produto|Dia|Nota|registros?|neste periodo/i.test(labelBruto + ' ' + valor)) continue;
-      if (indicadores.length < 4) {
-        indicadores.push({ label: labelBruto.replace(/_/g, ' ').toUpperCase(), valor });
-      }
     }
 
     if (!introducao && !resumo && !sugestao && !indicadores.length) return null;
@@ -3081,7 +3806,76 @@
   // isFalha: reservado para falha real de comunicacao (rede/servidor fora do
   // ar/erro 500) — nao usar para resultado de negocio como "sem dados", que e
   // resposta normal do backend e deve seguir com a aparencia padrao da bolha.
-  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, favoritoId = null, criadoEm, isFalha = false, perguntaContexto = null }) {
+  // Le do dado persistido POR MENSAGEM (nunca de um estado "atual" da
+  // conversa) — mensagens antigas continuam mostrando o escopo que de fato
+  // usaram, mesmo que o usuario troque a selecao da arvore depois no meio da
+  // conversa. Aceita tanto objeto (resposta de /mensagem) quanto string JSON
+  // (historico vindo de GET /sessoes/:id/mensagens).
+  function parseFilialEscopo(bruto) {
+    if (!bruto) return null;
+    if (typeof bruto === 'string') { try { return JSON.parse(bruto); } catch (_) { return null; } }
+    if (typeof bruto === 'object') return bruto;
+    return null;
+  }
+
+  function montarBadgeFilial(bruto) {
+    const escopo = parseFilialEscopo(bruto);
+    if (!escopo || !escopo.resultado || !escopo.resultado.solicitado) return '';
+    const resultado = escopo.resultado;
+    if (!resultado.aplicado) {
+      return `<span class="bubble-filial-badge aviso" title="Escopo de filial solicitado mas nao pode ser confirmado (${escapeHtml(resultado.erro || 'falha')})">⚠️ Filtro de filial incerto</span>`;
+    }
+    const nomes = [];
+    const empresasInteiras = escopo.selecao_ui?.empresas_inteiras || [];
+    const filiaisAvulsas = escopo.selecao_ui?.filiais_avulsas || [];
+    empresasInteiras.forEach((cod) => {
+      const emp = filialArvoreDisponivel.find(e => e.empresaProtheusCodigo === cod);
+      nomes.push(emp ? emp.nome : cod);
+    });
+    filiaisAvulsas.forEach((chave) => {
+      let nomeFil = chave;
+      for (const emp of filialArvoreDisponivel) {
+        const f = emp.filiais.find(x => x.filialChave === chave);
+        if (f) { nomeFil = f.nome; break; }
+      }
+      nomes.push(nomeFil);
+    });
+    if (!nomes.length) return '';
+    const rotulo = nomes.length > 2 ? `${nomes.slice(0, 2).join(', ')} +${nomes.length - 2}` : nomes.join(', ');
+    const avisoParcial = resultado.erro === 'selecao_parcialmente_orfa' ? ' (parcial)' : '';
+    return `<span class="bubble-filial-badge" title="${escapeHtml(nomes.join(', '))}">🏢 ${escapeHtml(rotulo)}${avisoParcial}</span>`;
+  }
+
+  // Segunda linha do cabecalho da aba Dados — mesmo dado por mensagem usado
+  // no badge da bolha (nao um estado "atual" da conversa), para o grid
+  // mostrar o escopo que gerou aqueles dados especificos.
+  function renderReportScope(dados) {
+    const escopo = parseFilialEscopo(dados && dados.filial_escopo_json);
+    if (!escopo || !escopo.resultado || !escopo.resultado.solicitado) { reportScope.textContent = ''; reportScope.className = 'report-scope'; return; }
+    const resultado = escopo.resultado;
+    if (!resultado.aplicado) {
+      reportScope.textContent = '⚠️ Escopo de filial solicitado, mas nao confirmado nesta resposta.';
+      reportScope.className = 'report-scope aviso';
+      return;
+    }
+    const nomes = [];
+    (escopo.selecao_ui?.empresas_inteiras || []).forEach((cod) => {
+      const emp = filialArvoreDisponivel.find(e => e.empresaProtheusCodigo === cod);
+      nomes.push(emp ? emp.nome : cod);
+    });
+    (escopo.selecao_ui?.filiais_avulsas || []).forEach((chave) => {
+      let nomeFil = chave;
+      for (const emp of filialArvoreDisponivel) {
+        const f = emp.filiais.find(x => x.filialChave === chave);
+        if (f) { nomeFil = f.nome; break; }
+      }
+      nomes.push(nomeFil);
+    });
+    reportScope.textContent = nomes.length ? `🏢 Filtro de filial: ${nomes.join(', ')}` : '';
+    reportScope.className = 'report-scope';
+  }
+
+  function addBubble({ id, texto, apresentacao = null, direcao, rows, temDados = false, rowsCount = null, favoritoId = null, criadoEm, isFalha = false, perguntaContexto = null, filial_escopo_json = null }) {
     const row = document.createElement('div');
     row.className = 'row ' + (direcao === 'out' ? 'out' : 'in');
     if (id) row.dataset.mensagemId = id;
@@ -3100,8 +3894,9 @@
       ? `<div class="result-table-rodape"><span>${labelRows}</span>`
         + `<button type="button" class="result-table-link" data-abrir-dados="1">Ver na aba Dados →</button></div>`
       : '';
+    const apresentacaoSalva = extrairApresentacaoDoTextoSalvo(texto);
     const apresentacaoFinal = (!isFalha && direcao === 'in')
-      ? (apresentacao || extrairApresentacaoDoTextoSalvo(texto))
+      ? (apresentacao || apresentacaoSalva)
       : apresentacao;
     const botaoMenu = (!isFalha && id)
       ? `<button type="button" class="message-menu-trigger${favoritoId ? ' active' : ''}" data-menu-msg="${escapeHtml(id)}" data-favoritable="${direcao === 'in' ? '1' : '0'}" data-tem-dados-tabulares="${temDadosTabulares ? '1' : '0'}"${favoritoId ? ` data-favorito-id="${escapeHtml(favoritoId)}"` : ''} title="Opcoes da mensagem" aria-label="Opcoes da mensagem">${chevronDownSvg()}</button>`
@@ -3126,8 +3921,10 @@
     const ordemCheckbox = direcao === 'out' ? '' : checkbox; // esquerda p/ bolhas 'in'
     const ordemCheckboxFim = direcao === 'out' ? checkbox : ''; // direita p/ bolhas 'out'
 
+    const badgeFilial = direcao === 'in' ? montarBadgeFilial(filial_escopo_json) : '';
+
     row.innerHTML = ordemCheckbox
-      + `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span></span></div>`
+      + `<div class="${bubbleClass}">${icone}${conteudo}<span class="meta"><span class="time">${nowLabel(criadoEm)}</span>${badgeFilial}</span></div>`
       + ordemCheckboxFim;
     if (temDadosTabulares) {
       row.querySelector('[data-abrir-dados]').addEventListener('click', (e) => {
@@ -3325,6 +4122,7 @@
     const cache = mensagensCachePorSessao.get(sessaoId);
     if (cache) {
       renderMensagensLista(cache.mensagens);
+      hidratarSelecaoFilialDaSessao(cache.mensagens);
     } else {
       renderLoadingState('Carregando mensagens...');
     }
@@ -3334,6 +4132,7 @@
         if (sessaoAtualId !== sessaoId) return;
         mensagensCachePorSessao.set(sessaoId, data);
         renderMensagensLista(data.mensagens);
+        hidratarSelecaoFilialDaSessao(data.mensagens);
       }
     } catch (err) {
       if (sessaoAtualId !== sessaoId) return;
@@ -3355,10 +4154,14 @@
     reportEmpty.classList.remove('preparing');
     reportEmpty.querySelector('p').textContent = 'Faça uma pergunta que retorne uma lista de dados para abrir os dados aqui.';
     reportCaption.textContent = '';
+    reportScope.textContent = '';
+    reportScope.className = 'report-scope';
     reportGrandTotal.style.display = 'none';
     reportColumnsPopover.innerHTML = '';
     reportColumnsMenu.classList.remove('open');
     btnReportColumns.setAttribute('aria-expanded', 'false');
+    btnExpandirGrupos.style.display = 'none';
+    btnRecolherGrupos.style.display = 'none';
     reportGlobalSearch.value = '';
     reportDadosAtuais = null;
     reportGridMontada = false;
@@ -3391,6 +4194,7 @@
           rows: relatorio.rows,
           gridConfig: relatorio.gridConfig,
           texto: relatorio.texto,
+          filial_escopo_json: relatorio.filial_escopo_json || null,
         };
         relatorioCachePorSessao.set(sessaoId, dados);
         relatorioCachePorMensagem.set(relatorio.id, dados);
@@ -3422,6 +4226,7 @@
         rows: relatorio.rows,
         gridConfig: relatorio.gridConfig,
         texto: relatorio.texto,
+        filial_escopo_json: relatorio.filial_escopo_json || null,
       };
       relatorioCachePorMensagem.set(mensagemId, dados);
       relatorioCachePorSessao.set(sessaoAtualId, dados);
@@ -3444,6 +4249,7 @@
       rows: relatorio.rows,
       gridConfig: relatorio.gridConfig,
       texto: relatorio.texto,
+      filial_escopo_json: relatorio.filial_escopo_json || null,
     };
     relatorioCachePorMensagem.set(mensagemId, dados);
     relatorioCachePorSessao.set(sessaoAtualId, dados);
@@ -3560,6 +4366,7 @@
         sessao.titulo = novoTitulo;
         if (sessao.sessaoId === sessaoAtualId) definirHeaderTitle(novoTitulo);
         renderSessionList();
+        if (favoritosCarregados) carregarFavoritos().catch((err) => bootLog('favoritos:renomear-sessao-falha', { erro: err.message }));
       } catch (err) {
         showError('Falha ao renomear conversa: ' + err.message);
         renderSessionList();
@@ -3590,6 +4397,7 @@
       await carregarSessoes({ selecionarPrimeira: eraAtual });
       if (eraAtual && !sessoesCache.length) {
         sessaoAtualId = null;
+        resetarSelecaoFilial();
         definirHeaderTitle('Nova conversa');
         renderEmptyState();
         fecharRelatorio();
@@ -3653,7 +4461,10 @@
     try {
       const data = await api('/mensagem', {
         method: 'POST',
-        body: JSON.stringify({ texto, sessaoId: sessaoAtualId, empresaIds: empresasSelecionadasIds }),
+        body: JSON.stringify({
+          texto, sessaoId: sessaoAtualId, empresaIds: empresasSelecionadasIds,
+          filialSelecaoUi: payloadFilialSelecaoUi(),
+        }),
       });
       sessaoAtualId = data.sessaoId;
       hideTyping();
@@ -3669,6 +4480,7 @@
         favoritoId: data.resposta.favoritoId || null,
         perguntaContexto: texto,
         criadoEm: data.criadoEm,
+        filial_escopo_json: data.resposta.filial_escopo_json || null,
       });
       scrollToBottom();
       const cacheMensagens = mensagensCachePorSessao.get(data.sessaoId);
@@ -3856,7 +4668,9 @@
     reportEmpty.classList.remove('preparing');
     reportEmpty.querySelector('p').textContent = 'Dados prontos para visualizacao.';
     reportCaption.textContent = dados.texto ? dados.texto.replace(/\n[\s\S]*/, '') : '';
+    renderReportScope(dados);
     renderGroupPicker();
+    atualizarBotoesGrupos();
     renderColumnPicker();
     renderGrandTotal(dados.rows, modelo);
   }
@@ -4005,7 +4819,9 @@
     const macroPendente = row?.dataset?.macroPendente || '';
     const select = row?.querySelector('[data-macro-select]');
     const manual = row?.querySelector('[data-macro-manual]');
-    const substituto = String(manual?.value || select?.value || '').trim();
+    const valorManual = String(manual?.value || '').trim();
+    const valorSelecionado = String(select?.value || '').trim();
+    const substituto = valorManual || (row?.dataset?.macroTipo === 'data' && valorSelecionado ? `'${valorSelecionado}'` : valorSelecionado);
     if (!macroPendente || !substituto) {
       macroAdjustStatus.textContent = 'Escolha uma macro ou informe um valor manual.';
       macroAdjustStatus.className = 'macro-adjust-status error';
@@ -4032,6 +4848,13 @@
   whatsappPreviewModal.addEventListener('click', (e) => {
     if (e.target === whatsappPreviewModal) fecharWhatsappPreview();
   });
+  btnFecharSqlPreviewTop.addEventListener('click', () => fecharSqlPreview());
+  btnFecharSqlPreview.addEventListener('click', () => fecharSqlPreview());
+  btnAjustarMacrosSqlPreview.addEventListener('click', () => abrirAjusteMacrosDoSqlPreview().catch(err => showError('Falha ao abrir ajuste de macros: ' + err.message)));
+  btnCopiarSqlPreview.addEventListener('click', () => copiarSqlPreview());
+  sqlPreviewModal.addEventListener('click', (e) => {
+    if (e.target === sqlPreviewModal) fecharSqlPreview();
+  });
   messageContextMenu.addEventListener('click', async (e) => {
     const item = e.target.closest('[data-menu-action]');
     if (!item || !messageContextMensagemId) return;
@@ -4048,6 +4871,8 @@
         await abrirForwardModal(mensagemId, 'resposta');
       } else if (acao === 'whatsapp-preview') {
         await abrirWhatsappPreview(mensagemId);
+      } else if (acao === 'sql-preview') {
+        await abrirSqlPreview(mensagemId);
       } else if (acao === 'delete') {
         if (!window.confirm('Apagar esta mensagem? Essa acao nao pode ser desfeita.')) return;
         await excluirMensagensPorIds([mensagemId]);
@@ -4067,6 +4892,7 @@
     if (e.key === 'Escape' && macroAdjustModal.classList.contains('active')) fecharAjusteMacro();
     if (e.key === 'Escape' && forwardModal.classList.contains('active')) fecharForwardModal();
     if (e.key === 'Escape' && whatsappPreviewModal.classList.contains('active')) fecharWhatsappPreview();
+    if (e.key === 'Escape' && sqlPreviewModal.classList.contains('active')) fecharSqlPreview();
     if (e.key === 'Escape') fecharMenuMensagem();
   });
 
@@ -4177,6 +5003,78 @@
     });
   }
 
+  function contarGruposRaiz(rows, groupBy) {
+    if (!Array.isArray(rows) || !Array.isArray(groupBy) || !groupBy.length) return 0;
+    const campo = groupBy[0];
+    const valores = new Set();
+    rows.forEach((row) => valores.add(String(row?.[campo] ?? '')));
+    return valores.size;
+  }
+
+  function gruposAbertosPorPadrao(rows, groupBy) {
+    const totalGrupos = contarGruposRaiz(rows, groupBy);
+    return totalGrupos > 0 && totalGrupos < REPORT_GROUPS_AUTO_COLLAPSE_MIN;
+  }
+
+  function atualizarBotoesGrupos() {
+    const temAgrupamento = !!(reportTable && reportGroupBy.length);
+    btnExpandirGrupos.style.display = temAgrupamento ? '' : 'none';
+    btnRecolherGrupos.style.display = temAgrupamento ? '' : 'none';
+    btnExpandirGrupos.disabled = !temAgrupamento;
+    btnRecolherGrupos.disabled = !temAgrupamento;
+  }
+
+  function aplicarVisibilidadeGrupo(grupo, abrir) {
+    if (!grupo) return;
+    const subGrupos = typeof grupo.getSubGroups === 'function' ? grupo.getSubGroups() : [];
+    if (!abrir) subGrupos.forEach((subGrupo) => aplicarVisibilidadeGrupo(subGrupo, abrir));
+    if (abrir && typeof grupo.show === 'function') grupo.show();
+    if (!abrir && typeof grupo.hide === 'function') grupo.hide();
+    if (abrir) subGrupos.forEach((subGrupo) => aplicarVisibilidadeGrupo(subGrupo, abrir));
+  }
+
+  function reconstruirAgrupamentoComEstado(abrir) {
+    if (!reportTable || !reportGroupBy.length) return;
+    const groupByAtual = [...reportGroupBy];
+
+    if (reportTable.options) {
+      reportTable.options.groupStartOpen = abrir;
+    }
+
+    reportTable.setGroupBy(false);
+    requestAnimationFrame(() => {
+      if (!reportTable || !groupByAtual.length) return;
+      reportTable.setGroupBy(groupByAtual);
+      reportTable.setSort(sortersParaTabulator(sortersComAgrupamento()));
+
+      requestAnimationFrame(() => {
+        if (!reportTable || typeof reportTable.getGroups !== 'function') return;
+        reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
+        atualizarBotoesGrupos();
+      });
+    });
+  }
+
+  function alternarVisibilidadeGrupos(abrir) {
+    if (!reportTable || !reportGroupBy.length || typeof reportTable.getGroups !== 'function') return;
+    reconstruirAgrupamentoComEstado(abrir);
+    reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
+    if (!abrir) {
+      requestAnimationFrame(() => {
+        if (!reportTable || !reportGroupBy.length || typeof reportTable.getGroups !== 'function') return;
+        reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
+      });
+    }
+    atualizarBotoesGrupos();
+  }
+
+  function aplicarAberturaPadraoGrupos() {
+    atualizarBotoesGrupos();
+    if (!reportTable || !reportGroupBy.length) return;
+    const abrir = gruposAbertosPorPadrao(reportDadosAtuais?.rows || [], reportGroupBy);
+    requestAnimationFrame(() => alternarVisibilidadeGrupos(abrir));
+  }
+
   function renderColumnPicker() {
     reportColumnsPopover.innerHTML = '';
     reportColunas.forEach((col) => {
@@ -4255,6 +5153,7 @@
     reportTable.setGroupBy(reportGroupBy.length ? reportGroupBy : false);
     reportTable.setSort(sortersParaTabulator(sortersComAgrupamento()));
     renderGroupPicker();
+    aplicarAberturaPadraoGrupos();
     agendarSalvarGridConfig();
   }
 
@@ -4262,6 +5161,9 @@
     reportGroupBy = [];
     aplicarAgrupamento();
   });
+
+  btnExpandirGrupos.addEventListener('click', () => alternarVisibilidadeGrupos(true));
+  btnRecolherGrupos.addEventListener('click', () => alternarVisibilidadeGrupos(false));
 
   function agendarSalvarGridConfig() {
     if (!reportMensagemId || !sessaoAtualId) return;
@@ -4395,6 +5297,7 @@
     tabRelatorio.disabled = false;
     reportEmpty.style.display = 'none';
     reportCaption.textContent = texto ? texto.replace(/\n[\s\S]*/, '') : '';
+    renderReportScope(dados);
 
     if (reportTable) {
       reportTable.destroy();
@@ -4429,7 +5332,7 @@
       height: '100%',
       columns: montarColunasTabulator(rowsGrid),
       groupBy: reportGroupBy.length ? reportGroupBy : false,
-      groupStartOpen: true,
+      groupStartOpen: gruposAbertosPorPadrao(rowsGrid, reportGroupBy),
       movableColumns: true,
       initialSort: sortersParaTabulator(sortersComAgrupamento()),
       initialHeaderFilter: reportHeaderFilters,
@@ -4454,6 +5357,7 @@
     reportTable.on('tableBuilt', () => {
       renderGroupPicker();
       renderColumnPicker();
+      atualizarBotoesGrupos();
       aplicarBuscaGlobal();
       reportEmpty.classList.remove('preparing');
       reportEmpty.style.display = 'none';
@@ -4828,6 +5732,7 @@
 
   btnNovaConversa.addEventListener('click', function () {
     sessaoAtualId = null;
+    resetarSelecaoFilial();
     definirHeaderTitle('Nova conversa');
     renderEmptyState();
     renderSessionList();
@@ -4847,9 +5752,37 @@
     e.stopPropagation();
   });
 
+  filialSelect.addEventListener('click', function (e) {
+    e.stopPropagation();
+    const aberto = !filialSelectWrap.classList.contains('open');
+    filialSelectWrap.classList.toggle('open', aberto);
+    filialSelect.setAttribute('aria-expanded', String(aberto));
+    if (aberto) { filialMenuSearch.value = ''; renderFilialMenu(); filialMenuSearch.focus(); }
+  });
+
+  filialMenu.addEventListener('click', function (e) {
+    e.stopPropagation();
+  });
+
+  filialMenuSearch.addEventListener('input', function () {
+    renderFilialMenu(filialMenuSearch.value);
+  });
+
+  filialOptionTodas.addEventListener('change', function () {
+    filialUiTouched = true;
+    if (filialOptionTodas.checked) {
+      filialEmpresasInteiras = new Set();
+      filialFiliaisAvulsas = new Set();
+    }
+    renderFilialMenu(filialMenuSearch.value);
+    atualizarLabelFilialSelect();
+  });
+
   document.addEventListener('click', function () {
     empresaSelectWrap.classList.remove('open');
     empresaSelect.setAttribute('aria-expanded', 'false');
+    filialSelectWrap.classList.remove('open');
+    filialSelect.setAttribute('aria-expanded', 'false');
     headerActions.classList.remove('open');
     btnHeaderMenu.setAttribute('aria-expanded', 'false');
   });

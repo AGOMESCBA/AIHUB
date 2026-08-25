@@ -10,6 +10,32 @@ const periodResolver = require('../ai/period-resolver');
 
 const TITULO_MAX_CHARS = 60;
 const PAGE_SIZE = 30;
+let chatMessagesHasFilialEscopoColumn = null;
+
+function tabelaTemColuna(cTabela, cColuna) {
+  try {
+    return getDB().prepare(`PRAGMA table_info(${cTabela})`).all()
+      .some(col => String(col.name || '').toLowerCase() === String(cColuna || '').toLowerCase());
+  } catch (_) {
+    return false;
+  }
+}
+
+function temFilialEscopoChatMessages() {
+  if (chatMessagesHasFilialEscopoColumn === null) {
+    chatMessagesHasFilialEscopoColumn = tabelaTemColuna('protheus_chat_messages', 'filial_escopo_json');
+  }
+  return chatMessagesHasFilialEscopoColumn;
+}
+
+function parseJsonSeguro(valor) {
+  if (!valor) return null;
+  try {
+    return JSON.parse(valor);
+  } catch (_) {
+    return null;
+  }
+}
 
 function parseRowsMeta(rowsJson) {
   if (!rowsJson) return { rows: null, temDados: false, rowsCount: 0 };
@@ -78,25 +104,43 @@ function listarSessoes({ empresaId, celular, limite = 30 }) {
 // — usados pelo frontend para referenciar essas mensagens especificas ao
 // salvar config de grid ou ao excluir mensagens individuais (selecao
 // multipla) sem precisar recarregar o historico da sessao.
-function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipoResultado = null, intent = null }) {
+function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipoResultado = null, intent = null, filialEscopo = null }) {
   const db = getDB();
   const agora = new Date().toISOString();
   const perguntaId = crypto.randomUUID();
   const respostaId = crypto.randomUUID();
+  let insert;
 
-  const insert = db.prepare(`
-    INSERT INTO protheus_chat_messages (id, sessao_id, direcao, texto, rows_json, tipo_resultado, intent_json, criado_em)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  if (temFilialEscopoChatMessages()) {
+    insert = db.prepare(`
+      INSERT INTO protheus_chat_messages (id, sessao_id, direcao, texto, rows_json, tipo_resultado, intent_json, filial_escopo_json, criado_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
-  insert.run(perguntaId, sessaoId, 'out', perguntaTexto, null, null, null, agora);
-  insert.run(
-    respostaId, sessaoId, 'in', respostaTexto,
-    rows ? JSON.stringify(rows) : null,
-    tipoResultado,
-    intent ? JSON.stringify(intent) : null,
-    agora,
-  );
+    insert.run(perguntaId, sessaoId, 'out', perguntaTexto, null, null, null, null, agora);
+    insert.run(
+      respostaId, sessaoId, 'in', respostaTexto,
+      rows ? JSON.stringify(rows) : null,
+      tipoResultado,
+      intent ? JSON.stringify(intent) : null,
+      filialEscopo ? JSON.stringify(filialEscopo) : null,
+      agora,
+    );
+  } else {
+    insert = db.prepare(`
+      INSERT INTO protheus_chat_messages (id, sessao_id, direcao, texto, rows_json, tipo_resultado, intent_json, criado_em)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    insert.run(perguntaId, sessaoId, 'out', perguntaTexto, null, null, null, agora);
+    insert.run(
+      respostaId, sessaoId, 'in', respostaTexto,
+      rows ? JSON.stringify(rows) : null,
+      tipoResultado,
+      intent ? JSON.stringify(intent) : null,
+      agora,
+    );
+  }
 
   db.prepare(`UPDATE protheus_chat_sessions SET atualizado_em = ? WHERE id = ?`).run(agora, sessaoId);
 
@@ -111,10 +155,11 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
 
 function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
   const db = getDB();
+  const cFilialEscopoCol = temFilialEscopoChatMessages() ? 'filial_escopo_json' : 'NULL AS filial_escopo_json';
   const rows = cursor
     ? db.prepare(`
         SELECT id, direcao, texto, rows_json,
-               tipo_resultado, grid_config_json, criado_em,
+               tipo_resultado, grid_config_json, intent_json, ${cFilialEscopoCol}, criado_em,
                (
                  SELECT f.id
                  FROM protheus_chat_favorites f
@@ -128,7 +173,7 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
       `).all(sessaoId, cursor, limite)
     : db.prepare(`
         SELECT id, direcao, texto, rows_json,
-               tipo_resultado, grid_config_json, criado_em,
+               tipo_resultado, grid_config_json, intent_json, ${cFilialEscopoCol}, criado_em,
                (
                  SELECT f.id
                  FROM protheus_chat_favorites f
@@ -152,6 +197,14 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
       rowsCount: metaRows.temDados ? metaRows.rowsCount : 0,
       tipo: r.tipo_resultado,
       gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
+      // intent_json exposto SO para o frontend reidratar o estado visual da
+      // arvore de filial ao trocar/reabrir sessao (ver
+      // hidratarSelecaoFilialDaSessao em protheus-chat.html) — mesmo dado
+      // que o backend ja usa para herdar contexto entre turnos
+      // (ultimoIntent), nao e novo dado sensivel, so passa a ser lido tambem
+      // no client.
+      intent_json: parseJsonSeguro(r.intent_json),
+      filial_escopo_json: parseJsonSeguro(r.filial_escopo_json),
       favoritoId: r.favorito_id || null,
       criadoEm: r.criado_em,
     };
@@ -166,8 +219,9 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
 // Ultima mensagem 'in' da sessao que tenha dados tabulares (rows com pelo
 // menos 1 linha) — usada para popular a aba Relatorio ao carregar a conversa.
 function ultimaMensagemTabular({ sessaoId }) {
+  const cFilialEscopoCol = temFilialEscopoChatMessages() ? 'filial_escopo_json' : 'NULL AS filial_escopo_json';
   const row = getDB().prepare(`
-    SELECT id, texto, rows_json, tipo_resultado, grid_config_json, criado_em
+    SELECT id, texto, rows_json, tipo_resultado, grid_config_json, ${cFilialEscopoCol}, criado_em
     FROM protheus_chat_messages
     WHERE sessao_id = ? AND direcao = 'in' AND rows_json IS NOT NULL
     ORDER BY criado_em DESC LIMIT 1
@@ -182,13 +236,15 @@ function ultimaMensagemTabular({ sessaoId }) {
     rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
     gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    filial_escopo_json: parseJsonSeguro(row.filial_escopo_json),
     criadoEm: row.criado_em,
   };
 }
 
 function mensagemTabular({ sessaoId, mensagemId }) {
+  const cFilialEscopoCol = temFilialEscopoChatMessages() ? 'filial_escopo_json' : 'NULL AS filial_escopo_json';
   const row = getDB().prepare(`
-    SELECT id, texto, rows_json, tipo_resultado, grid_config_json, criado_em
+    SELECT id, texto, rows_json, tipo_resultado, grid_config_json, ${cFilialEscopoCol}, criado_em
     FROM protheus_chat_messages
     WHERE sessao_id = ? AND id = ? AND direcao = 'in' AND rows_json IS NOT NULL
     LIMIT 1
@@ -203,6 +259,7 @@ function mensagemTabular({ sessaoId, mensagemId }) {
     rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
     gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    filial_escopo_json: parseJsonSeguro(row.filial_escopo_json),
     criadoEm: row.criado_em,
   };
 }
@@ -227,6 +284,47 @@ function vincularInterpretacao({ mensagemId, sessaoId, interpretationLogId }) {
      WHERE id = ? AND sessao_id = ? AND direcao = 'in'
   `).run(interpretationLogId, mensagemId, sessaoId);
   return info.changes > 0;
+}
+
+function sqlDaMensagem({ sessaoId, mensagemId }) {
+  if (!sessaoId || !mensagemId) return null;
+  const row = getDB().prepare(`
+    SELECT m.id, m.criado_em, m.interpretation_log_id,
+           l.sql_final_executado, l.sql_gerado, l.sql_template, l.modulo,
+           (
+             SELECT f.id
+             FROM protheus_chat_favorites f
+             WHERE f.resposta_mensagem_id = m.id
+               AND f.ativo = 1
+             LIMIT 1
+           ) AS favorito_id,
+           (
+             SELECT f.sql_final_executado
+             FROM protheus_chat_favorites f
+             WHERE f.resposta_mensagem_id = m.id
+               AND f.ativo = 1
+             LIMIT 1
+           ) AS favorito_sql_final_executado
+    FROM protheus_chat_messages m
+    LEFT JOIN interpretation_log l ON l.id = m.interpretation_log_id
+    WHERE m.sessao_id = ? AND m.id = ? AND m.direcao = 'in'
+    LIMIT 1
+  `).get(sessaoId, mensagemId);
+  if (!row) return null;
+
+  const sqlFavorito = String(row.favorito_sql_final_executado || '').trim();
+  const sql = String(sqlFavorito || row.sql_final_executado || row.sql_gerado || '').trim();
+  return {
+    mensagemId: row.id,
+    criadoEm: row.criado_em,
+    interpretationLogId: row.interpretation_log_id || null,
+    modulo: row.modulo || null,
+    sql,
+    sqlFonte: sqlFavorito ? 'favorito' : 'interpretation_log',
+    sqlTemplate: row.sql_template || null,
+    temSql: !!sql,
+    favoritoId: row.favorito_id || null,
+  };
 }
 
 function moduloDoIntentJson(intentJson) {
@@ -276,6 +374,8 @@ function macroPeriodoAgendamento(perguntaTexto) {
       return { start: '{{HOJE}}', end: '{{HOJE}}' };
     case 'ontem':
       return { start: '{{ONTEM}}', end: '{{ONTEM}}' };
+    case 'amanha':
+      return { start: '{{AMANHA}}', end: '{{AMANHA}}' };
     case 'esta_semana':
       return { start: '{{INICIO_SEMANA}}', end: '{{FIM_SEMANA}}' };
     case 'semana_anterior':
@@ -286,10 +386,14 @@ function macroPeriodoAgendamento(perguntaTexto) {
       return { start: '{{INICIO_MES}}', end: '{{FIM_MES}}' };
     case 'mes_anterior':
       return { start: '{{INICIO_MES_ANTERIOR}}', end: '{{FIM_MES_ANTERIOR}}' };
+    case 'proximo_mes':
+      return { start: '{{INICIO_MES:1}}', end: '{{FIM_MES:1}}' };
     case 'ano_atual':
       return { start: '{{INICIO_ANO}}', end: '{{FIM_ANO}}' };
     case 'ano_anterior':
       return { start: '{{INICIO_ANO_ANTERIOR}}', end: '{{FIM_ANO_ANTERIOR}}' };
+    case 'proximo_ano':
+      return { start: '{{INICIO_ANO:1}}', end: '{{FIM_ANO:1}}' };
     case 'ultimos_N_dias': {
       const dias = Math.max(Number(periodo.dias || 0), 1);
       return { start: `{{HOJE:-${dias - 1}}}`, end: '{{HOJE}}' };
@@ -315,6 +419,14 @@ function substituirLiteralData(sql, valor, macro) {
   return out;
 }
 
+function substituirBetweenDatasPorMacros(sql, macros) {
+  if (!macros?.start || !macros?.end) return sql;
+  return String(sql || '').replace(
+    /\bBETWEEN\s+'?(\d{8}|\d{4}-\d{2}-\d{2})'?\s+AND\s+'?(\d{8}|\d{4}-\d{2}-\d{2})'?/i,
+    `BETWEEN '${macros.start}' AND '${macros.end}'`
+  );
+}
+
 function macrosDataComoTexto(sql) {
   const macroData = /\{\{(?:HOJE|HOJE_ISO|ONTEM|ONTEM_ISO|DATA_EXECUCAO|DATA_EXECUCAO_ISO|INICIO_SEMANA|INICIO_SEMANA_ISO|FIM_SEMANA|FIM_SEMANA_ISO|INICIO_SEMANA_ANTERIOR|INICIO_SEMANA_ANTERIOR_ISO|FIM_SEMANA_ANTERIOR|FIM_SEMANA_ANTERIOR_ISO|INICIO_PROXIMA_SEMANA|INICIO_PROXIMA_SEMANA_ISO|FIM_PROXIMA_SEMANA|FIM_PROXIMA_SEMANA_ISO|INICIO_MES|INICIO_MES_ISO|FIM_MES|FIM_MES_ISO|INICIO_MES_ANTERIOR|INICIO_MES_ANTERIOR_ISO|FIM_MES_ANTERIOR|FIM_MES_ANTERIOR_ISO|INICIO_ANO|INICIO_ANO_ISO|FIM_ANO|FIM_ANO_ISO|INICIO_ANO_ANTERIOR|INICIO_ANO_ANTERIOR_ISO|FIM_ANO_ANTERIOR|FIM_ANO_ANTERIOR_ISO)(?::[-+]?\d+)?\}\}/g;
   return String(sql || '').replace(new RegExp(`(^|[^'])(${macroData.source})(?!')`, 'g'), "$1'$2'");
@@ -334,6 +446,9 @@ function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, r
 
   const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto), { hoje: referencia });
   let out = String(sqlFinal || '');
+  if (macros.start !== macros.end && /\bBETWEEN\b/i.test(out)) {
+    out = substituirBetweenDatasPorMacros(out, macros);
+  }
   out = substituirLiteralData(out, resolvido?.dataInicio, macros.start);
   out = substituirLiteralData(out, resolvido?.dataFim, macros.end);
   return macrosDataComoTexto(out);
@@ -564,9 +679,27 @@ function renomearSessao({ sessaoId, empresaId, celular, titulo }) {
   const db = getDB();
   const sessao = buscarSessao({ id: sessaoId, empresaId, celular });
   if (!sessao) return false;
-  const info = db.prepare(`UPDATE protheus_chat_sessions SET titulo = ? WHERE id = ?`)
-    .run(tituloLimpo, sessaoId);
-  return info.changes > 0;
+  const agora = new Date().toISOString();
+  const tx = db.transaction(() => {
+    const info = db.prepare(`UPDATE protheus_chat_sessions SET titulo = ?, atualizado_em = ? WHERE id = ?`)
+      .run(tituloLimpo, agora, sessaoId);
+    if (!info.changes) return 0;
+    db.prepare(`
+      UPDATE protheus_chat_favorites
+         SET titulo = ?,
+             atualizado_em = ?
+       WHERE empresa_id = ?
+         AND celular = ?
+         AND ativo = 1
+         AND resposta_mensagem_id IN (
+           SELECT id
+           FROM protheus_chat_messages
+           WHERE sessao_id = ? AND direcao = 'in'
+         )
+    `).run(tituloLimpo, agora, empresaId, celular, sessaoId);
+    return info.changes;
+  });
+  return tx() > 0;
 }
 
 // Apaga uma ou mais mensagens especificas de uma conversa (selecao multipla,
@@ -615,6 +748,7 @@ module.exports = {
   mensagemTabular,
   salvarGridConfig,
   vincularInterpretacao,
+  sqlDaMensagem,
   listarFavoritos,
   obterFavorito,
   favoritarMensagem,

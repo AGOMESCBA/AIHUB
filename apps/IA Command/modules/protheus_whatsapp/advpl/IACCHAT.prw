@@ -81,6 +81,17 @@
         cadastro ZCH nao tem cobertura completa. Ver ressalvas de nomes de
         campo/indice de SYS_USR em IACadUsr.prw (usadas la para o F3 de
         selecao de usuario, nao usadas aqui).
+     f) [ADICIONADO] IACFilUsr()/IACFilJs() — filiais permitidas por usuario,
+        via LoadFils() com troca de ambiente (RpcSetEnv/RpcClearEnv) por
+        empresa. UNICA troca de ambiente deste fonte; NUNCA validada em
+        ambiente Protheus real. Antes de homologar: (1) confirmar assinatura
+        exata de RpcSetEnv() contra o Include RPC desta instalacao; (2)
+        confirmar com ConOut(ValToChar(LoadFils())) se o formato do codigo de
+        filial devolvido bate com M0_CODFIL/filial_chave completo (mascara
+        M0_LEIAUTE, ex. 6 digitos "EEUUFF") ou precisa de composicao manual
+        com o codigo de empresa; (3) medir impacto de performance via
+        IACPerf (ja instrumentado) quando o usuario acessa varias empresas.
+        Ver comentario completo na funcao IACFilUsr, mais abaixo.
 
    Todo valor de configuracao especifico de ambiente (URL do IAHub, timeout,
    empresa_id, segredo) e lido via parametro SX6 (GetMV) — ver bloco
@@ -349,6 +360,15 @@ Return lExiste
    logada como empresa principal do token. Alem disso, envia
    empresasPermitidas: lista calculada no Protheus com FWUsrEmp()/FWLoadSM0()
    e GetNewPar() para localizar o MV_IACEMID de cada empresa permitida.
+
+   [ADICIONADO] filiaisPermitidas: granularidade de FILIAL dentro de cada
+   empresa que o usuario acessa, via LoadFils() (ver IACFilUsr abaixo). Campo
+   NOVO e ADITIVO — nao substitui "filial" (continua sendo xFilial(), a
+   filial corrente da sessao ADVPL) nem "empresasPermitidas". Se
+   IACFilUsr() falhar ou nao coletar nada, o campo vai vazio/ausente e o
+   backend trata como "sem informacao de filial por usuario" (compatibilidade
+   — ver ressalva em token-service.js::filiaisPermitidasDaEmpresa), nunca
+   bloqueia a abertura do chat por causa disso.
 ---------------------------------------------------------------------------- */
 Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     Local oRest
@@ -361,9 +381,11 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     Local aParamEmp   := {}
     Local nEmpresaId  := 0
     Local cEmpPermit  := ""
+    Local cFilPermit  := ""
     Local cUrlToken   := ""
     Local nTimeout    := 0
     Local nStep       := Seconds()
+    Local cFilialAtual := ""
 
     aCodigos := IACEmpUsr()
     IACPerf("IACToken IACEmpUsr empresas=" + cValToChar(Len(aCodigos)), nStep)
@@ -393,6 +415,20 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
         Return .F.
     EndIf
 
+    // [CORRIGIDO apos revisao de codigo] xFilial() precisa ser capturado
+    // AQUI, antes de IACFilJs() — IACFilJs()/IACFilUsr() fazem N trocas de
+    // ambiente (RpcSetEnv/RpcClearEnv, uma por empresa do usuario) e so
+    // restauram o ambiente original ao final, dentro de um bloco protegido
+    // que, se falhar, so loga via ConOut (nao propaga erro, decisao
+    // deliberada de fail-open — ver comentario em IACFilUsr). Se essa
+    // restauracao falhar, xFilial() lido DEPOIS da chamada devolveria a
+    // filial da ULTIMA empresa iterada no loop, nao a filial real de onde o
+    // usuario abriu o menu — quebraria silenciosamente a promessa de que
+    // filiaisPermitidas e um campo aditivo que nao afeta o resto do payload.
+    // Capturando antes, o valor de "filial" fica imune a qualquer falha de
+    // ambiente que IACFilUsr venha a ter.
+    cFilialAtual := xFilial()
+
     // Escapa aspas duplas e barra invertida no celular antes de montar o JSON
     // manualmente — protege contra quebra de payload se o campo de cadastro
     // tiver algum caractere inesperado. Preferir JsonObject():ToJson() se
@@ -401,10 +437,22 @@ Static Function IACToken(cCelular, cToken, cErro, cLaunchTk)
     cEmpPermit := IACEmpJs(nEmpresaId, aCodigos, aParamEmp)
     IACPerf("IACToken IACEmpJs", nStep)
 
+    // [ADICIONADO] Filiais por empresa via LoadFils() — troca de ambiente por
+    // empresa (RpcSetEnv/RpcClearEnv), unica chamada deste tipo neste fonte.
+    // Roda POR ULTIMO, depois de tudo que depende do ambiente original ja
+    // ter sido capturado (cFilialAtual acima, cEmpPermit) — protegida
+    // internamente (IACFilUsr nunca deixa o processo preso fora do ambiente
+    // original nem propaga erro fatal, mas nao garante que a restauracao
+    // tenha sucesso, so que tenta — ver comentario da funcao).
+    nStep     := Seconds()
+    cFilPermit := IACFilJs(aCodigos)
+    IACPerf("IACToken IACFilJs", nStep)
+
     cBody := '{"empresaId":' + cValToChar(nEmpresaId) + ;
               ',"celular":"' + IACEscJs(cCelular) + '"' + ;
-              ',"filial":"' + IACEscJs(xFilial()) + '"' + ;
-              ',"empresasPermitidas":' + cEmpPermit
+              ',"filial":"' + IACEscJs(cFilialAtual) + '"' + ;
+              ',"empresasPermitidas":' + cEmpPermit + ;
+              ',"filiaisPermitidas":' + cFilPermit
 
     If ValType(cLaunchTk) == "C" .And. !Empty(cLaunchTk)
         cBody += ',"launchTicket":"' + IACEscJs(cLaunchTk) + '"'
@@ -615,6 +663,174 @@ Static Function IACEmpUsr()
     Next nI
 
 Return aRet
+
+/* ----------------------------------------------------------------------------
+   IACFilUsr
+   [NOVO — unica troca de ambiente (RpcSetEnv/RpcClearEnv) deste fonte]
+   Para cada empresa Protheus que o usuario acessa (aCodigos, ja resolvido por
+   IACEmpUsr), troca de ambiente e chama LoadFils() para descobrir as filiais
+   que o usuario REALMENTE acessa naquela empresa — LoadFils() so enxerga a
+   empresa atualmente logada, por isso a troca e necessaria para cobrir todas
+   as empresas do usuario, nao so a empresa corrente do menu.
+
+   !!! NAO CONFIRMADO — VALIDAR EM AMBIENTE REAL ANTES DE HOMOLOGACAO !!!
+   a) Assinatura de RpcSetEnv() varia por versao (parametros de dicionario
+      centralizado, idioma, modulo). Usada aqui na forma mais comum
+      (RpcSetEnv(cEmpresa, cFilial)) — confirmar contra o Include RPC real
+      desta instalacao se parametros adicionais sao esperados/obrigatorios.
+   b) Formato do codigo devolvido por LoadFils(): assume-se aqui que e o
+      MESMO formato de M0_CODFIL/filial_chave (mascara completa do
+      M0_LEIAUTE, ex.: 6 digitos "EEUUFF" — mesmo padrao ja usado em
+      protheus_company_tree, ver comentario em
+      lobo-guara-filial-resolver.js::expandirFiliaisDaEmpresa). Se
+      LoadFils() devolver so os digitos finais (sem o prefixo de empresa),
+      esta funcao precisa comPor cCodigo + valor de LoadFils() antes de
+      devolver — validar com ConOut(ValToChar(LoadFils())) em ambiente real
+      (Plantivo/LOBO_GUARA) antes de confiar no valor puro.
+   c) Impacto de performance: uma troca de ambiente por empresa, dentro do
+      fluxo sincrono de abertura do chat (ja medido via IACPerf) — se o
+      usuario acessar muitas empresas, pode virar latencia perceptivel.
+      Medir com IACPerf (ja instrumentado abaixo) antes de considerar pronto.
+
+   Cada troca fica protegida por Begin Sequence/Recover — falha ao trocar de
+   ambiente para UMA empresa (ex.: empresa temporariamente indisponivel) so
+   pula aquela empresa (fica sem detalhamento de filial, tratado no backend
+   como "sem informacao", nunca bloqueia).
+
+   Restauracao do ambiente original: cEmpOrig/cFilOrig sao capturados ANTES
+   do loop, e a funcao SEMPRE TENTA restaurar ao final — mas essa tentativa
+   tambem esta dentro de um bloco Begin Sequence/Recover que, se falhar, so
+   loga via ConOut (fail-open deliberado, mesmo criterio do resto da funcao).
+   Ou seja: a funcao nunca lança erro fatal nem trava o fluxo do chamador,
+   mas NAO HA GARANTIA de que o ambiente volte ao original em caso de falha
+   real de RpcSetEnv/RpcClearEnv nessa etapa final — por isso o chamador
+   (IACToken) captura QUALQUER dado que dependa do ambiente original (ex.:
+   xFilial()) ANTES de invocar esta funcao, nunca depois.
+
+   Retorno: array de { cCodigoEmpresa, aFiliais (array de codigos) }.
+---------------------------------------------------------------------------- */
+Static Function IACFilUsr(aCodigos)
+    Local aRet       := {}
+    Local cEmpOrig   := Alltrim(cEmpAnt)
+    Local cFilOrig   := Alltrim(cFilAnt)
+    Local nI         := 0
+    Local cCod       := ""
+    Local cFilRef    := ""
+    Local aFiliais   := {}
+    Local lFalhou    := .F.
+
+    If ValType(aCodigos) != "A" .Or. Len(aCodigos) == 0
+        Return aRet
+    EndIf
+
+    For nI := 1 To Len(aCodigos)
+        cCod    := Alltrim(aCodigos[nI, 1])
+        cFilRef := Alltrim(aCodigos[nI, 2]) // SM0_CODFIL completo, filial de referencia da empresa
+        aFiliais := {}
+        lFalhou  := .F.
+
+        If Empty(cCod) .Or. Empty(cFilRef)
+            Loop
+        EndIf
+
+        Begin Sequence
+            RpcClearEnv() // fecha o ambiente atual antes de abrir outro (evita ambiente aninhado)
+            // NAO CONFIRMADO: assinatura RpcSetEnv(empresa, filial, ..., GetEnvServer(), {})
+            // e a forma mais comum documentada (TDN), mas parametros 3/4
+            // (idioma/modulo) e o ultimo (array de bases a abrir) podem
+            // precisar de valores especificos desta instalacao — validar
+            // contra o Include RPC real antes de homologar.
+            If !RpcSetEnv(cCod, cFilRef, , , GetEnvServer(), {})
+                lFalhou := .T.
+                Break
+            EndIf
+
+            aFiliais := LoadFils()
+
+            If ValType(aFiliais) != "A"
+                aFiliais := {}
+            EndIf
+        Recover
+            lFalhou  := .T.
+            aFiliais := {}
+            ConOut("[IA Command] IACFilUsr: falha ao trocar ambiente/LoadFils para empresa " + cCod + " — filial detalhada ficara ausente para esta empresa nesta sessao.")
+        End Sequence
+
+        // [CORRIGIDO apos revisao de codigo] Antes, uma empresa so entrava em
+        // aRet se Len(aFiliais) > 0 — isso confundia dois casos MUITO
+        // diferentes: (1) falha ao trocar ambiente/rodar LoadFils (deveria
+        // significar "sem informacao, nao filtra" — igual a nao mandar a
+        // empresa) e (2) LoadFils() rodou com sucesso mas devolveu VAZIO
+        // (usuario tem a empresa liberada por FWUsrEmp, mas NENHUMA filial
+        // dela autorizada — deveria bloquear tudo naquela empresa, nao
+        // "nao filtrar"). Os dois casos produziam o MESMO resultado no JSON
+        // (empresa ausente), e o backend le ausencia como "sem informacao,
+        // nao filtra" (ver token-service.js::filiaisPermitidasDaEmpresa) —
+        // ou seja, um usuario sem NENHUM acesso a filial numa empresa via
+        // LoadFils() acabava vendo TODAS as filiais cadastradas dela.
+        // Agora: sempre adiciona a empresa quando a chamada teve sucesso
+        // (mesmo com array vazio, que passa a significar corretamente
+        // "zero filiais autorizadas" no backend); so omite em caso de falha
+        // real de ambiente/LoadFils (lFalhou), que continua tratado como
+        // "sem informacao" (fail-open deliberado so para falha tecnica, nao
+        // para "usuario sem acesso").
+        If !lFalhou
+            AAdd(aRet, { cCod, aFiliais })
+        EndIf
+    Next nI
+
+    // Restaura o ambiente original do menu — OBRIGATORIO, o restante do
+    // fonte (IACSX6Lst, etc.) assume rodar no ambiente em que o usuario
+    // clicou o menu, nao no ultimo ambiente trocado pelo loop acima.
+    Begin Sequence
+        RpcClearEnv()
+        If !Empty(cEmpOrig) .And. !Empty(cFilOrig)
+            RpcSetEnv(cEmpOrig, cFilOrig, , , GetEnvServer(), {})
+        EndIf
+    Recover
+        ConOut("[IA Command] IACFilUsr: falha ao restaurar ambiente original apos coleta de filiais — validar RpcSetEnv/RpcClearEnv contra o Include real desta instalacao.")
+    End Sequence
+
+Return aRet
+
+/* ----------------------------------------------------------------------------
+   IACFilJs
+   Monta o JSON de filiaisPermitidas enviado ao IAHub, a partir do retorno de
+   IACFilUsr(). Formato: [{"codigoProtheus":"01","filiais":["010101",...]}].
+   Se IACFilUsr() nao coletar nada (falha geral, ou nenhuma empresa com
+   filiais detalhadas), devolve "[]" — o backend trata isso como "sem
+   informacao de filial por usuario" e nao filtra a arvore por essa
+   dimensao (comportamento equivalente a antes desta mudanca), nunca bloqueia.
+---------------------------------------------------------------------------- */
+Static Function IACFilJs(aCodigos)
+    Local aFilPorEmp := IACFilUsr(aCodigos)
+    Local cJson      := "["
+    Local nI         := 0
+    Local nJ         := 0
+    Local cCod       := ""
+    Local aFiliais   := {}
+
+    For nI := 1 To Len(aFilPorEmp)
+        cCod     := aFilPorEmp[nI, 1]
+        aFiliais := aFilPorEmp[nI, 2]
+
+        If nI > 1
+            cJson += ","
+        EndIf
+
+        cJson += '{"codigoProtheus":"' + IACEscJs(cCod) + '","filiais":['
+        For nJ := 1 To Len(aFiliais)
+            If nJ > 1
+                cJson += ","
+            EndIf
+            cJson += '"' + IACEscJs(Alltrim(cValToChar(aFiliais[nJ]))) + '"'
+        Next nJ
+        cJson += ']}'
+    Next nI
+
+    cJson += "]"
+
+Return cJson
 
 /* ----------------------------------------------------------------------------
    IACCodEmp
