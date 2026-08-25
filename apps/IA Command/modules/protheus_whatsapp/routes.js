@@ -964,7 +964,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         token,
         expiraEm,
         usuario: permissoes.usuarioNome,
-        chatUrl: `/api/ia-command/protheus/chat?token=${encodeURIComponent(token)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}`,
+        chatUrl: `/api/ia-command/protheus/chat?token=${encodeURIComponent(token)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}&origem=web`,
       });
     } catch (err) {
       perfLog('POST /web-login/verify', inicio, { status: 500, erro: err.message });

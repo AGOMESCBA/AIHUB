@@ -6,218 +6,662 @@
   <title>IA Command - Acesso Web</title>
   <style>
     :root {
-      --bg: #0b141a;
-      --panel: #111b21;
-      --panel-2: #202c33;
-      --text: #e9edef;
-      --muted: #8696a0;
-      --border: #2a3942;
+      --bg: #071014;
+      --bg-2: #0d1b20;
+      --panel: #102027;
+      --panel-2: #162b33;
+      --panel-3: #203740;
+      --text: #edf7f5;
+      --muted: #9fb4bb;
+      --soft: #c9d9dd;
+      --border: rgba(179, 215, 221, .18);
       --accent: #00a884;
-      --accent-hover: #06cf9c;
-      --danger: #ff7b7b;
-      --shadow: 0 20px 70px rgba(0,0,0,.35);
+      --accent-2: #25d366;
+      --accent-dark: #07382f;
+      --danger: #ff8a8a;
+      --warning: #ffd166;
+      --shadow: 0 28px 90px rgba(0, 0, 0, .42);
+      --radius: 8px;
     }
     * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: Inter, Arial, sans-serif;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
       color: var(--text);
-      background: var(--bg);
+      background:
+        linear-gradient(135deg, rgba(0, 168, 132, .18), transparent 28%),
+        radial-gradient(circle at 82% 22%, rgba(37, 211, 102, .16), transparent 30%),
+        linear-gradient(180deg, var(--bg), var(--bg-2));
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: 28px;
     }
+    button, input { font: inherit; }
     .shell {
-      width: min(440px, 100%);
-      background: var(--panel);
+      width: min(1060px, 100%);
+      min-height: 620px;
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(420px, 1fr);
+      background: rgba(16, 32, 39, .92);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
       overflow: hidden;
+      backdrop-filter: blur(18px);
     }
-    .head {
-      padding: 24px 26px 18px;
-      background: var(--panel-2);
-      border-bottom: 1px solid var(--border);
+    .hero {
+      position: relative;
+      padding: 34px;
+      border-right: 1px solid var(--border);
+      background:
+        linear-gradient(160deg, rgba(0, 168, 132, .22), transparent 46%),
+        linear-gradient(180deg, rgba(255, 255, 255, .05), rgba(255, 255, 255, .01));
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 34px;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
+      gap: 14px;
     }
     .logo {
-      width: 42px;
-      height: 42px;
+      width: 52px;
+      height: 52px;
       border-radius: 50%;
       display: grid;
       place-items: center;
-      background: var(--accent);
-      color: #06251d;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #03251d;
       font-weight: 900;
       letter-spacing: 0;
+      box-shadow: 0 12px 30px rgba(0, 168, 132, .28);
     }
+    h1, h2, p { margin: 0; }
     h1 {
-      margin: 0;
-      font-size: 20px;
+      font-size: 24px;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    .brand-sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .hero-copy h2 {
+      max-width: 420px;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+    .hero-copy p {
+      max-width: 440px;
+      margin-top: 18px;
+      color: var(--soft);
+      font-size: 16px;
+      line-height: 1.65;
+    }
+    .access-flow {
+      display: grid;
+      gap: 10px;
+      max-width: 430px;
+    }
+    .flow-item {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid rgba(179, 215, 221, .14);
+      border-radius: var(--radius);
+      background: rgba(7, 16, 20, .24);
+    }
+    .flow-num {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(0, 168, 132, .16);
+      color: var(--accent-2);
+      font-weight: 900;
+    }
+    .flow-title {
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .flow-text {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .visual {
+      align-self: center;
+      width: min(360px, 100%);
+      border: 1px solid rgba(179, 215, 221, .16);
+      border-radius: var(--radius);
+      background: rgba(7, 16, 20, .34);
+      padding: 16px;
+    }
+    .visual-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .phone-mock {
+      display: grid;
+      gap: 10px;
+    }
+    .bubble {
+      width: fit-content;
+      max-width: 86%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #0b2e27;
+      color: #dff7ec;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .bubble.out {
+      justify-self: end;
+      background: #005c4b;
+    }
+    .otp-preview {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .otp-preview span {
+      width: 30px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .1);
+      font-weight: 900;
+      color: #fff;
+    }
+    .card-wrap {
+      display: grid;
+      place-items: center;
+      padding: 42px;
+    }
+    .card {
+      width: min(460px, 100%);
+    }
+    .stepper {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .step-pill {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: rgba(255, 255, 255, .03);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .step-pill.active {
+      color: var(--text);
+      border-color: rgba(0, 168, 132, .62);
+      background: rgba(0, 168, 132, .14);
+    }
+    .step-dot {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, .08);
+      font-size: 12px;
+    }
+    .step-pill.active .step-dot {
+      background: var(--accent);
+      color: #03251d;
+    }
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: rgba(7, 16, 20, .52);
+      overflow: hidden;
+    }
+    .panel-head {
+      padding: 22px 22px 18px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .02));
+      border-bottom: 1px solid var(--border);
+    }
+    .eyebrow {
+      color: var(--accent-2);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .panel-head h2 {
+      margin-top: 8px;
+      font-size: 24px;
       line-height: 1.2;
       letter-spacing: 0;
     }
-    .subtitle {
-      margin: 0;
+    .panel-head p {
+      margin-top: 10px;
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.5;
+      font-size: 14px;
+      line-height: 1.55;
     }
-    .body { padding: 24px 26px 26px; }
+    .panel-body {
+      padding: 22px;
+    }
     .step { display: none; }
     .step.active { display: block; }
     label {
       display: block;
-      margin-bottom: 7px;
+      margin-bottom: 8px;
+      color: var(--soft);
       font-size: 12px;
-      color: var(--muted);
-      font-weight: 700;
+      font-weight: 900;
+      letter-spacing: .06em;
       text-transform: uppercase;
-      letter-spacing: .04em;
+    }
+    .input-wrap {
+      position: relative;
+    }
+    .prefix {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(37, 211, 102, .15);
+      color: var(--accent-2);
+      pointer-events: none;
+    }
+    .prefix svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
     }
     input {
       width: 100%;
-      height: 46px;
+      height: 54px;
       border: 1px solid var(--border);
-      border-radius: 7px;
-      background: #0b141a;
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .06);
       color: var(--text);
-      font-size: 16px;
-      padding: 0 14px;
+      font-size: 17px;
+      padding: 0 15px;
       outline: none;
       letter-spacing: 0;
     }
-    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,168,132,.16); }
+    .input-wrap input { padding-left: 54px; }
+    input::placeholder { color: rgba(201, 217, 221, .48); }
+    input:focus {
+      border-color: rgba(0, 168, 132, .9);
+      box-shadow: 0 0 0 4px rgba(0, 168, 132, .16);
+      background: rgba(255, 255, 255, .08);
+    }
+    .hint {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid rgba(179, 215, 221, .14);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, .04);
+    }
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .summary-value {
+      margin-top: 3px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      word-break: break-word;
+    }
+    .timer {
+      min-width: 78px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(255, 209, 102, .13);
+      color: var(--warning);
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .code-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    .code-row input {
+      height: 58px;
+      padding: 0;
+      text-align: center;
+      font-size: 24px;
+      font-weight: 900;
+    }
+    .hidden-code {
+      position: absolute;
+      left: -9999px;
+      width: 1px;
+      opacity: 0;
+    }
     .actions {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin-top: 18px;
+      margin-top: 20px;
     }
+    .actions.right { justify-content: flex-end; }
     button {
-      min-height: 42px;
+      min-height: 46px;
       border: 1px solid transparent;
-      border-radius: 7px;
-      padding: 0 15px;
+      border-radius: var(--radius);
+      padding: 0 17px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
       font-size: 14px;
-      font-weight: 800;
+      font-weight: 900;
       cursor: pointer;
-      color: #06251d;
+      color: #03251d;
       background: var(--accent);
+      transition: transform .12s ease, background .16s ease, border-color .16s ease;
     }
-    button:hover { background: var(--accent-hover); }
-    button:disabled { opacity: .55; cursor: not-allowed; }
+    button:hover { background: var(--accent-2); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
     button.ghost {
       background: transparent;
       border-color: var(--border);
       color: var(--text);
     }
-    button.ghost:hover { background: var(--panel-2); }
+    button.ghost:hover {
+      background: rgba(255, 255, 255, .06);
+      border-color: rgba(179, 215, 221, .32);
+    }
+    button svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
     .status {
-      min-height: 20px;
-      margin-top: 14px;
+      min-height: 22px;
+      margin-top: 16px;
+      padding: 0 2px;
+      color: var(--muted);
       font-size: 13px;
       line-height: 1.45;
-      color: var(--muted);
       word-break: break-word;
     }
     .status.error { color: var(--danger); }
-    .status.ok { color: var(--accent-hover); }
-    .code-row {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-      gap: 7px;
-    }
-    .code-row input {
-      text-align: center;
-      padding: 0;
-      font-size: 22px;
-      font-weight: 800;
-    }
-    .hidden-code { position: absolute; left: -9999px; opacity: 0; }
-    .meta {
-      margin-bottom: 14px;
+    .status.ok { color: var(--accent-2); }
+    .footnote {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: var(--radius);
       color: var(--muted);
-      font-size: 13px;
+      background: rgba(255, 255, 255, .04);
+      font-size: 12px;
       line-height: 1.5;
     }
-    @media (max-width: 480px) {
+    .loader {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      border: 2px solid rgba(3, 37, 29, .28);
+      border-top-color: #03251d;
+      animation: spin .8s linear infinite;
+      display: none;
+    }
+    button.loading .loader { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 900px) {
+      body { padding: 18px; }
+      .shell { grid-template-columns: 1fr; min-height: 0; }
+      .hero {
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        padding: 24px;
+      }
+      .hero-copy h2 { font-size: 30px; }
+      .visual { display: none; }
+      .card-wrap { padding: 24px; }
+    }
+    @media (max-width: 520px) {
       body { padding: 0; place-items: stretch; }
-      .shell { width: 100%; min-height: 100vh; border: none; border-radius: 0; }
-      .head, .body { padding-left: 20px; padding-right: 20px; }
+      .shell {
+        width: 100%;
+        min-height: 100vh;
+        border: none;
+        border-radius: 0;
+      }
+      .hero { padding: 22px 18px; }
+      .card-wrap { padding: 18px; place-items: start stretch; }
+      .stepper { grid-template-columns: 1fr; }
+      .panel-head, .panel-body { padding: 18px; }
+      .actions { align-items: stretch; flex-direction: column-reverse; }
+      .actions.right { flex-direction: column; }
+      button { width: 100%; }
+      .code-row { gap: 6px; }
+      .code-row input { height: 52px; font-size: 21px; }
     }
   </style>
 </head>
 <body>
   <main class="shell">
-    <section class="head">
+    <section class="hero" aria-label="IA Command">
       <div class="brand">
         <div class="logo">IA</div>
         <div>
           <h1>IA Command</h1>
-          <p class="subtitle">Chat Protheus via WhatsApp</p>
+          <p class="brand-sub">Chat Protheus via WhatsApp</p>
         </div>
       </div>
-      <p class="subtitle">Entre com o numero sincronizado no cadastro de usuarios do Protheus.</p>
+
+      <div class="hero-copy">
+        <h2>Acesso direto ao chat, com as permissoes do Protheus.</h2>
+        <p>Entre pelo telefone sincronizado no cadastro. O IA Command valida o numero por WhatsApp e abre o chat ja limitado as empresas e filiais autorizadas.</p>
+      </div>
+
+      <div class="access-flow" aria-label="Fluxo de acesso">
+        <div class="flow-item">
+          <div class="flow-num">1</div>
+          <div>
+            <div class="flow-title">Telefone sincronizado</div>
+            <div class="flow-text">Use o mesmo numero importado pela rotina de cadastro de usuarios.</div>
+          </div>
+        </div>
+        <div class="flow-item">
+          <div class="flow-num">2</div>
+          <div>
+            <div class="flow-title">Codigo no WhatsApp</div>
+            <div class="flow-text">O codigo e temporario e confirma que o telefone pertence ao usuario.</div>
+          </div>
+        </div>
+        <div class="flow-item">
+          <div class="flow-num">3</div>
+          <div>
+            <div class="flow-title">Chat liberado</div>
+            <div class="flow-text">A sessao nasce com as empresas e filiais gravadas no IA Command.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="visual" aria-hidden="true">
+        <div class="visual-top">
+          <span>WhatsApp</span>
+          <span>codigo seguro</span>
+        </div>
+        <div class="phone-mock">
+          <div class="bubble">Seu codigo IA Command chegou.</div>
+          <div class="bubble out">
+            Confirmacao de acesso
+            <div class="otp-preview">
+              <span>4</span><span>8</span><span>2</span><span>1</span><span>0</span><span>7</span>
+            </div>
+          </div>
+          <div class="bubble">Nunca compartilhe este codigo fora desta tela.</div>
+        </div>
+      </div>
     </section>
 
-    <section class="body">
-      <div class="step active" id="step-phone">
-        <label for="phone">WhatsApp</label>
-        <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 92 99999-9999">
-        <div class="actions">
-          <span></span>
-          <button id="send" type="button">Enviar codigo</button>
+    <section class="card-wrap">
+      <div class="card">
+        <div class="stepper" aria-hidden="true">
+          <div class="step-pill active" id="pill-phone"><span class="step-dot">1</span>Telefone</div>
+          <div class="step-pill" id="pill-code"><span class="step-dot">2</span>Codigo</div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <div class="eyebrow">Acesso Web</div>
+            <h2 id="panel-title">Identifique seu WhatsApp</h2>
+            <p id="panel-subtitle">Informe o numero com DDI e DDD para receber o codigo de entrada.</p>
+          </div>
+
+          <div class="panel-body">
+            <div class="step active" id="step-phone">
+              <label for="phone">Numero do WhatsApp</label>
+              <div class="input-wrap">
+                <span class="prefix" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.4 7.5L4 20l.9-4A8.5 8.5 0 1 1 20.5 11.7z"/><path d="M8.8 8.5c.2-.5.4-.6.7-.6h.5c.2 0 .4 0 .5.4l.8 1.9c.1.2.1.4 0 .6l-.4.6c-.1.2-.2.3 0 .5.4.8 1.2 1.6 2 2 .2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.9.9c.3.1.4.3.4.6 0 .6-.4 1.5-1 1.8-.5.3-1.2.4-2.3 0-2.1-.7-4.3-2.8-5.2-4.8-.5-1.1-.5-1.9-.2-2.9z"/></svg>
+                </span>
+                <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 65 99987-5116">
+              </div>
+              <p class="hint">Use o numero sincronizado no Protheus. Apenas usuarios ativos no IA Command conseguem receber o codigo.</p>
+              <div class="actions right">
+                <button id="send" type="button">
+                  <span class="loader" aria-hidden="true"></span>
+                  <span>Enviar codigo</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="step" id="step-code">
+              <div class="summary">
+                <div>
+                  <div class="summary-label">Enviado para</div>
+                  <div class="summary-value" id="phone-summary">-</div>
+                </div>
+                <div class="timer" id="timer">05:00</div>
+              </div>
+
+              <label for="code-hidden">Codigo de verificacao</label>
+              <input class="hidden-code" id="code-hidden" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+              <div class="code-row" id="code-row" aria-label="Codigo de verificacao">
+                <input maxlength="1" inputmode="numeric" aria-label="Digito 1">
+                <input maxlength="1" inputmode="numeric" aria-label="Digito 2">
+                <input maxlength="1" inputmode="numeric" aria-label="Digito 3">
+                <input maxlength="1" inputmode="numeric" aria-label="Digito 4">
+                <input maxlength="1" inputmode="numeric" aria-label="Digito 5">
+                <input maxlength="1" inputmode="numeric" aria-label="Digito 6">
+              </div>
+              <p class="hint">Digite ou cole o codigo recebido no WhatsApp. Ele expira em poucos minutos.</p>
+
+              <div class="actions">
+                <button class="ghost" id="back" type="button">Trocar numero</button>
+                <button id="verify" type="button">
+                  <span class="loader" aria-hidden="true"></span>
+                  <span>Entrar no chat</span>
+                </button>
+              </div>
+              <div class="actions right" style="margin-top:10px">
+                <button class="ghost" id="resend" type="button">Reenviar codigo</button>
+              </div>
+            </div>
+
+            <div class="status" id="status"></div>
+            <div class="footnote">Este acesso nao cria uma nova senha. A identidade vem do telefone validado e as permissoes continuam sendo as sincronizadas do Protheus.</div>
+          </div>
         </div>
       </div>
-
-      <div class="step" id="step-code">
-        <p class="meta" id="code-meta">Codigo enviado pelo WhatsApp.</p>
-        <label for="code-hidden">Codigo</label>
-        <input class="hidden-code" id="code-hidden" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
-        <div class="code-row" id="code-row" aria-hidden="true">
-          <input maxlength="1" inputmode="numeric">
-          <input maxlength="1" inputmode="numeric">
-          <input maxlength="1" inputmode="numeric">
-          <input maxlength="1" inputmode="numeric">
-          <input maxlength="1" inputmode="numeric">
-          <input maxlength="1" inputmode="numeric">
-        </div>
-        <div class="actions">
-          <button class="ghost" id="back" type="button">Trocar numero</button>
-          <button id="verify" type="button">Entrar</button>
-        </div>
-      </div>
-
-      <div class="status" id="status"></div>
     </section>
   </main>
 
   <script>
     const $ = id => document.getElementById(id);
-    const state = { celular: '', challengeId: '' };
+    const state = { celular: '', destino: '', challengeId: '', expiresAt: 0, cooldownUntil: 0 };
     const codeInputs = [...document.querySelectorAll('#code-row input')];
+    let timerHandle = null;
 
     function digits(v) { return String(v || '').replace(/\D/g, ''); }
-    function status(msg, type) {
+
+    function formatPhone(v) {
+      const d = digits(v);
+      if (d.length === 13 && d.startsWith('55')) {
+        return `+55 (${d.slice(2, 4)}) ${d.slice(4, 9)}-${d.slice(9)}`;
+      }
+      if (d.length === 12 && d.startsWith('55')) {
+        return `+55 (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+      }
+      return d ? `+${d}` : '';
+    }
+
+    function setStatus(msg, type) {
       const el = $('status');
       el.textContent = msg || '';
       el.className = 'status' + (type ? ' ' + type : '');
     }
+
+    function setLoading(btn, loading) {
+      btn.disabled = !!loading;
+      btn.classList.toggle('loading', !!loading);
+    }
+
     function show(step) {
       $('step-phone').classList.toggle('active', step === 'phone');
       $('step-code').classList.toggle('active', step === 'code');
-      status('');
-      if (step === 'code') codeInputs[0].focus();
+      $('pill-phone').classList.toggle('active', step === 'phone');
+      $('pill-code').classList.toggle('active', step === 'code');
+      $('panel-title').textContent = step === 'phone' ? 'Identifique seu WhatsApp' : 'Confirme o codigo';
+      $('panel-subtitle').textContent = step === 'phone'
+        ? 'Informe o numero com DDI e DDD para receber o codigo de entrada.'
+        : 'Verifique a mensagem recebida e conclua o acesso ao chat.';
+      setStatus('');
+      if (step === 'code') setTimeout(() => codeInputs[0].focus(), 0);
+      if (step === 'phone') $('phone').focus();
     }
+
     async function post(path, body) {
       const r = await fetch('/api/ia-command/protheus/web-login/' + path, {
         method: 'POST',
@@ -228,66 +672,116 @@
       if (!r.ok) throw new Error(data.error || 'Erro ' + r.status);
       return data;
     }
+
     function codeValue() { return codeInputs.map(i => i.value).join(''); }
+
     function setCode(value) {
       const chars = digits(value).slice(0, 6).split('');
       codeInputs.forEach((input, idx) => { input.value = chars[idx] || ''; });
+      const next = Math.min(chars.length, codeInputs.length - 1);
+      codeInputs[next].focus();
     }
 
-    $('send').addEventListener('click', async () => {
-      const celular = digits($('phone').value);
+    function updateTimer() {
+      const remaining = Math.max(0, Math.ceil((state.expiresAt - Date.now()) / 1000));
+      const min = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const sec = String(remaining % 60).padStart(2, '0');
+      $('timer').textContent = `${min}:${sec}`;
+      if (remaining <= 0) {
+        $('timer').textContent = 'Expirado';
+        setStatus('Codigo expirado. Solicite um novo codigo para continuar.', 'error');
+      }
+
+      const cooldown = Math.max(0, Math.ceil((state.cooldownUntil - Date.now()) / 1000));
+      $('resend').disabled = cooldown > 0;
+      $('resend').textContent = cooldown > 0 ? `Reenviar em ${cooldown}s` : 'Reenviar codigo';
+    }
+
+    function startTimer(expiresAt) {
+      state.expiresAt = expiresAt || Date.now() + 5 * 60 * 1000;
+      state.cooldownUntil = Date.now() + 45 * 1000;
+      clearInterval(timerHandle);
+      updateTimer();
+      timerHandle = setInterval(updateTimer, 1000);
+    }
+
+    async function solicitarCodigo({ reenviar = false } = {}) {
+      const celular = digits($('phone').value || state.celular);
       if (celular.length < 10 || celular.length > 15) {
-        status('Informe o numero com DDI e DDD.', 'error');
+        setStatus('Informe o numero com DDI e DDD.', 'error');
         return;
       }
-      $('send').disabled = true;
-      status('Enviando codigo pelo WhatsApp...');
+
+      const btn = reenviar ? $('resend') : $('send');
+      setLoading(btn, true);
+      setStatus(reenviar ? 'Reenviando codigo pelo WhatsApp...' : 'Enviando codigo pelo WhatsApp...');
+
       try {
         const data = await post('start', { celular });
         state.celular = celular;
+        state.destino = data.destino || formatPhone(celular);
         state.challengeId = data.challengeId;
-        $('code-meta').textContent = 'Codigo enviado para ' + (data.destino || 'seu WhatsApp') + '.';
+        $('phone-summary').textContent = state.destino;
+        codeInputs.forEach(i => { i.value = ''; });
+        startTimer(data.expiraEm ? new Date(data.expiraEm).getTime() : Date.now() + 5 * 60 * 1000);
         show('code');
-        status('Codigo enviado.', 'ok');
+        setStatus(reenviar ? 'Novo codigo enviado.' : 'Codigo enviado. Confira seu WhatsApp.', 'ok');
       } catch (err) {
-        status(err.message, 'error');
+        setStatus(err.message, 'error');
       } finally {
-        $('send').disabled = false;
+        setLoading(btn, false);
       }
-    });
+    }
+
+    $('send').addEventListener('click', () => solicitarCodigo());
+    $('resend').addEventListener('click', () => solicitarCodigo({ reenviar: true }));
 
     $('verify').addEventListener('click', async () => {
       const codigo = codeValue();
       if (codigo.length !== 6) {
-        status('Digite os 6 digitos do codigo.', 'error');
+        setStatus('Digite os 6 digitos do codigo.', 'error');
         return;
       }
-      $('verify').disabled = true;
-      status('Validando codigo...');
+      setLoading($('verify'), true);
+      setStatus('Validando codigo...');
       try {
         const data = await post('verify', { celular: state.celular, challengeId: state.challengeId, codigo });
-        status('Acesso liberado. Abrindo chat...', 'ok');
+        setStatus('Acesso liberado. Abrindo chat...', 'ok');
         window.location.href = data.chatUrl;
       } catch (err) {
-        status(err.message, 'error');
+        setStatus(err.message, 'error');
       } finally {
-        $('verify').disabled = false;
+        setLoading($('verify'), false);
       }
     });
 
     $('back').addEventListener('click', () => {
       state.challengeId = '';
+      clearInterval(timerHandle);
       codeInputs.forEach(i => { i.value = ''; });
       show('phone');
+    });
+
+    $('phone').addEventListener('input', () => {
+      const pos = $('phone').selectionStart;
+      $('phone').value = formatPhone($('phone').value);
+      try { $('phone').setSelectionRange(pos, pos); } catch (_err) {}
+    });
+
+    $('phone').addEventListener('keydown', e => {
+      if (e.key === 'Enter') $('send').click();
     });
 
     codeInputs.forEach((input, idx) => {
       input.addEventListener('input', () => {
         input.value = digits(input.value).slice(0, 1);
         if (input.value && idx < codeInputs.length - 1) codeInputs[idx + 1].focus();
+        if (codeValue().length === 6) $('verify').focus();
       });
       input.addEventListener('keydown', e => {
         if (e.key === 'Backspace' && !input.value && idx > 0) codeInputs[idx - 1].focus();
+        if (e.key === 'ArrowLeft' && idx > 0) codeInputs[idx - 1].focus();
+        if (e.key === 'ArrowRight' && idx < codeInputs.length - 1) codeInputs[idx + 1].focus();
         if (e.key === 'Enter') $('verify').click();
       });
       input.addEventListener('paste', e => {
@@ -296,9 +790,7 @@
       });
     });
 
-    $('phone').addEventListener('keydown', e => {
-      if (e.key === 'Enter') $('send').click();
-    });
+    show('phone');
   </script>
 </body>
 </html>

@@ -1428,6 +1428,10 @@
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
             <span>Esquecer contexto</span>
           </button>
+          <button class="reset-memoria-btn" id="btnSairWeb" type="button" title="Sair do chat" aria-label="Sair do chat" style="display:none">
+            <svg viewBox="0 0 24 24"><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M21 3v18"/></svg>
+            <span>Sair</span>
+          </button>
         </div>
       </div>
     </header>
@@ -1757,9 +1761,12 @@
   let token = params.get('token');
   const launchTicket = params.get('launchTicket') || params.get('ticket') || '';
   const usuarioLabelParam = params.get('usuario') || '';
+  const origemAcessoParam = params.get('origem') || '';
   const sessionTokenKey = 'iaCommandProtheusChatToken';
   const sessionUserKey = 'iaCommandProtheusChatUsuario';
+  const sessionOrigemKey = 'iaCommandProtheusChatOrigem';
   const usuarioLabel = usuarioLabelParam || lerSessaoNavegador(sessionUserKey) || '';
+  const origemAcesso = origemAcessoParam || lerSessaoNavegador(sessionOrigemKey) || '';
 
   function lerSessaoNavegador(chave) {
     try { return sessionStorage.getItem(chave) || ''; } catch (_err) { return ''; }
@@ -1769,6 +1776,7 @@
     try {
       if (novoToken) sessionStorage.setItem(sessionTokenKey, novoToken);
       if (usuario) sessionStorage.setItem(sessionUserKey, usuario);
+      if (origemAcessoParam) sessionStorage.setItem(sessionOrigemKey, origemAcessoParam);
     } catch (_err) {}
   }
 
@@ -1776,6 +1784,7 @@
     try {
       sessionStorage.removeItem(sessionTokenKey);
       sessionStorage.removeItem(sessionUserKey);
+      sessionStorage.removeItem(sessionOrigemKey);
     } catch (_err) {}
   }
 
@@ -1872,6 +1881,7 @@
   const headerActions = document.getElementById('headerActions');
   const btnHeaderMenu = document.getElementById('btnHeaderMenu');
   const headerActionsMenu = document.getElementById('headerActionsMenu');
+  const btnSairWeb = document.getElementById('btnSairWeb');
 
   // Elementos e estado da aba Relatorio — declarados aqui (nao mais abaixo,
   // junto das funcoes) porque carregarMensagens() chama fecharRelatorio() e
@@ -5797,6 +5807,15 @@
       btnHeaderMenu.setAttribute('aria-expanded', 'false');
     }
   });
+
+  if (btnSairWeb) {
+    const isAcessoWebDireto = origemAcesso === 'web';
+    btnSairWeb.style.display = isAcessoWebDireto ? '' : 'none';
+    btnSairWeb.addEventListener('click', function () {
+      limparSessaoNavegador();
+      window.location.href = '/api/ia-command/protheus/web-login';
+    });
+  }
 
   btnNovaConversa.addEventListener('click', function () {
     sessaoAtualId = null;
