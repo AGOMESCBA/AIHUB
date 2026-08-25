@@ -139,6 +139,18 @@ function buscarPorId(id) {
   return serializar(row);
 }
 
+function listarAtivosPorCelular(celular) {
+  const numero = normalizarNumero(celular);
+  if (!numero) return [];
+  return getDB().prepare(`
+    SELECT *
+      FROM protheus_web_user_permissions
+     WHERE celular = ?
+       AND ativo = 1
+     ORDER BY ultimo_sync_em DESC, atualizado_em DESC
+  `).all(numero).map(serializar);
+}
+
 function atualizar(id, campos = {}) {
   const existing = buscarPorId(id);
   if (!existing) return null;
@@ -177,6 +189,7 @@ module.exports = {
   salvarSync,
   listar,
   buscarPorId,
+  listarAtivosPorCelular,
   atualizar,
   normalizarNumero,
 };

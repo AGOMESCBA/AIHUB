@@ -2,6 +2,8 @@
 #Include "PROTHEUS.ch"
 #Include "FWMVCDef.ch"
 
+#Define IAC_HUB_URL_PADRAO  "http://200.106.188.87:3000"
+
 /*/{Protheus.doc} IACadUsr
     Cadastro de celular por usuario Protheus - IA Command.
     Tabela: ZCH
@@ -33,7 +35,7 @@ Static Function MenuDef()
     ADD OPTION aRotina TITLE "Incluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 3 ACCESS 0
     ADD OPTION aRotina TITLE "Alterar"    ACTION "VIEWDEF.IACADUSR" OPERATION 4 ACCESS 0
     ADD OPTION aRotina TITLE "Excluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 5 ACCESS 0
-    ADD OPTION aRotina TITLE "Sincronizar cadastro" ACTION "U_IACUSRSYNC" OPERATION 2 ACCESS 0
+    ADD OPTION aRotina TITLE "Sincronizar cadastro" ACTION "U_IACUSRSYNC" OPERATION 6 ACCESS 0
 
 Return aRotina
 
@@ -110,6 +112,7 @@ User Function IACUSRSYNC()
     Local aUsuarios := {}
     Local cErro     := ""
     Local nTotal    := 0
+    Local lSyncOk   := .F.
 
     If !MsgYesNo("Sincronizar os usuarios da ZCH com o IA Command?" + CRLF + ;
                  "Registros existentes serao atualizados e novos usuarios serao criados.", ;
@@ -124,7 +127,12 @@ User Function IACUSRSYNC()
         Return
     EndIf
 
-    If IACEnvSync(aUsuarios, @cErro)
+    Processa({|| lSyncOk := IACEnvSync(aUsuarios, @cErro)}, ;
+             "IA Command", ;
+             "Sincronizando usuarios com o IA Command...", ;
+             .F.)
+
+    If lSyncOk
         MsgInfo("Sincronizacao enviada ao IA Command." + CRLF + ;
                 "Usuarios processados: " + cValToChar(nTotal), "IA Command")
     Else
@@ -190,16 +198,21 @@ Static Function IACEnvSync(aUsuarios, cErro)
         Return .F.
     EndIf
 
+    ProcRegua(Len(aUsuarios))
+
     For nI := 1 To Len(aUsuarios)
         cUser    := aUsuarios[nI, 1]
         cNome    := aUsuarios[nI, 2]
         cCelular := aUsuarios[nI, 3]
 
-        aCodigos   := IACEmpUsrCad(cUser)
-        aParamEmp  := IACSX6LstCad("MV_IACEMID", aCodigos)
-        nEmpresaId := IACEmpIdCad(aCodigos, aParamEmp)
-        cEmpPermit := IACEmpJsCad(nEmpresaId, aCodigos, aParamEmp)
-        cFilPermit := IACFilJsCad(cUser, aCodigos)
+        IncProc(cValToChar(nI) + "/" + cValToChar(Len(aUsuarios)) + " - " + ;
+                IACRmAcent(cNome) + " (" + cUser + ")")
+
+        aCodigos   := IACEmpUsr(cUser)
+        aParamEmp  := IACSX6Lst("MV_IACEMID", aCodigos)
+        nEmpresaId := IACEmpId(aCodigos, aParamEmp)
+        cEmpPermit := IACEmpJs(nEmpresaId, aCodigos, aParamEmp)
+        cFilPermit := IACFilJs(cUser, aCodigos)
 
         If nEmpresaId <= 0
             Loop
@@ -253,7 +266,7 @@ Static Function IACEnvSync(aUsuarios, cErro)
 
 Return .T.
 
-Static Function IACEmpUsrCad(cUsuario)
+Static Function IACEmpUsr(cUsuario)
     Local aEmpUsr := FWUsrEmp(cUsuario)
     Local aSM0    := FWLoadSM0()
     Local aRet    := {}
@@ -276,7 +289,7 @@ Static Function IACEmpUsrCad(cUsuario)
         cGrp    := Alltrim(cValToChar(aSM0[nI, 1]))
         cFil    := Alltrim(cValToChar(aSM0[nI, 2]))
         cEmpSM0 := Alltrim(cValToChar(aSM0[nI, 3]))
-        cEmp    := IACCodEmpCad(cGrp, cFil, cEmpSM0)
+        cEmp    := IACCodEmp(cGrp, cFil, cEmpSM0)
         cNome   := ""
         If Len(aSM0[nI]) >= 19
             cNome := Alltrim(cValToChar(aSM0[nI, 19]))
@@ -290,27 +303,27 @@ Static Function IACEmpUsrCad(cUsuario)
         If Empty(cNome)
             cNome := cEmp
         EndIf
-        If lTodas .Or. IACEmpOkCad(aEmpUsr, cGrp, cEmp, cFil)
-            IACAddCodCad(@aRet, cEmp, cFil, cNome)
+        If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
+            IACAddCod(@aRet, cEmp, cFil, cNome)
         EndIf
     Next nI
 
 Return aRet
 
-Static Function IACEmpJsCad(nEmpresaAtual, aCodigos, aParamEmp)
+Static Function IACEmpJs(nEmpresaAtual, aCodigos, aParamEmp)
     Local aEmpresas  := {}
     Local cJson      := "["
     Local nI         := 0
     Local nEmpresaId := 0
 
     For nI := 1 To Len(aCodigos)
-        nEmpresaId := IACEmpIdCCad(aCodigos[nI, 1], aParamEmp)
+        nEmpresaId := IACEmpIDC(aCodigos[nI, 1], aParamEmp)
         If nEmpresaId > 0
-            IACAddEmpCad(@aEmpresas, nEmpresaId, aCodigos[nI, 1], aCodigos[nI, 3])
+            IACAddEmp(@aEmpresas, nEmpresaId, aCodigos[nI, 1], aCodigos[nI, 3])
         EndIf
     Next nI
     If nEmpresaAtual > 0
-        IACAddEmpCad(@aEmpresas, nEmpresaAtual, "", "")
+        IACAddEmp(@aEmpresas, nEmpresaAtual, "", "")
     EndIf
     For nI := 1 To Len(aEmpresas)
         If nI > 1
@@ -324,7 +337,7 @@ Static Function IACEmpJsCad(nEmpresaAtual, aCodigos, aParamEmp)
 
 Return cJson
 
-Static Function IACFilJsCad(cUsuario, aCodigos)
+Static Function IACFilJs(cUsuario, aCodigos)
     Local cJson    := "["
     Local nI       := 0
     Local nJ       := 0
@@ -332,8 +345,8 @@ Static Function IACFilJsCad(cUsuario, aCodigos)
     Local aFiliais := {}
 
     For nI := 1 To Len(aCodigos)
-        cCod     := Alltrim(aCodigos[nI, 1])
-        aFiliais := IACFilUsrCad(cUsuario, cCod, aCodigos)
+        cCod     := Alltrim(cValToChar(aCodigos[nI, 1]))
+        aFiliais := IACFilUsr(cUsuario, cCod, aCodigos)
         If ValType(aFiliais) != "A"
             Loop
         EndIf
@@ -353,58 +366,68 @@ Static Function IACFilJsCad(cUsuario, aCodigos)
 
 Return cJson
 
-Static Function IACFilUsrCad(cUsuario, cCodigo, aCodigos)
+Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
     Local aFiliais := {}
-    Local cEmpOrig := Alltrim(cEmpAnt)
-    Local cFilOrig := Alltrim(cFilAnt)
+    Local aUsrData := {}
+    Local aAcessos := {}
     Local cFilRef  := ""
     Local nI       := 0
-    Local lFalhou  := .F.
+    Local nJ       := 0
+    Local cEmp     := ""
+    Local cFil     := ""
+    Local lExiste  := .F.
 
     For nI := 1 To Len(aCodigos)
-        If Alltrim(aCodigos[nI, 1]) == Alltrim(cCodigo)
-            cFilRef := Alltrim(aCodigos[nI, 2])
+        If Alltrim(cValToChar(aCodigos[nI, 1])) == Alltrim(cValToChar(cCodigo))
+            cFilRef := Alltrim(cValToChar(aCodigos[nI, 2]))
             Exit
         EndIf
     Next nI
+
+    cCodigo := Alltrim(cValToChar(cCodigo))
 
     If Empty(cCodigo) .Or. Empty(cFilRef)
         Return aFiliais
     EndIf
 
     Begin Sequence
-        RpcClearEnv()
-        If !RpcSetEnv(cCodigo, cFilRef, , , GetEnvServer(), {})
-            lFalhou := .T.
-            Break
-        EndIf
-
-        aFiliais := LoadFils()
-        If ValType(aFiliais) != "A"
-            aFiliais := {}
+        PswOrder(1)
+        If PswSeek(cUsuario, .T.)
+            aUsrData := PswRet(1)
+            If ValType(aUsrData) == "A" .And. Len(aUsrData) >= 25 .And. ValType(aUsrData[25]) == "A"
+                aAcessos := aUsrData[25]
+                For nI := 1 To Len(aAcessos)
+                    If ValType(aAcessos[nI]) == "A" .And. Len(aAcessos[nI]) >= 2
+                        cEmp := Alltrim(cValToChar(aAcessos[nI, 1]))
+                        cFil := Alltrim(cValToChar(aAcessos[nI, 2]))
+                        If cEmp == cCodigo .And. !Empty(cFil) .And. cFil != "@@@@" .And. cFil != "@@"
+                            lExiste := .F.
+                            For nJ := 1 To Len(aFiliais)
+                                If Alltrim(cValToChar(aFiliais[nJ])) == cFil
+                                    lExiste := .T.
+                                    Exit
+                                EndIf
+                            Next nJ
+                            If !lExiste
+                                AAdd(aFiliais, cFil)
+                            EndIf
+                        EndIf
+                    EndIf
+                Next nI
+            EndIf
         EndIf
     Recover
-        lFalhou  := .T.
         aFiliais := {}
-        ConOut("[IA Command] IACUSRSYNC: falha ao carregar filiais da empresa " + cCodigo + " para usuario " + cUsuario)
+        ConOut("[IA Command] IACUSRSYNC: falha ao consultar permissoes via PswRet para empresa " + cCodigo + " usuario " + cUsuario)
     End Sequence
 
-    Begin Sequence
-        RpcClearEnv()
-        If !Empty(cEmpOrig) .And. !Empty(cFilOrig)
-            RpcSetEnv(cEmpOrig, cFilOrig, , , GetEnvServer(), {})
-        EndIf
-    Recover
-        ConOut("[IA Command] IACUSRSYNC: falha ao restaurar ambiente original apos LoadFils.")
-    End Sequence
-
-    If lFalhou
-        aFiliais := {}
+    If Len(aFiliais) == 0
+        AAdd(aFiliais, cFilRef)
     EndIf
 
 Return aFiliais
 
-Static Function IACSX6LstCad(cParam, aCodigos)
+Static Function IACSX6Lst(cParam, aCodigos)
     Local cAliasAtu := Alias()
     Local aRet      := {}
     Local nI        := 0
@@ -433,31 +456,67 @@ Static Function IACSX6LstCad(cParam, aCodigos)
         EndIf
     Next nI
 
+    If Len(aRet) == 0
+        SX6->(DbGoTop())
+        While !SX6->(Eof())
+            cDel := IACCampo("D_E_L_E_T_")
+            If Empty(cDel) .And. IACCampo("X6_VAR") == cVar
+                cFil   := Alltrim(IACCampo("X6_FIL"))
+                cValor := IACCampo("X6_CONTEUD")
+                If !Empty(cFil) .And. !Empty(cValor)
+                    AAdd(aRet, { cFil, cValor })
+                EndIf
+            EndIf
+            SX6->(DbSkip())
+        EndDo
+    EndIf
+
     If !Empty(cAliasAtu) .And. Select(cAliasAtu) > 0
         DbSelectArea(cAliasAtu)
     EndIf
 
 Return aRet
 
-Static Function IACEmpIdCad(aCodigos, aParamEmp)
-    Local nRet := 0
+Static Function IACEmpId(aCodigos, aParamEmp)
+    Local nRet    := 0
+    Local cEmpAtu := Alltrim(cValToChar(cEmpAnt))
+    Local cFilAtu := Alltrim(cValToChar(cFilAnt))
+    Local cCod    := ""
+    Local cFil    := ""
+    Local nI      := 0
+
+    For nI := 1 To Len(aCodigos)
+        cCod := Alltrim(cValToChar(aCodigos[nI, 1]))
+        cFil := Alltrim(cValToChar(aCodigos[nI, 2]))
+
+        If (!Empty(cEmpAtu) .And. cCod == cEmpAtu) .Or. ;
+           (!Empty(cFilAtu) .And. cFil == cFilAtu) .Or. ;
+           (!Empty(cCod) .And. !Empty(cFilAtu) .And. Left(cFilAtu, Len(cCod)) == cCod) .Or. ;
+           (!Empty(cFilAtu) .And. !Empty(cFil) .And. Left(cFil, Len(cFilAtu)) == cFilAtu)
+            nRet := IACEmpIDC(cCod, aParamEmp)
+            If nRet > 0
+                Return nRet
+            EndIf
+        EndIf
+    Next nI
+
     If Len(aCodigos) > 0
-        nRet := IACEmpIdCCad(aCodigos[1, 1], aParamEmp)
+        nRet := IACEmpIDC(aCodigos[1, 1], aParamEmp)
     EndIf
 Return nRet
 
-Static Function IACEmpIdCCad(cCodigoProtheus, aParamEmp)
-    Local cFilBus := Left(Alltrim(cCodigoProtheus), 2)
+Static Function IACEmpIDC(cCodigoProtheus, aParamEmp)
+    Local cFilBus := Left(Alltrim(cValToChar(cCodigoProtheus)), 2)
     Local nI      := 0
     For nI := 1 To Len(aParamEmp)
         If ValType(aParamEmp[nI]) == "A" .And. Len(aParamEmp[nI]) >= 2 .And. ;
-           Alltrim(aParamEmp[nI, 1]) == cFilBus
-            Return Val(Alltrim(aParamEmp[nI, 2]))
+           Alltrim(cValToChar(aParamEmp[nI, 1])) == cFilBus
+            Return Val(Alltrim(cValToChar(aParamEmp[nI, 2])))
         EndIf
     Next nI
 Return 0
 
-Static Function IACCodEmpCad(cGrp, cFil, cEmpSM0)
+Static Function IACCodEmp(cGrp, cFil, cEmpSM0)
     Local cRet := ""
     If !Empty(cFil)
         cRet := Left(Alltrim(cFil), 2)
@@ -470,7 +529,7 @@ Static Function IACCodEmpCad(cGrp, cFil, cEmpSM0)
     EndIf
 Return cRet
 
-Static Function IACEmpOkCad(aEmpUsr, cGrp, cEmp, cFil)
+Static Function IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
     Local nI   := 0
     Local cVal := ""
     For nI := 1 To Len(aEmpUsr)
@@ -484,7 +543,7 @@ Static Function IACEmpOkCad(aEmpUsr, cGrp, cEmp, cFil)
     Next nI
 Return .F.
 
-Static Function IACAddCodCad(aLista, cCodigo, cFilReferencia, cNome)
+Static Function IACAddCod(aLista, cCodigo, cFilReferencia, cNome)
     Local nI := 0
     If Empty(cCodigo)
         Return
@@ -497,7 +556,7 @@ Static Function IACAddCodCad(aLista, cCodigo, cFilReferencia, cNome)
     AAdd(aLista, { Alltrim(cCodigo), Alltrim(cFilReferencia), Alltrim(cNome) })
 Return
 
-Static Function IACAddEmpCad(aEmpresas, nEmpresaId, cCodigoProtheus, cNomeProtheus)
+Static Function IACAddEmp(aEmpresas, nEmpresaId, cCodigoProtheus, cNomeProtheus)
     Local nI := 0
     For nI := 1 To Len(aEmpresas)
         If aEmpresas[nI, 1] == nEmpresaId
@@ -550,6 +609,9 @@ Return cValToChar(cTexto)
 
 Static Function IACUrlBase()
     Local cBase := Alltrim(GetMV("MV_IACURL", , ""))
+    If Empty(cBase)
+        cBase := IAC_HUB_URL_PADRAO
+    EndIf
 Return cBase
 
 Static Function IACUrlSync()

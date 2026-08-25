@@ -262,6 +262,25 @@ function _garantirColunasCompatibilidade() {
     `);
   } catch (_) {}
   try {
+    _db.exec(`
+      CREATE TABLE IF NOT EXISTS protheus_web_login_challenges (
+        id             TEXT PRIMARY KEY,
+        celular        TEXT NOT NULL,
+        codigo_hash    TEXT NOT NULL,
+        expira_em      TEXT NOT NULL,
+        usado_em       TEXT DEFAULT NULL,
+        tentativas     INTEGER NOT NULL DEFAULT 0,
+        ip             TEXT DEFAULT NULL,
+        user_agent     TEXT DEFAULT NULL,
+        criado_em      TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_web_login_celular
+        ON protheus_web_login_challenges (celular, criado_em);
+      CREATE INDEX IF NOT EXISTS idx_iac_protheus_web_login_expira
+        ON protheus_web_login_challenges (expira_em);
+    `);
+  } catch (_) {}
+  try {
     _adicionarColunaSeFaltar('protheus_chat_messages', 'interpretation_log_id', 'TEXT DEFAULT NULL');
     _db.exec(`
       CREATE TABLE IF NOT EXISTS protheus_chat_favorites (

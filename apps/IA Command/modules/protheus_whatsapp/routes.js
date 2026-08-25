@@ -25,6 +25,8 @@ const loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-fil
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
+const WEB_LOGIN_TTL_MS = 5 * 60 * 1000;
+const WEB_LOGIN_MAX_TENTATIVAS = 5;
 
 function perfLog(etapa, inicio, dados = {}) {
   const duracaoMs = Date.now() - inicio;
@@ -77,6 +79,120 @@ function consumirLaunchTicket(ticket) {
     db.prepare('DELETE FROM protheus_chat_launch_tokens WHERE ticket = ?').run(ticket);
   }
   return info || null;
+}
+
+function hashCodigoLogin(celular, codigo, id) {
+  return crypto
+    .createHash('sha256')
+    .update(`${id}:${celular}:${codigo}:${PROTHEUS_SECRET || process.env.SESSION_SECRET || 'iahub'}`)
+    .digest('hex');
+}
+
+function limparLoginChallenges() {
+  getDB().prepare(`
+    DELETE FROM protheus_web_login_challenges
+     WHERE expira_em < ?
+        OR usado_em IS NOT NULL
+  `).run(new Date(Date.now() - 60 * 60 * 1000).toISOString());
+}
+
+function criarLoginChallenge(req, celular, codigo) {
+  limparLoginChallenges();
+  const id = crypto.randomUUID();
+  const agora = new Date();
+  const expiraEm = new Date(agora.getTime() + WEB_LOGIN_TTL_MS);
+  getDB().prepare(`
+    INSERT INTO protheus_web_login_challenges
+      (id, celular, codigo_hash, expira_em, ip, user_agent, criado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    celular,
+    hashCodigoLogin(celular, codigo, id),
+    expiraEm.toISOString(),
+    req.ip || req.socket?.remoteAddress || null,
+    String(req.headers['user-agent'] || '').slice(0, 500) || null,
+    agora.toISOString()
+  );
+  return { id, expiraEm: expiraEm.toISOString() };
+}
+
+function carregarPermissoesWebPorCelular(celular) {
+  const rows = userPermissionsStore.listarAtivosPorCelular(celular);
+  if (!rows.length) return null;
+
+  const principal = rows[0];
+  const empresasPermitidas = [];
+  const empresasVistas = new Set();
+  const filiaisPorEmpresa = new Map();
+
+  for (const row of rows) {
+    for (const emp of row.empresasPermitidas || []) {
+      const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
+      if (!id || empresasVistas.has(id)) continue;
+      empresasVistas.add(id);
+      empresasPermitidas.push(emp);
+    }
+    for (const item of row.filiaisPermitidas || []) {
+      const codigo = String(item.codigoProtheus || item.codigo_protheus || '').trim();
+      if (!codigo) continue;
+      if (!filiaisPorEmpresa.has(codigo)) filiaisPorEmpresa.set(codigo, new Set());
+      for (const filial of (Array.isArray(item.filiais) ? item.filiais : [])) {
+        const valor = String(filial || '').trim();
+        if (valor) filiaisPorEmpresa.get(codigo).add(valor);
+      }
+    }
+  }
+
+  const filiaisPermitidas = [...filiaisPorEmpresa.entries()].map(([codigoProtheus, filiais]) => ({
+    codigoProtheus,
+    filiais: [...filiais],
+  }));
+
+  return {
+    empresaId: principal.empresa_id,
+    celular: principal.celular,
+    usuarioNome: principal.usuario_nome || principal.usuario_id || principal.celular,
+    filial: principal.filial_atual || null,
+    empresasPermitidas,
+    filiaisPermitidas,
+  };
+}
+
+function validarLoginChallenge(challengeId, celular, codigo) {
+  const id = String(challengeId || '').trim();
+  const numero = tokenService.normalizarCelular(celular);
+  const code = String(codigo || '').replace(/\D/g, '');
+  if (!id || !numero || code.length !== 6) return { ok: false, error: 'Codigo invalido.' };
+
+  const db = getDB();
+  const row = db.prepare(`
+    SELECT *
+      FROM protheus_web_login_challenges
+     WHERE id = ?
+       AND celular = ?
+     LIMIT 1
+  `).get(id, numero);
+  if (!row || row.usado_em) return { ok: false, error: 'Codigo expirado ou invalido.' };
+  if (new Date(row.expira_em).getTime() < Date.now()) return { ok: false, error: 'Codigo expirado.' };
+  if (Number(row.tentativas || 0) >= WEB_LOGIN_MAX_TENTATIVAS) return { ok: false, error: 'Limite de tentativas excedido.' };
+
+  const informado = hashCodigoLogin(numero, code, id);
+  if (informado !== row.codigo_hash) {
+    db.prepare(`
+      UPDATE protheus_web_login_challenges
+         SET tentativas = tentativas + 1
+       WHERE id = ?
+    `).run(id);
+    return { ok: false, error: 'Codigo invalido.' };
+  }
+
+  db.prepare(`
+    UPDATE protheus_web_login_challenges
+       SET usado_em = ?
+     WHERE id = ?
+  `).run(new Date().toISOString(), id);
+  return { ok: true };
 }
 
 function requireTokenSessao(req, res, next) {
@@ -777,6 +893,82 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
   // ── Pagina do chat (servida como estatico, sem auth de sessao IAHub) ──
   app.get('/api/ia-command/protheus/chat', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'protheus-chat.html'));
+  });
+
+  app.get('/api/ia-command/protheus/web-login', (_req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'protheus-web-login.html'));
+  });
+
+  app.post('/api/ia-command/protheus/web-login/start', async (req, res) => {
+    const inicio = Date.now();
+    try {
+      const celular = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
+      if (celular.length < 10 || celular.length > 15) {
+        return res.status(400).json({ error: 'Informe o WhatsApp com DDI e DDD.' });
+      }
+
+      const permissoes = carregarPermissoesWebPorCelular(celular);
+      if (!permissoes) {
+        perfLog('POST /web-login/start', inicio, { status: 404, celular });
+        return res.status(404).json({ error: 'Numero nao encontrado ou sem permissao sincronizada.' });
+      }
+
+      const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+      const challenge = criarLoginChallenge(req, celular, codigo);
+      await enviarTextoWhatsApp({
+        empresaId: permissoes.empresaId,
+        numero: celular,
+        texto: `Seu codigo de acesso ao IA Command e ${codigo}. Ele expira em 5 minutos.`,
+      });
+
+      perfLog('POST /web-login/start', inicio, { status: 200, empresaId: permissoes.empresaId, celular });
+      res.json({
+        ok: true,
+        challengeId: challenge.id,
+        expiraEm: challenge.expiraEm,
+        destino: celular.replace(/^(\d{2})(\d{2})(.*)$/, '+$1 $2 *****-$3').slice(0, 24),
+      });
+    } catch (err) {
+      perfLog('POST /web-login/start', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/ia-command/protheus/web-login/verify', (req, res) => {
+    const inicio = Date.now();
+    try {
+      const celular = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
+      const validacao = validarLoginChallenge(req.body?.challengeId || req.body?.challenge_id, celular, req.body?.codigo);
+      if (!validacao.ok) {
+        perfLog('POST /web-login/verify', inicio, { status: 400, motivo: validacao.error });
+        return res.status(400).json({ error: validacao.error });
+      }
+
+      const permissoes = carregarPermissoesWebPorCelular(celular);
+      if (!permissoes) {
+        return res.status(403).json({ error: 'Permissao sincronizada nao encontrada.' });
+      }
+
+      const { token, expiraEm } = tokenService.emitir({
+        empresaId: permissoes.empresaId,
+        celular: permissoes.celular,
+        filial: permissoes.filial,
+        empresasPermitidas: permissoes.empresasPermitidas,
+        filiaisPermitidas: permissoes.filiaisPermitidas,
+      });
+
+      perfLog('POST /web-login/verify', inicio, { status: 200, empresaId: permissoes.empresaId, celular });
+      res.json({
+        ok: true,
+        token,
+        expiraEm,
+        usuario: permissoes.usuarioNome,
+        chatUrl: `/api/ia-command/protheus/chat?token=${encodeURIComponent(token)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}`,
+      });
+    } catch (err) {
+      perfLog('POST /web-login/verify', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.get('/api/ia-command/protheus/launch-token', (req, res) => {
