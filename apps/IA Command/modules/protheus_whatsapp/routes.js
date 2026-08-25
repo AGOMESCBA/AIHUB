@@ -12,6 +12,7 @@
 
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 const tokenService = require('./token-service');
 const sessionStore = require('./session-store');
 const chatService = require('./service');

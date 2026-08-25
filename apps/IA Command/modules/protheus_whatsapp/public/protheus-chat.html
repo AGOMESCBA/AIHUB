@@ -486,11 +486,11 @@
   .header-name { font-size: 15.5px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .header-sub { font-size: 12px; color: var(--wa-chrome-sub); display: flex; align-items: center; gap: 5px; }
   .header-sub .dot { width: 6px; height: 6px; border-radius: 50%; background: #25d366; box-shadow: 0 0 0 2px rgba(37, 211, 102, 0.16); flex: none; }
-  .empresa-select-wrap { flex: none; position: relative; display: none; max-width: min(460px, 44vw); }
-  .empresa-select-wrap.visible { display: block; }
-  .empresa-select {
-    min-width: 240px;
-    max-width: 100%;
+  /* Botao unico no header que abre o modal de empresa+filial (substitui os
+     antigos empresa-select e filial-select separados). */
+  .escopo-select-btn {
+    flex: none;
+    max-width: min(320px, 40vw);
     height: 40px;
     border: 1px solid var(--wa-border);
     border-radius: 8px;
@@ -499,118 +499,55 @@
     font: inherit;
     font-size: 12.5px;
     font-weight: 600;
-    padding: 0 30px 0 10px;
-    outline: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .empresa-select:hover,
-  .empresa-select:focus-visible { background: var(--wa-select-bg-hover); outline: none; }
-  .empresa-select .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .empresa-select .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; }
-  .empresa-menu {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: min(420px, 86vw);
-    max-height: min(360px, 70vh);
-    overflow-y: auto;
-    padding: 7px;
-    border: 1px solid var(--wa-border);
-    border-radius: 8px;
-    background: var(--wa-sidebar);
-    color: var(--wa-text);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
-    display: none;
-    z-index: 20;
-  }
-  .empresa-select-wrap.open .empresa-menu { display: block; }
-  .empresa-option {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 8px 9px;
-    border-radius: 7px;
-    cursor: pointer;
-    font-size: 12.5px;
-    line-height: 1.25;
-  }
-  .empresa-option:hover { background: var(--wa-sidebar-hover); }
-  .empresa-option input { width: 15px; height: 15px; flex: none; accent-color: var(--wa-accent); }
-  .empresa-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .empresa-option.all { border-bottom: 1px solid var(--wa-border); border-radius: 7px 7px 0 0; margin-bottom: 5px; font-weight: 700; }
-
-  /* Arvore de selecao de filial/empresa Protheus (LOBO_GUARA) — mesmo padrao
-     visual do empresa-select (dropdown + checkboxes), mas hierarquico
-     (empresa Protheus -> filiais) e escondido quando nenhuma empresa
-     selecionada e LOBO_GUARA validada (ver carregarFilialTree). */
-  .filial-select-wrap { position: relative; display: none; }
-  .filial-select-wrap.visible { display: block; }
-  .filial-select {
-    height: 40px;
-    border: 1px solid var(--wa-border);
-    border-radius: 8px;
-    background: var(--wa-select-bg);
-    color: var(--wa-chrome-text);
-    font: inherit;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 0 12px;
+    padding: 0 10px;
     outline: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     gap: 7px;
-    max-width: 220px;
     transition: background .12s ease, border-color .12s ease;
   }
-  .filial-select:hover, .filial-select:focus-visible { background: var(--wa-select-bg-hover); outline: none; }
-  .filial-select-wrap.open .filial-select { border-color: var(--wa-accent); background: var(--wa-select-bg-hover); }
-  .filial-select .icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
-  .filial-select .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .filial-select .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; transition: transform .12s ease; }
-  .filial-select-wrap.open .filial-select .chevron { transform: rotate(180deg); }
-  .filial-menu {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 0;
-    width: min(400px, 86vw);
-    max-height: min(440px, 70vh);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 0;
-    border: 1px solid var(--wa-border);
-    border-radius: 10px;
-    background: var(--wa-sidebar);
-    color: var(--wa-text);
-    box-shadow: 0 -14px 32px rgba(0, 0, 0, 0.32);
-    display: none;
-    z-index: 20;
-  }
-  .filial-select-wrap.open .filial-menu { display: flex; }
-  .filial-menu-header {
-    flex: none;
-    padding: 9px 9px 7px;
-    border-bottom: 1px solid var(--wa-border);
-    background: var(--wa-sidebar);
-  }
-  .filial-menu-search {
-    width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--wa-border);
-    border-radius: 7px; background: var(--wa-select-bg); color: var(--wa-chrome-text); font: inherit;
-    font-size: 12.5px; transition: border-color .12s ease;
-  }
-  .filial-menu-search:focus { outline: none; border-color: var(--wa-accent); }
-  .filial-menu-body { flex: 1; overflow-y: auto; padding: 6px; }
-  .filial-option-todas {
-    display: flex; align-items: center; gap: 9px; padding: 8px 9px; margin: 0 6px 4px;
+  .escopo-select-btn:hover, .escopo-select-btn:focus-visible { background: var(--wa-select-bg-hover); outline: none; }
+  .escopo-select-btn .icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
+  .escopo-select-btn .label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .escopo-select-btn .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; }
+
+  /* Modal de selecao de empresa + filial (arvore hierarquica: empresa IAHub
+     -> empresa Protheus -> filial). Casco reaproveita .favorites-modal* (ver
+     regras acima); aqui so o especifico da arvore de 2 niveis. */
+  .escopo-modal .favorites-modal-search { margin-bottom: 0; }
+  .escopo-modal-todas { padding: 6px 14px 0; }
+  .escopo-option-todas {
+    display: flex; align-items: center; gap: 9px; padding: 8px 9px;
     border-radius: 7px; cursor: pointer; font-size: 12.5px; font-weight: 700;
+    border-bottom: 1px solid var(--wa-border);
   }
-  .filial-option-todas:hover { background: var(--wa-sidebar-hover); }
-  .filial-option-todas input { width: 15px; height: 15px; flex: none; accent-color: var(--wa-accent); }
+  .escopo-option-todas:hover { background: var(--wa-sidebar-hover); }
+  .escopo-option-todas input { width: 15px; height: 15px; flex: none; accent-color: var(--wa-accent); }
+  .escopo-modal-body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px 14px; }
+  .escopo-modal-empty { padding: 24px 12px; font-size: 12.5px; opacity: 0.65; text-align: center; }
+
+  /* Nivel 0 — empresa-cliente do IAHub. Visual mais forte que os niveis
+     internos (Protheus), para deixar clara a hierarquia. */
+  .escopo-empresa-iahub { margin-bottom: 4px; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; }
+  .escopo-empresa-iahub-row {
+    display: flex; align-items: center; gap: 8px; padding: 10px 10px;
+    cursor: pointer; font-size: 13px; font-weight: 700; background: var(--wa-panel);
+  }
+  .escopo-empresa-iahub-row:hover { background: var(--wa-sidebar-hover); }
+  .escopo-empresa-iahub-row input[type=checkbox] { width: 16px; height: 16px; flex: none; accent-color: var(--wa-accent); cursor: pointer; }
+  .escopo-empresa-iahub-row .toggle {
+    flex: none; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; opacity: 0.7; border-radius: 5px; transition: transform .12s ease;
+  }
+  .escopo-empresa-iahub-row.expandido .toggle { transform: rotate(90deg); }
+  .escopo-empresa-iahub-row .toggle svg { width: 12px; height: 12px; }
+  .escopo-empresa-iahub-row .nome { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+  .escopo-empresa-iahub-corpo { display: none; padding: 6px 8px 8px; }
+  .escopo-empresa-iahub-row.expandido + .escopo-empresa-iahub-corpo { display: block; }
+  .escopo-empresa-iahub-loading, .escopo-empresa-iahub-vazio { padding: 10px 8px; font-size: 12px; opacity: 0.6; }
+
+  /* Nivel 1 — empresa Protheus (dentro de uma empresa IAHub expandida). */
   .filial-empresa-grupo { margin-bottom: 3px; }
   .filial-empresa-grupo + .filial-empresa-grupo { border-top: 1px solid var(--wa-border); padding-top: 3px; }
   .filial-empresa-row {
@@ -647,11 +584,20 @@
     border-left: 2px solid var(--wa-border);
   }
   .filial-empresa-row.expandido + .filial-lista-filiais { display: block; }
+
+  /* Nivel 2 — filial individual. */
   .filial-option { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 7px; cursor: pointer; font-size: 12px; }
   .filial-option:hover { background: var(--wa-sidebar-hover); }
   .filial-option input { width: 14px; height: 14px; flex: none; accent-color: var(--wa-accent); cursor: pointer; }
   .filial-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.92; }
   .filial-menu-empty { padding: 16px 12px; font-size: 12px; opacity: 0.65; text-align: center; }
+
+  /* Botao "Cancelar" plano no rodape do modal (ao lado do .favorite-run). */
+  .favorites-close-plain {
+    border: 1px solid var(--wa-border); border-radius: 7px; padding: 7px 11px;
+    background: transparent; color: var(--wa-text-secondary); font-size: 12px; font-weight: 700; cursor: pointer;
+  }
+  .favorites-close-plain:hover { background: var(--wa-sidebar-hover); }
 
   /* Badge de escopo de filial na bolha de mensagem e no cabecalho do grid */
   .bubble-filial-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; opacity: 0.75; margin-left: 6px; }
@@ -1391,8 +1337,7 @@
     .app-frame { grid-template-columns: 1fr; }
     .app-frame.focus-mode:not(.sidebar-collapsed) { grid-template-columns: 1fr; }
     .sidebar { display: none; }
-    .empresa-select-wrap { max-width: min(260px, 46vw); }
-    .empresa-select { min-width: 150px; }
+    .escopo-select-btn { max-width: min(220px, 46vw); }
     .app-frame.focus-mode .chat-footer { padding: 10px 12px; }
     .app-frame.focus-mode .input-wrap { min-height: 78px; }
   }
@@ -1454,13 +1399,11 @@
         <div class="header-name" id="headerTitle">IA Command</div>
         <div class="header-sub"><span class="dot"></span> online · respondendo em tempo real</div>
       </div>
-      <div class="empresa-select-wrap" id="empresaSelectWrap" title="Empresas consultadas">
-        <button class="empresa-select" id="empresaSelect" type="button" aria-label="Empresas consultadas" aria-haspopup="true" aria-expanded="false">
-          <span class="label" id="empresaSelectLabel">Empresa</span>
-          <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="empresa-menu" id="empresaMenu" role="menu"></div>
-      </div>
+      <button class="escopo-select-btn" id="escopoSelectBtn" type="button" title="Empresa e filial" aria-label="Selecionar empresa e filial" aria-haspopup="dialog">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
+        <span class="label" id="escopoSelectLabel">Todas as empresas</span>
+        <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
       <button class="focus-toggle-btn" id="btnModoFoco" type="button" title="Maximizar tela de conversa" aria-label="Maximizar tela de conversa" aria-pressed="false">
         <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3"/><path d="M16 3h3a2 2 0 012 2v3"/><path d="M8 21H5a2 2 0 01-2-2v-3"/><path d="M16 21h3a2 2 0 002-2v-3"/></svg>
       </button>
@@ -1534,25 +1477,6 @@
       <div class="reset-toast" id="resetToast">Contexto da conversa reiniciado</div>
 
       <form class="chat-footer" id="chatForm">
-        <div class="filial-select-wrap" id="filialSelectWrap" title="Filiais consultadas">
-          <button class="filial-select" id="filialSelect" type="button" aria-label="Filiais consultadas" aria-haspopup="true" aria-expanded="false">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></svg>
-            <span class="label" id="filialSelectLabel">Todas as filiais</span>
-            <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-          </button>
-          <div class="filial-menu" id="filialMenu" role="menu">
-            <div class="filial-menu-header">
-              <input type="search" class="filial-menu-search" id="filialMenuSearch" placeholder="Buscar empresa ou filial" autocomplete="off">
-            </div>
-            <div class="filial-menu-body">
-              <label class="filial-option-todas">
-                <input type="checkbox" id="filialOptionTodas">
-                <span>Todas as filiais</span>
-              </label>
-              <div id="filialMenuArvore"></div>
-            </div>
-          </div>
-        </div>
         <div class="input-wrap">
           <textarea id="msgInput" rows="1" placeholder="Pergunte algo sobre o ERP..." autocomplete="off" aria-label="Mensagem"></textarea>
         </div>
@@ -1617,6 +1541,37 @@
       </div>
     </div>
   </section>
+</div>
+
+<div class="favorites-modal-backdrop" id="escopoModal" aria-hidden="true">
+  <div class="favorites-modal escopo-modal" role="dialog" aria-modal="true" aria-labelledby="escopoModalTitle">
+    <div class="favorites-modal-head">
+      <div class="favorites-modal-title">
+        <strong id="escopoModalTitle">Empresa e filial</strong>
+        <span>Selecione o escopo da consulta</span>
+      </div>
+      <div class="favorites-modal-actions">
+        <button class="favorites-close" type="button" id="btnFecharEscopo" title="Fechar" aria-label="Fechar">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <label class="favorites-modal-search">
+      <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 10-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0a4.5 4.5 0 110-9 4.5 4.5 0 010 9z"/></svg>
+      <input type="search" id="escopoSearch" placeholder="Buscar empresa ou filial" autocomplete="off">
+    </label>
+    <div class="escopo-modal-todas">
+      <label class="escopo-option-todas">
+        <input type="checkbox" id="escopoOptionTodas">
+        <span>Todas as filiais das empresas selecionadas</span>
+      </label>
+    </div>
+    <div class="escopo-modal-body" id="escopoModalBody"></div>
+    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+      <button class="favorites-close-plain" type="button" id="btnEscopoCancelar">Cancelar</button>
+      <button class="favorite-run" type="button" id="btnEscopoAplicar">Aplicar</button>
+    </div>
+  </div>
 </div>
 
 <div class="favorites-modal-backdrop" id="favoritesModal" aria-hidden="true">
@@ -1903,17 +1858,15 @@
   const btnCancelarSelecao = document.getElementById('btnCancelarSelecao');
   const btnExcluirSelecionadas = document.getElementById('btnExcluirSelecionadas');
   const btnLimparChat = document.getElementById('btnLimparChat');
-  const empresaSelectWrap = document.getElementById('empresaSelectWrap');
-  const empresaSelect = document.getElementById('empresaSelect');
-  const empresaSelectLabel = document.getElementById('empresaSelectLabel');
-  const empresaMenu = document.getElementById('empresaMenu');
-  const filialSelectWrap = document.getElementById('filialSelectWrap');
-  const filialSelect = document.getElementById('filialSelect');
-  const filialSelectLabel = document.getElementById('filialSelectLabel');
-  const filialMenu = document.getElementById('filialMenu');
-  const filialMenuSearch = document.getElementById('filialMenuSearch');
-  const filialOptionTodas = document.getElementById('filialOptionTodas');
-  const filialMenuArvore = document.getElementById('filialMenuArvore');
+  const escopoSelectBtn = document.getElementById('escopoSelectBtn');
+  const escopoSelectLabel = document.getElementById('escopoSelectLabel');
+  const escopoModal = document.getElementById('escopoModal');
+  const btnFecharEscopo = document.getElementById('btnFecharEscopo');
+  const btnEscopoCancelar = document.getElementById('btnEscopoCancelar');
+  const btnEscopoAplicar = document.getElementById('btnEscopoAplicar');
+  const escopoSearch = document.getElementById('escopoSearch');
+  const escopoOptionTodas = document.getElementById('escopoOptionTodas');
+  const escopoModalBody = document.getElementById('escopoModalBody');
   const btnModoFoco = document.getElementById('btnModoFoco');
   const btnTema = document.getElementById('btnTema');
   const headerActions = document.getElementById('headerActions');
@@ -2189,76 +2142,16 @@
     empresaAtualId = Number(empresasSelecionadasIds[0] || empresasDisponiveis[0]?.empresaId || empresasDisponiveis[0]?.empresa_id || 0) || null;
   }
 
-  function atualizarLabelEmpresaSelect() {
-    const total = idsEmpresasDisponiveis().length;
-    if (!empresasSelecionadasIds.length) {
-      empresaSelectLabel.textContent = 'Selecione empresa';
-    } else if (total > 1 && empresasSelecionadasIds.length === total) {
-      empresaSelectLabel.textContent = 'Todas as empresas';
-    } else if (empresasSelecionadasIds.length === 1) {
-      const emp = empresasDisponiveis.find(item => Number(item?.empresaId || item?.empresa_id || item?.id || 0) === empresasSelecionadasIds[0]);
-      empresaSelectLabel.textContent = labelEmpresa(emp);
-    } else {
-      empresaSelectLabel.textContent = `${empresasSelecionadasIds.length} empresas`;
-    }
-    empresaSelect.title = empresaSelectLabel.textContent;
-  }
-
-  function renderEmpresaSelect() {
-    empresaMenu.innerHTML = '';
+  // Recalcula empresasSelecionadasIds/empresaAtualId contra o universo atual
+  // de empresasDisponiveis (sem tocar no DOM) — reaproveitado tanto pelo
+  // carregamento inicial quanto por renderEscopoModal, para o modal nunca
+  // mostrar um estado que o resto da tela nao reflete.
+  function normalizarEmpresasSelecionadas() {
     const ids = idsEmpresasDisponiveis();
     if (!empresasSelecionadasIds.length && empresaAtualId) empresasSelecionadasIds = [empresaAtualId];
     empresasSelecionadasIds = empresasSelecionadasIds.filter(id => ids.includes(id));
     if (!empresasSelecionadasIds.length && ids.length) empresasSelecionadasIds = [ids[0]];
     atualizarEmpresaAtualPorSelecao();
-
-    if (ids.length > 1) {
-      const allLabel = document.createElement('label');
-      allLabel.className = 'empresa-option all';
-      const allInput = document.createElement('input');
-      allInput.type = 'checkbox';
-      allInput.checked = empresasSelecionadasIds.length === ids.length;
-      allInput.addEventListener('change', async () => {
-        empresasSelecionadasIds = allInput.checked ? ids.slice() : [ids[0]];
-        atualizarEmpresaAtualPorSelecao();
-        renderEmpresaSelect();
-        await trocarEscopoEmpresa();
-      });
-      const allText = document.createElement('span');
-      allText.textContent = 'Todas as empresas';
-      allLabel.appendChild(allInput);
-      allLabel.appendChild(allText);
-      empresaMenu.appendChild(allLabel);
-    }
-
-    empresasDisponiveis.forEach((emp) => {
-      const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
-      if (!id) return;
-      const item = document.createElement('label');
-      item.className = 'empresa-option';
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.value = String(id);
-      input.checked = empresasSelecionadasIds.includes(id);
-      input.addEventListener('change', async () => {
-        if (input.checked) {
-          if (!empresasSelecionadasIds.includes(id)) empresasSelecionadasIds.push(id);
-        } else {
-          empresasSelecionadasIds = empresasSelecionadasIds.filter(itemId => itemId !== id);
-          if (!empresasSelecionadasIds.length) empresasSelecionadasIds = [id];
-        }
-        atualizarEmpresaAtualPorSelecao();
-        renderEmpresaSelect();
-        await trocarEscopoEmpresa();
-      });
-      const span = document.createElement('span');
-      span.textContent = labelEmpresa(emp);
-      item.appendChild(input);
-      item.appendChild(span);
-      empresaMenu.appendChild(item);
-    });
-    atualizarLabelEmpresaSelect();
-    empresaSelectWrap.classList.toggle('visible', empresasDisponiveis.length > 0);
   }
 
   async function carregarEmpresasDisponiveis() {
@@ -2270,7 +2163,8 @@
       empresasDisponiveis = [{ empresaId: empresaAtualId, nome: `Empresa ${empresaAtualId}` }];
     }
     empresasSelecionadasIds = empresaAtualId ? [empresaAtualId] : [];
-    renderEmpresaSelect();
+    normalizarEmpresasSelecionadas();
+    atualizarLabelEscopoSelect();
     bootLog('empresas:fim', { total: empresasDisponiveis.length, empresaAtualId });
   }
 
@@ -2283,8 +2177,9 @@
       empresasDisponiveis = [{ empresaId: empresaAtualId, nome: `Empresa ${empresaAtualId}` }];
     }
     empresasSelecionadasIds = empresaAtualId ? [empresaAtualId] : [];
+    normalizarEmpresasSelecionadas();
     sessoesCache = Array.isArray(data.sessoes) ? data.sessoes : [];
-    renderEmpresaSelect();
+    atualizarLabelEscopoSelect();
     renderSessionList();
     bootLog('bootstrap:fim', {
       empresas: empresasDisponiveis.length,
@@ -2295,8 +2190,6 @@
   }
 
   async function trocarEscopoEmpresa() {
-    empresaSelectWrap.classList.remove('open');
-    empresaSelect.setAttribute('aria-expanded', 'false');
     limparEstadoDaEmpresaAtual();
     resetarSelecaoFilial();
     try {
@@ -2311,7 +2204,6 @@
     } catch (err) {
       showError('Falha ao trocar empresa: ' + err.message);
     }
-    msgInput.focus();
   }
 
   // ── Arvore de selecao de filial/empresa Protheus (LOBO_GUARA) ──────────
@@ -2331,11 +2223,10 @@
     filialFiliaisAvulsas = new Set();
     filialEmpresasExpandidas = new Set();
     filialUiTouched = false;
-    filialSelectWrap.classList.remove('visible', 'open');
   }
 
   async function carregarFilialTree() {
-    if (!empresasSelecionadasIds.length) { filialSelectWrap.classList.remove('visible'); return; }
+    if (!empresasSelecionadasIds.length) { filialArvoreDisponivel = []; atualizarLabelEscopoSelect(); return; }
     const data = await api('/filial-tree');
     filialArvoreDisponivel = data && data.disponivel && Array.isArray(data.empresas) ? data.empresas : [];
     // Poda selecoes que nao existem mais na arvore atual (empresa/filial
@@ -2344,28 +2235,39 @@
     const filiaisValidas = new Set(filialArvoreDisponivel.flatMap(e => e.filiais.map(f => f.filialChave)));
     filialEmpresasInteiras = new Set([...filialEmpresasInteiras].filter(cod => empresasValidas.has(cod)));
     filialFiliaisAvulsas = new Set([...filialFiliaisAvulsas].filter(chave => filiaisValidas.has(chave)));
-    filialSelectWrap.classList.toggle('visible', filialArvoreDisponivel.length > 0);
-    renderFilialMenu();
-    atualizarLabelFilialSelect();
+    if (escopoModal.classList.contains('active')) renderEscopoModal(escopoSearch.value);
+    atualizarLabelEscopoSelect();
   }
 
   function selecaoFilialVazia() {
     return !filialEmpresasInteiras.size && !filialFiliaisAvulsas.size;
   }
 
-  function atualizarLabelFilialSelect() {
-    if (selecaoFilialVazia()) {
-      filialSelectLabel.textContent = 'Todas as filiais';
+  // Label do botao unico do header — combina as duas dimensoes (empresa
+  // IAHub + filial Protheus) num resumo curto.
+  function atualizarLabelEscopoSelect() {
+    const totalEmpresasIAHub = idsEmpresasDisponiveis().length;
+    const partes = [];
+    if (!empresasSelecionadasIds.length) {
+      partes.push('Selecione empresa');
+    } else if (totalEmpresasIAHub > 1 && empresasSelecionadasIds.length === totalEmpresasIAHub) {
+      partes.push('Todas as empresas');
+    } else if (empresasSelecionadasIds.length === 1) {
+      const emp = empresasDisponiveis.find(item => Number(item?.empresaId || item?.empresa_id || item?.id || 0) === empresasSelecionadasIds[0]);
+      partes.push(labelEmpresa(emp));
     } else {
-      const totalEmpresas = filialEmpresasInteiras.size;
-      const totalFiliais = filialFiliaisAvulsas.size;
-      const partes = [];
-      if (totalEmpresas) partes.push(`${totalEmpresas} empresa(s)`);
-      if (totalFiliais) partes.push(`${totalFiliais} filial(is)`);
-      filialSelectLabel.textContent = partes.join(' + ');
+      partes.push(`${empresasSelecionadasIds.length} empresas`);
     }
-    filialSelect.title = filialSelectLabel.textContent;
-    filialOptionTodas.checked = selecaoFilialVazia();
+    if (!selecaoFilialVazia()) {
+      const totalEmp = filialEmpresasInteiras.size;
+      const totalFil = filialFiliaisAvulsas.size;
+      const filialPartes = [];
+      if (totalEmp) filialPartes.push(`${totalEmp} emp.`);
+      if (totalFil) filialPartes.push(`${totalFil} fil.`);
+      if (filialPartes.length) partes.push(filialPartes.join('+'));
+    }
+    escopoSelectLabel.textContent = partes.join(' · ');
+    escopoSelectBtn.title = escopoSelectLabel.textContent;
   }
 
   function marcarEmpresaInteira(empresaProtheusCodigo, marcado) {
@@ -2411,15 +2313,21 @@
     return 'parcial';
   }
 
-  function renderFilialMenu(filtroTexto = '') {
-    filialMenuArvore.innerHTML = '';
+  // Renderiza a arvore Protheus (empresa -> filial, niveis 1+2) dentro de um
+  // container qualquer — parametrizado para servir tanto ao corpo expandido
+  // de cada empresa IAHub no modal unificado quanto a re-renderizacoes
+  // isoladas (busca, marcar/desmarcar) sem precisar redesenhar o modal
+  // inteiro. `onChange` e chamado apos qualquer alteracao de selecao, para
+  // o chamador (renderEscopoModal) atualizar o label do botao do header.
+  function renderArvoreProtheus(container, filtroTexto, onChange) {
+    container.innerHTML = '';
     const termo = String(filtroTexto || '').trim().toLowerCase();
 
     if (!filialArvoreDisponivel.length) {
       const vazio = document.createElement('div');
       vazio.className = 'filial-menu-empty';
-      vazio.textContent = 'Nenhuma empresa com filtro de filial disponivel.';
-      filialMenuArvore.appendChild(vazio);
+      vazio.textContent = 'Nenhuma filial disponivel para o seu acesso nesta empresa.';
+      container.appendChild(vazio);
       return;
     }
 
@@ -2451,7 +2359,7 @@
         e.stopPropagation();
         if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
         else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
-        renderFilialMenu(filialMenuSearch.value);
+        renderArvoreProtheus(container, filtroTexto, onChange);
       });
 
       const input = document.createElement('input');
@@ -2460,8 +2368,8 @@
       input.indeterminate = estado === 'parcial';
       input.addEventListener('change', () => {
         marcarEmpresaInteira(emp.empresaProtheusCodigo, input.checked);
-        renderFilialMenu(filialMenuSearch.value);
-        atualizarLabelFilialSelect();
+        renderArvoreProtheus(container, filtroTexto, onChange);
+        if (onChange) onChange();
       });
       input.addEventListener('click', (e) => e.stopPropagation());
 
@@ -2482,7 +2390,7 @@
       row.addEventListener('click', () => {
         if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
         else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
-        renderFilialMenu(filialMenuSearch.value);
+        renderArvoreProtheus(container, filtroTexto, onChange);
       });
 
       const listaFiliais = document.createElement('div');
@@ -2495,8 +2403,8 @@
         inputFilial.checked = filialFiliaisAvulsas.has(fil.filialChave) || filialEmpresasInteiras.has(emp.empresaProtheusCodigo);
         inputFilial.addEventListener('change', () => {
           marcarFilialAvulsa(emp.empresaProtheusCodigo, fil.filialChave, inputFilial.checked);
-          renderFilialMenu(filialMenuSearch.value);
-          atualizarLabelFilialSelect();
+          renderArvoreProtheus(container, filtroTexto, onChange);
+          if (onChange) onChange();
         });
         const spanFilial = document.createElement('span');
         spanFilial.textContent = fil.nome || fil.filialChave;
@@ -2507,8 +2415,104 @@
 
       grupo.appendChild(row);
       grupo.appendChild(listaFiliais);
-      filialMenuArvore.appendChild(grupo);
+      container.appendChild(grupo);
     });
+  }
+
+  // Nivel 0 do modal unificado: uma linha expansivel por empresa-cliente do
+  // IAHub (empresasDisponiveis). Marcar o checkbox da empresa IAHub
+  // adiciona/remove de empresasSelecionadasIds e recarrega a arvore Protheus
+  // (trocarEscopoEmpresa/carregarFilialTree, ja existentes). Expandir a
+  // linha so alterna visibilidade — nao dispara nova chamada de API, ja que
+  // filialArvoreDisponivel ja vem filtrada pelo backend para TODAS as
+  // empresas IAHub selecionadas ao mesmo tempo (nao por empresa isolada).
+  let escopoEmpresasIahubExpandidas = new Set();
+
+  function renderEscopoModal(filtroTexto = '') {
+    escopoModalBody.innerHTML = '';
+    const termo = String(filtroTexto || '').trim().toLowerCase();
+    const ids = idsEmpresasDisponiveis();
+
+    if (!empresasDisponiveis.length) {
+      const vazio = document.createElement('div');
+      vazio.className = 'escopo-modal-empty';
+      vazio.textContent = 'Nenhuma empresa disponivel.';
+      escopoModalBody.appendChild(vazio);
+      return;
+    }
+
+    empresasDisponiveis.forEach((emp) => {
+      const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
+      if (!id) return;
+      const nome = labelEmpresa(emp);
+      const bate = !termo || nome.toLowerCase().includes(termo);
+      const selecionada = empresasSelecionadasIds.includes(id);
+      if (termo && !bate && !selecionada) return;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'escopo-empresa-iahub';
+
+      const expandido = escopoEmpresasIahubExpandidas.has(id) || (termo && bate);
+      const row = document.createElement('div');
+      row.className = 'escopo-empresa-iahub-row' + (expandido ? ' expandido' : '');
+
+      const toggle = document.createElement('span');
+      toggle.className = 'toggle';
+      toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (escopoEmpresasIahubExpandidas.has(id)) escopoEmpresasIahubExpandidas.delete(id);
+        else escopoEmpresasIahubExpandidas.add(id);
+        renderEscopoModal(escopoSearch.value);
+      });
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = selecionada;
+      input.addEventListener('change', async () => {
+        if (input.checked) {
+          if (!empresasSelecionadasIds.includes(id)) empresasSelecionadasIds.push(id);
+        } else {
+          empresasSelecionadasIds = empresasSelecionadasIds.filter(itemId => itemId !== id);
+          if (!empresasSelecionadasIds.length) empresasSelecionadasIds = [id];
+        }
+        atualizarEmpresaAtualPorSelecao();
+        atualizarLabelEscopoSelect();
+        await trocarEscopoEmpresa();
+        renderEscopoModal(escopoSearch.value);
+      });
+      input.addEventListener('click', (e) => e.stopPropagation());
+
+      const nomeSpan = document.createElement('span');
+      nomeSpan.className = 'nome';
+      nomeSpan.textContent = nome;
+
+      row.appendChild(toggle);
+      row.appendChild(input);
+      row.appendChild(nomeSpan);
+      row.addEventListener('click', () => {
+        if (escopoEmpresasIahubExpandidas.has(id)) escopoEmpresasIahubExpandidas.delete(id);
+        else escopoEmpresasIahubExpandidas.add(id);
+        renderEscopoModal(escopoSearch.value);
+      });
+
+      const corpo = document.createElement('div');
+      corpo.className = 'escopo-empresa-iahub-corpo';
+      if (!selecionada) {
+        const aviso = document.createElement('div');
+        aviso.className = 'escopo-empresa-iahub-vazio';
+        aviso.textContent = 'Marque esta empresa para ver/filtrar suas filiais.';
+        corpo.appendChild(aviso);
+      } else {
+        renderArvoreProtheus(corpo, termo, atualizarLabelEscopoSelect);
+      }
+
+      wrap.appendChild(row);
+      wrap.appendChild(corpo);
+      escopoModalBody.appendChild(wrap);
+    });
+
+    escopoOptionTodas.checked = ids.length > 1 && empresasSelecionadasIds.length === ids.length;
   }
 
   // Reidrata o estado visual da arvore a partir do que o backend realmente
@@ -2527,23 +2531,23 @@
     const ultimaComIntent = Array.isArray(mensagens)
       ? [...mensagens].reverse().find(m => m.direcao === 'in' && m.intent_json)
       : null;
-    if (!ultimaComIntent) { renderFilialMenu(); atualizarLabelFilialSelect(); return; }
+    if (ultimaComIntent) {
+      let intent = null;
+      try {
+        intent = typeof ultimaComIntent.intent_json === 'string'
+          ? JSON.parse(ultimaComIntent.intent_json)
+          : ultimaComIntent.intent_json;
+      } catch (_) { intent = null; }
 
-    let intent = null;
-    try {
-      intent = typeof ultimaComIntent.intent_json === 'string'
-        ? JSON.parse(ultimaComIntent.intent_json)
-        : ultimaComIntent.intent_json;
-    } catch (_) { intent = null; }
-
-    const selecaoUi = intent?._filialSelecaoUi;
-    if (selecaoUi?.uiTouched) {
-      filialEmpresasInteiras = new Set(selecaoUi.empresasInteiras || []);
-      filialFiliaisAvulsas = new Set(selecaoUi.filiaisAvulsas || []);
-      filialUiTouched = true;
+      const selecaoUi = intent?._filialSelecaoUi;
+      if (selecaoUi?.uiTouched) {
+        filialEmpresasInteiras = new Set(selecaoUi.empresasInteiras || []);
+        filialFiliaisAvulsas = new Set(selecaoUi.filiaisAvulsas || []);
+        filialUiTouched = true;
+      }
     }
-    renderFilialMenu();
-    atualizarLabelFilialSelect();
+    if (escopoModal.classList.contains('active')) renderEscopoModal(escopoSearch.value);
+    atualizarLabelEscopoSelect();
   }
 
   function payloadFilialSelecaoUi() {
@@ -5805,48 +5809,47 @@
     msgInput.focus();
   });
 
-  empresaSelect.addEventListener('click', function (e) {
-    e.stopPropagation();
-    const aberto = !empresaSelectWrap.classList.contains('open');
-    empresaSelectWrap.classList.toggle('open', aberto);
-    empresaSelect.setAttribute('aria-expanded', String(aberto));
+  function abrirEscopoModal() {
+    escopoModal.classList.add('active');
+    escopoModal.setAttribute('aria-hidden', 'false');
+    escopoSearch.value = '';
+    renderEscopoModal();
+    setTimeout(() => escopoSearch.focus(), 0);
+  }
+
+  function fecharEscopoModal() {
+    escopoModal.classList.remove('active');
+    escopoModal.setAttribute('aria-hidden', 'true');
+    escopoSelectBtn.focus();
+  }
+
+  escopoSelectBtn.addEventListener('click', () => abrirEscopoModal());
+  btnFecharEscopo.addEventListener('click', () => fecharEscopoModal());
+  btnEscopoCancelar.addEventListener('click', () => fecharEscopoModal());
+  btnEscopoAplicar.addEventListener('click', () => fecharEscopoModal());
+
+  escopoModal.addEventListener('click', (e) => {
+    if (e.target === escopoModal) fecharEscopoModal();
   });
 
-  empresaMenu.addEventListener('click', function (e) {
-    e.stopPropagation();
+  escopoSearch.addEventListener('input', function () {
+    renderEscopoModal(escopoSearch.value);
   });
 
-  filialSelect.addEventListener('click', function (e) {
-    e.stopPropagation();
-    const aberto = !filialSelectWrap.classList.contains('open');
-    filialSelectWrap.classList.toggle('open', aberto);
-    filialSelect.setAttribute('aria-expanded', String(aberto));
-    if (aberto) { filialMenuSearch.value = ''; renderFilialMenu(); filialMenuSearch.focus(); }
+  escopoOptionTodas.addEventListener('change', async function () {
+    const ids = idsEmpresasDisponiveis();
+    empresasSelecionadasIds = escopoOptionTodas.checked ? ids.slice() : [ids[0]];
+    atualizarEmpresaAtualPorSelecao();
+    atualizarLabelEscopoSelect();
+    await trocarEscopoEmpresa();
+    renderEscopoModal(escopoSearch.value);
   });
 
-  filialMenu.addEventListener('click', function (e) {
-    e.stopPropagation();
-  });
-
-  filialMenuSearch.addEventListener('input', function () {
-    renderFilialMenu(filialMenuSearch.value);
-  });
-
-  filialOptionTodas.addEventListener('change', function () {
-    filialUiTouched = true;
-    if (filialOptionTodas.checked) {
-      filialEmpresasInteiras = new Set();
-      filialFiliaisAvulsas = new Set();
-    }
-    renderFilialMenu(filialMenuSearch.value);
-    atualizarLabelFilialSelect();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && escopoModal.classList.contains('active')) fecharEscopoModal();
   });
 
   document.addEventListener('click', function () {
-    empresaSelectWrap.classList.remove('open');
-    empresaSelect.setAttribute('aria-expanded', 'false');
-    filialSelectWrap.classList.remove('open');
-    filialSelect.setAttribute('aria-expanded', 'false');
     headerActions.classList.remove('open');
     btnHeaderMenu.setAttribute('aria-expanded', 'false');
   });
