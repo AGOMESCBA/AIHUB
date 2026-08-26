@@ -205,24 +205,38 @@ Return
 /*/
 Static Function IACGridAcessos(aDados, cCabecalho, cTitulo)
 
-    Local oDlg     := Nil
-    Local oBrowse  := Nil
-    Local aHeader  := { "Empresa Protheus", "Codigo", "Filial", "Chave" }
+    Local oDlg      := Nil
+    Local oBrowse   := Nil
+    Local aHeader   := { "Empresa Protheus", "Codigo", "Filial", "Chave" }
+    Local aColSizes := { 180, 70, 340, 120 }
+    // Dialog 700x900 PIXEL: TWBrowse:New() recebe (nRow, nCol, nWidth,
+    // nHeight, ...) — largura/altura, NAO um segundo ponto de coordenada
+    // (bottom/right). [CORRIGIDO apos grid aparecer cortada/fora do dialog:
+    // versao anterior passava 355,730 como se fossem bottom/right, mas
+    // TWBrowse interpreta como largura=355/altura=730, estourando um dialog
+    // de 400px de altura.] [AUMENTADO apos usuario reportar coluna Filial
+    // cortada — dialog e larguras de coluna maiores.]
+    Local nDlgAltura  := 700
+    Local nDlgLargura := 900
+    Local nGridTop    := 040
+    Local nGridLeft   := 008
+    Local nGridLargura:= nDlgLargura - 020
+    Local nGridAltura := nDlgAltura - 100
 
-    DEFINE MSDIALOG oDlg TITLE cTitulo FROM 0, 0 TO 400, 750 PIXEL
+    DEFINE MSDIALOG oDlg TITLE cTitulo FROM 0, 0 TO nDlgAltura, nDlgLargura PIXEL
 
     IF !Empty(cCabecalho)
-        @ 006, 008 SAY cCabecalho SIZE 730, 018 OF oDlg PIXEL
+        @ 008, 008 SAY cCabecalho SIZE nGridLargura, 024 OF oDlg PIXEL
     ENDIF
 
-    oBrowse := TWBrowse():New(030, 008, 355, 730, , aHeader, , oDlg,,,,,{||},,,,,,,.F.,,.T.,,.F.,,, )
+    oBrowse := TWBrowse():New(nGridTop, nGridLeft, nGridLargura, nGridAltura, , aHeader, aColSizes, oDlg,,,,,{||},,,,,,,.F.,,.T.,,.F.,,, )
     oBrowse:SetArray(aDados)
     oBrowse:bLine := {|| { aDados[oBrowse:nAt, 1], ;
                            aDados[oBrowse:nAt, 2], ;
                            aDados[oBrowse:nAt, 3], ;
                            aDados[oBrowse:nAt, 4] } }
 
-    DEFINE SBUTTON FROM 365, 690 TYPE 1 ACTION oDlg:End() ENABLE OF oDlg
+    DEFINE SBUTTON FROM (nDlgAltura - 040), (nDlgLargura - 070) TYPE 1 ACTION oDlg:End() ENABLE OF oDlg
 
     ACTIVATE MSDIALOG oDlg CENTERED
 
@@ -352,7 +366,12 @@ Static Function IACZCHUsr(aUsuarios)
 
 Return nTotal
 
-Static Function IACEnvSync(aUsuarios, cErro)
+// lDebugTela (opcional): quando .T., mostra uma grid ANTES de enviar cada
+// usuario, com empresa/filial que serao gravadas — usado por IACUSRSYNC
+// para conferencia manual, um usuario por vez. So faz sentido no fluxo
+// manual de sincronizacao (aqui); o chat (IACCHAT.prw) nao pode bloquear
+// esperando clique, entao la o mesmo diagnostico fica so no ConOut.
+Static Function IACEnvSync(aUsuarios, cErro, lDebugTela)
     Local oRest      := Nil
     Local aHeader    := {}
     Local cUrl       := IACUrlSync()
@@ -361,6 +380,7 @@ Static Function IACEnvSync(aUsuarios, cErro)
     Local oJsonRes   := Nil
     Local lOk        := .F.
     Local nI         := 0
+    Local nJ         := 0
     Local cUser      := ""
     Local cNome      := ""
     Local cCelular   := ""
@@ -370,6 +390,11 @@ Static Function IACEnvSync(aUsuarios, cErro)
     Local cEmpPermit := ""
     Local cFilPermit := ""
     Local nEnviados   := 0
+    Local aDebugGrid  := {}
+    Local oJsonDbg    := Nil
+    Local oEmpDbg     := Nil
+    Local oFilDbg     := Nil
+    Local nK          := 0
 
     If Empty(cUrl)
         cErro := "Parametro MV_IACURL (URL do IAHub) nao configurado."
@@ -391,6 +416,37 @@ Static Function IACEnvSync(aUsuarios, cErro)
         nEmpresaId := IACEmpId(aCodigos, aParamEmp)
         cEmpPermit := IACEmpJs(nEmpresaId, aCodigos, aParamEmp)
         cFilPermit := IACFilJs(cUser, aCodigos)
+        ConOut("[IA Command] SYNC usuario=" + cUser + " empresas=" + cEmpPermit + " filiais=" + cFilPermit)
+
+        // [DEBUG EM TELA] monta uma grid com o que SERA enviado para este
+        // usuario (empresa | codigo | filial) a partir do JSON ja montado
+        // acima (cEmpPermit/cFilPermit — exatamente o payload real do POST,
+        // nao uma reconstrucao paralela) e mostra ANTES de seguir para o
+        // proximo usuario.
+        If lDebugTela
+            aDebugGrid := {}
+            oJsonDbg := JsonObject():New()
+            If oJsonDbg:FromJson(cFilPermit) == Nil
+                For nJ := 1 To Len(oJsonDbg)
+                    oEmpDbg := oJsonDbg[nJ]
+                    oFilDbg := oEmpDbg:GetJsonObject("filiais")
+                    If ValType(oFilDbg) == "A" .And. Len(oFilDbg) > 0
+                        For nK := 1 To Len(oFilDbg)
+                            AAdd(aDebugGrid, { cUser + " - " + IACRmAcent(cNome), cValToChar(oEmpDbg:GetJsonObject("codigoProtheus")), cValToChar(oFilDbg[nK]), cValToChar(oFilDbg[nK]) })
+                        Next nK
+                    Else
+                        AAdd(aDebugGrid, { cUser + " - " + IACRmAcent(cNome), cValToChar(oEmpDbg:GetJsonObject("codigoProtheus")), "(Nenhuma filial)", "-" })
+                    EndIf
+                Next nJ
+            EndIf
+            If Len(aDebugGrid) == 0
+                MsgStop("Nenhuma empresa/filial resolvida para este usuario." + CRLF + ;
+                        "Usuario: " + cUser + " - " + IACRmAcent(cNome), "IA Command - Debug SYNC")
+            Else
+                IACGridAcessos(aDebugGrid, "ANTES DE ENVIAR - Usuario: " + cUser + " - " + IACRmAcent(cNome), ;
+                                "Debug SYNC (" + cValToChar(nI) + "/" + cValToChar(Len(aUsuarios)) + ")")
+            EndIf
+        EndIf
 
         If nEmpresaId <= 0
             Loop
@@ -451,24 +507,51 @@ Static Function IACEmpUsr(cUsuario)
     Local nI      := 0
     Local lTodas  := .F.
     Local cGrp    := ""
-    Local cFil    := ""
+    Local cCodFil := ""
     Local cEmp    := ""
     Local cEmpSM0 := ""
     Local cNome   := ""
 
-    If Len(aEmpUsr) == 1 .And. ValType(aEmpUsr[1]) == "C"
-        lTodas := aEmpUsr[1] == "@@@@"
+    If ValType(aEmpUsr) == "A"
+        For nI := 1 To Len(aEmpUsr)
+            If ValType(aEmpUsr[nI]) == "C"
+                If Alltrim(aEmpUsr[nI]) == "@@@@" .Or. Alltrim(aEmpUsr[nI]) == "@@"
+                    lTodas := .T.
+                    Exit
+                EndIf
+            EndIf
+        Next nI
     EndIf
 
     For nI := 1 To Len(aSM0)
         If ValType(aSM0[nI]) != "A" .Or. Len(aSM0[nI]) < 3
             Loop
         EndIf
+
         cGrp    := Alltrim(cValToChar(aSM0[nI, 1]))
-        cFil    := Alltrim(cValToChar(aSM0[nI, 2]))
+        cCodFil := Alltrim(cValToChar(aSM0[nI, 2]))
         cEmpSM0 := Alltrim(cValToChar(aSM0[nI, 3]))
-        cEmp    := IACCodEmp(cGrp, cFil, cEmpSM0)
-        cNome   := ""
+
+        // [DIAGNOSTICO TEMPORARIO — so leitura, nao muda nenhuma logica]
+        // confirma se SM0_EMPOK (pos 10) / SM0_USEROK (pos 11) ja vem util
+        // (variando .T./.F. por filial) mesmo com FWLoadSM0() chamado sem
+        // parametro (como ja usamos hoje) — se sim, pode virar fonte real
+        // de granularidade por usuario no lugar do fallback atual. Remover
+        // apos confirmar.
+        // If Len(aSM0[nI]) >= 11
+        //     ConOut("[IA Command][DIAG-SM0] usuario=" + cUsuario + ;
+        //            " empresa=" + cEmpSM0 + " filial=" + cCodFil + ;
+        //            " SM0_EMPOK=" + cValToChar(aSM0[nI, 10]) + ;
+        //            " SM0_USEROK=" + cValToChar(aSM0[nI, 11]))
+        // EndIf
+
+        If !Empty(cEmpSM0)
+            cEmp := cEmpSM0
+        Else
+            cEmp := cGrp
+        EndIf
+
+        cNome := ""
         If Len(aSM0[nI]) >= 19
             cNome := Alltrim(cValToChar(aSM0[nI, 19]))
         EndIf
@@ -481,12 +564,14 @@ Static Function IACEmpUsr(cUsuario)
         If Empty(cNome)
             cNome := cEmp
         EndIf
-        If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
-            IACAddCod(@aRet, cEmp, cFil, cNome)
+
+        If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cCodFil)
+            IACAddCod(@aRet, cEmp, cCodFil, cNome)
         EndIf
     Next nI
 
 Return aRet
+
 
 Static Function IACEmpJs(nEmpresaAtual, aCodigos, aParamEmp)
     Local aEmpresas  := {}
@@ -515,16 +600,42 @@ Static Function IACEmpJs(nEmpresaAtual, aCodigos, aParamEmp)
 
 Return cJson
 
+// [CORRIGIDO apos investigacao confirmar que PswRet() nao expoe a lista de
+// acessos empresa+filial nesta instalacao] FWUsrEmp(cUsuario) ja e a fonte
+// usada por IACEmpUsr() para resolver quais empresas o usuario acessa, e ja
+// detecta corretamente o coringa de grupo inteiro ("@@@@"/"@@" — usuario
+// admin/master, cadastrado so com "Grupo de empresas"). Reaproveita a MESMA
+// consulta aqui (uma vez, nao por empresa) para decidir se o usuario tem
+// acesso total: nesse caso, mostra TODAS as filiais reais de cada empresa
+// (SM0), em vez de so a filial de referencia.
 Static Function IACFilJs(cUsuario, aCodigos)
+    Local aEmpUsr  := FWUsrEmp(cUsuario)
+    Local lTodas   := .F.
     Local cJson    := "["
     Local nI       := 0
     Local nJ       := 0
     Local cCod     := ""
     Local aFiliais := {}
 
+    If ValType(aEmpUsr) == "A"
+        For nI := 1 To Len(aEmpUsr)
+            If ValType(aEmpUsr[nI]) == "C" .And. ;
+               (Alltrim(aEmpUsr[nI]) == "@@@@" .Or. Alltrim(aEmpUsr[nI]) == "@@")
+                lTodas := .T.
+                Exit
+            EndIf
+        Next nI
+    EndIf
+
     For nI := 1 To Len(aCodigos)
         cCod     := Alltrim(cValToChar(aCodigos[nI, 1]))
-        aFiliais := IACFilUsr(cUsuario, cCod, aCodigos)
+        aFiliais := IACFilUsr(cCod, aCodigos, lTodas)
+        // [DEBUG] mostra, no instante em que o vetor de filiais foi
+        // preenchido, qual funcao preencheu (IACFilUsr, chamada por
+        // IACFilJs), o usuario, a empresa e a lista resultante.
+        // ConOut("[IA Command][DEBUG] IACFilJs -> IACFilUsr preencheu vetor" + ;
+        //        " | usuario=" + cUsuario + " empresa=" + cCod + " lTodas=" + cValToChar(lTodas) + ;
+        //        " filiais=" + IACArrTxt(aFiliais))
         If ValType(aFiliais) != "A"
             Loop
         EndIf
@@ -544,26 +655,22 @@ Static Function IACFilJs(cUsuario, aCodigos)
 
 Return cJson
 
-// [CORRIGIDO apos usuario reportar arvore de filial errada no chat web —
-// mesma causa raiz corrigida em IACCHAT.prw::IACFilPsw] Usuario com acesso
-// PSW cadastrado como coringa de GRUPO inteiro (cEmpresa=="@@@@"/"@@" — ex.:
-// usuario admin/master, cadastrado so com "Grupo de empresas" preenchido,
-// sem empresa/filial especifica) fazia cEmp==cCodigo nunca bater para
-// nenhuma empresa real, caindo no fallback de "so a filial de referencia"
-// para TODAS elas. Corrigido para detectar o coringa e devolver Nil (sem
-// filtro adicional — IACFilJs ja trata Nil como "omite esta empresa do
-// JSON", equivalente a acesso total, mesmo contrato ja usado la).
-Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
+// [DECISAO DE PRODUCAO apos investigacao extensa confirmar que PswRet() nao
+// expoe, nesta instalacao, a lista de acessos empresa+filial do usuario em
+// NENHUMA posicao do array de retorno (confirmado varrendo TODAS as 26
+// posicoes de PswRet(1)[1] para 3 usuarios diferentes, incluindo um com
+// acesso de grupo inteiro cadastrado — nenhuma posicao contem um array de
+// pares {empresa,filial} nem o coringa "@@@@"). Abandonada a leitura via
+// PswRet para granularidade de filial. Em vez disso, reaproveita lTodas
+// (ja calculado uma vez em IACFilJs via FWUsrEmp(), a MESMA fonte que ja
+// resolve corretamente o coringa de grupo para as empresas em IACEmpUsr):
+// se o usuario tem acesso de grupo/empresa inteira, mostra TODAS as
+// filiais reais dessa empresa na SM0; senao, so a filial de referencia
+// (comportamento seguro/fail-closed quando nao ha mais informacao).
+Static Function IACFilUsr(cCodigo, aCodigos, lTodas)
     Local aFiliais := {}
-    Local aUsrData := {}
-    Local aAcessos := {}
     Local cFilRef  := ""
     Local nI       := 0
-    Local nJ       := 0
-    Local cEmp     := ""
-    Local cFil     := ""
-    Local lExiste  := .F.
-    Local lGrpTodo := .F.
 
     For nI := 1 To Len(aCodigos)
         If Alltrim(cValToChar(aCodigos[nI, 1])) == Alltrim(cValToChar(cCodigo))
@@ -578,43 +685,8 @@ Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
         Return aFiliais
     EndIf
 
-    Begin Sequence
-        PswOrder(1)
-        If PswSeek(cUsuario, .T.)
-            aUsrData := PswRet(1)
-            If ValType(aUsrData) == "A" .And. Len(aUsrData) >= 25 .And. ValType(aUsrData[25]) == "A"
-                aAcessos := aUsrData[25]
-                For nI := 1 To Len(aAcessos)
-                    If ValType(aAcessos[nI]) == "A" .And. Len(aAcessos[nI]) >= 2
-                        cEmp := Alltrim(cValToChar(aAcessos[nI, 1]))
-                        cFil := Alltrim(cValToChar(aAcessos[nI, 2]))
-                        If cEmp == "@@@@" .Or. cEmp == "@@"
-                            lGrpTodo := .T.
-                            Exit
-                        EndIf
-                        If cEmp == cCodigo .And. !Empty(cFil) .And. cFil != "@@@@" .And. cFil != "@@"
-                            lExiste := .F.
-                            For nJ := 1 To Len(aFiliais)
-                                If Alltrim(cValToChar(aFiliais[nJ])) == cFil
-                                    lExiste := .T.
-                                    Exit
-                                EndIf
-                            Next nJ
-                            If !lExiste
-                                AAdd(aFiliais, cFil)
-                            EndIf
-                        EndIf
-                    EndIf
-                Next nI
-            EndIf
-        EndIf
-    Recover
-        aFiliais := {}
-        ConOut("[IA Command] IACUSRSYNC: falha ao consultar permissoes via PswRet para empresa " + cCodigo + " usuario " + cUsuario)
-    End Sequence
-
-    If lGrpTodo
-        Return Nil
+    If lTodas
+        aFiliais := IACAllFilEmp(cCodigo)
     EndIf
 
     If Len(aFiliais) == 0
@@ -622,6 +694,63 @@ Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
     EndIf
 
 Return aFiliais
+
+// Lista TODAS as filiais reais (SM0_CODFIL) cadastradas no ambiente para uma
+// empresa — usada quando o usuario tem acesso de grupo/empresa inteira.
+Static Function IACAllFilEmp(cCodigo)
+    Local aSM0    := FWLoadSM0()
+    Local aRet    := {}
+    Local nI      := 0
+    Local cGrp    := ""
+    Local cEmp    := ""
+    Local cCodFil := ""
+
+    cCodigo := Alltrim(cValToChar(cCodigo))
+
+    For nI := 1 To Len(aSM0)
+        If ValType(aSM0[nI]) != "A" .Or. Len(aSM0[nI]) < 3
+            Loop
+        EndIf
+
+        cGrp    := Alltrim(cValToChar(aSM0[nI, 1]))
+        cEmp    := IACCodEmp(cGrp, Alltrim(cValToChar(aSM0[nI, 3])))
+        cCodFil := Alltrim(cValToChar(aSM0[nI, 2]))
+
+        // [DIAGNOSTICO TEMPORARIO] confirma bruto SM0_GRPEMP vs SM0_EMPRESA
+        // por filial, para investigar vazamento de filial entre empresas.
+        // If cCodigo == "01"
+        //     ConOut("[IA Command][DIAG-ALLFIL] cCodigo=" + cCodigo + ;
+        //            " filial=" + cCodFil + " SM0_GRPEMP=" + cGrp + ;
+        //            " SM0_EMPRESA=" + Alltrim(cValToChar(aSM0[nI, 3])) + ;
+        //            " cEmpResolvido=" + cEmp + " match=" + IIf(cEmp == cCodigo, "SIM", "nao"))
+        // EndIf
+
+        If cEmp == cCodigo .And. !Empty(cCodFil)
+            AAdd(aRet, cCodFil)
+        EndIf
+    Next nI
+
+Return aRet
+
+// Formata um array simples como texto "[item1,item2,...]" — usado so para
+// mensagens de debug (ConOut), nao gera JSON valido (sem aspas).
+Static Function IACArrTxt(aValores)
+    Local cRet := "["
+    Local nI   := 0
+
+    If ValType(aValores) != "A"
+        Return "[]"
+    EndIf
+
+    For nI := 1 To Len(aValores)
+        If nI > 1
+            cRet += ","
+        EndIf
+        cRet += Alltrim(cValToChar(aValores[nI]))
+    Next nI
+
+    cRet += "]"
+Return cRet
 
 Static Function IACSX6Lst(cParam, aCodigos)
     Local cAliasAtu := Alias()
@@ -712,18 +841,20 @@ Static Function IACEmpIDC(cCodigoProtheus, aParamEmp)
     Next nI
 Return 0
 
-Static Function IACCodEmp(cGrp, cFil, cEmpSM0)
+Static Function IACCodEmp(cGrp, cEmpSM0)
     Local cRet := ""
-    If !Empty(cFil)
-        cRet := Left(Alltrim(cFil), 2)
+
+    cGrp    := Alltrim(cValToChar(cGrp))
+    cEmpSM0 := Alltrim(cValToChar(cEmpSM0))
+
+    If !Empty(cEmpSM0)
+        cRet := cEmpSM0
+    Else
+        cRet := cGrp
     EndIf
-    If Empty(cRet) .And. !Empty(cEmpSM0) .And. Len(Alltrim(cEmpSM0)) <= 2
-        cRet := Alltrim(cEmpSM0)
-    EndIf
-    If Empty(cRet)
-        cRet := Left(Alltrim(cGrp), 2)
-    EndIf
+
 Return cRet
+
 
 Static Function IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
     Local nI   := 0

@@ -105,6 +105,31 @@
         referencia" (a primeira filial de cada empresa na SM0), quando
         deveriam ficar totalmente liberadas. Corrigido para detectar o
         coringa de grupo e devolver Nil (sem filtro adicional) nesse caso.
+     h) [DECISAO DE PRODUCAO — substitui e) a g) acima] Investigacao extensa
+        (varredura completa das 26 posicoes de PswRet(1)[1], em 3 usuarios
+        diferentes, incluindo um com acesso de grupo real cadastrado)
+        confirmou que PswRet() NAO expoe, nesta instalacao, a lista de
+        acessos empresa+filial em nenhuma posicao do array — a premissa de
+        e)/f)/g) (posicao fixa ou coringa dentro do retorno do PswRet)
+        estava incorreta. IACFilPsw() foi removida; IACFilUsr() nao usa mais
+        PswSeek/PswRet. Em vez disso, reaproveita FWUsrEmp() — a MESMA fonte
+        que ja resolve corretamente o coringa de grupo para as empresas em
+        IACEmpUsr() — para decidir se mostra TODAS as filiais reais de cada
+        empresa (via SM0) ou so a filial de referencia (fail-closed). Ver
+        IACFilJs/IACFilUsr/IACAllFilEmp mais abaixo.
+
+   IDEIA FUTURA (nao aplicada, precisa validar antes): FWLoadSM0(lForce,
+   lChkUser) aceita um 2o parametro logico que, segundo fontes externas
+   (nao TDN oficial confirmado), filtra o array so para as filiais que "o
+   usuario tem acesso" — junto com a posicao 11 do array (SM0_USEROK,
+   indicador de permissao). Nao confirmamos se lChkUser filtra pelo usuario
+   LOGADO na sessao atual (RetCodUsr(), como a maioria das funcoes FW*) ou
+   aceita um usuario arbitrario — sem essa confirmacao, nao vale gastar mais
+   um ciclo de compilar/testar em producao. Se um dia quiser granularidade
+   real de filial por usuario (hoje o codigo so faz fail-closed com base no
+   coringa de grupo via FWUsrEmp), esse e o proximo ponto a investigar:
+   testar FWLoadSM0(.F., .T.) no IACCHAT.prw (onde ha usuario logado de
+   verdade) e comparar Len(aSM0) e aSM0[nI,11] com/sem o parametro.
 
    Todo valor de configuracao especifico de ambiente (URL do IAHub, timeout,
    empresa_id, segredo) e lido via parametro SX6 (GetMV) — ver bloco
@@ -603,6 +628,12 @@ Return cJson
    Retorna codigos de grupo/empresa Protheus acessiveis ao usuario logado.
    Se FWUsrEmp() retornar @@@@, expande com FWLoadSM0().
 ---------------------------------------------------------------------------- */
+// [CORRIGIDO apos revisao de codigo — mesma correcao aplicada em
+// IACadUsr.prw::IACEmpUsr] IACCodEmp() deduzia a empresa pelos 2 primeiros
+// caracteres da filial completa (Left(cCodFil,2)) — funciona so por
+// coincidencia quando M0_LEIAUTE comeca com 2 digitos de empresa; quebra em
+// qualquer outro layout. FWLoadSM0()[nI,3] (SM0_EMPRESA) ja traz o codigo
+// real da empresa — usa direto, sem deduzir.
 Static Function IACEmpUsr()
     Local aEmpUsr := FWUsrEmp(RetCodUsr())
     Local aSM0    := FWLoadSM0()
@@ -610,7 +641,7 @@ Static Function IACEmpUsr()
     Local nI      := 0
     Local lTodas  := .F.
     Local cGrp    := ""
-    Local cFil    := ""
+    Local cCodFil := ""
     Local cEmp    := ""
     Local cEmpSM0 := ""
     Local cNome   := ""
@@ -619,30 +650,29 @@ Static Function IACEmpUsr()
     // pode devolver aEmpUsr[1] como algo que nao e string (ex.: array
     // aninhado, dependendo da config de acesso multiempresa do usuario) —
     // comparar direto com "@@@@" quebrava com type mismatch quando o tipo nao
-    // batia. ValType() antes da comparacao evita comparar tipos diferentes,
-    // mesmo padrao de blindagem ja usado no loop de aSM0 logo abaixo.
-    If Len(aEmpUsr) == 1 .And. ValType(aEmpUsr[1]) == "C"
-        lTodas := aEmpUsr[1] == "@@@@"
-    EndIf
+    // batia. Varre TODO o array (nao so Len==1) procurando o coringa, com
+    // ValType() antes da comparacao para evitar type mismatch.
+    For nI := 1 To Len(aEmpUsr)
+        If ValType(aEmpUsr[nI]) == "C" .And. ;
+           (Alltrim(aEmpUsr[nI]) == "@@@@" .Or. Alltrim(aEmpUsr[nI]) == "@@")
+            lTodas := .T.
+            Exit
+        EndIf
+    Next nI
 
     For nI := 1 To Len(aSM0)
         If ValType(aSM0[nI]) != "A" .Or. Len(aSM0[nI]) < 3
             Loop
         EndIf
 
-        // MV_IACEMID e por EMPRESA dentro do mesmo grupo, usando X6_FIL com
-        // codigo de empresa ("01", "02"...). A rotina tolera ambientes
-        // tradicionais e Lobo Guara: deriva o codigo pela filial completa
-        // quando possivel, ou pelo campo de empresa da SM0 quando ele vier
-        // realmente como codigo.
-        cGrp := Alltrim(cValToChar(aSM0[nI, 1])) // SM0_GRPEMP
-        cFil := Alltrim(cValToChar(aSM0[nI, 2])) // SM0_CODFIL completo
+        cGrp    := Alltrim(cValToChar(aSM0[nI, 1])) // SM0_GRPEMP
+        cCodFil := Alltrim(cValToChar(aSM0[nI, 2])) // SM0_CODFIL completo
         If Len(aSM0[nI]) >= 3
-            cEmpSM0 := Alltrim(cValToChar(aSM0[nI, 3])) // SM0_EMPRESA ou nome, conforme ambiente
+            cEmpSM0 := Alltrim(cValToChar(aSM0[nI, 3])) // SM0_EMPRESA
         Else
             cEmpSM0 := ""
         EndIf
-        cEmp := IACCodEmp(cGrp, cFil, cEmpSM0)
+        cEmp := IACCodEmp(cGrp, cEmpSM0)
         // Preferencia por descricao/nome comercial da EMPRESA, depois nome
         // reduzido/nome da filial. Posicoes conforme FWLoadSM0/TOTVS:
         // 19=SM0_DESCEMP, 17=SM0_NOMECOM, 7=SM0_NOMRED, 6=SM0_NOME.
@@ -663,8 +693,8 @@ Static Function IACEmpUsr()
             cNome := cEmp
         EndIf
 
-        If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cFil)
-            IACAddCod(@aRet, cEmp, cFil, cNome)
+        If lTodas .Or. IACEmpOk(aEmpUsr, cGrp, cEmp, cCodFil)
+            IACAddCod(@aRet, cEmp, cCodFil, cNome)
         EndIf
     Next nI
 
@@ -672,39 +702,31 @@ Return aRet
 
 /* ----------------------------------------------------------------------------
    IACFilUsr
-   [CORRIGIDO apos erro em producao 25/08/2026: "type mismatch on + on
-   RPCSETENV(TBICONN.PRW)"] A versao anterior trocava de ambiente por empresa
-   via RpcSetEnv/RpcClearEnv para poder chamar LoadFils() (que so enxerga a
-   empresa atualmente logada) — essa troca quebrava em runtime nesta
-   instalacao (erro real capturado no log do AppServer, chamada de dentro de
-   IACFilUsr -> IACFilJs -> IACToken -> U_IACCHAT, travando a abertura do
-   chat: o token nunca era emitido, entao a pagina ficava presa em "Preparando
-   sessao..." ate estourar o timeout do launch ticket).
+   [DECISAO DE PRODUCAO apos investigacao extensa confirmar que PswRet() nao
+   expoe, nesta instalacao, a lista de acessos empresa+filial do usuario em
+   NENHUMA posicao do array de retorno (confirmado varrendo TODAS as 26
+   posicoes de PswRet(1)[1] para 3 usuarios diferentes, incluindo um com
+   acesso de grupo inteiro cadastrado — nenhuma posicao contem um array de
+   pares {empresa,filial} nem o coringa "@@@@"). Abandonada a leitura via
+   PswRet para granularidade de filial (a tentativa anterior via
+   RpcSetEnv/LoadFils tambem quebrava em runtime, ver historico acima).
 
-   Mesmo problema ja tinha ocorrido no cadastro de usuarios (IACadUsr.prw) e
-   foi corrigido la trocando RpcSetEnv/LoadFils por PswSeek/PswRet — API
-   nativa de seguranca do Protheus que le os acessos (empresa+filial) do
-   USUARIO INFORMADO diretamente do pacote de senha, sem precisar trocar o
-   ambiente do processo atual. Esta funcao replica o MESMO padrao ja validado
-   la (ver IACadUsr.prw::IACFilUsr), agora recebendo o codigo do usuario
-   (cUsuarioId, ja resolvido em IACToken) em vez do usuario da sessao MVC do
-   cadastro.
-
-   PswRet(1) devolve um array por usuario; a posicao 25 (aUsrData[25]) e o
-   array de acessos {empresa, filial} liberados — cada item aAcessos[nI] tem
-   {cEmpresa, cFilial}. Ignora "@@@@"/"@@" (coringa de "todas"), que nao e um
-   codigo de filial valido para o filtro.
+   Em vez disso, reaproveita lTodas — calculado pelo CHAMADOR (IACFilJs) via
+   FWUsrEmp(), a MESMA fonte que ja resolve corretamente o coringa de grupo
+   para as empresas em IACEmpUsr — para decidir mostrar TODAS as filiais
+   reais de cada empresa (SM0) quando o usuario tem acesso de grupo inteiro,
+   ou so a filial de referencia caso contrario (fail-closed).
 
    Retorno: array de { cCodigoEmpresa, aFiliais (array de codigos) }.
 ---------------------------------------------------------------------------- */
-Static Function IACFilUsr(cUsuarioId, aCodigos)
+Static Function IACFilUsr(aCodigos, lTodas)
     Local aRet       := {}
     Local nI         := 0
     Local cCod       := ""
     Local cFilRef    := ""
     Local aFiliais   := {}
 
-    If ValType(aCodigos) != "A" .Or. Len(aCodigos) == 0 .Or. Empty(cUsuarioId)
+    If ValType(aCodigos) != "A" .Or. Len(aCodigos) == 0
         Return aRet
     EndIf
 
@@ -716,120 +738,113 @@ Static Function IACFilUsr(cUsuarioId, aCodigos)
             Loop
         EndIf
 
-        aFiliais := IACFilPsw(cUsuarioId, cCod, cFilRef)
+        aFiliais := {}
+        If lTodas
+            aFiliais := IACAllFilEmp(cCod)
+        EndIf
+        If Len(aFiliais) == 0
+            AAdd(aFiliais, cFilRef)
+        EndIf
 
-        // [CORRIGIDO apos revisao de codigo — mantido nesta reescrita] Sempre
-        // adiciona a empresa quando a consulta a PswRet teve sucesso, mesmo
-        // com array vazio — array vazio significa "usuario nao tem NENHUMA
-        // filial liberada nesta empresa" e o backend precisa bloquear tudo
-        // nesse caso, nao tratar como "sem informacao". So omite a empresa
-        // se IACFilPsw sinalizar falha real de consulta (ver comentario la).
-        If ValType(aFiliais) == "A"
-            AAdd(aRet, { cCod, aFiliais })
+        AAdd(aRet, { cCod, aFiliais })
+
+        // [DEBUG] mostra, no instante em que o vetor de filiais foi
+        // preenchido, qual funcao preencheu (IACFilUsr), a empresa e a
+        // lista resultante.
+        // ConOut("[IA Command][DEBUG] IACFilUsr preencheu vetor" + ;
+        //        " | empresa=" + cCod + " lTodas=" + cValToChar(lTodas) + ;
+        //        " filiais=" + IACArrTxt(aFiliais))
+    Next nI
+
+Return aRet
+
+// Lista TODAS as filiais reais (SM0_CODFIL) cadastradas no ambiente para uma
+// empresa — usada quando o usuario tem acesso de grupo/empresa inteira.
+Static Function IACAllFilEmp(cCodigo)
+    Local aSM0    := FWLoadSM0()
+    Local aRet    := {}
+    Local nI      := 0
+    Local cGrp    := ""
+    Local cEmp    := ""
+    Local cCodFil := ""
+
+    cCodigo := Alltrim(cValToChar(cCodigo))
+
+    For nI := 1 To Len(aSM0)
+        If ValType(aSM0[nI]) != "A" .Or. Len(aSM0[nI]) < 3
+            Loop
+        EndIf
+
+        cGrp    := Alltrim(cValToChar(aSM0[nI, 1]))
+        cEmp    := IACCodEmp(cGrp, Alltrim(cValToChar(aSM0[nI, 3])))
+        cCodFil := Alltrim(cValToChar(aSM0[nI, 2]))
+
+        // [DIAGNOSTICO TEMPORARIO] confirma bruto SM0_GRPEMP vs SM0_EMPRESA
+        // por filial, para investigar vazamento de filial entre empresas.
+        // If cCodigo == "01"
+        //     ConOut("[IA Command][DIAG-ALLFIL] cCodigo=" + cCodigo + ;
+        //            " filial=" + cCodFil + " SM0_GRPEMP=" + cGrp + ;
+        //            " SM0_EMPRESA=" + Alltrim(cValToChar(aSM0[nI, 3])) + ;
+        //            " cEmpResolvido=" + cEmp + " match=" + IIf(cEmp == cCodigo, "SIM", "nao"))
+        // EndIf
+
+        If cEmp == cCodigo .And. !Empty(cCodFil)
+            AAdd(aRet, cCodFil)
         EndIf
     Next nI
 
 Return aRet
 
-/* ----------------------------------------------------------------------------
-   IACFilPsw
-   Le, via PswSeek/PswRet (mesmo padrao ja validado em
-   IACadUsr.prw::IACFilUsr), as filiais que cUsuarioId tem liberadas dentro
-   da empresa cCodigo — sem trocar o ambiente RPC do processo atual.
+// Formata um array simples como texto "[item1,item2,...]" — usado so para
+// mensagens de debug (ConOut), nao gera JSON valido (sem aspas).
+Static Function IACArrTxt(aValores)
+    Local cRet := "["
+    Local nI   := 0
 
-   Retorno: array de codigos de filial (ValType "A"), ou Nil se a consulta
-   via PswRet falhou (Begin Sequence/Recover) OU se o usuario tem acesso
-   coringa de GRUPO inteiro (cEmpresa == "@@@@"/"@@" no acesso PSW — usuario
-   admin/master, cadastrado so com "Grupo de empresas" preenchido, sem
-   empresa/filial especifica) — Nil sinaliza para o chamador "sem informacao
-   adicional, nao filtra esta empresa" (equivalente a acesso total).
-   [CORRIGIDO apos usuario reportar arvore com filial errada/faltando: caso
-   real de producao com usuario cujo unico acesso cadastrado no PSW e coringa
-   de grupo ("Grupo de empresas: 01", sem empresa/filial marcada) — a
-   comparacao cEmp==cCodigo nunca batia (cEmp vinha "@@@@", nao "01"/"02"),
-   entao TODAS as empresas do grupo caiam no fallback de "so a filial de
-   referencia", quando deveriam ficar totalmente liberadas.]
+    If ValType(aValores) != "A"
+        Return "[]"
+    EndIf
 
-   Se PswRet teve sucesso mas nao teve NENHUM acesso (nem especifico, nem
-   coringa de grupo) cadastrado para esta empresa, cai no fallback de
-   devolver cFilRef sozinho — mesmo comportamento ja usado no cadastro de
-   usuarios.
----------------------------------------------------------------------------- */
-Static Function IACFilPsw(cUsuarioId, cCodigo, cFilRef)
-    Local aFiliais := {}
-    Local aUsrData := {}
-    Local aAcessos := {}
-    Local nI       := 0
-    Local nJ       := 0
-    Local cEmp     := ""
-    Local cFil     := ""
-    Local lExiste  := .F.
-    Local lFalhou  := .F.
-    Local lGrpTodo := .F.
-
-    Begin Sequence
-        PswOrder(1)
-        If PswSeek(cUsuarioId, .T.)
-            aUsrData := PswRet(1)
-            If ValType(aUsrData) == "A" .And. Len(aUsrData) >= 25 .And. ValType(aUsrData[25]) == "A"
-                aAcessos := aUsrData[25]
-                For nI := 1 To Len(aAcessos)
-                    If ValType(aAcessos[nI]) == "A" .And. Len(aAcessos[nI]) >= 2
-                        cEmp := Alltrim(cValToChar(aAcessos[nI, 1]))
-                        cFil := Alltrim(cValToChar(aAcessos[nI, 2]))
-                        If cEmp == "@@@@" .Or. cEmp == "@@"
-                            // Coringa de GRUPO inteiro — libera todas as
-                            // empresas/filiais, nao so a empresa cCodigo.
-                            lGrpTodo := .T.
-                            Exit
-                        EndIf
-                        If cEmp == cCodigo .And. !Empty(cFil) .And. cFil != "@@@@" .And. cFil != "@@"
-                            lExiste := .F.
-                            For nJ := 1 To Len(aFiliais)
-                                If Alltrim(cValToChar(aFiliais[nJ])) == cFil
-                                    lExiste := .T.
-                                    Exit
-                                EndIf
-                            Next nJ
-                            If !lExiste
-                                AAdd(aFiliais, cFil)
-                            EndIf
-                        EndIf
-                    EndIf
-                Next nI
-            EndIf
+    For nI := 1 To Len(aValores)
+        If nI > 1
+            cRet += ","
         EndIf
-    Recover
-        lFalhou := .T.
-        ConOut("[IA Command] IACFilPsw: falha ao consultar PswRet para empresa " + cCodigo + " usuario " + cUsuarioId)
-    End Sequence
+        cRet += Alltrim(cValToChar(aValores[nI]))
+    Next nI
 
-    If lFalhou .Or. lGrpTodo
-        Return Nil
-    EndIf
-
-    If Len(aFiliais) == 0
-        AAdd(aFiliais, cFilRef)
-    EndIf
-
-Return aFiliais
+    cRet += "]"
+Return cRet
 
 /* ----------------------------------------------------------------------------
    IACFilJs
    Monta o JSON de filiaisPermitidas enviado ao IAHub, a partir do retorno de
    IACFilUsr(). Formato: [{"codigoProtheus":"01","filiais":["010101",...]}].
-   Se IACFilUsr() nao coletar nada (usuario sem cadastro de acesso via PSW,
-   ou falha de consulta), devolve "[]" — o backend trata isso como "sem
-   informacao de filial por usuario" e nao filtra a arvore por essa
-   dimensao (comportamento equivalente a antes desta mudanca), nunca bloqueia.
+   Calcula lTodas (acesso de grupo/empresa inteira) uma vez via FWUsrEmp(),
+   mesma fonte ja usada por IACEmpUsr() para as empresas — reaproveitada
+   aqui para decidir se IACFilUsr() deve mostrar todas as filiais reais de
+   cada empresa (SM0) ou so a filial de referencia.
 ---------------------------------------------------------------------------- */
 Static Function IACFilJs(cUsuarioId, aCodigos)
-    Local aFilPorEmp := IACFilUsr(cUsuarioId, aCodigos)
+    Local aEmpUsr    := FWUsrEmp(cUsuarioId)
+    Local lTodas     := .F.
+    Local aFilPorEmp := {}
     Local cJson      := "["
     Local nI         := 0
     Local nJ         := 0
     Local cCod       := ""
     Local aFiliais   := {}
+
+    If ValType(aEmpUsr) == "A"
+        For nI := 1 To Len(aEmpUsr)
+            If ValType(aEmpUsr[nI]) == "C" .And. ;
+               (Alltrim(aEmpUsr[nI]) == "@@@@" .Or. Alltrim(aEmpUsr[nI]) == "@@")
+                lTodas := .T.
+                Exit
+            EndIf
+        Next nI
+    EndIf
+
+    aFilPorEmp := IACFilUsr(aCodigos, lTodas)
 
     For nI := 1 To Len(aFilPorEmp)
         cCod     := aFilPorEmp[nI, 1]
@@ -855,24 +870,23 @@ Return cJson
 
 /* ----------------------------------------------------------------------------
    IACCodEmp
-   Resolve o codigo de empresa usado em X6_FIL para buscar MV_IACEMID. Suporta
-   Protheus tradicional e Lobo Guara, onde FWLoadSM0()/SM0 podem expor campos
-   em formatos diferentes.
+   [CORRIGIDO apos revisao de codigo — removido Left(cFil,2)] Deduzir a
+   empresa pelos 2 primeiros caracteres da filial completa so funciona por
+   coincidencia quando M0_LEIAUTE comeca com EE (2 digitos de empresa);
+   FWLoadSM0()[nI,3] (SM0_EMPRESA) ja e o codigo real da empresa — usa
+   direto. Grupo (cGrp) fica so como fallback de compatibilidade com
+   ambientes legados onde SM0_EMPRESA vem vazio.
 ---------------------------------------------------------------------------- */
-Static Function IACCodEmp(cGrp, cFil, cEmpSM0)
+Static Function IACCodEmp(cGrp, cEmpSM0)
     Local cRet := ""
-    Local cEmp := Alltrim(cEmpSM0)
 
-    If !Empty(cFil)
-        cRet := Left(Alltrim(cFil), 2)
-    EndIf
+    cGrp    := Alltrim(cValToChar(cGrp))
+    cEmpSM0 := Alltrim(cValToChar(cEmpSM0))
 
-    If (Empty(cRet) .Or. Len(cRet) < 2) .And. !Empty(cEmp) .And. Len(cEmp) <= 2
-        cRet := cEmp
-    EndIf
-
-    If Empty(cRet)
-        cRet := Left(Alltrim(cGrp), 2)
+    If !Empty(cEmpSM0)
+        cRet := cEmpSM0
+    Else
+        cRet := cGrp
     EndIf
 
 Return cRet

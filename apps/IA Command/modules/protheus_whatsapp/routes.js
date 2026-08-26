@@ -221,6 +221,11 @@ function resolverEmpresaSelecionada(req, res) {
     return null;
   }
 
+  if (empresaConfirmadaInexistente(sessao, empresaId)) {
+    res.status(409).json({ error: 'Empresa nao esta configurada no IA Command.' });
+    return null;
+  }
+
   return empresaId;
 }
 
@@ -261,6 +266,9 @@ function empresasPermitidasDaSessao(sessao) {
       ...emp,
       empresa_id: Number(emp.empresaId),
       nome: emp.nomeProtheus || emp.codigoProtheus || `Empresa ${emp.empresaId}`,
+      // null = nao foi possivel confirmar (query falhou nesta instalacao);
+      // true/false = confirmado existir ou nao na tabela empresas.
+      existeNoCadastro: null,
     }));
 
   try {
@@ -270,16 +278,29 @@ function empresasPermitidasDaSessao(sessao) {
       const rows = getDB().prepare(`SELECT id, nome FROM empresas WHERE id IN (${placeholders})`).all(...ids);
       const nomes = new Map((rows || []).map(row => [Number(row.id), String(row.nome || '').trim()]));
       for (const emp of empresas) {
+        emp.existeNoCadastro = nomes.has(emp.empresa_id);
         const nome = nomes.get(emp.empresa_id);
         if (nome) emp.nome = nome;
       }
     }
   } catch (_) {
     // Algumas instalacoes mantem o cadastro de empresas fora deste DB; o codigo
-    // Protheus/empresaId ja e suficiente para executar o pipeline.
+    // Protheus/empresaId ja e suficiente para executar o pipeline. existeNoCadastro
+    // fica null para todas (nao confirmado, nao bloqueia).
   }
 
   return empresas;
+}
+
+// Empresa "fantasma": veio do .prw com MV_IACEMID apontando para um empresaId
+// que nao existe (mais) no cadastro do IAHub. So bloqueia quando a existencia
+// foi CONFIRMADA como falsa (existeNoCadastro === false) — se a checagem nao
+// pode ser feita nesta instalacao (null), mantem o comportamento permissivo
+// anterior a esta mudanca.
+function empresaConfirmadaInexistente(sessao, empresaId) {
+  const permitidas = empresasPermitidasDaSessao(sessao);
+  const emp = permitidas.find(e => Number(e.empresa_id) === Number(empresaId));
+  return !!emp && emp.existeNoCadastro === false;
 }
 
 function resolverEmpresasSelecionadas(req, res) {
@@ -297,6 +318,12 @@ function resolverEmpresasSelecionadas(req, res) {
   const invalidas = ids.filter(id => !permitidasPorId.has(id));
   if (!ids.length || invalidas.length) {
     res.status(403).json({ error: 'Empresa nao permitida para esta sessao.' });
+    return null;
+  }
+
+  const fantasmas = ids.filter(id => permitidasPorId.get(id)?.existeNoCadastro === false);
+  if (fantasmas.length) {
+    res.status(409).json({ error: 'Empresa nao esta configurada no IA Command.' });
     return null;
   }
 
@@ -1091,9 +1118,15 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
       const db = getDB();
       const empresas = [];
+      // empresa-cliente IAHub cadastrada e com acesso Protheus (aparece no
+      // nivel 0 do modal), mas sem LOBO_GUARA configurado/validado — o
+      // frontend usa essa lista para mostrar "empresa nao configurada" em
+      // vez de "sem filial liberada" (mensagens tem causas diferentes: uma e
+      // falta de configuracao da empresa, outra e falta de acesso do usuario).
+      const empresasSemConfiguracao = [];
       for (const emp of empresasSelecionadas) {
         const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, emp.empresa_id);
-        if (!ctx) continue; // nao LOBO_GUARA validada — nao aparece na arvore
+        if (!ctx) { empresasSemConfiguracao.push(emp.empresa_id); continue; } // nao LOBO_GUARA validada — nao aparece na arvore
         let arvoreEmpresa = loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId);
         // arvoreAgrupadaParaSelecao devolve TODAS as empresas Protheus da
         // conexao (protheus_company_tree so tem connection_id, nao empresa_id
@@ -1131,8 +1164,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       }
 
       perfLog('GET /filial-tree', inicio, { status: 200, empresas: empresas.length });
-      if (!empresas.length) return res.json({ disponivel: false });
-      res.json({ disponivel: true, empresas });
+      if (!empresas.length) return res.json({ disponivel: false, empresasSemConfiguracao });
+      res.json({ disponivel: true, empresas, empresasSemConfiguracao });
     } catch (err) {
       perfLog('GET /filial-tree', inicio, { status: 500, erro: err.message });
       res.status(500).json({ error: err.message });
