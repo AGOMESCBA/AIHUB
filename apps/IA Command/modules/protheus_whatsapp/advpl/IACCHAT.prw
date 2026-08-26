@@ -96,6 +96,15 @@
         trocar ambiente) — mesmo padrao ja validado e em producao no cadastro
         de usuarios. Ver comentario completo nas funcoes IACFilUsr/IACFilPsw,
         mais abaixo.
+     g) [CORRIGIDO apos usuario reportar arvore de filial errada no chat]
+        IACFilPsw() nao tratava acesso PSW cadastrado como coringa de GRUPO
+        inteiro (cEmpresa=="@@@@"/"@@", usuario admin/master cadastrado so
+        com "Grupo de empresas" preenchido, sem empresa/filial especifica) —
+        a comparacao cEmp==cCodigo nunca batia para nenhuma empresa real
+        ("01","02"...), entao TODAS caiam no fallback de "so a filial de
+        referencia" (a primeira filial de cada empresa na SM0), quando
+        deveriam ficar totalmente liberadas. Corrigido para detectar o
+        coringa de grupo e devolver Nil (sem filtro adicional) nesse caso.
 
    Todo valor de configuracao especifico de ambiente (URL do IAHub, timeout,
    empresa_id, segredo) e lido via parametro SX6 (GetMV) — ver bloco
@@ -729,13 +738,22 @@ Return aRet
    da empresa cCodigo — sem trocar o ambiente RPC do processo atual.
 
    Retorno: array de codigos de filial (ValType "A"), ou Nil se a consulta
-   via PswRet falhou (Begin Sequence/Recover) — Nil e distinto de array
-   vazio: Nil sinaliza para o chamador "sem informacao, nao adicionar esta
-   empresa"; array vazio sinaliza "zero filiais liberadas, bloquear tudo".
-   Se PswRet teve sucesso mas nao teve NENHUM acesso de filial cadastrado
-   para esta empresa (usuario so tem a filial de referencia padrao), cai no
-   fallback de devolver cFilRef sozinho — mesmo comportamento ja usado no
-   cadastro de usuarios.
+   via PswRet falhou (Begin Sequence/Recover) OU se o usuario tem acesso
+   coringa de GRUPO inteiro (cEmpresa == "@@@@"/"@@" no acesso PSW — usuario
+   admin/master, cadastrado so com "Grupo de empresas" preenchido, sem
+   empresa/filial especifica) — Nil sinaliza para o chamador "sem informacao
+   adicional, nao filtra esta empresa" (equivalente a acesso total).
+   [CORRIGIDO apos usuario reportar arvore com filial errada/faltando: caso
+   real de producao com usuario cujo unico acesso cadastrado no PSW e coringa
+   de grupo ("Grupo de empresas: 01", sem empresa/filial marcada) — a
+   comparacao cEmp==cCodigo nunca batia (cEmp vinha "@@@@", nao "01"/"02"),
+   entao TODAS as empresas do grupo caiam no fallback de "so a filial de
+   referencia", quando deveriam ficar totalmente liberadas.]
+
+   Se PswRet teve sucesso mas nao teve NENHUM acesso (nem especifico, nem
+   coringa de grupo) cadastrado para esta empresa, cai no fallback de
+   devolver cFilRef sozinho — mesmo comportamento ja usado no cadastro de
+   usuarios.
 ---------------------------------------------------------------------------- */
 Static Function IACFilPsw(cUsuarioId, cCodigo, cFilRef)
     Local aFiliais := {}
@@ -747,6 +765,7 @@ Static Function IACFilPsw(cUsuarioId, cCodigo, cFilRef)
     Local cFil     := ""
     Local lExiste  := .F.
     Local lFalhou  := .F.
+    Local lGrpTodo := .F.
 
     Begin Sequence
         PswOrder(1)
@@ -758,6 +777,12 @@ Static Function IACFilPsw(cUsuarioId, cCodigo, cFilRef)
                     If ValType(aAcessos[nI]) == "A" .And. Len(aAcessos[nI]) >= 2
                         cEmp := Alltrim(cValToChar(aAcessos[nI, 1]))
                         cFil := Alltrim(cValToChar(aAcessos[nI, 2]))
+                        If cEmp == "@@@@" .Or. cEmp == "@@"
+                            // Coringa de GRUPO inteiro — libera todas as
+                            // empresas/filiais, nao so a empresa cCodigo.
+                            lGrpTodo := .T.
+                            Exit
+                        EndIf
                         If cEmp == cCodigo .And. !Empty(cFil) .And. cFil != "@@@@" .And. cFil != "@@"
                             lExiste := .F.
                             For nJ := 1 To Len(aFiliais)
@@ -779,7 +804,7 @@ Static Function IACFilPsw(cUsuarioId, cCodigo, cFilRef)
         ConOut("[IA Command] IACFilPsw: falha ao consultar PswRet para empresa " + cCodigo + " usuario " + cUsuarioId)
     End Sequence
 
-    If lFalhou
+    If lFalhou .Or. lGrpTodo
         Return Nil
     EndIf
 

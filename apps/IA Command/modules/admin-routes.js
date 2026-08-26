@@ -469,12 +469,12 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json(rows.map(row => ({ ...row, modulos_dinamicos: modulosPorNumero.get(row.id) || [] })));
   });
 
-  app.get('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canNumeros, (req, res) => {
-    const store = require('./protheus_whatsapp/user-permissions-store');
-    const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
-    const nomes = new Map(empresas.map(e => [Number(e.id), e.nome]));
-    const ids = empresas.map(e => Number(e.id)).filter(Boolean);
-    const arvoreRows = ids.length ? getDB().prepare(`
+  // Nomes de empresa/filial Protheus (protheus_company_tree) por empresa_id
+  // IAHub — reaproveitado pela listagem (resumo em texto) e pelo detalhe
+  // (arvore visual), unica fonte de verdade para nao divergir os dois.
+  function _nomesArvoreProtheus(empresaIds) {
+    const ids = [...new Set((empresaIds || []).map(Number).filter(Boolean))];
+    const rows = ids.length ? getDB().prepare(`
       SELECT empresa_id, empresa_codigo, filial_chave, tipo_no, nome
         FROM protheus_company_tree
        WHERE empresa_id IN (${ids.map(() => '?').join(',')})
@@ -482,7 +482,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     `).all(...ids) : [];
     const nomesEmpProtheus = new Map();
     const nomesFiliais = new Map();
-    for (const item of arvoreRows) {
+    for (const item of rows) {
       if (item.tipo_no === 'empresa' && item.empresa_codigo) {
         nomesEmpProtheus.set(`${item.empresa_id}:${item.empresa_codigo}`, item.nome || item.empresa_codigo);
       }
@@ -490,6 +490,41 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         nomesFiliais.set(`${item.empresa_id}:${item.filial_chave}`, item.nome || item.filial_chave);
       }
     }
+    return { nomesEmpProtheus, nomesFiliais };
+  }
+
+  // Estrutura em arvore (empresa Protheus -> filiais, com nomes resolvidos)
+  // para a tela de detalhe renderizar de forma legivel, em vez do JSON cru
+  // {codigoProtheus, filiais:[...]} que so faz sentido para quem le codigo.
+  function _arvoreAcessosLegivel(row, nomesEmpProtheus, nomesFiliais) {
+    const filiaisPorCodigo = new Map(
+      (row.filiaisPermitidas || []).map(item => [String(item.codigoProtheus || '').trim(), item.filiais || []])
+    );
+    return (row.empresasPermitidas || []).map(emp => {
+      const codigo = String(emp.codigoProtheus || '').trim();
+      const filiaisCodigos = codigo ? (filiaisPorCodigo.get(codigo) || []) : [];
+      return {
+        empresaId: emp.empresaId,
+        codigoProtheus: codigo || null,
+        nome: emp.nomeProtheus || (codigo && nomesEmpProtheus.get(`${row.empresa_id}:${codigo}`)) || codigo || `Empresa ${emp.empresaId}`,
+        // sem codigo Protheus vinculado (empresa nao-LOBO_GUARA ou item de
+        // compatibilidade) ou sem filiais listadas -> acesso e a EMPRESA
+        // TODA, nao "zero filiais" (mesmo contrato usado no restante do
+        // sistema: ausencia de filtro = sem restricao adicional).
+        todasFiliais: !codigo || !filiaisCodigos.length,
+        filiais: filiaisCodigos.map(chave => ({
+          chave,
+          nome: (codigo && nomesFiliais.get(`${row.empresa_id}:${chave}`)) || chave,
+        })),
+      };
+    });
+  }
+
+  app.get('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
+    const nomes = new Map(empresas.map(e => [Number(e.id), e.nome]));
+    const { nomesEmpProtheus, nomesFiliais } = _nomesArvoreProtheus(empresas.map(e => e.id));
     const rows = store.listar({
       empresaIds: empresas.map(e => e.id),
       incluirInativos: req.query.inativos === '1' || req.query.incluirInativos === '1',
@@ -518,7 +553,12 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
     }
     const emp = empresasDb.buscarPorId(Number(row.empresa_id)) || {};
-    res.json({ ...row, empresa_nome: emp.nome || emp.razao_social || `Empresa #${row.empresa_id}` });
+    const { nomesEmpProtheus, nomesFiliais } = _nomesArvoreProtheus([row.empresa_id]);
+    res.json({
+      ...row,
+      empresa_nome: emp.nome || emp.razao_social || `Empresa #${row.empresa_id}`,
+      arvoreAcessos: _arvoreAcessosLegivel(row, nomesEmpProtheus, nomesFiliais),
+    });
   });
 
   app.put('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canNumeros, (req, res) => {

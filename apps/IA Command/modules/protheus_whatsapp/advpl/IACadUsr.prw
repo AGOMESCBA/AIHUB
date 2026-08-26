@@ -8,6 +8,18 @@
     Cadastro de celular por usuario Protheus - IA Command.
     Tabela: ZCH
     A estrutura fisica e o dicionario ja devem existir no ambiente.
+
+    IMPORTANTE — cache do login web: o login web (acesso direto pelo
+    telefone, sem passar pelo Protheus) le empresas/filiais permitidas de um
+    CACHE gravado no IAHub (tabela protheus_web_user_permissions), nao
+    consulta o Protheus em tempo real. Esse cache nao expira sozinho — so e
+    atualizado quando o usuario abre o chat pelo Protheus (POST /token) OU
+    quando alguem roda a opcao de menu "Sincronizar cadastro e acessos" aqui
+    (varre toda a ZCH e atualiza todos de uma vez via IACEnvSync/IACUrlSync).
+    SEMPRE que o acesso (empresa/filial/grupo) de algum usuario mudar no
+    Protheus, rode "Sincronizar cadastro e acessos" novamente — senao quem
+    usa login web direto continua vendo o escopo antigo ate a proxima
+    sincronizacao.
 /*/
 
 User Function IACADUSR()
@@ -35,7 +47,8 @@ Static Function MenuDef()
     ADD OPTION aRotina TITLE "Incluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 3 ACCESS 0
     ADD OPTION aRotina TITLE "Alterar"    ACTION "VIEWDEF.IACADUSR" OPERATION 4 ACCESS 0
     ADD OPTION aRotina TITLE "Excluir"    ACTION "VIEWDEF.IACADUSR" OPERATION 5 ACCESS 0
-    ADD OPTION aRotina TITLE "Sincronizar cadastro" ACTION "U_IACUSRSYNC" OPERATION 6 ACCESS 0
+    ADD OPTION aRotina TITLE "Sincronizar cadastro e acessos" ACTION "U_IACUSRSYNC" OPERATION 6 ACCESS 0
+    ADD OPTION aRotina TITLE "Ver Acessos Sincronizados" ACTION "U_IACUSRVER" OPERATION 6 ACCESS 0
 
 Return aRotina
 
@@ -142,6 +155,171 @@ User Function IACUSRSYNC()
     FWRestArea(aArea)
 
 Return
+
+/*/{Protheus.doc} IACUSRVER
+    "Ver Acessos Sincronizados" — consulta no IA Command o que foi gravado
+    para o usuario da linha selecionada no browse ZCH, e mostra empresas e
+    filiais liberadas de forma legivel (nome, nao so codigo). Le o mesmo
+    cache que o login web usa (protheus_web_user_permissions) — reflete
+    exatamente o que a proxima sessao web veria, nao consulta o ERP de novo.
+/*/
+User Function IACUSRVER()
+
+    Local aArea     := FWGetArea()
+    Local cUser     := Alltrim(IACCampo("ZCH_USER"))
+    Local cCelular  := IACDigitos(IACCampo("ZCH_CELULA"))
+    Local cErro     := ""
+    Local aDados    := {}
+    Local cCabecalho:= ""
+    Local lOk       := .F.
+
+    If Empty(cUser) .And. Empty(cCelular)
+        MsgAlert("Selecione um usuario na lista antes de consultar.", "IA Command")
+        FWRestArea(aArea)
+        Return
+    EndIf
+
+    Processa({|| lOk := IACConsultaVer(cUser, cCelular, @aDados, @cCabecalho, @cErro)}, ;
+             "IA Command", ;
+             "Consultando acessos sincronizados...", ;
+             .F.)
+
+    If lOk
+        If Empty(aDados)
+            MsgStop("Nenhuma empresa/filial liberada para este usuario." + CRLF + cCabecalho, "IA Command")
+        Else
+            IACGridAcessos(aDados, cCabecalho, "Acessos sincronizados - " + cUser)
+        EndIf
+    Else
+        MsgAlert("Nao foi possivel consultar os acessos:" + CRLF + cErro, "IA Command")
+    EndIf
+
+    FWRestArea(aArea)
+
+Return
+
+/*/{Protheus.doc} IACGridAcessos
+    Janela com grid (TWBrowse) somente-leitura mostrando uma linha por
+    filial liberada — Empresa Protheus | Codigo | Filial | Chave — mais
+    legivel que texto corrido quando o usuario tem muitas empresas/filiais.
+/*/
+Static Function IACGridAcessos(aDados, cCabecalho, cTitulo)
+
+    Local oDlg     := Nil
+    Local oBrowse  := Nil
+    Local aHeader  := { "Empresa Protheus", "Codigo", "Filial", "Chave" }
+
+    DEFINE MSDIALOG oDlg TITLE cTitulo FROM 0, 0 TO 400, 750 PIXEL
+
+    IF !Empty(cCabecalho)
+        @ 006, 008 SAY cCabecalho SIZE 730, 018 OF oDlg PIXEL
+    ENDIF
+
+    oBrowse := TWBrowse():New(030, 008, 355, 730, , aHeader, , oDlg,,,,,{||},,,,,,,.F.,,.T.,,.F.,,, )
+    oBrowse:SetArray(aDados)
+    oBrowse:bLine := {|| { aDados[oBrowse:nAt, 1], ;
+                           aDados[oBrowse:nAt, 2], ;
+                           aDados[oBrowse:nAt, 3], ;
+                           aDados[oBrowse:nAt, 4] } }
+
+    DEFINE SBUTTON FROM 365, 690 TYPE 1 ACTION oDlg:End() ENABLE OF oDlg
+
+    ACTIVATE MSDIALOG oDlg CENTERED
+
+Return
+
+// Monta aDados no formato { {empresa, codigo, filial, chave}, ... } — uma
+// linha por filial liberada; empresa com "todas as filiais" gera uma unica
+// linha com Filial="(Todas as filiais)"/Chave="-". cCabecalho traz
+// usuario/celular/ultimo sync como texto simples acima da grid.
+Static Function IACConsultaVer(cUser, cCelular, aDados, cCabecalho, cErro)
+    Local oRest      := Nil
+    Local aHeader    := {}
+    Local cUrl       := IACUrlConsulta()
+    Local cBody      := ""
+    Local cResp      := ""
+    Local oJsonRes   := Nil
+    Local oEmpresas  := Nil
+    Local oEmp       := Nil
+    Local oFiliais   := Nil
+    Local oFil       := Nil
+    Local lOk        := .F.
+    Local nI         := 0
+    Local nJ         := 0
+    Local lTodasFil  := .F.
+    Local cNomeEmp   := ""
+    Local cCodEmp    := ""
+
+    If Empty(cUrl)
+        cErro := "Parametro MV_IACURL (URL do IAHub) nao configurado."
+        Return .F.
+    EndIf
+
+    cBody := '{"usuarioId":"' + IACEscJs(cUser) + '","celular":"' + IACEscJs(cCelular) + '"}'
+
+    AAdd(aHeader, "Content-Type: application/json")
+    AAdd(aHeader, "X-Protheus-Secret: " + IACSecret())
+
+    oRest := FWRest():New(cUrl)
+    oRest:SetPath("")
+    oRest:nTimeOut := IACTimeout()
+    oRest:SetPostParams(cBody)
+    lOk := oRest:Post(aHeader)
+
+    If !lOk
+        cErro := "Falha de comunicacao com o IAHub: " + cValToChar(oRest:GetResult())
+        Return .F.
+    EndIf
+
+    cResp := oRest:GetResult()
+    oJsonRes := JsonObject():New()
+    If oJsonRes:FromJson(cResp) != Nil
+        cErro := "Resposta invalida do servidor: " + cResp
+        Return .F.
+    EndIf
+    If !Empty(oJsonRes:GetJsonObject("error"))
+        cErro := oJsonRes:GetJsonObject("error")
+        Return .F.
+    EndIf
+
+    cCabecalho := "Usuario: " + cValToChar(oJsonRes:GetJsonObject("usuarioNome")) + " (" + cValToChar(oJsonRes:GetJsonObject("usuarioId")) + ")" + ;
+                  "   |   Celular: " + cValToChar(oJsonRes:GetJsonObject("celular")) + ;
+                  "   |   Ultima sincronizacao: " + cValToChar(oJsonRes:GetJsonObject("ultimoSyncEm"))
+
+    oEmpresas := oJsonRes:GetJsonObject("empresas")
+    If ValType(oEmpresas) != "A" .Or. Len(oEmpresas) == 0
+        Return .T. // aDados fica vazio — grid mostra "sem registros"
+    EndIf
+
+    For nI := 1 To Len(oEmpresas)
+        oEmp     := oEmpresas[nI]
+        cNomeEmp := cValToChar(oEmp:GetJsonObject("nome"))
+        cCodEmp  := cValToChar(oEmp:GetJsonObject("codigoProtheus"))
+
+        lTodasFil := oEmp:GetJsonObject("todasFiliais") == .T.
+        If lTodasFil
+            AAdd(aDados, { cNomeEmp, cCodEmp, "(Todas as filiais)", "-" })
+        Else
+            oFiliais := oEmp:GetJsonObject("filiais")
+            If ValType(oFiliais) == "A" .And. Len(oFiliais) > 0
+                For nJ := 1 To Len(oFiliais)
+                    oFil := oFiliais[nJ]
+                    AAdd(aDados, { cNomeEmp, cCodEmp, cValToChar(oFil:GetJsonObject("nome")), cValToChar(oFil:GetJsonObject("chave")) })
+                Next nJ
+            Else
+                AAdd(aDados, { cNomeEmp, cCodEmp, "(Nenhuma filial liberada)", "-" })
+            EndIf
+        EndIf
+    Next nI
+
+Return .T.
+
+Static Function IACUrlConsulta()
+    Local cBase := IACUrlBase()
+    If Empty(cBase)
+        Return ""
+    EndIf
+Return cBase + "/api/ia-command/protheus/user-permissions/consulta"
 
 Static Function IACZCHUsr(aUsuarios)
     Local cAliasAtu := Alias()
@@ -366,6 +544,15 @@ Static Function IACFilJs(cUsuario, aCodigos)
 
 Return cJson
 
+// [CORRIGIDO apos usuario reportar arvore de filial errada no chat web —
+// mesma causa raiz corrigida em IACCHAT.prw::IACFilPsw] Usuario com acesso
+// PSW cadastrado como coringa de GRUPO inteiro (cEmpresa=="@@@@"/"@@" — ex.:
+// usuario admin/master, cadastrado so com "Grupo de empresas" preenchido,
+// sem empresa/filial especifica) fazia cEmp==cCodigo nunca bater para
+// nenhuma empresa real, caindo no fallback de "so a filial de referencia"
+// para TODAS elas. Corrigido para detectar o coringa e devolver Nil (sem
+// filtro adicional — IACFilJs ja trata Nil como "omite esta empresa do
+// JSON", equivalente a acesso total, mesmo contrato ja usado la).
 Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
     Local aFiliais := {}
     Local aUsrData := {}
@@ -376,6 +563,7 @@ Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
     Local cEmp     := ""
     Local cFil     := ""
     Local lExiste  := .F.
+    Local lGrpTodo := .F.
 
     For nI := 1 To Len(aCodigos)
         If Alltrim(cValToChar(aCodigos[nI, 1])) == Alltrim(cValToChar(cCodigo))
@@ -400,6 +588,10 @@ Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
                     If ValType(aAcessos[nI]) == "A" .And. Len(aAcessos[nI]) >= 2
                         cEmp := Alltrim(cValToChar(aAcessos[nI, 1]))
                         cFil := Alltrim(cValToChar(aAcessos[nI, 2]))
+                        If cEmp == "@@@@" .Or. cEmp == "@@"
+                            lGrpTodo := .T.
+                            Exit
+                        EndIf
                         If cEmp == cCodigo .And. !Empty(cFil) .And. cFil != "@@@@" .And. cFil != "@@"
                             lExiste := .F.
                             For nJ := 1 To Len(aFiliais)
@@ -420,6 +612,10 @@ Static Function IACFilUsr(cUsuario, cCodigo, aCodigos)
         aFiliais := {}
         ConOut("[IA Command] IACUSRSYNC: falha ao consultar permissoes via PswRet para empresa " + cCodigo + " usuario " + cUsuario)
     End Sequence
+
+    If lGrpTodo
+        Return Nil
+    EndIf
 
     If Len(aFiliais) == 0
         AAdd(aFiliais, cFilRef)

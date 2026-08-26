@@ -2237,8 +2237,22 @@
   }
 
   async function carregarFilialTree() {
-    if (!empresasSelecionadasIds.length) { filialArvoreDisponivel = []; atualizarLabelEscopoSelect(); return; }
-    const data = await api('/filial-tree');
+    // Busca a arvore tambem das empresas apenas EXPANDIDAS no modal (usuario
+    // quer conferir as filiais antes de decidir marcar) — nao so as
+    // marcadas. Nao reaproveita api() aqui porque ela sempre anexa
+    // empresaIds=empresasSelecionadasIds automaticamente (contrato usado por
+    // toda outra chamada) — duplicaria o parametro na query. Fetch direto,
+    // mesmo padrao de headers, com a uniao explicita de ids desta chamada.
+    const idsParaBuscar = [...new Set([...empresasSelecionadasIds, ...escopoEmpresasIahubExpandidas])];
+    if (!idsParaBuscar.length) { filialArvoreDisponivel = []; atualizarLabelEscopoSelect(); return; }
+    const url = '/api/ia-command/protheus/filial-tree?empresaIds=' + encodeURIComponent(idsParaBuscar.join(','))
+      + (empresaAtualId ? '&empresaId=' + encodeURIComponent(empresaAtualId) : '');
+    const resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      if (resp.status === 401) limparSessaoNavegador();
+      throw Object.assign(new Error(data.error || ('Erro ' + resp.status)), data);
+    }
     filialArvoreDisponivel = data && data.disponivel && Array.isArray(data.empresas) ? data.empresas : [];
     // Poda selecoes que nao existem mais na arvore atual (empresa/filial
     // desativada ou removida) — evita enviar chave morta ao backend.
@@ -2330,11 +2344,19 @@
   // isoladas (busca, marcar/desmarcar) sem precisar redesenhar o modal
   // inteiro. `onChange` e chamado apos qualquer alteracao de selecao, para
   // o chamador (renderEscopoModal) atualizar o label do botao do header.
-  function renderArvoreProtheus(container, filtroTexto, onChange) {
+  function renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId) {
     container.innerHTML = '';
     const termo = String(filtroTexto || '').trim().toLowerCase();
+    // filialArvoreDisponivel pode conter a arvore de VARIAS empresas-cliente
+    // IAHub de uma vez (selecionadas + apenas expandidas no modal) — filtra
+    // pela empresa-cliente deste container antes de renderizar, senao uma
+    // empresa mostraria ramos de outra (empresaIahubId vem do backend, ver
+    // routes.js::/filial-tree).
+    const arvoreDaEmpresa = empresaIahubId
+      ? filialArvoreDisponivel.filter(e => Number(e.empresaIahubId) === Number(empresaIahubId))
+      : filialArvoreDisponivel;
 
-    if (!filialArvoreDisponivel.length) {
+    if (!arvoreDaEmpresa.length) {
       const vazio = document.createElement('div');
       vazio.className = 'filial-menu-empty';
       vazio.textContent = 'Nenhuma filial disponivel para o seu acesso nesta empresa.';
@@ -2342,7 +2364,7 @@
       return;
     }
 
-    filialArvoreDisponivel.forEach((emp) => {
+    arvoreDaEmpresa.forEach((emp) => {
       const nomeEmpresaNorm = String(emp.nome || '').toLowerCase();
       const filiaisFiltradas = emp.filiais.filter(f => {
         if (!termo) return true;
@@ -2370,7 +2392,7 @@
         e.stopPropagation();
         if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
         else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
-        renderArvoreProtheus(container, filtroTexto, onChange);
+        renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
       });
 
       const input = document.createElement('input');
@@ -2379,7 +2401,7 @@
       input.indeterminate = estado === 'parcial';
       input.addEventListener('change', () => {
         marcarEmpresaInteira(emp.empresaProtheusCodigo, input.checked);
-        renderArvoreProtheus(container, filtroTexto, onChange);
+        renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
         if (onChange) onChange();
       });
       input.addEventListener('click', (e) => e.stopPropagation());
@@ -2401,7 +2423,7 @@
       row.addEventListener('click', () => {
         if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
         else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
-        renderArvoreProtheus(container, filtroTexto, onChange);
+        renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
       });
 
       const listaFiliais = document.createElement('div');
@@ -2414,7 +2436,7 @@
         inputFilial.checked = filialFiliaisAvulsas.has(fil.filialChave) || filialEmpresasInteiras.has(emp.empresaProtheusCodigo);
         inputFilial.addEventListener('change', () => {
           marcarFilialAvulsa(emp.empresaProtheusCodigo, fil.filialChave, inputFilial.checked);
-          renderArvoreProtheus(container, filtroTexto, onChange);
+          renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
           if (onChange) onChange();
         });
         const spanFilial = document.createElement('span');
@@ -2434,10 +2456,32 @@
   // IAHub (empresasDisponiveis). Marcar o checkbox da empresa IAHub
   // adiciona/remove de empresasSelecionadasIds e recarrega a arvore Protheus
   // (trocarEscopoEmpresa/carregarFilialTree, ja existentes). Expandir a
-  // linha so alterna visibilidade — nao dispara nova chamada de API, ja que
-  // filialArvoreDisponivel ja vem filtrada pelo backend para TODAS as
-  // empresas IAHub selecionadas ao mesmo tempo (nao por empresa isolada).
+  // linha e independente de marcar (usuario pode querer conferir as filiais
+  // antes de decidir) — carregarFilialTree busca a arvore da uniao de
+  // selecionadas + expandidas, entao expandir uma empresa ainda nao marcada
+  // dispara a busca sob demanda (ver alternarExpansaoEmpresaIahub).
   let escopoEmpresasIahubExpandidas = new Set();
+
+  async function alternarExpansaoEmpresaIahub(id) {
+    const jaExpandida = escopoEmpresasIahubExpandidas.has(id);
+    if (jaExpandida) {
+      escopoEmpresasIahubExpandidas.delete(id);
+      renderEscopoModal(escopoSearch.value);
+      return;
+    }
+    escopoEmpresasIahubExpandidas.add(id);
+    // Empresa marcada ja tem a arvore carregada por trocarEscopoEmpresa; so
+    // busca sob demanda quando expandindo uma empresa AINDA NAO selecionada.
+    const jaTemArvore = filialArvoreDisponivel.some(e => Number(e.empresaIahubId) === id);
+    if (!empresasSelecionadasIds.includes(id) && !jaTemArvore) {
+      try {
+        await carregarFilialTree();
+      } catch (err) {
+        showError('Falha ao carregar filiais: ' + err.message);
+      }
+    }
+    renderEscopoModal(escopoSearch.value);
+  }
 
   function renderEscopoModal(filtroTexto = '') {
     escopoModalBody.innerHTML = '';
@@ -2470,11 +2514,9 @@
       const toggle = document.createElement('span');
       toggle.className = 'toggle';
       toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-      toggle.addEventListener('click', (e) => {
+      toggle.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (escopoEmpresasIahubExpandidas.has(id)) escopoEmpresasIahubExpandidas.delete(id);
-        else escopoEmpresasIahubExpandidas.add(id);
-        renderEscopoModal(escopoSearch.value);
+        await alternarExpansaoEmpresaIahub(id);
       });
 
       const input = document.createElement('input');
@@ -2501,21 +2543,19 @@
       row.appendChild(toggle);
       row.appendChild(input);
       row.appendChild(nomeSpan);
-      row.addEventListener('click', () => {
-        if (escopoEmpresasIahubExpandidas.has(id)) escopoEmpresasIahubExpandidas.delete(id);
-        else escopoEmpresasIahubExpandidas.add(id);
-        renderEscopoModal(escopoSearch.value);
+      row.addEventListener('click', async () => {
+        await alternarExpansaoEmpresaIahub(id);
       });
 
       const corpo = document.createElement('div');
       corpo.className = 'escopo-empresa-iahub-corpo';
-      if (!selecionada) {
+      if (!expandido) {
         const aviso = document.createElement('div');
         aviso.className = 'escopo-empresa-iahub-vazio';
-        aviso.textContent = 'Marque esta empresa para ver/filtrar suas filiais.';
+        aviso.textContent = 'Clique na empresa para ver suas filiais.';
         corpo.appendChild(aviso);
       } else {
-        renderArvoreProtheus(corpo, termo, atualizarLabelEscopoSelect);
+        renderArvoreProtheus(corpo, termo, atualizarLabelEscopoSelect, id);
       }
 
       wrap.appendChild(row);

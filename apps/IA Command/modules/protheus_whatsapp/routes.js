@@ -891,6 +891,86 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
+  // ── Consulta do que foi sincronizado, para o Protheus mostrar de volta ──
+  // Usada pela opcao "Ver Acessos Sincronizados" do cadastro ZCH (IACadUsr.prw)
+  // — le o mesmo cache que o login web usa (protheus_web_user_permissions),
+  // nao consulta o ERP de novo, entao mostra exatamente o que o proximo login
+  // web veria (ver duvida do usuario sobre cache desatualizado).
+  // POST (nao GET) por escolha deliberada: o .prw so tem uso validado em
+  // producao de oRest:Post() — Get() nunca foi testado neste ambiente, e ja
+  // ocorreram 2 erros reais de metodo inexistente com FWRest antes (ver
+  // historico em IACCHAT.prw). Preferimos verbo semanticamente "errado" a
+  // arriscar mais um erro de Framework em producao.
+  app.post('/api/ia-command/protheus/user-permissions/consulta', (req, res) => {
+    const inicio = Date.now();
+    if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
+      perfLog('POST /user-permissions/consulta', inicio, { status: 401 });
+      return res.status(401).json({ error: 'Credencial invalida.' });
+    }
+    try {
+      const body = req.body || {};
+      const usuarioId = String(body.usuarioId || body.usuario_id || '').trim();
+      const celular = tokenService.normalizarCelular(body.celular || body.numero || '');
+      if (!usuarioId && !celular) {
+        perfLog('POST /user-permissions/consulta', inicio, { status: 400 });
+        return res.status(400).json({ error: 'Informe usuarioId ou celular.' });
+      }
+
+      const db = getDB();
+      const row = usuarioId
+        ? db.prepare(`
+            SELECT * FROM protheus_web_user_permissions
+             WHERE usuario_id = ? ORDER BY atualizado_em DESC LIMIT 1
+          `).get(usuarioId)
+        : db.prepare(`
+            SELECT * FROM protheus_web_user_permissions
+             WHERE celular = ? ORDER BY atualizado_em DESC LIMIT 1
+          `).get(celular);
+
+      if (!row) {
+        perfLog('POST /user-permissions/consulta', inicio, { status: 404 });
+        return res.status(404).json({ error: 'Nenhuma sincronizacao encontrada para este usuario.' });
+      }
+
+      const empresasPermitidas = JSON.parse(row.empresas_permitidas_json || '[]');
+      const filiaisPermitidas = JSON.parse(row.filiais_permitidas_json || '[]');
+      const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, row.empresa_id);
+      const nomesEmpresa = new Map();
+      const nomesFilial = new Map();
+      if (ctx) {
+        for (const emp of loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId)) {
+          nomesEmpresa.set(emp.empresaProtheusCodigo, emp.nome);
+          for (const fil of emp.filiais) nomesFilial.set(fil.filialChave, fil.nome);
+        }
+      }
+      const filiaisPorCodigo = new Map(filiaisPermitidas.map(item => [String(item.codigoProtheus || '').trim(), item.filiais || []]));
+
+      const empresas = empresasPermitidas.map(emp => {
+        const codigo = String(emp.codigoProtheus || '').trim();
+        const filiaisCodigos = codigo ? (filiaisPorCodigo.get(codigo) || []) : [];
+        return {
+          codigoProtheus: codigo || null,
+          nome: emp.nomeProtheus || (codigo && nomesEmpresa.get(codigo)) || codigo || `Empresa ${emp.empresaId}`,
+          todasFiliais: !codigo || !filiaisCodigos.length,
+          filiais: filiaisCodigos.map(chave => ({ chave, nome: nomesFilial.get(chave) || chave })),
+        };
+      });
+
+      perfLog('POST /user-permissions/consulta', inicio, { status: 200, empresas: empresas.length });
+      res.json({
+        usuarioId: row.usuario_id,
+        usuarioNome: row.usuario_nome,
+        celular: row.celular,
+        ativo: !!Number(row.ativo),
+        ultimoSyncEm: row.ultimo_sync_em,
+        empresas,
+      });
+    } catch (err) {
+      perfLog('POST /user-permissions/consulta', inicio, { status: 500, erro: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Pagina do chat (servida como estatico, sem auth de sessao IAHub) ──
   app.get('/api/ia-command/protheus/chat', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'protheus-chat.html'));
@@ -1034,13 +1114,18 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         // que esta cadastrado).
         for (const empArvore of arvoreEmpresa) {
           const filiaisErp = tokenService.filiaisPermitidasDaEmpresa(req.protheusChat, empArvore.empresaProtheusCodigo);
+          // empresaIahubId marca de qual empresa-cliente IAHub este ramo veio
+          // — necessario porque esta chamada pode devolver a arvore de VARIAS
+          // empresas-cliente de uma vez (selecionadas + apenas expandidas no
+          // modal), e o frontend precisa filtrar por empresa-cliente ao
+          // renderizar o corpo expandido de cada uma isoladamente.
           if (filiaisErp === null) {
-            empresas.push(empArvore);
+            empresas.push({ ...empArvore, empresaIahubId: emp.empresa_id });
             continue;
           }
           const filiaisFiltradas = empArvore.filiais.filter(f => filiaisErp.includes(f.filialChave));
           if (filiaisFiltradas.length) {
-            empresas.push({ ...empArvore, filiais: filiaisFiltradas });
+            empresas.push({ ...empArvore, filiais: filiaisFiltradas, empresaIahubId: emp.empresa_id });
           }
         }
       }
