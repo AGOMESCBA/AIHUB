@@ -1014,7 +1014,17 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       for (const emp of empresasSelecionadas) {
         const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, emp.empresa_id);
         if (!ctx) continue; // nao LOBO_GUARA validada — nao aparece na arvore
-        const arvoreEmpresa = loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId);
+        let arvoreEmpresa = loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId);
+        // arvoreAgrupadaParaSelecao devolve TODAS as empresas Protheus da
+        // conexao (protheus_company_tree so tem connection_id, nao empresa_id
+        // do IAHub) — varias empresas-cliente IAHub podem compartilhar a
+        // mesma conexao LOBO_GUARA. Restringe ao codigo Protheus vinculado a
+        // ESTA empresa-cliente (emp.codigoProtheus, vindo do .prw no /token);
+        // sem esse vinculo (instalacao antiga ou codigo vazio), mantem o
+        // comportamento anterior (mostra a conexao inteira).
+        if (emp.codigoProtheus) {
+          arvoreEmpresa = arvoreEmpresa.filter(e => e.empresaProtheusCodigo === emp.codigoProtheus);
+        }
         // Filtra pelo acesso real do usuario no ERP (FWUsrEmp/LoadFils,
         // capturado no .prw na abertura do chat) — a arvore cadastrada
         // (protheus_company_tree) representa o universo, nao o que este

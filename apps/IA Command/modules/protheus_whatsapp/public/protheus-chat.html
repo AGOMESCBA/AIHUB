@@ -2138,8 +2138,9 @@
     const id = Number(emp?.empresaId || emp?.empresa_id || emp?.id || 0);
     const codigo = String(emp?.codigoProtheus || emp?.codigo_protheus || '').trim();
     const nome = String(emp?.nome || '').trim();
-    const base = nome || codigo || `Empresa ${id}`;
-    return id ? `Id ${id} - ${base}` : base;
+    const base = nome || `Empresa ${id}`;
+    const prefixo = codigo ? `${codigo} - ` : '';
+    return id ? `${prefixo}Id ${id} - ${base}` : `${prefixo}${base}`;
   }
 
   function idsEmpresasDisponiveis() {
