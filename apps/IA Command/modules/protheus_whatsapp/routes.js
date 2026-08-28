@@ -28,10 +28,120 @@ const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
 const WEB_LOGIN_TTL_MS = 5 * 60 * 1000;
 const WEB_LOGIN_MAX_TENTATIVAS = 5;
+const WEB_LOGIN_DEFAULT_PATH = '/api/ia-command/protheus/web-login';
+const WEB_LOGIN_ENV_PATH = normalizarWebLoginPath(process.env.IAC_PROTHEUS_WEB_LOGIN_PATH) || '';
+const WEB_LOGIN_ENV_ACCESS_KEY = String(process.env.IAC_PROTHEUS_WEB_LOGIN_ACCESS_KEY || '').trim();
 
 function perfLog(etapa, inicio, dados = {}) {
   const duracaoMs = Date.now() - inicio;
   console.log(`[protheus_whatsapp][perf] ${new Date().toISOString()} ${etapa} ${duracaoMs}ms ${JSON.stringify(dados)}`);
+}
+
+function normalizarWebLoginPath(valor) {
+  const pathLogin = String(valor || '').trim();
+  if (!pathLogin) return '';
+  if (!pathLogin.startsWith('/')) return '';
+  if (pathLogin.includes('?') || pathLogin.includes('#') || pathLogin.includes('..')) return '';
+  if (!/^\/[A-Za-z0-9/_-]+$/.test(pathLogin)) return '';
+  return pathLogin.replace(/\/+$/g, '') || '';
+}
+
+function webLoginAccessKeyInformada(req) {
+  return String(
+    req.headers['x-web-login-key']
+    || req.query?.k
+    || req.query?.accessKey
+    || req.body?.k
+    || req.body?.accessKey
+    || ''
+  ).trim();
+}
+
+function compararSeguro(a, b) {
+  const ba = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+function webLoginAccessAutorizado(req, res, config = {}) {
+  const chave = String(config.accessKey || '').trim();
+  if (!chave) return true;
+  const informado = webLoginAccessKeyInformada(req);
+  if (compararSeguro(informado, chave)) return true;
+  perfLog('web-login/access', Date.now(), { status: 404 });
+  res.status(404).send('Not found');
+  return false;
+}
+
+function webLoginPathReq(req) {
+  return normalizarWebLoginPath(String(req.path || '').replace(/\/(start|verify)$/i, ''));
+}
+
+function normalizarWebLoginConfig(row = null) {
+  const pathLogin = normalizarWebLoginPath(row?.protheus_web_login_path)
+    || WEB_LOGIN_ENV_PATH
+    || WEB_LOGIN_DEFAULT_PATH;
+  return {
+    empresaId: row?.empresa_id ? Number(row.empresa_id) : null,
+    ativo: row?.protheus_web_login_ativo == null ? 1 : Number(row.protheus_web_login_ativo) ? 1 : 0,
+    path: pathLogin,
+    accessKey: row?.protheus_web_login_access_key || WEB_LOGIN_ENV_ACCESS_KEY || '',
+    ttlMs: Math.max(1, Math.min(30, Number(row?.protheus_web_login_otp_ttl_min || 5))) * 60 * 1000,
+    ttlMin: Math.max(1, Math.min(30, Number(row?.protheus_web_login_otp_ttl_min || 5))),
+    maxTentativas: Math.max(1, Math.min(10, Number(row?.protheus_web_login_max_tentativas || 5))),
+    exigirHttps: Number(row?.protheus_web_login_exigir_https || 0) ? 1 : 0,
+  };
+}
+
+function carregarWebLoginConfigs() {
+  try {
+    return getDB().prepare(`
+      SELECT empresa_id, protheus_web_login_ativo, protheus_web_login_path,
+             protheus_web_login_access_key, protheus_web_login_otp_ttl_min,
+             protheus_web_login_max_tentativas, protheus_web_login_exigir_https
+        FROM ai_config
+       WHERE COALESCE(protheus_web_login_ativo, 1) = 1
+    `).all().map(normalizarWebLoginConfig);
+  } catch (_) {
+    return [];
+  }
+}
+
+function carregarWebLoginConfigEmpresa(empresaId) {
+  try {
+    const row = getDB().prepare(`
+      SELECT empresa_id, protheus_web_login_ativo, protheus_web_login_path,
+             protheus_web_login_access_key, protheus_web_login_otp_ttl_min,
+             protheus_web_login_max_tentativas, protheus_web_login_exigir_https
+        FROM ai_config
+       WHERE empresa_id = ?
+       LIMIT 1
+    `).get(Number(empresaId));
+    return normalizarWebLoginConfig(row || null);
+  } catch (_) {
+    return normalizarWebLoginConfig(null);
+  }
+}
+
+function resolverWebLoginConfigPorPath(req) {
+  const reqPath = webLoginPathReq(req);
+  const configs = carregarWebLoginConfigs();
+  const config = configs.find(c => c.ativo && c.path === reqPath && c.path !== WEB_LOGIN_DEFAULT_PATH);
+  if (config) return config;
+  if (reqPath === WEB_LOGIN_DEFAULT_PATH || (WEB_LOGIN_ENV_PATH && reqPath === WEB_LOGIN_ENV_PATH)) return normalizarWebLoginConfig(null);
+  return null;
+}
+
+function reqEhHttps(req) {
+  const host = String(req.headers.host || req.hostname || '').toLowerCase();
+  if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) return true;
+  return req.secure || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase() === 'https';
+}
+
+function webLoginHttpsAutorizado(req, res, config = {}) {
+  if (!config.exigirHttps || reqEhHttps(req)) return true;
+  res.status(403).json({ error: 'Acesso permitido apenas por HTTPS.' });
+  return false;
 }
 
 function forwardDebug(etapa, dados = {}) {
@@ -97,11 +207,11 @@ function limparLoginChallenges() {
   `).run(new Date(Date.now() - 60 * 60 * 1000).toISOString());
 }
 
-function criarLoginChallenge(req, celular, codigo) {
+function criarLoginChallenge(req, celular, codigo, ttlMs = WEB_LOGIN_TTL_MS) {
   limparLoginChallenges();
   const id = crypto.randomUUID();
   const agora = new Date();
-  const expiraEm = new Date(agora.getTime() + WEB_LOGIN_TTL_MS);
+  const expiraEm = new Date(agora.getTime() + ttlMs);
   getDB().prepare(`
     INSERT INTO protheus_web_login_challenges
       (id, celular, codigo_hash, expira_em, ip, user_agent, criado_em)
@@ -160,7 +270,7 @@ function carregarPermissoesWebPorCelular(celular) {
   };
 }
 
-function validarLoginChallenge(challengeId, celular, codigo) {
+function validarLoginChallenge(challengeId, celular, codigo, maxTentativas = WEB_LOGIN_MAX_TENTATIVAS) {
   const id = String(challengeId || '').trim();
   const numero = tokenService.normalizarCelular(celular);
   const code = String(codigo || '').replace(/\D/g, '');
@@ -176,7 +286,7 @@ function validarLoginChallenge(challengeId, celular, codigo) {
   `).get(id, numero);
   if (!row || row.usado_em) return { ok: false, error: 'Codigo expirado ou invalido.' };
   if (new Date(row.expira_em).getTime() < Date.now()) return { ok: false, error: 'Codigo expirado.' };
-  if (Number(row.tentativas || 0) >= WEB_LOGIN_MAX_TENTATIVAS) return { ok: false, error: 'Limite de tentativas excedido.' };
+  if (Number(row.tentativas || 0) >= maxTentativas) return { ok: false, error: 'Limite de tentativas excedido.' };
 
   const informado = hashCodigoLogin(numero, code, id);
   if (informado !== row.codigo_hash) {
@@ -1008,13 +1118,29 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     res.sendFile(path.join(__dirname, 'public', 'protheus-chat.html'));
   });
 
-  app.get('/api/ia-command/protheus/web-login', (_req, res) => {
+  const webLoginRoutes = [
+    WEB_LOGIN_DEFAULT_PATH,
+    '/entrar/:slug',
+    '/acesso/:slug',
+  ];
+  if (WEB_LOGIN_ENV_PATH && !webLoginRoutes.includes(WEB_LOGIN_ENV_PATH)) webLoginRoutes.push(WEB_LOGIN_ENV_PATH);
+
+  app.get(webLoginRoutes, (req, res) => {
+    const config = resolverWebLoginConfigPorPath(req);
+    if (!config) return res.status(404).send('Not found');
+    if (!webLoginAccessAutorizado(req, res, config)) return;
+    if (!webLoginHttpsAutorizado(req, res, config)) return;
     res.sendFile(path.join(__dirname, 'public', 'protheus-web-login.html'));
   });
 
-  app.post('/api/ia-command/protheus/web-login/start', async (req, res) => {
+  app.post(webLoginRoutes.map(r => `${r}/start`), async (req, res) => {
     const inicio = Date.now();
     try {
+      const pathConfig = resolverWebLoginConfigPorPath(req);
+      if (!pathConfig) return res.status(404).send('Not found');
+      if (!webLoginAccessAutorizado(req, res, pathConfig)) return;
+      if (!webLoginHttpsAutorizado(req, res, pathConfig)) return;
+
       const celular = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
       if (celular.length < 10 || celular.length > 15) {
         return res.status(400).json({ error: 'Informe o WhatsApp com DDI e DDD.' });
@@ -1026,12 +1152,23 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         return res.status(404).json({ error: 'Numero nao encontrado ou sem permissao sincronizada.' });
       }
 
+      const empresaConfig = carregarWebLoginConfigEmpresa(permissoes.empresaId);
+      if (!empresaConfig.ativo) return res.status(403).json({ error: 'Acesso web desativado para esta empresa.' });
+      if (!webLoginAccessAutorizado(req, res, empresaConfig)) return;
+      if (!webLoginHttpsAutorizado(req, res, empresaConfig)) return;
+      if (pathConfig.path === WEB_LOGIN_DEFAULT_PATH && empresaConfig.path !== WEB_LOGIN_DEFAULT_PATH) {
+        return res.status(404).json({ error: 'Numero nao encontrado ou sem permissao sincronizada.' });
+      }
+      if (pathConfig.empresaId && pathConfig.empresaId !== Number(permissoes.empresaId)) {
+        return res.status(404).json({ error: 'Numero nao encontrado ou sem permissao sincronizada.' });
+      }
+
       const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
-      const challenge = criarLoginChallenge(req, celular, codigo);
+      const challenge = criarLoginChallenge(req, celular, codigo, empresaConfig.ttlMs);
       await enviarTextoWhatsApp({
         empresaId: permissoes.empresaId,
         numero: celular,
-        texto: `Seu codigo de acesso ao IA Command e ${codigo}. Ele expira em 5 minutos.`,
+        texto: `Seu codigo de acesso ao IA Command e ${codigo}. Ele expira em ${empresaConfig.ttlMin} minuto(s).`,
       });
 
       perfLog('POST /web-login/start', inicio, { status: 200, empresaId: permissoes.empresaId, celular });
@@ -1047,19 +1184,34 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     }
   });
 
-  app.post('/api/ia-command/protheus/web-login/verify', (req, res) => {
+  app.post(webLoginRoutes.map(r => `${r}/verify`), (req, res) => {
     const inicio = Date.now();
     try {
-      const celular = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
-      const validacao = validarLoginChallenge(req.body?.challengeId || req.body?.challenge_id, celular, req.body?.codigo);
-      if (!validacao.ok) {
-        perfLog('POST /web-login/verify', inicio, { status: 400, motivo: validacao.error });
-        return res.status(400).json({ error: validacao.error });
-      }
+      const pathConfig = resolverWebLoginConfigPorPath(req);
+      if (!pathConfig) return res.status(404).send('Not found');
+      if (!webLoginAccessAutorizado(req, res, pathConfig)) return;
+      if (!webLoginHttpsAutorizado(req, res, pathConfig)) return;
 
+      const celular = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
       const permissoes = carregarPermissoesWebPorCelular(celular);
       if (!permissoes) {
         return res.status(403).json({ error: 'Permissao sincronizada nao encontrada.' });
+      }
+      const empresaConfig = carregarWebLoginConfigEmpresa(permissoes.empresaId);
+      if (!empresaConfig.ativo) return res.status(403).json({ error: 'Acesso web desativado para esta empresa.' });
+      if (!webLoginAccessAutorizado(req, res, empresaConfig)) return;
+      if (!webLoginHttpsAutorizado(req, res, empresaConfig)) return;
+      if (pathConfig.path === WEB_LOGIN_DEFAULT_PATH && empresaConfig.path !== WEB_LOGIN_DEFAULT_PATH) {
+        return res.status(403).json({ error: 'Permissao sincronizada nao encontrada.' });
+      }
+      if (pathConfig.empresaId && pathConfig.empresaId !== Number(permissoes.empresaId)) {
+        return res.status(403).json({ error: 'Permissao sincronizada nao encontrada.' });
+      }
+
+      const validacao = validarLoginChallenge(req.body?.challengeId || req.body?.challenge_id, celular, req.body?.codigo, empresaConfig.maxTentativas);
+      if (!validacao.ok) {
+        perfLog('POST /web-login/verify', inicio, { status: 400, motivo: validacao.error });
+        return res.status(400).json({ error: validacao.error });
       }
 
       const { token, expiraEm } = tokenService.emitir({

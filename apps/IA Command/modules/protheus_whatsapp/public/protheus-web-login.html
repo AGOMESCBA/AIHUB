@@ -28,7 +28,7 @@
     html, body { min-height: 100%; }
     body {
       margin: 0;
-      min-height: 100vh;
+      height: 100vh;
       font-family: Inter, "Segoe UI", Arial, sans-serif;
       color: var(--text);
       background:
@@ -37,12 +37,14 @@
         linear-gradient(180deg, var(--bg), var(--bg-2));
       display: grid;
       place-items: center;
-      padding: 24px;
+      padding: 16px;
+      overflow: hidden;
     }
     button, input { font: inherit; }
     .shell {
       width: min(1080px, 100%);
-      min-height: 600px;
+      height: min(760px, calc(100vh - 32px));
+      min-height: 0;
       display: grid;
       grid-template-columns: minmax(0, .82fr) minmax(430px, 1fr);
       background: rgba(16, 32, 39, .92);
@@ -54,7 +56,7 @@
     }
     .hero {
       position: relative;
-      padding: 30px;
+      padding: 26px 30px;
       border-right: 1px solid var(--border);
       background:
         linear-gradient(160deg, rgba(0, 168, 132, .22), transparent 46%),
@@ -62,7 +64,9 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      gap: 24px;
+      gap: 16px;
+      min-height: 0;
+      overflow: hidden;
     }
     .brand {
       display: flex;
@@ -70,8 +74,8 @@
       gap: 14px;
     }
     .logo {
-      width: 52px;
-      height: 52px;
+      width: 46px;
+      height: 46px;
       border-radius: 50%;
       display: grid;
       place-items: center;
@@ -83,46 +87,46 @@
     }
     h1, h2, p { margin: 0; }
     h1 {
-      font-size: 24px;
+      font-size: 23px;
       line-height: 1.15;
       letter-spacing: 0;
     }
     .brand-sub {
       margin-top: 4px;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
     }
     .hero-copy h2 {
       max-width: 420px;
-      font-size: clamp(28px, 3.5vw, 42px);
-      line-height: 1.06;
+      font-size: clamp(25px, 3vw, 36px);
+      line-height: 1.08;
       letter-spacing: 0;
     }
     .hero-copy p {
       max-width: 440px;
-      margin-top: 14px;
+      margin-top: 10px;
       color: var(--soft);
-      font-size: 15px;
-      line-height: 1.58;
+      font-size: 14px;
+      line-height: 1.45;
     }
     .access-flow {
       display: grid;
-      gap: 10px;
+      gap: 8px;
       max-width: 430px;
     }
     .flow-item {
       display: grid;
-      grid-template-columns: 34px 1fr;
-      gap: 12px;
+      grid-template-columns: 30px 1fr;
+      gap: 10px;
       align-items: start;
-      padding: 10px 11px;
+      padding: 8px 10px;
       border: 1px solid rgba(179, 215, 221, .14);
       border-radius: var(--radius);
       background: rgba(7, 16, 20, .24);
     }
     .flow-num {
-      width: 34px;
-      height: 34px;
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
       display: grid;
       place-items: center;
@@ -131,22 +135,22 @@
       font-weight: 900;
     }
     .flow-title {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 800;
     }
     .flow-text {
       margin-top: 3px;
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
+      font-size: 12px;
+      line-height: 1.35;
     }
     .visual {
       align-self: center;
-      width: min(360px, 100%);
+      width: min(300px, 100%);
       border: 1px solid rgba(179, 215, 221, .16);
       border-radius: var(--radius);
       background: rgba(7, 16, 20, .34);
-      padding: 16px;
+      padding: 12px;
     }
     .visual-top {
       display: flex;
@@ -154,21 +158,21 @@
       align-items: center;
       margin-bottom: 14px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
     }
     .phone-mock {
       display: grid;
-      gap: 10px;
+      gap: 8px;
     }
     .bubble {
       width: fit-content;
       max-width: 86%;
-      padding: 10px 12px;
+      padding: 8px 10px;
       border-radius: 8px;
       background: #0b2e27;
       color: #dff7ec;
-      font-size: 13px;
-      line-height: 1.45;
+      font-size: 12px;
+      line-height: 1.35;
     }
     .bubble.out {
       justify-self: end;
@@ -462,6 +466,13 @@
       font-size: 12px;
       line-height: 1.5;
     }
+    .copyright {
+      margin-top: 14px;
+      color: rgba(201, 217, 221, .64);
+      font-size: 11px;
+      line-height: 1.45;
+      text-align: center;
+    }
     .loader {
       width: 15px;
       height: 15px;
@@ -474,8 +485,8 @@
     button.loading .loader { display: block; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 900px) {
-      body { padding: 18px; }
-      .shell { grid-template-columns: 1fr; min-height: 0; }
+      body { min-height: 100vh; height: auto; overflow: auto; padding: 18px; }
+      .shell { grid-template-columns: 1fr; height: auto; min-height: 0; }
       .hero {
         border-right: none;
         border-bottom: 1px solid var(--border);
@@ -484,6 +495,12 @@
       .hero-copy h2 { font-size: 28px; }
       .visual { display: none; }
       .card-wrap { padding: 24px; }
+    }
+    @media (max-height: 760px) and (min-width: 901px) {
+      .shell { height: calc(100vh - 24px); }
+      .hero { padding: 22px 28px; }
+      .hero-copy h2 { font-size: 30px; }
+      .visual { display: none; }
     }
     @media (max-width: 520px) {
       body { padding: 0; place-items: stretch; }
@@ -584,7 +601,7 @@
                 <span class="prefix" aria-hidden="true">
                   <svg viewBox="0 0 24 24"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.4 7.5L4 20l.9-4A8.5 8.5 0 1 1 20.5 11.7z"/><path d="M8.8 8.5c.2-.5.4-.6.7-.6h.5c.2 0 .4 0 .5.4l.8 1.9c.1.2.1.4 0 .6l-.4.6c-.1.2-.2.3 0 .5.4.8 1.2 1.6 2 2 .2.1.4.1.5-.1l.7-.8c.2-.2.4-.2.6-.1l1.9.9c.3.1.4.3.4.6 0 .6-.4 1.5-1 1.8-.5.3-1.2.4-2.3 0-2.1-.7-4.3-2.8-5.2-4.8-.5-1.1-.5-1.9-.2-2.9z"/></svg>
                 </span>
-                <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 65 99987-5116">
+                <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+55 11 91234-5678">
               </div>
               <p class="hint">Use o numero sincronizado no Protheus. Apenas usuarios ativos no IA Command conseguem receber o codigo.</p>
               <div class="actions right">
@@ -633,6 +650,7 @@
             <div class="footnote">Este acesso nao cria uma nova senha. A identidade vem do telefone validado e as permissoes continuam sendo as sincronizadas do Protheus.</div>
           </div>
         </div>
+        <p class="copyright">IA Command desenvolvido pela J2A Consultoria. Todos os direitos autorais e de propriedade intelectual reservados.</p>
       </div>
     </section>
   </main>
@@ -640,6 +658,9 @@
   <script>
     const $ = id => document.getElementById(id);
     const state = { celular: '', destino: '', challengeId: '', expiresAt: 0, cooldownUntil: 0 };
+    const params = new URLSearchParams(window.location.search || '');
+    const accessKey = params.get('k') || params.get('accessKey') || '';
+    const webLoginBasePath = window.location.pathname.replace(/\/+$/g, '');
     const codeInputs = [...document.querySelectorAll('#code-row input')];
     let timerHandle = null;
 
@@ -682,10 +703,12 @@
     }
 
     async function post(path, body) {
-      const r = await fetch('/api/ia-command/protheus/web-login/' + path, {
+      const headers = { 'Content-Type': 'application/json' };
+      if (accessKey) headers['X-Web-Login-Key'] = accessKey;
+      const r = await fetch(webLoginBasePath + '/' + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        headers,
+        body: JSON.stringify({ ...(body || {}), accessKey }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || 'Erro ' + r.status);

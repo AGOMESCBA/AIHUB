@@ -43,6 +43,7 @@
     .prov-icon-claude   { background:rgba(168,85,247,.12); }
     .prov-icon-openai   { background:rgba(16,163,127,.12); }
     .prov-icon-agente   { background:rgba(14,165,233,.12); font-size:20px; }
+    .prov-icon-chat     { background:rgba(0,168,132,.12); font-size:20px; }
     .prov-meta          { flex:1;min-width:0; }
     .prov-name          { font-size:16px;font-weight:700;color:var(--text-hi);display:flex;align-items:center;gap:8px; }
     .prov-desc          { font-size:13px;color:var(--text-md);margin-top:2px; }
@@ -82,6 +83,8 @@
     .btn-warning:hover { background:rgba(234,88,12,.18);color:#9a3412; }
     .agente-info-grid { display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px; }
     @media(max-width:600px) { .agente-info-grid { grid-template-columns:1fr; } }
+    .chat-config-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px; }
+    @media(max-width:760px) { .chat-config-grid { grid-template-columns:1fr; } }
     .agente-info-item { background:var(--bg-hover);border-radius:var(--radius-sm);padding:10px 14px; }
     .agente-info-label { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-lo);margin-bottom:3px; }
     .agente-info-value { font-size:13px;color:var(--text-hi);word-break:break-all; }
@@ -185,6 +188,7 @@
           <button class="iac-tab"         onclick="mudarAba(this,'aba-claude')">◆ Claude</button>
           <button class="iac-tab"         onclick="mudarAba(this,'aba-comportamento')">⚙ Comportamento</button>
           <button class="iac-tab"         onclick="mudarAba(this,'aba-agente')">🔌 Agente Local</button>
+          <button class="iac-tab"         onclick="mudarAba(this,'aba-chat')">Chat</button>
         </div>
 
         <div class="editor-grid editor-grid-wide">
@@ -473,6 +477,88 @@
               </div>
             </div>
 
+            <!-- ABA CHAT -->
+            <div class="iac-tab-panel" id="aba-chat">
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div class="form-section-title">Acesso remoto ao Chat</div>
+                  <div class="form-section-subtitle">Configure o link externo usado fora do Protheus.</div>
+                </div>
+                <div class="form-section-body">
+                  <div class="prov-header">
+                    <div class="prov-icon prov-icon-chat">IA</div>
+                    <div class="prov-meta">
+                      <div class="prov-name">Chat Web Protheus <span id="chat-status-badge" class="provider-badge badge-agente-ativo">Ativo</span></div>
+                      <div class="prov-desc">Login por WhatsApp com permissao sincronizada do Protheus, rota mascarada e controles de seguranca.</div>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Acesso remoto</label>
+                    <select id="chat-web-ativo" class="form-control" style="max-width:360px" onchange="atualizarResumoChat()">
+                      <option value="1">Ativo</option>
+                      <option value="0">Inativo</option>
+                    </select>
+                    <div class="form-hint">Quando inativo, o link publico nao envia codigo e nao abre o chat para esta empresa.</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Rota publica mascarada</label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                      <input type="text" id="chat-web-path" class="form-control" placeholder="/entrar/j2a-chat-seguro" style="flex:1;min-width:260px" oninput="atualizarResumoChat()">
+                      <button type="button" class="btn btn-ghost" onclick="gerarChatPath()">Gerar rota</button>
+                    </div>
+                    <div class="form-hint">Use /entrar/seu-codigo ou /acesso/seu-codigo. O link antigo fica escondido quando uma rota mascarada estiver ativa.</div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Chave extra de acesso</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="chat-web-access-key" class="form-control" placeholder="Opcional: gere uma chave para reforcar o link">
+                      <button type="button" class="btn-pass-toggle" id="toggle-chat-key" onclick="toggleChatKey()" title="Mostrar/ocultar chave">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div id="status-chat-key" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button type="button" class="btn btn-warning" onclick="gerarChatKey()">Gerar nova chave</button>
+                    </div>
+                    <div class="form-hint">Se preenchida, o servidor exige esta chave no link ou no cabecalho. Deixe em branco para manter a atual.</div>
+                  </div>
+
+                  <div class="chat-config-grid">
+                    <div class="form-group">
+                      <label class="form-label">Expiracao do codigo</label>
+                      <input type="number" id="chat-web-ttl" class="form-control" min="1" max="30" value="5" oninput="atualizarResumoChat()">
+                      <div class="form-hint">Minutos.</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Tentativas</label>
+                      <input type="number" id="chat-web-max" class="form-control" min="1" max="10" value="5" oninput="atualizarResumoChat()">
+                      <div class="form-hint">Por codigo enviado.</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">HTTPS</label>
+                      <select id="chat-web-https" class="form-control" onchange="atualizarResumoChat()">
+                        <option value="0">Nao exigir</option>
+                        <option value="1">Exigir HTTPS</option>
+                      </select>
+                      <div class="form-hint">Recomendado em producao.</div>
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Link para divulgar</label>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                      <input type="text" id="chat-web-link" class="form-control" readonly style="flex:1;min-width:260px">
+                      <button type="button" class="btn btn-ghost" onclick="copiarChatLink()">Copiar link</button>
+                    </div>
+                    <div class="form-hint">Salve as configuracoes antes de divulgar o link gerado.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- ABA COMPORTAMENTO -->
             <div class="iac-tab-panel" id="aba-comportamento">
               <div class="form-section">
@@ -639,6 +725,16 @@
                       <span class="summary-value" id="rs-agente-url" style="font-size:11px;word-break:break-all">—</span>
                     </div>
                   </div>
+                  <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px;display:flex;flex-direction:column;gap:10px">
+                    <div class="summary-item">
+                      <span class="summary-label">Chat Web</span>
+                      <span class="summary-value" id="rs-chat-status">—</span>
+                    </div>
+                    <div class="summary-item">
+                      <span class="summary-label">Rota publica</span>
+                      <span class="summary-value" id="rs-chat-path" style="font-size:11px;word-break:break-all">—</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -739,6 +835,7 @@
       const el = document.getElementById(`${p}-key`);
       document.getElementById(`rs-${p}`).textContent = el.value ? '● preenchida' : '— (mantém atual)';
     });
+    atualizarResumoChat();
   }
 
   async function toggleKey(id, btn) {
@@ -795,6 +892,7 @@
       if (cfg.confianca_minima != null) document.getElementById('confianca-min').value = cfg.confianca_minima;
       if (cfg.historico_turnos != null) document.getElementById('historico-turnos').value = cfg.historico_turnos;
       if (cfg.audio_idioma) document.getElementById('audio-idioma').value = cfg.audio_idioma;
+      carregarChatConfig(cfg);
 
       // Carregar modelos de cada provider
       if (cfg.groq_modelo) document.getElementById('groq-modelo').value = cfg.groq_modelo;
@@ -832,7 +930,14 @@
       gemini_modelo:     document.getElementById('gemini-modelo').value,
       deepseek_modelo:   document.getElementById('deepseek-modelo').value,
       claude_modelo:     document.getElementById('claude-modelo').value,
+      protheus_web_login_ativo: document.getElementById('chat-web-ativo').value === '1' ? 1 : 0,
+      protheus_web_login_path: document.getElementById('chat-web-path').value.trim(),
+      protheus_web_login_otp_ttl_min: parseInt(document.getElementById('chat-web-ttl').value, 10) || 5,
+      protheus_web_login_max_tentativas: parseInt(document.getElementById('chat-web-max').value, 10) || 5,
+      protheus_web_login_exigir_https: document.getElementById('chat-web-https').value === '1' ? 1 : 0,
     };
+    const chatKey = document.getElementById('chat-web-access-key').value.trim();
+    if (chatKey && chatKey !== '***') body.protheus_web_login_access_key = chatKey;
     PROVIDERS.forEach(p => {
       const val = document.getElementById(`${p}-key`).value.trim();
       if (val) body[PROVIDER_FIELDS[p]] = val;
@@ -857,9 +962,112 @@
           : '<span style="color:var(--text-lo)">— Não configurada</span>';
       });
 
+      carregarChatConfig(saved);
       atualizarResumo();
       showToast();
     } catch (e) { alert(e.message); }
+  }
+
+  function gerarTokenLocal(tamanho = 22) {
+    const alfabeto = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const bytes = new Uint8Array(tamanho);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    return [...bytes].map(b => alfabeto[b % alfabeto.length]).join('');
+  }
+
+  function slugRotaChat(valor) {
+    return String(valor || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+  }
+
+  function gerarChatPath() {
+    const atual = document.getElementById('chat-web-path').value.trim().split('/').filter(Boolean).pop() || '';
+    const sugestao = slugRotaChat(atual.replace(/-[a-z0-9]{8}$/i, '')) || 'j2a-consultoria';
+    const nome = window.prompt('Digite um nome bonito para a rota. Exemplo: j2a-consultoria', sugestao);
+    if (nome === null) return;
+    const slug = slugRotaChat(nome) || 'chat-protheus';
+    document.getElementById('chat-web-path').value = `/entrar/${slug}`;
+    atualizarResumoChat();
+  }
+
+  function gerarChatKey() {
+    const el = document.getElementById('chat-web-access-key');
+    el.value = gerarTokenLocal(36);
+    el.type = 'text';
+    el.dataset.configurada = '1';
+    document.getElementById('toggle-chat-key').innerHTML = _svgEye(true);
+    document.getElementById('status-chat-key').innerHTML = '<span style="color:#d97706">Nova chave gerada. Salve antes de divulgar o link.</span>';
+    atualizarResumoChat();
+  }
+
+  function carregarChatConfig(cfg = {}) {
+    const ativo = cfg.protheus_web_login_ativo == null ? 1 : Number(cfg.protheus_web_login_ativo) ? 1 : 0;
+    document.getElementById('chat-web-ativo').value = ativo ? '1' : '0';
+    document.getElementById('chat-web-path').value = cfg.protheus_web_login_path || '/api/ia-command/protheus/web-login';
+    document.getElementById('chat-web-ttl').value = cfg.protheus_web_login_otp_ttl_min || 5;
+    document.getElementById('chat-web-max').value = cfg.protheus_web_login_max_tentativas || 5;
+    document.getElementById('chat-web-https').value = Number(cfg.protheus_web_login_exigir_https || 0) ? '1' : '0';
+
+    const keyEl = document.getElementById('chat-web-access-key');
+    keyEl.value = '';
+    keyEl.type = 'password';
+    keyEl.dataset.configurada = cfg.protheus_web_login_access_key_configurada ? '1' : '0';
+    keyEl.placeholder = cfg.protheus_web_login_access_key_configurada
+      ? 'Chave configurada. Deixe em branco para manter.'
+      : 'Opcional: gere uma chave para reforcar o link';
+    document.getElementById('toggle-chat-key').innerHTML = _svgEye(false);
+    document.getElementById('status-chat-key').innerHTML = cfg.protheus_web_login_access_key_configurada
+      ? '<span style="color:var(--success)">Chave extra configurada</span>'
+      : '<span style="color:var(--text-lo)">Sem chave extra</span>';
+    atualizarResumoChat();
+  }
+
+  function atualizarResumoChat() {
+    const ativo = document.getElementById('chat-web-ativo')?.value === '1';
+    const path = document.getElementById('chat-web-path')?.value.trim() || '/api/ia-command/protheus/web-login';
+    const key = document.getElementById('chat-web-access-key')?.value.trim() || '';
+    const scheme = document.getElementById('chat-web-https')?.value === '1' ? 'https:' : window.location.protocol;
+    const base = `${scheme}//${window.location.host}`;
+    const link = key && key !== '***' ? `${base}${path}?k=${encodeURIComponent(key)}` : `${base}${path}`;
+    const linkEl = document.getElementById('chat-web-link');
+    if (linkEl) linkEl.value = link;
+    const badge = document.getElementById('chat-status-badge');
+    if (badge) {
+      badge.className = `provider-badge ${ativo ? 'badge-agente-ativo' : 'badge-agente-inativo'}`;
+      badge.textContent = ativo ? 'Ativo' : 'Inativo';
+    }
+    const rsStatus = document.getElementById('rs-chat-status');
+    const rsPath = document.getElementById('rs-chat-path');
+    if (rsStatus) rsStatus.textContent = ativo ? 'Ativo' : 'Inativo';
+    if (rsPath) rsPath.textContent = path;
+  }
+
+  function copiarChatLink() {
+    atualizarResumoChat();
+    const linkEl = document.getElementById('chat-web-link');
+    const val = linkEl.value;
+    const fallback = () => {
+      linkEl.select();
+      linkEl.setSelectionRange(0, val.length);
+      document.execCommand('copy');
+      showToast();
+    };
+    if (!navigator.clipboard?.writeText) return fallback();
+    navigator.clipboard.writeText(val).then(showToast).catch(fallback);
+  }
+
+  function toggleChatKey() {
+    const inp = document.getElementById('chat-web-access-key');
+    const btn = document.getElementById('toggle-chat-key');
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.innerHTML = _svgEye(show);
   }
 
   async function testarProvedor(provedor) {

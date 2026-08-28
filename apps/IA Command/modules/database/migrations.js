@@ -1717,6 +1717,18 @@ const MIGRATIONS = [
        WHERE groq_modelo = 'llama-3.3-70b-versatile' OR groq_modelo IS NULL;
     `,
   },
+  {
+    version: 90,
+    descricao: 'IA Command - configuracoes do acesso web do chat Protheus',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN protheus_web_login_ativo INTEGER DEFAULT 1;
+      ALTER TABLE ai_config ADD COLUMN protheus_web_login_path TEXT DEFAULT '/api/ia-command/protheus/web-login';
+      ALTER TABLE ai_config ADD COLUMN protheus_web_login_access_key TEXT DEFAULT NULL;
+      ALTER TABLE ai_config ADD COLUMN protheus_web_login_otp_ttl_min INTEGER DEFAULT 5;
+      ALTER TABLE ai_config ADD COLUMN protheus_web_login_max_tentativas INTEGER DEFAULT 5;
+      ALTER TABLE ai_config ADD COLUMN protheus_web_login_exigir_https INTEGER DEFAULT 0;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

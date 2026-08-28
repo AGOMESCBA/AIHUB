@@ -2,6 +2,7 @@ const crud = require('./database/crud');
 const { requireRotina } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 const https = require('https');
+const { getDB } = require('./database');
 
 const PROVIDERS = [
   { id: 'groq',     label: 'Groq',         keyField: 'groq_api_key',     painelUrl: 'https://console.groq.com/settings/billing' },
@@ -10,6 +11,35 @@ const PROVIDERS = [
   { id: 'claude',   label: 'Claude',       keyField: 'claude_api_key',   painelUrl: 'https://console.anthropic.com/settings/billing' },
   { id: 'openai',   label: 'OpenAI / GPT', keyField: 'openai_api_key',   painelUrl: 'https://platform.openai.com/account/billing' },
 ];
+
+const WEB_LOGIN_DEFAULT_PATH = '/api/ia-command/protheus/web-login';
+
+function normalizarWebLoginPath(valor) {
+  const pathLogin = String(valor || '').trim();
+  if (!pathLogin) return '';
+  if (!pathLogin.startsWith('/')) return '';
+  if (pathLogin.includes('?') || pathLogin.includes('#') || pathLogin.includes('..')) return '';
+  if (!/^\/[A-Za-z0-9/_-]+$/.test(pathLogin)) return '';
+  return pathLogin.replace(/\/+$/g, '') || '';
+}
+
+function clampInt(valor, min, max, padrao) {
+  const n = parseInt(valor, 10);
+  if (Number.isNaN(n)) return padrao;
+  return Math.min(max, Math.max(min, n));
+}
+
+function aplicarDefaultsChat(row = {}) {
+  return {
+    protheus_web_login_ativo: row.protheus_web_login_ativo == null ? 1 : Number(row.protheus_web_login_ativo) ? 1 : 0,
+    protheus_web_login_path: row.protheus_web_login_path || WEB_LOGIN_DEFAULT_PATH,
+    protheus_web_login_access_key: row.protheus_web_login_access_key ? '***' : null,
+    protheus_web_login_access_key_configurada: row.protheus_web_login_access_key ? 1 : 0,
+    protheus_web_login_otp_ttl_min: row.protheus_web_login_otp_ttl_min || 5,
+    protheus_web_login_max_tentativas: row.protheus_web_login_max_tentativas || 5,
+    protheus_web_login_exigir_https: Number(row.protheus_web_login_exigir_https || 0) ? 1 : 0,
+  };
+}
 
 function _getJson({ hostname, path, headers = {} }) {
   return new Promise((resolve, reject) => {
@@ -61,7 +91,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
   // ── GET config ───────────────────────────────────────────────────────────────
   app.get('/api/ia-command/ai-config', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
-    if (!row) return res.json({});
+    if (!row) return res.json(aplicarDefaultsChat({}));
     res.json({
       ...row,
       groq_api_key:     row.groq_api_key     ? '***' : null,
@@ -74,6 +104,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       gemini_modelo:    row.gemini_modelo    || 'gemini-3.5-flash',
       deepseek_modelo:  row.deepseek_modelo  || 'deepseek-chat',
       claude_modelo:    row.claude_modelo    || 'claude-haiku-4-5-20251001',
+      ...aplicarDefaultsChat(row),
     });
   });
 
@@ -84,6 +115,12 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       groq_modelo, openai_modelo, gemini_modelo, deepseek_modelo, claude_modelo,
       provedor_primario, fallback_ordem, confianca_minima,
       whisper_model, audio_idioma, historico_turnos,
+      protheus_web_login_ativo,
+      protheus_web_login_path,
+      protheus_web_login_access_key,
+      protheus_web_login_otp_ttl_min,
+      protheus_web_login_max_tentativas,
+      protheus_web_login_exigir_https,
     } = req.body;
 
     const existing = crud.buscarPor('ai_config', 'empresa_id', eid(req));
@@ -98,12 +135,38 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       historico_turnos:  (!isNaN(turnosVal) && turnosVal >= 1 && turnosVal <= 10) ? turnosVal : 5,
     };
 
+    const chatPath = normalizarWebLoginPath(protheus_web_login_path || existing?.protheus_web_login_path || WEB_LOGIN_DEFAULT_PATH);
+    if (!chatPath) return res.status(400).json({ error: 'Informe uma rota publica valida iniciando com /.' });
+    if (chatPath !== WEB_LOGIN_DEFAULT_PATH && !/^\/(entrar|acesso)\/[A-Za-z0-9_-]{8,80}$/.test(chatPath)) {
+      return res.status(400).json({ error: 'Use uma rota mascarada no formato /entrar/seu-codigo ou /acesso/seu-codigo.' });
+    }
+    if (chatPath !== WEB_LOGIN_DEFAULT_PATH) {
+      const rotaExistente = getDB().prepare(`
+        SELECT empresa_id
+          FROM ai_config
+         WHERE protheus_web_login_path = ?
+           AND empresa_id <> ?
+         LIMIT 1
+      `).get(chatPath, eid(req));
+      if (rotaExistente) {
+        return res.status(409).json({ error: 'Esta rota ja esta em uso por outra empresa. Escolha outro nome.' });
+      }
+    }
+    dados.protheus_web_login_ativo = Number(protheus_web_login_ativo) ? 1 : 0;
+    dados.protheus_web_login_path = chatPath;
+    dados.protheus_web_login_otp_ttl_min = clampInt(protheus_web_login_otp_ttl_min, 1, 30, 5);
+    dados.protheus_web_login_max_tentativas = clampInt(protheus_web_login_max_tentativas, 1, 10, 5);
+    dados.protheus_web_login_exigir_https = Number(protheus_web_login_exigir_https) ? 1 : 0;
+
     // Only update keys if non-empty strings were sent (not '***')
     if (groq_api_key     && groq_api_key     !== '***') dados.groq_api_key     = groq_api_key;
     if (gemini_api_key   && gemini_api_key   !== '***') dados.gemini_api_key   = gemini_api_key;
     if (deepseek_api_key && deepseek_api_key !== '***') dados.deepseek_api_key = deepseek_api_key;
     if (claude_api_key   && claude_api_key   !== '***') dados.claude_api_key   = claude_api_key;
     if (openai_api_key   && openai_api_key   !== '***') dados.openai_api_key   = openai_api_key;
+    if (protheus_web_login_access_key && protheus_web_login_access_key !== '***') {
+      dados.protheus_web_login_access_key = String(protheus_web_login_access_key).trim();
+    }
 
     // Update modelos if provided (não são secrets)
     if (groq_modelo)     dados.groq_modelo     = groq_modelo;
@@ -132,6 +195,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       gemini_modelo:    row.gemini_modelo    || 'gemini-3.5-flash',
       deepseek_modelo:  row.deepseek_modelo  || 'deepseek-chat',
       claude_modelo:    row.claude_modelo    || 'claude-haiku-4-5-20251001',
+      ...aplicarDefaultsChat(row),
     });
   });
 
