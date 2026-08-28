@@ -207,7 +207,12 @@ function requireTokenSessao(req, res, next) {
 
 function resolverEmpresaSelecionada(req, res) {
   const sessao = req.protheusChat || {};
+  const idsSelecionados = [
+    ...normalizarListaIds(req.body?.empresaIds || req.body?.empresasIds || req.body?.empresasSelecionadas),
+    ...normalizarListaIds(req.query?.empresaIds || req.query?.empresasIds || req.query?.empresasSelecionadas),
+  ];
   const empresaId = Number(
+    idsSelecionados[0] ||
     req.body?.empresaId ||
     req.body?.empresa_id ||
     req.query?.empresaId ||
@@ -1366,6 +1371,29 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         modulo: info.modulo,
         interpretationLogId: info.interpretationLogId,
         favoritoId: info.favoritoId,
+        auditoria: {
+          sqlIaBruto: info.sqlIaBruto,
+          sqlCanonicoOriginal: info.sqlCanonicoOriginal,
+          sqlCanonicoAdaptado: info.sqlCanonicoAdaptado,
+          sqlAuditoria: info.sqlAuditoria,
+          sqlAuditoriaJson: info.sqlAuditoriaJson,
+          sqlCanonicoParametros: info.sqlCanonicoParametros,
+          sqlCanonicoOrigem: info.sqlCanonicoOrigem,
+          sqlCanonicoEmpresaOrigem: info.sqlCanonicoEmpresaOrigem,
+          sqlCanonicoReusoMotivo: info.sqlCanonicoReusoMotivo,
+          sqlCanonicoReusoPermitido: info.sqlCanonicoReusoPermitido,
+          sqlValidacaoErro: info.sqlValidacaoErro,
+          trace: info.trace,
+          traceJson: info.traceJson,
+          intentCanonico: info.intentCanonico,
+          intentCanonicoEstrutural: info.intentCanonicoEstrutural,
+          chaveCache: info.chaveCache,
+          pipelineOrigem: info.pipelineOrigem,
+          faseExecucao: info.faseExecucao,
+          duracaoMs: info.duracaoMs,
+          rowsCount: info.rowsCount,
+          resultadoTipo: info.resultadoTipo,
+        },
       });
     } catch (err) {
       perfLog('GET /mensagem/sql', inicio, { status: 500, erro: err.message });
@@ -1477,7 +1505,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         return res.status(404).json({ error: 'Sessao nao encontrada nesta empresa.' });
       }
       const sid = sessaoId || sessionStore.criarSessao({ empresaId, celular });
-      console.log(`[protheus_whatsapp] Mensagem recebida: empresa=${empresasSelecionadas.map(e => e.empresa_id).join(',')} celular=${celular || ''} sessao=${sid} texto="${String(texto).trim().slice(0, 160)}"`);
+      console.log(`[protheus_whatsapp] Mensagem recebida: empresa=${empresaId} selecionadas=${empresasSelecionadas.map(e => e.empresa_id).join(',')} empresaSessao=${req.protheusChat?.empresaId || ''} celular=${celular || ''} sessao=${sid} texto="${String(texto).trim().slice(0, 160)}"`);
       const resultado = await chatService.processarMensagem({
         empresaId,
         empresasSelecionadas,

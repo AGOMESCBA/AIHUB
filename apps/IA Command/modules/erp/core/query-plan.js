@@ -107,6 +107,18 @@ function _inferirPlanoFinanceiro(texto, periodo) {
   // "bancos" isolado foi removido desta lista: a palavra aparece em contextos como "desconsiderando os bancos CX1 e CX2"
   // dentro de uma pergunta de fluxo de caixa, o que causava classificação errada como saldo_bancario.
   // Resultado: query_plan enviava operacao=saldo_bancario para a IA, que gerava SQL errado nas 3 tentativas de retry.
+  // PA/NDF (pagar) e RA/NCC (receber) sao SEMPRE titulo em ABERTO (credito nao utilizado, ver
+  // financeiro-fragmentos-spec.js "Antecipacoes/creditos"), mesmo quando a pergunta usa palavras
+  // como "pagamento"/"recebimento" que normalmente indicam realizado/baixado (ex: "pagamentos
+  // antecipados", "recebimentos antecipados"). Sem esta excecao, a checagem generica de estado
+  // "pago"/"recebido" abaixo classifica errado, o query_plan gerado instrui JOIN com tabelas de
+  // baixa (FK7/FK2/SE5) e nenhum guard do spec consegue vencer uma instrucao tao explicita.
+  const mencionaAntecipacaoOuCredito = _containsAny(texto, [
+    'antecipado', 'antecipados', 'antecipada', 'antecipadas', 'antecipacao', 'antecipacoes',
+    'adiantamento', 'adiantamentos',
+  ]) || /\bpa\b/i.test(texto) || /\bra\b/i.test(texto) || /\bndf\b/i.test(texto) || /\bncc\b/i.test(texto)
+    || _containsAny(texto, ['nota de debito', 'nota de credito', 'notas de debito', 'notas de credito']);
+
   const saldoBancario = _containsAny(texto, ['saldo bancario', 'saldos bancarios', 'saldo dos bancos', 'saldo por banco']);
   const mencionaReceber = _containsAny(texto, [
     'contas a receber', 'a receber', 'receber', 'recebimento', 'recebimentos',
@@ -143,7 +155,9 @@ function _inferirPlanoFinanceiro(texto, periodo) {
           ? 'ambas'
           : null;
 
-  const estado = _containsAny(texto, ['em aberto', 'aberto', 'abertos', 'saldo', 'carteira', 'posicao', 'vencendo'])
+  const estado = mencionaAntecipacaoOuCredito
+    ? 'em_aberto'
+    : _containsAny(texto, ['em aberto', 'aberto', 'abertos', 'saldo', 'carteira', 'posicao', 'vencendo'])
     ? 'em_aberto'
     : _containsAny(texto, ['vencido', 'vencidos', 'atrasado', 'atrasados'])
       ? 'vencido'
@@ -716,7 +730,12 @@ function validarSqlContraPlano(sql, plano = {}) {
 
   if (plano.modulo === 'faturamento') {
     exigeAgrupamento('cliente', ['A1_NOME', 'A1_NREDUZ', 'F2_CLIENTE', 'D2_CLIENTE'], 'cliente');
-    exigeAgrupamento('produto', ['B1_DESC', 'D2_COD'], 'produto');
+    // Aceita tambem campos de SBM (grupo de produto) alem dos campos de produto individual
+    // (B1_DESC/D2_COD): a cadeia real e SD2 -> SB1 (produto) -> SBM (grupo do produto), e o
+    // classificador de intencao upstream por vezes confunde "grupo de produto" com "produto"
+    // (mesma dimensao, nivel de agregacao diferente). Sem isso, um SQL corretamente agrupado
+    // por grupo de produto era rejeitado quando o plano vinha com agrupamentos=['produto'].
+    exigeAgrupamento('produto', ['B1_DESC', 'D2_COD', 'BM_GRUPO', 'BM_DESC'], 'produto');
     exigeAgrupamento('grupo_produto', ['BM_GRUPO', 'BM_DESC', 'B1_GRUPO'], 'grupo de produto');
     exigeAgrupamento('vendedor', ['A3_NOME', 'F2_VEND1'], 'vendedor');
   }

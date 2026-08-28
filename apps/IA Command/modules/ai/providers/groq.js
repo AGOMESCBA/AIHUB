@@ -1,12 +1,12 @@
 const https = require('https');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_MODEL   = 'llama-3.3-70b-versatile';
+const GROQ_MODEL   = 'openai/gpt-oss-20b';
 
-async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null) {
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null, modelo = null) {
   const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos, contextoAnterior);
   const body = JSON.stringify({
-    model: GROQ_MODEL,
+    model: modelo || GROQ_MODEL,
     messages: [{ role: 'user', content: prompt }],
     temperature: 0,
     max_tokens: 512,

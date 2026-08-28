@@ -1705,6 +1705,18 @@ const MIGRATIONS = [
         ON protheus_web_login_challenges (expira_em);
     `,
   },
+  {
+    version: 89,
+    descricao: 'IA Command - Groq descontinuou llama-3.3-70b-versatile para contas sem acesso a modelos Llama; migra default para openai/gpt-oss-20b, o mais barato entre os disponiveis (preco oficial Groq: $0.075/$0.30 por 1M tokens)',
+    sql: `
+      UPDATE ia_usage_pricing
+         SET model = 'openai/gpt-oss-20b', preco_input_1m = 0.075, preco_output_1m = 0.30, atualizado_em = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE provider = 'groq' AND model = 'llama-3.3-70b-versatile';
+      UPDATE ai_config
+         SET groq_modelo = 'openai/gpt-oss-20b'
+       WHERE groq_modelo = 'llama-3.3-70b-versatile' OR groq_modelo IS NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

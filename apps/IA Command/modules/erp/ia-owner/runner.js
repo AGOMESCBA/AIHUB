@@ -292,6 +292,26 @@ function mensagemErro(spec, tipo) {
   return msgs[tipo] || fallback[tipo] || fallback.erro_erp;
 }
 
+// Quando TODOS os provedores de IA falham (aiProviderClient.chamarIA esgota a lista),
+// a mensagem chega concatenada como "provedor1: erro1 | provedor2: erro2 | ...". Traduz
+// as causas mais acionáveis (sem chave, credito/cota esgotada, chave invalida) em algo
+// que o usuario final entenda e saiba repassar ao administrador — sem expor detalhe
+// tecnico de qual provedor/chave, so o tipo de problema. Mensagem generica de spec/fallback
+// como ultimo recurso, quando a causa nao e reconhecida.
+function mensagemIaIndisponivel(spec, erro) {
+  const msg = String(erro?.message || erro || '');
+  if (erro?._semChave || /nenhum provider dispon[ií]vel/i.test(msg)) {
+    return 'No momento nao ha nenhum provedor de IA configurado para esta empresa. Peca ao administrador do IA Command para cadastrar uma chave de API valida.';
+  }
+  if (erro?._cotaEsgotada || /quota|rate.?limit|free_tier|exceeded|429|credit balance|insufficient.{0,20}(credit|balance|funds)|purchase credits|billing/i.test(msg)) {
+    return 'O limite de uso dos provedores de IA configurados foi atingido no momento (cota ou creditos esgotados). Peca ao administrador do IA Command para verificar o saldo/plano das chaves de API.';
+  }
+  if (/invalid.{0,20}api.?key|authentication fails|invalid authentication credentials|unauthorized|401/i.test(msg)) {
+    return 'As chaves de IA configuradas para esta empresa nao foram aceitas pelos provedores no momento. Peca ao administrador do IA Command para conferir as chaves de API cadastradas.';
+  }
+  return mensagemErro(spec, 'ia_indisponivel');
+}
+
 // Rotulo exibido ao usuario final quando a resposta foi restrita por vendedorFixo/
 // clienteFixo (entidadeSeguranca injetada pelo sistema a partir do numero remetente —
 // ver vendedor-seguranca.js). Aprovador (compras) fica de fora: o filtro la e condicional
@@ -408,7 +428,7 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Nao filtrar por nome, descricao ou LIKE.',
       '- Nao remover periodo, metrica ou demais filtros ja corretos.',
     ];
-  } else if (/fiscal brasileira de CFOP|Faturamento\/vendas\/receita representam somente operacoes que geram receita|REGRA (?:NACIONAL|FISCAL BRASILEIRA) DE CFOP PARA RECEITA|Exclua remessas e transferencias por padrao/i.test(mensagem)) {
+  } else if (REGEX_ERRO_CFOP_RECEITA.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio — REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA:',
       '- Quando a pergunta pedir faturamento, vendas, vendido/faturado ou receita, retorne somente operacoes que geram receita.',
@@ -657,6 +677,68 @@ function _blocoRetryGenericoIaOwner(linhasEntidades) {
     'Nao fazer:',
     '- Nao copiar o SQL anterior sem revisar todos os contratos.',
   ];
+}
+
+const REGEX_ERRO_CFOP_RECEITA = /fiscal brasileira de CFOP|Faturamento\/vendas\/receita representam somente operacoes que geram receita|REGRA (?:NACIONAL|FISCAL BRASILEIRA) DE CFOP PARA RECEITA|Exclua remessas e transferencias por padrao/i;
+
+// Reforco final para o guard de CFOP (regra critica que NUNCA pode falhar): o SQL com
+// erro e o ultimo bloco de conteudo tecnico que a IA le antes de gerar a nova resposta
+// (ver prompt-builder.buildUserPrompt), entao repetir a instrucao logo apos o SQL antigo
+// evita que a IA "ancore" no SQL errado em vez de aplicar a correcao pedida no inicio do
+// prompt. Escopo deliberadamente restrito a este guard — nao mexe na ordem do prompt
+// compartilhada por outros retries.
+function _reforcoFinalRetryCfop(mensagemErro) {
+  if (!REGEX_ERRO_CFOP_RECEITA.test(String(mensagemErro || ''))) return '';
+  return [
+    '',
+    'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
+    "O SQL acima esta ERRADO porque nao exclui remessas/transferencias. Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
+    "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')",
+    'Nao repita o SQL acima sem esse filtro.',
+  ].join('\n');
+}
+
+const REGEX_ERRO_SF2_TIPO = /SF2 usada sem filtro SF2\.F2_TIPO|SF2\.F2_TIPO.*REGRA OBRIGATORIA/i;
+
+// Mesmo mecanismo de reforco final usado para o guard de CFOP (ver _reforcoFinalRetryCfop):
+// repete a instrucao logo apos o SQL antigo, que e o ultimo bloco de conteudo tecnico lido
+// pela IA antes de gerar a nova resposta. Guard de F2_TIPO tambem apresentou retries
+// esgotados sem correcao (mesmo padrao de "ancoragem" no SQL anterior).
+function _reforcoFinalRetrySf2Tipo(mensagemErro) {
+  if (!REGEX_ERRO_SF2_TIPO.test(String(mensagemErro || ''))) return '';
+  return [
+    '',
+    'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
+    "O SQL acima esta ERRADO porque usa SF2 sem filtrar SF2.F2_TIPO. Antes de responder, adicione ao WHERE:",
+    "AND SF2.F2_TIPO = 'N'",
+    'Nao repita o SQL acima sem esse filtro.',
+  ].join('\n');
+}
+
+const REGEX_ERRO_PA_RA_BAIXA = /pagamentos antecipados\/PA\/NDF isolado|recebimentos antecipados\/RA\/NCC isolado/i;
+
+// Mesmo mecanismo de reforco final usado para CFOP/F2_TIPO (ver _reforcoFinalRetryCfop):
+// guard de PA/RA isolado vs JOIN de baixa (SE5/FK1/FK2/FK7) tambem apresentou retries
+// esgotados sem correcao — a IA insiste no JOIN de baixa mesmo apos o guard rejeitar.
+function _reforcoFinalRetryPaRaBaixa(mensagemErro) {
+  if (!REGEX_ERRO_PA_RA_BAIXA.test(String(mensagemErro || ''))) return '';
+  return [
+    '',
+    'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
+    'O SQL acima esta ERRADO porque faz JOIN com tabela de baixa (SE5/FK1/FK2/FK7) para uma pergunta de PA/NDF/RA/NCC isolado.',
+    'PA/NDF/RA/NCC isolado e SEMPRE consulta de SALDO em aberto — REMOVA COMPLETAMENTE o JOIN com SE5/FK1/FK2/FK7.',
+    'Nao repita o SQL acima com esse JOIN.',
+  ].join('\n');
+}
+
+// Concatena todos os reforcos finais aplicaveis — uma mensagem de erro pode conter
+// multiplas violacoes simultaneas (ver split por " | " em buildRetryTecnicoIaOwner).
+function _reforcosFinaisRetry(mensagemErro) {
+  return [
+    _reforcoFinalRetryCfop(mensagemErro),
+    _reforcoFinalRetrySf2Tipo(mensagemErro),
+    _reforcoFinalRetryPaRaBaixa(mensagemErro),
+  ].join('');
 }
 
 function buildRetryTecnicoIaOwner({ erro, entidadesResolvidas = [] } = {}) {
@@ -2312,7 +2394,16 @@ function validarAliasesUsadosDeclarados(sql, spec = {}) {
     'JOIN', 'CROSS', 'UNION', 'SELECT', 'FROM', 'AS', 'WITH',
   ]);
   const aliasesDeclarados = new Set();
-  const reFromJoin = /\b(?:FROM|JOIN)\s+([A-Z_][A-Z0-9_]*)(?:\s+(?:AS\s+)?([A-Z_][A-Z0-9_]*))?/gi;
+  // O grupo de alias so pode consumir uma palavra que NAO seja keyword estrutural (lookahead
+  // negativo) — sem isso, um padrao como "CROSS JOIN bruto\nCROSS JOIN credito\nJOIN SA2010 SA2"
+  // faz o regex global "comer" o token JOIN seguinte como se fosse o alias do CTE anterior
+  // (bruto/credito nao sao tabelas do dominio, entao ficam sem alias real), avançando o
+  // lastIndex para depois desse JOIN e nunca reconhecendo o proximo FROM/JOIN real (SA2010 SA2).
+  const KEYWORDS_ALTERNATIVA = Array.from(keywords).join('|');
+  const reFromJoin = new RegExp(
+    `\\b(?:FROM|JOIN)\\s+([A-Z_][A-Z0-9_]*)(?:\\s+(?:AS\\s+)?(?!(?:${KEYWORDS_ALTERNATIVA})\\b)([A-Z_][A-Z0-9_]*))?`,
+    'gi'
+  );
   let m;
   while ((m = reFromJoin.exec(texto)) !== null) {
     const tabela = String(m[1] || '').toUpperCase();
@@ -3018,15 +3109,15 @@ function validarPeriodoDeclaradoNoSql(sql, spec = {}, periodo = null, opts = {})
       ],
     };
   }
-  if (_periodoTemMesesAnosDeclarados(periodo)) {
-    return validarMesesAnosDeclaradosNoSql(sql, spec, periodo);
-  }
   if (periodosPermitidos.length > 1) {
     const contradicoes = filtrosTemporaisContraditorios(sql, campos, dataInicio, dataFim, periodosPermitidos);
     if (contradicoes.length) {
       return { ok: false, erros: contradicoes };
     }
     return { ok: true, erros: [] };
+  }
+  if (_periodoTemMesesAnosDeclarados(periodo)) {
+    return validarMesesAnosDeclaradosNoSql(sql, spec, periodo);
   }
   if (!sqlContemPeriodoDeclarado(sql, campos, dataInicio, dataFim)) {
     return {
@@ -3776,7 +3867,7 @@ async function executar(spec, intent, empresaId) {
     return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- erro: ${e.message}`, duracao_ms: Date.now() - t0 };
   }
   if (!Object.values(keys || {}).some(Boolean)) {
-    return { tipo: 'erro', subtipo: 'sem_chave', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: '-- Nenhuma chave de IA configurada.', duracao_ms: Date.now() - t0 };
+    return { tipo: 'erro', subtipo: 'sem_chave', resposta_direta: mensagemIaIndisponivel(spec, { _semChave: true }), sql_gerado: '-- Nenhuma chave de IA configurada.', duracao_ms: Date.now() - t0 };
   }
 
   let intentEfetivo = intent;
@@ -4306,7 +4397,7 @@ async function executar(spec, intent, empresaId) {
     auditoriaBase.resposta_ia_bruta = plano.raw || null;
   } catch (e) {
     _traceIaOwner('ia_owner_chamar_ia_erro', { empresa_id: empresaId, tentativa: 1, erro: e?.message || String(e) });
-    return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- IA-OWNER falhou: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
+    return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemIaIndisponivel(spec, e), sql_gerado: `-- IA-OWNER falhou: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
   }
 
   let periodoAutoritativo = periodoAutoritativoParaSql(intentEfetivo, plano.obj);
@@ -4377,7 +4468,7 @@ async function executar(spec, intent, empresaId) {
         auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
         auditoriaBase.resposta_ia_bruta = plano.raw || auditoriaBase.resposta_ia_bruta;
       } catch (e) {
-        return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- IA-OWNER falhou no ultimo recurso de entidade: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
+        return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemIaIndisponivel(spec, e), sql_gerado: `-- IA-OWNER falhou no ultimo recurso de entidade: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
       }
     } else {
       entidadesResolvidas = deduplicarEntidadesResolvidas([...entidadesResolvidas, ...(resolucao.entidades || [])]);
@@ -4396,7 +4487,7 @@ async function executar(spec, intent, empresaId) {
         auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
         auditoriaBase.resposta_ia_bruta = plano.raw || auditoriaBase.resposta_ia_bruta;
       } catch (e) {
-        return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- IA-OWNER falhou apos entidades: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
+        return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemIaIndisponivel(spec, e), sql_gerado: `-- IA-OWNER falhou apos entidades: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
       }
     }
   } else if (plano.obj.precisa_confirmacao && entidadesDeclaradasPelaIa.length && entidadesResolvidas.length) {
@@ -4415,7 +4506,7 @@ async function executar(spec, intent, empresaId) {
       auditoriaBase.plano_ia_owner = plano.obj || auditoriaBase.plano_ia_owner;
       auditoriaBase.resposta_ia_bruta = plano.raw || auditoriaBase.resposta_ia_bruta;
     } catch (e) {
-      return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemErro(spec, 'ia_indisponivel'), sql_gerado: `-- IA-OWNER falhou apos entidade ja resolvida: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
+      return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemIaIndisponivel(spec, e), sql_gerado: `-- IA-OWNER falhou apos entidade ja resolvida: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
     }
   }
 
@@ -4600,7 +4691,14 @@ async function executar(spec, intent, empresaId) {
       if (tentativa >= maxTentativas) {
         const sqlErro = preparado?.sqlFinal || e._sql || plano.sql;
         const subtipo = e._tipo || 'erro_erp';
-        return { tipo: 'erro', subtipo, resposta_direta: mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'), sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
+        // Regra fiscal nacional de CFOP (nao pode falhar silenciosamente): se esgotou as
+        // tentativas ainda violando essa regra, o usuario precisa saber que o motivo foi
+        // essa regra especifica, nao um erro generico de SQL — evita interpretar a falha
+        // como bug tecnico e insistir na mesma pergunta sem entender a causa.
+        const respostaCfop = REGEX_ERRO_CFOP_RECEITA.test(e.message || '')
+          ? 'Nao consegui montar essa consulta respeitando a regra fiscal de CFOP (exclusao de remessas e transferencias do faturamento). Tente reformular a pergunta ou peca ajuda a um administrador.'
+          : null;
+        return { tipo: 'erro', subtipo, resposta_direta: respostaCfop || mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'), sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
       }
       const retryPrompt = promptBuilder.buildUserPrompt({
         mensagem,
@@ -4610,7 +4708,7 @@ async function executar(spec, intent, empresaId) {
         entidadesResolvidas,
         tentativa: buildRetryTecnicoIaOwner({ erro: e, entidadesResolvidas }),
         erroSql: e.message,
-        sqlComErro: preparado?.sqlFinal || e._sql || plano.sql,
+        sqlComErro: (preparado?.sqlFinal || e._sql || plano.sql) + _reforcosFinaisRetry(e.message),
       });
       plano = await chamarIaOwner(spec, keys, cfg, retryPrompt, { ...modeloOpts, maxTokens: spec.maxTokens || 3500 });
       auditoriaBase.prompt_user = plano.userPrompt || retryPrompt;
@@ -4826,6 +4924,7 @@ module.exports = {
   _test: {
     extrairJson,
     extrairSQL,
+    mensagemIaIndisponivel,
     buildEstadoAnterior,
     buildContextoTecnico,
     confirmacaoPodeEncerrarPlano,

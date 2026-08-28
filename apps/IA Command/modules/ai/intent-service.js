@@ -1005,9 +1005,7 @@ async function classificar(mensagem, empresaId, opts = {}) {
     for (const provedor of ordem) {
       if (!keys[provedor]) continue;
       try {
-        const modeloConfigurado = provedor === 'claude' ? cfg.claude_modelo
-          : provedor === 'gemini' ? cfg.gemini_modelo
-          : null;
+        const modeloConfigurado = cfg[`${provedor}_modelo`] || null;
         const raw = await PROVIDERS[provedor].classificarIntencao(mensagem, keys[provedor], intencoes, sinonimos, contextoAnterior, modeloConfigurado);
         const result = validator.validar(raw, nomesPermitidos);
         if (result.valido) {

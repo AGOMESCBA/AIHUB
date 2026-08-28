@@ -89,8 +89,15 @@ function extrairExplicitos(mensagem) {
   for (const regra of TIPOS_EXPLICITOS) {
     const m = texto.match(regra.re);
     if (m?.[1]) {
+      // Corta o texto capturado ANTES de dividir por " e "/", " — se o texto tiver algo como
+      // "...considerando RA e NCC" apos o nome, o split por " e " fragmenta a frase em pedacos
+      // menores que _limparTermo() nao reconhece mais como o padrao completo "considerando ...".
+      // Cortando aqui, "cliente NOME considerando RA e NCC" vira "cliente NOME" antes do split,
+      // evitando que siglas como RA/NCC/PA/NDF (que vem depois de "considerando") sejam
+      // capturadas como se fizessem parte do nome do cliente/fornecedor.
+      const capturaLimpa = _limparTermo(m[1]);
       // Divide em múltiplos nomes separados por " e " ou ", " (ex: "SESI AM e SENAI AM")
-      const partes = m[1].split(/\s*,\s*|\s+e\s+/i);
+      const partes = capturaLimpa.split(/\s*,\s*|\s+e\s+/i);
       for (const parte of partes) {
         const termo = _limparTermo(parte);
         const chave = `${regra.tipo}:${termo}`.toLowerCase();

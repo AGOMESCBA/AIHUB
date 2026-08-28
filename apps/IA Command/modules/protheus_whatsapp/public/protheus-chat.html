@@ -23,9 +23,9 @@
     --wa-bg-pattern-opacity: 0.055;
     --wa-bubble-in: #ffffff;
     --wa-bubble-out: #d9fdd3;
-    --wa-text: #111b21;
-    --wa-text-secondary: #667781;
-    --wa-text-tertiary: #8696a0;
+    --wa-text: #061016;
+    --wa-text-secondary: #1d2e36;
+    --wa-text-tertiary: #3f535d;
     --wa-accent: #00a884;
     --wa-accent-soft-bg: rgba(0, 168, 132, 0.12);
     --wa-accent-soft-bg-hover: rgba(0, 168, 132, 0.2);
@@ -35,11 +35,11 @@
     --wa-sidebar-hover: #f5f6f6;
     --wa-sidebar-active: #f0f2f5;
     --wa-chrome: #f0f2f5;
-    --wa-chrome-text: #111b21;
-    --wa-chrome-sub: #667781;
+    --wa-chrome-text: #061016;
+    --wa-chrome-sub: #1d2e36;
     --wa-select-bg: rgba(0, 0, 0, 0.025);
     --wa-select-bg-hover: rgba(0, 0, 0, 0.055);
-    --wa-tab-muted: #667781;
+    --wa-tab-muted: #1d2e36;
     --wa-border: rgba(0, 0, 0, 0.09);
     --wa-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
     --wa-input-bg: #ffffff;
@@ -47,6 +47,9 @@
     --wa-scrollbar: rgba(0, 0, 0, 0.18);
     --wa-check: #53bdeb;
     --wa-app-bg: #dcdfe1;
+    --wa-focus-ring: rgba(0, 168, 132, 0.22);
+    --wa-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    --wa-btn-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.10);
   }
 
   :root[data-theme="dark"] {
@@ -79,6 +82,9 @@
     --wa-scrollbar: rgba(255, 255, 255, 0.15);
     --wa-check: #53bdeb;
     --wa-app-bg: #02070a;
+    --wa-focus-ring: rgba(0, 217, 163, 0.20);
+    --wa-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.26);
+    --wa-btn-shadow-hover: 0 8px 20px rgba(0, 0, 0, 0.34);
   }
 
   /* [AJUSTADO a pedido do usuario] Tema escuro como PADRAO — antes so
@@ -118,6 +124,9 @@
     --wa-scrollbar: rgba(255, 255, 255, 0.15);
     --wa-check: #53bdeb;
     --wa-app-bg: #02070a;
+    --wa-focus-ring: rgba(0, 217, 163, 0.20);
+    --wa-btn-shadow: 0 1px 2px rgba(0, 0, 0, 0.26);
+    --wa-btn-shadow-hover: 0 8px 20px rgba(0, 0, 0, 0.34);
   }
 
   * { box-sizing: border-box; }
@@ -193,9 +202,12 @@
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: background 0.12s ease;
+    box-shadow: var(--wa-btn-shadow);
+    transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease;
   }
-  .new-chat-btn:hover { background: var(--wa-accent-soft-bg-hover); }
+  .new-chat-btn:hover { background: var(--wa-accent-soft-bg-hover); box-shadow: var(--wa-btn-shadow-hover); transform: translateY(-1px); }
+  .new-chat-btn:active { transform: translateY(0); box-shadow: var(--wa-btn-shadow); }
+  .new-chat-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
   .new-chat-btn svg { width: 15px; height: 15px; fill: currentColor; }
 
   .favorite-open-btn {
@@ -211,9 +223,12 @@
     font-size: 13px;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.12s ease, border-color 0.12s ease;
+    box-shadow: var(--wa-btn-shadow);
+    transition: background 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease;
   }
-  .favorite-open-btn:hover { background: var(--wa-sidebar-hover); border-color: var(--wa-accent-soft-border); }
+  .favorite-open-btn:hover { background: var(--wa-sidebar-hover); border-color: var(--wa-accent-soft-border); box-shadow: var(--wa-btn-shadow-hover); transform: translateY(-1px); }
+  .favorite-open-btn:active { transform: translateY(0); box-shadow: var(--wa-btn-shadow); }
+  .favorite-open-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
   .favorite-open-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .favorite-open-main svg { width: 15px; height: 15px; fill: var(--wa-accent); flex: none; }
   .favorite-count { min-width: 24px; height: 20px; padding: 0 7px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--wa-accent-soft-bg); color: var(--wa-accent); font-size: 11px; font-weight: 800; }
@@ -246,22 +261,27 @@
   .favorite-main { min-width: 0; }
   .favorite-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.2px; font-weight: 700; }
   .favorite-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wa-text-tertiary); font-size: 11.5px; margin-top: 3px; }
-  .favorite-run { border: none; border-radius: 7px; padding: 7px 11px; background: var(--wa-accent); color: #06251e; font-size: 12px; font-weight: 800; cursor: pointer; }
-  .favorite-run:hover { filter: brightness(1.07); }
+  .favorite-run { border: 1px solid transparent; border-radius: 7px; padding: 7px 11px; background: var(--wa-accent); color: #06251e; font-size: 12px; font-weight: 800; cursor: pointer; box-shadow: var(--wa-btn-shadow); transition: filter 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease; }
+  .favorite-run:hover { filter: brightness(1.07); box-shadow: var(--wa-btn-shadow-hover); transform: translateY(-1px); }
+  .favorite-run:active { transform: translateY(0); box-shadow: var(--wa-btn-shadow); }
+  .favorite-run:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
   .favorite-item.needs-adjust { border-color: rgba(255, 196, 87, 0.5); background: rgba(255, 196, 87, 0.06); }
   .favorite-adjust-badge { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; margin-top: 4px; padding: 2px 6px; border-radius: 999px; background: rgba(255, 196, 87, 0.14); color: #ffc457; font-size: 10.5px; font-weight: 800; }
   .favorite-item.needs-adjust .favorite-run { background: #ffc457; color: #2b1e04; }
-  .favorite-delete, .favorite-rename { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .favorite-delete, .favorite-rename { width: 24px; height: 24px; border: none; border-radius: 50%; background: transparent; color: var(--wa-text-tertiary); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease; }
   .favorite-delete:hover { background: rgba(214, 69, 69, 0.14); color: #d64545; }
   .favorite-rename:hover { background: var(--wa-accent-soft-bg); color: var(--wa-accent); }
+  .favorite-delete:active, .favorite-rename:active { transform: scale(0.94); }
+  .favorite-delete:focus-visible, .favorite-rename:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring); }
   .favorite-delete svg, .favorite-rename svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   /* Agrupamento por modulo — colapsavel. So aparece quando ha mais de um
      modulo entre os favoritos (ver renderFavoritos); com um unico modulo a
      lista fica plana, sem cabecalho de grupo (nada a organizar). */
   .favorite-group { border: 1px solid transparent; border-radius: 8px; }
-  .favorite-group-header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 6px; border: none; background: transparent; color: var(--wa-text-secondary); font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; cursor: pointer; text-align: left; border-radius: 6px; }
+  .favorite-group-header { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 6px; border: none; background: transparent; color: var(--wa-text-secondary); font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; cursor: pointer; text-align: left; border-radius: 6px; transition: background 0.14s ease, color 0.14s ease; }
   .favorite-group-header:hover { background: var(--wa-sidebar-hover); }
+  .favorite-group-header:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--wa-focus-ring); }
   .favorite-group-chevron { width: 14px; height: 14px; display: flex; flex: none; transition: transform 0.15s ease; color: var(--wa-text-tertiary); }
   .favorite-group-chevron svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
   .favorite-group.open .favorite-group-chevron { transform: rotate(90deg); }
@@ -311,10 +331,47 @@
 
   .session-empty { padding: 24px 12px; text-align: center; color: var(--wa-text-tertiary); font-size: 12.5px; line-height: 1.5; }
 
-  .session-item { display: flex; align-items: center; gap: 14px; min-height: 72px; padding: 10px 12px; border-radius: 12px; cursor: pointer; position: relative; }
+  .session-item { display: flex; align-items: center; gap: 11px; min-height: 72px; padding: 10px 12px; border-radius: 12px; cursor: pointer; position: relative; }
   .session-item:hover { background: var(--wa-sidebar-hover); }
   .session-item.active { background: var(--wa-sidebar-active); }
   .session-item.active::before { content: ""; position: absolute; left: -12px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--wa-accent); }
+  .session-item.unread .session-title { font-weight: 800; color: var(--wa-text); }
+  .session-unread-dot { position: absolute; right: 15px; top: 16px; width: 9px; height: 9px; border-radius: 50%; background: var(--wa-accent); box-shadow: 0 0 0 3px var(--wa-sidebar); }
+  .session-item.active .session-unread-dot { display: none; }
+  .session-processing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: none;
+    margin-left: 7px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: var(--wa-accent-soft-bg);
+    color: var(--wa-accent);
+  }
+  .session-processing-indicator span {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: session-processing-dot 1.05s infinite ease-in-out;
+  }
+  .session-processing-indicator span:nth-child(2) { animation-delay: 0.14s; }
+  .session-processing-indicator span:nth-child(3) { animation-delay: 0.28s; }
+  .session-item.processing .session-avatar {
+    position: relative;
+    box-shadow: 0 0 0 2px var(--wa-accent-soft-border);
+    animation: session-processing-ring 1.45s infinite ease-in-out;
+  }
+  .session-item.processing .session-preview { color: var(--wa-accent); font-weight: 650; }
+  @keyframes session-processing-dot {
+    0%, 70%, 100% { transform: translateY(0); opacity: 0.42; }
+    35% { transform: translateY(-2px); opacity: 1; }
+  }
+  @keyframes session-processing-ring {
+    0%, 100% { box-shadow: 0 0 0 2px var(--wa-accent-soft-border); }
+    50% { box-shadow: 0 0 0 2px var(--wa-accent-soft-border), 0 0 0 6px rgba(0, 217, 163, 0.08); }
+  }
 
   /* Acoes da conversa ficam agrupadas para liberar espaco ao titulo. */
   .session-actions {
@@ -387,7 +444,7 @@
   /* Input de edicao inline do titulo — substitui o <span class="session-title">
      no lugar exato dele (mesma posicao/tamanho de fonte), sem abrir modal. */
   .session-title-input {
-    font-size: 13.5px; font-weight: 600; color: var(--wa-text);
+    font-size: 14px; font-weight: 600; color: var(--wa-text);
     background: var(--wa-input-bg); border: 1px solid var(--wa-accent);
     border-radius: 4px; padding: 1px 5px; width: 100%; min-width: 0;
     font-family: inherit; outline: none;
@@ -402,10 +459,10 @@
 
   .session-meta { min-width: 0; flex: 1; }
   .session-top { display: flex; min-width: 0; }
-  .session-title { font-size: 15px; font-weight: 650; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .session-title { flex: 1; font-size: 14px; font-weight: 600; color: var(--wa-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .session-time { font-size: 12px; color: var(--wa-text-tertiary); flex: none; }
   .session-bottom { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
-  .session-preview { font-size: 13.2px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+  .session-preview { font-size: 12.8px; color: var(--wa-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 
   .sidebar-footer { flex: none; display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-top: 1px solid var(--wa-border); }
   .sidebar-footer .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: #0b5b4e; color: #fff; font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
@@ -506,9 +563,21 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    transition: background .12s ease, border-color .12s ease;
+    box-shadow: var(--wa-btn-shadow);
+    transition: background .14s ease, border-color .14s ease, box-shadow .14s ease, transform .12s ease;
   }
-  .escopo-select-btn:hover, .escopo-select-btn:focus-visible { background: var(--wa-select-bg-hover); outline: none; }
+  .escopo-select-btn:hover { background: var(--wa-select-bg-hover); border-color: var(--wa-accent-soft-border); box-shadow: var(--wa-btn-shadow-hover); transform: translateY(-1px); }
+  .escopo-select-btn:active { transform: translateY(0); box-shadow: var(--wa-btn-shadow); }
+  .escopo-select-btn:focus-visible { background: var(--wa-select-bg-hover); outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
+  .escopo-select-btn.has-scope {
+    border-color: var(--wa-accent-soft-border);
+    background: var(--wa-accent-soft-bg);
+    color: var(--wa-chrome-text);
+  }
+  .escopo-select-btn.has-scope .icon { color: var(--wa-accent); opacity: 1; }
+  .escopo-select-btn.partial-scope {
+    box-shadow: inset 0 -2px 0 var(--wa-accent);
+  }
   .escopo-select-btn .icon { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.8; }
   .escopo-select-btn .label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .escopo-select-btn .chevron { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0.86; }
@@ -530,7 +599,7 @@
 
   /* Nivel 0 — empresa-cliente do IAHub. Visual mais forte que os niveis
      internos (Protheus), para deixar clara a hierarquia. */
-  .escopo-empresa-iahub { margin-bottom: 4px; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; }
+  .escopo-empresa-iahub { margin-bottom: 6px; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: rgba(255,255,255,0.015); }
   .escopo-empresa-iahub-row {
     display: flex; align-items: center; gap: 8px; padding: 10px 10px;
     cursor: pointer; font-size: 13px; font-weight: 700; background: var(--wa-panel);
@@ -556,6 +625,8 @@
     cursor: pointer; font-size: 12.5px; font-weight: 600;
   }
   .filial-empresa-row:hover { background: var(--wa-sidebar-hover); }
+  .filial-empresa-row.selecionada,
+  .filial-empresa-row.parcial { background: var(--wa-accent-soft-bg); }
   .filial-empresa-row input[type=checkbox] {
     width: 16px; height: 16px; flex: none; accent-color: var(--wa-accent); cursor: pointer;
   }
@@ -587,8 +658,9 @@
   .filial-empresa-row.expandido + .filial-lista-filiais { display: block; }
 
   /* Nivel 2 — filial individual. */
-  .filial-option { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 7px; cursor: pointer; font-size: 12px; }
+  .filial-option { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 7px; cursor: pointer; font-size: 12px; }
   .filial-option:hover { background: var(--wa-sidebar-hover); }
+  .filial-option.selecionada { background: var(--wa-accent-soft-bg); }
   .filial-option input { width: 14px; height: 14px; flex: none; accent-color: var(--wa-accent); cursor: pointer; }
   .filial-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.92; }
   .filial-menu-empty { padding: 16px 12px; font-size: 12px; opacity: 0.65; text-align: center; }
@@ -598,14 +670,28 @@
   .favorites-close-plain {
     border: 1px solid var(--wa-border); border-radius: 7px; padding: 7px 11px;
     background: transparent; color: var(--wa-text-secondary); font-size: 12px; font-weight: 700; cursor: pointer;
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease;
   }
-  .favorites-close-plain:hover { background: var(--wa-sidebar-hover); }
+  .favorites-close-plain:hover { background: var(--wa-sidebar-hover); border-color: var(--wa-accent-soft-border); color: var(--wa-text); transform: translateY(-1px); }
+  .favorites-close-plain:active { transform: translateY(0); }
+  .favorites-close-plain:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring); }
+  .modal-actions {
+    flex: none;
+    padding: 10px 14px 14px;
+    border-top: 1px solid var(--wa-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
 
   /* Badge de escopo de filial na bolha de mensagem e no cabecalho do grid */
   .bubble-filial-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; opacity: 0.75; margin-left: 6px; }
   .bubble-filial-badge.aviso { opacity: 0.95; color: var(--wa-warning, #b98900); }
   .report-scope { padding: 2px 4px 6px; font-size: 12px; opacity: 0.75; }
   .report-scope.aviso { opacity: 0.95; color: var(--wa-warning, #b98900); }
+  :root[data-theme="light"] .report-scope,
+  :root[data-theme="light"] .bubble-filial-badge,
+  :root[data-theme="light"] .bubble .time { opacity: 0.92; }
 
   /* Botao discreto de resetar memoria: visivel mas quieto, nao compete com o
      restante do cabecalho — contraste suficiente pra ser encontrado sem gritar */
@@ -622,10 +708,11 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease, transform 0.4s ease;
+    box-shadow: var(--wa-btn-shadow);
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.18s ease;
   }
-  .reset-memoria-btn:hover,
-  .reset-memoria-btn:focus-visible { background: var(--wa-select-bg-hover); color: var(--wa-chrome-text); outline: none; }
+  .reset-memoria-btn:hover { background: var(--wa-select-bg-hover); border-color: var(--wa-accent-soft-border); color: var(--wa-chrome-text); box-shadow: var(--wa-btn-shadow-hover); transform: translateY(-1px); }
+  .reset-memoria-btn:focus-visible { background: var(--wa-select-bg-hover); color: var(--wa-chrome-text); outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
   .reset-memoria-btn.active { background: var(--wa-accent-soft-bg); border-color: var(--wa-accent); color: var(--wa-chrome-text); }
   .reset-memoria-btn:active svg { transform: rotate(-50deg); }
   .reset-memoria-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.35s ease; }
@@ -637,7 +724,8 @@
     width: 32px;
     height: 32px;
     padding: 0;
-    border: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
     background: transparent;
     color: var(--wa-chrome-sub);
     display: flex;
@@ -645,12 +733,19 @@
     justify-content: center;
     cursor: pointer;
     font: inherit;
-    transition: color 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
   }
-  .focus-toggle-btn:hover,
+  .focus-toggle-btn:hover {
+    background: var(--wa-select-bg-hover);
+    border-color: var(--wa-border);
+    color: var(--wa-chrome-text);
+    transform: translateY(-1px);
+  }
   .focus-toggle-btn:focus-visible {
+    background: var(--wa-select-bg-hover);
     color: var(--wa-chrome-text);
     outline: none;
+    box-shadow: 0 0 0 3px var(--wa-focus-ring);
   }
   .focus-toggle-btn.active {
     color: var(--wa-accent);
@@ -1036,6 +1131,13 @@
   .whatsapp-preview-question { border-left: 3px solid var(--wa-accent); padding: 8px 10px; background: var(--wa-panel); border-radius: 8px; color: var(--wa-text-secondary); font-size: 12.5px; line-height: 1.45; }
   .whatsapp-preview-question strong { display: block; color: var(--wa-accent); font-size: 11px; text-transform: uppercase; margin-bottom: 3px; }
   .whatsapp-preview-text { width: 100%; min-height: 360px; resize: vertical; border: 1px solid var(--wa-border); border-radius: 8px; background: var(--wa-panel); color: var(--wa-text); padding: 12px; font: 12.5px/1.45 Consolas, ui-monospace, SFMono-Regular, monospace; outline: none; white-space: pre; }
+  .sql-preview-tabs { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--wa-border); padding-bottom: 8px; }
+  .sql-preview-tab { border: 1px solid transparent; background: transparent; color: var(--wa-text-secondary); cursor: pointer; font-size: 13px; font-weight: 700; padding: 7px 10px; border-radius: 8px; }
+  .sql-preview-tab:hover { background: var(--wa-sidebar-hover); color: var(--wa-text); }
+  .sql-preview-tab.active { background: var(--wa-accent-soft-bg); border-color: var(--wa-accent-soft-border); color: var(--wa-accent); }
+  .sql-preview-panel { display: none; }
+  .sql-preview-panel.active { display: block; }
+  .sql-preview-audit-text { min-height: 360px; }
   .whatsapp-preview-status { min-height: 18px; color: var(--wa-text-tertiary); font-size: 12px; }
   .whatsapp-preview-status.error { color: #ff8a8a; }
   .whatsapp-preview-status.ok { color: var(--wa-accent); }
@@ -1044,19 +1146,20 @@
      — unica ligacao visual da bolha (texto puro, igual WhatsApp) com a aba
      Dados (Tabulator), que continua sendo a unica forma de visualizar os
      dados tabulares completos neste canal. */
-  .result-table-rodape { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px 2px; font-size: 12px; color: var(--wa-text-secondary); }
-  .result-table-link { background: none; border: none; padding: 0; color: var(--wa-accent); font-size: 12px; font-weight: 600; cursor: pointer; text-decoration: underline; font-family: inherit; }
-  .result-table-link:hover { opacity: 0.85; }
+  .result-table-rodape { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 5px; padding: 8px 0 1px; font-size: 12px; color: var(--wa-text-secondary); border-top: 1px solid var(--wa-border); }
+  .result-table-link { border: 1px solid var(--wa-accent-soft-border); border-radius: 7px; padding: 5px 9px; color: var(--wa-accent); background: var(--wa-accent-soft-bg); font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: none; font-family: inherit; white-space: nowrap; }
+  .result-table-link:hover { background: var(--wa-accent-soft-bg-hover); }
 
   .typing-row .bubble {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
     padding: 11px 14px;
     min-width: 68px;
     justify-content: center;
     animation: typing-bubble-pulse 1.6s infinite ease-in-out;
   }
+  .typing-status-text { font-size: 13px; color: var(--wa-text-secondary); white-space: nowrap; }
   .typing-dot {
     display: block;
     width: 7px;
@@ -1107,9 +1210,10 @@
   }
   .app-frame.focus-mode .input-wrap textarea { min-height: 66px; max-height: 168px; }
 
-  .send-btn { flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--wa-header); border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.12s ease; }
-  .send-btn:hover { transform: scale(1.04); }
+  .send-btn { flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--wa-header); border: 1px solid var(--wa-accent-soft-border); display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--wa-btn-shadow); transition: background 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease; }
+  .send-btn:hover { background: var(--wa-accent); box-shadow: var(--wa-btn-shadow-hover); transform: scale(1.04); }
   .send-btn:active { transform: scale(0.96); }
+  .send-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
   .send-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
   .send-btn svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
 
@@ -1122,7 +1226,34 @@
   .app-frame.focus-mode .protheus-strip svg { display: none; }
 
 
-  .error-banner { background: #d64545; color: #fff; font-size: 12.5px; padding: 8px 16px; text-align: center; }
+  .error-banner {
+    background: #d64545;
+    color: #fff;
+    font-size: 12.5px;
+    padding: 8px 12px 8px 16px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+  }
+  .error-banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .error-banner-close {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(255,255,255,0.26);
+    border-radius: 7px;
+    background: rgba(0,0,0,0.08);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .error-banner-close:hover,
+  .error-banner-close:focus-visible { background: rgba(255,255,255,0.16); outline: none; }
+  .error-banner-close svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
 
   /* ========================= ABAS (Conversa / Relatorio) ========================= */
   .view-tabs {
@@ -1145,9 +1276,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
   }
   .view-tab:hover { background: transparent; color: var(--wa-chrome-text); border-color: var(--wa-border); }
   .view-tab.active { background: transparent; color: var(--wa-chrome-text); border-color: var(--wa-accent); }
+  .view-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--wa-focus-ring); }
   .view-tab .badge-dot { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--wa-accent); flex: none; }
   .view-tab.active .badge-dot { display: inline-block; }
   .view-tab:disabled { opacity: 0.5; cursor: default; }
@@ -1224,6 +1357,23 @@
     color: var(--wa-text-secondary);
   }
   .report-search svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
+  .report-search-clear {
+    display: none;
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--wa-text-tertiary);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .report-search-clear.visible { display: inline-flex; }
+  .report-search-clear:hover,
+  .report-search-clear:focus-visible { background: var(--wa-sidebar-hover); color: var(--wa-text); outline: none; }
+  .report-search-clear svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
   .report-search input {
     min-width: 0;
     width: 100%;
@@ -1244,14 +1394,56 @@
     padding: 7px 12px;
     border-radius: 7px;
     border: 1px solid var(--wa-border);
-    background: var(--wa-sidebar);
+    background: linear-gradient(180deg, var(--wa-sidebar), var(--wa-panel));
     color: var(--wa-text);
     cursor: pointer;
-    transition: background 0.12s ease, border-color 0.12s ease;
+    box-shadow: var(--wa-btn-shadow);
+    transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease, box-shadow 0.14s ease, transform 0.12s ease;
   }
-  .report-btn:hover { border-color: var(--wa-accent); background: var(--wa-accent-soft-bg); }
+  .report-btn:hover { border-color: var(--wa-accent-soft-border); background: var(--wa-accent-soft-bg); box-shadow: var(--wa-btn-shadow-hover); transform: translateY(-1px); }
+  .report-btn:active { transform: translateY(0); box-shadow: var(--wa-btn-shadow); }
+  .report-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring), var(--wa-btn-shadow); }
+  .report-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .report-btn:disabled:hover { border-color: var(--wa-border); background: transparent; box-shadow: none; transform: none; }
   .report-btn svg { width: 14px; height: 14px; fill: currentColor; }
-  .report-btn.ghost { background: transparent; }
+  .report-btn.ghost { background: transparent; box-shadow: none; }
+  .report-btn.ghost:hover { background: var(--wa-accent-soft-bg); box-shadow: var(--wa-btn-shadow); }
+  .report-action-menu { position: relative; }
+  .report-action-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 13;
+    display: none;
+    min-width: 190px;
+    padding: 6px;
+    border: 1px solid var(--wa-border);
+    border-radius: 8px;
+    background: var(--wa-sidebar);
+    box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+  }
+  .report-action-menu.open .report-action-popover { display: block; }
+  .report-action-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 9px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--wa-text);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.14s ease, color 0.14s ease;
+  }
+  .report-action-option:hover { background: var(--wa-sidebar-hover); }
+  .report-action-option:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--wa-focus-ring); }
+  .report-action-option.active { color: var(--wa-accent); font-weight: 700; }
+  .report-action-option small { color: var(--wa-text-tertiary); font-size: 11px; font-weight: 600; }
   .report-columns { position: relative; }
   .report-columns-popover {
     position: absolute;
@@ -1269,6 +1461,38 @@
     box-shadow: 0 10px 28px rgba(0,0,0,0.28);
   }
   .report-columns.open .report-columns-popover { display: block; }
+  .report-status-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 34px;
+    padding: 7px 16px;
+    border-bottom: 1px solid var(--wa-border);
+    background: rgba(0, 0, 0, 0.035);
+    color: var(--wa-text-tertiary);
+    font-size: 11.5px;
+    font-weight: 650;
+  }
+  .report-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .report-status strong { color: var(--wa-text-secondary); font-weight: 800; }
+  .report-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--wa-accent);
+    box-shadow: 0 0 0 3px var(--wa-accent-soft-bg);
+    flex: none;
+  }
   .column-toggle {
     display: flex;
     align-items: center;
@@ -1301,7 +1525,7 @@
   .column-rename-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .report-body { flex: 1; min-height: 0; padding: 12px 16px 16px; overflow: hidden; display: flex; flex-direction: column; }
-  .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); }
+  .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
   #reportGrid { height: 100%; }
 
   .report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--wa-text-tertiary); text-align: center; padding: 30px; gap: 8px; }
@@ -1329,10 +1553,23 @@
   .report-grand-total .total-label { font-weight: 600; text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.4px; color: var(--wa-text-tertiary); }
   .report-grand-total .total-valor { font-variant-numeric: tabular-nums; }
 
-  /* Mantido o tema padrao do Tabulator (paleta propria da lib, ja com
-     contraste correto entre linhas/grupos/totais) — apenas herda a fonte da
-     tela e remove a borda dupla, sem sobrescrever cores de fundo/texto. */
+  /* Tema do Tabulator mantido proximo do padrao da lib. Aqui so ajustamos
+     tipografia e filtros, sem controlar cores de linhas/grupos. */
   .tabulator { font-family: inherit; font-size: 12.8px; }
+  .tabulator .tabulator-header-filter input,
+  .tabulator .tabulator-header-filter select {
+    min-height: 28px;
+    border: 1px solid #aeb8bf;
+    border-radius: 5px;
+    background: #ffffff;
+    color: #111b21;
+    font: inherit;
+    font-size: 12px;
+    padding: 4px 6px;
+    outline: none;
+  }
+  .tabulator .tabulator-header-filter input:focus,
+  .tabulator .tabulator-header-filter select:focus { border-color: var(--wa-accent-soft-border); box-shadow: 0 0 0 2px var(--wa-accent-soft-bg); }
   .tabulator .tabulator-cell.num { font-variant-numeric: tabular-nums; }
 
   @media (max-width: 760px) {
@@ -1343,7 +1580,29 @@
     .app-frame.focus-mode .chat-footer { padding: 10px 12px; }
     .app-frame.focus-mode .input-wrap { min-height: 78px; }
   }
-  @media (prefers-reduced-motion: reduce) { .row:not(.typing-row), .send-btn { animation: none !important; transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) {
+    .row:not(.typing-row),
+    .send-btn,
+    .new-chat-btn,
+    .favorite-open-btn,
+    .favorite-run,
+    .favorites-close-plain,
+    .escopo-select-btn,
+    .reset-memoria-btn,
+    .focus-toggle-btn,
+    .report-btn,
+    .report-action-option,
+    .favorite-delete,
+    .favorite-rename,
+    .favorite-group-header,
+    .session-processing-indicator span,
+    .session-item.processing .session-avatar,
+    .view-tab {
+      animation: none !important;
+      transition: none !important;
+      transform: none !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -1473,7 +1732,12 @@
       </button>
     </div>
 
-    <div id="errorBanner" class="error-banner" style="display:none;"></div>
+    <div id="errorBanner" class="error-banner" aria-live="polite">
+      <span class="error-banner-text" id="errorBannerText"></span>
+      <button class="error-banner-close" id="btnFecharErrorBanner" type="button" title="Fechar mensagem" aria-label="Fechar mensagem">
+        <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
 
     <div class="view-stack">
       <!-- ================= PAINEL: CONVERSA ================= -->
@@ -1510,9 +1774,24 @@
             <label class="report-search" title="Buscar em todas as colunas">
               <svg viewBox="0 0 24 24"><path d="M9.5 3a6.5 6.5 0 015.2 10.4l4 4-1.4 1.4-4-4A6.5 6.5 0 119.5 3zm0 2a4.5 4.5 0 100 9 4.5 4.5 0 000-9z"/></svg>
               <input type="search" id="reportGlobalSearch" placeholder="Buscar dados" autocomplete="off">
+              <button class="report-search-clear" id="btnLimparBuscaDados" type="button" title="Limpar busca" aria-label="Limpar busca">
+                <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
             </label>
-            <button class="report-btn ghost" id="btnExpandirGrupos" type="button" title="Expandir grupos" style="display:none">Expandir</button>
-            <button class="report-btn ghost" id="btnRecolherGrupos" type="button" title="Recolher grupos" style="display:none">Recolher</button>
+            <div class="report-action-menu" id="reportExpandMenu" style="display:none">
+              <button class="report-btn ghost" id="btnExpandirGrupos" type="button" title="Expandir grupos" aria-expanded="false">
+                Expandir
+                <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+              </button>
+              <div class="report-action-popover" id="reportExpandPopover"></div>
+            </div>
+            <div class="report-action-menu" id="reportCollapseMenu" style="display:none">
+              <button class="report-btn ghost" id="btnRecolherGrupos" type="button" title="Recolher grupos" aria-expanded="false">
+                Recolher
+                <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+              </button>
+              <div class="report-action-popover" id="reportCollapsePopover"></div>
+            </div>
             <button class="report-btn ghost" id="btnLimparAgrupamento" type="button">Limpar</button>
             <div class="report-columns" id="reportColumnsMenu">
               <button class="report-btn" id="btnReportColumns" type="button" aria-expanded="false">
@@ -1521,6 +1800,7 @@
               </button>
               <div class="report-columns-popover" id="reportColumnsPopover"></div>
             </div>
+            <button class="report-btn ghost" id="btnResetarLayoutGrid" type="button" title="Resetar layout da grade" disabled>Resetar</button>
             <button class="report-btn" id="btnExportXlsx" type="button">
               <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM8 18v-2h2v2H8zm0-4v-2h2v2H8zm0-4V8h2v2H8zm4 8v-2h4v2h-4zm0-4v-2h4v2h-4zm0-4V8h4v2h-4z"/></svg>
               Excel
@@ -1530,6 +1810,9 @@
               PDF
             </button>
           </div>
+        </div>
+        <div class="report-status-bar" id="reportStatusBar" style="display:none">
+          <div class="report-status" id="reportGridStatus"></div>
         </div>
         <div class="report-body">
           <div class="report-grid-wrap">
@@ -1573,7 +1856,7 @@
       </label>
     </div>
     <div class="escopo-modal-body" id="escopoModalBody"></div>
-    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+    <div class="modal-actions">
       <button class="favorites-close-plain" type="button" id="btnEscopoCancelar">Cancelar</button>
       <button class="favorite-run" type="button" id="btnEscopoAplicar">Aplicar</button>
     </div>
@@ -1628,7 +1911,7 @@
       <textarea class="macro-adjust-sql" id="macroAdjustSql" spellcheck="false"></textarea>
       <div class="macro-help-grid" id="macroHelpGrid"></div>
     </div>
-    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+    <div class="modal-actions">
       <button class="favorite-run" type="button" id="btnSalvarMacroAdjust">Salvar ajuste</button>
     </div>
   </div>
@@ -1700,7 +1983,7 @@
     <div class="forward-list" id="forwardContactsList">
       <div class="forward-empty">Carregando...</div>
     </div>
-    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+    <div class="modal-actions">
       <button class="favorite-run" type="button" id="btnConfirmForward">Encaminhar</button>
     </div>
   </div>
@@ -1724,7 +2007,7 @@
       <div class="whatsapp-preview-status" id="whatsappPreviewStatus"></div>
       <textarea class="whatsapp-preview-text" id="whatsappPreviewText" readonly spellcheck="false"></textarea>
     </div>
-    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+    <div class="modal-actions">
       <button class="report-btn" type="button" id="btnCopiarWhatsappPreview">Copiar</button>
       <button class="favorite-run" type="button" id="btnFecharWhatsappPreview">Fechar</button>
     </div>
@@ -1747,9 +2030,22 @@
     <div class="whatsapp-preview-body">
       <div class="whatsapp-preview-question" id="sqlPreviewQuestion" style="display:none"></div>
       <div class="whatsapp-preview-status" id="sqlPreviewStatus"></div>
-      <textarea class="whatsapp-preview-text" id="sqlPreviewText" readonly spellcheck="false"></textarea>
+      <div class="sql-preview-tabs" role="tablist" aria-label="Detalhes da consulta SQL">
+        <button class="sql-preview-tab active" type="button" role="tab" aria-selected="true" data-sql-preview-tab="sql">SQL</button>
+        <button class="sql-preview-tab" type="button" role="tab" aria-selected="false" data-sql-preview-tab="caminho">Caminho</button>
+        <button class="sql-preview-tab" type="button" role="tab" aria-selected="false" data-sql-preview-tab="auditoria">Auditoria</button>
+      </div>
+      <div class="sql-preview-panel active" data-sql-preview-panel="sql">
+        <textarea class="whatsapp-preview-text" id="sqlPreviewText" readonly spellcheck="false"></textarea>
+      </div>
+      <div class="sql-preview-panel" data-sql-preview-panel="caminho">
+        <textarea class="whatsapp-preview-text sql-preview-audit-text" id="sqlPreviewPath" readonly spellcheck="false"></textarea>
+      </div>
+      <div class="sql-preview-panel" data-sql-preview-panel="auditoria">
+        <textarea class="whatsapp-preview-text sql-preview-audit-text" id="sqlPreviewAudit" readonly spellcheck="false"></textarea>
+      </div>
     </div>
-    <div class="modal-actions" style="padding:10px 14px 14px;border-top:1px solid var(--wa-border);display:flex;justify-content:flex-end;gap:8px">
+    <div class="modal-actions">
       <button class="report-btn" type="button" id="btnAjustarMacrosSqlPreview">Substituir macros</button>
       <button class="report-btn" type="button" id="btnCopiarSqlPreview">Copiar SQL</button>
       <button class="favorite-run" type="button" id="btnFecharSqlPreview">Fechar</button>
@@ -1856,8 +2152,14 @@
   const sqlPreviewQuestion = document.getElementById('sqlPreviewQuestion');
   const sqlPreviewStatus = document.getElementById('sqlPreviewStatus');
   const sqlPreviewText = document.getElementById('sqlPreviewText');
+  const sqlPreviewPath = document.getElementById('sqlPreviewPath');
+  const sqlPreviewAudit = document.getElementById('sqlPreviewAudit');
+  const sqlPreviewTabs = Array.from(document.querySelectorAll('[data-sql-preview-tab]'));
+  const sqlPreviewPanels = Array.from(document.querySelectorAll('[data-sql-preview-panel]'));
   const headerTitle = document.getElementById('headerTitle');
   const errorBanner = document.getElementById('errorBanner');
+  const errorBannerText = document.getElementById('errorBannerText');
+  const btnFecharErrorBanner = document.getElementById('btnFecharErrorBanner');
   const userName = document.getElementById('userName');
   const userAvatar = document.getElementById('userAvatar');
   const btnNovaConversa = document.getElementById('btnNovaConversa');
@@ -1900,12 +2202,20 @@
   const reportScope = document.getElementById('reportScope');
   const reportGrandTotal = document.getElementById('reportGrandTotal');
   const btnLimparAgrupamento = document.getElementById('btnLimparAgrupamento');
+  const reportExpandMenu = document.getElementById('reportExpandMenu');
   const btnExpandirGrupos = document.getElementById('btnExpandirGrupos');
+  const reportExpandPopover = document.getElementById('reportExpandPopover');
+  const reportCollapseMenu = document.getElementById('reportCollapseMenu');
   const btnRecolherGrupos = document.getElementById('btnRecolherGrupos');
+  const reportCollapsePopover = document.getElementById('reportCollapsePopover');
   const reportGlobalSearch = document.getElementById('reportGlobalSearch');
+  const btnLimparBuscaDados = document.getElementById('btnLimparBuscaDados');
   const reportColumnsMenu = document.getElementById('reportColumnsMenu');
   const btnReportColumns = document.getElementById('btnReportColumns');
   const reportColumnsPopover = document.getElementById('reportColumnsPopover');
+  const btnResetarLayoutGrid = document.getElementById('btnResetarLayoutGrid');
+  const reportStatusBar = document.getElementById('reportStatusBar');
+  const reportGridStatus = document.getElementById('reportGridStatus');
   const btnExportXlsx = document.getElementById('btnExportXlsx');
   const btnExportPdf = document.getElementById('btnExportPdf');
 
@@ -1927,9 +2237,11 @@
   let reportGlobalFilterActive = false;
   let reportRedrawFrame = null;
   let reportLastGridWidth = 0;
+  let reportLastGridHeight = 0;
   let reportTabulatorPromise = null;
   const REPORT_GROUPS_AUTO_COLLAPSE_MIN = 5;
-  let reportGroupsOpenPreference = null;
+  let reportGroupsOpenDepthPreference = null;
+  let reportGroupsOpenDepth = 0;
   let reportXlsxPromise = null;
   let reportPdfPromise = null;
 
@@ -1953,6 +2265,7 @@
   let whatsappPreviewMensagemId = null;
   let sqlPreviewMensagemId = null;
   let sqlPreviewFavoritoId = null;
+  let sqlPreviewAbaAtual = 'sql';
 
   const macrosSqlDisponiveis = [
     ['{{HOJE}}', 'Data de hoje'],
@@ -1984,6 +2297,11 @@
   let empresasDisponiveis = [];
   let empresaAtualId = null;
   let empresasSelecionadasIds = [];
+  const sessoesProcessando = new Set();
+  const sessoesNaoLidas = new Set();
+  const rascunhosPorSessao = new Map();
+  let novasConversasProcessando = 0;
+  let conversaNovaTokenAtual = 0;
   const bootInicioMs = performance.now();
 
   function bootLog(etapa, dados = {}) {
@@ -1995,6 +2313,26 @@
     if (!msgInput) return;
     msgInput.style.height = 'auto';
     msgInput.style.height = Math.min(msgInput.scrollHeight, appFrame.classList.contains('focus-mode') ? 168 : 126) + 'px';
+  }
+
+  function chaveRascunhoSessao(sessaoId = sessaoAtualId) {
+    return sessaoId || '__nova__';
+  }
+
+  function salvarRascunhoAtual() {
+    if (!msgInput) return;
+    rascunhosPorSessao.set(chaveRascunhoSessao(), msgInput.value || '');
+  }
+
+  function restaurarRascunho(sessaoId = sessaoAtualId) {
+    if (!msgInput) return;
+    msgInput.value = rascunhosPorSessao.get(chaveRascunhoSessao(sessaoId)) || '';
+    ajustarAlturaInput();
+  }
+
+  function atualizarEstadoInput(disponivel = true) {
+    msgInput.disabled = !disponivel;
+    sendBtn.disabled = !disponivel;
   }
 
   function aplicarModoFoco(ativo, salvar = true) {
@@ -2025,8 +2363,14 @@
   }
 
   function showError(msg) {
-    errorBanner.textContent = msg;
-    errorBanner.style.display = 'block';
+    if (errorBannerText) errorBannerText.textContent = msg;
+    else errorBanner.textContent = msg;
+    errorBanner.style.display = 'flex';
+  }
+
+  function hideError() {
+    if (errorBannerText) errorBannerText.textContent = '';
+    errorBanner.style.display = 'none';
   }
 
   function carregarScriptUmaVez(src, testeDisponivel) {
@@ -2110,23 +2454,24 @@
     let url = '/api/ia-command/protheus' + path;
     if (empresaAtualId && !path.startsWith('/empresas')) {
       url += (url.includes('?') ? '&' : '?') + 'empresaId=' + encodeURIComponent(empresaAtualId);
-      if (empresasSelecionadasIds.length > 1) {
+      if (empresasSelecionadasIds.length) {
         url += '&empresaIds=' + encodeURIComponent(empresasSelecionadasIds.join(','));
       }
     }
     const inicio = performance.now();
+    const tokenRequisicao = token;
     return fetch(url, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
+        'Authorization': 'Bearer ' + tokenRequisicao,
         ...(options.headers || {}),
       },
     }).then(async (r) => {
       bootLog('api:' + path, { status: r.status, duracaoMs: Math.round(performance.now() - inicio) });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) {
-        if (r.status === 401) limparSessaoNavegador();
+        if (r.status === 401 && tokenRequisicao === token) limparSessaoNavegador();
         const err = new Error(body.error || ('Erro ' + r.status));
         err.status = r.status;
         Object.assign(err, body || {});
@@ -2267,10 +2612,11 @@
     if (!idsParaBuscar.length) { filialArvoreDisponivel = []; atualizarLabelEscopoSelect(); return; }
     const url = '/api/ia-command/protheus/filial-tree?empresaIds=' + encodeURIComponent(idsParaBuscar.join(','))
       + (empresaAtualId ? '&empresaId=' + encodeURIComponent(empresaAtualId) : '');
-    const resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    const tokenRequisicao = token;
+    const resp = await fetch(url, { headers: { 'Authorization': 'Bearer ' + tokenRequisicao } });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok) {
-      if (resp.status === 401) limparSessaoNavegador();
+      if (resp.status === 401 && tokenRequisicao === token) limparSessaoNavegador();
       throw Object.assign(new Error(data.error || ('Erro ' + resp.status)), data);
     }
     filialArvoreDisponivel = data && data.disponivel && Array.isArray(data.empresas) ? data.empresas : [];
@@ -2326,6 +2672,10 @@
     }
     escopoSelectLabel.textContent = partes.join(' · ');
     escopoSelectBtn.title = escopoSelectLabel.textContent;
+    const temRecorteFilial = !selecaoFilialVazia();
+    const temRecorteEmpresa = totalEmpresasIAHub > 1 && empresasSelecionadasIds.length !== totalEmpresasIAHub;
+    escopoSelectBtn.classList.toggle('has-scope', temRecorteEmpresa || temRecorteFilial);
+    escopoSelectBtn.classList.toggle('partial-scope', temRecorteFilial);
   }
 
   function marcarEmpresaInteira(empresaProtheusCodigo, marcado) {
@@ -2437,10 +2787,11 @@
       listaFiliais.className = 'filial-lista-filiais';
       (termo ? filiaisFiltradas : emp.filiais).forEach((fil) => {
         const optFilial = document.createElement('label');
-        optFilial.className = 'filial-option';
+        const filialSelecionada = filialFiliaisAvulsas.has(fil.filialChave) || filialEmpresasInteiras.has(emp.empresaProtheusCodigo);
+        optFilial.className = 'filial-option' + (filialSelecionada ? ' selecionada' : '');
         const inputFilial = document.createElement('input');
         inputFilial.type = 'checkbox';
-        inputFilial.checked = filialFiliaisAvulsas.has(fil.filialChave) || filialEmpresasInteiras.has(emp.empresaProtheusCodigo);
+        inputFilial.checked = filialSelecionada;
         inputFilial.addEventListener('change', () => {
           marcarFilialAvulsa(emp.empresaProtheusCodigo, fil.filialChave, inputFilial.checked);
           renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
@@ -2468,7 +2819,10 @@
       }
 
       const row = document.createElement('div');
-      row.className = 'filial-empresa-row' + (expandido ? ' expandido' : '');
+      row.className = 'filial-empresa-row'
+        + (expandido ? ' expandido' : '')
+        + ((estado === 'inteira' || estado === 'inteira-implicita') ? ' selecionada' : '')
+        + (estado === 'parcial' ? ' parcial' : '');
 
       const toggle = document.createElement('span');
       toggle.className = 'filial-toggle';
@@ -2708,6 +3062,11 @@
     forwardContactsCarregados = false;
     forwardMensagemAtualId = null;
     forwardContatoSelecionados.clear();
+    sessoesProcessando.clear();
+    sessoesNaoLidas.clear();
+    rascunhosPorSessao.clear();
+    novasConversasProcessando = 0;
+    conversaNovaTokenAtual += 1;
     relatorioCachePorSessao.clear();
     relatorioCachePorMensagem.clear();
     mensagensCachePorSessao.clear();
@@ -3330,13 +3689,122 @@
     }
   }
 
+  function stringifyJsonPreview(valor) {
+    if (valor == null || valor === '') return '';
+    if (typeof valor === 'string') {
+      try {
+        return JSON.stringify(JSON.parse(valor), null, 2);
+      } catch (_err) {
+        return valor;
+      }
+    }
+    try {
+      return JSON.stringify(valor, null, 2);
+    } catch (_err) {
+      return String(valor);
+    }
+  }
+
+  function detectarTentativaSql(valor) {
+    const texto = stringifyJsonPreview(valor);
+    const tentativas = Array.from(texto.matchAll(/tentativa\s*[=:]\s*(\d+)/gi))
+      .map((m) => Number(m[1]))
+      .filter((n) => Number.isFinite(n));
+    return tentativas.length ? Math.max(...tentativas) : null;
+  }
+
+  function montarCaminhoSqlPreview(data, pergunta, sql) {
+    const auditoria = data?.auditoria || {};
+    const sqlAuditoria = auditoria.sqlAuditoria || {};
+    const traceTexto = stringifyJsonPreview(auditoria.trace || auditoria.traceJson || sqlAuditoria.trace);
+    const promptTexto = String(sqlAuditoria.prompt_user || sqlAuditoria.prompt || '');
+    const sqlCompleto = [sql, auditoria.sqlValidacaoErro, traceTexto, promptTexto].join('\n');
+    const retryPrompt = /RETRY TECNICO IA-OWNER|erroSql|sqlComErro/i.test(promptTexto);
+    const erroGuardrail = /SQL rejeitado pelo query_plan|plano exige|query_plan/i.test(sqlCompleto);
+    const tentativaTrace = detectarTentativaSql(traceTexto || sqlAuditoria);
+    const queryPlan = sqlAuditoria.query_plan || sqlAuditoria.queryPlan || auditoria.query_plan || auditoria.queryPlan || null;
+    const linhas = [];
+    const simNao = (valor) => valor ? 'sim' : 'nao';
+    const disponivel = (valor) => valor ? 'disponivel' : 'nao gravado';
+
+    linhas.push('Consulta');
+    linhas.push('Pergunta: ' + (pergunta || '(sem pergunta registrada)'));
+    linhas.push('Modulo: ' + (data?.modulo || auditoria.modulo || '(nao informado)'));
+    linhas.push('Fonte do SQL exibido: ' + (data?.sqlFonte || '(nao informado)'));
+    linhas.push('Resultado: ' + (auditoria.resultadoTipo || '(nao informado)'));
+    linhas.push('Fase de execucao: ' + (auditoria.faseExecucao || '(nao informado)'));
+    linhas.push('Linhas retornadas: ' + (auditoria.rowsCount ?? '(nao informado)'));
+    linhas.push('Duracao: ' + (auditoria.duracaoMs != null ? auditoria.duracaoMs + ' ms' : '(nao informado)'));
+    linhas.push('Pipeline: ' + (auditoria.pipelineOrigem || '(nao informado)'));
+    linhas.push('Cache: ' + (auditoria.chaveCache || '(nao informado)'));
+    linhas.push('');
+
+    linhas.push('Retry tecnico');
+    linhas.push('Indicio de prompt de retry: ' + simNao(retryPrompt));
+    linhas.push('Indicio de erro de guardrail/query_plan: ' + simNao(erroGuardrail));
+    linhas.push('Ultima tentativa encontrada no trace: ' + (tentativaTrace || '(nao registrada)'));
+    if (retryPrompt || erroGuardrail) {
+      linhas.push('Leitura: o fluxo passou pelo caminho corretivo ou encerrou com erro validado pelo guardrail.');
+    } else {
+      linhas.push('Leitura: nao ha evidencia gravada de retry para esta mensagem.');
+    }
+    linhas.push('');
+
+    linhas.push('Artefatos SQL gravados');
+    linhas.push('SQL bruto da IA: ' + disponivel(auditoria.sqlIaBruto || sqlAuditoria.sql_ia_bruto || sqlAuditoria.sqlIaBruto));
+    linhas.push('SQL canonico original: ' + disponivel(auditoria.sqlCanonicoOriginal));
+    linhas.push('SQL canonico adaptado: ' + disponivel(auditoria.sqlCanonicoAdaptado));
+    linhas.push('SQL final exibido/executado: ' + disponivel(sql));
+    linhas.push('Erro de validacao SQL: ' + (auditoria.sqlValidacaoErro || '(sem erro registrado)'));
+    linhas.push('');
+
+    linhas.push('Query plan');
+    linhas.push(queryPlan ? stringifyJsonPreview(queryPlan) : '(query_plan nao gravado nesta auditoria)');
+    linhas.push('');
+
+    linhas.push('Trace');
+    linhas.push(traceTexto || '(trace nao gravado nesta auditoria)');
+    return linhas.join('\n');
+  }
+
+  function trocarAbaSqlPreview(aba) {
+    sqlPreviewAbaAtual = aba || 'sql';
+    sqlPreviewTabs.forEach((tab) => {
+      const ativo = tab.dataset.sqlPreviewTab === sqlPreviewAbaAtual;
+      tab.classList.toggle('active', ativo);
+      tab.setAttribute('aria-selected', ativo ? 'true' : 'false');
+    });
+    sqlPreviewPanels.forEach((panel) => {
+      panel.classList.toggle('active', panel.dataset.sqlPreviewPanel === sqlPreviewAbaAtual);
+    });
+    if (btnCopiarSqlPreview) {
+      const rotulos = { sql: 'Copiar SQL', caminho: 'Copiar caminho', auditoria: 'Copiar auditoria' };
+      btnCopiarSqlPreview.textContent = rotulos[sqlPreviewAbaAtual] || 'Copiar';
+    }
+  }
+
+  function textoSqlPreviewAtivo() {
+    if (sqlPreviewAbaAtual === 'caminho') return sqlPreviewPath?.value || '';
+    if (sqlPreviewAbaAtual === 'auditoria') return sqlPreviewAudit?.value || '';
+    return sqlPreviewText?.value || '';
+  }
+
+  function campoSqlPreviewAtivo() {
+    if (sqlPreviewAbaAtual === 'caminho') return sqlPreviewPath;
+    if (sqlPreviewAbaAtual === 'auditoria') return sqlPreviewAudit;
+    return sqlPreviewText;
+  }
+
   function fecharSqlPreview() {
     if (!sqlPreviewModal) return;
     sqlPreviewModal.classList.remove('active');
     sqlPreviewModal.setAttribute('aria-hidden', 'true');
     sqlPreviewMensagemId = null;
     sqlPreviewFavoritoId = null;
+    trocarAbaSqlPreview('sql');
     if (sqlPreviewText) sqlPreviewText.value = '';
+    if (sqlPreviewPath) sqlPreviewPath.value = '';
+    if (sqlPreviewAudit) sqlPreviewAudit.value = '';
     if (btnAjustarMacrosSqlPreview) {
       btnAjustarMacrosSqlPreview.disabled = true;
       btnAjustarMacrosSqlPreview.title = '';
@@ -3357,7 +3825,10 @@
     sqlPreviewFavoritoId = null;
     sqlPreviewModal.classList.add('active');
     sqlPreviewModal.setAttribute('aria-hidden', 'false');
+    trocarAbaSqlPreview('sql');
     if (sqlPreviewText) sqlPreviewText.value = '';
+    if (sqlPreviewPath) sqlPreviewPath.value = '';
+    if (sqlPreviewAudit) sqlPreviewAudit.value = '';
     if (btnAjustarMacrosSqlPreview) {
       btnAjustarMacrosSqlPreview.disabled = true;
       btnAjustarMacrosSqlPreview.title = 'Carregando favorito vinculado...';
@@ -3376,12 +3847,23 @@
       if (sqlPreviewMensagemId !== mensagemId) return;
       const pergunta = String(data.pergunta || perguntaParaMensagem(mensagemId) || '').trim();
       const sql = String(data.sql || '').trim();
+      const auditoriaCompleta = {
+        interpretationLogId: data.interpretationLogId || null,
+        pergunta,
+        modulo: data.modulo || null,
+        sqlFonte: data.sqlFonte || null,
+        sql,
+        sqlTemplate: data.sqlTemplate || null,
+        auditoria: data.auditoria || null,
+      };
       sqlPreviewFavoritoId = data.favoritoId || null;
       if (sqlPreviewQuestion && pergunta) {
         sqlPreviewQuestion.innerHTML = '<strong>Pergunta</strong>' + escapeHtml(pergunta);
         sqlPreviewQuestion.style.display = 'block';
       }
       if (sqlPreviewText) sqlPreviewText.value = sql;
+      if (sqlPreviewPath) sqlPreviewPath.value = montarCaminhoSqlPreview(data, pergunta, sql);
+      if (sqlPreviewAudit) sqlPreviewAudit.value = stringifyJsonPreview(auditoriaCompleta);
       if (btnAjustarMacrosSqlPreview) {
         btnAjustarMacrosSqlPreview.disabled = !sqlPreviewFavoritoId;
         btnAjustarMacrosSqlPreview.title = sqlPreviewFavoritoId
@@ -3419,10 +3901,12 @@
   }
 
   async function copiarSqlPreview() {
-    const texto = sqlPreviewText?.value || '';
+    const texto = textoSqlPreviewAtivo();
+    const campoAtivo = campoSqlPreviewAtivo();
+    const nomeConteudo = sqlPreviewAbaAtual === 'caminho' ? 'caminho' : (sqlPreviewAbaAtual === 'auditoria' ? 'auditoria' : 'SQL');
     if (!texto) {
       if (sqlPreviewStatus) {
-        sqlPreviewStatus.textContent = 'NÃ£o hÃ¡ SQL para copiar.';
+        sqlPreviewStatus.textContent = 'Nao ha ' + nomeConteudo + ' para copiar.';
         sqlPreviewStatus.className = 'whatsapp-preview-status error';
       }
       return;
@@ -3432,22 +3916,22 @@
       if (navigator.clipboard?.writeText && window.isSecureContext) {
         await navigator.clipboard.writeText(texto);
       } else {
-        sqlPreviewText.focus();
-        sqlPreviewText.select();
+        campoAtivo?.focus();
+        campoAtivo?.select();
         const ok = document.execCommand('copy');
         if (!ok) throw new Error('copy retornou falso');
       }
       if (sqlPreviewStatus) {
-        sqlPreviewStatus.textContent = 'SQL copiado.';
+        sqlPreviewStatus.textContent = nomeConteudo.charAt(0).toUpperCase() + nomeConteudo.slice(1) + ' copiado.';
         sqlPreviewStatus.className = 'whatsapp-preview-status ok';
       }
     } catch (_err) {
-      if (sqlPreviewText) {
-        sqlPreviewText.focus();
-        sqlPreviewText.select();
+      if (campoAtivo) {
+        campoAtivo.focus();
+        campoAtivo.select();
       }
       if (sqlPreviewStatus) {
-        sqlPreviewStatus.textContent = 'NÃ£o foi possÃ­vel copiar automaticamente. O SQL foi selecionado para copiar manualmente.';
+        sqlPreviewStatus.textContent = 'Nao foi possivel copiar automaticamente. O conteudo foi selecionado para copiar manualmente.';
         sqlPreviewStatus.className = 'whatsapp-preview-status error';
       }
     }
@@ -3749,63 +4233,111 @@
   async function executarFavorito(favoritoId) {
     if (!favoritoId) return;
     const fav = favoritosCache.find(f => f.id === favoritoId);
+    const perguntaTexto = fav?.perguntaTexto || 'Pergunta favorita';
+    salvarRascunhoAtual();
+    sessaoAtualId = null;
+    conversaNovaTokenAtual += 1;
+    const conversaNovaTokenEnvio = conversaNovaTokenAtual;
+    resetarSelecaoFilial();
+    definirHeaderTitle(fav?.titulo || 'Nova conversa');
+    chatBody.innerHTML = '';
+    const rowPergunta = addBubble({ texto: perguntaTexto, direcao: 'out', criadoEm: new Date().toISOString() });
+    renderSessionList();
+    trocarAba('conversa');
+    fecharRelatorio();
     showTyping();
-    sendBtn.disabled = true;
-    msgInput.disabled = true;
+    novasConversasProcessando += 1;
     try {
       const data = await api('/favoritos/' + favoritoId + '/executar', {
         method: 'POST',
-        body: JSON.stringify({ sessaoId: sessaoAtualId || null }),
+        body: JSON.stringify({ sessaoId: null }),
       });
-      sessaoAtualId = data.sessaoId;
-      hideTyping();
       fecharFavoritos();
-      addBubble({
-        id: data.resposta.perguntaId,
-        texto: fav?.perguntaTexto || 'Pergunta favorita',
-        direcao: 'out',
-        criadoEm: data.criadoEm,
-      });
-      addBubble({
+      const sessaoRespostaId = data.sessaoId;
+      const aindaNaConversaDoEnvio = sessaoAtualId === null && conversaNovaTokenAtual === conversaNovaTokenEnvio;
+      novasConversasProcessando = Math.max(0, novasConversasProcessando - 1);
+      if (sessaoRespostaId) sessoesProcessando.delete(sessaoRespostaId);
+      const perguntaCache = { id: data.resposta.perguntaId, texto: perguntaTexto, direcao: 'out', rows: null, temDados: false, rowsCount: 0, criadoEm: data.criadoEm };
+      const respostaCache = {
         id: data.resposta.mensagemId,
         texto: data.resposta.texto,
-        apresentacao: data.resposta.apresentacao || null,
         direcao: 'in',
-        rows: data.resposta.rows || null,
+        apresentacao: data.resposta.apresentacao || null,
+        rows: null,
         temDados: !!data.resposta.temDados,
         rowsCount: data.resposta.rowsCount ?? null,
         tipo: data.resposta.tipo || null,
         favoritoId: data.resposta.favoritoId || favoritoId,
-        perguntaContexto: fav?.perguntaTexto || 'Pergunta favorita',
         criadoEm: data.criadoEm,
-      });
-      if (data.resposta.gridConfig && data.resposta.mensagemId) {
-        const dados = relatorioCachePorMensagem.get(data.resposta.mensagemId);
-        if (dados) dados.gridConfig = data.resposta.gridConfig;
+      };
+      const cacheMensagens = mensagensCachePorSessao.get(sessaoRespostaId);
+      if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
+        cacheMensagens.mensagens.push(perguntaCache, respostaCache);
+      } else {
+        mensagensCachePorSessao.set(sessaoRespostaId, { mensagens: [perguntaCache, respostaCache], proximoCursor: null });
       }
+      if (data.resposta.gridConfig && data.resposta.mensagemId) {
+        const dados = relatorioCachePorMensagem.get(data.resposta.mensagemId)
+          || (Array.isArray(data.resposta.rows) && data.resposta.rows.length
+            ? {
+                mensagemId: data.resposta.mensagemId,
+                rows: data.resposta.rows,
+                gridConfig: data.resposta.gridConfig || null,
+                texto: data.resposta.texto,
+                perguntaTexto,
+              }
+            : null);
+        if (dados) dados.gridConfig = data.resposta.gridConfig;
+        if (dados) {
+          relatorioCachePorMensagem.set(data.resposta.mensagemId, dados);
+          relatorioCachePorSessao.set(sessaoRespostaId, dados);
+        }
+      }
+      if (!aindaNaConversaDoEnvio && sessaoRespostaId) sessoesNaoLidas.add(sessaoRespostaId);
       carregarSessoes().catch((err) => showError('Falha ao carregar conversas: ' + err.message));
       carregarFavoritos().catch(() => {});
-      if (data.resposta.temDados) carregarRelatorioDaSessao(sessaoAtualId);
-      scrollToBottom();
-    } catch (err) {
-      hideTyping();
-      if (Array.isArray(err.macrosPendentes) && err.macrosPendentes.length) {
-        if (fav) {
-          fav.precisaAjuste = true;
-          fav.macrosPendentes = err.macrosPendentes;
-          renderFavoritos();
-        }
-        abrirAjusteMacroFavorito(favoritoId, err.macrosPendentes).catch((erroAjuste) => {
-          addBubble({ texto: 'Não foi possível abrir o ajuste do favorito: ' + erroAjuste.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+      if (aindaNaConversaDoEnvio) {
+        sessaoAtualId = sessaoRespostaId;
+        hideTyping();
+        atribuirIdABolha(rowPergunta, data.resposta.perguntaId);
+        addBubble({
+          id: data.resposta.mensagemId,
+          texto: data.resposta.texto,
+          apresentacao: data.resposta.apresentacao || null,
+          direcao: 'in',
+          rows: data.resposta.rows || null,
+          temDados: !!data.resposta.temDados,
+          rowsCount: data.resposta.rowsCount ?? null,
+          tipo: data.resposta.tipo || null,
+          favoritoId: data.resposta.favoritoId || favoritoId,
+          perguntaContexto: perguntaTexto,
+          criadoEm: data.criadoEm,
         });
-      } else {
-        addBubble({ texto: 'Não foi possível executar o favorito: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+        if (data.resposta.temDados) carregarRelatorioDaSessao(sessaoRespostaId);
+        scrollToBottom();
       }
-      scrollToBottom();
+    } catch (err) {
+      novasConversasProcessando = Math.max(0, novasConversasProcessando - 1);
+      const aindaNaConversaDoEnvio = sessaoAtualId === null && conversaNovaTokenAtual === conversaNovaTokenEnvio;
+      if (aindaNaConversaDoEnvio) {
+        hideTyping();
+        if (Array.isArray(err.macrosPendentes) && err.macrosPendentes.length) {
+          if (fav) {
+            fav.precisaAjuste = true;
+            fav.macrosPendentes = err.macrosPendentes;
+            renderFavoritos();
+          }
+          abrirAjusteMacroFavorito(favoritoId, err.macrosPendentes).catch((erroAjuste) => {
+            addBubble({ texto: 'Não foi possível abrir o ajuste do favorito: ' + erroAjuste.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+          });
+        } else {
+          addBubble({ texto: 'Não foi possível executar o favorito: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+        }
+        scrollToBottom();
+      }
     } finally {
-      sendBtn.disabled = false;
-      msgInput.disabled = false;
-      msgInput.focus();
+      renderSessionList();
+      atualizarEstadoInput(true);
     }
   }
 
@@ -4112,15 +4644,29 @@
   function scrollToBottom() { chatBody.scrollTop = chatBody.scrollHeight; }
 
   let typingRow = null;
-  function showTyping() {
+  let typingDemoraTimer = null;
+  // Chamada de /mensagem e uma unica requisicao HTTP sincrona que so responde
+  // apos o pipeline inteiro terminar (inclusive as ate 4 tentativas internas de
+  // retry do IA-OWNER quando o SQL e rejeitado por contrato) — nao ha como o
+  // backend enviar update por tentativa nesse modelo request-response. Como
+  // aproximacao do "processando..." do WhatsApp, troca o texto apos alguns
+  // segundos para sinalizar que a consulta esta em uma tentativa mais longa.
+  const TYPING_DEMORA_MS = 8000;
+  function showTyping(textoInicial = 'Consultando o Protheus...') {
     hideTyping();
     typingRow = document.createElement('div');
     typingRow.className = 'row in typing-row';
-    typingRow.innerHTML = '<div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+    typingRow.innerHTML = '<div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-status-text"></span></div>';
+    typingRow.querySelector('.typing-status-text').textContent = textoInicial;
     chatBody.appendChild(typingRow);
     scrollToBottom();
+    typingDemoraTimer = setTimeout(() => {
+      const el = typingRow?.querySelector('.typing-status-text');
+      if (el) el.textContent = 'Ainda processando, a consulta está mais complexa que o normal...';
+    }, TYPING_DEMORA_MS);
   }
   function hideTyping() {
+    if (typingDemoraTimer) { clearTimeout(typingDemoraTimer); typingDemoraTimer = null; }
     if (typingRow) { typingRow.remove(); typingRow = null; }
   }
 
@@ -4276,6 +4822,7 @@
   async function carregarMensagens(sessaoId) {
     sessaoAtualId = sessaoId;
     sairModoSelecao();
+    hideTyping();
     const cache = mensagensCachePorSessao.get(sessaoId);
     if (cache) {
       renderMensagensLista(cache.mensagens);
@@ -4295,6 +4842,8 @@
       if (sessaoAtualId !== sessaoId) return;
       showError('Falha ao carregar mensagens: ' + err.message);
     }
+    if (sessoesProcessando.has(sessaoId)) showTyping();
+    restaurarRascunho(sessaoId);
     renderSessionList();
     trocarAba('conversa');
     fecharRelatorio();
@@ -4317,9 +4866,16 @@
     reportColumnsPopover.innerHTML = '';
     reportColumnsMenu.classList.remove('open');
     btnReportColumns.setAttribute('aria-expanded', 'false');
-    btnExpandirGrupos.style.display = 'none';
-    btnRecolherGrupos.style.display = 'none';
+    fecharMenusAgrupamento();
+    reportExpandMenu.style.display = 'none';
+    reportCollapseMenu.style.display = 'none';
+    reportExpandPopover.innerHTML = '';
+    reportCollapsePopover.innerHTML = '';
     reportGlobalSearch.value = '';
+    btnLimparBuscaDados.classList.remove('visible');
+    reportStatusBar.style.display = 'none';
+    reportGridStatus.textContent = '';
+    btnResetarLayoutGrid.disabled = true;
     reportDadosAtuais = null;
     reportGridMontada = false;
     reportMensagemId = null;
@@ -4332,6 +4888,9 @@
     reportGlobalTerm = '';
     reportGlobalFilterActive = false;
     reportLastGridWidth = 0;
+    reportLastGridHeight = 0;
+    reportGroupsOpenDepthPreference = null;
+    reportGroupsOpenDepth = 0;
   }
 
   async function carregarRelatorioDaSessao(sessaoId) {
@@ -4430,19 +4989,28 @@
     }
     sessionList.innerHTML = '';
     sessoesCache.forEach((s) => {
+      const ativa = s.sessaoId === sessaoAtualId;
+      const processando = sessoesProcessando.has(s.sessaoId);
+      const naoLida = !ativa && sessoesNaoLidas.has(s.sessaoId);
       const item = document.createElement('div');
-      item.className = 'session-item' + (s.sessaoId === sessaoAtualId ? ' active' : '');
+      item.className = 'session-item'
+        + (ativa ? ' active' : '')
+        + (processando ? ' processing' : '')
+        + (naoLida ? ' unread' : '');
+      const preview = processando ? 'Consultando o Protheus...' : (s.ultimaMensagem || '');
       item.innerHTML = `
         <div class="session-avatar">IC</div>
         <div class="session-meta">
           <div class="session-top">
             <span class="session-title" data-session-title="1" title="${escapeHtml(s.titulo)}">${escapeHtml(s.titulo)}</span>
+            ${processando ? '<span class="session-processing-indicator" title="Processando resposta" aria-label="Processando resposta"><span></span><span></span><span></span></span>' : ''}
           </div>
           <div class="session-bottom">
-            <div class="session-preview" title="${escapeHtml(s.ultimaMensagem || '')}">${escapeHtml(s.ultimaMensagem || '')}</div>
+            <div class="session-preview" title="${escapeHtml(preview)}">${escapeHtml(preview)}</div>
             <span class="session-time">${nowLabel(s.atualizadoEm)}</span>
           </div>
         </div>
+        ${naoLida ? '<span class="session-unread-dot" title="Resposta não lida" aria-label="Resposta não lida"></span>' : ''}
         <div class="session-actions">
           <button type="button" class="session-menu-btn" title="Mais opções" aria-label="Mais opções da conversa" aria-haspopup="menu" aria-expanded="false">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
@@ -4460,6 +5028,8 @@
         </div>`;
       item.addEventListener('click', () => {
         fecharMenusSessao();
+        salvarRascunhoAtual();
+        sessoesNaoLidas.delete(s.sessaoId);
         definirHeaderTitle(s.titulo);
         carregarMensagens(s.sessaoId);
       });
@@ -4579,7 +5149,7 @@
         await carregarMensagens(sessoesCache[0].sessaoId);
       } else if (!sessoesCache.length) {
         renderEmptyState();
-      } else if (!sessaoAtualId) {
+      } else if (!sessaoAtualId && novasConversasProcessando <= 0) {
         definirHeaderTitle('Nova conversa');
         renderEmptyState('Selecione uma conversa ou inicie uma nova.');
         fecharRelatorio();
@@ -4611,97 +5181,122 @@
   }
 
   async function enviarMensagem(texto) {
-    const rowPergunta = addBubble({ texto, direcao: 'out', criadoEm: new Date().toISOString() });
+    const sessaoOrigemId = sessaoAtualId;
+    const envioEmNovaConversa = !sessaoOrigemId;
+    const conversaNovaTokenEnvio = envioEmNovaConversa ? conversaNovaTokenAtual : null;
+    const criadoEmLocal = new Date().toISOString();
+    const rowPergunta = addBubble({ texto, direcao: 'out', criadoEm: criadoEmLocal });
     scrollToBottom();
     showTyping();
-    sendBtn.disabled = true;
-    msgInput.disabled = true;
+    if (envioEmNovaConversa) novasConversasProcessando += 1;
+    if (sessaoOrigemId) {
+      sessoesProcessando.add(sessaoOrigemId);
+      renderSessionList();
+    }
 
     try {
       const data = await api('/mensagem', {
         method: 'POST',
         body: JSON.stringify({
-          texto, sessaoId: sessaoAtualId, empresaIds: empresasSelecionadasIds,
+          texto, sessaoId: sessaoOrigemId, empresaId: empresaAtualId, empresaIds: empresasSelecionadasIds,
           filialSelecaoUi: payloadFilialSelecaoUi(),
         }),
       });
-      sessaoAtualId = data.sessaoId;
-      hideTyping();
-      atribuirIdABolha(rowPergunta, data.resposta.perguntaId);
-      addBubble({
+      const sessaoRespostaId = data.sessaoId;
+      const aindaNaConversaDoEnvio = sessaoAtualId === sessaoOrigemId
+        || (envioEmNovaConversa && sessaoAtualId === null && conversaNovaTokenAtual === conversaNovaTokenEnvio);
+      if (envioEmNovaConversa) novasConversasProcessando = Math.max(0, novasConversasProcessando - 1);
+      if (sessaoOrigemId) sessoesProcessando.delete(sessaoOrigemId);
+      if (sessaoRespostaId) sessoesProcessando.delete(sessaoRespostaId);
+
+      const perguntaCache = { id: data.resposta.perguntaId, texto, direcao: 'out', rows: null, temDados: false, rowsCount: 0, criadoEm: data.criadoEm };
+      const respostaCache = {
         id: data.resposta.mensagemId,
         texto: data.resposta.texto,
-        apresentacao: data.resposta.apresentacao,
-        rows: data.resposta.rows,
-        temDados: data.resposta.temDados,
-        rowsCount: data.resposta.rowsCount,
         direcao: 'in',
+        apresentacao: data.resposta.apresentacao || null,
+        rows: null,
+        temDados: !!data.resposta.temDados,
+        rowsCount: data.resposta.rowsCount ?? null,
+        tipo: data.resposta.tipo || null,
         favoritoId: data.resposta.favoritoId || null,
-        perguntaContexto: texto,
         criadoEm: data.criadoEm,
         filial_escopo_json: data.resposta.filial_escopo_json || null,
-      });
-      scrollToBottom();
-      const cacheMensagens = mensagensCachePorSessao.get(data.sessaoId);
+      };
+      const cacheMensagens = mensagensCachePorSessao.get(sessaoRespostaId);
       if (cacheMensagens && Array.isArray(cacheMensagens.mensagens)) {
-        cacheMensagens.mensagens.push(
-          { id: data.resposta.perguntaId, texto, direcao: 'out', rows: null, temDados: false, rowsCount: 0, criadoEm: data.criadoEm },
-          {
-            id: data.resposta.mensagemId,
-            texto: data.resposta.texto,
-            apresentacao: data.resposta.apresentacao || null,
-            direcao: 'in',
-            rows: null,
-            temDados: !!data.resposta.temDados,
-            rowsCount: data.resposta.rowsCount ?? null,
-            tipo: data.resposta.tipo || null,
-            favoritoId: data.resposta.favoritoId || null,
-            criadoEm: data.criadoEm,
-          },
-        );
+        cacheMensagens.mensagens.push(perguntaCache, respostaCache);
       } else {
-        mensagensCachePorSessao.set(data.sessaoId, {
-          mensagens: [
-            { id: data.resposta.perguntaId, texto, direcao: 'out', rows: null, temDados: false, rowsCount: 0, criadoEm: data.criadoEm },
-            {
-              id: data.resposta.mensagemId,
-              texto: data.resposta.texto,
-              apresentacao: data.resposta.apresentacao || null,
-              direcao: 'in',
-              rows: null,
-              temDados: !!data.resposta.temDados,
-              rowsCount: data.resposta.rowsCount ?? null,
-              tipo: data.resposta.tipo || null,
-              favoritoId: data.resposta.favoritoId || null,
-              criadoEm: data.criadoEm,
-            },
-          ],
+        mensagensCachePorSessao.set(sessaoRespostaId, {
+          mensagens: [perguntaCache, respostaCache],
           proximoCursor: null,
         });
       }
+      if (!aindaNaConversaDoEnvio && sessaoRespostaId) sessoesNaoLidas.add(sessaoRespostaId);
       carregarSessoes().catch((err) => showError('Falha ao carregar conversas: ' + err.message));
 
       const temDados = Array.isArray(data.resposta.rows)
         ? data.resposta.rows.length > 0
         : !!data.resposta.temDados;
       if (temDados) {
-        const dadosMensagem = relatorioCachePorMensagem.get(data.resposta.mensagemId);
+        const dadosMensagem = relatorioCachePorMensagem.get(data.resposta.mensagemId)
+          || (Array.isArray(data.resposta.rows) && data.resposta.rows.length
+            ? {
+                mensagemId: data.resposta.mensagemId,
+                rows: data.resposta.rows,
+                gridConfig: data.resposta.gridConfig || null,
+                texto: data.resposta.texto,
+                perguntaTexto: texto,
+                filial_escopo_json: data.resposta.filial_escopo_json || null,
+              }
+            : null);
         if (dadosMensagem) {
-          relatorioCachePorSessao.set(sessaoAtualId, dadosMensagem);
-          prepararRelatorio(dadosMensagem);
+          relatorioCachePorMensagem.set(data.resposta.mensagemId, dadosMensagem);
+          relatorioCachePorSessao.set(sessaoRespostaId, dadosMensagem);
+          if (aindaNaConversaDoEnvio) prepararRelatorio(dadosMensagem);
         } else {
-          relatorioCachePorSessao.delete(sessaoAtualId);
-          carregarRelatorioDaSessao(sessaoAtualId);
+          relatorioCachePorSessao.delete(sessaoRespostaId);
+          if (aindaNaConversaDoEnvio) carregarRelatorioDaSessao(sessaoRespostaId);
+        }
+      }
+      if (aindaNaConversaDoEnvio) {
+        sessaoAtualId = sessaoRespostaId;
+        hideTyping();
+        atribuirIdABolha(rowPergunta, data.resposta.perguntaId);
+        addBubble({
+          id: data.resposta.mensagemId,
+          texto: data.resposta.texto,
+          apresentacao: data.resposta.apresentacao,
+          rows: data.resposta.rows,
+          temDados: data.resposta.temDados,
+          rowsCount: data.resposta.rowsCount,
+          direcao: 'in',
+          favoritoId: data.resposta.favoritoId || null,
+          perguntaContexto: texto,
+          criadoEm: data.criadoEm,
+          filial_escopo_json: data.resposta.filial_escopo_json || null,
+        });
+        scrollToBottom();
+        if (envioEmNovaConversa) {
+          rascunhosPorSessao.delete('__nova__');
+          rascunhosPorSessao.set(chaveRascunhoSessao(sessaoRespostaId), '');
         }
       }
     } catch (err) {
-      hideTyping();
-      addBubble({ texto: 'Não foi possível enviar sua pergunta: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
-      scrollToBottom();
+      if (sessaoOrigemId) sessoesProcessando.delete(sessaoOrigemId);
+      if (envioEmNovaConversa) novasConversasProcessando = Math.max(0, novasConversasProcessando - 1);
+      const aindaNaConversaDoEnvio = sessaoAtualId === sessaoOrigemId
+        || (envioEmNovaConversa && sessaoAtualId === null && conversaNovaTokenAtual === conversaNovaTokenEnvio);
+      if (aindaNaConversaDoEnvio) {
+        hideTyping();
+        addBubble({ texto: 'Não foi possível enviar sua pergunta: ' + err.message, direcao: 'in', criadoEm: new Date().toISOString(), isFalha: true });
+        scrollToBottom();
+      } else if (sessaoOrigemId) {
+        sessoesNaoLidas.add(sessaoOrigemId);
+      }
     } finally {
-      sendBtn.disabled = false;
-      msgInput.disabled = false;
-      msgInput.focus();
+      renderSessionList();
+      atualizarEstadoInput(true);
     }
   }
 
@@ -4818,12 +5413,14 @@
     reportHeaderFilters = modelo.cfg.headerFilters.filter((f) => f && reportColunas.some((c) => c.field === f.field));
     reportColumnWidths = { ...modelo.cfg.columnWidths };
     reportColumnTitles = { ...modelo.cfg.columnTitles };
-    reportGroupsOpenPreference = null;
+    reportGroupsOpenDepthPreference = null;
+    reportGroupsOpenDepth = 0;
     reportGlobalTerm = '';
     reportGlobalSearch.value = '';
 
     if (reportTable) { reportTable.destroy(); reportTable = null; }
     tabRelatorio.disabled = false;
+    btnResetarLayoutGrid.disabled = false;
     reportEmpty.style.display = 'flex';
     reportEmpty.classList.remove('preparing');
     reportEmpty.querySelector('p').textContent = 'Dados prontos para visualizacao.';
@@ -4833,6 +5430,8 @@
     atualizarBotoesGrupos();
     renderColumnPicker();
     renderGrandTotal(dados.rows, modelo);
+    atualizarEstadoBuscaRelatorio();
+    atualizarStatusGrid();
   }
 
   function garantirRelatorioMontado() {
@@ -4862,14 +5461,20 @@
     });
   }
 
-  function agendarRedrawRelatorioSePreciso() {
+  function agendarRedrawRelatorioSePreciso(forcar = false) {
     if (!reportTable || reportRedrawFrame) return;
     reportRedrawFrame = requestAnimationFrame(() => {
       reportRedrawFrame = null;
-      const largura = Math.round(reportGridEl.getBoundingClientRect().width || 0);
-      if (!largura || Math.abs(largura - reportLastGridWidth) <= 2) return;
+      const rect = reportGridEl.getBoundingClientRect();
+      const largura = Math.round(rect.width || 0);
+      const altura = Math.round(rect.height || 0);
+      if (!largura || !altura) return;
+      const mudouLargura = Math.abs(largura - reportLastGridWidth) > 2;
+      const mudouAltura = Math.abs(altura - reportLastGridHeight) > 2;
+      if (!forcar && !mudouLargura && !mudouAltura) return;
       reportLastGridWidth = largura;
-      reportTable.redraw(false);
+      reportLastGridHeight = altura;
+      reportTable.redraw(true);
     });
   }
 
@@ -4888,6 +5493,7 @@
         reportTable.clearFilter();
         reportGlobalFilterActive = false;
       }
+      atualizarStatusGrid();
       return;
     }
     const colunasVisiveis = reportColunas.filter((c) => !reportHiddenColumns.includes(c.field));
@@ -4896,6 +5502,47 @@
       const valor = valorFormatadoParaBusca(col, data[col.field]);
       return String(valor == null ? '' : valor).toLowerCase().includes(termo);
     }));
+    atualizarStatusGrid();
+  }
+
+  function contarRowsAtivasRelatorio() {
+    if (reportTable && typeof reportTable.getData === 'function') {
+      try {
+        const ativas = reportTable.getData('active');
+        if (Array.isArray(ativas)) return ativas.length;
+      } catch (_err) {}
+    }
+    return rowsRelatorioAtual().length;
+  }
+
+  function atualizarEstadoBuscaRelatorio() {
+    btnLimparBuscaDados.classList.toggle('visible', !!reportGlobalSearch.value.trim());
+  }
+
+  function filtrosAtivosRelatorio() {
+    const filtrosColuna = reportHeaderFilters.filter((f) => String(f?.value ?? '').trim()).length;
+    return filtrosColuna + (reportGlobalTerm.trim() ? 1 : 0);
+  }
+
+  function atualizarStatusGrid() {
+    if (!reportDadosAtuais || !Array.isArray(reportDadosAtuais.rows) || !reportDadosAtuais.rows.length) {
+      reportStatusBar.style.display = 'none';
+      reportGridStatus.textContent = '';
+      return;
+    }
+
+    const totalRows = rowsRelatorioAtual().length;
+    const rowsAtivas = contarRowsAtivasRelatorio();
+    const colunasVisiveis = reportColunas.filter((c) => !reportHiddenColumns.includes(c.field)).length;
+    const filtrosAtivos = filtrosAtivosRelatorio();
+    const partes = [
+      `${rowsAtivas.toLocaleString('pt-BR')} de ${totalRows.toLocaleString('pt-BR')} registros`,
+      `${colunasVisiveis} coluna${colunasVisiveis === 1 ? '' : 's'} visive${colunasVisiveis === 1 ? 'l' : 'is'}`,
+      `${reportGroupBy.length} agrupamento${reportGroupBy.length === 1 ? '' : 's'}`,
+    ];
+    if (filtrosAtivos) partes.push(`${filtrosAtivos} filtro${filtrosAtivos === 1 ? '' : 's'} ativo${filtrosAtivos === 1 ? '' : 's'}`);
+    reportGridStatus.innerHTML = `<span class="report-status-dot"></span><strong>Dados</strong><span>${escapeHtml(partes.join(' · '))}</span>`;
+    reportStatusBar.style.display = 'flex';
   }
 
   function obterGridConfigAtual() {
@@ -4959,7 +5606,7 @@
       depoisDaPintura(() => {
         if (!panelRelatorio.classList.contains('active')) return;
         garantirRelatorioMontado();
-        if (reportTable) agendarRedrawRelatorioSePreciso();
+        if (reportTable) agendarRedrawRelatorioSePreciso(true);
       });
     }
   }
@@ -5025,9 +5672,13 @@
   btnFecharSqlPreview.addEventListener('click', () => fecharSqlPreview());
   btnAjustarMacrosSqlPreview.addEventListener('click', () => abrirAjusteMacrosDoSqlPreview().catch(err => showError('Falha ao abrir ajuste de macros: ' + err.message)));
   btnCopiarSqlPreview.addEventListener('click', () => copiarSqlPreview());
+  sqlPreviewTabs.forEach((tab) => {
+    tab.addEventListener('click', () => trocarAbaSqlPreview(tab.dataset.sqlPreviewTab || 'sql'));
+  });
   sqlPreviewModal.addEventListener('click', (e) => {
     if (e.target === sqlPreviewModal) fecharSqlPreview();
   });
+  if (btnFecharErrorBanner) btnFecharErrorBanner.addEventListener('click', hideError);
   messageContextMenu.addEventListener('click', async (e) => {
     const item = e.target.closest('[data-menu-action]');
     if (!item || !messageContextMensagemId) return;
@@ -5067,6 +5718,7 @@
     if (e.key === 'Escape' && whatsappPreviewModal.classList.contains('active')) fecharWhatsappPreview();
     if (e.key === 'Escape' && sqlPreviewModal.classList.contains('active')) fecharSqlPreview();
     if (e.key === 'Escape') fecharMenuMensagem();
+    if (e.key === 'Escape') hideError();
   });
 
   // Numero vs texto decidido pelo dado real (typeof), nao por metadado do
@@ -5195,66 +5847,109 @@
     return totalGrupos > 0 && totalGrupos < REPORT_GROUPS_AUTO_COLLAPSE_MIN;
   }
 
+  function fecharMenusAgrupamento() {
+    reportExpandMenu.classList.remove('open');
+    reportCollapseMenu.classList.remove('open');
+    btnExpandirGrupos.setAttribute('aria-expanded', 'false');
+    btnRecolherGrupos.setAttribute('aria-expanded', 'false');
+  }
+
+  function limitarProfundidadeGrupos(profundidade) {
+    const maximo = reportGroupBy.length;
+    const numero = Number.isFinite(profundidade) ? profundidade : 0;
+    return Math.max(0, Math.min(maximo, Math.trunc(numero)));
+  }
+
+  function estadosAberturaGrupos(profundidade) {
+    const abertaAte = limitarProfundidadeGrupos(profundidade);
+    return reportGroupBy.map((_field, idx) => idx < abertaAte);
+  }
+
+  function profundidadePadraoGrupos() {
+    if (!reportGroupBy.length) return 0;
+    if (Number.isFinite(reportGroupsOpenDepthPreference)) {
+      return limitarProfundidadeGrupos(reportGroupsOpenDepthPreference);
+    }
+    return gruposAbertosPorPadrao(reportDadosAtuais?.rows || [], reportGroupBy) ? 1 : 0;
+  }
+
+  function tituloNivelAgrupamento(nivel) {
+    const campo = reportGroupBy[nivel - 1];
+    const coluna = reportColunas.find((c) => c.field === campo);
+    return coluna?.title || campo || `Nivel ${nivel}`;
+  }
+
+  function renderMenuNivelGrupos(container, modo) {
+    container.innerHTML = '';
+    if (!reportGroupBy.length) return;
+
+    const criarOpcao = (label, detail, profundidade) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'report-action-option' + (reportGroupsOpenDepth === profundidade ? ' active' : '');
+      btn.innerHTML = `<span>${escapeHtml(label)}</span>${detail ? `<small>${escapeHtml(detail)}</small>` : ''}`;
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fecharMenusAgrupamento();
+        aplicarVisibilidadeGruposPorNivel(profundidade);
+      });
+      container.appendChild(btn);
+    };
+
+    if (modo === 'expandir') {
+      criarOpcao('Expandir tudo', reportGroupBy.length > 1 ? `${reportGroupBy.length} niveis` : '1 nivel', reportGroupBy.length);
+      if (reportGroupBy.length > 1) {
+        reportGroupBy.forEach((_field, idx) => {
+          const nivel = idx + 1;
+          criarOpcao(`Ate nivel ${nivel}`, tituloNivelAgrupamento(nivel), nivel);
+        });
+      }
+    } else {
+      criarOpcao('Recolher tudo', '0 niveis', 0);
+      if (reportGroupBy.length > 1) {
+        for (let nivel = reportGroupBy.length - 1; nivel >= 1; nivel -= 1) {
+          criarOpcao(`Recolher ate nivel ${nivel}`, tituloNivelAgrupamento(nivel), nivel);
+        }
+      }
+    }
+  }
+
   function atualizarBotoesGrupos() {
     const temAgrupamento = !!(reportTable && reportGroupBy.length);
-    btnExpandirGrupos.style.display = temAgrupamento ? '' : 'none';
-    btnRecolherGrupos.style.display = temAgrupamento ? '' : 'none';
+    reportExpandMenu.style.display = temAgrupamento ? '' : 'none';
+    reportCollapseMenu.style.display = temAgrupamento ? '' : 'none';
     btnExpandirGrupos.disabled = !temAgrupamento;
     btnRecolherGrupos.disabled = !temAgrupamento;
-  }
-
-  function aplicarVisibilidadeGrupo(grupo, abrir) {
-    if (!grupo) return;
-    const subGrupos = typeof grupo.getSubGroups === 'function' ? grupo.getSubGroups() : [];
-    if (!abrir) subGrupos.forEach((subGrupo) => aplicarVisibilidadeGrupo(subGrupo, abrir));
-    if (abrir && typeof grupo.show === 'function') grupo.show();
-    if (!abrir && typeof grupo.hide === 'function') grupo.hide();
-    if (abrir) subGrupos.forEach((subGrupo) => aplicarVisibilidadeGrupo(subGrupo, abrir));
-  }
-
-  function reconstruirAgrupamentoComEstado(abrir) {
-    if (!reportTable || !reportGroupBy.length) return;
-    const groupByAtual = [...reportGroupBy];
-
-    if (reportTable.options) {
-      reportTable.options.groupStartOpen = abrir;
+    if (!temAgrupamento) {
+      fecharMenusAgrupamento();
+      return;
     }
 
-    reportTable.setGroupBy(false);
-    requestAnimationFrame(() => {
-      if (!reportTable || !groupByAtual.length) return;
-      reportTable.setGroupBy(groupByAtual);
-      reportTable.setSort(sortersParaTabulator(sortersComAgrupamento()));
-
-      requestAnimationFrame(() => {
-        if (!reportTable || typeof reportTable.getGroups !== 'function') return;
-        reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
-        atualizarBotoesGrupos();
-      });
-    });
+    reportGroupsOpenDepth = limitarProfundidadeGrupos(reportGroupsOpenDepth);
+    btnExpandirGrupos.title = reportGroupBy.length > 1
+      ? 'Expandir grupos por nivel ou tudo'
+      : 'Expandir grupos';
+    btnRecolherGrupos.title = reportGroupBy.length > 1
+      ? 'Recolher grupos por nivel ou tudo'
+      : 'Recolher grupos';
+    renderMenuNivelGrupos(reportExpandPopover, 'expandir');
+    renderMenuNivelGrupos(reportCollapsePopover, 'recolher');
   }
 
-  function alternarVisibilidadeGrupos(abrir, guardarPreferencia = true) {
+  function aplicarVisibilidadeGruposPorNivel(profundidade, guardarPreferencia = true) {
     if (!reportTable || !reportGroupBy.length || typeof reportTable.getGroups !== 'function') return;
-    if (guardarPreferencia) reportGroupsOpenPreference = !!abrir;
-    reconstruirAgrupamentoComEstado(abrir);
-    reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
-    if (!abrir) {
-      requestAnimationFrame(() => {
-        if (!reportTable || !reportGroupBy.length || typeof reportTable.getGroups !== 'function') return;
-        reportTable.getGroups().forEach((grupo) => aplicarVisibilidadeGrupo(grupo, abrir));
-      });
-    }
+    reportGroupsOpenDepth = limitarProfundidadeGrupos(profundidade);
+    if (guardarPreferencia) reportGroupsOpenDepthPreference = reportGroupsOpenDepth;
     atualizarBotoesGrupos();
+    if (!reportDadosAtuais) return;
+    abrirRelatorio(reportDadosAtuais).catch((err) => showError('Falha ao ajustar agrupamento: ' + err.message));
   }
 
   function aplicarAberturaPadraoGrupos() {
     atualizarBotoesGrupos();
     if (!reportTable || !reportGroupBy.length) return;
-    const abrir = typeof reportGroupsOpenPreference === 'boolean'
-      ? reportGroupsOpenPreference
-      : gruposAbertosPorPadrao(reportDadosAtuais?.rows || [], reportGroupBy);
-    requestAnimationFrame(() => alternarVisibilidadeGrupos(abrir, false));
+    const profundidade = profundidadePadraoGrupos();
+    requestAnimationFrame(() => aplicarVisibilidadeGruposPorNivel(profundidade, false));
   }
 
   function renderColumnPicker() {
@@ -5336,6 +6031,7 @@
     reportTable.setSort(sortersParaTabulator(sortersComAgrupamento()));
     renderGroupPicker();
     aplicarAberturaPadraoGrupos();
+    atualizarStatusGrid();
     agendarSalvarGridConfig();
   }
 
@@ -5344,8 +6040,48 @@
     aplicarAgrupamento();
   });
 
-  btnExpandirGrupos.addEventListener('click', () => alternarVisibilidadeGrupos(true));
-  btnRecolherGrupos.addEventListener('click', () => alternarVisibilidadeGrupos(false));
+  btnExpandirGrupos.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const abrir = !reportExpandMenu.classList.contains('open');
+    fecharMenusAgrupamento();
+    reportExpandMenu.classList.toggle('open', abrir);
+    btnExpandirGrupos.setAttribute('aria-expanded', String(abrir));
+  });
+
+  btnRecolherGrupos.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const abrir = !reportCollapseMenu.classList.contains('open');
+    fecharMenusAgrupamento();
+    reportCollapseMenu.classList.toggle('open', abrir);
+    btnRecolherGrupos.setAttribute('aria-expanded', String(abrir));
+  });
+
+  reportExpandPopover.addEventListener('click', (e) => e.stopPropagation());
+  reportCollapsePopover.addEventListener('click', (e) => e.stopPropagation());
+
+  async function resetarLayoutGrid() {
+    if (!reportDadosAtuais) return;
+    if (!window.confirm('Resetar layout da grade? Agrupamentos, filtros, larguras, ordem, colunas ocultas e nomes customizados voltarao ao padrao.')) return;
+    reportGroupBy = [];
+    reportHiddenColumns = [];
+    reportSorters = [];
+    reportHeaderFilters = [];
+    reportColumnWidths = {};
+    reportColumnTitles = {};
+    reportGroupsOpenDepthPreference = null;
+    reportGroupsOpenDepth = 0;
+    reportGlobalTerm = '';
+    reportGlobalSearch.value = '';
+    atualizarEstadoBuscaRelatorio();
+    reportDadosAtuais.gridConfig = gridConfigNormalizada(null);
+    delete reportDadosAtuais._modelo;
+    await abrirRelatorio(reportDadosAtuais);
+    agendarSalvarGridConfig();
+  }
+
+  btnResetarLayoutGrid.addEventListener('click', () => {
+    resetarLayoutGrid().catch((err) => showError('Falha ao resetar layout: ' + err.message));
+  });
 
   function agendarSalvarGridConfig() {
     if (!reportMensagemId || !sessaoAtualId) return;
@@ -5475,6 +6211,7 @@
     reportColunas = modelo.colunas;
     reportGroupBy = reportGroupBy.filter((field) => reportColunas.some((c) => c.field === field));
     const rowsGrid = rowsRelatorioAtual();
+    reportGroupsOpenDepth = profundidadePadraoGrupos();
 
     tabRelatorio.disabled = false;
     reportEmpty.style.display = 'none';
@@ -5486,6 +6223,8 @@
       reportTable = null;
     }
     reportGlobalFilterActive = false;
+    reportLastGridWidth = 0;
+    reportLastGridHeight = 0;
 
     reportTable = new Tabulator(reportGridEl, {
       data: rowsGrid,
@@ -5512,11 +6251,15 @@
       // '100%' funciona como altura explicita quando o container pai
       // (.report-grid-wrap) ja tem altura fixa definida pelo layout flex.
       height: '100%',
+      // Com agrupamento ativo, o virtual DOM do Tabulator pode recalcular as
+      // linhas de grupo durante a rolagem e devolver o scroll para o inicio.
+      // Mantemos virtual na visao detalhada (sem grupos), onde ele e mais
+      // importante para performance, e usamos basic nos grupos para preservar
+      // a posicao da rolagem.
+      renderVertical: reportGroupBy.length ? 'basic' : 'virtual',
       columns: montarColunasTabulator(rowsGrid),
       groupBy: reportGroupBy.length ? reportGroupBy : false,
-      groupStartOpen: typeof reportGroupsOpenPreference === 'boolean'
-        ? reportGroupsOpenPreference
-        : gruposAbertosPorPadrao(rowsGrid, reportGroupBy),
+      groupStartOpen: estadosAberturaGrupos(reportGroupsOpenDepth),
       movableColumns: true,
       initialSort: sortersParaTabulator(sortersComAgrupamento()),
       initialHeaderFilter: reportHeaderFilters,
@@ -5545,6 +6288,7 @@
       aplicarBuscaGlobal();
       reportEmpty.classList.remove('preparing');
       reportEmpty.style.display = 'none';
+      depoisDaPintura(() => agendarRedrawRelatorioSePreciso(true));
     });
     reportTable.on('dataSorted', (sorters) => {
       reportSorters = sorters.map((s) => ({ field: s.field, dir: s.dir }));
@@ -5552,6 +6296,7 @@
     });
     reportTable.on('dataFiltered', () => {
       reportHeaderFilters = reportTable.getHeaderFilters ? reportTable.getHeaderFilters() : reportHeaderFilters;
+      atualizarStatusGrid();
       agendarSalvarGridConfig();
     });
     reportTable.on('columnResized', (column) => {
@@ -5563,6 +6308,7 @@
     reportTable.on('columnMoved', () => {
       sincronizarOrdemColunasRelatorio();
       renderColumnPicker();
+      atualizarStatusGrid();
       agendarSalvarGridConfig();
     });
     reportTable.on('columnVisibilityChanged', (column, visible) => {
@@ -5571,11 +6317,14 @@
       if (visible) reportHiddenColumns = reportHiddenColumns.filter((f) => f !== field);
       else if (!reportHiddenColumns.includes(field)) reportHiddenColumns.push(field);
       renderColumnPicker();
+      atualizarStatusGrid();
       agendarSalvarGridConfig();
     });
 
     renderGrandTotal(rowsGrid, modelo);
+    atualizarStatusGrid();
     reportGridMontada = true;
+    depoisDaPintura(() => agendarRedrawRelatorioSePreciso(true));
   }
 
   // Total geral da grade inteira, somando cada coluna numerica sobre TODAS as
@@ -5594,12 +6343,24 @@
 
   reportGlobalSearch.addEventListener('input', () => {
     reportGlobalTerm = reportGlobalSearch.value;
+    atualizarEstadoBuscaRelatorio();
     aplicarBuscaGlobal();
+  });
+
+  btnLimparBuscaDados.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    reportGlobalTerm = '';
+    reportGlobalSearch.value = '';
+    atualizarEstadoBuscaRelatorio();
+    aplicarBuscaGlobal();
+    reportGlobalSearch.focus();
   });
 
   btnReportColumns.addEventListener('click', (e) => {
     e.stopPropagation();
     const aberto = !reportColumnsMenu.classList.contains('open');
+    fecharMenusAgrupamento();
     reportColumnsMenu.classList.toggle('open', aberto);
     btnReportColumns.setAttribute('aria-expanded', String(aberto));
   });
@@ -5607,27 +6368,49 @@
   reportColumnsPopover.addEventListener('click', (e) => e.stopPropagation());
 
   document.addEventListener('click', () => {
+    fecharMenusAgrupamento();
     reportColumnsMenu.classList.remove('open');
     btnReportColumns.setAttribute('aria-expanded', 'false');
   });
 
-  // Percorre a arvore de grupos do Tabulator ate as FOLHAS. Com agrupamento
-  // multi-nivel (ex: grupo_produto + produto), group.getRows() dos niveis
-  // intermediarios/raiz vem VAZIO — as rows so existem no ultimo nivel
-  // (getSubGroups().length === 0). Sem essa recursao, o export ficava com 1
-  // linha por grupo raiz sem nenhum detalhe e subtotal calculado sobre array
-  // vazio (0,00) — bug corrigido aqui. Retorna [{ chave, rows }] na ordem de
-  // visita, chave sendo o caminho completo (ex: "AEREM » AEREM GRANEL").
-  function _gruposFolhaComRows(grupos, prefixo = '') {
+  function textoGrupoParaExport(grupo, chaveFallback) {
+    const texto = typeof grupo?.getElement === 'function'
+      ? String(grupo.getElement()?.textContent || '').replace(/\s+/g, ' ').trim()
+      : '';
+    return texto || chaveFallback;
+  }
+
+  function grupoEstaAbertoParaExport(grupo, nivel) {
+    if (typeof grupo?.isOpen === 'function') return !!grupo.isOpen();
+    const el = typeof grupo?.getElement === 'function' ? grupo.getElement() : null;
+    const aria = el?.getAttribute?.('aria-expanded');
+    if (aria === 'true') return true;
+    if (aria === 'false') return false;
+    if (el?.classList?.contains('tabulator-group-visible')) return true;
+    if (el?.classList?.contains('tabulator-group-hidden')) return false;
+    if (typeof grupo?._group?.visible === 'boolean') return grupo._group.visible;
+    return nivel < reportGroupsOpenDepth;
+  }
+
+  // Percorre a arvore de grupos preservando a configuracao visual atual. Se
+  // um grupo esta recolhido na tela, a exportacao para nele; se esta aberto,
+  // continua ate os detalhes visiveis. Assim PDF/Excel nao expandem niveis que
+  // o usuario deixou suprimidos na grid.
+  function linhasAgrupadasParaExport(grupos, prefixo = '', nivel = 0) {
     const resultado = [];
     (grupos || []).forEach((grupo) => {
       const chaveAtual = prefixo ? `${prefixo} » ${String(grupo.getKey() ?? '')}` : String(grupo.getKey() ?? '');
       const subGrupos = typeof grupo.getSubGroups === 'function' ? grupo.getSubGroups() : [];
+      const aberto = grupoEstaAbertoParaExport(grupo, nivel);
+      resultado.push({ tipo: 'grupo', chave: textoGrupoParaExport(grupo, chaveAtual), nivel, aberto });
+      if (!aberto) return;
       if (subGrupos.length) {
-        resultado.push(..._gruposFolhaComRows(subGrupos, chaveAtual));
-      } else {
-        resultado.push({ chave: chaveAtual, rows: grupo.getRows().map((r) => r.getData()) });
+        resultado.push(...linhasAgrupadasParaExport(subGrupos, chaveAtual, nivel + 1));
+        return;
       }
+      const rows = typeof grupo.getRows === 'function' ? grupo.getRows().map((r) => r.getData()) : [];
+      rows.forEach((row) => resultado.push({ tipo: 'linha', row, nivel: nivel + 1 }));
+      if (rows.length) resultado.push({ tipo: 'subtotal', rows, nivel });
     });
     return resultado;
   }
@@ -5673,13 +6456,15 @@
     });
 
     if (reportGroupBy.length && reportTable) {
-      _gruposFolhaComRows(reportTable.getGroups()).forEach(({ chave, rows: rowsDoGrupo }) => {
-        linhasGrupo.add(aoa.length);
-        aoa.push([chave]);
-        rowsDoGrupo.forEach((row) => aoa.push(linhaDados(row)));
-        if (colunas.some((c) => c.numerico)) {
+      linhasAgrupadasParaExport(reportTable.getGroups()).forEach((item) => {
+        if (item.tipo === 'grupo') {
+          linhasGrupo.add(aoa.length);
+          aoa.push([item.chave]);
+        } else if (item.tipo === 'linha') {
+          aoa.push(linhaDados(item.row));
+        } else if (item.tipo === 'subtotal' && colunas.some((c) => c.numerico)) {
           linhasSubtotal.add(aoa.length);
-          aoa.push(linhaSubtotal(rowsDoGrupo));
+          aoa.push(linhaSubtotal(item.rows));
         }
       });
     } else {
@@ -5852,10 +6637,14 @@
     });
 
     if (reportGroupBy.length && reportTable) {
-      _gruposFolhaComRows(reportTable.getGroups()).forEach(({ chave, rows: rowsDoGrupo }) => {
-        body.push([{ content: chave, colSpan: colunas.length, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }]);
-        rowsDoGrupo.forEach((row) => body.push(linhaDados(row)));
-        if (colunas.some((c) => c.numerico)) body.push(linhaSubtotal(rowsDoGrupo));
+      linhasAgrupadasParaExport(reportTable.getGroups()).forEach((item) => {
+        if (item.tipo === 'grupo') {
+          body.push([{ content: item.chave, colSpan: colunas.length, styles: { fontStyle: 'bold', fillColor: [220, 220, 220] } }]);
+        } else if (item.tipo === 'linha') {
+          body.push(linhaDados(item.row));
+        } else if (item.tipo === 'subtotal' && colunas.some((c) => c.numerico)) {
+          body.push(linhaSubtotal(item.rows));
+        }
       });
     } else {
       rowsRelatorioAtual().forEach((row) => body.push(linhaDados(row)));
@@ -5899,10 +6688,14 @@
     if (!text) return;
     msgInput.value = '';
     ajustarAlturaInput();
+    salvarRascunhoAtual();
     enviarMensagem(text);
   });
 
-  msgInput.addEventListener('input', ajustarAlturaInput);
+  msgInput.addEventListener('input', () => {
+    ajustarAlturaInput();
+    salvarRascunhoAtual();
+  });
   msgInput.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
     e.preventDefault();
@@ -5945,13 +6738,16 @@
   }
 
   btnNovaConversa.addEventListener('click', function () {
+    salvarRascunhoAtual();
     sessaoAtualId = null;
+    conversaNovaTokenAtual += 1;
     resetarSelecaoFilial();
     definirHeaderTitle('Nova conversa');
     renderEmptyState();
     renderSessionList();
     trocarAba('conversa');
     fecharRelatorio();
+    restaurarRascunho(null);
     msgInput.focus();
   });
 
@@ -6101,8 +6897,7 @@
       userName.textContent = 'Usuário Protheus';
       userAvatar.textContent = 'PT';
     }
-    msgInput.disabled = false;
-    sendBtn.disabled = false;
+    atualizarEstadoInput(true);
     bootLog('input:liberado');
     renderEmptyState('Selecione uma conversa ou inicie uma nova.');
     carregarBootstrapInicial()
@@ -6125,8 +6920,7 @@
     userName.textContent = 'Usuário Protheus';
     userAvatar.textContent = 'PT';
     renderEmptyState('Preparando sessão...');
-    msgInput.disabled = true;
-    sendBtn.disabled = true;
+    atualizarEstadoInput(false);
     aguardarTokenLaunch(launchTicket)
       .then((tk) => {
         token = tk;
@@ -6139,14 +6933,12 @@
       })
       .catch((err) => {
         showError('Falha ao preparar sessão: ' + err.message);
-        msgInput.disabled = true;
-        sendBtn.disabled = true;
+        atualizarEstadoInput(false);
       });
   } else if (!token) {
     bootLog('pagina:sem-token');
     showError('Sessão inválida: token ausente na URL.');
-    msgInput.disabled = true;
-    sendBtn.disabled = true;
+    atualizarEstadoInput(false);
   } else {
     bootLog('pagina:aberta-com-token-direto');
     iniciarChatComToken();

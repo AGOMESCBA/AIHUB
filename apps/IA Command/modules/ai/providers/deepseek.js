@@ -3,10 +3,10 @@ const https = require('https');
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 const DEEPSEEK_MODEL   = 'deepseek-chat';
 
-async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null) {
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null, modelo = null) {
   const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos, contextoAnterior);
   const body = JSON.stringify({
-    model: DEEPSEEK_MODEL,
+    model: modelo || DEEPSEEK_MODEL,
     messages: [{ role: 'user', content: prompt }],
     temperature: 0,
     max_tokens: 512,

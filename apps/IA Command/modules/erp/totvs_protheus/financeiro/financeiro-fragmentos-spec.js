@@ -152,6 +152,8 @@ function receberPosicao() {
 ## Contas a receber — posicao/em aberto
 - Contas a receber usa SE1 e cliente SA1.
 - Saldo a receber/em aberto: SE1.E1_SALDO, com SE1.E1_SALDO > 0. Titulos com E1_SALDO = 0 ja foram recebidos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE1.E1_VENCREA — PROIBIDO usar SE1.E1_VENCTO. NAO filtre SE1.E1_SITUACA.
+- REGRA ABSOLUTA — valor do titulo em aberto: use SEMPRE SE1.E1_SALDO, NUNCA SE1.E1_VALOR. E1_VALOR e o valor ORIGINAL do titulo (na emissao); E1_SALDO e o que efetivamente falta receber apos baixas/pagamentos parciais. Isso vale tanto para SOMA agregada quanto para LISTAGEM individual de titulos (ex: titulo a titulo por vencimento) — usar E1_VALOR em titulo com baixa parcial exibe um valor maior do que realmente resta a receber.
+- REGRA ABSOLUTA — NDF/NCC nunca representam saldo real em aberto: exclua SEMPRE SE1.E1_TIPO IN ('RA', 'NCC') das consultas de saldo/posicao/em aberto por padrao, no WHERE. RA (recebimento antecipado) e NCC (nota de credito cliente) sao movimentos de compensacao, nao obrigacoes reais futuras — misturá-los distorce o saldo real a receber. So inclua RA ou NCC quando o usuario pedir EXPLICITAMENTE (ver secao "Antecipacoes PA/RA" e "Titulos especiais — NDF, NCC").
 - REGRA ABSOLUTA — periodo/data especifica em posicao/em aberto: filtre DIRETAMENTE SE1.E1_VENCREA (ex: SE1.E1_VENCREA = '20260629' ou BETWEEN). PROIBIDO fazer JOIN com a tabela de baixas/movimentos (SE5 ou equivalente) para aplicar filtro de data nesta operacao — baixas/movimentos sao da operacao "Contas a receber — realizado" (outro fragmento, dados JA PAGOS/RECEBIDOS), sem relacao com vencimento em aberto. Misturar E1_SALDO > 0 (saldo aberto) com filtro pela data de baixa produz resultado sem sentido de negocio.
 - Natureza financeira: SE1.E1_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_receber: COALESCE(SUM(SE1.E1_SALDO),0) AS saldo_a_receber.
@@ -200,6 +202,8 @@ function pagarPosicao() {
 ## Contas a pagar — posicao/em aberto
 - Contas a pagar usa SE2 e fornecedor SA2.
 - Saldo a pagar/em aberto: SE2.E2_SALDO, com SE2.E2_SALDO > 0. Titulos com E2_SALDO = 0 ja foram pagos — nunca os inclua em consultas de aberto. Vencimento SEMPRE SE2.E2_VENCREA — PROIBIDO usar SE2.E2_VENCTO.
+- REGRA ABSOLUTA — valor do titulo em aberto: use SEMPRE SE2.E2_SALDO, NUNCA SE2.E2_VALOR. E2_VALOR e o valor ORIGINAL do titulo (na emissao); E2_SALDO e o que efetivamente falta pagar apos baixas/pagamentos parciais. Isso vale tanto para SOMA agregada quanto para LISTAGEM individual de titulos (ex: titulo a titulo por vencimento) — usar E2_VALOR em titulo com baixa parcial exibe um valor maior do que realmente resta a pagar.
+- REGRA ABSOLUTA — NDF/PA nunca representam saldo real em aberto: exclua SEMPRE SE2.E2_TIPO IN ('PA', 'NDF') das consultas de saldo/posicao/em aberto por padrao, no WHERE. PA (pagamento antecipado) e NDF (nota de debito fornecedor) sao movimentos de compensacao, nao obrigacoes reais futuras — misturá-los distorce o saldo real a pagar. So inclua PA ou NDF quando o usuario pedir EXPLICITAMENTE (ver secao "Antecipacoes PA/RA" e "Titulos especiais — NDF, NCC").
 - REGRA ABSOLUTA — periodo/data especifica em posicao/em aberto: filtre DIRETAMENTE SE2.E2_VENCREA (ex: SE2.E2_VENCREA = '20260629' ou BETWEEN). PROIBIDO fazer JOIN com a tabela de baixas/movimentos (SE5 ou equivalente) para aplicar filtro de data nesta operacao — baixas/movimentos sao da operacao "Contas a pagar — realizado" (outro fragmento, dados JA PAGOS), sem relacao com vencimento em aberto. Misturar E2_SALDO > 0 (saldo aberto) com filtro pela data de baixa produz resultado sem sentido de negocio — "tem conta a pagar em [data]" e sobre vencimento, nao sobre quando foi pago.
 - Natureza financeira: SE2.E2_NATUREZ -> SED.ED_CODIGO.
 - saldo_a_pagar: COALESCE(SUM(SE2.E2_SALDO),0) AS saldo_a_pagar.
@@ -483,21 +487,64 @@ ORDER BY fluxo.dia;
 
 function antecipacoesPaRa() {
   return `
-## Antecipacoes PA/RA
-- PA = pagamento antecipado em contas a pagar, normalmente SE2.E2_TIPO = 'PA'.
-- RA = recebimento antecipado em contas a receber, normalmente SE1.E1_TIPO = 'RA'.
-- Por padrao, NAO inclua PA nem RA nas metricas. Exclua PA em contas a pagar e RA em contas a receber quando o campo tipo existir: filtre SE2.E2_TIPO <> 'PA' (pagar) ou SE1.E1_TIPO <> 'RA' (receber).
-- So considere/apresente PA ou RA quando o usuario pedir explicitamente: PA, RA, pagamento antecipado, recebimento antecipado, adiantamento, antecipacao.
-- REGRA ABSOLUTA — quando pedido explicitamente, o filtro DEVE ISOLAR o antecipado, nunca exclui-lo: use SE2.E2_TIPO = 'PA' (pagar) ou SE1.E1_TIPO = 'RA' (receber). PROIBIDO manter o operador <> (diferente) do comportamento padrao quando a pergunta pede antecipados/PA/RA explicitamente — isso inverte o resultado e responde exatamente o oposto do que foi pedido.
+## Antecipacoes/creditos — PA, NDF (pagar) e RA, NCC (receber)
+- PA = pagamento antecipado (SE2.E2_TIPO = 'PA'). NDF = nota de debito fornecedor (SE2.E2_TIPO = 'NDF'). Ambos em contas a pagar — sao CREDITOS do usuario junto ao fornecedor, nao obrigacoes reais de pagamento.
+- RA = recebimento antecipado (SE1.E1_TIPO = 'RA'). NCC = nota de credito cliente (SE1.E1_TIPO = 'NCC'). Ambos em contas a receber — sao CREDITOS do cliente junto ao usuario, nao valores reais a receber.
+- Nao use PA/NDF para contas a receber. Nao use RA/NCC para contas a pagar.
+- COMPORTAMENTO PADRAO (pergunta NAO menciona PA/NDF/RA/NCC): exclua sempre. Contas a pagar: AND SE2.E2_TIPO NOT IN ('PA', 'NDF'). Contas a receber: AND SE1.E1_TIPO NOT IN ('RA', 'NCC').
+
+### Modo 1 — ISOLAR (pedido de "total de PA", "quanto tem de NDF", "recebimentos antecipados", sem a palavra "considerando"/"descontando"/"liquido")
+- O filtro DEVE ISOLAR o tipo pedido, nunca exclui-lo: use SE2.E2_TIPO IN ('PA','NDF') ou SE2.E2_TIPO = 'PA' (conforme o que foi pedido) para pagar; SE1.E1_TIPO IN ('RA','NCC') ou SE1.E1_TIPO = 'RA' para receber. PROIBIDO manter o operador <> / NOT IN do comportamento padrao aqui — isso inverte o resultado e responde o oposto do pedido.
+- REGRA ABSOLUTA — "pagamentos/recebimentos antecipados" (PA/RA) e SEMPRE consulta de POSICAO/EM ABERTO (SE2.E2_SALDO > 0 / SE1.E1_SALDO > 0, filtro por E2_VENCREA/E1_VENCREA), NUNCA de realizado/baixado. A palavra "pagamento"/"recebimento" no nome do tipo PA/RA e nomenclatura do Protheus, nao significa que o titulo ja foi baixado — PA/RA com saldo > 0 ainda esta em aberto (e um credito nao utilizado). PROIBIDO fazer JOIN com SE5/FK1/FK2/FK7 (tabelas de baixa) para consultas de PA/RA/NDF/NCC isolados ou no calculo de liquido — essas tabelas so se aplicam ao fragmento "realizado" (outra operacao, ver "Contas a pagar/receber — realizado"), que e sobre valores JA baixados, dado diferente do saldo/credito em aberto de PA/RA/NDF/NCC.
 - EXEMPLO CORRETO — "total de pagamentos antecipados com saldo": SELECT SUM(SE2.E2_SALDO) AS total_pagamentos_antecipados FROM SE2<sufixo> SE2 WHERE SE2.E2_TIPO = 'PA' AND SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '<inicio>' AND '<fim>'.
 - EXEMPLO ERRADO — nunca faca isso: a mesma pergunta com SE2.E2_TIPO <> 'PA' — isso soma exatamente os titulos que NAO sao antecipados, o oposto do pedido.
-- Mesmo quando pedido explicitamente, apresente PA/RA somente quando a pergunta estiver por fornecedor ou por cliente, ou quando houver fornecedor/cliente filtrado. Sem fornecedor/cliente, marque precisa_confirmacao=true perguntando qual fornecedor/cliente ou se deseja agrupar por entidade.
-- Se considerar PA/RA por entidade, retorne colunas separadas: saldo_a_pagar/saldo_a_receber, pagamento_antecipado/recebimento_antecipado, total_liquido.
-- Nao use PA para contas a receber. Nao use RA para contas a pagar.
+- EXEMPLO ERRADO — nunca faca isso: JOIN SE2 com FK7/FK2 (ou SE5) para "total de pagamentos antecipados" — isso confunde PA (titulo em aberto do tipo antecipado) com uma baixa realizada, e ainda exige um periodo de baixa que a pergunta nao pediu.
+- Apresente PA/NDF/RA/NCC isolados somente quando a pergunta estiver por fornecedor/cliente especifico, ou quando houver fornecedor/cliente filtrado. Sem fornecedor/cliente, marque precisa_confirmacao=true perguntando qual fornecedor/cliente ou se deseja agrupar por entidade.
 
-## Titulos especiais — NDF, NCC
-- NDF = nota de debito fornecedor em SE2.E2_TIPO. NCC = nota de credito cliente em SE1.E1_TIPO.
-- Sao movimentos de compensacao, nao obrigacoes reais futuras. Seguem a mesma regra de opt-in: so considere/apresente quando o usuario pedir explicitamente NDF ou NCC.
+### Modo 2 — LIQUIDO (pedido usa "considerando PA/NDF", "descontando PA/NDF", "considerando RA/NCC", "liquido", "abatendo os creditos")
+- PA/NDF/RA/NCC sao creditos que o usuario/cliente ja tem junto ao fornecedor/cliente — o valor desses tipos deve ser SUBTRAIDO do total normal, nunca somado a ele nem apresentado como categoria separada sem relacao com o total.
+- REGRA ABSOLUTA — exige fornecedor ou cliente especifico (mesma exigencia do Modo 1). Sem fornecedor/cliente, marque precisa_confirmacao=true.
+- REGRA ABSOLUTA — SEMPRE retorne os 3 componentes lado a lado, calculados em CTEs/subqueries ESCALARES SEPARADAS (nunca JOIN entre elas — mesma tabela, filtros de E2_TIPO/E1_TIPO diferentes, JOIN duplicaria linhas): valor bruto (tipos normais, excluindo PA/NDF ou RA/NCC), valor de credito (soma de PA+NDF ou RA+NCC), e valor liquido (bruto menos credito).
+- Nomeie as colunas: contas a pagar -> debito_bruto, credito_pa_ndf, debito_liquido. Contas a receber -> credito_bruto, credito_ra_ncc, credito_liquido.
+- FORMULA: debito_liquido = debito_bruto - credito_pa_ndf (pagar). credito_liquido = credito_bruto - credito_ra_ncc (receber).
+- EXEMPLO CORRETO — "contas a pagar do fornecedor X considerando PA e NDF":
+SELECT
+    bruto.debito_bruto,
+    credito.credito_pa_ndf,
+    (bruto.debito_bruto - credito.credito_pa_ndf) AS debito_liquido
+FROM (
+    SELECT COALESCE(SUM(SE2.E2_SALDO), 0) AS debito_bruto
+    FROM SE2<sufixo> SE2
+    WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_TIPO NOT IN ('PA', 'NDF') AND SE2.E2_FORNECE = '<codigo>' AND SE2.E2_LOJA = '<loja>'
+) AS bruto
+CROSS JOIN (
+    SELECT COALESCE(SUM(SE2.E2_SALDO), 0) AS credito_pa_ndf
+    FROM SE2<sufixo> SE2
+    WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_TIPO IN ('PA', 'NDF') AND SE2.E2_FORNECE = '<codigo>' AND SE2.E2_LOJA = '<loja>'
+) AS credito;
+- O mesmo padrao estrutural vale para contas a receber, trocando SE2/E2_* por SE1/E1_*, E2_TIPO NOT IN ('PA','NDF')/IN ('PA','NDF') por E1_TIPO NOT IN ('RA','NCC')/IN ('RA','NCC'), e os aliases de coluna para credito_bruto/credito_ra_ncc/credito_liquido.
+- EXEMPLO ERRADO — nunca faca isso: somar tudo num unico SELECT sem separar bruto e credito (SELECT SUM(SE2.E2_SALDO) FROM SE2 WHERE E2_TIPO NOT IN ('PA','NDF') OR alguma logica que nao isole os dois componentes) — isso nao permite calcular o liquido nem mostrar a composicao.
+- REGRA ABSOLUTA — quando a pergunta pedir LISTAGEM de titulos individuais (nao so o total escalar), o filtro de fornecedor/cliente E2_FORNECE+E2_LOJA (ou E1_CLIENTE+E1_LOJA) e o filtro de E2_TIPO NOT IN ('PA','NDF') (ou E1_TIPO NOT IN ('RA','NCC')) DEVEM aparecer TANTO dentro das CTEs bruto/credito QUANTO no WHERE do SELECT externo que lista os titulos. Esquecer o filtro no SELECT externo faz a listagem trazer titulos de TODOS os fornecedores/clientes da empresa, nao so o pedido — vazamento de dados entre entidades, alem de resultado tecnicamente incorreto.
+- EXEMPLO CORRETO — listagem: "titulos a pagar do fornecedor X considerando PA e NDF, com o liquido":
+WITH bruto AS (
+    SELECT COALESCE(SUM(SE2.E2_SALDO), 0) AS debito_bruto
+    FROM SE2<sufixo> SE2
+    WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_TIPO NOT IN ('PA', 'NDF') AND SE2.E2_FORNECE = '<codigo>' AND SE2.E2_LOJA = '<loja>'
+),
+credito AS (
+    SELECT COALESCE(SUM(SE2.E2_SALDO), 0) AS credito_pa_ndf
+    FROM SE2<sufixo> SE2
+    WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_TIPO IN ('PA', 'NDF') AND SE2.E2_FORNECE = '<codigo>' AND SE2.E2_LOJA = '<loja>'
+)
+SELECT
+    SE2.E2_NUM, SE2.E2_TIPO, SE2.E2_VENCREA AS vencimento, SE2.E2_SALDO,
+    bruto.debito_bruto, credito.credito_pa_ndf, (bruto.debito_bruto - credito.credito_pa_ndf) AS debito_liquido
+FROM SE2<sufixo> SE2
+CROSS JOIN bruto
+CROSS JOIN credito
+WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_FORNECE = '<codigo>' AND SE2.E2_LOJA = '<loja>'
+ORDER BY SE2.E2_VENCREA;
+- Repare que SE2.E2_FORNECE = '<codigo>' AND SE2.E2_LOJA = '<loja>' aparece 3 VEZES (dentro de bruto, dentro de credito, e no WHERE externo) — as 3 ocorrencias sao obrigatorias. O mesmo vale para E1_CLIENTE/E1_LOJA em contas a receber.
 `;
 }
 

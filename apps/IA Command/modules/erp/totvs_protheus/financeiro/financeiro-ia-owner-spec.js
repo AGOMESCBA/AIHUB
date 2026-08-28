@@ -464,16 +464,211 @@ const sqlPatternsProibidos = [
       const pedeAntecipadoPagar = /\b(pagamentos?\s+antecipados?|adiantament\w*\s+(a\s+)?fornece\w*)\b/i.test(texto) || (/\bPA\b/.test(texto) && /\bpagar\b|\bpagament\w*/i.test(texto));
       const pedeAntecipadoReceber = /\b(recebimentos?\s+antecipados?|adiantament\w*\s+(de\s+)?client\w*)\b/i.test(texto) || (/\bRA\b/.test(texto) && /\breceber\b|\brecebiment\w*/i.test(texto));
 
-      if (pedeAntecipadoPagar && /\bFROM\s+SE2/i.test(sql) && /E2_TIPO\s*<>\s*'PA'/i.test(sql)) {
+      const excluiPagar = /E2_TIPO\s*<>\s*'PA'/i.test(sql) || /E2_TIPO\s+NOT\s+IN\s*\(\s*'PA'\s*\)/i.test(sql);
+      if (pedeAntecipadoPagar && /\bFROM\s+SE2/i.test(sql) && excluiPagar) {
         return (
-          'A pergunta pede pagamentos antecipados (PA), mas o SQL usa SE2.E2_TIPO <> \'PA\', que EXCLUI os antecipados — o oposto do pedido. ' +
+          'A pergunta pede pagamentos antecipados (PA), mas o SQL usa SE2.E2_TIPO <> \'PA\' ou NOT IN (\'PA\'), que EXCLUI os antecipados — o oposto do pedido. ' +
           'Troque para SE2.E2_TIPO = \'PA\' para ISOLAR apenas os titulos antecipados. Corrija e regere o SQL.'
         );
       }
-      if (pedeAntecipadoReceber && /\bFROM\s+SE1/i.test(sql) && /E1_TIPO\s*<>\s*'RA'/i.test(sql)) {
+      const excluiReceber = /E1_TIPO\s*<>\s*'RA'/i.test(sql) || /E1_TIPO\s+NOT\s+IN\s*\(\s*'RA'\s*\)/i.test(sql);
+      if (pedeAntecipadoReceber && /\bFROM\s+SE1/i.test(sql) && excluiReceber) {
         return (
-          'A pergunta pede recebimentos antecipados (RA), mas o SQL usa SE1.E1_TIPO <> \'RA\', que EXCLUI os antecipados — o oposto do pedido. ' +
+          'A pergunta pede recebimentos antecipados (RA), mas o SQL usa SE1.E1_TIPO <> \'RA\' ou NOT IN (\'RA\'), que EXCLUI os antecipados — o oposto do pedido. ' +
           'Troque para SE1.E1_TIPO = \'RA\' para ISOLAR apenas os titulos antecipados. Corrija e regere o SQL.'
+        );
+      }
+      return null;
+    },
+  },
+  {
+    // Bug real confirmado em producao: consulta de titulos em ABERTO (filtra E2_SALDO > 0
+    // ou E1_SALDO > 0) mas exibe/soma E2_VALOR/E1_VALOR (valor ORIGINAL do titulo na
+    // emissao) em vez de E2_SALDO/E1_SALDO (o que efetivamente resta pagar/receber apos
+    // baixas parciais). Em titulo com baixa parcial isso mostra um valor maior do que o
+    // saldo real — informacao financeira incorreta entregue ao usuario.
+    validar(sql) {
+      const usaSaldoAbertoPagar = /\bSE2\s*\.\s*E2_SALDO\s*>\s*0\b/i.test(sql);
+      const usaValorOriginalPagar = /\bSE2\s*\.\s*E2_VALOR\b/i.test(sql);
+      if (usaSaldoAbertoPagar && usaValorOriginalPagar) {
+        return (
+          'Consulta filtra titulos em aberto por SE2.E2_SALDO > 0, mas usa SE2.E2_VALOR (valor ORIGINAL do titulo na emissao) no SELECT/SUM. ' +
+          'Titulos com baixa parcial tem E2_VALOR maior que o saldo real. Troque toda referencia a SE2.E2_VALOR por SE2.E2_SALDO — o valor do titulo em aberto e sempre o saldo, nunca o valor original.'
+        );
+      }
+      const usaSaldoAbertoReceber = /\bSE1\s*\.\s*E1_SALDO\s*>\s*0\b/i.test(sql);
+      const usaValorOriginalReceber = /\bSE1\s*\.\s*E1_VALOR\b/i.test(sql);
+      if (usaSaldoAbertoReceber && usaValorOriginalReceber) {
+        return (
+          'Consulta filtra titulos em aberto por SE1.E1_SALDO > 0, mas usa SE1.E1_VALOR (valor ORIGINAL do titulo na emissao) no SELECT/SUM. ' +
+          'Titulos com baixa parcial tem E1_VALOR maior que o saldo real. Troque toda referencia a SE1.E1_VALOR por SE1.E1_SALDO — o valor do titulo em aberto e sempre o saldo, nunca o valor original.'
+        );
+      }
+      return null;
+    },
+  },
+  {
+    // Bug real confirmado em producao (mesma familia do bug de PA/RA acima): consulta de
+    // titulos em ABERTO (E2_SALDO > 0 / E1_SALDO > 0) sem excluir NDF/NCC, que sao
+    // movimentos de compensacao e distorcem o saldo real quando misturados — mesma logica
+    // ja aplicada a PA/RA. So nao exige a exclusao quando o usuario pediu NDF/NCC/nota de
+    // debito/nota de credito explicitamente (nesse caso o SQL deve ISOLAR, nao excluir).
+    validar(sql, mensagem) {
+      const texto = String(mensagem || '');
+      const pedeNdfExplicito = /\bNDF\b/i.test(texto) || /\bnotas?\s+de\s+d[ée]bito\b/i.test(texto);
+      const pedeNccExplicito = /\bNCC\b/i.test(texto) || /\bnotas?\s+de\s+cr[ée]dito\b/i.test(texto);
+
+      const usaSaldoAbertoPagar = /\bSE2\s*\.\s*E2_SALDO\s*>\s*0\b/i.test(sql);
+      if (usaSaldoAbertoPagar && !pedeNdfExplicito && !/\bE2_TIPO\b/i.test(sql)) {
+        return (
+          'Consulta de titulos a pagar em aberto (SE2.E2_SALDO > 0) sem filtro de SE2.E2_TIPO. ' +
+          'NDF (nota de debito fornecedor) e PA (pagamento antecipado) sao movimentos de compensacao que distorcem o saldo real a pagar quando misturados. ' +
+          'Adicione AND SE2.E2_TIPO NOT IN (\'PA\', \'NDF\') ao WHERE, a menos que o usuario tenha pedido PA/NDF explicitamente.'
+        );
+      }
+      const usaSaldoAbertoReceber = /\bSE1\s*\.\s*E1_SALDO\s*>\s*0\b/i.test(sql);
+      if (usaSaldoAbertoReceber && !pedeNccExplicito && !/\bE1_TIPO\b/i.test(sql)) {
+        return (
+          'Consulta de titulos a receber em aberto (SE1.E1_SALDO > 0) sem filtro de SE1.E1_TIPO. ' +
+          'NCC (nota de credito cliente) e RA (recebimento antecipado) sao movimentos de compensacao que distorcem o saldo real a receber quando misturados. ' +
+          'Adicione AND SE1.E1_TIPO NOT IN (\'RA\', \'NCC\') ao WHERE, a menos que o usuario tenha pedido RA/NCC explicitamente.'
+        );
+      }
+      return null;
+    },
+  },
+  {
+    // Pergunta pede explicitamente o CALCULO LIQUIDO (contas a pagar/receber "considerando"
+    // ou "descontando" PA/NDF/RA/NCC) — o valor desses tipos e credito do usuario/cliente e
+    // deve ser SUBTRAIDO do total normal, nunca somado como categoria isolada nem ignorado.
+    // Exige a estrutura de 2 componentes (bruto excluindo o tipo, credito isolando o tipo)
+    // subtraidos no SELECT final — sem isso nao ha como o resultado representar o liquido.
+    validar(sql, mensagem) {
+      const texto = String(mensagem || '');
+      const pedeLiquidoPagar = /\b(considerando|descontando|abatendo|liquido)\b/i.test(texto)
+        && /\b(PA|NDF|pagamentos?\s+antecipados?|notas?\s+de\s+d[ée]bito)\b/i.test(texto)
+        && /\bpagar\b|\bpagament\w*/i.test(texto);
+      const pedeLiquidoReceber = /\b(considerando|descontando|abatendo|liquido)\b/i.test(texto)
+        && /\b(RA|NCC|recebimentos?\s+antecipados?|notas?\s+de\s+cr[ée]dito)\b/i.test(texto)
+        && /\breceber\b|\brecebiment\w*/i.test(texto);
+
+      if (pedeLiquidoPagar && /\bFROM\s+\w*SE2\w*\s+SE2\b/i.test(sql)) {
+        const temBruto = /\bSE2\s*\.\s*E2_TIPO\s+NOT\s+IN\s*\(\s*'PA'\s*,\s*'NDF'\s*\)/i.test(sql) || /\bSE2\s*\.\s*E2_TIPO\s+NOT\s+IN\s*\(\s*'NDF'\s*,\s*'PA'\s*\)/i.test(sql);
+        const temCredito = /\bSE2\s*\.\s*E2_TIPO\s+IN\s*\(\s*'PA'\s*,\s*'NDF'\s*\)/i.test(sql) || /\bSE2\s*\.\s*E2_TIPO\s+IN\s*\(\s*'NDF'\s*,\s*'PA'\s*\)/i.test(sql);
+        const temSubtracao = /-\s*(?:\w+\s*\.\s*)?credito_pa_ndf\b/i.test(sql) || /\bdebito_liquido\b/i.test(sql);
+        if (!temBruto || !temCredito || !temSubtracao) {
+          return (
+            'A pergunta pede contas a pagar CONSIDERANDO/DESCONTANDO PA/NDF — PA e NDF sao creditos do usuario com o fornecedor e devem ser SUBTRAIDOS do total normal, nunca somados ou ignorados. ' +
+            'O SQL deve calcular em subqueries/CTEs escalares SEPARADAS: debito_bruto (SE2.E2_TIPO NOT IN (\'PA\',\'NDF\')), credito_pa_ndf (SE2.E2_TIPO IN (\'PA\',\'NDF\')), e debito_liquido = debito_bruto - credito_pa_ndf. Corrija e regere o SQL com essa estrutura.'
+          );
+        }
+      }
+      if (pedeLiquidoReceber && /\bFROM\s+\w*SE1\w*\s+SE1\b/i.test(sql)) {
+        const temBruto = /\bSE1\s*\.\s*E1_TIPO\s+NOT\s+IN\s*\(\s*'RA'\s*,\s*'NCC'\s*\)/i.test(sql) || /\bSE1\s*\.\s*E1_TIPO\s+NOT\s+IN\s*\(\s*'NCC'\s*,\s*'RA'\s*\)/i.test(sql);
+        const temCredito = /\bSE1\s*\.\s*E1_TIPO\s+IN\s*\(\s*'RA'\s*,\s*'NCC'\s*\)/i.test(sql) || /\bSE1\s*\.\s*E1_TIPO\s+IN\s*\(\s*'NCC'\s*,\s*'RA'\s*\)/i.test(sql);
+        const temSubtracao = /-\s*(?:\w+\s*\.\s*)?credito_ra_ncc\b/i.test(sql) || /\bcredito_liquido\b/i.test(sql);
+        if (!temBruto || !temCredito || !temSubtracao) {
+          return (
+            'A pergunta pede contas a receber CONSIDERANDO/DESCONTANDO RA/NCC — RA e NCC sao creditos do cliente com o usuario e devem ser SUBTRAIDOS do total normal, nunca somados ou ignorados. ' +
+            'O SQL deve calcular em subqueries/CTEs escalares SEPARADAS: credito_bruto (SE1.E1_TIPO NOT IN (\'RA\',\'NCC\')), credito_ra_ncc (SE1.E1_TIPO IN (\'RA\',\'NCC\')), e credito_liquido = credito_bruto - credito_ra_ncc. Corrija e regere o SQL com essa estrutura.'
+          );
+        }
+      }
+      return null;
+    },
+  },
+  {
+    // Bug real confirmado em teste (2026-08-28): no calculo de liquido PA/NDF ou RA/NCC com
+    // LISTAGEM de titulos individuais, as CTEs bruto/credito filtram corretamente o
+    // fornecedor/cliente pedido, mas a IA por vezes esquece de repetir esse MESMO filtro no
+    // WHERE do SELECT externo que lista os titulos (so mantem D_E_L_E_T_/SALDO > 0). Resultado:
+    // a listagem traz titulos de TODOS os fornecedores/clientes da empresa, nao so o pedido —
+    // vazamento de dados entre entidades, alem de contaminar o CROSS JOIN com bruto/credito de
+    // uma entidade em linhas de outras. So se aplica quando ha CTE (WITH) e o SELECT externo
+    // referencia a tabela diretamente (listagem); escalar puro via subquery no FROM nao lista
+    // linhas de SE2/SE1, entao nao precisa repetir o filtro fora da subquery.
+    validar(sql) {
+      const texto = String(sql || '');
+      if (!/\bWITH\b/i.test(texto)) return null;
+
+      function extrairSelectExterno(str) {
+        const mWith = str.match(/\bWITH\b/i);
+        if (!mWith) return str;
+        let i = mWith.index + mWith[0].length;
+        let depth = 0;
+        let fechamento = -1;
+        for (; i < str.length; i++) {
+          const c = str[i];
+          if (c === '(') depth++;
+          else if (c === ')') {
+            depth--;
+            if (depth === 0) {
+              fechamento = i;
+              if (/^\s*,/.test(str.slice(i + 1))) continue;
+              break;
+            }
+          }
+        }
+        return fechamento === -1 ? str : str.slice(fechamento + 1);
+      }
+
+      const externo = extrairSelectExterno(texto);
+
+      const mFornece = texto.match(/\bSE2\s*\.\s*E2_FORNECE\s*=\s*'([^']+)'/i);
+      const listaSE2Externo = /\bFROM\s+\w*SE2\w*\s+SE2\b/i.test(externo);
+      if (mFornece && listaSE2Externo) {
+        const codigo = mFornece[1];
+        const filtroRepetido = new RegExp(`SE2\\s*\\.\\s*E2_FORNECE\\s*=\\s*'${codigo}'`, 'i').test(externo);
+        if (!filtroRepetido) {
+          return (
+            `O calculo de liquido PA/NDF filtra o fornecedor '${codigo}' dentro das CTEs (bruto/credito), mas a listagem de titulos no SELECT externo nao repete esse filtro. ` +
+            `Isso traz titulos de TODOS os fornecedores, nao so o pedido. Adicione AND SE2.E2_FORNECE = '${codigo}' (e o filtro de loja correspondente) tambem no WHERE do SELECT externo.`
+          );
+        }
+      }
+
+      const mCliente = texto.match(/\bSE1\s*\.\s*E1_CLIENTE\s*=\s*'([^']+)'/i);
+      const listaSE1Externo = /\bFROM\s+\w*SE1\w*\s+SE1\b/i.test(externo);
+      if (mCliente && listaSE1Externo) {
+        const codigo = mCliente[1];
+        const filtroRepetido = new RegExp(`SE1\\s*\\.\\s*E1_CLIENTE\\s*=\\s*'${codigo}'`, 'i').test(externo);
+        if (!filtroRepetido) {
+          return (
+            `O calculo de liquido RA/NCC filtra o cliente '${codigo}' dentro das CTEs (bruto/credito), mas a listagem de titulos no SELECT externo nao repete esse filtro. ` +
+            `Isso traz titulos de TODOS os clientes, nao so o pedido. Adicione AND SE1.E1_CLIENTE = '${codigo}' (e o filtro de loja correspondente) tambem no WHERE do SELECT externo.`
+          );
+        }
+      }
+      return null;
+    },
+  },
+  {
+    // Bug real confirmado em teste (2026-08-28): pergunta pede "total de pagamentos
+    // antecipados" (PA/RA isolado) e a IA confunde o nome do tipo com uma baixa ja
+    // realizada, fazendo JOIN com SE5/FK1/FK2/FK7 (tabelas de baixa). PA/RA/NDF/NCC com
+    // SALDO > 0 sao titulos EM ABERTO (creditos nao utilizados) — nunca tabela de baixa.
+    // Baseado na PERGUNTA (nao no filtro de tipo do SQL): a IA pode escapar de um guard
+    // baseado em E2_TIPO='PA' simplesmente omitindo o filtro de tipo ou usando NOT IN,
+    // mas ainda assim errar ao usar JOIN de baixa quando a pergunta pede PA/RA isolado.
+    validar(sql, mensagem) {
+      const texto = String(mensagem || '');
+      const pedePagarAntecipadoIsolado = /\b(pagamentos?\s+antecipados?|nota\s+de\s+d[ée]bito|\bNDF\b)\b/i.test(texto)
+        && !/\bconsiderando\b|\bdescontando\b|\bl[ií]quido\b/i.test(texto);
+      const pedeReceberAntecipadoIsolado = /\b(recebimentos?\s+antecipados?|nota\s+de\s+cr[ée]dito|\bNCC\b)\b/i.test(texto)
+        && !/\bconsiderando\b|\bdescontando\b|\bl[ií]quido\b/i.test(texto);
+
+      const usaBaixaPagar = /\bJOIN\s+\w*(?:SE5|FK1|FK2|FK7)\w*\s+(?:SE5|FK1|FK2|FK7)\b/i.test(sql);
+      if (pedePagarAntecipadoIsolado && /\bFROM\s+\w*SE2\w*\s+SE2\b/i.test(sql) && usaBaixaPagar) {
+        return (
+          'A pergunta pede pagamentos antecipados/PA/NDF isolado, que e SEMPRE consulta de titulo EM ABERTO (credito nao utilizado), mas o SQL faz JOIN com tabela de baixa (SE5/FK1/FK2/FK7). ' +
+          'Remova o JOIN de baixa. Use SELECT SUM(SE2.E2_SALDO) FROM SE2<sufixo> SE2 WHERE SE2.E2_TIPO = \'PA\' AND SE2.E2_SALDO > 0 (mais filtros de fornecedor/periodo se pedidos) — sem nenhuma tabela de baixa.'
+        );
+      }
+      const usaBaixaReceber = /\bJOIN\s+\w*(?:SE5|FK1|FK7)\w*\s+(?:SE5|FK1|FK7)\b/i.test(sql);
+      if (pedeReceberAntecipadoIsolado && /\bFROM\s+\w*SE1\w*\s+SE1\b/i.test(sql) && usaBaixaReceber) {
+        return (
+          'A pergunta pede recebimentos antecipados/RA/NCC isolado, que e SEMPRE consulta de titulo EM ABERTO (credito nao utilizado), mas o SQL faz JOIN com tabela de baixa (SE5/FK1/FK7). ' +
+          'Remova o JOIN de baixa. Use SELECT SUM(SE1.E1_SALDO) FROM SE1<sufixo> SE1 WHERE SE1.E1_TIPO = \'RA\' AND SE1.E1_SALDO > 0 (mais filtros de cliente/periodo se pedidos) — sem nenhuma tabela de baixa.'
         );
       }
       return null;

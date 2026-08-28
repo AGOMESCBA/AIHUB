@@ -34,6 +34,17 @@ function _buildUrl(conn, path) {
 
 const REQUEST_TIMEOUT_MS = 240000; // 240s — queries SQL pesadas (faturamento com muitos clientes pode ultrapassar 2min)
 
+// keepAlive:false — desde o Node 19 o agent global reutiliza conexoes TCP por padrao.
+// Esses agentes rodam por horas contra o mesmo host (agente local do cliente, atras de
+// NAT/firewall que pode derrubar conexoes ociosas sem enviar FIN/RST). Reaproveitar um
+// socket assim faz o Node herdar o timer de inatividade da conexao antiga: observado em
+// producao um "timeout de 240s" disparando em ~5s porque o socket reciclado ja estava
+// silencioso ha ~235s de uma chamada anterior. Forcar conexao nova a cada chamada evita
+// esse socket "zumbi" — o custo de handshake TCP extra e desprezivel frente ao tempo de
+// uma query SQL no ERP.
+const _httpAgent  = new http.Agent({ keepAlive: false });
+const _httpsAgent = new https.Agent({ keepAlive: false, rejectUnauthorized: false });
+
 function _request(url, method, body, apiKey) {
   return new Promise((resolve, reject) => {
     // Flag para garantir que resolve/reject seja chamado apenas uma vez.
@@ -72,6 +83,7 @@ function _request(url, method, body, apiKey) {
       },
       // Aceita certificados auto-assinados em ambientes internos
       rejectUnauthorized: false,
+      agent: isHttps ? _httpsAgent : _httpAgent,
     };
 
     const lib = isHttps ? https : http;

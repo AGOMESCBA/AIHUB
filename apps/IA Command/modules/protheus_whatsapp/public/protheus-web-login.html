@@ -22,6 +22,7 @@
       --warning: #ffd166;
       --shadow: 0 28px 90px rgba(0, 0, 0, .42);
       --radius: 8px;
+      --focus-ring: 0 0 0 3px rgba(37, 211, 102, .18);
     }
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
@@ -36,14 +37,14 @@
         linear-gradient(180deg, var(--bg), var(--bg-2));
       display: grid;
       place-items: center;
-      padding: 28px;
+      padding: 24px;
     }
     button, input { font: inherit; }
     .shell {
-      width: min(1060px, 100%);
-      min-height: 620px;
+      width: min(1080px, 100%);
+      min-height: 600px;
       display: grid;
-      grid-template-columns: minmax(0, .9fr) minmax(420px, 1fr);
+      grid-template-columns: minmax(0, .82fr) minmax(430px, 1fr);
       background: rgba(16, 32, 39, .92);
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -53,7 +54,7 @@
     }
     .hero {
       position: relative;
-      padding: 34px;
+      padding: 30px;
       border-right: 1px solid var(--border);
       background:
         linear-gradient(160deg, rgba(0, 168, 132, .22), transparent 46%),
@@ -61,7 +62,7 @@
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      gap: 34px;
+      gap: 24px;
     }
     .brand {
       display: flex;
@@ -93,16 +94,16 @@
     }
     .hero-copy h2 {
       max-width: 420px;
-      font-size: clamp(30px, 4vw, 48px);
-      line-height: 1.02;
+      font-size: clamp(28px, 3.5vw, 42px);
+      line-height: 1.06;
       letter-spacing: 0;
     }
     .hero-copy p {
       max-width: 440px;
-      margin-top: 18px;
+      margin-top: 14px;
       color: var(--soft);
-      font-size: 16px;
-      line-height: 1.65;
+      font-size: 15px;
+      line-height: 1.58;
     }
     .access-flow {
       display: grid;
@@ -114,7 +115,7 @@
       grid-template-columns: 34px 1fr;
       gap: 12px;
       align-items: start;
-      padding: 12px;
+      padding: 10px 11px;
       border: 1px solid rgba(179, 215, 221, .14);
       border-radius: var(--radius);
       background: rgba(7, 16, 20, .24);
@@ -191,7 +192,10 @@
     .card-wrap {
       display: grid;
       place-items: center;
-      padding: 42px;
+      padding: 34px 42px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(37, 211, 102, .07), transparent 32%),
+        rgba(7, 16, 20, .08);
     }
     .card {
       width: min(460px, 100%);
@@ -238,6 +242,7 @@
       border-radius: var(--radius);
       background: rgba(7, 16, 20, .52);
       overflow: hidden;
+      box-shadow: 0 18px 52px rgba(0, 0, 0, .22);
     }
     .panel-head {
       padding: 22px 22px 18px;
@@ -280,6 +285,10 @@
     .input-wrap {
       position: relative;
     }
+    .input-wrap:focus-within .prefix {
+      background: rgba(37, 211, 102, .22);
+      color: #fff;
+    }
     .prefix {
       position: absolute;
       left: 14px;
@@ -293,6 +302,7 @@
       background: rgba(37, 211, 102, .15);
       color: var(--accent-2);
       pointer-events: none;
+      transition: background .16s ease, color .16s ease;
     }
     .prefix svg {
       width: 16px;
@@ -312,6 +322,11 @@
       letter-spacing: 0;
     }
     .input-wrap input { padding-left: 54px; }
+    .input-wrap input:focus,
+    .code-row input:focus {
+      border-color: rgba(37, 211, 102, .58);
+      box-shadow: var(--focus-ring);
+    }
     input::placeholder { color: rgba(201, 217, 221, .48); }
     input:focus {
       border-color: rgba(0, 168, 132, .9);
@@ -359,7 +374,10 @@
       color: var(--warning);
       font-size: 13px;
       font-weight: 900;
+      transition: background .16s ease, color .16s ease;
     }
+    .timer.expiring { background: rgba(255, 177, 66, .22); color: #ffd99a; }
+    .timer.expired { background: rgba(255, 138, 138, .14); color: var(--danger); }
     .code-row {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
@@ -386,6 +404,7 @@
       margin-top: 20px;
     }
     .actions.right { justify-content: flex-end; }
+    .actions.resend-row { margin-top: 10px; }
     button {
       min-height: 46px;
       border: 1px solid transparent;
@@ -462,7 +481,7 @@
         border-bottom: 1px solid var(--border);
         padding: 24px;
       }
-      .hero-copy h2 { font-size: 30px; }
+      .hero-copy h2 { font-size: 28px; }
       .visual { display: none; }
       .card-wrap { padding: 24px; }
     }
@@ -605,7 +624,7 @@
                   <span>Entrar no chat</span>
                 </button>
               </div>
-              <div class="actions right" style="margin-top:10px">
+              <div class="actions right resend-row">
                 <button class="ghost" id="resend" type="button">Reenviar codigo</button>
               </div>
             </div>
@@ -686,9 +705,12 @@
       const remaining = Math.max(0, Math.ceil((state.expiresAt - Date.now()) / 1000));
       const min = String(Math.floor(remaining / 60)).padStart(2, '0');
       const sec = String(remaining % 60).padStart(2, '0');
-      $('timer').textContent = `${min}:${sec}`;
+      const timerEl = $('timer');
+      timerEl.classList.toggle('expiring', remaining > 0 && remaining <= 60);
+      timerEl.classList.toggle('expired', remaining <= 0);
+      timerEl.textContent = `${min}:${sec}`;
       if (remaining <= 0) {
-        $('timer').textContent = 'Expirado';
+        timerEl.textContent = 'Expirado';
         setStatus('Codigo expirado. Solicite um novo codigo para continuar.', 'error');
       }
 

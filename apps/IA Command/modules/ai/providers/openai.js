@@ -3,10 +3,10 @@ const https = require('https');
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const OPENAI_MODEL   = 'gpt-4o-mini';
 
-async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null) {
+async function classificarIntencao(mensagem, apiKey, intencoes, sinonimos = [], contextoAnterior = null, modelo = null) {
   const prompt = require('../prompts/intent-classifier').buildPrompt(mensagem, intencoes, sinonimos, contextoAnterior);
   const body = JSON.stringify({
-    model: OPENAI_MODEL,
+    model: modelo || OPENAI_MODEL,
     messages: [{ role: 'user', content: prompt }],
     temperature: 0,
     max_tokens: 512,

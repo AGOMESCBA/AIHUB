@@ -8,11 +8,10 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 
-// 30 minutos — suficiente para uma sessao de teste manual com varias perguntas
-// seguidas. Em producao (fluxo real via TWebEngine), o token e consumido na
-// mesma fracao de segundo em que e gerado, entao esse TTL maior nao aumenta o
-// risco pratico: so evita expiracao no meio de testes longos.
-const TTL_MS = 30 * 60 * 1000;
+// Validade por inatividade. O chat pode ficar aberto dentro do Protheus por uma
+// manha inteira; por isso a expiracao e renovada a cada chamada valida, evitando
+// derrubar a sessao no meio de consultas longas ou alternancia entre conversas.
+const TTL_MS = Number(process.env.IAC_PROTHEUS_CHAT_TTL_MS || 8 * 60 * 60 * 1000);
 
 // Mesma normalizacao usada pelo canal WhatsApp real (_normalizarNumeroWa em
 // modules/whatsapp/service.js): so digitos. Aplicada aqui, na entrada do celular
@@ -99,8 +98,10 @@ function validar(token) {
   if (!row) return null;
   if (new Date(row.expira_em).getTime() < Date.now()) return null;
 
-  getDB().prepare(`UPDATE protheus_chat_tokens SET usado_em = ? WHERE token = ?`)
-    .run(new Date().toISOString(), token);
+  const usadoEm = new Date();
+  const novoExpiraEm = new Date(usadoEm.getTime() + TTL_MS);
+  getDB().prepare(`UPDATE protheus_chat_tokens SET usado_em = ?, expira_em = ? WHERE token = ?`)
+    .run(usadoEm.toISOString(), novoExpiraEm.toISOString(), token);
 
   let empresasPermitidas = [];
   try {

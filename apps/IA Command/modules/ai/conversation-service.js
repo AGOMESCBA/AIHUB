@@ -7,7 +7,7 @@ const PROVIDER_CONFIGS = {
   groq: {
     hostname: 'api.groq.com',
     path: '/openai/v1/chat/completions',
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-20b',
     tipo: 'openai_compat',
   },
   deepseek: {
@@ -204,9 +204,7 @@ async function responder(mensagem, empresaId) {
     if (!keys[provedor] || !PROVIDER_CONFIGS[provedor]) continue;
     try {
       const pcfg = PROVIDER_CONFIGS[provedor];
-      const modeloConfigurado = provedor === 'claude' ? cfg.claude_modelo
-        : provedor === 'gemini' ? cfg.gemini_modelo
-        : null;
+      const modeloConfigurado = cfg[`${provedor}_modelo`] || null;
       const pcfgEfetivo = modeloConfigurado ? { ...pcfg, model: modeloConfigurado } : pcfg;
       const resposta = pcfgEfetivo.tipo === 'gemini'
         ? await _requestGemini(pcfgEfetivo, keys[provedor], prompt)
@@ -468,11 +466,13 @@ async function rotear(mensagem, empresaId, historico = [], contextoTecnico = nul
     if (!keys[provedor] || !PROVIDER_CONFIGS[provedor]) continue;
     try {
       const pcfg = PROVIDER_CONFIGS[provedor];
-      const raw = pcfg.tipo === 'gemini'
-        ? await _requestGeminiChat(pcfg, keys[provedor], systemPrompt, messages)
-        : pcfg.tipo === 'anthropic'
-          ? await _requestAnthropicChat(pcfg, keys[provedor], systemPrompt, messages)
-          : await _requestOpenAICompatChat(pcfg, keys[provedor], systemPrompt, messages);
+      const modeloConfigurado = cfg[`${provedor}_modelo`] || null;
+      const pcfgEfetivo = modeloConfigurado ? { ...pcfg, model: modeloConfigurado } : pcfg;
+      const raw = pcfgEfetivo.tipo === 'gemini'
+        ? await _requestGeminiChat(pcfgEfetivo, keys[provedor], systemPrompt, messages)
+        : pcfgEfetivo.tipo === 'anthropic'
+          ? await _requestAnthropicChat(pcfgEfetivo, keys[provedor], systemPrompt, messages)
+          : await _requestOpenAICompatChat(pcfgEfetivo, keys[provedor], systemPrompt, messages);
 
       const texto = String(raw || '').trim();
 

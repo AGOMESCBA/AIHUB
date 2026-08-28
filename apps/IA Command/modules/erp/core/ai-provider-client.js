@@ -7,7 +7,7 @@ const PROVIDER_CONFIGS = {
   groq: {
     hostname: 'api.groq.com',
     path: '/openai/v1/chat/completions',
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-20b',
     tipo: 'openai_compat',
   },
   deepseek: {

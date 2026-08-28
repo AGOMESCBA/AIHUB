@@ -160,6 +160,7 @@ Avalie a METRICA e a granularidade da pergunta para determinar a estrutura do FR
 - Excecao ao padrao de receita: se o usuario pedir explicitamente "todas as saidas", "movimentacao total", "venda + remessa + transferencia", "incluindo remessas e transferencias" ou equivalente, nao aplique a exclusao de CFOP.
 - Agrupamentos por cliente, vendedor ou natureza: faca JOIN adicional com SA1 (via Joins padrao SF2->SA1), SA3 ou SED conforme o agrupamento pedido.
 - Exemplo completo de "faturamento do mes": SELECT COALESCE(SUM(SD2.D2_TOTAL), 0) AS faturamento FROM SD2... JOIN SF2... WHERE SF2.F2_TIPO = 'N' AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND [demais filtros D_E_L_E_T_/periodo].
+- Quando o usuario pedir a DESCRICAO do CFOP (ex: "trazendo a descricao do CFOP", "com o nome do CFOP"): o Protheus nao guarda a descricao textual do CFOP diretamente em SD2; ela vem da tabela de TES (SF4), via F4_TEXTO. Adicione JOIN SF4<sufixo> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' e inclua SF4.F4_TEXTO AS descricao_cfop no SELECT (e no GROUP BY, se houver agregacao). Isso nao substitui SD2.D2_CF no SELECT/GROUP BY — mostre ambos.
 `;
 }
 

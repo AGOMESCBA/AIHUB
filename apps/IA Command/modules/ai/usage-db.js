@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { getDB } = require('../database');
 
 const DEFAULT_PRICES = [
-  { provider: 'groq', model: 'llama-3.3-70b-versatile', input: 0.59, output: 0.79 },
+  { provider: 'groq', model: 'openai/gpt-oss-20b', input: 0.075, output: 0.30 },
   { provider: 'openai', model: 'gpt-4o-mini', input: 0.15, output: 0.60 },
   { provider: 'gemini', model: 'gemini-3.5-flash', input: 1.50, output: 9.00 },
   { provider: 'deepseek', model: 'deepseek-chat', input: 0.27, output: 1.10 },

@@ -294,16 +294,34 @@ function validarGrupoProduto(sql = '', mensagem = '') {
   if (!pedidoGrupoProduto) return null;
   const texto = String(sql || '');
   const temSBM = /\bJOIN\s+\w+\s+SBM\b/i.test(texto);
-  if (temSBM) return null;
-  return [
-    'A pergunta pede agrupamento por grupo de produto, mas o SQL nao contem JOIN SBM.',
-    'OBRIGATORIO montar a cadeia completa: SD2 -> SB1 -> SBM.',
-    'Template de JOIN obrigatorio:',
-    "  JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '",
-    "  JOIN SBM<sufixo> SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '",
-    'SELECT obrigatorio: SBM.BM_DESC AS grupo_produto',
-    'GROUP BY obrigatorio: SBM.BM_GRUPO, SBM.BM_DESC',
-  ].join(' ');
+  if (!temSBM) {
+    return [
+      'A pergunta pede agrupamento por grupo de produto, mas o SQL nao contem JOIN SBM.',
+      'OBRIGATORIO montar a cadeia completa: SD2 -> SB1 -> SBM.',
+      'Template de JOIN obrigatorio:',
+      "  JOIN SB1<sufixo> SB1 ON SD2.D2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '",
+      "  JOIN SBM<sufixo> SBM ON SB1.B1_GRUPO = SBM.BM_GRUPO AND SBM.D_E_L_E_T_ = ' '",
+      'SELECT obrigatorio: SBM.BM_DESC AS grupo_produto',
+      'GROUP BY obrigatorio: SBM.BM_GRUPO, SBM.BM_DESC',
+    ].join(' ');
+  }
+  // Bug real confirmado em teste (2026-08-28): a IA faz o JOIN SBM corretamente, mas ainda
+  // agrupa por produto individual (SB1.B1_COD/B1_DESC) junto com o grupo — granularidade mais
+  // fina que o pedido, ja que a pergunta so pediu "grupo de produto" (nao "por produto" junto).
+  // "grupo de produto" e "produto" sao dimensoes DIFERENTES — grupo agrega varios produtos.
+  const pedidoTambemProdutoIndividual = /\bpor\s+produto\b|\bdetalhando\s+por\s+produto\b|\bdetalhado\s+por\s+produto\b/i.test(String(mensagem || ''));
+  if (pedidoTambemProdutoIndividual) return null;
+  const groupByMatch = texto.match(/\bGROUP\s+BY\b([\s\S]*?)(?:\bORDER\s+BY\b|\bHAVING\b|$)/i);
+  const groupByTexto = groupByMatch ? groupByMatch[1] : '';
+  const agrupaPorProdutoIndividual = /\bSB1\s*\.\s*B1_(?:COD|DESC)\b/i.test(groupByTexto);
+  if (agrupaPorProdutoIndividual) {
+    return [
+      'A pergunta pede agrupamento por GRUPO de produto (nao por produto individual), mas o GROUP BY inclui SB1.B1_COD/B1_DESC.',
+      '"Grupo de produto" e "produto" sao dimensoes DIFERENTES — grupo agrega varios produtos, produto e o item individual.',
+      'Remova SB1.B1_COD e SB1.B1_DESC do SELECT e do GROUP BY. Mantenha apenas SBM.BM_GRUPO, SBM.BM_DESC (e os demais agrupamentos pedidos, como dia/mes).',
+    ].join(' ');
+  }
+  return null;
 }
 
 function validarFiltroProdutoAusente(sql = '', mensagem = '') {

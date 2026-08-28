@@ -263,6 +263,7 @@ function buildPrompt(mensagem, intencoes = [], sinonimos = [], contextoAnterior 
     '',
     '   Dimensões reconhecidas:',
     '   - "por grupo de produto", "por grupo de produtos", "por grupo", "por categoria de produto", "detalhado por grupo de produto" → group_by=["grupo_produto"], agrupar_por="grupo_produto"',
+    '   - ERRO COMUM A EVITAR: "por grupo de produto" NUNCA vira group_by=["produto"] — "grupo de produto" e "produto" sao dimensoes DIFERENTES (grupo/categoria agrega varios produtos; produto e o item individual). Se o texto contem a palavra "grupo" antes de "produto", use SEMPRE "grupo_produto", nunca "produto".',
     '   - "por produto", "por negócio", "detalhado por produto", "detalhando por produto" → group_by=["produto"], agrupar_por="produto"',
     '   - "por cliente", "ranking de clientes", "quem mais comprou" → group_by=["cliente"], agrupar_por="cliente"',
     '   - "por vendedor", "breakdown por vendedor", "quem mais vendeu" → group_by=["vendedor"], agrupar_por="vendedor"',
