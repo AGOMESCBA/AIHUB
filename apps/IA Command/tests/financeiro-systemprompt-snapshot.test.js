@@ -55,8 +55,7 @@ const SECOES_ESPERADAS = [
   '## Regras tecnicas obrigatorias — SE8',
   '## Fluxo de caixa projetado',
   '## Fluxo de caixa realizado',
-  '## Antecipacoes PA/RA',
-  '## Titulos especiais — NDF, NCC',
+  '## Antecipacoes/creditos — PA, NDF (pagar) e RA, NCC (receber)',
   '## Media por periodo (agrupamento temporal)',
 ];
 

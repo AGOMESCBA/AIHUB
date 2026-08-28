@@ -22,9 +22,11 @@ const systemPrompt = promptBuilder.buildSystemPrompt(financeiroSpec);
 assert(systemPrompt.includes('Voce e o IA-OWNER do modulo financeiro'), 'prompt deve declarar IA-OWNER financeiro');
 assert(systemPrompt.includes('Saldo a pagar/em aberto: SE2.E2_SALDO'), 'prompt deve orientar saldo a pagar');
 assert(systemPrompt.includes('Saldo a receber/em aberto: SE1.E1_SALDO'), 'prompt deve orientar saldo a receber');
-assert(systemPrompt.includes('## Antecipacoes PA/RA'), 'prompt deve conter regra de PA/RA');
-assert(systemPrompt.includes('So considere/apresente PA ou RA quando o usuario pedir explicitamente'), 'PA/RA devem ser opt-in');
-assert(systemPrompt.includes('somente quando a pergunta estiver por fornecedor ou por cliente'), 'PA/RA devem exigir entidade');
+assert(systemPrompt.includes('## Antecipacoes/creditos — PA, NDF (pagar) e RA, NCC (receber)'), 'prompt deve conter regra de PA/NDF/RA/NCC');
+assert(systemPrompt.includes('COMPORTAMENTO PADRAO (pergunta NAO menciona PA/NDF/RA/NCC): exclua sempre'), 'PA/NDF/RA/NCC devem ser excluidos por padrao');
+assert(systemPrompt.includes('Apresente PA/NDF/RA/NCC isolados somente quando a pergunta estiver por fornecedor/cliente especifico'), 'PA/NDF/RA/NCC isolados devem exigir entidade');
+assert(systemPrompt.includes('debito_liquido = debito_bruto - credito_pa_ndf'), 'prompt deve conter formula do liquido em contas a pagar');
+assert(systemPrompt.includes('credito_liquido = credito_bruto - credito_ra_ncc'), 'prompt deve conter formula do liquido em contas a receber');
 assert(systemPrompt.includes('Saldo bancario puro usa SOMENTE SE8 e SA6'), 'saldo bancario deve ficar separado');
 assert(systemPrompt.includes('Fluxo de caixa projetado'), 'prompt deve preservar fluxo projetado');
 

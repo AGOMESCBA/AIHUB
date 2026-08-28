@@ -435,15 +435,19 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Essa e uma regra fiscal nacional de interpretacao de CFOP, nao uma regra especifica do ERP.',
       "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%').",
       "- Transferencias nao geram receita: exclua AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
-      '- So nao aplique essa exclusao se a pergunta pedir explicitamente remessas, transferencias, todas as saidas ou movimentacao total.',
+      "- Devolucoes de compra nao geram receita: exclua AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%').",
+      "- Devolucoes de compra com ST nao geram receita: exclua AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413').",
+      "- Ativo imobilizado/material de uso ou consumo nao e receita operacional: exclua AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') — inclui 5557/6557.",
+      "- Creditos/ressarcimentos de ICMS nao geram receita: exclua AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%').",
+      '- So nao aplique a exclusao correspondente se a pergunta pedir explicitamente remessas, transferencias, devolucao de compra, ativo/material de uso ou consumo, credito/ressarcimento, todas as saidas ou movimentacao total.',
       ...linhasEntidades,
       'Tarefa:',
       '- Gere novo SQL a partir da pergunta original.',
       '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
-      '- Adicione os dois filtros de exclusao de CFOP no bloco de receita que usa SD2.',
+      '- Adicione todos os filtros de exclusao de CFOP sem receita operacional no bloco de receita que usa SD2.',
       '',
       'Nao fazer:',
-      '- Nao retornar remessas ou transferencias dentro de faturamento/vendas/receita padrao.',
+      '- Nao retornar remessas, transferencias, devolucoes de compra, ativo/material de uso ou consumo, credito/ressarcimento ou devolucao de compra com ST dentro de faturamento/vendas/receita padrao.',
       '- Nao remover filtros de periodo, seguranca ou D_E_L_E_T_ ja corretos.',
     ];
   } else if (/D_E_L_E_T_|deletad/i.test(mensagem)) {
@@ -679,7 +683,7 @@ function _blocoRetryGenericoIaOwner(linhasEntidades) {
   ];
 }
 
-const REGEX_ERRO_CFOP_RECEITA = /fiscal brasileira de CFOP|Faturamento\/vendas\/receita representam somente operacoes que geram receita|REGRA (?:NACIONAL|FISCAL BRASILEIRA) DE CFOP PARA RECEITA|Exclua remessas e transferencias por padrao/i;
+const REGEX_ERRO_CFOP_RECEITA = /fiscal brasileira de CFOP|Faturamento\/vendas\/receita representam somente operacoes que geram receita|REGRA (?:NACIONAL|FISCAL BRASILEIRA) DE CFOP PARA RECEITA|Exclua (?:remessas e transferencias|saidas sem receita operacional) por padrao/i;
 
 // Reforco final para o guard de CFOP (regra critica que NUNCA pode falhar): o SQL com
 // erro e o ultimo bloco de conteudo tecnico que a IA le antes de gerar a nova resposta
@@ -692,8 +696,8 @@ function _reforcoFinalRetryCfop(mensagemErro) {
   return [
     '',
     'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
-    "O SQL acima esta ERRADO porque nao exclui remessas/transferencias. Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
-    "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')",
+    "O SQL acima esta ERRADO porque nao exclui todos os CFOPs sem receita operacional. Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
+    "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')",
     'Nao repita o SQL acima sem esse filtro.',
   ].join('\n');
 }
@@ -4696,7 +4700,7 @@ async function executar(spec, intent, empresaId) {
         // essa regra especifica, nao um erro generico de SQL — evita interpretar a falha
         // como bug tecnico e insistir na mesma pergunta sem entender a causa.
         const respostaCfop = REGEX_ERRO_CFOP_RECEITA.test(e.message || '')
-          ? 'Nao consegui montar essa consulta respeitando a regra fiscal de CFOP (exclusao de remessas e transferencias do faturamento). Tente reformular a pergunta ou peca ajuda a um administrador.'
+          ? 'Nao consegui montar essa consulta respeitando a regra fiscal de CFOP (exclusao de saidas sem receita operacional do faturamento). Tente reformular a pergunta ou peca ajuda a um administrador.'
           : null;
         return { tipo: 'erro', subtipo, resposta_direta: respostaCfop || mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'), sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
       }

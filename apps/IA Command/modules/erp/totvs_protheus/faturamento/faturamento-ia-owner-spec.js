@@ -203,6 +203,8 @@ function validarFiltroTipoSF2(sql = '') {
 }
 
 const CFOPS_TRANSFERENCIA_SEM_RECEITA = ['5151', '6151', '5152', '6152', '5155', '6155', '5156', '6156'];
+const CFOPS_DEVOLUCAO_COMPRA_ST_SEM_RECEITA = ['5410', '6410', '5411', '6411', '5412', '6412', '5413', '6413'];
+const FILTRO_CFOP_RECEITA_PADRAO = "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')";
 
 function _normalizarTextoFiscal(texto = '') {
   return String(texto || '')
@@ -220,7 +222,7 @@ function _mensagemPedeReceitaPadrao(mensagem = '') {
 
   // Estes termos indicam modo fiscal explicito ou saidas totais; nesses casos
   // a IA deve decidir o filtro/estrutura conforme a pergunta, nao o validador.
-  const pedeModoFiscalExplicito = /\b(remessa|remessas|transferencia|transferencias|carregad[oa]s?|carregamento|carregamentos|carga|entrega\s+futura|nota\s+mae|todas?\s+as?\s+saidas?|movimentacao\s+total|incluindo\s+remessas?|incluindo\s+transferencias?)\b/.test(texto)
+  const pedeModoFiscalExplicito = /\b(remessa|remessas|transferencia|transferencias|carregad[oa]s?|carregamento|carregamentos|carga|entrega\s+futura|nota\s+mae|todas?\s+as?\s+saidas?|movimentacao\s+total|incluindo\s+remessas?|incluindo\s+transferencias?|devolucao\s+de\s+compra|ativo\s+imobilizado|material\s+de\s+uso|uso\s+e\s+consumo|uso\/consumo|credito\s+de\s+icms|ressarcimento\s+de\s+icms|saidas?\s+patrimoniais?)\b/.test(texto)
     || /(?:venda|faturamento|receita)[\s+,&/]+(?:remessa|transferencia)/.test(texto)
     || /(?:remessa|transferencia)[\s+,&/]+(?:venda|faturamento|receita)/.test(texto);
   return !pedeModoFiscalExplicito;
@@ -255,15 +257,41 @@ function _temExclusaoTransferencia(sql = '') {
   return false;
 }
 
+function _temExclusaoPrefixos(sql = '', prefixoA, prefixoB) {
+  const texto = String(sql || '');
+  const notLikeA = new RegExp(`\\bSD2\\s*\\.\\s*D2_CF\\s+NOT\\s+LIKE\\s*'${prefixoA}%'`, 'i').test(texto);
+  const notLikeB = new RegExp(`\\bSD2\\s*\\.\\s*D2_CF\\s+NOT\\s+LIKE\\s*'${prefixoB}%'`, 'i').test(texto);
+  const notGrupoLike = new RegExp(`\\bNOT\\s*\\([\\s\\S]{0,160}\\bSD2\\s*\\.\\s*D2_CF\\s+LIKE\\s*'${prefixoA}%'[\\s\\S]{0,80}\\bOR\\b[\\s\\S]{0,80}\\bSD2\\s*\\.\\s*D2_CF\\s+LIKE\\s*'${prefixoB}%'[\\s\\S]{0,160}\\)`, 'i').test(texto);
+  return (notLikeA && notLikeB) || notGrupoLike;
+}
+
+function _temExclusaoLista(sql = '', cfops = []) {
+  const texto = String(sql || '');
+  const matches = [
+    ...texto.matchAll(/\bSD2\s*\.\s*D2_CF\s+NOT\s+IN\s*\(([^)]*)\)/gi),
+    ...texto.matchAll(/\bNOT\s*\(\s*SD2\s*\.\s*D2_CF\s+IN\s*\(([^)]*)\)\s*\)/gi),
+  ];
+  return matches.some(match => cfops.every(cfop => new RegExp(`'${cfop}'`).test(match[1])));
+}
+
+function _temExclusaoSemReceitaOperacional(sql = '') {
+  return _temExclusaoRemessa(sql)
+    && _temExclusaoTransferencia(sql)
+    && _temExclusaoPrefixos(sql, '52', '62')
+    && _temExclusaoLista(sql, CFOPS_DEVOLUCAO_COMPRA_ST_SEM_RECEITA)
+    && _temExclusaoPrefixos(sql, '55', '65')
+    && _temExclusaoPrefixos(sql, '56', '66');
+}
+
 function validarExclusaoCfopReceita(sql = '', mensagem = '') {
   if (!_mensagemPedeReceitaPadrao(mensagem)) return null;
   if (!_sqlUsaSD2Receita(sql)) return null;
-  if (_temExclusaoRemessa(sql) && _temExclusaoTransferencia(sql)) return null;
+  if (_temExclusaoSemReceitaOperacional(sql)) return null;
   return [
     'Regra fiscal brasileira de CFOP: faturamento/vendas/receita representam somente operacoes que geram receita.',
-    'CFOP de remessa ou transferencia nao representa receita no entendimento fiscal nacional, independentemente do ERP.',
-    "Exclua remessas e transferencias por padrao usando: AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
-    'So remova essa exclusao quando o usuario pedir explicitamente remessas, transferencias, todas as saidas ou movimentacao total.',
+    'CFOP de remessa, transferencia, devolucao de compra, ativo/material de uso ou consumo, credito/ressarcimento de ICMS e devolucao de compra com ST nao representa receita operacional de venda no entendimento fiscal nacional, independentemente do ERP.',
+    `Exclua saidas sem receita operacional por padrao usando: ${FILTRO_CFOP_RECEITA_PADRAO}.`,
+    'So remova a exclusao correspondente quando o usuario pedir explicitamente remessas, transferencias, devolucao de compra, ativo/material de uso ou consumo, credito/ressarcimento, todas as saidas ou movimentacao total.',
   ].join(' ');
 }
 
@@ -639,5 +667,7 @@ module.exports = {
     resolverEntidades,
     validarExclusaoCfopReceita,
     _mensagemPedeReceitaPadrao,
+    _temExclusaoSemReceitaOperacional,
+    FILTRO_CFOP_RECEITA_PADRAO,
   },
 };

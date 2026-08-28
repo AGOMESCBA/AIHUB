@@ -10,7 +10,7 @@ const promptBuilder = require(path.join(ROOT, 'modules/erp/ia-owner/prompt-build
 const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 const financeiroSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/financeiro/financeiro-ia-owner-spec'));
 
-assert(routerSrc.includes("financeiro: './totvs_protheus/financeiro/ai-sql-handler-v2'"), 'financeiro deve estar habilitado no roteador');
+assert(routerSrc.includes("financeiro: '../totvs_protheus/financeiro/ai-sql-handler-v2'"), 'financeiro deve estar habilitado no roteador');
 assert.strictEqual(financeiroSpec.nome, 'financeiro', 'spec financeiro deve identificar o modulo');
 assert.strictEqual(typeof financeiroSpec.resolverEntidades, 'function', 'spec financeiro deve resolver entidades');
 

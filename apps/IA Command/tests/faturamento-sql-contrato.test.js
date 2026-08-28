@@ -16,8 +16,13 @@ assert(systemPrompt.includes('Para cliente SEM LOJA ou todos os registros do mes
 assert(systemPrompt.includes('faturamento_liquido'), 'prompt deve orientar regras de devolucao/liquido quando solicitado');
 assert(systemPrompt.includes('data_atual') && systemPrompt.includes('CONTRATO OBRIGATORIO DE SQL'), 'prompt deve manter ancora cronologica e respeitar contrato autoritativo');
 assert(systemPrompt.includes('DIRETRIZ DE SELECAO DE TABELAS') && systemPrompt.includes('Consultas por QUANTIDADE ou filtros de Produto/Item'), 'prompt deve diferenciar consulta geral de item');
-assert(systemPrompt.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'prompt deve definir receita excluindo remessa/transferencia por padrao');
+assert(systemPrompt.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'prompt deve definir receita excluindo saidas sem receita operacional por padrao');
 assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'prompt deve excluir transferencia do faturamento/vendas por padrao');
+assert(systemPrompt.includes("AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%')"), 'prompt deve excluir devolucao de compra do faturamento/vendas por padrao');
+assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413')"), 'prompt deve excluir devolucao de compra ST do faturamento/vendas por padrao');
+assert(systemPrompt.includes("AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%')"), 'prompt deve excluir ativo/material de uso e consumo do faturamento/vendas por padrao');
+assert(systemPrompt.includes("AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')"), 'prompt deve excluir credito/ressarcimento de ICMS do faturamento/vendas por padrao');
+assert(systemPrompt.includes('prefixo 7 = operacao para exterior/exportacao'), 'prompt deve explicar CFOP 7xxx como saida/exportacao');
 assert(systemPrompt.includes("LIKE '59%' OR LIKE '69%'"), 'prompt deve permitir filtro invertido quando a pergunta pedir simples remessa especificamente');
 assert(systemPrompt.includes("IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'prompt deve permitir filtro de lista fixa quando a pergunta pedir transferencia especificamente');
 assert(systemPrompt.includes("Quantidade carregada: SUM(SD2.D2_QUANT), com JOIN adicional SD2 -> SF4 ON SD2.D2_TES = SF4.F4_CODIGO AND SF4.D_E_L_E_T_ = ' ' AND SF4.F4_ESTOQUE = 'S'"), 'prompt deve definir quantidade carregada usando JOIN SF4/F4_ESTOQUE=S em vez de filtro de CF');

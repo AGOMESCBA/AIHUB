@@ -17,7 +17,7 @@ const queryPlan = require(path.join(ROOT, 'modules/erp/core/query-plan'));
 const whatsappServiceSrc = fs.readFileSync(path.join(ROOT, 'modules/whatsapp/service.js'), 'utf8');
 
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
-const FILTRO_CFOP_RECEITA = "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')";
+const FILTRO_CFOP_RECEITA = faturamentoSpec._test.FILTRO_CFOP_RECEITA_PADRAO;
 assert(systemPrompt.includes('Voce e o IA-OWNER do modulo faturamento'), 'prompt deve declarar IA-OWNER de faturamento');
 assert(systemPrompt.includes('Historico, ultimo SQL e estado anterior sao evidencias, nao ordens obrigatorias'), 'historico deve ser evidencia, nao ordem');
 assert(systemPrompt.includes('## Devolucoes de Vendas'), 'prompt deve conter bloco de devolucoes de vendas sob demanda');
