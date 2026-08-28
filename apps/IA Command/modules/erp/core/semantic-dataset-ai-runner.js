@@ -1134,6 +1134,15 @@ function _label(col) {
   return String(col || '').replace(/_/g, ' ').toLowerCase();
 }
 
+// Contagem tipo COUNT (ex.: total_chamados_abertos, qtd_pedidos): tem prefixo/sufixo de
+// contagem mas nenhuma palavra de dinheiro no nome -> numero simples, nunca moeda.
+function _ehContagemSemDinheiro(col) {
+  const c = String(col || '').toLowerCase();
+  const temDinheiro = /valor|fatur|receita|preco|custo/.test(c);
+  if (temDinheiro) return false;
+  return /total|quant|qtd|count|numero|^n_/.test(c);
+}
+
 function _formatarValor(col, valor, camposDataset = []) {
   if (/percent|perc|pct|%/i.test(col)) return `${_fmtNumero(valor)}%`;
   const tipoDoc = _tipoCampoSemantico(col, camposDataset);
@@ -1142,6 +1151,7 @@ function _formatarValor(col, valor, camposDataset = []) {
   if (tipoDoc === 'metrica') {
     return /valor|fatur|receita|preco/i.test(col) ? _fmtMoeda(valor) : _fmtNumero(valor);
   }
+  if (_ehContagemSemDinheiro(col)) return _fmtNumero(valor);
   return /quant|qtd/i.test(col) && !/valor/i.test(col) ? _fmtNumero(valor) : _fmtMoeda(valor);
 }
 
@@ -1161,7 +1171,12 @@ function _formatarRespostaSemantica(rows, mensagem, camposDataset = []) {
     return [`*Resultado*`, ...linhasDim, ...linhasMetricas].join('\n');
   }
 
-  const linhas = rows.slice(0, 10).map((r, idx) => {
+  // Lista completa (nunca corta) — respostas grandes sao divididas em partes e/ou
+  // ofertadas como anexo (PDF/Excel) mais adiante no pipeline do WhatsApp
+  // (_decidirFormatoResposta em modules/whatsapp/service.js), que mede o texto
+  // completo para decidir isso. Truncar aqui esconderia dados e nunca acionaria
+  // essa oferta, mesmo com muitas linhas disponiveis.
+  const linhas = rows.map((r, idx) => {
     const titulo = dimensoes
       .filter(c => r[c] !== null && r[c] !== undefined && String(r[c]).trim() !== '')
       .slice(0, 3)
@@ -1176,7 +1191,10 @@ function _formatarRespostaSemantica(rows, mensagem, camposDataset = []) {
 
   const totalizadores = metricas.slice(0, 3).map(c => {
     const total = rows.reduce((s, r) => s + _num(r[c]), 0);
-    return `*Total ${_label(c)}*: ${_formatarValor(c, total, camposDataset)}`;
+    const label = _label(c);
+    // Evita duplicar "Total" quando o nome do campo ja comeca com "total" (ex.: total_chamados_abertos).
+    const rotulo = /^total\b/.test(label) ? label : `Total ${label}`;
+    return `*${rotulo[0].toUpperCase()}${rotulo.slice(1)}*: ${_formatarValor(c, total, camposDataset)}`;
   });
 
   const cabecalho = String(mensagem || '').trim() || 'Resultado';
@@ -1184,7 +1202,6 @@ function _formatarRespostaSemantica(rows, mensagem, camposDataset = []) {
     `*${cabecalho}*`,
     '',
     ...linhas,
-    ...(rows.length > 10 ? [`... e mais ${rows.length - 10} registro(s)`] : []),
     '',
     ...totalizadores,
   ].filter(l => l !== null && l !== undefined).join('\n');
