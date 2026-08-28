@@ -42,6 +42,12 @@ const TERMOS_AGRUPAMENTO_OU_METRICA = new Set([
   'baixado', 'baixados', 'baixada', 'baixadas',
 ]);
 
+function _pareceDimensaoEntidadeGenerica(termo) {
+  const normalizado = _normalizarToken(termo);
+  if (!normalizado) return true;
+  return /^(?:nome|nomes|codigo|codigos|descricao|descricoes|razao social)\s+(?:do|da|de|dos|das)\s+(?:cliente|clientes|fornecedor|fornecedores|produto|produtos|vendedor|vendedores|transportadora|transportadoras|natureza|naturezas|tes)$/.test(normalizado);
+}
+
 function _normalizarToken(valor) {
   return String(valor || '')
     .normalize('NFD')
@@ -62,6 +68,7 @@ function _pareceSomenteAgrupamentoOuMetrica(termo) {
 function _deveIgnorarTermo(termo) {
   const texto = String(termo || '').trim();
   if (!texto || texto.length < 2 || /^\d+$/.test(texto)) return true;
+  if (_pareceDimensaoEntidadeGenerica(texto)) return true;
   return _pareceSomenteAgrupamentoOuMetrica(texto);
 }
 
@@ -118,6 +125,7 @@ function buildExtractionSystemPrompt() {
     'Tipos permitidos: fornecedor, cliente, produto, grupo_produto, marca, centro_custo, vendedor, transportadora, natureza, tes, desconhecido.',
     'Nao inclua periodos, datas, meses, anos, filiais, metricas ou palavras genericas como total, compras, vendas.',
     'Condicoes operacionais do financeiro (contas pagas, contas recebidas, contas a pagar, contas a receber, carteira pagar, carteira receber, recebimentos, pagamentos) NAO sao entidades cadastrais — nunca as extraia.',
+    'Expressoes de exibicao/agrupamento como "por fornecedor", "por nome do fornecedor", "por cliente", "por produto", "titulo", "prefixo" e "tipo" sao dimensoes/colunas, nao entidades cadastrais a resolver.',
     'PA e RA sao tipos de titulo do Protheus (E2_TIPO/E1_TIPO), nao sao nomes de fornecedor ou cliente. Nunca extraia PA ou RA como entidade.',
     'Banco (ex: "banco DAF", "excluindo o banco Bradesco") e um codigo/nome do campo SE8.E8_BANCO — filtro tecnico, nao entidade cadastral. Nunca extraia nomes ou codigos de banco como entidade.',
     'Se o usuario indicar explicitamente o tipo, use esse tipo.',
@@ -172,4 +180,5 @@ module.exports = {
   formatarPerguntaAmbiguidade,
   _limparTermo,
   _pareceSomenteAgrupamentoOuMetrica,
+  _pareceDimensaoEntidadeGenerica,
 };

@@ -409,8 +409,15 @@ function buscarLogParaFavorito({ empresaId, celular, mensagem, perguntaTexto }) 
   `).get(empresaId, numero, perguntaTexto) || null;
 }
 
-function macroPeriodoAgendamento(perguntaTexto) {
-  const periodo = periodResolver.identificarPeriodoTexto(perguntaTexto);
+function periodoDeMacro(perguntaTexto, periodoHint = null) {
+  const periodoTexto = periodResolver.identificarPeriodoTexto(perguntaTexto);
+  if (periodoTexto && periodoTexto.tipo && periodoTexto.tipo !== 'nenhum') return periodoTexto;
+  const hint = periodoHint && typeof periodoHint === 'object' ? periodoHint : null;
+  return hint && hint.tipo && hint.tipo !== 'nenhum' ? hint : periodoTexto;
+}
+
+function macroPeriodoAgendamento(perguntaTexto, periodoHint = null) {
+  const periodo = periodoDeMacro(perguntaTexto, periodoHint);
   if (!periodo || !periodo.tipo || periodo.tipo === 'nenhum') return null;
 
   switch (periodo.tipo) {
@@ -476,8 +483,17 @@ function macrosDataComoTexto(sql) {
   return String(sql || '').replace(new RegExp(`(^|[^'])(${macroData.source})(?!')`, 'g'), "$1'$2'");
 }
 
-function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, referencia = new Date()) {
-  const macros = macroPeriodoAgendamento(perguntaTexto);
+function datasPeriodoHint(periodoHint) {
+  const p = periodoHint && typeof periodoHint === 'object' ? periodoHint : {};
+  const dataInicio = String(p.dataInicio || p.data_inicio || p.start || p.inicio || '').replace(/\D/g, '');
+  const dataFim = String(p.dataFim || p.data_fim || p.end || p.fim || '').replace(/\D/g, '');
+  if (/^\d{8}$/.test(dataInicio) && /^\d{8}$/.test(dataFim)) return { dataInicio, dataFim };
+  return null;
+}
+
+function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, referencia = new Date(), periodoHint = null) {
+  const periodo = periodoDeMacro(perguntaTexto, periodoHint);
+  const macros = macroPeriodoAgendamento(perguntaTexto, periodoHint);
   if (!macros) return macrosDataComoTexto(sqlFinal);
 
   const template = String(sqlTemplate || '');
@@ -488,7 +504,7 @@ function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, r
     if (!/\{\{\s*iac:/i.test(convertido)) return macrosDataComoTexto(convertido);
   }
 
-  const resolvido = periodResolver.resolverPeriodo(periodResolver.identificarPeriodoTexto(perguntaTexto), { hoje: referencia });
+  const resolvido = datasPeriodoHint(periodoHint) || periodResolver.resolverPeriodo(periodo, { hoje: referencia });
   let out = String(sqlFinal || '');
   if (macros.start !== macros.end && /\bBETWEEN\b/i.test(out)) {
     out = substituirBetweenDatasPorMacros(out, macros);
@@ -496,6 +512,21 @@ function sqlFavoritoComMacrosAgendamento(sqlFinal, sqlTemplate, perguntaTexto, r
   out = substituirLiteralData(out, resolvido?.dataInicio, macros.start);
   out = substituirLiteralData(out, resolvido?.dataFim, macros.end);
   return macrosDataComoTexto(out);
+}
+
+function periodoFavoritoHint(...fontesJson) {
+  for (const fonte of fontesJson) {
+    const obj = parseJsonSeguro(fonte);
+    const candidatos = [
+      obj?.periodo,
+      obj?.intent?.periodo,
+      obj?.contrato?.periodo,
+      obj?.contrato_orquestrador?.periodo,
+    ];
+    const periodo = candidatos.find(p => p && typeof p === 'object' && p.tipo);
+    if (periodo) return periodo;
+  }
+  return null;
 }
 
 function mapFavoritoRow(row, { incluirSql = false } = {}) {
@@ -567,7 +598,13 @@ function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = 
 
   const log = buscarLogParaFavorito({ empresaId, celular, mensagem, perguntaTexto });
   const sqlFinalOriginal = String(log?.sql_final_executado || log?.sql_gerado || '').trim();
-  const sqlFinal = sqlFavoritoComMacrosAgendamento(sqlFinalOriginal, log?.sql_template || null, perguntaTexto).trim();
+  const periodoHint = periodoFavoritoHint(
+    mensagem.intent_json,
+    log?.intent_json,
+    log?.intent_canonico_json,
+    log?.intent_canonico_estrutural_json,
+  );
+  const sqlFinal = sqlFavoritoComMacrosAgendamento(sqlFinalOriginal, log?.sql_template || null, perguntaTexto, new Date(), periodoHint).trim();
   if (!sqlFinal) {
     throw Object.assign(new Error('Esta resposta ainda nao possui SQL auditado para favoritar.'), { statusCode: 400 });
   }

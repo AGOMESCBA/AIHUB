@@ -216,7 +216,7 @@ function _normalizarTextoFiscal(texto = '') {
 function _mensagemPedeReceitaPadrao(mensagem = '') {
   const texto = _normalizarTextoFiscal(mensagem);
   if (!texto.trim()) return false;
-  const pedeReceita = /\b(faturamento|faturad[oa]s?|vendas?|vendid[oa]s?|receita)\b/.test(texto)
+  const pedeReceita = /\b(faturamento|faturamentos|fturamento|fturamentos|faturameto|faturametos|faturamnto|faturamntos|faturad[oa]s?|vendas?|vendid[oa]s?|receita)\b/.test(texto)
     || /\bquanto\s+vendemos\b/.test(texto);
   if (!pedeReceita) return false;
 

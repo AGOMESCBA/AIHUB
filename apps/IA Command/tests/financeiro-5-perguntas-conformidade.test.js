@@ -487,6 +487,12 @@ for (const caso of PERGUNTAS) {
       `Entidade válida com tipo="cliente" foi incorretamente rejeitada`);
   });
 
+  ok(id, `rejeita entidade genérica { tipo:"fornecedor", texto:"nome do fornecedor" }`, () => {
+    const resultado = _normEnt({ entidades_necessarias: [{ tipo: 'fornecedor', texto: 'nome do fornecedor' }] });
+    assert.strictEqual(resultado.length, 0,
+      '"nome do fornecedor" e dimensao/coluna, nao entidade cadastral para filtrar');
+  });
+
   // ── 5. entity-resolver: _deveIgnorarTermo / normalizarEntidadesIA ─────────
 
   console.log(`\n  → Testando entity-resolver (termos financeiros):`);
@@ -511,6 +517,12 @@ for (const caso of PERGUNTAS) {
     const raw = JSON.stringify({ entidades: [{ texto: 'Fornecedor ABC', tipo_sugerido: 'fornecedor', confianca: 0.9 }] });
     const resultado = entityRes.normalizarEntidadesIA(raw);
     assert.ok(resultado.length > 0, `Nome próprio "Fornecedor ABC" foi incorretamente filtrado`);
+  });
+
+  ok(id, `entity-resolver ignora dimensão genérica "nome do fornecedor"`, () => {
+    const raw = JSON.stringify({ entidades: [{ texto: 'nome do fornecedor', tipo_sugerido: 'fornecedor', confianca: 0.8 }] });
+    const resultado = entityRes.normalizarEntidadesIA(raw);
+    assert.strictEqual(resultado.length, 0, `"nome do fornecedor" e coluna/dimensão, não filtro cadastral`);
   });
 
   // ── 6. buildExtractionSystemPrompt: instruções de não-extração financeira ─
@@ -601,6 +613,25 @@ for (const tipo of tiposValidos) {
     assert.strictEqual(res.length, 1, `tipo="${tipo}" válido foi incorretamente descartado`);
   });
 }
+
+ok('EXTRA', 'consulta nova por nome do fornecedor descarta fornecedor herdado', () => {
+  const intent = {
+    _herdouFiltros: true,
+    filtros: { carteira: 'pagar', fornecedor: 'SOFTEXPERT' },
+    _entidadesResolvidas: [{ tipo: 'fornecedor', codigo: '007057', loja: '01', nome: 'SOFTEXPERT SOFTWARE SA' }],
+    _entidadesResolvidasPorEmpresa: {
+      5: [{ tipo: 'fornecedor', codigo: '007057', loja: '01', nome: 'SOFTEXPERT SOFTWARE SA' }],
+    },
+  };
+  const limpo = runner._test.limparFiltrosEntidadeHerdadosDaConsultaAtual(
+    finSpec,
+    intent,
+    'Contas a pagar do dia por nome do fornecedor, titulo, prefixo e tipo, valor do titulo e saldo do titulo',
+  );
+  assert.strictEqual(limpo.filtros.fornecedor, undefined);
+  assert.deepStrictEqual(limpo._entidadesResolvidas, []);
+  assert.deepStrictEqual(limpo._filtrosEntidadeHerdadosIgnorados, ['fornecedor']);
+});
 
 // ─── RELATÓRIO FINAL ─────────────────────────────────────────────────────────
 

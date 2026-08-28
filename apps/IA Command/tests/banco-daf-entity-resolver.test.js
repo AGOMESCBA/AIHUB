@@ -46,6 +46,13 @@ teste('"fornecedor ACME" ainda deve funcionar normalmente', () => {
   assert.strictEqual(r[0].texto, 'ACME');
 });
 
+teste('"por nome do fornecedor" e dimensao, nao entidade cadastral', () => {
+  const r = entityResolver.normalizarEntidadesIA({
+    entidades: [{ texto: 'nome do fornecedor', tipo_sugerido: 'fornecedor', confianca: 0.8 }],
+  });
+  assert.strictEqual(r.length, 0, `Esperado 0 termos, obteve ${JSON.stringify(r)}`);
+});
+
 teste('"cliente SESI AM" ainda deve funcionar normalmente', () => {
   const r = entityResolver.extrairExplicitos('contas a receber do SESI AM');
   assert.strictEqual(r.length, 1);

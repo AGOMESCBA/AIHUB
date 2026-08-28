@@ -153,6 +153,16 @@ assert.strictEqual(
   'validador direto deve rejeitar faturamento sem exclusao de CFOP sem receita',
 );
 assert.strictEqual(
+  faturamentoSpec._test.validarExclusaoCfopReceita(sqlFaturamentoSemFiltroCfop, 'Fturamento do mes por dia e grupo de produto') === null,
+  false,
+  'validador direto deve rejeitar faturamento digitado errado sem exclusao de CFOP sem receita',
+);
+assert.strictEqual(
+  runner._test.validarSqlIaOwnerBasico(sqlFaturamentoSemFiltroCfop, faturamentoSpec, sx2, 'Fturamento do mes por dia e grupo de produto').ok,
+  false,
+  'runner deve rejeitar faturamento digitado errado sem exclusao fiscal completa',
+);
+assert.strictEqual(
   faturamentoSpec._test.validarExclusaoCfopReceita(sqlFaturamentoSemFiltroCfop, 'todas as saidas do mes incluindo remessa e transferencia'),
   null,
   'validador direto deve aceitar todas as saidas sem exclusao fiscal',

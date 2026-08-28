@@ -1069,7 +1069,12 @@ function normalizarEntidadesNecessarias(obj = {}) {
     }))
     // Só tipos cadastrais são válidos — descarta condições operacionais como
     // "contas_pagas", "carteira", "contas_recebidas" que a IA pode declarar incorretamente.
-    .filter(e => e.tipo && e.texto && _TIPOS_ENTIDADE_CADASTRAL.has(e.tipo));
+    .filter(e => (
+      e.tipo
+      && e.texto
+      && _TIPOS_ENTIDADE_CADASTRAL.has(e.tipo)
+      && !(typeof entityResolver._pareceDimensaoEntidadeGenerica === 'function' && entityResolver._pareceDimensaoEntidadeGenerica(e.texto))
+    ));
 }
 
 function confirmacaoPodeEncerrarPlano(obj = {}) {
@@ -1157,6 +1162,15 @@ function mensagemMencionaValorEntidade(mensagem, valor) {
   return Boolean(texto && alvo && (` ${texto} `).includes(` ${alvo} `));
 }
 
+function mensagemMencionaEntidadeResolvida(mensagem, entidade = {}) {
+  return [
+    entidade.nome,
+    entidade.texto,
+    entidade.descricao,
+    entidade.codigo,
+  ].some(valor => mensagemMencionaValorEntidade(mensagem, valor));
+}
+
 function mensagemIniciaConsultaExplicitaDeModulo(mensagem) {
   const texto = normalizarTextoEntidade(mensagem);
   return /\b(faturamento|vendas|compras|comissao|financeiro|contas a pagar|contas a receber)\b/.test(texto);
@@ -1210,7 +1224,8 @@ function normalizarFiltroEmpresaComoEntidade(spec, intent = {}, mensagem = '') {
 }
 
 function limparFiltrosEntidadeHerdadosDaConsultaAtual(spec, intent = {}, mensagem = '') {
-  if (!intent._herdouFiltros || !mensagemIniciaConsultaExplicitaDeModulo(mensagem)) return intent;
+  const temEntidadesHerdadas = Array.isArray(intent._entidadesResolvidas) && intent._entidadesResolvidas.length > 0;
+  if ((!intent._herdouFiltros && !temEntidadesHerdadas) || !mensagemIniciaConsultaExplicitaDeModulo(mensagem)) return intent;
 
   const definicoes = spec.entityCatalog?.DEFINICOES || {};
   const explicitos = intent._filtroEntidadeExplicitaMensagem || {};
@@ -1222,6 +1237,13 @@ function limparFiltrosEntidadeHerdadosDaConsultaAtual(spec, intent = {}, mensage
     if (!valor || explicitos[campo] || mensagemMencionaValorEntidade(mensagem, valor)) continue;
     delete filtros[campo];
     tiposRemovidos.add(String(campo).toLowerCase());
+  }
+
+  for (const entidade of intent._entidadesResolvidas || []) {
+    const tipo = String(entidade?.tipo || '').toLowerCase();
+    if (!tipo || tipo.endsWith('_fixo_seguranca') || !definicoes[tipo] || explicitos[tipo]) continue;
+    if (mensagemMencionaEntidadeResolvida(mensagem, entidade)) continue;
+    tiposRemovidos.add(tipo);
   }
 
   if (!tiposRemovidos.size) return intent;
@@ -2567,6 +2589,56 @@ function validarPontoEVirgulaUnico(sql) {
   };
 }
 
+function validarJoinDepoisWhere(sql = '') {
+  const texto = String(sql || '').replace(/^SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '');
+  const eventos = [];
+  let nivel = 0;
+  let aspas = false;
+
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (c === "'" && texto[i - 1] !== '\\') {
+      aspas = !aspas;
+      continue;
+    }
+    if (aspas) continue;
+    if (c === '(') {
+      nivel++;
+      continue;
+    }
+    if (c === ')') {
+      if (nivel > 0) nivel--;
+      continue;
+    }
+    if (nivel !== 0) continue;
+
+    const match = /^(WHERE|JOIN|INNER\s+JOIN|LEFT\s+JOIN|RIGHT\s+JOIN|FULL\s+JOIN|CROSS\s+JOIN|GROUP\s+BY|HAVING|ORDER\s+BY|UNION)\b/i.exec(texto.slice(i));
+    if (!match) continue;
+    eventos.push({ tipo: match[1].replace(/\s+/g, ' ').toUpperCase(), pos: i });
+    i += match[0].length - 1;
+  }
+
+  let whereAtivo = false;
+  for (const evento of eventos) {
+    if (evento.tipo === 'WHERE') {
+      whereAtivo = true;
+      continue;
+    }
+    if (/^(GROUP BY|HAVING|ORDER BY|UNION)$/.test(evento.tipo)) {
+      whereAtivo = false;
+      continue;
+    }
+    if (whereAtivo && /\bJOIN$/.test(evento.tipo)) {
+      return {
+        ok: false,
+        erros: ['SQL invalido: encontrou JOIN depois do WHERE no mesmo SELECT/CTE. Todos os JOINs devem ficar no FROM, antes do WHERE. Mova o JOIN para antes do WHERE e deixe apenas filtros no WHERE.'],
+      };
+    }
+  }
+
+  return { ok: true, erros: [] };
+}
+
 function validarFiltroFiscalCarregada(sql, mensagem = '') {
   // Guardrail de DOMINIO especifico do faturamento: perguntas sobre "carregada"/"carga",
   // "faturada"/"faturado", "remessa" ou "transferencia" exigem um filtro SD2.D2_CF
@@ -2743,6 +2815,7 @@ function validarSqlIaOwnerBasico(sql, spec = {}, sx2 = {}, mensagem = '', opts =
   const erros = [];
   const permitirSelectTop = opts.permitirSelectTop === true;
   erros.push(...validarPontoEVirgulaUnico(texto).erros);
+  erros.push(...validarJoinDepoisWhere(texto).erros);
   erros.push(...validarFiltroFiscalCarregada(texto, mensagem).erros);
   erros.push(...validarDevolucaoConsistente(texto, mensagem).erros);
   erros.push(...validarComparativoCrossModuleNormalizado(texto, spec, mensagem).erros);
@@ -4941,6 +5014,7 @@ module.exports = {
     validarSqlIaOwnerBasico,
     permitirSelectTopPorIntent,
     validarPontoEVirgulaUnico,
+    validarJoinDepoisWhere,
     validarFiltroFiscalCarregada,
     validarPrecedenciaOrRemessaSemParenteses,
     validarDevolucaoConsistente,
