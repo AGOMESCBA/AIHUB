@@ -2491,9 +2491,9 @@
   }
 
   function idsEmpresasDisponiveis() {
-    return empresasDisponiveis
+    return [...new Set(empresasDisponiveis
       .map(emp => Number(emp?.empresaId || emp?.empresa_id || emp?.id || 0))
-      .filter(Boolean);
+      .filter(Boolean))];
   }
 
   function atualizarEmpresaAtualPorSelecao() {
@@ -2913,6 +2913,15 @@
       vazio.className = 'escopo-modal-empty';
       vazio.textContent = 'Nenhuma empresa disponivel.';
       escopoModalBody.appendChild(vazio);
+      return;
+    }
+
+    if (ids.length === 1) {
+      renderArvoreProtheus(escopoModalBody, termo, () => {
+        atualizarLabelEscopoSelect();
+        atualizarEstadoEscopoOptionTodas();
+      }, ids[0]);
+      atualizarEstadoEscopoOptionTodas();
       return;
     }
 
@@ -4234,6 +4243,7 @@
     if (!favoritoId) return;
     const fav = favoritosCache.find(f => f.id === favoritoId);
     const perguntaTexto = fav?.perguntaTexto || 'Pergunta favorita';
+    fecharFavoritos();
     salvarRascunhoAtual();
     sessaoAtualId = null;
     conversaNovaTokenAtual += 1;
@@ -4252,7 +4262,6 @@
         method: 'POST',
         body: JSON.stringify({ sessaoId: null }),
       });
-      fecharFavoritos();
       const sessaoRespostaId = data.sessaoId;
       const aindaNaConversaDoEnvio = sessaoAtualId === null && conversaNovaTokenAtual === conversaNovaTokenEnvio;
       novasConversasProcessando = Math.max(0, novasConversasProcessando - 1);

@@ -255,6 +255,10 @@ function carregarPermissoesWebPorCelular(celular, empresaId = null) {
     }
   }
 
+  const empresasFiltradas = filtrarEmpresasSemCodigoQuandoHaArvore(empresasPermitidas);
+  empresasPermitidas.splice(0, empresasPermitidas.length, ...empresasFiltradas);
+  if (!empresasPermitidas.length) return null;
+
   const filiaisPermitidas = [...filiaisPorEmpresa.entries()].map(([codigoProtheus, filiais]) => ({
     codigoProtheus,
     filiais: [...filiais],
@@ -268,6 +272,29 @@ function carregarPermissoesWebPorCelular(celular, empresaId = null) {
     empresasPermitidas,
     filiaisPermitidas,
   };
+}
+
+function filtrarEmpresasSemCodigoQuandoHaArvore(empresasPermitidas) {
+  const empresas = Array.isArray(empresasPermitidas) ? empresasPermitidas : [];
+  const ids = [...new Set(empresas.map(emp => Number(emp.empresaId || emp.empresa_id || emp.id || 0)).filter(Boolean))];
+  if (!ids.length) return [];
+  try {
+    const rows = getDB().prepare(`
+      SELECT DISTINCT empresa_id
+        FROM protheus_company_tree
+       WHERE empresa_id IN (${ids.map(() => '?').join(',')})
+         AND ativo = 1
+         AND tipo_no IN ('empresa', 'filial')
+    `).all(...ids);
+    const empresasComArvore = new Set((rows || []).map(row => Number(row.empresa_id)));
+    return empresas.filter((emp) => {
+      const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
+      const codigo = String(emp.codigoProtheus || emp.codigo_protheus || '').trim();
+      return codigo || !empresasComArvore.has(id);
+    });
+  } catch (_) {
+    return empresas;
+  }
 }
 
 function validarLoginChallenge(challengeId, celular, codigo, maxTentativas = WEB_LOGIN_MAX_TENTATIVAS) {
@@ -376,7 +403,8 @@ function normalizarListaIds(valor) {
 }
 
 function empresasPermitidasDaSessao(sessao) {
-  const empresas = tokenService.normalizarEmpresasPermitidas(sessao?.empresasPermitidas, sessao?.empresaId)
+  let empresas = tokenService.normalizarEmpresasPermitidas(sessao?.empresasPermitidas, sessao?.empresaId)
+    .filter(emp => filtrarEmpresasSemCodigoQuandoHaArvore([emp]).length > 0)
     .map(emp => ({
       ...emp,
       empresa_id: Number(emp.empresaId),
@@ -421,7 +449,13 @@ function empresaConfirmadaInexistente(sessao, empresaId) {
 function resolverEmpresasSelecionadas(req, res) {
   const sessao = req.protheusChat || {};
   const permitidas = empresasPermitidasDaSessao(sessao);
-  const permitidasPorId = new Map(permitidas.map(emp => [Number(emp.empresa_id), emp]));
+  const permitidasPorId = new Map();
+  for (const emp of permitidas) {
+    const id = Number(emp.empresa_id);
+    if (!id) continue;
+    if (!permitidasPorId.has(id)) permitidasPorId.set(id, []);
+    permitidasPorId.get(id).push(emp);
+  }
   const idsInformados = [
     ...normalizarListaIds(req.body?.empresaIds || req.body?.empresasIds || req.body?.empresasSelecionadas),
     ...normalizarListaIds(req.query?.empresaIds || req.query?.empresasIds || req.query?.empresasSelecionadas),
@@ -436,13 +470,13 @@ function resolverEmpresasSelecionadas(req, res) {
     return null;
   }
 
-  const fantasmas = ids.filter(id => permitidasPorId.get(id)?.existeNoCadastro === false);
+  const fantasmas = ids.filter(id => (permitidasPorId.get(id) || []).some(emp => emp.existeNoCadastro === false));
   if (fantasmas.length) {
     res.status(409).json({ error: 'Empresa nao esta configurada no IA Command.' });
     return null;
   }
 
-  return ids.map(id => permitidasPorId.get(id)).filter(Boolean);
+  return ids.flatMap(id => permitidasPorId.get(id) || []);
 }
 
 function normalizarNumero(valor) {
@@ -1001,8 +1035,9 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       });
       res.json({ token, expiraEm });
     } catch (err) {
-      perfLog('POST /token', inicio, { status: 500, erro: err.message });
-      res.status(500).json({ error: err.message });
+      const status = Number(err.statusCode || err.status || 500);
+      perfLog('POST /token', inicio, { status, erro: err.message });
+      res.status(status).json({ error: err.message });
     }
   });
 
@@ -1231,8 +1266,9 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         chatUrl: `/api/ia-command/protheus/chat?token=${encodeURIComponent(token)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}&origem=web`,
       });
     } catch (err) {
-      perfLog('POST /web-login/verify', inicio, { status: 500, erro: err.message });
-      res.status(500).json({ error: err.message });
+      const status = Number(err.statusCode || err.status || 500);
+      perfLog('POST /web-login/verify', inicio, { status, erro: err.message });
+      res.status(status).json({ error: err.message });
     }
   });
 
@@ -1290,11 +1326,13 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         // do IAHub) — varias empresas-cliente IAHub podem compartilhar a
         // mesma conexao LOBO_GUARA. Restringe ao codigo Protheus vinculado a
         // ESTA empresa-cliente (emp.codigoProtheus, vindo do .prw no /token);
-        // sem esse vinculo (instalacao antiga ou codigo vazio), mantem o
-        // comportamento anterior (mostra a conexao inteira).
-        if (emp.codigoProtheus) {
-          arvoreEmpresa = arvoreEmpresa.filter(e => e.empresaProtheusCodigo === emp.codigoProtheus);
+        // Sem esse vinculo, nao abre a conexao inteira: isso transformaria uma
+        // permissao vazia/incompleta em acesso a todas as empresas da arvore.
+        if (!emp.codigoProtheus) {
+          empresasSemConfiguracao.push(emp.empresa_id);
+          continue;
         }
+        arvoreEmpresa = arvoreEmpresa.filter(e => e.empresaProtheusCodigo === emp.codigoProtheus);
         // Filtra pelo acesso real do usuario no ERP (FWUsrEmp/LoadFils,
         // capturado no .prw na abertura do chat) — a arvore cadastrada
         // (protheus_company_tree) representa o universo, nao o que este

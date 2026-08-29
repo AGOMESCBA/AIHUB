@@ -371,7 +371,10 @@
     const marcadosFilial = [...document.querySelectorAll('[data-chk-filial]:checked')];
     if(!state.arvoreDisponivel || !state.arvoreDisponivel.loboGuara){
       // Empresa sem arvore Protheus (modelo tradicional) -> acesso e a empresa IAHub inteira
-      return { empresasPermitidas: [], filiaisPermitidas: [] };
+      return {
+        empresasPermitidas: empresaAtual ? [{ empresaId: empresaAtual.id, codigoProtheus: '', nomeProtheus: empresaAtual.nome || '' }] : [],
+        filiaisPermitidas: []
+      };
     }
     const empresasPermitidas = marcadosEmpresa.map(codigo => {
       const emp = state.arvoreDisponivel.empresas.find(e => e.codigoProtheus === codigo);

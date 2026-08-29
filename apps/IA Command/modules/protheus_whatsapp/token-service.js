@@ -26,23 +26,31 @@ function normalizarCelular(valor) {
 function normalizarEmpresasPermitidas(empresasPermitidas, empresaIdAtual) {
   const vistas = new Set();
   const lista = [];
+  const temListaExplicita = Array.isArray(empresasPermitidas);
 
   const add = (item = {}) => {
     const id = Number(item.empresaId || item.empresa_id || item.id || 0);
-    if (!id || vistas.has(id)) return;
-    vistas.add(id);
+    const codigoProtheus = String(item.codigoProtheus || item.codigo_protheus || '').trim();
+    const chave = `${id}:${codigoProtheus}`;
+    if (!id || vistas.has(chave)) return;
+    vistas.add(chave);
     lista.push({
       empresaId: id,
-      codigoProtheus: String(item.codigoProtheus || item.codigo_protheus || '').trim(),
+      codigoProtheus,
       nomeProtheus: String(item.nomeProtheus || item.nome_protheus || item.nome || '').trim(),
     });
   };
 
-  if (Array.isArray(empresasPermitidas)) {
+  if (temListaExplicita) {
     for (const item of empresasPermitidas) add(item);
   }
 
-  add({ empresaId: empresaIdAtual, codigoProtheus: '', nomeProtheus: '' });
+  // Compatibilidade com tokens antigos: quando nao havia JSON de permissoes,
+  // a empresa atual era o unico escopo conhecido. Lista vazia explicita,
+  // porem, significa usuario sem acesso e nao deve reabrir a empresa atual.
+  if (!temListaExplicita) {
+    add({ empresaId: empresaIdAtual, codigoProtheus: '', nomeProtheus: '' });
+  }
   return lista;
 }
 
@@ -67,7 +75,7 @@ function normalizarFiliaisPermitidas(filiaisPermitidas) {
   return [...porCodigo.entries()].map(([codigoProtheus, filiais]) => ({ codigoProtheus, filiais }));
 }
 
-function emitir({ empresaId, celular, filial = null, empresasPermitidas = [], filiaisPermitidas = [] }) {
+function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefined, filiaisPermitidas = [] }) {
   if (!empresaId) throw new Error('empresaId obrigatorio.');
   const celularNormalizado = normalizarCelular(celular);
   if (!celularNormalizado) throw new Error('celular obrigatorio.');
@@ -77,6 +85,11 @@ function emitir({ empresaId, celular, filial = null, empresasPermitidas = [], fi
   const expiraEm = new Date(agora.getTime() + TTL_MS);
   const empresas = normalizarEmpresasPermitidas(empresasPermitidas, empresaId);
   const filiais = normalizarFiliaisPermitidas(filiaisPermitidas);
+  if (!empresas.length) {
+    const err = new Error('Usuario sem empresas permitidas.');
+    err.statusCode = 403;
+    throw err;
+  }
 
   getDB().prepare(`
     INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json)
@@ -103,9 +116,11 @@ function validar(token) {
   getDB().prepare(`UPDATE protheus_chat_tokens SET usado_em = ?, expira_em = ? WHERE token = ?`)
     .run(usadoEm.toISOString(), novoExpiraEm.toISOString(), token);
 
-  let empresasPermitidas = [];
+  let empresasPermitidas;
   try {
-    empresasPermitidas = JSON.parse(row.empresas_permitidas_json || '[]');
+    empresasPermitidas = row.empresas_permitidas_json
+      ? JSON.parse(row.empresas_permitidas_json)
+      : undefined;
   } catch (_) {
     empresasPermitidas = [];
   }

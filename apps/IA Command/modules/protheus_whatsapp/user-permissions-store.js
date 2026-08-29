@@ -32,7 +32,7 @@ function salvarSync({
   usuarioNome,
   celular,
   filialAtual = null,
-  empresasPermitidas = [],
+  empresasPermitidas = undefined,
   filiaisPermitidas = [],
   origem = 'protheus_token',
 }) {
