@@ -118,6 +118,7 @@
           </div>
           <div class="head-actions">
             <button class="btn btn-ghost" id="refresh-btn" type="button" style="font-weight:700;color:#1e3a8a;padding:5px 14px">Atualizar</button>
+            <button class="btn btn-primary" id="new-btn" type="button">+ Novo</button>
           </div>
         </div>
         <div class="group-panel" id="group-panel">
@@ -184,6 +185,7 @@
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span class="save-feedback" id="save-feedback"></span>
             <button class="btn btn-ghost" id="back-btn" type="button">Voltar a lista</button>
+            <button class="btn btn-danger" id="delete-btn" type="button" style="display:none">Excluir</button>
             <button class="btn btn-primary" id="save-btn" type="button">Salvar</button>
           </div>
         </div>
@@ -193,7 +195,7 @@
             <div><label class="form-label">Nome</label><input class="form-control" id="f-usuario-nome"></div>
             <div><label class="form-label">Telefone</label><input class="form-control" id="f-celular"></div>
             <div><label class="form-label">Status</label><select class="form-control" id="f-ativo"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
-            <div><label class="form-label">Empresa IAHub</label><input class="form-control" id="f-empresa" disabled></div>
+            <div><label class="form-label">Empresa IAHub</label><input class="form-control" id="f-empresa" disabled><select class="form-control" id="f-empresa-select" style="display:none"></select></div>
             <div><label class="form-label">Ultimo sync</label><input class="form-control" id="f-sync" disabled></div>
           </div>
           <div style="margin-top:14px"><label class="form-label">Observacoes</label><textarea class="form-control" id="f-observacoes" rows="3"></textarea></div>
@@ -218,7 +220,7 @@
 <script>
 (function () {
   const GRID_STATE_KEY = 'iac_admin_protheus_web_users_grid_state';
-  const state = { rows: [], view: [], sortField: 'usuario_nome', sortDir: 'asc', filters: {}, groupFields: [], groupPanelOpen: false, collapsedGroups: new Set(), detail: null };
+  const state = { rows: [], view: [], sortField: 'usuario_nome', sortDir: 'asc', filters: {}, groupFields: [], groupPanelOpen: false, collapsedGroups: new Set(), detail: null, empresas: [], isNew: false };
   const $ = id => document.getElementById(id);
 
   function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -348,6 +350,7 @@
     const data = await api('?inativos=1');
     if(!data) return;
     state.rows = Array.isArray(data.rows) ? data.rows : [];
+    state.empresas = Array.isArray(data.empresas) ? data.empresas : [];
     applyFilters();
   }
   const ICON_EMPRESA = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="1"/><path d="M9 21V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14"/></svg>';
@@ -372,25 +375,52 @@
         </div>`;
     }).join('');
   }
+  function abrirEditor(){
+    $('save-feedback').textContent = '';
+    $('list-view').style.display = 'none';
+    $('detail-view').classList.add('open');
+  }
   async function abrir(id){
     const data = await api('/' + encodeURIComponent(id));
     if(!data) return;
     state.detail = data;
+    state.isNew = false;
     $('detail-title').textContent = data.usuario_nome || data.usuario_id || data.celular || 'Usuario';
     $('detail-subtitle').textContent = (data.empresa_nome || 'Empresa') + ' - ' + fmtPhone(data.celular);
     $('f-usuario-id').value = data.usuario_id || '';
     $('f-usuario-nome').value = data.usuario_nome || '';
     $('f-celular').value = data.celular || '';
     $('f-ativo').value = Number(data.ativo) ? '1' : '0';
+    $('f-empresa').style.display = '';
+    $('f-empresa-select').style.display = 'none';
     $('f-empresa').value = data.empresa_nome || data.empresa_id || '';
     $('f-sync').value = fmtDate(data.ultimo_sync_em || data.atualizado_em);
     $('f-observacoes').value = data.observacoes || '';
     $('f-empresas').value = jsonFmt(data.empresasPermitidas);
     $('f-filiais').value = jsonFmt(data.filiaisPermitidas);
     renderArvoreAcessos(data.arvoreAcessos);
-    $('save-feedback').textContent = '';
-    $('list-view').style.display = 'none';
-    $('detail-view').classList.add('open');
+    $('delete-btn').style.display = '';
+    abrirEditor();
+  }
+  function novo(){
+    state.detail = null;
+    state.isNew = true;
+    $('detail-title').textContent = 'Novo usuario';
+    $('detail-subtitle').textContent = 'Cadastro manual';
+    $('f-usuario-id').value = '';
+    $('f-usuario-nome').value = '';
+    $('f-celular').value = '';
+    $('f-ativo').value = '1';
+    $('f-empresa').style.display = 'none';
+    $('f-empresa-select').style.display = '';
+    $('f-empresa-select').innerHTML = state.empresas.map(e => `<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('');
+    $('f-sync').value = '-';
+    $('f-observacoes').value = '';
+    $('f-empresas').value = jsonFmt([]);
+    $('f-filiais').value = jsonFmt([]);
+    renderArvoreAcessos([]);
+    $('delete-btn').style.display = 'none';
+    abrirEditor();
   }
   async function salvar(){
     try {
@@ -403,9 +433,27 @@
         empresasPermitidas: JSON.parse($('f-empresas').value || '[]'),
         filiaisPermitidas: JSON.parse($('f-filiais').value || '[]'),
       };
-      state.detail = await api('/' + encodeURIComponent(state.detail.id), { method:'PUT', body:JSON.stringify(payload) });
+      if(state.isNew){
+        payload.empresa_id = Number($('f-empresa-select').value);
+        state.detail = await api('', { method:'POST', body:JSON.stringify(payload) });
+        state.isNew = false;
+      } else {
+        state.detail = await api('/' + encodeURIComponent(state.detail.id), { method:'PUT', body:JSON.stringify(payload) });
+      }
       $('save-feedback').textContent = 'Salvo';
       $('save-feedback').className = 'save-feedback ok';
+      await carregar();
+    } catch (err) {
+      $('save-feedback').textContent = err.message;
+      $('save-feedback').className = 'save-feedback fail';
+    }
+  }
+  async function excluir(){
+    if(!state.detail || state.isNew) return;
+    if(!confirm('Excluir este usuario sincronizado? Esta acao nao pode ser desfeita.')) return;
+    try {
+      await api('/' + encodeURIComponent(state.detail.id), { method:'DELETE' });
+      voltar();
       await carregar();
     } catch (err) {
       $('save-feedback').textContent = err.message;
@@ -460,8 +508,10 @@
     if(tr) abrir(tr.dataset.id);
   });
   $('refresh-btn').addEventListener('click', () => carregar());
+  $('new-btn').addEventListener('click', novo);
   $('back-btn').addEventListener('click', voltar);
   $('save-btn').addEventListener('click', salvar);
+  $('delete-btn').addEventListener('click', excluir);
   carregar().catch(err => { $('count').textContent = err.message; });
 })();
 </script>

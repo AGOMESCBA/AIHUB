@@ -83,6 +83,7 @@ const _PAGINA_ROTINA = {
   '/app/ia-command/admin-instalador-agente.html':     'iac-admin-instalador-agente',
   '/app/ia-command/admin-canais-whatsapp.html':       'iac-admin-canais-whatsapp',
   '/app/ia-command/admin-numeros-whatsapp.html':      'iac-admin-numeros-whatsapp',
+  '/app/ia-command/admin-protheus-web-users.html':    'iac-admin-usuarios-protheus-web',
   '/app/ia-command/admin-grupos-whatsapp.html':       'iac-admin-grupos-whatsapp',
   '/app/ia-command/admin-mensagens-whatsapp.html':    'iac-admin-mensagens-whatsapp',
   '/app/ia-command/admin-whatsapp-response-config.html': 'iac-admin-whatsapp-response-config',
@@ -151,6 +152,7 @@ const _ROTINA_LABELS = {
   'iac-admin-agendamento':      'IA Command - Agendamento',
   'iac-admin-chat-favoritos':   'IA Command - Chat Favoritos',
   'iac-admin-grupos-whatsapp':  'IA Command - Grupos WhatsApp',
+  'iac-admin-usuarios-protheus-web': 'IA Command - Usuários Protheus (Chat Web)',
   // ── IAHub / IA Recruit
   'dashboard': 'Dashboard',
   'monitores': 'Monitores',

@@ -15,6 +15,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   function eid(req) { return getEmpresaId(req); }
   const canModulos   = requireRotina('iac-admin-modulos');
   const canNumeros   = requireRotina('iac-admin-numeros-whatsapp');
+  const canUsuariosProtheusWeb = requireRotina('iac-admin-usuarios-protheus-web');
   const canMensagens = requireRotina('iac-admin-mensagens-whatsapp');
   const canIntencoes = requireRotina('iac-admin-intencoes');
   const canDatasets  = requireRotina('iac-admin-datasets');
@@ -520,9 +521,9 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     });
   }
 
-  app.get('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+  app.get('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
-    const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
+    const empresas = _empresasPermitidas(req, 'iac-admin-usuarios-protheus-web');
     const nomes = new Map(empresas.map(e => [Number(e.id), e.nome]));
     const { nomesEmpProtheus, nomesFiliais } = _nomesArvoreProtheus(empresas.map(e => e.id));
     const rows = store.listar({
@@ -546,10 +547,10 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json({ rows, empresas });
   });
 
-  app.get('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+  app.get('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
     const row = store.buscarPorId(req.params.id);
-    if (!row || !_empresaPermitida(req, Number(row.empresa_id), 'iac-admin-numeros-whatsapp')) {
+    if (!row || !_empresaPermitida(req, Number(row.empresa_id), 'iac-admin-usuarios-protheus-web')) {
       return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
     }
     const emp = empresasDb.buscarPorId(Number(row.empresa_id)) || {};
@@ -561,10 +562,10 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     });
   });
 
-  app.put('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canNumeros, (req, res) => {
+  app.put('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
     const existing = store.buscarPorId(req.params.id);
-    if (!existing || !_empresaPermitida(req, Number(existing.empresa_id), 'iac-admin-numeros-whatsapp')) {
+    if (!existing || !_empresaPermitida(req, Number(existing.empresa_id), 'iac-admin-usuarios-protheus-web')) {
       return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
     }
     try {
@@ -582,6 +583,41 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
+  });
+
+  app.post('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const empresaId = Number(req.body?.empresa_id);
+    if (!empresaId || !_empresaPermitida(req, empresaId, 'iac-admin-usuarios-protheus-web')) {
+      return res.status(403).json({ error: 'Empresa nao permitida.' });
+    }
+    try {
+      const row = store.criar({
+        empresaId,
+        usuarioId: req.body?.usuario_id,
+        usuarioNome: req.body?.usuario_nome,
+        celular: req.body?.celular,
+        observacoes: req.body?.observacoes,
+        ativo: req.body?.ativo !== false,
+        empresasPermitidas: req.body?.empresasPermitidas,
+        filiaisPermitidas: req.body?.filiaisPermitidas,
+      });
+      _audit(req, 'criar_usuario_protheus_web', { id: row?.id, usuario_id: row?.usuario_id, celular: row?.celular });
+      res.status(201).json(row);
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const existing = store.buscarPorId(req.params.id);
+    if (!existing || !_empresaPermitida(req, Number(existing.empresa_id), 'iac-admin-usuarios-protheus-web')) {
+      return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
+    }
+    store.excluir(req.params.id);
+    _audit(req, 'excluir_usuario_protheus_web', { id: req.params.id, usuario_id: existing.usuario_id, celular: existing.celular });
+    res.json({ ok: true });
   });
 
   app.get('/api/ia-command/admin/numeros-whatsapp/modulos-disponiveis', requireAuth, requireIaCommand, canNumeros, (req, res) => {

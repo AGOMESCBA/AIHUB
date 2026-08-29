@@ -115,6 +115,60 @@ function salvarSync({
   return buscarPorId(id);
 }
 
+function criar({
+  empresaId,
+  usuarioId = null,
+  usuarioNome = null,
+  celular,
+  filialAtual = null,
+  empresasPermitidas = [],
+  filiaisPermitidas = [],
+  observacoes = null,
+  ativo = true,
+}) {
+  const empresaPrincipal = Number(empresaId || 0);
+  const numero = normalizarNumero(celular);
+  if (!empresaPrincipal) throw new Error('empresaId obrigatorio.');
+  if (!numero) throw new Error('celular obrigatorio.');
+
+  const uid = String(usuarioId || '').trim() || null;
+  const nome = String(usuarioNome || '').trim() || null;
+  const empresas = tokenService.normalizarEmpresasPermitidas(empresasPermitidas, empresaPrincipal);
+  const filiais = tokenService.normalizarFiliaisPermitidas(filiaisPermitidas);
+  const agora = new Date().toISOString();
+  const db = getDB();
+
+  const id = crypto.randomUUID();
+  db.prepare(`
+    INSERT INTO protheus_web_user_permissions
+      (id, empresa_id, usuario_id, usuario_nome, celular, filial_atual,
+       empresas_permitidas_json, filiais_permitidas_json, origem, ativo,
+       observacoes, criado_em, atualizado_em)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?, ?, ?)
+  `).run(
+    id,
+    empresaPrincipal,
+    uid,
+    nome,
+    numero,
+    filialAtual || null,
+    JSON.stringify(empresas),
+    JSON.stringify(filiais),
+    ativo ? 1 : 0,
+    observacoes || null,
+    agora,
+    agora
+  );
+  return buscarPorId(id);
+}
+
+function excluir(id) {
+  const existing = buscarPorId(id);
+  if (!existing) return false;
+  getDB().prepare(`DELETE FROM protheus_web_user_permissions WHERE id = ?`).run(id);
+  return true;
+}
+
 function listar({ empresaIds = [], incluirInativos = true } = {}) {
   const ids = (empresaIds || []).map(Number).filter(Boolean);
   if (!ids.length) return [];
@@ -187,9 +241,11 @@ function atualizar(id, campos = {}) {
 
 module.exports = {
   salvarSync,
+  criar,
   listar,
   buscarPorId,
   listarAtivosPorCelular,
   atualizar,
+  excluir,
   normalizarNumero,
 };
