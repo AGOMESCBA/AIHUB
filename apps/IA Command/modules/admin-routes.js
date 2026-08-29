@@ -523,11 +523,13 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
   app.get('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
-    const empresas = _empresasPermitidas(req, 'iac-admin-usuarios-protheus-web');
+    const empresaId = eid(req);
+    const emp = empresasDb.buscarPorId(empresaId) || {};
+    const empresas = [{ id: empresaId, nome: emp.nome || emp.razao_social || `Empresa #${empresaId}` }];
     const nomes = new Map(empresas.map(e => [Number(e.id), e.nome]));
-    const { nomesEmpProtheus, nomesFiliais } = _nomesArvoreProtheus(empresas.map(e => e.id));
+    const { nomesEmpProtheus, nomesFiliais } = _nomesArvoreProtheus([empresaId]);
     const rows = store.listar({
-      empresaIds: empresas.map(e => e.id),
+      empresaIds: [empresaId],
       incluirInativos: req.query.inativos === '1' || req.query.incluirInativos === '1',
     }).map(row => ({
       ...row,
@@ -547,10 +549,47 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     res.json({ rows, empresas });
   });
 
+  // Arvore de empresas/filiais Protheus DISPONIVEIS para a empresa IAHub atual
+  // (protheus_company_tree, so populada em instalacoes LOBO_GUARA) — usada
+  // pelo formulario de cadastro/edicao para permitir a selecao clicavel do
+  // escopo de acesso, em vez de exigir edicao manual do JSON bruto.
+  app.get('/api/ia-command/admin/protheus-web-users/arvore-disponivel', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
+    const empresaId = eid(req);
+    const rows = getDB().prepare(`
+      SELECT empresa_codigo, filial_chave, tipo_no, nome
+        FROM protheus_company_tree
+       WHERE empresa_id = ?
+         AND ativo = 1
+         AND tipo_no IN ('empresa', 'filial')
+    `).all(empresaId);
+
+    const empresasMap = new Map();
+    for (const row of rows) {
+      if (row.tipo_no === 'empresa' && row.empresa_codigo) {
+        if (!empresasMap.has(row.empresa_codigo)) {
+          empresasMap.set(row.empresa_codigo, { codigoProtheus: row.empresa_codigo, nome: row.nome || row.empresa_codigo, filiais: [] });
+        } else {
+          empresasMap.get(row.empresa_codigo).nome = row.nome || row.empresa_codigo;
+        }
+      }
+    }
+    for (const row of rows) {
+      if (row.tipo_no === 'filial' && row.empresa_codigo && row.filial_chave) {
+        if (!empresasMap.has(row.empresa_codigo)) {
+          empresasMap.set(row.empresa_codigo, { codigoProtheus: row.empresa_codigo, nome: row.empresa_codigo, filiais: [] });
+        }
+        empresasMap.get(row.empresa_codigo).filiais.push({ chave: row.filial_chave, nome: row.nome || row.filial_chave });
+      }
+    }
+
+    const arvore = [...empresasMap.values()];
+    res.json({ loboGuara: arvore.length > 0, empresas: arvore });
+  });
+
   app.get('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
     const row = store.buscarPorId(req.params.id);
-    if (!row || !_empresaPermitida(req, Number(row.empresa_id), 'iac-admin-usuarios-protheus-web')) {
+    if (!row || Number(row.empresa_id) !== eid(req)) {
       return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
     }
     const emp = empresasDb.buscarPorId(Number(row.empresa_id)) || {};
@@ -565,7 +604,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.put('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
     const existing = store.buscarPorId(req.params.id);
-    if (!existing || !_empresaPermitida(req, Number(existing.empresa_id), 'iac-admin-usuarios-protheus-web')) {
+    if (!existing || Number(existing.empresa_id) !== eid(req)) {
       return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
     }
     try {
@@ -587,10 +626,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
   app.post('/api/ia-command/admin/protheus-web-users', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
-    const empresaId = Number(req.body?.empresa_id);
-    if (!empresaId || !_empresaPermitida(req, empresaId, 'iac-admin-usuarios-protheus-web')) {
-      return res.status(403).json({ error: 'Empresa nao permitida.' });
-    }
+    const empresaId = eid(req);
     try {
       const row = store.criar({
         empresaId,
@@ -612,7 +648,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   app.delete('/api/ia-command/admin/protheus-web-users/:id', requireAuth, requireIaCommand, canUsuariosProtheusWeb, (req, res) => {
     const store = require('./protheus_whatsapp/user-permissions-store');
     const existing = store.buscarPorId(req.params.id);
-    if (!existing || !_empresaPermitida(req, Number(existing.empresa_id), 'iac-admin-usuarios-protheus-web')) {
+    if (!existing || Number(existing.empresa_id) !== eid(req)) {
       return res.status(404).json({ error: 'Usuario sincronizado nao encontrado.' });
     }
     store.excluir(req.params.id);

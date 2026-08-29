@@ -195,7 +195,7 @@
             <div><label class="form-label">Nome</label><input class="form-control" id="f-usuario-nome"></div>
             <div><label class="form-label">Telefone</label><input class="form-control" id="f-celular"></div>
             <div><label class="form-label">Status</label><select class="form-control" id="f-ativo"><option value="1">Ativo</option><option value="0">Inativo</option></select></div>
-            <div><label class="form-label">Empresa IAHub</label><input class="form-control" id="f-empresa" disabled><select class="form-control" id="f-empresa-select" style="display:none"></select></div>
+            <div><label class="form-label">Empresa IAHub</label><input class="form-control" id="f-empresa" disabled></div>
             <div><label class="form-label">Ultimo sync</label><input class="form-control" id="f-sync" disabled></div>
           </div>
           <div style="margin-top:14px"><label class="form-label">Observacoes</label><textarea class="form-control" id="f-observacoes" rows="3"></textarea></div>
@@ -220,7 +220,7 @@
 <script>
 (function () {
   const GRID_STATE_KEY = 'iac_admin_protheus_web_users_grid_state';
-  const state = { rows: [], view: [], sortField: 'usuario_nome', sortDir: 'asc', filters: {}, groupFields: [], groupPanelOpen: false, collapsedGroups: new Set(), detail: null, empresas: [], isNew: false };
+  const state = { rows: [], view: [], sortField: 'usuario_nome', sortDir: 'asc', filters: {}, groupFields: [], groupPanelOpen: false, collapsedGroups: new Set(), detail: null, empresas: [], isNew: false, arvoreDisponivel: null };
   const $ = id => document.getElementById(id);
 
   function esc(v){ return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -355,25 +355,93 @@
   }
   const ICON_EMPRESA = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="1"/><path d="M9 21V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14"/></svg>';
   const ICON_FILIAL = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/></svg>';
-  function renderArvoreAcessos(arvore){
+
+  async function carregarArvoreDisponivel(){
+    if(state.arvoreDisponivel) return state.arvoreDisponivel;
+    const data = await api('/arvore-disponivel');
+    state.arvoreDisponivel = data || { loboGuara: false, empresas: [] };
+    return state.arvoreDisponivel;
+  }
+
+  // Reconstroi {empresasPermitidas, filiaisPermitidas} no formato aceito pelo backend
+  // a partir dos checkboxes marcados na arvore editavel.
+  function lerSelecaoArvore(){
+    const empresaAtual = state.empresas[0];
+    const marcadosEmpresa = [...document.querySelectorAll('[data-chk-empresa]:checked')].map(el => el.dataset.chkEmpresa);
+    const marcadosFilial = [...document.querySelectorAll('[data-chk-filial]:checked')];
+    if(!state.arvoreDisponivel || !state.arvoreDisponivel.loboGuara){
+      // Empresa sem arvore Protheus (modelo tradicional) -> acesso e a empresa IAHub inteira
+      return { empresasPermitidas: [], filiaisPermitidas: [] };
+    }
+    const empresasPermitidas = marcadosEmpresa.map(codigo => {
+      const emp = state.arvoreDisponivel.empresas.find(e => e.codigoProtheus === codigo);
+      return { empresaId: empresaAtual ? empresaAtual.id : null, codigoProtheus: codigo, nomeProtheus: emp ? emp.nome : codigo };
+    });
+    const filiaisPorCodigo = new Map();
+    marcadosFilial.forEach(el => {
+      const codigo = el.dataset.chkFilialEmpresa;
+      if(!filiaisPorCodigo.has(codigo)) filiaisPorCodigo.set(codigo, []);
+      filiaisPorCodigo.get(codigo).push(el.dataset.chkFilial);
+    });
+    // Empresa marcada mas sem nenhuma filial marcada = acesso a todas as filiais dela (sem entrada em filiaisPermitidas)
+    const filiaisPermitidas = [...filiaisPorCodigo.entries()].map(([codigoProtheus, filiais]) => ({ codigoProtheus, filiais }));
+    return { empresasPermitidas, filiaisPermitidas };
+  }
+
+  function empresaMarcada(codigo, empresasPermitidas){
+    return (empresasPermitidas || []).some(e => String(e.codigoProtheus || '').trim() === codigo);
+  }
+  function filiaisMarcadasDaEmpresa(codigo, filiaisPermitidas){
+    const item = (filiaisPermitidas || []).find(f => String(f.codigoProtheus || '').trim() === codigo);
+    return item ? item.filiais : null; // null = todas (nao restringido)
+  }
+
+  async function renderArvoreAcessos(empresasPermitidas, filiaisPermitidas){
     const el = $('acessos-tree');
-    if(!Array.isArray(arvore) || !arvore.length){
-      el.innerHTML = '<div class="acessos-tree-empty">Nenhuma empresa/filial liberada para este usuario.</div>';
+    el.innerHTML = '<div class="acessos-tree-empty">Carregando...</div>';
+    const arvore = await carregarArvoreDisponivel();
+
+    if(!arvore.loboGuara || !arvore.empresas.length){
+      el.innerHTML = '<div class="acessos-tree-empty">Esta empresa nao tem multiplas empresas/filiais Protheus cadastradas — o acesso ja e a empresa inteira, nao ha selecao adicional a fazer.</div>';
       return;
     }
-    el.innerHTML = arvore.map(emp => {
-      const badge = emp.todasFiliais
-        ? '<span class="acessos-empresa-badge">Todas as filiais</span>'
-        : `<span class="acessos-empresa-badge">${emp.filiais.length} filial(is)</span>`;
-      const filiaisHtml = emp.todasFiliais ? '' : `<ul class="acessos-filiais-lista">${
-        emp.filiais.map(f => `<li class="acessos-filial-item">${ICON_FILIAL}<span>${esc(f.nome)}</span><span class="acessos-filial-chave">${esc(f.chave)}</span></li>`).join('')
-      }</ul>`;
+
+    el.innerHTML = arvore.empresas.map(emp => {
+      const marcada = empresaMarcada(emp.codigoProtheus, empresasPermitidas);
+      const filiaisMarcadas = filiaisMarcadasDaEmpresa(emp.codigoProtheus, filiaisPermitidas);
+      const filiaisHtml = emp.filiais.map(f => {
+        const checked = marcada && (filiaisMarcadas === null || filiaisMarcadas.includes(f.chave));
+        return `<li class="acessos-filial-item">
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer">
+            <input type="checkbox" data-chk-filial="${esc(f.chave)}" data-chk-filial-empresa="${esc(emp.codigoProtheus)}" ${checked ? 'checked' : ''} ${marcada ? '' : 'disabled'}>
+            ${ICON_FILIAL}<span>${esc(f.nome)}</span><span class="acessos-filial-chave">${esc(f.chave)}</span>
+          </label>
+        </li>`;
+      }).join('');
       return `
         <div class="acessos-empresa">
-          <div class="acessos-empresa-head">${ICON_EMPRESA}<span>${esc(emp.nome)}</span>${emp.codigoProtheus ? `<span class="acessos-empresa-codigo">${esc(emp.codigoProtheus)}</span>` : ''}${badge}</div>
-          ${filiaisHtml}
+          <div class="acessos-empresa-head">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1">
+              <input type="checkbox" data-chk-empresa="${esc(emp.codigoProtheus)}" ${marcada ? 'checked' : ''}>
+              ${ICON_EMPRESA}<span>${esc(emp.nome)}</span><span class="acessos-empresa-codigo">${esc(emp.codigoProtheus)}</span>
+            </label>
+            <span class="acessos-empresa-badge">${marcada ? (filiaisMarcadas === null ? 'Todas as filiais' : filiaisMarcadas.length + ' filial(is)') : 'Sem acesso'}</span>
+          </div>
+          <ul class="acessos-filiais-lista">${filiaisHtml}</ul>
         </div>`;
     }).join('');
+
+    // Marcar/desmarcar a empresa habilita/desabilita os checkboxes de filial dela
+    el.querySelectorAll('[data-chk-empresa]').forEach(chkEmpresa => {
+      chkEmpresa.addEventListener('change', () => {
+        const codigo = chkEmpresa.dataset.chkEmpresa;
+        el.querySelectorAll(`[data-chk-filial-empresa="${CSS.escape(codigo)}"]`).forEach(chkFilial => {
+          chkFilial.disabled = !chkEmpresa.checked;
+          if(chkEmpresa.checked) chkFilial.checked = true; // marcar empresa = todas as filiais por padrao
+          else chkFilial.checked = false;
+        });
+      });
+    });
   }
   function abrirEditor(){
     $('save-feedback').textContent = '';
@@ -391,16 +459,14 @@
     $('f-usuario-nome').value = data.usuario_nome || '';
     $('f-celular').value = data.celular || '';
     $('f-ativo').value = Number(data.ativo) ? '1' : '0';
-    $('f-empresa').style.display = '';
-    $('f-empresa-select').style.display = 'none';
     $('f-empresa').value = data.empresa_nome || data.empresa_id || '';
     $('f-sync').value = fmtDate(data.ultimo_sync_em || data.atualizado_em);
     $('f-observacoes').value = data.observacoes || '';
     $('f-empresas').value = jsonFmt(data.empresasPermitidas);
     $('f-filiais').value = jsonFmt(data.filiaisPermitidas);
-    renderArvoreAcessos(data.arvoreAcessos);
     $('delete-btn').style.display = '';
     abrirEditor();
+    renderArvoreAcessos(data.empresasPermitidas, data.filiaisPermitidas);
   }
   function novo(){
     state.detail = null;
@@ -411,19 +477,26 @@
     $('f-usuario-nome').value = '';
     $('f-celular').value = '';
     $('f-ativo').value = '1';
-    $('f-empresa').style.display = 'none';
-    $('f-empresa-select').style.display = '';
-    $('f-empresa-select').innerHTML = state.empresas.map(e => `<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('');
+    const empresaAtual = state.empresas[0];
+    $('f-empresa').value = empresaAtual ? empresaAtual.nome : '';
     $('f-sync').value = '-';
     $('f-observacoes').value = '';
     $('f-empresas').value = jsonFmt([]);
     $('f-filiais').value = jsonFmt([]);
-    renderArvoreAcessos([]);
     $('delete-btn').style.display = 'none';
     abrirEditor();
+    renderArvoreAcessos([], []);
   }
   async function salvar(){
     try {
+      // A arvore clicavel e a fonte primaria de selecao; sincroniza o JSON bruto
+      // antes de ler, para que quem editar o textarea diretamente tambem funcione
+      // (ultima edicao manual no textarea prevalece se o usuario mexeu nela).
+      if(state.arvoreDisponivel && state.arvoreDisponivel.loboGuara){
+        const selecao = lerSelecaoArvore();
+        $('f-empresas').value = jsonFmt(selecao.empresasPermitidas);
+        $('f-filiais').value = jsonFmt(selecao.filiaisPermitidas);
+      }
       const payload = {
         usuario_id: $('f-usuario-id').value.trim(),
         usuario_nome: $('f-usuario-nome').value.trim(),
@@ -434,7 +507,6 @@
         filiaisPermitidas: JSON.parse($('f-filiais').value || '[]'),
       };
       if(state.isNew){
-        payload.empresa_id = Number($('f-empresa-select').value);
         state.detail = await api('', { method:'POST', body:JSON.stringify(payload) });
         state.isNew = false;
       } else {

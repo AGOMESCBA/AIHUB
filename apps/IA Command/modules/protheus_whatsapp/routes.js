@@ -228,8 +228,8 @@ function criarLoginChallenge(req, celular, codigo, ttlMs = WEB_LOGIN_TTL_MS) {
   return { id, expiraEm: expiraEm.toISOString() };
 }
 
-function carregarPermissoesWebPorCelular(celular) {
-  const rows = userPermissionsStore.listarAtivosPorCelular(celular);
+function carregarPermissoesWebPorCelular(celular, empresaId = null) {
+  const rows = userPermissionsStore.listarAtivosPorCelular(celular, empresaId);
   if (!rows.length) return null;
 
   const principal = rows[0];
@@ -1146,7 +1146,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         return res.status(400).json({ error: 'Informe o WhatsApp com DDI e DDD.' });
       }
 
-      const permissoes = carregarPermissoesWebPorCelular(celular);
+      const permissoes = carregarPermissoesWebPorCelular(celular, pathConfig.empresaId);
       if (!permissoes) {
         perfLog('POST /web-login/start', inicio, { status: 404, celular });
         return res.status(404).json({ error: 'Numero nao encontrado ou sem permissao sincronizada.' });
@@ -1193,7 +1193,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       if (!webLoginHttpsAutorizado(req, res, pathConfig)) return;
 
       const celular = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
-      const permissoes = carregarPermissoesWebPorCelular(celular);
+      const permissoes = carregarPermissoesWebPorCelular(celular, pathConfig.empresaId);
       if (!permissoes) {
         return res.status(403).json({ error: 'Permissao sincronizada nao encontrada.' });
       }
