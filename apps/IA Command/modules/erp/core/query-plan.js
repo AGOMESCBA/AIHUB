@@ -562,7 +562,7 @@ function _contratoBaixaPagar(modelo = 'SE5') {
 function formatQueryPlanForPrompt(plano = {}) {
   if (!plano || !plano.versao) return '';
   const linhas = [
-    'Plano estruturado da consulta (contrato obrigatorio entre interpretacao e SQL):',
+    'Plano estruturado da consulta (guia tecnico entre interpretacao e SQL):',
     `  modulo: ${plano.modulo || 'dinamico'}`,
     `  operacao: ${plano.operacao || 'consulta'}`,
     `  carteira: ${plano.carteira || 'nao_aplicavel'}`,
@@ -583,8 +583,8 @@ function formatQueryPlanForPrompt(plano = {}) {
     ? plano.agrupamentos.filter(g => g && g !== 'empresa')
     : [];
   if (agrupamentosSql.length) {
-    linhas.push(`  agrupamentos_obrigatorios: ${agrupamentosSql.join(', ')}`);
-    linhas.push('  regra_agrupamentos: preserve esses agrupamentos no SELECT e no GROUP BY; continuidade/comparativo nao remove detalhamento herdado.');
+    linhas.push(`  agrupamentos_sugeridos: ${agrupamentosSql.join(', ')}`);
+    linhas.push('  regra_agrupamentos: trate como leitura semantica auxiliar; preserve quando fizer sentido para a pergunta, mas nao force agrupamento se a melhor resposta pedir listagem, escalar ou outra granularidade.');
   }
   if (Array.isArray(plano.regras) && plano.regras.length) linhas.push(`  regras: ${plano.regras.join(', ')}`);
   if (plano.comparativo) linhas.push('  comparativo: gere linhas comparaveis para os periodos solicitados.');
@@ -592,7 +592,7 @@ function formatQueryPlanForPrompt(plano = {}) {
   if (plano.modulo === 'faturamento' && plano.calcularPercentualCrescimento && Array.isArray(plano.agrupamentos) && plano.agrupamentos.includes('mes')) {
     linhas.push('  faturamento_crescimento_mensal: primeiro agregue faturamento por competencia; depois, na query externa, use LAG(h.faturamento) OVER (ORDER BY h.competencia) para calcular faturamento_mes_anterior, crescimento_valor e crescimento_percentual.');
   }
-  if (plano.proibirFiltroData) linhas.push('  proibido: adicionar filtro de data quando periodo=nenhum.');
+  if (plano.proibirFiltroData) linhas.push('  periodo_nao_detectado: evite adicionar filtro de data se a pergunta realmente nao pedir periodo; se a mensagem trouxer "do dia", "hoje", "mes", "ano" ou equivalente, resolva o periodo pela pergunta.');
   if (plano.exigirSaldoAberto) linhas.push('  obrigatorio: filtrar saldo em aberto na carteira correspondente.');
   if (plano.modulo === 'financeiro' && plano.ajusteAntecipacao) {
     if (plano.ajusteAntecipacao === 'nenhum') {
@@ -627,7 +627,7 @@ function formatQueryPlanForPrompt(plano = {}) {
   if (plano.modulo === 'financeiro' && plano.carteira === 'ambas') {
     const estadoAmbas = plano.estado;
     if (estadoAmbas === 'recebido' || estadoAmbas === 'pago' || estadoAmbas === 'realizado') {
-      linhas.push('  financeiro_ambas_realizado: gere UM UNICO SELECT com duas colunas: valor_recebido e valor_pago. Use duas subqueries escalares no SELECT. PROIBIDO gerar dois SELECTs separados ou UNION ALL.');
+      linhas.push('  financeiro_ambas_realizado: retorne entradas e saidas realizadas com valor_recebido e valor_pago, usando o modelo tecnico de baixas correto. Subqueries escalares ou UNION ALL agregado sao aceitaveis quando preservarem a semantica e nao duplicarem valores.');
       linhas.push(`  financeiro_ambas_realizado_receber: ${_contratoBaixaReceber(plano.modelo_baixas_receber || 'SE5')}`);
       linhas.push(`  financeiro_ambas_realizado_pagar: ${_contratoBaixaPagar(plano.modelo_baixas_pagar || 'SE5')}`);
       linhas.push("  financeiro_ambas_realizado: OBRIGATORIO: SE1.D_E_L_E_T_ = ' ' no WHERE da subquery de receber; SE2.D_E_L_E_T_ = ' ' no WHERE da subquery de pagar.");
@@ -740,14 +740,9 @@ function validarSqlContraPlano(sql, plano = {}) {
     exigeAgrupamento('vendedor', ['A3_NOME', 'F2_VEND1'], 'vendedor');
   }
 
-  if (plano.proibirFiltroData) {
-    const campos = _camposDataPorPlano(plano);
-    if (campos.length) {
-      if (campos.some(campoTemFiltro)) {
-        erros.push('SQL aplicou filtro de data apesar de o plano indicar periodo=nenhum.');
-      }
-    }
-  }
+  // Periodo ausente no query_plan e uma evidencia fraca, nao uma regra tecnica
+  // do Protheus. A IA pode ter resolvido "do dia", "hoje" ou outro recorte
+  // diretamente da pergunta, entao nao bloqueamos SQL apenas por conter data.
 
   if (plano.exigirSaldoAberto) {
     if ((plano.carteira === 'receber' || plano.carteira === 'ambas') && !/\bE1_SALDO\b\s*>\s*0\b/i.test(texto)) {
@@ -774,10 +769,7 @@ function validarSqlContraPlano(sql, plano = {}) {
         erros.push('SQL de contas recebidas e pagas (realizadas) nao usou SE5, FK1 nem FK2; use subqueries escalares com SE1+SE5/FK1 para valor_recebido e SE2+SE5/FK2 para valor_pago. PROIBIDO FULL OUTER JOIN entre SE1 e SE2 com E1_VALOR/E2_VALOR.');
       }
       if (/\bFULL\s+(?:OUTER\s+)?JOIN\b/i.test(texto)) {
-        erros.push('SQL usou FULL OUTER JOIN para contas realizadas (ambas); use UM UNICO SELECT com duas subqueries escalares: (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE1 JOIN SE5 ...) AS valor_recebido, (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE2 JOIN SE5 ...) AS valor_pago.');
-      }
-      if (/\bUNION\s+ALL\b/i.test(texto)) {
-        erros.push("SQL usou UNION ALL para contas realizadas (carteira=ambas); PROIBIDO. Gere UM UNICO SELECT com duas subqueries escalares: SELECT (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE1 JOIN SE5 WHERE ... AND SE5.E5_TIPO NOT IN ('EST','ED')) AS valor_recebido, (SELECT COALESCE(SUM(SE5.E5_VALOR),0) FROM SE2 JOIN SE5 WHERE ... AND SE5.E5_TIPO NOT IN ('EST','ED')) AS valor_pago.");
+        erros.push('SQL usou FULL OUTER JOIN para contas realizadas (ambas); nao faca JOIN direto entre SE1 e SE2 para realizadas. Calcule recebidos e pagos em blocos independentes usando o modelo tecnico de baixas (SE5/FK1/FK2) e combine apenas o resultado agregado.');
       }
     }
     if (plano.carteira === 'pagar') {

@@ -433,7 +433,8 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       'Contrato obrigatorio — REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA:',
       '- Quando a pergunta pedir faturamento, vendas, vendido/faturado ou receita, retorne somente operacoes que geram receita.',
       '- Essa e uma regra fiscal nacional de interpretacao de CFOP, nao uma regra especifica do ERP.',
-      "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%').",
+      "- Remessas nao geram receita: exclua CFOP com prefixo 59/69 usando AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')).",
+      "- EXCECAO DENTRO DO PREFIXO 59/69: CFOP 5932/6932 (frete de transportadora) e 5933/6933 (servico tributado por ISS) SAO receita real — NAO exclua esses 4 codigos, mesmo comecando com 59/69. So 5931/6931 (retencao de imposto de frete de autonomo) e 5934/6934 (remessa simbolica em armazem geral) continuam sem receita.",
       "- Transferencias nao geram receita: exclua AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156').",
       "- Devolucoes de compra nao geram receita: exclua AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%').",
       "- Devolucoes de compra com ST nao geram receita: exclua AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413').",
@@ -483,16 +484,16 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
       '- Preserve periodo, metrica, entidades resolvidas e filtros cadastrais.',
       '- Corrija TODOS os problemas listados no motivo da rejeicao em um unico SQL — nao apenas D_E_L_E_T_.',
       '- Antes de retornar: percorra CADA tabela do FROM e de CADA JOIN, uma por uma, e confirme visualmente que ela tem alias.D_E_L_E_T_ = \' \' — nao confie apenas nas tabelas citadas no motivo da rejeicao, releia o SQL inteiro.',
-      '- Releia o CONTRATO OBRIGATORIO DE SQL no contexto tecnico antes de retornar.',
+      '- Releia o GUIA TECNICO DE SQL no contexto tecnico antes de retornar.',
     ];
   } else if (subtipo === 'contrato_query_plan_invalido' || /plano estruturado|campo_data_semantico|baixa\/movimento|baixa_movimento/i.test(mensagem)) {
     bloco = [
-      'Contrato obrigatorio:',
-      '- O SQL deve respeitar o query_plan enviado em contextoTecnico.',
-      '- Quando query_plan.campo_data_semantico = baixa_movimento, filtre o periodo por baixa/movimento real, nao por emissao ou vencimento.',
+      'Guia tecnico:',
+      '- Use o query_plan em contextoTecnico como guia de regras tecnicas Protheus, nao como fonte soberana da semantica.',
+      '- Quando a pergunta for de baixa/movimento realizado (campo_data_semantico=baixa_movimento), filtre o periodo por baixa/movimento real, nao por emissao ou vencimento.',
       ...linhasEntidades,
       'Tarefa:',
-      '- Gere novo SQL a partir da pergunta original e do query_plan atual.',
+      '- Gere novo SQL a partir da pergunta original, usando o query_plan apenas para regras tecnicas Protheus.',
       '- Preserve periodo, metrica, entidades resolvidas e agrupamentos solicitados.',
     ];
   } else if (/Nao use um unico intervalo continuo|mes\(es\) repetidos em varios anos|Filtre mes e ano separadamente/i.test(mensagem)) {
@@ -517,7 +518,7 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
     bloco = [
       'Contrato obrigatorio:',
       '- O periodo declarado no plano deve aparecer no SQL em campo temporal valido do modulo.',
-      '- Se a tentativa anterior trouxe periodo diferente no JSON ou no SQL, ignore esse periodo anterior: ele foi rejeitado. Use somente dataInicio/dataFim do CONTRATO OBRIGATORIO DE SQL atual.',
+      '- Se a tentativa anterior trouxe periodo diferente no JSON ou no SQL, ignore esse periodo anterior: ele foi rejeitado. Use somente dataInicio/dataFim do GUIA TECNICO DE SQL atual quando o periodo estiver explicitamente resolvido.',
       '- Remova qualquer filtro temporal antigo/inferido que contradiga o periodo do contrato, inclusive SUBSTRING/LEFT/LIKE no mesmo campo de data.',
       ...linhasEntidades,
       'Tarefa:',
@@ -696,8 +697,8 @@ function _reforcoFinalRetryCfop(mensagemErro) {
   return [
     '',
     'LEMBRETE FINAL (nao ignore mesmo apos ler o SQL acima):',
-    "O SQL acima esta ERRADO porque nao exclui todos os CFOPs sem receita operacional. Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
-    "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')",
+    "O SQL acima esta ERRADO porque nao exclui todos os CFOPs sem receita operacional (ou excluiu 5932/5933/6932/6933 que SAO receita). Antes de responder, adicione ao WHERE do bloco de receita (SD2):",
+    "AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')) AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')",
     'Nao repita o SQL acima sem esse filtro.',
   ].join('\n');
 }
@@ -4822,6 +4823,16 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
   const _sqlTrim = String(sqlCanonico || '').trim();
   if (!_sqlTrim || _sqlTrim === 'null') {
     return { tipo: 'erro', subtipo: 'sql_nao_extraido', resposta_direta: mensagemErro(spec, 'sql_invalido'), sql_gerado: null, _sql_auditoria: { origem: 'ia_owner_reuso', sql_final_executado: null }, duracao_ms: Date.now() - t0 };
+  }
+  const periodoDireto = periodoComDatas(intent?._periodoCanonicoResolvido)
+    || periodoComDatas(intent?.periodo)
+    || periodoDeterministicoMensagem(mensagem);
+  if (periodoDireto) {
+    intent = {
+      ...intent,
+      periodo: { ...(intent.periodo || {}), ...periodoDireto },
+      _periodoCanonicoResolvido: periodoDireto,
+    };
   }
   const protheus = configProtheus(empresaId);
   const sx2 = completarSX2Permitidas(modosSX2(spec.tabelas, protheus.conexaoId, empresaId), spec.tabelas, protheus.sufixoTabela);

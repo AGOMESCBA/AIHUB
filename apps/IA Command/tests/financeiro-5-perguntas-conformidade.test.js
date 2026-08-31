@@ -74,10 +74,9 @@ const PERGUNTAS = [
       // instruções obrigatórias no query_plan_texto
       promptDeveConter: [
         'financeiro_ambas_realizado',
-        'PROIBIDO gerar dois SELECTs separados',
-        'PROIBIDO',
+        'modelo_baixas',
         'UNION ALL',
-        'subqueries escalares',
+        'Subqueries escalares',
         'valor_recebido',
         'valor_pago',
         'SE5',

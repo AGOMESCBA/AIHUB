@@ -46,6 +46,8 @@ const METRICS = [
   { canon: 'comissao', label: 'Comissao', type: 'money', totalRule: 'sum', aliases: ['comissao', 'total_comissao', 'valor_comissao', 'e3_comis'] },
   { canon: 'entradas', label: 'Entradas', type: 'money', totalRule: 'sum', aliases: ['entrada', 'entradas', 'valor_entrada', 'total_entrada', 'valor_receber', 'total_receber'] },
   { canon: 'saidas', label: 'Saidas', type: 'money', totalRule: 'sum', aliases: ['saida', 'saidas', 'valor_saida', 'total_saida', 'valor_pagar', 'total_pagar'] },
+  { canon: 'saldo_fisico', label: 'Saldo Fisico', type: 'quantity', totalRule: 'sum', aliases: ['saldo_fisico', 'saldo_fisico_atual', 'saldo_quantidade', 'saldo_quantidade_atual', 'b2_qatu'] },
+  { canon: 'saldo_financeiro', label: 'Saldo Financeiro', type: 'money', totalRule: 'sum', aliases: ['saldo_financeiro', 'saldo_financeiro_moeda1', 'valor_estoque', 'valor_estoque_moeda1', 'b2_vatu1'] },
   { canon: 'saldo', label: 'Saldo', type: 'money', totalRule: 'sum', aliases: ['saldo', 'saldo_atual', 'salatua', 'e8_salatua'] },
   { canon: 'saldo_bancario_base', label: 'Saldo Bancario Base', type: 'money', totalRule: 'first', aliases: ['saldo_bancario_base', 'saldo_base', 'base_saldo_bancario'] },
   { canon: 'fluxo_liquido', label: 'Saldo Bancario Final', type: 'money', totalRule: 'last', aliases: ['fluxo_liquido', 'saldo_projetado', 'saldo_final', 'saldo_final_projetado'] },

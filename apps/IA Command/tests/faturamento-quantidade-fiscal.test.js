@@ -12,7 +12,7 @@ const intentService = require(path.join(ROOT, 'modules/ai/intent-service'));
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
 
 assert(systemPrompt.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'quantidade/valor faturado deve aplicar regra nacional de receita por padrao');
-assert(systemPrompt.includes("AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%')"), 'faturamento/vendas deve excluir remessas por padrao');
+assert(systemPrompt.includes("AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933'))"), 'faturamento/vendas deve excluir remessas por padrao, exceto 5932/5933/6932/6933 (receita real de frete/servico)');
 assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'faturamento/vendas deve excluir transferencias por padrao');
 assert(systemPrompt.includes("AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%')"), 'faturamento/vendas deve excluir devolucoes de compra por padrao');
 assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413')"), 'faturamento/vendas deve excluir devolucoes de compra com ST por padrao');

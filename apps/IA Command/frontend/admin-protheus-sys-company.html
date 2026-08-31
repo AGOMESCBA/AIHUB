@@ -134,10 +134,6 @@
           </div>
         </div>
 
-        <div class="warn-box" id="aviso-nao-lobo" style="display:none">
-          Esta empresa está configurada como <strong>TRADICIONAL</strong> no Middleware SQL. A importação direta do banco só é liberada quando o modelo é <strong>LOBO_GUARA</strong>.
-        </div>
-
         <div class="quick-panel">
           <div class="quick-row">
             <select id="f-conexao-lista" class="form-control" onchange="filtrar()">
@@ -377,14 +373,12 @@ function comEmpresa(body = {}) {
 // ── Carregamento inicial ─────────────────────────────────────────────────────
 
 async function carregar() {
-  const [conns, cfg, rows] = await Promise.all([
+  const [conns, rows] = await Promise.all([
     fetch('/api/ia-command/connections/available').then(r => r.json()).catch(() => []),
-    fetch(apiUrl('/api/ia-command/compras/middleware-config')).then(r => r.json()).catch(() => ({})),
     fetch(apiUrl('/api/ia-command/protheus/sys-company')).then(r => r.json()).catch(() => []),
   ]);
   conexoes = conns;
   dados = rows;
-  document.getElementById('aviso-nao-lobo').style.display = (cfg.modelo_dados === 'LOBO_GUARA') ? 'none' : '';
   popularSelectConexoes();
   if (table) { table.replaceData(dados); } else { criarTabela(dados); }
 }

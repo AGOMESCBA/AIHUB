@@ -140,10 +140,6 @@
           </div>
         </div>
 
-        <div class="warn-box" id="aviso-nao-lobo" style="display:none">
-          Esta empresa está configurada como <strong>TRADICIONAL</strong> no Middleware SQL. A importação direta do banco só é liberada quando o modelo é <strong>LOBO_GUARA</strong>.
-        </div>
-
         <div class="quick-panel">
           <div class="quick-row">
             <select id="f-conexao-lista" class="form-control" onchange="filtrar(); onTrocarConexaoLista()">
@@ -380,8 +376,15 @@
       <div class="modal-panel-body"></div>
     </div>
 
+    <div id="mapeamento-detectado" style="display:none;padding:16px 22px;border-top:1px solid var(--border);background:var(--bg-base);flex-shrink:0;max-height:260px;overflow-y:auto">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-lo);font-weight:700;margin-bottom:10px">Mapeamento detectado</div>
+      <div id="mapeamento-resumo" style="font-size:13px;color:var(--text-md);margin-bottom:12px"></div>
+      <div id="mapeamento-campos" style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px"></div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="fecharImportar()">Cancelar</button>
+      <button class="btn btn-ghost" id="btn-detectar-import" onclick="detectarMapeamentoAtivo()" disabled>Detectar mapeamento</button>
       <button class="btn btn-primary" id="btn-confirmar-import" onclick="confirmarImportacao()" disabled>Importar</button>
     </div>
   </div>
@@ -403,6 +406,7 @@ let dbfRegistros = null;
 let sdbRegistros = null;
 let abaImportAtiva = 'banco';
 let modoImport = 'apagar';
+let mapeamentoDetectado = null;
 
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function label(n) { return n === 1 ? '1 registro' : `${n} registros`; }
@@ -424,14 +428,12 @@ function comEmpresa(body = {}) {
 // ── Carregamento inicial ─────────────────────────────────────────────────────
 
 async function carregar() {
-  const [conns, cfg, rows] = await Promise.all([
+  const [conns, rows] = await Promise.all([
     fetch('/api/ia-command/connections/available').then(r => r.json()).catch(() => []),
-    fetch(apiUrl('/api/ia-command/compras/middleware-config')).then(r => r.json()).catch(() => ({})),
     fetch(apiUrl('/api/ia-command/protheus/sys-company-cfg')).then(r => r.json()).catch(() => []),
   ]);
   conexoes = conns;
   dados = rows;
-  document.getElementById('aviso-nao-lobo').style.display = (cfg.modelo_dados === 'LOBO_GUARA') ? 'none' : '';
   popularSelectConexoes();
   if (table) { table.replaceData(dados); } else { criarTabela(dados); }
 }
@@ -679,7 +681,9 @@ function abrirImportar() {
   document.getElementById('status-sdb').textContent = '';
   document.getElementById('sdb-preview').textContent = '';
   document.getElementById('imp-arquivo-sdb').value = '';
+  document.getElementById('btn-detectar-import').disabled = true;
   document.getElementById('btn-confirmar-import').disabled = true;
+  esconderMapeamentoDetectado();
   document.getElementById('modal-importar').classList.add('open');
 }
 function fecharImportar() { document.getElementById('modal-importar').classList.remove('open'); }
@@ -690,7 +694,144 @@ function modalTab(el, id) {
   el.classList.add('active');
   document.getElementById(id).classList.add('active');
   abaImportAtiva = id === 'tab-banco' ? 'banco' : id === 'tab-dbf' ? 'dbf' : 'sdb';
+  document.getElementById('btn-detectar-import').disabled = true;
   document.getElementById('btn-confirmar-import').disabled = true;
+  esconderMapeamentoDetectado();
+}
+
+// ── Deteccao automatica de mapeamento (heuristica no servidor) ────────────────
+// So SUGERE — usuario ve os campos preenchidos e editaveis antes de importar,
+// nunca grava sem essa confirmacao visual.
+
+function esconderMapeamentoDetectado() {
+  mapeamentoDetectado = null;
+  document.getElementById('mapeamento-detectado').style.display = 'none';
+}
+
+function renderizarMapeamentoDetectado(deteccao) {
+  const painel  = document.getElementById('mapeamento-detectado');
+  const resumo  = document.getElementById('mapeamento-resumo');
+  const campos  = document.getElementById('mapeamento-campos');
+  const btnConfirmar = document.getElementById('btn-confirmar-import');
+
+  if (!deteccao.field_map) {
+    resumo.innerHTML = `<span style="color:#b45309">⚠ Não foi possível detectar o mapeamento automaticamente: ${esc(deteccao.motivo || 'estrutura não reconhecida')}.</span><br>Preencha manualmente em "⚙ Perfil de campos" antes de importar, ou ajuste os campos abaixo.`;
+    mapeamentoDetectado = { field_map: {}, confianca: 'nenhuma' };
+  } else {
+    const p = deteccao.preview || {};
+    const corConfianca = deteccao.confianca === 'alta' ? '#15803d' : '#b45309';
+    resumo.innerHTML = `<span style="color:${corConfianca};font-weight:600">Confiança: ${esc(deteccao.confianca)}</span> — ` +
+      `${p.reconhecidos ?? 0} de ${p.total_linhas ?? 0} linha(s) reconhecida(s) ` +
+      `(${p.empresas ?? 0} empresa(s), ${p.unidades ?? 0} unidade(s), ${p.filiais ?? 0} filial(is)).` +
+      (deteccao.motivo ? `<br><span style="color:var(--text-lo)">${esc(deteccao.motivo)}</span>` : '');
+    mapeamentoDetectado = deteccao;
+  }
+
+  const fm = deteccao.field_map || {};
+  const campo = (id, label, valor) => `
+    <div>
+      <label class="form-label" style="font-size:11px">${label}</label>
+      <input type="text" id="mapd-${id}" class="form-control" value="${esc(valor ?? '')}" style="text-transform:uppercase;font-size:12px;height:32px">
+    </div>`;
+  campos.innerHTML = [
+    campo('campo-tipo-no', 'Campo tipo de nó', fm.campo_tipo_no || 'XX8_TIPO'),
+    campo('campo-empresa', 'Campo empresa', fm.campo_empresa || ''),
+    campo('campo-unidade', 'Campo unidade', fm.campo_unidade || ''),
+    campo('campo-filial', 'Campo filial (código)', fm.campo_filial || 'XX8_CODIGO'),
+    campo('campo-descricao', 'Campo descrição', fm.campo_descricao || 'XX8_DESCRI'),
+    campo('tipo-no-empresa', 'Valor tipo = empresa', fm.tipo_no_empresa ?? ''),
+    campo('tipo-no-unidade', 'Valor tipo = unidade', fm.tipo_no_unidade ?? ''),
+    campo('tipo-no-filial', 'Valor tipo = filial', fm.tipo_no_filial ?? ''),
+  ].join('');
+
+  painel.style.display = '';
+  btnConfirmar.disabled = false;
+}
+
+function lerMapeamentoDoFormulario() {
+  return {
+    campo_tipo_no:   document.getElementById('mapd-campo-tipo-no').value.trim().toUpperCase(),
+    campo_empresa:   document.getElementById('mapd-campo-empresa').value.trim().toUpperCase(),
+    campo_unidade:   document.getElementById('mapd-campo-unidade').value.trim().toUpperCase(),
+    campo_filial:    document.getElementById('mapd-campo-filial').value.trim().toUpperCase(),
+    campo_descricao: document.getElementById('mapd-campo-descricao').value.trim().toUpperCase(),
+    tipo_no_empresa: document.getElementById('mapd-tipo-no-empresa').value.trim(),
+    tipo_no_unidade: document.getElementById('mapd-tipo-no-unidade').value.trim(),
+    tipo_no_filial:  document.getElementById('mapd-tipo-no-filial').value.trim(),
+  };
+}
+
+async function detectarMapeamentoAtivo() {
+  const btn = document.getElementById('btn-detectar-import');
+  btn.disabled = true; btn.textContent = 'Detectando...';
+  try {
+    if (abaImportAtiva === 'banco') await detectarMapeamentoBanco();
+    else if (abaImportAtiva === 'dbf') await detectarMapeamentoDBF();
+    else await detectarMapeamentoSDB();
+  } finally {
+    btn.disabled = false; btn.textContent = 'Detectar mapeamento';
+  }
+}
+
+async function detectarMapeamentoBanco() {
+  const conexaoId = document.getElementById('imp-conexao-banco').value;
+  const statusEl  = document.getElementById('status-banco');
+  const grupo     = document.getElementById('imp-grupo-codigo').value.trim();
+  if (!conexaoId || !tabelaBancoSelecionada) return;
+  if (!grupo) { alert('Informe o código do grupo antes de detectar.'); return; }
+  try {
+    const res  = await fetch('/api/ia-command/protheus/sys-company-cfg/reload', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, tabela: tabelaBancoSelecionada, grupo_codigo: grupo, apenas_detectar: true })),
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro ao detectar.'; statusEl.className = 'import-status fail'; return; }
+    renderizarMapeamentoDetectado(body);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+async function detectarMapeamentoDBF() {
+  const statusEl = document.getElementById('status-dbf');
+  if (!dbfRegistros) return;
+  try {
+    const res  = await fetch('/api/ia-command/protheus/sys-company-cfg/detectar-mapeamento', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(comEmpresa({ registros: dbfRegistros })),
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro ao detectar.'; statusEl.className = 'import-status fail'; return; }
+    renderizarMapeamentoDetectado(body);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
+}
+
+async function detectarMapeamentoSDB() {
+  const conexaoId = document.getElementById('imp-conexao-sdb').value;
+  const statusEl  = document.getElementById('status-sdb');
+  const grupo     = document.getElementById('imp-grupo-codigo').value.trim();
+  if (!conexaoId || !sdbRegistros) return;
+  if (!grupo) { alert('Informe o código do grupo antes de detectar.'); return; }
+  statusEl.textContent = 'Enviando arquivo para detecção...';
+  statusEl.className = 'import-status';
+  try {
+    const empresaId = empresaIdAtiva();
+    const params = new URLSearchParams({ conexao_id: conexaoId, grupo_codigo: grupo, apenas_detectar: 'true' });
+    if (empresaId) params.set('empresa_id', empresaId);
+    const res  = await fetch(`/api/ia-command/protheus/sys-company-cfg/import-sdb?${params}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/octet-stream'},
+      body: sdbRegistros,
+    });
+    const body = await res.json();
+    if (!res.ok) { statusEl.textContent = body.error || 'Erro ao detectar.'; statusEl.className = 'import-status fail'; return; }
+    statusEl.textContent = '';
+    renderizarMapeamentoDetectado(body);
+  } catch (e) {
+    statusEl.textContent = 'Erro: ' + e.message; statusEl.className = 'import-status fail';
+  }
 }
 
 async function buscarTabelasBanco() {
@@ -728,13 +869,15 @@ function selecionarTabela(el, nome) {
   el.classList.add('selected');
   el.querySelector('input[type=radio]').checked = true;
   tabelaBancoSelecionada = nome;
-  document.getElementById('btn-confirmar-import').disabled = false;
+  esconderMapeamentoDetectado();
+  document.getElementById('btn-detectar-import').disabled = false;
 }
 
 function lerArquivoDBF(input) {
   dbfRegistros = null;
   document.getElementById('dbf-preview').textContent = '';
-  document.getElementById('btn-confirmar-import').disabled = true;
+  esconderMapeamentoDetectado();
+  document.getElementById('btn-detectar-import').disabled = true;
   const file = input.files?.[0];
   if (!file) return;
   const reader = new FileReader();
@@ -742,10 +885,10 @@ function lerArquivoDBF(input) {
     try {
       dbfRegistros = parsearDBF(e.target.result);
       document.getElementById('dbf-preview').textContent = `✔ ${dbfRegistros.length} registros lidos do arquivo.`;
-      document.getElementById('btn-confirmar-import').disabled = !document.getElementById('imp-conexao-dbf').value;
+      document.getElementById('btn-detectar-import').disabled = !document.getElementById('imp-conexao-dbf').value;
     } catch (err) {
       document.getElementById('dbf-preview').textContent = 'Erro ao ler DBF: ' + err.message;
-      document.getElementById('btn-confirmar-import').disabled = true;
+      document.getElementById('btn-detectar-import').disabled = true;
     }
   };
   reader.readAsArrayBuffer(file);
@@ -787,20 +930,43 @@ function parsearDBF(buffer) {
 function lerArquivoSDB(input) {
   sdbRegistros = null;
   document.getElementById('sdb-preview').textContent = '';
-  document.getElementById('btn-confirmar-import').disabled = true;
+  esconderMapeamentoDetectado();
+  document.getElementById('btn-detectar-import').disabled = true;
   const file = input.files?.[0];
   if (!file) return;
   sdbRegistros = file;
-  document.getElementById('sdb-preview').textContent = `✔ Arquivo selecionado (${(file.size / 1024 / 1024).toFixed(1)} MB). Clique em Importar para processar.`;
-  document.getElementById('btn-confirmar-import').disabled = !document.getElementById('imp-conexao-sdb').value;
+  document.getElementById('sdb-preview').textContent = `✔ Arquivo selecionado (${(file.size / 1024).toFixed(0)} KB). Clique em "Detectar mapeamento" para continuar.`;
+  document.getElementById('btn-detectar-import').disabled = !document.getElementById('imp-conexao-sdb').value;
+}
+
+function _conexaoDaAbaAtiva() {
+  if (abaImportAtiva === 'banco') return document.getElementById('imp-conexao-banco').value;
+  if (abaImportAtiva === 'dbf') return document.getElementById('imp-conexao-dbf').value;
+  return document.getElementById('imp-conexao-sdb').value;
 }
 
 async function confirmarImportacao() {
   const grupo = document.getElementById('imp-grupo-codigo').value.trim();
   if (!grupo) { alert('Informe o código do grupo.'); return; }
+  if (!mapeamentoDetectado) { alert('Clique em "Detectar mapeamento" antes de importar.'); return; }
+
   const btn = document.getElementById('btn-confirmar-import');
   btn.disabled = true; btn.textContent = 'Importando...';
   try {
+    // Salva o Perfil de campos com o mapeamento (editado ou nao) antes de
+    // importar — as rotas de import/reload sempre leem o Perfil do banco.
+    const conexaoId = _conexaoDaAbaAtiva();
+    const fieldMap = lerMapeamentoDoFormulario();
+    const salvou = await fetch('/api/ia-command/protheus/sys-company-cfg/perfil', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(comEmpresa({ conexao_id: conexaoId, field_map: fieldMap })),
+    });
+    if (!salvou.ok) {
+      const body = await salvou.json().catch(() => ({}));
+      alert(body.error || 'Erro ao salvar o mapeamento de campos.');
+      return;
+    }
+
     if (abaImportAtiva === 'banco') await importarDoBanco(grupo);
     else if (abaImportAtiva === 'dbf') await importarDoDBF(grupo);
     else await importarDoSDB(grupo);
@@ -875,10 +1041,18 @@ async function importarDoSDB(grupo) {
 // Eventos ─────────────────────────────────────────────────────────────────────
 
 document.getElementById('imp-conexao-dbf')?.addEventListener('change', () => {
-  document.getElementById('btn-confirmar-import').disabled = !dbfRegistros || !document.getElementById('imp-conexao-dbf').value;
+  esconderMapeamentoDetectado();
+  document.getElementById('btn-detectar-import').disabled = !dbfRegistros || !document.getElementById('imp-conexao-dbf').value;
 });
 document.getElementById('imp-conexao-sdb')?.addEventListener('change', () => {
-  document.getElementById('btn-confirmar-import').disabled = !sdbRegistros || !document.getElementById('imp-conexao-sdb').value;
+  esconderMapeamentoDetectado();
+  document.getElementById('btn-detectar-import').disabled = !sdbRegistros || !document.getElementById('imp-conexao-sdb').value;
+});
+document.getElementById('imp-conexao-banco')?.addEventListener('change', () => {
+  tabelaBancoSelecionada = null;
+  document.getElementById('lista-tabelas-banco').innerHTML = '';
+  esconderMapeamentoDetectado();
+  document.getElementById('btn-detectar-import').disabled = true;
 });
 document.getElementById('modal-importar')?.addEventListener('click', e => {
   if (e.target === document.getElementById('modal-importar')) fecharImportar();

@@ -12,7 +12,7 @@ const spec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras
 const sysPrompt = promptBuilder.buildSystemPrompt(spec);
 assert(sysPrompt.includes('IA-OWNER do modulo compras'), 'compras deve usar IA-OWNER');
 assert(sysPrompt.includes('Voce e dono da decisao semantica'), 'IA deve decidir heranca/continuidade');
-assert(sysPrompt.includes('data_atual') && sysPrompt.includes('CONTRATO OBRIGATORIO DE SQL'), 'compras deve manter ancora cronologica e respeitar contrato autoritativo');
+assert(sysPrompt.includes('data_atual') && sysPrompt.includes('GUIA TECNICO DE SQL'), 'compras deve manter ancora cronologica e respeitar guia tecnico');
 assert(/devolu(?:cao|coes)|devolu[cç](?:ao|oes)/i.test(sysPrompt), 'prompt deve enviar regras de devolucao quando o usuario pedir');
 assert(sysPrompt.includes('Regras de Validacao de Tabelas Fisicas'), 'compras deve receber regras SX2 multi-tenant');
 assert(sysPrompt.includes('Formato de Data Protheus') && sysPrompt.includes('data_atual'), 'compras deve receber regras cronologicas');

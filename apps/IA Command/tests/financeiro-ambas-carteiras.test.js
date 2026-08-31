@@ -4,8 +4,8 @@
  * Testes para carteira='ambas' no módulo financeiro.
  *
  * Cobre dois bugs corrigidos:
- *   1. query_plan_texto deve instruir SELECT único com duas colunas (valor_recebido + valor_pago)
- *      quando carteira='ambas' e estado=recebido/pago — nunca dois SELECTs separados ou UNION ALL.
+ *   1. query_plan_texto deve orientar valor_recebido + valor_pago
+ *      quando carteira='ambas' e estado=recebido/pago, sem impor uma única forma SQL.
  *   2. _extrairLabelIntencao deve retornar label correto para "contas recebidas e pagas",
  *      "contas recebidas" e "contas pagas" isoladas — evita que o formatter invente título.
  */
@@ -62,31 +62,31 @@ ok('plano detecta estado recebido/realizado', () => {
 
 const textoPlanoAmbas = queryPlan.formatQueryPlanForPrompt(planoAmbas);
 
-ok('query_plan instrui SELECT unico com duas colunas', () => {
+ok('query_plan orienta realizadas de ambas as carteiras', () => {
   assert.ok(
     textoPlanoAmbas.includes('financeiro_ambas_realizado'),
     'deve conter instrucao financeiro_ambas_realizado',
   );
 });
 
-ok('query_plan proibe dois SELECTs separados', () => {
+ok('query_plan nao impoe forma unica para ambas realizado', () => {
   assert.ok(
-    textoPlanoAmbas.includes('PROIBIDO gerar dois SELECTs separados'),
-    'deve proibir dois SELECTs separados explicitamente',
+    !textoPlanoAmbas.includes('PROIBIDO gerar dois SELECTs separados'),
+    'nao deve proibir dois SELECTs separados por preferencia de formato',
   );
 });
 
-ok('query_plan proibe UNION ALL para ambas realizado', () => {
+ok('query_plan nao proibe UNION ALL por si so para ambas realizado', () => {
   assert.ok(
-    textoPlanoAmbas.includes('PROIBIDO') && textoPlanoAmbas.includes('UNION ALL'),
-    'deve proibir UNION ALL para carteira ambas realizado',
+    textoPlanoAmbas.includes('UNION ALL') && !/PROIBIDO[^\n]*UNION ALL/i.test(textoPlanoAmbas),
+    'UNION ALL pode ser citado como alternativa valida, nao como proibicao',
   );
 });
 
-ok('query_plan instrui subqueries escalares', () => {
+ok('query_plan aceita subqueries escalares como alternativa', () => {
   assert.ok(
-    textoPlanoAmbas.includes('subqueries escalares'),
-    'deve instruir uso de subqueries escalares no SELECT',
+    textoPlanoAmbas.includes('Subqueries escalares'),
+    'deve citar subqueries escalares como alternativa valida',
   );
 });
 

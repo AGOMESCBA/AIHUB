@@ -218,7 +218,7 @@ const retryPeriodo = runner._test.buildRetryTecnicoIaOwner({
   ),
   entidadesResolvidas: [],
 });
-assert(retryPeriodo.includes('CONTRATO OBRIGATORIO DE SQL'), 'retry de periodo deve mandar seguir o contrato atual');
+assert(retryPeriodo.includes('GUIA TECNICO DE SQL'), 'retry de periodo deve mandar seguir o guia tecnico atual');
 assert(retryPeriodo.includes('SUBSTRING/LEFT/LIKE'), 'retry de periodo deve orientar remover filtro temporal residual');
 
 // ── Novo contrato: recebidas devem usar FK1 ou SE5, nunca E1_BAIXA ────────────

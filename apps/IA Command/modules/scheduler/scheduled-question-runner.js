@@ -8,6 +8,7 @@ const store = require('./scheduled-question-store');
 const crud = require('../database/crud');
 const connectionFactory = require('../erp/providers/connection-factory');
 const semanticDatasetRunner = require('../erp/core/semantic-dataset-ai-runner');
+const temporalContract = require('../erp/core/temporal-contract');
 
 const SQL_HANDLERS = {
   compras: require('../erp/totvs_protheus/compras/ai-sql-handler-v2'),
@@ -295,17 +296,66 @@ function validarSqlFixoBasico(sql) {
 }
 
 function montarIntentSqlFixo(job) {
+  const mensagem = job.pergunta || job.nome || 'Consulta agendada';
+  const periodoResolvido = temporalContract.resolverPeriodoDeterministico({
+    modulo: String(job.modulo || '').toLowerCase(),
+    mensagem,
+  });
+  const periodo = periodoResolvido?.dataInicio && periodoResolvido?.dataFim ? periodoResolvido : {};
   return {
     intencao: `${String(job.modulo || 'agendamento').toLowerCase()}_dinamico`,
     origem: 'agendamento_sql_fixo',
     confianca: 1,
-    periodo: {},
+    periodo,
     filtros: {},
     _moduloDinamico: String(job.modulo || '').toLowerCase(),
-    _mensagemOriginal: job.pergunta || job.nome || 'Consulta agendada',
+    _mensagemOriginal: mensagem,
     _empresaIdFixa: Number(job.empresa_id || 0) || null,
     _systemOrigin: 'agendamento',
     _skipIaSqlGeneration: true,
+    ...(periodo.dataInicio && periodo.dataFim ? { _periodoCanonicoResolvido: periodo } : {}),
+  };
+}
+
+function erroSqlFixoPermiteRetryIA(resultado = {}) {
+  if (resultado?.tipo !== 'erro') return false;
+  const subtipo = String(resultado.subtipo || '').trim();
+  if (/^acesso_negado_/.test(subtipo) || subtipo === 'sem_conexao') return false;
+  return [
+    'contrato_query_plan_invalido',
+    'contrato_ia_owner_invalido',
+    'periodo_sql_inconsistente',
+    'sql_bloqueado',
+  ].includes(subtipo);
+}
+
+async function tentarRetryIaAposSqlFixo({ handler, resultadoSqlFixo, intent, empresaId } = {}) {
+  if (!erroSqlFixoPermiteRetryIA(resultadoSqlFixo) || typeof handler?.executar !== 'function') {
+    return resultadoSqlFixo;
+  }
+  const intentRetry = {
+    ...intent,
+    origem: 'agendamento_sql_fixo_retry_ia',
+    _skipIaSqlGeneration: false,
+    _sqlFixoFalhouSubtipo: resultadoSqlFixo.subtipo || null,
+  };
+  let resultadoRetry = null;
+  try {
+    resultadoRetry = await handler.executar(intentRetry, Number(empresaId));
+  } catch (e) {
+    return {
+      ...resultadoSqlFixo,
+      _sql_fixo_retry_ia_erro: e.message || String(e),
+    };
+  }
+  if (!resultadoRetry || resultadoRetry.tipo === 'erro') return resultadoSqlFixo;
+  return {
+    ...resultadoRetry,
+    _pipeline_origem: 'agendamento_sql_fixo_retry_ia',
+    _sql_fixo_erro_original: {
+      subtipo: resultadoSqlFixo.subtipo || null,
+      mensagem: resultadoSqlFixo._sql_validacao_erro || resultadoSqlFixo.resposta_direta || null,
+    },
   };
 }
 
@@ -439,7 +489,8 @@ async function executarSqlFixoUmaVez(empresaId, job, destinatarios = null) {
 
   const intent = montarIntentSqlFixo(job);
   const t0 = Date.now();
-  const resultado = await handler.executarSqlDireto(sql, intent, Number(empresaId));
+  const resultadoSqlFixo = await handler.executarSqlDireto(sql, intent, Number(empresaId));
+  const resultado = await tentarRetryIaAposSqlFixo({ handler, resultadoSqlFixo, intent, empresaId });
   const resposta = responseFormatter.formatar(resultado, intent, { empresaId: Number(empresaId), messageTemplates });
   const status = statusExecucaoSql(resultado, resposta);
   const log = interpretationLog.registrar({
@@ -709,9 +760,12 @@ module.exports = {
     consultaSemSetRowcount,
     garantirSetRowcountSqlFixo,
     validarSqlFixoBasico,
+    erroSqlFixoPermiteRetryIA,
+    tentarRetryIaAposSqlFixo,
     macrosDataSql,
     resolverMacroDataSql,
     executarSqlFixoUmaVez,
+    montarIntentSqlFixo,
     _erpDoModulo,
   },
 };

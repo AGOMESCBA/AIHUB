@@ -136,7 +136,15 @@
     font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, "Helvetica Neue", Arial, sans-serif;
     background: var(--wa-app-bg);
     color: var(--wa-text);
+    /* 100vh no Chrome Android e a altura com a barra de enderecos
+       RECOLHIDA (o maximo possivel) — no carregamento ela costuma estar
+       expandida, entao a area realmente visivel e menor que 100vh. Como o
+       body tem overflow:hidden, o que sobra "embaixo" (chat-footer, campo
+       de digitar) fica inacessivel, sem rolagem possivel ate ele — e some
+       da tela. 100dvh acompanha a altura visivel real; 100vh fica como
+       fallback para navegadores sem suporte a unidades dinamicas. */
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -149,7 +157,11 @@
     /* Sem transicao aqui: alternar Conversa/Dados ja dispara recalculo pesado
        de layout no Tabulator. Animar a largura junto deixa a navegacao entre
        abas parecendo travada em bases maiores. */
+    /* Mesmo raciocinio do 100dvh no body acima — sem isso o grid calcula
+       altura errada em mobile e empurra o chat-footer pra fora da area
+       visivel real. */
     height: 100vh;
+    height: 100dvh;
     /* Sem limite de largura: usa todo o espaco disponivel da janela do
        Protheus/TWebEngine, em vez de travar em 1180px e sobrar espaco vazio
        nas laterais em telas maiores. */
@@ -750,6 +762,37 @@
   .focus-toggle-btn.active {
     color: var(--wa-accent);
   }
+  /* Botao hamburguer que abre a sidebar como drawer no mobile (ver media
+     query max-width:760px). Escondido no desktop pois a sidebar ja fica
+     sempre visivel ali. */
+  .sidebar-toggle-btn {
+    display: none;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--wa-chrome-sub);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.12s ease;
+  }
+  .sidebar-toggle-btn:hover { background: var(--wa-select-bg-hover); border-color: var(--wa-border); color: var(--wa-chrome-text); }
+  .sidebar-toggle-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring); }
+  .sidebar-toggle-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.46);
+    z-index: 55;
+  }
+  .sidebar-backdrop.active { display: block; }
+
   .focus-toggle-btn svg {
     width: 15px;
     height: 15px;
@@ -1283,6 +1326,29 @@
   .view-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--wa-focus-ring); }
   .view-tab .badge-dot { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--wa-accent); flex: none; }
   .view-tab.active .badge-dot { display: inline-block; }
+  /* Botao de recolher/reabrir o cabecalho — disponivel em qualquer tela
+     (mobile ou desktop) como opcao de "modo compacto" pra quem quer mais
+     espaco de tela pra conversa/grid. Fica na propria .view-tabs (nunca
+     recolhida) pra sempre ter como reabrir. */
+  .header-collapse-btn {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    margin: auto 4px auto auto;
+    padding: 0;
+    border: 1px solid var(--wa-border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--wa-tab-muted);
+    cursor: pointer;
+  }
+  .header-collapse-btn:hover { color: var(--wa-chrome-text); border-color: var(--wa-accent-soft-border); }
+  .header-collapse-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--wa-focus-ring); }
+  .header-collapse-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.15s ease; }
+  .app-frame.header-collapsed .header-collapse-btn svg { transform: rotate(180deg); }
   .view-tab:disabled { opacity: 0.5; cursor: default; }
   .view-tab:disabled:hover { background: transparent; color: var(--wa-tab-muted); border-color: transparent; }
 
@@ -1525,8 +1591,15 @@
   .column-rename-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
   .report-body { flex: 1; min-height: 0; padding: 12px 16px 16px; overflow: hidden; display: flex; flex-direction: column; }
-  .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); }
-  #reportGrid { height: 100%; }
+  /* touch-action explicito: sem isso, em alguns Chrome Android o gesto de
+     arrastar dentro de containers flex aninhados com overflow:hidden (este
+     wrap fica dentro de report-body > report-panel > view-panel, todos com
+     overflow:hidden) nao e delegado corretamente pro scroll interno do
+     Tabulator (.tabulator-tableholder) — usuario reportou a grid "travada",
+     sem rolar nem no eixo vertical nem horizontal mesmo por toque. */
+  .report-grid-wrap { flex: 1; min-height: 0; border: 1px solid var(--wa-border); border-radius: 8px; overflow: hidden; background: var(--wa-sidebar); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03); touch-action: pan-x pan-y; }
+  #reportGrid { height: 100%; touch-action: pan-x pan-y; }
+  .tabulator-tableholder { touch-action: pan-x pan-y; }
 
   .report-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--wa-text-tertiary); text-align: center; padding: 30px; gap: 8px; }
   .report-empty svg { width: 42px; height: 42px; fill: var(--wa-text-tertiary); opacity: 0.4; }
@@ -1572,13 +1645,201 @@
   .tabulator .tabulator-header-filter select:focus { border-color: var(--wa-accent-soft-border); box-shadow: 0 0 0 2px var(--wa-accent-soft-bg); }
   .tabulator .tabulator-cell.num { font-variant-numeric: tabular-nums; }
 
-  @media (max-width: 760px) {
+  /* max-height:500px cobre celular deitado: a LARGURA em paisagem passa de
+     760px (vira a altura original do aparelho, ~700-900px), entao uma regra
+     baseada so em max-width perderia esse caso e voltaria pro layout
+     desktop (sidebar fixa de 344px) espremido numa tela de ~390px de
+     altura, sem espaco pra nada. Qualquer um dos dois criterios ativa o
+     layout mobile. */
+  @media (max-width: 760px), (max-height: 500px) {
     .app-frame { grid-template-columns: 1fr; }
     .app-frame.focus-mode:not(.sidebar-collapsed) { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
-    .escopo-select-btn { max-width: min(330px, 60vw); }
+    /* .app-frame.sidebar-collapsed (aba Dados, ver trocarAba() no JS) tem
+       maior especificidade que a regra .app-frame acima e vencia mesmo
+       dentro da media query, aplicando "0px 1fr" da regra base (fora da
+       media query) — sobrava uma coluna fantasma de 0px no grid que
+       quebrava o calculo de altura de header/rodape/input, fazendo-os
+       sumir da tela sem rolagem possivel ate eles. Precisa forcar 1fr aqui
+       tambem, com a MESMA especificidade da regra base, pra vencer por
+       ordem de declaracao (esta vem depois no arquivo). */
+    .app-frame.sidebar-collapsed { grid-template-columns: 1fr; }
+    /* Sidebar vira drawer deslizante por cima do chat, em vez de sumir sem
+       volta (era display:none antes — o usuario ficava sem forma de trocar
+       de conversa, buscar ou abrir favoritos no celular). Abre via
+       .sidebar-toggle-btn no header, toggleSidebarMobile() no JS. */
+    .sidebar {
+      display: flex;
+      position: fixed;
+      top: 0; bottom: 0; left: 0;
+      width: min(320px, 86vw);
+      z-index: 60;
+      box-shadow: 0 0 0 1px var(--wa-border);
+      transform: translateX(-100%);
+      transition: transform 0.22s ease;
+    }
+    .app-frame.sidebar-mobile-open .sidebar { transform: translateX(0); }
+    .sidebar-toggle-btn { display: flex; }
+    /* Header espremido no celular (avatar + hamburguer + escopo + acoes):
+       subtitulo "online..." e dispensavel e sem nowrap quebrava em 3 linhas
+       empurrando o botao de escopo. Nome do app ja basta como titulo. */
+    .header-sub { display: none; }
+    .chat-header { gap: 8px; padding: 10px 12px; }
+    .escopo-select-btn { min-width: 0; max-width: min(200px, 42vw); }
+    /* Modo foco (maximizar/recolher sidebar) e redundante no mobile: a
+       sidebar ja e um drawer escondido por padrao aqui, nao ha coluna fixa
+       pra "recolher". Libera espaco no header ja apertado. */
+    .focus-toggle-btn { display: none; }
+    /* Wallpaper decorativo do chat-body (SVG de icones IA/ERP) so atrapalha
+       legibilidade em tela pequena — sem funcao, so estetica de fundo. */
+    .chat-body { background-image: none; }
+    /* focus-mode (persistido em localStorage, pode vir ativo de uma sessao
+       anterior no desktop) colapsa a sidebar para icones de 48px sem nome
+       nem preview de conversa, e aumenta o input do rodape alem da viewport
+       visivel no celular (fica atras da barra de gestos do Android). No
+       mobile a sidebar ja e um drawer full-detail por padrao — nao existe
+       "modo compacto" aqui, entao neutraliza focus-mode por completo em vez
+       de tentar compensar caso a caso. */
+    .app-frame.focus-mode .sidebar-header .brand-text,
+    .app-frame.focus-mode .sidebar-search,
+    .app-frame.focus-mode .sidebar-footer .user-info,
+    .app-frame.focus-mode .session-meta,
+    .app-frame.focus-mode .session-actions,
+    .app-frame.focus-mode .favorite-open-btn .favorite-label,
+    .app-frame.focus-mode .new-chat-btn span { display: initial; }
+    .app-frame.focus-mode .session-meta { display: block; }
+    .app-frame.focus-mode .session-actions { display: flex; }
+    .app-frame.focus-mode .sidebar-header { justify-content: flex-start; padding: 14px 24px; }
+    .app-frame.focus-mode .sidebar-header .brand-icon { width: 40px; height: 40px; border-radius: 50%; }
+    .app-frame.focus-mode .new-chat-btn,
+    .app-frame.focus-mode .favorite-open-btn { width: auto; height: auto; margin: 14px 14px 10px; padding: 9px 12px; border-radius: 999px; font-size: 13px; gap: 7px; }
+    .app-frame.focus-mode .favorite-open-btn { margin: 0 14px 12px; justify-content: space-between; }
+    .app-frame.focus-mode .favorite-open-btn .favorite-count { position: static; border: none; }
+    .app-frame.focus-mode .session-list { flex-direction: column; align-items: stretch; padding: 2px 12px 10px; gap: 0; }
+    .app-frame.focus-mode .session-item { width: auto; min-height: 72px; justify-content: flex-start; padding: 10px 12px; gap: 11px; }
+    .app-frame.focus-mode .session-avatar { width: 44px; height: 44px; }
+    .app-frame.focus-mode .sidebar-footer { justify-content: flex-start; padding: 12px 16px; }
+    .app-frame.focus-mode .sidebar-footer .user-avatar { width: 40px; height: 40px; }
     .app-frame.focus-mode .chat-footer { padding: 10px 12px; }
-    .app-frame.focus-mode .input-wrap { min-height: 78px; }
+    .app-frame.focus-mode .input-wrap { min-height: 0; align-items: center; border-radius: 24px; padding: 0 8px 0 18px; }
+    .app-frame.focus-mode .input-wrap textarea { min-height: auto; max-height: 126px; }
+    /* Campo de digitar no mobile ficava baixo/espremido perto do botao de
+       enviar (48px de diametro) — a pedido do usuario, aumenta a altura
+       minima da caixa de texto e o padding vertical do rodape em ambos os
+       casos (normal e focus-mode, que no mobile e neutralizado mas ainda
+       pode estar com a classe ativa vinda de sessao anterior). */
+    .chat-footer,
+    .app-frame.focus-mode .chat-footer { padding: 12px 14px; }
+    .input-wrap,
+    .app-frame.focus-mode .input-wrap { min-height: 46px; padding: 12px 18px; }
+    .input-wrap textarea,
+    .app-frame.focus-mode .input-wrap textarea { min-height: 24px; font-size: 15.5px; }
+    .app-frame.focus-mode .protheus-strip { justify-content: space-between; min-height: auto; padding: 4px 16px; font-size: 10px; }
+    .app-frame.focus-mode .protheus-strip svg { display: inline; }
+    /* Barra de selecao de mensagens (Selecionar Todas/Limpar Chat/Cancelar/
+       Excluir) e uma linha flex sem wrap — em ~390px de largura os 4 itens
+       nao cabem e estouravam pra fora da tela sem nenhuma forma de rolar ate
+       eles. Agora rola horizontalmente por baixo do dedo (nada fica
+       inacessivel), com os botoes compactados para caber mais na tela. */
+    .selecao-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x; padding: 9px 12px; gap: 8px; }
+    .selecao-contagem { flex: none; white-space: nowrap; }
+    #selecaoContagemTexto { display: none; }
+    .selecao-todas, .selecao-limpar, .selecao-cancelar, .selecao-excluir { flex: none; padding: 7px 10px; white-space: nowrap; }
+    /* Toolbar da aba Dados (Agrupar por / Buscar / Expandir / Recolher /
+       Limpar / Colunas / Resetar / Excel / PDF) — no desktop usa
+       flex-wrap, que em ~390px de largura gera varias linhas empilhadas e
+       cortadas (Buscar dados ilegivel, botoes sumindo). Mesmo tratamento
+       da barra de selecao: uma linha so, rolavel horizontalmente, nada
+       fica inacessivel. */
+    .report-toolbar { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x; padding: 9px 12px; }
+    .report-toolbar .toolbar-label { flex: none; white-space: nowrap; }
+    .group-picker { flex: none; flex-wrap: nowrap; }
+    .group-chip { flex: none; white-space: nowrap; }
+    .report-actions { flex: none; }
+    .report-search { flex: none; width: 160px; }
+    .report-btn, .report-columns, .report-action-menu { flex: none; white-space: nowrap; }
+    /* Bolhas de mensagem: no desktop max-width:64%/74% (focus-mode) faz
+       sentido pra nao esticar demais em telas largas, mas em ~390px vira
+       so ~250px — estreito demais pra respostas com dados. O card
+       .structured-response, alem disso, tinha min-width em vw (420px/
+       520px) MAIOR que a propria bolha, entao vazava visualmente pra fora
+       do balao (usuario reportou "o texto sai da area demarcada").
+       Bolha ganha mais espaco e o card passa a respeitar 100% do container
+       em vez de impor uma largura minima propria. */
+    .bubble,
+    .app-frame.focus-mode .bubble { max-width: 88%; }
+    .bubble .structured-response,
+    .app-frame.focus-mode .bubble .structured-response { min-width: 0; width: 100%; }
+    /* Fonte da grade de dados reduzida no mobile — a pedido do usuario,
+       pra caber mais colunas legiveis na tela antes de precisar rolar
+       horizontalmente.
+       !important necessario: o CSS do Tabulator (lib externa) so e
+       carregado via <link> injetado dinamicamente no <head> quando a aba
+       Dados abre pela 1a vez (ver garantirTabulator()/carregarCssUmaVez())
+       — como ele entra DEPOIS deste <style> no DOM, com mesma
+       especificidade ele vence por ordem de declaracao e nossos overrides
+       eram ignorados silenciosamente (confirmado medindo em runtime: o
+       padding/font-size aplicado continuava sendo o da lib, nao o nosso). */
+    .tabulator { font-size: 11.3px !important; }
+    .tabulator .tabulator-col-title { font-size: 11px !important; }
+    .tabulator .tabulator-cell { padding: 3px 6px !important; }
+    .tabulator .tabulator-col { padding: 0 !important; }
+    .tabulator .tabulator-header-filter input,
+    .tabulator .tabulator-header-filter select { font-size: 11px !important; padding: 3px 5px !important; }
+  }
+  /* Paisagem de celular (altura baixa, ~360-430px): cabecalho + abas +
+     toolbar da aba Dados + barra de status juntos consomem ~200px de uma
+     tela com so ~390px de altura total, sobrando espaco insuficiente pra
+     grid mostrar qualquer linha de dado (usuario reportou "nao consigo ver
+     nada na grid" — confirmado via teste: a area de linhas ficava com
+     ~29px, cabendo menos de 1 linha). Compacta a altura desses elementos
+     SO quando a tela esta baixa (nao mexe no retrato, onde ha espaco de
+     sobra). Nao esconde nada — grand-total continua sempre visivel.  */
+  @media (max-height: 500px) {
+    .chat-header { min-height: 0; padding: 5px 10px; gap: 6px; }
+    /* Avatar redondo e botao de escopo (empresa/filial) tinham altura fixa
+       de 40px cada — maior fator determinando a altura minima do header
+       mesmo com padding reduzido. Encolhidos so em paisagem, sem remover
+       nenhuma funcao (escopo continua clicavel, so mais compacto). */
+    .chat-header .avatar { width: 30px; height: 30px; }
+    .chat-header .avatar svg { width: 16px; height: 16px; }
+    .escopo-select-btn { height: 30px; }
+    .sidebar-toggle-btn,
+    .header-actions .reset-memoria-btn { width: 30px; height: 30px; }
+    .view-tabs { padding: 0 10px; }
+    .view-tab { padding: 4px 8px 3px; font-size: 11px; }
+    .report-toolbar { padding: 4px 10px; gap: 6px; }
+    .report-btn { padding: 5px 9px; font-size: 11px; }
+    .group-chip { padding: 3px 8px; font-size: 11px; }
+    .report-search { padding: 5px 9px; }
+    .report-status-bar { min-height: 0; padding: 2px 10px; }
+    .report-body { padding: 5px 10px 6px; }
+    .report-grand-total { padding: 4px 10px; margin-top: 3px; gap: 12px; }
+    .report-caption { padding: 2px 10px; font-size: 10.5px; }
+    .report-scope { padding: 0 10px 3px; }
+    /* Linhas e cabecalho de coluna da grid mais baixos so em paisagem —
+       cada linha economizada aqui multiplica pelo numero de linhas
+       visiveis, dando o maior ganho de area util pra ver dados.
+       !important pelo mesmo motivo explicado no bloco mobile geral acima
+       (CSS do Tabulator injetado dinamicamente DEPOIS deste <style>). */
+    .tabulator { font-size: 10.5px !important; }
+    .tabulator .tabulator-cell { padding: 1px 6px !important; }
+    .tabulator .tabulator-col-title { font-size: 10px !important; }
+    .tabulator .tabulator-col { padding: 0 !important; }
+    .tabulator .tabulator-header-filter input,
+    .tabulator .tabulator-header-filter select { min-height: 20px !important; font-size: 10px !important; padding: 1px 5px !important; }
+    .tabulator-row .tabulator-group { min-height: 0 !important; padding: 3px 8px !important; font-size: 10.5px !important; }
+  }
+  /* Recolher cabecalho (avatar, titulo, escopo de empresa/filial, menu) —
+     disponivel em qualquer tamanho de tela, nao so paisagem mobile. Grid/
+     conversa ganham esse espaco de volta; botao continua sempre acessivel
+     na .view-tabs (nunca recolhida junto) pra reabrir a qualquer momento. */
+  .app-frame.header-collapsed .chat-header { display: none; }
+  /* Inverso exato da media query mobile acima (761px+ DE largura E 501px+
+     DE altura) — se so checasse min-width, o backdrop ficaria forcado
+     invisivel tambem em paisagem de celular (largura >760 mas altura baixa),
+     onde o drawer mobile continua ativo. */
+  @media (min-width: 761px) and (min-height: 501px) {
+    .sidebar-backdrop { display: none !important; }
   }
   @media (prefers-reduced-motion: reduce) {
     .row:not(.typing-row),
@@ -1651,8 +1912,13 @@
     </div>
   </aside>
 
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
   <section class="chat-panel">
     <header class="chat-header">
+      <button class="sidebar-toggle-btn" id="btnSidebarToggle" type="button" title="Conversas" aria-label="Abrir lista de conversas" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
       <div class="avatar" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 015 5c0 2.1-1.3 3.9-3.1 4.6.1.4.1.9.1 1.4 3.4.5 6 3.4 6 6.9v1H4v-1c0-3.5 2.6-6.4 6-6.9 0-.5 0-1 .1-1.4C8.3 10.9 7 9.1 7 7a5 5 0 015-5z"/></svg>
       </div>
@@ -1702,7 +1968,7 @@
          Ordem a pedido do usuario: contagem a esquerda; Limpar Chat,
          Cancelar Selecao e Excluir agrupados a direita. -->
     <div class="selecao-bar" id="selecaoBar" style="display:none;">
-      <span class="selecao-contagem" id="selecaoContagem">0 selecionada(s)</span>
+      <span class="selecao-contagem" id="selecaoContagem"><span id="selecaoContagemNum">0</span><span id="selecaoContagemTexto"> selecionada(s)</span></span>
       <button type="button" class="selecao-todas" id="btnSelecionarTodas" title="Selecionar todas as mensagens">
         <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
         Selecionar Todas
@@ -1729,6 +1995,9 @@
       <button class="view-tab" id="tabRelatorio" type="button" role="tab" aria-selected="false" disabled>
         <span class="badge-dot" aria-hidden="true"></span>
         Dados
+      </button>
+      <button class="header-collapse-btn" id="btnHeaderCollapse" type="button" title="Recolher cabecalho" aria-label="Recolher cabecalho" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><path d="M18 15l-6-6-6 6"/></svg>
       </button>
     </div>
 
@@ -2101,6 +2370,9 @@
   }
 
   const appFrame = document.querySelector('.app-frame');
+  const btnSidebarToggle = document.getElementById('btnSidebarToggle');
+  const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+  const btnHeaderCollapse = document.getElementById('btnHeaderCollapse');
   const chatBody = document.getElementById('chatBody');
   const chatForm = document.getElementById('chatForm');
   const msgInput = document.getElementById('msgInput');
@@ -2167,6 +2439,8 @@
   const btnForwardAttachmentTop = document.getElementById('btnForwardAttachmentTop');
   const selecaoBar = document.getElementById('selecaoBar');
   const selecaoContagem = document.getElementById('selecaoContagem');
+  const selecaoContagemNum = document.getElementById('selecaoContagemNum');
+  const selecaoContagemTexto = document.getElementById('selecaoContagemTexto');
   const btnSelecionarTodas = document.getElementById('btnSelecionarTodas');
   const btnCancelarSelecao = document.getElementById('btnCancelarSelecao');
   const btnExcluirSelecionadas = document.getElementById('btnExcluirSelecionadas');
@@ -4692,7 +4966,11 @@
 
   function atualizarBarraSelecao() {
     const qtd = mensagensSelecionadas.size;
-    selecaoContagem.textContent = qtd + ' selecionada' + (qtd === 1 ? '' : 's');
+    // Numero e texto em spans separados: no mobile o CSS esconde o span de
+    // texto e deixa so o numero (barra de selecao e apertada em tela
+    // pequena — ver media query max-width:760px).
+    selecaoContagemNum.textContent = qtd;
+    selecaoContagemTexto.textContent = ' selecionada' + (qtd === 1 ? '' : 's');
     btnExcluirSelecionadas.disabled = qtd === 0;
 
     // Botao "Selecionar Todas" vira "Desmarcar Todas" quando toda mensagem
@@ -6049,12 +6327,48 @@
     aplicarAgrupamento();
   });
 
+  // No mobile, o toolbar da aba Dados rola horizontalmente
+  // (.report-toolbar { overflow-x: auto }, ver media query max-width:760px).
+  // Os popovers de Expandir/Recolher/Colunas usam position:absolute
+  // relativo ao proprio botao (pai com position:relative) — dentro de um
+  // ancestral com overflow-x:auto, a parte do popover que cai fora da
+  // altura visivel do toolbar e cortada pelo mesmo overflow que corta o
+  // eixo X, entao o menu abria mas ficava invisivel/inacessivel (usuario
+  // reportou "nao conseguimos expandir nenhuma opcao dos botoes").
+  // Reposiciona como position:fixed calculado a partir do botao, com
+  // clamping na viewport — mesmo padrao ja usado em abrirMenuMensagem()
+  // para o menu de contexto da mensagem.
+  function isMobileLayout() {
+    return window.matchMedia('(max-width: 760px), (max-height: 500px)').matches;
+  }
+  function posicionarPopoverMobile(popoverEl, triggerEl) {
+    if (!isMobileLayout()) {
+      popoverEl.style.position = '';
+      popoverEl.style.left = '';
+      popoverEl.style.right = '';
+      popoverEl.style.top = '';
+      return;
+    }
+    const rect = triggerEl.getBoundingClientRect();
+    const margem = 8;
+    popoverEl.style.position = 'fixed';
+    popoverEl.style.right = 'auto';
+    // Mede APOS display:block (classe .open ja aplicada pelo chamador) para
+    // ter largura real do popover no calculo de clamping.
+    const popoverRect = popoverEl.getBoundingClientRect();
+    const left = Math.min(window.innerWidth - popoverRect.width - margem, Math.max(margem, rect.left));
+    const top = Math.min(window.innerHeight - popoverRect.height - margem, Math.max(margem, rect.bottom + 6));
+    popoverEl.style.left = left + 'px';
+    popoverEl.style.top = top + 'px';
+  }
+
   btnExpandirGrupos.addEventListener('click', (e) => {
     e.stopPropagation();
     const abrir = !reportExpandMenu.classList.contains('open');
     fecharMenusAgrupamento();
     reportExpandMenu.classList.toggle('open', abrir);
     btnExpandirGrupos.setAttribute('aria-expanded', String(abrir));
+    if (abrir) posicionarPopoverMobile(reportExpandPopover, btnExpandirGrupos);
   });
 
   btnRecolherGrupos.addEventListener('click', (e) => {
@@ -6063,6 +6377,7 @@
     fecharMenusAgrupamento();
     reportCollapseMenu.classList.toggle('open', abrir);
     btnRecolherGrupos.setAttribute('aria-expanded', String(abrir));
+    if (abrir) posicionarPopoverMobile(reportCollapsePopover, btnRecolherGrupos);
   });
 
   reportExpandPopover.addEventListener('click', (e) => e.stopPropagation());
@@ -6372,6 +6687,7 @@
     fecharMenusAgrupamento();
     reportColumnsMenu.classList.toggle('open', aberto);
     btnReportColumns.setAttribute('aria-expanded', String(aberto));
+    if (aberto) posicionarPopoverMobile(reportColumnsPopover, btnReportColumns);
   });
 
   reportColumnsPopover.addEventListener('click', (e) => e.stopPropagation());
@@ -6746,6 +7062,72 @@
     });
   }
 
+  // Sidebar no mobile funciona como drawer (ver media query max-width:760px
+  // no CSS) — mesmas funcionalidades do desktop (nova conversa, busca,
+  // favoritos, lista de sessoes), so que sobreposta ao chat em vez de
+  // ocupar coluna fixa. Fecha ao escolher uma conversa/nova conversa para
+  // nao ficar cobrindo a tela.
+  function abrirSidebarMobile() {
+    appFrame.classList.add('sidebar-mobile-open');
+    sidebarBackdrop.classList.add('active');
+    btnSidebarToggle.setAttribute('aria-expanded', 'true');
+  }
+  function fecharSidebarMobile() {
+    appFrame.classList.remove('sidebar-mobile-open');
+    sidebarBackdrop.classList.remove('active');
+    btnSidebarToggle.setAttribute('aria-expanded', 'false');
+  }
+  btnSidebarToggle.addEventListener('click', function () {
+    if (appFrame.classList.contains('sidebar-mobile-open')) fecharSidebarMobile();
+    else abrirSidebarMobile();
+  });
+  sidebarBackdrop.addEventListener('click', fecharSidebarMobile);
+  sessionList.addEventListener('click', function (ev) {
+    if (ev.target.closest('.session-item')) fecharSidebarMobile();
+  });
+
+  // Recolher/reabrir o cabecalho — nasceu como solucao pra paisagem
+  // mobile (cabecalho consumia espaco valioso numa tela de ~390px de
+  // altura), mas o usuario gostou e pediu como opcao geral tambem no
+  // desktop. Botao fica na .view-tabs, que nunca e recolhida, entao
+  // sempre da pra reabrir.
+  if (btnHeaderCollapse) {
+    btnHeaderCollapse.addEventListener('click', function () {
+      const recolhido = appFrame.classList.toggle('header-collapsed');
+      btnHeaderCollapse.setAttribute('aria-pressed', String(recolhido));
+      btnHeaderCollapse.setAttribute('aria-label', recolhido ? 'Reabrir cabecalho' : 'Recolher cabecalho');
+      btnHeaderCollapse.title = recolhido ? 'Reabrir cabecalho' : 'Recolher cabecalho';
+      // Grid ganha/perde altura disponivel quando o cabecalho some/volta —
+      // Tabulator precisa ser avisado pra remedir (mesmo mecanismo usado
+      // no resize/orientationchange, ver agendarRedrawRelatorioAposResize).
+      agendarRedrawRelatorioAposResize();
+    });
+  }
+  // Redesenha a grid do Tabulator apos mudanca real de tamanho/orientacao
+  // da tela — cobre tanto a barra de enderecos do Chrome Android
+  // retraindo/expandindo (100dvh acompanha isso, mas o Tabulator so
+  // recalcula quando mandamos redraw explicitamente) quanto girar o
+  // celular para paisagem (usuario reportou grid completamente vazia ao
+  // deitar o aparelho, so o cabecalho "TOTAL GERAL" aparecia).
+  // setTimeout com atraso: ao rotacionar, o navegador dispara resize ANTES
+  // do reflow do CSS (media query max-width/max-height, grid do
+  // .app-frame, overflow-x do toolbar) terminar de se estabilizar — medir
+  // a grid no mesmo frame pegava dimensoes antigas/intermediarias e o
+  // redraw saia "congelado" com o layout errado.
+  let reportResizeTimer = null;
+  function agendarRedrawRelatorioAposResize() {
+    if (reportResizeTimer) clearTimeout(reportResizeTimer);
+    reportResizeTimer = setTimeout(() => {
+      reportResizeTimer = null;
+      if (reportTable) agendarRedrawRelatorioSePreciso(true);
+    }, 250);
+  }
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 760) fecharSidebarMobile();
+    agendarRedrawRelatorioAposResize();
+  });
+  window.addEventListener('orientationchange', agendarRedrawRelatorioAposResize);
+
   btnNovaConversa.addEventListener('click', function () {
     salvarRascunhoAtual();
     sessaoAtualId = null;
@@ -6757,6 +7139,7 @@
     trocarAba('conversa');
     fecharRelatorio();
     restaurarRascunho(null);
+    fecharSidebarMobile();
     msgInput.focus();
   });
 

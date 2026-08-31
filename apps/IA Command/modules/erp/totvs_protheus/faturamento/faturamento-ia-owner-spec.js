@@ -204,7 +204,13 @@ function validarFiltroTipoSF2(sql = '') {
 
 const CFOPS_TRANSFERENCIA_SEM_RECEITA = ['5151', '6151', '5152', '6152', '5155', '6155', '5156', '6156'];
 const CFOPS_DEVOLUCAO_COMPRA_ST_SEM_RECEITA = ['5410', '6410', '5411', '6411', '5412', '6412', '5413', '6413'];
-const FILTRO_CFOP_RECEITA_PADRAO = "AND NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')";
+// Excecao dentro do grupo 59xx/69xx (documental/logistico, regra geral sem receita): 5932/6932
+// (frete de transportadora) e 5933/6933 (servico tributado por ISS) SAO receita real — o
+// unico subconjunto do grupo que representa faturamento de fato. 5931/6931 (retencao de
+// imposto de frete de autonomo) e 5934/6934 (remessa simbolica em armazem geral) continuam
+// sem receita, cobertos pela exclusao geral do prefixo.
+const CFOPS_59_69_COM_RECEITA = ['5932', '6932', '5933', '6933'];
+const FILTRO_CFOP_RECEITA_PADRAO = "AND (NOT (SD2.D2_CF LIKE '59%' OR SD2.D2_CF LIKE '69%') OR SD2.D2_CF IN ('5932','6932','5933','6933')) AND SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156') AND NOT (SD2.D2_CF LIKE '52%' OR SD2.D2_CF LIKE '62%') AND SD2.D2_CF NOT IN ('5410','6410','5411','6411','5412','6412','5413','6413') AND NOT (SD2.D2_CF LIKE '55%' OR SD2.D2_CF LIKE '65%') AND NOT (SD2.D2_CF LIKE '56%' OR SD2.D2_CF LIKE '66%')";
 
 function _normalizarTextoFiscal(texto = '') {
   return String(texto || '')
@@ -234,12 +240,27 @@ function _sqlUsaSD2Receita(sql = '') {
     && /\bSD2\s*\.\s*D2_(?:TOTAL|VALDEV|QUANT|QTDEDEV|CF)\b/i.test(texto);
 }
 
+// Exige a excecao dos 4 codigos que geram receita real dentro do grupo 59/69 (5932/6932
+// frete de transportadora, 5933/6933 servico tributado por ISS). Sem essa excecao, o filtro
+// generico LIKE '59%'/'69%' exclui receita de verdade — bug oposto ao original (perder
+// faturamento real em vez de incluir CFOP sem receita).
+function _temExcecaoCfop59_69ComReceita(sql = '') {
+  const texto = String(sql || '');
+  const codigos = ['5932', '6932', '5933', '6933'];
+  const matches = [
+    ...texto.matchAll(/\bSD2\s*\.\s*D2_CF\s+IN\s*\(([^)]*)\)/gi),
+  ];
+  return matches.some(match => codigos.every(cfop => new RegExp(`'${cfop}'`).test(match[1])));
+}
+
 function _temExclusaoRemessa(sql = '') {
   const texto = String(sql || '');
   const notLike59 = /\bSD2\s*\.\s*D2_CF\s+NOT\s+LIKE\s*'59%'/i.test(texto);
   const notLike69 = /\bSD2\s*\.\s*D2_CF\s+NOT\s+LIKE\s*'69%'/i.test(texto);
   const notGrupoLike = /\bNOT\s*\([\s\S]{0,160}\bSD2\s*\.\s*D2_CF\s+LIKE\s*'59%'[\s\S]{0,80}\bOR\b[\s\S]{0,80}\bSD2\s*\.\s*D2_CF\s+LIKE\s*'69%'[\s\S]{0,160}\)/i.test(texto);
-  return (notLike59 && notLike69) || notGrupoLike;
+  const excluiGrupo = (notLike59 && notLike69) || notGrupoLike;
+  if (!excluiGrupo) return false;
+  return _temExcecaoCfop59_69ComReceita(texto);
 }
 
 function _temExclusaoTransferencia(sql = '') {

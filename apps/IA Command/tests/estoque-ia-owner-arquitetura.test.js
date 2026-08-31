@@ -15,6 +15,8 @@ assert(systemPrompt.includes('Regras de Validacao de Tabelas Fisicas'), 'prompt 
 assert(systemPrompt.includes('APENAS o mapa fornecido no no "sx2"'), 'prompt deve obrigar uso do SX2 atual');
 assert(systemPrompt.includes('SB1.B1_DESC AS produto'), 'entidades devem retornar descricao de produto');
 assert(systemPrompt.includes('SB2.B2_QATU'), 'prompt deve documentar campo de saldo atual');
+assert(systemPrompt.includes('SB2.B2_VATU1'), 'prompt deve documentar campo de saldo financeiro de estoque');
+assert(systemPrompt.includes('B2_LOCAL'), 'prompt deve preservar almoxarifado/armazem em saldo de estoque');
 assert(systemPrompt.includes('SD3'), 'prompt deve documentar movimentacao interna SD3');
 assert(systemPrompt.includes('D3_TM'), 'prompt deve documentar tipo de movimento SD3');
 assert(systemPrompt.includes('NUNCA use B1_FILIAL no ON'), 'prompt deve proibir JOIN SB2->SB1 por filial');
@@ -33,6 +35,7 @@ assert(userPrompt.includes('agora por armazem'), 'prompt deve conter mensagem at
 
 const sx3Prompt = runner._test.sx3EssencialParaPrompt(estoqueSpec.camposSx3Essenciais);
 assert(sx3Prompt.SB2.some(c => c.campo === 'B2_QATU'), 'SX3 essencial deve manter campo de saldo');
+assert(sx3Prompt.SB2.some(c => c.campo === 'B2_VATU1'), 'SX3 essencial deve manter campo de saldo financeiro');
 assert(sx3Prompt.SD3.some(c => c.campo === 'D3_TM'), 'SX3 essencial deve incluir D3_TM');
 
 const sx2 = {
@@ -79,15 +82,34 @@ WHERE SD2.D_E_L_E_T_ = ' '
 const validacaoSaldoSd2 = runner._test.validarSqlIaOwnerBasico(sqlSaldoPorSd2, estoqueSpec, sx2, 'saldo em estoque do produto 000001');
 assert.strictEqual(validacaoSaldoSd2.ok, false, 'saldo derivado de SD2 deve ser rejeitado');
 
+const sqlSoFisicoQuandoPediuFisicoFinanceiro = `
+SET ROWCOUNT 10000;
+SELECT SB2.B2_COD AS cod_produto, SB1.B1_DESC AS produto, SUM(SB2.B2_QATU) AS saldo_fisico
+FROM SB2990 SB2
+JOIN SB1990 SB1 ON SB2.B2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
+WHERE SB2.D_E_L_E_T_ = ' '
+GROUP BY SB2.B2_COD, SB1.B1_DESC
+`;
+const validacaoFisicoFinanceiroIncompleto = runner._test.validarSqlIaOwnerBasico(
+  sqlSoFisicoQuandoPediuFisicoFinanceiro,
+  estoqueSpec,
+  sx2,
+  'saldo em estoque fisico e financeiro de todos os produtos',
+);
+assert.strictEqual(validacaoFisicoFinanceiroIncompleto.ok, false, 'estoque fisico e financeiro nao pode retornar apenas saldo fisico');
+assert(validacaoFisicoFinanceiroIncompleto.erros.some(e => e.includes('B2_VATU1')), 'erro deve orientar uso de B2_VATU1 para saldo financeiro');
+
 const sqlBom = `
 SET ROWCOUNT 50;
-SELECT SB2.B2_FILIAL AS filial, SB1.B1_DESC AS produto, SUM(SB2.B2_QATU) AS saldo_atual
+SELECT SB2.B2_FILIAL AS filial, SB2.B2_COD AS cod_produto, SB1.B1_DESC AS produto,
+       SB1.B1_UM AS unidade_medida, SB2.B2_LOCAL AS armazem,
+       SUM(SB2.B2_QATU) AS saldo_fisico, SUM(SB2.B2_VATU1) AS saldo_financeiro
 FROM SB2990 SB2
 JOIN SB1990 SB1 ON SB2.B2_COD = SB1.B1_COD AND SB1.D_E_L_E_T_ = ' '
 WHERE SB2.B2_COD = '000001' AND SB2.D_E_L_E_T_ = ' '
-GROUP BY SB2.B2_FILIAL, SB1.B1_DESC
+GROUP BY SB2.B2_FILIAL, SB2.B2_COD, SB1.B1_DESC, SB1.B1_UM, SB2.B2_LOCAL
 `;
-const validacaoBoa = runner._test.validarSqlIaOwnerBasico(sqlBom, estoqueSpec, sx2);
+const validacaoBoa = runner._test.validarSqlIaOwnerBasico(sqlBom, estoqueSpec, sx2, 'saldo em estoque fisico e financeiro de todos os produtos');
 assert.strictEqual(validacaoBoa.ok, true, `SQL bom nao deveria ser rejeitado: ${(validacaoBoa.erros || []).join(' | ')}`);
 
 console.log('estoque-ia-owner-arquitetura.test.js: ok');

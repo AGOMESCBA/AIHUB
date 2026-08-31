@@ -31,6 +31,9 @@ function _normalizarNome(nome) {
 function _tipoMetrica(col) {
   const nome = _normalizarNome(col);
   const tokens = nome.split('_').filter(Boolean);
+  if (/saldo_(?:fisico|quantidade)|(?:fisico|quantidade)_estoque/.test(nome)) {
+    return 'quantidade';
+  }
   if (tokens.some(t => ['quantidade', 'qtd', 'qtde', 'qte', 'volume', 'unidade', 'unidades', 'item', 'itens', 'peca', 'pecas', 'peso', 'kg', 'quilo', 'quilos', 'kilo', 'kilos', 'ton', 'tn', 'tonelada', 'toneladas', 'litro', 'litros', 'metro', 'metros', 'caixa', 'caixas', 'saca', 'sacas'].includes(t))) {
     return 'quantidade';
   }

@@ -14,7 +14,10 @@
 function base() {
   return `
 ## Tabelas padrao do modulo Estoque
-- SB2: saldo/posicao de estoque por produto e armazem. Metrica principal: SB2.B2_QATU.
+- SB2: saldo/posicao de estoque por produto e armazem. Metricas principais:
+  saldo fisico/quantidade = SB2.B2_QATU; saldo financeiro/valor do estoque = SB2.B2_VATU1
+  (valor atual na moeda 1). Se B2_VATU1 nao existir no SX3 do tenant, use SUM(B2_QATU * B2_CM1)
+  somente se B2_CM1 existir; nunca apresente B2_QATU como valor financeiro.
 - SB1: cadastro de produto. SB1.B1_DESC e a descricao, SB1.B1_GRUPO o grupo.
 - SBM: grupo de produtos. SBM.BM_DESC e a descricao do grupo.
 - SD3: historico de movimentacao INTERNA de estoque (transferencia, requisicao, devolucao,
@@ -57,7 +60,8 @@ WHERE SB2.B2_COD = '000001' AND SB2.D_E_L_E_T_ = ' ' GROUP BY SB2.B2_FILIAL, SB1
 - Nunca use UPDATE, DELETE, INSERT, DROP, ALTER, TRUNCATE, EXEC, DECLARE, MERGE, SELECT INTO.
 
 ## Exibicao de entidades
-- produto: SB1.B1_DESC AS produto. Codigo como cod_produto.
+- produto em listagens de saldo: SB2.B2_FILIAL AS filial, SB2.B2_COD AS cod_produto,
+  SB1.B1_DESC AS produto, SB1.B1_UM AS unidade_medida, SB2.B2_LOCAL AS armazem.
 - grupo_produto: SBM.BM_DESC AS grupo_produto.
 Se uma entidade estiver no GROUP BY, inclua sua descricao no SELECT e no GROUP BY.
 
@@ -74,11 +78,19 @@ function saldoPosicao() {
 - Saldo/posicao atual de estoque de um produto e SEMPRE SB2 (tabela de saldo por produto e
   armazem), nunca SD2 (que e movimentacao de saida/faturamento), SD1 (movimentacao de entrada)
   nem SD3 (movimentacao interna — ver fragmento de movimentacao).
-- Quantidade em estoque = SB2.B2_QATU (quantidade atual). Reservado = SB2.B2_RESERVA.
+- Quantidade em estoque / saldo fisico = SB2.B2_QATU (quantidade atual). Saldo financeiro /
+  valor de estoque = SB2.B2_VATU1 (valor atual moeda 1). Reservado = SB2.B2_RESERVA.
   Empenhado = SB2.B2_QEMP. Disponivel = B2_QATU - B2_RESERVA - B2_QEMP (some somente se a
   pergunta pedir "disponivel"; para "saldo em estoque" simples, use apenas B2_QATU).
-- SB2 e por armazem (B2_LOCAL): se a pergunta nao especificar armazem, some B2_QATU de todos
-  os armazens do produto (SUM), agrupando por B2_COD.
+- Quando a pergunta pedir "saldo fisico e financeiro", "estoque fisico e financeiro",
+  "quantidade e valor" ou equivalente, retorne DUAS metricas separadas: SUM(SB2.B2_QATU)
+  AS saldo_fisico e SUM(SB2.B2_VATU1) AS saldo_financeiro. Nao calcule saldo_financeiro a
+  partir de saldo_fisico e nao use o mesmo alias/valor para as duas metricas.
+- SB2 sempre trabalha por filial + produto + almoxarifado/armazem (B2_LOCAL). Em listagens de
+  saldo por produto ou "todos os produtos", preserve essa granularidade: retorne B2_FILIAL,
+  B2_COD, B1_DESC, B1_UM e B2_LOCAL, agrupando por esses campos. So consolide/some todos os
+  almoxarifados em uma unica linha por produto se a pergunta pedir explicitamente "consolidado",
+  "total por produto", "somado" ou equivalente.
 - NUNCA use SD2 (Itens de Nota Fiscal de Saida) para responder "saldo em estoque" — SD2 e
   movimentacao de faturamento, e mesmo que SF4.F4_ESTOQUE indique que uma nota MOVIMENTOU
   estoque, isso nao representa a POSICAO/SALDO atual do produto. Perguntas sobre quantidade

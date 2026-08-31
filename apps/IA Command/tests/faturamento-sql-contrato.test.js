@@ -14,7 +14,7 @@ const faturamentoSpec = require(path.join(ROOT, 'modules/erp/totvs_protheus/fatu
 const systemPrompt = promptBuilder.buildSystemPrompt(faturamentoSpec);
 assert(systemPrompt.includes('Para cliente SEM LOJA ou todos os registros do mesmo codigo'), 'prompt deve preservar regra de cliente sem loja');
 assert(systemPrompt.includes('faturamento_liquido'), 'prompt deve orientar regras de devolucao/liquido quando solicitado');
-assert(systemPrompt.includes('data_atual') && systemPrompt.includes('CONTRATO OBRIGATORIO DE SQL'), 'prompt deve manter ancora cronologica e respeitar contrato autoritativo');
+assert(systemPrompt.includes('data_atual') && systemPrompt.includes('GUIA TECNICO DE SQL'), 'prompt deve manter ancora cronologica e respeitar guia tecnico');
 assert(systemPrompt.includes('DIRETRIZ DE SELECAO DE TABELAS') && systemPrompt.includes('Consultas por QUANTIDADE ou filtros de Produto/Item'), 'prompt deve diferenciar consulta geral de item');
 assert(systemPrompt.includes('REGRA FISCAL BRASILEIRA DE CFOP PARA RECEITA'), 'prompt deve definir receita excluindo saidas sem receita operacional por padrao');
 assert(systemPrompt.includes("SD2.D2_CF NOT IN ('5151','6151','5152','6152','5155','6155','5156','6156')"), 'prompt deve excluir transferencia do faturamento/vendas por padrao');
@@ -89,8 +89,8 @@ assert(planoComparativoTexto.includes('periodo_base: 20250601 a 20250630'), 'que
 assert(planoComparativoTexto.includes('periodo_comparacao: 20250701 a 20250731'), 'query_plan deve expor periodo de comparacao');
 const planoComparativoCliente = { ...planoComparativo, agrupamentos: ['cliente'] };
 const planoComparativoClienteTexto = queryPlan.formatQueryPlanForPrompt(planoComparativoCliente);
-assert(planoComparativoClienteTexto.includes('agrupamentos_obrigatorios: cliente'), 'query_plan comparativo deve expor agrupamento herdado');
-assert(planoComparativoClienteTexto.includes('continuidade/comparativo nao remove detalhamento herdado'), 'query_plan deve orientar preservacao de agrupamento em continuidade');
+assert(planoComparativoClienteTexto.includes('agrupamentos_sugeridos: cliente'), 'query_plan comparativo deve expor agrupamento herdado como sugestao');
+assert(planoComparativoClienteTexto.includes('leitura semantica auxiliar'), 'query_plan deve orientar agrupamento como leitura auxiliar em continuidade');
 assert(planoComparativoTexto.includes('comparativo_continuidade'), 'query_plan deve orientar SQL com dois periodos');
 
 const planoComparativoClienteViaIntent = runner._test.prepararPlanoConsultaTecnico({
@@ -107,7 +107,7 @@ const planoComparativoClienteViaIntent = runner._test.prepararPlanoConsultaTecni
   },
 });
 const planoComparativoClienteViaIntentTexto = queryPlan.formatQueryPlanForPrompt(planoComparativoClienteViaIntent);
-assert(planoComparativoClienteViaIntentTexto.includes('agrupamentos_obrigatorios: cliente'), 'runner deve propagar group_by do Intent Canonico para o query_plan');
+assert(planoComparativoClienteViaIntentTexto.includes('agrupamentos_sugeridos: cliente'), 'runner deve propagar group_by do Intent Canonico para o query_plan como sugestao');
 assert(Array.isArray(planoComparativoClienteViaIntent.periodos_comparativos) && planoComparativoClienteViaIntent.periodos_comparativos.length === 2, 'runner deve manter periodos comparativos junto com agrupamento do intent');
 
 const planoGrupoProdutoDia = queryPlan.buildQueryPlan({

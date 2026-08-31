@@ -4,8 +4,11 @@
 // dicionario no banco (grupos onde mais de uma empresa juridica compartilha as
 // mesmas tabelas fisicas). Espelha exatamente o padrao de sx2-routes.js.
 //
-// So habilitado quando a empresa esta configurada como LOBO_GUARA no Middleware
-// SQL — em TRADICIONAL essa tabela normalmente nem existe na base.
+// Cadastro oficial do ERP (filiais), disponivel independente do modelo_dados
+// (TRADICIONAL ou LOBO_GUARA) da empresa: importar aqui nao ativa nenhum
+// filtro de SQL sozinho — isso so acontece quando modelo_dados=LOBO_GUARA E
+// protheus_company_profile.validated=1 simultaneamente (gate em
+// lobo-guara-filial-resolver.js::contextoLoboGuara).
 
 const { getDB }          = require('../../../database');
 const { requireRotina }  = require('../../../permissions');
@@ -14,26 +17,6 @@ const connectionFactory  = require('../../providers/connection-factory');
 
 function _invalidarMetaSX2(empresaId) {
   try { require('../../ia-owner/runner').invalidarMetaCache(empresaId); } catch (_) {}
-}
-
-function _modeloDadosEmpresa(empresaId) {
-  try {
-    const row = getDB().prepare(
-      "SELECT config FROM erp_config WHERE empresa_id = ? AND erp = 'protheus' AND connection_id IS NULL ORDER BY atualizado_em DESC, criado_em DESC LIMIT 1"
-    ).get(empresaId);
-    const cfg = row?.config ? JSON.parse(row.config) : {};
-    return cfg.modelo_dados || 'TRADICIONAL';
-  } catch (_) {
-    return 'TRADICIONAL';
-  }
-}
-
-function _exigirLoboGuara(req, res, next) {
-  const empresaId = getEmpresaId(req);
-  if (_modeloDadosEmpresa(empresaId) !== 'LOBO_GUARA') {
-    return res.status(400).json({ error: 'Esta rotina só está disponível quando a empresa está configurada como LOBO_GUARA (Middleware SQL Protheus).' });
-  }
-  next();
 }
 
 // Resolve a conexão de forma EXECUTÁVEL — diferente de ler a linha crua de
@@ -71,7 +54,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
 
   // ── LISTAR TABELAS SYS_COMPANY* DO BANCO ─────────────────────────────────
   app.get('/api/ia-command/protheus/sys-company/tabelas-disponiveis',
-    requireAuth, requireIaCommand, canCompany, _exigirLoboGuara,
+    requireAuth, requireIaCommand, canCompany,
     async (req, res) => {
       const { conexao_id } = req.query;
       if (!conexao_id) return res.status(400).json({ error: 'Informe conexao_id.' });
@@ -95,7 +78,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
 
   // ── RELOAD DO BANCO (tabela selecionada) ──────────────────────────────────
   app.post('/api/ia-command/protheus/sys-company/reload',
-    requireAuth, requireIaCommand, canCompany, _exigirLoboGuara,
+    requireAuth, requireIaCommand, canCompany,
     async (req, res) => {
       const { conexao_id, tabela, grupo_codigo, limpar = true } = req.body || {};
       if (!conexao_id || !tabela || !grupo_codigo) return res.status(400).json({ error: 'Informe conexao_id, tabela e grupo_codigo.' });
@@ -123,7 +106,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
 
   // ── IMPORTAR DE ARQUIVO SDB (SQLite exportado pelo Protheus) ─────────────
   app.post('/api/ia-command/protheus/sys-company/import-sdb',
-    requireAuth, requireIaCommand, canCompany, _exigirLoboGuara,
+    requireAuth, requireIaCommand, canCompany,
     (req, res) => {
       const fs   = require('fs');
       const path = require('path');
@@ -164,7 +147,7 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
 
   // ── IMPORTAR DO CLIENTE (DBF parseado no browser) ─────────────────────────
   app.post('/api/ia-command/protheus/sys-company/import',
-    requireAuth, requireIaCommand, canCompany, _exigirLoboGuara,
+    requireAuth, requireIaCommand, canCompany,
     (req, res) => {
       try {
         const { conexao_id, grupo_codigo, registros, limpar = true } = req.body || {};

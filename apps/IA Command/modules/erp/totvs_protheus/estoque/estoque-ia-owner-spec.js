@@ -10,7 +10,7 @@ const { resolverVendedorFixoPorEmpresa } = require('../guards/vendedor-seguranca
 const TABELAS = ['SB2', 'SB1', 'SBM', 'SD3'];
 
 const CAMPOS_SX3_ESSENCIAIS = {
-  SB2: ['B2_FILIAL', 'B2_COD', 'B2_LOCAL', 'B2_QATU', 'B2_QEMP', 'B2_RESERVA', 'D_E_L_E_T_'],
+  SB2: ['B2_FILIAL', 'B2_COD', 'B2_LOCAL', 'B2_QATU', 'B2_VATU1', 'B2_CM1', 'B2_QEMP', 'B2_RESERVA', 'D_E_L_E_T_'],
   SB1: ['B1_FILIAL', 'B1_COD', 'B1_DESC', 'B1_GRUPO', 'B1_UM', 'B1_TIPO', 'D_E_L_E_T_'],
   SBM: ['BM_FILIAL', 'BM_GRUPO', 'BM_DESC', 'D_E_L_E_T_'],
   SD3: ['D3_FILIAL', 'D3_COD', 'D3_TM', 'D3_QUANT', 'D3_LOCAL', 'D3_DOC', 'D3_EMISSAO', 'D3_CF', 'D3_CUSTO1', 'D3_OP', 'D3_CC', 'D3_ESTORNO', 'D3_LOTECTL', 'D3_NUMSERI', 'D_E_L_E_T_'],
@@ -252,6 +252,25 @@ module.exports = {
         const usaSD1 = /\b(?:FROM|JOIN)\s+\w*SD1\w*\s+SD1\b/i.test(sql);
         if (!usaSD2 && !usaSD1) return null;
         return 'A pergunta pede saldo/posicao de estoque, mas o SQL usa SD1 ou SD2 (tabelas de movimentacao de nota fiscal). Saldo/posicao atual e SEMPRE SB2.B2_QATU — nunca derive de SD1 (entrada) ou SD2 (saida).';
+      },
+    },
+    {
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase();
+        const perguntaPedeSaldoEstoque = /\bsaldo\b|\bposicao\b|\bestoque\b/.test(texto);
+        const pedeFisico = /\bfisic[ao]s?\b|\bquantidade\b|\bqtd\b|\bqtde\b/.test(texto);
+        const pedeFinanceiro = /\bfinanceir[ao]s?\b|\bvalor\b|\bvalorizad[ao]s?\b/.test(texto);
+        if (!perguntaPedeSaldoEstoque || !pedeFisico || !pedeFinanceiro) return null;
+
+        const sqlTexto = String(sql || '');
+        const temSaldoFisico = /\bSB2\s*\.\s*B2_QATU\b/i.test(sqlTexto) || /\bAS\s+saldo_fisico\b/i.test(sqlTexto);
+        const temSaldoFinanceiro = /\bSB2\s*\.\s*B2_VATU1\b/i.test(sqlTexto) || /\bSB2\s*\.\s*B2_CM1\b/i.test(sqlTexto) || /\bAS\s+saldo_financeiro\b/i.test(sqlTexto);
+        if (temSaldoFisico && temSaldoFinanceiro) return null;
+
+        return 'A pergunta pede saldo fisico E financeiro de estoque, mas o SQL nao retornou as duas metricas separadas. Use SUM(SB2.B2_QATU) AS saldo_fisico e SUM(SB2.B2_VATU1) AS saldo_financeiro (ou B2_QATU * B2_CM1 apenas se B2_VATU1 nao existir no SX3). Nunca apresente B2_QATU como valor financeiro.';
       },
     },
     {
