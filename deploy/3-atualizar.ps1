@@ -126,9 +126,26 @@ function Invoke-Nssm {
         [string[]]$Arguments
     )
 
-    $output = & nssm @Arguments 2>&1
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & nssm @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
     if ($output) {
         $output | ForEach-Object { Write-Host $_ }
+    }
+
+    $texto = ($output | Out-String)
+    $startPendente = $Arguments.Count -gt 0 `
+        -and $Arguments[0] -eq "start" `
+        -and $texto -match "SERVICE_START_PENDING"
+
+    if ($exitCode -and !$startPendente) {
+        throw "Falha ao executar nssm $($Arguments -join ' '). Codigo: $exitCode"
     }
 }
 
