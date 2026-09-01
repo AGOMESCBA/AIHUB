@@ -76,12 +76,24 @@ function contextoLoboGuara(db, empresaId) {
 }
 
 // Carrega a arvore (so nos de filial e empresa, ativos) de uma conexao.
+// So inclui empresas Protheus com vinculo explicito a uma empresa cliente do
+// IAHub (empresa_iahub_vinculo_id, ver migration v91) — empresa Protheus que
+// existe no grupo Lobo Guara mas nunca foi vinculada a um cadastro proprio no
+// IAHub (ex.: sem canal WhatsApp/config dedicada) fica automaticamente fora
+// da selecao, sem exigir uma acao manual de "bloquear" por empresa nova.
 function _carregarArvore(db, connectionId) {
-  return db.prepare(`
+  const codigosVinculados = new Set(
+    db.prepare(`
+      SELECT DISTINCT empresa_codigo FROM protheus_company_tree
+       WHERE connection_id = ? AND ativo = 1 AND tipo_no = 'empresa' AND empresa_iahub_vinculo_id IS NOT NULL
+    `).all(connectionId).map(r => r.empresa_codigo)
+  );
+  const nos = db.prepare(`
     SELECT grupo_codigo, empresa_codigo, unidade_codigo, filial_codigo, filial_chave, tipo_no, nome
       FROM protheus_company_tree
      WHERE connection_id = ? AND ativo = 1 AND tipo_no IN ('empresa', 'filial')
   `).all(connectionId);
+  return nos.filter(no => codigosVinculados.has(no.empresa_codigo));
 }
 
 function _escaparRegex(s) {

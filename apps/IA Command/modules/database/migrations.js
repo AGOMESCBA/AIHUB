@@ -1729,6 +1729,13 @@ const MIGRATIONS = [
       ALTER TABLE ai_config ADD COLUMN protheus_web_login_exigir_https INTEGER DEFAULT 0;
     `,
   },
+  {
+    version: 91,
+    descricao: 'IA Command - vincula empresa Protheus (grupo Lobo Guara) a uma empresa cliente do IAHub',
+    sql: `
+      ALTER TABLE protheus_company_tree ADD COLUMN empresa_iahub_vinculo_id INTEGER DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

@@ -399,6 +399,7 @@
 let table, gp;
 let dados = [];
 let conexoes = [];
+let empresasIahub = [];
 let filtrosVisiveis = false;
 let quickFilterFn = null;
 let tabelaBancoSelecionada = null;
@@ -428,14 +429,43 @@ function comEmpresa(body = {}) {
 // ── Carregamento inicial ─────────────────────────────────────────────────────
 
 async function carregar() {
-  const [conns, rows] = await Promise.all([
+  const [conns, rows, empresas] = await Promise.all([
     fetch('/api/ia-command/connections/available').then(r => r.json()).catch(() => []),
     fetch(apiUrl('/api/ia-command/protheus/sys-company-cfg')).then(r => r.json()).catch(() => []),
+    fetch('/api/empresas/minhas').then(r => r.json()).catch(() => []),
   ]);
   conexoes = conns;
   dados = rows;
+  empresasIahub = Array.isArray(empresas) ? empresas : [];
   popularSelectConexoes();
   if (table) { table.replaceData(dados); } else { criarTabela(dados); }
+}
+
+function nomeEmpresaIahub(id) {
+  if (!id) return null;
+  const emp = empresasIahub.find(e => Number(e.id) === Number(id));
+  return emp ? (emp.nome || emp.razao_social || `#${id}`) : `#${id}`;
+}
+
+// Vincula/desvincula uma empresa Protheus (linha tipo_no='empresa') a uma
+// empresa cliente do IAHub — sem esse vinculo, ela fica automaticamente fora
+// do chat (ver lobo-guara-filial-resolver.js::_carregarArvore). Afeta a
+// empresa inteira e suas filiais/unidades, nao so a linha clicada.
+async function vincularEmpresaIahub(id, selectEl) {
+  const valor = selectEl.value;
+  const empresaVinculoId = valor === '' ? null : Number(valor);
+  selectEl.disabled = true;
+  try {
+    const res = await fetch(apiUrl(`/api/ia-command/protheus/sys-company-cfg/${encodeURIComponent(id)}/vinculo-empresa`), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empresaVinculoId }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(body.error || 'Erro ao vincular.'); return; }
+    await carregar();
+  } finally {
+    selectEl.disabled = false;
+  }
 }
 
 function popularSelectConexoes() {
@@ -495,6 +525,15 @@ function criarTabela(data) {
         headerFilterParams:{values:{'':'Todos','empresa':'Empresa','unidade':'Unidade','filial':'Filial'}},
         formatter: c => `<span class="badge-${c.getValue()}">${esc(c.getValue())}</span>` },
       { title:'Nome', field:'nome', minWidth:200, headerFilter:true, formatter: c => esc(c.getValue()) },
+      { title:'Empresa IAHub', field:'empresa_iahub_vinculo_id', minWidth:190, headerFilter:false, groupable:false,
+        formatter: cell => {
+          const row = cell.getRow().getData();
+          if (row.tipo_no !== 'empresa') return '<span style="color:var(--text-lo);font-size:12px">—</span>';
+          const atual = cell.getValue();
+          const options = ['<option value="">Sem vínculo (bloqueada)</option>']
+            .concat(empresasIahub.map(e => `<option value="${e.id}" ${Number(atual) === Number(e.id) ? 'selected' : ''}>${esc(e.nome || e.razao_social || ('#' + e.id))}</option>`));
+          return `<select class="form-control" style="height:30px;font-size:12px" onclick="event.stopPropagation()" onchange="vincularEmpresaIahub('${row.id}', this)">${options.join('')}</select>`;
+        }},
       { title:'Ações', field:'id', width:80, headerFilter:false, groupable:false, hozAlign:'right',
         formatter: cell => `<button class="btn-icon" onclick="event.stopPropagation();excluir('${cell.getValue()}')" title="Excluir" style="color:#dc2626">🗑</button>` },
     ],

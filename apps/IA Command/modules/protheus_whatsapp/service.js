@@ -670,6 +670,33 @@ async function processarMensagem({ empresaId, celular, sessaoId, texto, empresas
   if (filialLoboGuara) intent._filialLoboGuara = filialLoboGuara;
   if (selecaoUiTurno) intent._filialSelecaoUi = selecaoUiTurno;
   if (filialEscopoAuditoria) intent._filialEscopoAuditoria = filialEscopoAuditoria;
+
+  // Selecao da UI foi tocada mas nao pode ser honrada (ex.: empresa/filial
+  // bloqueada via liberado_chat, ou orfa/desativada) — interrompe ANTES de
+  // rodar qualquer SQL. Sem isso, filialLoboGuara fica null e a consulta roda
+  // sem filtro nenhum (todas as filiais), o que mascara o problema real como
+  // "sem resultado" em vez de avisar que a selecao nao foi aplicada.
+  if (selecaoUiTurno?.uiTouched && !filialLoboGuara && filialEscopoAuditoria?.resultado?.erro) {
+    const respostaTextoBloqueio = 'A empresa/filial selecionada ainda não está configurada para consultas no IA Command. Solicite ao administrador ou selecione outra empresa.';
+    const { perguntaId, respostaId } = sessionStore.salvarTurno({
+      sessaoId,
+      perguntaTexto: texto,
+      respostaTexto: respostaTextoBloqueio,
+      rows: null,
+      tipoResultado: null,
+      intent: null,
+      filialEscopo: filialEscopoAuditoria,
+    });
+    return {
+      mensagemId: respostaId,
+      perguntaId,
+      texto: respostaTextoBloqueio,
+      rows: null,
+      temDados: false,
+      rowsCount: 0,
+      tipo: null,
+    };
+  }
   // Usuario tocou a UI e marcou "Todas" DE PROPOSITO nesta mensagem (arrays
   // vazios, uiTouched true) — sem este marcador, intentMerger nao consegue
   // distinguir isso de "usuario nao mencionou filial" e reaplicaria

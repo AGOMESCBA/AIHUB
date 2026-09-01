@@ -292,6 +292,17 @@ function mensagemErro(spec, tipo) {
   return msgs[tipo] || fallback[tipo] || fallback.erro_erp;
 }
 
+// mensagemErro('sem_resultado') especializada: quando o periodo desta consulta
+// veio herdado silenciosamente da pergunta anterior (intent-merger.js, sem que
+// o usuario tenha pedido esse periodo especifico), avisa isso explicitamente —
+// evita o usuario interpretar "sem resultado" como "sem dados" quando na
+// verdade e so o periodo herdado que nao tem nada.
+function mensagemSemResultado(spec, intent) {
+  const base = mensagemErro(spec, 'sem_resultado');
+  if (!intent?._herdouPeriodo) return base;
+  return base + ' (usei o mesmo período da pergunta anterior, pois esta não especificou um período — se quiser outro intervalo, informe a data.)';
+}
+
 // Quando TODOS os provedores de IA falham (aiProviderClient.chamarIA esgota a lista),
 // a mensagem chega concatenada como "provedor1: erro1 | provedor2: erro2 | ...". Traduz
 // as causas mais acionáveis (sem chave, credito/cota esgotada, chave invalida) em algo
@@ -3583,7 +3594,7 @@ function _buildContextoFormatacao(mensagem = '', contextoConsulta = null) {
 
 async function formatarResposta(spec, mensagem, rows, keys, cfg, intent, periodoResolvido = null, protheus = null, empresaId = null) {
   if (typeof spec.formatarResposta === 'function') return spec.formatarResposta({ mensagem, rows, keys, cfg });
-  if (!rows || !rows.length) return mensagemErro(spec, 'sem_resultado');
+  if (!rows || !rows.length) return mensagemSemResultado(spec, intent);
   const whatsappFormat = require('../core/whatsapp-format-prompt');
   const contextoConsulta = _buildContextoConsulta(intent, periodoResolvido, mensagem);
 
@@ -4666,7 +4677,7 @@ async function executar(spec, intent, empresaId) {
       const periodoRetorno = periodoResolvidoComComparativos(periodoAutoritativo || plano.obj.periodo || null, planoConsulta);
       const resposta = rows && rows.length
         ? await formatarResposta(spec, mensagem, rows, keys, cfg, intentEfetivo, periodoRetorno, protheus, empresaId)
-        : mensagemErro(spec, 'sem_resultado');
+        : mensagemSemResultado(spec, intentEfetivo);
       // Formatter programático tem prioridade sobre template planejado pela IA (evita Total Geral errado em comparativos)
       const _wf = require('../core/whatsapp-format-prompt');
       const _comparativo = rows?.length
@@ -4944,7 +4955,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       const periodoRetorno = periodoResolvidoComComparativos(intent._periodoCanonicoResolvido || intent.periodo || null, planoConsulta);
       const resposta = rows && rows.length
         ? await formatarResposta(spec, intent._mensagemOriginal || 'consulta', rows, keys, cfg, intent, periodoRetorno, protheus, empresaId)
-        : mensagemErro(spec, 'sem_resultado');
+        : mensagemSemResultado(spec, intent);
       // Formatter programático tem prioridade sobre template canônico herdado (evita Total Geral errado em comparativos)
       const _wfD = require('../core/whatsapp-format-prompt');
       const _comparativoD = rows?.length

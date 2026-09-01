@@ -17,6 +17,7 @@ const { getDB }          = require('../../../database');
 const { requireRotina }  = require('../../../permissions');
 const { getEmpresaId }   = require('../../../empresa-context');
 const connectionFactory  = require('../../providers/connection-factory');
+const empresasDb         = require('../../../../../../modules/empresas/database');
 
 function _invalidarMetaSX2(empresaId) {
   try { require('../../ia-owner/runner').invalidarMetaCache(empresaId); } catch (_) {}
@@ -245,6 +246,45 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
         db.prepare('DELETE FROM protheus_company_tree WHERE id = ?').run(row.id);
         res.json({ ok: true });
+      } catch (e) {
+        res.status(500).json({ error: e.message });
+      }
+    }
+  );
+
+  // ── VINCULAR empresa Protheus a uma empresa cliente do IAHub ──────────────
+  // Sem esse vinculo, a empresa Protheus (ex.: "02-EMA" dentro do grupo da
+  // Plantivo) fica automaticamente fora da selecao/execucao do chat — ver
+  // lobo-guara-filial-resolver.js::_carregarArvore. Nao existe estado
+  // "bloqueado manualmente"; o unico estado e "vinculada" ou "sem vinculo"
+  // (bloqueada por padrao). Afeta todos os nos com o mesmo connection_id +
+  // empresa_codigo (empresa inteira e suas filiais/unidades), nao so a linha
+  // clicada — o vinculo e uma propriedade da empresa Protheus, nao de um no
+  // isolado da arvore.
+  app.put('/api/ia-command/protheus/sys-company-cfg/:id/vinculo-empresa',
+    requireAuth, requireIaCommand, canCompanyCfg,
+    (req, res) => {
+      try {
+        const db = getDB();
+        const row = db.prepare('SELECT * FROM protheus_company_tree WHERE id = ?').get(req.params.id);
+        if (!row || row.empresa_id !== eid(req)) return res.status(404).json({ error: 'Não encontrado.' });
+        if (!row.empresa_codigo) return res.status(400).json({ error: 'Registro sem empresa_codigo — não é possível vincular.' });
+
+        const empresaVinculoId = req.body?.empresaVinculoId != null ? Number(req.body.empresaVinculoId) : null;
+        if (empresaVinculoId != null) {
+          const empresaExiste = empresasDb.buscarPorId(empresaVinculoId);
+          if (!empresaExiste) return res.status(400).json({ error: 'Empresa IAHub informada não existe.' });
+        }
+
+        const agora = new Date().toISOString();
+        const info = db.prepare(`
+          UPDATE protheus_company_tree
+             SET empresa_iahub_vinculo_id = ?, atualizado_em = ?
+           WHERE connection_id = ? AND empresa_codigo = ?
+        `).run(empresaVinculoId, agora, row.connection_id, row.empresa_codigo);
+
+        try { require('../../ia-owner/runner').invalidarMetaCache(eid(req)); } catch (_) {}
+        res.json({ ok: true, empresaVinculoId, afetados: info.changes });
       } catch (e) {
         res.status(500).json({ error: e.message });
       }
