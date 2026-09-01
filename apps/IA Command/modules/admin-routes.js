@@ -1,6 +1,6 @@
 const crud = require('./database/crud');
 const { getDB } = require('./database');
-const { requireRotina, requireAnyRotina } = require('./permissions');
+const { requireRotina, requireAnyRotina, requireAllRotinas } = require('./permissions');
 const { getEmpresaId } = require('./empresa-context');
 const { normalizarTexto } = require('./ai/local-intent-resolver');
 const periodResolver = require('./ai/period-resolver');
@@ -16,6 +16,11 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
   const canModulos   = requireRotina('iac-admin-modulos');
   const canNumeros   = requireRotina('iac-admin-numeros-whatsapp');
   const canUsuariosProtheusWeb = requireRotina('iac-admin-usuarios-protheus-web');
+  // Aba "Empresas Protheus" (dentro de Numeros Autorizados) edita a mesma
+  // tabela da tela "Usuarios Protheus" — exige as DUAS rotinas juntas, nao
+  // qualquer uma delas, para nao dar acesso a esse dado sensivel (usuario_id
+  // sincronizado do ERP) para quem so tem uma das duas permissoes hoje.
+  const podeFiliaisProtheus = requireAllRotinas(['iac-admin-numeros-whatsapp', 'iac-admin-usuarios-protheus-web']);
   const canMensagens = requireRotina('iac-admin-mensagens-whatsapp');
   const canIntencoes = requireRotina('iac-admin-intencoes');
   const canDatasets  = requireRotina('iac-admin-datasets');
@@ -78,6 +83,21 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     if (!sistemasDb.hasUserSystem(sess.user_id, id, 'ia-command')) return false;
     const rotinas = permissoesDb.getRotinas(sess.user_id, id);
     return Array.isArray(rotinas) && rotinas.includes(rotina);
+  }
+
+  // Usada dentro de _listarAcessosNumero/_salvarAcessosNumero (rotas
+  // compartilhadas com a aba Empresas WhatsApp) para checar, sem bloquear a
+  // rota inteira, se o usuario logado tem as DUAS rotinas exigidas para
+  // ver/editar filiais Protheus (dado sensivel: usuario_id sincronizado do
+  // ERP). Quem so tem uma delas continua editando normalmente o resto do
+  // cadastro (modulos, codigos ERP) — so o campo protheus_filiais e' negado.
+  function _temPermissaoFiliaisProtheus(req) {
+    const sess = req.session || {};
+    if (sess.role === 'admin') return true;
+    const empresaId = eid(req);
+    const rotinas = permissoesDb.getRotinas(sess.user_id, empresaId);
+    if (!Array.isArray(rotinas)) return false;
+    return rotinas.includes('iac-admin-numeros-whatsapp') && rotinas.includes('iac-admin-usuarios-protheus-web');
   }
 
   function _empresasPermitidas(req, rotina = 'iac-admin-numeros-whatsapp') {
@@ -756,10 +776,16 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
 
   // Upsert de filiais Protheus (chat web) a partir da tela de Numeros Autorizados —
   // reaproveita protheus_web_user_permissions (mesma tabela da tela "Usuarios
-  // Protheus"), localizando o registro pelo NUMERO dentro da empresa (nao pelo
-  // usuario_id, que so existe apos sync real do Protheus) para nao duplicar
-  // cadastro: o numero digitado aqui e' a mesma chave usada la.
-  // payload = { empresasPermitidas: [...], filiaisPermitidas: [...] } | undefined.
+  // Protheus"). Localiza o registro por celular dentro da empresa (hoje 1:1 na
+  // pratica — confirmado sem duplicidade na base real) e edita SOMENTE
+  // empresasPermitidas/filiaisPermitidas/observacoes. NUNCA mexe em usuario_id,
+  // usuario_nome ou ultimo_sync_em — esses campos sao escritos exclusivamente
+  // por salvarSync() (chamado pelo .prw do Protheus). Decisao de produto: o
+  // sync do Protheus sempre prevalece — se o mesmo usuario sincronizar de novo
+  // depois de uma edicao manual aqui, salvarSync() sobrescreve
+  // empresas_permitidas_json/filiais_permitidas_json sem aviso (comportamento
+  // ja existente, mantido de proposito — ver user-permissions-store.js:66-90).
+  // payload = { empresasPermitidas, filiaisPermitidas, observacoes } | undefined.
   // undefined = campo nao enviado, nao mexe em nada (mesma semantica de
   // modulos_dinamicos ausente do payload).
   function _salvarFiliaisProtheusNumeroTx(numero, empresaId, nome, payload) {
@@ -769,16 +795,20 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     const filiaisPermitidas = Array.isArray(payload?.filiaisPermitidas) ? payload.filiaisPermitidas : [];
     const existentes = store.listarAtivosPorCelular(numero, empresaId);
     const existente = existentes[0] || null;
+    const campos = { empresasPermitidas, filiaisPermitidas };
+    if (payload.observacoes !== undefined) campos.observacoes = payload.observacoes || null;
     if (existente) {
-      store.atualizar(existente.id, { empresasPermitidas, filiaisPermitidas });
+      store.atualizar(existente.id, campos);
     } else {
-      store.criar({ empresaId, celular: numero, usuarioNome: nome, empresasPermitidas, filiaisPermitidas });
+      store.criar({ empresaId, celular: numero, usuarioNome: nome, ...campos });
     }
   }
 
   // Filiais Protheus ja cadastradas para este numero, por empresa — le direto
   // de protheus_web_user_permissions (nao depende de whatsapp_allowed_numbers
-  // ter linha para essa empresa; sao tabelas independentes).
+  // ter linha para essa empresa; sao tabelas independentes). Traz tambem os
+  // campos de identidade/sync (somente leitura na UI) para o admin saber se
+  // esta editando um registro ja vinculado a um usuario Protheus real.
   function _filiaisProtheusPorEmpresa(numero, empresaIds) {
     const store = require('./protheus_whatsapp/user-permissions-store');
     const porEmpresa = {};
@@ -786,13 +816,21 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
       const existentes = store.listarAtivosPorCelular(numero, empresaId);
       const row = existentes[0] || null;
       porEmpresa[empresaId] = row
-        ? { empresasPermitidas: row.empresasPermitidas, filiaisPermitidas: row.filiaisPermitidas }
-        : { empresasPermitidas: [], filiaisPermitidas: [] };
+        ? {
+            empresasPermitidas: row.empresasPermitidas,
+            filiaisPermitidas: row.filiaisPermitidas,
+            usuarioId: row.usuario_id || null,
+            usuarioNomeSync: row.usuario_nome || null,
+            origem: row.origem || null,
+            ultimoSyncEm: row.ultimo_sync_em || null,
+            observacoes: row.observacoes || null,
+          }
+        : { empresasPermitidas: [], filiaisPermitidas: [], usuarioId: null, usuarioNomeSync: null, origem: null, ultimoSyncEm: null, observacoes: null };
     }
     return porEmpresa;
   }
 
-  function _listarAcessosNumero(numero, empresas) {
+  function _listarAcessosNumero(req, numero, empresas) {
     const ids = empresas.map(e => Number(e.id)).filter(Boolean);
     if (!ids.length) return { numero, empresas: [], acessos: [] };
     const placeholders = ids.map(() => '?').join(',');
@@ -804,15 +842,19 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
        ORDER BY empresa_id, nome
     `).all(numero, ...ids);
     const empresasPorId = new Map(empresas.map(e => [Number(e.id), e]));
-    const filiaisPorEmpresa = _filiaisProtheusPorEmpresa(numero, ids);
+    const podeVerFiliais = _temPermissaoFiliaisProtheus(req);
+    const filiaisPorEmpresa = podeVerFiliais ? _filiaisProtheusPorEmpresa(numero, ids) : {};
     return {
       numero,
       empresas,
+      podeGerenciarFiliaisProtheus: podeVerFiliais,
       acessos: rows.map(row => ({
         ...row,
         empresa_nome: empresasPorId.get(Number(row.empresa_id))?.nome || `Empresa #${row.empresa_id}`,
         modulos_dinamicos: _listarModulosDinamicosNumero(row.id),
-        protheus_filiais: filiaisPorEmpresa[Number(row.empresa_id)] || { empresasPermitidas: [], filiaisPermitidas: [] },
+        protheus_filiais: podeVerFiliais
+          ? (filiaisPorEmpresa[Number(row.empresa_id)] || { empresasPermitidas: [], filiaisPermitidas: [] })
+          : null,
       })),
     };
   }
@@ -845,6 +887,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
        WHERE id = ?
     `);
 
+    const podeGerenciarFiliaisProtheus = _temPermissaoFiliaisProtheus(req);
     const aplicar = db.transaction(() => {
       const atualizados = [];
       for (const item of empresasPayload) {
@@ -916,10 +959,12 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
           _salvarModulosDinamicosNumeroTx(db, numeroId, empresaId, item.modulos_dinamicos, agora);
         }
         // Filiais Protheus (chat web) — payload opcional: item.protheus_filiais =
-        // {empresasPermitidas, filiaisPermitidas}. Independente de numeroId (tabela
-        // separada de protheus_web_user_permissions, indexada pelo numero, nao pelo
-        // id de whatsapp_allowed_numbers) — so grava quando autorizado nesta empresa.
-        if (autorizado && item.protheus_filiais !== undefined) {
+        // {empresasPermitidas, filiaisPermitidas, observacoes}. Independente de
+        // numeroId (tabela separada de protheus_web_user_permissions, indexada
+        // pelo numero, nao pelo id de whatsapp_allowed_numbers) — so grava
+        // quando autorizado nesta empresa E com as duas rotinas exigidas
+        // (dado sensivel, compartilhado com a tela "Usuarios Protheus").
+        if (autorizado && podeGerenciarFiliaisProtheus && item.protheus_filiais !== undefined) {
           _salvarFiliaisProtheusNumeroTx(numero, empresaId, nome, item.protheus_filiais);
         }
       }
@@ -937,14 +982,14 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     }
     const emp = empresasDb.buscarPorId(empresaId) || {};
     const empresas = [{ id: empresaId, nome: emp.nome || emp.razao_social || `Empresa #${empresaId}` }];
-    res.json(_listarAcessosNumero(numero, empresas));
+    res.json(_listarAcessosNumero(req, numero, empresas));
   });
 
   app.get('/api/ia-command/admin/numeros-whatsapp/contatos/:numero/empresas-global', requireAuth, requireIaCommand, canNumeros, (req, res) => {
     const numero = normalizarNumero(req.params.numero);
     if (!numero) return res.status(400).json({ error: 'Numero invalido.' });
     const empresas = _empresasPermitidas(req, 'iac-admin-numeros-whatsapp');
-    res.json(_listarAcessosNumero(numero, empresas));
+    res.json(_listarAcessosNumero(req, numero, empresas));
   });
 
   app.put('/api/ia-command/admin/numeros-whatsapp/contatos/:numero/empresas', requireAuth, requireIaCommand, canNumeros, (req, res) => {
