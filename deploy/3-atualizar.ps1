@@ -216,6 +216,13 @@ function Start-IaHubServices {
         $toStart = @($SERVICE_NAME)
     }
 
+    # Sobe o web principal primeiro para reduzir indisponibilidade do painel.
+    # Workers do IACommand/WhatsApp podem demorar por inicializacao propria,
+    # mas nao devem segurar o retorno da interface web.
+    $toStart = @($toStart | Sort-Object {
+        if ($_ -eq $SERVICE_NAME) { 0 } else { 1 }
+    }, { $_ })
+
     foreach ($serviceName in $toStart) {
         $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if (!$svc) { continue }
