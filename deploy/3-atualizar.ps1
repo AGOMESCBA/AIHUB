@@ -128,8 +128,18 @@ function Invoke-Nssm {
 
     $previousErrorActionPreference = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
+    $output = @()
+    $exitCode = 0
+    $nativeError = $null
     try {
         $output = & nssm @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } catch {
+        # O NSSM pode escrever SERVICE_START_PENDING no stderr durante start.
+        # Com ErrorActionPreference=Stop, o PowerShell transforma isso em erro
+        # nativo antes de chegarmos ao Wait-ServiceState abaixo.
+        $nativeError = $_
+        $output = @($_.Exception.Message)
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -143,6 +153,10 @@ function Invoke-Nssm {
     $startPendente = $Arguments.Count -gt 0 `
         -and $Arguments[0] -eq "start" `
         -and $texto -match "SERVICE_START_PENDING"
+
+    if ($nativeError -and !$startPendente) {
+        throw $nativeError
+    }
 
     if ($exitCode -and !$startPendente) {
         throw "Falha ao executar nssm $($Arguments -join ' '). Codigo: $exitCode"

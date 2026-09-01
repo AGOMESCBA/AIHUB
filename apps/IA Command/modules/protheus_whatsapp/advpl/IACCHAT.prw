@@ -1268,20 +1268,22 @@ Return
 /* ----------------------------------------------------------------------------
    IACAddEmp
    Adiciona uma empresa permitida no formato usado pelo JSON enviado ao IAHub.
-   Evita repetir o mesmo empresa_id do IA Command quando mais de um codigo
-   Protheus apontar para o mesmo MV_IACEMID. Tambem leva o nome Protheus para
-   exibicao no seletor do chat.
+   Evita repetir o mesmo par empresa_id + codigo Protheus. Mais de uma empresa
+   Protheus pode apontar para o mesmo MV_IACEMID no IA Command (ex.: PLANTIVO
+   e EMA dentro do mesmo cliente IAHub); nesse caso as duas precisam ir no
+   token para aparecerem como ramos separados na arvore do chat.
 ---------------------------------------------------------------------------- */
 Static Function IACAddEmp(aEmpresas, nEmpresaId, cCodigoProtheus, cNomeProtheus)
     Local nI := 0
+    Local cCod := Alltrim(cCodigoProtheus)
 
     For nI := 1 To Len(aEmpresas)
-        If aEmpresas[nI, 1] == nEmpresaId
+        If aEmpresas[nI, 1] == nEmpresaId .And. Alltrim(aEmpresas[nI, 2]) == cCod
             Return
         EndIf
     Next nI
 
-    AAdd(aEmpresas, { nEmpresaId, Alltrim(cCodigoProtheus), Alltrim(cNomeProtheus) })
+    AAdd(aEmpresas, { nEmpresaId, cCod, Alltrim(cNomeProtheus) })
 
 Return
 

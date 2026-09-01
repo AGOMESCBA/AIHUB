@@ -137,8 +137,8 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
 
     const chatPath = normalizarWebLoginPath(protheus_web_login_path || existing?.protheus_web_login_path || WEB_LOGIN_DEFAULT_PATH);
     if (!chatPath) return res.status(400).json({ error: 'Informe uma rota publica valida iniciando com /.' });
-    if (chatPath !== WEB_LOGIN_DEFAULT_PATH && !/^\/(entrar|acesso)\/[A-Za-z0-9_-]{8,80}$/.test(chatPath)) {
-      return res.status(400).json({ error: 'Use uma rota mascarada no formato /entrar/seu-codigo ou /acesso/seu-codigo.' });
+    if (chatPath !== WEB_LOGIN_DEFAULT_PATH && !/^\/(entrar|acesso)\/[A-Za-z0-9_-]{3,80}$/.test(chatPath)) {
+      return res.status(400).json({ error: 'Use uma rota mascarada no formato /entrar/seu-codigo ou /acesso/seu-codigo, com 3 a 80 caracteres.' });
     }
     if (chatPath !== WEB_LOGIN_DEFAULT_PATH) {
       const rotaExistente = getDB().prepare(`
