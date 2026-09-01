@@ -249,9 +249,16 @@ async function testarComIaReal() {
   });
 
   ok('IA-REAL', 'SQL usa subqueries escalares (carteira=ambas)', () => {
-    const temSubquery = /\(SELECT\s+COALESCE/i.test(sqlNormalizado);
+    // Subquery escalar inline — (SELECT COALESCE(...) FROM ...) — e CTE nomeada usada como
+    // escalar — WITH x AS (SELECT COALESCE(...) ...) SELECT (SELECT campo FROM x) — sao
+    // formas SQL equivalentes: ambas calculam um valor unico sem duplicar linhas. query-plan.js
+    // (financeiro_ambas_realizado) aceita explicitamente "subqueries escalares ou UNION ALL
+    // agregado" sem exigir sintaxe inline; o teste nao deve ser mais restritivo que a regra real.
+    const temSubqueryInline = /\(SELECT\s+COALESCE/i.test(sqlNormalizado);
+    const temCteEscalar = /\bWITH\b[\s\S]*?\bAS\s*\(\s*SELECT\s+COALESCE/i.test(sqlNormalizado)
+      && /\(SELECT\s+\w+\s+FROM\s+\w+\)/i.test(sqlNormalizado);
     const temUnionAll = /UNION\s+ALL/i.test(sqlNormalizado);
-    assert(temSubquery, 'SQL deve usar subqueries escalares para carteira=ambas');
+    assert(temSubqueryInline || temCteEscalar, 'SQL deve usar subqueries escalares (inline ou via CTE nomeada) para carteira=ambas');
     assert(!temUnionAll, 'SQL não deve usar UNION ALL para carteira=ambas realizado');
   });
 

@@ -24,17 +24,17 @@ function _normalizar(s) {
     .toLowerCase().trim();
 }
 
-// Empresa esta configurada como LOBO_GUARA? (mesma leitura usada pelas rotas
-// de dicionario — ver sys-company-routes.js::_modeloDadosEmpresa)
-function _modeloDadosEmpresa(db, empresaId) {
+// Le empresa_codigo (usado so como default de exibicao) do erp_config —
+// nao decide mais se o filtro liga (ver contextoLoboGuara).
+function _empresaCodigoPadrao(db, empresaId) {
   try {
     const row = db.prepare(
       "SELECT config FROM erp_config WHERE empresa_id = ? AND erp = 'protheus' AND connection_id IS NULL ORDER BY atualizado_em DESC, criado_em DESC LIMIT 1"
     ).get(empresaId);
     const cfg = row?.config ? JSON.parse(row.config) : {};
-    return cfg;
+    return String(cfg.empresa_codigo || '').trim() || null;
   } catch (_) {
-    return {};
+    return null;
   }
 }
 
@@ -52,19 +52,27 @@ function _resolverConnectionId(empresaId) {
   }
 }
 
-// Contexto pronto para resolver filial nesta empresa: modelo LOBO_GUARA +
-// perfil validado. Falha fechada — qualquer coisa fora disso retorna null.
+// Contexto pronto para resolver filial nesta empresa: existe arvore curada e
+// confirmada (protheus_company_profile.validated=1), com pelo menos um no
+// cadastrado — independente do rotulo TRADICIONAL/LOBO_GUARA em modelo_dados
+// (esse campo deixou de ser o gate; ele so descrevia se a empresa faz parte
+// de um grupo com varias empresas juridicas, nao se tem controle de filial).
+// Falha fechada — qualquer coisa fora disso retorna null, e o chamador nao
+// aplica filtro nenhum (comportamento igual ao de hoje para quem nao tem
+// arvore validada).
 function contextoLoboGuara(db, empresaId) {
-  const cfg = _modeloDadosEmpresa(db, empresaId);
-  if (cfg.modelo_dados !== 'LOBO_GUARA') return null;
-
   const connectionId = _resolverConnectionId(empresaId);
   if (!connectionId) return null;
 
   const perfil = db.prepare('SELECT * FROM protheus_company_profile WHERE connection_id = ?').get(connectionId);
   if (!perfil || !perfil.validated) return null;
 
-  return { connectionId, empresaCodigoPadrao: String(cfg.empresa_codigo || '').trim() || null };
+  const temArvore = db.prepare(
+    "SELECT 1 FROM protheus_company_tree WHERE connection_id = ? AND ativo = 1 AND tipo_no IN ('empresa','filial') LIMIT 1"
+  ).get(connectionId);
+  if (!temArvore) return null;
+
+  return { connectionId, empresaCodigoPadrao: _empresaCodigoPadrao(db, empresaId) };
 }
 
 // Carrega a arvore (so nos de filial e empresa, ativos) de uma conexao.

@@ -754,6 +754,44 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
     }
   }
 
+  // Upsert de filiais Protheus (chat web) a partir da tela de Numeros Autorizados —
+  // reaproveita protheus_web_user_permissions (mesma tabela da tela "Usuarios
+  // Protheus"), localizando o registro pelo NUMERO dentro da empresa (nao pelo
+  // usuario_id, que so existe apos sync real do Protheus) para nao duplicar
+  // cadastro: o numero digitado aqui e' a mesma chave usada la.
+  // payload = { empresasPermitidas: [...], filiaisPermitidas: [...] } | undefined.
+  // undefined = campo nao enviado, nao mexe em nada (mesma semantica de
+  // modulos_dinamicos ausente do payload).
+  function _salvarFiliaisProtheusNumeroTx(numero, empresaId, nome, payload) {
+    if (payload === undefined) return;
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const empresasPermitidas = Array.isArray(payload?.empresasPermitidas) ? payload.empresasPermitidas : [];
+    const filiaisPermitidas = Array.isArray(payload?.filiaisPermitidas) ? payload.filiaisPermitidas : [];
+    const existentes = store.listarAtivosPorCelular(numero, empresaId);
+    const existente = existentes[0] || null;
+    if (existente) {
+      store.atualizar(existente.id, { empresasPermitidas, filiaisPermitidas });
+    } else {
+      store.criar({ empresaId, celular: numero, usuarioNome: nome, empresasPermitidas, filiaisPermitidas });
+    }
+  }
+
+  // Filiais Protheus ja cadastradas para este numero, por empresa — le direto
+  // de protheus_web_user_permissions (nao depende de whatsapp_allowed_numbers
+  // ter linha para essa empresa; sao tabelas independentes).
+  function _filiaisProtheusPorEmpresa(numero, empresaIds) {
+    const store = require('./protheus_whatsapp/user-permissions-store');
+    const porEmpresa = {};
+    for (const empresaId of empresaIds) {
+      const existentes = store.listarAtivosPorCelular(numero, empresaId);
+      const row = existentes[0] || null;
+      porEmpresa[empresaId] = row
+        ? { empresasPermitidas: row.empresasPermitidas, filiaisPermitidas: row.filiaisPermitidas }
+        : { empresasPermitidas: [], filiaisPermitidas: [] };
+    }
+    return porEmpresa;
+  }
+
   function _listarAcessosNumero(numero, empresas) {
     const ids = empresas.map(e => Number(e.id)).filter(Boolean);
     if (!ids.length) return { numero, empresas: [], acessos: [] };
@@ -766,6 +804,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
        ORDER BY empresa_id, nome
     `).all(numero, ...ids);
     const empresasPorId = new Map(empresas.map(e => [Number(e.id), e]));
+    const filiaisPorEmpresa = _filiaisProtheusPorEmpresa(numero, ids);
     return {
       numero,
       empresas,
@@ -773,6 +812,7 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         ...row,
         empresa_nome: empresasPorId.get(Number(row.empresa_id))?.nome || `Empresa #${row.empresa_id}`,
         modulos_dinamicos: _listarModulosDinamicosNumero(row.id),
+        protheus_filiais: filiaisPorEmpresa[Number(row.empresa_id)] || { empresasPermitidas: [], filiaisPermitidas: [] },
       })),
     };
   }
@@ -874,6 +914,13 @@ module.exports = function registrarRotasAdmin(app, { requireAuth, requireIaComma
         // Roda dentro da mesma transacao, apos garantir que numeroId existe.
         if (numeroId && Array.isArray(item.modulos_dinamicos)) {
           _salvarModulosDinamicosNumeroTx(db, numeroId, empresaId, item.modulos_dinamicos, agora);
+        }
+        // Filiais Protheus (chat web) — payload opcional: item.protheus_filiais =
+        // {empresasPermitidas, filiaisPermitidas}. Independente de numeroId (tabela
+        // separada de protheus_web_user_permissions, indexada pelo numero, nao pelo
+        // id de whatsapp_allowed_numbers) — so grava quando autorizado nesta empresa.
+        if (autorizado && item.protheus_filiais !== undefined) {
+          _salvarFiliaisProtheusNumeroTx(numero, empresaId, nome, item.protheus_filiais);
         }
       }
       return atualizados;

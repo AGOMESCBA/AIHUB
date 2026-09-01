@@ -127,6 +127,32 @@
     .sistema-block-field input[type="text"], .sistema-block-field select { height:32px;border:1px solid var(--border);border-radius:6px;background:var(--bg-base);color:var(--text-hi);font-size:12px;padding:4px 8px;box-sizing:border-box;width:100%;text-transform:uppercase; }
     .sistema-block-mods { display:flex;gap:12px;flex-wrap:wrap;grid-column:1 / -1; }
     .sistema-block-mods label { display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-md);white-space:nowrap; }
+
+    /* Arvore de filiais Protheus (chat web) — dentro do bloco Protheus de cada cartao de empresa */
+    .acessos-tree { border:1px solid var(--border);border-radius:8px;background:var(--bg-base);padding:4px;max-height:260px;overflow:auto;grid-column:1 / -1; }
+    .acessos-tree-empty { padding:14px;text-align:center;color:var(--text-lo);font-size:12px; }
+    .acessos-empresa { border-bottom:1px solid var(--border); }
+    .acessos-empresa:last-child { border-bottom:none; }
+    .acessos-empresa-head { display:flex;align-items:center;gap:8px;padding:8px 10px;font-weight:700;color:var(--text-hi);font-size:12px; }
+    .acessos-empresa-head svg { color:var(--accent);flex-shrink:0; }
+    .acessos-empresa-codigo { font-size:10px;font-weight:700;color:var(--text-lo);background:var(--bg-card);border:1px solid var(--border);border-radius:5px;padding:1px 6px; }
+    .acessos-empresa-badge { margin-left:auto;font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-glow);border-radius:99px;padding:2px 8px;white-space:nowrap; }
+    .acessos-filiais-lista { list-style:none;margin:0;padding:0 10px 8px 30px;display:flex;flex-direction:column;gap:4px; }
+    .acessos-filial-item { display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-md); }
+    .acessos-filial-item svg { color:var(--text-lo);flex-shrink:0; }
+    .acessos-filial-chave { font-family:ui-monospace,Consolas,monospace;font-size:10px;color:var(--text-lo); }
+
+    /* Explicacao recolhivel dentro de um info-box (ex: aba Empresas Protheus) —
+       recolhida por padrao, nao ocupa espaco extra ate o usuario abrir. */
+    .help-inline { margin-top:6px; }
+    .help-inline summary { cursor:pointer;font-size:12px;font-weight:700;color:inherit;opacity:.85;list-style:none;display:inline-flex;align-items:center;gap:5px; }
+    .help-inline summary::-webkit-details-marker { display:none; }
+    .help-inline summary .help-inline-caret { font-size:10px;transition:transform .15s;display:inline-block; }
+    .help-inline[open] summary .help-inline-caret { transform:rotate(90deg); }
+    .help-inline summary:hover { opacity:1; }
+    .help-inline-body { margin-top:8px;padding-top:8px;border-top:1px dashed currentColor;opacity:.9;font-size:12px;line-height:1.6; }
+    .help-inline-body p { margin:0 0 8px; }
+    .help-inline-body p:last-child { margin-bottom:0; }
     .sistema-block-dyn-item { display:flex;flex-direction:column;gap:6px;grid-column:1 / -1; }
     .sistema-block-dyn-item label.chk { display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-hi); }
     .sistema-block-dyn-extra { display:none;gap:10px;flex-wrap:wrap;padding-left:20px; }
@@ -230,7 +256,8 @@
               <!-- Abas -->
               <div class="form-tabs">
                 <button class="form-tab active" onclick="mudarAba('geral',this)">Geral</button>
-                <button class="form-tab" onclick="mudarAba('empresas',this)">Empresas</button>
+                <button class="form-tab" onclick="mudarAba('empresas',this)">Empresas WhatsApp</button>
+                <button class="form-tab" onclick="mudarAba('empresas-protheus',this)">Empresas Protheus</button>
               </div>
 
               <!-- ABA: GERAL -->
@@ -288,6 +315,39 @@
                     </div>
                     <div class="info-box" id="empresas-info" style="margin-top:0;margin-bottom:14px">Salve ou informe um numero para carregar os acessos deste contato.</div>
                     <div class="empresa-cards" id="empresas-cards">
+                      <div style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- ABA: EMPRESAS PROTHEUS -->
+              <div class="tab-pane" id="tab-empresas-protheus">
+                <section class="form-section">
+                  <div class="form-section-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <div>
+                      <div class="form-section-title">Filiais Protheus (Chat Web)</div>
+                      <div class="form-section-subtitle">Empresas e filiais Protheus que este numero pode consultar pelo chat web, por empresa IAHub.</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+                      <button class="btn btn-ghost" type="button" onclick="carregarAcessosContato()">Atualizar</button>
+                      <button class="btn btn-primary" type="button" onclick="salvarEmpresasProtheusContato()">Salvar filiais Protheus</button>
+                    </div>
+                  </div>
+                  <div class="form-section-body">
+                    <div class="info-box" style="margin-top:0;margin-bottom:14px;border-color:#f59e0b;background:#fffbeb;color:#92400e">
+                      <span>Restringe o acesso <strong>só no Chat Web</strong> — não afeta o WhatsApp comum. Salve pelo botão <strong>"Salvar filiais Protheus"</strong> acima.</span>
+                      <details class="help-inline">
+                        <summary><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Saiba mais<span class="help-inline-caret">▸</span></summary>
+                        <div class="help-inline-body">
+                          <p><strong>Chat Web (login por código):</strong> a seleção abaixo controla exatamente o que este número vê — por empresa e por filial.</p>
+                          <p><strong>WhatsApp comum:</strong> não existe seleção por número. Se a empresa tiver a árvore de filiais confirmada e a mensagem citar o nome de uma filial (ex: "vendas da Filial X"), o sistema filtra automaticamente para <em>qualquer</em> número autorizado daquela empresa — não só este. Sem menção na mensagem, nenhum filtro extra é aplicado.</p>
+                          <p>Ou seja: marcar ou desmarcar filiais aqui não muda nada no que este número vê pelo WhatsApp comum.</p>
+                        </div>
+                      </details>
+                    </div>
+                    <div class="info-box" id="empresas-protheus-info" style="margin-top:0;margin-bottom:14px">Salve ou informe um numero antes, na aba Empresas WhatsApp, para liberar o acesso a esta empresa.</div>
+                    <div class="empresa-cards" id="empresas-protheus-cards">
                       <div style="color:var(--text-lo);text-align:center;padding:24px">Nenhum numero carregado.</div>
                     </div>
                   </div>
@@ -376,6 +436,11 @@
   // duas tabelas (contato/global) para montar os checkboxes dinamicos por sistema.
   let modulosDinamicosDisponiveis = [];
 
+  // Arvore de filiais Protheus (chat web), em cache por empresa — evita recarregar
+  // a mesma arvore toda vez que o mesmo cartao e' re-renderizado. Undefined = ainda
+  // nao carregada; { loboGuara, empresas } = resultado real.
+  const arvoresPorEmpresa = new Map();
+
   function esc(s) {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -459,6 +524,7 @@
     document.getElementById('f-ativo').value = '0';
     acessosContato = { empresas: [], acessos: [] };
     renderEmpresasContato();
+    renderEmpresasProtheus();
     feedback('', true);
   }
 
@@ -484,16 +550,19 @@
     if (!numero) {
       acessosContato = { empresas: [], acessos: [] };
       renderEmpresasContato('Informe um numero para carregar os acessos.');
+      renderEmpresasProtheus();
       return;
     }
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}`);
     if (!res.ok) {
       acessosContato = { empresas: [], acessos: [] };
       renderEmpresasContato('Nao foi possivel carregar os acessos.');
+      renderEmpresasProtheus();
       return;
     }
     acessosContato = await res.json();
     renderEmpresasContato();
+    renderEmpresasProtheus();
   }
 
   function acessoPorEmpresa(empresaId) {
@@ -523,6 +592,7 @@
     }
     container.innerHTML = empresas.map(emp => renderEmpresaCard(emp, acessoPorEmpresa(emp.id), 'c', 'access')).join('');
     sincronizarResumoEmpresaAtual();
+    carregarArvoresDosCards('#empresas-cards', 'c', acessosContato);
   }
 
   async function salvarEmpresasContato() {
@@ -531,8 +601,9 @@
     if (!numero) return feedback('Informe o numero antes de salvar empresas.', false);
     const empresas = [...document.querySelectorAll('#empresas-cards .empresa-card[data-empresa-id]')].map(card => {
       const get = key => card.querySelector(`[data-access="${key}"]`);
+      const empresaId = Number(card.dataset.empresaId);
       return {
-        empresa_id: Number(card.dataset.empresaId),
+        empresa_id: empresaId,
         autorizado: get('autorizado')?.checked ? 1 : 0,
         nome: get('nome')?.value.trim() || nome || 'Contato WhatsApp',
         modulo_financeiro: get('modulo_financeiro')?.checked ? 1 : 0,
@@ -545,6 +616,7 @@
         cod_cliente_erp: (get('cod_cliente_erp')?.value || '').trim().toUpperCase() || null,
         cod_aprov_erp: (get('cod_aprov_erp')?.value || '').trim().toUpperCase() || null,
         modulos_dinamicos: lerModulosDinamicosContainer(card),
+        protheus_filiais: lerSelecaoArvoreCard(empresaId, `c-arvore-${empresaId}`),
       };
     });
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas`, {
@@ -592,6 +664,7 @@
       return;
     }
     container.innerHTML = empresas.map(emp => renderEmpresaCard(emp, acessoGlobalPorEmpresa(emp.id), 'g', 'global-access')).join('');
+    carregarArvoresDosCards('#empresas-global-cards', 'g', acessosGlobaisContato);
   }
 
   async function salvarEmpresasGlobais() {
@@ -601,8 +674,9 @@
     if (!confirm('Confirmar alteracao deste numero em varias empresas?')) return;
     const empresas = [...document.querySelectorAll('#empresas-global-cards .empresa-card[data-empresa-id]')].map(card => {
       const get = key => card.querySelector(`[data-global-access="${key}"]`);
+      const empresaId = Number(card.dataset.empresaId);
       return {
-        empresa_id: Number(card.dataset.empresaId),
+        empresa_id: empresaId,
         autorizado: get('autorizado')?.checked ? 1 : 0,
         nome: get('nome')?.value.trim() || nome || 'Contato WhatsApp',
         modulo_financeiro: get('modulo_financeiro')?.checked ? 1 : 0,
@@ -615,6 +689,7 @@
         cod_cliente_erp: (get('cod_cliente_erp')?.value || '').trim().toUpperCase() || null,
         cod_aprov_erp: (get('cod_aprov_erp')?.value || '').trim().toUpperCase() || null,
         modulos_dinamicos: lerModulosDinamicosContainer(card),
+        protheus_filiais: lerSelecaoArvoreCard(empresaId, `g-arvore-${empresaId}`),
       };
     });
     const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas-global`, {
@@ -808,6 +883,121 @@
     });
   }
 
+  // ── Arvore de filiais Protheus (chat web) dentro do cartao de empresa ──────────
+  // Reaproveita a mesma rota/formato de admin-protheus-web-users.html
+  // (GET .../protheus-web-users/arvore-disponivel), mas aqui pode haver varios
+  // cartoes de empresa simultaneos na tela — por isso cada arvore fica isolada
+  // num elemento proprio (#${prefix}-arvore-${empresaId}) em vez de um unico
+  // container global, e o cache e' por empresa (arvoresPorEmpresa), nao unico.
+  const ICON_EMPRESA_ARV = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="1"/><path d="M9 21V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v14"/></svg>';
+  const ICON_FILIAL_ARV = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/></svg>';
+
+  async function carregarArvoreEmpresa(empresaId) {
+    if (arvoresPorEmpresa.has(empresaId)) return arvoresPorEmpresa.get(empresaId);
+    const data = await fetch(`/api/ia-command/admin/protheus-web-users/arvore-disponivel?empresa_id=${empresaId}`)
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    const arvore = data || { loboGuara: false, empresas: [] };
+    arvoresPorEmpresa.set(empresaId, arvore);
+    return arvore;
+  }
+
+  function empresaMarcadaArv(codigo, empresasPermitidas) {
+    return (empresasPermitidas || []).some(e => String(e.codigoProtheus || '').trim() === codigo);
+  }
+  function filiaisMarcadasDaEmpresaArv(codigo, filiaisPermitidas) {
+    const item = (filiaisPermitidas || []).find(f => String(f.codigoProtheus || '').trim() === codigo);
+    return item ? item.filiais : null; // null = todas (nao restringido)
+  }
+
+  // Renderiza a arvore de um cartao especifico apos o card ja estar no DOM
+  // (chamado de forma assincrona logo apos renderEmpresaCard, que so deixa o
+  // placeholder "Carregando..." no HTML sincrono).
+  async function preencherArvoreCard(empresaId, elId, empresasPermitidas, filiaisPermitidas) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const arvore = await carregarArvoreEmpresa(empresaId);
+    if (!arvore.loboGuara || !arvore.empresas.length) {
+      el.innerHTML = '<div class="acessos-tree-empty">Esta empresa nao tem multiplas empresas/filiais Protheus cadastradas — o acesso ja e a empresa inteira, nao ha selecao adicional a fazer.</div>';
+      return;
+    }
+    el.innerHTML = arvore.empresas.map(emp => {
+      const marcada = empresaMarcadaArv(emp.codigoProtheus, empresasPermitidas);
+      const filiaisMarcadas = filiaisMarcadasDaEmpresaArv(emp.codigoProtheus, filiaisPermitidas);
+      const filiaisHtml = emp.filiais.map(f => {
+        const checked = marcada && (filiaisMarcadas === null || filiaisMarcadas.includes(f.chave));
+        return `<li class="acessos-filial-item">
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer">
+            <input type="checkbox" data-chk-filial="${esc(f.chave)}" data-chk-filial-empresa="${esc(emp.codigoProtheus)}" ${checked ? 'checked' : ''} ${marcada ? '' : 'disabled'}>
+            ${ICON_FILIAL_ARV}<span>${esc(f.nome)}</span><span class="acessos-filial-chave">${esc(f.chave)}</span>
+          </label>
+        </li>`;
+      }).join('');
+      return `
+        <div class="acessos-empresa">
+          <div class="acessos-empresa-head">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1">
+              <input type="checkbox" data-chk-empresa="${esc(emp.codigoProtheus)}" ${marcada ? 'checked' : ''}>
+              ${ICON_EMPRESA_ARV}<span>${esc(emp.nome)}</span><span class="acessos-empresa-codigo">${esc(emp.codigoProtheus)}</span>
+            </label>
+            <span class="acessos-empresa-badge">${marcada ? (filiaisMarcadas === null ? 'Todas as filiais' : filiaisMarcadas.length + ' filial(is)') : 'Sem acesso'}</span>
+          </div>
+          <ul class="acessos-filiais-lista">${filiaisHtml}</ul>
+        </div>`;
+    }).join('');
+
+    el.querySelectorAll('[data-chk-empresa]').forEach(chkEmpresa => {
+      chkEmpresa.addEventListener('change', () => {
+        const codigo = chkEmpresa.dataset.chkEmpresa;
+        el.querySelectorAll(`[data-chk-filial-empresa="${CSS.escape(codigo)}"]`).forEach(chkFilial => {
+          chkFilial.disabled = !chkEmpresa.checked;
+          if (chkEmpresa.checked) chkFilial.checked = true; // marcar empresa = todas as filiais por padrao
+          else chkFilial.checked = false;
+        });
+      });
+    });
+  }
+
+  // Chamado apos renderEmpresasContato/renderEmpresasGlobais preencherem o HTML —
+  // dispara o carregamento assincrono de cada arvore em paralelo, sem bloquear o
+  // render inicial dos cartoes.
+  function carregarArvoresDosCards(containerSelector, prefix, dadosOrigem) {
+    document.querySelectorAll(`${containerSelector} [data-arvore-empresa]`).forEach(el => {
+      const empresaId = Number(el.dataset.arvoreEmpresa);
+      const acesso = (dadosOrigem.acessos || []).find(a => Number(a.empresa_id) === empresaId);
+      const filiais = acesso?.protheus_filiais || { empresasPermitidas: [], filiaisPermitidas: [] };
+      preencherArvoreCard(empresaId, el.id, filiais.empresasPermitidas, filiais.filiaisPermitidas);
+    });
+  }
+
+  // Le a arvore marcada em UM cartao especifico (identificado por elId), no mesmo
+  // formato aceito pelo backend ({empresasPermitidas, filiaisPermitidas}) — ou
+  // undefined se essa empresa nao tem arvore Protheus (nao mexe no cadastro
+  // existente de filiais nesse caso, so quando ha arvore de fato para decidir).
+  function lerSelecaoArvoreCard(empresaId, elId) {
+    const arvore = arvoresPorEmpresa.get(empresaId);
+    const el = document.getElementById(elId);
+    if (!arvore || !el) return undefined;
+    if (!arvore.loboGuara || !arvore.empresas.length) {
+      // Empresa sem arvore Protheus (modelo tradicional sem filiais cadastradas)
+      // -> acesso e a empresa IAHub inteira, sem selecao adicional.
+      return { empresasPermitidas: [], filiaisPermitidas: [] };
+    }
+    const marcadosEmpresa = [...el.querySelectorAll('[data-chk-empresa]:checked')].map(e => e.dataset.chkEmpresa);
+    const marcadosFilial = [...el.querySelectorAll('[data-chk-filial]:checked')];
+    const empresasPermitidas = marcadosEmpresa.map(codigo => {
+      const emp = arvore.empresas.find(e => e.codigoProtheus === codigo);
+      return { empresaId, codigoProtheus: codigo, nomeProtheus: emp ? emp.nome : codigo };
+    });
+    const filiaisPorCodigo = new Map();
+    marcadosFilial.forEach(elFilial => {
+      const codigo = elFilial.dataset.chkFilialEmpresa;
+      if (!filiaisPorCodigo.has(codigo)) filiaisPorCodigo.set(codigo, []);
+      filiaisPorCodigo.get(codigo).push(elFilial.dataset.chkFilial);
+    });
+    const filiaisPermitidas = [...filiaisPorCodigo.entries()].map(([codigoProtheus, filiais]) => ({ codigoProtheus, filiais }));
+    return { empresasPermitidas, filiaisPermitidas };
+  }
+
   // Monta o cartao completo de uma empresa: cabecalho (acesso/nome) + bloco Protheus
   // (modulos fixos + Perfil ERP + os 3 codigos, tudo dentro do mesmo bloco visual, ja que
   // esses campos so tem efeito para Protheus) + blocos dos demais sistemas cadastrados.
@@ -875,6 +1065,72 @@
         </div>
       </div>
     `;
+  }
+
+  // Cartao enxuto da aba "Empresas Chat Protheus" — so a arvore de filiais, sem
+  // repetir modulos/codigos ERP (que ficam na aba Empresas WhatsApp). So exibido
+  // para empresas onde o numero JA tem autorizado=1 na aba WhatsApp (nao faz
+  // sentido liberar filial de uma empresa sem acesso basico ao numero).
+  function renderEmpresaCardProtheus(emp, row) {
+    const bodyId = `p-body-${emp.id}`;
+    return `
+      <div class="empresa-card" data-empresa-id="${emp.id}">
+        <div class="empresa-card-head">
+          <div>
+            <div class="empresa-card-title">${esc(emp.nome)}</div>
+            <div class="empresa-card-sub">ID ${emp.id}</div>
+          </div>
+        </div>
+        <div class="empresa-card-body" id="${bodyId}">
+          <div class="acessos-tree" id="p-arvore-${emp.id}" data-arvore-empresa="${emp.id}">
+            <div class="acessos-tree-empty">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderEmpresasProtheus() {
+    const container = document.getElementById('empresas-protheus-cards');
+    const info = document.getElementById('empresas-protheus-info');
+    if (!container || !info) return;
+    const empresas = (acessosContato.empresas || []).filter(emp => {
+      const acesso = acessoPorEmpresa(emp.id);
+      return acesso && Number(acesso.ativo) !== 0;
+    });
+    if (!empresas.length) {
+      info.textContent = 'Nenhuma empresa com acesso autorizado ainda — libere o acesso na aba Empresas WhatsApp primeiro.';
+      container.innerHTML = '<div style="color:var(--text-lo);text-align:center;padding:24px">Nenhuma empresa disponivel.</div>';
+      return;
+    }
+    info.textContent = `${empresas.length} empresa(s) com acesso autorizado disponivel para configurar filiais.`;
+    container.innerHTML = empresas.map(emp => renderEmpresaCardProtheus(emp, acessoPorEmpresa(emp.id))).join('');
+    carregarArvoresDosCards('#empresas-protheus-cards', 'p', acessosContato);
+  }
+
+  async function salvarEmpresasProtheusContato() {
+    const numero = soNumeros(document.getElementById('f-numero').value);
+    if (!numero) return feedback('Informe o numero antes de salvar filiais Protheus.', false);
+    const empresas = [...document.querySelectorAll('#empresas-protheus-cards .empresa-card[data-empresa-id]')].map(card => {
+      const empresaId = Number(card.dataset.empresaId);
+      const acesso = acessoPorEmpresa(empresaId);
+      return {
+        empresa_id: empresaId,
+        autorizado: 1, // so aparecem aqui empresas ja autorizadas na aba WhatsApp
+        nome: acesso?.nome || document.getElementById('f-nome').value.trim() || 'Contato WhatsApp',
+        protheus_filiais: lerSelecaoArvoreCard(empresaId, `p-arvore-${empresaId}`),
+      };
+    });
+    if (!empresas.length) return feedback('Nenhuma empresa autorizada para salvar filiais.', false);
+    const res = await fetch(`/api/ia-command/admin/numeros-whatsapp/contatos/${numero}/empresas`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ nome: document.getElementById('f-nome').value.trim(), empresas }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return feedback(data.error || 'Erro ao salvar filiais Protheus.', false);
+    feedback('Filiais Protheus salvas com sucesso!', true);
+    await carregarAcessosContato();
   }
 
   function criarTabela(data) {
@@ -955,13 +1211,23 @@
       <div class="help-item"><div class="help-item-label">Status</div><div class="help-item-desc">Numeros inativos ficam registrados, mas nao autorizam novas interacoes.</div></div>
     </div>
     <div class="help-section">
-      <div class="help-section-title">Aba: Empresas</div>
+      <div class="help-section-title">Aba: Empresas WhatsApp</div>
       <div class="help-item-desc">Controle, por empresa, os módulos que este número pode acessar e o perfil ERP. Se um módulo estiver desativado, o usuário receberá uma mensagem amigável orientando a solicitar acesso ao gestor.</div>
       <div class="help-item"><div class="help-item-label">Usuário</div><div class="help-item-desc">Perfil restrito pelos códigos abaixo — cada um opcional e independente entre si.</div></div>
       <div class="help-item"><div class="help-item-label">Cód Vend ERP</div><div class="help-item-desc">Filtra automaticamente comissão, faturamento e financeiro pelos próprios dados como vendedor.</div></div>
       <div class="help-item"><div class="help-item-label">Cód Cliente ERP</div><div class="help-item-desc">Filtra automaticamente faturamento e contas a receber pelos próprios dados como cliente, em todas as filiais.</div></div>
       <div class="help-item"><div class="help-item-label">Cód Aprov ERP</div><div class="help-item-desc">Permite consultar pedidos pendentes de aprovação em compras. Aprovar via WhatsApp ainda não está disponível.</div></div>
       <div class="help-item"><div class="help-item-label">Gestor</div><div class="help-item-desc">Acesso irrestrito, sem nenhum filtro aplicado.</div></div>
+    </div>
+    <div class="help-section">
+      <div class="help-section-title">Aba: Empresas Protheus</div>
+      <div class="help-item-desc">Escolha, por empresa, quais filiais Protheus este número pode ver <strong>no Chat Web</strong> (o link de login por código). Só aparecem aqui empresas já liberadas na aba Empresas WhatsApp.</div>
+      <div class="help-item"><div class="help-item-label">Empresa sem filiais cadastradas</div><div class="help-item-desc">Não há o que restringir — o acesso já é à empresa inteira.</div></div>
+      <div class="help-item"><div class="help-item-label">Empresa marcada, sem filial marcada</div><div class="help-item-desc">Acesso a todas as filiais dela.</div></div>
+      <div class="help-item"><div class="help-item-label">Filiais específicas marcadas</div><div class="help-item-desc">Acesso restrito só a elas, no Chat Web.</div></div>
+      <div class="help-tip">
+        <strong>Isto não controla o WhatsApp comum.</strong> No WhatsApp tradicional não há seleção por número — se a mensagem citar o nome de uma filial (ex: "vendas da Filial X") e a empresa tiver a árvore de filiais confirmada, o sistema filtra automaticamente para <em>qualquer</em> número autorizado daquela empresa. Marcar ou desmarcar filiais nesta aba não muda o que este número específico vê pelo WhatsApp comum.
+      </div>
     </div>
     <div class="help-tip">Se nenhum numero ativo estiver cadastrado, o comportamento atual e mantido para evitar bloqueio acidental do atendimento.</div>
   </div>

@@ -468,6 +468,71 @@ const ocorrencias = (segundaPassagem.sql.match(/LEFT\(SF2\.F2_FILIAL/gi) || []).
 assert(ocorrencias === 1, 'Idempotência: aplicar a amarração duas vezes não duplica a condição no SQL', `${ocorrencias} ocorrências`);
 
 // ─────────────────────────────────────────────────────────────
+// CENÁRIO 11 — contextoLoboGuara desacoplado de modelo_dados (2026-09):
+// filtro liga por arvore validada, nao mais por modelo_dados=LOBO_GUARA.
+// Caso real: CAIEIRA (empresa TRADICIONAL, uma unica empresa juridica) com
+// hierarquia SYS_COMPANY_CFG importada e validada — antes da mudanca, o
+// chat web nunca reconhecia essa arvore ("empresa nao configurada"), porque
+// o gate exigia modelo_dados=LOBO_GUARA mesmo com tudo pronto.
+// ─────────────────────────────────────────────────────────────
+titulo('CENÁRIO 11 — contextoLoboGuara: TRADICIONAL com arvore validada ativa o filtro');
+
+{
+  const CONN_TRAD_COM_ARVORE = 'conn-tradicional-com-arvore';
+  const EMPRESA_TRAD_COM_ARVORE = 401;
+
+  db.prepare(`INSERT INTO connections (id, empresa_id, nome, tipo, erp, ativo, padrao) VALUES (?,?,?,?,?,1,1)`)
+    .run(CONN_TRAD_COM_ARVORE, EMPRESA_TRAD_COM_ARVORE, 'Tradicional Com Arvore Teste', 'sqlserver', 'protheus');
+  db.prepare(`INSERT INTO erp_config (id, connection_id, empresa_id, erp, config, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?)`)
+    .run('cfg-trad-arvore', null, EMPRESA_TRAD_COM_ARVORE, 'protheus', JSON.stringify({ modelo_dados: 'TRADICIONAL' }), 'now', 'now');
+  db.prepare(`INSERT INTO protheus_company_profile (id, connection_id, empresa_id, validated, branch_key_strategy, criado_em, atualizado_em) VALUES (?,?,?,1,'igualdade_direta',?,?)`)
+    .run('perfil-trad-arvore', CONN_TRAD_COM_ARVORE, EMPRESA_TRAD_COM_ARVORE, 'now', 'now');
+  db.prepare(`INSERT INTO protheus_company_tree (id, connection_id, empresa_id, grupo_codigo, empresa_codigo, filial_chave, tipo_no, nome, ativo, origem, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?,1,'sys_company_cfg',?,?)`)
+    .run('empresa-caieira', CONN_TRAD_COM_ARVORE, EMPRESA_TRAD_COM_ARVORE, '01', '01', 'EMP:01:01', 'empresa', 'CAIEIRA', 'now', 'now');
+  db.prepare(`INSERT INTO protheus_company_tree (id, connection_id, empresa_id, grupo_codigo, empresa_codigo, filial_chave, tipo_no, nome, ativo, origem, criado_em, atualizado_em) VALUES (?,?,?,?,?,?,?,?,1,'sys_company_cfg',?,?)`)
+    .run('filial-caieira-matriz', CONN_TRAD_COM_ARVORE, EMPRESA_TRAD_COM_ARVORE, '01', '01', '0100', 'filial', 'MATRIZ', 'now', 'now');
+
+  // Mock de connection-factory para as duas empresas deste cenário — sem
+  // rede real, só resolve o id da conexão pela tabela `connections` de teste.
+  const cfPath = require.resolve(path.join(ROOT, 'modules/erp/providers/connection-factory'));
+  require.cache[cfPath] = {
+    id: cfPath, filename: cfPath, loaded: true,
+    exports: {
+      carregarConexao: (empresaId) => {
+        const row = db.prepare('SELECT id FROM connections WHERE empresa_id = ? AND ativo = 1 LIMIT 1').get(empresaId);
+        if (!row) throw new Error('conexão não encontrada (mock de teste)');
+        return { id: row.id };
+      },
+    },
+  };
+  // resolver precisa ser recarregado para pegar o connection-factory mockado
+  // (foi exigido de forma preguiçosa dentro de _resolverConnectionId).
+  delete require.cache[require.resolve(path.join(ROOT, 'modules/erp/totvs_protheus/SX/lobo-guara-filial-resolver'))];
+  const resolverComMock = require(path.join(ROOT, 'modules/erp/totvs_protheus/SX/lobo-guara-filial-resolver'));
+
+  const ctxTradComArvore = resolverComMock.contextoLoboGuara(db, EMPRESA_TRAD_COM_ARVORE);
+  assert(ctxTradComArvore !== null, 'TRADICIONAL + árvore validada com nós ativos → filtro ATIVA (contexto não-nulo)', JSON.stringify(ctxTradComArvore));
+  assert(ctxTradComArvore && ctxTradComArvore.connectionId === CONN_TRAD_COM_ARVORE, 'Contexto resolvido aponta para a connection_id correta');
+
+  // Mesma empresa, mas sem nenhum nó na árvore (validated=1, porém tree vazia)
+  // — deve continuar null: "validated" sozinho não basta, precisa ter dado.
+  const CONN_TRAD_SEM_ARVORE = 'conn-tradicional-sem-arvore';
+  const EMPRESA_TRAD_SEM_ARVORE = 402;
+  db.prepare(`INSERT INTO connections (id, empresa_id, nome, tipo, erp, ativo, padrao) VALUES (?,?,?,?,?,1,1)`)
+    .run(CONN_TRAD_SEM_ARVORE, EMPRESA_TRAD_SEM_ARVORE, 'Tradicional Sem Arvore Teste', 'sqlserver', 'protheus');
+  db.prepare(`INSERT INTO protheus_company_profile (id, connection_id, empresa_id, validated, branch_key_strategy, criado_em, atualizado_em) VALUES (?,?,?,1,'igualdade_direta',?,?)`)
+    .run('perfil-trad-sem-arvore', CONN_TRAD_SEM_ARVORE, EMPRESA_TRAD_SEM_ARVORE, 'now', 'now');
+
+  const ctxTradSemArvore = resolverComMock.contextoLoboGuara(db, EMPRESA_TRAD_SEM_ARVORE);
+  assert(ctxTradSemArvore === null, 'TRADICIONAL + validated=1 mas SEM nenhum nó na árvore → continua null (falha fechada preservada)', JSON.stringify(ctxTradSemArvore));
+
+  // Empresa sem profile nenhum (nunca importou/validou nada) — continua null,
+  // preserva o comportamento padrão de qualquer empresa nunca configurada.
+  const ctxSemProfileNenhum = resolverComMock.contextoLoboGuara(db, 403);
+  assert(ctxSemProfileNenhum === null, 'Empresa sem connections nem profile → continua null (comportamento padrão preservado)');
+}
+
+// ─────────────────────────────────────────────────────────────
 // Resultado final
 // ─────────────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(60)}`);
