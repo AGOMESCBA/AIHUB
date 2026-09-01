@@ -18,6 +18,8 @@ $SERVICE_NAME = "iahub"
 $PARENT_PATH  = "C:\Web"
 $BACKUP_ROOT  = "C:\Web\backups"
 $STOPPED_SERVICES = @()
+$SERVICE_STOP_TIMEOUT_SECONDS = 90
+$SERVICE_START_TIMEOUT_SECONDS = 120
 
 # Verificar Administrador
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
@@ -88,19 +90,80 @@ function Stop-ServiceIfRunning {
         [System.ServiceProcess.ServiceController]$Service
     )
 
-    if ($Service.Status -ne "Running" -and $Service.Status -ne "StartPending") {
+    if ($Service.Status -ne "Running" -and $Service.Status -ne "StartPending" -and $Service.Status -ne "StopPending") {
         return
     }
 
-    Write-Host "      Parando $($Service.Name) ($($Service.DisplayName))..." -ForegroundColor Gray
-    try {
-        nssm stop $Service.Name | Out-Host
-    } catch {
-        try { Stop-Service -Name $Service.Name -Force -ErrorAction Stop } catch { throw }
+    $serviceName = $Service.Name
+    Write-Host "      Parando $serviceName ($($Service.DisplayName))..." -ForegroundColor Gray
+
+    if ($Service.Status -eq "StopPending") {
+        if (Wait-ServiceState -Name $serviceName -DesiredStatus "Stopped" -TimeoutSeconds $SERVICE_STOP_TIMEOUT_SECONDS) {
+            $script:STOPPED_SERVICES += $serviceName
+            return
+        }
+    } else {
+        Invoke-Nssm -Arguments @("stop", $serviceName)
     }
 
-    $Service.WaitForStatus("Stopped", [TimeSpan]::FromSeconds(20))
-    $script:STOPPED_SERVICES += $Service.Name
+    if (!(Wait-ServiceState -Name $serviceName -DesiredStatus "Stopped" -TimeoutSeconds $SERVICE_STOP_TIMEOUT_SECONDS)) {
+        try {
+            Stop-Service -Name $serviceName -Force -ErrorAction Stop
+        } catch {}
+
+        if (!(Wait-ServiceState -Name $serviceName -DesiredStatus "Stopped" -TimeoutSeconds 30)) {
+            $current = Get-ServiceStatusText -Name $serviceName
+            throw "Servico $serviceName nao parou dentro do tempo esperado. Status atual: $current"
+        }
+    }
+
+    $script:STOPPED_SERVICES += $serviceName
+}
+
+function Invoke-Nssm {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$Arguments
+    )
+
+    $output = & nssm @Arguments 2>&1
+    if ($output) {
+        $output | ForEach-Object { Write-Host $_ }
+    }
+}
+
+function Get-ServiceStatusText {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (!$svc) { return "Nao encontrado" }
+    return [string]$svc.Status
+}
+
+function Wait-ServiceState {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+
+        [Parameter(Mandatory=$true)]
+        [string]$DesiredStatus,
+
+        [Parameter(Mandatory=$true)]
+        [int]$TimeoutSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if (!$svc) { return $false }
+        if ([string]$svc.Status -eq $DesiredStatus) { return $true }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
 }
 
 function Stop-IaHubServices {
@@ -144,17 +207,18 @@ function Start-IaHubServices {
             continue
         }
 
-        try {
-            nssm start $serviceName | Out-Host
-        } catch {
-            try { Start-Service -Name $serviceName -ErrorAction Stop } catch { Write-Host "      AVISO: falha ao iniciar ${serviceName}: $($_.Exception.Message)" -ForegroundColor Yellow }
+        if ($svc.Status -eq "StartPending") {
+            Write-Host "      ${serviceName}: aguardando inicializacao ja em andamento..." -ForegroundColor Gray
+        } else {
+            Invoke-Nssm -Arguments @("start", $serviceName)
         }
-        Start-Sleep -Seconds 2
-        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if ($svc -and $svc.Status -eq "Running") {
+
+        if (Wait-ServiceState -Name $serviceName -DesiredStatus "Running" -TimeoutSeconds $SERVICE_START_TIMEOUT_SECONDS) {
             Write-Host "      ${serviceName}: RODANDO" -ForegroundColor Green
         } else {
-            Write-Host "      AVISO: verifique o servico $serviceName" -ForegroundColor Yellow
+            $current = Get-ServiceStatusText -Name $serviceName
+            Write-Host "      AVISO: $serviceName nao ficou Running em $SERVICE_START_TIMEOUT_SECONDS segundos. Status atual: $current" -ForegroundColor Yellow
+            Write-Host "             Verifique logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
         }
     }
 }

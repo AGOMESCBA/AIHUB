@@ -240,8 +240,10 @@ function carregarPermissoesWebPorCelular(celular, empresaId = null) {
   for (const row of rows) {
     for (const emp of row.empresasPermitidas || []) {
       const id = Number(emp.empresaId || emp.empresa_id || emp.id || 0);
-      if (!id || empresasVistas.has(id)) continue;
-      empresasVistas.add(id);
+      const codigo = String(emp.codigoProtheus || emp.codigo_protheus || '').trim();
+      const chave = `${id}:${codigo}`;
+      if (!id || empresasVistas.has(chave)) continue;
+      empresasVistas.add(chave);
       empresasPermitidas.push(emp);
     }
     for (const item of row.filiaisPermitidas || []) {
@@ -1317,6 +1319,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       // vez de "sem filial liberada" (mensagens tem causas diferentes: uma e
       // falta de configuracao da empresa, outra e falta de acesso do usuario).
       const empresasSemConfiguracao = [];
+      const empresasProtheusSemConfiguracao = [];
       for (const emp of empresasSelecionadas) {
         const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, emp.empresa_id);
         if (!ctx) { empresasSemConfiguracao.push(emp.empresa_id); continue; } // nao LOBO_GUARA validada — nao aparece na arvore
@@ -1333,6 +1336,15 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
           continue;
         }
         arvoreEmpresa = arvoreEmpresa.filter(e => e.empresaProtheusCodigo === emp.codigoProtheus);
+        if (!arvoreEmpresa.length) {
+          empresasProtheusSemConfiguracao.push({
+            empresaIahubId: emp.empresa_id,
+            empresaId: emp.empresa_id,
+            codigoProtheus: emp.codigoProtheus,
+            nome: emp.nomeProtheus || emp.nome || emp.codigoProtheus,
+          });
+          continue;
+        }
         // Filtra pelo acesso real do usuario no ERP (FWUsrEmp/LoadFils,
         // capturado no .prw na abertura do chat) — a arvore cadastrada
         // (protheus_company_tree) representa o universo, nao o que este
@@ -1359,8 +1371,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       }
 
       perfLog('GET /filial-tree', inicio, { status: 200, empresas: empresas.length });
-      if (!empresas.length) return res.json({ disponivel: false, empresasSemConfiguracao });
-      res.json({ disponivel: true, empresas, empresasSemConfiguracao });
+      if (!empresas.length) return res.json({ disponivel: false, empresasSemConfiguracao, empresasProtheusSemConfiguracao });
+      res.json({ disponivel: true, empresas, empresasSemConfiguracao, empresasProtheusSemConfiguracao });
     } catch (err) {
       perfLog('GET /filial-tree', inicio, { status: 500, erro: err.message });
       res.status(500).json({ error: err.message });

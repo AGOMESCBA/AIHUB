@@ -16,12 +16,60 @@ $PROJECT_PATH = "C:\Web\iahub"
 $SERVICE_NAME = "iahub"
 $BACKUP_ROOT  = "C:\Web\backups"
 $TEMP_PATH    = "C:\Web\restore-iahub-temp"
+$SERVICE_STOP_TIMEOUT_SECONDS = 90
+$SERVICE_START_TIMEOUT_SECONDS = 120
 
 function Assert-Admin {
     if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
         Write-Host "ERRO: Execute este script como Administrador!" -ForegroundColor Red
         exit 1
     }
+}
+
+function Invoke-Nssm {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$Arguments
+    )
+
+    $output = & nssm @Arguments 2>&1
+    if ($output) {
+        $output | ForEach-Object { Write-Host $_ }
+    }
+}
+
+function Get-ServiceStatusText {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (!$svc) { return "Nao encontrado" }
+    return [string]$svc.Status
+}
+
+function Wait-ServiceState {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+
+        [Parameter(Mandatory=$true)]
+        [string]$DesiredStatus,
+
+        [Parameter(Mandatory=$true)]
+        [int]$TimeoutSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if (!$svc) { return $false }
+        if ([string]$svc.Status -eq $DesiredStatus) { return $true }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
 }
 
 function New-SourceBackup {
@@ -103,10 +151,17 @@ Write-Host ""
 
 Write-Host "[1/6] Parando servico IAHub..." -ForegroundColor Yellow
 $svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq "Running") {
-    nssm stop $SERVICE_NAME
-    Start-Sleep -Seconds 2
-    Write-Host "      Servico parado." -ForegroundColor Green
+if ($svc -and ($svc.Status -eq "Running" -or $svc.Status -eq "StartPending" -or $svc.Status -eq "StopPending")) {
+    if ($svc.Status -ne "StopPending") {
+        Invoke-Nssm -Arguments @("stop", $SERVICE_NAME)
+    }
+
+    if (Wait-ServiceState -Name $SERVICE_NAME -DesiredStatus "Stopped" -TimeoutSeconds $SERVICE_STOP_TIMEOUT_SECONDS) {
+        Write-Host "      Servico parado." -ForegroundColor Green
+    } else {
+        $current = Get-ServiceStatusText -Name $SERVICE_NAME
+        throw "Servico $SERVICE_NAME nao parou dentro do tempo esperado. Status atual: $current"
+    }
 } else {
     Write-Host "      Servico ja estava parado." -ForegroundColor Gray
 }
@@ -151,14 +206,14 @@ Pop-Location
 Write-Host "      Dependencias ok." -ForegroundColor Green
 
 Write-Host "[6/6] Iniciando servico IAHub..." -ForegroundColor Yellow
-nssm start $SERVICE_NAME
-Start-Sleep -Seconds 3
+Invoke-Nssm -Arguments @("start", $SERVICE_NAME)
 
-$svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq "Running") {
+if (Wait-ServiceState -Name $SERVICE_NAME -DesiredStatus "Running" -TimeoutSeconds $SERVICE_START_TIMEOUT_SECONDS) {
     Write-Host "      Servico IAHub: RODANDO" -ForegroundColor Green
 } else {
-    Write-Host "      AVISO: Verifique os logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
+    $current = Get-ServiceStatusText -Name $SERVICE_NAME
+    Write-Host "      AVISO: IAHub nao ficou Running em $SERVICE_START_TIMEOUT_SECONDS segundos. Status atual: $current" -ForegroundColor Yellow
+    Write-Host "             Verifique os logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
 }
 
 if (Test-Path $TEMP_PATH) {

@@ -28,6 +28,240 @@
   --transition:   .2s cubic-bezier(.4,0,.2,1);
 }
 
+/* ── Tema escuro ─────────────────────────────────────────────
+   Ativado via [data-theme="dark"] no <html> (nao por
+   prefers-color-scheme — o toggle decide, nao o SO). Hoje
+   aplicado apenas dentro do IA Command (ver auth.js); as demais
+   variaveis/regras do arquivo ja usam essas custom properties,
+   entao nao precisam de duplicacao — so o :root muda. */
+:root[data-theme="dark"] {
+  --bg-base:      #12161f;
+  --bg-sidebar:   #181d29;
+  --bg-card:      #181d29;
+  --bg-hover:     #232838;
+  --bg-active:    #212a3d;
+  --accent:       #5b8def;
+  --accent-light: #7ba3f2;
+  --accent-glow:  rgba(91,141,239,.14);
+  --accent-2:     #8b93e8;
+  --text-hi:      #e2e6ed;
+  --text-md:      #9199a8;
+  --text-lo:      #6b7285;
+  --border:       #262c3c;
+  --border-hi:    #333a4d;
+  --success:      #4ade80;
+  --error:        #f87171;
+  --warning:      #fbbf24;
+  --shadow-sm:    0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+  --shadow-md:    0 4px 16px rgba(0,0,0,.4);
+}
+
+/* Badges de modulo: fundo mais solido (nao so translucido) pra o chip se
+   destacar do card ao redor — com opacidade baixa (.16) o texto parecia
+   "flutuar" sem contraste. Texto num tom mais suave que o branco puro,
+   suficiente pra ler sem competir com o resto da tela. */
+:root[data-theme="dark"] .badge-blue   { background: rgba(91,141,239,.22);  color: #a9c3f5; }
+:root[data-theme="dark"] .badge-green  { background: rgba(74,222,128,.20);  color: #a3ecc0; }
+:root[data-theme="dark"] .badge-yellow { background: rgba(251,191,36,.20);  color: #f0d191; }
+:root[data-theme="dark"] .badge-red    { background: rgba(248,113,113,.20); color: #f3b0b0; }
+:root[data-theme="dark"] .badge-purple { background: rgba(139,147,232,.22); color: #c1c6f0; }
+
+/* Badges locais de cada tela (badge-ativo, badge-erro, badge-cache-ok, etc.,
+   ~52 classes catalogadas) — cada HTML define sua propria cor hardcoded em
+   vez de usar as 5 genericas acima, entao nao herdam variavel nenhuma.
+   Cobertura por HEURISTICA de substring do nome da classe (nao by design
+   original) — agrupa por semantica provavel do nome em 5 tons ja usados
+   acima. Pode errar a cor de algum nome ambiguo isolado; corrigir pontual
+   se aparecer. [class*=] casa em qualquer classe que contenha o token,
+   entao cobre variacoes tipo "badge-cache-ok", "badge-agente-ativo" etc. */
+:root[data-theme="dark"] [class*="badge-"][class*="ativ"],
+:root[data-theme="dark"] [class*="badge-"][class*="ok"],
+:root[data-theme="dark"] [class*="badge-"][class*="sucesso"],
+:root[data-theme="dark"] [class*="badge-"][class*="conectad"],
+:root[data-theme="dark"] [class*="badge-"][class*="connect"],
+:root[data-theme="dark"] [class*="badge-"][class*="enviad"],
+:root[data-theme="dark"] [class*="badge-"][class*="finaliz"],
+:root[data-theme="dark"] [class*="badge-"][class*="aberta"],
+:root[data-theme="dark"] [class*="badge-"][class*="promovid"],
+:root[data-theme="dark"] [class*="badge-"][class*="start"]:not([class*="starting"]),
+:root[data-theme="dark"] [class*="badge-"][class*="-on"],
+:root[data-theme="dark"] [class*="badge-"][class*="run"] {
+  background: rgba(74,222,128,.20) !important; color: #a3ecc0 !important;
+}
+
+:root[data-theme="dark"] [class*="badge-"][class*="erro"],
+:root[data-theme="dark"] [class*="badge-"][class*="error"],
+:root[data-theme="dark"] [class*="badge-"][class*="fail"],
+:root[data-theme="dark"] [class*="badge-"][class*="inativ"],
+:root[data-theme="dark"] [class*="badge-"][class*="negativ"],
+:root[data-theme="dark"] [class*="badge-"][class*="bloque"],
+:root[data-theme="dark"] [class*="badge-"][class*="block"],
+:root[data-theme="dark"] [class*="badge-"][class*="timeout"],
+:root[data-theme="dark"] [class*="badge-"][class*="revert"],
+:root[data-theme="dark"] [class*="badge-"][class*="ignorad"],
+:root[data-theme="dark"] [class*="badge-"][class*="cancelad"],
+:root[data-theme="dark"] [class*="badge-"][class*="chave"] {
+  background: rgba(248,113,113,.20) !important; color: #f3b0b0 !important;
+}
+
+:root[data-theme="dark"] [class*="badge-"][class*="pend"],
+:root[data-theme="dark"] [class*="badge-"][class*="warn"],
+:root[data-theme="dark"] [class*="badge-"][class*="parcial"],
+:root[data-theme="dark"] [class*="badge-"][class*="cota"],
+:root[data-theme="dark"] [class*="badge-"][class*="starting"],
+:root[data-theme="dark"] [class*="badge-"][class*="fallback"],
+:root[data-theme="dark"] [class*="badge-"][class*="data"],
+:root[data-theme="dark"] [class*="badge-"][class*="manual"] {
+  background: rgba(251,191,36,.20) !important; color: #f0d191 !important;
+}
+
+:root[data-theme="dark"] [class*="badge-"][class*="info"],
+:root[data-theme="dark"] [class*="badge-"][class*="config"],
+:root[data-theme="dark"] [class*="badge-"][class*="externo"],
+:root[data-theme="dark"] [class*="badge-"][class*="reuso"],
+:root[data-theme="dark"] [class*="badge-"][class*="chat"],
+:root[data-theme="dark"] [class*="badge-"][class*="global"],
+:root[data-theme="dark"] [class*="badge-"][class*="admin"],
+:root[data-theme="dark"] [class*="badge-"][class*="empresa"],
+:root[data-theme="dark"] [class*="badge-"][class*="camada"],
+:root[data-theme="dark"] [class*="badge-"][class*="grid"],
+:root[data-theme="dark"] [class*="badge-"][class*="gemini"],
+:root[data-theme="dark"] [class*="badge-"][class*="nivel"],
+:root[data-theme="dark"] [class*="badge-"][class*="qtd"],
+:root[data-theme="dark"] [class*="badge-"][class*="teal"],
+:root[data-theme="dark"] [class*="badge-"][class*="consolidado"],
+:root[data-theme="dark"] [class*="badge-"][class*="exec-ok"] {
+  background: rgba(91,141,239,.20) !important; color: #a9c3f5 !important;
+}
+
+:root[data-theme="dark"] [class*="badge-"][class*="filial"],
+:root[data-theme="dark"] [class*="badge-"][class*="erp"],
+:root[data-theme="dark"] [class*="badge-"][class*="cand"],
+:root[data-theme="dark"] [class*="badge-"][class*="acao"],
+:root[data-theme="dark"] [class*="badge-"][class*="claude"],
+:root[data-theme="dark"] [class*="badge-"][class*="flow"],
+:root[data-theme="dark"] [class*="badge-"][class*="pre-exec"],
+:root[data-theme="dark"] [class*="badge-"][class*="custom"],
+:root[data-theme="dark"] [class*="badge-"][class*="move"],
+:root[data-theme="dark"] [class*="badge-"][class*="open"] {
+  background: rgba(139,147,232,.22) !important; color: #c1c6f0 !important;
+}
+
+/* Neutros — ja usam var(--bg-*)/var(--text-*) na definicao original na
+   maioria dos casos (herdam sozinhos); so reforca contraste de borda. */
+:root[data-theme="dark"] [class*="badge-"][class*="neutro"],
+:root[data-theme="dark"] [class*="badge-"][class*="classico"],
+:root[data-theme="dark"] [class*="badge-"][class*="form"],
+:root[data-theme="dark"] [class*="badge-"][class*="noservice"] {
+  border-color: var(--border) !important;
+}
+
+/* Caixas de aviso amarelas com cor de fundo/texto claros hardcoded via
+   style="" inline (nao herdam variavel nenhuma) — marcadas com o atributo
+   data-warn-box na propria tela para poder mirar com especificidade maior
+   que o inline, sem reescrever o layout inline existente. */
+:root[data-theme="dark"] [data-warn-box] {
+  border-color: rgba(251,191,36,.4) !important;
+  background: rgba(251,191,36,.10) !important;
+  color: #f0d191 !important;
+}
+
+:root[data-theme="dark"] .btn-success { background: rgba(74,222,128,.16); color: #a3ecc0; border-color: rgba(74,222,128,.32); }
+:root[data-theme="dark"] .btn-danger  { background: rgba(248,113,113,.16); color: #f3b0b0; border-color: rgba(248,113,113,.32); }
+:root[data-theme="dark"] .btn-info    { background: rgba(91,141,239,.16); color: #a9c3f5; border-color: rgba(91,141,239,.32); }
+:root[data-theme="dark"] .btn-logout:hover { background: rgba(248,113,113,.14); }
+
+/* Botoes "solidos" (Guia de Uso, Alterar senha, primary) ficam menos
+   saturados no dark — o azul/roxo vivo do tema claro cansa mais a vista
+   sobre fundo escuro. */
+:root[data-theme="dark"] .btn-primary {
+  background: var(--accent); border-color: var(--accent);
+}
+:root[data-theme="dark"] .btn-primary:hover { background: #4a7ad9; border-color: #4a7ad9; }
+:root[data-theme="dark"] .sidebar-userinfo .user-change-pass {
+  background: rgba(139,147,232,.14); border-color: rgba(139,147,232,.28); color: #b7bcef;
+}
+:root[data-theme="dark"] .sidebar-userinfo .user-change-pass:hover {
+  background: rgba(139,147,232,.22); border-color: rgba(139,147,232,.4);
+}
+
+:root[data-theme="dark"] .qr-box {
+  background: rgba(59,130,246,.10); border-color: rgba(59,130,246,.3);
+}
+:root[data-theme="dark"] .login-error {
+  background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.35); color: #f87171;
+}
+:root[data-theme="dark"] .pill-stopped   { background: rgba(239,68,68,.16); color: #f87171; }
+:root[data-theme="dark"] .pill-starting  { background: rgba(245,158,11,.16); color: #fcd34d; }
+:root[data-theme="dark"] .pill-connected { background: rgba(34,197,94,.16); color: #4ade80; }
+
+:root[data-theme="dark"] .login-page {
+  background: linear-gradient(135deg, #0f1420 0%, #0b0f19 50%, #14101f 100%);
+}
+
+/* Grid Tabulator — a lib tem seu proprio CSS (tabulator.min.css) com cores
+   fixas; sem isso a grid fica clara dentro de uma pagina escura. */
+:root[data-theme="dark"] .tabulator {
+  background: var(--bg-card) !important; color: var(--text-hi) !important; border-color: var(--border) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-header {
+  background: var(--bg-base) !important; border-color: var(--border) !important; color: var(--text-lo) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-header .tabulator-col {
+  background: var(--bg-base) !important; color: var(--text-lo) !important; border-color: var(--border) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-header .tabulator-col .tabulator-header-filter input,
+:root[data-theme="dark"] .tabulator .tabulator-header .tabulator-col .tabulator-header-filter select {
+  background: var(--bg-hover) !important; color: var(--text-hi) !important; border-color: var(--border) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-row {
+  background: var(--bg-card) !important; color: var(--text-hi) !important; border-color: var(--border) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-row.tabulator-row-even {
+  background: var(--bg-base) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-row:hover {
+  background: var(--bg-hover) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-row .tabulator-cell {
+  border-color: var(--border) !important; color: var(--text-md);
+}
+:root[data-theme="dark"] .tabulator .tabulator-footer {
+  background: var(--bg-base) !important; color: var(--text-lo) !important; border-color: var(--border) !important;
+}
+:root[data-theme="dark"] .tabulator .tabulator-placeholder {
+  background: var(--bg-card) !important; color: var(--text-lo) !important;
+}
+:root[data-theme="dark"] .tabulator-menu {
+  background: var(--bg-card) !important; color: var(--text-hi) !important; border-color: var(--border) !important;
+}
+
+/* ── Toggle de tema (topbar, injetado via auth.js) ──────────── */
+.theme-toggle-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: none; border: 1px solid var(--border); border-radius: 7px;
+  cursor: pointer; color: var(--text-md);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+  /* Fica sempre ANTES do badge de empresa (#_empresa-badge tem order:2 mais
+     abaixo). auth.js anexa o toggle e o badge no MESMO container flex
+     (slot > .topbar-actions > .topbar, nessa ordem de preferencia — ver
+     _injetarThemeToggle e _injetarEmpresaTopbar), entao `order` funciona
+     como comparacao direta entre irmaos, sem depender de qual dos dois
+     terminou de carregar primeiro (o badge e' assincrono). */
+  order: -1;
+}
+/* Badge/combo de empresa, injetado via auth.js (_injetarEmpresaTopbar) —
+   order explicito pra garantir "titulo, toggle, empresa" sempre, nas duas
+   telas com toggle (launcher e IA Command). */
+#_empresa-badge { order: 2; }
+.theme-toggle-btn:hover { background: var(--bg-hover); color: var(--text-hi); border-color: var(--border-hi); }
+.theme-toggle-btn svg { width: 16px; height: 16px; }
+.theme-toggle-btn .icon-sun  { display: none; }
+.theme-toggle-btn .icon-moon { display: block; }
+:root[data-theme="dark"] .theme-toggle-btn .icon-sun  { display: block; }
+:root[data-theme="dark"] .theme-toggle-btn .icon-moon { display: none; }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 

@@ -11,6 +11,7 @@ $PROJECT_PATH  = "C:\Web\iahub"
 $SERVICE_NAME  = "iahub"
 $CHROME_PATH   = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $APP_PORT      = 3000
+$SERVICE_START_TIMEOUT_SECONDS = 120
 
 # Auto-detectar pasta do Nginx (instalado pelo Chocolatey)
 $nginxExe = Get-Command nginx -ErrorAction SilentlyContinue
@@ -33,6 +34,52 @@ if ($nginxExe) {
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
     Write-Host "ERRO: Execute este script como Administrador!" -ForegroundColor Red
     exit 1
+}
+
+function Invoke-Nssm {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$Arguments
+    )
+
+    $output = & nssm @Arguments 2>&1
+    if ($output) {
+        $output | ForEach-Object { Write-Host $_ }
+    }
+}
+
+function Get-ServiceStatusText {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (!$svc) { return "Nao encontrado" }
+    return [string]$svc.Status
+}
+
+function Wait-ServiceState {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Name,
+
+        [Parameter(Mandatory=$true)]
+        [string]$DesiredStatus,
+
+        [Parameter(Mandatory=$true)]
+        [int]$TimeoutSeconds
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if (!$svc) { return $false }
+        if ([string]$svc.Status -eq $DesiredStatus) { return $true }
+        Start-Sleep -Seconds 1
+    } while ((Get-Date) -lt $deadline)
+
+    return $false
 }
 
 Write-Host ""
@@ -175,14 +222,14 @@ if (!$rule3000) {
 # ── Iniciar servicos ──────────────────────────────────────────
 Write-Host ""
 Write-Host "Iniciando servicos..." -ForegroundColor Yellow
-nssm start $SERVICE_NAME
-Start-Sleep -Seconds 3
+Invoke-Nssm -Arguments @("start", $SERVICE_NAME)
 
-$svc = Get-Service -Name $SERVICE_NAME -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq "Running") {
+if (Wait-ServiceState -Name $SERVICE_NAME -DesiredStatus "Running" -TimeoutSeconds $SERVICE_START_TIMEOUT_SECONDS) {
     Write-Host "Servico IAHub: RODANDO" -ForegroundColor Green
 } else {
-    Write-Host "AVISO: Servico IAHub pode nao ter iniciado. Verifique os logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
+    $current = Get-ServiceStatusText -Name $SERVICE_NAME
+    Write-Host "AVISO: Servico IAHub nao ficou Running em $SERVICE_START_TIMEOUT_SECONDS segundos. Status atual: $current" -ForegroundColor Yellow
+    Write-Host "       Verifique os logs em $PROJECT_PATH\logs\" -ForegroundColor Yellow
 }
 
 Write-Host ""

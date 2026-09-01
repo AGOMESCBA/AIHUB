@@ -25,10 +25,10 @@
     }
     .hub-topbar { gap: 12px; }
     .hub-topbar .topbar-title { font-size: 16px; font-weight: 800; letter-spacing: .02em; }
-    .topbar-actions { margin-left: 10px; display: flex; align-items: center; gap: 10px; order: 3; }
+    .topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; order: 3; }
     .topbar-company-slot { display: contents; }
     #_guia-btn { display: none !important; }
-    #_empresa-badge { order: 2; margin-left: auto !important; }
+    #_empresa-badge { order: 2; }
     .hub-logout {
       height: 34px; padding: 0 13px; border-radius: 8px;
       display: inline-flex; align-items: center; gap: 7px;
@@ -162,6 +162,50 @@
       .systems-frame { max-height: none; overflow: visible; }
       .system-card { min-height: 230px; }
       .hub-logout span { display: none; }
+    }
+
+    /* Tema escuro — a maioria das cores desta tela e' hardcoded (nao usa
+       var(--bg-*)/var(--text-*)), diferente do resto do design system,
+       entao precisa de bloco dedicado aqui. */
+    :root[data-theme="dark"] .hub-shell { background: var(--bg-base); }
+    :root[data-theme="dark"] .systems-panel {
+      border-color: var(--border); background: var(--bg-card);
+      box-shadow: 0 22px 56px rgba(0,0,0,.35);
+    }
+    :root[data-theme="dark"] .systems-kicker { color: var(--text-md); }
+    :root[data-theme="dark"] .systems-kicker::before { border-color: var(--text-lo); box-shadow: 6px 0 0 -2px var(--text-lo), 0 6px 0 -2px var(--text-lo), 6px 6px 0 -2px var(--text-lo); }
+    :root[data-theme="dark"] .hub-logout {
+      border-color: rgba(248,113,113,.3); color: #f3b0b0; background: rgba(248,113,113,.08);
+    }
+    :root[data-theme="dark"] .hub-logout:hover {
+      background: rgba(248,113,113,.16); border-color: rgba(248,113,113,.5);
+      box-shadow: 0 8px 20px rgba(248,113,113,.14);
+    }
+    :root[data-theme="dark"] .system-card {
+      border-color: var(--border); background: var(--bg-hover);
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+    }
+    :root[data-theme="dark"] .system-card:hover {
+      border-color: color-mix(in srgb, var(--system-accent) 42%, var(--border));
+      box-shadow: 0 14px 30px rgba(0,0,0,.4);
+    }
+    :root[data-theme="dark"] .system-media {
+      background: linear-gradient(135deg, color-mix(in srgb, var(--system-accent) 20%, var(--bg-card)), var(--bg-base));
+      border-bottom-color: var(--border);
+    }
+    :root[data-theme="dark"] .system-media.has-image::after {
+      background: linear-gradient(180deg, rgba(0,0,0,.1), rgba(0,0,0,.55));
+    }
+    :root[data-theme="dark"] .system-icon {
+      background: color-mix(in srgb, var(--system-accent) 16%, var(--bg-card));
+      box-shadow: 0 10px 22px rgba(0,0,0,.3);
+    }
+    :root[data-theme="dark"] .system-name { color: var(--text-hi); }
+    :root[data-theme="dark"] .system-desc { color: var(--text-md); }
+    :root[data-theme="dark"] .system-action {
+      border-color: color-mix(in srgb, var(--system-accent) 32%, var(--border));
+      background: var(--bg-card);
+      color: color-mix(in srgb, var(--system-accent) 82%, var(--text-hi));
     }
   </style>
 </head>

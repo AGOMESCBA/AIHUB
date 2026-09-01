@@ -1,3 +1,77 @@
+// ── Tema claro/escuro — restrito a IA Command + launcher por enquanto ──────
+// Aplicado o mais cedo possivel dentro deste script (fora de qualquer
+// await/fetch) para MINIMIZAR o flash de tela clara antes do dark aplicar.
+// LIMITACAO CONHECIDA E ACEITA: auth.js e' carregado no fim do <body> em
+// todas as telas (nao no <head>), entao o flash nao e' 100% eliminado — o
+// CSS/HTML ja pintou em modo claro antes deste script rodar. Eliminar de
+// vez exigiria um script inline no <head> de cada tela; decisao deliberada
+// de nao fazer isso agora por simplicidade e menor superficie de erro (ver
+// historico de bugs desta sessao ao editar varios HTMLs parecidos).
+//
+// Duas "zonas" com preferencia INDEPENDENTE uma da outra (decisao explicita
+// do usuario — nao e' o mesmo interruptor): o launcher de sistemas
+// (iahub.html) e o IA Command. Escolher dark num nao afeta o outro. Os
+// demais modulos (IA Recruit, IA Administracao, etc.) continuam sempre no
+// tema claro, sem toggle — quando decidirem expandir, e' so adicionar uma
+// nova zona em _ZONAS_TEMA (o CSS compartilhado ja suporta).
+const _ZONAS_TEMA = [
+  { chave: 'iac_theme',     dentro: () => location.pathname.includes('/app/ia-command/') },
+  { chave: 'launcher_theme', dentro: () => location.pathname === '/iahub.html' || location.pathname.endsWith('/iahub.html') },
+];
+function _zonaTemaAtual() {
+  return _ZONAS_TEMA.find(z => z.dentro()) || null;
+}
+(function _aplicarTemaAntesDoPaint() {
+  const zona = _zonaTemaAtual();
+  if (!zona) return;
+  try {
+    const tema = localStorage.getItem(zona.chave);
+    if (tema === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  } catch (_) { /* localStorage indisponivel (modo privado restrito) — segue sem tema salvo */ }
+})();
+
+function _injetarThemeToggle() {
+  const zona = _zonaTemaAtual();
+  if (!zona) return;
+  const topbar = document.querySelector('.topbar');
+  if (!topbar || document.getElementById('_theme-toggle-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = '_theme-toggle-btn';
+  btn.type = 'button';
+  btn.className = 'theme-toggle-btn';
+  btn.title = 'Alternar tema claro/escuro';
+  btn.innerHTML = `
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  `;
+  btn.addEventListener('click', () => {
+    const escuroAgora = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (escuroAgora) {
+      document.documentElement.removeAttribute('data-theme');
+      try { localStorage.setItem(zona.chave, 'light'); } catch (_) {}
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      try { localStorage.setItem(zona.chave, 'dark'); } catch (_) {}
+    }
+  });
+  // Anexa no MESMO container onde o badge de empresa realmente cai
+  // (ver _injetarEmpresaTopbar: slot .topbar-company-slot > .topbar-actions
+  // > .topbar, nessa ordem de preferencia). No launcher, o slot tem
+  // `display:contents`, entao seus filhos contam como irmaos flex de
+  // .topbar-actions (onde fica o botao Sair) — se o toggle fosse anexado
+  // direto em .topbar (fora desse container), o `order` CSS nao teria
+  // efeito nenhum sobre a posicao relativa ao badge, pois `order` so
+  // compara irmaos do MESMO pai flex. A posicao final (toggle sempre antes
+  // do badge) e' garantida por `.theme-toggle-btn { order: -1 }` em
+  // iahub.css, já que o badge e anexado de forma assincrona
+  // (_injetarEmpresaTopbar faz fetch antes de anexar).
+  const target = topbar.querySelector('.topbar-company-slot')
+    || topbar.querySelector('.topbar-actions')
+    || topbar;
+  target.appendChild(btn);
+}
+
 // Sinal de pronto: resolve quando window._iahubEmpresa estiver disponível
 let _authReadyResolve;
 window._iahubAuthReady = new Promise(r => { _authReadyResolve = r; });
@@ -372,13 +446,15 @@ function _mostrarOverlaySemAcesso(rotinaNome = 'esta rotina') {
     // Overlay já exibido; injeta empresa no topbar mas NÃO resolve authReady
     // (impede que os scripts da página iniciem o carregamento de dados)
     _injetarEmpresaTopbar();
+    _injetarThemeToggle();
     return;
   }
 
   _authReadyResolve?.();
 
-  // 5. Injetar combo de empresa no topbar
+  // 5. Injetar combo de empresa e o toggle de tema no topbar
   _injetarEmpresaTopbar();
+  _injetarThemeToggle();
 
   // 6. Exibir aviso de acesso negado vindo de redirecionamento anterior
   const _aviso = sessionStorage.getItem('_iahub_aviso');
@@ -555,8 +631,8 @@ async function _injetarEmpresaTopbar() {
     topbar.appendChild(guiaBtn);
   }
 
-  badge.style.cssText = 'margin-left:8px;position:relative;';
-  topbar.appendChild(badge);
+  badge.style.cssText = topbarTarget === topbar ? 'margin-left:auto;position:relative;' : 'margin-left:8px;position:relative;';
+  topbarTarget.appendChild(badge);
 
   const btn      = document.getElementById('_empresa-btn');
   const dropdown = document.getElementById('_empresa-dropdown');

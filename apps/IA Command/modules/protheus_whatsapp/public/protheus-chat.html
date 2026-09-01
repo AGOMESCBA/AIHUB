@@ -639,6 +639,8 @@
   .filial-empresa-row:hover { background: var(--wa-sidebar-hover); }
   .filial-empresa-row.selecionada,
   .filial-empresa-row.parcial { background: var(--wa-accent-soft-bg); }
+  .filial-empresa-row.desabilitada { cursor: not-allowed; opacity: 0.68; }
+  .filial-empresa-row.desabilitada:hover { background: transparent; }
   .filial-empresa-row input[type=checkbox] {
     width: 16px; height: 16px; flex: none; accent-color: var(--wa-accent); cursor: pointer;
   }
@@ -662,6 +664,10 @@
   .filial-empresa-row .contagem {
     flex: none; font-size: 11px; font-weight: 600; opacity: 0.6; padding: 1px 6px;
     border-radius: 999px; background: var(--wa-select-bg);
+  }
+  .filial-empresa-row .aviso-config {
+    flex: none; font-size: 11px; font-weight: 700; color: #ffb454;
+    padding: 1px 7px; border-radius: 999px; background: rgba(255, 180, 84, 0.12);
   }
   .filial-lista-filiais {
     display: none; margin: 2px 0 4px 19px; padding-left: 12px;
@@ -1533,9 +1539,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    min-height: 34px;
-    padding: 7px 16px;
-    border-bottom: 1px solid var(--wa-border);
+    min-height: 28px;
+    padding: 6px 16px 0;
     background: rgba(0, 0, 0, 0.035);
     color: var(--wa-text-tertiary);
     font-size: 11.5px;
@@ -2080,9 +2085,6 @@
             </button>
           </div>
         </div>
-        <div class="report-status-bar" id="reportStatusBar" style="display:none">
-          <div class="report-status" id="reportGridStatus"></div>
-        </div>
         <div class="report-body">
           <div class="report-grid-wrap">
             <div id="reportGrid"></div>
@@ -2092,6 +2094,9 @@
             </div>
           </div>
           <div class="report-grand-total" id="reportGrandTotal" style="display:none;"></div>
+          <div class="report-status-bar" id="reportStatusBar" style="display:none">
+            <div class="report-status" id="reportGridStatus"></div>
+          </div>
         </div>
         <div class="report-caption" id="reportCaption"></div>
         <div class="report-scope" id="reportScope"></div>
@@ -2853,19 +2858,29 @@
   let filialEmpresasInteiras = new Set();        // empresaProtheusCodigo marcados "inteira"
   let filialFiliaisAvulsas = new Set();          // filialChave marcadas avulsas (empresa nao esta inteira)
   let filialEmpresasExpandidas = new Set();      // empresaProtheusCodigo com a lista de filiais aberta na UI
+  let filialEmpresasRecolhidas = new Set();      // empresaProtheusCodigo fechado manualmente, mesmo com expansao padrao
   let filialUiTouched = false;                   // usuario ja interagiu com o componente nesta conversa
   // empresaId (IAHub) sem LOBO_GUARA configurado/validado — usado so para
   // trocar a mensagem "sem filial" por "empresa nao configurada" (ver
   // routes.js::/filial-tree, campo empresasSemConfiguracao).
   let filialEmpresasSemConfiguracao = new Set();
+  let filialEmpresasProtheusSemConfiguracao = new Map();
 
   function resetarSelecaoFilial() {
     filialArvoreDisponivel = [];
     filialEmpresasInteiras = new Set();
     filialFiliaisAvulsas = new Set();
     filialEmpresasExpandidas = new Set();
+    filialEmpresasRecolhidas = new Set();
     filialUiTouched = false;
     filialEmpresasSemConfiguracao = new Set();
+    filialEmpresasProtheusSemConfiguracao = new Map();
+  }
+
+  function chaveEmpresaProtheusSemConfiguracao(item) {
+    const id = Number(item?.empresaIahubId || item?.empresaId || item?.empresa_id || 0);
+    const codigo = String(item?.codigoProtheus || item?.codigo_protheus || '').trim();
+    return `${id}:${codigo}`;
   }
 
   async function carregarFilialTree(todasEmpresas = false) {
@@ -2883,7 +2898,12 @@
     const idsParaBuscar = todasEmpresas
       ? idsEmpresasDisponiveis()
       : [...new Set([...empresasSelecionadasIds, ...escopoEmpresasIahubExpandidas])];
-    if (!idsParaBuscar.length) { filialArvoreDisponivel = []; atualizarLabelEscopoSelect(); return; }
+    if (!idsParaBuscar.length) {
+      filialArvoreDisponivel = [];
+      filialEmpresasProtheusSemConfiguracao = new Map();
+      atualizarLabelEscopoSelect();
+      return;
+    }
     const url = '/api/ia-command/protheus/filial-tree?empresaIds=' + encodeURIComponent(idsParaBuscar.join(','))
       + (empresaAtualId ? '&empresaId=' + encodeURIComponent(empresaAtualId) : '');
     const tokenRequisicao = token;
@@ -2895,6 +2915,10 @@
     }
     filialArvoreDisponivel = data && data.disponivel && Array.isArray(data.empresas) ? data.empresas : [];
     filialEmpresasSemConfiguracao = new Set(Array.isArray(data?.empresasSemConfiguracao) ? data.empresasSemConfiguracao.map(Number) : []);
+    filialEmpresasProtheusSemConfiguracao = new Map(
+      (Array.isArray(data?.empresasProtheusSemConfiguracao) ? data.empresasProtheusSemConfiguracao : [])
+        .map(item => [chaveEmpresaProtheusSemConfiguracao(item), item])
+    );
     // Poda selecoes que nao existem mais na arvore atual (empresa/filial
     // desativada ou removida) — evita enviar chave morta ao backend.
     const empresasValidas = new Set(filialArvoreDisponivel.map(e => e.empresaProtheusCodigo));
@@ -2911,6 +2935,18 @@
 
   function atualizarEstadoEscopoOptionTodas() {
     const ids = idsEmpresasDisponiveis();
+    const arvoresSelecionadas = filialArvoreDisponivel
+      .filter(emp => empresasSelecionadasIds.includes(Number(emp.empresaIahubId || 0)));
+    if (arvoresSelecionadas.length) {
+      const todasFiliaisSelecionadas = arvoresSelecionadas.every((emp) =>
+        filialEmpresasInteiras.has(emp.empresaProtheusCodigo)
+        || emp.filiais.every(f => filialFiliaisAvulsas.has(f.filialChave))
+      );
+      escopoOptionTodas.checked = todasFiliaisSelecionadas;
+      escopoOptionTodas.indeterminate = !todasFiliaisSelecionadas && !selecaoFilialVazia();
+      return;
+    }
+
     const idsMarcaveisTodas = ids.filter(id => !filialEmpresasSemConfiguracao.has(id));
     const totalParaComparar = idsMarcaveisTodas.length || ids.length;
     const todasEmpresasSelecionadas = ids.length > 1
@@ -3016,8 +3052,12 @@
     const arvoreDaEmpresa = empresaIahubId
       ? filialArvoreDisponivel.filter(e => Number(e.empresaIahubId) === Number(empresaIahubId))
       : filialArvoreDisponivel;
+    const codigosComArvore = new Set(arvoreDaEmpresa.map(e => String(e.empresaProtheusCodigo || '').trim()));
+    const protheusSemConfiguracao = [...filialEmpresasProtheusSemConfiguracao.values()]
+      .filter(item => !empresaIahubId || Number(item.empresaIahubId || item.empresaId || item.empresa_id || 0) === Number(empresaIahubId))
+      .filter(item => !codigosComArvore.has(String(item.codigoProtheus || item.codigo_protheus || '').trim()));
 
-    if (!arvoreDaEmpresa.length) {
+    if (!arvoreDaEmpresa.length && !protheusSemConfiguracao.length) {
       const semConfiguracao = empresaIahubId && filialEmpresasSemConfiguracao.has(Number(empresaIahubId));
       const vazio = document.createElement('div');
       vazio.className = 'filial-menu-empty';
@@ -3032,6 +3072,43 @@
         : 'Nenhuma filial disponivel para o seu acesso nesta empresa.';
       container.appendChild(vazio);
       return;
+    }
+
+    function renderEmpresaProtheusSemConfiguracao(item) {
+      const codigo = String(item.codigoProtheus || item.codigo_protheus || '').trim();
+      const nome = String(item.nome || codigo || 'Empresa Protheus').trim();
+      const texto = codigo ? `${codigo} - ${nome}` : nome;
+      if (termo && !texto.toLowerCase().includes(termo)) return;
+
+      const grupo = document.createElement('div');
+      grupo.className = 'filial-empresa-grupo';
+
+      const row = document.createElement('div');
+      row.className = 'filial-empresa-row desabilitada';
+      row.title = 'Empresa Protheus permitida, mas ainda nao configurada ou sincronizada no IA Command.';
+
+      const toggle = document.createElement('span');
+      toggle.className = 'filial-toggle';
+      toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.disabled = true;
+
+      const nomeSpan = document.createElement('span');
+      nomeSpan.className = 'nome';
+      nomeSpan.textContent = texto;
+
+      const aviso = document.createElement('span');
+      aviso.className = 'aviso-config';
+      aviso.textContent = 'Sem configuracao';
+
+      row.appendChild(toggle);
+      row.appendChild(input);
+      row.appendChild(nomeSpan);
+      row.appendChild(aviso);
+      grupo.appendChild(row);
+      container.appendChild(grupo);
     }
 
     arvoreDaEmpresa.forEach((emp) => {
@@ -3050,12 +3127,11 @@
       grupo.className = 'filial-empresa-grupo';
 
       const estado = estadoEmpresaNaArvore(emp);
-      const expandido = filialEmpresasExpandidas.has(emp.empresaProtheusCodigo) || (termo && filiaisFiltradas.length > 0 && !empresaBate);
-      // Quando a empresa-cliente IAHub so tem UMA empresa-Protheus vinculada,
-      // o nome dela (ex: "PLANTIVO") ja apareceu no no pai (nivel 0, via
-      // labelEmpresa) — repetir aqui e redundante. Colapsa o nivel 1 e lista
-      // as filiais direto, mantendo o mesmo checkbox de "empresa inteira".
-      const nivelUnico = arvoreDaEmpresa.length === 1;
+      const expandidoPadrao = empresaIahubId && idsEmpresasDisponiveis().length === 1;
+      const expandido = expandidoPadrao
+        ? !filialEmpresasRecolhidas.has(emp.empresaProtheusCodigo)
+        : filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)
+        || (termo && filiaisFiltradas.length > 0 && !empresaBate);
 
       const listaFiliais = document.createElement('div');
       listaFiliais.className = 'filial-lista-filiais';
@@ -3078,20 +3154,6 @@
         listaFiliais.appendChild(optFilial);
       });
 
-      if (nivelUnico) {
-        // Sem linha "PLANTIVO" intermediaria — as filiais ficam soltas no
-        // container, controladas pelo checkbox do nivel 0 (empresa IAHub).
-        // O CSS de .filial-lista-filiais depende do irmao ".expandido" que
-        // nao existe aqui (sem a row) — forca a exibicao explicitamente.
-        listaFiliais.style.display = 'block';
-        listaFiliais.style.margin = '2px 0';
-        listaFiliais.style.paddingLeft = '0';
-        listaFiliais.style.borderLeft = 'none';
-        grupo.appendChild(listaFiliais);
-        container.appendChild(grupo);
-        return;
-      }
-
       const row = document.createElement('div');
       row.className = 'filial-empresa-row'
         + (expandido ? ' expandido' : '')
@@ -3103,8 +3165,13 @@
       toggle.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       toggle.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
-        else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
+        if (expandido) {
+          filialEmpresasRecolhidas.add(emp.empresaProtheusCodigo);
+          filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
+        } else {
+          filialEmpresasRecolhidas.delete(emp.empresaProtheusCodigo);
+          filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
+        }
         renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
       });
 
@@ -3135,8 +3202,13 @@
         row.appendChild(contagem);
       }
       row.addEventListener('click', () => {
-        if (filialEmpresasExpandidas.has(emp.empresaProtheusCodigo)) filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
-        else filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
+        if (expandido) {
+          filialEmpresasRecolhidas.add(emp.empresaProtheusCodigo);
+          filialEmpresasExpandidas.delete(emp.empresaProtheusCodigo);
+        } else {
+          filialEmpresasRecolhidas.delete(emp.empresaProtheusCodigo);
+          filialEmpresasExpandidas.add(emp.empresaProtheusCodigo);
+        }
         renderArvoreProtheus(container, filtroTexto, onChange, empresaIahubId);
       });
 
@@ -3144,6 +3216,7 @@
       grupo.appendChild(listaFiliais);
       container.appendChild(grupo);
     });
+    protheusSemConfiguracao.forEach(renderEmpresaProtheusSemConfiguracao);
   }
 
   // Nivel 0 do modal unificado: uma linha expansivel por empresa-cliente do
@@ -7179,16 +7252,33 @@
 
   escopoOptionTodas.addEventListener('change', async function () {
     const ids = idsEmpresasDisponiveis();
-    // "Marcar todas" nunca inclui empresa sem LOBO_GUARA configurado (mesma
-    // regra do checkbox individual de nivel 0) — sem esse filtro, o atalho
-    // global contornava a validacao e marcava empresa sem configuracao real.
-    const idsMarcaveis = ids.filter(id => !filialEmpresasSemConfiguracao.has(id));
-    empresasSelecionadasIds = escopoOptionTodas.checked
-      ? (idsMarcaveis.length ? idsMarcaveis : ids.slice())
-      : [ids[0]];
-    atualizarEmpresaAtualPorSelecao();
-    atualizarLabelEscopoSelect();
-    await trocarEscopoEmpresa();
+    const arvoresSelecionadas = filialArvoreDisponivel
+      .filter(emp => empresasSelecionadasIds.includes(Number(emp.empresaIahubId || 0)));
+
+    if (arvoresSelecionadas.length) {
+      filialUiTouched = true;
+      arvoresSelecionadas.forEach((emp) => {
+        if (escopoOptionTodas.checked) {
+          filialEmpresasInteiras.add(emp.empresaProtheusCodigo);
+          emp.filiais.forEach(f => filialFiliaisAvulsas.delete(f.filialChave));
+        } else {
+          filialEmpresasInteiras.delete(emp.empresaProtheusCodigo);
+          emp.filiais.forEach(f => filialFiliaisAvulsas.delete(f.filialChave));
+        }
+      });
+      atualizarLabelEscopoSelect();
+    } else {
+      // Se a arvore ainda nao carregou, mantem a regra antiga de selecionar o
+      // universo marcavel e dispara a carga; ao voltar, o checkbox passa a
+      // controlar as filiais de fato.
+      const idsMarcaveis = ids.filter(id => !filialEmpresasSemConfiguracao.has(id));
+      empresasSelecionadasIds = escopoOptionTodas.checked
+        ? (idsMarcaveis.length ? idsMarcaveis : ids.slice())
+        : [ids[0]];
+      atualizarEmpresaAtualPorSelecao();
+      atualizarLabelEscopoSelect();
+      await trocarEscopoEmpresa();
+    }
     renderEscopoModal(escopoSearch.value);
   });
 
