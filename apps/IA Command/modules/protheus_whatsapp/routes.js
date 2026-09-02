@@ -1239,7 +1239,20 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       await enviarTextoWhatsApp({
         empresaId: permissoes.empresaId,
         numero: celular,
-        texto: `Seu codigo de acesso ao IA Command e ${codigo}. Ele expira em ${empresaConfig.ttlMin} minuto(s).`,
+        texto: [
+          '🔐 IA Command - acesso ao Chat Web',
+          '',
+          'Recebemos uma tentativa de entrada usando este WhatsApp.',
+          `O codigo expira em ${empresaConfig.ttlMin} minuto(s).`,
+          '',
+          '⚠️ Se voce nao solicitou este acesso, ignore a proxima mensagem e avise o administrador.',
+          'Nunca compartilhe seu codigo com terceiros.',
+        ].join('\n'),
+      });
+      await enviarTextoWhatsApp({
+        empresaId: permissoes.empresaId,
+        numero: celular,
+        texto: codigo,
       });
 
       perfLog('POST /web-login/start', inicio, { status: 200, empresaId: permissoes.empresaId, celular });
