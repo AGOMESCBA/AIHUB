@@ -1266,14 +1266,6 @@
   .send-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
   .send-btn svg { width: 18px; height: 18px; fill: #fff; margin-left: 2px; }
 
-  /* Faixa discreta de status do canal Protheus no rodape da conversa. */
-  .protheus-strip { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 16px; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--wa-text-tertiary); background: var(--wa-chat-footer, var(--wa-panel)); border-top: 1px solid var(--wa-border); }
-  .protheus-strip svg { width: 11px; height: 11px; fill: var(--wa-text-tertiary); flex: none; }
-  .protheus-strip > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .protheus-strip-status { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
-  .app-frame.focus-mode .protheus-strip { justify-content: flex-end; min-height: 18px; padding: 3px 24px; font-size: 9.5px; }
-  .app-frame.focus-mode .protheus-strip svg { display: none; }
-
 
   .error-banner {
     background: #d64545;
@@ -1738,8 +1730,6 @@
     .app-frame.focus-mode .input-wrap { min-height: 46px; padding: 12px 18px; }
     .input-wrap textarea,
     .app-frame.focus-mode .input-wrap textarea { min-height: 24px; font-size: 15.5px; }
-    .app-frame.focus-mode .protheus-strip { justify-content: space-between; min-height: auto; padding: 4px 16px; font-size: 10px; }
-    .app-frame.focus-mode .protheus-strip svg { display: inline; }
     /* Barra de selecao de mensagens (Selecionar Todas/Limpar Chat/Cancelar/
        Excluir) e uma linha flex sem wrap — em ~390px de largura os 4 itens
        nao cabem e estouravam pra fora da tela sem nenhuma forma de rolar ate
@@ -2029,13 +2019,6 @@
         </button>
       </form>
 
-      <div class="protheus-strip">
-        <span>Desenvolvido pela J2A Consultoria</span>
-        <span class="protheus-strip-status">
-          <svg viewBox="0 0 24 24"><path d="M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6z"/></svg>
-          <span>Integrado ao ERP Protheus · dados em tempo real</span>
-        </span>
-      </div>
     </div>
 
       <!-- ================= PAINEL: RELATORIO ================= -->
@@ -3008,8 +2991,14 @@
     const temRecorteFilial = !selecaoFilialVazia();
     const empresasProtheusSelecionadas = temRecorteFilial ? empresasProtheusSelecionadasNoEscopo() : [];
 
-    if (temRecorteFilial && todasEmpresasProtheusSelecionadas()) {
+    if (temRecorteFilial && todasEmpresasProtheusSelecionadas() && filialArvoreDisponivel.length > 1) {
       partes.push('Todas as empresas');
+    } else if (temRecorteFilial && todasEmpresasProtheusSelecionadas() && filialArvoreDisponivel.length === 1) {
+      // So existe UMA empresa Protheus disponivel (as demais podem estar sem
+      // vinculo com o IAHub e por isso fora da arvore) — mostrar o nome dela
+      // em vez de "Todas as empresas", que sugere multiplas opcoes quando na
+      // pratica nao ha escolha nenhuma a fazer.
+      partes.push(labelEmpresaProtheus(filialArvoreDisponivel[0]));
     } else if (empresasProtheusSelecionadas.length === 1) {
       partes.push(labelEmpresaProtheus(empresasProtheusSelecionadas[0]));
     } else if (empresasProtheusSelecionadas.length > 1) {

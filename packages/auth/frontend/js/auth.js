@@ -47,13 +47,11 @@ function _injetarThemeToggle() {
   `;
   btn.addEventListener('click', () => {
     const escuroAgora = document.documentElement.getAttribute('data-theme') === 'dark';
-    if (escuroAgora) {
-      document.documentElement.removeAttribute('data-theme');
-      try { localStorage.setItem(zona.chave, 'light'); } catch (_) {}
-    } else {
-      document.documentElement.setAttribute('data-theme', 'dark');
-      try { localStorage.setItem(zona.chave, 'dark'); } catch (_) {}
-    }
+    const novoTema = escuroAgora ? 'light' : 'dark';
+    if (escuroAgora) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', 'dark');
+    try { localStorage.setItem(zona.chave, novoTema); } catch (_) {}
+    _propagarTemaParaIframes(novoTema);
   });
   // Anexa no MESMO container onde o badge de empresa realmente cai
   // (ver _injetarEmpresaTopbar: slot .topbar-company-slot > .topbar-actions
@@ -70,6 +68,24 @@ function _injetarThemeToggle() {
     || topbar.querySelector('.topbar-actions')
     || topbar;
   target.appendChild(btn);
+}
+
+// Propaga a troca de tema para iframes de rotinas já abertas no shell MDI
+// (apps/IA Command/frontend/shell.html carrega cada rotina num <iframe>
+// dentro de #mdi-content). Sem isso, uma rotina aberta antes da troca so'
+// atualiza o tema se for fechada e reaberta (le' o localStorage so' no load).
+// Mesma origem sempre (todas as paginas do IA Command sao do proprio
+// dominio), entao acesso direto a contentDocument e' seguro, sem precisar
+// de postMessage.
+function _propagarTemaParaIframes(novoTema) {
+  document.querySelectorAll('#mdi-content iframe').forEach((f) => {
+    try {
+      const doc = f.contentDocument;
+      if (!doc) return;
+      if (novoTema === 'dark') doc.documentElement.setAttribute('data-theme', 'dark');
+      else doc.documentElement.removeAttribute('data-theme');
+    } catch (_) { /* iframe de outra origem (nao deveria ocorrer aqui) — ignora */ }
+  });
 }
 
 // Sinal de pronto: resolve quando window._iahubEmpresa estiver disponível
