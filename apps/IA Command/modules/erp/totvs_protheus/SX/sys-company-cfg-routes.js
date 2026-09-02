@@ -274,6 +274,45 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
         if (empresaVinculoId != null) {
           const empresaExiste = empresasDb.buscarPorId(empresaVinculoId);
           if (!empresaExiste) return res.status(400).json({ error: 'Empresa IAHub informada não existe.' });
+
+          // Bloqueia vincular um segundo codigo Protheus a uma empresa IAHub que
+          // ja tem outro codigo vinculado, SE isso criar ambiguidade de tabela
+          // fisica no dicionario SX2 (protheus_sx2, chave -> arquivo). No modelo
+          // Lobo Guara "de verdade" o grupo inteiro compartilha as mesmas tabelas
+          // fisicas (uma linha por chave, ja sob o mesmo empresa_id do IAHub) —
+          // vincular mais de um codigo nao gera nenhuma chave com 2+ arquivos
+          // distintos. No modelo TRADICIONAL cada empresa juridica tem seu
+          // proprio conjunto de tabelas (ex.: SA1010 vs SA1020); vincular duas ao
+          // mesmo cadastro faria o sistema achar 2 tabelas fisicas candidatas
+          // para a mesma chave e nao saber qual usar (sx2-sql-normalizer.js so
+          // aplica sufixo quando ha exatamente 1 candidata) — ou pior, se so uma
+          // das duas tiver SX2 importado, o sistema usaria silenciosamente a
+          // tabela da OUTRA empresa sem avisar nada.
+          const outrosCodigosVinculados = db.prepare(`
+            SELECT DISTINCT empresa_codigo FROM protheus_company_tree
+             WHERE connection_id = ? AND tipo_no = 'empresa' AND empresa_iahub_vinculo_id = ? AND empresa_codigo <> ?
+          `).all(row.connection_id, empresaVinculoId, row.empresa_codigo).map(r => r.empresa_codigo);
+
+          if (outrosCodigosVinculados.length) {
+            const codigosTodos = [row.empresa_codigo, ...outrosCodigosVinculados];
+            const placeholders = codigosTodos.map(() => '?').join(',');
+            const rowsSx2 = db.prepare(`
+              SELECT chave, arquivo FROM protheus_sx2
+               WHERE connection_id = ? AND empresa_id = ?
+            `).all(row.connection_id, empresaVinculoId);
+            const arquivosPorChave = new Map();
+            for (const r of rowsSx2) {
+              const chave = String(r.chave || '').trim().toUpperCase();
+              if (!arquivosPorChave.has(chave)) arquivosPorChave.set(chave, new Set());
+              arquivosPorChave.get(chave).add(String(r.arquivo || '').trim().toUpperCase());
+            }
+            const chaveConflitante = [...arquivosPorChave.entries()].find(([, arquivos]) => arquivos.size > 1);
+            if (chaveConflitante) {
+              return res.status(409).json({
+                error: `Não é possível vincular: a empresa "${row.nome || row.empresa_codigo}" tem tabelas físicas diferentes das já vinculadas a esta empresa IAHub (ex.: tabela "${chaveConflitante[0]}" aponta para ${[...chaveConflitante[1]].join(' e ')}). Isso indica modelo TRADICIONAL — cada empresa com tabelas próprias precisa de um cadastro IAHub separado.`,
+              });
+            }
+          }
         }
 
         const agora = new Date().toISOString();
