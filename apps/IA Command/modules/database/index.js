@@ -562,6 +562,7 @@ function _garantirColunasCompatibilidade() {
     protheus_web_login_ativo: 'INTEGER DEFAULT 1',
     protheus_web_login_path: "TEXT DEFAULT '/api/ia-command/protheus/web-login'",
     protheus_web_login_access_key: 'TEXT DEFAULT NULL',
+    protheus_chat_secret: 'TEXT DEFAULT NULL',
     protheus_web_login_otp_ttl_min: 'INTEGER DEFAULT 5',
     protheus_web_login_max_tentativas: 'INTEGER DEFAULT 5',
     protheus_web_login_exigir_https: 'INTEGER DEFAULT 0',

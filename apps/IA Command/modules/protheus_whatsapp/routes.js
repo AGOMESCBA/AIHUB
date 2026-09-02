@@ -4,7 +4,8 @@
 // servidor, sem sessao de usuario do IAHub) e por isso precisa ser registrada
 // ANTES do app.use que aplica requireAuth a todo /api/ia-command/* — mesmo padrao
 // ja usado em modules/routes.js para o worker-event do WhatsApp. Autenticacao via
-// header de segredo compartilhado (IAC_PROTHEUS_CHAT_SECRET), nao via sessao.
+// header de segredo compartilhado (por empresa em ai_config.protheus_chat_secret,
+// com fallback em IAC_PROTHEUS_CHAT_SECRET), nao via sessao.
 //
 // As demais rotas (mensagem, sessoes) sao chamadas pelo navegador embutido
 // (TWebEngine) e se autenticam com o token de sessao emitido aqui — tambem sem
@@ -79,6 +80,42 @@ function compararSeguro(a, b) {
   const ba = Buffer.from(String(a || ''));
   const bb = Buffer.from(String(b || ''));
   return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+function carregarProtheusSecretEmpresa(empresaId) {
+  const id = Number(empresaId || 0);
+  if (!id) return '';
+  try {
+    const row = getDB().prepare(`
+      SELECT protheus_chat_secret
+        FROM ai_config
+       WHERE empresa_id = ?
+       LIMIT 1
+    `).get(id);
+    return String(row?.protheus_chat_secret || '').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function protheusSecretEsperado(empresaId) {
+  return carregarProtheusSecretEmpresa(empresaId) || PROTHEUS_SECRET;
+}
+
+function protheusSecretAutorizado(req, res, empresaId, etapa, inicio) {
+  const esperado = protheusSecretEsperado(empresaId);
+  if (!esperado) return true;
+  const informado = String(req.headers['x-protheus-secret'] || '').trim();
+  if (compararSeguro(informado, esperado)) return true;
+  perfLog(etapa, inicio, { status: 401, empresaId: Number(empresaId || 0) || null });
+  res.status(401).json({ error: 'Credencial invalida.' });
+  return false;
+}
+
+function protheusSecretsAutorizados(req, res, empresaIds, etapa, inicio) {
+  const ids = [...new Set((empresaIds || []).map(id => Number(id || 0)).filter(Boolean))];
+  if (!ids.length) return protheusSecretAutorizado(req, res, null, etapa, inicio);
+  return ids.every(id => protheusSecretAutorizado(req, res, id, etapa, inicio));
 }
 
 function webLoginAccessAutorizado(req, res, config = {}) {
@@ -1026,15 +1063,12 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     const inicio = Date.now();
     setPublicChatSecurityHeaders(res);
     if (!publicRateLimit(req, res, 'protheus-token', { janelaMs: 60 * 1000, max: 60 })) return;
-    if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
-      perfLog('POST /token', inicio, { status: 401 });
-      return res.status(401).json({ error: 'Credencial invalida.' });
-    }
     const { empresaId, celular, filial, empresasPermitidas, filiaisPermitidas, launchTicket, usuarioId, usuarioNome } = req.body || {};
     if (!empresaId || !celular) {
       perfLog('POST /token', inicio, { status: 400 });
       return res.status(400).json({ error: 'empresaId e celular sao obrigatorios.' });
     }
+    if (!protheusSecretAutorizado(req, res, empresaId, 'POST /token', inicio)) return;
     try {
       const { token, expiraEm } = tokenService.emitir({ empresaId, celular, filial, empresasPermitidas, filiaisPermitidas });
       try {
@@ -1073,13 +1107,14 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
   app.post('/api/ia-command/protheus/user-permissions/sync', (req, res) => {
     const inicio = Date.now();
     if (!publicRateLimit(req, res, 'protheus-user-sync', { janelaMs: 60 * 1000, max: 60 })) return;
-    if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
-      perfLog('POST /user-permissions/sync', inicio, { status: 401 });
-      return res.status(401).json({ error: 'Credencial invalida.' });
-    }
     try {
       const body = req.body || {};
       const usuarios = Array.isArray(body.usuarios) ? body.usuarios : [body];
+      const empresaIdsAuth = [
+        body.empresaId || body.empresa_id,
+        ...usuarios.map(u => u?.empresaId || u?.empresa_id),
+      ];
+      if (!protheusSecretsAutorizados(req, res, empresaIdsAuth, 'POST /user-permissions/sync', inicio)) return;
       const rows = usuarios.map(item => userPermissionsStore.salvarSync({
         empresaId: item.empresaId || item.empresa_id || body.empresaId || body.empresa_id,
         celular: item.celular || item.numero,
@@ -1111,12 +1146,10 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
   app.post('/api/ia-command/protheus/user-permissions/consulta', (req, res) => {
     const inicio = Date.now();
     if (!publicRateLimit(req, res, 'protheus-user-consulta', { janelaMs: 60 * 1000, max: 60 })) return;
-    if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
-      perfLog('POST /user-permissions/consulta', inicio, { status: 401 });
-      return res.status(401).json({ error: 'Credencial invalida.' });
-    }
     try {
       const body = req.body || {};
+      const empresaIdAuth = body.empresaId || body.empresa_id;
+      if (!protheusSecretAutorizado(req, res, empresaIdAuth, 'POST /user-permissions/consulta', inicio)) return;
       const usuarioId = String(body.usuarioId || body.usuario_id || '').trim();
       const celular = tokenService.normalizarCelular(body.celular || body.numero || '');
       if (!usuarioId && !celular) {

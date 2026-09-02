@@ -1736,6 +1736,13 @@ const MIGRATIONS = [
       ALTER TABLE protheus_company_tree ADD COLUMN empresa_iahub_vinculo_id INTEGER DEFAULT NULL;
     `,
   },
+  {
+    version: 92,
+    descricao: 'IA Command - segredo servidor-a-servidor do chat Protheus por empresa',
+    sql: `
+      ALTER TABLE ai_config ADD COLUMN protheus_chat_secret TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

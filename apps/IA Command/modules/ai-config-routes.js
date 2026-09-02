@@ -35,6 +35,8 @@ function aplicarDefaultsChat(row = {}) {
     protheus_web_login_path: row.protheus_web_login_path || WEB_LOGIN_DEFAULT_PATH,
     protheus_web_login_access_key: row.protheus_web_login_access_key ? '***' : null,
     protheus_web_login_access_key_configurada: row.protheus_web_login_access_key ? 1 : 0,
+    protheus_chat_secret: row.protheus_chat_secret ? '***' : null,
+    protheus_chat_secret_configurado: row.protheus_chat_secret ? 1 : 0,
     protheus_web_login_otp_ttl_min: row.protheus_web_login_otp_ttl_min || 5,
     protheus_web_login_max_tentativas: row.protheus_web_login_max_tentativas || 5,
     protheus_web_login_exigir_https: Number(row.protheus_web_login_exigir_https || 0) ? 1 : 0,
@@ -118,6 +120,7 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
       protheus_web_login_ativo,
       protheus_web_login_path,
       protheus_web_login_access_key,
+      protheus_chat_secret,
       protheus_web_login_otp_ttl_min,
       protheus_web_login_max_tentativas,
       protheus_web_login_exigir_https,
@@ -166,6 +169,9 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     if (openai_api_key   && openai_api_key   !== '***') dados.openai_api_key   = openai_api_key;
     if (protheus_web_login_access_key && protheus_web_login_access_key !== '***') {
       dados.protheus_web_login_access_key = String(protheus_web_login_access_key).trim();
+    }
+    if (protheus_chat_secret && protheus_chat_secret !== '***') {
+      dados.protheus_chat_secret = String(protheus_chat_secret).trim();
     }
 
     // Update modelos if provided (não são secrets)

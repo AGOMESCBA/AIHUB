@@ -62,6 +62,10 @@ aplicação: se a variável de ambiente `IAC_PROTHEUS_CHAT_SECRET` estiver defin
 chamador deve enviá-la no header `X-Protheus-Secret`. Sem essa variável configurada, o
 endpoint fica aberto — **recomendado configurar antes de expor a Fase 4 em produção**.
 
+Nota atual: alem do fallback global `IAC_PROTHEUS_CHAT_SECRET`, o backend tambem
+aceita segredo por empresa em `ai_config.protheus_chat_secret`, configurado pela aba
+CHAT. Quando o segredo por empresa existir, ele prevalece sobre o fallback global.
+
 ## Estrutura implementada
 
 ```
@@ -90,7 +94,7 @@ usuário do IAHub (mesmo padrão do `worker-event` do WhatsApp).
 
 ```
 POST /api/ia-command/protheus/token
-  headers: X-Protheus-Secret (se IAC_PROTHEUS_CHAT_SECRET configurado)
+  headers: X-Protheus-Secret (se secret por empresa ou IAC_PROTHEUS_CHAT_SECRET configurado)
   body: { empresaId, celular, filial? }
   → { token, expiraEm }
 

@@ -526,6 +526,21 @@
                     <div class="form-hint">Se preenchida, o servidor exige esta chave no link ou no cabecalho. Deixe em branco para manter a atual.</div>
                   </div>
 
+                  <div class="form-group">
+                    <label class="form-label">Segredo Protheus</label>
+                    <div class="pass-wrap">
+                      <input type="password" id="protheus-chat-secret" class="form-control" placeholder="Mesmo valor do MV_IACSECR desta empresa">
+                      <button type="button" class="btn-pass-toggle" id="toggle-protheus-secret" onclick="toggleProtheusSecret()" title="Mostrar/ocultar segredo">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <div id="status-protheus-secret" style="margin-top:6px;font-size:12px"></div>
+                    <div class="key-action">
+                      <button type="button" class="btn btn-warning" onclick="gerarProtheusSecret()">Gerar novo segredo</button>
+                    </div>
+                    <div class="form-hint">Usado pelo ADVPL no header X-Protheus-Secret ao emitir token do chat. Configure o mesmo valor no SX6 MV_IACSECR.</div>
+                  </div>
+
                   <div class="chat-config-grid">
                     <div class="form-group">
                       <label class="form-label">Expiracao do codigo</label>
@@ -938,6 +953,8 @@
     };
     const chatKey = document.getElementById('chat-web-access-key').value.trim();
     if (chatKey && chatKey !== '***') body.protheus_web_login_access_key = chatKey;
+    const protheusSecret = document.getElementById('protheus-chat-secret').value.trim();
+    if (protheusSecret && protheusSecret !== '***') body.protheus_chat_secret = protheusSecret;
     PROVIDERS.forEach(p => {
       const val = document.getElementById(`${p}-key`).value.trim();
       if (val) body[PROVIDER_FIELDS[p]] = val;
@@ -1006,6 +1023,15 @@
     atualizarResumoChat();
   }
 
+  function gerarProtheusSecret() {
+    const el = document.getElementById('protheus-chat-secret');
+    el.value = gerarTokenLocal(64);
+    el.type = 'text';
+    el.dataset.configurada = '1';
+    document.getElementById('toggle-protheus-secret').innerHTML = _svgEye(true);
+    document.getElementById('status-protheus-secret').innerHTML = '<span style="color:#d97706">Novo segredo gerado. Salve e copie para o MV_IACSECR desta empresa.</span>';
+  }
+
   function carregarChatConfig(cfg = {}) {
     const ativo = cfg.protheus_web_login_ativo == null ? 1 : Number(cfg.protheus_web_login_ativo) ? 1 : 0;
     document.getElementById('chat-web-ativo').value = ativo ? '1' : '0';
@@ -1025,6 +1051,18 @@
     document.getElementById('status-chat-key').innerHTML = cfg.protheus_web_login_access_key_configurada
       ? '<span style="color:var(--success)">Chave extra configurada</span>'
       : '<span style="color:var(--text-lo)">Sem chave extra</span>';
+
+    const secretEl = document.getElementById('protheus-chat-secret');
+    secretEl.value = '';
+    secretEl.type = 'password';
+    secretEl.dataset.configurada = cfg.protheus_chat_secret_configurado ? '1' : '0';
+    secretEl.placeholder = cfg.protheus_chat_secret_configurado
+      ? 'Segredo configurado. Deixe em branco para manter.'
+      : 'Mesmo valor do MV_IACSECR desta empresa';
+    document.getElementById('toggle-protheus-secret').innerHTML = _svgEye(false);
+    document.getElementById('status-protheus-secret').innerHTML = cfg.protheus_chat_secret_configurado
+      ? '<span style="color:var(--success)">Segredo Protheus configurado</span>'
+      : '<span style="color:var(--text-lo)">Sem segredo por empresa; usa fallback global se existir</span>';
     atualizarResumoChat();
   }
 
@@ -1065,6 +1103,14 @@
   function toggleChatKey() {
     const inp = document.getElementById('chat-web-access-key');
     const btn = document.getElementById('toggle-chat-key');
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.innerHTML = _svgEye(show);
+  }
+
+  function toggleProtheusSecret() {
+    const inp = document.getElementById('protheus-chat-secret');
+    const btn = document.getElementById('toggle-protheus-secret');
     const show = inp.type === 'password';
     inp.type = show ? 'text' : 'password';
     btn.innerHTML = _svgEye(show);

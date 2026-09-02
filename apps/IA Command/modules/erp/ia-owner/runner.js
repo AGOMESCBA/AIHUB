@@ -3911,11 +3911,18 @@ async function prepararSql({ spec, sql, sx2, sx2Empresa = null, sx3, protheus, m
         filialEscopoResultado.erro = 'lobo_guara_indisponivel';
       }
     } catch (e) {
-      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao aplicar escopo Lobo Guara (ignorado, SQL segue sem o filtro): ${e.message}`);
+      console.warn(`[${spec.logPrefix || 'IAOwner'}] Falha ao aplicar escopo Lobo Guara: ${e.message}`);
       if (filialLoboGuaraState) filialEscopoResultado.erro = e.message || 'falha_interna';
     }
   } else if (filialLoboGuaraState) {
     filialEscopoResultado.erro = 'normalizer_desabilitado';
+  }
+  if (filialLoboGuaraState && !filialEscopoResultado.aplicado) {
+    const motivo = filialEscopoResultado.erro || 'nao_aplicado';
+    throw Object.assign(
+      new Error(`Escopo de filial Lobo Guara nao aplicado: ${motivo}`),
+      { _tipo: 'lobo_guara_escopo_nao_aplicado', _sql: out, filialEscopoResultado }
+    );
   }
   const validacaoPlano = queryPlan.validarSqlContraPlano(out, planoConsulta);
   if (!validacaoPlano.ok) {
