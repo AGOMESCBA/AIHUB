@@ -1187,6 +1187,16 @@
   .sql-preview-panel { display: none; }
   .sql-preview-panel.active { display: block; }
   .sql-preview-audit-text { min-height: 360px; }
+  /* SQL gerado, caminho de execucao e auditoria sao textos SEM quebra de
+     linha propria (SQL vem numa unica linha longa do backend) — herdavam
+     white-space:pre do preview de WhatsApp (que precisa disso pra
+     preservar a formatacao exata da mensagem final), forcando o texto
+     inteiro numa linha so e exigindo rolagem horizontal pra ler, tanto no
+     desktop quanto no mobile. Quebra automatica so nesses 3 textareas,
+     preview de WhatsApp continua com white-space:pre. */
+  #sqlPreviewText,
+  #sqlPreviewPath,
+  #sqlPreviewAudit { white-space: pre-wrap; word-break: break-word; }
   .whatsapp-preview-status { min-height: 18px; color: var(--wa-text-tertiary); font-size: 12px; }
   .whatsapp-preview-status.error { color: #ff8a8a; }
   .whatsapp-preview-status.ok { color: var(--wa-accent); }
@@ -5067,14 +5077,11 @@
   function scrollToBottom() { chatBody.scrollTop = chatBody.scrollHeight; }
 
   let typingRow = null;
-  let typingDemoraTimer = null;
-  // Chamada de /mensagem e uma unica requisicao HTTP sincrona que so responde
-  // apos o pipeline inteiro terminar (inclusive as ate 4 tentativas internas de
-  // retry do IA-OWNER quando o SQL e rejeitado por contrato) — nao ha como o
-  // backend enviar update por tentativa nesse modelo request-response. Como
-  // aproximacao do "processando..." do WhatsApp, troca o texto apos alguns
-  // segundos para sinalizar que a consulta esta em uma tentativa mais longa.
-  const TYPING_DEMORA_MS = 8000;
+  // [REMOVIDO a pedido do usuario] Antes trocava o texto para "Ainda
+  // processando, a consulta esta mais complexa que o normal..." apos 8s —
+  // usuario achou que parecia uma segunda mensagem separada na conversa.
+  // Mantido so o indicador de "Consultando o Protheus..." com os pontinhos
+  // animados, sem troca de texto, ate a resposta chegar.
   function showTyping(textoInicial = 'Consultando o Protheus...') {
     hideTyping();
     typingRow = document.createElement('div');
@@ -5083,13 +5090,8 @@
     typingRow.querySelector('.typing-status-text').textContent = textoInicial;
     chatBody.appendChild(typingRow);
     scrollToBottom();
-    typingDemoraTimer = setTimeout(() => {
-      const el = typingRow?.querySelector('.typing-status-text');
-      if (el) el.textContent = 'Ainda processando, a consulta está mais complexa que o normal...';
-    }, TYPING_DEMORA_MS);
   }
   function hideTyping() {
-    if (typingDemoraTimer) { clearTimeout(typingDemoraTimer); typingDemoraTimer = null; }
     if (typingRow) { typingRow.remove(); typingRow = null; }
   }
 
