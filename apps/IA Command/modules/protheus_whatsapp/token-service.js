@@ -12,6 +12,14 @@ const { getDB } = require('../database');
 // manha inteira; por isso a expiracao e renovada a cada chamada valida, evitando
 // derrubar a sessao no meio de consultas longas ou alternancia entre conversas.
 const TTL_MS = Number(process.env.IAC_PROTHEUS_CHAT_TTL_MS || 8 * 60 * 60 * 1000);
+const MAX_TTL_MS = Number(process.env.IAC_PROTHEUS_CHAT_MAX_TTL_MS || 8 * 60 * 60 * 1000);
+
+function hashToken(token) {
+  return crypto
+    .createHash('sha256')
+    .update(String(token || ''))
+    .digest('hex');
+}
 
 // Mesma normalizacao usada pelo canal WhatsApp real (_normalizarNumeroWa em
 // modules/whatsapp/service.js): so digitos. Aplicada aqui, na entrada do celular
@@ -94,7 +102,7 @@ function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefi
   getDB().prepare(`
     INSERT INTO protheus_chat_tokens (token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(token, empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas), JSON.stringify(filiais));
+  `).run(hashToken(token), empresaId, celularNormalizado, filial, expiraEm.toISOString(), agora.toISOString(), JSON.stringify(empresas), JSON.stringify(filiais));
 
   return { token, expiraEm: expiraEm.toISOString() };
 }
@@ -102,19 +110,36 @@ function emitir({ empresaId, celular, filial = null, empresasPermitidas = undefi
 function validar(token) {
   if (!token) return null;
 
-  const row = getDB().prepare(`
-    SELECT token, empresa_id, celular, filial, expira_em, empresas_permitidas_json, filiais_permitidas_json
+  const tokenHash = hashToken(token);
+  let row = getDB().prepare(`
+    SELECT token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json
     FROM protheus_chat_tokens
     WHERE token = ?
-  `).get(token);
+  `).get(tokenHash);
+
+  // Compatibilidade temporaria com tokens emitidos antes do hardening, quando
+  // a tabela ainda guardava o token em claro.
+  if (!row) {
+    row = getDB().prepare(`
+      SELECT token, empresa_id, celular, filial, expira_em, criado_em, empresas_permitidas_json, filiais_permitidas_json
+      FROM protheus_chat_tokens
+      WHERE token = ?
+    `).get(token);
+  }
 
   if (!row) return null;
   if (new Date(row.expira_em).getTime() < Date.now()) return null;
+  const criadoEmMs = new Date(row.criado_em || row.expira_em).getTime();
+  if (MAX_TTL_MS > 0 && criadoEmMs && criadoEmMs + MAX_TTL_MS < Date.now()) return null;
 
   const usadoEm = new Date();
-  const novoExpiraEm = new Date(usadoEm.getTime() + TTL_MS);
+  const expiracaoInatividade = usadoEm.getTime() + TTL_MS;
+  const expiracaoAbsoluta = MAX_TTL_MS > 0 && criadoEmMs
+    ? criadoEmMs + MAX_TTL_MS
+    : expiracaoInatividade;
+  const novoExpiraEm = new Date(Math.min(expiracaoInatividade, expiracaoAbsoluta));
   getDB().prepare(`UPDATE protheus_chat_tokens SET usado_em = ?, expira_em = ? WHERE token = ?`)
-    .run(usadoEm.toISOString(), novoExpiraEm.toISOString(), token);
+    .run(usadoEm.toISOString(), novoExpiraEm.toISOString(), row.token);
 
   let empresasPermitidas;
   try {
@@ -180,4 +205,5 @@ module.exports = {
   empresaPermitida,
   filiaisPermitidasDaEmpresa,
   TTL_MS,
+  MAX_TTL_MS,
 };

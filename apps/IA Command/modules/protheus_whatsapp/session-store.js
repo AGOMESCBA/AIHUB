@@ -7,6 +7,7 @@
 const crypto = require('crypto');
 const { getDB } = require('../database');
 const periodResolver = require('../ai/period-resolver');
+const secureFields = require('../security/chat-secure-fields');
 
 const TITULO_MAX_CHARS = 60;
 const PAGE_SIZE = 30;
@@ -30,8 +31,11 @@ function temFilialEscopoChatMessages() {
 
 function parseJsonSeguro(valor) {
   if (!valor) return null;
+  const descriptografado = secureFields.decryptJson(valor);
+  if (descriptografado && typeof descriptografado === 'object') return descriptografado;
+  if (typeof descriptografado !== 'string') return descriptografado || null;
   try {
-    return JSON.parse(valor);
+    return JSON.parse(descriptografado);
   } catch (_) {
     return null;
   }
@@ -39,8 +43,16 @@ function parseJsonSeguro(valor) {
 
 function parseRowsMeta(rowsJson) {
   if (!rowsJson) return { rows: null, temDados: false, rowsCount: 0 };
+  const descriptografado = secureFields.decryptJson(rowsJson);
+  if (Array.isArray(descriptografado)) {
+    return {
+      rows: descriptografado,
+      temDados: descriptografado.length > 0,
+      rowsCount: descriptografado.length,
+    };
+  }
   try {
-    const rows = JSON.parse(rowsJson);
+    const rows = JSON.parse(descriptografado);
     return {
       rows: Array.isArray(rows) ? rows : null,
       temDados: Array.isArray(rows) && rows.length > 0,
@@ -52,9 +64,18 @@ function parseRowsMeta(rowsJson) {
 }
 
 function truncarTitulo(texto) {
-  const limpo = String(texto || '').replace(/\s+/g, ' ').trim();
+  const limpo = String(secureFields.decryptText(texto || '') || '').replace(/\s+/g, ' ').trim();
   if (limpo.length <= TITULO_MAX_CHARS) return limpo;
   return limpo.slice(0, TITULO_MAX_CHARS - 1).trimEnd() + '…';
+}
+
+function textoClaro(valor) {
+  return String(secureFields.decryptText(valor || '') || '');
+}
+
+function jsonParaSalvar(valor) {
+  if (valor === null || valor === undefined) return null;
+  return secureFields.encryptJson(valor);
 }
 
 function criarSessao({ empresaId, celular, tituloInicial = null }) {
@@ -95,7 +116,7 @@ function listarSessoes({ empresaId, celular, limite = 30 }) {
   return sessoes.map(s => ({
     sessaoId: s.id,
     titulo: s.titulo || 'Nova conversa',
-    ultimaMensagem: s.ultima_mensagem || null,
+    ultimaMensagem: s.ultima_mensagem ? textoClaro(s.ultima_mensagem) : null,
     atualizadoEm: s.atualizado_em,
   }));
 }
@@ -117,13 +138,13 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    insert.run(perguntaId, sessaoId, 'out', perguntaTexto, null, null, null, null, agora);
+    insert.run(perguntaId, sessaoId, 'out', secureFields.encryptText(perguntaTexto), null, null, null, null, agora);
     insert.run(
-      respostaId, sessaoId, 'in', respostaTexto,
-      rows ? JSON.stringify(rows) : null,
+      respostaId, sessaoId, 'in', secureFields.encryptText(respostaTexto),
+      jsonParaSalvar(rows),
       tipoResultado,
-      intent ? JSON.stringify(intent) : null,
-      filialEscopo ? JSON.stringify(filialEscopo) : null,
+      jsonParaSalvar(intent),
+      jsonParaSalvar(filialEscopo),
       agora,
     );
   } else {
@@ -132,12 +153,12 @@ function salvarTurno({ sessaoId, perguntaTexto, respostaTexto, rows = null, tipo
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    insert.run(perguntaId, sessaoId, 'out', perguntaTexto, null, null, null, agora);
+    insert.run(perguntaId, sessaoId, 'out', secureFields.encryptText(perguntaTexto), null, null, null, agora);
     insert.run(
-      respostaId, sessaoId, 'in', respostaTexto,
-      rows ? JSON.stringify(rows) : null,
+      respostaId, sessaoId, 'in', secureFields.encryptText(respostaTexto),
+      jsonParaSalvar(rows),
       tipoResultado,
-      intent ? JSON.stringify(intent) : null,
+      jsonParaSalvar(intent),
       agora,
     );
   }
@@ -191,12 +212,12 @@ function listarMensagens({ sessaoId, cursor = null, limite = PAGE_SIZE }) {
     return {
       id: r.id,
       direcao: r.direcao,
-      texto: r.texto,
+      texto: textoClaro(r.texto),
       rows: null,
       temDados: metaRows.temDados,
       rowsCount: metaRows.temDados ? metaRows.rowsCount : 0,
       tipo: r.tipo_resultado,
-      gridConfig: r.grid_config_json ? JSON.parse(r.grid_config_json) : null,
+      gridConfig: parseJsonSeguro(r.grid_config_json),
       // intent_json exposto SO para o frontend reidratar o estado visual da
       // arvore de filial ao trocar/reabrir sessao (ver
       // hidratarSelecaoFilialDaSessao em protheus-chat.html) — mesmo dado
@@ -229,7 +250,7 @@ function _perguntaAnteriorMensagem({ sessaoId, criadoEm }) {
     WHERE sessao_id = ? AND direcao = 'out' AND criado_em <= ?
     ORDER BY criado_em DESC LIMIT 1
   `).get(sessaoId, criadoEm);
-  return row?.texto || null;
+  return row?.texto ? textoClaro(row.texto) : null;
 }
 
 function ultimaMensagemTabular({ sessaoId }) {
@@ -245,12 +266,12 @@ function ultimaMensagemTabular({ sessaoId }) {
   if (!meta.temDados) return null;
   return {
     id: row.id,
-    texto: row.texto,
+    texto: textoClaro(row.texto),
     perguntaTexto: _perguntaAnteriorMensagem({ sessaoId, criadoEm: row.criado_em }),
     rows: meta.rows,
     rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
-    gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    gridConfig: parseJsonSeguro(row.grid_config_json),
     filial_escopo_json: parseJsonSeguro(row.filial_escopo_json),
     criadoEm: row.criado_em,
   };
@@ -269,12 +290,12 @@ function mensagemTabular({ sessaoId, mensagemId }) {
   if (!meta.temDados) return null;
   return {
     id: row.id,
-    texto: row.texto,
+    texto: textoClaro(row.texto),
     perguntaTexto: _perguntaAnteriorMensagem({ sessaoId, criadoEm: row.criado_em }),
     rows: meta.rows,
     rowsCount: meta.rowsCount,
     tipo: row.tipo_resultado,
-    gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    gridConfig: parseJsonSeguro(row.grid_config_json),
     filial_escopo_json: parseJsonSeguro(row.filial_escopo_json),
     criadoEm: row.criado_em,
   };
@@ -288,7 +309,7 @@ function salvarGridConfig({ mensagemId, sessaoId, gridConfig }) {
   const info = getDB().prepare(`
     UPDATE protheus_chat_messages SET grid_config_json = ?
     WHERE id = ? AND sessao_id = ?
-  `).run(JSON.stringify(gridConfig || {}), mensagemId, sessaoId);
+  `).run(jsonParaSalvar(gridConfig || {}), mensagemId, sessaoId);
   return info.changes > 0;
 }
 
@@ -335,7 +356,7 @@ function sqlDaMensagem({ sessaoId, mensagemId }) {
   `).get(sessaoId, mensagemId);
   if (!row) return null;
 
-  const sqlFavorito = String(row.favorito_sql_final_executado || '').trim();
+  const sqlFavorito = String(secureFields.decryptText(row.favorito_sql_final_executado || '') || '').trim();
   const sql = String(sqlFavorito || row.sql_final_executado || row.sql_gerado || '').trim();
   return {
     mensagemId: row.id,
@@ -344,7 +365,7 @@ function sqlDaMensagem({ sessaoId, mensagemId }) {
     modulo: row.modulo || null,
     sql,
     sqlFonte: sqlFavorito ? 'favorito' : 'interpretation_log',
-    sqlTemplate: row.sql_template || null,
+    sqlTemplate: row.sql_template ? textoClaro(row.sql_template) : null,
     sqlIaBruto: row.sql_ia_bruto || null,
     sqlCanonicoOriginal: row.sql_canonico_original || null,
     sqlCanonicoAdaptado: row.sql_canonico_adaptado || null,
@@ -373,7 +394,7 @@ function sqlDaMensagem({ sessaoId, mensagemId }) {
 
 function moduloDoIntentJson(intentJson) {
   try {
-    const intent = JSON.parse(intentJson || '{}');
+    const intent = parseJsonSeguro(intentJson) || {};
     return String(intent._moduloDinamico || intent.modulo || intent.module || '').trim().toLowerCase();
   } catch (_) {
     return '';
@@ -529,7 +550,21 @@ function periodoFavoritoHint(...fontesJson) {
   return null;
 }
 
+function decryptFavoritoRow(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    pergunta_texto: row.pergunta_texto ? textoClaro(row.pergunta_texto) : row.pergunta_texto,
+    sql_final_executado: row.sql_final_executado ? textoClaro(row.sql_final_executado) : row.sql_final_executado,
+    sql_template: row.sql_template ? textoClaro(row.sql_template) : row.sql_template,
+    intent_json: row.intent_json ? JSON.stringify(parseJsonSeguro(row.intent_json) || {}) : row.intent_json,
+    grid_config_json: row.grid_config_json ? JSON.stringify(parseJsonSeguro(row.grid_config_json) || {}) : row.grid_config_json,
+    rows_preview_json: row.rows_preview_json ? JSON.stringify(parseJsonSeguro(row.rows_preview_json) || []) : row.rows_preview_json,
+  };
+}
+
 function mapFavoritoRow(row, { incluirSql = false } = {}) {
+  row = decryptFavoritoRow(row);
   const favorito = {
     id: row.id,
     empresaId: Number(row.empresa_id),
@@ -538,7 +573,7 @@ function mapFavoritoRow(row, { incluirSql = false } = {}) {
     respostaMensagemId: row.resposta_mensagem_id || null,
     interpretationLogId: row.interpretation_log_id || null,
     modulo: row.modulo || null,
-    gridConfig: row.grid_config_json ? JSON.parse(row.grid_config_json) : null,
+    gridConfig: parseJsonSeguro(row.grid_config_json),
     ultimoUsoEm: row.ultimo_uso_em || null,
     criadoEm: row.criado_em,
     atualizadoEm: row.atualizado_em,
@@ -562,12 +597,13 @@ function listarFavoritos({ empresaId, celular, limite = 80, incluirSql = false }
 }
 
 function obterFavorito({ favoritoId, empresaId, celular }) {
-  return getDB().prepare(`
+  const row = getDB().prepare(`
     SELECT *
     FROM protheus_chat_favorites
     WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
     LIMIT 1
   `).get(favoritoId, empresaId, celular) || null;
+  return decryptFavoritoRow(row);
 }
 
 function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = null }) {
@@ -591,7 +627,7 @@ function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = 
     ORDER BY criado_em DESC
     LIMIT 1
   `).get(sessaoId, mensagem.criado_em);
-  const perguntaTexto = String(pergunta?.texto || '').trim();
+  const perguntaTexto = String(pergunta?.texto ? textoClaro(pergunta.texto) : '').trim();
   if (!perguntaTexto) {
     throw Object.assign(new Error('Nao encontrei a pergunta original desta resposta.'), { statusCode: 400 });
   }
@@ -624,7 +660,7 @@ function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = 
   const nome = tituloFavorito(titulo || perguntaTexto);
   let preview = null;
   try {
-    const rowsPreview = mensagem.rows_json ? JSON.parse(mensagem.rows_json) : null;
+    const rowsPreview = parseRowsMeta(mensagem.rows_json).rows;
     preview = Array.isArray(rowsPreview) ? JSON.stringify(rowsPreview.slice(0, 20)) : null;
   } catch (_) {
     preview = null;
@@ -639,10 +675,14 @@ function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = 
              atualizado_em = ?
        WHERE id = ?
     `).run(
-      nome, perguntaTexto, log?.id || mensagem.interpretation_log_id || null,
-      modulo, sqlFinal, log?.sql_template || null,
-      mensagem.intent_json || log?.intent_json || null, mensagem.grid_config_json || null,
-      preview, agora, existente.id,
+      nome, secureFields.encryptText(perguntaTexto), log?.id || mensagem.interpretation_log_id || null,
+      modulo,
+      secureFields.encryptText(sqlFinal),
+      log?.sql_template ? secureFields.encryptText(log.sql_template) : null,
+      jsonParaSalvar(parseJsonSeguro(mensagem.intent_json) || parseJsonSeguro(log?.intent_json)),
+      jsonParaSalvar(parseJsonSeguro(mensagem.grid_config_json)),
+      jsonParaSalvar(preview ? JSON.parse(preview) : null),
+      agora, existente.id,
     );
     return obterFavorito({ favoritoId: existente.id, empresaId, celular });
   }
@@ -655,10 +695,15 @@ function favoritarMensagem({ sessaoId, empresaId, celular, mensagemId, titulo = 
        intent_json, grid_config_json, rows_preview_json, ativo, criado_em, atualizado_em)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `).run(
-    id, empresaId, celular, nome, perguntaTexto, mensagemId,
-    log?.id || mensagem.interpretation_log_id || null, modulo, sqlFinal, log?.sql_template || null,
-    mensagem.intent_json || log?.intent_json || null, mensagem.grid_config_json || null,
-    preview, agora, agora,
+    id, empresaId, celular, nome, secureFields.encryptText(perguntaTexto), mensagemId,
+    log?.id || mensagem.interpretation_log_id || null,
+    modulo,
+    secureFields.encryptText(sqlFinal),
+    log?.sql_template ? secureFields.encryptText(log.sql_template) : null,
+    jsonParaSalvar(parseJsonSeguro(mensagem.intent_json) || parseJsonSeguro(log?.intent_json)),
+    jsonParaSalvar(parseJsonSeguro(mensagem.grid_config_json)),
+    jsonParaSalvar(preview ? JSON.parse(preview) : null),
+    agora, agora,
   );
   return obterFavorito({ favoritoId: id, empresaId, celular });
 }
@@ -684,7 +729,7 @@ function renomearFavorito({ favoritoId, empresaId, celular, titulo }) {
      WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
   `).run(
     ...(atualizaPerguntaTexto
-      ? [tituloLimpo, tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular]
+      ? [tituloLimpo, secureFields.encryptText(tituloLimpo), new Date().toISOString(), favoritoId, empresaId, celular]
       : [tituloLimpo, new Date().toISOString(), favoritoId, empresaId, celular])
   );
   if (!info.changes) return null;
@@ -698,7 +743,7 @@ function atualizarSqlFavorito({ favoritoId, empresaId, celular, sqlFinal }) {
     UPDATE protheus_chat_favorites
        SET sql_final_executado = ?, atualizado_em = ?
      WHERE id = ? AND empresa_id = ? AND celular = ? AND ativo = 1
-  `).run(sqlLimpo, new Date().toISOString(), favoritoId, empresaId, celular);
+  `).run(secureFields.encryptText(sqlLimpo), new Date().toISOString(), favoritoId, empresaId, celular);
   if (!info.changes) return null;
   return obterFavorito({ favoritoId, empresaId, celular });
 }
@@ -731,7 +776,7 @@ function ultimoIntent({ sessaoId }) {
         ORDER BY criado_em DESC LIMIT 1
       `).get(sessaoId);
 
-  return row ? JSON.parse(row.intent_json) : null;
+  return row ? parseJsonSeguro(row.intent_json) : null;
 }
 
 // Marca o momento atual como fronteira de memoria da sessao — ultimoIntent()

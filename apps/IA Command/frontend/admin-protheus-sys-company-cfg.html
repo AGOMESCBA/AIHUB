@@ -461,8 +461,11 @@ async function vincularEmpresaIahub(id, selectEl) {
       body: JSON.stringify({ empresaVinculoId }),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) { alert(body.error || 'Erro ao vincular.'); return; }
+    // Sempre recarrega da fonte real (mesmo em erro) — sem isso, o <select> fica
+    // mostrando o valor que o usuario escolheu na tela mesmo quando o backend
+    // recusou e o banco nunca mudou, dando a falsa impressao de que gravou.
     await carregar();
+    if (!res.ok) { alert(body.error || 'Erro ao vincular.'); }
   } finally {
     selectEl.disabled = false;
   }

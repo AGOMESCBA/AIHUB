@@ -31,6 +31,24 @@ const WEB_LOGIN_MAX_TENTATIVAS = 5;
 const WEB_LOGIN_DEFAULT_PATH = '/api/ia-command/protheus/web-login';
 const WEB_LOGIN_ENV_PATH = normalizarWebLoginPath(process.env.IAC_PROTHEUS_WEB_LOGIN_PATH) || '';
 const WEB_LOGIN_ENV_ACCESS_KEY = String(process.env.IAC_PROTHEUS_WEB_LOGIN_ACCESS_KEY || '').trim();
+const publicRateBuckets = new Map();
+
+function publicRateLimit(req, res, chave, { janelaMs = 60 * 1000, max = 30 } = {}) {
+  const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '')
+    .split(',')[0]
+    .trim();
+  const key = `${chave}:${ip}`;
+  const agora = Date.now();
+  const atual = publicRateBuckets.get(key);
+  if (!atual || atual.resetEm <= agora) {
+    publicRateBuckets.set(key, { total: 1, resetEm: agora + janelaMs });
+    return true;
+  }
+  atual.total += 1;
+  if (atual.total <= max) return true;
+  res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns instantes.' });
+  return false;
+}
 
 function perfLog(etapa, inicio, dados = {}) {
   const duracaoMs = Date.now() - inicio;
@@ -142,6 +160,13 @@ function webLoginHttpsAutorizado(req, res, config = {}) {
   if (!config.exigirHttps || reqEhHttps(req)) return true;
   res.status(403).json({ error: 'Acesso permitido apenas por HTTPS.' });
   return false;
+}
+
+function setPublicChatSecurityHeaders(res) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
 }
 
 function forwardDebug(etapa, dados = {}) {
@@ -999,6 +1024,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
   // ── Emissao de token (chamada pelo Protheus/ADVPL, sem sessao de usuario) ──
   app.post('/api/ia-command/protheus/token', (req, res) => {
     const inicio = Date.now();
+    setPublicChatSecurityHeaders(res);
+    if (!publicRateLimit(req, res, 'protheus-token', { janelaMs: 60 * 1000, max: 60 })) return;
     if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
       perfLog('POST /token', inicio, { status: 401 });
       return res.status(401).json({ error: 'Credencial invalida.' });
@@ -1045,6 +1072,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
   app.post('/api/ia-command/protheus/user-permissions/sync', (req, res) => {
     const inicio = Date.now();
+    if (!publicRateLimit(req, res, 'protheus-user-sync', { janelaMs: 60 * 1000, max: 60 })) return;
     if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
       perfLog('POST /user-permissions/sync', inicio, { status: 401 });
       return res.status(401).json({ error: 'Credencial invalida.' });
@@ -1082,6 +1110,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
   // arriscar mais um erro de Framework em producao.
   app.post('/api/ia-command/protheus/user-permissions/consulta', (req, res) => {
     const inicio = Date.now();
+    if (!publicRateLimit(req, res, 'protheus-user-consulta', { janelaMs: 60 * 1000, max: 60 })) return;
     if (PROTHEUS_SECRET && req.headers['x-protheus-secret'] !== PROTHEUS_SECRET) {
       perfLog('POST /user-permissions/consulta', inicio, { status: 401 });
       return res.status(401).json({ error: 'Credencial invalida.' });
@@ -1152,6 +1181,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
   // ── Pagina do chat (servida como estatico, sem auth de sessao IAHub) ──
   app.get('/api/ia-command/protheus/chat', (req, res) => {
+    setPublicChatSecurityHeaders(res);
     res.sendFile(path.join(__dirname, 'public', 'protheus-chat.html'));
   });
 
@@ -1167,11 +1197,15 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
     if (!config) return res.status(404).send('Not found');
     if (!webLoginAccessAutorizado(req, res, config)) return;
     if (!webLoginHttpsAutorizado(req, res, config)) return;
+    setPublicChatSecurityHeaders(res);
     res.sendFile(path.join(__dirname, 'public', 'protheus-web-login.html'));
   });
 
   app.post(webLoginRoutes.map(r => `${r}/start`), async (req, res) => {
     const inicio = Date.now();
+    setPublicChatSecurityHeaders(res);
+    const celularRate = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
+    if (!publicRateLimit(req, res, `web-login-start:${celularRate || 'sem-celular'}`, { janelaMs: 15 * 60 * 1000, max: 8 })) return;
     try {
       const pathConfig = resolverWebLoginConfigPorPath(req);
       if (!pathConfig) return res.status(404).send('Not found');
@@ -1223,6 +1257,9 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
   app.post(webLoginRoutes.map(r => `${r}/verify`), (req, res) => {
     const inicio = Date.now();
+    setPublicChatSecurityHeaders(res);
+    const celularRate = tokenService.normalizarCelular(req.body?.celular || req.body?.numero || '');
+    if (!publicRateLimit(req, res, `web-login-verify:${celularRate || 'sem-celular'}`, { janelaMs: 15 * 60 * 1000, max: 20 })) return;
     try {
       const pathConfig = resolverWebLoginConfigPorPath(req);
       if (!pathConfig) return res.status(404).send('Not found');
@@ -1258,14 +1295,16 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
         empresasPermitidas: permissoes.empresasPermitidas,
         filiaisPermitidas: permissoes.filiaisPermitidas,
       });
+      const launchTicket = crypto.randomBytes(32).toString('hex');
+      salvarLaunchTicket(launchTicket, token, expiraEm);
 
       perfLog('POST /web-login/verify', inicio, { status: 200, empresaId: permissoes.empresaId, celular });
       res.json({
         ok: true,
-        token,
+        launchTicket,
         expiraEm,
         usuario: permissoes.usuarioNome,
-        chatUrl: `/api/ia-command/protheus/chat?token=${encodeURIComponent(token)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}&origem=web`,
+        chatUrl: `/api/ia-command/protheus/chat?launchTicket=${encodeURIComponent(launchTicket)}&usuario=${encodeURIComponent(permissoes.usuarioNome)}&origem=web`,
       });
     } catch (err) {
       const status = Number(err.statusCode || err.status || 500);
@@ -1276,6 +1315,8 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
   app.get('/api/ia-command/protheus/launch-token', (req, res) => {
     const inicio = Date.now();
+    setPublicChatSecurityHeaders(res);
+    if (!publicRateLimit(req, res, 'protheus-launch-token', { janelaMs: 60 * 1000, max: 180 })) return;
     const ticket = String(req.query.ticket || req.query.launchTicket || '').trim();
     if (!ticket) {
       perfLog('GET /launch-token', inicio, { status: 400 });
