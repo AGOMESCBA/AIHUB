@@ -12,7 +12,7 @@ const { getDB } = require('../database');
 // manha inteira; por isso a expiracao e renovada a cada chamada valida, evitando
 // derrubar a sessao no meio de consultas longas ou alternancia entre conversas.
 const TTL_MS = Number(process.env.IAC_PROTHEUS_CHAT_TTL_MS || 8 * 60 * 60 * 1000);
-const MAX_TTL_MS = Number(process.env.IAC_PROTHEUS_CHAT_MAX_TTL_MS || 8 * 60 * 60 * 1000);
+const MAX_TTL_MS = Number(process.env.IAC_PROTHEUS_CHAT_MAX_TTL_MS || 0);
 
 function hashToken(token) {
   return crypto

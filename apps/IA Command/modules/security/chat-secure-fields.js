@@ -39,10 +39,14 @@ function decryptValue(value) {
   if (typeof value !== 'string' || !value.startsWith(FIELD_MARKER)) return value;
   const key = keyMaterial();
   if (!key) return value;
-  const raw = Buffer.from(value.slice(FIELD_MARKER.length), 'base64').toString('utf8');
-  const envelope = JSON.parse(raw);
-  if (!isEncryptedEnvelope(envelope)) return value;
-  return decryptPayload(envelope, key).value;
+  try {
+    const raw = Buffer.from(value.slice(FIELD_MARKER.length), 'base64').toString('utf8');
+    const envelope = JSON.parse(raw);
+    if (!isEncryptedEnvelope(envelope)) return value;
+    return decryptPayload(envelope, key).value;
+  } catch (_) {
+    return value;
+  }
 }
 
 function encryptText(value) {
