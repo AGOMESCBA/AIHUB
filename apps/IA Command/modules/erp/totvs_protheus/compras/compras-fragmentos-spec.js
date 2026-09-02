@@ -20,8 +20,15 @@ function base() {
 ## Tabelas padrao do modulo Compras
 - SF1: cabecalho de NF de entrada. F1_VALBRUT e o valor bruto total da nota (nivel cabecalho).
 - SD1: itens de NF de entrada. Metrica principal: SD1.D1_TOTAL. Quantidade: SD1.D1_QUANT.
-- Tipos de nota fiscal de entrada no Protheus (SF1.F1_TIPO): N=Normal (compra de mercadoria/insumo/servico), D=Devolucao de venda (retorno de nota de saida para a empresa), B=Beneficiamento/guarda/reparo/conserto, I=Complementar de ICMS, P=Complementar de IPI. Apenas tipo 'N' representa compra real.
-- REGRA OBRIGATORIA — SF1.F1_TIPO: toda consulta fiscal que use SF1 deve informar explicitamente SF1.F1_TIPO no WHERE. Para compra normal/custo real use SF1.F1_TIPO = 'N'. Para devolucao de venda use SF1.F1_TIPO = 'D'. Nunca use SF1.F1_TIPO = '1' e nunca use SF1 sem F1_TIPO.
+- Tipos de nota fiscal de entrada no Protheus (SF1.F1_TIPO):
+  - N=Normal: tipo de nota com caracteristicas padroes; entra em compras/custo real.
+  - C=Compl. Preco: nota complementar de preco; entra em compras/custo real junto com N.
+  - D=Devolucao: retorno de uma nota de saida a empresa; nao entra em compras por padrao.
+  - B=Beneficiamento: envio/recebimento de produto para guarda, reparo, conserto, beneficiamento etc.; nao entra em compras por padrao.
+  - I=Compl. ICMS: complemento quando aliquota ou valor do ICMS da nota principal foi menor que o devido; nao entra em compras por padrao.
+  - P=Compl. IPI: complemento quando aliquota ou valor do IPI da nota principal foi menor que o devido, podendo gerar duplicata; nao entra em compras por padrao.
+  Para compras/custo real considere somente os tipos 'N' e 'C'.
+- REGRA OBRIGATORIA — SF1.F1_TIPO: toda consulta fiscal que use SF1 deve informar explicitamente SF1.F1_TIPO no WHERE. Para compra normal/custo real use SF1.F1_TIPO IN ('N','C'). Para devolucao de venda use SF1.F1_TIPO = 'D'. Nunca use SF1.F1_TIPO = '1' e nunca use SF1 sem F1_TIPO.
 - SF2: cabecalho de NF de saida do faturamento; para devolucao de compra use SF2.F2_TIPO = 'D'.
 - SD2: itens de NF de saida do faturamento; para valor de devolucao use SD2.D2_TOTAL.
 - SA2: fornecedores.
@@ -108,7 +115,7 @@ FROM (
   SELECT COALESCE(SUM(SD1.D1_TOTAL), 0) AS valor_compra, 0 AS valor_devolucao
   FROM SD1xxx SD1
   JOIN SF1xxx SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
-  WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO = 'N' AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
+  WHERE SF1.D_E_L_E_T_ = ' ' AND SD1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO IN ('N','C') AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
   UNION ALL
   SELECT 0 AS valor_compra, COALESCE(SUM(SD2.D2_TOTAL), 0) AS valor_devolucao
   FROM SD2xxx SD2

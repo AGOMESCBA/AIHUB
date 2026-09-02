@@ -17,6 +17,7 @@ assert(systemPrompt.includes('APENAS o mapa fornecido no no "sx2"'), 'prompt dev
 assert(systemPrompt.includes('mes passado'), 'prompt deve conter regra cronologica para mes passado');
 assert(systemPrompt.includes('resposta_planejada'), 'prompt deve orientar resposta planejada WhatsApp');
 assert(systemPrompt.includes("Nunca use SF1.F1_TIPO = '1'"), 'prompt deve proibir F1_TIPO = 1 em compras');
+assert(systemPrompt.includes("SF1.F1_TIPO IN ('N','C')"), 'prompt deve incluir notas normais e complementares em compras');
 assert(systemPrompt.includes('escopo de tenant IAHub'), 'prompt deve separar empresa IAHub de entidade cadastral');
 assert(systemPrompt.includes('SA2.A2_NOME AS fornecedor'), 'entidades devem retornar descricao de fornecedor');
 assert(systemPrompt.includes('SB1.B1_DESC AS produto'), 'entidades devem retornar descricao de produto');
@@ -91,6 +92,19 @@ const validacaoSf4 = runner._test.validarSqlIaOwnerBasico(sqlDevolucaoErradoPorS
 assert.strictEqual(validacaoSf4.ok, false, 'devolucao por SF4/SD1 deve ser rejeitada');
 assert(validacaoSf4.erros.some(e => e.includes('SF2/SD2')), 'deve orientar uso de SF2/SD2');
 
+const sqlCompraTipoNormalSemComplementar = `
+SET ROWCOUNT 50000;
+SELECT COALESCE(SUM(SD1.D1_TOTAL),0) AS valor_compra
+FROM SD1990 SD1
+INNER JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
+WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' '
+AND SF1.F1_TIPO = 'N'
+AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
+`;
+const validacaoTipoNormalSemComplementar = runner._test.validarSqlIaOwnerBasico(sqlCompraTipoNormalSemComplementar, comprasSpec, sx2);
+assert.strictEqual(validacaoTipoNormalSemComplementar.ok, false, 'compras com apenas F1_TIPO=N deve ser rejeitada');
+assert(validacaoTipoNormalSemComplementar.erros.some(e => e.includes("IN ('N','C')")), 'deve orientar F1_TIPO IN N,C');
+
 const sqlBom = `
 SET ROWCOUNT 50000;
 SELECT
@@ -101,7 +115,7 @@ FROM (
   SELECT SD1.D1_TOTAL AS valor_compra, 0 AS valor_devolucao
   FROM SD1990 SD1
   INNER JOIN SF1990 SF1 ON SD1.D1_FILIAL = SF1.F1_FILIAL AND SD1.D1_DOC = SF1.F1_DOC AND SD1.D1_SERIE = SF1.F1_SERIE AND SD1.D1_FORNECE = SF1.F1_FORNECE AND SD1.D1_LOJA = SF1.F1_LOJA
-  WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO = 'N' AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
+  WHERE SD1.D_E_L_E_T_ = ' ' AND SF1.D_E_L_E_T_ = ' ' AND SF1.F1_TIPO IN ('N','C') AND SD1.D1_DTDIGIT BETWEEN '20260601' AND '20260630'
   UNION ALL
   SELECT 0 AS valor_compra, SD2.D2_TOTAL AS valor_devolucao
   FROM SD2990 SD2

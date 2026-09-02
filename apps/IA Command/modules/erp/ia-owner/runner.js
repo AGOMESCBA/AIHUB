@@ -552,12 +552,12 @@ function _blocoRetryTecnicoIaOwner(subtipo, mensagem, linhasEntidades) {
   } else if (/SF1.*F1_TIPO|F1_TIPO.*SF1/i.test(mensagem)) {
     bloco = [
       'Contrato obrigatorio:',
-      "- TODA query que use SF1 deve incluir AND SF1.F1_TIPO = 'N' no WHERE.",
-      "- SF1.F1_TIPO = 'N' filtra apenas compras normais (custo real de compra).",
-      "- Sem esse filtro, devolucoes (D), complementos (C) e beneficiamentos (B) distorcem o custo.",
+      "- TODA query de compras que use SF1 deve incluir AND SF1.F1_TIPO IN ('N','C') no WHERE.",
+      "- SF1.F1_TIPO IN ('N','C') filtra notas normais e complementares, que compoem o custo real de compra.",
+      "- Sem esse filtro, devolucoes (D), beneficiamentos (B), complementos de ICMS (I) e complementos de IPI (P) distorcem o custo.",
       ...linhasEntidades,
       'Tarefa:',
-      '- Gere novo SQL com AND SF1.F1_TIPO = \'N\' obrigatoriamente no WHERE.',
+      '- Gere novo SQL com AND SF1.F1_TIPO IN (\'N\',\'C\') obrigatoriamente no WHERE para compras.',
       '- Preserve periodo, metrica, entidades resolvidas e agrupamentos.',
       '- Nao remova nenhum filtro existente.',
       '- Antes de retornar: releia o SQL inteiro e confirme visualmente que F1_TIPO esta presente — nao confie so na memoria da correcao, ela pode ter sido perdida ao reescrever outras partes do SQL.',

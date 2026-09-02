@@ -293,14 +293,30 @@ module.exports = {
   sqlPatternsProibidos: [
     {
       regex: /\bSF1\s*\.\s*F1_TIPO\s*=\s*'1'/i,
-      mensagem: "Compras normais de NF de entrada nao usam SF1.F1_TIPO = '1'; quando precisar filtrar tipo, use SF1.F1_TIPO = 'N'.",
+      mensagem: "Compras normais de NF de entrada nao usam SF1.F1_TIPO = '1'; quando precisar filtrar tipo de compra, use SF1.F1_TIPO IN ('N','C').",
+    },
+    {
+      validar(sql) {
+        const texto = String(sql || '');
+        if (/\bSF1\s*\.\s*F1_TIPO\s*=\s*'N'/i.test(texto)) {
+          return "Compras de NF de entrada devem considerar notas normais e complementares: use SF1.F1_TIPO IN ('N','C') para compras/custo real. Mantenha SF1.F1_TIPO = 'D' apenas quando a pergunta for devolucao de venda.";
+        }
+        const listas = texto.match(/\bSF1\s*\.\s*F1_TIPO\s+IN\s*\(([^)]*)\)/ig) || [];
+        for (const lista of listas) {
+          const valores = (lista.match(/'([^']+)'/g) || []).map(v => v.replace(/'/g, '').toUpperCase());
+          if (valores.includes('N') && !valores.includes('C')) {
+            return "Filtro de compras incompleto em SF1.F1_TIPO: compra/custo real deve usar SF1.F1_TIPO IN ('N','C') para incluir notas normais e complementares.";
+          }
+        }
+        return null;
+      },
     },
     {
       validar(sql) {
         const texto = String(sql || '');
         if (!/\b(?:FROM|JOIN)\s+SF1\w*\s+SF1\b/i.test(texto)) return null;
         if (/\bSF1\s*\.\s*F1_TIPO\b/i.test(texto)) return null;
-        return "SF1 usada sem filtro SF1.F1_TIPO. REGRA OBRIGATORIA: toda query fiscal que use SF1 deve informar o tipo da NF de entrada. Use SF1.F1_TIPO = 'N' para compra normal/custo real, ou SF1.F1_TIPO = 'D' quando a pergunta for devolucao de venda. Nunca use SF1 sem F1_TIPO.";
+        return "SF1 usada sem filtro SF1.F1_TIPO. REGRA OBRIGATORIA: toda query fiscal que use SF1 deve informar o tipo da NF de entrada. Use SF1.F1_TIPO IN ('N','C') para compra/custo real, ou SF1.F1_TIPO = 'D' quando a pergunta for devolucao de venda. Nunca use SF1 sem F1_TIPO.";
       },
     },
     {
