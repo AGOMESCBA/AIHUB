@@ -2361,6 +2361,8 @@ class IACWhatsAppService extends EventEmitter {
       linhas.push('');
       const totGeralStr = colsSomaveis.map(col => `*${_fmt(col, totGeral[col] || 0)}*`).join(' | ');
       linhas.push(`*Total Geral: ${totGeralStr}*`);
+      const resultadoGeral = canonicalWhatsappFormat.formulaResultado(colsSomaveis, totGeral);
+      if (resultadoGeral) linhas.push(`*${resultadoGeral.label}: ${_brl(resultadoGeral.valor)}*`);
     } else {
       // Sem colunas numéricas: apenas contagem
       let totalRegistros = 0;

@@ -5759,6 +5759,63 @@
     });
   }
 
+  // Pares de metricas semanticamente opostas onde "Total Geral" deve ser A - B,
+  // nao A + B (ex.: faturamento x compras). Mesma lista de canonical-whatsapp-format.js
+  // (funcao formulaResultado) — mantida em paralelo aqui porque a grid roda no
+  // browser e nao pode importar o modulo Node do backend.
+  const PARES_RESULTADO_GRID = [
+    { a: /^(valor_recebido|valor_recebido_total|recebido)$/i, b: /^(valor_pago|valor_pago_total|pago)$/i, label: 'Resultado' },
+    { a: /^(total_faturamento|faturamento|receita)$/i, b: /^(total_compras|compras)$/i, label: 'Resultado' },
+    { a: /^(a_receber|saldo_a_receber|total_a_receber)$/i, b: /^(a_pagar|saldo_a_pagar|total_a_pagar)$/i, label: 'Resultado' },
+    { a: /^(entrada|entradas|valor_entrada|total_entrada)$/i, b: /^(saida|saidas|valor_saida|total_saida)$/i, label: 'Resultado' },
+    { a: /^(receita|receitas|valor_receita|total_receita)$/i, b: /^(despesa|despesas|valor_despesa|total_despesa|custo|custos|total_custo)$/i, label: 'Resultado' },
+  ];
+  // Mesmas colunas categoricas reconhecidas em canonical-whatsapp-format.js (RE_CATEGORIA_SEMANTICA).
+  const RE_COLUNA_CATEGORIA_GRID = /^(carteira|tipo_carteira|origem_carteira|tipo|categoria|natureza|operacao|movimento|tipo_movimento|sentido|fluxo|origem|classe)$/i;
+
+  // Calcula o item extra "Resultado" (A - B) do total geral quando os dados
+  // representam um par de metricas opostas — cobre tanto o formato "wide"
+  // (colunas separadas: faturamento, compras) quanto o formato "long" (uma
+  // coluna categorica tipo=faturamento/compras + uma coluna valor unica).
+  // Retorna null quando nenhum par e reconhecido, deixando o total geral
+  // como soma simples por coluna (comportamento padrao, inalterado).
+  function calcularResultadoParSemantico(rows, colunas, colunasNumericas) {
+    if (!Array.isArray(rows) || !rows.length) return null;
+
+    // Formato wide: duas colunas numericas com nomes opostos reconhecidos.
+    if (colunasNumericas.length >= 2) {
+      for (const par of PARES_RESULTADO_GRID) {
+        const colA = colunasNumericas.find((c) => par.a.test(c.field));
+        const colB = colunasNumericas.find((c) => par.b.test(c.field));
+        if (colA && colB) {
+          const totalA = rows.reduce((acc, r) => acc + (typeof r[colA.field] === 'number' ? r[colA.field] : 0), 0);
+          const totalB = rows.reduce((acc, r) => acc + (typeof r[colB.field] === 'number' ? r[colB.field] : 0), 0);
+          return { label: par.label, valor: totalA - totalB };
+        }
+      }
+      return null;
+    }
+
+    // Formato long: uma unica coluna numerica + uma coluna categorica cujos
+    // valores distintos casam com os dois lados de algum par reconhecido.
+    if (colunasNumericas.length !== 1) return null;
+    const colValor = colunasNumericas[0];
+    const colCategoria = colunas.find((c) => !c.numerico && RE_COLUNA_CATEGORIA_GRID.test(c.field));
+    if (!colCategoria) return null;
+
+    for (const par of PARES_RESULTADO_GRID) {
+      let totalA = 0, totalB = 0, achouA = false, achouB = false;
+      for (const row of rows) {
+        const item = String(row[colCategoria.field] ?? '').trim();
+        const v = typeof row[colValor.field] === 'number' ? row[colValor.field] : 0;
+        if (par.a.test(item)) { totalA += v; achouA = true; }
+        else if (par.b.test(item)) { totalB += v; achouB = true; }
+      }
+      if (achouA && achouB) return { label: par.label, valor: totalA - totalB };
+    }
+    return null;
+  }
+
   function modeloRelatorio(dados) {
     if (dados._modelo) return dados._modelo;
     const cfg = gridConfigNormalizada(dados.gridConfig);
@@ -5773,6 +5830,8 @@
       title: col.title,
       valor: dados.rows.reduce((acc, r) => acc + (typeof r[col.field] === 'number' ? r[col.field] : 0), 0),
     }));
+    const resultado = calcularResultadoParSemantico(dados.rows, colunas, colunasNumericas);
+    if (resultado) totais.push({ field: '_resultado', title: resultado.label, valor: resultado.valor });
     dados._modelo = { cfg, colunas, totais, totalRegistros: dados.rows.length };
     return dados._modelo;
   }
@@ -5822,6 +5881,8 @@
   function resumoTotaisGrupo(rows) {
     const numericas = reportColunas.filter((c) => c.numerico);
     if (!Array.isArray(rows) || !rows.length || !numericas.length) return '';
+    const resultado = calcularResultadoParSemantico(rows, reportColunas, numericas);
+    if (resultado) return `${escapeHtml(resultado.label)}: ${escapeHtml(formatarNumero(resultado.valor))}`;
     return numericas.slice(0, 3).map((col) => {
       const valor = rows.reduce((acc, row) => acc + (typeof row[col.field] === 'number' ? row[col.field] : 0), 0);
       return `${escapeHtml(col.title)}: ${escapeHtml(formatarNumero(valor))}`;
@@ -6660,7 +6721,19 @@
         // o agrupamento selecionado. Usa o calculo embutido do proprio
         // Tabulator (sem recalcular ou reconstruir a grid manualmente a cada
         // troca de agrupamento), entao nao pesa na performance.
-        bottomCalc: col.numerico ? 'sum' : undefined,
+        // Quando a coluna e a metrica unica de um par semantico oposto
+        // reconhecido (ex.: tipo=faturamento/compras + coluna valor), o
+        // rodape de grupo/tabela deve mostrar faturamento - compras, nao a
+        // soma bruta das duas linhas. calcularResultadoParSemantico retorna
+        // null para qualquer outra grid (comportamento padrao preservado).
+        bottomCalc: col.numerico
+          ? (_values, data) => {
+              const numericasBottom = reportColunas.filter((c) => c.numerico);
+              const resultado = calcularResultadoParSemantico(data, reportColunas, numericasBottom);
+              if (resultado && numericasBottom.length === 1 && numericasBottom[0].field === col.field) return resultado.valor;
+              return data.reduce((acc, row) => acc + (typeof row[col.field] === 'number' ? row[col.field] : 0), 0);
+            }
+          : undefined,
         bottomCalcFormatter: col.numerico ? (cell) => formatarNumero(cell.getValue()) : undefined,
       };
       return def;

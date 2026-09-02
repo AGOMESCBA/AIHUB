@@ -2,6 +2,7 @@
 
 const aiProviderClient    = require('../../erp/core/ai-provider-client');
 const whatsappFormatPrompt = require('../../erp/core/whatsapp-format-prompt');
+const canonicalWhatsappFormat = require('../../erp/core/canonical-whatsapp-format');
 
 function _brl(v) {
   const n = parseFloat(v);
@@ -141,6 +142,8 @@ function _formatarFallback(rows, mensagemOriginal) {
     const valor = _RE_CAMPO_QUANTIDADE.test(k) ? _num(v) : _brl(v);
     return `*${k}: ${valor}*`;
   });
+  const resultado = canonicalWhatsappFormat.formulaResultado(Object.keys(totais), totais);
+  if (resultado) linhasTotais.push(`*${resultado.label}: ${_brl(resultado.valor)}*`);
   linhasTotais.push(`*Total: ${rows.length} registros*`);
 
   return [...linhas, '', ...linhasTotais].join('\n');

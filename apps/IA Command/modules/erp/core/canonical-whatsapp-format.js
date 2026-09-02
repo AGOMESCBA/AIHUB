@@ -1270,17 +1270,25 @@ function renderDuasDimensoesComTemporalUnico(rows, shape, linhas, contexto) {
 
   const primary = shape.metricas[0];
   const entradas = ordenarEntradasDimensao([...porItem.entries()], dimItem, primary);
+  const itemEhCategoria = isCategoriaSemantica(dimItem);
+  const resultado = itemEhCategoria ? resultadoCategorias(totaisPorCategoriaItens(porItem, shape.metricas)) : null;
 
   linhas.push(`\u{1F4CB} *Por ${labelDimensao(dimItem)}*`);
   linhas.push(`\u{1F5D3} *${labelDimensao(contexto.dim)}: ${labelValorDimensao(contexto.dim, contexto.valor)}*`);
   entradas.slice(0, 80).forEach(([item, totais], idx) => {
-    linhas.push(`  ${idx + 1}. ${labelDimensao(dimItem)} ${labelValorDimensao(dimItem, item)}: ${valsMetricas(totais, shape.metricas)}`);
+    if (itemEhCategoria) {
+      linhas.push(`  ${idx + 1}. ${valsMetricasPorCategoria(totais, shape.metricas, item)}`);
+      return;
+    }
+    const label = labelValorDimensao(dimItem, item);
+    linhas.push(`  ${idx + 1}. ${labelDimensao(dimItem)} ${label}: ${valsMetricas(totais, shape.metricas)}`);
   });
   if (entradas.length > 80) linhas.push(`  ... e mais ${entradas.length - 80}`);
 
   linhas.push('');
-  linhas.push(`\u{1F9FE} *Subtotal*: ${valsMetricas(totalGeral, shape.metricas)}`);
-  linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
+  const totalStr = resultado ? `${resultado.label}: *${brl(resultado.valor)}*` : valsMetricas(totalGeral, shape.metricas);
+  linhas.push(`\u{1F9FE} *Subtotal*: ${totalStr}`);
+  linhas.push(`*Total Geral*: ${totalStr}`);
   return true;
 }
 
@@ -1958,5 +1966,6 @@ module.exports = {
   renderAll,
   setLabelsSx3,
   labelMetrica,
+  formulaResultado,
   _test: { keyNorm, somarMetricas, formulaResultado, toNumber },
 };
