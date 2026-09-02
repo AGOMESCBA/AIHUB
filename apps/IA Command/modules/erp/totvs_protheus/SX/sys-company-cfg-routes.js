@@ -294,6 +294,21 @@ module.exports = function registrar(app, { requireAuth, requireIaCommand }) {
           `).all(row.connection_id, empresaVinculoId, row.empresa_codigo).map(r => r.empresa_codigo);
 
           if (outrosCodigosVinculados.length) {
+            // 1a barreira: modelo_dados=TRADICIONAL bloqueia direto, mesmo sem
+            // nenhum SX2 importado ainda (a checagem de conflito de tabela fisica
+            // logo abaixo so funciona quando ja ha SX2 para comparar — sem isso,
+            // uma empresa TRADICIONAL recem-cadastrada passaria sem checagem
+            // nenhuma, exatamente o cenario que motivou esta barreira). Empresas
+            // LOBO_GUARA (modelo_dados explicito) nunca caem aqui.
+            const erpCfgRow = db.prepare(`SELECT config FROM erp_config WHERE empresa_id = ? AND erp = 'protheus' LIMIT 1`).get(empresaVinculoId);
+            let modeloDados = null;
+            try { modeloDados = JSON.parse(erpCfgRow?.config || '{}')?.modelo_dados || null; } catch (_) {}
+            if (String(modeloDados || '').toUpperCase() === 'TRADICIONAL') {
+              return res.status(409).json({
+                error: `Não é possível vincular: esta empresa do IAHub está configurada como modelo TRADICIONAL (cada empresa Protheus tem suas próprias tabelas). Já existe outra empresa Protheus vinculada a este cadastro — cada empresa com tabelas próprias precisa de um cadastro IAHub separado.`,
+              });
+            }
+
             const codigosTodos = [row.empresa_codigo, ...outrosCodigosVinculados];
             const placeholders = codigosTodos.map(() => '?').join(',');
             const rowsSx2 = db.prepare(`
