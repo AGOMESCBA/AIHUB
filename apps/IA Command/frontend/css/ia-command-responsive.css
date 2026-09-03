@@ -45,7 +45,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-height: 560px) {
   .iac-shell-responsive {
     --sidebar-w: min(320px, calc(100vw - 48px));
   }
@@ -134,6 +134,27 @@
     flex-basis: clamp(150px, 42vw, 210px);
     max-width: 210px;
     padding: 6px 8px 7px 10px;
+  }
+}
+
+@media (max-width: 900px), (max-height: 560px) {
+  .iac-shell-responsive {
+    overflow: hidden;
+  }
+
+  .iac-shell-responsive .layout,
+  .iac-shell-responsive .main {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .iac-shell-responsive .mdi-content {
+    overflow: hidden;
+  }
+
+  .iac-shell-responsive .mdi-iframe {
+    overflow: auto;
   }
 }
 

@@ -470,6 +470,19 @@
           min-width: 0 !important;
         }
         @media (max-width: 900px) {
+          html, body {
+            overflow: auto !important;
+            height: auto !important;
+            min-height: 100% !important;
+          }
+          .layout {
+            height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
+          }
+          .main {
+            overflow: visible !important;
+          }
           .page-content { padding: 16px !important; }
           .page-head,
           .head-row,
@@ -517,6 +530,24 @@
           .form-section-body,
           .tab-panel {
             padding: 14px !important;
+          }
+        }
+        @media (max-height: 560px) and (orientation: landscape) {
+          html, body {
+            overflow: auto !important;
+            height: auto !important;
+            min-height: 100% !important;
+          }
+          .layout {
+            height: auto !important;
+            min-height: 100% !important;
+            overflow: visible !important;
+          }
+          .main {
+            overflow: visible !important;
+          }
+          .page-content {
+            padding: 10px !important;
           }
         }
       `;

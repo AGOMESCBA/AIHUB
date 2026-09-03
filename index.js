@@ -20,6 +20,12 @@ const permissoesDb                  = require('./modules/permissoes/database');
 const { APPS, LEGACY_STATIC_DIRS }   = require('./apps/registry');
 const iahubData                     = require('./apps/IAHUB/backend/data-paths');
 
+const STARTUP_PROFILER_T0 = Date.now();
+function startupProfilerMark(label) {
+  const elapsed = Date.now() - STARTUP_PROFILER_T0;
+  console.log(`[startup-profiler] +${elapsed}ms ${label}`);
+}
+
 let puppeteer;
 try { puppeteer = require('puppeteer-core'); } catch (_) {}
 
@@ -120,6 +126,7 @@ function _consoleArgToString(arg) {
   const orig = console[level].bind(console);
   console[level] = (...args) => { orig(...args); _consoleEmit(level === 'log' ? 'info' : level, args); };
 });
+startupProfilerMark('console-monitor pronto');
 
 // ── Segurança: headers HTTP ───────────────────────────────────────────────────
 app.use(helmet({
@@ -161,8 +168,11 @@ app.use(sessionMiddleware);
 io.use((socket, next) => sessionMiddleware(socket.request, socket.request.res || {}, next));
 
 inicializarAdmin().catch(err => console.error('[auth] Falha ao inicializar admin:', err));
+startupProfilerMark('inicializarAdmin disparado');
 inicializarConfig();
+startupProfilerMark('inicializarConfig concluido');
 inicializarSistemas();
+startupProfilerMark('inicializarSistemas concluido');
 
 const requireRecrutamento = requireSystemAccess('recrutamento');
 const requireIaAdmin      = requireSystemAccess('ia-admin');
@@ -526,8 +536,12 @@ require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
 require('./modules/seguranca/routes')(app, { requireAuth });
 
 // ── IA Command ────────────────────────────────────────────────────────────────
+startupProfilerMark('IA Command DB inicio');
 require('./apps/IA Command/modules/database').inicializarDB();
+startupProfilerMark('IA Command DB fim');
+startupProfilerMark('IA Command rotas inicio');
 require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand, io });
+startupProfilerMark('IA Command rotas fim');
 
 [
   '/api/service',
@@ -551,6 +565,7 @@ require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand
 ].forEach(prefix => app.use(prefix, requireRecrutamento));
 
 // ── Módulo Monitoramento (WhatsApp Currículo) ─────────────────────────────────
+startupProfilerMark('rotas IA Recruit inicio');
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, requireEmpresa, registrarLog, io });
 
 // ── Módulo Processo Seletivo ──────────────────────────────────────────────────
@@ -573,6 +588,7 @@ require('./modules/integracoes/SEVaga/routes')(app, { requireAuth, requireEmpres
 // ── Módulo Integrações › SE API Configurador ──────────────────────────────────
 app.use(require('express').static(require('path').join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
 require('./modules/integracoes/SEApiConfigurator/routes')(app, { requireAuth, requireEmpresa, registrarLog });
+startupProfilerMark('rotas IA Recruit fim');
 
 // ── Exportação do Guia em PDF via Puppeteer ───────────────────────────────────
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -685,7 +701,9 @@ app.get('/app/ia-command/guia/exportar-pdf', requireIaCommand, async (req, res) 
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
+startupProfilerMark('server.listen inicio');
 server.listen(PORT, () => {
+  startupProfilerMark('server.listen callback');
   console.log(`\n🌐 IAHub rodando em http://localhost:${PORT}\n`);
   console.log(`   Log WA:    ${LOG_DIR}/whatscurriculo_<empresa_id>.log`);
   console.log(`   Log Email: ${EMAIL_LOG_FILE}\n`);

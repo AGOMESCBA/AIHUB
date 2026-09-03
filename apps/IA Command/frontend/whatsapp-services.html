@@ -17,7 +17,7 @@
     .topbar-title { flex:1; min-width:0; font-weight:700; }
 
     /* ── Page layout ── */
-    .page-content { padding-top:0 !important; padding-bottom:0 !important; display:flex; flex-direction:column; height:calc(100vh - 48px); overflow:hidden; }
+    .page-content { padding-top:0 !important; padding-bottom:0 !important; display:flex; flex-direction:column; height:calc(100vh - 48px); height:calc(100dvh - 48px); overflow:hidden; }
 
     /* ── Abas internas ── */
     .ws-tabs { display:flex; align-items:center; gap:0; border-bottom:2px solid var(--border); flex-shrink:0; padding:0 16px; overflow:hidden; }
@@ -293,8 +293,7 @@
       }
 
       .page-content {
-        height: calc(100vh - 52px);
-        height: calc(100dvh - 52px);
+        height: auto;
         min-height: calc(100vh - 52px);
         min-height: calc(100dvh - 52px);
         overflow-y: auto;
@@ -386,7 +385,7 @@
       }
 
       .ws-main {
-        order: 2;
+        order: 3;
         min-height: 280px;
         border-bottom: 1px solid var(--border);
         background: var(--bg-base);
@@ -422,7 +421,7 @@
       }
 
       .ws-panel {
-        order: 3;
+        order: 2;
         width: 100%;
         min-width: 0;
         max-height: none;
@@ -433,8 +432,7 @@
       }
 
       .ws-mobile-actions {
-        order: 2;
-        display: block;
+        display: none;
         padding: 10px;
         border-bottom: 1px solid var(--border);
         background: var(--bg-card);
@@ -543,6 +541,98 @@
         left: 12px;
         right: 12px;
         bottom: 12px;
+      }
+    }
+
+    @media (max-width: 760px) and (max-height: 700px) {
+      .ws-sidebar {
+        max-height: 25vh;
+      }
+
+      .ws-channel-list {
+        max-height: calc(25vh - 49px);
+      }
+
+      .ws-main,
+      #main-channel {
+        min-height: 220px;
+      }
+
+      .ws-terminal {
+        min-height: 220px;
+        max-height: 38vh;
+      }
+    }
+
+    @media (min-width: 761px) and (max-height: 560px) and (orientation: landscape) {
+      html, body {
+        height: 100%;
+        overflow: hidden;
+      }
+
+      .layout,
+      .main {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .topbar {
+        min-height: 46px;
+        height: 46px;
+        padding-top: 6px;
+        padding-bottom: 6px;
+      }
+
+      .page-content {
+        height: calc(100vh - 46px);
+        height: calc(100dvh - 46px);
+        min-height: 0;
+        overflow: auto;
+        padding: 0 !important;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .ws-tabs {
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+      }
+
+      .ws-body {
+        min-width: 1040px;
+        min-height: 540px;
+        overflow: visible;
+      }
+
+      .ws-sidebar {
+        width: 250px;
+        min-width: 250px;
+        max-height: none;
+      }
+
+      .ws-panel {
+        width: 260px;
+        min-width: 260px;
+        overflow: visible;
+      }
+
+      .ws-terminal {
+        min-height: 360px;
+      }
+
+      .ws-panel-qr-img {
+        width: min(220px, 100%);
+      }
+
+      .ws-panel-btn {
+        min-height: 34px;
+      }
+
+      .ws-modal-overlay,
+      .help-overlay,
+      .help-drawer {
+        position: fixed;
       }
     }
   </style>
