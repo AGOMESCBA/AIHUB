@@ -44,6 +44,7 @@ const WHATSAPP_INIT_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_INIT_
 const WHATSAPP_POST_CLEANUP_WAIT_MS = Math.max(0, Number(process.env.IAC_WA_POST_CLEANUP_WAIT_MS || 1500));
 const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(60000, Number(process.env.IAC_WA_SILENT_SESSION_RETRY_MS || 90000));
 const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR_AUTH_TIMEOUT_MS || 300000));
+const WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT = String(process.env.IAC_WA_PRESERVE_AUTH_SESSION_ON_TIMEOUT ?? '1') !== '0';
 // Reconexao automatica apos "disconnected" com motivo recuperavel (NAVIGATION, CONFLICT, etc).
 // LOGOUT nao entra aqui: significa que o vinculo foi revogado no celular e a sessao salva fica invalida.
 const WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS = Math.max(0, Number(process.env.IAC_WA_AUTO_RECONNECT_MAX_TENTATIVAS ?? 5));
@@ -493,6 +494,23 @@ class IACWhatsAppService extends EventEmitter {
       retryingCleanSession = true;
       clearTimers();
       const sessao = this._authClientId;
+
+      if (WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT && _sessionLooksAuthenticated(sessao)) {
+        this.log(
+          `${motivo}; sessao "${sessao}" parece autenticada, entao foi preservada. ` +
+          'Tente iniciar novamente em alguns instantes antes de solicitar um novo QR.',
+          'warning'
+        );
+        if (this.client) {
+          await this.client.destroy().catch(() => {});
+          this.client = null;
+        }
+        await this._killChromeForSession(sessao);
+        this.lastQrUrl = null;
+        this.setStatus('stopped');
+        return true;
+      }
+
       this.log(`${motivo}; colocando sessao "${sessao}" em quarentena e tentando gerar novo QR.`, 'warning');
       if (this.client) {
         await this.client.destroy().catch(() => {});
