@@ -452,6 +452,7 @@ class IACWhatsAppService extends EventEmitter {
     this._channelName = channel.nome || `Canal ${channel.id}`;
     this._configuredAuthClientId = this._resolveConfiguredAuthClientId(channel, empresaId);
     this._authClientId = this._configuredAuthClientId;
+    const hadAuthenticatedSessionAtStart = _sessionLooksAuthenticated(this._authClientId);
     this.setStatus('starting');
     this._startTime = Date.now();
     this.log(`Iniciando IA Command WhatsApp no canal "${this._channelName}"...`, 'info');
@@ -487,6 +488,7 @@ class IACWhatsAppService extends EventEmitter {
     let firstQrAt = null;
     let qrCount = 0;
     let qrAuthTimer = null;
+    let preservingQrFromSavedSession = false;
 
     const retryWithCleanSession = async (motivo) => {
       if (retryingCleanSession || this.status !== 'starting' || cfg.cleanSessionRetry) return false;
@@ -566,6 +568,29 @@ class IACWhatsAppService extends EventEmitter {
 
     this.client.on('qr', async (qr) => {
       receivedBootEvent = true;
+      if (
+        !cfg.cleanSessionRetry &&
+        WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT &&
+        hadAuthenticatedSessionAtStart &&
+        !preservingQrFromSavedSession
+      ) {
+        preservingQrFromSavedSession = true;
+        clearTimers();
+        const sessao = this._authClientId;
+        this.log(
+          `WhatsApp gerou QR para a sessao salva "${sessao}", mas ela parece autenticada; preservando a sessao. ` +
+          'Aguarde 1 ou 2 minutos e inicie o servico novamente. Use "Novo QR" apenas se quiser desconectar esta sessao.',
+          'warning'
+        );
+        if (this.client) {
+          await this.client.destroy().catch(() => {});
+          this.client = null;
+        }
+        await this._killChromeForSession(sessao);
+        this.lastQrUrl = null;
+        this.setStatus('stopped');
+        return;
+      }
       if (silentSessionTimer) {
         clearTimeout(silentSessionTimer);
         silentSessionTimer = null;
