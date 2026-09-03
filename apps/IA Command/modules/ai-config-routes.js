@@ -110,6 +110,17 @@ module.exports = function registrarRotasAIConfig(app, { requireAuth, requireIaCo
     });
   });
 
+  app.get('/api/ia-command/ai-config/chat-secret/:campo', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
+    const camposPermitidos = {
+      protheus_web_login_access_key: 'protheus_web_login_access_key',
+      protheus_chat_secret: 'protheus_chat_secret',
+    };
+    const campo = camposPermitidos[req.params.campo];
+    if (!campo) return res.status(404).json({ error: 'Campo nao encontrado.' });
+    const row = crud.buscarPor('ai_config', 'empresa_id', eid(req));
+    res.json({ valor: row?.[campo] || '' });
+  });
+
   // ── SAVE / UPDATE config ─────────────────────────────────────────────────────
   app.post('/api/ia-command/ai-config', requireAuth, requireIaCommand, canConfigIa, (req, res) => {
     const {
