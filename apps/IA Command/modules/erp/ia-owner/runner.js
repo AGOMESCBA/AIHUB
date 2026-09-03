@@ -323,24 +323,6 @@ function mensagemIaIndisponivel(spec, erro) {
   return mensagemErro(spec, 'ia_indisponivel');
 }
 
-// Rotulo exibido ao usuario final quando a resposta foi restrita por vendedorFixo/
-// clienteFixo (entidadeSeguranca injetada pelo sistema a partir do numero remetente —
-// ver vendedor-seguranca.js). Aprovador (compras) fica de fora: o filtro la e condicional
-// a intencao da pergunta, sem garantia estrutural de que foi aplicado no SQL final.
-const ROTULOS_ENTIDADE_SEGURANCA = {
-  vendedor_fixo_seguranca: 'Vendedor',
-  cliente_fixo_seguranca: 'Cliente',
-};
-
-function rodapeFiltroSeguranca(entidadesResolvidas = []) {
-  const entidadeSeguranca = (entidadesResolvidas || []).find(
-    e => ROTULOS_ENTIDADE_SEGURANCA[e?.tipo]
-  );
-  if (!entidadeSeguranca) return '';
-  const rotulo = ROTULOS_ENTIDADE_SEGURANCA[entidadeSeguranca.tipo];
-  return `\n\n_Filtrado por ${rotulo}: ${entidadeSeguranca.codigo}_`;
-}
-
 function maxTentativasPrepararSql(entidadesResolvidas = []) {
   return 4;
 }
@@ -4729,7 +4711,7 @@ async function executar(spec, intent, empresaId) {
       }
       return {
         tipo: 'sucesso_ai_sql',
-        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta) + rodapeFiltroSeguranca(entidadesResolvidas),
+        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
         rows: rows || [],
         sql_gerado: preparado.sqlFinal,
         periodo_resolvido: periodoRetorno,
@@ -4974,7 +4956,7 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
       const respostaDireta = _comparativoD || respostaCanonicaD || interpolarRespostaPlanejada(template, rows) || resposta;
       return {
         tipo: 'sucesso_ai_sql',
-        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta) + rodapeFiltroSeguranca(entidades),
+        resposta_direta: responseFormatter.normalizarAgrupamentosPais(respostaDireta),
         rows: rows || [],
         sql_gerado: preparado.sqlFinal,
         periodo_resolvido: periodoRetorno,

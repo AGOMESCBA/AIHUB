@@ -264,6 +264,9 @@
 
     @media (max-width: 560px) {
       .login-page {
+        display: flex !important;
+        flex-direction: column !important;
+        min-height: 100dvh !important;
         padding-bottom: 0 !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
@@ -273,47 +276,63 @@
         flex-direction: column !important;
         width: 100vw !important;
         max-width: 100vw !important;
-        min-height: auto;
+        min-height: 0;
+        flex: 0 0 auto;
         overflow-x: hidden !important;
       }
       .login-panel {
         width: 100% !important;
         max-width: 100vw !important;
-        padding: 14px 18px 14px;
+        min-height: 0 !important;
+        padding: 28px 16px 18px;
+        flex: 0 0 auto;
+        justify-content: flex-start;
         box-sizing: border-box;
       }
       .login-visual {
         width: 100% !important;
         max-width: 100vw !important;
-        min-height: 120px;
-        padding: 12px 18px;
+        height: 230px;
+        min-height: 230px;
+        padding: 0;
+        flex: 0 0 230px;
+        background-color: #eef3f8;
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center center;
+      }
+      .login-visual.has-image {
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center center;
       }
       .login-card {
         width: 100% !important;
         max-width: 360px !important;
+        flex: 0 0 auto;
       }
       .login-visual-text {
         font-size: 20px;
       }
       .login-logo {
-        margin-bottom: 10px;
+        margin-bottom: 24px;
       }
       .login-logo-img {
-        max-width: 88%;
-        max-height: 76px;
-        margin-bottom: 6px;
+        max-width: 78%;
+        max-height: 190px;
+        margin-bottom: 0;
       }
       .form-group {
-        margin-bottom: 9px;
+        margin-bottom: 8px;
       }
       .form-label {
         margin-bottom: 3px;
         font-size: 11px;
       }
       .form-control {
-        min-height: 40px;
-        padding-top: 7px;
-        padding-bottom: 7px;
+        min-height: 42px;
+        padding-top: 8px;
+        padding-bottom: 8px;
       }
       .login-error {
         padding: 8px 10px;
@@ -321,8 +340,8 @@
         font-size: 12px;
       }
       .btn-login {
-        margin-top: 2px;
-        padding: 9px;
+        margin-top: 4px;
+        padding: 10px;
       }
       .login-footer {
         position: static !important;
@@ -330,57 +349,41 @@
         max-width: 100vw !important;
         box-sizing: border-box;
         min-height: 0 !important;
-        padding: 8px 14px calc(8px + env(safe-area-inset-bottom)) !important;
-        font-size: 12px;
+        padding: 8px 16px calc(8px + env(safe-area-inset-bottom)) !important;
+        font-size: 11px;
         overflow: hidden;
+        gap: 8px;
+        align-items: center;
+        margin-top: 0;
       }
       .login-footer-name {
         white-space: normal;
+        line-height: 1.25;
       }
       .login-footer-links {
-        gap: 7px;
+        gap: 6px;
+        flex: 0 0 auto;
       }
     }
 
     @media (max-width: 560px) and (max-height: 740px) {
       .login-visual {
-        min-height: 92px;
+        height: 190px;
+        min-height: 190px;
+        flex-basis: 190px;
       }
       .login-logo-img {
-        max-height: 62px;
+        max-height: 150px;
       }
       .login-panel {
-        padding-top: 10px;
+        padding-top: 22px;
+        padding-bottom: 16px;
       }
-    }
-
-    @media (max-width: 560px) {
-      .login-page.login-company-selected .login-visual {
-        display: none !important;
+      .form-control {
+        min-height: 40px;
       }
-      .login-page.login-company-selected .login-panel {
-        justify-content: flex-start;
-        min-height: auto;
-        padding-top: 18px;
-      }
-      .login-page.login-company-selected .login-logo {
-        margin-bottom: 12px;
-      }
-      .login-page.login-company-selected .login-logo-img {
-        max-height: 72px !important;
-        max-width: 70% !important;
-      }
-      .login-page.login-company-selected .login-footer {
-        margin-top: 8px;
-      }
-    }
-
-    @media (max-width: 560px) and (max-height: 740px) {
-      .login-page.login-company-selected .login-logo-img {
-        max-height: 58px !important;
-      }
-      .login-page.login-company-selected .login-panel {
-        padding-top: 12px;
+      .form-group {
+        margin-bottom: 7px;
       }
     }
 
@@ -411,18 +414,6 @@
       }
     }
 
-    @media (max-width: 960px) and (orientation: landscape) {
-      .login-page.login-company-selected .login-visual {
-        display: none !important;
-      }
-      .login-page.login-company-selected .login-shell {
-        display: block;
-        min-height: auto;
-      }
-      .login-page.login-company-selected .login-panel {
-        min-height: auto;
-      }
-    }
   </style>
 </head>
 <body class="login-page">

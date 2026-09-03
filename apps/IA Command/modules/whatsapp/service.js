@@ -3357,20 +3357,23 @@ class IACWhatsAppService extends EventEmitter {
           };
           const resEmp = await intentRouter.rotear(intentEmpresa, emp.empresa_id);
           this._logResultadoIntent({ intent: intentEmpresa, resultado: resEmp, escopo: 'pendente_all' });
+          const respostaEmpComRodape = resEmp.resposta_direta
+            ? resEmp.resposta_direta + (resEmp.tipo === 'sucesso_ai_sql' ? responseFormatter.rodapeFiltroSeguranca(resEmp._entidadesResolvidas) : '')
+            : '';
           this._registrarInterpretacao({
             empresaId: emp.empresa_id, sender, texto: intentPendente._mensagemOriginal || texto,
             intent: intentEmpresa, resultado: resEmp,
-            resposta: resEmp.resposta_direta || 'Não encontrei dados.',
+            resposta: respostaEmpComRodape || 'Não encontrei dados.',
             duracaoMs: resEmp.duracao_ms ?? (Date.now() - t0),
           });
           if (resEmp.tipo !== 'erro' && resEmp.tipo !== 'desconhecido' && intentEmpresa.intencao !== 'desconhecido') {
             this._saveLastIntent(sender, intentEmpresa, emp.empresa_id);
           }
-          if (resEmp.tipo !== 'erro' && resEmp.tipo !== 'pergunta_entidade' && resEmp.resposta_direta) {
+          if (resEmp.tipo !== 'erro' && resEmp.tipo !== 'pergunta_entidade' && respostaEmpComRodape) {
             respostasEmpresa.push({
               empresaId: emp.empresa_id,
               nome: emp.nome || `Empresa #${emp.empresa_id}`,
-              resposta: resEmp.resposta_direta,
+              resposta: respostaEmpComRodape,
               resultado: resEmp,
               rows: resEmp.rows || [],
             });
@@ -3439,7 +3442,8 @@ class IACWhatsAppService extends EventEmitter {
 
     const resultado = await intentRouter.rotear(intentPendente, empresaPendente);
     this._logResultadoIntent({ intent: intentPendente, resultado, escopo: 'pendente' });
-    const resposta = resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+    const resposta = (resultado.resposta_direta || 'Não encontrei dados para essa consulta.')
+      + (resultado.tipo === 'sucesso_ai_sql' ? responseFormatter.rodapeFiltroSeguranca(resultado._entidadesResolvidas) : '');
     if (resultado.tipo !== 'erro' && resultado.tipo !== 'desconhecido' && intentPendente.intencao !== 'desconhecido') {
       this._saveLastIntent(sender, intentPendente, empresaPendente);
     }
@@ -5180,7 +5184,12 @@ class IACWhatsAppService extends EventEmitter {
                 sql_gerado:     resultadoRetry.sql_gerado   || null,
                 duracao_ms:     resultadoRetry.duracao_ms   || null,
               });
-              const respostaRetry = resultadoRetry.resposta_direta || 'NÃ£o encontrei dados para essa consulta.';
+              const respostaRetry = responseFormatter.formatar(resultadoRetry, intentRetry, {
+                empresaId: empRetry.empresa_id,
+                messageTemplates,
+                humanizarResposta: true,
+                sugerirComparacao: true,
+              });
               const resultadoRetryRegistrado = {
                 ...resultadoRetry,
                 _retry_canonico: true,

@@ -19,6 +19,31 @@ const LIMITE_PADRAO_AGRUPAMENTO = 20;
 const LIMITE_ROWS_RESUMO_HUMANO = 5000;
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+// Rotulo exibido ao usuario final quando a resposta foi restrita por vendedorFixo/
+// clienteFixo (entidadeSeguranca injetada pelo sistema a partir do numero remetente —
+// ver guards/vendedor-seguranca.js e guards/cliente-seguranca.js). Aprovador (compras)
+// fica de fora: o filtro la e condicional a intencao da pergunta, sem garantia
+// estrutural de que foi aplicado no SQL final.
+//
+// Centralizado aqui (unico ponto usado tanto por whatsapp/service.js quanto por
+// protheus_whatsapp/service.js via formatar()) para nao depender de cada caminho de
+// retorno do ia-owner/runner.js (execucao normal, reuso semantico, pipeline multiempresa)
+// concatenar o rodape manualmente — ver ia_command_erp_config_vazamento na memoria para
+// o historico de por que esse tipo de duplicacao de logica de seguranca e fragil.
+const ROTULOS_ENTIDADE_SEGURANCA = {
+  vendedor_fixo_seguranca: 'Vendedor',
+  cliente_fixo_seguranca: 'Cliente',
+};
+
+function rodapeFiltroSeguranca(entidadesResolvidas = []) {
+  const entidadeSeguranca = (entidadesResolvidas || []).find(
+    e => ROTULOS_ENTIDADE_SEGURANCA[e?.tipo]
+  );
+  if (!entidadeSeguranca) return '';
+  const rotulo = ROTULOS_ENTIDADE_SEGURANCA[entidadeSeguranca.tipo];
+  return `\n\n_Filtrado por ${rotulo}: ${entidadeSeguranca.codigo}_`;
+}
+
 function _normalizarNome(nome) {
   return String(nome || '')
     .normalize('NFD')
@@ -1139,7 +1164,12 @@ function formatar(resultado, intent, opts = {}) {
   // Resultado do motor Text-to-SQL dinâmico (ex: módulo de Compras)
   // A resposta já vem formatada pela IA ou pelo fallback interno do handler.
   if (resultado.tipo === 'sucesso_ai_sql') {
-    return humanizarResposta(resultado.resposta_direta || 'Não encontrei dados para essa consulta.', resultado, intent, opts);
+    const respostaBase = resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+    const jaTemRodape = /_Filtrado por (Vendedor|Cliente): /.test(respostaBase);
+    const respostaComRodape = jaTemRodape
+      ? respostaBase
+      : respostaBase + rodapeFiltroSeguranca(resultado._entidadesResolvidas);
+    return humanizarResposta(respostaComRodape, resultado, intent, opts);
   }
 
   if (resultado.tipo === 'erro' && resultado.resposta_direta) {
@@ -1350,6 +1380,7 @@ function detectarDimensaoCategorica(firstRow) {
 module.exports = {
   formatar, formatarAiSqlLocal, montarApresentacaoResposta, textoApresentacao,
   normalizarAgrupamentosPais, _extrairMes, _extrairAno, detectarDimensaoCategorica,
+  rodapeFiltroSeguranca,
   // Usados tambem por modules/whatsapp/whatsapp-attachment-builder.js (geracao de PDF/Excel) —
   // nao alterar assinatura sem checar esse consumidor.
   _formatarValorMetrica, _groupByIntent, _labelDimensao, _resolverDimensao,
