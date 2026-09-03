@@ -6,16 +6,8 @@ const { alertarEventoWorkerWhatsapp } = require('./whatsapp/operational-alerts')
 
 const WORKER_TOKEN = process.env.IAC_HUB_INTERNAL_TOKEN || '';
 
-const STARTUP_PROFILER_T0 = Date.now();
-function startupProfilerMark(label) {
-  const elapsed = Date.now() - STARTUP_PROFILER_T0;
-  console.log(`[startup-profiler][ia-command-routes] +${elapsed}ms ${label}`);
-}
-
 module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, io }) {
-  startupProfilerMark('registrarRotas inicio');
   const canDashboard = requireRotina('iac-dashboard');
-  startupProfilerMark('requireRotina dashboard fim');
 
   // IMPORTANTE: worker-event é chamado pelo processo Windows Service (sem sessão de usuário).
   // Deve ser registrado ANTES do app.use que aplica requireAuth a todo /api/ia-command/*.
@@ -46,72 +38,42 @@ module.exports = function registrarRotas(app, { requireAuth, requireIaCommand, i
   // IAHub). Deve ser registrado ANTES do app.use que aplica requireAuth a todo
   // /api/ia-command/*. Autenticacao propria via IAC_PROTHEUS_CHAT_SECRET (emissao
   // de token) e token de sessao (demais rotas) — ver modules/protheus_whatsapp/routes.js.
-  startupProfilerMark('protheus_whatsapp/routes inicio');
   require('./protheus_whatsapp/routes')(app);
-  startupProfilerMark('protheus_whatsapp/routes fim');
 
   app.use('/api/ia-command', requireAuth, requireIaCommand, requireEmpresaContext);
 
   // Rotas do WhatsApp
-  startupProfilerMark('whatsapp/routes inicio');
   require('./whatsapp/routes')(app, { requireAuth, requireIaCommand, io });
-  startupProfilerMark('whatsapp/routes fim');
 
   // Rotas de configuração de conexões ERP
-  startupProfilerMark('connections-routes inicio');
   require('./connections-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('connections-routes fim');
 
   // Rotas de configuração de IA
-  startupProfilerMark('ai-config-routes inicio');
   require('./ai-config-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('ai-config-routes fim');
 
   // Rotas do Agente Local (cloud_extension)
-  startupProfilerMark('agente-local-routes inicio');
   require('../cloud_extension/agente-local-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('agente-local-routes fim');
 
   // Rotas do middleware SQL Protheus
-  startupProfilerMark('compras/middleware-routes inicio');
   require('./erp/totvs_protheus/compras/middleware-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('compras/middleware-routes fim');
 
   // Rotas do dicionário SX2 do Protheus
-  startupProfilerMark('sx2-routes inicio');
   require('./erp/totvs_protheus/SX/sx2-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('sx2-routes fim');
-  startupProfilerMark('sx3-routes inicio');
   require('./erp/totvs_protheus/SX/sx3-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('sx3-routes fim');
 
   // Rotas dos dicionários SYS_COMPANY / SYS_COMPANY_CFG (hierarquia organizacional
   // para grupos Protheus com mais de uma empresa jurídica — cenário LOBO_GUARA)
-  startupProfilerMark('sys-company-routes inicio');
   require('./erp/totvs_protheus/SX/sys-company-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('sys-company-routes fim');
-  startupProfilerMark('sys-company-cfg-routes inicio');
   require('./erp/totvs_protheus/SX/sys-company-cfg-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('sys-company-cfg-routes fim');
 
   // Rotas do painel administrativo (intenções, datasets, logs)
-  startupProfilerMark('admin-routes inicio');
   require('./admin-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('admin-routes fim');
-  startupProfilerMark('whatsapp-response-config-routes inicio');
   require('./whatsapp/whatsapp-response-config-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('whatsapp-response-config-routes fim');
-  startupProfilerMark('scheduled-question-routes inicio');
   require('./scheduler/scheduled-question-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('scheduled-question-routes fim');
-  startupProfilerMark('scheduled-question-executor start inicio');
   require('./scheduler/scheduled-question-executor').start();
-  startupProfilerMark('scheduled-question-executor start fim');
 
   // Rota para geração do instalador do Agente Local
-  startupProfilerMark('instalador-agente-routes inicio');
   require('./instalador-agente-routes')(app, { requireAuth, requireIaCommand });
-  startupProfilerMark('instalador-agente-routes fim');
 
   // Health check
   app.get('/api/ia-command/health', requireAuth, requireIaCommand, canDashboard, (req, res) => {

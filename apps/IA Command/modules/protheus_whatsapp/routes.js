@@ -16,14 +16,9 @@ const http = require('http');
 const crypto = require('crypto');
 const tokenService = require('./token-service');
 const sessionStore = require('./session-store');
-const chatService = require('./service');
 const userPermissionsStore = require('./user-permissions-store');
 const { getDB } = require('../database');
-const whatsappManager = require('../whatsapp/service-manager');
 const whatsappChannels = require('../whatsapp/channel-store');
-const scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
-const canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
-const loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-filial-resolver');
 
 const PROTHEUS_SECRET = process.env.IAC_PROTHEUS_CHAT_SECRET || '';
 const LAUNCH_TICKET_TTL_MS = 5 * 60 * 1000;
@@ -33,6 +28,37 @@ const WEB_LOGIN_DEFAULT_PATH = '/api/ia-command/protheus/web-login';
 const WEB_LOGIN_ENV_PATH = normalizarWebLoginPath(process.env.IAC_PROTHEUS_WEB_LOGIN_PATH) || '';
 const WEB_LOGIN_ENV_ACCESS_KEY = String(process.env.IAC_PROTHEUS_WEB_LOGIN_ACCESS_KEY || '').trim();
 const publicRateBuckets = new Map();
+
+let chatService;
+let whatsappManager;
+let scheduledQuestionRunner;
+let canonicalWhatsappFormat;
+let loboGuaraFilialResolver;
+
+function getChatService() {
+  if (!chatService) chatService = require('./service');
+  return chatService;
+}
+
+function getWhatsappManager() {
+  if (!whatsappManager) whatsappManager = require('../whatsapp/service-manager');
+  return whatsappManager;
+}
+
+function getScheduledQuestionRunner() {
+  if (!scheduledQuestionRunner) scheduledQuestionRunner = require('../scheduler/scheduled-question-runner');
+  return scheduledQuestionRunner;
+}
+
+function getCanonicalWhatsappFormat() {
+  if (!canonicalWhatsappFormat) canonicalWhatsappFormat = require('../erp/core/canonical-whatsapp-format');
+  return canonicalWhatsappFormat;
+}
+
+function getLoboGuaraFilialResolver() {
+  if (!loboGuaraFilialResolver) loboGuaraFilialResolver = require('../erp/totvs_protheus/SX/lobo-guara-filial-resolver');
+  return loboGuaraFilialResolver;
+}
 
 function publicRateLimit(req, res, chave, { janelaMs = 60 * 1000, max = 30 } = {}) {
   const ip = String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '')
@@ -615,7 +641,7 @@ function avaliarMacrosFavorito(favorito, empresaId, celular) {
   const sql = String(favorito?.sql_final_executado || favorito?.sqlFinalExecutado || '').trim();
   if (!sql) return { precisaAjuste: false, macrosPendentes: [] };
   try {
-    const avaliacao = scheduledQuestionRunner.avaliarMacrosSql(sql, {
+    const avaliacao = getScheduledQuestionRunner().avaliarMacrosSql(sql, {
       empresa_id: empresaId,
       nome: favorito?.titulo || favorito?.pergunta_texto || favorito?.perguntaTexto || '',
       pergunta: favorito?.pergunta_texto || favorito?.perguntaTexto || '',
@@ -726,7 +752,7 @@ function montarMensagemEncaminhamento({ pergunta, resumo, rows }) {
   const perguntaTxt = String(pergunta || '(sem pergunta registrada)').trim();
   const rowsLista = Array.isArray(rows) ? rows : [];
   const textoCanonico = rowsLista.length
-    ? canonicalWhatsappFormat.renderSingle(rowsLista, {
+    ? getCanonicalWhatsappFormat().renderSingle(rowsLista, {
         contextoConsulta: perguntaTxt,
         nomeModulo: 'IA Command',
       })
@@ -864,7 +890,7 @@ async function canalWorkerConectado(canal, workerJsonFn = workerJson) {
   }
 }
 
-function canalServiceConectado(canal, manager = whatsappManager) {
+function canalServiceConectado(canal, manager = getWhatsappManager()) {
   const svcDireto = manager.get(canal.id);
   if (svcDireto && svcDireto.getStatus() === 'connected') return svcDireto;
 
@@ -876,7 +902,7 @@ function canalServiceConectado(canal, manager = whatsappManager) {
   return null;
 }
 
-async function primeiroCanalConectado(canais, { manager = whatsappManager, workerJsonFn = workerJson } = {}) {
+async function primeiroCanalConectado(canais, { manager = getWhatsappManager(), workerJsonFn = workerJson } = {}) {
   for (const canal of canais) {
     const svc = canalServiceConectado(canal, manager);
     if (svc) return { canal, svc };
@@ -927,7 +953,7 @@ function canaisGlobaisCandidatos(channelStore = whatsappChannels) {
   return canais;
 }
 
-async function canaisGlobaisConectados({ manager = whatsappManager, workerJsonFn = workerJson, channelStore = whatsappChannels } = {}) {
+async function canaisGlobaisConectados({ manager = getWhatsappManager(), workerJsonFn = workerJson, channelStore = whatsappChannels } = {}) {
   const canaisAtivos = canaisGlobaisCandidatos(channelStore);
   const conectados = [];
 
@@ -1175,11 +1201,12 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
 
       const empresasPermitidas = JSON.parse(row.empresas_permitidas_json || '[]');
       const filiaisPermitidas = JSON.parse(row.filiais_permitidas_json || '[]');
-      const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, row.empresa_id);
+      const loboResolver = getLoboGuaraFilialResolver();
+      const ctx = loboResolver.contextoLoboGuara(db, row.empresa_id);
       const nomesEmpresa = new Map();
       const nomesFilial = new Map();
       if (ctx) {
-        for (const emp of loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId)) {
+        for (const emp of loboResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId)) {
           nomesEmpresa.set(emp.empresaProtheusCodigo, emp.nome);
           for (const fil of emp.filiais) nomesFilial.set(fil.filialChave, fil.nome);
         }
@@ -1407,10 +1434,11 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       // falta de configuracao da empresa, outra e falta de acesso do usuario).
       const empresasSemConfiguracao = [];
       const empresasProtheusSemConfiguracao = [];
+      const loboResolver = getLoboGuaraFilialResolver();
       for (const emp of empresasSelecionadas) {
-        const ctx = loboGuaraFilialResolver.contextoLoboGuara(db, emp.empresa_id);
+        const ctx = loboResolver.contextoLoboGuara(db, emp.empresa_id);
         if (!ctx) { empresasSemConfiguracao.push(emp.empresa_id); continue; } // nao LOBO_GUARA validada — nao aparece na arvore
-        let arvoreEmpresa = loboGuaraFilialResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId);
+        let arvoreEmpresa = loboResolver.arvoreAgrupadaParaSelecao(db, ctx.connectionId);
         // arvoreAgrupadaParaSelecao devolve TODAS as empresas Protheus da
         // conexao (protheus_company_tree so tem connection_id, nao empresa_id
         // do IAHub) — varias empresas-cliente IAHub podem compartilhar a
@@ -1795,7 +1823,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       }
       const sid = sessaoId || sessionStore.criarSessao({ empresaId, celular });
       console.log(`[protheus_whatsapp] Mensagem recebida: empresa=${empresaId} selecionadas=${empresasSelecionadas.map(e => e.empresa_id).join(',')} empresaSessao=${req.protheusChat?.empresaId || ''} celular=${celular || ''} sessao=${sid} texto="${String(texto).trim().slice(0, 160)}"`);
-      const resultado = await chatService.processarMensagem({
+      const resultado = await getChatService().processarMensagem({
         empresaId,
         empresasSelecionadas,
         celular,
@@ -2063,7 +2091,7 @@ module.exports = function registrarRotasProtheusWhatsApp(app) {
       if (req.body?.sessaoId && !sessionStore.buscarSessao({ id: sid, empresaId, celular })) {
         return res.status(404).json({ error: 'Sessao nao encontrada nesta empresa.' });
       }
-      const resultado = await chatService.executarFavorito({
+      const resultado = await getChatService().executarFavorito({
         empresaId,
         celular,
         sessaoId: sid,

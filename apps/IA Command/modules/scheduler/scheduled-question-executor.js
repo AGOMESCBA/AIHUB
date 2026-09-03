@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const store = require('./scheduled-question-store');
-const runner = require('./scheduled-question-runner');
 
 const DEFAULT_INTERVAL_MS = 30000;
 const DEFAULT_LOCK_MS = 15 * 60 * 1000;
@@ -15,6 +14,12 @@ let lastRunAt = null;
 let lastError = null;
 let totalTicks = 0;
 let totalExecutions = 0;
+let runner = null;
+
+function getRunner() {
+  if (!runner) runner = require('./scheduled-question-runner');
+  return runner;
+}
 
 function token() {
   return crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -171,7 +176,7 @@ async function processarJob(job) {
   const emRetry = Number(locked.retry_count || 0) > 0;
 
   try {
-    const run = await runner.executarJob(locked.empresa_id, locked, {
+    const run = await getRunner().executarJob(locked.empresa_id, locked, {
       trigger_tipo: emRetry ? 'schedule_retry' : 'schedule',
       usuario: 'scheduler',
     });

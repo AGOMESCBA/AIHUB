@@ -1,6 +1,5 @@
 'use strict';
 
-console.log('[IA Command] LoboGuaraNormalizer v20260821a — considera X2_MODOEMP (compartilhamento por empresa, alem de filial)');
 
 // Normalizer Lobo Guara — ver docs/lobo-guara-consenso-arquitetura.md.
 //

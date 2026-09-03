@@ -1,6 +1,5 @@
 'use strict';
 
-console.log('[IA Command] SX2SqlNormalizer v20260614b — fix: segunda passagem normaliza JOIN TabelaBase ON (alias=keyword SQL consumido pelo regex)');
 
 // Palavras reservadas SQL que o regex FROM/JOIN nao deve capturar como alias de tabela.
 // Sem este conjunto, "FROM SF2\nWHERE" captura WHERE como alias, fazendo

@@ -8,37 +8,23 @@ const DB_PATH  = path.join(DATA_DIR, 'ia-command.db');
 
 let _db = null;
 
-const STARTUP_PROFILER_T0 = Date.now();
-function startupProfilerMark(label) {
-  const elapsed = Date.now() - STARTUP_PROFILER_T0;
-  console.log(`[startup-profiler][ia-command-db] +${elapsed}ms ${label}`);
-}
-
 function getDB() {
   if (!_db) throw new Error('[IA Command] Banco não inicializado. Chame inicializarDB() primeiro.');
   return _db;
 }
 
 function inicializarDB() {
-  startupProfilerMark('inicio');
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  startupProfilerMark('data dir pronto');
 
   _db = new Database(DB_PATH);
-  startupProfilerMark('sqlite aberto');
   _db.pragma('journal_mode = WAL');
   _db.pragma('foreign_keys = ON');
   _db.pragma('busy_timeout = 5000');
-  startupProfilerMark('pragmas aplicados');
 
   _criarTabelaMigracoes();
-  startupProfilerMark('schema_migrations pronto');
   _executarMigracoes();
-  startupProfilerMark('migracoes executadas');
   _garantirColunasCompatibilidade();
-  startupProfilerMark('compatibilidade garantida');
   _sincronizarSinonimosDoSistema();
-  startupProfilerMark('sinonimos sincronizados');
 
   console.log('[IA Command] Banco SQLite inicializado:', DB_PATH);
   return _db;
@@ -55,7 +41,6 @@ function _criarTabelaMigracoes() {
 }
 
 function _executarMigracoes() {
-  const t0 = Date.now();
   const aplicadas = new Set(
     _db.prepare('SELECT version FROM schema_migrations').all().map(r => r.version)
   );
@@ -68,16 +53,14 @@ function _executarMigracoes() {
     if (aplicadas.has(migration.version)) continue;
 
     try {
-      const mt0 = Date.now();
       _db.exec(migration.sql);
       inserir.run(migration.version, migration.descricao, new Date().toISOString());
-      console.log(`[IA Command] Migração v${migration.version} aplicada em ${Date.now() - mt0}ms: ${migration.descricao}`);
+      console.log(`[IA Command] Migração v${migration.version} aplicada: ${migration.descricao}`);
     } catch (err) {
       console.error(`[IA Command] Erro na migração v${migration.version}:`, err.message);
       throw err;
     }
   }
-  startupProfilerMark(`_executarMigracoes fim (${Date.now() - t0}ms)`);
 }
 
 function _temColuna(tabela, coluna) {
@@ -90,7 +73,6 @@ function _adicionarColunaSeFaltar(tabela, coluna, definicao) {
 }
 
 function _garantirColunasCompatibilidade() {
-  const t0 = Date.now();
   _db.exec(`
     CREATE TABLE IF NOT EXISTS interpretation_log (
       id                    TEXT PRIMARY KEY,
@@ -664,7 +646,6 @@ function _garantirColunasCompatibilidade() {
   }
 
   _migrarErpDeUsuariosJson();
-  startupProfilerMark(`_garantirColunasCompatibilidade fim (${Date.now() - t0}ms)`);
 }
 
 // Migração única: copia erp_tipo/erp_id de usuarios.json para whatsapp_allowed_numbers

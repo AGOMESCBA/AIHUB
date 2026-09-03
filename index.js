@@ -20,12 +20,6 @@ const permissoesDb                  = require('./modules/permissoes/database');
 const { APPS, LEGACY_STATIC_DIRS }   = require('./apps/registry');
 const iahubData                     = require('./apps/IAHUB/backend/data-paths');
 
-const STARTUP_PROFILER_T0 = Date.now();
-function startupProfilerMark(label) {
-  const elapsed = Date.now() - STARTUP_PROFILER_T0;
-  console.log(`[startup-profiler] +${elapsed}ms ${label}`);
-}
-
 let puppeteer;
 try { puppeteer = require('puppeteer-core'); } catch (_) {}
 
@@ -126,7 +120,6 @@ function _consoleArgToString(arg) {
   const orig = console[level].bind(console);
   console[level] = (...args) => { orig(...args); _consoleEmit(level === 'log' ? 'info' : level, args); };
 });
-startupProfilerMark('console-monitor pronto');
 
 // ── Segurança: headers HTTP ───────────────────────────────────────────────────
 app.use(helmet({
@@ -168,11 +161,8 @@ app.use(sessionMiddleware);
 io.use((socket, next) => sessionMiddleware(socket.request, socket.request.res || {}, next));
 
 inicializarAdmin().catch(err => console.error('[auth] Falha ao inicializar admin:', err));
-startupProfilerMark('inicializarAdmin disparado');
 inicializarConfig();
-startupProfilerMark('inicializarConfig concluido');
 inicializarSistemas();
-startupProfilerMark('inicializarSistemas concluido');
 
 const requireRecrutamento = requireSystemAccess('recrutamento');
 const requireIaAdmin      = requireSystemAccess('ia-admin');
@@ -350,15 +340,24 @@ function registrarLog(entry, empresaId) {
 }
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
-startupProfilerMark('require waManager inicio');
-const waManager    = require('./modules/whatsapp-curriculo/service-manager');
-startupProfilerMark('require waManager fim');
-startupProfilerMark('require emailSvcMgr inicio');
-const emailSvcMgr  = require('./modules/processo-seletivo/email-service-manager');
-startupProfilerMark('require emailSvcMgr fim');
-startupProfilerMark('require iacWaManager inicio');
-const iacWaManager = require('./apps/IA Command/modules/whatsapp/service-manager');
-startupProfilerMark('require iacWaManager fim');
+let waManager;
+let emailSvcMgr;
+let iacWaManager;
+
+function getWaManager() {
+  if (!waManager) waManager = require('./modules/whatsapp-curriculo/service-manager');
+  return waManager;
+}
+
+function getEmailSvcMgr() {
+  if (!emailSvcMgr) emailSvcMgr = require('./modules/processo-seletivo/email-service-manager');
+  return emailSvcMgr;
+}
+
+function getIacWaManager() {
+  if (!iacWaManager) iacWaManager = require('./apps/IA Command/modules/whatsapp/service-manager');
+  return iacWaManager;
+}
 // Email log file is set per-instance when service starts
 
 function sessaoPodeReceberIaCommand(sess, empresaId) {
@@ -373,7 +372,7 @@ function sessaoPodeReceberIaCommand(sess, empresaId) {
 function emitirReplayIaCommand(socket, empresaId) {
   if (!sessaoPodeReceberIaCommand(socket.request.session, empresaId)) return;
 
-  const svc = iacWaManager.get(empresaId);
+  const svc = getIacWaManager().get(empresaId);
   if (svc) {
     svc.getLogBuffer().forEach(entry => socket.emit('iac-log', entry));
     socket.emit('iac-status', { status: svc.getStatus(), empresa_id: empresaId });
@@ -392,7 +391,7 @@ io.on('connection', (socket) => {
     socket.join(`emp_${eid}`);
 
     // Replay do log e status da empresa específica
-    const svc = waManager.get(eid);
+    const svc = getWaManager().get(eid);
     if (svc) {
       svc.getLogBuffer().forEach(entry => socket.emit('log', entry));
       socket.emit('status', {
@@ -407,7 +406,7 @@ io.on('connection', (socket) => {
     }
   }
 
-  const emailSvc = eid ? emailSvcMgr.get(eid) : null;
+  const emailSvc = eid ? getEmailSvcMgr().get(eid) : null;
   if (emailSvc) {
     emailSvc.getLogBuffer().forEach(entry => socket.emit('email-log', entry));
     socket.emit('email-status', emailSvc.getStatus());
@@ -434,7 +433,7 @@ io.on('connection', (socket) => {
     // Limpa os logs/status errados que foram enviados na conexão inicial (empresa da sessão)
     socket.emit('clear-monitor');
 
-    const svc = waManager.get(empresaId);
+    const svc = getWaManager().get(empresaId);
     if (svc) {
       svc.getLogBuffer().forEach(entry => socket.emit('log', entry));
       socket.emit('status', { status: svc.getStatus(), empresa_id: svc.getEmpresaId(), empresa_nome: svc.getEmpresaNome() });
@@ -443,7 +442,7 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('status', { status: 'stopped', empresa_id: null, empresa_nome: null });
     }
-    const emailSvc = emailSvcMgr.get(empresaId);
+    const emailSvc = getEmailSvcMgr().get(empresaId);
     if (emailSvc) {
       emailSvc.getLogBuffer().forEach(entry => socket.emit('email-log', entry));
       socket.emit('email-status', emailSvc.getStatus());
@@ -477,7 +476,7 @@ io.on('connection', (socket) => {
       [...socket.rooms].filter(r => r !== socket.id && r.startsWith('emp_')).forEach(r => socket.leave(r));
       socket.join(`emp_${freshEid}`);
       // Envia replay para este socket
-      const svc = waManager.get(freshEid);
+      const svc = getWaManager().get(freshEid);
       if (svc) {
         svc.getLogBuffer().forEach(entry => socket.emit('log', entry));
         socket.emit('status', {
@@ -490,7 +489,7 @@ io.on('connection', (socket) => {
       } else {
         socket.emit('status', { status: 'stopped', empresa_id: null, empresa_nome: null });
       }
-      const freshEmailSvc = emailSvcMgr.get(freshEid);
+      const freshEmailSvc = getEmailSvcMgr().get(freshEid);
       if (freshEmailSvc) {
         freshEmailSvc.getLogBuffer().forEach(entry => socket.emit('email-log', entry));
         socket.emit('email-status', freshEmailSvc.getStatus());
@@ -542,12 +541,8 @@ require('./modules/sistemas/routes')(app, { requireAuth, requireAdmin });
 require('./modules/seguranca/routes')(app, { requireAuth });
 
 // ── IA Command ────────────────────────────────────────────────────────────────
-startupProfilerMark('IA Command DB inicio');
 require('./apps/IA Command/modules/database').inicializarDB();
-startupProfilerMark('IA Command DB fim');
-startupProfilerMark('IA Command rotas inicio');
 require('./apps/IA Command/modules/routes')(app, { requireAuth, requireIaCommand, io });
-startupProfilerMark('IA Command rotas fim');
 
 [
   '/api/service',
@@ -571,7 +566,6 @@ startupProfilerMark('IA Command rotas fim');
 ].forEach(prefix => app.use(prefix, requireRecrutamento));
 
 // ── Módulo Monitoramento (WhatsApp Currículo) ─────────────────────────────────
-startupProfilerMark('rotas IA Recruit inicio');
 require('./modules/whatsapp-curriculo/routes')(app, { requireAuth, requireEmpresa, registrarLog, io });
 
 // ── Módulo Processo Seletivo ──────────────────────────────────────────────────
@@ -594,7 +588,6 @@ require('./modules/integracoes/SEVaga/routes')(app, { requireAuth, requireEmpres
 // ── Módulo Integrações › SE API Configurador ──────────────────────────────────
 app.use(require('express').static(require('path').join(__dirname, 'modules', 'integracoes', 'SEApiConfigurator', 'frontend')));
 require('./modules/integracoes/SEApiConfigurator/routes')(app, { requireAuth, requireEmpresa, registrarLog });
-startupProfilerMark('rotas IA Recruit fim');
 
 // ── Exportação do Guia em PDF via Puppeteer ───────────────────────────────────
 const CHROME_PATH = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
@@ -707,9 +700,7 @@ app.get('/app/ia-command/guia/exportar-pdf', requireIaCommand, async (req, res) 
 
 // ── Inicia servidor ───────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-startupProfilerMark('server.listen inicio');
 server.listen(PORT, () => {
-  startupProfilerMark('server.listen callback');
   console.log(`\n🌐 IAHub rodando em http://localhost:${PORT}\n`);
   console.log(`   Log WA:    ${LOG_DIR}/whatscurriculo_<empresa_id>.log`);
   console.log(`   Log Email: ${EMAIL_LOG_FILE}\n`);

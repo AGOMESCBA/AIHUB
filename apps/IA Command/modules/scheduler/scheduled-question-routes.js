@@ -4,7 +4,6 @@ const { getEmpresaId } = require('../empresa-context');
 const channels = require('../whatsapp/channel-store');
 const recipientGroups = require('../whatsapp/recipient-group-store');
 const store = require('./scheduled-question-store');
-const runner = require('./scheduled-question-runner');
 const executor = require('./scheduled-question-executor');
 
 // Módulos Protheus com autorização granular por número (whatsapp_allowed_numbers) e com
@@ -18,6 +17,12 @@ const COLUNA_MODULO = {
   faturamento: 'modulo_faturamento',
   comissao: 'modulo_comissao',
 };
+
+let runner = null;
+function getRunner() {
+  if (!runner) runner = require('./scheduled-question-runner');
+  return runner;
+}
 
 function usuario(req) {
   return req.session?.username || req.session?.user || 'sistema';
@@ -380,7 +385,7 @@ module.exports = function registrarRotasAgendamento(app, { requireAuth, requireI
     validarCanalEmpresa(empresaId, job.channel_id);
     let run;
     try {
-      run = await runner.executarJob(empresaId, job, { trigger_tipo: 'manual', usuario: usuario(req) });
+      run = await getRunner().executarJob(empresaId, job, { trigger_tipo: 'manual', usuario: usuario(req) });
     } catch (err) {
       // Execucao manual: falha parcial/total de envio ja foi registrada no run pelo runner —
       // devolve o historico ao usuario em vez de 500, mesmo com a excecao usada p/ retry automatico.

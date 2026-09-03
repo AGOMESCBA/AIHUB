@@ -1,4 +1,3 @@
-const manager = require('./service-manager');
 const channels = require('./channel-store');
 const { requireRotina } = require('../permissions');
 const { getEmpresaId } = require('../empresa-context');
@@ -7,6 +6,12 @@ const permissoesDb = require('../../../../modules/permissoes/database');
 const intentService = require('../ai/intent-service');
 
 const registrarRotasWindowsService = require('./windows-service/service-routes');
+
+let manager;
+function getManager() {
+  if (!manager) manager = require('./service-manager');
+  return manager;
+}
 
 module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCommand, io }) {
   function eid(req) { return getEmpresaId(req); }
@@ -240,7 +245,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     const empresaInicial = empresaInicialDoCanal(channel, empresaId);
     if (!empresaInicial) return res.status(400).json({ error: 'Nenhuma empresa apta para iniciar este canal WhatsApp.' });
 
-    const svc = manager.getOrCreate(channel.id);
+    const svc = getManager().getOrCreate(channel.id);
     wireEvents(svc, channel);
     await svc.start({ empresaId: empresaInicial.empresa_id, channel });
     res.json({ ok: true, channel });
@@ -249,13 +254,13 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   app.post('/api/ia-command/whatsapp/stop', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const { channel, error } = resolveChannel(req, { createDefault: false });
     if (error) return res.status(404).json({ error });
-    const svc = channel ? manager.get(channel.id) : null;
+    const svc = channel ? getManager().get(channel.id) : null;
     if (svc) svc.stop();
     res.json({ ok: true });
   });
 
   app.post('/api/ia-command/whatsapp/stop-all', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
-    const all = manager.getAll();
+    const all = getManager().getAll();
     let parados = 0;
     for (const svc of all.values()) {
       if (svc.getStatus() !== 'stopped') { svc.stop(); parados++; }
@@ -267,7 +272,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
     const { channel, error } = resolveChannel(req, { createDefault: false });
     if (error) return res.status(404).json({ error });
     if (!channel) return res.status(400).json({ error: 'Nenhum canal WhatsApp vinculado a esta empresa.' });
-    const svc = manager.getOrCreate(channel.id);
+    const svc = getManager().getOrCreate(channel.id);
     wireEvents(svc, channel);
     await svc.disconnectSession(channel.auth_client_id || `iac_ch_${channel.id}`);
     res.json({ ok: true });
@@ -276,7 +281,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
   app.get('/api/ia-command/whatsapp/status', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const { empresaId, channel, error } = resolveChannel(req);
     if (error) return res.status(404).json({ error });
-    const svc = channel ? manager.get(channel.id) : null;
+    const svc = channel ? getManager().get(channel.id) : null;
     res.json({
       status: svc?.getStatus() || 'stopped',
       qr: svc?.getQr() || null,
@@ -292,7 +297,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
 
     const { channel, error } = resolveChannel(req, { createDefault: false });
     if (error) return res.status(404).json({ error });
-    const svc = channel ? manager.get(channel.id) : null;
+    const svc = channel ? getManager().get(channel.id) : null;
     if (!svc || svc.getStatus() !== 'connected') {
       return res.status(400).json({ error: 'WhatsApp nao esta conectado.' });
     }
@@ -307,7 +312,7 @@ module.exports = function registrarRotasWhatsApp(app, { requireAuth, requireIaCo
 
   app.post('/api/ia-command/whatsapp/clear-logs', requireAuth, requireIaCommand, canMonitorWhatsapp, (req, res) => {
     const { channel } = resolveChannel(req, { createDefault: false });
-    const svc = channel ? manager.get(channel.id) : null;
+    const svc = channel ? getManager().get(channel.id) : null;
     if (svc) svc.clearBuffer();
     res.json({ ok: true });
   });
