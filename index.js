@@ -350,9 +350,15 @@ function registrarLog(entry, empresaId) {
 }
 
 // ── Socket.IO — replay do buffer ao reconectar ────────────────────────────────
+startupProfilerMark('require waManager inicio');
 const waManager    = require('./modules/whatsapp-curriculo/service-manager');
+startupProfilerMark('require waManager fim');
+startupProfilerMark('require emailSvcMgr inicio');
 const emailSvcMgr  = require('./modules/processo-seletivo/email-service-manager');
+startupProfilerMark('require emailSvcMgr fim');
+startupProfilerMark('require iacWaManager inicio');
 const iacWaManager = require('./apps/IA Command/modules/whatsapp/service-manager');
+startupProfilerMark('require iacWaManager fim');
 // Email log file is set per-instance when service starts
 
 function sessaoPodeReceberIaCommand(sess, empresaId) {
