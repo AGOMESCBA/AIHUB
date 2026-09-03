@@ -540,6 +540,15 @@ class IACWhatsAppService extends EventEmitter {
     if (!cfg.cleanSessionRetry && _sessionExists(this._authClientId)) {
       silentSessionTimer = setTimeout(() => {
         if (receivedBootEvent || this.status !== 'starting') return;
+        if (WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT && hadAuthenticatedSessionAtStart) {
+          this.log(
+            `Sessao salva nao emitiu QR/autenticacao/ready em ${Math.round(WHATSAPP_SILENT_SESSION_RETRY_MS / 1000)}s; ` +
+            `sessao "${this._authClientId}" parece autenticada. Mantendo tentativa ativa ate o timeout final.`,
+            'warning'
+          );
+          silentSessionTimer = null;
+          return;
+        }
         retryWithCleanSession(`Sessao salva nao emitiu QR/autenticacao/ready em ${Math.round(WHATSAPP_SILENT_SESSION_RETRY_MS / 1000)}s`).catch(err => {
           this.log(`Falha no retry de sessao silenciosa: ${err.message}`, 'error');
         });
