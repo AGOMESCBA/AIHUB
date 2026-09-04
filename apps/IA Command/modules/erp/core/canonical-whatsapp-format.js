@@ -7,7 +7,7 @@ const RE_MEDIA = /media|medio|ticket|avg|pct|percent|taxa|indice|proporcao/i;
 const RE_SKIP = /percentual|percent|crescimento|variacao|taxa|indice|id$|^id_|codigo|cod_/i;
 const RE_QTD = /qtd|quantidade|qt_|volume/i;
 const RE_TEMPORAL = /^(ano_mes|aaaamm|aaaa_mm|competencia|referencia|ano|mes|mes_ano|periodo|data|data_.*|dt_.*|.*_data|dia|trimestre|semestre|vencimento|vencto|vencrea|emissao|baixa|.*_(vencimento|vencto|vencrea|emissao|baixa))$/i;
-const RE_ENTIDADE = /^(vendedor|fornecedor|cliente|produto|servico|funcionario|unidade|empresa|filial|grupo|categoria|depto|departamento|cc|centro|nome|descri)/i;
+const RE_ENTIDADE = /^(vendedor|fornecedor|cliente|produto|servico|funcionario|unidade|empresa|filial|grupo|categoria|depto|departamento|cc|centro|nome|descri|aprovador)/i;
 const RE_DOCUMENTO = /^(documento|doc|nota|nota_fiscal|nf|nfe|titulo|duplicata|f2_doc|d2_doc|e1_num|e2_num|pedido|numero_pedido|num_pedido|cr_num|c7_num)$/i;
 const RE_BANCARIO = /^(banco|bancos|e8_banco|a6_cod|banco_nome|agencia|e8_agencia|a6_agencia|conta|conta_corrente|e8_conta|a6_numcon|conta_bancaria)$/i;
 const RE_CATEGORIA_SEMANTICA = /^(carteira|tipo_carteira|origem_carteira|tipo|categoria|natureza|operacao|movimento|tipo_movimento|sentido|fluxo|origem|classe)$/i;
@@ -328,6 +328,10 @@ function labelValorDimensao(col, valor) {
   // quando o valor tem 6 ou 8 digitos por coincidencia — CR_NUM, C7_NUM etc. sao identificadores,
   // nao datas. Sem esta guarda, um numero de pedido como "16506462" virava "62/64/1650".
   if (RE_DOCUMENTO.test(k)) return s || '(sem identificacao)';
+  // Entidade nomeada (vendedor, aprovador, cliente etc.) tambem nunca deve ser reinterpretada
+  // como data, mesmo quando o codigo tem 6 digitos por coincidencia — bug real: SCR.CR_APROV
+  // = '000002' (codigo de aprovador) virava "Fevereiro/0000" porque batia no padrao AAAAMM.
+  if (RE_ENTIDADE.test(k)) return s || '(sem identificacao)';
   if (/^mes$/.test(k)) {
     const n = parseInt(s, 10);
     if (n >= 1 && n <= 12) return MESES[n - 1];

@@ -24,13 +24,21 @@ function _detectarColunaEmpresa(row) {
   return Object.keys(row).find(_DETECTOR_EMPRESA) || null;
 }
 
-function _colunasMetrica(rows, intent) {
+function _colunasMetrica(rows, intent, colunasDimensaoFisicas = []) {
   const totais = _somarNumericos(rows);
-  const cols = Object.keys(totais);
+  // Colunas ja resolvidas como dimensao (ex.: "aprovador", "numero_pedido") nunca podem
+  // tambem virar metrica somada — bug real: codigo de aprovador ('000002') e numero de
+  // pedido, ambos numericos, eram somados como se fossem valor monetario, gerando um
+  // "Total Geral" sem sentido (soma de todos os numeros de pedido do periodo).
+  const excluidas = new Set(colunasDimensaoFisicas.map(c => String(c).toLowerCase()));
+  const cols = Object.keys(totais).filter(c => !excluidas.has(c.toLowerCase()));
   const pedidas = Array.isArray(intent?.metricas) && intent.metricas.length
     ? cols.filter(c => intent.metricas.some(m => String(m).toLowerCase() === c.toLowerCase()))
     : [];
-  return { cols: pedidas.length ? pedidas : cols, totais };
+  const colsFinais = pedidas.length ? pedidas : cols;
+  const totaisFinais = {};
+  for (const c of colsFinais) totaisFinais[c] = totais[c];
+  return { cols: colsFinais, totais: totaisFinais };
 }
 
 function _periodoLabel(periodo) {
@@ -54,10 +62,12 @@ function prepararEstruturaTabular(rows, intent = {}, opts = {}) {
   const firstRow = linhasBrutas[0] || {};
 
   const dims = _groupByIntent(intent);
-  const resolvers = dims.map(dim => _resolverDimensao(firstRow, dim)).filter(Boolean);
+  const resolversTodos = dims.map(dim => _resolverDimensao(firstRow, dim));
+  const resolvers = resolversTodos.filter(Boolean);
   const dimsValidas = dims.filter((_, idx) => resolvers[idx]);
+  const colunasDimensaoFisicas = resolversTodos.filter(r => r?.tipo === 'coluna').map(r => r.coluna);
 
-  const { cols: colunasMetrica, totais: totalGeral } = _colunasMetrica(linhasBrutas, intent);
+  const { cols: colunasMetrica, totais: totalGeral } = _colunasMetrica(linhasBrutas, intent, colunasDimensaoFisicas);
 
   const colEmpresa = _detectarColunaEmpresa(firstRow);
   const nomesEmpresa = colEmpresa

@@ -213,7 +213,12 @@ function _fmtData(yyyymmdd) {
 
 // Detectores de colunas por semântica — mesma ideia do campo_data, mas para dimensões
 const _DETECTORES = {
-  data:     k => /^data$/i.test(k) || /^dt_/i.test(k) || /^data_/i.test(k) || /^_data$/i.test(k)
+  // 'dia' e o alias padrao que a IA usa para data convertida (CONVERT(...) AS dia,
+  // instruido no prompt como formato obrigatorio para agrupamento/detalhamento diario) —
+  // sem isso, _extrairDia/_extrairAno nunca encontravam a coluna e a dimensao "dia" caia
+  // sempre em null (bug real: PDF/Excel de "agrupado por dia" saia com a coluna Dia vazia
+  // e um subtotal por linha individual, pois nenhum agrupamento temporal era reconhecido).
+  data:     k => /^data$/i.test(k) || /^dia$/i.test(k) || /^dt_/i.test(k) || /^data_/i.test(k) || /^_data$/i.test(k)
              || /^vencimento$/i.test(k) || /^vencto/i.test(k)
              || /^emissao$/i.test(k) || /^emissão$/i.test(k),
   // Protheus: F2_CLIENTE, A1_COD, D2_CLIENTE, E1_CLIENTE, etc. — aliases comuns: cliente, cod_cliente
@@ -229,6 +234,8 @@ const _DETECTORES = {
   // Protheus: A2_COD, A2_NOME — aliases: fornecedor
   fornecedor:  k => /^fornecedor$/i.test(k) || /^nm_forn/i.test(k) || /^ds_forn/i.test(k) || /^nome_forn/i.test(k) || /^razao/i.test(k)
                || /^a2_cod$/i.test(k) || /^a2_nome$/i.test(k) || /^[a-z]\d_fornece$/i.test(k),
+  // Protheus: SAK.AK_COD/AK_NOME, SCR.CR_APROV — aprovador de pedido de compra (alcada)
+  aprovador:   k => /^aprovador$/i.test(k) || /^cr_aprov$/i.test(k) || /^ak_cod$/i.test(k) || /^ak_nome$/i.test(k),
   documento:       k => /^documento$/i.test(k) || /^doc$/i.test(k) || /^nota$/i.test(k) || /^nota_fiscal$/i.test(k)
                || /^nf$/i.test(k) || /^nfe$/i.test(k) || /^titulo$/i.test(k) || /^duplicata$/i.test(k)
                || /^f2_doc$/i.test(k) || /^d2_doc$/i.test(k) || /^e1_num$/i.test(k) || /^e2_num$/i.test(k),
