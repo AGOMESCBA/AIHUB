@@ -298,7 +298,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "ZIP:     $Zip"
 Write-Host "Destino: $PROJECT_PATH"
-Write-Host "Seguro:  sem DROP/DELETE/TRUNCATE; nao sobrescreve .env, banco, uploads ou sessoes"
+Write-Host "Seguro:  nao sobrescreve .env, banco, uploads ou sessoes"
 Write-Host ""
 
 # ── 1. Parar o servico ────────────────────────────────────────

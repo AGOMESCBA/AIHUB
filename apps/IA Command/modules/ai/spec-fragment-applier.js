@@ -16,11 +16,11 @@ const fs = require('fs');
 const path = require('path');
 
 const ARQUIVOS_POR_MODULO = {
-  financeiro: path.join(__dirname, '..', 'erp', 'financeiro', 'financeiro-fragmentos-spec.js'),
-  faturamento: path.join(__dirname, '..', 'erp', 'faturamento', 'faturamento-fragmentos-spec.js'),
-  compras: path.join(__dirname, '..', 'erp', 'compras', 'compras-fragmentos-spec.js'),
-  comissao: path.join(__dirname, '..', 'erp', 'comissao', 'comissao-fragmentos-spec.js'),
-  estoque: path.join(__dirname, '..', 'erp', 'estoque', 'estoque-fragmentos-spec.js'),
+  financeiro: path.join(__dirname, '..', 'erp', 'totvs_protheus', 'financeiro', 'financeiro-fragmentos-spec.js'),
+  faturamento: path.join(__dirname, '..', 'erp', 'totvs_protheus', 'faturamento', 'faturamento-fragmentos-spec.js'),
+  compras: path.join(__dirname, '..', 'erp', 'totvs_protheus', 'compras', 'compras-fragmentos-spec.js'),
+  comissao: path.join(__dirname, '..', 'erp', 'totvs_protheus', 'comissao', 'comissao-fragmentos-spec.js'),
+  estoque: path.join(__dirname, '..', 'erp', 'totvs_protheus', 'estoque', 'estoque-fragmentos-spec.js'),
 };
 
 function normalizarModulo(modulo) {

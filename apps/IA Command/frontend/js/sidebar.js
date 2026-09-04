@@ -3,13 +3,22 @@
 
   const MENU = [
     {
-      id: 'operacao', label: 'Monitor', icon: '⚡', defaultOpen: false,
+      id: 'operacao', label: 'Operação', icon: '⚡', defaultOpen: false,
       items: [
         { id: 'iac-dashboard',           label: 'Dashboard',            href: '/app/ia-command/dashboard.html',          icon: '⊞' },
         { id: 'iac-whatsapp-services',   label: 'WhatsApp Services',    href: '/app/ia-command/whatsapp-services.html',  icon: '📡' },
-        { id: 'iac-monitor-whatsapp',    label: 'Monitor',              href: '/app/ia-command/monitor.html',            icon: '💬' },
-        { id: 'iac-admin-auditoria',  label: 'Histórico',        href: '/app/ia-command/admin-interpretacoes-v2.html',  icon: '🧭' },
-        { id: 'iac-admin-spec-feedback', label: 'Propostas de Correção', href: '/app/ia-command/admin-spec-feedback.html', icon: '🛠️' },
+        { id: 'iac-monitor-whatsapp',    label: 'Monitor WhatsApp',      href: '/app/ia-command/monitor.html',            icon: '💬' },
+      ],
+    },
+    {
+      id: 'auditoria-diagnostico', label: 'Auditoria e Diagnóstico', icon: '🔍', defaultOpen: false,
+      items: [
+        { id: 'iac-admin-auditoria',      label: 'Histórico de Interpretações', href: '/app/ia-command/admin-interpretacoes-v2.html',        icon: '🧭' },
+        { id: 'iac-admin-auditoria',      label: 'Auditoria',                   href: '/app/ia-command/admin-auditoria.html',                icon: '🔍' },
+        { id: 'iac-admin-execucoes',      label: 'Auditoria de Consultas IA',   href: '/app/ia-command/admin-execucoes.html',                icon: '📋' },
+        { id: 'iac-admin-logs-consultas', label: 'Log de Consultas',            href: '/app/ia-command/admin-logs-consultas.html',           icon: '📋' },
+        { id: 'iac-admin-execucoes',      label: 'Consumo IA',                  href: '/app/ia-command/admin-consumo-ia.html',               icon: '$' },
+        { id: 'iac-console-servidor',     label: 'Console do Servidor',         href: '/app/ia-command/console-servidor.html',               icon: '🖥' },
       ],
     },
     {
@@ -19,25 +28,29 @@
         { id: 'iac-admin-numeros-whatsapp',       label: 'Números Autorizados', href: '/app/ia-command/admin-numeros-whatsapp.html',       icon: '📱' },
         { id: 'iac-admin-grupos-whatsapp',        label: 'Grupos',              href: '/app/ia-command/admin-grupos-whatsapp.html',        icon: '👥' },
         { id: 'iac-admin-mensagens-whatsapp',     label: 'Mensagens',           href: '/app/ia-command/admin-mensagens-whatsapp.html',     icon: '✉️' },
-        { id: 'iac-admin-whatsapp-response-config', label: 'Respostas',         href: '/app/ia-command/admin-whatsapp-response-config.html', icon: '📎' },
-        { id: 'iac-financeiro-whatsapp',          label: 'Relatório Financeiro', href: '/app/ia-command/admin-financeiro-whatsapp.html',   icon: '💰' },
+        { id: 'iac-admin-whatsapp-response-config', label: 'Modelos de Resposta', href: '/app/ia-command/admin-whatsapp-response-config.html', icon: '📎' },
+        { id: 'iac-financeiro-whatsapp',          label: 'Relatório Financeiro WhatsApp', href: '/app/ia-command/admin-financeiro-whatsapp.html', icon: '💰' },
+        { id: 'iac-admin-auditoria',              label: 'Encaminhamentos',      href: '/app/ia-command/admin-protheus-chat-encaminhamentos.html', icon: '->' },
       ],
     },
     {
-      id: 'cadastros', label: 'Cadastros', icon: '📁', defaultOpen: false,
+      id: 'conhecimento-ia', label: 'Conhecimento da IA', icon: '🧠', defaultOpen: false,
       items: [
-        { id: 'iac-admin-modulos',   label: 'Módulos',      href: '/app/ia-command/admin-modulos.html',    icon: '📂' },
-        { id: 'iac-admin-sinonimos', label: 'Equivalências', href: '/app/ia-command/admin-sinonimos.html',  icon: '🔤' },
+        { id: 'iac-admin-modulos',       label: 'Módulos',                 href: '/app/ia-command/admin-modulos.html',        icon: '📂' },
+        { id: 'iac-admin-datasets',      label: 'Datasets ERP',            href: '/app/ia-command/admin-datasets.html',       icon: '📊' },
+        { id: 'iac-admin-intencoes',     label: 'Intenções',               href: '/app/ia-command/admin-intencoes.html',      icon: '🧠' },
+        { id: 'iac-admin-sinonimos',     label: 'Equivalências',           href: '/app/ia-command/admin-sinonimos.html',      icon: '🔤' },
+        { id: 'iac-admin-normalizacao',  label: 'Normalização Linguística', href: '/app/ia-command/admin-normalizacao.html',   icon: '🧹' },
+        { id: 'iac-admin-spec-feedback', label: 'Feedback Técnico da IA',    href: '/app/ia-command/admin-spec-feedback.html',  icon: '🛠️' },
       ],
     },
     {
       id: 'configuracao', label: 'Configuração', icon: '⚙', defaultOpen: false,
       items: [
-        { id: 'iac-config-conexoes', label: 'Conexões ERP',      href: '/app/ia-command/config-conexoes.html',  icon: '🔌' },
-        { id: 'iac-admin-datasets',  label: 'Datasets ERP',      href: '/app/ia-command/admin-datasets.html',   icon: '📊' },
-        { id: 'iac-config-ia',       label: 'Configuração de IA', href: '/app/ia-command/config-ia.html',       icon: '🤖' },
-        { id: 'iac-admin-intencoes', label: 'Intenções',          href: '/app/ia-command/admin-intencoes.html', icon: '🧠' },
-        { id: 'iac-migrar-dados',    label: 'Migrar Dados',       href: '/app/ia-command/migrar-dados.html',    icon: '⇄' },
+        { id: 'iac-config-conexoes',  label: 'Conexões ERP',            href: '/app/ia-command/config-conexoes.html',            icon: '🔌' },
+        { id: 'iac-config-ia',        label: 'Configuração de IA',       href: '/app/ia-command/config-ia.html',                  icon: '🤖' },
+        { id: 'iac-config-middleware', label: 'Middleware SQL Protheus', href: '/app/ia-command/config-middleware-protheus.html', icon: '🛡' },
+        { id: 'iac-migrar-dados',     label: 'Migrar Dados',             href: '/app/ia-command/migrar-dados.html',               icon: '⇄' },
       ],
     },
     {
@@ -46,13 +59,11 @@
         {
           type: 'group', id: 'erp-protheus', label: 'ERP Protheus', icon: '🏭',
           items: [
-            { id: 'iac-config-middleware',    label: 'Middleware SQL',   href: '/app/ia-command/config-middleware-protheus.html', icon: '🛡' },
-            { id: 'iac-admin-protheus-sx2',   label: 'Dicionário SX2',  href: '/app/ia-command/admin-protheus-sx2.html',          icon: '📖' },
-            { id: 'iac-admin-protheus-sx3',   label: 'Dicionário SX3',  href: '/app/ia-command/admin-protheus-sx3.html',          icon: '📑' },
-            { id: 'iac-admin-protheus-sys-company',     label: 'Dicionário SYS_COMPANY',     href: '/app/ia-command/admin-protheus-sys-company.html',     icon: '🏢' },
-            { id: 'iac-admin-protheus-sys-company-cfg', label: 'Dicionário SYS_COMPANY_CFG', href: '/app/ia-command/admin-protheus-sys-company-cfg.html', icon: '🧭' },
-            { id: 'iac-admin-usuarios-protheus-web', label: 'Usuários Protheus', href: '/app/ia-command/admin-protheus-web-users.html', icon: '🏭' },
-            { id: 'iac-admin-logs-consultas', label: 'Log de Consultas', href: '/app/ia-command/admin-logs-consultas.html',        icon: '📋' },
+            { id: 'iac-admin-protheus-sx2',             label: 'Tabelas Protheus (SX2)',               href: '/app/ia-command/admin-protheus-sx2.html',             icon: '📖' },
+            { id: 'iac-admin-protheus-sx3',             label: 'Campos Protheus (SX3)',                href: '/app/ia-command/admin-protheus-sx3.html',             icon: '📑' },
+            { id: 'iac-admin-protheus-sys-company',     label: 'Empresas Protheus',                    href: '/app/ia-command/admin-protheus-sys-company.html',     icon: '🏢' },
+            { id: 'iac-admin-protheus-sys-company-cfg', label: 'Configuração de Empresas Protheus',     href: '/app/ia-command/admin-protheus-sys-company-cfg.html', icon: '🧭' },
+            { id: 'iac-admin-usuarios-protheus-web',    label: 'Usuários Protheus',                    href: '/app/ia-command/admin-protheus-web-users.html',       icon: '🏭' },
           ],
         },
         {
@@ -67,53 +78,29 @@
       id: 'agendamento', label: 'Agendamento', icon: '⏱', defaultOpen: false,
       items: [
         { id: 'iac-admin-agendamento', label: 'Perguntas Agendadas', href: '/app/ia-command/admin-agendamento.html', icon: '⏱' },
-        { id: 'iac-admin-chat-favoritos', label: 'Chat Favoritos', href: '/app/ia-command/admin-chat-favoritos.html', icon: '★' },
+        { id: 'iac-admin-agendamento', label: 'Histórico de Execuções', href: '/app/ia-command/admin-agendamento-historico.html', icon: '◷' },
+        { id: 'iac-admin-chat-favoritos', label: 'Favoritos do Chat', href: '/app/ia-command/admin-chat-favoritos.html', icon: '★' },
       ],
     },
     {
       id: 'aprendizado-nlsql', label: 'Aprendizado NL-SQL', icon: '◈', defaultOpen: false,
       items: [
-        { id: 'iac-admin-auditoria', label: 'Saude do Aprendizado', href: '/app/ia-command/admin-nlsql-saude.html?v=20260727-scroll', icon: '◎' },
-        { id: 'iac-admin-execucoes', label: 'Auditoria de Consultas IA', href: '/app/ia-command/admin-execucoes.html', icon: '📋' },
-        { id: 'iac-admin-auditoria', label: 'Auditoria do Shadow Mode', href: '/app/ia-command/admin-nlsql-shadow.html', icon: '◐' },
-        { id: 'iac-admin-auditoria', label: 'Decisoes Automaticas', href: '/app/ia-command/admin-nlsql-politicas.html', icon: '◇' },
+        { id: 'iac-admin-auditoria', label: 'Saúde do Aprendizado', href: '/app/ia-command/admin-nlsql-saude.html?v=20260727-scroll', icon: '◎' },
+        { id: 'iac-admin-auditoria', label: 'Shadow Mode', href: '/app/ia-command/admin-nlsql-shadow.html', icon: '◐' },
+        { id: 'iac-admin-auditoria', label: 'Decisões Automáticas', href: '/app/ia-command/admin-nlsql-politicas.html', icon: '◇' },
+        { id: 'iac-admin-auditoria', label: 'Calibração', href: '/app/ia-command/admin-nlsql-calibracao.html', icon: '◌' },
+        { id: 'iac-admin-auditoria', label: 'Embeddings', href: '/app/ia-command/admin-nlsql-embeddings.html', icon: '◍' },
+        { id: 'iac-admin-auditoria', label: 'Backfill', href: '/app/ia-command/admin-nlsql-backfill.html', icon: '↻' },
       ],
     },
     {
       id: 'administracao', label: 'Administração', icon: '🛠', defaultOpen: false,
       items: [
-        { id: 'iac-admin-auditoria',          label: 'Interpretações',           href: '/app/ia-command/admin-interpretacoes-v2.html',     icon: '🧭' },
-        { id: 'iac-admin-spec-feedback',      label: 'Propostas de Correção',    href: '/app/ia-command/admin-spec-feedback.html',       icon: '🛠️' },
-        { id: 'iac-admin-auditoria',          label: 'Auditoria',                href: '/app/ia-command/admin-auditoria.html',           icon: '🔍' },
         { id: 'iac-admin-dialogos',           label: 'Diálogos Conversacionais', href: '/app/ia-command/admin-dialogos.html',            icon: '💬' },
-        { id: 'iac-console-servidor',         label: 'Console do Servidor',      href: '/app/ia-command/console-servidor.html',          icon: '🖥' },
-        { id: 'iac-admin-instalador-agente',  label: 'Gerar Inst Agente-local',  href: '/app/ia-command/admin-instalador-agente.html',   icon: '📦' },
+        { id: 'iac-admin-instalador-agente',  label: 'Instalador do Agente Local', href: '/app/ia-command/admin-instalador-agente.html', icon: '📦' },
       ],
     },
   ];
-
-  const cadastros = MENU.find(s => s.id === 'cadastros');
-  if (cadastros && !cadastros.items.some(i => i.id === 'iac-admin-normalizacao')) {
-    cadastros.items.push({ id: 'iac-admin-normalizacao', label: 'Normalizacao', href: '/app/ia-command/admin-normalizacao.html', icon: '🧹' });
-  }
-
-  const administracao = MENU.find(s => s.id === 'administracao');
-  if (administracao && !administracao.items.some(i => i.href === '/app/ia-command/admin-consumo-ia.html')) {
-    administracao.items.splice(1, 0, {
-      id: 'iac-admin-execucoes',
-      label: 'Consumo IA',
-      href: '/app/ia-command/admin-consumo-ia.html',
-      icon: '$',
-    });
-  }
-  if (administracao && !administracao.items.some(i => i.href === '/app/ia-command/admin-protheus-chat-encaminhamentos.html')) {
-    administracao.items.splice(2, 0, {
-      id: 'iac-admin-auditoria',
-      label: 'Encaminhamentos',
-      href: '/app/ia-command/admin-protheus-chat-encaminhamentos.html',
-      icon: '->',
-    });
-  }
 
   const curPath = location.pathname;
 

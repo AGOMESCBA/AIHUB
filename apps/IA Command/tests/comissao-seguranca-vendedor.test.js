@@ -56,10 +56,18 @@ ok('SQL filtrando SOMENTE codigo de outro vendedor (sem o autorizado) e rejeitad
   assert.strictEqual(r.ok, false, 'deveria rejeitar');
 });
 
-ok('SQL sem nenhum filtro de E3_VEND nao dispara este guard (outro guard cobre ausencia de filtro)', () => {
+// Ate esta correcao, este guard so rejeitava CODIGO ERRADO — SQL sem nenhum filtro de
+// vendedor passava, confiando que validarSqlEntidadesResolvidas (Camada 2c) cobriria a
+// ausencia. Isso e verdade quando SQL chega a ser gerado, mas o caso real reportado
+// (usuario vendedor pediu "vendas do ano com vendedor de codigo 000003", codigo inexistente
+// no cadastro) nunca chegava a gerar SQL: a IA respondia com precisa_confirmacao perguntando
+// se deveria seguir SEM o filtro, ANTES de qualquer guard de SQL rodar (ver bloqueio em
+// runner.js `planoTentaFiltrarOutraEntidadeSeguranca`, que cobre a causa raiz). Este guard
+// agora exige presenca do filtro correto tambem, como defesa em profundidade independente.
+ok('SQL sem nenhum filtro de E3_VEND e rejeitado (defesa em profundidade)', () => {
   const sql = "SET ROWCOUNT 50000; SELECT SUM(SE3.E3_COMIS) FROM SE3990 SE3";
   const r = entitySqlGuard.validarExclusividadeVendedorSeguranca(sql, { codigo: '000012' });
-  assert.strictEqual(r.ok, true, 'guard de exclusividade nao deve reclamar de ausencia, so de codigo errado');
+  assert.strictEqual(r.ok, false, 'guard de exclusividade deve exigir presenca do filtro correto');
 });
 
 ok('sem entidadeSeguranca (gestor), guard nao bloqueia nada', () => {

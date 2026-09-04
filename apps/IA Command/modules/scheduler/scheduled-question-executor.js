@@ -15,10 +15,16 @@ let lastError = null;
 let totalTicks = 0;
 let totalExecutions = 0;
 let runner = null;
+let specFeedbackNotifier = null;
 
 function getRunner() {
   if (!runner) runner = require('./scheduled-question-runner');
   return runner;
+}
+
+function getSpecFeedbackNotifier() {
+  if (!specFeedbackNotifier) specFeedbackNotifier = require('./spec-feedback-daily-notifier');
+  return specFeedbackNotifier;
 }
 
 function token() {
@@ -246,6 +252,11 @@ async function tick() {
       await processarJob(job);
       processed++;
     }
+    try {
+      await getSpecFeedbackNotifier().tick();
+    } catch (err) {
+      lastError = { at: new Date().toISOString(), source: 'spec_feedback_notifier', message: err.message };
+    }
     return { skipped: false, processed };
   } finally {
     runningTick = false;
@@ -290,6 +301,7 @@ function status() {
     last_error: lastError,
     total_ticks: totalTicks,
     total_executions: totalExecutions,
+    spec_feedback_notifier: getSpecFeedbackNotifier().status(),
   };
 }
 

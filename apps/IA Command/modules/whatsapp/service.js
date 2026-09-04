@@ -3372,22 +3372,28 @@ class IACWhatsAppService extends EventEmitter {
       this.log(`[FeedbackDialog] Falha ao iniciar dialogo: ${e.message}`, 'error');
       return null;
     }
-    historico.push({ papel: 'ia', texto: resultado.mensagem });
     if (resultado.tipo === 'fechamento') {
-      specFeedbackDialog.registrarProposta({
-        empresaId: registro.empresa_id,
-        numeroWa,
-        interpretationLogId: registro.id,
-        perguntaOriginal: registro.texto_original,
-        sqlGerado: sql,
-        observacaoUsuario: texto,
-        fragmento: resultado.fragmento,
-        diagnostico: resultado.diagnostico,
-        textoProposto: resultado.texto_proposto,
-        historico,
+      const mensagemConfirmacao = specFeedbackDialog.montarMensagemConfirmacao(resultado);
+      historico.push({ papel: 'ia', texto: mensagemConfirmacao });
+      this._setSenderContext(sender, {
+        _feedbackSession: {
+          interpretationLogId: registro.id,
+          empresaId: registro.empresa_id,
+          numeroWa,
+          perguntaOriginal: registro.texto_original,
+          sqlGerado: sql,
+          modulo: registro.modulo || registro.intencao,
+          historico,
+          propostaPendenteConfirmacao: {
+            fragmento: resultado.fragmento,
+            diagnostico: resultado.diagnostico,
+            textoProposto: resultado.texto_proposto,
+          },
+        },
       });
-      return resultado.mensagem;
+      return mensagemConfirmacao;
     }
+    historico.push({ papel: 'ia', texto: resultado.mensagem });
     this._setSenderContext(sender, {
       _feedbackSession: {
         interpretationLogId: registro.id,
@@ -3404,6 +3410,39 @@ class IACWhatsAppService extends EventEmitter {
 
   async _conduzirDialogoFeedback(sender, texto, sessao) {
     const specFeedbackDialog = require('../erp/core/spec-feedback-dialog');
+
+    if (sessao.propostaPendenteConfirmacao) {
+      const historicoConfirmacao = [...sessao.historico, { papel: 'usuario', texto }];
+      if (specFeedbackDialog.textoConfirmaProposta(texto)) {
+        specFeedbackDialog.registrarProposta({
+          empresaId: sessao.empresaId,
+          numeroWa: sessao.numeroWa,
+          interpretationLogId: sessao.interpretationLogId,
+          perguntaOriginal: sessao.perguntaOriginal,
+          sqlGerado: sessao.sqlGerado,
+          observacaoUsuario: historicoConfirmacao.filter(h => h.papel === 'usuario').map(h => h.texto).join(' | '),
+          fragmento: sessao.propostaPendenteConfirmacao.fragmento,
+          diagnostico: sessao.propostaPendenteConfirmacao.diagnostico,
+          textoProposto: sessao.propostaPendenteConfirmacao.textoProposto,
+          historico: historicoConfirmacao,
+        });
+        this._setSenderContext(sender, { _feedbackSession: null });
+        return 'Perfeito, registrei essa correção para revisão técnica do administrador.';
+      }
+      if (specFeedbackDialog.textoRecusaProposta(texto)) {
+        const resposta = 'Certo. Me diga o que ainda não está correto para eu ajustar a proposta antes de registrar.';
+        historicoConfirmacao.push({ papel: 'ia', texto: resposta });
+        this._setSenderContext(sender, {
+          _feedbackSession: { ...sessao, historico: historicoConfirmacao, propostaPendenteConfirmacao: null },
+        });
+        return resposta;
+      }
+      this._setSenderContext(sender, {
+        _feedbackSession: { ...sessao, historico: historicoConfirmacao, propostaPendenteConfirmacao: null },
+      });
+      return await this._conduzirDialogoFeedback(sender, texto, this._getSenderContext(sender)._feedbackSession);
+    }
+
     const historico = [...sessao.historico, { papel: 'usuario', texto }];
     let resultado;
     try {
@@ -3425,23 +3464,23 @@ class IACWhatsAppService extends EventEmitter {
       this._setSenderContext(sender, { _feedbackSession: null });
       return await this._pipeline(texto, sender, {});
     }
-    historico.push({ papel: 'ia', texto: resultado.mensagem });
     if (resultado.tipo === 'fechamento') {
-      specFeedbackDialog.registrarProposta({
-        empresaId: sessao.empresaId,
-        numeroWa: sessao.numeroWa,
-        interpretationLogId: sessao.interpretationLogId,
-        perguntaOriginal: sessao.perguntaOriginal,
-        sqlGerado: sessao.sqlGerado,
-        observacaoUsuario: historico.filter(h => h.papel === 'usuario').map(h => h.texto).join(' | '),
-        fragmento: resultado.fragmento,
-        diagnostico: resultado.diagnostico,
-        textoProposto: resultado.texto_proposto,
-        historico,
+      const mensagemConfirmacao = specFeedbackDialog.montarMensagemConfirmacao(resultado);
+      historico.push({ papel: 'ia', texto: mensagemConfirmacao });
+      this._setSenderContext(sender, {
+        _feedbackSession: {
+          ...sessao,
+          historico,
+          propostaPendenteConfirmacao: {
+            fragmento: resultado.fragmento,
+            diagnostico: resultado.diagnostico,
+            textoProposto: resultado.texto_proposto,
+          },
+        },
       });
-      this._setSenderContext(sender, { _feedbackSession: null });
-      return resultado.mensagem;
+      return mensagemConfirmacao;
     }
+    historico.push({ papel: 'ia', texto: resultado.mensagem });
     this._setSenderContext(sender, { _feedbackSession: { ...sessao, historico } });
     return resultado.mensagem;
   }

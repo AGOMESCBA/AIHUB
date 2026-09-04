@@ -101,4 +101,58 @@ function excluirPorIds(empresaId, ids) {
   return info.changes || 0;
 }
 
-module.exports = { criarProposta, listar, obterPorId, atualizarStatus, marcarAplicado, excluirPorIds };
+function listarEmpresasComPendencias() {
+  return getDB().prepare(`
+    SELECT empresa_id, COUNT(*) AS total, MIN(criado_em) AS primeiro_em, MAX(criado_em) AS ultimo_em
+    FROM spec_feedback_propostas
+    WHERE status = 'pendente'
+    GROUP BY empresa_id
+    HAVING COUNT(*) > 0
+    ORDER BY empresa_id ASC
+  `).all().map(row => ({
+    empresa_id: Number(row.empresa_id),
+    total: Number(row.total || 0),
+    primeiro_em: row.primeiro_em || null,
+    ultimo_em: row.ultimo_em || null,
+  }));
+}
+
+function avisoJaEnviado(empresaId, dataRef) {
+  const row = getDB().prepare(`
+    SELECT id
+    FROM spec_feedback_daily_notifications
+    WHERE empresa_id = ? AND data_ref = ?
+    LIMIT 1
+  `).get(Number(empresaId), String(dataRef || ''));
+  return !!row;
+}
+
+function registrarAvisoEnviado({ empresaId, dataRef, numeroWa, totalPendencias, channelId }) {
+  const id = uuid();
+  getDB().prepare(`
+    INSERT OR IGNORE INTO spec_feedback_daily_notifications (
+      id, empresa_id, data_ref, numero_wa, total_pendencias, channel_id, enviado_em
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    Number(empresaId),
+    String(dataRef || ''),
+    numeroWa || null,
+    Number(totalPendencias || 0),
+    channelId || null,
+    agora(),
+  );
+  return id;
+}
+
+module.exports = {
+  criarProposta,
+  listar,
+  obterPorId,
+  atualizarStatus,
+  marcarAplicado,
+  excluirPorIds,
+  listarEmpresasComPendencias,
+  avisoJaEnviado,
+  registrarAvisoEnviado,
+};

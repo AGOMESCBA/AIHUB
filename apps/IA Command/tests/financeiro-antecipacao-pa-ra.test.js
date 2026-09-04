@@ -82,6 +82,55 @@ WHERE SE2.E2_SALDO > 0 AND SE2.E2_VENCREA BETWEEN '20260803' AND '20260807' AND 
   assert.deepStrictEqual(erros, []);
 });
 
+console.log('\n[4] Bug real confirmado em producao: IA confunde E1_NATUREZ/E2_NATUREZ com E1_TIPO/E2_TIPO');
+
+// Caso real reportado: "Contas a receber em aberto do ano" — o guard rejeitou o SQL por
+// faltar filtro de E1_TIPO, e na tentativa seguinte a IA usou E1_NATUREZ (natureza
+// financeira, campo totalmente diferente) com os mesmos valores 'RA'/'NCC', em vez de
+// corrigir para E1_TIPO como o erro pedia.
+ok('"Contas a receber em aberto do ano" + E1_NATUREZ NOT IN (\'RA\',\'NCC\') e rejeitado com erro especifico', () => {
+  const sql = `SET ROWCOUNT 50000;
+SELECT SE1.E1_FILIAL, SE1.E1_PREFIXO, SE1.E1_NUM, SE1.E1_PARCELA, SE1.E1_VENCREA AS vencimento, SE1.E1_SALDO AS saldo_a_receber, SA1.A1_NOME AS cliente
+FROM SE1990 SE1
+JOIN SA1990 SA1 ON SE1.E1_CLIENTE = SA1.A1_COD AND SE1.E1_LOJA = SA1.A1_LOJA
+WHERE SE1.D_E_L_E_T_ = ' ' AND SA1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_VENCREA BETWEEN '20260101' AND '20261231' AND SE1.E1_NATUREZ NOT IN ('RA', 'NCC');`;
+  const erros = validar(sql, 'Contas a receber em aberto do ano');
+  assert.ok(
+    erros.some(e => /E1_NATUREZ/.test(e) && /campo ERRADO/i.test(e)),
+    `esperava erro especifico apontando a troca de campo, obteve: ${JSON.stringify(erros)}`,
+  );
+});
+
+ok('"Contas a pagar em aberto do ano" + E2_NATUREZ NOT IN (\'PA\',\'NDF\') e rejeitado com erro especifico', () => {
+  const sql = `SET ROWCOUNT 50000;
+SELECT SE2.E2_SALDO AS saldo_a_pagar
+FROM SE2990 SE2
+WHERE SE2.D_E_L_E_T_ = ' ' AND SE2.E2_SALDO > 0 AND SE2.E2_NATUREZ NOT IN ('PA', 'NDF');`;
+  const erros = validar(sql, 'Contas a pagar em aberto do ano');
+  assert.ok(
+    erros.some(e => /E2_NATUREZ/.test(e) && /campo ERRADO/i.test(e)),
+    `esperava erro especifico apontando a troca de campo, obteve: ${JSON.stringify(erros)}`,
+  );
+});
+
+ok('SQL correto usando E1_TIPO (nao E1_NATUREZ) nao gera o erro especifico', () => {
+  const sql = `SET ROWCOUNT 50000;
+SELECT SE1.E1_SALDO AS saldo_a_receber
+FROM SE1990 SE1
+WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_TIPO NOT IN ('RA', 'NCC');`;
+  const erros = validar(sql, 'Contas a receber em aberto do ano');
+  assert.ok(!erros.some(e => /campo ERRADO/i.test(e)), `nao deveria disparar o erro de campo trocado: ${JSON.stringify(erros)}`);
+});
+
+ok('E1_NATUREZ usado com valor legitimo (nao RA/NCC) nao dispara o erro especifico de troca de campo', () => {
+  const sql = `SET ROWCOUNT 50000;
+SELECT SE1.E1_SALDO AS saldo_a_receber
+FROM SE1990 SE1
+WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_SALDO > 0 AND SE1.E1_TIPO NOT IN ('RA', 'NCC') AND SE1.E1_NATUREZ = 'VEN';`;
+  const erros = validar(sql, 'Contas a receber em aberto do ano por natureza vendas');
+  assert.ok(!erros.some(e => /campo ERRADO/i.test(e)), `nao deveria disparar (E1_NATUREZ='VEN' e uso legitimo): ${JSON.stringify(erros)}`);
+});
+
 if (falhou === 0) {
   console.log(`\n${'─'.repeat(60)}\nfinanceiro-antecipacao-pa-ra.test.js: ${passou} testes passaram ✓`);
 } else {

@@ -182,7 +182,7 @@ O atualizador seguro:
 - valida o ZIP antes de aplicar;
 - cancela se encontrar `.env`, banco SQLite, `data`, `uploads`, `sessions`, `.wwebjs_auth`, `.wwebjs_cache`, `logs`, `backups` ou `node_modules`;
 - para o servico, gera backup em `C:\Web\backups`, extrai somente os fontes e reinstala dependencias;
-- nao executa `DROP TABLE`, `DELETE FROM` ou `TRUNCATE`;
+- pode executar migrations controladas do sistema;
 - nao remove tabelas existentes nem diretorios de dados.
 
 ---

@@ -64,6 +64,18 @@ ok('sem entidadeSeguranca (gestor), guard nao bloqueia nada', () => {
   assert.strictEqual(r.ok, true);
 });
 
+// Caso real reportado: usuario vendedor 000007 pediu "vendas do ano com vendedor de
+// codigo 000003" (codigo inexistente no cadastro). A IA nao encontrou o vendedor no
+// cadastro e devolveu precisa_confirmacao perguntando se deveria seguir SEM o filtro.
+// O guard antigo so rejeitava SQL com CODIGO ERRADO — SQL sem filtro nenhum passava
+// (nenhum "codigo diferente" para reportar), o que abriria a porta para dados de todos
+// os vendedores caso o usuario aceitasse a confirmacao.
+ok('SQL SEM nenhum filtro de vendedor e rejeitado quando entidadeSeguranca esta ativa', () => {
+  const sql = "SET ROWCOUNT 50000; SELECT SUM(SE1.E1_VALOR) FROM SE1990 SE1 WHERE SE1.D_E_L_E_T_ = ' ' AND SE1.E1_EMISSAO BETWEEN '20260101' AND '20261231'";
+  const r = entitySqlGuard.validarExclusividadeVendedorSeguranca(sql, { codigo: '000007' }, CAMPOS);
+  assert.strictEqual(r.ok, false, 'deveria rejeitar SQL sem nenhum filtro de vendedor');
+});
+
 console.log('\n[3] Camada 2b — bloqueio total de SE2 (contas a pagar) para vendedor');
 
 ok('SQL que usa SE2 e rejeitado quando ha entidadeSeguranca ativa', () => {

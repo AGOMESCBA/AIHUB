@@ -1743,6 +1743,26 @@ const MIGRATIONS = [
       ALTER TABLE ai_config ADD COLUMN protheus_chat_secret TEXT DEFAULT NULL;
     `,
   },
+  {
+    version: 93,
+    descricao: 'IA Command - feedback tecnico confirmado pelo usuario e aviso diario ao administrador',
+    sql: `
+      DELETE FROM spec_feedback_propostas;
+
+      CREATE TABLE IF NOT EXISTS spec_feedback_daily_notifications (
+        id                TEXT PRIMARY KEY,
+        empresa_id        INTEGER NOT NULL,
+        data_ref          TEXT NOT NULL,
+        numero_wa         TEXT,
+        total_pendencias  INTEGER NOT NULL DEFAULT 0,
+        channel_id        TEXT,
+        enviado_em        TEXT NOT NULL
+      );
+
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_spec_feedback_daily_notifications_dia
+        ON spec_feedback_daily_notifications (empresa_id, data_ref);
+    `,
+  },
 ];
 
 module.exports = MIGRATIONS;

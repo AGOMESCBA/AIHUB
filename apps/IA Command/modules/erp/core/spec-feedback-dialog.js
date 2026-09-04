@@ -91,6 +91,33 @@ function buildUserPrompt(historico) {
     .join('\n');
 }
 
+function textoConfirmaProposta(texto) {
+  const t = String(texto || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim();
+  return /^(sim|s|isso|isso mesmo|correto|correta|exato|exatamente|perfeito|ok|pode registrar|pode sim|confirmo|confirmado)\b/.test(t);
+}
+
+function textoRecusaProposta(texto) {
+  const t = String(texto || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim();
+  return /^(nao|n|negativo|errado|nao e isso|nao esta correto|cancela|cancelar)\b/.test(t);
+}
+
+function montarMensagemConfirmacao(resultado) {
+  const diagnostico = String(resultado?.diagnostico || '').trim();
+  const proposta = String(resultado?.texto_proposto || '').trim();
+  const partes = [];
+  partes.push(diagnostico
+    ? `Entendi o ajuste: ${diagnostico}`
+    : (String(resultado?.mensagem || '').trim() || 'Entendi o ajuste que precisa ser revisado.'));
+  partes.push(proposta
+    ? 'Posso registrar essa correção para revisão técnica do administrador? Responda "sim" para registrar ou explique o que ainda não está correto.'
+    : 'Ainda não tenho uma proposta técnica segura para registrar. Pode me dar mais um detalhe do que precisa mudar?');
+  return partes.join('\n\n');
+}
+
 // Conduz um turno do dialogo. historico = [{ papel: 'usuario'|'ia', texto }].
 // Retorna { tipo, mensagem, diagnostico, texto_proposto }.
 async function processarTurno({ empresaId, perguntaOriginal, sqlGerado, modulo, historico }) {
@@ -138,4 +165,11 @@ function registrarProposta({ empresaId, numeroWa, interpretationLogId, perguntaO
   });
 }
 
-module.exports = { processarTurno, registrarProposta, localizarFragmento };
+module.exports = {
+  processarTurno,
+  registrarProposta,
+  localizarFragmento,
+  textoConfirmaProposta,
+  textoRecusaProposta,
+  montarMensagemConfirmacao,
+};
