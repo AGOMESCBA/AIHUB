@@ -1160,11 +1160,52 @@ function humanizarResposta(texto, resultado, intent, opts = {}) {
   return textoApresentacao(apresentacao, texto);
 }
 
+function _textoSemDados(resultado, intent) {
+  const periodoStr = formatarPeriodo(resultado?.periodo || intent?.periodo || intent?._periodoCanonicoResolvido);
+  const filtrosStr = formatarFiltros(intent?.filtros);
+  const detalhes = [periodoStr.trim(), filtrosStr.trim()].filter(Boolean).join('\n');
+  const linhas = [
+    'ℹ️ Entendi sua consulta, mas não encontrei registros para os filtros informados.',
+  ];
+  if (detalhes) linhas.push('', detalhes);
+  linhas.push(
+    '',
+    'Você pode tentar com um período maior, remover algum filtro específico ou conferir se o nome/código informado está igual ao cadastro do ERP.'
+  );
+  return linhas.join('\n');
+}
+
+function _textoErroConsulta(resultado) {
+  const subtipo = String(resultado?.subtipo || '').trim();
+  if (/sem_conexao/i.test(subtipo)) {
+    return '⚠️ Não consegui acessar o ERP desta empresa agora. Verifique a conexão do agente local ou peça ao administrador para conferir a integração.';
+  }
+  if (/ia_indisponivel|sem_chave|cota_esgotada/i.test(subtipo)) {
+    return '⚠️ O serviço de IA está indisponível no momento. Aguarde alguns instantes e tente novamente.';
+  }
+  if (/acesso_negado_vendedor|acesso_negado_cliente/i.test(subtipo)) {
+    return resultado?.mensagem || '🔒 Essa consulta foi bloqueada porque sairia do escopo liberado para o seu número.';
+  }
+  if (/contrato_|sql_|periodo_sql_|funcao_data_|filtro_/i.test(subtipo)) {
+    return [
+      '⚠️ Não consegui montar essa consulta com segurança.',
+      '',
+      'Isso costuma acontecer quando a pergunta mistura filtros incompatíveis, pede um detalhe que o dataset não tem ou quando uma regra de validação bloqueia o SQL gerado.',
+      '',
+      'Tente reformular com mais contexto, informar período e filtros separadamente, ou dividir a pergunta em duas consultas menores.'
+    ].join('\n');
+  }
+  return '⚠️ Não consegui buscar essa informação no ERP agora. Tente novamente com um período menor ou filtros mais específicos.';
+}
+
 function formatar(resultado, intent, opts = {}) {
   // Resultado do motor Text-to-SQL dinâmico (ex: módulo de Compras)
   // A resposta já vem formatada pela IA ou pelo fallback interno do handler.
   if (resultado.tipo === 'sucesso_ai_sql') {
-    const respostaBase = resultado.resposta_direta || 'Não encontrei dados para essa consulta.';
+    const semRows = Array.isArray(resultado.rows) && resultado.rows.length === 0;
+    const respostaBase = semRows
+      ? _textoSemDados(resultado, intent)
+      : (resultado.resposta_direta || 'Não encontrei dados para essa consulta.');
     const jaTemRodape = /_Filtrado por (Vendedor|Cliente): /.test(respostaBase);
     const respostaComRodape = jaTemRodape
       ? respostaBase
@@ -1199,7 +1240,7 @@ function formatar(resultado, intent, opts = {}) {
   }
 
   if (resultado.tipo === 'erro') {
-    return `❌ Ocorreu um erro ao consultar o ERP:\n${resultado.mensagem}`;
+    return _textoErroConsulta(resultado);
   }
 
   const { rows, intencao, periodo } = resultado;
@@ -1207,7 +1248,7 @@ function formatar(resultado, intent, opts = {}) {
   const filtrosStr  = formatarFiltros(intent?.filtros);
 
   if (!rows || rows.length === 0) {
-    return `ℹ️ Nenhum dado encontrado para sua consulta.${periodoStr}${filtrosStr}`;
+    return _textoSemDados(resultado, intent);
   }
 
   // Comparação: detectada pelo tipo de período, vale para qualquer intenção
@@ -1328,7 +1369,7 @@ function formatar(resultado, intent, opts = {}) {
 }
 
 function formatarAiSqlLocal(rows, intent) {
-  if (!rows || !rows.length) return 'Nenhum dado encontrado para sua consulta.';
+  if (!rows || !rows.length) return _textoSemDados({ rows: [] }, intent);
   const periodo = intent?.periodo || {};
   const periodoStr = formatarPeriodo(periodo);
   const filtrosStr = formatarFiltros(intent?.filtros);

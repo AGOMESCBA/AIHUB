@@ -10,7 +10,7 @@ const TIPOS_EXPLICITOS = [
   { tipo: 'marca', re: /\bmarcas?\s+(.+)$/i },
   { tipo: 'centro_custo', re: /\bcentros?\s+de\s+custos?\s+(.+)$/i },
   { tipo: 'tes', re: /\btes\s+(.+)$/i },
-  { tipo: 'vendedor', re: /\bvendedores?\s+(.+)$/i },
+  { tipo: 'vendedor', re: /\bvendedor(?:es)?\s+(.+)$/i },
   { tipo: 'transportadora', re: /\btransportadoras?\s+(.+)$/i },
   { tipo: 'natureza', re: /\bnaturezas?(?:\s+financeiras?)?\s+(.+)$/i },
   { tipo: 'desconhecido', re: /\bem\s+aberto\s+(?:do|da|de)\s+(.+?)(?=\s+(?:e\s+)?(?:agrupad[oa]s?\s+)?por\b|\s+agrupad[oa]s?\b|[?.!,;:]|$)/i },

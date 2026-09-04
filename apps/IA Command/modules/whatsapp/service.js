@@ -45,6 +45,7 @@ const WHATSAPP_POST_CLEANUP_WAIT_MS = Math.max(0, Number(process.env.IAC_WA_POST
 const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(60000, Number(process.env.IAC_WA_SILENT_SESSION_RETRY_MS || 90000));
 const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR_AUTH_TIMEOUT_MS || 300000));
 const WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT = String(process.env.IAC_WA_PRESERVE_AUTH_SESSION_ON_TIMEOUT ?? '1') !== '0';
+const WHATSAPP_TYPING_REFRESH_MS = Math.max(5000, Number(process.env.IAC_WA_TYPING_REFRESH_MS || 20000));
 // Reconexao automatica apos "disconnected" com motivo recuperavel (NAVIGATION, CONFLICT, etc).
 // LOGOUT nao entra aqui: significa que o vinculo foi revogado no celular e a sessao salva fica invalida.
 const WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS = Math.max(0, Number(process.env.IAC_WA_AUTO_RECONNECT_MAX_TENTATIVAS ?? 5));
@@ -920,6 +921,42 @@ class IACWhatsAppService extends EventEmitter {
       }
     }
     return partes.length;
+  }
+
+  async _startTypingIndicator(chat, sender, { contexto = 'resposta' } = {}) {
+    let replyChat = chat;
+    if (!replyChat || typeof replyChat.sendStateTyping !== 'function') {
+      replyChat = await this._resolveReplyChat([sender]).catch(() => null);
+    }
+    if (!replyChat || typeof replyChat.sendStateTyping !== 'function') {
+      return { stop: async () => {} };
+    }
+
+    let stopped = false;
+    let running = false;
+    const pulse = async () => {
+      if (stopped || running) return;
+      running = true;
+      try {
+        await replyChat.sendStateTyping();
+      } catch (err) {
+        this.log(`Falha ao atualizar indicador de digitacao (${contexto}) para ${sender}: ${err.message}`, 'warning');
+      } finally {
+        running = false;
+      }
+    };
+
+    await pulse();
+    const intervalId = setInterval(pulse, WHATSAPP_TYPING_REFRESH_MS);
+    return {
+      stop: async () => {
+        stopped = true;
+        clearInterval(intervalId);
+        if (typeof replyChat.clearState === 'function') {
+          try { await replyChat.clearState(); } catch (_) {}
+        }
+      },
+    };
   }
 
   _normalizarNumeroWa(valor) {
@@ -3645,6 +3682,7 @@ class IACWhatsAppService extends EventEmitter {
 
     const t0 = Date.now();
     const _timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
+    const typingIndicator = await this._startTypingIndicator(chat, sender, { contexto: 'texto' });
 
     // Heartbeat: envia mensagem de progresso durante consultas longas para manter o WhatsApp Web ativo.
     const HEARTBEAT_INTERVAL_MS = 30000;
@@ -3681,7 +3719,11 @@ class IACWhatsAppService extends EventEmitter {
       const resposta = await Promise.race([
         this._pipeline(texto, sender, { _pipelineTs: t0, _recebidoEm: t0, _timingCtx }),
         timeoutPipeline,
-      ]).finally(() => { clearTimeout(timeoutId); clearInterval(heartbeatId); });
+      ]).finally(async () => {
+        clearTimeout(timeoutId);
+        clearInterval(heartbeatId);
+        await typingIndicator.stop();
+      });
       if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > t0) {
         this.log(`🚫 Resposta descartada — conversa foi resetada durante o processamento (${sender})`, 'info');
         return;
@@ -3699,6 +3741,7 @@ class IACWhatsAppService extends EventEmitter {
       }
     } catch (err) {
       clearInterval(heartbeatId);
+      await typingIndicator.stop();
       this.log(`❌ Pipeline falhou (${Date.now() - t0}ms): ${err.message}`, 'error');
       const isTimeout = /timeout ao chamar o agente|tempo limite de processamento excedido/i.test(err.message);
       const templateChave = isTimeout ? 'timeout_agente' : 'erro_processamento';
@@ -4823,24 +4866,24 @@ class IACWhatsAppService extends EventEmitter {
     // — devem ser exibidos diretamente em vez da mensagem genérica de sistema.
     const mensagemInconsistenciaPorSubtipo = (subtipo) => {
       if (/ia_indisponivel|sem_chave|cota_esgotada/.test(subtipo || '')) {
-        return 'O servico de IA esta com instabilidade no momento. Aguarde alguns instantes e tente novamente.';
+        return 'O serviço de IA está indisponível no momento. Aguarde alguns instantes e tente novamente.';
       }
       if (/sem_conexao/.test(subtipo || '')) {
-        return 'Esta empresa nao possui conexao com o ERP configurada. Solicite ao administrador do sistema.';
+        return 'Não consegui acessar o ERP desta empresa agora. Verifique a conexão do agente local ou peça ao administrador para conferir a integração.';
       }
       if (/contrato_query_plan_invalido|contrato_ia_owner_invalido|sql_invalido|contrato_entidade_sql_invalido/.test(subtipo || '')) {
-        return 'Nao consegui montar a consulta para essa combinacao de filtros. Tente dividir em duas perguntas separadas ou reformule com mais especificidade.';
+        return 'Não consegui montar essa consulta com segurança. Tente reformular com mais contexto, informar período e filtros separadamente, ou dividir em duas perguntas menores.';
       }
       if (/contrato_sx3_invalido|funcao_data_protheus_invalida/.test(subtipo || '')) {
-        return 'Encontrei uma inconsistencia tecnica ao gerar a consulta. Tente reformular a pergunta com um periodo ou filtro diferente.';
+        return 'Não consegui validar os campos necessários para essa consulta. Tente reformular com outro filtro ou peça ao administrador para conferir o dataset.';
       }
       if (/periodo_sql_inconsistente|periodo_sql_invalido/.test(subtipo || '')) {
-        return 'Nao consegui identificar o periodo corretamente. Tente informar a data de forma explicita, como "junho de 2026" ou "01/06/2026 a 30/06/2026".';
+        return 'Não consegui confirmar o período da consulta. Tente informar a data de forma explícita, como "junho de 2026" ou "01/06/2026 a 30/06/2026".';
       }
       if (/sql_nao_extraido|sql_bloqueado|sql_parametro_entidade_pendente/.test(subtipo || '')) {
-        return 'Nao consegui completar a interpretacao da sua consulta. Reformule a pergunta e tente novamente.';
+        return 'Não consegui completar a interpretação com segurança. Reformule a pergunta com o período, a entidade e o indicador desejado.';
       }
-      return 'Tivemos uma inconsistencia ao interpretar ou executar sua consulta. Por favor, reformule a pergunta e tente novamente.';
+      return 'Não consegui executar essa consulta agora. Tente novamente com um período menor ou filtros mais específicos.';
     };
     const SUBTIPOS_DOMINIO_DIRETO = new Set([
       'entidade_nao_encontrada', 'entidade_ia_nao_encontrada',
@@ -5557,7 +5600,9 @@ class IACWhatsAppService extends EventEmitter {
             this.log(`[All] Empresa #${emp.empresa_id} dinamica erro: ${resultado.subtipo || resultado.tipo}`, 'info');
             const subtipoErro = resultado.subtipo || resultado.tipo;
             const inconsistenciaInterna = SUBTIPOS_INCONSISTENCIA_INTERNA.has(subtipoErro);
-            const respostaUsuario = inconsistenciaInterna ? mensagemInconsistenciaPorSubtipo(subtipoErro) : resultado.resposta_direta;
+            const respostaUsuario = (inconsistenciaInterna && !resultado._resposta_guardrail_usuario)
+              ? mensagemInconsistenciaPorSubtipo(subtipoErro)
+              : resultado.resposta_direta;
             const retryElegivel = !sqlCanonicoDinamico && subtiposRetryCanonico.has(subtipoErro);
             const resultadoComDiagnostico = {
               ...resultado,
@@ -5831,7 +5876,9 @@ class IACWhatsAppService extends EventEmitter {
       const respostaErro = errosDinamicos.length
         ? (SUBTIPOS_DOMINIO_DIRETO.has(_subtipoDominante)
             ? (ultimoResultadoDinamico?.resultado?.resposta_direta || mensagemInconsistenciaPorSubtipo(_subtipoDominante))
-            : mensagemInconsistenciaPorSubtipo(_subtipoDominante))
+            : (ultimoResultadoDinamico?.resultado?._resposta_guardrail_usuario && ultimoResultadoDinamico?.resultado?.resposta_direta
+                ? ultimoResultadoDinamico.resultado.resposta_direta
+                : mensagemInconsistenciaPorSubtipo(_subtipoDominante)))
         : 'Nao consegui executar a consulta dinamica nas empresas disponiveis. Verifique se a intencao dinamica, conexao ERP e chaves de IA estao configuradas.';
       if (
         ultimoResultadoDinamico?.resultado

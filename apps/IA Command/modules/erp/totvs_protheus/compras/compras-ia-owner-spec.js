@@ -427,6 +427,39 @@ module.exports = {
         );
       },
     },
+    {
+      // Bug real confirmado em producao: pergunta "meus pedidos de compras aprovados no
+      // mes passado" gerou SQL com SC7.C7_APROV = 'L' (campo de ATENDIMENTO/recebimento,
+      // errado) em vez de SC7.C7_CONAPRO IN ('L','') (campo de ALCADA/aprovacao, correto).
+      // O valor 'A' tambem NAO EXISTE no dominio de C7_CONAPRO (confirmado contra a
+      // documentacao oficial do campo) — os unicos valores validos sao 'L'/vazio
+      // (liberado/aprovado), 'B' (bloqueado) e 'R' (rejeitado).
+      validar(sql) {
+        if (/\bSC7\s*\.\s*C7_CONAPRO\s*=\s*'A'/i.test(sql)) {
+          return (
+            "SQL usa SC7.C7_CONAPRO = 'A' — valor INEXISTENTE no dominio deste campo. " +
+            "Os unicos valores validos de C7_CONAPRO sao: 'L' ou vazio/branco (aprovado/liberado na alcada), 'B' (bloqueado), 'R' (rejeitado). " +
+            "Para \"pedido aprovado\"/\"pedido liberado\" (status de ALCADA), use SEMPRE SC7.C7_CONAPRO IN ('L', '')."
+          );
+        }
+        return null;
+      },
+    },
+    {
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeStatusAlcada = /\baprovad[oa]s?\b/.test(texto) || /\bliberad[oa]s?\s+(?:na|pela)?\s*al[cç]ada\b/.test(texto) || /\bpendentes?\s+de\s+aprova[cç][aã]o\b/.test(texto);
+        const pedeAtendimento = /\ba\s+receber\b|\brecebiment\w*\b|\bnota\s+fiscal\b|\bnf\s+de\s+entrada\b|\batendiment\w*\b/.test(texto);
+        if (!pedeStatusAlcada || pedeAtendimento) return null;
+        if (!/\bSC7\s*\.\s*C7_APROV\s*=\s*'L'/i.test(sql)) return null;
+        if (/\bSC7\s*\.\s*C7_CONAPRO\b/i.test(sql)) return null;
+        return (
+          "A pergunta e sobre status de APROVACAO/ALCADA (\"aprovado\", \"liberado na alcada\", \"pendente de aprovacao\"), mas o SQL usa SC7.C7_APROV = 'L' — esse campo e sobre ATENDIMENTO/recebimento, campo ERRADO para este caso. " +
+          "SC7.C7_APROV e SC7.C7_CONAPRO sao EIXOS INDEPENDENTES: C7_APROV = 'L' significa apenas que o pedido esta em aberto para receber NF, nao que foi aprovado na alcada. " +
+          "Troque para SC7.C7_CONAPRO IN ('L', '') — o campo correto para status de aprovacao/alcada."
+        );
+      },
+    },
   ],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta de compras no momento. Tente novamente em breve.',

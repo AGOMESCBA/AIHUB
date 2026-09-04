@@ -283,11 +283,11 @@ function buscarTemplateCacheDeterministico({ empresaId, numeroWa, intentCanonico
 function mensagemErro(spec, tipo) {
   const msgs = spec.mensagensErro || {};
   const fallback = {
-    ia_indisponivel: 'Nao consigo processar sua consulta no momento. Tente novamente em breve.',
-    sql_invalido: 'Tivemos uma inconsistencia ao interpretar sua consulta. Por favor, reformule a pergunta e tente novamente.',
-    sem_resultado: 'Nao encontrei registros para essa consulta.',
-    erro_erp: 'Nao consegui buscar essa informacao no sistema. Tente um periodo menor ou filtros mais especificos.',
-    sem_conexao: 'Esta empresa nao possui uma conexao com o ERP configurada. Solicite ao administrador.',
+    ia_indisponivel: 'O serviço de IA está indisponível no momento. Aguarde alguns instantes e tente novamente.',
+    sql_invalido: 'Não consegui montar essa consulta com segurança. Tente reformular com mais contexto, informar período e filtros separadamente, ou dividir em duas perguntas menores.',
+    sem_resultado: 'Entendi sua consulta, mas não encontrei registros para os filtros informados. Tente um período maior, remova algum filtro específico ou confira se o nome/código está igual ao cadastro do ERP.',
+    erro_erp: 'Não consegui buscar essa informação no ERP agora. Tente novamente com um período menor ou filtros mais específicos.',
+    sem_conexao: 'Não consegui acessar o ERP desta empresa agora. Verifique a conexão do agente local ou peça ao administrador para conferir a integração.',
   };
   return msgs[tipo] || fallback[tipo] || fallback.erro_erp;
 }
@@ -792,6 +792,43 @@ function subtipoEhInconsistenciaConsulta(subtipo) {
   return /^(?:contrato_|sql_|periodo_sql_|funcao_data_|filtro_|ia_indisponivel|sem_chave|cota_esgotada)/i.test(String(subtipo || ''));
 }
 
+function _limparMensagemGuardrailUsuario(valor) {
+  return String(valor || '')
+    .replace(/^SQL rejeitado por (?:contrato IA-OWNER|periodo inconsistente|cobertura incompleta de rateio|guard Lobo Guara)\s*:\s*/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function respostaGuardrailUsuario(mensagemErro, subtipo = '') {
+  const msg = _limparMensagemGuardrailUsuario(mensagemErro);
+  let orientacao = null;
+
+  if (/PA\/RA\/NDF\/NCC isolado|JOIN com tabela de baixa|SE5|FK1|FK2|FK7/i.test(msg)) {
+    orientacao = "Para PA/RA/NDF/NCC isolado, consulte saldo em aberto na SE1/SE2 e remova joins com tabelas de baixa. Essas tabelas são para valores já baixados, não para créditos em aberto.";
+  } else if (/\bE1_NATUREZ\b[\s\S]{0,120}\b(?:RA|NCC)\b/i.test(msg)) {
+    orientacao = "RA/NCC são tipos de título em contas a receber. Para consultar esses créditos, a IA deve usar SE1.E1_TIPO IN ('RA','NCC'), e não SE1.E1_NATUREZ.";
+  } else if (/\bE2_NATUREZ\b[\s\S]{0,120}\b(?:PA|NDF)\b/i.test(msg)) {
+    orientacao = "PA/NDF são tipos de título em contas a pagar. Para consultar esses créditos, a IA deve usar SE2.E2_TIPO IN ('PA','NDF'), e não SE2.E2_NATUREZ.";
+  } else if (/pergunta pede recebimentos antecipados|SE1\.E1_TIPO\s*<>\s*'RA'|EXCLUI os antecipados/i.test(msg)) {
+    orientacao = "Para recebimentos antecipados, a consulta precisa isolar o tipo RA: use SE1.E1_TIPO = 'RA'. Usar diferente de RA exclui justamente o que foi pedido.";
+  } else if (/pergunta pede pagamentos antecipados|SE2\.E2_TIPO\s*<>\s*'PA'|EXCLUI os antecipados/i.test(msg)) {
+    orientacao = "Para pagamentos antecipados, a consulta precisa isolar o tipo PA: use SE2.E2_TIPO = 'PA'. Usar diferente de PA exclui justamente o que foi pedido.";
+  } else if (/CFOP|receita operacional|remessas|transferencias/i.test(msg)) {
+    orientacao = "Para faturamento/receita, a consulta precisa excluir operações sem receita operacional por CFOP, mantendo apenas as exceções fiscais permitidas.";
+  } else if (/periodo/i.test(subtipo) || /per[ií]odo|data/i.test(msg)) {
+    orientacao = 'Informe o período de forma explícita, por exemplo: "junho de 2026" ou "01/06/2026 a 30/06/2026".';
+  }
+
+  return [
+    '⚠️ A consulta foi bloqueada por uma regra de validação antes de acessar o ERP.',
+    '',
+    msg ? `Motivo: ${limitarTexto(msg, 700)}` : null,
+    orientacao ? `Como ajustar: ${orientacao}` : 'Como ajustar: reformule a pergunta informando período, entidade e indicador separadamente. Se souber o campo correto, inclua essa orientação na própria pergunta.',
+    '',
+    'Você pode perguntar novamente já com essa correção.'
+  ].filter(Boolean).join('\n');
+}
+
 function extrairJson(raw) {
   if (!raw) return null;
   if (typeof raw === 'object') return raw;
@@ -1073,6 +1110,55 @@ function normalizarEntidadesNecessarias(obj = {}) {
 
 function confirmacaoPodeEncerrarPlano(obj = {}) {
   return Boolean(obj.precisa_confirmacao && normalizarEntidadesNecessarias(obj).length === 0);
+}
+
+// Deteccao minima e determinística de "vendedor/cliente <codigo>" na MENSAGEM ORIGINAL,
+// usada apenas para o bloqueio de seguranca — nao e o extrator generico de entidades
+// (entity-resolver.extrairExplicitos), que descarta termos puramente numericos por
+// design (_deveIgnorarTermo) e serve dezenas de outros fluxos de negocio nao relacionados
+// a seguranca. Aqui o objetivo e estreito: se a mensagem cita um codigo ERP explicito
+// (ex.: "vendedor de codigo 000006", "vendedor 000006") diferente do vendedor/cliente
+// autorizado, bloquear ANTES de chamar a IA — mesmo que a IA, em vez de recusar como
+// instruido no prompt (ver identidadeVendedor() nos *-fragmentos-spec.js), decida
+// "corrigir" silenciosamente o codigo no SQL final e devolver os dados do usuario
+// autorizado como se fossem do codigo pedido (caso real: usuario vendedor 000007 pediu
+// "faturamento do vendedor 000006" e recebeu seus proprios dados sem nenhum aviso).
+function codigoEntidadeSegurancaCitadoNaMensagem(mensagem, tipo) {
+  // "vend" cobre a abreviacao comum em digitacao rapida/informal (ex.: "vend 000006").
+  // O \b nos dois lados evita casar com "vendas" ou "vendendo" — so a palavra isolada.
+  const palavra = tipo === 'cliente' ? 'clientes?' : '(?:vendedor(?:es)?|vend)';
+  const re = new RegExp(`\\b${palavra}\\b(?:\\s+de\\s+c[oó]digo)?\\s+0*(\\d{1,10})\\b`, 'i');
+  const m = String(mensagem || '').match(re);
+  return m ? m[1] : null;
+}
+
+// Compara codigos ERP ignorando zeros a esquerda (o padding do campo Protheus, ex.:
+// C(6), nao e garantido pelo codigo — comparar como numero evita depender dessa
+// convencao) — mas exige que ambos sejam puramente numericos, senao cai para
+// comparacao textual exata.
+function _codigosErpEquivalentes(a, b) {
+  const sa = String(a ?? '').trim();
+  const sb = String(b ?? '').trim();
+  if (/^\d+$/.test(sa) && /^\d+$/.test(sb)) return Number(sa) === Number(sb);
+  return sa === sb;
+}
+
+// Bloqueio de seguranca sobre plano.obj.filtros: cobre o caso em que a IA declara um
+// filtro de vendedor/cliente cujo codigo NAO existe no cadastro (ex.: "vendedor 000003"
+// quando so ha 000001..000002) — nesse caso ele nunca vira entidade resolvida (o bloqueio
+// antecipado em entidadesResolvidas, mais acima, so compara contra cadastros reais) e a IA
+// tende a devolver precisa_confirmacao perguntando se deve seguir SEM o filtro. Se o
+// usuario aceitar, o SQL final poderia sair sem filtro de vendedor algum, expondo dados de
+// todos os vendedores. Roda antes de confirmacaoPodeEncerrarPlano para negar o acesso ali
+// mesmo, sem chegar a perguntar "deseja continuar sem esse filtro?".
+function planoTentaFiltrarOutraEntidadeSeguranca(obj, entidadeSeguranca) {
+  if (!entidadeSeguranca?.codigo) return null;
+  const filtros = obj?.filtros || {};
+  const campoFiltro = entidadeSeguranca.tipo === 'cliente_fixo_seguranca' ? 'cliente' : 'vendedor';
+  const valorPedido = filtros[campoFiltro];
+  if (valorPedido === undefined || valorPedido === null || valorPedido === '') return null;
+  if (String(valorPedido) === String(entidadeSeguranca.codigo)) return null;
+  return { campo: campoFiltro, valorPedido: String(valorPedido) };
 }
 
 async function resolverEntidadesSeNecessario(spec, pedido, contexto) {
@@ -4144,6 +4230,22 @@ async function executar(spec, intent, empresaId) {
         };
       }
     }
+    // Defesa adicional: cobre o caso em que o codigo citado na mensagem nunca chegou a
+    // virar entidade resolvida (ex.: extrator generico descarta termos puramente
+    // numericos) e a IA, em vez de recusar como instruido no prompt, poderia substituir
+    // silenciosamente pelo codigo autorizado e devolver os dados como se fossem do
+    // codigo pedido — sem jamais avisar o usuario da substituicao.
+    const tipoCampoCitado = entidadeSeguranca.tipo === 'cliente_fixo_seguranca' ? 'cliente' : 'vendedor';
+    const codigoCitado = codigoEntidadeSegurancaCitadoNaMensagem(mensagem, tipoCampoCitado);
+    if (codigoCitado && !_codigosErpEquivalentes(codigoCitado, entidadeSeguranca.codigo)) {
+      return {
+        tipo: 'erro',
+        subtipo: tipoCampoCitado === 'cliente' ? 'acesso_negado_cliente' : 'acesso_negado_vendedor',
+        resposta_direta: `Você só pode consultar seus próprios dados. Para ver dados de outro ${tipoCampoCitado}, peça para um gestor consultar.`,
+        sql_gerado: `-- bloqueado: ${entidadeSeguranca.tipo} '${entidadeSeguranca.codigo}' citou na mensagem o codigo '${codigoCitado}' de ${tipoCampoCitado}`,
+        duracao_ms: Date.now() - t0,
+      };
+    }
   }
   let intentCanonicoInfo = null;
   try {
@@ -4478,6 +4580,19 @@ async function executar(spec, intent, empresaId) {
     return { tipo: 'erro', subtipo: 'ia_indisponivel', resposta_direta: mensagemIaIndisponivel(spec, e), sql_gerado: `-- IA-OWNER falhou: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
   }
 
+  const tentativaOutraEntidadeSeguranca = planoTentaFiltrarOutraEntidadeSeguranca(plano.obj, entidadeSeguranca);
+  if (tentativaOutraEntidadeSeguranca) {
+    const subtipo = tentativaOutraEntidadeSeguranca.campo === 'cliente' ? 'acesso_negado_cliente' : 'acesso_negado_vendedor';
+    return {
+      tipo: 'erro',
+      subtipo,
+      resposta_direta: `Você só pode consultar seus próprios dados. Para ver dados de outro ${tentativaOutraEntidadeSeguranca.campo}, peça para um gestor consultar.`,
+      sql_gerado: `-- bloqueado: ${entidadeSeguranca.tipo} '${entidadeSeguranca.codigo}' tentou filtrar plano.filtros.${tentativaOutraEntidadeSeguranca.campo} = '${tentativaOutraEntidadeSeguranca.valorPedido}'`,
+      _sql_auditoria: auditoriaBase,
+      duracao_ms: Date.now() - t0,
+    };
+  }
+
   let periodoAutoritativo = periodoAutoritativoParaSql(intentEfetivo, plano.obj);
   if (periodoAutoritativo) {
     intentEfetivo = { ...intentEfetivo, _periodoCanonicoResolvido: periodoAutoritativo };
@@ -4769,14 +4884,17 @@ async function executar(spec, intent, empresaId) {
       if (tentativa >= maxTentativas) {
         const sqlErro = preparado?.sqlFinal || e._sql || plano.sql;
         const subtipo = e._tipo || 'erro_erp';
-        // Regra fiscal nacional de CFOP (nao pode falhar silenciosamente): se esgotou as
-        // tentativas ainda violando essa regra, o usuario precisa saber que o motivo foi
-        // essa regra especifica, nao um erro generico de SQL — evita interpretar a falha
-        // como bug tecnico e insistir na mesma pergunta sem entender a causa.
-        const respostaCfop = REGEX_ERRO_CFOP_RECEITA.test(e.message || '')
-          ? 'Nao consegui montar essa consulta respeitando a regra fiscal de CFOP (exclusao de saidas sem receita operacional do faturamento). Tente reformular a pergunta ou peca ajuda a um administrador.'
-          : null;
-        return { tipo: 'erro', subtipo, resposta_direta: respostaCfop || mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'), sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0, _ia_owner_plano: plano.obj };
+        const ehGuardrail = subtipoEhInconsistenciaConsulta(subtipo);
+        return {
+          tipo: 'erro',
+          subtipo,
+          resposta_direta: ehGuardrail ? respostaGuardrailUsuario(e.message, subtipo) : mensagemErro(spec, 'erro_erp'),
+          _resposta_guardrail_usuario: ehGuardrail,
+          sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
+          _sql_auditoria: auditoriaBase,
+          duracao_ms: Date.now() - t0,
+          _ia_owner_plano: plano.obj,
+        };
       }
       const retryPrompt = promptBuilder.buildUserPrompt({
         mensagem,
@@ -4993,7 +5111,8 @@ async function executarSqlDireto(spec, sqlCanonico, intent, empresaId) {
         subtipo,
         resposta_direta: subtipo === 'acesso_negado_vendedor'
           ? 'Você só pode consultar seus próprios dados. Para ver dados de outro vendedor, peça para um gestor consultar.'
-          : mensagemErro(spec, subtipoEhInconsistenciaConsulta(subtipo) ? 'sql_invalido' : 'erro_erp'),
+          : (subtipoEhInconsistenciaConsulta(subtipo) ? respostaGuardrailUsuario(e.message, subtipo) : mensagemErro(spec, 'erro_erp')),
+        _resposta_guardrail_usuario: subtipo !== 'acesso_negado_vendedor' && subtipoEhInconsistenciaConsulta(subtipo),
         sql_gerado: `${sqlErro}\n\n-- ERRO: ${limitarTexto(e.message, 1000)}`,
         _sql_auditoria: auditoriaBase,
         duracao_ms: Date.now() - t0,
@@ -5016,6 +5135,10 @@ module.exports = {
     buildEstadoAnterior,
     buildContextoTecnico,
     confirmacaoPodeEncerrarPlano,
+    respostaGuardrailUsuario,
+    planoTentaFiltrarOutraEntidadeSeguranca,
+    codigoEntidadeSegurancaCitadoNaMensagem,
+    _codigosErpEquivalentes,
     pedidosEntidadesParaResolverNoTenant,
     mensagemTemPeriodoRelativo,
     limparPeriodosNaoAutoritativos,

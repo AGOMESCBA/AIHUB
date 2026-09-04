@@ -518,6 +518,31 @@ const sqlPatternsProibidos = [
       const pedeNdfExplicito = /\bNDF\b/i.test(texto) || /\bnotas?\s+de\s+d[ée]bito\b/i.test(texto);
       const pedeNccExplicito = /\bNCC\b/i.test(texto) || /\bnotas?\s+de\s+cr[ée]dito\b/i.test(texto);
 
+      // Bug real confirmado em producao: a IA, ao tentar corrigir o erro de "falta filtro
+      // de E1_TIPO/E2_TIPO" (guard abaixo), confundiu com o campo textualmente parecido
+      // E1_NATUREZ/E2_NATUREZ (natureza financeira/categoria contabil — campo totalmente
+      // diferente, sem os valores 'RA'/'NCC'/'PA'/'NDF'). Detecta esse erro especifico
+      // ANTES do guard generico de ausencia, para dar um erro que aponte exatamente a
+      // troca de campo em vez de repetir a mensagem generica (que a IA ja violou uma vez).
+      const usaNaturezComoTipoPagar = /\bSE2\s*\.\s*E2_NATUREZ\s*(?:NOT\s+IN|IN|=|<>)\s*\(?\s*'(?:PA|NDF)'/i.test(sql);
+      if (usaNaturezComoTipoPagar) {
+        return (
+          'SQL usa SE2.E2_NATUREZ com os valores \'PA\'/\'NDF\' — campo ERRADO. ' +
+          'SE2.E2_NATUREZ e a natureza financeira/categoria contabil do titulo (ex.: "compras", "servicos"), NAO tem os valores PA ou NDF. ' +
+          'O filtro de exclusao de PA/NDF e SEMPRE no campo SE2.E2_TIPO (tipo de movimento do titulo), NUNCA em SE2.E2_NATUREZ. ' +
+          'Troque para: AND SE2.E2_TIPO NOT IN (\'PA\', \'NDF\').'
+        );
+      }
+      const usaNaturezComoTipoReceber = /\bSE1\s*\.\s*E1_NATUREZ\s*(?:NOT\s+IN|IN|=|<>)\s*\(?\s*'(?:RA|NCC)'/i.test(sql);
+      if (usaNaturezComoTipoReceber) {
+        return (
+          'SQL usa SE1.E1_NATUREZ com os valores \'RA\'/\'NCC\' — campo ERRADO. ' +
+          'SE1.E1_NATUREZ e a natureza financeira/categoria contabil do titulo (ex.: "vendas", "servicos"), NAO tem os valores RA ou NCC. ' +
+          'O filtro de exclusao de RA/NCC e SEMPRE no campo SE1.E1_TIPO (tipo de movimento do titulo), NUNCA em SE1.E1_NATUREZ. ' +
+          'Troque para: AND SE1.E1_TIPO NOT IN (\'RA\', \'NCC\').'
+        );
+      }
+
       const usaSaldoAbertoPagar = /\bSE2\s*\.\s*E2_SALDO\s*>\s*0\b/i.test(sql);
       if (usaSaldoAbertoPagar && !pedeNdfExplicito && !/\bE2_TIPO\b/i.test(sql)) {
         return (

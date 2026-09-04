@@ -261,7 +261,13 @@ function removerFiltrosLojaEntidadesTodas(sql, entidades) {
 
 // Garante que, quando ha entidade de seguranca de vendedor (vendedor_fixo_seguranca),
 // NENHUM outro codigo de vendedor apareca nos campos de filtro do modulo — nem mesmo via
-// OR, subquery ou JOIN adicional que a IA tente usar para contornar o filtro principal.
+// OR, subquery ou JOIN adicional que a IA tente usar para contornar o filtro principal —
+// E que o filtro do vendedor autorizado esteja de fato PRESENTE em algum dos campos alvo.
+// A exigencia de presenca fecha o caso em que a IA, em vez de trocar o codigo, simplesmente
+// omite o filtro (ex.: usuario "confirma" seguir sem o filtro apos um vendedor de negocio
+// nao ser encontrado no cadastro — ver runner.js `confirmacaoPodeEncerrarPlano`): sem essa
+// checagem, SQL sem nenhum filtro de vendedor passava por aqui porque nao havia "codigo
+// errado" para reportar, apenas ausencia.
 // Defesa em profundidade: roda DEPOIS do SQL gerado, mesmo que o bloqueio antecipado
 // (antes da chamada a IA) ja tenha tentado impedir o caso comum.
 // `campos` deve ser passado pelo spec do modulo (ex.: comissao usa ['E3_VEND'];
@@ -273,14 +279,20 @@ function validarExclusividadeVendedorSeguranca(sql, entidadeSeguranca, campos) {
   const codigoEsperado = String(entidadeSeguranca.codigo);
   const where = _sqlSemComentarios(sql);
   const erros = [];
+  let temCodigoCorreto = false;
   for (const campo of camposAlvo) {
     const re = new RegExp(`\\b(?:[A-Z0-9_]+\\.)?${_escapeRegexLiteral(campo)}\\s*=\\s*'([^']*)'`, 'gi');
     let m;
     while ((m = re.exec(where))) {
       if (m[1] !== codigoEsperado) {
         erros.push(`SQL filtra ${campo} pelo codigo '${m[1]}', diferente do vendedor autorizado '${codigoEsperado}'. Acesso negado: nunca filtre dados de outro vendedor.`);
+      } else {
+        temCodigoCorreto = true;
       }
     }
+  }
+  if (!erros.length && !temCodigoCorreto) {
+    erros.push(`SQL nao contem filtro pelo vendedor autorizado '${codigoEsperado}' em nenhum dos campos esperados (${camposAlvo.join(', ')}). Acesso negado: toda consulta deve filtrar explicitamente pelo vendedor autenticado.`);
   }
   return { ok: erros.length === 0, erros };
 }
