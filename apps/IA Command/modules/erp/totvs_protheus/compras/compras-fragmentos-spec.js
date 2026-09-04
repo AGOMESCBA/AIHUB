@@ -274,6 +274,7 @@ function aprovacaoPedidoCompra({ temNomeAprovador } = {}) {
 - SCR e tabela de CABECALHO de documento (nao tem item) — chave: SCR.CR_FILIAL + SCR.CR_NUM + SCR.CR_TIPO.
 - SCR.CR_TIPO identifica o tipo de documento em aprovacao. Para pedido de compra, filtre SEMPRE SCR.CR_TIPO = 'PC'. NUNCA use SCR sem esse filtro — sem ele a consulta mistura outros tipos de documento (solicitacao de compra 'SC', nota fiscal 'NF', contrato 'CT', etc.), retornando aprovacoes que nao sao de pedido de compra.
 - Join SCR -> SC7 (pedido de compra): SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.D_E_L_E_T_ = ' '. E relacionamento de CABECALHO (SCR nao tem C7_ITEM) — nao junte por item.
+- PROIBIDO — CR_LOJA nao existe em SCR. NUNCA adicione C7_LOJA = CR_LOJA a este JOIN.
 ${joinAprovador}
 - SCR.CR_STATUS (controle da aprovacao, valores fixos do Protheus):
   '01' = aguardando nivel anterior.

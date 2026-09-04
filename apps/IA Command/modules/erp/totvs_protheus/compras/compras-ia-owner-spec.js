@@ -480,6 +480,20 @@ module.exports = {
         return null;
       },
     },
+    {
+      // Bug real confirmado em producao, intermitente: IA junta SC7<->SCR usando
+      // C7_LOJA = CR_LOJA. CR_LOJA nao existe em SCR (confirmado no SX3 real) — o guard
+      // SX3 generico ja rejeitaria, mas este da um erro mais direto para a IA corrigir.
+      validar(sql) {
+        if (/\bSCR\s*\.\s*CR_LOJA\b/i.test(sql)) {
+          return (
+            "SQL referencia SCR.CR_LOJA — campo INEXISTENTE. O JOIN entre SC7 e SCR usa SOMENTE " +
+            "SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, sem loja."
+          );
+        }
+        return null;
+      },
+    },
   ],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta de compras no momento. Tente novamente em breve.',
