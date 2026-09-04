@@ -175,6 +175,19 @@ const server = http.createServer((req, res) => {
           res.writeHead(200);
           res.end(JSON.stringify({ ok: true }));
           await _encerrar();
+        } else if (cmd === 'start') {
+          const statusAtual = svc.getStatus?.() ?? 'unknown';
+          if (statusAtual === 'connected' || statusAtual === 'starting') {
+            res.writeHead(200);
+            res.end(JSON.stringify({ ok: true, status: statusAtual }));
+            return;
+          }
+
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, status: 'starting' }));
+          _ultimoQr = null;
+          log('info', 'Iniciar solicitado — conectando com a sessão salva...');
+          await _iniciar();
         } else if (cmd === 'clear-buffer') {
           svc.clearBuffer?.();
           res.writeHead(200);

@@ -94,11 +94,15 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
     });
   }
 
-  function _statusConsolidado(nssmStatus, workerAlive) {
+  function _statusConsolidado(nssmStatus, health) {
     if (nssmStatus === 'not_installed')    return 'sem_servico';
-    if (nssmStatus === 'SERVICE_RUNNING')  return workerAlive ? 'connected' : 'starting';
     if (nssmStatus === 'SERVICE_STOPPED')  return 'stopped';
     if (nssmStatus === 'SERVICE_PAUSED')   return 'stopped'; // NSSM pausa quando processo filho morre rápido
+    if (nssmStatus === 'SERVICE_RUNNING') {
+      const waStatus = String(health?.status || '').toLowerCase();
+      if (['connected', 'starting', 'stopped', 'error'].includes(waStatus)) return waStatus;
+      return 'starting';
+    }
     return 'unknown';
   }
 
@@ -138,7 +142,7 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
             ? await _workerHealth(canal.worker_port)
             : null;
           const workerAlive = health !== null;
-          const status      = _statusConsolidado(nssmStatus, workerAlive);
+          const status      = _statusConsolidado(nssmStatus, health);
 
           return {
             id:           canal.id,
@@ -209,6 +213,20 @@ module.exports = function registrarRotasWindowsService(app, { requireAuth, requi
       const slug = canal.service_slug || nssm.slugDoCanal(canal.id, canal.nome);
       const porta = canal.worker_port;
       if (!porta) return res.status(400).json({ error: 'Canal sem porta worker configurada. Execute /install primeiro.' });
+
+      const nssmStatus = nssm.statusServico(slug);
+      if (nssmStatus === 'SERVICE_RUNNING') {
+        const health = await _workerHealth(porta);
+        if (health) {
+          const waStatus = String(health.status || '').toLowerCase();
+          if (waStatus === 'connected' || waStatus === 'starting') {
+            return res.json({ ok: true, status: waStatus, worker_alive: true, worker_pid: health.pid || null });
+          }
+
+          const resultadoWorker = await _workerCommand(porta, 'start');
+          return res.json({ ok: true, status: 'starting', worker_alive: true, ...resultadoWorker });
+        }
+      }
 
       const resultado = nssm.iniciarServico(canal.id, slug, porta, {
         IAC_HUB_CALLBACK_URL: `http://localhost:${process.env.PORT || 3000}/api/ia-command/whatsapp/worker-event`,
