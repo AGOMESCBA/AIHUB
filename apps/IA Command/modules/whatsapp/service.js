@@ -502,7 +502,7 @@ class IACWhatsAppService extends EventEmitter {
       if (WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT && _sessionLooksAuthenticated(sessao)) {
         this.log(
           `${motivo}; sessao "${sessao}" parece autenticada, entao foi preservada. ` +
-          'Tente iniciar novamente em alguns instantes antes de solicitar um novo QR.',
+          'Reinicie o servico em alguns instantes antes de solicitar um novo QR.',
           'warning'
         );
         if (this.client) {
