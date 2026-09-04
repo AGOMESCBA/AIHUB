@@ -460,6 +460,26 @@ module.exports = {
         );
       },
     },
+    {
+      // Bug real confirmado em producao: pergunta "pedidos de compras aprovados no mes
+      // passado agrupado por dia, aprovador, pedido e valor" gerou SQL projetando
+      // SC7.C7_CONAPRO (ou C7_APROV) com AS aprovador — esses campos guardam um STATUS
+      // ('L'/'B'/'R'), NAO uma pessoa. Sem regra explicita para "por aprovador" em pedidos
+      // JA aprovados (so havia regra para pedidos bloqueados), a IA usou o unico campo
+      // "relacionado a aprovacao" que tinha a mao. O aprovador real (quem liberou) vem de
+      // SCR.CR_APROV/SAK.AK_NOME com SCR.CR_STATUS = '03' — nunca de C7_CONAPRO/C7_APROV.
+      validar(sql) {
+        const m = sql.match(/\bSC7\s*\.\s*(C7_CONAPRO|C7_APROV)\s+AS\s+aprovador\b/i);
+        if (m) {
+          return (
+            `SQL projeta SC7.${m[1].toUpperCase()} AS aprovador — campo ERRADO. ` +
+            `SC7.C7_CONAPRO e SC7.C7_APROV guardam um STATUS ('L'/'B'/'R'), nao o codigo/nome de uma pessoa. ` +
+            "O aprovador real (quem liberou o pedido) vem de SCR.CR_APROV (ou SAK.AK_NOME via JOIN com SAK) filtrando SCR.CR_STATUS = '03' (liberado) — nunca de C7_CONAPRO ou C7_APROV."
+          );
+        }
+        return null;
+      },
+    },
   ],
   mensagensErro: {
     ia_indisponivel: 'Nao consigo processar sua consulta de compras no momento. Tente novamente em breve.',

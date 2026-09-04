@@ -500,13 +500,33 @@ function detectarShape(rows, opts = {}) {
   let dimensoesNormalizadas = compactarDimensoesBancarias(dimensoes);
   dimensoesNormalizadas = reduzirDimensoesFinanceirasDetalhe(dimensoesNormalizadas, metricas, opts);
 
-  if (dimensoesNormalizadas.length > 3) {
+  // >3 dimensoes: sempre hierarquico (se houver temporal) — lista plana viraria ilegivel.
+  // ===3 dimensoes COM uma temporal QUE VARIA (mais de 1 valor distinto) E VOLUME ALTO
+  // (mais linhas que o corte de exibicao do formato plano, hoje 80): tambem usa o formato
+  // hierarquico (agrupado por periodo com subtotal) — uma combinacao de 3 dimensoes com
+  // granularidade fina (ex.: dia + aprovador + documento) normalmente nao reduz a
+  // quantidade de linhas (cada documento e unico), entao uma lista plana grande fica
+  // truncada e ilegivel no WhatsApp. Com poucas linhas (abaixo do corte), o formato plano
+  // ja e legivel e o hierarquico so acrescentaria cabecalhos/subtotais desnecessarios (ex.:
+  // 2 registros virando 2 blocos de 1 item cada). Quando o temporal e UNICO (ex.:
+  // "faturamento do dia", uma so data em todo o resultado), agrupar por ele nao ajuda em
+  // nada de qualquer forma — mantem o formato plano/duas-dimensoes (contextoTemporalUnico).
+  const CORTE_VOLUME_HIERARQUICO = 80;
+  if (
+    dimensoesNormalizadas.length > 3
+    || (
+      dimensoesNormalizadas.length === 3
+      && dimensoesNormalizadas.some(isTemporal)
+      && rows.length > CORTE_VOLUME_HIERARQUICO
+      && !contextoTemporalUnico(rows, dimensoesNormalizadas)
+    )
+  ) {
     const temporal = dimensoesNormalizadas.find(isTemporal);
     if (temporal) {
       const ordenadas = ordenarDetalheTemporalDimensoes(dimensoesNormalizadas);
       return { tipo: 'detalhe_temporal_multidimensional', dimensao: temporal, dimensoes: ordenadas, metricas };
     }
-    return null;
+    if (dimensoesNormalizadas.length > 3) return null;
   }
   if (dimensoesNormalizadas.length === 0) return { tipo: 'metricas_simples', dimensao: null, dimensoes: [], metricas };
   if (dimensoesNormalizadas.length === 1 && metricas.length === 1 && isCategoriaSemantica(dimensoesNormalizadas[0])) {

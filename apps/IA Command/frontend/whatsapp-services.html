@@ -1339,21 +1339,18 @@ function selecionarCanal(id) {
   document.getElementById('main-empty').style.display = 'none';
   document.getElementById('main-channel').style.display = 'flex';
 
-  // QR — se há imagem visível na tela, não interfere (o Socket.IO controla o painel)
-  // Só define o estado inicial quando não há QR ativo
+  // QR — canal conectado sempre ganha prioridade sobre qualquer estado visual antigo.
   const qrImg = document.getElementById('qr-img');
   const temQr = qrImg && qrImg.src && qrImg.src.length > 10;
-  if (!temQr) {
+  if (canal.estado === 'connected') {
     _esconderQr();
-    if (canal.estado === 'connected') {
-      document.getElementById('qr-waiting').style.display   = 'none';
-      document.getElementById('qr-connected').style.display = 'block';
-    } else {
-      document.getElementById('qr-waiting').style.display   = 'block';
-      document.getElementById('qr-connected').style.display = 'none';
-    }
+    document.getElementById('qr-waiting').style.display   = 'none';
+    document.getElementById('qr-connected').style.display = 'block';
+  } else if (!temQr) {
+    _esconderQr();
+    document.getElementById('qr-waiting').style.display   = 'block';
+    document.getElementById('qr-connected').style.display = 'none';
   }
-  // Se tem QR visível e o banco diz connected: deixa o QR — o usuário ainda não escaneou
 
   document.getElementById('ctrl-canal-nome').textContent = `${canal.icone} ${canal.nome}`;
   document.getElementById('ctrl-canal-num').textContent  = canal.numero;

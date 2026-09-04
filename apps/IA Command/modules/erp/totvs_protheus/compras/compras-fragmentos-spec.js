@@ -286,6 +286,7 @@ ${joinAprovador}
 - REGRA CRITICA — "aguardando aprovacao", "pendente de liberacao", "bloqueado" ou "nao apto a ser comprado" (linguagem de negocio do usuario) identifica o PEDIDO sempre por SC7.C7_CONAPRO = 'B' — o campo CONSOLIDADO e definitivo (diferente de 'B', ou seja 'L'/vazio (liberado) ou 'R' (rejeitado), significa que nao ha bloqueio de aprovacao pendente). NUNCA use SCR.CR_STATUS sozinho para decidir SE um pedido esta bloqueado — SCR tem uma linha por NIVEL, entao um pedido pode ter niveis ja liberados ('03') e ainda assim estar bloqueado no nivel seguinte; so o campo consolidado do proprio pedido (C7_CONAPRO) resolve isso sem ambiguidade.
 - Pergunta SEM "por aprovador" (ex: "quantos pedidos estao bloqueados", "pedidos aguardando aprovacao"): responda direto com SC7.C7_CONAPRO = 'B', SEM JOIN com SCR — nao ha necessidade de tocar a tabela de fluxo so para contar/listar pedidos.
 - Pergunta COM "por aprovador" (agrupar por quem precisa liberar): alem de C7_CONAPRO = 'B' no pedido, filtre tambem SCR.CR_STATUS IN ('01','02','04') no WHERE — isso traz TODOS os niveis/aprovadores que ainda impedem a liberacao do pedido (aguardando nivel anterior, pendente no nivel atual, ou bloqueado), propositalmente EXCLUINDO niveis ja liberados ('03') do mesmo pedido. Se o pedido estiver pendente para mais de um aprovador/nivel simultaneamente, ele aparece uma vez PARA CADA aprovador — isso e o comportamento correto (cada aprovador precisa ver o pedido na propria fila), nao e duplicacao indevida.
+- REGRA CRITICA — pedidos JA APROVADOS/LIBERADOS (C7_CONAPRO IN ('L','')) agrupados "por aprovador": aqui "aprovador" significa QUEM LIBEROU o pedido no fluxo, nao quem esta bloqueando — use JOIN com SCR filtrando SCR.CR_STATUS = '03' (liberado) e exiba SAK.AK_NOME/SCR.CR_APROV (mesma logica ja aplicada em "o que eu ja aprovei", generalizada para qualquer aprovador, nao so o remetente). NUNCA projete SC7.C7_CONAPRO ou SC7.C7_APROV como se fossem o nome/codigo do aprovador — esses campos guardam um STATUS ('L'/'B'/'R'), nao uma pessoa. Sem JOIN com SCR disponivel para esta empresa, informe que a identificacao de aprovador nao esta disponivel em vez de inventar uma coluna.
 - SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
 - Quando o usuario pedir "por aprovador", agrupe pelo aprovador (SCR.CR_APROV ou SAK.AK_NOME conforme disponibilidade) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
 - Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado para ATENDIMENTO (resultado final de recebimento). SCR detalha o FLUXO de aprovacao por ALCADA (quem, em que nivel, em que status) — use SCR apenas para identificar QUEM esta no caminho do bloqueio, nunca para decidir SE o pedido esta bloqueado (isso e sempre C7_CONAPRO).
@@ -312,6 +313,21 @@ ${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.
   AND SCR.CR_EMISSAO BETWEEN '20260701' AND '20260731'
 GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM
 ORDER BY ${temNomeAprovador ? 'SAK.AK_NOME' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM;
+
+### EXEMPLO CORRETO — pedidos de compra APROVADOS, agrupados por dia, aprovador, pedido e valor
+SELECT CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
+       ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
+       SCR.CR_NUM AS numero_pedido,
+       SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SCRxxx SCR
+JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.C7_CONAPRO IN ('L', '') AND SC7.D_E_L_E_T_ = ' '
+${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
+  AND SCR.CR_TIPO = 'PC'
+  AND SCR.CR_STATUS = '03'
+  AND SCR.CR_DATALIB BETWEEN '20260701' AND '20260731'
+GROUP BY CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103), ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_NUM
+ORDER BY SCR.CR_EMISSAO, ${temNomeAprovador ? 'SAK.AK_NOME' : 'SCR.CR_APROV'}, SCR.CR_NUM;
+-- Nao confundir SCR.CR_EMISSAO (data de emissao do documento) com o periodo de aprovacao pedido pelo usuario: quando a pergunta for sobre pedidos APROVADOS num periodo (ex: "aprovados no mes passado"), filtre pela DATA DA LIBERACAO (SCR.CR_DATALIB), nao pela emissao — um pedido pode ter sido emitido num mes e liberado em outro.
 `;
 }
 

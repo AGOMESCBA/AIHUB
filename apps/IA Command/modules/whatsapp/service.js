@@ -46,6 +46,7 @@ const WHATSAPP_SILENT_SESSION_RETRY_MS = Math.max(60000, Number(process.env.IAC_
 const WHATSAPP_QR_AUTH_TIMEOUT_MS = Math.max(60000, Number(process.env.IAC_WA_QR_AUTH_TIMEOUT_MS || 300000));
 const WHATSAPP_PRESERVE_AUTH_SESSION_ON_TIMEOUT = String(process.env.IAC_WA_PRESERVE_AUTH_SESSION_ON_TIMEOUT ?? '1') !== '0';
 const WHATSAPP_TYPING_REFRESH_MS = Math.max(5000, Number(process.env.IAC_WA_TYPING_REFRESH_MS || 20000));
+const WHATSAPP_PROGRESS_REFRESH_MS = Math.max(700, Number(process.env.IAC_WA_PROGRESS_REFRESH_MS || 900));
 // Reconexao automatica apos "disconnected" com motivo recuperavel (NAVIGATION, CONFLICT, etc).
 // LOGOUT nao entra aqui: significa que o vinculo foi revogado no celular e a sessao salva fica invalida.
 const WHATSAPP_AUTO_RECONNECT_MAX_TENTATIVAS = Math.max(0, Number(process.env.IAC_WA_AUTO_RECONNECT_MAX_TENTATIVAS ?? 5));
@@ -923,6 +924,90 @@ class IACWhatsAppService extends EventEmitter {
     return partes.length;
   }
 
+  async _sendSingleReplyMessageSafe(chat, sender, texto) {
+    try {
+      if (!chat || typeof chat.sendMessage !== 'function') {
+        throw new Error('Chat nao disponivel');
+      }
+      return await chat.sendMessage(texto);
+    } catch (chatErr) {
+      if (!this.client) {
+        this.log(`Cliente WhatsApp nulo — mensagem nao entregue para ${sender}`, 'error');
+        return null;
+      }
+      try {
+        this.log(`Chat indisponível; mensagem enviada por rota direta para ${sender}.`, 'warning');
+        return await this.client.sendMessage(sender, texto);
+      } catch (directErr) {
+        this.log(`Envio direto tambem falhou para ${sender}: ${directErr.message}`, 'error');
+        return null;
+      }
+    }
+  }
+
+  _startProgressMessageAnimation(progressMessage, { baseText = '*IA Command* está processando' } = {}) {
+    if (!progressMessage || typeof progressMessage.edit !== 'function') {
+      return { canEdit: false, stop: async () => {} };
+    }
+
+    let stopped = false;
+    let frame = -1;
+    let inFlight = Promise.resolve();
+    const frames = ['●○○', '○●○', '○○●'];
+    const render = () => `${frames[frame]} ${baseText}`;
+    const tick = async () => {
+      if (stopped) return;
+      frame = (frame + 1) % frames.length;
+      try {
+        inFlight = progressMessage.edit(render());
+        await inFlight;
+      } catch (err) {
+        stopped = true;
+        clearInterval(intervalId);
+        this.log(`Falha ao animar mensagem de processamento: ${err.message}`, 'warning');
+      }
+    };
+    const intervalId = setInterval(tick, WHATSAPP_PROGRESS_REFRESH_MS);
+    setTimeout(tick, 250);
+
+    return {
+      canEdit: true,
+      stop: async () => {
+        stopped = true;
+        clearInterval(intervalId);
+        try { await inFlight; } catch (_) {}
+      },
+    };
+  }
+
+  async _sendReplyReplacingProgressSafe(chat, sender, progressMessage, texto) {
+    const partes = _quebrarMensagemWhatsapp(texto);
+    if (progressMessage && typeof progressMessage.edit === 'function') {
+      try {
+        const primeira = partes.length > 1 ? `(1/${partes.length})\n${partes[0]}` : partes[0];
+        await progressMessage.edit(primeira);
+        for (let i = 1; i < partes.length; i++) {
+          await this._sendSingleReplyMessageSafe(chat, sender, `(${i + 1}/${partes.length})\n${partes[i]}`);
+        }
+        return partes.length;
+      } catch (err) {
+        this.log(`Falha ao substituir mensagem de processamento pela resposta: ${err.message}`, 'warning');
+      }
+    }
+    return this._sendReplyMessageSafe(chat, sender, texto);
+  }
+
+  async _finalizeProgressMessage(progressMessage, texto) {
+    if (!progressMessage || typeof progressMessage.edit !== 'function') return false;
+    try {
+      await progressMessage.edit(texto);
+      return true;
+    } catch (err) {
+      this.log(`Falha ao finalizar mensagem de processamento: ${err.message}`, 'warning');
+      return false;
+    }
+  }
+
   async _startTypingIndicator(chat, sender, { contexto = 'resposta' } = {}) {
     let replyChat = chat;
     if (!replyChat || typeof replyChat.sendStateTyping !== 'function') {
@@ -938,6 +1023,9 @@ class IACWhatsAppService extends EventEmitter {
       if (stopped || running) return;
       running = true;
       try {
+        if (this.client && typeof this.client.sendPresenceAvailable === 'function') {
+          await this.client.sendPresenceAvailable().catch(() => {});
+        }
         await replyChat.sendStateTyping();
       } catch (err) {
         this.log(`Falha ao atualizar indicador de digitacao (${contexto}) para ${sender}: ${err.message}`, 'warning');
@@ -3659,32 +3747,26 @@ class IACWhatsAppService extends EventEmitter {
     this.log(`📩 Texto recebido: "${texto}"`, 'received');
 
     let chat = null;
+    let progressMessage = null;
     try {
       chat = await msg.getChat();
-      await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, 'processando', {
-        canal_nome: this._channelName || '',
-        numero: this._normalizarNumeroWa(sender),
-      }));
+      progressMessage = await this._sendSingleReplyMessageSafe(chat, sender, '●○○ *IA Command* está processando');
       this.log(`⏳ Acuse de recebimento enviado — iniciando pipeline...`, 'info');
     } catch (chatErr) {
       this.log(`Chat indisponível pelo evento; tentando recuperar por ID antes da rota direta: ${chatErr.message}`, 'warning');
       chat = await this._resolveReplyChat([msg.from, msg?.id?.remote, sender]);
       if (chat) this.log(`Chat recuperado por getChatById para ${sender}.`, 'info');
-      try {
-        await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, 'processando', {
-          canal_nome: this._channelName || '',
-          numero: this._normalizarNumeroWa(sender),
-        }));
-      } catch (directAckErr) {
-        this.log(`Falha tambem no acuse direto: ${directAckErr.message}`, 'warning');
-      }
+      progressMessage = await this._sendSingleReplyMessageSafe(chat, sender, '●○○ *IA Command* está processando');
     }
 
     const t0 = Date.now();
     const _timingCtx = { logId: null, recebidoEm: new Date(t0).toISOString() };
     const typingIndicator = await this._startTypingIndicator(chat, sender, { contexto: 'texto' });
+    const progressAnimation = this._startProgressMessageAnimation(progressMessage, {
+      baseText: '*IA Command* está processando',
+    });
 
-    // Heartbeat: envia mensagem de progresso durante consultas longas para manter o WhatsApp Web ativo.
+    // Mantem telemetria de consultas longas sem enviar novas mensagens de progresso.
     const HEARTBEAT_INTERVAL_MS = 30000;
     let heartbeatCount = 0;
     const heartbeatId = setInterval(async () => {
@@ -3700,10 +3782,9 @@ class IACWhatsAppService extends EventEmitter {
           clearInterval(heartbeatId);
           return;
         }
-        await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, 'aguardando_processamento', {}));
-        this.log(`⏳ Heartbeat #${heartbeatCount} enviado para ${sender} (${Math.round((Date.now() - t0) / 1000)}s)`, 'info');
+        this.log(`⏳ Processamento ainda em andamento para ${sender} (${Math.round((Date.now() - t0) / 1000)}s)`, 'info');
       } catch (hbErr) {
-        this.log(`Falha ao enviar heartbeat: ${hbErr.message}`, 'error');
+        this.log(`Falha ao registrar heartbeat: ${hbErr.message}`, 'error');
       }
     }, HEARTBEAT_INTERVAL_MS);
 
@@ -3723,12 +3804,14 @@ class IACWhatsAppService extends EventEmitter {
         clearTimeout(timeoutId);
         clearInterval(heartbeatId);
         await typingIndicator.stop();
+        await progressAnimation.stop();
       });
       if ((this._senderCancelledAt.get(this._sessionKey(sender)) || 0) > t0) {
         this.log(`🚫 Resposta descartada — conversa foi resetada durante o processamento (${sender})`, 'info');
         return;
       }
       try {
+        await this._finalizeProgressMessage(progressMessage, '✅ *IA Command* consulta concluída');
         const partesEnviadas = await this._sendReplyMessageSafe(chat, sender, resposta);
         const entregueMs = Date.now() - t0;
         if (partesEnviadas > 1) this.log(`Resposta dividida em ${partesEnviadas} partes para ${sender}.`, 'info');
@@ -3742,11 +3825,13 @@ class IACWhatsAppService extends EventEmitter {
     } catch (err) {
       clearInterval(heartbeatId);
       await typingIndicator.stop();
+      await progressAnimation.stop();
       this.log(`❌ Pipeline falhou (${Date.now() - t0}ms): ${err.message}`, 'error');
       const isTimeout = /timeout ao chamar o agente|tempo limite de processamento excedido/i.test(err.message);
       const templateChave = isTimeout ? 'timeout_agente' : 'erro_processamento';
       try {
         if (this.client) {
+          await this._finalizeProgressMessage(progressMessage, '⚠️ *IA Command* consulta finalizada com erro');
           await this._sendReplyMessageSafe(chat, sender, messageTemplates.render(this._empresaId, templateChave, { erro: err.message }));
         } else {
           this.log(`Cliente nulo — mensagem de erro nao entregue para ${sender}`, 'error');
