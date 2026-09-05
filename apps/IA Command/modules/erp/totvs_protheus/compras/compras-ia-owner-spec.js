@@ -507,7 +507,7 @@ module.exports = {
         const origem = mCampo ? `${mCampo[1].toUpperCase()}.${mCampo[2].toUpperCase()}` : 'um campo';
         return (
           `SQL projeta ${origem} como aprovador, mas nao usa a tabela SCR em lugar nenhum — fonte ERRADA. ` +
-          "Aprovador (quem liberou o pedido na alcada) SO pode vir de SCR.CR_APROV (ou SAK.AK_NOME via LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD), com JOIN SCR-SC7 por SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM e SCR.CR_STATUS = '03' (liberado). " +
+          "Aprovador (quem liberou o pedido na alcada) SO pode vir de SCR.CR_APROV (ou SAK.AK_NOME via LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD), com JOIN SCR-SC7 por SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, SCR.CR_TIPO = 'PC' e SCR.CR_STATUS = '03' (liberado). " +
           "NUNCA use SC7.C7_CONAPRO/C7_APROV (status do pedido, nao pessoa) nem SA2.A2_NOME (nome do FORNECEDOR do pedido) como se fossem o aprovador."
         );
       },
@@ -524,6 +524,45 @@ module.exports = {
           );
         }
         return null;
+      },
+    },
+    {
+      // Bug real confirmado em producao: a mesma pergunta no Chat Protheus e no WhatsApp
+      // retornou totais diferentes porque uma SQL juntou SCR sem filtrar CR_STATUS = '03'.
+      // SCR tem uma linha por etapa/status de aprovacao; sem esse filtro, o mesmo pedido
+      // entra por outros niveis/status e multiplica SUM(SC7.C7_TOTAL).
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        if (!perguntaPedidoAprovado) return null;
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaSCR) return null;
+        const temStatusLiberado = /\bSCR\s*\.\s*CR_STATUS\s*=\s*'03'/i.test(sql);
+        if (temStatusLiberado) return null;
+        return (
+          "SQL consulta pedidos de compra aprovados usando SCR, mas nao filtra SCR.CR_STATUS = '03'. " +
+          "SCR tem uma linha por nivel/status de aprovacao; sem CR_STATUS = '03', a query soma o mesmo pedido em etapas diferentes e infla SUM(SC7.C7_TOTAL). " +
+          "Adicione AND SCR.CR_STATUS = '03' no JOIN ou WHERE."
+        );
+      },
+    },
+    {
+      // SCR mistura tipos de documento (PC, SC, NF, CT etc.). Para pedido de compra, o
+      // filtro CR_TIPO = 'PC' e parte da chave semantica; sem ele a consulta pode trazer
+      // aprovacoes de outros documentos com o mesmo numero.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoCompra = /\bpedidos?\s+de\s+compras?\b/.test(texto);
+        if (!perguntaPedidoCompra) return null;
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaSCR) return null;
+        const temTipoPC = /\bSCR\s*\.\s*CR_TIPO\s*=\s*'PC'/i.test(sql);
+        if (temTipoPC) return null;
+        return (
+          "SQL usa SCR para pedido de compra, mas nao filtra SCR.CR_TIPO = 'PC'. " +
+          "SCR armazena fluxos de aprovacao de varios tipos de documento; sem CR_TIPO = 'PC', a consulta pode misturar solicitacoes, notas, contratos ou outros documentos. " +
+          "Adicione AND SCR.CR_TIPO = 'PC' no JOIN ou WHERE."
+        );
       },
     },
     {

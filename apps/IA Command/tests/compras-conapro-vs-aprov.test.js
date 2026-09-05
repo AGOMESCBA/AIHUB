@@ -109,7 +109,7 @@ ok('JOIN SC7<->SCR usando C7_LOJA = CR_LOJA e rejeitado com erro especifico', ()
 SELECT CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103) AS dia, SCR.CR_APROV AS aprovador, SC7.C7_NUM AS pedido, SUM(SC7.C7_TOTAL) AS valor
 FROM SC7010 SC7
 JOIN SCR010 SCR ON SC7.C7_NUM = SCR.CR_NUM AND SC7.C7_LOJA = SCR.CR_LOJA AND SCR.D_E_L_E_T_ = ' '
-WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '') AND SC7.C7_EMISSAO BETWEEN '20260801' AND '20260831' AND SCR.CR_STATUS = '03'
+WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '') AND SC7.C7_EMISSAO BETWEEN '20260801' AND '20260831' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'
 GROUP BY SC7.C7_EMISSAO, SCR.CR_APROV, SC7.C7_NUM;`;
   const erros = validar(sql, 'Pedidos de compras aprovados no mes passado agrupado por dia, aprovador, pedido e valor');
   assert.ok(erros.some(e => /CR_LOJA/.test(e) && /INEXISTENTE/i.test(e)), `esperava erro sobre CR_LOJA inexistente, obteve: ${JSON.stringify(erros)}`);
@@ -136,7 +136,7 @@ ok('SC7 agrupado por numero de pedido com COUNT(*) e rejeitado quando a pergunta
 SELECT SCR.CR_APROV AS aprovador, SC7.C7_NUM AS pedido, COUNT(*) AS total
 FROM SC7010 SC7
 JOIN SCR010 SCR ON SC7.C7_NUM = SCR.CR_NUM AND SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.D_E_L_E_T_ = ' '
-WHERE SC7.D_E_L_E_T_ = ' ' AND SCR.CR_STATUS = '03' AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+WHERE SC7.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
 GROUP BY SCR.CR_APROV, SC7.C7_NUM;`;
   const erros = validar(sql, 'Pedidos de compras aprovados do mes agrupados por nome do aprovador e numero de pedido');
   assert.ok(erros.some(e => /COUNT\(\*\)/.test(e) && /SUM/.test(e)), `esperava erro de COUNT(*) vs SUM, obteve: ${JSON.stringify(erros)}`);
@@ -147,7 +147,7 @@ ok('SC7 agrupado por numero de pedido com SUM(valor) correto nao dispara o guard
 SELECT SCR.CR_APROV AS aprovador, SC7.C7_NUM AS pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SC7010 SC7
 JOIN SCR010 SCR ON SC7.C7_NUM = SCR.CR_NUM AND SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.D_E_L_E_T_ = ' '
-WHERE SC7.D_E_L_E_T_ = ' ' AND SCR.CR_STATUS = '03'
+WHERE SC7.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'
 GROUP BY SCR.CR_APROV, SC7.C7_NUM;`;
   const erros = validar(sql, 'Pedidos de compras aprovados do mes agrupados por aprovador e numero de pedido');
   assert.ok(!erros.some(e => /COUNT\(\*\)/.test(e)), `nao deveria disparar: ${JSON.stringify(erros)}`);
@@ -158,7 +158,7 @@ ok('"quantos pedidos" com COUNT(*) nao dispara o guard (contagem foi pedida expl
 SELECT SCR.CR_APROV AS aprovador, SC7.C7_NUM AS pedido, COUNT(*) AS total
 FROM SC7010 SC7
 JOIN SCR010 SCR ON SC7.C7_NUM = SCR.CR_NUM AND SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.D_E_L_E_T_ = ' '
-WHERE SC7.D_E_L_E_T_ = ' ' AND SCR.CR_STATUS = '03'
+WHERE SC7.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'
 GROUP BY SCR.CR_APROV, SC7.C7_NUM;`;
   const erros = validar(sql, 'Quantos pedidos de compra foram aprovados por aprovador e numero de pedido');
   assert.ok(!erros.some(e => /COUNT\(\*\)/.test(e)), `nao deveria disparar quando a pergunta pede contagem explicita: ${JSON.stringify(erros)}`);
@@ -168,7 +168,7 @@ ok('pedidos aprovados por nome do aprovador e dia com COUNT(*) e rejeitado quand
   const sql = `SET ROWCOUNT 10000;
 SELECT SC7.C7_EMISSAO AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, COUNT(*) AS total_pedidos
 FROM SC7010 SC7
-JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
 LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
 WHERE SC7.D_E_L_E_T_ = ' '
   AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
@@ -263,6 +263,52 @@ WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'
 GROUP BY COALESCE(SAK.AK_NOME, SCR.CR_APROV), SC7.C7_NUM;`;
   const erros = validar(sql, 'Pedidos de compras aprovados do mes agrupados por nome do aprovador e numero de pedido');
   assert.ok(!erros.some(e => /NOME do aprovador/i.test(e) && /SAK\.AK_NOME/.test(e)), `nao deveria disparar guard de nome: ${JSON.stringify(erros)}`);
+});
+
+console.log('\n[8] SCR em pedido de compra exige CR_TIPO=PC e, para aprovados, CR_STATUS=03');
+
+// Bug real confirmado entre canais: a mesma pergunta no WhatsApp trouxe CR_STATUS = '03',
+// enquanto o Chat Protheus omitiu esse filtro e inflou SUM(SC7.C7_TOTAL) por repetir o
+// pedido em varias linhas/status do fluxo SCR.
+ok('SQL do Chat sem SCR.CR_STATUS = \'03\' e rejeitado para pedidos aprovados', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103) AS dia, SC7.C7_NUM AS numero_pedido, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SC7010 SC7
+JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103), SC7.C7_NUM, SCR.CR_APROV, SAK.AK_NOME
+ORDER BY dia, numero_pedido;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /CR_STATUS\s*=\s*'03'/.test(e) && /infla SUM/.test(e)), `esperava erro exigindo CR_STATUS, obteve: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL com SCR em pedido de compra sem SCR.CR_TIPO = \'PC\' e rejeitado', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT SC7.C7_NUM AS numero_pedido, SC7.C7_EMISSAO AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SC7010 SC7
+JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_NUM, SC7.C7_EMISSAO, SAK.AK_NOME, SCR.CR_APROV;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /CR_TIPO\s*=\s*'PC'/.test(e)), `esperava erro exigindo CR_TIPO=PC, obteve: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL de pedidos aprovados com SCR.CR_TIPO = \'PC\' e SCR.CR_STATUS = \'03\' passa', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT SC7.C7_NUM AS numero_pedido, CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SC7010 SC7
+JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_NUM, SC7.C7_EMISSAO, SAK.AK_NOME, SCR.CR_APROV
+ORDER BY SC7.C7_EMISSAO, aprovador;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(!erros.some(e => /CR_STATUS\s*=\s*'03'|CR_TIPO\s*=\s*'PC'/.test(e)), `nao deveria disparar guard de filtros SCR: ${JSON.stringify(erros)}`);
 });
 
 if (falhou === 0) {
