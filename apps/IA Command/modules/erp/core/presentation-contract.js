@@ -53,6 +53,7 @@ const METRICS = [
   { canon: 'fluxo_liquido', label: 'Saldo Bancario Final', type: 'money', totalRule: 'last', aliases: ['fluxo_liquido', 'saldo_projetado', 'saldo_final', 'saldo_final_projetado'] },
   { canon: 'crescimento_valor', label: 'Crescimento Valor', type: 'money', totalRule: 'ignore', aliases: ['crescimento_valor', 'variacao_valor', 'valor_crescimento', 'valor_variacao'] },
   { canon: 'crescimento_percentual', label: 'Crescimento %', type: 'percent', totalRule: 'ignore', aliases: ['crescimento_percentual', 'crescimento_pct', 'variacao_percentual', 'variacao_pct', 'percentual_crescimento', 'percentual_variacao'] },
+  { canon: 'pedidos', label: 'Total Pedidos', type: 'quantity', totalRule: 'sum', aliases: ['total_pedidos', 'qtd_pedidos', 'quantidade_pedidos', 'pedidos_total', 'pedidos_qtd'] },
   { canon: 'quantidade', label: 'Quantidade', type: 'quantity', totalRule: 'sum', aliases: ['quantidade', 'qtd', 'qtde', 'd1_quant', 'd2_quant'] },
   { canon: 'valor', label: 'Valor', type: 'money', totalRule: 'sum', aliases: ['valor', 'e1_valor', 'e2_valor'] },
 ];

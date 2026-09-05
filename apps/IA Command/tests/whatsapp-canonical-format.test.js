@@ -1103,6 +1103,17 @@ ok('aprovador com codigo de 6 digitos nao e reinterpretado como competencia (mes
   assert.ok(!/Fevereiro|Marco|Março|Abril/i.test(texto), texto);
 });
 
+ok('total_pedidos e formatado como quantidade, nao como valor monetario', () => {
+  const texto = canonical.renderSingle([
+    { dia: '20260901', aprovador: 'Lucivando', total_pedidos: 42 },
+    { dia: '20260901', aprovador: 'GUSTAVO P. C. OLIVEIRA', total_pedidos: 30 },
+  ], { nomeModulo: 'Compras', contextoConsulta: 'Quantos pedidos de compras aprovados neste mes por aprovador e dia' });
+
+  assert.ok(texto.includes('Total Pedidos: *42*'), texto);
+  assert.ok(texto.includes('Total Pedidos: *30*'), texto);
+  assert.ok(!/Total Pedidos: \*R\$/.test(texto), texto);
+});
+
 console.log(`\nwhatsapp-canonical-format.test.js: ${passou} passaram, ${falhou} falharam`);
 if (falhou) process.exit(1);
 

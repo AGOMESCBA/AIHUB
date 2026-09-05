@@ -527,28 +527,25 @@ module.exports = {
       },
     },
     {
-      // Bug real confirmado em producao, intermitente: pergunta "pedidos de compras
-      // aprovados... agrupados por nome do aprovador e numero de pedido" (SEM pedir
-      // "quantos"/contagem explicitamente) gerou SQL usando COUNT(*) AS total em vez de
-      // SUM(SC7.C7_TOTAL) — resultado exibido como "R$ 181,00" quando na verdade era a
-      // CONTAGEM de 47 pedidos, nao o valor monetario somado. Contagem so faz sentido
-      // quando pedida explicitamente ("quantos pedidos"); um agrupamento por NUMERO DE
-      // PEDIDO (chave ja unica por grupo) com COUNT(*) nunca agrega informacao real —
-      // e quase sempre 1 por grupo, entao esse padrao e sinal forte de metrica errada.
+      // Bug real confirmado em producao: perguntas de "pedidos de compras aprovados"
+      // agrupadas por aprovador/dia/pedido (SEM pedir "quantos"/contagem explicitamente)
+      // geraram COUNT(*) AS total_pedidos. O formatter exibiu a contagem como R$, mas o
+      // erro principal nasceu no SQL: por padrao, analise de pedidos deve exibir valor do
+      // pedido (SUM(SC7.C7_TOTAL)); COUNT so faz sentido quando o usuario pede quantidade.
       validar(sql, mensagem) {
         const texto = String(mensagem || '').toLowerCase();
         const pedeContagemExplicita = /\bquant[oa]s?\b/.test(texto) || /\bquantidade\s+de\s+pedidos?\b/.test(texto);
         if (pedeContagemExplicita) return null;
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        if (!perguntaPedidoAprovado) return null;
         const usaSC7 = /\bFROM\s+\w*SC7\w*\s+SC7\b|\bJOIN\s+\w*SC7\w*\s+SC7\b/i.test(sql);
         if (!usaSC7) return null;
-        const agrupaPorNumeroPedido = /\bGROUP\s+BY\b[\s\S]*\bC7_NUM\b|\bGROUP\s+BY\b[\s\S]*\bCR_NUM\b/i.test(sql);
-        if (!agrupaPorNumeroPedido) return null;
         const usaCountEstrela = /\bCOUNT\s*\(\s*\*\s*\)/i.test(sql);
         const usaSum = /\bSUM\s*\(/i.test(sql);
         if (usaCountEstrela && !usaSum) {
           return (
-            "SQL agrupa por numero de pedido (chave ja unica) e usa COUNT(*) — isso conta REGISTROS (quase sempre 1 por grupo), nao soma dinheiro, e a pergunta nao pediu contagem explicitamente. " +
-            "Troque para SUM(SC7.C7_TOTAL) AS valor_pedido, mantendo o mesmo GROUP BY."
+            "SQL usa COUNT(*) para pedidos de compra aprovados, mas a pergunta nao pediu contagem explicitamente — isso conta REGISTROS, nao soma o valor dos pedidos. " +
+            "Troque para SUM(SC7.C7_TOTAL) AS valor_pedido, mantendo os agrupamentos pedidos."
           );
         }
         return null;

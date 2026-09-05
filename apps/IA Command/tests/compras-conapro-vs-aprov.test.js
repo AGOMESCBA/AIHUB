@@ -164,6 +164,20 @@ GROUP BY SCR.CR_APROV, SC7.C7_NUM;`;
   assert.ok(!erros.some(e => /COUNT\(\*\)/.test(e)), `nao deveria disparar quando a pergunta pede contagem explicita: ${JSON.stringify(erros)}`);
 });
 
+ok('pedidos aprovados por nome do aprovador e dia com COUNT(*) e rejeitado quando nao pede contagem', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT SC7.C7_EMISSAO AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, COUNT(*) AS total_pedidos
+FROM SC7010 SC7
+JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_EMISSAO, SAK.AK_NOME, SCR.CR_APROV
+ORDER BY SC7.C7_EMISSAO;`;
+  const erros = validar(sql, 'Pedidos de compras aprovados neste mes agrupado por nome do aprovador e por dia');
+  assert.ok(erros.some(e => /COUNT\(\*\)/.test(e) && /SUM\(SC7\.C7_TOTAL\)/.test(e)), `esperava erro de COUNT(*) vs SUM, obteve: ${JSON.stringify(erros)}`);
+});
+
 console.log('\n[6] Qualquer alias "AS aprovador" sem tabela SCR e rejeitado, nao so C7_CONAPRO/C7_APROV');
 
 // Bug real confirmado em producao, RECORRENTE (2 ocorrencias reais): apos o guard [1]
