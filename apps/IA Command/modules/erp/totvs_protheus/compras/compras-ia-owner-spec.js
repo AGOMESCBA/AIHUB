@@ -527,6 +527,18 @@ module.exports = {
       },
     },
     {
+      // Bug real confirmado em producao: IA gerou LEFT JOIN SCR SCR ON SC7.C7_NUM = SCR.C7_NUM.
+      // SCR nao possui campos C7_*; o numero do documento em SCR e CR_NUM.
+      validar(sql) {
+        const campoSc7DentroScr = String(sql || '').match(/\bSCR\s*\.\s*(C7_\w+)\b/i);
+        if (!campoSc7DentroScr) return null;
+        return (
+          `SQL referencia SCR.${campoSc7DentroScr[1].toUpperCase()} — campo INEXISTENTE em SCR. ` +
+          "SCR nao possui campos C7_*; no JOIN entre SC7 e SCR use SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, com SCR.CR_TIPO = 'PC'."
+        );
+      },
+    },
+    {
       // Bug real confirmado em producao: a mesma pergunta no Chat Protheus e no WhatsApp
       // retornou totais diferentes porque uma SQL juntou SCR sem filtrar CR_STATUS = '03'.
       // SCR tem uma linha por etapa/status de aprovacao; sem esse filtro, o mesmo pedido
@@ -588,6 +600,27 @@ module.exports = {
           );
         }
         return null;
+      },
+    },
+    {
+      // Para pedidos de compra, uma listagem agrupada por pedido/dia/aprovador precisa exibir
+      // o valor do pedido. Sem SUM(SC7.C7_TOTAL), a resposta vira apenas uma lista sem metrica.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        if (!perguntaPedidoAprovado) return null;
+        const pedeItens = /\bitens?\b|\bpor\s+item\b|\bdetalhad[oa]\s+por\s+item\b/.test(texto);
+        if (pedeItens) return null;
+        const usaSC7 = /\b(?:FROM|JOIN)\s+\w*SC7\w*\s+SC7\b/i.test(sql);
+        if (!usaSC7) return null;
+        const temNumeroPedido = /\bSC7\s*\.\s*C7_NUM\b|\bSCR\s*\.\s*CR_NUM\b/i.test(sql);
+        if (!temNumeroPedido) return null;
+        const temSumC7Total = /\bSUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)/i.test(sql);
+        if (temSumC7Total) return null;
+        return (
+          "SQL lista pedidos de compra aprovados sem exibir o valor do pedido. " +
+          "Para listagem por pedido/dia/aprovador, inclua SUM(SC7.C7_TOTAL) AS valor_pedido e agrupe pelas demais colunas solicitadas."
+        );
       },
     },
   ],
