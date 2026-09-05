@@ -4741,6 +4741,46 @@ async function executar(spec, intent, empresaId) {
       contextoTecnico.query_plan = planoConsulta;
       contextoTecnico.query_plan_texto = queryPlan.formatQueryPlanForPrompt(planoConsulta);
       auditoriaBase.query_plan = planoConsulta;
+      if (typeof spec.validarCorrigirSqlGerado === 'function') {
+        const guard = await spec.validarCorrigirSqlGerado({
+          sql: plano.sql,
+          keys,
+          cfg,
+          mensagem,
+          entidadesResolvidas,
+          fase1: {
+            periodo: periodoAutoritativo || plano.obj?.periodo || intentEfetivo?.periodo || null,
+            agrupamentos: plano.obj?.agrupamentos || intentEfetivo?.agrupar_por_composto || intentEfetivo?.group_by || [],
+            tipo_consulta: plano.obj?.tipo_consulta || null,
+          },
+          contexto: contextoTecnico,
+          userSql: auditoriaBase.prompt_user,
+          respostaSql: auditoriaBase.resposta_ia_bruta,
+          helpers: {
+            connectionFactory,
+            tabelaFisicaSX2: (sx2Arg, base) => tabelaFisicaSX2(sx2Arg, base) || `${String(base || '').trim().toUpperCase()}${inferirSufixoSX2(sx2Arg, protheus.sufixoTabela)}`,
+            escapeSqlLiteral,
+            baseTabelaSX2,
+          },
+        });
+        if (guard?.erro) {
+          return { ...guard.erro, _sql_auditoria: auditoriaBase, duracao_ms: Date.now() - t0 };
+        }
+        if (guard?.sql && String(guard.sql).trim() !== String(plano.sql || '').trim()) {
+          sqlOriginalIa = sqlOriginalIa || plano.sql;
+          plano = {
+            ...plano,
+            sql: guard.sql,
+            raw: guard.respostaSql || plano.raw,
+            obj: {
+              ...(plano.obj || {}),
+              sql: guard.sql,
+            },
+          };
+          auditoriaBase.sql_ia_bruto = guard.sqlIaBruto || auditoriaBase.sql_ia_bruto || sqlOriginalIa;
+          auditoriaBase.resposta_ia_bruta = guard.respostaSql || auditoriaBase.resposta_ia_bruta;
+        }
+      }
       expandirMetadadosParaSql(plano.sql);
       _traceIaOwner('ia_owner_preparar_sql_inicio', { empresa_id: empresaId, tentativa });
       preparado = await prepararSql({ spec: { ...spec, tabelas: tabelasMetadados }, sql: plano.sql, sx2, sx2Empresa, sx3: sx3Validacao, protheus, middlewareCfg: { ...middlewareCfg, limite_ranking: intentEfetivo?.limite }, entidades: entidadesResolvidas, filial, periodo: periodoAutoritativo || plano.obj.periodo, planoConsulta, mensagem, empresaId, filialLoboGuaraState: intentEfetivo?._filialLoboGuara || null });

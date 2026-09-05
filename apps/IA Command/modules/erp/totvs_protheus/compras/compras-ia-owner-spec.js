@@ -5,6 +5,7 @@ const sqlMiddleware = require('./sql-middleware');
 const entityCatalog = require('./entity-catalog');
 const fragmentosSpec = require('./compras-fragmentos-spec');
 const { classificarFragmentos } = require('./compras-spec-classifier');
+const sx2SqlNormalizer = require('../SX/sx2-sql-normalizer');
 const { resolverVendedorFixoPorEmpresa } = require('../guards/vendedor-seguranca');
 const { resolverAprovadorFixoPorEmpresa } = require('../guards/aprovador-seguranca');
 
@@ -204,6 +205,126 @@ function normalizarCandidato(def, row) {
     loja: row.loja == null ? null : String(row.loja || '').trim(),
     nome: String(row.nome || '').trim(),
     joinHint: def.joinHint,
+  };
+}
+
+function tabelaFisicaSX2(sx2, base) {
+  const alvo = String(base || '').trim().toUpperCase();
+  return Object.keys(sx2 || {}).find(n => sx2SqlNormalizer.baseTabelaSX2(n) === alvo) || null;
+}
+
+function selectPrincipalSql(sql = '') {
+  const texto = String(sql || '').trim();
+  const semRowcount = texto.replace(/^\s*SET\s+ROWCOUNT\s+\d+\s*;\s*/i, '').trim();
+  if (!/^WITH\b/i.test(semRowcount)) {
+    const idx = semRowcount.search(/\bSELECT\b/i);
+    return idx >= 0 ? semRowcount.slice(idx) : semRowcount;
+  }
+
+  let depth = 0;
+  let inString = false;
+  for (let i = 4; i < semRowcount.length; i++) {
+    const ch = semRowcount[i];
+    const next = semRowcount[i + 1];
+    if (ch === "'") {
+      if (inString && next === "'") {
+        i++;
+        continue;
+      }
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '(') {
+      depth++;
+      continue;
+    }
+    if (ch === ')') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth === 0 && /\s/.test(ch)) {
+      const resto = semRowcount.slice(i).trimStart();
+      if (/^SELECT\b/i.test(resto)) return resto;
+    }
+  }
+  return semRowcount;
+}
+
+function removerAcentos(texto = '') {
+  return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function isPedidoCompraAprovadoPorAprovadorDiaPedido(mensagem = '') {
+  const texto = removerAcentos(mensagem).toLowerCase();
+  const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+  const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
+  const pedeDia = /\bpor\s+dia\b|\bagrupad[oa]s?\b[\s\S]*\bdia\b/.test(texto);
+  const pedePedido = /\bnumero\s+d[oa]\s+pedido\b|\bpor\s+pedido\b|\bpedido\s+de\s+compra\b/.test(texto);
+  const pedeDetalhe = /\bitens?\b|\bpor\s+item\b|\bproduto\b|\bfornecedor\b|\bdetalhad[oa]\b/.test(texto);
+  return perguntaPedidoAprovado && pedeAprovador && pedeDia && pedePedido && !pedeDetalhe;
+}
+
+function periodoSqlContexto(contexto = {}, fase1 = {}) {
+  const periodo = contexto.periodo || contexto.contextoIA?.periodo || fase1.periodo || contexto.queryPlan?.periodo || contexto.contrato?.periodo || {};
+  const dataInicio = periodo.dataInicio || periodo.data_inicio || periodo.inicio || periodo.start;
+  const dataFim = periodo.dataFim || periodo.data_fim || periodo.fim || periodo.end;
+  if (!/^\d{8}$/.test(String(dataInicio || '')) || !/^\d{8}$/.test(String(dataFim || ''))) return null;
+  return { dataInicio, dataFim };
+}
+
+function sqlPedidosAprovadosPorAprovadorDiaPedido({ mensagem, contexto, fase1, helpers } = {}) {
+  if (!isPedidoCompraAprovadoPorAprovadorDiaPedido(mensagem)) return null;
+  const periodo = periodoSqlContexto(contexto, fase1);
+  if (!periodo) return null;
+
+  const sx2 = contexto?.sx2 || {};
+  const tabelaSC7 = helpers?.tabelaFisicaSX2?.(sx2, 'SC7') || tabelaFisicaSX2(sx2, 'SC7') || 'SC7';
+  const tabelaSCR = helpers?.tabelaFisicaSX2?.(sx2, 'SCR') || tabelaFisicaSX2(sx2, 'SCR') || 'SCR';
+  const tabelaSAK = helpers?.tabelaFisicaSX2?.(sx2, 'SAK') || tabelaFisicaSX2(sx2, 'SAK') || 'SAK';
+  const selectAprovador = 'COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador';
+  const joinSAK = `\nLEFT JOIN ${tabelaSAK} SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '`;
+
+  return `SET ROWCOUNT 50000;
+WITH pedidos AS (
+  SELECT SC7.C7_FILIAL,
+         SC7.C7_NUM AS numero_pedido,
+         SUM(SC7.C7_TOTAL) AS valor_pedido
+  FROM ${tabelaSC7} SC7
+  WHERE SC7.D_E_L_E_T_ = ' '
+    AND SC7.C7_CONAPRO IN ('L', '')
+  GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+),
+liberacoes AS (
+  SELECT DISTINCT SCR.CR_FILIAL,
+         SCR.CR_NUM,
+         SCR.CR_APROV,
+         SCR.CR_DATALIB
+  FROM ${tabelaSCR} SCR
+  WHERE SCR.D_E_L_E_T_ = ' '
+    AND SCR.CR_TIPO = 'PC'
+    AND SCR.CR_STATUS = '03'
+    AND SCR.CR_DATALIB BETWEEN '${periodo.dataInicio}' AND '${periodo.dataFim}'
+)
+SELECT ${selectAprovador},
+       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       pedidos.numero_pedido,
+       pedidos.valor_pedido
+FROM liberacoes
+JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido${joinSAK}
+ORDER BY aprovador, dia, pedidos.numero_pedido;`;
+}
+
+async function validarCorrigirSqlGerado({ sql, mensagem, contexto, fase1, helpers } = {}) {
+  const sqlDeterministico = sqlPedidosAprovadosPorAprovadorDiaPedido({ mensagem, contexto, fase1, helpers });
+  if (!sqlDeterministico) return null;
+  return {
+    sql: sqlDeterministico,
+    respostaSql: JSON.stringify({
+      origem: 'compras_deterministico_pedidos_aprovados_aprovador_dia_pedido',
+      sql: sqlDeterministico,
+    }),
+    sqlIaBruto: sql || null,
   };
 }
 
@@ -625,13 +746,54 @@ module.exports = {
         const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
         const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
         if (!perguntaPedidoAprovado || !pedeAprovador) return null;
-        if (!/\bSUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)/i.test(sql)) return null;
-        const joinDiretoSc7Scr = /\bFROM\s+\w*SC7\w*\s+SC7\b[\s\S]{0,1200}\bJOIN\s+\w*SCR\w*\s+SCR\b/i.test(sql)
-          || /\bFROM\s+\w*SCR\w*\s+SCR\b[\s\S]{0,1200}\bJOIN\s+\w*SC7\w*\s+SC7\b/i.test(sql);
-        if (!joinDiretoSc7Scr) return null;
+        const principal = selectPrincipalSql(sql);
+        if (!/\bSUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)/i.test(principal)) return null;
+        const joinDiretoSc7Scr = /\bFROM\s+\w*SC7\w*\s+SC7\b[\s\S]{0,1200}\bJOIN\s+\w*SCR\w*\s+SCR\b/i.test(principal)
+          || /\bFROM\s+\w*SCR\w*\s+SCR\b[\s\S]{0,1200}\bJOIN\s+\w*SC7\w*\s+SC7\b/i.test(principal);
+        const joinSc7ComLiberacoes = /\bFROM\s+liberacoes\s+\w+\b[\s\S]{0,1200}\bJOIN\s+\w*SC7\w*\s+SC7\b/i.test(principal)
+          || /\bFROM\s+\w*SC7\w*\s+SC7\b[\s\S]{0,1200}\bJOIN\s+liberacoes\s+\w+\b/i.test(principal);
+        if (!joinDiretoSc7Scr && !joinSc7ComLiberacoes) return null;
         return (
-          "SQL soma SC7.C7_TOTAL depois de juntar diretamente SC7 com SCR. Isso pode multiplicar o valor do pedido quando SCR tem mais de uma linha liberada para o mesmo pedido/aprovador. " +
+          "SQL soma SC7.C7_TOTAL no SELECT principal depois de juntar SC7 com SCR/liberacoes. Isso pode multiplicar o valor do pedido quando SCR tem mais de uma linha liberada para o mesmo pedido/aprovador. " +
           "Agregue SC7 antes em uma CTE/subquery por C7_FILIAL + C7_NUM com SUM(SC7.C7_TOTAL) AS valor_pedido, e junte com SELECT DISTINCT de SCR por CR_FILIAL + CR_NUM + CR_APROV + CR_DATALIB filtrando CR_TIPO = 'PC' e CR_STATUS = '03'."
+        );
+      },
+    },
+    {
+      // Protecao especifica para CTEs de pedidos: a IA ja gerou SELECT P.C7_NUM sem
+      // declarar alias P no FROM/JOIN. O SQL Server rejeitaria "P could not be bound".
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        if (!perguntaPedidoAprovado) return null;
+        if (!/\bP\s*\.\s*(?:C7_NUM|valor_pedido)\b/i.test(sql)) return null;
+        const principal = selectPrincipalSql(sql);
+        const declaraP = /\b(?:FROM|JOIN)\s+(?:pedidos|\w*SC7\w*)\s+P\b/i.test(principal)
+          || /\b(?:FROM|JOIN)\s*\([^)]{1,1200}\)\s+P\b/i.test(principal);
+        if (declaraP) return null;
+        return (
+          "SQL referencia alias P (ex.: P.C7_NUM/P.valor_pedido), mas nao declara P no FROM/JOIN principal. " +
+          "Use a CTE pedidos e declare FROM/JOIN pedidos P, ou troque para o alias realmente declarado. Para esta consulta, o padrao seguro e CTE pedidos P + CTE liberacoes L."
+        );
+      },
+    },
+    {
+      // Para o conceito "pedido aprovado" por aprovador, o pedido precisa estar liberado
+      // em SC7 e a liberacao precisa existir em SCR. Sem C7_CONAPRO, o SQL mistura pedidos
+      // ainda bloqueados/rejeitados que tenham alguma linha historica liberada em SCR.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
+        if (!perguntaPedidoAprovado || !pedeAprovador) return null;
+        const usaSC7 = /\b(?:FROM|JOIN)\s+\w*SC7\w*\s+SC7\b/i.test(sql);
+        const usaPedidos = /\b(?:FROM|JOIN)\s+pedidos\s+\w+\b/i.test(sql);
+        if (!usaSC7 && !usaPedidos) return null;
+        const temConaproAprovado = /\bSC7\s*\.\s*C7_CONAPRO\s+IN\s*\(\s*'L'\s*,\s*''\s*\)/i.test(sql);
+        if (temConaproAprovado) return null;
+        return (
+          "SQL de pedidos de compra aprovados por aprovador nao filtra SC7.C7_CONAPRO IN ('L', ''). " +
+          "SCR.CR_STATUS = '03' identifica a liberacao no fluxo; SC7.C7_CONAPRO confirma que o pedido esta aprovado/liberado na alcada. Inclua esse filtro na CTE/subquery de pedidos."
         );
       },
     },
@@ -659,6 +821,31 @@ module.exports = {
         return (
           `SQL adiciona ${extras.join(', ')} sem o usuario pedir detalhe por item/produto/fornecedor. ` +
           'Para a pergunta por nome do aprovador, dia e numero do pedido, mantenha uma linha por aprovador + dia + pedido; agregue SC7 por C7_FILIAL + C7_NUM antes de juntar com SCR.'
+        );
+      },
+    },
+    {
+      // Quando SC7 ja foi agregada em CTE/subquery, o proximo risco e duplicar linhas
+      // vindas de SCR. Deduplicar as liberacoes e parte do contrato semantico desta consulta.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
+        if (!perguntaPedidoAprovado || !pedeAprovador) return null;
+        const principal = selectPrincipalSql(sql);
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaSCR) return null;
+        const somaNoSelectPrincipal = /\bSUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)/i.test(principal);
+        if (somaNoSelectPrincipal) return null;
+        const usaValorPedidoPreAgregado = /\b(?:pedidos|p)\s*\.\s*valor_pedido\b/i.test(principal);
+        if (!usaValorPedidoPreAgregado) return null;
+        const temScrDistinct = /\bSELECT\s+DISTINCT\s+SCR\s*\.\s*CR_FILIAL\b[\s\S]{0,800}\bFROM\s+\w*SCR\w*\s+SCR\b/i.test(sql)
+          || /\bFROM\s*\(\s*SELECT\s+DISTINCT\b[\s\S]{0,800}\bFROM\s+\w*SCR\w*\s+SCR\b/i.test(sql)
+          || /^\s*SELECT\s+DISTINCT\b/i.test(principal);
+        if (temScrDistinct) return null;
+        return (
+          "SQL agrega SC7 antes, mas junta SCR sem deduplicar as liberacoes. SCR pode ter mais de uma linha para o mesmo pedido/aprovador/data, gerando linhas repetidas na resposta. " +
+          "Crie uma CTE/subquery liberacoes com SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB FROM SCR... filtrando CR_TIPO = 'PC', CR_STATUS = '03' e D_E_L_E_T_ = ' ', e junte a query principal nessa lista deduplicada."
         );
       },
     },
@@ -720,10 +907,14 @@ module.exports = {
   camposAprovadorSeguranca: ['CR_APROV'],
   garantirIntencao,
   prepararIntent,
+  validarCorrigirSqlGerado,
   resolverEntidades,
   formatarPerguntaAmbiguidade,
   _test: {
     prepararIntent,
+    isPedidoCompraAprovadoPorAprovadorDiaPedido,
+    sqlPedidosAprovadosPorAprovadorDiaPedido,
+    selectPrincipalSql,
     buscarEntidade,
     resolverEntidades,
   },

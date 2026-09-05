@@ -370,8 +370,55 @@ WHERE SC7.D_E_L_E_T_ = ' '
 GROUP BY SC7.C7_NUM, SC7.C7_ITEM, SA2.A2_NOME, SCR.CR_DATALIB, SCR.CR_APROV, SAK.AK_NOME
 ORDER BY SCR.CR_DATALIB, SC7.C7_NUM;`;
   const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupados por nome do aprovador, por dia e por numero do pedido de compra');
-  assert.ok(erros.some(e => /juntar diretamente SC7 com SCR|Agregue SC7 antes/.test(e)), `esperava erro de multiplicacao por JOIN direto, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(erros.some(e => /juntar SC7 com SCR\/liberacoes|Agregue SC7 antes/.test(e)), `esperava erro de multiplicacao por JOIN direto, obteve: ${JSON.stringify(erros)}`);
   assert.ok(erros.some(e => /SC7\.C7_ITEM/.test(e) && /fornecedor/.test(e)), `esperava erro de granularidade nao pedida, obteve: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL com SC7 agregada mas SCR sem DISTINCT e rejeitado', () => {
+  const sql = `SET ROWCOUNT 50000;
+WITH Pedidos AS (
+    SELECT SC7.C7_FILIAL, SC7.C7_NUM, SUM(SC7.C7_TOTAL) AS valor_pedido
+    FROM SC7010 SC7
+    WHERE SC7.D_E_L_E_T_ = ' '
+    AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+    GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+)
+SELECT P.C7_NUM AS numero_pedido,
+       CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia,
+       COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador,
+       P.valor_pedido
+FROM Pedidos P
+JOIN SCR010 SCR ON SCR.CR_FILIAL = P.C7_FILIAL AND SCR.CR_NUM = P.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SCR.D_E_L_E_T_ = ' '
+  AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+ORDER BY dia, P.C7_NUM;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupados por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /sem deduplicar as liberacoes|SELECT DISTINCT SCR\.CR_FILIAL/.test(e)), `esperava erro exigindo SCR DISTINCT, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(!erros.some(e => /juntar SC7 com SCR\/liberacoes/.test(e)), `nao deveria confundir SUM da CTE com soma depois do JOIN: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL real da CAIEIRA com alias P inexistente e SUM depois de liberacoes e rejeitado', () => {
+  const sql = `SET ROWCOUNT 50000;
+WITH liberacoes AS (
+    SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB
+    FROM SCR010 SCR
+    WHERE SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+)
+SELECT COALESCE(SAK.AK_NOME, L.CR_APROV) AS aprovador,
+       CONVERT(VARCHAR(10), CAST(L.CR_DATALIB AS DATE), 103) AS dia,
+       P.C7_NUM AS numero_pedido,
+       SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM liberacoes L
+JOIN SC7010 SC7 ON L.CR_FILIAL = SC7.C7_FILIAL AND L.CR_NUM = SC7.C7_NUM AND SC7.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON L.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE L.CR_DATALIB BETWEEN '20260901' AND '20260930'
+GROUP BY COALESCE(SAK.AK_NOME, L.CR_APROV), L.CR_DATALIB, P.C7_NUM
+ORDER BY dia, numero_pedido;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupados por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /alias P/.test(e) && /nao declara P/.test(e)), `esperava erro de alias P inexistente, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(erros.some(e => /juntar SC7 com SCR\/liberacoes/.test(e)), `esperava erro de soma no SELECT principal apos liberacoes, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(erros.some(e => /SC7\.C7_CONAPRO IN/.test(e)), `esperava erro exigindo C7_CONAPRO, obteve: ${JSON.stringify(erros)}`);
 });
 
 ok('validador real do runner aceita SQL seguro e rejeita SQL ruim do WhatsApp', () => {
@@ -412,7 +459,7 @@ GROUP BY SC7.C7_NUM, SC7.C7_ITEM, SA2.A2_NOME, SCR.CR_DATALIB, SCR.CR_APROV, SAK
 ORDER BY SCR.CR_DATALIB, SC7.C7_NUM;`;
   const ruim = runner._test.validarSqlIaOwnerBasico(sqlRuim, spec, {}, mensagem);
   assert.strictEqual(ruim.ok, false, 'SQL ruim do WhatsApp deve ser rejeitado pelo validador real');
-  assert.ok(ruim.erros.some(e => /juntar diretamente SC7 com SCR|SC7\.C7_ITEM/.test(e)), `erro deveria apontar duplicidade/granularidade: ${JSON.stringify(ruim.erros)}`);
+  assert.ok(ruim.erros.some(e => /juntar SC7 com SCR\/liberacoes|SC7\.C7_ITEM/.test(e)), `erro deveria apontar duplicidade/granularidade: ${JSON.stringify(ruim.erros)}`);
 });
 
 console.log('\n[9] SCR nao aceita campos C7_* e pedido agrupado precisa de valor');
