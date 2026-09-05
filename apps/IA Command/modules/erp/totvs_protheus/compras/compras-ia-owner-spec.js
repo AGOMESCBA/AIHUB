@@ -416,7 +416,7 @@ module.exports = {
         const pedeNomeAprovador = /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto)
           || /\baprovador(?:es)?\s+por\s+nome\b/.test(texto);
         if (!pedeNomeAprovador) return null;
-        if (!/\bAS\s+aprovador\b/i.test(sql)) return null;
+        if (!/\bAS\s+\[?[\w_]*aprovador[\w_]*\]?\b/i.test(sql)) return null;
         const usaNomeSak = /\bSAK\s*\.\s*AK_NOME\b/i.test(sql);
         if (usaNomeSak) return null;
         return (
@@ -490,14 +490,23 @@ module.exports = {
       // SQL projeta qualquer coisa "AS aprovador" mas nao usa a tabela SCR em lugar
       // nenhum, a fonte esta errada, seja qual for o campo/tabela usado indevidamente.
       validar(sql) {
-        const temAliasAprovador = /\bAS\s+aprovador\b/i.test(sql);
+        const aliasAprovadorRe = /\bAS\s+\[?[\w_]*aprovador[\w_]*\]?\b/i;
+        const temAliasAprovador = aliasAprovadorRe.test(sql);
         if (!temAliasAprovador) return null;
+        const statusComoPessoa = sql.match(/\bSC7\s*\.\s*(C7_CONAPRO|C7_APROV)\s+AS\s+(\[?[\w_]*aprovador[\w_]*\]?)/i);
+        if (statusComoPessoa) {
+          return (
+            `SQL projeta SC7.${statusComoPessoa[1].toUpperCase()} AS ${statusComoPessoa[2]} — fonte ERRADA. ` +
+            'C7_CONAPRO/C7_APROV guardam STATUS do pedido, nao nome/codigo de pessoa. ' +
+            "Para nome do aprovador, use SCR.CR_APROV + LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' ' e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
+          );
+        }
         const usaSCR = /\bFROM\s+\w*SCR\w*\s+SCR\b|\bJOIN\s+\w*SCR\w*\s+SCR\b/i.test(sql);
         if (usaSCR) return null;
-        const mCampo = sql.match(/(\w+)\s*\.\s*(\w+)\s+AS\s+aprovador\b/i);
+        const mCampo = sql.match(/(\w+)\s*\.\s*(\w+)\s+AS\s+(\[?[\w_]*aprovador[\w_]*\]?)/i);
         const origem = mCampo ? `${mCampo[1].toUpperCase()}.${mCampo[2].toUpperCase()}` : 'um campo';
         return (
-          `SQL projeta ${origem} AS aprovador, mas nao usa a tabela SCR em lugar nenhum — fonte ERRADA. ` +
+          `SQL projeta ${origem} como aprovador, mas nao usa a tabela SCR em lugar nenhum — fonte ERRADA. ` +
           "Aprovador (quem liberou o pedido na alcada) SO pode vir de SCR.CR_APROV (ou SAK.AK_NOME via LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD), com JOIN SCR-SC7 por SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM e SCR.CR_STATUS = '03' (liberado). " +
           "NUNCA use SC7.C7_CONAPRO/C7_APROV (status do pedido, nao pessoa) nem SA2.A2_NOME (nome do FORNECEDOR do pedido) como se fossem o aprovador."
         );

@@ -191,6 +191,19 @@ ok('qualquer campo AS aprovador sem SCR e rejeitado, mesmo campos nao previstos 
   assert.ok(erros.some(e => /SC7\.C7_FORNECE/.test(e) && /SCR/.test(e)), `obteve: ${JSON.stringify(erros)}`);
 });
 
+ok('SC7.C7_CONAPRO AS nome_do_aprovador e rejeitado (status disfarcado de pessoa)', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT SC7.C7_NUM AS numero_pedido, SC7.C7_EMISSAO AS dia, SC7.C7_CONAPRO AS nome_do_aprovador
+FROM SC7010 SC7
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_CONAPRO IN ('L', '')
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_CONAPRO, SC7.C7_EMISSAO, SC7.C7_NUM
+ORDER BY SC7.C7_EMISSAO, SC7.C7_NUM;`;
+  const erros = validar(sql, 'Pedidos de compras aprovados neste mes agrupado por nome do aprovador, por dia e numero de pedido');
+  assert.ok(erros.some(e => /C7_CONAPRO/.test(e) && /STATUS/.test(e) && /SAK/.test(e)), `esperava erro sobre status como aprovador, obteve: ${JSON.stringify(erros)}`);
+});
+
 ok('SQL correto com SCR e SAK.AK_NOME AS aprovador nao dispara o guard', () => {
   const sql = `SELECT COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SC7.C7_NUM AS pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SCR010 SCR
@@ -207,6 +220,17 @@ console.log('\n[7] Nome do aprovador exige SAK.AK_NOME quando pedido explicitame
 ok('SCR.CR_APROV AS aprovador e rejeitado quando o usuario pede nome do aprovador', () => {
   const sql = `SET ROWCOUNT 10000;
 SELECT SCR.CR_APROV AS aprovador, SC7.C7_NUM AS pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SCR010 SCR
+JOIN SC7010 SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.C7_CONAPRO IN ('L','') AND SC7.D_E_L_E_T_ = ' '
+WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'
+GROUP BY SCR.CR_APROV, SC7.C7_NUM;`;
+  const erros = validar(sql, 'Pedidos de compras aprovados do mes agrupados por nome do aprovador e numero de pedido');
+  assert.ok(erros.some(e => /NOME do aprovador/i.test(e) && /SAK\.AK_NOME/.test(e)), `esperava erro exigindo SAK.AK_NOME, obteve: ${JSON.stringify(erros)}`);
+});
+
+ok('SCR.CR_APROV AS nome_do_aprovador tambem e rejeitado quando usuario pede nome', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT SCR.CR_APROV AS nome_do_aprovador, SC7.C7_NUM AS pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SCR010 SCR
 JOIN SC7010 SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.C7_CONAPRO IN ('L','') AND SC7.D_E_L_E_T_ = ' '
 WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'
