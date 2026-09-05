@@ -314,6 +314,22 @@ ORDER BY aprovador, dia, numero_pedido;`;
   assert.ok(erros.some(e => /SC7\.C7_EMISSAO/.test(e) && /SCR\.CR_DATALIB/.test(e)), `esperava erro exigindo dia por CR_DATALIB, obteve: ${JSON.stringify(erros)}`);
 });
 
+ok('SQL real sem SCR/SAK e sem aprovador e rejeitado quando pergunta pede nome do aprovador', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103) AS dia, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SC7010 SC7
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_CONAPRO IN ('L', '')
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_EMISSAO, SC7.C7_NUM
+ORDER BY SC7.C7_EMISSAO, SC7.C7_NUM;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(
+    erros.some(e => /nao traz a dimensao aprovador/i.test(e) && /SCR/.test(e) && /SAK/.test(e)),
+    `esperava erro exigindo dimensao aprovador via SCR/SAK, obteve: ${JSON.stringify(erros)}`,
+  );
+});
+
 ok('SQL de pedidos aprovados com SCR.CR_TIPO = \'PC\' e SCR.CR_STATUS = \'03\' passa', () => {
   const sql = `SET ROWCOUNT 10000;
 SELECT SC7.C7_NUM AS numero_pedido, CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido

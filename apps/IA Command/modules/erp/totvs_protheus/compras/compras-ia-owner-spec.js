@@ -407,6 +407,26 @@ module.exports = {
       },
     },
     {
+      // Bug real confirmado: a pergunta pediu "nome do aprovador", mas a SQL gerada
+      // listou apenas dia + numero_pedido + valor direto em SC7, omitindo completamente
+      // SCR/SAK. Para pedidos aprovados por aprovador, a pessoa vem do fluxo SCR.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
+        if (!perguntaPedidoAprovado || !pedeAprovador) return null;
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        const usaSAK = /\b(?:FROM|JOIN)\s+\w*SAK\w*\s+SAK\b/i.test(sql);
+        const projetaAprovador = /\bAS\s+\[?[\w_]*aprovador[\w_]*\]?\b/i.test(sql);
+        if (usaSCR && (usaSAK || projetaAprovador || /\bSCR\s*\.\s*CR_APROV\b/i.test(sql))) return null;
+        return (
+          "A pergunta pediu pedidos de compra aprovados por nome/aprovador, mas o SQL nao traz a dimensao aprovador. " +
+          "Use SCR para identificar quem liberou: JOIN SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '. " +
+          "Para nome, adicione LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' ' e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
+        );
+      },
+    },
+    {
       // Bug real confirmado em producao: o usuario pedia "nome do aprovador", mas o SQL
       // retornava SCR.CR_APROV (codigo, ex.: "000003") como se fosse nome. Quando o nome
       // for pedido explicitamente, a fonte correta e SAK.AK_NOME, com fallback para o
