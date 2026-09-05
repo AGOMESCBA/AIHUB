@@ -19,6 +19,7 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 const spec = require(path.join(ROOT, 'modules/erp/totvs_protheus/compras/compras-ia-owner-spec'));
+const runner = require(path.join(ROOT, 'modules/erp/ia-owner/runner'));
 
 let passou = 0;
 let falhou = 0;
@@ -330,18 +331,88 @@ ORDER BY SC7.C7_EMISSAO, SC7.C7_NUM;`;
   );
 });
 
-ok('SQL de pedidos aprovados com SCR.CR_TIPO = \'PC\' e SCR.CR_STATUS = \'03\' passa', () => {
+ok('SQL de pedidos aprovados com CTE SC7 agregada e SCR deduplicado passa', () => {
   const sql = `SET ROWCOUNT 10000;
-SELECT SC7.C7_NUM AS numero_pedido, CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
+WITH pedidos AS (
+  SELECT SC7.C7_FILIAL, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+  FROM SC7010 SC7
+  WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '')
+  GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+),
+liberacoes AS (
+  SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB
+  FROM SCR010 SCR
+  WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+)
+SELECT COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador,
+       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       pedidos.numero_pedido,
+       pedidos.valor_pedido
+FROM liberacoes
+JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
+LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+ORDER BY aprovador, dia, pedidos.numero_pedido;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(!erros.some(e => /CR_STATUS\s*=\s*'03'|CR_TIPO\s*=\s*'PC'|SCR\.CR_DATALIB/.test(e)), `nao deveria disparar guard de filtros SCR/data: ${JSON.stringify(erros)}`);
+  assert.ok(!erros.some(e => /juntar diretamente SC7 com SCR|granularidade|SC7\.C7_ITEM|fornecedor/i.test(e)), `nao deveria disparar guards de duplicidade/granularidade: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL real do WhatsApp com item/fornecedor e SUM apos JOIN SCR e rejeitado', () => {
+  const sql = `SET ROWCOUNT 10000;
+SELECT SC7.C7_NUM AS pedido, SC7.C7_ITEM AS item, SA2.A2_NOME AS fornecedor, CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SC7010 SC7
+JOIN SA2010 SA2 ON SC7.C7_FORNECE = SA2.A2_COD AND SC7.C7_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = ' '
+JOIN SCR SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_CONAPRO IN ('L', '')
+  AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_NUM, SC7.C7_ITEM, SA2.A2_NOME, SCR.CR_DATALIB, SCR.CR_APROV, SAK.AK_NOME
+ORDER BY SCR.CR_DATALIB, SC7.C7_NUM;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupados por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /juntar diretamente SC7 com SCR|Agregue SC7 antes/.test(e)), `esperava erro de multiplicacao por JOIN direto, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(erros.some(e => /SC7\.C7_ITEM/.test(e) && /fornecedor/.test(e)), `esperava erro de granularidade nao pedida, obteve: ${JSON.stringify(erros)}`);
+});
+
+ok('validador real do runner aceita SQL seguro e rejeita SQL ruim do WhatsApp', () => {
+  const mensagem = 'Pedidos de compra aprovados neste mes agrupados por nome do aprovador, por dia e por numero do pedido de compra';
+  const sqlSeguro = `SET ROWCOUNT 10000;
+WITH pedidos AS (
+  SELECT SC7.C7_FILIAL, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+  FROM SC7010 SC7
+  WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '')
+  GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+),
+liberacoes AS (
+  SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB
+  FROM SCR010 SCR
+  WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+)
+SELECT COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador,
+       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       pedidos.numero_pedido,
+       pedidos.valor_pedido
+FROM liberacoes
+JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
+LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+ORDER BY aprovador, dia, pedidos.numero_pedido;`;
+  const seguro = runner._test.validarSqlIaOwnerBasico(sqlSeguro, spec, {}, mensagem);
+  assert.strictEqual(seguro.ok, true, `SQL seguro deveria passar no validador real: ${JSON.stringify(seguro.erros)}`);
+
+  const sqlRuim = `SET ROWCOUNT 10000;
+SELECT SC7.C7_NUM AS pedido, SC7.C7_ITEM AS item, SA2.A2_NOME AS fornecedor, CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SC7010 SC7
+JOIN SA2010 SA2 ON SC7.C7_FORNECE = SA2.A2_COD AND SC7.C7_LOJA = SA2.A2_LOJA AND SA2.D_E_L_E_T_ = ' '
 JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
 LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
 WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_CONAPRO IN ('L', '')
   AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
-GROUP BY SC7.C7_NUM, SCR.CR_DATALIB, SAK.AK_NOME, SCR.CR_APROV
-ORDER BY dia, aprovador;`;
-  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
-  assert.ok(!erros.some(e => /CR_STATUS\s*=\s*'03'|CR_TIPO\s*=\s*'PC'|SCR\.CR_DATALIB/.test(e)), `nao deveria disparar guard de filtros SCR/data: ${JSON.stringify(erros)}`);
+GROUP BY SC7.C7_NUM, SC7.C7_ITEM, SA2.A2_NOME, SCR.CR_DATALIB, SCR.CR_APROV, SAK.AK_NOME
+ORDER BY SCR.CR_DATALIB, SC7.C7_NUM;`;
+  const ruim = runner._test.validarSqlIaOwnerBasico(sqlRuim, spec, {}, mensagem);
+  assert.strictEqual(ruim.ok, false, 'SQL ruim do WhatsApp deve ser rejeitado pelo validador real');
+  assert.ok(ruim.erros.some(e => /juntar diretamente SC7 com SCR|SC7\.C7_ITEM/.test(e)), `erro deveria apontar duplicidade/granularidade: ${JSON.stringify(ruim.erros)}`);
 });
 
 console.log('\n[9] SCR nao aceita campos C7_* e pedido agrupado precisa de valor');

@@ -293,7 +293,8 @@ ${joinAprovador}
 - SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
 - Quando o usuario pedir "por aprovador", agrupe pelo aprovador (COALESCE(SAK.AK_NOME, SCR.CR_APROV) quando SAK existir; SCR.CR_APROV somente quando SAK nao existir) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
 - Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado para ATENDIMENTO (resultado final de recebimento). SCR detalha o FLUXO de aprovacao por ALCADA (quem, em que nivel, em que status) — use SCR apenas para identificar QUEM esta no caminho do bloqueio, nunca para decidir SE o pedido esta bloqueado (isso e sempre C7_CONAPRO).
-- REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido (SUM(SC7.C7_TOTAL)) na projecao, mesmo que o usuario nao peca valor explicitamente. SCR e cabecalho, mas SC7 e tabela de ITEM (varias linhas por pedido) — para nao duplicar o numero do pedido em N linhas, agrupe por SCR.CR_NUM (e demais colunas de identificacao) com SUM(SC7.C7_TOTAL) AS valor_pedido. Uma listagem de pedidos SEM nenhuma coluna de valor monetario e uma listagem incompleta — sempre agregue e exiba o valor.
+- REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido, mesmo que o usuario nao peca valor explicitamente. Para consultas por aprovador, NAO some SC7.C7_TOTAL depois do JOIN com SCR: primeiro agregue SC7 por pedido em uma CTE/subquery (C7_FILIAL + C7_NUM) com SUM(SC7.C7_TOTAL) AS valor_pedido, depois junte com uma lista DISTINCT de liberacoes SCR por pedido/aprovador/data. Isso evita multiplicar o valor quando SCR tem mais de uma linha liberada para o mesmo pedido/aprovador/nivel. Uma listagem de pedidos SEM coluna de valor monetario e incompleta.
+- REGRA DE GRANULARIDADE — se a pergunta pedir agrupamento por numero do pedido de compra, por dia e por aprovador, mas NAO pedir "item", "produto", "fornecedor" ou "detalhado", mantenha UMA linha por aprovador + dia + pedido. PROIBIDO incluir SC7.C7_ITEM, SA2.A2_NOME AS fornecedor ou SB1.B1_DESC AS produto nesse caso, pois isso muda a granularidade e quebra o agrupamento pedido. Inclua essas colunas somente quando o usuario pedir explicitamente detalhe por item/produto/fornecedor.
 
 ### Linguagem de posse do proprio aprovador (remetente do WhatsApp)
 - SCR tem UMA LINHA POR NIVEL de aprovacao (chave real: CR_FILIAL + CR_NUM + CR_TIPO + CR_NIVEL). CR_APROV identifica o aprovador responsavel APENAS por aquele nivel especifico — nao o pedido inteiro.
@@ -318,18 +319,33 @@ GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_AP
 ORDER BY aprovador, SCR.CR_EMISSAO, SCR.CR_NUM;
 
 ### EXEMPLO CORRETO — pedidos de compra APROVADOS, agrupados por aprovador, dia, pedido e valor
-SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
-       CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia,
-       SCR.CR_NUM AS numero_pedido,
-       SUM(SC7.C7_TOTAL) AS valor_pedido
-FROM SCRxxx SCR
-JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.C7_CONAPRO IN ('L', '') AND SC7.D_E_L_E_T_ = ' '
-${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
-  AND SCR.CR_TIPO = 'PC'
-  AND SCR.CR_STATUS = '03'
-  AND SCR.CR_DATALIB BETWEEN '20260701' AND '20260731'
-GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103), SCR.CR_NUM
-ORDER BY aprovador, dia, SCR.CR_NUM;
+WITH pedidos AS (
+  SELECT SC7.C7_FILIAL,
+         SC7.C7_NUM AS numero_pedido,
+         SUM(SC7.C7_TOTAL) AS valor_pedido
+  FROM SC7xxx SC7
+  WHERE SC7.D_E_L_E_T_ = ' '
+    AND SC7.C7_CONAPRO IN ('L', '')
+  GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+),
+liberacoes AS (
+  SELECT DISTINCT SCR.CR_FILIAL,
+         SCR.CR_NUM,
+         SCR.CR_APROV,
+         SCR.CR_DATALIB
+  FROM SCRxxx SCR
+  WHERE SCR.D_E_L_E_T_ = ' '
+    AND SCR.CR_TIPO = 'PC'
+    AND SCR.CR_STATUS = '03'
+    AND SCR.CR_DATALIB BETWEEN '20260701' AND '20260731'
+)
+SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, liberacoes.CR_APROV)' : 'liberacoes.CR_APROV'} AS aprovador,
+       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       pedidos.numero_pedido,
+       pedidos.valor_pedido
+FROM liberacoes
+JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
+${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}ORDER BY aprovador, dia, pedidos.numero_pedido;
 -- Nao confundir SCR.CR_EMISSAO/SC7.C7_EMISSAO (data de emissao do documento/pedido) com o periodo de aprovacao pedido pelo usuario: quando a pergunta for sobre pedidos APROVADOS num periodo (ex: "aprovados no mes passado"), filtre e agrupe o dia pela DATA DA LIBERACAO (SCR.CR_DATALIB), nao pela emissao — um pedido pode ter sido emitido num mes e liberado em outro.
 `;
 }

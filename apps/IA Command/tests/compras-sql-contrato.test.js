@@ -189,5 +189,8 @@ const textoAprovador = spec.regrasTecnicas({
 assert(textoAprovador.includes("SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'"), 'prompt de aprovador deve exigir CR_TIPO=PC e CR_STATUS=03 no JOIN/WHERE');
 assert(/PROIBIDO fazer LEFT JOIN SCR somente por numero\/filial/i.test(textoAprovador), 'prompt deve bloquear o padrao de LEFT JOIN SCR incompleto');
 assert(textoAprovador.includes('SCR.CR_DATALIB'), 'prompt deve orientar data de liberacao para pedidos aprovados');
+assert(textoAprovador.includes('NAO some SC7.C7_TOTAL depois do JOIN com SCR'), 'prompt deve proibir soma de SC7.C7_TOTAL depois do JOIN direto com SCR');
+assert(textoAprovador.includes('SELECT DISTINCT SCR.CR_FILIAL'), 'prompt deve orientar deduplicacao de liberacoes SCR');
+assert(textoAprovador.includes('PROIBIDO incluir SC7.C7_ITEM'), 'prompt deve impedir item/fornecedor/produto sem pedido explicito nessa consulta');
 
 console.log('compras-sql-contrato.test.js: ok (ia-owner)');

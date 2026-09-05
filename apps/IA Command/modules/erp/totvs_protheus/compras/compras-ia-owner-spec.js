@@ -617,6 +617,52 @@ module.exports = {
       },
     },
     {
+      // Mesmo com CR_TIPO/CR_STATUS corretos, somar SC7.C7_TOTAL apos JOIN direto com SCR
+      // pode multiplicar o valor do pedido quando ha mais de uma liberacao/linha SCR para
+      // o mesmo aprovador/pedido. A forma segura e agregar SC7 por pedido antes e deduplicar SCR.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
+        if (!perguntaPedidoAprovado || !pedeAprovador) return null;
+        if (!/\bSUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)/i.test(sql)) return null;
+        const joinDiretoSc7Scr = /\bFROM\s+\w*SC7\w*\s+SC7\b[\s\S]{0,1200}\bJOIN\s+\w*SCR\w*\s+SCR\b/i.test(sql)
+          || /\bFROM\s+\w*SCR\w*\s+SCR\b[\s\S]{0,1200}\bJOIN\s+\w*SC7\w*\s+SC7\b/i.test(sql);
+        if (!joinDiretoSc7Scr) return null;
+        return (
+          "SQL soma SC7.C7_TOTAL depois de juntar diretamente SC7 com SCR. Isso pode multiplicar o valor do pedido quando SCR tem mais de uma linha liberada para o mesmo pedido/aprovador. " +
+          "Agregue SC7 antes em uma CTE/subquery por C7_FILIAL + C7_NUM com SUM(SC7.C7_TOTAL) AS valor_pedido, e junte com SELECT DISTINCT de SCR por CR_FILIAL + CR_NUM + CR_APROV + CR_DATALIB filtrando CR_TIPO = 'PC' e CR_STATUS = '03'."
+        );
+      },
+    },
+    {
+      // Bug real confirmado: a pergunta pediu agrupamento por aprovador + dia + numero do
+      // pedido, mas o SQL incluiu C7_ITEM e fornecedor. Isso transforma uma listagem por
+      // pedido em uma listagem por item/fornecedor sem o usuario pedir essa granularidade.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        const pedeAprovador = /\baprovador(?:es)?\b/.test(texto) || /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto);
+        const pedeDia = /\bpor\s+dia\b|\bagrupad[oa]s?\b[\s\S]*\bdia\b/.test(texto);
+        const pedePedido = /\bn[uú]mero\s+d[oa]\s+pedido\b|\bpor\s+pedido\b|\bpedido\s+de\s+compra\b/.test(texto);
+        if (!perguntaPedidoAprovado || !pedeAprovador || !pedeDia || !pedePedido) return null;
+        const pediuDetalhe = /\bitens?\b|\bpor\s+item\b|\bproduto\b|\bfornecedor\b|\bdetalhad[oa]\b/.test(texto);
+        if (pediuDetalhe) return null;
+        const usaItem = /\bSC7\s*\.\s*C7_ITEM\b/i.test(sql);
+        const usaFornecedor = /\bSA2\s*\.\s*A2_NOME\b/i.test(sql) || /\bAS\s+\[?fornecedor\]?/i.test(sql);
+        const usaProduto = /\bSB1\s*\.\s*B1_DESC\b/i.test(sql) || /\bAS\s+\[?produto\]?/i.test(sql);
+        if (!usaItem && !usaFornecedor && !usaProduto) return null;
+        const extras = [];
+        if (usaItem) extras.push('SC7.C7_ITEM');
+        if (usaFornecedor) extras.push('fornecedor/SA2.A2_NOME');
+        if (usaProduto) extras.push('produto/SB1.B1_DESC');
+        return (
+          `SQL adiciona ${extras.join(', ')} sem o usuario pedir detalhe por item/produto/fornecedor. ` +
+          'Para a pergunta por nome do aprovador, dia e numero do pedido, mantenha uma linha por aprovador + dia + pedido; agregue SC7 por C7_FILIAL + C7_NUM antes de juntar com SCR.'
+        );
+      },
+    },
+    {
       // Bug real confirmado em producao: perguntas de "pedidos de compras aprovados"
       // agrupadas por aprovador/dia/pedido (SEM pedir "quantos"/contagem explicitamente)
       // geraram COUNT(*) AS total_pedidos. O formatter exibiu a contagem como R$, mas o
