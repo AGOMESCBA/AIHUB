@@ -461,23 +461,26 @@ module.exports = {
       },
     },
     {
-      // Bug real confirmado em producao: pergunta "pedidos de compras aprovados no mes
-      // passado agrupado por dia, aprovador, pedido e valor" gerou SQL projetando
-      // SC7.C7_CONAPRO (ou C7_APROV) com AS aprovador — esses campos guardam um STATUS
-      // ('L'/'B'/'R'), NAO uma pessoa. Sem regra explicita para "por aprovador" em pedidos
-      // JA aprovados (so havia regra para pedidos bloqueados), a IA usou o unico campo
-      // "relacionado a aprovacao" que tinha a mao. O aprovador real (quem liberou) vem de
-      // SCR.CR_APROV/SAK.AK_NOME com SCR.CR_STATUS = '03' — nunca de C7_CONAPRO/C7_APROV.
+      // Bug real confirmado em producao, RECORRENTE e criativo: a IA ja projetou
+      // SC7.C7_CONAPRO/C7_APROV AS aprovador (status, nao pessoa) E, em outra tentativa,
+      // SA2.A2_NOME AS aprovador (nome do FORNECEDOR do pedido, sem nenhum JOIN com SCR) —
+      // ambos sao alias mentirosos: a coluna se chama "aprovador" mas o dado vem de outro
+      // lugar. A UNICA fonte legitima de aprovador (quem liberou o pedido na alcada) e
+      // SCR.CR_APROV/SAK.AK_NOME, exigindo JOIN com SCR. Regra geral e definitiva: se o
+      // SQL projeta qualquer coisa "AS aprovador" mas nao usa a tabela SCR em lugar
+      // nenhum, a fonte esta errada, seja qual for o campo/tabela usado indevidamente.
       validar(sql) {
-        const m = sql.match(/\bSC7\s*\.\s*(C7_CONAPRO|C7_APROV)\s+AS\s+aprovador\b/i);
-        if (m) {
-          return (
-            `SQL projeta SC7.${m[1].toUpperCase()} AS aprovador — campo ERRADO. ` +
-            `SC7.C7_CONAPRO e SC7.C7_APROV guardam um STATUS ('L'/'B'/'R'), nao o codigo/nome de uma pessoa. ` +
-            "O aprovador real (quem liberou o pedido) vem de SCR.CR_APROV (ou SAK.AK_NOME via JOIN com SAK) filtrando SCR.CR_STATUS = '03' (liberado) — nunca de C7_CONAPRO ou C7_APROV."
-          );
-        }
-        return null;
+        const temAliasAprovador = /\bAS\s+aprovador\b/i.test(sql);
+        if (!temAliasAprovador) return null;
+        const usaSCR = /\bFROM\s+\w*SCR\w*\s+SCR\b|\bJOIN\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (usaSCR) return null;
+        const mCampo = sql.match(/(\w+)\s*\.\s*(\w+)\s+AS\s+aprovador\b/i);
+        const origem = mCampo ? `${mCampo[1].toUpperCase()}.${mCampo[2].toUpperCase()}` : 'um campo';
+        return (
+          `SQL projeta ${origem} AS aprovador, mas nao usa a tabela SCR em lugar nenhum — fonte ERRADA. ` +
+          "Aprovador (quem liberou o pedido na alcada) SO pode vir de SCR.CR_APROV (ou SAK.AK_NOME via LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD), com JOIN SCR-SC7 por SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM e SCR.CR_STATUS = '03' (liberado). " +
+          "NUNCA use SC7.C7_CONAPRO/C7_APROV (status do pedido, nao pessoa) nem SA2.A2_NOME (nome do FORNECEDOR do pedido) como se fossem o aprovador."
+        );
       },
     },
     {
@@ -489,6 +492,34 @@ module.exports = {
           return (
             "SQL referencia SCR.CR_LOJA — campo INEXISTENTE. O JOIN entre SC7 e SCR usa SOMENTE " +
             "SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, sem loja."
+          );
+        }
+        return null;
+      },
+    },
+    {
+      // Bug real confirmado em producao, intermitente: pergunta "pedidos de compras
+      // aprovados... agrupados por nome do aprovador e numero de pedido" (SEM pedir
+      // "quantos"/contagem explicitamente) gerou SQL usando COUNT(*) AS total em vez de
+      // SUM(SC7.C7_TOTAL) — resultado exibido como "R$ 181,00" quando na verdade era a
+      // CONTAGEM de 47 pedidos, nao o valor monetario somado. Contagem so faz sentido
+      // quando pedida explicitamente ("quantos pedidos"); um agrupamento por NUMERO DE
+      // PEDIDO (chave ja unica por grupo) com COUNT(*) nunca agrega informacao real —
+      // e quase sempre 1 por grupo, entao esse padrao e sinal forte de metrica errada.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeContagemExplicita = /\bquant[oa]s?\b/.test(texto) || /\bquantidade\s+de\s+pedidos?\b/.test(texto);
+        if (pedeContagemExplicita) return null;
+        const usaSC7 = /\bFROM\s+\w*SC7\w*\s+SC7\b|\bJOIN\s+\w*SC7\w*\s+SC7\b/i.test(sql);
+        if (!usaSC7) return null;
+        const agrupaPorNumeroPedido = /\bGROUP\s+BY\b[\s\S]*\bC7_NUM\b|\bGROUP\s+BY\b[\s\S]*\bCR_NUM\b/i.test(sql);
+        if (!agrupaPorNumeroPedido) return null;
+        const usaCountEstrela = /\bCOUNT\s*\(\s*\*\s*\)/i.test(sql);
+        const usaSum = /\bSUM\s*\(/i.test(sql);
+        if (usaCountEstrela && !usaSum) {
+          return (
+            "SQL agrupa por numero de pedido (chave ja unica) e usa COUNT(*) — isso conta REGISTROS (quase sempre 1 por grupo), nao soma dinheiro, e a pergunta nao pediu contagem explicitamente. " +
+            "Troque para SUM(SC7.C7_TOTAL) AS valor_pedido, mantendo o mesmo GROUP BY."
           );
         }
         return null;
