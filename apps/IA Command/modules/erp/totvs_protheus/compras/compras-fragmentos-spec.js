@@ -266,7 +266,7 @@ WHERE SC7.D_E_L_E_T_ = ' '
 
 function aprovacaoPedidoCompra({ temNomeAprovador } = {}) {
   const joinAprovador = temNomeAprovador
-    ? `- SCR -> SAK (nome do aprovador): SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '. Use LEFT JOIN (aprovador pode nao estar cadastrado em SAK) e exiba COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador. Quando o usuario pedir "nome do aprovador", SAK.AK_NOME e obrigatorio; SCR.CR_APROV sozinho e apenas codigo, nao nome.`
+    ? `- SCR -> SAK (nome do aprovador): SCR.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = SCR.CR_FILIAL AND SAK.D_E_L_E_T_ = ' '. SAK e cadastro de aprovadores POR FILIAL — o mesmo AK_COD existe uma vez em cada filial cadastrada; omitir AK_FILIAL no JOIN duplica cada liberacao por filial (bug real confirmado na CAIEIRA: 1 aprovador cadastrado em 3 filiais triplicou todo o resultado). Use LEFT JOIN (aprovador pode nao estar cadastrado em SAK) e exiba COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador. Quando o usuario pedir "nome do aprovador", SAK.AK_NOME e obrigatorio; SCR.CR_APROV sozinho e apenas codigo, nao nome.`
     : `- Esta empresa nao tem a tabela SAK (cadastro de aprovadores) disponivel: exiba SCR.CR_APROV (codigo do aprovador) diretamente, sem tentar resolver o nome. NUNCA invente JOIN com SAK ou outra tabela de usuarios nesse caso.`;
   return `
 ## Aprovacao/liberacao de pedido de compra por aprovador (SCR)
@@ -293,7 +293,7 @@ ${joinAprovador}
 - SCR.CR_NIVEL identifica o nivel/etapa de alcada do fluxo de aprovacao (util quando o usuario pedir "por nivel de aprovacao").
 - Quando o usuario pedir "por aprovador", agrupe pelo aprovador (COALESCE(SAK.AK_NOME, SCR.CR_APROV) quando SAK existir; SCR.CR_APROV somente quando SAK nao existir) — nao confunda com SC7.C7_APROV (que so indica se o PEDIDO esta liberado 'L' ou nao, sem identificar QUEM precisa aprovar).
 - Diferenca entre SC7.C7_APROV e SCR: SC7.C7_APROV = 'L' informa que o pedido JA esta liberado para ATENDIMENTO (resultado final de recebimento). SCR detalha o FLUXO de aprovacao por ALCADA (quem, em que nivel, em que status) — use SCR apenas para identificar QUEM esta no caminho do bloqueio, nunca para decidir SE o pedido esta bloqueado (isso e sempre C7_CONAPRO).
-- REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido, mesmo que o usuario nao peca valor explicitamente. Para consultas por aprovador, NAO some SC7.C7_TOTAL depois do JOIN com SCR: primeiro agregue SC7 por pedido em uma CTE/subquery (C7_FILIAL + C7_NUM) com SUM(SC7.C7_TOTAL) AS valor_pedido, depois junte com uma lista DISTINCT de liberacoes SCR por pedido/aprovador/data. Isso evita multiplicar o valor quando SCR tem mais de uma linha liberada para o mesmo pedido/aprovador/nivel. Uma listagem de pedidos SEM coluna de valor monetario e incompleta.
+- REGRA OBRIGATORIA — SEMPRE inclua o VALOR do pedido, mesmo que o usuario nao peca valor explicitamente. Para consultas por aprovador, NAO some SC7.C7_TOTAL depois do JOIN com SCR: primeiro agregue SC7 por pedido em uma CTE/subquery (C7_FILIAL + C7_NUM) com SUM(SC7.C7_TOTAL) AS valor_pedido, depois junte com uma UNICA liberacao final por pedido em SCR (ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC) filtrando rn = 1). Bug real confirmado em producao (CAIEIRA): usar apenas SELECT DISTINCT por CR_FILIAL/CR_NUM/CR_APROV/CR_DATALIB NAO deduplica de verdade — quando o mesmo pedido tem mais de uma liberacao (niveis/aprovadores diferentes no periodo), o pedido aparece mais de uma vez e o Total Geral fica inflado (chegou a 3,4x o valor real). ROW_NUMBER + rn = 1 garante uma linha por pedido. Uma listagem de pedidos SEM coluna de valor monetario e incompleta.
 - REGRA DE GRANULARIDADE — se a pergunta pedir agrupamento por numero do pedido de compra, por dia e por aprovador, mas NAO pedir "item", "produto", "fornecedor" ou "detalhado", mantenha UMA linha por aprovador + dia + pedido. PROIBIDO incluir SC7.C7_ITEM, SA2.A2_NOME AS fornecedor ou SB1.B1_DESC AS produto nesse caso, pois isso muda a granularidade e quebra o agrupamento pedido. Inclua essas colunas somente quando o usuario pedir explicitamente detalhe por item/produto/fornecedor.
 
 ### Linguagem de posse do proprio aprovador (remetente do WhatsApp)
@@ -311,7 +311,7 @@ SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APRO
        SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SCRxxx SCR
 JOIN SC7xxx SC7 ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SC7.C7_CONAPRO = 'B' AND SC7.D_E_L_E_T_ = ' '
-${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
+${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = SCR.CR_FILIAL AND SAK.D_E_L_E_T_ = ' '\n" : ''}WHERE SCR.D_E_L_E_T_ = ' '
   AND SCR.CR_TIPO = 'PC'
   AND SCR.CR_STATUS IN ('01', '02', '04')
   AND SCR.CR_EMISSAO BETWEEN '20260701' AND '20260731'
@@ -328,25 +328,36 @@ WITH pedidos AS (
     AND SC7.C7_CONAPRO IN ('L', '')
   GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
 ),
-liberacoes AS (
-  SELECT DISTINCT SCR.CR_FILIAL,
+liberacoes_rank AS (
+  SELECT SCR.CR_FILIAL,
          SCR.CR_NUM,
          SCR.CR_APROV,
-         SCR.CR_DATALIB
+         CAST(SCR.CR_DATALIB AS DATE) AS data_liberacao,
+         ROW_NUMBER() OVER (
+           PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM
+           ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC, SCR.CR_APROV
+         ) AS rn
   FROM SCRxxx SCR
   WHERE SCR.D_E_L_E_T_ = ' '
     AND SCR.CR_TIPO = 'PC'
     AND SCR.CR_STATUS = '03'
     AND SCR.CR_DATALIB BETWEEN '20260701' AND '20260731'
+),
+liberacoes AS (
+  SELECT CR_FILIAL, CR_NUM, CR_APROV, data_liberacao
+  FROM liberacoes_rank
+  WHERE rn = 1
 )
 SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, liberacoes.CR_APROV)' : 'liberacoes.CR_APROV'} AS aprovador,
-       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       CONVERT(VARCHAR(10), liberacoes.data_liberacao, 103) AS dia,
        pedidos.numero_pedido,
        pedidos.valor_pedido
 FROM liberacoes
 JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
-${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '\n" : ''}ORDER BY aprovador, dia, pedidos.numero_pedido;
+${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = liberacoes.CR_FILIAL AND SAK.D_E_L_E_T_ = ' '\n" : ''}ORDER BY aprovador, dia, pedidos.numero_pedido;
 -- Nao confundir SCR.CR_EMISSAO/SC7.C7_EMISSAO (data de emissao do documento/pedido) com o periodo de aprovacao pedido pelo usuario: quando a pergunta for sobre pedidos APROVADOS num periodo (ex: "aprovados no mes passado"), filtre e agrupe o dia pela DATA DA LIBERACAO (SCR.CR_DATALIB), nao pela emissao — um pedido pode ter sido emitido num mes e liberado em outro.
+-- PROIBIDO usar apenas SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB como CTE de liberacoes: se o mesmo pedido tiver mais de uma liberacao (niveis/aprovadores diferentes), o pedido se repete e o Total Geral fica inflado. Use sempre ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC) com rn = 1 para escolher a liberacao final unica por pedido.
+-- PROIBIDO fazer LEFT JOIN SAK usando SOMENTE AK_COD (sem AK_FILIAL): SAK e cadastro de aprovadores POR FILIAL — o mesmo codigo de aprovador (AK_COD) tem uma linha ativa para cada filial cadastrada. Bug real confirmado na CAIEIRA: aprovador cadastrado em 3 filiais triplicou TODO o resultado (200 linhas para 114 pedidos, total 938.800,19 -> muito maior). SEMPRE inclua AND SAK.AK_FILIAL = liberacoes.CR_FILIAL (ou SCR.CR_FILIAL, conforme o alias em escopo) na condicao do JOIN com SAK.
 `;
 }
 

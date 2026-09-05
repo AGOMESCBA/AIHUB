@@ -265,6 +265,11 @@ function isPedidoCompraAprovadoPorAprovadorDiaPedido(mensagem = '') {
   return perguntaPedidoAprovado && pedeAprovador && pedeDia && pedePedido && !pedeDetalhe;
 }
 
+function pedeTodosAprovadoresOuNiveis(mensagem = '') {
+  const texto = removerAcentos(mensagem).toLowerCase();
+  return /\btodos?\s+os\s+aprovadores\b|\btodas?\s+as\s+liberacoes\b|\bniveis?\s+de\s+aprovacao\b|\bfluxo\s+de\s+aprovacao\b|\bhistorico\s+de\s+aprovacao\b/.test(texto);
+}
+
 function periodoSqlContexto(contexto = {}, fase1 = {}) {
   const periodo = contexto.periodo || contexto.contextoIA?.periodo || fase1.periodo || contexto.queryPlan?.periodo || contexto.contrato?.periodo || {};
   const dataInicio = periodo.dataInicio || periodo.data_inicio || periodo.inicio || periodo.start;
@@ -283,7 +288,7 @@ function sqlPedidosAprovadosPorAprovadorDiaPedido({ mensagem, contexto, fase1, h
   const tabelaSCR = helpers?.tabelaFisicaSX2?.(sx2, 'SCR') || tabelaFisicaSX2(sx2, 'SCR') || 'SCR';
   const tabelaSAK = helpers?.tabelaFisicaSX2?.(sx2, 'SAK') || tabelaFisicaSX2(sx2, 'SAK') || 'SAK';
   const selectAprovador = 'COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador';
-  const joinSAK = `\nLEFT JOIN ${tabelaSAK} SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '`;
+  const joinSAK = `\nLEFT JOIN ${tabelaSAK} SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = liberacoes.CR_FILIAL AND SAK.D_E_L_E_T_ = ' '`;
 
   return `SET ROWCOUNT 50000;
 WITH pedidos AS (
@@ -295,19 +300,31 @@ WITH pedidos AS (
     AND SC7.C7_CONAPRO IN ('L', '')
   GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
 ),
-liberacoes AS (
-  SELECT DISTINCT SCR.CR_FILIAL,
+liberacoes_rank AS (
+  SELECT SCR.CR_FILIAL,
          SCR.CR_NUM,
          SCR.CR_APROV,
-         SCR.CR_DATALIB
+         CAST(SCR.CR_DATALIB AS DATE) AS data_liberacao,
+         ROW_NUMBER() OVER (
+           PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM
+           ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC, SCR.CR_APROV
+         ) AS rn
   FROM ${tabelaSCR} SCR
   WHERE SCR.D_E_L_E_T_ = ' '
     AND SCR.CR_TIPO = 'PC'
     AND SCR.CR_STATUS = '03'
     AND SCR.CR_DATALIB BETWEEN '${periodo.dataInicio}' AND '${periodo.dataFim}'
+),
+liberacoes AS (
+  SELECT CR_FILIAL,
+         CR_NUM,
+         CR_APROV,
+         data_liberacao
+  FROM liberacoes_rank
+  WHERE rn = 1
 )
 SELECT ${selectAprovador},
-       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       CONVERT(VARCHAR(10), liberacoes.data_liberacao, 103) AS dia,
        pedidos.numero_pedido,
        pedidos.valor_pedido
 FROM liberacoes
@@ -523,7 +540,7 @@ module.exports = {
         if (temCrAprov || temJoinSak) return null;
         return (
           'A pergunta pede "por aprovador", mas o SQL usa SCR sem projetar/agrupar SCR.CR_APROV nem fazer JOIN com SAK. ' +
-          'Adicione SCR.CR_APROV (ou LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD para exibir o nome) no SELECT e no GROUP BY — sem essa coluna a consulta nao identifica QUEM precisa aprovar, apenas lista os pedidos.'
+          'Adicione SCR.CR_APROV (ou LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = SCR.CR_FILIAL para exibir o nome — SAK e cadastro por filial, join sem AK_FILIAL duplica o aprovador por filial) no SELECT e no GROUP BY — sem essa coluna a consulta nao identifica QUEM precisa aprovar, apenas lista os pedidos.'
         );
       },
     },
@@ -543,7 +560,7 @@ module.exports = {
         return (
           "A pergunta pediu pedidos de compra aprovados por nome/aprovador, mas o SQL nao traz a dimensao aprovador. " +
           "Use SCR para identificar quem liberou: JOIN SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '. " +
-          "Para nome, adicione LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' ' e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
+          "Para nome, adicione LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = SCR.CR_FILIAL AND SAK.D_E_L_E_T_ = ' ' (SAK e cadastro por filial; sem AK_FILIAL o aprovador se multiplica por filial cadastrada) e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
         );
       },
     },
@@ -563,7 +580,7 @@ module.exports = {
         return (
           'A pergunta pediu NOME do aprovador, mas o SQL nao usa SAK.AK_NOME. ' +
           'SCR.CR_APROV e apenas o CODIGO do aprovador. Use LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD ' +
-          "AND SAK.D_E_L_E_T_ = ' ' e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
+          "AND SAK.AK_FILIAL = SCR.CR_FILIAL AND SAK.D_E_L_E_T_ = ' ' (SAK e cadastro por filial; sem AK_FILIAL duplica o aprovador por filial) e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
         );
       },
     },
@@ -639,7 +656,7 @@ module.exports = {
           return (
             `SQL projeta SC7.${statusComoPessoa[1].toUpperCase()} AS ${statusComoPessoa[2]} — fonte ERRADA. ` +
             'C7_CONAPRO/C7_APROV guardam STATUS do pedido, nao nome/codigo de pessoa. ' +
-            "Para nome do aprovador, use SCR.CR_APROV + LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' ' e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
+            "Para nome do aprovador, use SCR.CR_APROV + LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = SCR.CR_FILIAL AND SAK.D_E_L_E_T_ = ' ' (SAK e cadastro por filial; sem AK_FILIAL duplica o aprovador por filial) e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
           );
         }
         const usaSCR = /\bFROM\s+\w*SCR\w*\s+SCR\b|\bJOIN\s+\w*SCR\w*\s+SCR\b/i.test(sql);
@@ -648,7 +665,7 @@ module.exports = {
         const origem = mCampo ? `${mCampo[1].toUpperCase()}.${mCampo[2].toUpperCase()}` : 'um campo';
         return (
           `SQL projeta ${origem} como aprovador, mas nao usa a tabela SCR em lugar nenhum — fonte ERRADA. ` +
-          "Aprovador (quem liberou o pedido na alcada) SO pode vir de SCR.CR_APROV (ou SAK.AK_NOME via LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD), com JOIN SCR-SC7 por SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, SCR.CR_TIPO = 'PC' e SCR.CR_STATUS = '03' (liberado). " +
+          "Aprovador (quem liberou o pedido na alcada) SO pode vir de SCR.CR_APROV (ou SAK.AK_NOME via LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = SCR.CR_FILIAL — SAK e cadastro por filial, join sem AK_FILIAL duplica o aprovador), com JOIN SCR-SC7 por SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, SCR.CR_TIPO = 'PC' e SCR.CR_STATUS = '03' (liberado). " +
           "NUNCA use SC7.C7_CONAPRO/C7_APROV (status do pedido, nao pessoa) nem SA2.A2_NOME (nome do FORNECEDOR do pedido) como se fossem o aprovador."
         );
       },
@@ -676,6 +693,32 @@ module.exports = {
         return (
           `SQL referencia SCR.${campoSc7DentroScr[1].toUpperCase()} — campo INEXISTENTE em SCR. ` +
           "SCR nao possui campos C7_*; no JOIN entre SC7 e SCR use SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM, com SCR.CR_TIPO = 'PC'."
+        );
+      },
+    },
+    {
+      // Bug real confirmado na CAIEIRA: LEFT JOIN SAK... ON <alias>.CR_APROV = SAK.AK_COD
+      // sem AK_FILIAL na condicao. SAK e cadastro de aprovadores POR FILIAL — o mesmo AK_COD
+      // tem uma linha ativa para cada filial cadastrada (ex: 3 filiais = 3 linhas do mesmo
+      // aprovador). Sem filtrar AK_FILIAL, cada liberacao casa com todas as linhas
+      // cadastrais do aprovador e o resultado inteiro se multiplica (confirmado: 200 linhas
+      // para 114 pedidos, total 3,4x maior que o real). Isso e independente do bug de
+      // liberacoes duplicadas por ROW_NUMBER/rn=1 (guard proprio, ja corrigido) — os dois
+      // bugs se somavam.
+      validar(sql) {
+        const texto = String(sql || '');
+        const joinSakMatch = texto.match(/\bJOIN\s+\w*SAK\w*\s+SAK\s+ON\s+([\s\S]{0,300}?)(?:\bLEFT\s+JOIN\b|\bJOIN\b|\bWHERE\b|\bORDER\s+BY\b|\bGROUP\s+BY\b|;|$)/i);
+        if (!joinSakMatch) return null;
+        const condicaoJoin = joinSakMatch[1];
+        const usaAkCod = /\bSAK\s*\.\s*AK_COD\b/i.test(condicaoJoin);
+        if (!usaAkCod) return null;
+        const temAkFilial = /\bSAK\s*\.\s*AK_FILIAL\b/i.test(condicaoJoin);
+        if (temAkFilial) return null;
+        return (
+          "SQL faz JOIN com SAK usando apenas AK_COD, sem AK_FILIAL. SAK e cadastro de aprovadores POR FILIAL — " +
+          "o mesmo codigo de aprovador (AK_COD) tem uma linha ativa para cada filial cadastrada, e o JOIN sem AK_FILIAL " +
+          "multiplica cada liberacao por essa quantidade de filiais (bug real confirmado na CAIEIRA: total 3,4x maior que o real). " +
+          "Adicione AND SAK.AK_FILIAL = <alias_liberacao>.CR_FILIAL na condicao do JOIN (mesmo alias de filial usado no restante da query)."
         );
       },
     },
@@ -827,6 +870,9 @@ module.exports = {
     {
       // Quando SC7 ja foi agregada em CTE/subquery, o proximo risco e duplicar linhas
       // vindas de SCR. Deduplicar as liberacoes e parte do contrato semantico desta consulta.
+      // Aceita tanto ROW_NUMBER()/rn=1 (padrao correto, unica liberacao final por pedido)
+      // quanto SELECT DISTINCT bruto (o guard seguinte cuida de rejeitar esse ultimo caso
+      // quando ele ainda assim duplica pedido por ter mais de uma liberacao no periodo).
       validar(sql, mensagem) {
         const texto = String(mensagem || '').toLowerCase();
         const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
@@ -842,10 +888,34 @@ module.exports = {
         const temScrDistinct = /\bSELECT\s+DISTINCT\s+SCR\s*\.\s*CR_FILIAL\b[\s\S]{0,800}\bFROM\s+\w*SCR\w*\s+SCR\b/i.test(sql)
           || /\bFROM\s*\(\s*SELECT\s+DISTINCT\b[\s\S]{0,800}\bFROM\s+\w*SCR\w*\s+SCR\b/i.test(sql)
           || /^\s*SELECT\s+DISTINCT\b/i.test(principal);
-        if (temScrDistinct) return null;
+        const escolheUmaLiberacaoPorPedido = /\bROW_NUMBER\s*\(\s*\)\s+OVER\s*\(\s*PARTITION\s+BY\s+SCR\s*\.\s*CR_FILIAL\s*,\s*SCR\s*\.\s*CR_NUM\b/i.test(sql)
+          || /\bROW_NUMBER\s*\(\s*\)\s+OVER\s*\(\s*PARTITION\s+BY\s+CR_FILIAL\s*,\s*CR_NUM\b/i.test(sql);
+        if (temScrDistinct || escolheUmaLiberacaoPorPedido) return null;
         return (
           "SQL agrega SC7 antes, mas junta SCR sem deduplicar as liberacoes. SCR pode ter mais de uma linha para o mesmo pedido/aprovador/data, gerando linhas repetidas na resposta. " +
-          "Crie uma CTE/subquery liberacoes com SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB FROM SCR... filtrando CR_TIPO = 'PC', CR_STATUS = '03' e D_E_L_E_T_ = ' ', e junte a query principal nessa lista deduplicada."
+          "Crie uma CTE liberacoes_rank com ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC) filtrando CR_TIPO = 'PC', CR_STATUS = '03' e D_E_L_E_T_ = ' ', e junte a query principal apenas em rn = 1 (uma liberacao final por pedido)."
+        );
+      },
+    },
+    {
+      // Bug real confirmado na CAIEIRA: SELECT DISTINCT por CR_DATALIB ainda duplica o mesmo
+      // pedido quando a SCR possui mais de uma liberacao no mesmo dia/aprovador/pedido. Para
+      // a pergunta de pedidos aprovados por aprovador/dia/pedido, a base deve continuar sendo
+      // o pedido; SCR apenas classifica pela liberacao final do pedido.
+      validar(sql, mensagem) {
+        if (!isPedidoCompraAprovadoPorAprovadorDiaPedido(mensagem) || pedeTodosAprovadoresOuNiveis(mensagem)) return null;
+        const principal = selectPrincipalSql(sql);
+        const usaValorPedidoPreAgregado = /\b(?:pedidos|p)\s*\.\s*valor_pedido\b/i.test(principal);
+        if (!usaValorPedidoPreAgregado) return null;
+        const usaScrDistinctPorDataBruta = /\bSELECT\s+DISTINCT\s+SCR\s*\.\s*CR_FILIAL\b[\s\S]{0,900}\bSCR\s*\.\s*CR_DATALIB\b[\s\S]{0,900}\bFROM\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaScrDistinctPorDataBruta) return null;
+        const escolheUmaLiberacaoPorPedido = /\bROW_NUMBER\s*\(\s*\)\s+OVER\s*\(\s*PARTITION\s+BY\s+SCR\s*\.\s*CR_FILIAL\s*,\s*SCR\s*\.\s*CR_NUM\b/i.test(sql)
+          || /\bROW_NUMBER\s*\(\s*\)\s+OVER\s*\(\s*PARTITION\s+BY\s+CR_FILIAL\s*,\s*CR_NUM\b/i.test(sql);
+        if (escolheUmaLiberacaoPorPedido) return null;
+        return (
+          "SQL usa SELECT DISTINCT em SCR por CR_DATALIB, mas isso ainda duplica pedidos quando ha varias liberacoes do mesmo pedido. " +
+          "Para pedidos aprovados por aprovador/dia/pedido, mantenha SC7 como base agregada por pedido e escolha uma unica liberacao final por pedido com ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC). " +
+          "Use apenas rn = 1 para classificar aprovador e dia, evitando inflar o Total Geral."
         );
       },
     },

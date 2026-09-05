@@ -1131,6 +1131,13 @@ window._iahubAuthReady?.then(init) ?? init();
       <div class="help-item-desc">A validação confere se todo código de filial gravado numa tabela de negócio real existe na hierarquia importada, e se não há chave duplicada dentro do grupo. Só libera uso automático quando a checagem é 100% limpa. Qualquer divergência mantém o grupo em modo assistido — isolamento parcial de dados entre empresas é pior que bloqueio.</div>
     </div>
 
+    <div class="help-section">
+      <div class="help-section-title">Coluna "Empresa IAHub" — o que o vínculo realmente protege</div>
+      <div class="help-item-desc">Um grupo Protheus (mesmo sufixo de tabela física) pode conter <strong>mais de uma empresa jurídica</strong> (CNPJs diferentes) misturada nos mesmos registros — ex.: pedidos de compra de duas razões sociais na mesma <code>SC7010</code>. Vincular uma linha <code>tipo_no='empresa'</code> aqui a uma empresa cliente do IAHub é o que decide se essa empresa jurídica <strong>existe</strong> para o IA Command: uma empresa Protheus sem vínculo fica automaticamente fora de qualquer resposta, consulta ou seleção de filial — não porque um filtro a bloqueia, mas porque ela nunca entra na árvore de resolução (<code>lobo-guara-filial-resolver.js::_carregarArvore</code>).</div>
+      <div class="help-tip"><strong>Isso é a proteção real hoje contra misturar dados de duas empresas jurídicas do mesmo grupo</strong> — não existe (ainda) um filtro automático que restrinja ao vínculo quando a pergunta do usuário não menciona nome de filial/empresa. Ela funciona <em>enquanto apenas uma empresa jurídica do grupo estiver vinculada</em> a este <code>empresa_id</code> do IAHub.</div>
+      <div class="help-tip" style="border-left-color:#e0a030;background:rgba(224,160,48,.12)"><strong>Atenção ao vincular uma SEGUNDA empresa jurídica do mesmo grupo a um <code>empresa_id</code> do IAHub</strong> (ou ao vincular duas empresas do grupo a <code>empresa_id</code>s diferentes que dividem o mesmo canal/config): a partir desse momento, uma pergunta que não cite o nome da filial/empresa explicitamente pode retornar ou somar dados das duas empresas jurídicas misturados, sem aviso — o normalizer ainda não aplica um escopo padrão a partir do vínculo quando não há menção textual na pergunta. Confirme com o time antes de aprovar esse cenário em produção.</div>
+    </div>
+
   </div>
 </div>
 <script>

@@ -331,7 +331,7 @@ ORDER BY SC7.C7_EMISSAO, SC7.C7_NUM;`;
   );
 });
 
-ok('SQL de pedidos aprovados com CTE SC7 agregada e SCR deduplicado passa', () => {
+ok('SQL de pedidos aprovados com CTE SC7 agregada e SCR deduplicado por DISTINCT bruto e rejeitado (bug real CAIEIRA: infla total)', () => {
   const sql = `SET ROWCOUNT 10000;
 WITH pedidos AS (
   SELECT SC7.C7_FILIAL, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
@@ -353,8 +353,66 @@ JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM =
 LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
 ORDER BY aprovador, dia, pedidos.numero_pedido;`;
   const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /SELECT DISTINCT em SCR por CR_DATALIB|ROW_NUMBER/.test(e)), `esperava erro exigindo ROW_NUMBER/rn=1 em vez de DISTINCT bruto, obteve: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL de pedidos aprovados com CTE SC7 agregada e liberacao final unica por ROW_NUMBER/rn=1 passa', () => {
+  const sql = `SET ROWCOUNT 10000;
+WITH pedidos AS (
+  SELECT SC7.C7_FILIAL, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+  FROM SC7010 SC7
+  WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '')
+  GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+),
+liberacoes_rank AS (
+  SELECT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, CAST(SCR.CR_DATALIB AS DATE) AS data_liberacao,
+         ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC) AS rn
+  FROM SCR010 SCR
+  WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+),
+liberacoes AS (
+  SELECT CR_FILIAL, CR_NUM, CR_APROV, data_liberacao FROM liberacoes_rank WHERE rn = 1
+)
+SELECT COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador,
+       CONVERT(VARCHAR(10), liberacoes.data_liberacao, 103) AS dia,
+       pedidos.numero_pedido,
+       pedidos.valor_pedido
+FROM liberacoes
+JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
+LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = liberacoes.CR_FILIAL AND SAK.D_E_L_E_T_ = ' '
+ORDER BY aprovador, dia, pedidos.numero_pedido;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
   assert.ok(!erros.some(e => /CR_STATUS\s*=\s*'03'|CR_TIPO\s*=\s*'PC'|SCR\.CR_DATALIB/.test(e)), `nao deveria disparar guard de filtros SCR/data: ${JSON.stringify(erros)}`);
-  assert.ok(!erros.some(e => /juntar diretamente SC7 com SCR|granularidade|SC7\.C7_ITEM|fornecedor/i.test(e)), `nao deveria disparar guards de duplicidade/granularidade: ${JSON.stringify(erros)}`);
+  assert.ok(!erros.some(e => /juntar diretamente SC7 com SCR|granularidade|SC7\.C7_ITEM|fornecedor|ROW_NUMBER|AK_FILIAL/i.test(e)), `nao deveria disparar guards de duplicidade/granularidade/dedup/filial: ${JSON.stringify(erros)}`);
+});
+
+ok('SQL com JOIN SAK sem AK_FILIAL e rejeitado (bug real CAIEIRA: aprovador cadastrado em multiplas filiais triplica o resultado)', () => {
+  const sql = `SET ROWCOUNT 10000;
+WITH pedidos AS (
+  SELECT SC7.C7_FILIAL, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+  FROM SC7010 SC7
+  WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '')
+  GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
+),
+liberacoes_rank AS (
+  SELECT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, CAST(SCR.CR_DATALIB AS DATE) AS data_liberacao,
+         ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC) AS rn
+  FROM SCR010 SCR
+  WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+),
+liberacoes AS (
+  SELECT CR_FILIAL, CR_NUM, CR_APROV, data_liberacao FROM liberacoes_rank WHERE rn = 1
+)
+SELECT COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador,
+       CONVERT(VARCHAR(10), liberacoes.data_liberacao, 103) AS dia,
+       pedidos.numero_pedido,
+       pedidos.valor_pedido
+FROM liberacoes
+JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
+LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+ORDER BY aprovador, dia, pedidos.numero_pedido;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /AK_FILIAL/.test(e)), `esperava erro exigindo AK_FILIAL no JOIN com SAK, obteve: ${JSON.stringify(erros)}`);
 });
 
 ok('SQL real do WhatsApp com item/fornecedor e SUM apos JOIN SCR e rejeitado', () => {
@@ -430,18 +488,22 @@ WITH pedidos AS (
   WHERE SC7.D_E_L_E_T_ = ' ' AND SC7.C7_CONAPRO IN ('L', '')
   GROUP BY SC7.C7_FILIAL, SC7.C7_NUM
 ),
-liberacoes AS (
-  SELECT DISTINCT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, SCR.CR_DATALIB
+liberacoes_rank AS (
+  SELECT SCR.CR_FILIAL, SCR.CR_NUM, SCR.CR_APROV, CAST(SCR.CR_DATALIB AS DATE) AS data_liberacao,
+         ROW_NUMBER() OVER (PARTITION BY SCR.CR_FILIAL, SCR.CR_NUM ORDER BY SCR.CR_DATALIB DESC, SCR.CR_NIVEL DESC) AS rn
   FROM SCR010 SCR
   WHERE SCR.D_E_L_E_T_ = ' ' AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+),
+liberacoes AS (
+  SELECT CR_FILIAL, CR_NUM, CR_APROV, data_liberacao FROM liberacoes_rank WHERE rn = 1
 )
 SELECT COALESCE(SAK.AK_NOME, liberacoes.CR_APROV) AS aprovador,
-       CONVERT(VARCHAR(10), CAST(liberacoes.CR_DATALIB AS DATE), 103) AS dia,
+       CONVERT(VARCHAR(10), liberacoes.data_liberacao, 103) AS dia,
        pedidos.numero_pedido,
        pedidos.valor_pedido
 FROM liberacoes
 JOIN pedidos ON liberacoes.CR_FILIAL = pedidos.C7_FILIAL AND liberacoes.CR_NUM = pedidos.numero_pedido
-LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON liberacoes.CR_APROV = SAK.AK_COD AND SAK.AK_FILIAL = liberacoes.CR_FILIAL AND SAK.D_E_L_E_T_ = ' '
 ORDER BY aprovador, dia, pedidos.numero_pedido;`;
   const seguro = runner._test.validarSqlIaOwnerBasico(sqlSeguro, spec, {}, mensagem);
   assert.strictEqual(seguro.ok, true, `SQL seguro deveria passar no validador real: ${JSON.stringify(seguro.erros)}`);

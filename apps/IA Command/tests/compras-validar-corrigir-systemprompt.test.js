@@ -46,7 +46,8 @@ ORDER BY aprovador, dia, numero_pedido;`;
   assert.ok(/LEFT JOIN SAK010 SAK/i.test(corrigido.sql), 'esperava SAK fisica');
   assert.ok(/WITH pedidos AS/i.test(corrigido.sql), 'esperava CTE pedidos');
   assert.ok(/WITH pedidos AS[\s\S]*SUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)\s+AS\s+valor_pedido/i.test(corrigido.sql), 'esperava soma apenas na CTE pedidos');
-  assert.ok(/liberacoes AS[\s\S]*SELECT DISTINCT SCR\.CR_FILIAL/i.test(corrigido.sql), 'esperava SCR deduplicado');
+  assert.ok(/liberacoes_rank AS[\s\S]*ROW_NUMBER\(\)/i.test(corrigido.sql), 'esperava CTE liberacoes_rank com ROW_NUMBER');
+  assert.ok(/liberacoes AS[\s\S]*FROM liberacoes_rank[\s\S]*WHERE rn = 1/i.test(corrigido.sql), 'esperava liberacao final unica por pedido via rn = 1 (evita inflar total, bug real CAIEIRA)');
   assert.ok(/SC7\.C7_CONAPRO\s+IN\s*\(\s*'L'\s*,\s*''\s*\)/i.test(corrigido.sql), 'esperava filtro C7_CONAPRO aprovado');
   assert.ok(!/SUM\s*\(\s*SC7\s*\.\s*C7_TOTAL\s*\)/i.test(spec._test.selectPrincipalSql(corrigido.sql)), 'nao deve somar SC7 no select principal');
 

@@ -190,7 +190,8 @@ assert(textoAprovador.includes("SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'"), '
 assert(/PROIBIDO fazer LEFT JOIN SCR somente por numero\/filial/i.test(textoAprovador), 'prompt deve bloquear o padrao de LEFT JOIN SCR incompleto');
 assert(textoAprovador.includes('SCR.CR_DATALIB'), 'prompt deve orientar data de liberacao para pedidos aprovados');
 assert(textoAprovador.includes('NAO some SC7.C7_TOTAL depois do JOIN com SCR'), 'prompt deve proibir soma de SC7.C7_TOTAL depois do JOIN direto com SCR');
-assert(textoAprovador.includes('SELECT DISTINCT SCR.CR_FILIAL'), 'prompt deve orientar deduplicacao de liberacoes SCR');
+assert(/ROW_NUMBER\(\)\s+OVER\s*\(\s*PARTITION BY SCR\.CR_FILIAL, SCR\.CR_NUM/.test(textoAprovador), 'prompt deve orientar uma unica liberacao final por pedido via ROW_NUMBER/rn=1, nao SELECT DISTINCT');
+assert(!/liste\s+de\s+liberacoes\s+DISTINCT|junte com uma lista DISTINCT/i.test(textoAprovador), 'prompt nao deve mais orientar SELECT DISTINCT como forma de deduplicar liberacoes (bug real da CAIEIRA)');
 assert(textoAprovador.includes('PROIBIDO incluir SC7.C7_ITEM'), 'prompt deve impedir item/fornecedor/produto sem pedido explicito nessa consulta');
 
 console.log('compras-sql-contrato.test.js: ok (ia-owner)');
