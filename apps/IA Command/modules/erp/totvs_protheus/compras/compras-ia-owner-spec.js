@@ -578,6 +578,25 @@ module.exports = {
       },
     },
     {
+      // Para pedidos aprovados, "neste mes" e "por dia" referem-se a data da liberacao
+      // no fluxo de alcada (SCR.CR_DATALIB), nao a emissao do pedido em SC7.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const perguntaPedidoAprovado = /\bpedidos?\s+de\s+compras?\b/.test(texto) && /\baprovad[oa]s?\b/.test(texto);
+        const pedeDia = /\bpor\s+dia\b|\bagrupad[oa]s?\b[\s\S]*\bdia\b/.test(texto);
+        if (!perguntaPedidoAprovado || !pedeDia) return null;
+        const usaSCR = /\b(?:FROM|JOIN)\s+\w*SCR\w*\s+SCR\b/i.test(sql);
+        if (!usaSCR) return null;
+        const diaPorEmissaoPedido = /\bSC7\s*\.\s*C7_EMISSAO\b[\s\S]{0,120}\bAS\s+\[?dia\]?/i.test(sql)
+          || /\bAS\s+\[?dia\]?[\s\S]{0,120}\bSC7\s*\.\s*C7_EMISSAO\b/i.test(sql);
+        if (!diaPorEmissaoPedido) return null;
+        return (
+          "SQL agrupa pedidos aprovados por dia usando SC7.C7_EMISSAO, mas a pergunta e sobre data de aprovacao/liberacao. " +
+          "Use SCR.CR_DATALIB para o periodo e para o alias dia: CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia."
+        );
+      },
+    },
+    {
       // Bug real confirmado em producao: perguntas de "pedidos de compras aprovados"
       // agrupadas por aprovador/dia/pedido (SEM pedir "quantos"/contagem explicitamente)
       // geraram COUNT(*) AS total_pedidos. O formatter exibiu a contagem como R$, mas o

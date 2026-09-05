@@ -297,18 +297,35 @@ GROUP BY SC7.C7_NUM, SC7.C7_EMISSAO, SAK.AK_NOME, SCR.CR_APROV;`;
   assert.ok(erros.some(e => /CR_TIPO\s*=\s*'PC'/.test(e)), `esperava erro exigindo CR_TIPO=PC, obteve: ${JSON.stringify(erros)}`);
 });
 
+ok('SQL real com LEFT JOIN SCR incompleto e dia por emissao e rejeitado com orientacoes especificas', () => {
+  const sql = `SET ROWCOUNT 50000;
+SELECT COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103) AS dia, SC7.C7_NUM AS numero_pedido, SUM(SC7.C7_TOTAL) AS valor_pedido
+FROM SC7010 SC7
+LEFT JOIN SCR010 SCR ON SC7.C7_NUM = SCR.CR_NUM AND SC7.C7_FILIAL = SCR.CR_FILIAL AND SCR.D_E_L_E_T_ = ' '
+LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
+WHERE SC7.D_E_L_E_T_ = ' '
+  AND SC7.C7_CONAPRO IN ('L', '')
+  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
+GROUP BY COALESCE(SAK.AK_NOME, SCR.CR_APROV), SC7.C7_EMISSAO, SC7.C7_NUM
+ORDER BY aprovador, dia, numero_pedido;`;
+  const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
+  assert.ok(erros.some(e => /CR_STATUS\s*=\s*'03'/.test(e)), `esperava erro exigindo CR_STATUS=03, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(erros.some(e => /CR_TIPO\s*=\s*'PC'/.test(e)), `esperava erro exigindo CR_TIPO=PC, obteve: ${JSON.stringify(erros)}`);
+  assert.ok(erros.some(e => /SC7\.C7_EMISSAO/.test(e) && /SCR\.CR_DATALIB/.test(e)), `esperava erro exigindo dia por CR_DATALIB, obteve: ${JSON.stringify(erros)}`);
+});
+
 ok('SQL de pedidos aprovados com SCR.CR_TIPO = \'PC\' e SCR.CR_STATUS = \'03\' passa', () => {
   const sql = `SET ROWCOUNT 10000;
-SELECT SC7.C7_NUM AS numero_pedido, CONVERT(VARCHAR(10), CAST(SC7.C7_EMISSAO AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
+SELECT SC7.C7_NUM AS numero_pedido, CONVERT(VARCHAR(10), CAST(SCR.CR_DATALIB AS DATE), 103) AS dia, COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador, SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SC7010 SC7
 JOIN SCR010 SCR ON SCR.CR_FILIAL = SC7.C7_FILIAL AND SCR.CR_NUM = SC7.C7_NUM AND SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03' AND SCR.D_E_L_E_T_ = ' '
 LEFT JOIN SAK010 SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.D_E_L_E_T_ = ' '
 WHERE SC7.D_E_L_E_T_ = ' '
-  AND SC7.C7_EMISSAO BETWEEN '20260901' AND '20260930'
-GROUP BY SC7.C7_NUM, SC7.C7_EMISSAO, SAK.AK_NOME, SCR.CR_APROV
-ORDER BY SC7.C7_EMISSAO, aprovador;`;
+  AND SCR.CR_DATALIB BETWEEN '20260901' AND '20260930'
+GROUP BY SC7.C7_NUM, SCR.CR_DATALIB, SAK.AK_NOME, SCR.CR_APROV
+ORDER BY dia, aprovador;`;
   const erros = validar(sql, 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra');
-  assert.ok(!erros.some(e => /CR_STATUS\s*=\s*'03'|CR_TIPO\s*=\s*'PC'/.test(e)), `nao deveria disparar guard de filtros SCR: ${JSON.stringify(erros)}`);
+  assert.ok(!erros.some(e => /CR_STATUS\s*=\s*'03'|CR_TIPO\s*=\s*'PC'|SCR\.CR_DATALIB/.test(e)), `nao deveria disparar guard de filtros SCR/data: ${JSON.stringify(erros)}`);
 });
 
 console.log('\n[9] SCR nao aceita campos C7_* e pedido agrupado precisa de valor');

@@ -181,4 +181,13 @@ const textoStatusPedidoCompra = fragmentosSpec.FRAGMENTOS.status_pedido_compra.t
 assert(/C7_CONAPRO\s*=\s*'B'/.test(textoStatusPedidoCompra), 'fragmento de status deve ensinar C7_CONAPRO = \'B\' como bloqueio por alcada');
 assert(/nunca\s+como\s+sinonimo\s+de\s+"bloqueado"|bloqueio\s+e\s+sempre\s+C7_CONAPRO/i.test(textoStatusPedidoCompra), 'fragmento de status deve deixar explicito que C7_APROV nao e sinonimo de bloqueado');
 
+const textoAprovador = spec.regrasTecnicas({
+  mensagem: 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra',
+  temAprovacaoPedidoCompra: true,
+  temNomeAprovador: true,
+});
+assert(textoAprovador.includes("SCR.CR_TIPO = 'PC' AND SCR.CR_STATUS = '03'"), 'prompt de aprovador deve exigir CR_TIPO=PC e CR_STATUS=03 no JOIN/WHERE');
+assert(/PROIBIDO fazer LEFT JOIN SCR somente por numero\/filial/i.test(textoAprovador), 'prompt deve bloquear o padrao de LEFT JOIN SCR incompleto');
+assert(textoAprovador.includes('SCR.CR_DATALIB'), 'prompt deve orientar data de liberacao para pedidos aprovados');
+
 console.log('compras-sql-contrato.test.js: ok (ia-owner)');
