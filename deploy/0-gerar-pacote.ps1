@@ -34,6 +34,7 @@ $EXCLUDE_DIRS  = @(
     ".agents",
     ".vscode",
     "tmp",
+    "tests",
     "_prod_compare",
     "backups",
     "data",

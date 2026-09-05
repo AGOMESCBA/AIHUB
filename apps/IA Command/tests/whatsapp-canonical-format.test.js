@@ -1103,6 +1103,30 @@ ok('aprovador com codigo de 6 digitos nao e reinterpretado como competencia (mes
   assert.ok(!/Fevereiro|Marco|Março|Abril/i.test(texto), texto);
 });
 
+ok('pedidos aprovados respeitam hierarquia pedida por aprovador dia e pedido', () => {
+  const rows = [
+    { dia: '20260901', aprovador: 'ANA COSTA', numero_pedido: '590001', valor_pedido: 1000 },
+    { dia: '20260901', aprovador: 'ANA COSTA', numero_pedido: '590002', valor_pedido: 2500 },
+    { dia: '20260902', aprovador: 'ANA COSTA', numero_pedido: '590003', valor_pedido: 500 },
+    { dia: '20260901', aprovador: 'BRUNO LIMA', numero_pedido: '590004', valor_pedido: 700 },
+  ];
+  const opts = {
+    nomeModulo: 'Compras',
+    contextoConsulta: 'Pedidos de compra aprovados neste mes agrupado por nome do aprovador, por dia e por numero do pedido de compra',
+  };
+  const shape = canonical.detectarShape(rows, opts);
+  const texto = canonical.renderSingle(rows, opts);
+
+  assert.strictEqual(shape.tipo, 'detalhe_multidimensional');
+  assert.deepStrictEqual(shape.dimensoes, ['aprovador', 'dia', 'numero_pedido']);
+  assert.ok(texto.includes('*Aprovador: ANA COSTA*'), texto);
+  assert.ok(texto.includes('  *Dia: 01/09/2026*'), texto);
+  assert.ok(texto.includes('    1. Documento 590001: Valor Pedido: *R$'), texto);
+  assert.ok(texto.includes('*Aprovador: BRUNO LIMA*'), texto);
+  assert.ok(texto.indexOf('*Aprovador: ANA COSTA*') < texto.indexOf('  *Dia: 01/09/2026*'), texto);
+  assert.ok(!texto.includes('*Detalhamento por Dia, Aprovador'), texto);
+});
+
 ok('total_pedidos e formatado como quantidade, nao como valor monetario', () => {
   const texto = canonical.renderSingle([
     { dia: '20260901', aprovador: 'Lucivando', total_pedidos: 42 },

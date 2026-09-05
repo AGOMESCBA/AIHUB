@@ -503,6 +503,12 @@ function detectarShape(rows, opts = {}) {
 
   let dimensoesNormalizadas = compactarDimensoesBancarias(dimensoes);
   dimensoesNormalizadas = reduzirDimensoesFinanceirasDetalhe(dimensoesNormalizadas, metricas, opts);
+  dimensoesNormalizadas = ordenarDimensoesPorPedido(dimensoesNormalizadas, opts);
+
+  const hierarquiaPedido = hierarquiaExplicitaMultinivel(dimensoesNormalizadas, opts);
+  if (hierarquiaPedido) {
+    return { tipo: 'detalhe_multidimensional', dimensao: hierarquiaPedido[0], dimensoes: hierarquiaPedido, metricas };
+  }
 
   // >3 dimensoes: sempre hierarquico (se houver temporal) — lista plana viraria ilegivel.
   // ===3 dimensoes COM uma temporal QUE VARIA (mais de 1 valor distinto) E VOLUME ALTO
@@ -585,6 +591,76 @@ function ordenarMultiplasDimensoes(dimensoes) {
   const temporal = dimensoes.filter(isTemporal);
   const outras = dimensoes.filter(d => !isTemporal(d));
   return [...temporal, ...outras].slice(0, 3);
+}
+
+function ordemDimensoesPedidas(opts = {}) {
+  const texto = norm(opts.contextoConsulta || opts.mensagem || '');
+  if (!/\b(agrup|por)\b/.test(texto)) return [];
+
+  const dimensoes = [];
+  const padroes = [
+    { canon: 'aprovador', re: /\b(?:nome\s+d[oa]\s+)?aprovador(?:es)?\b/g },
+    { canon: 'dia', re: /\bdia\b|\bdata\b/g },
+    { canon: 'mes', re: /\bmes\b/g },
+    { canon: 'ano', re: /\bano\b/g },
+    { canon: 'numero_pedido', re: /\bnumero\s+d[oa]\s+pedido(?:\s+de\s+compra)?\b|\bpedido(?:\s+de\s+compra)?\b/g },
+    { canon: 'documento', re: /\bdocumento\b|\bnota\s+fiscal\b|\bnf\b|\btitulo\b|\bduplicata\b/g },
+    { canon: 'cliente', re: /\bcliente\b/g },
+    { canon: 'fornecedor', re: /\bfornecedor\b/g },
+    { canon: 'vendedor', re: /\bvendedor\b/g },
+    { canon: 'produto', re: /\bproduto\b/g },
+    { canon: 'filial', re: /\bfilial\b/g },
+    { canon: 'empresa', re: /\bempresa\b/g },
+  ];
+
+  for (const item of padroes) {
+    let m;
+    item.re.lastIndex = 0;
+    while ((m = item.re.exec(texto))) dimensoes.push({ canon: item.canon, pos: m.index });
+  }
+
+  return dimensoes
+    .sort((a, b) => a.pos - b.pos)
+    .map(x => x.canon)
+    .filter((canon, idx, arr) => arr.indexOf(canon) === idx);
+}
+
+function dimensaoAtendeCanon(dim, canon) {
+  const k = keyNorm(dim);
+  if (canon === 'dia') return k === 'dia' || k === 'data' || /_(data|emissao|vencimento|vencto|vencrea)$/.test(k);
+  if (canon === 'mes') return k === 'mes' || k === 'competencia' || k === 'ano_mes' || k === 'aaaamm';
+  if (canon === 'ano') return k === 'ano';
+  if (canon === 'numero_pedido') return /^(pedido|numero_pedido|num_pedido|cr_num|c7_num)$/.test(k);
+  if (canon === 'documento') return isDocumento(dim);
+  if (canon === 'aprovador') return /^aprovador|^cr_aprov$|^ak_cod$|^ak_nome$/.test(k);
+  return k === canon || k.startsWith(`${canon}_`) || k.endsWith(`_${canon}`);
+}
+
+function ordenarDimensoesPorPedido(dimensoes, opts = {}) {
+  if (!Array.isArray(dimensoes) || dimensoes.length < 2) return dimensoes;
+  const ordemPedido = ordemDimensoesPedidas(opts);
+  if (ordemPedido.length < 2) return dimensoes;
+
+  const restantes = dimensoes.slice();
+  const ordenadas = [];
+  for (const canon of ordemPedido) {
+    const idx = restantes.findIndex(dim => dimensaoAtendeCanon(dim, canon));
+    if (idx >= 0) ordenadas.push(restantes.splice(idx, 1)[0]);
+  }
+  if (ordenadas.length < 2) return dimensoes;
+  return [...ordenadas, ...restantes];
+}
+
+function hierarquiaExplicitaMultinivel(dimensoes, opts = {}) {
+  if (!Array.isArray(dimensoes) || dimensoes.length < 3) return null;
+  const ordenadas = ordenarDimensoesPorPedido(dimensoes, opts);
+  if (ordenadas.join('\u0000') === dimensoes.join('\u0000')) {
+    const ordemPedido = ordemDimensoesPedidas(opts);
+    if (ordemPedido.length < 3) return null;
+  }
+  if (!ordenadas.some(isTemporal) || !ordenadas.some(isDocumento)) return null;
+  if (isTemporal(ordenadas[0])) return null;
+  return ordenadas;
 }
 
 function ordenarDetalheTemporalDimensoes(dimensoes) {
@@ -1509,6 +1585,78 @@ function renderDetalheTemporalMultidimensional(rows, shape, linhas) {
   linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
 }
 
+function montarDetalheMultidimensional(rows, shape) {
+  const totalGeral = totalVazio(shape.metricas);
+  const root = { total: totalVazio(shape.metricas), filhos: new Map() };
+
+  for (const row of rows || []) {
+    let node = root;
+    for (const dim of shape.dimensoes) {
+      const valor = String(row[dim] ?? '').trim() || '(sem identificacao)';
+      if (!node.filhos.has(valor)) node.filhos.set(valor, { total: totalVazio(shape.metricas), filhos: new Map() });
+      node = node.filhos.get(valor);
+    }
+    for (const col of shape.metricas) {
+      const v = toNumber(row[col]);
+      node.total[col] += v;
+      totalGeral[col] += v;
+    }
+  }
+
+  function acumular(node) {
+    for (const child of node.filhos.values()) {
+      acumular(child);
+      for (const col of shape.metricas) node.total[col] += child.total[col];
+    }
+  }
+  acumular(root);
+
+  return { root, totalGeral };
+}
+
+function ordenarNosDetalheMultidimensional(entries, dim, primary) {
+  return entries.sort(([a, nodeA], [b, nodeB]) => {
+    if (isTemporal(dim) || isDocumento(dim)) return sortValorDimensao(dim, a).localeCompare(sortValorDimensao(dim, b));
+    const diff = (nodeB.total[primary] || 0) - (nodeA.total[primary] || 0);
+    if (diff) return diff;
+    return String(a).localeCompare(String(b));
+  });
+}
+
+function renderDetalheMultidimensional(rows, shape, linhas) {
+  const { root, totalGeral } = montarDetalheMultidimensional(rows, shape);
+  const titulo = `Detalhamento por ${shape.dimensoes.map(labelDimensao).join(', ')}`;
+  const primary = shape.metricas[0];
+  const MAX_ITENS_POR_NIVEL = 200;
+
+  function renderNode(node, nivel, prefixo) {
+    const dim = shape.dimensoes[nivel];
+    const ultimo = nivel === shape.dimensoes.length - 1;
+    const entries = ordenarNosDetalheMultidimensional([...node.filhos.entries()], dim, primary);
+    const visiveis = entries.slice(0, MAX_ITENS_POR_NIVEL);
+
+    visiveis.forEach(([valor, child], idx) => {
+      const label = labelValorDimensao(dim, valor);
+      if (ultimo) {
+        linhas.push(`${prefixo}${idx + 1}. ${labelDimensao(dim)} ${label}: ${valsMetricas(child.total, shape.metricas)}`);
+      } else {
+        if (nivel > 0 || idx > 0) linhas.push('');
+        linhas.push(`${prefixo}*${labelDimensao(dim)}: ${label}*`);
+        renderNode(child, nivel + 1, `${prefixo}  `);
+        linhas.push(`${prefixo}\u{1F9FE} *Subtotal*: ${valsMetricas(child.total, shape.metricas)}`);
+      }
+    });
+    if (entries.length > visiveis.length) {
+      linhas.push(`${prefixo}... e mais ${entries.length - visiveis.length}`);
+    }
+  }
+
+  linhas.push(`\u{1F4CB} *${titulo}*`);
+  renderNode(root, 0, '');
+  linhas.push('');
+  linhas.push(`*Total Geral*: ${valsMetricas(totalGeral, shape.metricas)}`);
+}
+
 function renderMultiplasDimensoes(rows, shape, linhas) {
   const temporalUnico = contextoTemporalUnico(rows, shape.dimensoes);
   let dimensoesExibicao = temporalUnico
@@ -1659,6 +1807,11 @@ function renderSingle(rows, opts = {}) {
 
   if (shape.tipo === 'detalhe_temporal_multidimensional') {
     renderDetalheTemporalMultidimensional(rows, shape, linhas);
+    return linhas.join('\n');
+  }
+
+  if (shape.tipo === 'detalhe_multidimensional') {
+    renderDetalheMultidimensional(rows, shape, linhas);
     return linhas.join('\n');
   }
 
@@ -1815,6 +1968,12 @@ function renderAll(sucessos, opts = {}) {
   if (shape.tipo === 'detalhe_temporal_multidimensional') {
     const rows = sucessos.flatMap(s => s.rows || []);
     renderDetalheTemporalMultidimensional(rows, shape, linhas);
+    return linhas.join('\n');
+  }
+
+  if (shape.tipo === 'detalhe_multidimensional') {
+    const rows = sucessos.flatMap(s => s.rows || []);
+    renderDetalheMultidimensional(rows, shape, linhas);
     return linhas.join('\n');
   }
 

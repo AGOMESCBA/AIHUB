@@ -708,14 +708,7 @@ function listarContatosAutorizados(empresaId) {
 }
 
 function perguntaDaResposta({ sessaoId, respostaCriadaEm }) {
-  const row = getDB().prepare(`
-    SELECT texto
-    FROM protheus_chat_messages
-    WHERE sessao_id = ? AND direcao = 'out' AND criado_em <= ?
-    ORDER BY criado_em DESC
-    LIMIT 1
-  `).get(sessaoId, respostaCriadaEm);
-  return String(row?.texto || '').trim();
+  return String(sessionStore.perguntaAnteriorMensagem({ sessaoId, criadoEm: respostaCriadaEm }) || '').trim();
 }
 
 function resumoDaResposta(texto) {

@@ -880,6 +880,7 @@ module.exports = {
   limparMensagens,
   ultimaMensagemTabular,
   mensagemTabular,
+  perguntaAnteriorMensagem: _perguntaAnteriorMensagem,
   salvarGridConfig,
   vincularInterpretacao,
   sqlDaMensagem,

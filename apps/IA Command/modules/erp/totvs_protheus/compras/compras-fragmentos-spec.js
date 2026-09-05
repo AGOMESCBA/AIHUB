@@ -315,9 +315,9 @@ ${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.
 GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_EMISSAO, SCR.CR_NUM
 ORDER BY aprovador, SCR.CR_EMISSAO, SCR.CR_NUM;
 
-### EXEMPLO CORRETO — pedidos de compra APROVADOS, agrupados por dia, aprovador, pedido e valor
-SELECT CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
-       ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
+### EXEMPLO CORRETO — pedidos de compra APROVADOS, agrupados por aprovador, dia, pedido e valor
+SELECT ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'} AS aprovador,
+       CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103) AS dia,
        SCR.CR_NUM AS numero_pedido,
        SUM(SC7.C7_TOTAL) AS valor_pedido
 FROM SCRxxx SCR
@@ -326,8 +326,8 @@ ${temNomeAprovador ? "LEFT JOIN SAKxxx SAK ON SCR.CR_APROV = SAK.AK_COD AND SAK.
   AND SCR.CR_TIPO = 'PC'
   AND SCR.CR_STATUS = '03'
   AND SCR.CR_DATALIB BETWEEN '20260701' AND '20260731'
-GROUP BY CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103), ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, SCR.CR_NUM
-ORDER BY dia, aprovador, SCR.CR_NUM;
+GROUP BY ${temNomeAprovador ? 'COALESCE(SAK.AK_NOME, SCR.CR_APROV)' : 'SCR.CR_APROV'}, CONVERT(VARCHAR(10), CAST(SCR.CR_EMISSAO AS DATE), 103), SCR.CR_NUM
+ORDER BY aprovador, dia, SCR.CR_NUM;
 -- Nao confundir SCR.CR_EMISSAO (data de emissao do documento) com o periodo de aprovacao pedido pelo usuario: quando a pergunta for sobre pedidos APROVADOS num periodo (ex: "aprovados no mes passado"), filtre pela DATA DA LIBERACAO (SCR.CR_DATALIB), nao pela emissao — um pedido pode ter sido emitido num mes e liberado em outro.
 `;
 }

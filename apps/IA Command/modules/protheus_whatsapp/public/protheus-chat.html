@@ -4540,6 +4540,7 @@
     const itemForward = messageContextMenu.querySelector('[data-menu-action="forward-response"]');
     const itemPreview = messageContextMenu.querySelector('[data-menu-action="whatsapp-preview"]');
     const itemSql = messageContextMenu.querySelector('[data-menu-action="sql-preview"]');
+    const itemDelete = messageContextMenu.querySelector('[data-menu-action="delete"]');
     if (itemFavorito) {
       itemFavorito.querySelector('span').textContent = favoritoId ? 'Remover favorito' : 'Favoritar';
       itemFavorito.disabled = !favoritable;
@@ -4556,6 +4557,10 @@
     if (itemSql) {
       itemSql.disabled = !favoritable;
       itemSql.title = favoritable ? 'Visualizar o SQL auditado desta resposta' : 'Somente respostas da IA podem ter SQL gerado';
+    }
+    if (itemDelete) {
+      itemDelete.querySelector('span').textContent = favoritable ? 'Apagar' : 'Apagar pergunta';
+      itemDelete.title = favoritable ? 'Apagar esta resposta' : 'Apagar esta pergunta';
     }
 
     const rect = trigger.getBoundingClientRect();
@@ -6191,7 +6196,9 @@
       } else if (acao === 'sql-preview') {
         await abrirSqlPreview(mensagemId);
       } else if (acao === 'delete') {
-        if (!window.confirm('Apagar esta mensagem? Essa acao nao pode ser desfeita.')) return;
+        const ehPergunta = trigger?.dataset.favoritable !== '1';
+        const label = ehPergunta ? 'esta pergunta' : 'esta resposta';
+        if (!window.confirm('Apagar ' + label + '? Essa acao nao pode ser desfeita.')) return;
         await excluirMensagensPorIds([mensagemId]);
       }
     } catch (err) {
