@@ -407,6 +407,26 @@ module.exports = {
       },
     },
     {
+      // Bug real confirmado em producao: o usuario pedia "nome do aprovador", mas o SQL
+      // retornava SCR.CR_APROV (codigo, ex.: "000003") como se fosse nome. Quando o nome
+      // for pedido explicitamente, a fonte correta e SAK.AK_NOME, com fallback para o
+      // codigo apenas dentro de COALESCE para casos de cadastro incompleto.
+      validar(sql, mensagem) {
+        const texto = String(mensagem || '').toLowerCase();
+        const pedeNomeAprovador = /\bnome\s+d[oa]\s+aprovador(?:es)?\b/.test(texto)
+          || /\baprovador(?:es)?\s+por\s+nome\b/.test(texto);
+        if (!pedeNomeAprovador) return null;
+        if (!/\bAS\s+aprovador\b/i.test(sql)) return null;
+        const usaNomeSak = /\bSAK\s*\.\s*AK_NOME\b/i.test(sql);
+        if (usaNomeSak) return null;
+        return (
+          'A pergunta pediu NOME do aprovador, mas o SQL nao usa SAK.AK_NOME. ' +
+          'SCR.CR_APROV e apenas o CODIGO do aprovador. Use LEFT JOIN SAK ON SCR.CR_APROV = SAK.AK_COD ' +
+          "AND SAK.D_E_L_E_T_ = ' ' e projete COALESCE(SAK.AK_NOME, SCR.CR_APROV) AS aprovador."
+        );
+      },
+    },
+    {
       validar(sql, mensagem) {
         const texto = String(mensagem || '').toLowerCase();
         const linguagemPosse = /\bmeus?\s+pedidos?\b/.test(texto)

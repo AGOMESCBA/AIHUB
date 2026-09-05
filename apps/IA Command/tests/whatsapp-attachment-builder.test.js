@@ -84,4 +84,25 @@ const { prepararEstruturaTabular } = require(path.join(ROOT, 'modules/whatsapp/w
   assert.deepStrictEqual(estrutura.totalGeral, {});
 }
 
+// 7. Bug real confirmado em producao: PDF de "pedidos aprovados agrupado por aprovador,
+// dia, pedido e valor" saia com Aprovador/Dia sempre "—" (dimensao nao reconhecida),
+// um subtotal por PEDIDO individual (nenhum agrupamento real aconteceu) e um "Total Geral"
+// absurdo somando codigos de aprovador e numeros de pedido como se fossem valor monetario.
+// Causa raiz: response-formatter.js nao tinha detector para a coluna "aprovador" nem
+// reconhecia "dia" (o alias literal que a IA usa) como coluna de data — e colunas ja
+// resolvidas como dimensao continuavam sendo somadas como metrica.
+{
+  const rows = [
+    { aprovador: 'Luiz Carlos', dia: '20260801', numero_pedido: '591208', valor_pedido: 34740.89 },
+    { aprovador: 'Rafael Bernardes', dia: '20260801', numero_pedido: '591208', valor_pedido: 34740.89 },
+    { aprovador: 'Luiz Carlos', dia: '20260803', numero_pedido: '591227', valor_pedido: 16650.61 },
+  ];
+  const estrutura = prepararEstruturaTabular(rows, { agrupar_por_composto: ['aprovador', 'dia', 'numero_pedido'] });
+  assert.strictEqual(estrutura.colunasDimensao.length, 3, 'aprovador, dia e numero_pedido devem ser reconhecidas como dimensao');
+  assert.deepStrictEqual(estrutura.linhas[0].dimensoes, ['Luiz Carlos', '2026-08-01', '591208'], 'dia deve ser reconhecido como coluna temporal e aprovador deve preservar o nome');
+  assert.deepStrictEqual(estrutura.colunasMetrica, ['valor_pedido'], 'aprovador/numero_pedido (numericos) nao podem virar metrica somada');
+  assert.strictEqual(estrutura.totalGeral.valor_pedido, 86132.39, 'total geral deve somar so valor_pedido, nao codigos/numeros de pedido');
+  assert.strictEqual(estrutura.subtotais.length, 3, 'cada combinacao unica (aprovador+dia+pedido) deve virar 1 subtotal — sem duplicar em grupos por linha individual sem sentido');
+}
+
 console.log('whatsapp-attachment-builder.test.js: ok');

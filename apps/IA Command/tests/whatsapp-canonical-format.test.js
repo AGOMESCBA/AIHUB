@@ -1086,6 +1086,23 @@ ok('fluxo mensal misto: consolidado nao soma saldo base nem fluxo diario repetid
   assert.ok(!/Saldo Bancario Base: \*R\$\s*4\.801\.339,26\*/.test(texto), texto);
 });
 
+// Bug real confirmado em producao: SCR.CR_APROV (codigo de aprovador, ex.: "000002") tem
+// 6 digitos e batia por coincidencia no padrao AAAAMM de competencia, virando "Fevereiro/0000"
+// em vez do codigo do aprovador. labelValorDimensao agora reconhece "aprovador" (RE_ENTIDADE)
+// e nunca tenta reinterpretar como data, igual ja acontecia para campos de documento.
+ok('aprovador com codigo de 6 digitos nao e reinterpretado como competencia (mes/ano)', () => {
+  const texto = canonical.renderSingle([
+    { dia: '20260801', aprovador: '000002', numero_pedido: '591208', valor_pedido: 34740.89 },
+    { dia: '20260801', aprovador: '000003', numero_pedido: '591209', valor_pedido: 23400.00 },
+    { dia: '20260803', aprovador: '000004', numero_pedido: '591227', valor_pedido: 16650.61 },
+  ], { nomeModulo: 'Compras', contextoConsulta: 'Pedidos aprovados' });
+
+  assert.ok(texto.includes('Aprovador 000002'), texto);
+  assert.ok(texto.includes('Aprovador 000003'), texto);
+  assert.ok(texto.includes('Aprovador 000004'), texto);
+  assert.ok(!/Fevereiro|Marco|Março|Abril/i.test(texto), texto);
+});
+
 console.log(`\nwhatsapp-canonical-format.test.js: ${passou} passaram, ${falhou} falharam`);
 if (falhou) process.exit(1);
 
