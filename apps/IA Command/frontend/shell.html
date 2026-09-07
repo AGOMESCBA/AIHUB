@@ -237,8 +237,25 @@
     } catch (_) {}
   })();
 </script>
-<script src="./js/tab-manager.js?v=20260903-mobile-scroll"></script>
+<script src="./js/tab-manager.js?v=20260907-help-actions"></script>
 <script>
+  function removerAjudaAntigaCabecalhoEmpresa() {
+    document.querySelectorAll('#mdi-content iframe').forEach(frame => {
+      try {
+        frame.contentDocument?.getElementById('_mdi-help-btn')?.remove();
+      } catch (_) {}
+    });
+  }
+
+  window.addEventListener('message', (e) => {
+    if (e.origin !== location.origin) return;
+    if (e.data?.type === 'shell:show-ajuda' || e.data?.type === 'shell:hide-ajuda') {
+      removerAjudaAntigaCabecalhoEmpresa();
+    }
+  });
+
+  setInterval(removerAjudaAntigaCabecalhoEmpresa, 1200);
+
   document.addEventListener('click', (e) => {
     const link = e.target.closest('#sidebar a.nav-item');
     if (!link) return;
