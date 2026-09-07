@@ -492,6 +492,33 @@ async function okAsync(desc, fn) {
     }
   });
 
+  // ── calcularPeriodoBaseAnterior: bug real de producao (07/09/2026, PLANTIVO/CAIEIRA) ──────
+  // Formula original ("30 dias exatos antes") gerava periodo-base tecnicamente correto mas nao
+  // intuitivo (ex: setembro -> 02/08 a 31/08 em vez de agosto inteiro), causando divergencia
+  // entre o periodo que o backend validava e o periodo que a IA geradora de SQL as vezes
+  // "corrigia" por conta propria para o mes civil completo. Corrigido: quando o periodo atual e
+  // um MES CIVIL COMPLETO, o periodo-base tambem e o mes civil anterior completo; quando e um
+  // intervalo especifico de dias, mantem a duracao exata (comportamento original).
+  ok('calcularPeriodoBaseAnterior: mes civil completo -> mes civil anterior completo (nao 30 dias exatos)', () => {
+    const base = resolver.calcularPeriodoBaseAnterior({ dataInicio: '20260901', dataFim: '20260930' });
+    assert.deepStrictEqual(base, { dataInicio: '20260801', dataFim: '20260831' }, 'setembro inteiro -> agosto inteiro, nao 02/08-31/08');
+  });
+
+  ok('calcularPeriodoBaseAnterior: mes civil completo em janeiro -> dezembro do ano anterior', () => {
+    const base = resolver.calcularPeriodoBaseAnterior({ dataInicio: '20260101', dataFim: '20260131' });
+    assert.deepStrictEqual(base, { dataInicio: '20251201', dataFim: '20251231' }, 'virada de ano deve funcionar corretamente');
+  });
+
+  ok('calcularPeriodoBaseAnterior: intervalo especifico de dias mantem MESMA duracao (comportamento original preservado)', () => {
+    const base = resolver.calcularPeriodoBaseAnterior({ dataInicio: '20260902', dataFim: '20260910' });
+    assert.deepStrictEqual(base, { dataInicio: '20260824', dataFim: '20260901' }, 'dia 02 a 10 (9 dias) -> mesma duracao terminando no dia anterior');
+  });
+
+  ok('calcularPeriodoBaseAnterior: semana (7 dias) continua usando duracao exata, nao mes civil', () => {
+    const base = resolver.calcularPeriodoBaseAnterior({ dataInicio: '20260901', dataFim: '20260907' });
+    assert.deepStrictEqual(base, { dataInicio: '20260825', dataFim: '20260831' });
+  });
+
   limpar();
 
   console.log(`\nanalytic-glossary.test.js: ${passou} passaram, ${falhou} falharam`);

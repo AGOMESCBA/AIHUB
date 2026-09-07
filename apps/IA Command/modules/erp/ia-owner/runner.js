@@ -3410,10 +3410,43 @@ function aplicarAgrupamentosIntentNoPlano(planoConsulta = {}, intent = {}) {
   return { ...planoConsulta, agrupamentos };
 }
 
+// BUG REAL encontrado em teste de producao (07/09/2026, empresas PLANTIVO/CAIEIRA): apos
+// corrigir a IA para de fato seguir a instrucao de "analise horizontal" (2 CTEs, periodo atual
+// + periodo base), o SQL correto passou a ser REJEITADO por validarPeriodoDeclaradoNoSql —
+// essa validacao so aceita datas fora do periodo principal quando estao em
+// planoConsulta.periodos_comparativos, e esse campo so era populado pelo mecanismo de
+// "comparar com o mesmo periodo do ano passado" (aplicarPeriodosComparativoContinuidade),
+// nunca pelo periodo-base calculado para analise horizontal (intent._glossario.periodoBase),
+// que e um caminho paralelo e independente. Declarar aqui os dois periodos (atual + base do
+// glossario) reaproveita a validacao ja existente sem alterar sua logica.
+function aplicarPeriodoBaseGlossarioNoPlano(planoConsulta = {}, intent = {}, periodoAtual = null) {
+  const periodoBase = intent?._glossario?.periodoBase;
+  if (!periodoBase?.dataInicio || !periodoBase?.dataFim) return planoConsulta;
+  if (Array.isArray(planoConsulta?.periodos_comparativos) && planoConsulta.periodos_comparativos.length > 1) {
+    return planoConsulta; // ja populado por outro mecanismo (ex: comparativo de continuidade) — nao sobrescreve
+  }
+  // NAO usar o parametro periodoAtual aqui: em alguns pontos de chamada ele e
+  // periodoAutoritativoParaSql(), que pode ja refletir plano.obj.periodo — o periodo que a
+  // PROPRIA IA declarou no JSON de resposta, podendo ser um range amplo cobrindo os dois meses
+  // da comparacao (ela sabe que vai buscar dado de agosto+setembro). Usar esse valor aqui
+  // geraria "periodos_comparativos" com um range combinado + o periodo base, produzindo datas
+  // sem sentido na validacao (bug real observado: "20260801 a 20260930" em vez do periodo atual
+  // real). intent.periodo (resolvido pelo classificador, ANTES de qualquer decisao da IA) e o
+  // valor estavel e confiavel do periodo atual real da pergunta.
+  const atual = periodoComDatas(intent?.periodo);
+  const base = periodoComDatas(periodoBase);
+  if (!atual || !base) return planoConsulta;
+  return {
+    ...planoConsulta,
+    periodos_comparativos: deduplicarPeriodosComparativos([atual, base]),
+  };
+}
+
 function prepararPlanoConsultaTecnico({ spec, mensagem, periodo, filtros, entidades, intent } = {}) {
   let planoConsulta = construirQueryPlanTecnico({ spec, mensagem, periodo, filtros, entidades });
   planoConsulta = aplicarAgrupamentosIntentNoPlano(planoConsulta, intent);
   planoConsulta = aplicarPeriodosComparativoContinuidade(planoConsulta, intent, periodo);
+  planoConsulta = aplicarPeriodoBaseGlossarioNoPlano(planoConsulta, intent, periodo);
   return planoConsulta;
 }
 
@@ -3443,16 +3476,38 @@ function validarPeriodosComparativosNoSql(sql, spec = {}, planoConsulta = {}) {
   };
 }
 
+// BUG REAL encontrado em teste de producao (07/09/2026, PLANTIVO): quando o SQL usa CTEs
+// (WITH atual AS (...), base AS (...) SELECT ...), o regex ingenuo /\bSELECT\b([\s\S]*?)\bFROM\b/
+// (nao-guloso) capturava o PRIMEIRO "SELECT...FROM" do texto inteiro — que e o SELECT de DENTRO
+// da primeira CTE, nao o SELECT final apos o WITH (que e o que de fato tem a coluna "AS
+// competencia" exigida). Isso rejeitava respostas de "analise horizontal" corretas, mesmo
+// quando a IA seguia a instrucao a risca. Corrigido usando localizarKeywordNivelZero (ja usada
+// em outras validacoes deste arquivo, ex: extrairSelectEGroupByNivelZero) para achar o SELECT
+// de nivel-zero (fora de qualquer parenteses/CTE/subquery), em vez de regex ingenuo.
+// Quando ha UNION ALL (caso ja validado em producao, ex: comparativo "mesmo periodo do ano
+// passado"), o comportamento anterior e preservado: cada bloco entre UNION ALL e avaliado
+// separadamente, e o SELECT de nivel-zero DENTRO de cada bloco (relativo ao bloco) e o correto,
+// ja que blocos de UNION ALL nao tem CTE propria nesse padrao.
 function _cabecalhosSelectComparativo(sql) {
-  return String(sql || '')
-    .split(/\bUNION\s+ALL\b/i)
-    .map(bloco => {
-      const semRowcount = bloco.replace(/\bSET\s+ROWCOUNT\s+\d+\s*;?/ig, ' ');
-      const match = semRowcount.match(/\bSELECT\b([\s\S]*?)\bFROM\b/i);
-      return match ? match[1] : '';
-    })
-    .map(s => s.trim())
-    .filter(Boolean);
+  const texto = String(sql || '').replace(/\bSET\s+ROWCOUNT\s+\d+\s*;?/ig, ' ');
+  const blocosUnion = texto.split(/\bUNION\s+ALL\b/i);
+  if (blocosUnion.length > 1) {
+    return blocosUnion
+      .map(bloco => {
+        const match = bloco.match(/\bSELECT\b([\s\S]*?)\bFROM\b/i);
+        return match ? match[1] : '';
+      })
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+  // Sem UNION ALL: acha o SELECT de nivel-zero (respeitando parenteses de CTE/subquery), nao o
+  // primeiro SELECT do texto inteiro.
+  const posSelect = localizarKeywordNivelZero(texto, 'SELECT');
+  if (posSelect < 0) return [];
+  const posFrom = localizarKeywordNivelZero(texto, 'FROM', posSelect + 6);
+  if (posFrom < 0) return [];
+  const cabecalho = texto.slice(posSelect + 6, posFrom).trim();
+  return cabecalho ? [cabecalho] : [];
 }
 
 function validarSaidaComparativaPeriodos(sql, periodos = []) {
@@ -4066,11 +4121,25 @@ function _comDefinicaoGlossario(queryPlanTexto, intent) {
 function _instrucaoPeriodoHorizontal(intent) {
   const glossario = intent?._glossario;
   if (!glossario?.periodoBase) return null;
+  const pAtualIni = intent.periodo?.dataInicio || '?';
+  const pAtualFim = intent.periodo?.dataFim || '?';
+  const pBaseIni = glossario.periodoBase.dataInicio;
+  const pBaseFim = glossario.periodoBase.dataFim;
   return [
-    `A pergunta pede "${glossario.termo}" comparando DOIS periodos, mesmo que o texto mencione apenas um periodo explicitamente.`,
-    `PERIODO ATUAL: ${intent.periodo?.dataInicio || '?'} a ${intent.periodo?.dataFim || '?'}.`,
-    `PERIODO BASE DE COMPARACAO (calculado — imediatamente anterior, mesma duracao, pois a pergunta nao especificou outra base): ${glossario.periodoBase.dataInicio} a ${glossario.periodoBase.dataFim}.`,
-    'OBRIGATORIO: busque valores para os DOIS periodos acima separadamente (ex: uma CTE/subquery por periodo, ou UNION ALL rotulado por periodo) e calcule variacao absoluta (atual - base) e percentual ((atual - base) / base * 100). NAO gere detalhamento por dia/mes dentro do periodo atual — a pergunta e sobre comparar os dois periodos acima, nao sobre listar o periodo atual.',
+    `A pergunta pede "${glossario.termo}", que por definicao SEMPRE compara DOIS periodos — mesmo que o texto da pergunta mencione apenas um periodo explicitamente. Isso NAO e uma leitura alternativa da pergunta: e o significado literal do termo "${glossario.termo}".`,
+    `PERIODO ATUAL: ${pAtualIni} a ${pAtualFim}.`,
+    `PERIODO BASE DE COMPARACAO (calculado — imediatamente anterior, mesma duracao, pois a pergunta nao especificou outra base): ${pBaseIni} a ${pBaseFim}.`,
+    '',
+    'CHECKLIST OBRIGATORIO antes de responder (falhar qualquer item invalida a resposta):',
+    `1. O SQL final DEVE retornar linhas para OS DOIS periodos (${pAtualIni}-${pAtualFim} E ${pBaseIni}-${pBaseFim}), nunca so um.`,
+    '2. Estruture com uma CTE/subquery por periodo (ou UNION ALL rotulado por periodo), nunca um unico SELECT com um so filtro de data.',
+    '3. Calcule variacao absoluta (atual - base) e percentual ((atual - base) / base * 100) como colunas do resultado.',
+    '4. NAO gere detalhamento por dia/mes dentro do periodo atual (ex: GROUP BY competencia listando so um mes) — isso e o erro mais comum e INVALIDA a resposta, mesmo que o SQL execute sem erro.',
+    '',
+    `ERRADO (rejeitado mesmo sem erro de sintaxe): SELECT ... WHERE campo_data BETWEEN '${pAtualIni}' AND '${pAtualFim}' GROUP BY competencia — isso ignora o periodo base e retorna so 1 linha/periodo.`,
+    `CERTO (UNION ALL, uma linha por periodo): WITH atual AS (SELECT ... WHERE campo_data BETWEEN '${pAtualIni}' AND '${pAtualFim}'), base AS (SELECT ... WHERE campo_data BETWEEN '${pBaseIni}' AND '${pBaseFim}') SELECT '${pAtualIni.slice(0,6)}' AS competencia, atual.* FROM atual UNION ALL SELECT '${pBaseIni.slice(0,6)}' AS competencia, base.* FROM base.`,
+    `TAMBEM CERTO (colunas lado a lado numa unica linha): WITH atual AS (...), base AS (...) SELECT '${pAtualIni.slice(0,6)}' AS competencia, atual.faturamento AS faturamento_atual, base.faturamento AS faturamento_base, (atual.faturamento - base.faturamento) AS variacao_absoluta FROM atual, base — OBRIGATORIO incluir a coluna literal "AS competencia" (com esse nome exato) referente ao periodo atual, mesmo no formato de colunas lado a lado; sem essa coluna a resposta e rejeitada por validacao tecnica mesmo com o calculo correto.`,
+    'Antes de finalizar o SQL, verifique: "meu SELECT tem uma unica clausula BETWEEN/faixa de data? Se sim, esta ERRADO para analise horizontal — refaca com os dois periodos." Verifique tambem se o SELECT final tem uma coluna literal "AS competencia" (nome exato, sem sufixo).',
   ].join('\n');
 }
 
@@ -4178,6 +4247,15 @@ async function executar(spec, intent, empresaId) {
   const historico = Array.isArray(intentEfetivo._historicoResumido) ? intentEfetivo._historicoResumido : [];
   const estadoAnterior = limparPeriodosNaoAutoritativos(buildEstadoAnterior(intentEfetivo), mensagem);
   let contextoTecnico = { ...buildContextoTecnico({ spec, empresaId, protheus, sx2, sx2Puro, sx3Prompt, middlewareCfg, filial }), ...contextoTecnicoExtra };
+  // BUG REAL encontrado em teste de producao (07/09/2026, empresas PLANTIVO/CAIEIRA):
+  // instrucao_periodo_horizontal so era calculada e atribuida a contextoTecnico DEPOIS que o
+  // PRIMEIRO userPrompt (linha ~4617, com a PRIMEIRA chamada real de IA) ja tinha sido montado
+  // e enviado — ou seja, a instrucao critica de comparar 2 periodos nunca chegava na chamada
+  // que de fato gera o SQL na maioria dos casos (so chegaria numa tentativa de retry, que nao
+  // acontece quando a IA "consegue" gerar algum SQL, mesmo que semanticamente incompleto).
+  // So depende de intentEfetivo (ja disponivel aqui), nao de planoConsulta/queryPlan (que so
+  // existem mais tarde) — mover para ca garante que a PRIMEIRA chamada ja recebe a instrucao.
+  contextoTecnico.instrucao_periodo_horizontal = _instrucaoPeriodoHorizontal(intentEfetivo);
   const tabelaFisica = (sx2Arg, base) => tabelaFisicaSX2(sx2Arg, base) || `${String(base || '').trim().toUpperCase()}${inferirSufixoSX2(sx2Arg, protheus.sufixoTabela)}`;
   const helpers = { connectionFactory, tabelaFisicaSX2: tabelaFisica, escapeSqlLiteral, baseTabelaSX2 };
   const expandirMetadadosParaSql = (sqlAtual) => {

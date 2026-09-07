@@ -156,6 +156,25 @@ async function okAsync(desc, fn) {
     assert.strictEqual(_textoPareceNovaConsulta('Financeiro'), true);
   });
 
+  // ── Bug real encontrado em teste de producao (07/09/2026, empresa CAIEIRA) ────────────────
+  // "Me envie a analise horizontal desse mes" (termo reconhecido pelo glossario, mas SEM
+  // dominio explicito na frase) retornava, no WhatsApp, a mensagem generica de "sem chave de
+  // IA configurada" em vez da pergunta real de esclarecimento de dominio. Causa raiz: quando
+  // o glossario pede esclarecimento, intent-service.js retorna _provedor='nenhum' (nao chamou
+  // IA principal porque o glossario resolveu antes) — mas service.js tratava QUALQUER
+  // _provedor='nenhum' como "IA falhou/sem chave", silenciando a pergunta real. Corrigido
+  // checando intent._erroTipo === 'conceito_analitico_ambiguo' ANTES desse bloco generico.
+  // Este teste confirma o contrato exato que intent-service.js produz e que service.js passou
+  // a verificar — trava contra reintroducao do bug.
+  const intentService = require(path.join(ROOT, 'modules/ai/intent-service'));
+  await okAsync('intent-service.js: "analise horizontal" sem dominio produz o contrato exato que service.js precisa distinguir de "sem chave de IA"', async () => {
+    const intent = await intentService.classificar('Me envie a analise horizontal desse mes', -9992);
+    assert.strictEqual(intent.precisa_confirmacao, true);
+    assert.strictEqual(intent._provedor, 'nenhum', 'mesmo valor usado para "sem chave de IA" — por isso a checagem de _erroTipo e obrigatoria antes');
+    assert.strictEqual(intent._erroTipo, 'conceito_analitico_ambiguo', 'campo que service.js usa para diferenciar este caso do bloco generico de falha de IA');
+    assert.ok(typeof intent._erro === 'string' && intent._erro.includes('analise horizontal'), 'a pergunta de esclarecimento real deve estar em _erro, pronta para ser devolvida ao usuario');
+  });
+
   console.log(`\nglossario-pendencia-dominio.test.js: ${passou} passaram, ${falhou} falharam`);
   process.exit(falhou > 0 ? 1 : 0);
 })().catch(err => {

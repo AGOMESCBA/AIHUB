@@ -368,13 +368,37 @@ function _paraAaaammdd(date) {
   return `${y}${m}${d}`;
 }
 
-// Periodo imediatamente anterior, com a MESMA duracao em dias do periodo atual — ex: atual
-// 01/09 a 07/09 (7 dias) -> base 25/08 a 31/08 (7 dias, terminando no dia anterior ao inicio
-// do atual). Retorna null se o periodo atual nao tiver datas utilizaveis.
+// Verdadeiro quando o periodo cobre exatamente do dia 1 ao ultimo dia do MESMO mes/ano — ou
+// seja, "o mes inteiro", nao um recorte de dias dentro dele.
+function _ehMesCivilCompleto(inicio, fim) {
+  if (inicio.getFullYear() !== fim.getFullYear() || inicio.getMonth() !== fim.getMonth()) return false;
+  if (inicio.getDate() !== 1) return false;
+  const ultimoDiaDoMes = new Date(fim.getFullYear(), fim.getMonth() + 1, 0).getDate();
+  return fim.getDate() === ultimoDiaDoMes;
+}
+
+// Periodo-base imediatamente anterior. Duas regras, decididas pela FORMA do periodo atual —
+// confirmado com o usuario (07/09/2026) que a comparacao esperada depende disso:
+// (a) periodo atual = MES CIVIL COMPLETO (ex: "setembro", dia 1 ao ultimo dia) -> base e o MES
+//     CIVIL ANTERIOR COMPLETO (ex: agosto inteiro, 01/08 a 31/08). E a leitura natural de "mes
+//     anterior" tanto para o usuario quanto para a IA geradora de SQL — usar "30 dias exatos
+//     antes" (ex: 02/08 a 31/08) e tecnicamente valido mas nao intuitivo, e a IA geradora as
+//     vezes "corrigia" por conta propria para o mes civil, causando divergencia entre o periodo
+//     validado pelo backend e o periodo que ela de fato usava no SQL (bug real observado).
+// (b) periodo atual = intervalo especifico de dias (ex: "do dia 02 ao dia 10") -> base mantem a
+//     MESMA duracao em dias, terminando no dia anterior ao inicio do atual (ex: dia 02 a 10 do
+//     mes anterior, se a duracao coincidir) — comportamento original, preservado para esse caso.
 function calcularPeriodoBaseAnterior(periodoAtual) {
   const inicio = _paraDate(periodoAtual?.dataInicio);
   const fim = _paraDate(periodoAtual?.dataFim);
   if (!inicio || !fim || fim < inicio) return null;
+
+  if (_ehMesCivilCompleto(inicio, fim)) {
+    const inicioBaseMes = new Date(inicio.getFullYear(), inicio.getMonth() - 1, 1);
+    const fimBaseMes = new Date(inicio.getFullYear(), inicio.getMonth(), 0);
+    return { dataInicio: _paraAaaammdd(inicioBaseMes), dataFim: _paraAaaammdd(fimBaseMes) };
+  }
+
   const duracaoDias = Math.round((fim - inicio) / 86400000) + 1;
   const fimBase = new Date(inicio);
   fimBase.setDate(fimBase.getDate() - 1);

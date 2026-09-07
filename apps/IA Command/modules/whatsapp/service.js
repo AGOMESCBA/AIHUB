@@ -4785,6 +4785,23 @@ class IACWhatsAppService extends EventEmitter {
       ? ` | período: ${intent.periodo.tipo}${intent.periodo.dataInicio ? ` (${intent.periodo.dataInicio} → ${intent.periodo.dataFim})` : ''}`
       : '';
     this.log(`🧠 Intenção: "${intent.intencao}" | motor: ${this._rotuloMotor(intent)} | provedor: ${intent._provedor} | confiança: ${(intent.confianca * 100).toFixed(0)}%${periodoStr}${filtrosStr}`, 'info');
+    // Glossario analitico (item pre-existente, bug encontrado em teste real 07/09/2026): quando
+    // o glossario pede esclarecimento de dominio (ex: "analise horizontal" sem mencionar
+    // vendas/compras/financeiro), intent-service.js retorna precisa_confirmacao=true com
+    // _provedor='nenhum' (nao chamou IA principal porque o glossario resolveu isso ANTES).
+    // O bloco abaixo (_provedor === 'nenhum') tratava isso como "sem chave de IA/IA falhou" e
+    // devolvia a mensagem generica de erro, silenciando a pergunta real de esclarecimento —
+    // precisa ser checado ANTES do bloco generico, nao depois.
+    if (intent._erroTipo === 'conceito_analitico_ambiguo' && intent.precisa_confirmacao) {
+      const perguntaEsclarecimento = intent._erro || 'Preciso que voce confirme sobre qual dado deseja essa consulta.';
+      this._registrarInterpretacao({
+        empresaId, sender, texto: textoExecucao,
+        intent, resultado: { tipo: 'desconhecido', subtipo: 'confirmacao_necessaria', mensagem: perguntaEsclarecimento },
+        resposta: perguntaEsclarecimento, duracaoMs: Date.now() - _t0,
+      });
+      return perguntaEsclarecimento;
+    }
+
     if (intent._provedor === 'nenhum') {
       if (intent._erros?.length) {
         this.log(`❌ IA falhou para empresa #${empresaId}: ${intent._erro}`, 'error');
